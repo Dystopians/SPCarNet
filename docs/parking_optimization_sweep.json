@@ -1,0 +1,26 @@
+[
+  {
+    "save_iteration": 30020,
+    "returncode": 1,
+    "triangles_reduced": -1,
+    "vertices_reduced": -1,
+    "merged_regions": -1,
+    "candidate_triangles": -1
+  },
+  {
+    "save_iteration": 30021,
+    "returncode": 1,
+    "triangles_reduced": -1,
+    "vertices_reduced": -1,
+    "merged_regions": -1,
+    "candidate_triangles": -1
+  },
+  {
+    "save_iteration": 30022,
+    "returncode": 1,
+    "triangles_reduced": -1,
+    "vertices_reduced": -1,
+    "merged_regions": -1,
+    "candidate_triangles": -1
+  }
+]

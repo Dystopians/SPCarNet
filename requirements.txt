@@ -6,5 +6,7 @@ matplotlib
 tqdm 
 trimesh
 mmengine
-mmcv
+mmcv-lite==2.2.0
 timm
+transformers
+wandb

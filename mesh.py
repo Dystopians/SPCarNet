@@ -53,10 +53,7 @@ if __name__ == "__main__":
     scene = Scene(args=dataset,
                   triangles=triangles,
                   init_opacity=None,
-                  init_size=None,
-                  nb_points=None,
                   set_sigma=None,
-                  no_dome=False,
                   load_iteration=args.iteration,
                   shuffle=False)
 

@@ -38,6 +38,8 @@ class Scene:
         self.model_path = args.model_path
         self.loaded_iter = None
         self.triangles = triangles
+        self.scene_info = None
+        self.ground_plane = None
 
         if load_iteration:
             if load_iteration == -1:
@@ -56,6 +58,7 @@ class Scene:
             scene_info = sceneLoadTypeCallbacks["Blender"](args.source_path, args.white_background, args.eval)
         else:
             assert False, "Could not recognize scene type!"
+        self.scene_info = scene_info
 
         if not self.loaded_iter:
             with open(scene_info.ply_path, 'rb') as src_file, open(os.path.join(self.model_path, "input.ply") , 'wb') as dest_file:

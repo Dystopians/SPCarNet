@@ -1,4 +1,4 @@
-<h1 align="center">MeshSplatting: Differentiable Rendering with Opaque Meshes [CVPR 2026] </h1>
+<h1 align="center">MeshSplatting: Differentiable Rendering with Opaque Meshes</h1>
 <p align="center">
   Jan Held, Sanghyun Son, Renaud Vandeghen, Daniel Rebain, Matheus Gadelha, Yi Zhou, Anthony Cioppa, Ming C. Lin, Marc Van Droogenbroeck, Andrea Tagliasacchi
 </p>

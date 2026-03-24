@@ -33,6 +33,7 @@ from pathlib import Path
 from plyfile import PlyData, PlyElement
 from utils.sh_utils import SH2RGB
 from scene.triangle_model import BasicPointCloud
+from utils.read_write_model import read_points3D_binary as read_points3D_binary_dict, read_points3D_text as read_points3D_text_dict
 import torch
 import torchvision.transforms as transforms
 import cv2
@@ -54,6 +55,9 @@ class CameraInfo(NamedTuple):
     normal_map: np.array = None 
     depth_params: dict = None  
     depth_path: str = ""     
+    ground_mask_path: str = ""
+    colmap_xys: np.array = None
+    colmap_point3D_ids: np.array = None
     
 
 class SceneInfo(NamedTuple):
@@ -62,6 +66,7 @@ class SceneInfo(NamedTuple):
     test_cameras: list
     nerf_normalization: dict
     ply_path: str
+    colmap_points3d: dict = None
 
 def getNerfppNorm(cam_info):
     def get_center_and_diag(cam_centers):
@@ -168,6 +173,9 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, depths_params, images_fold
             normal_map=normal,
             depth_params=depth_params,
             depth_path=depth_path,
+            ground_mask_path="",
+            colmap_xys=np.array(extr.xys, copy=True) if hasattr(extr, "xys") else None,
+            colmap_point3D_ids=np.array(extr.point3D_ids, copy=True) if hasattr(extr, "point3D_ids") else None,
         )
         cam_infos.append(cam_info)
 
@@ -262,6 +270,7 @@ def readColmapSceneInfo(path, images, eval, llffhold=8, aug=False):
     ply_path = os.path.join(path, f"sparse/0/{ply_str}.ply")
     bin_path = os.path.join(path, f"sparse/0/{ply_str}.bin")
     txt_path = os.path.join(path, f"sparse/0/{ply_str}.txt")
+    colmap_points3d = None
     if not os.path.exists(ply_path):
         print("Converting point3d.bin to .ply, will happen only the first time you open the scene.")
         try:
@@ -269,6 +278,14 @@ def readColmapSceneInfo(path, images, eval, llffhold=8, aug=False):
         except:
             xyz, rgb, _ = read_points3D_text(txt_path)
         storePly(ply_path, xyz, rgb)
+    try:
+        if os.path.exists(bin_path):
+            colmap_points3d = read_points3D_binary_dict(bin_path)
+        elif os.path.exists(txt_path):
+            colmap_points3d = read_points3D_text_dict(txt_path)
+    except Exception as exc:
+        print(f"[GroundPlane] Failed to read COLMAP points3D dictionary: {exc}")
+        colmap_points3d = None
     try:
         pcd = fetchPly(ply_path)
     except:
@@ -278,7 +295,8 @@ def readColmapSceneInfo(path, images, eval, llffhold=8, aug=False):
                            train_cameras=train_cam_infos,
                            test_cameras=test_cam_infos,
                            nerf_normalization=nerf_normalization,
-                           ply_path=ply_path)
+                           ply_path=ply_path,
+                           colmap_points3d=colmap_points3d)
     return scene_info
 
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png"):
@@ -356,7 +374,8 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
                            train_cameras=train_cam_infos,
                            test_cameras=test_cam_infos,
                            nerf_normalization=nerf_normalization,
-                           ply_path=ply_path)
+                           ply_path=ply_path,
+                           colmap_points3d=None)
     return scene_info
 
 sceneLoadTypeCallbacks = {

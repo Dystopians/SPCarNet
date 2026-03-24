@@ -26,7 +26,7 @@ from utils.graphics_utils import getWorld2View2, getProjectionMatrix
 class Camera(nn.Module):
     def __init__(self, colmap_id, R, T, FoVx, FoVy, depth_params, image, invdepthmap, gt_alpha_mask,
                  image_name, uid,
-                 trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda", normal_map=None
+                 trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda", normal_map=None, ground_mask=None
                  ):
         super(Camera, self).__init__()
 
@@ -38,6 +38,7 @@ class Camera(nn.Module):
         self.FoVy = FoVy
         self.image_name = image_name
         self.normal_map = normal_map
+        self.ground_mask = None
 
         try:
             self.data_device = torch.device(data_device)
@@ -49,6 +50,8 @@ class Camera(nn.Module):
         self.original_image = image.clamp(0.0, 1.0).to(self.data_device)
         self.image_width = self.original_image.shape[2]
         self.image_height = self.original_image.shape[1]
+        if ground_mask is not None:
+            self.ground_mask = ground_mask.bool().to(self.data_device)
 
         if gt_alpha_mask is not None:
             #self.original_image *= gt_alpha_mask.to(self.data_device) # IF YOU WANT A BACKGROUND FOR DTU COMMENT THIS

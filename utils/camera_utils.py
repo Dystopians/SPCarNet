@@ -15,8 +15,16 @@ from utils.general_utils import PILtoTorch
 from utils.graphics_utils import fov2focal
 import torch
 import cv2
+import os
+from utils.ground_mask_utils import (
+    resolve_ground_mask_path,
+    load_ground_mask_binary,
+    resize_ground_mask,
+    maybe_save_mask_overlay,
+)
 
 WARNED = False
+_MISSING_GROUND_MASK_WARNED = set()
 
 import numpy as np, torch
 from pathlib import Path
@@ -105,10 +113,67 @@ def loadCam(args, id, cam_info, resolution_scale):
     else:
         normal_map = None
 
+    ground_mask = None
+    use_ground_masks = bool(getattr(args, "ground_masks", False) or getattr(args, "enable_ground_masks", False)) and bool(getattr(args, "ground_mask_dir", ""))
+    if use_ground_masks:
+        mask_path = resolve_ground_mask_path(
+            source_path=getattr(args, "source_path", ""),
+            mask_dir=getattr(args, "ground_mask_dir", ""),
+            image_name=cam_info.image_name,
+            image_path=cam_info.image_path,
+            matching=getattr(args, "ground_mask_matching", "auto"),
+            suffix=getattr(args, "ground_mask_suffix", ".png"),
+            missing_strategy=getattr(args, "ground_mask_missing_strategy", "empty"),
+            nearest_max_gap=getattr(args, "ground_mask_nearest_max_gap", 6),
+        )
+        if mask_path is None:
+            image_key = cam_info.image_name
+            if image_key not in _MISSING_GROUND_MASK_WARNED:
+                print(f"[GroundMask] Missing mask for image '{cam_info.image_name}'. Using empty mask fallback.")
+                _MISSING_GROUND_MASK_WARNED.add(image_key)
+            ground_mask = torch.zeros((resolution[1], resolution[0]), dtype=torch.bool)
+        else:
+            try:
+                ground_mask_raw = load_ground_mask_binary(
+                    mask_path=mask_path,
+                    threshold=getattr(args, "ground_mask_threshold", 127),
+                    label_value=getattr(args, "ground_mask_label_value", -1),
+                    label_rgb=getattr(args, "ground_mask_label_rgb", ""),
+                )
+                ground_mask = resize_ground_mask(ground_mask_raw, out_h=resolution[1], out_w=resolution[0])
+            except Exception as exc:
+                image_key = cam_info.image_name
+                if image_key not in _MISSING_GROUND_MASK_WARNED:
+                    print(
+                        f"[GroundMask] Failed to load mask '{mask_path}' for image '{cam_info.image_name}' "
+                        f"({exc}). Using empty mask fallback."
+                    )
+                    _MISSING_GROUND_MASK_WARNED.add(image_key)
+                ground_mask = torch.zeros((resolution[1], resolution[0]), dtype=torch.bool)
+
+        assert ground_mask.shape[0] == gt_image.shape[1] and ground_mask.shape[1] == gt_image.shape[2], (
+            f"Ground mask shape {tuple(ground_mask.shape)} does not match image shape "
+            f"{tuple(gt_image.shape[1:])} for '{cam_info.image_name}'."
+        )
+
+        debug_enabled = bool(getattr(args, "ground_mask_debug_vis", False))
+        debug_max = int(getattr(args, "ground_mask_debug_max", 8))
+        debug_dir = getattr(args, "ground_mask_debug_dir", "")
+        if not debug_dir:
+            debug_dir = os.path.join(getattr(args, "model_path", "."), "ground_mask_debug")
+        maybe_save_mask_overlay(
+            rgb_chw=gt_image,
+            mask_hw=ground_mask,
+            image_name=cam_info.image_name,
+            debug_enabled=debug_enabled,
+            debug_dir=debug_dir,
+            max_examples=debug_max,
+        )
+
     return Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
                   FoVx=cam_info.FovX, FoVy=cam_info.FovY,  depth_params=cam_info.depth_params, invdepthmap=invdepthmap,
                   image=gt_image, gt_alpha_mask=loaded_mask,
-                  image_name=cam_info.image_name, uid=id, data_device=args.data_device, normal_map=normal_map)
+                  image_name=cam_info.image_name, uid=id, data_device=args.data_device, normal_map=normal_map, ground_mask=ground_mask)
 
 def cameraList_from_camInfos(cam_infos, resolution_scale, args):
     camera_list = []

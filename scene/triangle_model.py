@@ -20,6 +20,7 @@
 
 import torch
 import numpy as np
+from collections import defaultdict, deque
 from utils.general_utils import inverse_sigmoid, get_expon_lr_func
 from torch import nn
 import os
@@ -828,6 +829,408 @@ class TriangleModel:
         areas = 0.5 * torch.linalg.norm(cross_prod, dim=1)             # [T]
         areas = torch.nan_to_num(areas, nan=0.0, posinf=0.0, neginf=0.0)
         return areas
+
+    def _rebuild_optimizer_after_topology_change(self):
+        """
+        Rebuild optimizer after topology changes.
+        Momentum buffers are reset intentionally because the parameter shapes changed.
+        """
+        if self.optimizer is None:
+            return
+
+        lr_by_name = {g.get("name", f"group_{i}"): g.get("lr", 0.0) for i, g in enumerate(self.optimizer.param_groups)}
+        param_groups = [
+            {'params': [self._features_dc],   'lr': lr_by_name.get("f_dc", 0.0016), "name": "f_dc"},
+            {'params': [self._features_rest], 'lr': lr_by_name.get("f_rest", 0.0016 / 20.0), "name": "f_rest"},
+            {'params': [self.vertices],       'lr': lr_by_name.get("vertices", 0.0001), "name": "vertices"},
+            {'params': [self.vertex_weight],  'lr': lr_by_name.get("vertex_weight", 0.0), "name": "vertex_weight"},
+        ]
+        self.optimizer = torch.optim.Adam(param_groups, lr=0.0, eps=1e-15)
+
+    def optimize_ground_planar_patches(
+        self,
+        up_axis="auto",
+        max_ground_tilt_deg=30.0,
+        max_neighbor_normal_deg=20.0,
+        max_neighbor_height_delta=0.10,
+        min_region_triangles=80,
+        min_region_area=0.05,
+        max_plane_residual=0.03,
+        residual_quantile=0.95,
+        snap_cell_size=0.05,
+        near_center=None,
+        near_radius=-1.0,
+        enable_global_snap=False,
+        global_height_bin=0.05,
+        allow_boundary_snap=False,
+        boundary_snap_max_shift=0.02,
+        merge_mode="edge_collapse",
+        project_to_plane=True,
+        max_project_shift=0.015,
+        edge_collapse_length=0.03,
+        max_collapse_shift=0.02,
+        max_edges_per_region=6000,
+        max_candidate_triangles=800000,
+        verbose=True,
+    ):
+        """
+        Expression-level planar optimization for large near-planar patches (e.g. ground).
+
+        Strategy:
+        1) Select ground-like triangles by normal/up-axis angle.
+        2) Build conservative connected regions with neighbor normal gating.
+        3) For each valid region, fit a plane and only continue if residual is low.
+        4) Keep boundary vertices fixed; only snap interior vertices on-plane and to a 2D grid.
+        5) Remap triangles, remove degenerate/duplicate faces, compact vertices.
+
+        This keeps merging strictly inside detected regions and avoids crossing protected boundaries.
+        """
+        device = self.vertices.device
+        verts = self.vertices.detach().cpu().numpy().astype(np.float64)
+        tris = self._triangle_indices.detach().cpu().numpy().astype(np.int64)
+
+        if tris.shape[0] == 0 or verts.shape[0] == 0:
+            return {"status": "skipped_empty_mesh"}
+
+        # Triangle geometry
+        tri_pts = verts[tris]  # [T,3,3]
+        ab = tri_pts[:, 1] - tri_pts[:, 0]
+        ac = tri_pts[:, 2] - tri_pts[:, 0]
+        normals = np.cross(ab, ac)
+        norm_len = np.linalg.norm(normals, axis=1, keepdims=True)
+        valid_n = norm_len[:, 0] > 1e-12
+        normals[valid_n] = normals[valid_n] / norm_len[valid_n]
+        areas = 0.5 * np.linalg.norm(np.cross(ab, ac), axis=1)
+
+        axis = up_axis.lower()
+        axis_map = {"x": np.array([1.0, 0.0, 0.0]), "y": np.array([0.0, 1.0, 0.0]), "z": np.array([0.0, 0.0, 1.0])}
+        if axis == "auto":
+            # Pick the axis with strongest area-weighted normal concentration.
+            axis_scores = {}
+            for k, a in axis_map.items():
+                axis_scores[k] = float((np.abs(normals @ a) * areas).sum())
+            axis = max(axis_scores, key=axis_scores.get)
+        elif axis not in axis_map:
+            raise ValueError(f"Unsupported up_axis '{up_axis}'. Use one of x/y/z/auto.")
+        up = axis_map[axis]
+
+        cos_ground = np.cos(np.deg2rad(max_ground_tilt_deg))
+        centroids = tri_pts.mean(axis=1)
+        near_mask = np.ones(tris.shape[0], dtype=bool)
+        if near_center is not None and near_radius is not None and float(near_radius) > 0:
+            c = np.asarray(near_center, dtype=np.float64).reshape(1, 3)
+            near_mask = np.linalg.norm(centroids - c, axis=1) <= float(near_radius)
+        ground_like = valid_n & (np.abs(normals @ up) >= cos_ground) & near_mask
+        candidate_idx = np.where(ground_like)[0]
+
+        if candidate_idx.size == 0:
+            return {"status": "skipped_no_ground_candidates", "up_axis_used": axis}
+
+        # Cap candidate size for runtime stability on very large meshes.
+        if candidate_idx.size > max_candidate_triangles:
+            order = np.argsort(areas[candidate_idx])[::-1]
+            candidate_idx = candidate_idx[order[:max_candidate_triangles]]
+
+        cand_normals = normals[candidate_idx]
+        cand_tris = tris[candidate_idx]
+        cand_areas = areas[candidate_idx]
+        cand_centroids = centroids[candidate_idx]
+
+        # Build adjacency by shared edges (only among candidate triangles).
+        edge_to_tris = defaultdict(list)
+        for t_local, tri in enumerate(cand_tris):
+            a, b, c = int(tri[0]), int(tri[1]), int(tri[2])
+            e0 = (a, b) if a < b else (b, a)
+            e1 = (b, c) if b < c else (c, b)
+            e2 = (a, c) if a < c else (c, a)
+            edge_to_tris[e0].append(t_local)
+            edge_to_tris[e1].append(t_local)
+            edge_to_tris[e2].append(t_local)
+
+        neigh_cos = np.cos(np.deg2rad(max_neighbor_normal_deg))
+        neighbors = [[] for _ in range(cand_tris.shape[0])]
+        for tri_list in edge_to_tris.values():
+            if len(tri_list) != 2:
+                continue
+            i, j = tri_list
+            normal_ok = np.abs(np.dot(cand_normals[i], cand_normals[j])) >= neigh_cos
+            height_ok = np.abs(np.dot((cand_centroids[i] - cand_centroids[j]), up)) <= float(max_neighbor_height_delta)
+            if normal_ok and height_ok:
+                neighbors[i].append(j)
+                neighbors[j].append(i)
+
+        # Region growing
+        visited = np.zeros(cand_tris.shape[0], dtype=bool)
+        regions = []
+        for seed in range(cand_tris.shape[0]):
+            if visited[seed]:
+                continue
+            q = deque([seed])
+            visited[seed] = True
+            region = []
+            while q:
+                cur = q.popleft()
+                region.append(cur)
+                for nb in neighbors[cur]:
+                    if not visited[nb]:
+                        visited[nb] = True
+                        q.append(nb)
+            regions.append(region)
+
+        remap = np.arange(verts.shape[0], dtype=np.int64)
+        parent = np.arange(verts.shape[0], dtype=np.int64)
+        merged_regions = 0
+        rejected_small = 0
+        rejected_area = 0
+        rejected_plane_tilt = 0
+        rejected_residual = 0
+        edge_collapses = 0
+
+        def _find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        # Global tangent frame for optional cross-region snapping
+        if np.abs(up[2]) < 0.99:
+            g0 = np.cross(up, np.array([0.0, 0.0, 1.0], dtype=np.float64))
+        else:
+            g0 = np.cross(up, np.array([1.0, 0.0, 0.0], dtype=np.float64))
+        g0 = g0 / (np.linalg.norm(g0) + 1e-12)
+        g1 = np.cross(up, g0)
+        g1 = g1 / (np.linalg.norm(g1) + 1e-12)
+        global_origin = centroids[candidate_idx].mean(axis=0) if candidate_idx.size > 0 else np.zeros(3, dtype=np.float64)
+        global_cell_to_rep = {}
+
+        for region in regions:
+            if len(region) < min_region_triangles:
+                rejected_small += 1
+                continue
+
+            region = np.asarray(region, dtype=np.int64)
+            region_area = float(cand_areas[region].sum())
+            if region_area < float(min_region_area):
+                rejected_area += 1
+                continue
+
+            region_tris = cand_tris[region]  # [R,3]
+            region_vert_ids = np.unique(region_tris.reshape(-1))
+            region_points = verts[region_vert_ids]
+            if region_points.shape[0] < 8:
+                continue
+
+            # Plane fit
+            centroid = region_points.mean(axis=0)
+            centered = region_points - centroid
+            _, _, vh = np.linalg.svd(centered, full_matrices=False)
+            plane_n = vh[-1]
+            if np.abs(np.dot(plane_n, up)) < cos_ground:
+                rejected_plane_tilt += 1
+                continue
+
+            # Keep orientation stable
+            if np.dot(plane_n, up) < 0:
+                plane_n = -plane_n
+
+            dists = np.abs(centered @ plane_n)
+            if np.quantile(dists, float(residual_quantile)) > max_plane_residual:
+                rejected_residual += 1
+                continue
+
+            # Region boundary vertices: edges appearing once in this region.
+            e01 = np.sort(region_tris[:, [0, 1]], axis=1)
+            e12 = np.sort(region_tris[:, [1, 2]], axis=1)
+            e02 = np.sort(region_tris[:, [0, 2]], axis=1)
+            region_edges = np.concatenate([e01, e12, e02], axis=0)
+            uniq_edges, counts = np.unique(region_edges, axis=0, return_counts=True)
+            boundary_edges = uniq_edges[counts == 1]
+            boundary_vertices = set(boundary_edges.reshape(-1).tolist())
+
+            interior_vertices = [vid for vid in region_vert_ids.tolist() if vid not in boundary_vertices]
+            candidate_vertices = interior_vertices
+
+            if allow_boundary_snap:
+                # Conservative boundary snapping: only very small on-plane displacement allowed.
+                extra = []
+                for vid in boundary_vertices:
+                    p = verts[vid]
+                    p_proj = p - np.dot((p - centroid), plane_n) * plane_n
+                    shift = np.linalg.norm(p_proj - p)
+                    if shift <= float(boundary_snap_max_shift):
+                        extra.append(int(vid))
+                candidate_vertices = interior_vertices + extra
+
+            if len(candidate_vertices) < 4:
+                continue
+
+            # Build in-plane basis
+            t0 = vh[0]
+            t1 = vh[1]
+            if np.linalg.norm(t0) < 1e-12 or np.linalg.norm(t1) < 1e-12:
+                continue
+
+            if merge_mode == "snap":
+                # Conservative in-plane snapping.
+                cell_to_rep = {}
+                for vid in candidate_vertices:
+                    p = verts[vid]
+
+                    if enable_global_snap:
+                        relg = p - global_origin
+                        gu = np.dot(relg, g0)
+                        gv = np.dot(relg, g1)
+                        gh = np.dot(relg, up)
+                        key = (
+                            int(np.floor(gu / snap_cell_size)),
+                            int(np.floor(gv / snap_cell_size)),
+                            int(np.floor(gh / max(float(global_height_bin), 1e-6))),
+                        )
+                        if key not in global_cell_to_rep:
+                            global_cell_to_rep[key] = vid
+                        rep = global_cell_to_rep[key]
+                    else:
+                        rel = p - centroid
+                        u = np.dot(rel, t0)
+                        v = np.dot(rel, t1)
+                        key = (int(np.floor(u / snap_cell_size)), int(np.floor(v / snap_cell_size)))
+                        if key not in cell_to_rep:
+                            cell_to_rep[key] = vid
+                        rep = cell_to_rep[key]
+
+                    remap[vid] = rep
+            elif merge_mode == "edge_collapse":
+                interior_set = set(interior_vertices)
+                active_set = set(candidate_vertices)
+
+                # Step 1: optional local plane projection (small displacement only).
+                if project_to_plane:
+                    for vid in candidate_vertices:
+                        p = verts[vid]
+                        p_proj = p - np.dot((p - centroid), plane_n) * plane_n
+                        shift = np.linalg.norm(p_proj - p)
+                        if shift <= float(max_project_shift):
+                            verts[vid] = p_proj
+
+                # Step 2: conservative short-edge collapse inside region.
+                e01 = np.sort(region_tris[:, [0, 1]], axis=1)
+                e12 = np.sort(region_tris[:, [1, 2]], axis=1)
+                e02 = np.sort(region_tris[:, [0, 2]], axis=1)
+                reg_edges = np.concatenate([e01, e12, e02], axis=0)
+                reg_edges = np.unique(reg_edges, axis=0)
+
+                edge_data = []
+                for e in reg_edges:
+                    u, v = int(e[0]), int(e[1])
+                    if u == v:
+                        continue
+                    if (u not in active_set) or (v not in active_set):
+                        continue
+                    if (u not in interior_set) or (v not in interior_set):
+                        continue
+                    pu = verts[u]
+                    pv = verts[v]
+                    l = np.linalg.norm(pu - pv)
+                    if l > float(edge_collapse_length):
+                        continue
+                    hdiff = np.abs(np.dot((pu - pv), up))
+                    if hdiff > float(max_neighbor_height_delta):
+                        continue
+                    edge_data.append((l, u, v))
+
+                if edge_data:
+                    edge_data.sort(key=lambda x: x[0])
+                    if len(edge_data) > int(max_edges_per_region):
+                        edge_data = edge_data[: int(max_edges_per_region)]
+
+                    for _, u0, v0 in edge_data:
+                        u = _find(u0)
+                        v = _find(v0)
+                        if u == v:
+                            continue
+                        pu = verts[u]
+                        pv = verts[v]
+                        mid = 0.5 * (pu + pv)
+                        if np.linalg.norm(mid - pu) > float(max_collapse_shift):
+                            continue
+                        if np.linalg.norm(mid - pv) > float(max_collapse_shift):
+                            continue
+                        parent[v] = u
+                        verts[u] = mid
+                        edge_collapses += 1
+            else:
+                raise ValueError(f"Unsupported merge_mode '{merge_mode}'. Use 'snap' or 'edge_collapse'.")
+
+            merged_regions += 1
+
+        # Compose collapse map (if edge collapse mode used)
+        if merge_mode == "edge_collapse":
+            for i in range(parent.shape[0]):
+                parent[i] = _find(i)
+            remap = parent[remap]
+
+        # Apply vertex remapping
+        new_tris = remap[tris]
+        deg_mask = (new_tris[:, 0] != new_tris[:, 1]) & (new_tris[:, 1] != new_tris[:, 2]) & (new_tris[:, 0] != new_tris[:, 2])
+        new_tris = new_tris[deg_mask]
+
+        # Remove duplicate faces (orientation-agnostic)
+        sorted_faces = np.sort(new_tris, axis=1)
+        _, unique_idx = np.unique(sorted_faces, axis=0, return_index=True)
+        new_tris = new_tris[np.sort(unique_idx)]
+
+        # Compact vertex arrays
+        used = np.unique(new_tris.reshape(-1))
+        new_vid = -np.ones(verts.shape[0], dtype=np.int64)
+        new_vid[used] = np.arange(used.shape[0], dtype=np.int64)
+        compact_tris = new_vid[new_tris].astype(np.int32)
+
+        new_vertices = torch.from_numpy(self.vertices.detach().cpu().numpy()[used]).to(device=device, dtype=torch.float32)
+        new_weight = torch.from_numpy(self.vertex_weight.detach().cpu().numpy()[used]).to(device=device, dtype=torch.float32)
+        new_fdc = torch.from_numpy(self._features_dc.detach().cpu().numpy()[used]).to(device=device, dtype=torch.float32)
+        new_frest = torch.from_numpy(self._features_rest.detach().cpu().numpy()[used]).to(device=device, dtype=torch.float32)
+
+        old_v = int(self.vertices.shape[0])
+        old_t = int(self._triangle_indices.shape[0])
+
+        self.vertices = nn.Parameter(new_vertices.requires_grad_(True))
+        self.vertex_weight = nn.Parameter(new_weight.requires_grad_(True))
+        self._features_dc = nn.Parameter(new_fdc.requires_grad_(True))
+        self._features_rest = nn.Parameter(new_frest.requires_grad_(True))
+        self._triangle_indices = torch.from_numpy(compact_tris).to(device=device, dtype=torch.int32)
+
+        self.image_size = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device=device)
+        self.importance_score = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device=device)
+        self.pixel_count = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.int, device=device)
+
+        self._rebuild_optimizer_after_topology_change()
+
+        new_v = int(self.vertices.shape[0])
+        new_t = int(self._triangle_indices.shape[0])
+        stats = {
+            "status": "ok",
+            "up_axis_used": axis,
+            "candidate_triangles": int(candidate_idx.size),
+            "regions_total": int(len(regions)),
+            "merged_regions": int(merged_regions),
+            "rejected_small_region": int(rejected_small),
+            "rejected_small_area": int(rejected_area),
+            "rejected_plane_tilt": int(rejected_plane_tilt),
+            "rejected_plane_residual": int(rejected_residual),
+            "enable_global_snap": bool(enable_global_snap),
+            "allow_boundary_snap": bool(allow_boundary_snap),
+            "merge_mode": merge_mode,
+            "edge_collapses": int(edge_collapses),
+            "vertices_before": old_v,
+            "vertices_after": new_v,
+            "triangles_before": old_t,
+            "triangles_after": new_t,
+            "vertices_reduced": int(old_v - new_v),
+            "triangles_reduced": int(old_t - new_t),
+        }
+        if verbose:
+            print("[PlanarMerge] {}".format(stats))
+        return stats
 
 
     

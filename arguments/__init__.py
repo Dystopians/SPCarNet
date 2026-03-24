@@ -63,6 +63,20 @@ class ModelParams(ParamGroup):
         self._white_background = False
         self.data_device = "cuda"
         self.eval = False
+        # Optional per-image binary ground masks.
+        self.ground_masks = False
+        self.enable_ground_masks = False
+        self.ground_mask_dir = ""
+        self.ground_mask_matching = "auto"
+        self.ground_mask_suffix = ".png"
+        self.ground_mask_missing_strategy = "empty"
+        self.ground_mask_nearest_max_gap = 6
+        self.ground_mask_threshold = 127
+        self.ground_mask_label_value = -1
+        self.ground_mask_label_rgb = ""
+        self.ground_mask_debug_vis = False
+        self.ground_mask_debug_dir = ""
+        self.ground_mask_debug_max = 8
         super().__init__(parser, "Loading Parameters", sentinel)
 
     def extract(self, args):
@@ -143,6 +157,85 @@ class OptimizationParams(ParamGroup):
 
         self.depth_lambda_init = 0.01
         self.depth_lambda_final = 0.001
+
+        # Ground-plane estimation (for ground-aware regularization).
+        self.enable_ground_plane_estimation = False
+        self.enable_ground_plane_fit = False
+        self.ground_plane_source_priority = "colmap,depth,mesh"
+        self.ground_plane_cache_file = "ground_plane_cache.json"
+        self.ground_plane_recompute_interval = 0
+        self.ground_plane_force_recompute = False
+        self.ground_plane_min_points = 200
+        self.ground_plane_ransac_iters = 600
+        self.ground_plane_ransac_dist_thresh = 0.04
+        self.ground_plane_inlier_ratio_min = 0.35
+        self.ground_plane_track_len_min = 3
+        self.ground_plane_obs_min = 2
+        self.ground_plane_obs_ratio_min = 0.5
+        self.ground_plane_colmap_error_max = 2.0
+        self.ground_plane_depth_max_samples_per_view = 4000
+        self.ground_plane_depth_sample_stride = 4
+        self.ground_plane_depth_inv_min = 1e-6
+        self.ground_plane_mesh_sample_max = 30000
+        self.ground_plane_axis_consistency_min = 0.45
+        self.ground_plane_outlier_quantile = 0.95
+        self.ground_plane_use_if_poor = False
+        self.ground_plane_diag_every = 1000
+        self.ground_plane_diag_save = False
+        self.ground_plane_diag_dir = ""
+
+        # Ground-aware geometry regularization losses.
+        self.enable_ground_regularization = False
+        self.enable_ground_plane_loss = False
+        self.enable_ground_normal_loss = False
+        self.enable_ground_smoothness_loss = False
+        self.enable_ground_mesh_assignment = False
+        self.debug_save_ground_visualizations = False
+        self.ground_debug_vis_every = 1000
+        self.ground_debug_vis_max = 16
+        self.ground_debug_vis_dir = ""
+        self.ground_reg_start_iter = 2000
+        self.ground_reg_warmup_iters = 3000
+        self.lambda_ground_plane = 0.0
+        self.lambda_ground_normal = 0.0
+        self.lambda_ground_smoothness = 0.0
+        # Global multiplier on the full ground-regularization term.
+        self.ground_reg_global_scale = 1.0
+        # Optional adaptive scaling target: keep Lground around
+        # target_ratio * current image loss. Set 0 to disable.
+        self.ground_reg_target_ratio = 0.0
+        self.ground_reg_adaptive_ema_decay = 0.95
+        self.ground_reg_adaptive_min_scale = 1.0
+        self.ground_reg_adaptive_max_scale = 50.0
+        # Optional cap on final Lground value (0 disables cap).
+        self.ground_reg_max_total = 0.0
+        # If >=0, smoothness starts from this iteration (independent gate).
+        self.ground_smooth_start_iter = -1
+        self.ground_reg_huber_delta = 0.03
+        self.ground_assign_min_pixels = 30
+        self.ground_assign_ema_decay = 0.9
+        self.ground_plane_min_ratio = 0.7
+        self.ground_plane_max_abs_height = 0.4
+        self.ground_normal_min_ratio = 0.9
+        self.ground_normal_max_abs_height = 0.2
+        self.ground_smooth_min_ratio = 0.8
+        self.ground_smooth_max_abs_height = 0.3
+        self.ground_smooth_max_pairs = 50000
+        self.ground_smooth_fallback_edges_max = 80000
+
+        # Robust multi-view ground association (image-space -> mesh-space).
+        self.ground_assoc_min_observations = 3
+        self.ground_assoc_min_ground_ratio = 0.75
+        self.ground_assoc_min_view_consistency = 0.6
+        self.ground_assoc_per_view_ground_ratio = 0.5
+        self.ground_assoc_boundary_margin = 0.1
+        self.ground_assoc_confidence_min = 0.45
+        self.ground_assoc_use_cache = True
+        self.ground_assoc_cache_file = "ground_assoc_cache.pt"
+        self.ground_assoc_cache_every = 1000
+        self.ground_assoc_debug_every = 1000
+        self.ground_assoc_debug_dir = ""
+        self.ground_assoc_hist_bins = 80
 
         super().__init__(parser, "Optimization Parameters")
 
