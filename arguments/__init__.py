@@ -77,6 +77,12 @@ class ModelParams(ParamGroup):
         self.ground_mask_debug_vis = False
         self.ground_mask_debug_dir = ""
         self.ground_mask_debug_max = 8
+        # Camera split configuration for COLMAP scenes.
+        # split_strategy:
+        # - "llff": default every-N holdout
+        # - "file": load explicit train/test split from split_file
+        self.split_strategy = "llff"
+        self.split_file = ""
         super().__init__(parser, "Loading Parameters", sentinel)
 
     def extract(self, args):
@@ -222,6 +228,9 @@ class OptimizationParams(ParamGroup):
         self.ground_smooth_max_abs_height = 0.3
         self.ground_smooth_max_pairs = 50000
         self.ground_smooth_fallback_edges_max = 80000
+        # If local ground triangles exceed this, skip CPU tri-adjacency build
+        # and use fallback edge smoothing path. Keep default for prior behavior.
+        self.ground_smooth_tri_adj_max_triangles = 4096
 
         # Robust multi-view ground association (image-space -> mesh-space).
         self.ground_assoc_min_observations = 3
@@ -236,6 +245,91 @@ class OptimizationParams(ParamGroup):
         self.ground_assoc_debug_every = 1000
         self.ground_assoc_debug_dir = ""
         self.ground_assoc_hist_bins = 80
+
+        # PRISM-Prune scaffolding (disabled by default; neutral to legacy behavior).
+        self.enable_prism_pruning = False
+        self.prism_collect_stats = False
+        self.prism_stats_warmup_iters = 2000
+        self.prism_collect_interval = 100
+        # Heavy PRISM feature recomputation (structure + sparse support) interval.
+        # Keep this decoupled from light stat collection to avoid step-time spikes.
+        self.prism_score_recompute_interval = 500
+        # If triangle count exceeds this, skip expensive structure/sparse metrics
+        # and use a lightweight fallback to avoid long stalls.
+        self.prism_max_triangles_for_heavy_metrics = 400000
+        self.prism_dead_prune_ratio = 0.0
+        self.prism_candidate_prune_ratio = 0.0
+        self.prism_recovery_iters = 0
+        self.prism_use_counterfactual_gate = False
+        self.prism_use_ground_protect = False
+        self.prism_use_roi_protect = False
+        self.prism_calib_num_hard_train_views = 8
+        self.prism_calib_num_buffer_views = 8
+        self.prism_calib_hard_pool_size = 64
+        self.prism_save_debug_json = False
+        self.prism_changed_pixel_threshold = 0.02
+        self.prism_gate_min_delta_psnr_db = -0.05
+        self.prism_gate_max_delta_mae = 0.002
+        self.prism_gate_max_delta_absrel = 0.0008
+        self.prism_gate_max_delta_mean_angle_deg = 0.3
+        self.prism_gate_max_changed_pixel_ratio = 0.005
+        # PRISM pipeline state machine
+        self.prism_geometry_acq_until_iter = -1
+        self.prism_stats_collection_iters = 500
+        self.prism_dead_rounds = 1
+        self.prism_candidate_rounds = 3
+        self.prism_candidate_prune_ratio_per_round = 0.015
+        self.prism_recovery_iters = 400
+        self.prism_final_finetune_iters = 500
+        self.prism_topology_freeze_during_stats = True
+        self.prism_round_checkpoint = True
+        # Optional lightweight teacher distillation during recovery.
+        self.prism_enable_teacher_rgb_distill = False
+        self.prism_enable_teacher_depth_distill = False
+        self.prism_teacher_rgb_lambda = 0.01
+        self.prism_teacher_depth_lambda = 0.002
+        self.prism_teacher_num_views = 8
+        # PRISM global validation + rollback gate
+        self.prism_validation_interval = 1000
+        self.prism_validation_max_views = 32
+        self.prism_rollback_absrel_rel_thresh = 0.01
+        self.prism_rollback_mean_angle_thresh = 0.4
+        self.prism_rollback_psnr_drop_thresh = 0.10
+        self.prism_rollback_mae_increase_thresh = 0.003
+
+        # PRISM scoring weights (utility / redundancy).
+        self.prism_utility_w_vis = 0.30
+        self.prism_utility_w_sens = 0.25
+        self.prism_utility_w_geo = 0.20
+        self.prism_utility_w_viewdiv = 0.15
+        self.prism_utility_w_edge = 0.10
+        self.prism_redund_w_flat = 0.70
+        self.prism_redund_w_coplanar = 0.30
+
+        # PRISM robust normalization.
+        self.prism_norm_percentile_low = 5.0
+        self.prism_norm_percentile_high = 95.0
+        self.prism_norm_eps = 1e-6
+
+        # PRISM classifier thresholds.
+        self.prism_thresh_protected_edge = 0.60
+        self.prism_thresh_protected_geo = 0.75
+        self.prism_thresh_protected_sens = 0.80
+        self.prism_thresh_protected_unc = 0.65
+        self.prism_thresh_dead_vis = 0.02
+        self.prism_thresh_dead_sens = 0.03
+        self.prism_thresh_dead_geo = 0.05
+        self.prism_thresh_dead_edge = 0.10
+        self.prism_thresh_suspicious_vis = 0.05
+        self.prism_thresh_suspicious_geo = 0.15
+        self.prism_thresh_suspicious_unc = 0.50
+
+        # PRISM risk controls.
+        self.prism_boundary_risk_value = 1.0
+        self.prism_nonmanifold_risk_value = 1.0
+        self.prism_recent_age_iters = 500
+        self.prism_ground_protect_bonus = 1.0
+        self.prism_roi_protect_bonus = 1.0
 
         super().__init__(parser, "Optimization Parameters")
 

@@ -34,6 +34,7 @@ class GroundRegConfig:
     smooth_max_abs_height: float
     smooth_max_pairs: int
     smooth_fallback_edges_max: int
+    smooth_tri_adj_max_triangles: int
 
 
 def _safe_huber(x: torch.Tensor, delta: float) -> torch.Tensor:
@@ -261,7 +262,7 @@ def compute_ground_smoothness_loss(
     max_pairs = int(cfg.smooth_max_pairs)
     # Triangle-adjacency building uses CPU-side hashing and can dominate runtime
     # once ground triangles grow. Keep it only for small local sets.
-    max_tri_for_adj = 4096
+    max_tri_for_adj = int(max(0, cfg.smooth_tri_adj_max_triangles))
     if max_pairs > 0 and local_tri.shape[0] <= max_tri_for_adj:
         pairs = _triangle_adjacency_pairs(local_tri, max_pairs=max_pairs)
         if pairs.shape[0] > 0:

@@ -90,6 +90,33 @@ Alternatively, you can run the full evaluation without slurm by using the follow
 python full_eval.py --mipnerf360 <path_to_mipnerf360> --output_path <path_to_save>
 ```
 
+### Local recommended datasets (already imported)
+
+For this workspace, two real-world scenes compatible with the COLMAP pipeline have already been imported at:
+
+`/data2/peilincai/mesh_datasets/mipnerf360`
+
+- Indoor: `bonsai`
+- Outdoor: `flowers`
+
+Each scene contains `images`, `images_2`, `images_4`, `images_8`, and `sparse/0/{cameras,images,points3D}.bin`.
+
+Quick start examples:
+
+```bash
+# Indoor (bonsai)
+python train.py \
+  -s /data2/peilincai/mesh_datasets/mipnerf360/bonsai \
+  -m models/bonsai_local \
+  --indoor --eval
+
+# Outdoor (flowers)
+python train.py \
+  -s /data2/peilincai/mesh_datasets/mipnerf360/flowers \
+  -m models/flowers_local \
+  --outdoor --eval
+```
+
 ### Normal supervision
 If you want to use supervised normals, you must first extract them:
 
@@ -126,6 +153,54 @@ To render a scene, you can use the following command:
 ```bash
 python render.py -m <path_to_model>
 ```
+
+### Optional: custom train/test split for COLMAP scenes
+
+By default, COLMAP evaluation follows LLFF-style holdout (`idx % 8 == 0` as test).
+For strict out-of-train experiments, you can provide an explicit split file:
+
+```bash
+python train.py \
+  -s <path_to_scene> \
+  -m <output_model_path> \
+  --eval \
+  --split_strategy file \
+  --split_file <path_to_split_json>
+```
+
+You can generate such a split from COLMAP poses with:
+
+```bash
+python create_colmap_outoftrain_split.py \
+  -s <path_to_scene> \
+  -o <path_to_scene>/sparse/0/split_outoftrain_v1.json \
+  --test_ratio 0.12 \
+  --gap_ratio 0.03
+```
+
+The split JSON supports:
+
+- `train`: list of image stems
+- `test`: list of image stems
+- `dropped` (optional): buffer-zone frames excluded from both sets
+
+### Optional: COLMAP geometry realism evaluation (depth + normal proxy)
+
+You can evaluate geometric realism against COLMAP sparse geometry:
+
+```bash
+python evaluate_geometry_colmap.py \
+  -s <path_to_scene> \
+  -m <path_to_model> \
+  --iteration <iter> \
+  --eval \
+  --output <path_to_model>/geometry_eval_colmap/iter_<iter>.json
+```
+
+Notes:
+
+- Depth metrics are computed at sparse COLMAP correspondences (not dense GT depth).
+- Normal metrics use a sparse proxy: local PCA normals estimated from COLMAP 3D points.
 
 To create a video, you can use the following command:
 ```bash

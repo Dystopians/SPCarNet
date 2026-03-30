@@ -160,6 +160,7 @@ class TriangleModel:
         self.add_percentage = 1.0
 
         self.scaling = 1
+        self._temporary_active_mask = None
 
         self.laplacian_update_freq = 50  # Update every 50 iterations
         self.iteration_count = 0
@@ -167,6 +168,22 @@ class TriangleModel:
         self.use_sparse_adam = use_sparse_adam
 
         self.setup_functions()
+
+    def get_temporary_active_mask(self):
+        return self._temporary_active_mask
+
+    def set_temporary_active_mask(self, active_mask: torch.Tensor):
+        mask = active_mask.to(device=self._triangle_indices.device, dtype=torch.bool).contiguous()
+        if int(mask.numel()) != int(self._triangle_indices.shape[0]):
+            raise ValueError(
+                "temporary active mask size mismatch: got {}, expected {}".format(
+                    int(mask.numel()), int(self._triangle_indices.shape[0])
+                )
+            )
+        self._temporary_active_mask = mask
+
+    def clear_temporary_active_mask(self):
+        self._temporary_active_mask = None
 
     def save_parameters(self, path):
 
@@ -753,6 +770,7 @@ class TriangleModel:
                     kept2 = torch.nonzero(mask_referenced, as_tuple=True)[0]
                     new_id2[kept2] = torch.arange(kept2.numel(), device=device, dtype=torch.long)
                     self._triangle_indices = new_id2[self._triangle_indices.long()].to(torch.int32).contiguous()
+        self.clear_temporary_active_mask()
 
     def prune_triangles(self, mask):
         self._triangle_indices = self._triangle_indices[mask]
@@ -760,6 +778,7 @@ class TriangleModel:
         self.image_size = self.image_size[mask]
         self.importance_score = self.importance_score[mask]
         self.pixel_count = self.pixel_count[mask]
+        self.clear_temporary_active_mask()
         
 
     def _sample_alives(self, probs, num, alive_indices=None):
@@ -1255,3 +1274,4 @@ class TriangleModel:
         self.image_size = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
         self.importance_score = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.float, device="cuda")
         self.pixel_count = torch.zeros((self._triangle_indices.shape[0]), dtype=torch.int, device="cuda")
+        self.clear_temporary_active_mask()

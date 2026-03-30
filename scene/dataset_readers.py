@@ -208,7 +208,27 @@ def storePly(path, xyz, rgb):
     ply_data = PlyData([vertex_element])
     ply_data.write(path)
 
-def readColmapSceneInfo(path, images, eval, llffhold=8, aug=False):
+def _normalize_image_key(name: str):
+    stem = Path(name).stem
+    return stem.lower()
+
+
+def _load_colmap_split_file(split_file: str):
+    split_path = Path(split_file)
+    if not split_path.exists():
+        raise FileNotFoundError(f"split_file not found: {split_file}")
+    with open(split_path, "r") as f:
+        payload = json.load(f)
+    train_names = payload.get("train", [])
+    test_names = payload.get("test", [])
+    dropped_names = payload.get("dropped", [])
+    train_keys = {_normalize_image_key(n) for n in train_names}
+    test_keys = {_normalize_image_key(n) for n in test_names}
+    dropped_keys = {_normalize_image_key(n) for n in dropped_names}
+    return train_keys, test_keys, dropped_keys
+
+
+def readColmapSceneInfo(path, images, eval, llffhold=8, aug=False, split_strategy="llff", split_file=""):
     try:
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
@@ -254,8 +274,45 @@ def readColmapSceneInfo(path, images, eval, llffhold=8, aug=False):
     cam_infos = sorted(cam_infos_unsorted.copy(), key = lambda x : x.image_name)
 
     if eval:
-        train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold != 0]
-        test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold == 0]
+        if split_strategy == "file":
+            if not split_file:
+                raise ValueError("split_strategy=file requires --split_file")
+            train_keys, test_keys, dropped_keys = _load_colmap_split_file(split_file)
+            if not test_keys:
+                raise ValueError("split file must contain non-empty 'test' list for eval mode")
+
+            train_cam_infos = []
+            test_cam_infos = []
+            unknown_train = set(train_keys)
+            unknown_test = set(test_keys)
+
+            for c in cam_infos:
+                key = _normalize_image_key(c.image_name)
+                if key in dropped_keys:
+                    continue
+                if key in test_keys:
+                    test_cam_infos.append(c)
+                    unknown_test.discard(key)
+                elif key in train_keys:
+                    train_cam_infos.append(c)
+                    unknown_train.discard(key)
+                else:
+                    # If train list exists, treat unspecified views as train by default.
+                    train_cam_infos.append(c)
+
+            if unknown_test:
+                print(f"[Split] Warning: {len(unknown_test)} test entries not found in COLMAP cameras.")
+            if unknown_train:
+                print(f"[Split] Warning: {len(unknown_train)} train entries not found in COLMAP cameras.")
+            if len(test_cam_infos) == 0:
+                raise ValueError("split file produced empty test set after matching camera names")
+            print(
+                f"[Split] Using file split from {split_file}: "
+                f"train={len(train_cam_infos)} test={len(test_cam_infos)} dropped={len(dropped_keys)}"
+            )
+        else:
+            train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold != 0]
+            test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold == 0]
     else:
         train_cam_infos = cam_infos
         test_cam_infos = []

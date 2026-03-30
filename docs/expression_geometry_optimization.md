@@ -150,6 +150,21 @@ Recommended first pass:
 
 ---
 
+## New Evaluation Utilities (2026-03-27)
+
+Two utility scripts were added to support stricter validation:
+
+1. `create_colmap_outoftrain_split.py`
+   - Builds a COLMAP-pose-based train/test split with optional dropped buffer views.
+   - Intended for strict out-of-train evaluation.
+2. `evaluate_geometry_colmap.py`
+   - Evaluates model geometry using COLMAP sparse correspondences.
+   - Reports depth metrics (MAE/RMSE/AbsRel/delta) and sparse normal-consistency proxy.
+
+These tools are useful when visual quality and geometric fidelity diverge from FPS gains.
+
+---
+
 ## Quick Validation Checklist
 
 After optimization:

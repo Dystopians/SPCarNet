@@ -108,12 +108,19 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
     """
 
     
-    triangles_indices = pc.get_triangle_indices  # the idx of the 3 vertices of each triangl
+    full_triangles_indices = pc.get_triangle_indices  # [T,3] full topology indices
     vertices = pc.get_vertices # contains all the vertices of the triangles
     vertex_weights = pc.get_vertex_weight  # contains the weights of the vertices for each vertex in the triangles
-    scaling = torch.zeros_like(triangles_indices[:, 0], dtype=pc.get_triangles_points.dtype, requires_grad=True, device="cuda").detach()
-
-    vertex_index = pc._triangle_indices.shape[0]
+    full_triangle_count = int(full_triangles_indices.shape[0])
+    active_mask = pc.get_temporary_active_mask()
+    if active_mask is not None:
+        active_ids = torch.nonzero(active_mask, as_tuple=True)[0]
+        triangles_indices = full_triangles_indices[active_ids]
+    else:
+        active_ids = None
+        triangles_indices = full_triangles_indices
+    active_triangle_count = int(triangles_indices.shape[0])
+    scaling = torch.zeros((active_triangle_count,), dtype=pc.get_triangles_points.dtype, requires_grad=True, device="cuda").detach()
 
     # Set up rasterization configuration
     tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
@@ -163,27 +170,46 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
     else:
         colors_precomp = override_color
 
-    # Rasterize visible triangles to image, obtain their radii (on screen). 
-    rendered_image, radii, scaling, allmap, max_blending, was_rendered  = rasterizer(
-        vertices=vertices,
-        triangles_indices=triangles_indices,
-        vertex_weights=vertex_weights.squeeze(),
-        sigma=sigma,
-        shs = shs,
-        colors_precomp = colors_precomp,
-        scaling = scaling,
-       )
+    if active_triangle_count > 0:
+        # Rasterize visible triangles to image, obtain their radii (on screen).
+        rendered_image, radii_active, scaling_active, allmap, max_blending_active, was_rendered_active = rasterizer(
+            vertices=vertices,
+            triangles_indices=triangles_indices,
+            vertex_weights=vertex_weights.squeeze(),
+            sigma=sigma,
+            shs=shs,
+            colors_precomp=colors_precomp,
+            scaling=scaling,
+        )
+    else:
+        rendered_image = bg_color[:, None, None].expand(3, H, W).contiguous()
+        radii_active = torch.zeros((0,), dtype=torch.int32, device=vertices.device)
+        scaling_active = torch.zeros((0,), dtype=torch.float32, device=vertices.device)
+        max_blending_active = torch.zeros((0,), dtype=torch.float32, device=vertices.device)
+        was_rendered_active = torch.zeros((0,), dtype=torch.int32, device=vertices.device)
+        allmap = torch.zeros((7, H, W), dtype=torch.float32, device=vertices.device)
 
-    radii = radii[:vertex_index]
-    scaling = scaling[:vertex_index]
-    max_blending = max_blending[:vertex_index]
+    if active_ids is None:
+        radii = radii_active[:full_triangle_count]
+        scaling = scaling_active[:full_triangle_count]
+        max_blending = max_blending_active[:full_triangle_count]
+        was_rendered = was_rendered_active[:full_triangle_count]
+    else:
+        radii = torch.zeros((full_triangle_count,), dtype=radii_active.dtype, device=radii_active.device)
+        scaling = torch.zeros((full_triangle_count,), dtype=scaling_active.dtype, device=scaling_active.device)
+        max_blending = torch.zeros((full_triangle_count,), dtype=max_blending_active.dtype, device=max_blending_active.device)
+        was_rendered = torch.zeros((full_triangle_count,), dtype=was_rendered_active.dtype, device=was_rendered_active.device)
+        radii[active_ids] = radii_active
+        scaling[active_ids] = scaling_active
+        max_blending[active_ids] = max_blending_active
+        was_rendered[active_ids] = was_rendered_active
        
     img_hr = rendered_image.unsqueeze(0)  # -> [1, 3, H, W]
     img_ds_area = F.interpolate(img_hr, size=(H_init, W_init), mode="area")  # [1, 3, H0, W0]
     rendered_image_small = img_ds_area.squeeze(0)
 
     V = vertices.shape[0]
-    idx = triangles_indices[was_rendered > 0].reshape(-1).long()
+    idx = triangles_indices[was_rendered_active > 0].reshape(-1).long() if active_triangle_count > 0 else torch.zeros((0,), dtype=torch.long, device=triangles_indices.device)
     vertex_rendered = torch.zeros(V, device=triangles_indices.device, dtype=was_rendered.dtype)
     vertex_rendered.index_fill_(0, idx, 1)
 
@@ -235,6 +261,13 @@ def render(viewpoint_camera, pc : TriangleModel, pipe, bg_color : torch.Tensor, 
     
     # gets the id per pixel of the triangle influencing it
     render_id = allmap[6:7]
+    if active_ids is not None:
+        render_id_local = render_id.long()
+        render_id_global = torch.full_like(render_id_local, -1)
+        valid = (render_id_local >= 0) & (render_id_local < active_ids.shape[0])
+        if torch.any(valid):
+            render_id_global[valid] = active_ids[render_id_local[valid]]
+        render_id = render_id_global.to(render_id.dtype)
     
     surf_depth = render_depth_median
     

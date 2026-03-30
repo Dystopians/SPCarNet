@@ -445,3 +445,136 @@ Interpretation:
 - `models/parking_phone_tiny/comparisons/ground_resume30040_short30100/triplets`
   - 6 representative panels
   - each panel: `GT | Base30040 | ADE30100 | City30100`
+
+---
+
+## Run Record: Evaluation Protocol Upgrade + Original Baseline Audit (2026-03-27)
+
+### Why this update
+
+Recent comparisons exposed that "baseline" naming had drifted across experiments. We therefore:
+
+1. explicitly restored and rendered the **original pure baseline**;
+2. added a switchable **out-of-train split** pipeline;
+3. added **COLMAP-based geometry evaluation** (depth + sparse normal consistency).
+
+### 1) Original baseline identification
+
+Confirmed original pure baseline model:
+
+- `models/parking_phone_tiny_baseline_fastcmp_30000`
+- `cfg_args`: `enable_ground_masks=False` (no ground-aware training switches)
+
+Rendered checkpoint used for comparisons:
+
+- `iteration_15000`
+- output: `models/parking_phone_tiny_baseline_fastcmp_30000/test/ours_15000`
+
+### 2) Original baseline vs current method checkpoints
+
+Compared against:
+
+- `models/parking_ground_resume_16500` @ `iteration_16000`
+- `models/parking_ground_resume_16500` @ `iteration_16500`
+
+Generated artifacts:
+
+- `models/parking_ground_resume_16500/visual_comparisons_original_baseline/`
+  - `comparison_overview_8frames.png`
+  - `per_frame/compare_*.png` (54 views)
+  - `error_report.csv`
+
+Observed (resized-to-baseline-resolution visual protocol):
+
+- mean MAE:
+  - original baseline: `0.08282`
+  - method_16000: `0.09260`
+  - method_16500: `0.09556`
+- per-view MAE wins (baseline better):
+  - vs method_16000: `50 / 54`
+  - vs method_16500: `50 / 54`
+
+Performance-only side:
+
+- render wall-time (54 views):
+  - original baseline: `141.91s` (~`0.38 FPS`)
+  - method_16000: `57.74s` (~`0.94 FPS`)
+  - method_16500: `41.38s` (~`1.31 FPS`)
+- topology:
+  - baseline: triangles `721,930`, vertices `234,401`
+  - method_16000: triangles `626,830`, vertices `204,175`
+  - method_16500: triangles `181,288`, vertices `149,033`
+
+Interpretation:
+
+- Current method branch is clearly better on speed/compactness.
+- In this audit, original baseline is better on visual fidelity.
+
+### 3) Out-of-train split support (switchable)
+
+Code changes:
+
+- `arguments/__init__.py`: add
+  - `--split_strategy` (`llff` | `file`, default `llff`)
+  - `--split_file`
+- `scene/__init__.py`: forward split args to COLMAP loader
+- `scene/dataset_readers.py`: support explicit split file parsing (`train/test/dropped`)
+
+New split generator:
+
+- `create_colmap_outoftrain_split.py`
+
+Generated split:
+
+- `.../sparse/0/split_outoftrain_v1.json`
+- counts: total `425`, train `361`, test `51`, dropped `13`
+- separation:
+  - out-of-train split: min `0.6728`, median `1.4921`
+  - old llff-hold8: min `0.0247`, median `0.1530`
+
+Interpretation:
+
+- old alternating split is near-neighbor validation, not strict extrapolation.
+- new split is materially farther from train distribution.
+
+### 4) COLMAP geometry realism evaluation added
+
+New script:
+
+- `evaluate_geometry_colmap.py`
+
+What it evaluates:
+
+1. **Depth realism** using COLMAP sparse correspondences (projected sparse points):
+   - MAE, RMSE, AbsRel, delta-thresholds.
+2. **Normal realism proxy**:
+   - local PCA normals on sparse COLMAP points vs rendered normals.
+   - reports mean angular error and threshold percentages.
+
+Saved reports:
+
+- baseline:
+  - `models/parking_phone_tiny_baseline_fastcmp_30000/geometry_eval_colmap/iter_15000_llff.json`
+- method:
+  - `models/parking_ground_resume_16500/geometry_eval_colmap/iter_16000_llff.json`
+  - `models/parking_ground_resume_16500/geometry_eval_colmap/iter_16500_llff.json`
+
+Key results (LLFF split):
+
+- Depth AbsRel:
+  - baseline: `0.05666`
+  - method_16000: `0.05833`
+  - method_16500: `0.05945`
+- Depth delta<1.25:
+  - baseline: `0.9439`
+  - method_16000: `0.9395`
+  - method_16500: `0.9385`
+- Normal mean angle (deg, lower is better):
+  - baseline: `39.13`
+  - method_16000: `41.14`
+  - method_16500: `40.68`
+
+Interpretation:
+
+- Under this geometry protocol, baseline currently remains stronger.
+- Method does not yet convert its speed gains into geometry-quality gains.
