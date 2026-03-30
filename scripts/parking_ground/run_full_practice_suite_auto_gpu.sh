@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Parallel full suite launcher:
-# - auto-picks 4 least-busy GPUs
-# - runs 4 training variants concurrently (one per GPU)
+# Parallel geogate suite launcher:
+# - auto-picks 3 least-busy GPUs
+# - runs 3 training variants concurrently (one per GPU)
 # - then runs fair quantitative benchmark + qualitative panels
 #
 # Required env:
@@ -33,7 +33,7 @@ RUN_TAG="${RUN_TAG:-parking_full_practice}"
 ITERATIONS="${ITERATIONS:-30000}"
 WANDB_PROJECT="${WANDB_PROJECT:-mesh-splatting}"
 WANDB_ENTITY="${WANDB_ENTITY:-}"
-WANDB_GROUP="${WANDB_GROUP:-parking_practice}"
+WANDB_GROUP="${WANDB_GROUP:-parking_prism_geogate}"
 WANDB_ENABLE="${WANDB_ENABLE:-1}"
 WANDB_SCALAR_LOG_INTERVAL="${WANDB_SCALAR_LOG_INTERVAL:-10}"
 WANDB_IMAGE_LOG_INTERVAL="${WANDB_IMAGE_LOG_INTERVAL:-5000}"
@@ -45,8 +45,8 @@ if ! command -v nvidia-smi >/dev/null 2>&1; then
 fi
 
 mapfile -t GPU_ROWS < <(nvidia-smi --query-gpu=index,utilization.gpu,memory.used --format=csv,noheader,nounits)
-if [[ "${#GPU_ROWS[@]}" -lt 4 ]]; then
-  echo "Need at least 4 GPUs, found ${#GPU_ROWS[@]}."
+if [[ "${#GPU_ROWS[@]}" -lt 3 ]]; then
+  echo "Need at least 3 GPUs, found ${#GPU_ROWS[@]}."
   exit 1
 fi
 
@@ -54,12 +54,12 @@ mapfile -t BEST_GPUS < <(
   printf "%s\n" "${GPU_ROWS[@]}" \
     | awk -F',' '{gsub(/ /,"",$1); gsub(/ /,"",$2); gsub(/ /,"",$3); score=($2*100000)+$3; printf "%012d %s\n", score, $1}' \
     | sort -n \
-    | head -n 4 \
+    | head -n 3 \
     | awk '{print $2}'
 )
 
-if [[ "${#BEST_GPUS[@]}" -lt 4 ]]; then
-  echo "Failed to pick 4 GPUs."
+if [[ "${#BEST_GPUS[@]}" -lt 3 ]]; then
+  echo "Failed to pick 3 GPUs."
   exit 1
 fi
 
@@ -99,19 +99,17 @@ launch_case() {
   LAST_PID="$!"
 }
 
-launch_case "${BEST_GPUS[0]}" "no_prism" "${RUN_TAG}_baseline"
+launch_case "${BEST_GPUS[0]}" "prism_geogate_fix" "${RUN_TAG}_prism_geogate_fix"
 P1="${LAST_PID}"
-launch_case "${BEST_GPUS[1]}" "grounding_only" "${RUN_TAG}_grounding"
+launch_case "${BEST_GPUS[1]}" "prism_late_prune" "${RUN_TAG}_prism_late_prune"
 P2="${LAST_PID}"
-launch_case "${BEST_GPUS[2]}" "full_prism" "${RUN_TAG}_prism"
+launch_case "${BEST_GPUS[2]}" "prism_geogate_fix_keep" "${RUN_TAG}_prism_geogate_fix_keep"
 P3="${LAST_PID}"
-launch_case "${BEST_GPUS[3]}" "full_prism_ground_protect" "${RUN_TAG}_prism_ground_protect"
-P4="${LAST_PID}"
 
-echo "[AutoGPU] PIDs: ${P1} ${P2} ${P3} ${P4}"
+echo "[AutoGPU] PIDs: ${P1} ${P2} ${P3}"
 
 FAIL=0
-for pid in "${P1}" "${P2}" "${P3}" "${P4}"; do
+for pid in "${P1}" "${P2}" "${P3}"; do
   if ! wait "${pid}"; then
     FAIL=1
   fi
@@ -127,10 +125,9 @@ python scripts/parking_ground/benchmark_prism_runs.py \
   --repo_root . \
   --scene_path "${SCENE_PATH}" \
   --split_file "${SPLIT_FILE}" \
-  --run baseline="${MODEL_ROOT}/${RUN_TAG}_geom_first_no_prism" \
-  --run grounding="${MODEL_ROOT}/${RUN_TAG}_geom_first_grounding" \
-  --run prism="${MODEL_ROOT}/${RUN_TAG}_geom_first_full_prism" \
-  --run prism_ground="${MODEL_ROOT}/${RUN_TAG}_geom_first_full_prism_ground_protect"
+  --run PRISM-GeoGateFix="${MODEL_ROOT}/${RUN_TAG}_prism_geogate_fix" \
+  --run PRISM-LatePrune="${MODEL_ROOT}/${RUN_TAG}_prism_late_prune" \
+  --run PRISM-GeoGateFixKeep="${MODEL_ROOT}/${RUN_TAG}_prism_geogate_fix_keep"
 
 LATEST_BENCH_DIR="$(ls -dt benchmarks/prism_parking_ground/* 2>/dev/null | head -n 1 || true)"
 if [[ -z "${LATEST_BENCH_DIR}" ]]; then
@@ -140,10 +137,9 @@ fi
 
 python scripts/parking_ground/make_qualitative_panels.py \
   --output_dir "${LATEST_BENCH_DIR}" \
-  --run baseline="${MODEL_ROOT}/${RUN_TAG}_geom_first_no_prism" \
-  --run grounding="${MODEL_ROOT}/${RUN_TAG}_geom_first_grounding" \
-  --run prism="${MODEL_ROOT}/${RUN_TAG}_geom_first_full_prism" \
-  --run prism_ground="${MODEL_ROOT}/${RUN_TAG}_geom_first_full_prism_ground_protect"
+  --run PRISM-GeoGateFix="${MODEL_ROOT}/${RUN_TAG}_prism_geogate_fix" \
+  --run PRISM-LatePrune="${MODEL_ROOT}/${RUN_TAG}_prism_late_prune" \
+  --run PRISM-GeoGateFixKeep="${MODEL_ROOT}/${RUN_TAG}_prism_geogate_fix_keep"
 
 echo "[AutoGPU] Done."
 echo "[AutoGPU] Results at: ${LATEST_BENCH_DIR}"

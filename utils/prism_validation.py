@@ -1,7 +1,7 @@
 import json
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -9,7 +9,13 @@ import torch.nn.functional as F
 
 from scene.dataset_readers import sceneLoadTypeCallbacks
 from utils.camera_utils import cameraList_from_camInfos
-from utils.geometry_metrics_utils import depth_metrics, normal_metrics_from_abs_cos
+from utils.prism_geometry_proxy import (
+    GeometryProxyConfig,
+    GeometryProxyContext,
+    estimate_view_sparse_observability,
+    evaluate_view_sparse_geometry_proxy,
+    normalize_image_key,
+)
 
 
 @dataclass
@@ -20,11 +26,16 @@ class PrismValidationConfig:
     mean_angle_degrade_thresh_deg: float = 0.4
     psnr_drop_thresh_db: float = 0.10
     mae_increase_thresh: float = 0.003
-
-
-def _normalize_name(name: str) -> str:
-    base = os.path.basename(name)
-    return os.path.splitext(base)[0].lower()
+    # Hybrid view construction
+    num_buffer_views: int = 16
+    num_train_views: int = 16
+    train_pool_size: int = 128
+    prefer_observable_train_views: bool = True
+    min_depth_matches_per_view: int = 24
+    min_normal_matches_per_view: int = 8
+    # Gate observability thresholds
+    min_valid_depth_matches: int = 128
+    min_valid_normal_matches: int = 64
 
 
 def _load_split_dropped_keys(split_file: str) -> List[str]:
@@ -33,12 +44,12 @@ def _load_split_dropped_keys(split_file: str) -> List[str]:
     try:
         with open(split_file, "r", encoding="utf-8") as f:
             payload = json.load(f)
-        return [_normalize_name(x) for x in payload.get("dropped", [])]
+        return [normalize_image_key(x) for x in payload.get("dropped", [])]
     except Exception:
         return []
 
 
-def _build_all_colmap_cameras(dataset) -> List:
+def _build_all_colmap_cam_infos(dataset) -> List:
     if not os.path.exists(os.path.join(dataset.source_path, "sparse")):
         return []
     try:
@@ -49,40 +60,93 @@ def _build_all_colmap_cameras(dataset) -> List:
             split_strategy="llff",
             split_file="",
         )
-        return cameraList_from_camInfos(info.train_cameras, 1.0, dataset)
+        return list(info.train_cameras)
     except Exception:
         return []
 
 
-def build_prism_validation_views(scene, dataset, cfg: PrismValidationConfig) -> List:
+def _build_all_colmap_cameras(dataset) -> List:
+    all_infos = _build_all_colmap_cam_infos(dataset)
+    if len(all_infos) == 0:
+        return []
+    try:
+        return cameraList_from_camInfos(all_infos, 1.0, dataset)
+    except Exception:
+        return []
+
+
+def build_prism_validation_views(
+    scene,
+    dataset,
+    cfg: PrismValidationConfig,
+    proxy_ctx: Optional[GeometryProxyContext] = None,
+    proxy_cfg: Optional[GeometryProxyConfig] = None,
+) -> List:
     """
-    Dev validation set for PRISM:
-    - Prefer dropped buffer views from split file (when available).
-    - Keep test set untouched (never used as primary PRISM dev-val under file split with dropped).
+    Dev validation set for PRISM (hybrid):
+    - file split: dropped buffer views first
+    - then add train views prioritized by sparse observability
     """
     max_views = max(1, int(cfg.max_views))
     selected: List = []
+    selected_names = set()
+    proxy_cfg = proxy_cfg or GeometryProxyConfig(compute_normal=True)
 
     use_file_split = str(getattr(dataset, "split_strategy", "")).strip().lower() == "file"
     dropped = _load_split_dropped_keys(str(getattr(dataset, "split_file", ""))) if use_file_split else []
     if len(dropped) > 0:
         all_cams = _build_all_colmap_cameras(dataset)
-        by_name = {_normalize_name(getattr(c, "image_name", "")): c for c in all_cams}
-        for k in dropped:
-            cam = by_name.get(k, None)
+        by_name = {normalize_image_key(getattr(c, "image_name", "")): c for c in all_cams}
+        for key in dropped:
+            cam = by_name.get(key, None)
             if cam is None:
                 continue
             selected.append(cam)
+            selected_names.add(key)
+            if len(selected) >= int(min(max_views, max(0, cfg.num_buffer_views))):
+                break
+
+    train_pool = scene.getTrainCameras()
+    pool_size = min(int(cfg.train_pool_size), len(train_pool))
+    pool = train_pool[:pool_size]
+
+    ranked = []
+    for cam in pool:
+        name = normalize_image_key(getattr(cam, "image_name", ""))
+        if name in selected_names:
+            continue
+        score = 0.0
+        depth_matches = 0
+        normal_matches = 0
+        if proxy_ctx is not None:
+            obs = estimate_view_sparse_observability(view=cam, ctx=proxy_ctx, cfg=proxy_cfg)
+            depth_matches = int(obs["depth_matches"])
+            normal_matches = int(obs["normal_matches"])
+            score = float(obs["score"])
+            if bool(cfg.prefer_observable_train_views):
+                if depth_matches < int(max(0, cfg.min_depth_matches_per_view)):
+                    continue
+                if bool(proxy_cfg.compute_normal) and normal_matches < int(max(0, cfg.min_normal_matches_per_view)):
+                    continue
+        ranked.append((score, depth_matches, normal_matches, cam))
+    ranked.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+
+    for _, _, _, cam in ranked:
+        name = normalize_image_key(getattr(cam, "image_name", ""))
+        if name in selected_names:
+            continue
+        selected.append(cam)
+        selected_names.add(name)
+        if len(selected) >= int(min(max_views, max(0, cfg.num_buffer_views) + max(0, cfg.num_train_views))):
+            break
+
+    if len(selected) == 0:
+        for cam in scene.getTestCameras():
+            selected.append(cam)
             if len(selected) >= max_views:
                 break
-        if len(selected) > 0:
-            return selected
-
-    # Fallback only when dropped buffer is unavailable.
-    for cam in scene.getTestCameras():
-        selected.append(cam)
-        if len(selected) >= max_views:
-            break
+    if len(selected) > max_views:
+        selected = selected[:max_views]
     return selected
 
 
@@ -97,19 +161,26 @@ def evaluate_prism_validation_metrics(
     render_func,
     pipe,
     background: torch.Tensor,
+    proxy_ctx: GeometryProxyContext,
+    proxy_cfg: GeometryProxyConfig,
+    cfg: PrismValidationConfig,
 ) -> Dict[str, float]:
     psnr_vals = []
     mae_vals = []
-    absrel_vals = []
-    delta_vals = []
-    mean_angle_vals = []
-    abs_cos_vals = []
+    absrel_num = 0.0
+    delta_num = 0.0
+    depth_weight = 0.0
+    mean_angle_num = 0.0
+    abs_cos_num = 0.0
+    normal_weight = 0.0
+    num_depth_views = 0
+    num_normal_views = 0
+    total_depth_matches = 0
+    total_normal_matches = 0
+    dropped_reason_breakdown: Dict[str, int] = {}
 
     roi_psnr_vals = []
     roi_mae_vals = []
-    roi_absrel_vals = []
-    roi_mean_angle_vals = []
-    roi_abs_cos_vals = []
 
     with torch.no_grad():
         for v in views:
@@ -123,92 +194,84 @@ def evaluate_prism_validation_metrics(
             mae_vals.append(mae)
             psnr_vals.append(psnr)
 
-            # Depth metrics (if available)
-            absrel = float("nan")
-            delta_125 = float("nan")
-            if getattr(v, "invdepthmap", None) is not None:
-                pred_depth = pkg["surf_depth"].detach()[0]
-                gt_inv = v.invdepthmap.to(pred_depth.device)[0]
-                gt_depth = 1.0 / torch.clamp(gt_inv, min=1e-6)
-                valid = torch.isfinite(gt_depth) & torch.isfinite(pred_depth) & (gt_depth > 1e-6) & (pred_depth > 1e-6)
-                if torch.any(valid):
-                    dm = depth_metrics(
-                        pred=pred_depth[valid].detach().cpu().numpy().astype(np.float64),
-                        gt=gt_depth[valid].detach().cpu().numpy().astype(np.float64),
-                    )
-                    absrel = float(dm["abs_rel"])
-                    delta_125 = float(dm["delta_1.25"])
-            absrel_vals.append(absrel)
-            delta_vals.append(delta_125)
+            proxy = evaluate_view_sparse_geometry_proxy(
+                view=v,
+                render_pkg=pkg,
+                ctx=proxy_ctx,
+                cfg=proxy_cfg,
+            )
+            reason = str(proxy.get("reason", "unknown"))
+            if reason != "ok":
+                dropped_reason_breakdown[reason] = int(dropped_reason_breakdown.get(reason, 0)) + 1
 
-            # Normal metrics (if available)
-            mean_ang = float("nan")
-            abs_cos = float("nan")
-            if getattr(v, "normal_map", None) is not None:
-                rn = F.normalize(pkg["rend_normal"].detach(), dim=0, eps=1e-6)
-                gn = F.normalize(v.normal_map.to(rn.device), dim=0, eps=1e-6)
-                c = torch.clamp(torch.abs(torch.sum(rn * gn, dim=0)), 0.0, 1.0)
-                nm = normal_metrics_from_abs_cos(c.detach().cpu().numpy().astype(np.float64))
-                mean_ang = float(nm["mean_ang_deg"])
-                abs_cos = float(nm["mean_abs_cos"])
-            mean_angle_vals.append(mean_ang)
-            abs_cos_vals.append(abs_cos)
+            depth_points = int(proxy.get("depth_points", 0))
+            if depth_points > 0 and proxy.get("depth_stats", None) is not None:
+                ds = proxy["depth_stats"]
+                num_depth_views += 1
+                total_depth_matches += depth_points
+                depth_weight += float(depth_points)
+                absrel_num += float(ds["abs_rel"]) * float(depth_points)
+                delta_num += float(ds["delta_1.25"]) * float(depth_points)
 
-            # Optional ROI breakdown from existing ground mask (analysis only).
+            normal_points = int(proxy.get("normal_points", 0))
+            if bool(proxy_cfg.compute_normal) and normal_points > 0 and proxy.get("normal_stats", None) is not None:
+                ns = proxy["normal_stats"]
+                num_normal_views += 1
+                total_normal_matches += normal_points
+                normal_weight += float(normal_points)
+                mean_angle_num += float(ns["mean_ang_deg"]) * float(normal_points)
+                abs_cos_num += float(ns["mean_abs_cos"]) * float(normal_points)
+
             gm = getattr(v, "ground_mask", None)
             if gm is not None:
                 mask = gm.to(img.device)
                 if mask.ndim == 3:
                     mask = mask[0]
-                if mask.ndim != 2:
-                    continue
-                if mask.shape[0] != img.shape[1] or mask.shape[1] != img.shape[2]:
-                    mask = F.interpolate(mask[None, None].float(), size=(img.shape[1], img.shape[2]), mode="nearest").squeeze(0).squeeze(0)
-                mask = mask > 0.5
-                if torch.any(mask):
-                    mask3 = mask.unsqueeze(0).float()
-                    roi_mae = float((torch.abs(diff) * mask3).sum().item() / (mask3.sum().item() * 3.0 + 1e-8))
-                    roi_mse = float(((diff * diff) * mask3).sum().item() / (mask3.sum().item() * 3.0 + 1e-8))
-                    roi_psnr = float(-10.0 * np.log10(max(roi_mse, 1e-8)))
-                    roi_mae_vals.append(roi_mae)
-                    roi_psnr_vals.append(roi_psnr)
+                if mask.ndim == 2:
+                    if mask.shape[0] != img.shape[1] or mask.shape[1] != img.shape[2]:
+                        mask = F.interpolate(mask[None, None].float(), size=(img.shape[1], img.shape[2]), mode="nearest").squeeze(0).squeeze(0)
+                    mask = mask > 0.5
+                    if torch.any(mask):
+                        mask3 = mask.unsqueeze(0).float()
+                        roi_mae = float((torch.abs(diff) * mask3).sum().item() / (mask3.sum().item() * 3.0 + 1e-8))
+                        roi_mse = float(((diff * diff) * mask3).sum().item() / (mask3.sum().item() * 3.0 + 1e-8))
+                        roi_psnr = float(-10.0 * np.log10(max(roi_mse, 1e-8)))
+                        roi_mae_vals.append(roi_mae)
+                        roi_psnr_vals.append(roi_psnr)
 
-                    if getattr(v, "invdepthmap", None) is not None:
-                        pred_depth = pkg["surf_depth"].detach()[0]
-                        gt_inv = v.invdepthmap.to(pred_depth.device)[0]
-                        gt_depth = 1.0 / torch.clamp(gt_inv, min=1e-6)
-                        valid = mask & torch.isfinite(gt_depth) & torch.isfinite(pred_depth) & (gt_depth > 1e-6) & (pred_depth > 1e-6)
-                        if torch.any(valid):
-                            dm_roi = depth_metrics(
-                                pred=pred_depth[valid].detach().cpu().numpy().astype(np.float64),
-                                gt=gt_depth[valid].detach().cpu().numpy().astype(np.float64),
-                            )
-                            roi_absrel_vals.append(float(dm_roi["abs_rel"]))
+    geometry_failure_reasons: List[str] = []
+    if total_depth_matches <= 0:
+        if int(dropped_reason_breakdown.get("render_missing_output", 0)) > 0:
+            geometry_failure_reasons.append("render_missing_output")
+        else:
+            geometry_failure_reasons.append("no_sparse_matches")
+    if total_depth_matches < int(max(0, cfg.min_valid_depth_matches)):
+        geometry_failure_reasons.append("insufficient_depth_matches")
+    if bool(proxy_cfg.compute_normal):
+        if total_normal_matches <= 0:
+            geometry_failure_reasons.append("no_sparse_matches")
+        if total_normal_matches < int(max(0, cfg.min_valid_normal_matches)):
+            geometry_failure_reasons.append("insufficient_normal_matches")
 
-                    if getattr(v, "normal_map", None) is not None:
-                        rn = F.normalize(pkg["rend_normal"].detach(), dim=0, eps=1e-6)
-                        gn = F.normalize(v.normal_map.to(rn.device), dim=0, eps=1e-6)
-                        c = torch.clamp(torch.abs(torch.sum(rn * gn, dim=0)), 0.0, 1.0)
-                        c_roi = c[mask]
-                        if c_roi.numel() > 0:
-                            nm_roi = normal_metrics_from_abs_cos(c_roi.detach().cpu().numpy().astype(np.float64))
-                            roi_mean_angle_vals.append(float(nm_roi["mean_ang_deg"]))
-                            roi_abs_cos_vals.append(float(nm_roi["mean_abs_cos"]))
+    geometry_observable = len(geometry_failure_reasons) == 0
 
     return {
         "num_views": float(len(views)),
+        "num_depth_views_used": float(num_depth_views),
+        "num_normal_views_used": float(num_normal_views),
+        "total_valid_depth_matches": float(total_depth_matches),
+        "total_valid_normal_matches": float(total_normal_matches),
+        "dropped_views_reason_breakdown": {str(k): int(v) for k, v in dropped_reason_breakdown.items()},
+        "geometry_observable": 1.0 if geometry_observable else 0.0,
+        "geometry_failure_reasons": list(sorted(set(geometry_failure_reasons))),
         "psnr": _safe_mean(psnr_vals),
         "mae": _safe_mean(mae_vals),
-        "absrel": _safe_mean(absrel_vals),
-        "delta_1.25": _safe_mean(delta_vals),
-        "mean_angle": _safe_mean(mean_angle_vals),
-        "abs_cos": _safe_mean(abs_cos_vals),
-        # Optional analysis-only ROI breakdown
+        "absrel": float(absrel_num / depth_weight) if depth_weight > 0 else float("nan"),
+        "delta_1.25": float(delta_num / depth_weight) if depth_weight > 0 else float("nan"),
+        "mean_angle": float(mean_angle_num / normal_weight) if normal_weight > 0 else float("nan"),
+        "abs_cos": float(abs_cos_num / normal_weight) if normal_weight > 0 else float("nan"),
         "roi_psnr": _safe_mean(roi_psnr_vals),
         "roi_mae": _safe_mean(roi_mae_vals),
-        "roi_absrel": _safe_mean(roi_absrel_vals),
-        "roi_mean_angle": _safe_mean(roi_mean_angle_vals),
-        "roi_abs_cos": _safe_mean(roi_abs_cos_vals),
     }
 
 
@@ -229,7 +292,16 @@ def compare_validation_against_stage_best(
         "psnr_drop": float("nan"),
         "mae_increase": float("nan"),
     }
-    rules = []
+    rules: List[str] = []
+
+    cur_observable = bool(float(current_metrics.get("geometry_observable", 0.0)) > 0.5)
+    if not cur_observable:
+        reasons = current_metrics.get("geometry_failure_reasons", [])
+        if isinstance(reasons, list) and len(reasons) > 0:
+            rules.extend([str(r) for r in reasons])
+        else:
+            rules.append("insufficient_geometry_observability")
+        return False, deltas, sorted(set(rules))
 
     cur_absrel = current_metrics.get("absrel", float("nan"))
     bst_absrel = stage_best_metrics.get("absrel", float("nan"))

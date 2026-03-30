@@ -9,10 +9,15 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 
-def _latest_test_method_dir(model_path: Path) -> Path:
+def _latest_test_method_dir(model_path: Path, iteration: int = -1) -> Path:
     test_dir = model_path / "test"
     if not test_dir.exists():
         raise FileNotFoundError(f"Missing test dir: {test_dir}")
+    if int(iteration) >= 0:
+        target = test_dir / f"ours_{int(iteration)}"
+        if not target.exists():
+            raise FileNotFoundError(f"Missing method dir: {target}")
+        return target
     best = None
     best_it = -1
     for d in test_dir.iterdir():
@@ -72,6 +77,7 @@ def main():
         help="Run spec name=/abs/or/relative/model_path; can repeat",
     )
     parser.add_argument("--max_views", type=int, default=12)
+    parser.add_argument("--iteration", type=int, default=-1, help="If set, use fixed ours_<iter> for all runs.")
     args = parser.parse_args()
 
     out_dir = Path(args.output_dir).resolve()
@@ -84,7 +90,7 @@ def main():
             raise ValueError(f"Bad --run spec: {spec}")
         run_name, model_raw = spec.split("=", 1)
         model_path = Path(model_raw).resolve()
-        method_dir = _latest_test_method_dir(model_path)
+        method_dir = _latest_test_method_dir(model_path, iteration=args.iteration)
         renders_dir = method_dir / "renders"
         gt_dir = method_dir / "gt"
         if (not renders_dir.exists()) or (not gt_dir.exists()):

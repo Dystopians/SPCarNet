@@ -1,17 +1,21 @@
 import json
 import os
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence
+from dataclasses import asdict, dataclass
+from typing import Dict, List, Sequence
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 
 from scene.dataset_readers import sceneLoadTypeCallbacks
 from utils.camera_utils import cameraList_from_camInfos
-from utils.geometry_metrics_utils import depth_metrics
+from utils.prism_geometry_proxy import (
+    GeometryProxyConfig,
+    GeometryProxyContext,
+    estimate_view_sparse_observability,
+    evaluate_view_sparse_geometry_proxy,
+    normalize_image_key,
+)
 from utils.prism_scoring import PrismScoreOutputs
-from utils.triangle_stats import TriangleState
 
 
 @dataclass
@@ -22,6 +26,8 @@ class CounterfactualGateConfig:
     max_delta_mean_angle_deg: float = 0.3
     max_changed_pixel_ratio: float = 0.005
     changed_pixel_threshold: float = 0.02
+    min_valid_depth_matches: int = 128
+    min_valid_normal_matches: int = 64
 
 
 @dataclass
@@ -29,6 +35,9 @@ class CalibrationConfig:
     num_buffer_views: int = 8
     num_hard_train_views: int = 8
     hard_view_pool_size: int = 64
+    prefer_observable_views: bool = True
+    min_depth_matches_per_view: int = 24
+    min_normal_matches_per_view: int = 8
 
 
 @dataclass
@@ -39,6 +48,12 @@ class CounterfactualDecision:
     baseline: Dict[str, float]
     counterfactual: Dict[str, float]
     reason: str
+    num_views: int
+    num_depth_views_used: int
+    num_normal_views_used: int
+    total_valid_depth_matches: int
+    total_valid_normal_matches: int
+    dropped_views_reason_breakdown: Dict[str, int]
 
 
 class TemporaryTriangleMask:
@@ -74,11 +89,6 @@ class TemporaryTriangleMask:
         return False
 
 
-def _normalize_name(name: str) -> str:
-    base = os.path.basename(name)
-    return os.path.splitext(base)[0].lower()
-
-
 def _load_split_dropped(split_file: str) -> List[str]:
     if not split_file or (not os.path.exists(split_file)):
         return []
@@ -86,13 +96,12 @@ def _load_split_dropped(split_file: str) -> List[str]:
         with open(split_file, "r", encoding="utf-8") as f:
             payload = json.load(f)
         dropped = payload.get("dropped", [])
-        return [_normalize_name(x) for x in dropped]
+        return [normalize_image_key(x) for x in dropped]
     except Exception:
         return []
 
 
-def _ensure_all_cameras(scene, dataset) -> List:
-    # Build all views without train/test split to recover dropped buffer views when possible.
+def _build_all_colmap_cam_infos(dataset) -> List:
     try:
         if not os.path.exists(os.path.join(dataset.source_path, "sparse")):
             return []
@@ -103,37 +112,59 @@ def _ensure_all_cameras(scene, dataset) -> List:
             split_strategy="llff",
             split_file="",
         )
-        all_cams = cameraList_from_camInfos(all_info.train_cameras, 1.0, dataset)
-        return all_cams
+        return list(all_info.train_cameras)
     except Exception:
         return []
 
 
-def _compute_view_difficulty(render_pkg: Dict, view) -> float:
+def _build_all_cameras(scene, dataset) -> List:
+    all_infos = _build_all_colmap_cam_infos(dataset)
+    if len(all_infos) == 0:
+        return []
+    try:
+        return cameraList_from_camInfos(all_infos, 1.0, dataset)
+    except Exception:
+        return []
+
+
+def _compute_view_difficulty(
+    render_pkg: Dict,
+    view,
+    proxy_ctx: GeometryProxyContext,
+    proxy_cfg: GeometryProxyConfig,
+) -> float:
     img = torch.clamp(render_pkg["render"].detach(), 0.0, 1.0)
     gt = torch.clamp(view.original_image.to(img.device), 0.0, 1.0)
-    mae = torch.mean(torch.abs(img - gt))
+    mae = float(torch.mean(torch.abs(img - gt)).item())
 
-    depth_absrel = torch.tensor(0.0, device=img.device)
-    if getattr(view, "invdepthmap", None) is not None:
-        pred_depth = render_pkg["surf_depth"].detach()[0]
-        gt_inv = view.invdepthmap.to(pred_depth.device)[0]
-        gt_depth = 1.0 / torch.clamp(gt_inv, min=1e-6)
-        valid = torch.isfinite(gt_depth) & torch.isfinite(pred_depth) & (gt_depth > 1e-6) & (pred_depth > 1e-6)
-        if torch.any(valid):
-            pd = pred_depth[valid]
-            gd = gt_depth[valid]
-            depth_absrel = torch.mean(torch.abs(pd - gd) / torch.clamp(gd, min=1e-6))
+    proxy = evaluate_view_sparse_geometry_proxy(
+        view=view,
+        render_pkg=render_pkg,
+        ctx=proxy_ctx,
+        cfg=proxy_cfg,
+    )
+    depth_penalty = 1.0
+    normal_penalty = 0.5 if bool(proxy_cfg.compute_normal) else 0.0
+    if proxy.get("depth_stats", None) is not None:
+        depth_penalty = float(proxy["depth_stats"]["abs_rel"])
+    if bool(proxy_cfg.compute_normal) and proxy.get("normal_stats", None) is not None:
+        normal_penalty = float(proxy["normal_stats"]["mean_ang_deg"]) / 180.0
+    return float(mae + depth_penalty + normal_penalty)
 
-    normal_term = torch.tensor(0.0, device=img.device)
-    if getattr(view, "normal_map", None) is not None:
-        rn = F.normalize(render_pkg["rend_normal"].detach(), dim=0, eps=1e-6)
-        gn = F.normalize(view.normal_map.to(rn.device), dim=0, eps=1e-6)
-        c = torch.clamp(torch.abs(torch.sum(rn * gn, dim=0)), 0.0, 1.0)
-        ang = torch.rad2deg(torch.arccos(c))
-        normal_term = torch.mean(ang) / 180.0
 
-    return float((mae + depth_absrel + normal_term).item())
+def _is_view_observable(
+    view,
+    proxy_ctx: GeometryProxyContext,
+    proxy_cfg: GeometryProxyConfig,
+    cfg: CalibrationConfig,
+) -> bool:
+    obs = estimate_view_sparse_observability(view=view, ctx=proxy_ctx, cfg=proxy_cfg)
+    if int(obs["depth_matches"]) < int(max(0, cfg.min_depth_matches_per_view)):
+        return False
+    if bool(proxy_cfg.compute_normal):
+        if int(obs["normal_matches"]) < int(max(0, cfg.min_normal_matches_per_view)):
+            return False
+    return True
 
 
 def build_calibration_set(
@@ -144,6 +175,8 @@ def build_calibration_set(
     pipe,
     background: torch.Tensor,
     cfg: CalibrationConfig,
+    proxy_ctx: GeometryProxyContext,
+    proxy_cfg: GeometryProxyConfig,
 ) -> List:
     train_cams = scene.getTrainCameras()
     test_cams = scene.getTestCameras()
@@ -151,123 +184,146 @@ def build_calibration_set(
     selected: List = []
     selected_names = set()
 
-    # 1) Buffer views: prioritize dropped views from split file.
     dropped = []
     if getattr(dataset, "split_strategy", "") == "file":
         dropped = _load_split_dropped(getattr(dataset, "split_file", ""))
     if len(dropped) > 0:
         by_name = {}
         for cam in test_cams + train_cams:
-            by_name[_normalize_name(getattr(cam, "image_name", ""))] = cam
-        # Try direct hit first.
+            by_name[normalize_image_key(getattr(cam, "image_name", ""))] = cam
         for name in dropped:
             cam = by_name.get(name, None)
             if cam is not None and name not in selected_names:
-                selected.append(cam)
-                selected_names.add(name)
+                if (not bool(cfg.prefer_observable_views)) or _is_view_observable(cam, proxy_ctx, proxy_cfg, cfg):
+                    selected.append(cam)
+                    selected_names.add(name)
                 if len(selected) >= int(cfg.num_buffer_views):
                     break
-        # If still missing, attempt to recover from full camera list.
         if len(selected) < int(cfg.num_buffer_views):
-            all_cams = _ensure_all_cameras(scene=scene, dataset=dataset)
-            by_name_all = {_normalize_name(getattr(c, "image_name", "")): c for c in all_cams}
+            all_cams = _build_all_cameras(scene=scene, dataset=dataset)
+            by_name_all = {normalize_image_key(getattr(c, "image_name", "")): c for c in all_cams}
             for name in dropped:
                 if name in selected_names:
                     continue
                 cam = by_name_all.get(name, None)
                 if cam is None:
                     continue
-                selected.append(cam)
-                selected_names.add(name)
+                if (not bool(cfg.prefer_observable_views)) or _is_view_observable(cam, proxy_ctx, proxy_cfg, cfg):
+                    selected.append(cam)
+                    selected_names.add(name)
                 if len(selected) >= int(cfg.num_buffer_views):
                     break
 
-    # Buffer fallback to test views if dropped buffer unavailable.
     if len(selected) < int(cfg.num_buffer_views):
         for cam in test_cams:
-            name = _normalize_name(getattr(cam, "image_name", ""))
+            name = normalize_image_key(getattr(cam, "image_name", ""))
             if name in selected_names:
                 continue
-            selected.append(cam)
-            selected_names.add(name)
+            if (not bool(cfg.prefer_observable_views)) or _is_view_observable(cam, proxy_ctx, proxy_cfg, cfg):
+                selected.append(cam)
+                selected_names.add(name)
             if len(selected) >= int(cfg.num_buffer_views):
                 break
 
-    # 2) Add hardest train views.
     pool_size = min(len(train_cams), int(cfg.hard_view_pool_size))
     pool = train_cams[:pool_size]
+    filtered = []
+    for cam in pool:
+        name = normalize_image_key(getattr(cam, "image_name", ""))
+        if name in selected_names:
+            continue
+        if (not bool(cfg.prefer_observable_views)) or _is_view_observable(cam, proxy_ctx, proxy_cfg, cfg):
+            filtered.append(cam)
+    if len(filtered) == 0:
+        filtered = [c for c in pool if normalize_image_key(getattr(c, "image_name", "")) not in selected_names]
+
     hardness = []
     with torch.no_grad():
-        for cam in pool:
+        for cam in filtered:
             pkg = render_func(cam, triangles, pipe, background)
-            h = _compute_view_difficulty(pkg, cam)
+            h = _compute_view_difficulty(
+                render_pkg=pkg,
+                view=cam,
+                proxy_ctx=proxy_ctx,
+                proxy_cfg=proxy_cfg,
+            )
             hardness.append(h)
     if len(hardness) > 0:
         order = np.argsort(np.asarray(hardness))[::-1]
         n_hard = int(cfg.num_hard_train_views)
         for idx in order[:n_hard]:
-            cam = pool[int(idx)]
-            name = _normalize_name(getattr(cam, "image_name", ""))
+            cam = filtered[int(idx)]
+            name = normalize_image_key(getattr(cam, "image_name", ""))
             if name in selected_names:
                 continue
             selected.append(cam)
             selected_names.add(name)
-
     return selected
 
 
-def _compute_metrics(render_pkg: Dict, view) -> Dict[str, float]:
+def _compute_image_metrics(render_pkg: Dict, view) -> Dict[str, float]:
     img = torch.clamp(render_pkg["render"].detach(), 0.0, 1.0)
     gt = torch.clamp(view.original_image.to(img.device), 0.0, 1.0)
+    mae = float(torch.mean(torch.abs(img - gt)).item())
+    mse = float(torch.mean((img - gt) ** 2).item())
+    psnr = float(-10.0 * np.log10(max(mse, 1e-8)))
+    return {"psnr": psnr, "mae": mae, "image": img}
 
-    mae = torch.mean(torch.abs(img - gt))
-    mse = torch.mean((img - gt) ** 2)
-    psnr = -10.0 * torch.log10(torch.clamp(mse, min=1e-8))
 
-    absrel = torch.tensor(float("nan"), device=img.device)
-    delta_125 = torch.tensor(float("nan"), device=img.device)
-    if getattr(view, "invdepthmap", None) is not None:
-        pred_depth = render_pkg["surf_depth"].detach()[0]
-        gt_inv = view.invdepthmap.to(pred_depth.device)[0]
-        gt_depth = 1.0 / torch.clamp(gt_inv, min=1e-6)
-        valid = torch.isfinite(gt_depth) & torch.isfinite(pred_depth) & (gt_depth > 1e-6) & (pred_depth > 1e-6)
-        if torch.any(valid):
-            pd = pred_depth[valid]
-            gd = gt_depth[valid]
-            dm = depth_metrics(
-                pred=pd.detach().cpu().numpy().astype(np.float64),
-                gt=gd.detach().cpu().numpy().astype(np.float64),
-            )
-            absrel = torch.tensor(float(dm["abs_rel"]), dtype=torch.float32, device=img.device)
-            delta_125 = torch.tensor(float(dm["delta_1.25"]), dtype=torch.float32, device=img.device)
+def _aggregate_from_entries(entries: Sequence[Dict], compute_normal: bool) -> Dict[str, float]:
+    psnr_vals = [float(e["psnr"]) for e in entries if np.isfinite(e["psnr"])]
+    mae_vals = [float(e["mae"]) for e in entries if np.isfinite(e["mae"])]
 
-    mean_angle = torch.tensor(float("nan"), device=img.device)
-    abs_cos = torch.tensor(float("nan"), device=img.device)
-    if getattr(view, "normal_map", None) is not None:
-        rn = F.normalize(render_pkg["rend_normal"].detach(), dim=0, eps=1e-6)
-        gn = F.normalize(view.normal_map.to(rn.device), dim=0, eps=1e-6)
-        c = torch.clamp(torch.abs(torch.sum(rn * gn, dim=0)), 0.0, 1.0)
-        abs_cos = torch.mean(c)
-        mean_angle = torch.mean(torch.rad2deg(torch.arccos(c)))
+    depth_weight = 0.0
+    absrel_num = 0.0
+    d125_num = 0.0
+    dmae_num = 0.0
+    normal_weight = 0.0
+    mean_ang_num = 0.0
+    abs_cos_num = 0.0
+    reason_breakdown: Dict[str, int] = {}
+    num_depth_views = 0
+    num_normal_views = 0
+    total_depth_matches = 0
+    total_normal_matches = 0
+
+    for e in entries:
+        proxy = e["proxy"]
+        reason = str(proxy.get("reason", "unknown"))
+        if reason != "ok":
+            reason_breakdown[reason] = int(reason_breakdown.get(reason, 0)) + 1
+        depth_points = int(proxy.get("depth_points", 0))
+        normal_points = int(proxy.get("normal_points", 0))
+        if depth_points > 0 and proxy.get("depth_stats", None) is not None:
+            ds = proxy["depth_stats"]
+            num_depth_views += 1
+            total_depth_matches += depth_points
+            depth_weight += float(depth_points)
+            absrel_num += float(ds["abs_rel"]) * float(depth_points)
+            d125_num += float(ds["delta_1.25"]) * float(depth_points)
+            dmae_num += float(ds["mae"]) * float(depth_points)
+        if compute_normal and normal_points > 0 and proxy.get("normal_stats", None) is not None:
+            ns = proxy["normal_stats"]
+            num_normal_views += 1
+            total_normal_matches += normal_points
+            normal_weight += float(normal_points)
+            mean_ang_num += float(ns["mean_ang_deg"]) * float(normal_points)
+            abs_cos_num += float(ns["mean_abs_cos"]) * float(normal_points)
 
     return {
-        "psnr": float(psnr.item()),
-        "mae": float(mae.item()),
-        "absrel": float(absrel.item()) if torch.isfinite(absrel) else float("nan"),
-        "delta_125": float(delta_125.item()) if torch.isfinite(delta_125) else float("nan"),
-        "mean_normal_angle": float(mean_angle.item()) if torch.isfinite(mean_angle) else float("nan"),
-        "abs_cos": float(abs_cos.item()) if torch.isfinite(abs_cos) else float("nan"),
-        "image": img,
+        "psnr": float(np.mean(psnr_vals)) if len(psnr_vals) > 0 else float("nan"),
+        "mae": float(np.mean(mae_vals)) if len(mae_vals) > 0 else float("nan"),
+        "absrel": float(absrel_num / depth_weight) if depth_weight > 0 else float("nan"),
+        "delta_125": float(d125_num / depth_weight) if depth_weight > 0 else float("nan"),
+        "depth_mae": float(dmae_num / depth_weight) if depth_weight > 0 else float("nan"),
+        "mean_normal_angle": float(mean_ang_num / normal_weight) if normal_weight > 0 else float("nan"),
+        "abs_cos": float(abs_cos_num / normal_weight) if normal_weight > 0 else float("nan"),
+        "num_depth_views_used": int(num_depth_views),
+        "num_normal_views_used": int(num_normal_views),
+        "total_valid_depth_matches": int(total_depth_matches),
+        "total_valid_normal_matches": int(total_normal_matches),
+        "dropped_views_reason_breakdown": reason_breakdown,
     }
-
-
-def _aggregate_metrics(items: Sequence[Dict[str, float]]) -> Dict[str, float]:
-    keys = ["psnr", "mae", "absrel", "delta_125", "mean_normal_angle", "abs_cos", "changed_pixel_ratio"]
-    out = {}
-    for k in keys:
-        vals = [it[k] for it in items if k in it and np.isfinite(it[k])]
-        out[k] = float(np.mean(vals)) if len(vals) > 0 else float("nan")
-    return out
 
 
 def run_counterfactual_simulation(
@@ -279,6 +335,8 @@ def run_counterfactual_simulation(
     candidate_triangle_ids: torch.Tensor,
     calibration_views: Sequence,
     gate_cfg: CounterfactualGateConfig,
+    proxy_ctx: GeometryProxyContext,
+    proxy_cfg: GeometryProxyConfig,
 ) -> CounterfactualDecision:
     cand = candidate_triangle_ids.to(torch.int64)
     t = int(triangles._triangle_indices.shape[0])
@@ -292,6 +350,12 @@ def run_counterfactual_simulation(
             baseline={},
             counterfactual={},
             reason="empty_candidates",
+            num_views=0,
+            num_depth_views_used=0,
+            num_normal_views_used=0,
+            total_valid_depth_matches=0,
+            total_valid_normal_matches=0,
+            dropped_views_reason_breakdown={},
         )
     if len(calibration_views) == 0:
         return CounterfactualDecision(
@@ -301,34 +365,116 @@ def run_counterfactual_simulation(
             baseline={},
             counterfactual={},
             reason="empty_calibration_set",
+            num_views=0,
+            num_depth_views_used=0,
+            num_normal_views_used=0,
+            total_valid_depth_matches=0,
+            total_valid_normal_matches=0,
+            dropped_views_reason_breakdown={},
         )
 
-    baseline_items = []
+    baseline_entries = []
     with torch.no_grad():
         for v in calibration_views:
             pkg = render_func(v, triangles, pipe, background)
-            m = _compute_metrics(pkg, v)
-            baseline_items.append(m)
+            img_m = _compute_image_metrics(pkg, v)
+            proxy_m = evaluate_view_sparse_geometry_proxy(v, pkg, proxy_ctx, proxy_cfg)
+            baseline_entries.append({"psnr": img_m["psnr"], "mae": img_m["mae"], "image": img_m["image"], "proxy": proxy_m})
 
-    cf_items = []
+    cf_entries = []
     with TemporaryTriangleMask(triangles=triangles, inactive_triangle_ids=cand):
         with torch.no_grad():
             for i, v in enumerate(calibration_views):
                 pkg = render_func(v, triangles, pipe, background)
-                m = _compute_metrics(pkg, v)
-                base_img = baseline_items[i]["image"]
-                cf_img = m["image"]
+                img_m = _compute_image_metrics(pkg, v)
+                proxy_m = evaluate_view_sparse_geometry_proxy(v, pkg, proxy_ctx, proxy_cfg)
+                base_img = baseline_entries[i]["image"]
+                cf_img = img_m["image"]
                 diff = torch.mean(torch.abs(base_img - cf_img), dim=0)
                 changed = torch.mean((diff > float(gate_cfg.changed_pixel_threshold)).to(torch.float32))
-                m["changed_pixel_ratio"] = float(changed.item())
-                cf_items.append(m)
+                cf_entries.append(
+                    {
+                        "psnr": img_m["psnr"],
+                        "mae": img_m["mae"],
+                        "changed_pixel_ratio": float(changed.item()),
+                        "proxy": proxy_m,
+                    }
+                )
 
-    baseline = _aggregate_metrics(baseline_items)
-    counterfactual = _aggregate_metrics(cf_items)
+    baseline = _aggregate_from_entries(entries=baseline_entries, compute_normal=bool(proxy_cfg.compute_normal))
+    counterfactual = _aggregate_from_entries(entries=cf_entries, compute_normal=bool(proxy_cfg.compute_normal))
+    changed_vals = [float(e["changed_pixel_ratio"]) for e in cf_entries if np.isfinite(e["changed_pixel_ratio"])]
+    counterfactual["changed_pixel_ratio"] = float(np.mean(changed_vals)) if len(changed_vals) > 0 else float("nan")
+
+    combined_reasons: Dict[str, int] = {}
+    for reason_map in [baseline["dropped_views_reason_breakdown"], counterfactual["dropped_views_reason_breakdown"]]:
+        for k, v in reason_map.items():
+            combined_reasons[k] = int(combined_reasons.get(k, 0)) + int(v)
+
+    min_depth = int(max(0, gate_cfg.min_valid_depth_matches))
+    min_normal = int(max(0, gate_cfg.min_valid_normal_matches)) if bool(proxy_cfg.compute_normal) else 0
+    b_depth = int(baseline["total_valid_depth_matches"])
+    c_depth = int(counterfactual["total_valid_depth_matches"])
+    b_norm = int(baseline["total_valid_normal_matches"])
+    c_norm = int(counterfactual["total_valid_normal_matches"])
+
+    if max(b_depth, c_depth) <= 0:
+        reason = "render_missing_output" if int(combined_reasons.get("render_missing_output", 0)) > 0 else "no_sparse_matches"
+        return CounterfactualDecision(
+            accept=False,
+            num_candidates=int(cand.numel()),
+            deltas={},
+            baseline=baseline,
+            counterfactual=counterfactual,
+            reason=reason,
+            num_views=int(len(calibration_views)),
+            num_depth_views_used=int(baseline["num_depth_views_used"]),
+            num_normal_views_used=int(baseline["num_normal_views_used"]),
+            total_valid_depth_matches=int(b_depth),
+            total_valid_normal_matches=int(b_norm),
+            dropped_views_reason_breakdown=combined_reasons,
+        )
+    if (b_depth < min_depth) or (c_depth < min_depth):
+        return CounterfactualDecision(
+            accept=False,
+            num_candidates=int(cand.numel()),
+            deltas={},
+            baseline=baseline,
+            counterfactual=counterfactual,
+            reason="insufficient_depth_matches",
+            num_views=int(len(calibration_views)),
+            num_depth_views_used=int(baseline["num_depth_views_used"]),
+            num_normal_views_used=int(baseline["num_normal_views_used"]),
+            total_valid_depth_matches=int(b_depth),
+            total_valid_normal_matches=int(b_norm),
+            dropped_views_reason_breakdown=combined_reasons,
+        )
+    if min_normal > 0 and ((b_norm < min_normal) or (c_norm < min_normal)):
+        return CounterfactualDecision(
+            accept=False,
+            num_candidates=int(cand.numel()),
+            deltas={},
+            baseline=baseline,
+            counterfactual=counterfactual,
+            reason="insufficient_normal_matches",
+            num_views=int(len(calibration_views)),
+            num_depth_views_used=int(baseline["num_depth_views_used"]),
+            num_normal_views_used=int(baseline["num_normal_views_used"]),
+            total_valid_depth_matches=int(b_depth),
+            total_valid_normal_matches=int(b_norm),
+            dropped_views_reason_breakdown=combined_reasons,
+        )
+
     deltas = {
-        "delta_psnr": counterfactual["psnr"] - baseline["psnr"] if np.isfinite(counterfactual["psnr"]) and np.isfinite(baseline["psnr"]) else float("nan"),
-        "delta_mae": counterfactual["mae"] - baseline["mae"] if np.isfinite(counterfactual["mae"]) and np.isfinite(baseline["mae"]) else float("nan"),
-        "delta_absrel": counterfactual["absrel"] - baseline["absrel"] if np.isfinite(counterfactual["absrel"]) and np.isfinite(baseline["absrel"]) else float("nan"),
+        "delta_psnr": counterfactual["psnr"] - baseline["psnr"]
+        if np.isfinite(counterfactual["psnr"]) and np.isfinite(baseline["psnr"])
+        else float("nan"),
+        "delta_mae": counterfactual["mae"] - baseline["mae"]
+        if np.isfinite(counterfactual["mae"]) and np.isfinite(baseline["mae"])
+        else float("nan"),
+        "delta_absrel": counterfactual["absrel"] - baseline["absrel"]
+        if np.isfinite(counterfactual["absrel"]) and np.isfinite(baseline["absrel"])
+        else float("nan"),
         "delta_mean_angle": counterfactual["mean_normal_angle"] - baseline["mean_normal_angle"]
         if np.isfinite(counterfactual["mean_normal_angle"]) and np.isfinite(baseline["mean_normal_angle"])
         else float("nan"),
@@ -354,8 +500,29 @@ def run_counterfactual_simulation(
         deltas=deltas,
         baseline=baseline,
         counterfactual=counterfactual,
-        reason="ok",
+        reason="ok" if accept else "threshold_reject",
+        num_views=int(len(calibration_views)),
+        num_depth_views_used=int(baseline["num_depth_views_used"]),
+        num_normal_views_used=int(baseline["num_normal_views_used"]),
+        total_valid_depth_matches=int(b_depth),
+        total_valid_normal_matches=int(b_norm),
+        dropped_views_reason_breakdown=combined_reasons,
     )
+
+
+def counterfactual_decision_to_dict(decision: CounterfactualDecision) -> Dict:
+    payload = asdict(decision)
+    payload["accept"] = bool(payload["accept"])
+    payload["num_candidates"] = int(payload["num_candidates"])
+    payload["num_views"] = int(payload["num_views"])
+    payload["num_depth_views_used"] = int(payload["num_depth_views_used"])
+    payload["num_normal_views_used"] = int(payload["num_normal_views_used"])
+    payload["total_valid_depth_matches"] = int(payload["total_valid_depth_matches"])
+    payload["total_valid_normal_matches"] = int(payload["total_valid_normal_matches"])
+    payload["dropped_views_reason_breakdown"] = {
+        str(k): int(v) for k, v in payload.get("dropped_views_reason_breakdown", {}).items()
+    }
+    return payload
 
 
 def select_prism_candidate_ids(

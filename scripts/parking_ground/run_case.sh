@@ -19,12 +19,12 @@ set -euo pipefail
 #   TEST_ITER_EVERY=1000
 #   TEST_ITER_START=1000
 #   TEST_ITER_END=$ITERATIONS
-#   SAVE_ITERATIONS="7000 15000 16000 20000 21000 30000"
+#   SAVE_ITERATIONS="15000 16000 18000 20000 21000 24000 30000"
 
 CASE_NAME="${1:-}"
 if [[ -z "${CASE_NAME}" ]]; then
   echo "Missing case name. Expected one of:"
-  echo "  no_prism | grounding_only | dead_only | full_prism | full_prism_ground_protect"
+  echo "  prism_geogate_fix | prism_late_prune | prism_geogate_fix_keep"
   exit 1
 fi
 
@@ -45,7 +45,7 @@ EXTRA_ARGS="${EXTRA_ARGS:-}"
 TEST_ITER_EVERY="${TEST_ITER_EVERY:-1000}"
 TEST_ITER_START="${TEST_ITER_START:-1000}"
 TEST_ITER_END="${TEST_ITER_END:-${ITERATIONS}}"
-SAVE_ITERATIONS="${SAVE_ITERATIONS:-7000 15000 16000 20000 21000 30000}"
+SAVE_ITERATIONS="${SAVE_ITERATIONS:-15000 16000 18000 20000 21000 24000 30000}"
 
 mkdir -p "${MODEL_ROOT}"
 
@@ -82,12 +82,13 @@ PRISM_COMMON_ARGS=(
   --prism_collect_stats
   --prism_collect_interval 20
   --prism_stats_warmup_iters 2000
-  --prism_geometry_acq_until_iter 12000
-  --prism_stats_collection_iters 800
+  --prism_geometry_acq_until_iter 16000
+  --prism_stats_collection_iters 1500
   --prism_dead_rounds 1
-  --prism_candidate_rounds 3
-  --prism_recovery_iters 400
-  --prism_candidate_prune_ratio_per_round 0.015
+  --prism_candidate_rounds 2
+  --prism_recovery_iters 1000
+  --prism_post_commit_recollect_iters 300
+  --prism_candidate_prune_ratio_per_round 0.0075
   --prism_dead_prune_ratio 0.005
   --prism_use_counterfactual_gate
   --prism_calib_num_buffer_views 8
@@ -98,66 +99,66 @@ PRISM_COMMON_ARGS=(
   --prism_validation_max_views 32
 )
 
-# Conservative grounding recipe (non-PRISM), derived from previous ground optimization settings.
-GROUNDING_ARGS=(
-  --enable_ground_plane_estimation
-  --enable_ground_regularization
-  --enable_ground_plane_loss
-  --enable_ground_normal_loss
-  --enable_ground_smoothness_loss
-  --enable_ground_mesh_assignment
-  --ground_reg_start_iter 2000
-  --ground_reg_warmup_iters 3000
-  --lambda_ground_plane 0.015
-  --lambda_ground_normal 0.008
-  --lambda_ground_smoothness 0.004
-  --ground_reg_target_ratio 0.08
-  --ground_reg_adaptive_min_scale 1.0
-  --ground_reg_adaptive_max_scale 30.0
-  --ground_reg_max_total 0.08
-  --ground_normal_max_abs_height 0.2
-  --ground_plane_max_abs_height 0.4
-  --ground_smooth_max_abs_height 0.3
-)
-if [[ -n "${GROUND_MASK_DIR:-}" ]]; then
-  GROUNDING_ARGS+=(
-    --enable_ground_masks
-    --ground_mask_dir "${GROUND_MASK_DIR}"
-    --ground_mask_matching auto
-  )
-fi
-
 case "${CASE_NAME}" in
-  no_prism)
-    MODEL_PATH="${MODEL_ROOT}/${RUN_TAG}_geom_first_no_prism"
-    RUN_ARGS=()
-    ;;
-  grounding_only)
-    MODEL_PATH="${MODEL_ROOT}/${RUN_TAG}_geom_first_grounding"
-    RUN_ARGS=(
-      "${GROUNDING_ARGS[@]}"
-    )
-    ;;
-  dead_only)
-    MODEL_PATH="${MODEL_ROOT}/${RUN_TAG}_geom_first_dead_only"
+  prism_geogate_fix)
+    MODEL_PATH="${MODEL_ROOT}/${RUN_TAG}_prism_geogate_fix"
     RUN_ARGS=(
       "${PRISM_COMMON_ARGS[@]}"
-      --prism_candidate_rounds 0
-      --prism_use_counterfactual_gate
+      --prism_geometry_acq_until_iter 16000
+      --prism_stats_collection_iters 1500
+      --prism_candidate_rounds 2
+      --prism_candidate_prune_ratio_per_round 0.0075
+      --prism_recovery_iters 1000
+      --prism_post_commit_recollect_iters 300
+      --enable_sparse_colmap_depth_loss
+      --lambda_sparse_colmap_depth 0.01
+      --sparse_colmap_depth_start_iter 1000
+      --sparse_colmap_depth_warmup_iters 3000
+      --sparse_colmap_depth_min_matches 32
+      --prism_protected_dilation_rings 0
+      --prism_keep_geometry_threshold 1.1
+      --prism_keep_orientation_threshold 1.1
+      --prism_keep_render_threshold 1.1
+      --prism_candidate_block_geometry_keep_threshold 1.1
     )
     ;;
-  full_prism)
-    MODEL_PATH="${MODEL_ROOT}/${RUN_TAG}_geom_first_full_prism"
+  prism_late_prune)
+    MODEL_PATH="${MODEL_ROOT}/${RUN_TAG}_prism_late_prune"
     RUN_ARGS=(
       "${PRISM_COMMON_ARGS[@]}"
+      --prism_geometry_acq_until_iter 18000
+      --prism_stats_collection_iters 2000
+      --prism_candidate_rounds 2
+      --prism_candidate_prune_ratio_per_round 0.0075
+      --prism_recovery_iters 1000
+      --prism_post_commit_recollect_iters 300
+      --prism_protected_dilation_rings 0
+      --prism_keep_geometry_threshold 1.1
+      --prism_keep_orientation_threshold 1.1
+      --prism_keep_render_threshold 1.1
+      --prism_candidate_block_geometry_keep_threshold 1.1
     )
     ;;
-  full_prism_ground_protect)
-    MODEL_PATH="${MODEL_ROOT}/${RUN_TAG}_geom_first_full_prism_ground_protect"
+  prism_geogate_fix_keep)
+    MODEL_PATH="${MODEL_ROOT}/${RUN_TAG}_prism_geogate_fix_keep"
     RUN_ARGS=(
       "${PRISM_COMMON_ARGS[@]}"
-      --prism_use_ground_protect
-      --prism_use_roi_protect
+      --prism_geometry_acq_until_iter 16000
+      --prism_stats_collection_iters 1500
+      --prism_candidate_rounds 2
+      --prism_candidate_prune_ratio_per_round 0.0075
+      --prism_recovery_iters 1000
+      --prism_post_commit_recollect_iters 300
+      --enable_sparse_colmap_depth_loss
+      --lambda_sparse_colmap_depth 0.01
+      --sparse_colmap_depth_start_iter 1000
+      --sparse_colmap_depth_warmup_iters 3000
+      --sparse_colmap_depth_min_matches 32
+      --prism_protected_dilation_rings 1
+      --prism_keep_geometry_threshold 0.6
+      --prism_keep_orientation_threshold 0.6
+      --prism_keep_render_threshold 0.6
+      --prism_candidate_block_geometry_keep_threshold 0.6
     )
     ;;
   *)

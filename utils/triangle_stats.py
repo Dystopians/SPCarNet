@@ -62,6 +62,8 @@ class TriangleStatsManager:
         self.stats = self._make_empty_stats(self.num_triangles, init_iter=int(init_iter))
         # Internal EMA mean for uncertainty (variance) tracking.
         self._grad_total_mean_ema = torch.zeros((self.num_triangles,), dtype=torch.float32, device=self.device)
+        self.last_seen_iteration = int(init_iter)
+        self.last_global_topology_change_iter = int(init_iter)
 
     def _make_empty_stats(self, num_triangles: int, init_iter: int) -> TriangleStats:
         n = int(max(0, num_triangles))
@@ -84,15 +86,21 @@ class TriangleStatsManager:
 
         Fallback policy for now: full reset to avoid stale triangle-ID associations.
         """
+        iter_now = int(iteration)
+        self.last_seen_iteration = iter_now
+        self.last_global_topology_change_iter = iter_now
         self.num_triangles = int(max(0, new_num_triangles))
-        self.stats = self._make_empty_stats(self.num_triangles, init_iter=int(iteration))
+        self.stats = self._make_empty_stats(self.num_triangles, init_iter=iter_now)
         self._grad_total_mean_ema = torch.zeros((self.num_triangles,), dtype=torch.float32, device=self.device)
+
+    def sync_iteration(self, iteration: int):
+        self.last_seen_iteration = int(iteration)
 
     def _ema_update(self, old: torch.Tensor, new_value: torch.Tensor) -> torch.Tensor:
         d = self.ema_decay
         return d * old + (1.0 - d) * new_value
 
-    def update_visibility_from_render(self, render_pkg: Dict, triangles, viewpoint_cam=None) -> bool:
+    def update_visibility_from_render(self, render_pkg: Dict, triangles, viewpoint_cam=None, iteration: Optional[int] = None) -> bool:
         """
         Update visibility-related stats.
 
@@ -100,13 +108,16 @@ class TriangleStatsManager:
         - uses `triangle_was_rendered` if available (per-triangle coverage count)
         - uses `scaling` as projected-area proxy if available
         """
+        if iteration is not None:
+            self.sync_iteration(int(iteration))
         tri_cov = render_pkg.get("triangle_was_rendered", None)
         if tri_cov is None:
             return False
 
         tri_cov = tri_cov.detach().to(self.device).float()
         if tri_cov.numel() != self.num_triangles:
-            self.on_topology_change(new_num_triangles=int(tri_cov.numel()), iteration=0)
+            iter_now = int(self.last_seen_iteration if iteration is None else iteration)
+            self.on_topology_change(new_num_triangles=int(tri_cov.numel()), iteration=iter_now)
             tri_cov = tri_cov[: self.num_triangles]
 
         vis_signal = (tri_cov > 0).float()
@@ -142,19 +153,22 @@ class TriangleStatsManager:
 
         return True
 
-    def update_gradient_stats(self, triangles) -> bool:
+    def update_gradient_stats(self, triangles, iteration: Optional[int] = None) -> bool:
         """
         Update gradient-based stats from current backward pass.
 
         Fallback behavior:
         - if a gradient source is missing, corresponding update uses zeros.
         """
+        if iteration is not None:
+            self.sync_iteration(int(iteration))
         if self.num_triangles <= 0:
             return False
 
         tri_idx = triangles._triangle_indices.long()
         if tri_idx.shape[0] != self.num_triangles:
-            self.on_topology_change(new_num_triangles=int(tri_idx.shape[0]), iteration=0)
+            iter_now = int(self.last_seen_iteration if iteration is None else iteration)
+            self.on_topology_change(new_num_triangles=int(tri_idx.shape[0]), iteration=iter_now)
             tri_idx = triangles._triangle_indices.long()
 
         v_grad = triangles.vertices.grad

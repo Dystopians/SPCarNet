@@ -13,6 +13,7 @@ from utils.prism_counterfactual import (
     build_calibration_set,
     run_counterfactual_simulation,
 )
+from utils.prism_geometry_proxy import GeometryProxyConfig, build_geometry_proxy_context
 
 
 def _parse_candidate_ids(spec: str) -> torch.Tensor:
@@ -57,6 +58,21 @@ if __name__ == "__main__":
 
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
+    proxy_cfg = GeometryProxyConfig(
+        max_points_per_view=3000,
+        point_error_max=2.0,
+        normal_knn=24,
+        compute_normal=True,
+        seed=7,
+    )
+    cam_infos = []
+    cam_infos.extend(list(getattr(scene.scene_info, "train_cameras", []) or []))
+    cam_infos.extend(list(getattr(scene.scene_info, "test_cameras", []) or []))
+    proxy_ctx = build_geometry_proxy_context(
+        colmap_points3d=getattr(scene.scene_info, "colmap_points3d", None),
+        cam_infos=cam_infos,
+        cfg=proxy_cfg,
+    )
 
     calib_cfg = CalibrationConfig(
         num_buffer_views=int(args.calib_num_buffer_views),
@@ -71,6 +87,8 @@ if __name__ == "__main__":
         pipe=pipe,
         background=background,
         cfg=calib_cfg,
+        proxy_ctx=proxy_ctx,
+        proxy_cfg=proxy_cfg,
     )
     gate_cfg = CounterfactualGateConfig(
         min_delta_psnr_db=-0.05,
@@ -91,6 +109,8 @@ if __name__ == "__main__":
         candidate_triangle_ids=cand,
         calibration_views=views,
         gate_cfg=gate_cfg,
+        proxy_ctx=proxy_ctx,
+        proxy_cfg=proxy_cfg,
     )
     payload = {
         "accept": bool(decision.accept),

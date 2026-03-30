@@ -22,6 +22,8 @@ class PrismPipelineConfig:
     final_finetune_iters: int = 500
     topology_freeze_during_stats: bool = True
     round_checkpoint: bool = True
+    post_commit_recollect_iters: int = 0
+    force_recompute_scores_after_recollect: bool = True
 
 
 class PrismRoundController:
@@ -46,6 +48,9 @@ class PrismRoundController:
         self.candidate_round_done = 0
 
         self.recovery_remaining = 0
+        self.post_commit_recollect_remaining = 0
+        self._pending_recollect_after_recovery = False
+        self._force_recompute_after_recollect = False
         self.phase = PrismPhase.GEOMETRY_ACQUISITION if bool(cfg.enabled) else PrismPhase.FINAL_FINE_TUNE
         self._phase_initialized = False
         self._prune_pending = False
@@ -53,6 +58,7 @@ class PrismRoundController:
         self.pruned_this_round = 0
         self.last_counterfactual_accept = 0
         self.last_rollback = 0
+        self.last_recollect_iters_used = 0
 
     def _transition_if_needed(self, iteration: int):
         if not bool(self.cfg.enabled):
@@ -66,6 +72,10 @@ class PrismRoundController:
 
         if self.recovery_remaining > 0:
             self.phase = PrismPhase.RECOVERY_FINE_TUNE
+            return
+
+        if self.post_commit_recollect_remaining > 0:
+            self.phase = PrismPhase.STATS_COLLECTION
             return
 
         if it <= self.stats_end_iter:
@@ -122,6 +132,7 @@ class PrismRoundController:
             "allow_topology_mutation": bool(allow_topology_mutation),
             "should_attempt_prune": bool(should_attempt_prune),
             "prune_mode": prune_mode,
+            "post_commit_recollect_remaining": int(self.post_commit_recollect_remaining),
         }
 
     def report_prune_result(self, prune_mode: str, committed: bool, pruned_count: int, counterfactual_accept: int, rollback: int):
@@ -134,6 +145,16 @@ class PrismRoundController:
             self.dead_round_done += 1
         elif prune_mode == "candidate":
             self.candidate_round_done += 1
+
+        self.last_recollect_iters_used = 0
+        if committed and prune_mode == "candidate":
+            rec = int(max(0, getattr(self.cfg, "post_commit_recollect_iters", 0)))
+            self.last_recollect_iters_used = rec
+            if rec > 0:
+                if int(self.cfg.recovery_iters) > 0:
+                    self._pending_recollect_after_recovery = True
+                else:
+                    self.post_commit_recollect_remaining = rec
 
         if committed and int(self.cfg.recovery_iters) > 0:
             self.recovery_remaining = int(self.cfg.recovery_iters)
@@ -151,3 +172,18 @@ class PrismRoundController:
     def consume_recovery_step(self):
         if self.recovery_remaining > 0:
             self.recovery_remaining -= 1
+            if self.recovery_remaining == 0 and bool(self._pending_recollect_after_recovery):
+                rec = int(max(0, getattr(self.cfg, "post_commit_recollect_iters", 0)))
+                if rec > 0:
+                    self.post_commit_recollect_remaining = rec
+                self._pending_recollect_after_recovery = False
+            return
+        if self.post_commit_recollect_remaining > 0:
+            self.post_commit_recollect_remaining -= 1
+            if self.post_commit_recollect_remaining == 0 and bool(getattr(self.cfg, "force_recompute_scores_after_recollect", True)):
+                self._force_recompute_after_recollect = True
+
+    def consume_force_recompute_flag(self) -> bool:
+        flag = bool(self._force_recompute_after_recollect)
+        self._force_recompute_after_recollect = False
+        return flag

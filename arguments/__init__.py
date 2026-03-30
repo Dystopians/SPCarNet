@@ -163,6 +163,14 @@ class OptimizationParams(ParamGroup):
 
         self.depth_lambda_init = 0.01
         self.depth_lambda_final = 0.001
+        # Sparse COLMAP depth supervision (train-view sparse correspondences).
+        self.enable_sparse_colmap_depth_loss = False
+        self.lambda_sparse_colmap_depth = 0.01
+        self.sparse_colmap_depth_start_iter = 1000
+        self.sparse_colmap_depth_warmup_iters = 3000
+        self.sparse_colmap_depth_min_matches = 32
+        self.sparse_colmap_depth_enable_in_recovery = False
+        self.sparse_colmap_depth_enable_in_final_finetune = False
 
         # Ground-plane estimation (for ground-aware regularization).
         self.enable_ground_plane_estimation = False
@@ -266,6 +274,9 @@ class OptimizationParams(ParamGroup):
         self.prism_calib_num_hard_train_views = 8
         self.prism_calib_num_buffer_views = 8
         self.prism_calib_hard_pool_size = 64
+        self.prism_calib_prefer_observable_views = True
+        self.prism_calib_min_depth_matches_per_view = 24
+        self.prism_calib_min_normal_matches_per_view = 8
         self.prism_save_debug_json = False
         self.prism_changed_pixel_threshold = 0.02
         self.prism_gate_min_delta_psnr_db = -0.05
@@ -273,6 +284,13 @@ class OptimizationParams(ParamGroup):
         self.prism_gate_max_delta_absrel = 0.0008
         self.prism_gate_max_delta_mean_angle_deg = 0.3
         self.prism_gate_max_changed_pixel_ratio = 0.005
+        self.prism_gate_min_valid_depth_matches = 128
+        self.prism_gate_min_valid_normal_matches = 64
+        self.prism_proxy_max_points_per_view = 3000
+        self.prism_proxy_point_error_max = 2.0
+        self.prism_proxy_normal_knn = 24
+        self.prism_disable_final_cleanup_prune = True
+        self.prism_save_pre_cleanup_checkpoint = True
         # PRISM pipeline state machine
         self.prism_geometry_acq_until_iter = -1
         self.prism_stats_collection_iters = 500
@@ -280,6 +298,8 @@ class OptimizationParams(ParamGroup):
         self.prism_candidate_rounds = 3
         self.prism_candidate_prune_ratio_per_round = 0.015
         self.prism_recovery_iters = 400
+        self.prism_post_commit_recollect_iters = 300
+        self.prism_force_recompute_scores_after_recollect = True
         self.prism_final_finetune_iters = 500
         self.prism_topology_freeze_during_stats = True
         self.prism_round_checkpoint = True
@@ -292,6 +312,14 @@ class OptimizationParams(ParamGroup):
         # PRISM global validation + rollback gate
         self.prism_validation_interval = 1000
         self.prism_validation_max_views = 32
+        self.prism_validation_num_buffer_views = 16
+        self.prism_validation_num_train_views = 16
+        self.prism_validation_train_pool_size = 128
+        self.prism_validation_prefer_observable_train_views = True
+        self.prism_validation_min_depth_matches_per_view = 24
+        self.prism_validation_min_normal_matches_per_view = 8
+        self.prism_validation_min_valid_depth_matches = 128
+        self.prism_validation_min_valid_normal_matches = 64
         self.prism_rollback_absrel_rel_thresh = 0.01
         self.prism_rollback_mean_angle_thresh = 0.4
         self.prism_rollback_psnr_drop_thresh = 0.10
@@ -305,6 +333,19 @@ class OptimizationParams(ParamGroup):
         self.prism_utility_w_edge = 0.10
         self.prism_redund_w_flat = 0.70
         self.prism_redund_w_coplanar = 0.30
+        self.prism_keep_support_count_min = 12.0
+        self.prism_keep_plane_residual_max = 0.02
+        self.prism_keep_normal_residual_max_deg = 15.0
+        self.prism_keep_orientation_dihedral_min_deg = 12.0
+        self.prism_keep_orientation_local_var_min = 0.25
+        self.prism_keep_geometry_threshold = 0.6
+        self.prism_keep_orientation_threshold = 0.6
+        self.prism_keep_render_threshold = 0.6
+        self.prism_keep_geometry_bonus = 1.0
+        self.prism_keep_orientation_bonus = 1.0
+        self.prism_keep_render_bonus = 1.0
+        self.prism_candidate_block_geometry_keep_threshold = 0.6
+        self.prism_protected_dilation_rings = 1
 
         # PRISM robust normalization.
         self.prism_norm_percentile_low = 5.0
