@@ -483,7 +483,19 @@ def _build_prism_ground_and_roi_signals(
                 # Near-field render keep via inverse depth per-triangle (screen-space proxy).
                 surf_depth = render_pkg.get("surf_depth", None)
                 if surf_depth is not None:
-                    depth = surf_depth[0].to(device=device, dtype=torch.float32)
+                    depth = surf_depth.to(device=device, dtype=torch.float32)
+                    if depth.ndim == 4:
+                        depth = depth[0, 0]
+                    elif depth.ndim == 3:
+                        depth = depth[0]
+                    # Keep depth/id grids aligned before boolean indexing.
+                    if (depth.shape[0] != ids.shape[0]) or (depth.shape[1] != ids.shape[1]):
+                        depth = F.interpolate(
+                            depth[None, None],
+                            size=(ids.shape[0], ids.shape[1]),
+                            mode="bilinear",
+                            align_corners=False,
+                        ).squeeze(0).squeeze(0)
                     inv = 1.0 / torch.clamp(depth, min=1e-6)
                     inv = torch.where(torch.isfinite(inv), inv, torch.zeros_like(inv))
                     inv_valid = inv[valid]
