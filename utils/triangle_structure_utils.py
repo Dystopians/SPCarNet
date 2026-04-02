@@ -11,11 +11,14 @@ class TriangleStructureCache:
     # Edge table
     unique_edges: torch.Tensor  # [E, 2] int64
     edge_counts: torch.Tensor  # [E] int64
+    edge_sort_order: torch.Tensor  # [3T] int64, groups same unique edge together
+    edge_group_offsets: torch.Tensor  # [E+1] int64, offsets into edge_sort_order
+    edge_owner_tri_sorted: torch.Tensor  # [3T] int64
     # For each edge occurrence from original 3*T edge list:
     edge_owner_tri: torch.Tensor  # [3T] int64
     edge_unique_id_per_occurrence: torch.Tensor  # [3T] int64
     # 1-ring neighbors for each triangle (python lists of triangle ids)
-    tri_neighbors: List[List[int]]
+    tri_neighbors: Optional[List[List[int]]]
     # Per-triangle edge-level tags
     boundary_edge_count: torch.Tensor  # [T] int32
     nonmanifold_edge_count: torch.Tensor  # [T] int32
@@ -32,6 +35,19 @@ class TriangleStructureMetrics:
     coplanar_neighbor_fraction: torch.Tensor  # [T] float32
     qem_like: torch.Tensor  # [T] float32
     flatness_score: torch.Tensor  # [T] float32, larger => flatter/redundant
+
+
+@dataclass
+class TriangleStructureSubsetMetrics:
+    triangle_ids: torch.Tensor  # [K] int64, global triangle ids
+    boundary_edge_count: torch.Tensor  # [K] int32
+    nonmanifold_edge_count: torch.Tensor  # [K] int32
+    mean_abs_dihedral_deg: torch.Tensor  # [K] float32
+    coplanar_neighbor_fraction: torch.Tensor  # [K] float32
+    flatness_score: torch.Tensor  # [K] float32
+
+
+_MAX_TRIANGLES_FOR_PYTHON_NEIGHBORS = 500_000
 
 
 def _topology_signature(triangle_indices: torch.Tensor) -> Tuple[int, int, int]:
@@ -57,6 +73,9 @@ def _build_cache(triangle_indices: torch.Tensor) -> TriangleStructureCache:
             topology_signature=_topology_signature(tri),
             unique_edges=empty_e,
             edge_counts=empty_i64,
+            edge_sort_order=empty_i64,
+            edge_group_offsets=torch.zeros((1,), dtype=torch.int64, device=device),
+            edge_owner_tri_sorted=empty_i64,
             edge_owner_tri=empty_i64,
             edge_unique_id_per_occurrence=empty_i64,
             tri_neighbors=[],
@@ -82,40 +101,45 @@ def _build_cache(triangle_indices: torch.Tensor) -> TriangleStructureCache:
     boundary_edge_count.index_add_(0, edge_owner_tri, boundary_occ)
     nonmanifold_edge_count.index_add_(0, edge_owner_tri, nonmanifold_occ)
 
-    tri_neighbors: List[List[int]] = [[] for _ in range(t)]
-    # Group edge occurrences by unique edge id. Most edges have <=2 owners.
     order = torch.argsort(inverse)
-    inv_sorted = inverse[order].detach().cpu()
-    tri_sorted = edge_owner_tri[order].detach().cpu()
-    edge_sorted = torch.arange(order.shape[0], dtype=torch.int64)
+    edge_group_offsets = torch.zeros((counts.shape[0] + 1,), dtype=torch.int64, device=device)
+    edge_group_offsets[1:] = torch.cumsum(counts.to(torch.int64), dim=0)
+    edge_owner_tri_sorted = edge_owner_tri[order]
 
-    start = 0
-    n_occ = int(inv_sorted.numel())
-    while start < n_occ:
-        eid = int(inv_sorted[start].item())
-        end = start + 1
-        while end < n_occ and int(inv_sorted[end].item()) == eid:
-            end += 1
-        owners = tri_sorted[start:end].tolist()
-        if len(owners) >= 2:
-            # Build all neighbor relations for non-manifold edges too.
-            for i in range(len(owners)):
-                oi = int(owners[i])
-                for j in range(len(owners)):
-                    if i == j:
-                        continue
-                    oj = int(owners[j])
-                    tri_neighbors[oi].append(oj)
-        start = end
+    tri_neighbors: Optional[List[List[int]]] = None
+    if t <= _MAX_TRIANGLES_FOR_PYTHON_NEIGHBORS:
+        tri_neighbors = [[] for _ in range(t)]
+        inv_sorted = inverse[order].detach().cpu()
+        tri_sorted = edge_owner_tri[order].detach().cpu()
 
-    # Deduplicate neighbors.
-    tri_neighbors = [sorted(set(nbrs)) for nbrs in tri_neighbors]
+        start = 0
+        n_occ = int(inv_sorted.numel())
+        while start < n_occ:
+            eid = int(inv_sorted[start].item())
+            end = start + 1
+            while end < n_occ and int(inv_sorted[end].item()) == eid:
+                end += 1
+            owners = tri_sorted[start:end].tolist()
+            if len(owners) >= 2:
+                for i in range(len(owners)):
+                    oi = int(owners[i])
+                    for j in range(len(owners)):
+                        if i == j:
+                            continue
+                        oj = int(owners[j])
+                        tri_neighbors[oi].append(oj)
+            start = end
+
+        tri_neighbors = [sorted(set(nbrs)) for nbrs in tri_neighbors]
 
     return TriangleStructureCache(
         num_triangles=t,
         topology_signature=_topology_signature(tri),
         unique_edges=unique_edges,
         edge_counts=counts,
+        edge_sort_order=order,
+        edge_group_offsets=edge_group_offsets,
+        edge_owner_tri_sorted=edge_owner_tri_sorted,
         edge_owner_tri=edge_owner_tri,
         edge_unique_id_per_occurrence=inverse,
         tri_neighbors=tri_neighbors,
@@ -131,6 +155,83 @@ def get_or_build_structure_cache(
     if cache is not None and cache.topology_signature == sig:
         return cache
     return _build_cache(triangle_indices)
+
+
+def get_triangle_one_ring_neighbors(
+    cache: TriangleStructureCache,
+    triangle_id: int,
+) -> List[int]:
+    tid = int(triangle_id)
+    if tid < 0 or tid >= int(cache.num_triangles):
+        return []
+    if cache.tri_neighbors is not None:
+        if tid >= len(cache.tri_neighbors):
+            return []
+        return cache.tri_neighbors[tid]
+
+    t = int(cache.num_triangles)
+    device = cache.edge_unique_id_per_occurrence.device
+    occ_idx = torch.tensor(
+        [tid, tid + t, tid + 2 * t],
+        dtype=torch.int64,
+        device=device,
+    )
+    edge_ids = torch.unique(cache.edge_unique_id_per_occurrence[occ_idx]).tolist()
+    nbrs = set()
+    for eid in edge_ids:
+        start = int(cache.edge_group_offsets[int(eid)].item())
+        end = int(cache.edge_group_offsets[int(eid) + 1].item())
+        owners = cache.edge_owner_tri_sorted[start:end].tolist()
+        for oid in owners:
+            oi = int(oid)
+            if oi != tid:
+                nbrs.add(oi)
+    return sorted(nbrs)
+
+
+def expand_triangle_ids_via_neighbors(
+    seed_triangle_ids: torch.Tensor,
+    cache: TriangleStructureCache,
+    rings: int,
+    max_count: Optional[int] = None,
+) -> torch.Tensor:
+    if seed_triangle_ids.numel() == 0:
+        return seed_triangle_ids.to(torch.int64)
+    frontier = [int(v) for v in seed_triangle_ids.to(torch.int64).tolist()]
+    visited = set(frontier)
+    if max_count is not None and len(visited) >= int(max_count):
+        keep = frontier[: int(max_count)]
+        return torch.tensor(keep, dtype=torch.int64, device=seed_triangle_ids.device)
+    for _ in range(max(0, int(rings))):
+        nxt: List[int] = []
+        for tid in frontier:
+            for nid in get_triangle_one_ring_neighbors(cache=cache, triangle_id=tid):
+                if nid in visited:
+                    continue
+                visited.add(nid)
+                nxt.append(nid)
+                if max_count is not None and len(visited) >= int(max_count):
+                    keep = sorted(visited)
+                    return torch.tensor(keep, dtype=torch.int64, device=seed_triangle_ids.device)
+        if len(nxt) == 0:
+            break
+        frontier = nxt
+    keep = sorted(visited)
+    return torch.tensor(keep, dtype=torch.int64, device=seed_triangle_ids.device)
+
+
+def build_local_triangle_neighbors(
+    cache: TriangleStructureCache,
+    triangle_ids: torch.Tensor,
+) -> Dict[int, List[int]]:
+    out: Dict[int, List[int]] = {}
+    if triangle_ids.numel() == 0:
+        return out
+    allowed = set(int(v) for v in triangle_ids.to(torch.int64).tolist())
+    for tid in allowed:
+        nbrs = [nid for nid in get_triangle_one_ring_neighbors(cache=cache, triangle_id=tid) if nid in allowed]
+        out[int(tid)] = nbrs
+    return out
 
 
 def _triangle_planes_and_areas(
@@ -233,7 +334,7 @@ def compute_triangle_structure_metrics(
     coplanar_neighbor_fraction = torch.zeros((t,), dtype=torch.float32, device=device)
     cos_thr = float(torch.cos(torch.tensor(coplanar_angle_threshold_deg * torch.pi / 180.0)).item())
     for i in range(t):
-        nbrs = cache.tri_neighbors[i]
+        nbrs = get_triangle_one_ring_neighbors(cache=cache, triangle_id=i)
         if len(nbrs) == 0:
             coplanar_neighbor_fraction[i] = 0.0
             continue
@@ -251,7 +352,7 @@ def compute_triangle_structure_metrics(
 
     qem_like = torch.zeros((t,), dtype=torch.float32, device=device)
     for i in range(t):
-        ring = [i] + cache.tri_neighbors[i]
+        ring = [i] + get_triangle_one_ring_neighbors(cache=cache, triangle_id=i)
         ring_t = torch.tensor(ring, dtype=torch.int64, device=device)
         # x^T (sum w p p^T) x == sum w (p.x)^2
         dot_vals = torch.sum(pi[ring_t] * x_h[i].unsqueeze(0), dim=1)
@@ -278,6 +379,89 @@ def compute_triangle_structure_metrics(
         flatness_score=flatness_score,
     )
     return metrics, cache
+
+
+def compute_triangle_structure_metrics_subset(
+    vertices: torch.Tensor,
+    triangle_indices: torch.Tensor,
+    triangle_ids: torch.Tensor,
+    cache: Optional[TriangleStructureCache] = None,
+    coplanar_angle_threshold_deg: float = 8.0,
+    flatness_alpha: float = 0.5,
+) -> Tuple[TriangleStructureSubsetMetrics, TriangleStructureCache]:
+    tri = triangle_indices.to(torch.int64).contiguous()
+    cache = get_or_build_structure_cache(triangle_indices=tri, cache=cache)
+    ids = torch.unique(triangle_ids.to(torch.int64).contiguous())
+    if ids.numel() == 0:
+        zf = torch.zeros((0,), dtype=torch.float32, device=tri.device)
+        zi32 = torch.zeros((0,), dtype=torch.int32, device=tri.device)
+        return (
+            TriangleStructureSubsetMetrics(
+                triangle_ids=ids,
+                boundary_edge_count=zi32,
+                nonmanifold_edge_count=zi32,
+                mean_abs_dihedral_deg=zf,
+                coplanar_neighbor_fraction=zf,
+                flatness_score=zf,
+            ),
+            cache,
+        )
+
+    local_neighbors = build_local_triangle_neighbors(cache=cache, triangle_ids=ids)
+    local_tri = tri[ids]
+    device = local_tri.device
+    pi, centroids, areas = _triangle_planes_and_areas(vertices=vertices, triangle_indices=local_tri)
+    normals = pi[:, :3]
+    id_list = [int(v) for v in ids.tolist()]
+    local_index = {gid: i for i, gid in enumerate(id_list)}
+
+    mean_abs_dihedral_rad = torch.zeros((ids.shape[0],), dtype=torch.float32, device=device)
+    coplanar_neighbor_fraction = torch.zeros((ids.shape[0],), dtype=torch.float32, device=device)
+    qem_like = torch.zeros((ids.shape[0],), dtype=torch.float32, device=device)
+    cos_thr = float(torch.cos(torch.tensor(coplanar_angle_threshold_deg * torch.pi / 180.0)).item())
+
+    x_h = torch.cat(
+        [centroids, torch.ones((centroids.shape[0], 1), dtype=centroids.dtype, device=device)],
+        dim=1,
+    )
+    weights = torch.clamp(areas, min=1e-8)
+
+    for local_i, global_i in enumerate(id_list):
+        nbr_global = local_neighbors.get(global_i, [])
+        if len(nbr_global) == 0:
+            continue
+        nbr_local = torch.tensor([local_index[nid] for nid in nbr_global], dtype=torch.int64, device=device)
+        cos_vals = torch.clamp(
+            torch.abs(torch.sum(normals[nbr_local] * normals[local_i].unsqueeze(0), dim=1)),
+            0.0,
+            1.0,
+        )
+        angles = torch.arccos(cos_vals)
+        mean_abs_dihedral_rad[local_i] = torch.mean(angles)
+        coplanar_neighbor_fraction[local_i] = torch.mean((cos_vals >= cos_thr).to(torch.float32))
+        ring_local = torch.cat(
+            [torch.tensor([local_i], dtype=torch.int64, device=device), nbr_local],
+            dim=0,
+        )
+        dot_vals = torch.sum(pi[ring_local] * x_h[local_i].unsqueeze(0), dim=1)
+        qem_like[local_i] = torch.sum(weights[ring_local] * dot_vals * dot_vals)
+
+    mean_abs_dihedral_deg = mean_abs_dihedral_rad * (180.0 / torch.pi)
+    qem_norm = qem_like / (1.0 + qem_like)
+    dihedral_norm = mean_abs_dihedral_rad / torch.pi
+    alpha = float(max(0.0, min(flatness_alpha, 1.0)))
+    flatness_score = 1.0 - (alpha * qem_norm + (1.0 - alpha) * dihedral_norm)
+    flatness_score = torch.clamp(flatness_score, 0.0, 1.0)
+
+    subset = TriangleStructureSubsetMetrics(
+        triangle_ids=ids,
+        boundary_edge_count=cache.boundary_edge_count[ids],
+        nonmanifold_edge_count=cache.nonmanifold_edge_count[ids],
+        mean_abs_dihedral_deg=mean_abs_dihedral_deg.to(torch.float32),
+        coplanar_neighbor_fraction=coplanar_neighbor_fraction.to(torch.float32),
+        flatness_score=flatness_score.to(torch.float32),
+    )
+    return subset, cache
 
 
 def debug_print_triangle_structure(

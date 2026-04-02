@@ -24,7 +24,7 @@ set -euo pipefail
 CASE_NAME="${1:-}"
 if [[ -z "${CASE_NAME}" ]]; then
   echo "Missing case name. Expected one of:"
-  echo "  prism_geogate_fix | prism_late_prune | prism_geogate_fix_keep"
+  echo "  baseline | prism_geogate_fix | prism_late_prune | prism_geogate_fix_keep | prism_geogate_compact"
   exit 1
 fi
 
@@ -82,6 +82,9 @@ PRISM_COMMON_ARGS=(
   --prism_collect_stats
   --prism_collect_interval 20
   --prism_stats_warmup_iters 2000
+  --prism_force_full_heavy_eval_below 400000
+  --prism_heavy_eval_budget 120000
+  --prism_heavy_eval_neighbor_rings 2
   --prism_geometry_acq_until_iter 16000
   --prism_stats_collection_iters 1500
   --prism_dead_rounds 1
@@ -100,6 +103,10 @@ PRISM_COMMON_ARGS=(
 )
 
 case "${CASE_NAME}" in
+  baseline)
+    MODEL_PATH="${MODEL_ROOT}/${RUN_TAG}_baseline"
+    RUN_ARGS=()
+    ;;
   prism_geogate_fix)
     MODEL_PATH="${MODEL_ROOT}/${RUN_TAG}_prism_geogate_fix"
     RUN_ARGS=(
@@ -154,11 +161,44 @@ case "${CASE_NAME}" in
       --sparse_colmap_depth_start_iter 1000
       --sparse_colmap_depth_warmup_iters 3000
       --sparse_colmap_depth_min_matches 32
+      --prism_heavy_eval_budget 180000
       --prism_protected_dilation_rings 1
       --prism_keep_geometry_threshold 0.6
       --prism_keep_orientation_threshold 0.6
       --prism_keep_render_threshold 0.6
       --prism_candidate_block_geometry_keep_threshold 0.6
+    )
+    ;;
+  prism_geogate_compact)
+    MODEL_PATH="${MODEL_ROOT}/${RUN_TAG}_prism_geogate_compact"
+    RUN_ARGS=(
+      "${PRISM_COMMON_ARGS[@]}"
+      --prism_geometry_acq_until_iter 16000
+      --prism_stats_collection_iters 1500
+      --prism_candidate_rounds 2
+      --prism_candidate_prune_ratio_per_round 0.0075
+      --prism_recovery_iters 1000
+      --prism_post_commit_recollect_iters 300
+      --enable_sparse_colmap_depth_loss
+      --lambda_sparse_colmap_depth 0.01
+      --sparse_colmap_depth_start_iter 1000
+      --sparse_colmap_depth_warmup_iters 3000
+      --sparse_colmap_depth_min_matches 32
+      --prism_enable_compaction_stage
+      --prism_compaction_rounds 2
+      --prism_compaction_microbatch_active_ratio 0.0035
+      --prism_compaction_max_microbatches_per_round 6
+      --prism_compaction_candidate_pool_multiplier 6.0
+      --prism_compaction_min_prune_count 256
+      --prism_compaction_roi_budget_fraction 0.10
+      --prism_compaction_near_field_budget_fraction 0.25
+      --prism_compaction_roi_signal_threshold 0.05
+      --prism_compaction_near_field_area_percentile 80
+      --prism_protected_dilation_rings 0
+      --prism_keep_geometry_threshold 1.1
+      --prism_keep_orientation_threshold 1.1
+      --prism_keep_render_threshold 1.1
+      --prism_candidate_block_geometry_keep_threshold 1.1
     )
     ;;
   *)

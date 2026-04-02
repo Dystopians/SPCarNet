@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Mapping, Optional, Sequence
 
 import torch
 
@@ -76,9 +76,10 @@ class PrismScoreInputs:
     sparse_plane_residual: Optional[torch.Tensor] = None
     sparse_normal_residual_deg: Optional[torch.Tensor] = None
     render_keep_t: Optional[torch.Tensor] = None
-    tri_neighbors: Optional[List[List[int]]] = None
+    tri_neighbors: Optional[object] = None
     ground_protect_t: Optional[torch.Tensor] = None
     roi_protect_t: Optional[torch.Tensor] = None
+    lightweight_only_mask: Optional[torch.Tensor] = None
 
 
 @dataclass
@@ -107,6 +108,8 @@ class PrismScoreOutputs:
     protected_mask_dilated: torch.Tensor
     candidate_blocked_by_geometry_keep: torch.Tensor
     candidate_blocked_by_dilated_protect: torch.Tensor
+    heavy_eval_mask: torch.Tensor
+    lightweight_only_mask: torch.Tensor
     dead_mask: torch.Tensor
     suspicious_mask: torch.Tensor
     candidate_mask: torch.Tensor
@@ -135,11 +138,21 @@ def _view_diversity_from_hist(hist: torch.Tensor, eps: float) -> torch.Tensor:
 
 def _expand_protected_mask(
     protected_mask: torch.Tensor,
-    tri_neighbors: Optional[List[List[int]]],
+    tri_neighbors: Optional[object],
     rings: int,
 ) -> torch.Tensor:
     if (tri_neighbors is None) or (int(rings) <= 0) or (protected_mask.numel() == 0):
         return protected_mask
+
+    def _lookup_neighbors(tid: int) -> List[int]:
+        if isinstance(tri_neighbors, Mapping):
+            return [int(v) for v in tri_neighbors.get(int(tid), [])]
+        if isinstance(tri_neighbors, Sequence):
+            if tid < 0 or tid >= len(tri_neighbors):
+                return []
+            return [int(v) for v in tri_neighbors[tid]]
+        return []
+
     out = protected_mask.clone()
     t = int(protected_mask.numel())
     frontier = torch.nonzero(protected_mask, as_tuple=True)[0].tolist()
@@ -147,9 +160,7 @@ def _expand_protected_mask(
     for _ in range(int(rings)):
         nxt = []
         for tid in frontier:
-            if tid < 0 or tid >= len(tri_neighbors):
-                continue
-            for n in tri_neighbors[tid]:
+            for n in _lookup_neighbors(tid):
                 ni = int(n)
                 if ni < 0 or ni >= t or ni in visited:
                     continue
@@ -196,6 +207,11 @@ def compute_prism_scores(
             inputs.ground_protect_t.to(torch.float32) * float(cfg.ground_protect_bonus), 0.0, 1.0
         )
     optional_roiprotect_t = torch.zeros((n,), dtype=torch.float32, device=device)
+    lightweight_only_mask = torch.zeros((n,), dtype=torch.bool, device=device)
+    if inputs.lightweight_only_mask is not None:
+        lightweight_only_mask = inputs.lightweight_only_mask.to(device=device, dtype=torch.bool)
+    heavy_eval_mask = ~lightweight_only_mask
+
     # Geometry keep from sparse support quality.
     geometry_keep_t = torch.zeros((n,), dtype=torch.float32, device=device)
     if (
@@ -226,6 +242,7 @@ def compute_prism_scores(
             0.0,
             1.0,
         )
+        geometry_keep_t = torch.where(heavy_eval_mask, geometry_keep_t, torch.zeros_like(geometry_keep_t))
 
     # Orientation keep from structure signals.
     orientation_keep_t = torch.zeros((n,), dtype=torch.float32, device=device)
@@ -247,6 +264,7 @@ def compute_prism_scores(
             0.0,
             1.0,
         )
+        orientation_keep_t = torch.where(heavy_eval_mask, orientation_keep_t, torch.zeros_like(orientation_keep_t))
 
     # Optional render-space keep (already computed in train when available).
     render_keep_t = torch.zeros((n,), dtype=torch.float32, device=device)
@@ -328,10 +346,10 @@ def compute_prism_scores(
     triangle_state[dead_mask] = int(TriangleState.DEAD)
     triangle_state[suspicious_mask] = int(TriangleState.SUSPICIOUS)
     candidate_mask = triangle_state == int(TriangleState.ACTIVE)
-    candidate_blocked_by_geometry_keep = (
+    candidate_blocked_by_geometry_keep = candidate_mask & (
         geometry_keep_t > float(cfg.candidate_block_geometry_keep_threshold)
     )
-    candidate_blocked_by_dilated_protect = protected_mask_dilated
+    candidate_blocked_by_dilated_protect = candidate_mask & protected_mask_dilated
     candidate_mask = candidate_mask & (~candidate_blocked_by_geometry_keep) & (~candidate_blocked_by_dilated_protect)
 
     return PrismScoreOutputs(
@@ -359,6 +377,8 @@ def compute_prism_scores(
         protected_mask_dilated=protected_mask_dilated,
         candidate_blocked_by_geometry_keep=candidate_blocked_by_geometry_keep,
         candidate_blocked_by_dilated_protect=candidate_blocked_by_dilated_protect,
+        heavy_eval_mask=heavy_eval_mask,
+        lightweight_only_mask=lightweight_only_mask,
         dead_mask=dead_mask,
         suspicious_mask=suspicious_mask,
         candidate_mask=candidate_mask,
@@ -381,4 +401,10 @@ def summarize_prism_scores(scores: PrismScoreOutputs) -> Dict[str, float]:
         "num_dead": float(scores.dead_mask.sum().item()),
         "num_suspicious": float(scores.suspicious_mask.sum().item()),
         "num_candidates": float(scores.candidate_mask.sum().item()),
+        "heavy_eval_triangle_count": float(scores.heavy_eval_mask.sum().item()),
+        "heavy_eval_fraction": _mean(scores.heavy_eval_mask.to(torch.float32)),
+        "geometry_keep_nonzero_fraction": _mean((scores.geometry_keep_t > 0).to(torch.float32)),
+        "orientation_keep_nonzero_fraction": _mean((scores.orientation_keep_t > 0).to(torch.float32)),
+        "candidate_blocked_by_geometry_keep_count": float(scores.candidate_blocked_by_geometry_keep.sum().item()),
+        "candidate_blocked_by_dilated_protect_count": float(scores.candidate_blocked_by_dilated_protect.sum().item()),
     }

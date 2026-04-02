@@ -174,8 +174,18 @@ def _collect_run_flags(model_path: Path) -> Dict[str, object]:
     if cleanup_summary.exists():
         try:
             payload = json.loads(cleanup_summary.read_text(encoding="utf-8"))
-            cleanup_enabled = bool(payload.get("cleanup_enabled", False))
-            cleanup_pruned = int(payload.get("pruned_triangles", 0))
+            cleanup_enabled = bool(
+                payload.get(
+                    "final_cleanup_enabled",
+                    payload.get("cleanup_executed", payload.get("cleanup_enabled", False)),
+                )
+            )
+            cleanup_pruned = int(
+                payload.get(
+                    "final_cleanup_pruned",
+                    payload.get("cleanup_pruned", payload.get("pruned_triangles", 0)),
+                )
+            )
         except Exception:
             pass
 
@@ -197,6 +207,26 @@ def _collect_run_flags(model_path: Path) -> Dict[str, object]:
         "rollback_happened": rollback_happened,
         "sparse_colmap_depth_supervision": _parse_sparse_depth_enabled(model_path),
     }
+
+
+def _load_runtime_benchmark(path: Path) -> Dict[str, float]:
+    out = {
+        "runtime_fps_mean": float("nan"),
+        "runtime_fps_std": float("nan"),
+        "runtime_num_views": 0,
+        "runtime_repeats": 0,
+    }
+    if not path.exists():
+        return out
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        out["runtime_fps_mean"] = _safe_float(payload.get("runtime_fps_mean"))
+        out["runtime_fps_std"] = _safe_float(payload.get("runtime_fps_std"))
+        out["runtime_num_views"] = int(payload.get("num_views", 0))
+        out["runtime_repeats"] = int(payload.get("repeats", 0))
+    except Exception:
+        pass
+    return out
 
 
 def _geometry_key(row: Dict) -> Tuple[float, float, float, float]:
@@ -239,20 +269,25 @@ def _write_markdown(out_path: Path, rows: List[Dict], run_summaries: Dict[str, D
     lines: List[str] = []
     lines.append("# PRISM GeoGate Benchmark")
     lines.append("")
+    lines.append("- `pipeline wall-clock fps`: end-to-end `render.py` subprocess timing divided by rendered PNG count.")
+    lines.append("- `controlled runtime fps`: no-PNG-I/O in-process render benchmark with warmup, repeats, and GPU synchronization.")
+    lines.append("")
     lines.append("## Per-Checkpoint Results")
     lines.append("")
     lines.append(
-        "| Run | Checkpoint | FPS | PSNR | SSIM | LPIPS | MAE | AbsRel | Delta<1.25 | MeanAngle | AbsCos | Depth MAE | triangles | vertices | final cleanup | rollback | sparse depth sup |"
+        "| Run | Checkpoint | pipeline wall-clock fps | controlled runtime fps | runtime std | PSNR | SSIM | LPIPS | MAE | AbsRel | Delta<1.25 | MeanAngle | AbsCos | Depth MAE | triangles | vertices | final cleanup | rollback | sparse depth sup |"
     )
     lines.append(
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|"
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|"
     )
     for r in rows:
         lines.append(
-            "| {run} | {ckpt} | {fps:.3f} | {psnr:.4f} | {ssim:.4f} | {lpips:.4f} | {mae:.4f} | {absrel:.4f} | {delta:.4f} | {ang:.4f} | {abscos:.4f} | {dmae:.4f} | {tri:.0f} | {vert:.0f} | {cleanup} | {rollback} | {sparse} |".format(
+            "| {run} | {ckpt} | {fps:.3f} | {rt_fps:.3f} | {rt_std:.3f} | {psnr:.4f} | {ssim:.4f} | {lpips:.4f} | {mae:.4f} | {absrel:.4f} | {delta:.4f} | {ang:.4f} | {abscos:.4f} | {dmae:.4f} | {tri:.0f} | {vert:.0f} | {cleanup} | {rollback} | {sparse} |".format(
                 run=r["run_name"],
                 ckpt=r["checkpoint"],
-                fps=r["fps"],
+                fps=r["pipeline_wall_clock_fps"],
+                rt_fps=r["runtime"]["runtime_fps_mean"],
+                rt_std=r["runtime"]["runtime_fps_std"],
                 psnr=r["metrics"]["PSNR"],
                 ssim=r["metrics"]["SSIM"],
                 lpips=r["metrics"]["LPIPS"],
@@ -315,6 +350,9 @@ def main():
     )
     parser.add_argument("--skip_render_metrics", action="store_true")
     parser.add_argument("--skip_geometry_eval", action="store_true")
+    parser.add_argument("--skip_runtime_benchmark", action="store_true")
+    parser.add_argument("--runtime_warmup_views", type=int, default=5)
+    parser.add_argument("--runtime_repeats", type=int, default=3)
     args = parser.parse_args()
 
     repo_root = Path(args.repo_root).resolve()
@@ -323,6 +361,8 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     geometry_root = out_dir / "geometry_eval"
     geometry_root.mkdir(parents=True, exist_ok=True)
+    runtime_root = out_dir / "runtime_eval"
+    runtime_root.mkdir(parents=True, exist_ok=True)
 
     rows: List[Dict] = []
     run_specs: List[Tuple[str, Path]] = []
@@ -375,9 +415,12 @@ def main():
         run_flags = _collect_run_flags(model_path)
         run_geo_dir = geometry_root / run_name
         run_geo_dir.mkdir(parents=True, exist_ok=True)
+        run_runtime_dir = runtime_root / run_name
+        run_runtime_dir.mkdir(parents=True, exist_ok=True)
 
         for ckpt in selected:
             geom_out = run_geo_dir / f"iter_{ckpt}.json"
+            runtime_out = run_runtime_dir / f"iter_{ckpt}.json"
             if not args.skip_geometry_eval:
                 _run(
                     [
@@ -399,19 +442,49 @@ def main():
                     ],
                     cwd=str(repo_root),
                 )
+            if not args.skip_runtime_benchmark:
+                _run(
+                    [
+                        "python",
+                        "scripts/parking_ground/benchmark_runtime.py",
+                        "-s",
+                        args.scene_path,
+                        "-m",
+                        str(model_path),
+                        "--iteration",
+                        str(ckpt),
+                        "--eval",
+                        "--split_strategy",
+                        "file",
+                        "--split_file",
+                        args.split_file,
+                        "--warmup_views",
+                        str(args.runtime_warmup_views),
+                        "--repeats",
+                        str(args.runtime_repeats),
+                        "--output",
+                        str(runtime_out),
+                    ],
+                    cwd=str(repo_root),
+                )
 
             metrics = metrics_by_iter.get(str(ckpt), {})
             mae, paired = _compute_mae_for_iteration(model_path, ckpt)
             elapsed = render_times.get(ckpt, float("nan"))
             count = view_counts.get(ckpt, 0)
             fps = float(count) / elapsed if (count > 0 and (not _is_nan(elapsed))) else float("nan")
+            runtime_stats = _load_runtime_benchmark(runtime_out)
             row = {
                 "run_name": run_name,
                 "model_path": str(model_path),
                 "checkpoint": int(ckpt),
+                "pipeline_wall_clock_fps": float(fps),
                 "fps": float(fps),
                 "num_eval_views": int(count),
                 "render_elapsed_sec": float(elapsed) if not _is_nan(elapsed) else float("nan"),
+                "runtime_fps_mean": float(runtime_stats["runtime_fps_mean"]),
+                "runtime_fps_std": float(runtime_stats["runtime_fps_std"]),
+                "runtime": runtime_stats,
                 "metrics": {
                     "PSNR": _safe_float(metrics.get("PSNR")),
                     "SSIM": _safe_float(metrics.get("SSIM")),

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Parallel geogate suite launcher:
-# - auto-picks 3 least-busy GPUs
-# - runs 3 training variants concurrently (one per GPU)
+# Parallel acceptance suite launcher:
+# - auto-picks up to 4 least-busy GPUs
+# - runs baseline + 3 PRISM variants
+# - if only 3 GPUs are available, baseline is run sequentially after the PRISM trio
 # - then runs fair quantitative benchmark + qualitative panels
 #
 # Required env:
@@ -54,12 +55,12 @@ mapfile -t BEST_GPUS < <(
   printf "%s\n" "${GPU_ROWS[@]}" \
     | awk -F',' '{gsub(/ /,"",$1); gsub(/ /,"",$2); gsub(/ /,"",$3); score=($2*100000)+$3; printf "%012d %s\n", score, $1}' \
     | sort -n \
-    | head -n 3 \
+    | head -n 4 \
     | awk '{print $2}'
 )
 
 if [[ "${#BEST_GPUS[@]}" -lt 3 ]]; then
-  echo "Failed to pick 3 GPUs."
+  echo "Failed to pick at least 3 GPUs."
   exit 1
 fi
 
@@ -105,11 +106,19 @@ launch_case "${BEST_GPUS[1]}" "prism_late_prune" "${RUN_TAG}_prism_late_prune"
 P2="${LAST_PID}"
 launch_case "${BEST_GPUS[2]}" "prism_geogate_fix_keep" "${RUN_TAG}_prism_geogate_fix_keep"
 P3="${LAST_PID}"
+P4=""
+if [[ "${#BEST_GPUS[@]}" -ge 4 ]]; then
+  launch_case "${BEST_GPUS[3]}" "baseline" "${RUN_TAG}_baseline"
+  P4="${LAST_PID}"
+fi
 
-echo "[AutoGPU] PIDs: ${P1} ${P2} ${P3}"
+echo "[AutoGPU] PIDs: ${P1} ${P2} ${P3} ${P4}"
 
 FAIL=0
-for pid in "${P1}" "${P2}" "${P3}"; do
+for pid in "${P1}" "${P2}" "${P3}" "${P4}"; do
+  if [[ -z "${pid}" ]]; then
+    continue
+  fi
   if ! wait "${pid}"; then
     FAIL=1
   fi
@@ -120,11 +129,20 @@ if [[ "${FAIL}" == "1" ]]; then
   exit 1
 fi
 
+if [[ "${#BEST_GPUS[@]}" -lt 4 ]]; then
+  echo "[AutoGPU] Running baseline sequentially on GPU=${BEST_GPUS[0]}"
+  CUDA_VISIBLE_DEVICES="${BEST_GPUS[0]}" \
+  EXTRA_ARGS="${COMMON_WANDB[*]} --wandb_name ${RUN_TAG}_baseline" \
+    bash scripts/parking_ground/run_case.sh baseline \
+    > "${MODEL_ROOT}/${RUN_TAG}_baseline.log" 2>&1
+fi
+
 echo "[AutoGPU] All training jobs finished. Running benchmark..."
 python scripts/parking_ground/benchmark_prism_runs.py \
   --repo_root . \
   --scene_path "${SCENE_PATH}" \
   --split_file "${SPLIT_FILE}" \
+  --run Baseline="${MODEL_ROOT}/${RUN_TAG}_baseline" \
   --run PRISM-GeoGateFix="${MODEL_ROOT}/${RUN_TAG}_prism_geogate_fix" \
   --run PRISM-LatePrune="${MODEL_ROOT}/${RUN_TAG}_prism_late_prune" \
   --run PRISM-GeoGateFixKeep="${MODEL_ROOT}/${RUN_TAG}_prism_geogate_fix_keep"

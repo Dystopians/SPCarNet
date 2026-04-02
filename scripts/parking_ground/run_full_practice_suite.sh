@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# End-to-end parking dataset PRISM geogate suite:
+# End-to-end parking dataset acceptance suite:
+# - Baseline
 # - PRISM-GeoGateFix
 # - PRISM-LatePrune
 # - PRISM-GeoGateFixKeep
@@ -49,15 +50,19 @@ fi
 
 export MODEL_ROOT RUN_TAG ITERATIONS
 
-echo "[Suite] 1/3 PRISM-GeoGateFix"
+echo "[Suite] 1/4 Baseline"
+EXTRA_ARGS="${COMMON_WANDB[*]} --wandb_name ${RUN_TAG}_baseline" \
+  bash scripts/parking_ground/run_case.sh baseline
+
+echo "[Suite] 2/4 PRISM-GeoGateFix"
 EXTRA_ARGS="${COMMON_WANDB[*]} --wandb_name ${RUN_TAG}_prism_geogate_fix" \
   bash scripts/parking_ground/run_case.sh prism_geogate_fix
 
-echo "[Suite] 2/3 PRISM-LatePrune"
+echo "[Suite] 3/4 PRISM-LatePrune"
 EXTRA_ARGS="${COMMON_WANDB[*]} --wandb_name ${RUN_TAG}_prism_late_prune" \
   bash scripts/parking_ground/run_case.sh prism_late_prune
 
-echo "[Suite] 3/3 PRISM-GeoGateFixKeep"
+echo "[Suite] 4/4 PRISM-GeoGateFixKeep"
 EXTRA_ARGS="${COMMON_WANDB[*]} --wandb_name ${RUN_TAG}_prism_geogate_fix_keep" \
   bash scripts/parking_ground/run_case.sh prism_geogate_fix_keep
 
@@ -66,6 +71,7 @@ python scripts/parking_ground/benchmark_prism_runs.py \
   --repo_root . \
   --scene_path "${SCENE_PATH}" \
   --split_file "${SPLIT_FILE}" \
+  --run Baseline="${MODEL_ROOT}/${RUN_TAG}_baseline" \
   --run PRISM-GeoGateFix="${MODEL_ROOT}/${RUN_TAG}_prism_geogate_fix" \
   --run PRISM-LatePrune="${MODEL_ROOT}/${RUN_TAG}_prism_late_prune" \
   --run PRISM-GeoGateFixKeep="${MODEL_ROOT}/${RUN_TAG}_prism_geogate_fix_keep"

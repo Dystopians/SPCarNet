@@ -1,7 +1,7 @@
 import json
 import os
 from dataclasses import asdict, dataclass
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 import torch
@@ -38,6 +38,17 @@ class CalibrationConfig:
     prefer_observable_views: bool = True
     min_depth_matches_per_view: int = 24
     min_normal_matches_per_view: int = 8
+
+
+@dataclass
+class CompactionSelectionConfig:
+    microbatch_active_ratio: float = 0.0035
+    candidate_pool_multiplier: float = 6.0
+    min_prune_count: int = 256
+    roi_budget_fraction: float = 0.10
+    near_field_budget_fraction: float = 0.25
+    roi_signal_threshold: float = 0.05
+    near_field_area_percentile: float = 80.0
 
 
 @dataclass
@@ -555,3 +566,86 @@ def select_prism_candidate_ids(
     if len(selected) == 0:
         return torch.zeros((0,), dtype=torch.int64, device=scores.prune_score_t.device)
     return torch.unique(torch.cat(selected, dim=0))
+
+
+def select_prism_compaction_microbatch_ids(
+    scores: PrismScoreOutputs,
+    projected_area_ema: torch.Tensor,
+    cfg: CompactionSelectionConfig,
+    rejected_mask: Optional[torch.Tensor] = None,
+):
+    t = int(scores.prune_score_t.numel())
+    device = scores.prune_score_t.device
+    empty = torch.zeros((0,), dtype=torch.int64, device=device)
+    if t == 0:
+        return empty, {"target_count": 0, "pool_count": 0, "roi_count": 0, "near_field_count": 0, "far_field_count": 0}
+
+    candidate_mask = scores.candidate_mask.to(torch.bool)
+    if rejected_mask is not None:
+        candidate_mask = candidate_mask & (~rejected_mask.to(device=device, dtype=torch.bool))
+    cand_ids = torch.nonzero(candidate_mask, as_tuple=True)[0]
+    active_count = int(cand_ids.numel())
+    if active_count <= 0:
+        return empty, {"target_count": 0, "pool_count": 0, "roi_count": 0, "near_field_count": 0, "far_field_count": 0}
+
+    target_count = int(max(int(getattr(cfg, "min_prune_count", 256)), round(float(getattr(cfg, "microbatch_active_ratio", 0.0035)) * active_count)))
+    target_count = min(target_count, active_count)
+    if target_count <= 0:
+        return empty, {"target_count": 0, "pool_count": 0, "roi_count": 0, "near_field_count": 0, "far_field_count": 0}
+
+    pool_count = int(max(target_count, round(float(getattr(cfg, "candidate_pool_multiplier", 6.0)) * target_count)))
+    pool_count = min(pool_count, active_count)
+    cand_scores = scores.prune_score_t[cand_ids]
+    _, top_idx = torch.topk(cand_scores, k=pool_count, largest=True, sorted=True)
+    pool_ids = cand_ids[top_idx]
+
+    roi_signal = scores.optional_roiprotect_t[pool_ids].to(torch.float32)
+    area_vals = projected_area_ema[pool_ids].to(torch.float32)
+    render_keep = scores.render_keep_t[pool_ids].to(torch.float32)
+    if pool_ids.numel() > 1:
+        q = float(max(0.0, min(1.0, float(getattr(cfg, "near_field_area_percentile", 80.0)) / 100.0)))
+        near_thr = float(torch.quantile(area_vals, q=q).item())
+    else:
+        near_thr = float(area_vals.mean().item()) if pool_ids.numel() > 0 else 0.0
+    roi_mask = roi_signal > float(getattr(cfg, "roi_signal_threshold", 0.05))
+    near_mask = (~roi_mask) & ((area_vals >= near_thr) | (render_keep > float(getattr(cfg, "roi_signal_threshold", 0.05))))
+    far_mask = (~roi_mask) & (~near_mask)
+
+    def _pick(mask: torch.Tensor, k: int) -> torch.Tensor:
+        ids = pool_ids[mask]
+        if ids.numel() == 0 or k <= 0:
+            return empty
+        s = scores.prune_score_t[ids]
+        kk = min(int(k), int(ids.numel()))
+        _, idx = torch.topk(s, k=kk, largest=True, sorted=False)
+        return ids[idx]
+
+    roi_cap = int(round(target_count * float(getattr(cfg, "roi_budget_fraction", 0.10))))
+    near_cap = int(round(target_count * float(getattr(cfg, "near_field_budget_fraction", 0.25))))
+    far_cap = target_count
+
+    selected_chunks = []
+    far_sel = _pick(far_mask, far_cap)
+    if far_sel.numel() > 0:
+        selected_chunks.append(far_sel)
+    remaining = max(0, target_count - sum(int(x.numel()) for x in selected_chunks))
+    near_sel = _pick(near_mask, min(near_cap, remaining))
+    if near_sel.numel() > 0:
+        selected_chunks.append(near_sel)
+    remaining = max(0, target_count - sum(int(x.numel()) for x in selected_chunks))
+    roi_sel = _pick(roi_mask, min(roi_cap, remaining))
+    if roi_sel.numel() > 0:
+        selected_chunks.append(roi_sel)
+
+    chosen = torch.unique(torch.cat(selected_chunks, dim=0)) if len(selected_chunks) > 0 else empty
+    stats = {
+        "target_count": int(target_count),
+        "pool_count": int(pool_ids.numel()),
+        "roi_count": int(roi_mask.sum().item()),
+        "near_field_count": int(near_mask.sum().item()),
+        "far_field_count": int(far_mask.sum().item()),
+        "selected_count": int(chosen.numel()),
+        "roi_cap": int(roi_cap),
+        "near_field_cap": int(near_cap),
+    }
+    return chosen, stats

@@ -38,6 +38,14 @@ class PrismValidationConfig:
     min_valid_normal_matches: int = 64
 
 
+STAGE_BEST_UPDATE_STRATEGY = (
+    "geometry-first lexicographic: require observable geometry, compare "
+    "(AbsRel asc, MeanAngle asc, DepthMAE asc, Delta1.25 desc) first; "
+    "only when geometry is not worse than current stage-best within tolerance "
+    "may image metrics (PSNR desc, MAE asc) update the stage-best."
+)
+
+
 def _load_split_dropped_keys(split_file: str) -> List[str]:
     if (not split_file) or (not os.path.exists(split_file)):
         return []
@@ -169,6 +177,7 @@ def evaluate_prism_validation_metrics(
     mae_vals = []
     absrel_num = 0.0
     delta_num = 0.0
+    depth_mae_num = 0.0
     depth_weight = 0.0
     mean_angle_num = 0.0
     abs_cos_num = 0.0
@@ -212,6 +221,7 @@ def evaluate_prism_validation_metrics(
                 depth_weight += float(depth_points)
                 absrel_num += float(ds["abs_rel"]) * float(depth_points)
                 delta_num += float(ds["delta_1.25"]) * float(depth_points)
+                depth_mae_num += float(ds["mae"]) * float(depth_points)
 
             normal_points = int(proxy.get("normal_points", 0))
             if bool(proxy_cfg.compute_normal) and normal_points > 0 and proxy.get("normal_stats", None) is not None:
@@ -268,6 +278,7 @@ def evaluate_prism_validation_metrics(
         "mae": _safe_mean(mae_vals),
         "absrel": float(absrel_num / depth_weight) if depth_weight > 0 else float("nan"),
         "delta_1.25": float(delta_num / depth_weight) if depth_weight > 0 else float("nan"),
+        "depth_mae": float(depth_mae_num / depth_weight) if depth_weight > 0 else float("nan"),
         "mean_angle": float(mean_angle_num / normal_weight) if normal_weight > 0 else float("nan"),
         "abs_cos": float(abs_cos_num / normal_weight) if normal_weight > 0 else float("nan"),
         "roi_psnr": _safe_mean(roi_psnr_vals),
@@ -338,6 +349,132 @@ def compare_validation_against_stage_best(
     return (len(rules) == 0), deltas, rules
 
 
+def decide_stage_best_update(
+    current_metrics: Dict[str, float],
+    stage_best_metrics: Optional[Dict[str, float]],
+) -> Dict[str, object]:
+    """
+    Geometry-first stage-best update:
+    1. candidate must have observable geometry
+    2. compare geometry tuple first:
+       (AbsRel asc, MeanAngle asc, DepthMAE asc, Delta1.25 desc)
+    3. only if geometry is not worse than stage-best on every finite component
+       may image metrics break ties: (PSNR desc, MAE asc)
+    """
+    if stage_best_metrics is None:
+        observable = bool(float(current_metrics.get("geometry_observable", 0.0)) > 0.5)
+        return {
+            "update": bool(observable),
+            "reason": "initialize_observable_stage_best" if observable else "reject_non_observable_candidate",
+            "strategy": STAGE_BEST_UPDATE_STRATEGY,
+            "geometry_not_worse": bool(observable),
+            "geometry_lexicographic_better": bool(observable),
+            "image_tiebreak_better": False,
+        }
+
+    cur_observable = bool(float(current_metrics.get("geometry_observable", 0.0)) > 0.5)
+    bst_observable = bool(float(stage_best_metrics.get("geometry_observable", 0.0)) > 0.5)
+    if not cur_observable:
+        return {
+            "update": False,
+            "reason": "reject_non_observable_candidate",
+            "strategy": STAGE_BEST_UPDATE_STRATEGY,
+            "geometry_not_worse": False,
+            "geometry_lexicographic_better": False,
+            "image_tiebreak_better": False,
+        }
+    if not bst_observable:
+        return {
+            "update": True,
+            "reason": "replace_non_observable_stage_best",
+            "strategy": STAGE_BEST_UPDATE_STRATEGY,
+            "geometry_not_worse": True,
+            "geometry_lexicographic_better": True,
+            "image_tiebreak_better": False,
+        }
+
+    eps = {
+        "absrel": 1e-6,
+        "mean_angle": 1e-4,
+        "depth_mae": 1e-6,
+        "delta_1.25": 1e-6,
+        "psnr": 1e-4,
+        "mae": 1e-6,
+    }
+    geometry_specs = [
+        ("absrel", "asc"),
+        ("mean_angle", "asc"),
+        ("depth_mae", "asc"),
+        ("delta_1.25", "desc"),
+    ]
+    geometry_not_worse = True
+    geometry_lexicographic_better = False
+    comparable_geometry = False
+    for key, mode in geometry_specs:
+        cur = current_metrics.get(key, float("nan"))
+        bst = stage_best_metrics.get(key, float("nan"))
+        if not (np.isfinite(cur) and np.isfinite(bst)):
+            continue
+        comparable_geometry = True
+        tol = float(eps[key])
+        if mode == "asc":
+            if cur > bst + tol:
+                geometry_not_worse = False
+                break
+            if (not geometry_lexicographic_better) and (cur < bst - tol):
+                geometry_lexicographic_better = True
+                break
+        else:
+            if cur < bst - tol:
+                geometry_not_worse = False
+                break
+            if (not geometry_lexicographic_better) and (cur > bst + tol):
+                geometry_lexicographic_better = True
+                break
+    if not comparable_geometry:
+        geometry_not_worse = False
+
+    if geometry_lexicographic_better:
+        return {
+            "update": True,
+            "reason": "geometry_lexicographic_improvement",
+            "strategy": STAGE_BEST_UPDATE_STRATEGY,
+            "geometry_not_worse": True,
+            "geometry_lexicographic_better": True,
+            "image_tiebreak_better": False,
+        }
+    if not geometry_not_worse:
+        return {
+            "update": False,
+            "reason": "geometry_regression_blocks_update",
+            "strategy": STAGE_BEST_UPDATE_STRATEGY,
+            "geometry_not_worse": False,
+            "geometry_lexicographic_better": False,
+            "image_tiebreak_better": False,
+        }
+
+    image_tiebreak_better = False
+    cur_psnr = current_metrics.get("psnr", float("nan"))
+    bst_psnr = stage_best_metrics.get("psnr", float("nan"))
+    if np.isfinite(cur_psnr) and np.isfinite(bst_psnr):
+        if cur_psnr > bst_psnr + float(eps["psnr"]):
+            image_tiebreak_better = True
+        elif abs(cur_psnr - bst_psnr) <= float(eps["psnr"]):
+            cur_mae = current_metrics.get("mae", float("nan"))
+            bst_mae = stage_best_metrics.get("mae", float("nan"))
+            if np.isfinite(cur_mae) and np.isfinite(bst_mae) and cur_mae < bst_mae - float(eps["mae"]):
+                image_tiebreak_better = True
+
+    return {
+        "update": bool(image_tiebreak_better),
+        "reason": "image_tiebreak_after_geometry_guard" if image_tiebreak_better else "geometry_tie_without_image_gain",
+        "strategy": STAGE_BEST_UPDATE_STRATEGY,
+        "geometry_not_worse": True,
+        "geometry_lexicographic_better": False,
+        "image_tiebreak_better": bool(image_tiebreak_better),
+    }
+
+
 def save_validation_summary(
     out_dir: str,
     iteration: int,
@@ -347,6 +484,7 @@ def save_validation_summary(
     deltas: Dict[str, float],
     pass_gate: bool,
     triggered_rules: Sequence[str],
+    stage_best_update: Optional[Dict[str, object]] = None,
 ):
     os.makedirs(out_dir, exist_ok=True)
     payload = {
@@ -357,6 +495,7 @@ def save_validation_summary(
         "current": current_metrics,
         "stage_best": stage_best_metrics,
         "deltas": deltas,
+        "stage_best_update": stage_best_update or {},
     }
     json_path = os.path.join(out_dir, f"validation_iter_{int(iteration):06d}.json")
     with open(json_path, "w", encoding="utf-8") as f:
@@ -369,6 +508,11 @@ def save_validation_summary(
         f.write(f"- phase: {phase_name}\n")
         f.write(f"- pass_gate: {bool(pass_gate)}\n")
         f.write(f"- triggered_rules: {', '.join(triggered_rules) if len(triggered_rules) > 0 else 'none'}\n\n")
+        if stage_best_update:
+            f.write("## Stage-Best Update\n")
+            for k, v in stage_best_update.items():
+                f.write(f"- {k}: {v}\n")
+            f.write("\n")
         f.write("## Current Metrics\n")
         for k, v in current_metrics.items():
             f.write(f"- {k}: {v}\n")

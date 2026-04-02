@@ -262,9 +262,13 @@ class OptimizationParams(ParamGroup):
         # Heavy PRISM feature recomputation (structure + sparse support) interval.
         # Keep this decoupled from light stat collection to avoid step-time spikes.
         self.prism_score_recompute_interval = 500
-        # If triangle count exceeds this, skip expensive structure/sparse metrics
-        # and use a lightweight fallback to avoid long stalls.
+        # Legacy threshold above which PRISM switches from full heavy eval
+        # to the scalable two-stage heavy-eval path.
         self.prism_max_triangles_for_heavy_metrics = 400000
+        self.prism_heavy_eval_budget = 120000
+        self.prism_heavy_eval_neighbor_rings = 2
+        self.prism_force_full_heavy_eval_below = 400000
+        self.prism_skip_heavy_eval_for_far_field = False
         self.prism_dead_prune_ratio = 0.0
         self.prism_candidate_prune_ratio = 0.0
         self.prism_recovery_iters = 0
@@ -301,6 +305,17 @@ class OptimizationParams(ParamGroup):
         self.prism_post_commit_recollect_iters = 300
         self.prism_force_recompute_scores_after_recollect = True
         self.prism_final_finetune_iters = 500
+        self.prism_enable_compaction_stage = False
+        self.prism_compaction_source_preference = "best_geometry"
+        self.prism_compaction_rounds = 2
+        self.prism_compaction_microbatch_active_ratio = 0.0035
+        self.prism_compaction_max_microbatches_per_round = 6
+        self.prism_compaction_candidate_pool_multiplier = 6.0
+        self.prism_compaction_min_prune_count = 256
+        self.prism_compaction_roi_budget_fraction = 0.10
+        self.prism_compaction_near_field_budget_fraction = 0.25
+        self.prism_compaction_roi_signal_threshold = 0.05
+        self.prism_compaction_near_field_area_percentile = 80.0
         self.prism_topology_freeze_during_stats = True
         self.prism_round_checkpoint = True
         # Optional lightweight teacher distillation during recovery.

@@ -11,6 +11,15 @@ class PrismPhase(IntEnum):
     FINAL_FINE_TUNE = 5
 
 
+class PrismCompactionPhase(IntEnum):
+    DISABLED = 0
+    SELECT_SOURCE = 1
+    RESTORE_SOURCE = 2
+    SCORE_REFRESH = 3
+    MICROBATCH_PRUNE = 4
+    FINALIZE = 5
+
+
 @dataclass
 class PrismPipelineConfig:
     enabled: bool = False
@@ -24,6 +33,22 @@ class PrismPipelineConfig:
     round_checkpoint: bool = True
     post_commit_recollect_iters: int = 0
     force_recompute_scores_after_recollect: bool = True
+
+
+@dataclass
+class PrismCompactionConfig:
+    enabled: bool = False
+    source_preference: str = "best_geometry"
+    rounds: int = 2
+    microbatch_active_ratio: float = 0.0035
+    max_microbatches_per_round: int = 6
+    candidate_pool_multiplier: float = 6.0
+    min_prune_count: int = 256
+    roi_budget_fraction: float = 0.10
+    near_field_budget_fraction: float = 0.25
+    roi_signal_threshold: float = 0.05
+    near_field_area_percentile: float = 80.0
+    save_checkpoints: bool = True
 
 
 class PrismRoundController:

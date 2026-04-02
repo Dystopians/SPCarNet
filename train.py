@@ -66,7 +66,9 @@ from utils.ground_association_utils import (
 )
 from utils.ground_debug_utils import save_ground_debug_view
 from utils.triangle_stats import TriangleStatsManager
-from utils.triangle_structure_utils import compute_triangle_structure_metrics
+from utils.triangle_structure_utils import (
+    compute_triangle_structure_metrics,
+)
 from utils.triangle_sparse_support import SparseSupportConfig, TriangleSparseSupportEstimator
 from utils.prism_scoring import (
     PrismScoreConfig,
@@ -76,10 +78,12 @@ from utils.prism_scoring import (
 )
 from utils.prism_counterfactual import (
     CalibrationConfig,
+    CompactionSelectionConfig,
     CounterfactualGateConfig,
     build_calibration_set,
     counterfactual_decision_to_dict,
     run_counterfactual_simulation,
+    select_prism_compaction_microbatch_ids,
     select_prism_candidate_ids,
 )
 from utils.prism_geometry_proxy import (
@@ -87,10 +91,17 @@ from utils.prism_geometry_proxy import (
     build_geometry_proxy_context,
     collect_view_sparse_depth_correspondences,
 )
-from utils.prism_pipeline import PrismPipelineConfig, PrismRoundController, PrismPhase
+from utils.prism_pipeline import (
+    PrismCompactionConfig,
+    PrismCompactionPhase,
+    PrismPipelineConfig,
+    PrismRoundController,
+    PrismPhase,
+)
 from utils.prism_validation import (
     PrismValidationConfig,
     build_prism_validation_views,
+    decide_stage_best_update,
     evaluate_prism_validation_metrics,
     compare_validation_against_stage_best,
     save_validation_summary,
@@ -124,6 +135,10 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "collect_interval": int(getattr(opt, "prism_collect_interval", 0)),
         "score_recompute_interval": int(getattr(opt, "prism_score_recompute_interval", 500)),
         "max_triangles_for_heavy_metrics": int(getattr(opt, "prism_max_triangles_for_heavy_metrics", 400000)),
+        "heavy_eval_budget": int(getattr(opt, "prism_heavy_eval_budget", 120000)),
+        "heavy_eval_neighbor_rings": int(getattr(opt, "prism_heavy_eval_neighbor_rings", 2)),
+        "force_full_heavy_eval_below": int(getattr(opt, "prism_force_full_heavy_eval_below", 400000)),
+        "skip_heavy_eval_for_far_field": bool(getattr(opt, "prism_skip_heavy_eval_for_far_field", False)),
         "dead_prune_ratio": float(getattr(opt, "prism_dead_prune_ratio", 0.0)),
         "candidate_prune_ratio": float(getattr(opt, "prism_candidate_prune_ratio", 0.0)),
         "candidate_prune_ratio_per_round": float(getattr(opt, "prism_candidate_prune_ratio_per_round", 0.015)),
@@ -140,6 +155,7 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "force_recompute_scores_after_recollect": bool(
             getattr(opt, "prism_force_recompute_scores_after_recollect", True)
         ),
+        "enable_compaction_stage": bool(getattr(opt, "prism_enable_compaction_stage", False)),
     }
     collect_enabled = bool(cfg["enabled"] or cfg["collect_stats"])
     manager = None
@@ -291,6 +307,20 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         first_iter=int(init_iter),
         total_iters=int(getattr(opt, "iterations", 0)),
     )
+    compaction_cfg = PrismCompactionConfig(
+        enabled=bool(getattr(opt, "prism_enable_compaction_stage", False)),
+        source_preference=str(getattr(opt, "prism_compaction_source_preference", "best_geometry")),
+        rounds=int(getattr(opt, "prism_compaction_rounds", 2)),
+        microbatch_active_ratio=float(getattr(opt, "prism_compaction_microbatch_active_ratio", 0.0035)),
+        max_microbatches_per_round=int(getattr(opt, "prism_compaction_max_microbatches_per_round", 6)),
+        candidate_pool_multiplier=float(getattr(opt, "prism_compaction_candidate_pool_multiplier", 6.0)),
+        min_prune_count=int(getattr(opt, "prism_compaction_min_prune_count", 256)),
+        roi_budget_fraction=float(getattr(opt, "prism_compaction_roi_budget_fraction", 0.10)),
+        near_field_budget_fraction=float(getattr(opt, "prism_compaction_near_field_budget_fraction", 0.25)),
+        roi_signal_threshold=float(getattr(opt, "prism_compaction_roi_signal_threshold", 0.05)),
+        near_field_area_percentile=float(getattr(opt, "prism_compaction_near_field_area_percentile", 80.0)),
+        save_checkpoints=True,
+    )
     validation_cfg = PrismValidationConfig(
         interval=int(getattr(opt, "prism_validation_interval", 1000)),
         max_views=int(getattr(opt, "prism_validation_max_views", 32)),
@@ -354,6 +384,14 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "validation_views": validation_views,
         "proxy_cfg": proxy_cfg,
         "proxy_ctx": proxy_ctx,
+        "compaction_cfg": compaction_cfg,
+        "stage_best_checkpoint_dir": "",
+        "last_validation_pass_checkpoint_dir": "",
+        "compaction_source_checkpoint_dir": "",
+        "compaction_best_geometry_checkpoint_dir": "",
+        "compaction_best_speed_checkpoint_dir": "",
+        "compaction_final_checkpoint_dir": "",
+        "compaction_phase": PrismCompactionPhase.DISABLED,
         "stage_best_metrics": None,
         "last_validation_metrics": None,
         "last_validation_pass": 1,
@@ -595,6 +633,115 @@ def _compute_sparse_colmap_depth_loss(
     }
 
 
+def _topk_masked_ids(score_t: torch.Tensor, mask_t: torch.Tensor, k: int) -> torch.Tensor:
+    device = score_t.device
+    k = int(max(0, k))
+    if k <= 0 or score_t.numel() == 0:
+        return torch.zeros((0,), dtype=torch.int64, device=device)
+    mask = mask_t.to(torch.bool)
+    valid = int(mask.sum().item())
+    if valid <= 0:
+        return torch.zeros((0,), dtype=torch.int64, device=device)
+    k = min(k, valid)
+    masked = torch.where(mask, score_t.to(torch.float32), torch.full_like(score_t.to(torch.float32), -1e9))
+    return torch.unique(torch.topk(masked, k=k, largest=True, sorted=False).indices.to(torch.int64))
+
+
+def _build_lightweight_metric_defaults(manager, tri_count: int, device: torch.device):
+    zeros_i32 = torch.zeros((tri_count,), dtype=torch.int32, device=device)
+    zeros_f32 = torch.zeros((tri_count,), dtype=torch.float32, device=device)
+    half = torch.full((tri_count,), 0.5, dtype=torch.float32, device=device)
+    area_ema = manager.stats.projected_area_ema.to(device=device, dtype=torch.float32)
+    denom = torch.clamp(torch.mean(area_ema), min=1e-6)
+    geo_proxy = torch.clamp(area_ema / denom, 0.0, 1.0)
+    struct_metrics = SimpleNamespace(
+        boundary_edge_count=zeros_i32,
+        nonmanifold_edge_count=zeros_i32,
+        flatness_score=half,
+        coplanar_neighbor_fraction=half,
+        mean_abs_dihedral_deg=zeros_f32,
+    )
+    sparse_metrics = SimpleNamespace(
+        support_count=zeros_i32,
+        plane_residual_median=torch.full((tri_count,), 1e6, dtype=torch.float32, device=device),
+        normal_angle_residual_deg=torch.full((tri_count,), 180.0, dtype=torch.float32, device=device),
+        geometry_support_score_base=geo_proxy,
+    )
+    return struct_metrics, sparse_metrics
+
+
+def _select_heavy_eval_triangle_ids(
+    cfg,
+    score_inputs: PrismScoreInputs,
+    preliminary_scores,
+    tri_count: int,
+) -> torch.Tensor:
+    budget = int(max(0, cfg.get("heavy_eval_budget", 0)))
+    if budget <= 0 or tri_count <= 0:
+        return torch.zeros((0,), dtype=torch.int64, device=preliminary_scores.prune_score_t.device)
+
+    candidate_quota = max(1, budget // 2)
+    protect_quota = max(1, budget - candidate_quota)
+    far_field_ok = torch.ones((tri_count,), dtype=torch.bool, device=preliminary_scores.prune_score_t.device)
+    if bool(cfg.get("skip_heavy_eval_for_far_field", False)):
+        far_field_ok = ~(
+            (preliminary_scores.render_keep_t <= 0.05)
+            & (score_inputs.geometry_support_score_base.to(torch.float32) <= 0.10)
+            & (preliminary_scores.optional_groundprotect_t <= 0.0)
+            & (preliminary_scores.optional_roiprotect_t <= 0.0)
+        )
+
+    candidate_ids = _topk_masked_ids(
+        score_t=preliminary_scores.prune_score_t,
+        mask_t=preliminary_scores.candidate_mask & far_field_ok,
+        k=candidate_quota,
+    )
+    protect_score = torch.stack(
+        [
+            preliminary_scores.geo_t,
+            preliminary_scores.sens_t,
+            preliminary_scores.unc_t,
+            preliminary_scores.render_keep_t,
+            preliminary_scores.optional_groundprotect_t,
+            preliminary_scores.optional_roiprotect_t,
+        ],
+        dim=1,
+    ).max(dim=1).values
+    protect_ids = _topk_masked_ids(
+        score_t=protect_score,
+        mask_t=preliminary_scores.protected_mask_raw & far_field_ok,
+        k=protect_quota,
+    )
+    seed_ids = torch.unique(torch.cat([candidate_ids, protect_ids], dim=0))
+    if seed_ids.numel() == 0:
+        seed_ids = _topk_masked_ids(
+            score_t=protect_score + preliminary_scores.prune_score_t,
+            mask_t=far_field_ok,
+            k=min(budget, tri_count),
+        )
+    # Large-topology mode must stay local-only. Do not build a global structure
+    # cache just to expand neighborhoods; that defeats the scalability fix and
+    # was causing crashes around the first heavy-eval transition.
+    if seed_ids.numel() > budget:
+        seed_scores = preliminary_scores.prune_score_t[seed_ids]
+        _, idx = torch.topk(seed_scores, k=int(budget), largest=True, sorted=False)
+        seed_ids = seed_ids[idx]
+    return torch.unique(seed_ids.to(torch.int64))
+
+
+def _build_local_global_neighbor_map(local_neighbors, global_ids: torch.Tensor):
+    out = {}
+    if global_ids.numel() == 0:
+        return out
+    gids = [int(v) for v in global_ids.to(torch.int64).tolist()]
+    for local_i, global_i in enumerate(gids):
+        nbr_local = []
+        if local_neighbors is not None and local_i < len(local_neighbors):
+            nbr_local = local_neighbors[local_i]
+        out[int(global_i)] = [int(gids[int(nid)]) for nid in nbr_local if int(nid) >= 0 and int(nid) < len(gids)]
+    return out
+
+
 def _update_prism_scores(
     prism_state,
     iteration,
@@ -629,59 +776,6 @@ def _update_prism_scores(
     need_recompute = need_recompute or (tri_count != last_recompute_tri_count)
     need_recompute = need_recompute or ((int(iteration) - last_recompute_iter) >= score_recompute_interval)
 
-    use_lightweight_fallback = (max_triangles_for_heavy > 0) and (tri_count > max_triangles_for_heavy)
-    if use_lightweight_fallback:
-        device = triangles.vertices.device
-        if not bool(prism_state.get("_warned_heavy_metrics_fallback", False)):
-            print(
-                "[PRISM] heavy structure/sparse metrics fallback enabled: triangles={} > max_triangles_for_heavy_metrics={}".format(
-                    tri_count, max_triangles_for_heavy
-                )
-            )
-            prism_state["_warned_heavy_metrics_fallback"] = True
-        zeros_i32 = torch.zeros((tri_count,), dtype=torch.int32, device=device)
-        half = torch.full((tri_count,), 0.5, dtype=torch.float32, device=device)
-        area_ema = manager.stats.projected_area_ema.to(torch.float32)
-        denom = torch.clamp(torch.mean(area_ema), min=1e-6)
-        geo_proxy = torch.clamp(area_ema / denom, 0.0, 1.0)
-        struct_metrics = SimpleNamespace(
-            boundary_edge_count=zeros_i32,
-            nonmanifold_edge_count=zeros_i32,
-            flatness_score=half,
-            coplanar_neighbor_fraction=half,
-        )
-        sparse_metrics = SimpleNamespace(
-            geometry_support_score_base=geo_proxy,
-        )
-        prism_state["cached_structure_metrics"] = struct_metrics
-        prism_state["cached_sparse_metrics"] = sparse_metrics
-        prism_state["last_score_recompute_iter"] = int(iteration)
-        prism_state["last_score_triangle_count"] = int(tri_count)
-    elif need_recompute:
-        struct_metrics, struct_cache = compute_triangle_structure_metrics(
-            vertices=triangles.vertices,
-            triangle_indices=triangles._triangle_indices,
-            cache=prism_state.get("structure_cache", None),
-        )
-        prism_state["structure_cache"] = struct_cache
-
-        sparse_est = prism_state.get("sparse_estimator", None)
-        if sparse_est is None:
-            return
-        sparse_metrics = sparse_est.compute(
-            vertices=triangles.vertices,
-            triangle_indices=triangles._triangle_indices,
-        )
-        prism_state["cached_structure_metrics"] = struct_metrics
-        prism_state["cached_sparse_metrics"] = sparse_metrics
-        prism_state["last_score_recompute_iter"] = int(iteration)
-        prism_state["last_score_triangle_count"] = int(tri_count)
-    else:
-        struct_metrics = prism_state.get("cached_structure_metrics", None)
-        sparse_metrics = prism_state.get("cached_sparse_metrics", None)
-        if (struct_metrics is None) or (sparse_metrics is None):
-            return
-
     if assoc_stats is None:
         assoc_stats = prism_state.get("latest_assoc_stats", None)
     ground_protect_t, roi_protect_t, render_keep_t = _build_prism_ground_and_roi_signals(
@@ -691,6 +785,141 @@ def _update_prism_scores(
         viewpoint_cam=viewpoint_cam,
         assoc_stats=assoc_stats,
     )
+    device = triangles.vertices.device
+    force_full_heavy_eval_below = int(cfg.get("force_full_heavy_eval_below", max_triangles_for_heavy))
+    use_two_stage_heavy = tri_count > max(0, force_full_heavy_eval_below)
+    if max_triangles_for_heavy > 0:
+        use_two_stage_heavy = use_two_stage_heavy or (tri_count > max_triangles_for_heavy)
+
+    lightweight_only_mask = prism_state.get("cached_lightweight_only_mask", None)
+    local_tri_neighbors = prism_state.get("cached_local_tri_neighbors", None)
+
+    if need_recompute:
+        sparse_est = prism_state.get("sparse_estimator", None)
+        if sparse_est is None:
+            return
+
+        if not use_two_stage_heavy:
+            struct_metrics, struct_cache = compute_triangle_structure_metrics(
+                vertices=triangles.vertices,
+                triangle_indices=triangles._triangle_indices,
+                cache=prism_state.get("structure_cache", None),
+            )
+            prism_state["structure_cache"] = struct_cache
+            sparse_metrics = sparse_est.compute(
+                vertices=triangles.vertices,
+                triangle_indices=triangles._triangle_indices,
+            )
+            lightweight_only_mask = torch.zeros((tri_count,), dtype=torch.bool, device=device)
+            local_tri_neighbors = getattr(struct_cache, "tri_neighbors", None)
+            prism_state["last_heavy_eval_info"] = {
+                "mode": "full",
+                "heavy_eval_triangle_count": int(tri_count),
+                "heavy_eval_fraction": 1.0,
+            }
+        else:
+            if not bool(prism_state.get("_warned_heavy_metrics_scalable", False)):
+                print(
+                    "[PRISM] scalable heavy-eval enabled (local submesh only): triangles={} budget={} rings={}".format(
+                        tri_count,
+                        int(cfg.get("heavy_eval_budget", 0)),
+                        int(cfg.get("heavy_eval_neighbor_rings", 1)),
+                    )
+                )
+                prism_state["_warned_heavy_metrics_scalable"] = True
+            struct_metrics, sparse_metrics = _build_lightweight_metric_defaults(
+                manager=manager,
+                tri_count=tri_count,
+                device=device,
+            )
+            cheap_inputs = PrismScoreInputs(
+                vis_count_ema=manager.stats.vis_count_ema,
+                grad_pos_norm_ema=manager.stats.grad_pos_norm_ema,
+                grad_app_norm_ema=manager.stats.grad_app_norm_ema,
+                grad_norm_var_ema=manager.stats.grad_norm_var_ema,
+                view_direction_histogram=manager.stats.view_direction_histogram,
+                birth_iter=manager.stats.birth_iter,
+                geometry_support_score_base=sparse_metrics.geometry_support_score_base,
+                boundary_edge_count=struct_metrics.boundary_edge_count,
+                nonmanifold_edge_count=struct_metrics.nonmanifold_edge_count,
+                flatness_score=struct_metrics.flatness_score,
+                coplanar_neighbor_fraction=struct_metrics.coplanar_neighbor_fraction,
+                mean_abs_dihedral_deg=struct_metrics.mean_abs_dihedral_deg,
+                sparse_support_count=sparse_metrics.support_count,
+                sparse_plane_residual=sparse_metrics.plane_residual_median,
+                sparse_normal_residual_deg=sparse_metrics.normal_angle_residual_deg,
+                render_keep_t=render_keep_t,
+                tri_neighbors=None,
+                ground_protect_t=ground_protect_t,
+                roi_protect_t=roi_protect_t,
+                lightweight_only_mask=torch.ones((tri_count,), dtype=torch.bool, device=device),
+            )
+            cheap_scores = compute_prism_scores(
+                inputs=cheap_inputs,
+                current_iter=int(iteration),
+                cfg=prism_state["score_cfg"],
+            )
+            heavy_ids = _select_heavy_eval_triangle_ids(
+                cfg=cfg,
+                score_inputs=cheap_inputs,
+                preliminary_scores=cheap_scores,
+                tri_count=tri_count,
+            )
+            lightweight_only_mask = torch.ones((tri_count,), dtype=torch.bool, device=device)
+            local_tri_neighbors = {}
+            if heavy_ids.numel() > 0:
+                lightweight_only_mask[heavy_ids] = False
+                local_struct_metrics, local_struct_cache = compute_triangle_structure_metrics(
+                    vertices=triangles.vertices,
+                    triangle_indices=triangles._triangle_indices[heavy_ids],
+                    cache=None,
+                )
+                sparse_subset = sparse_est.compute_subset(
+                    vertices=triangles.vertices,
+                    triangle_indices=triangles._triangle_indices,
+                    triangle_ids=heavy_ids,
+                )
+                local_tri_neighbors = _build_local_global_neighbor_map(
+                    local_neighbors=getattr(local_struct_cache, "tri_neighbors", None),
+                    global_ids=heavy_ids,
+                )
+                struct_metrics.boundary_edge_count[heavy_ids] = local_struct_metrics.boundary_edge_count
+                struct_metrics.nonmanifold_edge_count[heavy_ids] = local_struct_metrics.nonmanifold_edge_count
+                struct_metrics.mean_abs_dihedral_deg[heavy_ids] = local_struct_metrics.mean_abs_dihedral_deg
+                struct_metrics.coplanar_neighbor_fraction[heavy_ids] = local_struct_metrics.coplanar_neighbor_fraction
+                struct_metrics.flatness_score[heavy_ids] = local_struct_metrics.flatness_score
+                sparse_metrics.support_count[sparse_subset.triangle_ids] = sparse_subset.support_count
+                sparse_metrics.plane_residual_median[sparse_subset.triangle_ids] = sparse_subset.plane_residual_median
+                sparse_metrics.normal_angle_residual_deg[sparse_subset.triangle_ids] = sparse_subset.normal_angle_residual_deg
+                sparse_metrics.geometry_support_score_base[sparse_subset.triangle_ids] = torch.maximum(
+                    sparse_metrics.geometry_support_score_base[sparse_subset.triangle_ids],
+                    sparse_subset.geometry_support_score_base,
+                )
+            prism_state["structure_cache"] = None
+            prism_state["last_heavy_eval_info"] = {
+                "mode": "two_stage",
+                "heavy_eval_triangle_count": int((~lightweight_only_mask).sum().item()),
+                "heavy_eval_fraction": float((~lightweight_only_mask).to(torch.float32).mean().item())
+                if tri_count > 0
+                else 0.0,
+                "heavy_eval_budget": int(cfg.get("heavy_eval_budget", 0)),
+                "heavy_eval_neighbor_rings": int(cfg.get("heavy_eval_neighbor_rings", 1)),
+            }
+
+        prism_state["cached_structure_metrics"] = struct_metrics
+        prism_state["cached_sparse_metrics"] = sparse_metrics
+        prism_state["cached_lightweight_only_mask"] = lightweight_only_mask
+        prism_state["cached_local_tri_neighbors"] = local_tri_neighbors
+        prism_state["last_score_recompute_iter"] = int(iteration)
+        prism_state["last_score_triangle_count"] = int(tri_count)
+    else:
+        struct_metrics = prism_state.get("cached_structure_metrics", None)
+        sparse_metrics = prism_state.get("cached_sparse_metrics", None)
+        if (struct_metrics is None) or (sparse_metrics is None):
+            return
+        if lightweight_only_mask is None:
+            lightweight_only_mask = torch.zeros((tri_count,), dtype=torch.bool, device=device)
+
     score_inputs = PrismScoreInputs(
         vis_count_ema=manager.stats.vis_count_ema,
         grad_pos_norm_ema=manager.stats.grad_pos_norm_ema,
@@ -708,9 +937,10 @@ def _update_prism_scores(
         sparse_plane_residual=getattr(sparse_metrics, "plane_residual_median", None),
         sparse_normal_residual_deg=getattr(sparse_metrics, "normal_angle_residual_deg", None),
         render_keep_t=render_keep_t,
-        tri_neighbors=getattr(prism_state.get("structure_cache", None), "tri_neighbors", None),
+        tri_neighbors=local_tri_neighbors,
         ground_protect_t=ground_protect_t,
         roi_protect_t=roi_protect_t,
+        lightweight_only_mask=lightweight_only_mask,
     )
     score_cfg = prism_state["score_cfg"]
     scores = compute_prism_scores(
@@ -722,6 +952,20 @@ def _update_prism_scores(
     manager.stats.triangle_state = scores.triangle_state.to(manager.stats.triangle_state.dtype)
     summary = summarize_prism_scores(scores)
     prism_state["last_scores_summary"] = summary
+    heavy_info = prism_state.get("last_heavy_eval_info", {})
+
+    if need_recompute:
+        print(
+            "[PRISM] score recompute iter={} mode={} heavy_eval={}/{} ({:.3f}) geom_keep_nonzero={:.3f} orient_keep_nonzero={:.3f}".format(
+                int(iteration),
+                str(heavy_info.get("mode", "cached")),
+                int(summary.get("heavy_eval_triangle_count", 0)),
+                int(tri_count),
+                float(summary.get("heavy_eval_fraction", 0.0)),
+                float(summary.get("geometry_keep_nonzero_fraction", 0.0)),
+                float(summary.get("orientation_keep_nonzero_fraction", 0.0)),
+            )
+        )
 
     if bool(cfg["save_debug_json"]):
         out_dir = os.path.join(prism_state["model_path"], "prism_debug")
@@ -735,6 +979,7 @@ def _update_prism_scores(
                         "force_recompute": bool(force_recompute),
                         "score_recompute_interval": int(score_recompute_interval),
                         "last_score_recompute_iter": int(prism_state.get("last_score_recompute_iter", -1)),
+                        "heavy_eval": heavy_info,
                     },
                     "signals": {
                         "ground_protect_mean": float(ground_protect_t.mean().item()) if ground_protect_t.numel() > 0 else 0.0,
@@ -742,6 +987,16 @@ def _update_prism_scores(
                         "render_keep_mean": float(render_keep_t.mean().item()) if render_keep_t.numel() > 0 else 0.0,
                         "protected_raw_count": int(scores.protected_mask_raw.sum().item()),
                         "protected_dilated_count": int(scores.protected_mask_dilated.sum().item()),
+                        "heavy_eval_fraction": float(summary.get("heavy_eval_fraction", 0.0)),
+                        "heavy_eval_triangle_count": int(summary.get("heavy_eval_triangle_count", 0)),
+                        "geometry_keep_nonzero_fraction": float(summary.get("geometry_keep_nonzero_fraction", 0.0)),
+                        "orientation_keep_nonzero_fraction": float(summary.get("orientation_keep_nonzero_fraction", 0.0)),
+                        "candidate_blocked_by_geometry_keep_count": int(
+                            summary.get("candidate_blocked_by_geometry_keep_count", 0)
+                        ),
+                        "candidate_blocked_by_dilated_protect_count": int(
+                            summary.get("candidate_blocked_by_dilated_protect_count", 0)
+                        ),
                     },
                     "top_protected": [
                         {
@@ -762,6 +1017,7 @@ def _update_prism_scores(
                             "render_keep": float(scores.render_keep_t[tid].item()),
                             "ground_protect": float(scores.optional_groundprotect_t[tid].item()),
                             "roi_protect": float(scores.optional_roiprotect_t[tid].item()),
+                            "lightweight_only": bool(scores.lightweight_only_mask[tid].item()),
                         }
                         for tid in torch.nonzero(scores.protected_mask_dilated, as_tuple=True)[0][:20].tolist()
                     ],
@@ -772,6 +1028,7 @@ def _update_prism_scores(
                             "reason": "candidate",
                             "geometry_keep": float(scores.geometry_keep_t[tid].item()),
                             "in_dilated_protected_nbr": bool(scores.candidate_blocked_by_dilated_protect[tid].item()),
+                            "lightweight_only": bool(scores.lightweight_only_mask[tid].item()),
                         }
                         for tid in torch.topk(scores.prune_score_t * scores.candidate_mask.to(torch.float32), k=min(20, int(scores.prune_score_t.numel())), largest=True).indices.tolist()
                         if bool(scores.candidate_mask[tid].item())
@@ -783,6 +1040,7 @@ def _update_prism_scores(
                             "blocked_by_geometry_keep": bool(scores.candidate_blocked_by_geometry_keep[tid].item()),
                             "blocked_by_dilated_protect": bool(scores.candidate_blocked_by_dilated_protect[tid].item()),
                             "geometry_keep": float(scores.geometry_keep_t[tid].item()),
+                            "lightweight_only": bool(scores.lightweight_only_mask[tid].item()),
                         }
                         for tid in torch.topk(scores.prune_score_t, k=min(20, int(scores.prune_score_t.numel())), largest=True).indices.tolist()
                         if (not bool(scores.candidate_mask[tid].item()))
@@ -884,6 +1142,164 @@ def _save_final_cleanup_checkpoint(scene, triangles, iteration: int, tag: str):
     return out_dir
 
 
+def _capture_manager_snapshot(manager):
+    if manager is None:
+        return None
+    return {
+        "num_triangles": int(manager.num_triangles),
+        "ema_decay": float(manager.ema_decay),
+        "view_hist_bins": int(manager.view_hist_bins),
+        "last_seen_iteration": int(manager.last_seen_iteration),
+        "last_global_topology_change_iter": int(manager.last_global_topology_change_iter),
+        "_grad_total_mean_ema": manager._grad_total_mean_ema.detach().clone(),
+        "stats": {
+            "vis_count_ema": manager.stats.vis_count_ema.detach().clone(),
+            "projected_area_ema": manager.stats.projected_area_ema.detach().clone(),
+            "grad_pos_norm_ema": manager.stats.grad_pos_norm_ema.detach().clone(),
+            "grad_app_norm_ema": manager.stats.grad_app_norm_ema.detach().clone(),
+            "grad_norm_var_ema": manager.stats.grad_norm_var_ema.detach().clone(),
+            "view_direction_histogram": manager.stats.view_direction_histogram.detach().clone(),
+            "birth_iter": manager.stats.birth_iter.detach().clone(),
+            "last_topology_change_iter": manager.stats.last_topology_change_iter.detach().clone(),
+            "active_mask": manager.stats.active_mask.detach().clone(),
+            "triangle_state": manager.stats.triangle_state.detach().clone(),
+        },
+    }
+
+
+def _restore_manager_snapshot(manager, snapshot):
+    if manager is None or snapshot is None:
+        return
+    device = manager.device
+    manager.num_triangles = int(snapshot.get("num_triangles", manager.num_triangles))
+    manager.ema_decay = float(snapshot.get("ema_decay", manager.ema_decay))
+    manager.view_hist_bins = int(snapshot.get("view_hist_bins", manager.view_hist_bins))
+    manager.last_seen_iteration = int(snapshot.get("last_seen_iteration", manager.last_seen_iteration))
+    manager.last_global_topology_change_iter = int(
+        snapshot.get("last_global_topology_change_iter", manager.last_global_topology_change_iter)
+    )
+    stats = snapshot.get("stats", {})
+    manager.stats.vis_count_ema = stats["vis_count_ema"].to(device=device)
+    manager.stats.projected_area_ema = stats["projected_area_ema"].to(device=device)
+    manager.stats.grad_pos_norm_ema = stats["grad_pos_norm_ema"].to(device=device)
+    manager.stats.grad_app_norm_ema = stats["grad_app_norm_ema"].to(device=device)
+    manager.stats.grad_norm_var_ema = stats["grad_norm_var_ema"].to(device=device)
+    manager.stats.view_direction_histogram = stats["view_direction_histogram"].to(device=device)
+    manager.stats.birth_iter = stats["birth_iter"].to(device=device)
+    manager.stats.last_topology_change_iter = stats["last_topology_change_iter"].to(device=device)
+    manager.stats.active_mask = stats["active_mask"].to(device=device)
+    manager.stats.triangle_state = stats["triangle_state"].to(device=device)
+    manager._grad_total_mean_ema = snapshot["_grad_total_mean_ema"].to(device=device)
+
+
+def _save_prism_compaction_checkpoint(scene, triangles, iteration: int, tag: str, meta: Optional[dict] = None, prism_state=None):
+    out_dir = os.path.join(scene.model_path, "prism_compaction_checkpoints", f"iter_{int(iteration):06d}_{tag}")
+    os.makedirs(out_dir, exist_ok=True)
+    triangles.save_parameters(out_dir)
+    payload = {
+        "iteration": int(iteration),
+        "tag": str(tag),
+        "triangles": int(triangles._triangle_indices.shape[0]),
+        "vertices": int(triangles.vertices.shape[0]),
+    }
+    if isinstance(meta, dict):
+        payload.update(meta)
+    with open(os.path.join(out_dir, "meta.json"), "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    if isinstance(prism_state, dict):
+        manager_snapshot = _capture_manager_snapshot(prism_state.get("manager", None))
+        if manager_snapshot is not None:
+            torch.save(manager_snapshot, os.path.join(out_dir, "triangle_stats_snapshot.pt"))
+        assoc_stats = prism_state.get("latest_assoc_stats", None)
+        if assoc_stats is not None:
+            torch.save(assoc_stats, os.path.join(out_dir, "assoc_stats_snapshot.pt"))
+    return out_dir
+
+
+def _load_saved_triangle_parameters(prism_state, triangles, checkpoint_dir: str, iteration: int, reason: str = "") -> bool:
+    if not checkpoint_dir or (not os.path.exists(os.path.join(checkpoint_dir, "point_cloud_state_dict.pt"))):
+        return False
+    device = triangles.vertices.device
+    triangles.load_parameters(checkpoint_dir, device=device)
+    triangles.clear_temporary_active_mask()
+    restored_manager_snapshot = False
+    stats_snapshot_path = os.path.join(checkpoint_dir, "triangle_stats_snapshot.pt")
+    if os.path.exists(stats_snapshot_path):
+        try:
+            _restore_manager_snapshot(prism_state.get("manager", None), torch.load(stats_snapshot_path, map_location=device))
+            restored_manager_snapshot = True
+        except Exception:
+            pass
+    assoc_snapshot_path = os.path.join(checkpoint_dir, "assoc_stats_snapshot.pt")
+    if os.path.exists(assoc_snapshot_path):
+        try:
+            prism_state["latest_assoc_stats"] = torch.load(assoc_snapshot_path, map_location=device)
+        except Exception:
+            prism_state["latest_assoc_stats"] = None
+    if restored_manager_snapshot:
+        prism_state["last_topology_change_iter"] = int(iteration)
+        if reason:
+            prism_state["last_topology_change_reason"] = str(reason)
+    else:
+        _sync_prism_topology_change(
+            prism_state=prism_state,
+            triangles=triangles,
+            iteration=int(iteration),
+            reason=str(reason or "load_saved_parameters"),
+        )
+    return True
+
+
+def _extract_geometry_key(metrics: Optional[dict]) -> tuple:
+    metrics = metrics or {}
+    absrel = float(metrics.get("absrel", metrics.get("AbsRel", float("nan"))))
+    mean_angle = float(metrics.get("mean_angle", metrics.get("mean_normal_angle", metrics.get("MeanAngle", float("nan")))))
+    depth_mae = float(metrics.get("depth_mae", metrics.get("DepthMAE", float("nan"))))
+    delta = float(metrics.get("delta_1.25", metrics.get("delta_125", metrics.get("Delta1.25", float("nan")))))
+    if not (np.isfinite(absrel) and np.isfinite(mean_angle) and np.isfinite(depth_mae) and np.isfinite(delta)):
+        return (float("inf"), float("inf"), float("inf"), float("inf"))
+    return (absrel, mean_angle, depth_mae, -delta)
+
+
+def _geometry_key_is_better(lhs: Optional[dict], rhs: Optional[dict]) -> bool:
+    return _extract_geometry_key(lhs) < _extract_geometry_key(rhs)
+
+
+def _maybe_save_compaction_source_checkpoint(
+    prism_state,
+    scene,
+    triangles,
+    iteration: int,
+    current_metrics: dict,
+    pass_gate: bool,
+    stage_best_update: dict,
+):
+    comp_cfg = prism_state.get("compaction_cfg", None)
+    if comp_cfg is None or (not bool(getattr(comp_cfg, "enabled", False))):
+        return
+    if not bool(pass_gate):
+        return
+    pass_dir = _save_prism_compaction_checkpoint(
+        scene=scene,
+        triangles=triangles,
+        iteration=int(iteration),
+        tag="validation_pass",
+        meta={"metrics": current_metrics, "source_kind": "validation_pass"},
+        prism_state=prism_state,
+    )
+    prism_state["last_validation_pass_checkpoint_dir"] = str(pass_dir)
+    if bool(stage_best_update.get("update", False)) or (str(stage_best_update.get("reason", "")) == "initialize_observable_stage_best"):
+        best_dir = _save_prism_compaction_checkpoint(
+            scene=scene,
+            triangles=triangles,
+            iteration=int(iteration),
+            tag="best_geometry_source",
+            meta={"metrics": current_metrics, "source_kind": "best_geometry"},
+            prism_state=prism_state,
+        )
+        prism_state["stage_best_checkpoint_dir"] = str(best_dir)
+
+
 def _capture_prism_round_snapshot(triangles):
     snap = {
         "vertices": triangles.vertices.detach().clone(),
@@ -969,6 +1385,10 @@ def _evaluate_prism_validation(prism_state, scene, triangles, iteration: int):
     )
     stage_best = prism_state.get("stage_best_metrics", None)
     current_observable = bool(float(current_metrics.get("geometry_observable", 0.0)) > 0.5)
+    stage_best_update = decide_stage_best_update(
+        current_metrics=current_metrics,
+        stage_best_metrics=stage_best,
+    )
     if stage_best is None:
         if current_observable:
             stage_best = dict(current_metrics)
@@ -985,25 +1405,18 @@ def _evaluate_prism_validation(prism_state, scene, triangles, iteration: int):
             stage_best_metrics=stage_best,
             cfg=prism_state["validation_cfg"],
         )
-        # Keep best updated conservatively on global visual+geometry metrics.
-        if pass_gate:
-            better = False
-            if np.isfinite(current_metrics.get("psnr", float("nan"))) and np.isfinite(stage_best.get("psnr", float("nan"))):
-                better = better or (current_metrics["psnr"] > stage_best["psnr"])
-            if np.isfinite(current_metrics.get("mae", float("nan"))) and np.isfinite(stage_best.get("mae", float("nan"))):
-                better = better or (current_metrics["mae"] < stage_best["mae"])
-            if np.isfinite(current_metrics.get("absrel", float("nan"))) and np.isfinite(stage_best.get("absrel", float("nan"))):
-                better = better or (current_metrics["absrel"] < stage_best["absrel"])
-            if np.isfinite(current_metrics.get("mean_angle", float("nan"))) and np.isfinite(stage_best.get("mean_angle", float("nan"))):
-                better = better or (current_metrics["mean_angle"] < stage_best["mean_angle"])
-            if better:
-                stage_best = dict(current_metrics)
+        # Geometry-first stage-best policy:
+        # 1) geometry tuple decides admissibility/update priority
+        # 2) image metrics can only break ties after geometry is not worse
+        if pass_gate and bool(stage_best_update.get("update", False)):
+            stage_best = dict(current_metrics)
 
     prism_state["stage_best_metrics"] = stage_best
     prism_state["last_validation_metrics"] = current_metrics
     prism_state["last_validation_pass"] = 1 if pass_gate else 0
     prism_state["last_validation_rules"] = list(rules)
     prism_state["last_validation_deltas"] = dict(deltas)
+    prism_state["last_stage_best_update"] = dict(stage_best_update)
     prism_state["last_validation_eval_iter"] = int(iteration)
 
     out_dir = os.path.join(prism_state["model_path"], "prism_validation")
@@ -1016,6 +1429,7 @@ def _evaluate_prism_validation(prism_state, scene, triangles, iteration: int):
         deltas=deltas,
         pass_gate=pass_gate,
         triggered_rules=rules,
+        stage_best_update=stage_best_update,
     )
     debug_dir = os.path.join(prism_state["model_path"], "prism_debug")
     os.makedirs(debug_dir, exist_ok=True)
@@ -1033,10 +1447,20 @@ def _evaluate_prism_validation(prism_state, scene, triangles, iteration: int):
                 "dropped_views_reason_breakdown": current_metrics.get("dropped_views_reason_breakdown", {}),
                 "geometry_failure_reasons": current_metrics.get("geometry_failure_reasons", []),
                 "triggered_rules": list(rules),
+                "stage_best_update": stage_best_update,
             },
             f,
             indent=2,
         )
+    _maybe_save_compaction_source_checkpoint(
+        prism_state=prism_state,
+        scene=scene,
+        triangles=triangles,
+        iteration=int(iteration),
+        current_metrics=current_metrics,
+        pass_gate=bool(pass_gate),
+        stage_best_update=stage_best_update,
+    )
     return {
         "pass_gate": bool(pass_gate),
         "current_metrics": current_metrics,
@@ -1044,6 +1468,246 @@ def _evaluate_prism_validation(prism_state, scene, triangles, iteration: int):
         "deltas": deltas,
         "rules": rules,
     }
+
+
+def _run_prism_compaction_stage(
+    prism_state,
+    scene,
+    triangles,
+    iteration: int,
+    tb_writer=None,
+    wandb_run=None,
+    wandb_log_state=None,
+    ground_association_tracker=None,
+):
+    comp_cfg = prism_state.get("compaction_cfg", None)
+    if comp_cfg is None or (not bool(getattr(comp_cfg, "enabled", False))):
+        prism_state["compaction_phase"] = PrismCompactionPhase.DISABLED
+        return {"ran": False, "reason": "disabled"}
+
+    prism_state["compaction_phase"] = PrismCompactionPhase.SELECT_SOURCE
+    pref = str(getattr(comp_cfg, "source_preference", "best_geometry")).strip().lower()
+    source_dir = ""
+    if pref == "best_geometry":
+        source_dir = str(prism_state.get("stage_best_checkpoint_dir", "") or "")
+        if not source_dir:
+            source_dir = str(prism_state.get("last_validation_pass_checkpoint_dir", "") or "")
+    else:
+        source_dir = str(prism_state.get("last_validation_pass_checkpoint_dir", "") or "")
+        if not source_dir:
+            source_dir = str(prism_state.get("stage_best_checkpoint_dir", "") or "")
+    if not source_dir:
+        payload = {"ran": False, "reason": "no_geometry_safe_source_checkpoint"}
+        out_dir = os.path.join(scene.model_path, "prism_compaction")
+        os.makedirs(out_dir, exist_ok=True)
+        with open(os.path.join(out_dir, "compaction_summary.json"), "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        prism_state["compaction_phase"] = PrismCompactionPhase.FINALIZE
+        return payload
+
+    prism_state["compaction_phase"] = PrismCompactionPhase.RESTORE_SOURCE
+    if not _load_saved_triangle_parameters(
+        prism_state=prism_state,
+        triangles=triangles,
+        checkpoint_dir=source_dir,
+        iteration=int(iteration),
+        reason="compaction_source_restore",
+    ):
+        return {"ran": False, "reason": "failed_to_restore_source"}
+    prism_state["compaction_source_checkpoint_dir"] = str(source_dir)
+    prism_state["compaction_best_geometry_checkpoint_dir"] = str(source_dir)
+
+    if ground_association_tracker is not None:
+        ground_association_tracker.ensure_num_triangles(int(triangles._triangle_indices.shape[0]))
+
+    best_geometry_metrics = prism_state.get("stage_best_metrics", None)
+    best_speed_triangles = int(triangles._triangle_indices.shape[0])
+    total_committed = 0
+    total_rollbacks = 0
+    microbatch_logs = []
+    global_micro_idx = 0
+
+    for round_idx in range(int(max(0, getattr(comp_cfg, "rounds", 0)))):
+        rejected_mask = None
+        round_committed = 0
+        for micro_idx in range(int(max(0, getattr(comp_cfg, "max_microbatches_per_round", 0)))):
+            prism_state["compaction_phase"] = PrismCompactionPhase.SCORE_REFRESH
+            _update_prism_scores(
+                prism_state=prism_state,
+                iteration=int(iteration),
+                triangles=triangles,
+                force_recompute=True,
+            )
+            scores = prism_state.get("last_scores", None)
+            manager = prism_state.get("manager", None)
+            if scores is None or manager is None:
+                break
+            projected_area_ema = manager.stats.projected_area_ema.to(device=triangles.vertices.device, dtype=torch.float32)
+            select_cfg = CompactionSelectionConfig(
+                microbatch_active_ratio=float(getattr(comp_cfg, "microbatch_active_ratio", 0.0035)),
+                candidate_pool_multiplier=float(getattr(comp_cfg, "candidate_pool_multiplier", 6.0)),
+                min_prune_count=int(getattr(comp_cfg, "min_prune_count", 256)),
+                roi_budget_fraction=float(getattr(comp_cfg, "roi_budget_fraction", 0.10)),
+                near_field_budget_fraction=float(getattr(comp_cfg, "near_field_budget_fraction", 0.25)),
+                roi_signal_threshold=float(getattr(comp_cfg, "roi_signal_threshold", 0.05)),
+                near_field_area_percentile=float(getattr(comp_cfg, "near_field_area_percentile", 80.0)),
+            )
+            candidate_ids, selection_stats = select_prism_compaction_microbatch_ids(
+                scores=scores,
+                projected_area_ema=projected_area_ema,
+                cfg=select_cfg,
+                rejected_mask=rejected_mask,
+            )
+            if candidate_ids.numel() == 0:
+                break
+
+            prism_state["compaction_phase"] = PrismCompactionPhase.MICROBATCH_PRUNE
+            decision = run_counterfactual_simulation(
+                scene=scene,
+                triangles=triangles,
+                render_func=render,
+                pipe=prism_state.get("pipe", None),
+                background=prism_state.get("background", None),
+                candidate_triangle_ids=candidate_ids,
+                calibration_views=prism_state.get("calibration_views", []),
+                gate_cfg=prism_state["gate_cfg"],
+                proxy_ctx=prism_state.get("proxy_ctx", None),
+                proxy_cfg=prism_state.get("proxy_cfg", None),
+            )
+
+            committed = False
+            pruned_count = 0
+            rollback = 0 if bool(decision.accept) else 1
+            if bool(decision.accept):
+                keep_mask = torch.ones(
+                    (triangles._triangle_indices.shape[0],),
+                    dtype=torch.bool,
+                    device=triangles._triangle_indices.device,
+                )
+                valid = (candidate_ids >= 0) & (candidate_ids < keep_mask.numel())
+                if torch.any(valid):
+                    keep_mask[candidate_ids[valid]] = False
+                    pruned_count = int(valid.sum().item())
+                    triangles.prune_triangles(keep_mask)
+                    _sync_prism_topology_change(
+                        prism_state=prism_state,
+                        triangles=triangles,
+                        iteration=int(iteration),
+                        reason="prism_compaction_commit",
+                    )
+                    committed = True
+                    total_committed += int(pruned_count)
+                    round_committed += int(pruned_count)
+                    rejected_mask = None
+                    if ground_association_tracker is not None:
+                        ground_association_tracker.ensure_num_triangles(int(triangles._triangle_indices.shape[0]))
+                    if _geometry_key_is_better(decision.counterfactual, best_geometry_metrics):
+                        best_geometry_metrics = dict(decision.counterfactual)
+                        prism_state["compaction_best_geometry_checkpoint_dir"] = _save_prism_compaction_checkpoint(
+                            scene=scene,
+                            triangles=triangles,
+                            iteration=int(iteration),
+                            tag="best_by_geometry",
+                            meta={"round_idx": int(round_idx), "microbatch_idx": int(micro_idx), "metrics": decision.counterfactual},
+                            prism_state=prism_state,
+                        )
+                    if int(triangles._triangle_indices.shape[0]) < int(best_speed_triangles):
+                        best_speed_triangles = int(triangles._triangle_indices.shape[0])
+                        prism_state["compaction_best_speed_checkpoint_dir"] = _save_prism_compaction_checkpoint(
+                            scene=scene,
+                            triangles=triangles,
+                            iteration=int(iteration),
+                            tag="best_by_speed",
+                            meta={"round_idx": int(round_idx), "microbatch_idx": int(micro_idx), "triangle_count": int(best_speed_triangles)},
+                            prism_state=prism_state,
+                        )
+            else:
+                total_rollbacks += 1
+                if rejected_mask is None:
+                    rejected_mask = torch.zeros(
+                        (scores.prune_score_t.numel(),),
+                        dtype=torch.bool,
+                        device=scores.prune_score_t.device,
+                    )
+                rejected_mask[candidate_ids] = True
+
+            global_micro_idx += 1
+            prism_state["counterfactual_accept"] = 1 if bool(decision.accept) else 0
+            prism_state["rollback"] = int(rollback)
+            log_payload = {
+                "round_idx": int(round_idx),
+                "microbatch_idx": int(micro_idx),
+                "pruned_count": int(pruned_count),
+                "triangle_count": int(triangles._triangle_indices.shape[0]),
+                "counterfactual_accept": 1 if bool(decision.accept) else 0,
+                "rollback": int(rollback),
+                "selection": selection_stats,
+                "decision": counterfactual_decision_to_dict(decision),
+            }
+            microbatch_logs.append(log_payload)
+
+            debug_dir = os.path.join(scene.model_path, "prism_compaction")
+            os.makedirs(debug_dir, exist_ok=True)
+            with open(
+                os.path.join(debug_dir, f"round_{int(round_idx):02d}_microbatch_{int(micro_idx):02d}.json"),
+                "w",
+                encoding="utf-8",
+            ) as f:
+                json.dump(log_payload, f, indent=2)
+
+            step = int(iteration) + int(global_micro_idx)
+            if tb_writer is not None:
+                tb_writer.add_scalar("prism/compaction_round", float(round_idx), step)
+                tb_writer.add_scalar("prism/compaction_microbatch_idx", float(micro_idx), step)
+                tb_writer.add_scalar("prism/compaction_pruned_this_microbatch", float(pruned_count), step)
+                tb_writer.add_scalar("prism/compaction_triangle_count", float(triangles._triangle_indices.shape[0]), step)
+                tb_writer.add_scalar("prism/compaction_counterfactual_accept", float(1 if bool(decision.accept) else 0), step)
+                tb_writer.add_scalar("prism/compaction_rollback", float(rollback), step)
+            if wandb_run is not None:
+                _wandb_log_filtered(
+                    wandb_run,
+                    {
+                        "prism/compaction_round": float(round_idx),
+                        "prism/compaction_microbatch_idx": float(micro_idx),
+                        "prism/compaction_pruned_this_microbatch": float(pruned_count),
+                        "prism/compaction_triangle_count": float(triangles._triangle_indices.shape[0]),
+                        "prism/compaction_counterfactual_accept": float(1 if bool(decision.accept) else 0),
+                        "prism/compaction_rollback": float(rollback),
+                    },
+                    step=step,
+                    log_state=wandb_log_state,
+                )
+
+        if round_committed <= 0:
+            break
+
+    prism_state["compaction_phase"] = PrismCompactionPhase.FINALIZE
+    final_ckpt = _save_prism_compaction_checkpoint(
+        scene=scene,
+        triangles=triangles,
+        iteration=int(iteration),
+        tag="final",
+        meta={"triangle_count": int(triangles._triangle_indices.shape[0]), "total_committed": int(total_committed)},
+        prism_state=prism_state,
+    )
+    prism_state["compaction_final_checkpoint_dir"] = str(final_ckpt)
+
+    payload = {
+        "ran": True,
+        "source_checkpoint_dir": str(source_dir),
+        "best_geometry_checkpoint_dir": str(prism_state.get("compaction_best_geometry_checkpoint_dir", "")),
+        "best_speed_checkpoint_dir": str(prism_state.get("compaction_best_speed_checkpoint_dir", "")),
+        "final_checkpoint_dir": str(final_ckpt),
+        "total_pruned": int(total_committed),
+        "total_rollbacks": int(total_rollbacks),
+        "final_triangle_count": int(triangles._triangle_indices.shape[0]),
+        "microbatches": microbatch_logs,
+    }
+    out_dir = os.path.join(scene.model_path, "prism_compaction")
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "compaction_summary.json"), "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    return payload
 
 
 def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, prune_mode: str):
@@ -1905,7 +2569,7 @@ def training(
                 )
                 last_val = prism_state.get("last_validation_metrics", None)
                 if isinstance(last_val, dict):
-                    for k in ["psnr", "mae", "absrel", "delta_1.25", "mean_angle", "abs_cos", "roi_psnr", "roi_mae", "roi_absrel", "roi_mean_angle", "roi_abs_cos"]:
+                    for k in ["psnr", "mae", "absrel", "delta_1.25", "depth_mae", "mean_angle", "abs_cos", "roi_psnr", "roi_mae", "roi_absrel", "roi_mean_angle", "roi_abs_cos"]:
                         v = float(last_val.get(k, float("nan")))
                         if np.isfinite(v):
                             tb_writer.add_scalar(f"prism/val_{k}", v, iteration)
@@ -1924,6 +2588,12 @@ def training(
                     tb_writer.add_scalar("prism/protected_dilated_count", float(last_scores.protected_mask_dilated.sum().item()), iteration)
                     tb_writer.add_scalar("prism/geometry_keep_mean", float(last_scores.geometry_keep_t.mean().item()), iteration)
                     tb_writer.add_scalar("prism/orientation_keep_mean", float(last_scores.orientation_keep_t.mean().item()), iteration)
+                    tb_writer.add_scalar("prism/heavy_eval_fraction", float(last_scores.heavy_eval_mask.to(torch.float32).mean().item()), iteration)
+                    tb_writer.add_scalar("prism/heavy_eval_triangle_count", float(last_scores.heavy_eval_mask.sum().item()), iteration)
+                    tb_writer.add_scalar("prism/geometry_keep_nonzero_fraction", float((last_scores.geometry_keep_t > 0).to(torch.float32).mean().item()), iteration)
+                    tb_writer.add_scalar("prism/orientation_keep_nonzero_fraction", float((last_scores.orientation_keep_t > 0).to(torch.float32).mean().item()), iteration)
+                    tb_writer.add_scalar("prism/candidate_blocked_by_geometry_keep_count", float(last_scores.candidate_blocked_by_geometry_keep.sum().item()), iteration)
+                    tb_writer.add_scalar("prism/candidate_blocked_by_dilated_protect_count", float(last_scores.candidate_blocked_by_dilated_protect.sum().item()), iteration)
                     tb_writer.add_scalar("prism/dead_count", float(last_scores.dead_mask.sum().item()), iteration)
                     tb_writer.add_scalar("prism/candidate_count", float(last_scores.candidate_mask.sum().item()), iteration)
             if should_log_wandb_scalar:
@@ -1948,7 +2618,7 @@ def training(
                 }
                 last_val = prism_state.get("last_validation_metrics", None)
                 if isinstance(last_val, dict):
-                    for k in ["psnr", "mae", "absrel", "delta_1.25", "mean_angle", "abs_cos", "roi_psnr", "roi_mae", "roi_absrel", "roi_mean_angle", "roi_abs_cos"]:
+                    for k in ["psnr", "mae", "absrel", "delta_1.25", "depth_mae", "mean_angle", "abs_cos", "roi_psnr", "roi_mae", "roi_absrel", "roi_mean_angle", "roi_abs_cos"]:
                         v = float(last_val.get(k, float("nan")))
                         if np.isfinite(v):
                             wandb_payload[f"prism/val_{k}"] = v
@@ -1980,6 +2650,12 @@ def training(
                             "prism/protected_dilated_count": float(last_scores.protected_mask_dilated.sum().item()),
                             "prism/geometry_keep_mean": float(last_scores.geometry_keep_t.mean().item()),
                             "prism/orientation_keep_mean": float(last_scores.orientation_keep_t.mean().item()),
+                            "prism/heavy_eval_fraction": float(last_scores.heavy_eval_mask.to(torch.float32).mean().item()),
+                            "prism/heavy_eval_triangle_count": float(last_scores.heavy_eval_mask.sum().item()),
+                            "prism/geometry_keep_nonzero_fraction": float((last_scores.geometry_keep_t > 0).to(torch.float32).mean().item()),
+                            "prism/orientation_keep_nonzero_fraction": float((last_scores.orientation_keep_t > 0).to(torch.float32).mean().item()),
+                            "prism/candidate_blocked_by_geometry_keep_count": float(last_scores.candidate_blocked_by_geometry_keep.sum().item()),
+                            "prism/candidate_blocked_by_dilated_protect_count": float(last_scores.candidate_blocked_by_dilated_protect.sum().item()),
                             "prism/dead_count": float(last_scores.dead_mask.sum().item()),
                             "prism/candidate_count": float(last_scores.candidate_mask.sum().item()),
                         }
@@ -2250,6 +2926,19 @@ def training(
                 if controller is not None:
                     controller.consume_recovery_step()
 
+    compaction_result = None
+    if bool(getattr(opt, "enable_prism_pruning", False)) and bool(getattr(opt, "prism_enable_compaction_stage", False)):
+        compaction_result = _run_prism_compaction_stage(
+            prism_state=prism_state,
+            scene=scene,
+            triangles=triangles,
+            iteration=int(iteration),
+            tb_writer=tb_writer,
+            wandb_run=wandb_run,
+            wandb_log_state=wandb_log_state if 'wandb_log_state' in locals() else None,
+            ground_association_tracker=ground_association_tracker,
+        )
+
     # cleaning of triangles that we do not need
     if ground_association_tracker is not None:
         ground_association_tracker.ensure_num_triangles(int(triangles._triangle_indices.shape[0]))
@@ -2328,6 +3017,13 @@ def training(
     final_cleanup_payload = {
         "iteration": int(iteration),
         "prism_enabled": bool(prism_enabled),
+        "compaction_ran": bool(isinstance(compaction_result, dict) and compaction_result.get("ran", False)),
+        "compaction_source_checkpoint_dir": str(prism_state.get("compaction_source_checkpoint_dir", "")),
+        "compaction_best_geometry_checkpoint_dir": str(prism_state.get("compaction_best_geometry_checkpoint_dir", "")),
+        "compaction_best_speed_checkpoint_dir": str(prism_state.get("compaction_best_speed_checkpoint_dir", "")),
+        "compaction_final_checkpoint_dir": str(prism_state.get("compaction_final_checkpoint_dir", "")),
+        "final_cleanup_enabled": bool(cleanup_executed),
+        "final_cleanup_pruned": int(cleanup_pruned),
         "cleanup_executed": bool(cleanup_executed),
         "cleanup_pruned": int(cleanup_pruned),
         "pre_cleanup_checkpoint": str(pre_cleanup_ckpt),

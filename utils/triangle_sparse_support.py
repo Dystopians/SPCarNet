@@ -48,6 +48,15 @@ class TriangleSparseSupportResult:
     scene_scale: float
 
 
+@dataclass
+class TriangleSparseSupportSubsetResult:
+    triangle_ids: torch.Tensor  # [K] int64, global triangle ids
+    support_count: torch.Tensor  # [K] int32
+    plane_residual_median: torch.Tensor  # [K] float32
+    normal_angle_residual_deg: torch.Tensor  # [K] float32
+    geometry_support_score_base: torch.Tensor  # [K] float32
+
+
 def _estimate_scene_scale(point_xyz: np.ndarray, scene=None) -> float:
     if scene is not None:
         ext = float(getattr(scene, "cameras_extent", 0.0))
@@ -245,4 +254,31 @@ class TriangleSparseSupportEstimator:
             geometry_support_score_base=geometry_support_score_base,
             query_radius=float(self.query_radius),
             scene_scale=float(self.scene_scale),
+        )
+
+    def compute_subset(
+        self,
+        vertices: torch.Tensor,
+        triangle_indices: torch.Tensor,
+        triangle_ids: torch.Tensor,
+    ) -> TriangleSparseSupportSubsetResult:
+        ids = torch.unique(triangle_ids.to(torch.int64).contiguous())
+        if ids.numel() == 0:
+            zf = torch.zeros((0,), dtype=torch.float32, device=triangle_indices.device)
+            zi = torch.zeros((0,), dtype=torch.int32, device=triangle_indices.device)
+            return TriangleSparseSupportSubsetResult(
+                triangle_ids=ids,
+                support_count=zi,
+                plane_residual_median=zf,
+                normal_angle_residual_deg=zf,
+                geometry_support_score_base=zf,
+            )
+
+        sub = self.compute(vertices=vertices, triangle_indices=triangle_indices[ids])
+        return TriangleSparseSupportSubsetResult(
+            triangle_ids=ids,
+            support_count=sub.support_count,
+            plane_residual_median=sub.plane_residual_median,
+            normal_angle_residual_deg=sub.normal_angle_residual_deg,
+            geometry_support_score_base=sub.geometry_support_score_base,
         )
