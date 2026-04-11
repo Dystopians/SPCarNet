@@ -1,0 +1,7 @@
+town_mesh_cache:
+  cache_root: outputs/ss3dm_prior/town_mesh_cache
+  vertex_dtype: float32
+  face_dtype: int32
+  mmap_mode: r
+  process: false
+  debug_single_town_only: false

@@ -1,0 +1,18 @@
+observed_cache:
+  frame_stride: 10
+  lidar_names:
+    - lidar_FRONT
+    - lidar_LEFT
+    - lidar_REAR
+    - lidar_RIGHT
+    - lidar_TOP
+  lidar_rays_world_frame: true
+  min_range: 0.5
+  max_range: 80.0
+  max_points_per_frame: 10000
+  tile_stride_m: 1.5
+  tile_min_points: 20
+  tile_center_mode: mean
+  max_observed_points_per_sequence: 500000
+  debug_max_sequences: null
+  seed: 0

@@ -1,0 +1,19 @@
+split_name: default_town_holdout_v1
+strategy: town_holdout
+unit_of_split: sequence
+forbid_random_patch_split: true
+forbid_random_frame_split: true
+train_towns:
+  - Town01
+  - Town02
+  - Town03
+  - Town04
+  - Town05
+  - Town06
+val_towns:
+  - Town07
+test_towns:
+  - Town10
+notes:
+  - First version must hold out entire towns.
+  - Sequence is the manifest unit, but towns are the split boundary.

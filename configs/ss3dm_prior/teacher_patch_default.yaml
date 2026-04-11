@@ -1,0 +1,10 @@
+teacher_patch:
+  town_mesh_unit_scale: 0.01
+  patch_radius_m: 3.0
+  observed_min_points: 64
+  clean_min_faces: 20
+  clean_sample_count: 2048
+  observed_sample_count: 512
+  face_query_margin_m: 1.0
+  debug_max_sequences: null
+  debug_max_tiles_per_sequence: null

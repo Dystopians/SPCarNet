@@ -1,0 +1,11 @@
+split_name: partial_town01_eval
+strategy: town_holdout
+unit_of_split: sequence
+forbid_random_patch_split: true
+forbid_random_frame_split: true
+train_towns: []
+val_towns: []
+test_towns:
+  - Town01
+notes:
+  - Temporary eval split for partial patch cache rooted in Town01 only.

@@ -1,0 +1,31 @@
+dataset:
+  name: ss3dm_raw
+  root: /data2/peilincai/SS3DM_raw
+  manifest_out: outputs/ss3dm_prior/manifests/ss3dm_raw_manifest.json
+  unit_of_index: sequence
+  discovery:
+    include_towns:
+      - Town01
+      - Town02
+      - Town03
+      - Town04
+      - Town05
+      - Town06
+      - Town07
+      - Town10
+    sequence_glob_suffix: _streetsurf
+  metadata:
+    parse_scenario_files: true
+    include_camera_metadata_interface: true
+    include_lidar_metadata_interface: true
+
+split:
+  config: configs/ss3dm_prior/splits/default_town_split.yaml
+  policy: town_holdout_only
+  forbid_random_patch_split: true
+  forbid_random_frame_split: true
+
+debug:
+  enabled: false
+  max_towns: 2
+  max_sequences_per_town: 1

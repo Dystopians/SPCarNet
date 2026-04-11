@@ -1,0 +1,14 @@
+split_name: debug_town_holdout_v1
+strategy: town_holdout
+unit_of_split: sequence
+forbid_random_patch_split: true
+forbid_random_frame_split: true
+train_towns:
+  - Town01
+val_towns:
+  - Town02
+test_towns:
+  - Town03
+notes:
+  - Debug split still respects town holdout.
+  - Use this only for smoke tests and low-cost pipeline checks.

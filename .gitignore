@@ -1,4 +1,5 @@
 # Byte-compiled / optimized / DLL files
+__pycache__/
 */__pycache__/
 *.py[cod]
 *$py.class
@@ -154,13 +155,36 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+# PyCharm / JetBrains
+.idea/
 
 # Local experiment artifacts (do not upload)
 models/
 benchmarks/
+
+# ------------------------------------------------------------------------------
+# Mesh splatting / ss3dm_prior: generated runs, caches, and logs
+# (configs live under configs/; default artifacts go under outputs/)
+# ------------------------------------------------------------------------------
+outputs/
+
+# Weights & Biases (run folders; also appears under outputs/ or model_path)
+wandb/
+
+# Common tool caches
+.ruff_cache/
+.torchinductor_cache/
+
+# Other ML experiment trackers (if used)
+mlruns/
+lightning_logs/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.history/
+
+# Vim swap files
+*.swp
+*.swo
+*~

@@ -1,0 +1,49 @@
+dataset:
+  subsets:
+    - train
+  seed: 0
+
+corruptions:
+  target_corrupted_count: 2048
+  point_dropout:
+    enabled: true
+    dropout_ratio: 0.15
+  gaussian_jitter:
+    enabled: true
+    sigma: 0.03
+    anisotropic: true
+  normal_noise:
+    enabled: true
+    sigma: 0.1
+    flip_prob: 0.05
+  local_hole_mask:
+    enabled: true
+    max_holes: 2
+    hole_radius: 0.25
+  outlier_cluster:
+    enabled: true
+    cluster_size: 32
+    cluster_offset_sigma: 0.5
+    cluster_spread_sigma: 0.03
+  density_imbalance:
+    enabled: true
+    region_radius: 0.3
+    thin_probability: 0.5
+    thin_ratio: 0.5
+    duplicate_count: 64
+
+model:
+  latent_dim: 256
+  retrieval_dim: 128
+  recon_point_count: 2048
+  use_observed_condition: true
+  use_local_frame: true
+  use_residual_reconstruction: true
+
+loss_weights:
+  recon_chamfer_loss: 1.0
+  recon_normal_loss: 0.5
+  point_defect_loss: 0.75
+  patch_score_loss: 0.25
+  latent_align_loss: 0.02
+  retrieval_align_loss: 0.05
