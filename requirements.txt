@@ -10,3 +10,6 @@ mmcv-lite==2.2.0
 timm
 transformers
 wandb
+pyrender
+pyglet
+PyOpenGL

@@ -7,6 +7,12 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ss3dm_prior.utils.cuda_env import configure_isolated_mps_pipe_if_needed
+
+configured_mps_pipe = configure_isolated_mps_pipe_if_needed()
+
+import torch
+
 from ss3dm_prior.engine.trainer import SS3DMPriorTrainer
 from ss3dm_prior.utils.io import dump_yaml, load_yaml
 
@@ -37,12 +43,29 @@ def make_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--output_dir", required=True, help="Output directory.")
     parser.add_argument("--wandb_project", default=None, help="wandb project override.")
     parser.add_argument("--wandb_mode", default=None, help="wandb mode override.")
+    parser.add_argument(
+        "--device",
+        default="auto",
+        choices=["cpu", "cuda", "auto"],
+        help="Execution device for training. Use 'cuda' to skip torch.cuda.is_available() probing.",
+    )
     parser.add_argument("--resume", default=None, help="Checkpoint path to resume from.")
     return parser
 
 
+def _resolve_device(device_arg: str) -> torch.device:
+    normalized = str(device_arg).strip().lower()
+    if normalized == "cpu":
+        return torch.device("cpu")
+    if normalized == "cuda":
+        return torch.device("cuda")
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = make_argparser().parse_args(argv)
+    if configured_mps_pipe:
+        print(f"[train] using isolated CUDA_MPS_PIPE_DIRECTORY={configured_mps_pipe}", flush=True)
 
     data_config = load_yaml(args.data_config) if args.data_config else {}
     model_config = load_yaml(args.model_config)
@@ -52,11 +75,13 @@ def main(argv: list[str] | None = None) -> int:
         train_config["wandb_project"] = args.wandb_project
     if args.wandb_mode is not None:
         train_config["wandb_mode"] = args.wandb_mode
+        train_config["wandb_enable"] = str(args.wandb_mode).strip().lower() != "disabled"
 
     patch_cache_dir = Path(args.patch_cache_dir).expanduser().resolve()
     patch_index_path = patch_cache_dir / "patch_index.jsonl"
     output_dir = Path(args.output_dir).expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
+    device = _resolve_device(args.device)
 
     resolved = {
         "data_config": data_config,
@@ -71,6 +96,7 @@ def main(argv: list[str] | None = None) -> int:
             "split_config": args.split_config,
             "run_name": args.run_name,
             "output_dir": str(output_dir),
+            "device": str(device),
             "resume": args.resume,
         },
     }
@@ -90,12 +116,17 @@ def main(argv: list[str] | None = None) -> int:
         output_dir=output_dir,
         run_name=args.run_name,
         run_metadata=resolved,
+        device=device,
         resume_path=args.resume,
     )
     result = trainer.fit()
     print(f"history_path: {result['history_path']}")
     print(f"best_recon: {result['best_metrics']['best_recon']}")
     print(f"best_gain: {result['best_metrics']['best_gain']}")
+    if "best_composite" in result["best_metrics"]:
+        print(f"best_composite: {result['best_metrics']['best_composite']}")
+    if "best_visibility" in result["best_metrics"]:
+        print(f"best_visibility: {result['best_metrics']['best_visibility']}")
     return 0
 
 

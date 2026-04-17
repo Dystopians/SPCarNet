@@ -15,6 +15,7 @@ import warnings
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from torch.utils.data import WeightedRandomSampler
 from torch.utils.data._utils.collate import default_collate
 
 from ss3dm_prior.data.patch_index import read_patch_index_jsonl
@@ -23,36 +24,159 @@ from ss3dm_prior.engine.checkpoint import load_checkpoint, save_checkpoint
 from ss3dm_prior.losses import compute_patch_losses
 from ss3dm_prior.metrics import (
     denoise_gain_chamfer,
+    free_space_violation_rate,
+    intrinsic_difficulty_mae,
+    intrinsic_difficulty_spearman,
+    occupancy_iou_visible,
     point_defect_mae,
+    prototype_usage_entropy,
     recon_chamfer_l1,
     recon_normal_cosine,
-    retrieval_top1,
-    retrieval_top5,
+    retrieval_top1_cross_sequence,
+    retrieval_top1_nonself,
+    retrieval_top1_self_aligned,
+    retrieval_top5_nonself,
+    retrieval_top5_self_aligned,
     score_mae,
     score_spearman,
 )
 from ss3dm_prior.models.patch_denoiser import LocalPatchDenoiser
 from ss3dm_prior.utils.io import load_yaml
 from ss3dm_prior.viz.render_patch_panels import (
+    render_hybrid_reconstruction_panel,
     render_patch_denoise_panel,
     render_patch_triptych,
+    render_prototype_usage_gallery,
     render_retrieval_gallery,
+    render_visibility_panel,
 )
-from ss3dm_prior.viz.render_sequence_maps import render_sequence_improvement_map
+from ss3dm_prior.viz.render_sequence_maps import (
+    render_sequence_improvement_map,
+    render_sequence_visibility_map,
+)
 
 
-def set_global_seed(seed: int) -> None:
+def set_global_seed(seed: int, *, device: torch.device | None = None) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
+    if device is not None and device.type == "cuda":
         torch.cuda.manual_seed_all(seed)
 
 
 def _safe_mean(values: list[float]) -> float:
     if not values:
         return float("nan")
-    return float(np.mean(values))
+    arr = np.asarray(values, dtype=np.float64)
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return float("nan")
+    return float(np.mean(finite))
+
+
+def _safe_float(value: float | int | np.floating | np.integer | None, default: float = 0.0) -> float:
+    if value is None:
+        return default
+    value = float(value)
+    return default if math.isnan(value) or math.isinf(value) else value
+
+
+def _score_from_weights(metrics: dict[str, float], weights: dict[str, float]) -> float:
+    total = 0.0
+    for key, weight in weights.items():
+        total += float(weight) * _safe_float(metrics.get(key), default=0.0)
+    return float(total)
+
+
+def _effective_loss_weights(weights: dict[str, float]) -> dict[str, float]:
+    corruption_score_weight = float(weights.get("corruption_score_loss", weights.get("patch_score_loss", 0.0)))
+    return {
+        "recon_chamfer_loss": float(weights.get("recon_chamfer_loss", 1.0)),
+        "recon_normal_loss": float(weights.get("recon_normal_loss", 0.5)),
+        "point_defect_loss": float(weights.get("point_defect_loss", 1.0)),
+        "corruption_score_loss": corruption_score_weight,
+        "intrinsic_difficulty_loss": float(weights.get("intrinsic_difficulty_loss", 0.0)),
+        "occupancy_bce_loss": float(weights.get("occupancy_bce_loss", 0.0)),
+        "free_space_violation_loss": float(weights.get("free_space_violation_loss", 0.0)),
+        "vq_commitment_loss": float(weights.get("vq_commitment_loss", 0.0)),
+        "prototype_diversity_loss": float(weights.get("prototype_diversity_loss", 0.0)),
+        "latent_align_loss": float(weights.get("latent_align_loss", 0.25)),
+        "retrieval_align_loss": float(weights.get("retrieval_align_loss", 0.0)),
+    }
+
+
+def _loss_contribution_means(
+    metric_values: dict[str, float],
+    effective_weights: dict[str, float],
+) -> dict[str, float]:
+    contributions: dict[str, float] = {}
+    for key, weight in effective_weights.items():
+        if key not in metric_values:
+            continue
+        contributions[key] = float(weight) * _safe_float(metric_values[key], default=0.0)
+    return contributions
+
+
+def _is_effectively_whole_car_run(run_metadata: dict[str, Any]) -> bool:
+    dataset_cfg = (run_metadata.get("data_config") or {}).get("dataset", {}) or {}
+    dataset_name = str(dataset_cfg.get("name", "")).strip().lower()
+    dataset_source = str(dataset_cfg.get("source", "")).strip().lower()
+    return dataset_name == "meshfleet_car_whole_mesh" or dataset_source == "meshfleet_trellis"
+
+
+def _build_hard_example_sampler(
+    records: list[dict[str, Any]],
+    *,
+    enable: bool,
+    alpha: float,
+    floor: float,
+    power: float,
+) -> WeightedRandomSampler | None:
+    if not enable or not records:
+        return None
+    sample_weights = []
+    for record in records:
+        difficulty = _safe_float(record.get("intrinsic_patch_difficulty_target"), default=0.0)
+        sample_weight = float(floor) + float(alpha) * float(max(difficulty, 0.0) ** power)
+        sample_weights.append(max(sample_weight, 1e-6))
+    weights_tensor = torch.as_tensor(sample_weights, dtype=torch.double)
+    return WeightedRandomSampler(weights_tensor, num_samples=len(records), replacement=True)
+
+
+def _merge_loss_weights_for_epoch(
+    base_weights: dict[str, float],
+    train_config: dict[str, Any],
+    epoch: int,
+) -> tuple[dict[str, float], str]:
+    merged = dict(base_weights)
+    curriculum = train_config.get("curriculum", {}) or {}
+    warmup_epochs = int(curriculum.get("warmup_epochs", 0) or 0)
+    main_start_epoch = int(curriculum.get("main_start_epoch", warmup_epochs) or 0)
+    occupancy_start_epoch = int(curriculum.get("occupancy_start_epoch", main_start_epoch) or 0)
+    intrinsic_start_epoch = int(curriculum.get("intrinsic_start_epoch", main_start_epoch) or 0)
+    vq_start_epoch = int(curriculum.get("vq_start_epoch", main_start_epoch) or 0)
+    prototype_start_epoch = int(curriculum.get("prototype_start_epoch", main_start_epoch) or 0)
+
+    if epoch < warmup_epochs:
+        stage_name = "warmup"
+    elif epoch < max(occupancy_start_epoch, intrinsic_start_epoch, vq_start_epoch, prototype_start_epoch):
+        stage_name = "transition"
+    else:
+        stage_name = "main"
+
+    if epoch < occupancy_start_epoch:
+        merged["occupancy_bce_loss"] = 0.0
+        merged["free_space_violation_loss"] = 0.0
+    if epoch < intrinsic_start_epoch:
+        merged["intrinsic_difficulty_loss"] = 0.0
+    if epoch < vq_start_epoch:
+        merged["vq_commitment_loss"] = 0.0
+    if epoch < prototype_start_epoch:
+        merged["prototype_diversity_loss"] = 0.0
+    if epoch < warmup_epochs:
+        merged["retrieval_align_loss"] = 0.0
+        merged["latent_align_loss"] = 0.0
+    return merged, stage_name
 
 
 def _safe_grad_norm(parameters) -> float:
@@ -77,6 +201,20 @@ def _collate_samples(batch: list[dict[str, Any]]) -> dict[str, Any]:
         "corrupted_normals",
         "point_defect_target",
         "corruption_score_target",
+        "surface_query_points",
+        "surface_query_labels",
+        "free_query_points",
+        "free_query_labels",
+        "unknown_query_points",
+        "query_points_all",
+        "query_labels_all",
+        "query_ignore_mask",
+        "camera_support_count",
+        "lidar_support_count",
+        "visible_surface_fraction",
+        "free_space_fraction",
+        "unknown_fraction",
+        "intrinsic_patch_difficulty_target",
         "patch_center_world",
     }
     for key in batch[0]:
@@ -237,6 +375,7 @@ class SS3DMPriorTrainer:
         output_dir: str | Path,
         run_name: str,
         run_metadata: dict[str, Any],
+        device: torch.device | None = None,
         resume_path: str | Path | None = None,
     ) -> None:
         self.model_config = model_config
@@ -246,9 +385,8 @@ class SS3DMPriorTrainer:
         self.run_name = run_name
         self.run_metadata = run_metadata
         self.seed = int(train_config.get("seed", 0))
-        set_global_seed(self.seed)
-
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        set_global_seed(self.seed, device=self.device)
         self.amp_enabled = bool(train_config.get("amp", False)) and self.device.type == "cuda"
 
         self.datasets = build_datasets(
@@ -258,10 +396,20 @@ class SS3DMPriorTrainer:
             train_config=train_config,
             seed=self.seed,
         )
+        self.model_type = str(model_config.get("model", {}).get("model_type", "legacy_v1")).strip().lower()
+        hard_sampling_cfg = train_config.get("hard_example_sampling", {}) or {}
+        train_sampler = _build_hard_example_sampler(
+            self.datasets.train_dataset.records,
+            enable=bool(hard_sampling_cfg.get("enable", False)),
+            alpha=float(hard_sampling_cfg.get("alpha", 1.0)),
+            floor=float(hard_sampling_cfg.get("floor", 1.0)),
+            power=float(hard_sampling_cfg.get("power", 1.0)),
+        )
         self.train_loader = DataLoader(
             self.datasets.train_dataset,
             batch_size=int(train_config.get("batch_size", 4)),
-            shuffle=True,
+            shuffle=train_sampler is None,
+            sampler=train_sampler,
             num_workers=int(train_config.get("num_workers", 0)),
             collate_fn=_collate_samples,
         )
@@ -295,6 +443,8 @@ class SS3DMPriorTrainer:
         self.best_metrics = {
             "best_recon": float("inf"),
             "best_gain": float("-inf"),
+            "best_composite": float("-inf"),
+            "best_visibility": float("-inf"),
         }
         self.start_epoch = 0
         self.global_step = 0
@@ -319,6 +469,7 @@ class SS3DMPriorTrainer:
             json.dumps(run_metadata, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        self.is_whole_car_run = _is_effectively_whole_car_run(run_metadata)
         self.step_visual_examples = self._build_step_visual_examples()
 
     def _move_batch_to_device(self, batch: dict[str, Any]) -> dict[str, Any]:
@@ -330,21 +481,130 @@ class SS3DMPriorTrainer:
                 moved[key] = value
         return moved
 
-    def _forward_batch(self, batch: dict[str, Any]) -> tuple[dict[str, torch.Tensor | None], dict[str, torch.Tensor]]:
+    def _forward_batch(
+        self,
+        batch: dict[str, Any],
+        *,
+        loss_weights: dict[str, float] | None = None,
+    ) -> tuple[dict[str, torch.Tensor | None], dict[str, torch.Tensor]]:
         outputs = self.model(
             corrupted_points=batch["corrupted_points"].float(),
             corrupted_normals=batch["corrupted_normals"].float(),
             observed_points=batch["observed_points"].float(),
             clean_points=batch["clean_points"].float(),
             clean_normals=batch["clean_normals"].float(),
+            query_points_all=batch.get("query_points_all").float() if batch.get("query_points_all") is not None else None,
         )
-        losses = compute_patch_losses(outputs, batch, self.model_config.get("loss_weights", {}))
+        losses = compute_patch_losses(outputs, batch, loss_weights or self.model_config.get("loss_weights", {}))
         return outputs, losses
 
     def _log(self, payload: dict[str, Any], step: int | None = None) -> None:
         if self.wandb_run is None:
             return
         self.wandb_run.log(payload, step=step)
+
+    def _metric_should_be_logged(
+        self,
+        metric_name: str,
+        value: float,
+        *,
+        effective_weights: dict[str, float],
+    ) -> bool:
+        if not np.isfinite(value):
+            return False
+        if metric_name in {"patch_score_loss", "val_patch_score_loss", "train_patch_score_loss"}:
+            return False
+        if metric_name.endswith("prototype_usage_entropy") and effective_weights.get("vq_commitment_loss", 0.0) <= 0.0:
+            return False
+        if "intrinsic_difficulty" in metric_name and effective_weights.get("intrinsic_difficulty_loss", 0.0) <= 0.0:
+            return False
+        if (
+            "occupancy" in metric_name or "free_space" in metric_name or "visible" in metric_name
+        ) and max(
+            effective_weights.get("occupancy_bce_loss", 0.0),
+            effective_weights.get("free_space_violation_loss", 0.0),
+        ) <= 0.0:
+            return False
+        if ("vq_commitment" in metric_name or "prototype_diversity" in metric_name) and max(
+            effective_weights.get("vq_commitment_loss", 0.0),
+            effective_weights.get("prototype_diversity_loss", 0.0),
+        ) <= 0.0:
+            return False
+        if metric_name.endswith("retrieval_top1_cross_sequence") and self.is_whole_car_run:
+            return False
+        return True
+
+    def _active_raw_loss_keys(self, effective_weights: dict[str, float]) -> list[str]:
+        ordered = [
+            "recon_chamfer_loss",
+            "recon_normal_loss",
+            "point_defect_loss",
+            "corruption_score_loss",
+            "intrinsic_difficulty_loss",
+            "occupancy_bce_loss",
+            "free_space_violation_loss",
+            "vq_commitment_loss",
+            "prototype_diversity_loss",
+            "latent_align_loss",
+            "retrieval_align_loss",
+        ]
+        return [key for key in ordered if effective_weights.get(key, 0.0) > 0.0]
+
+    def _compact_history_metrics(
+        self,
+        metrics: dict[str, float],
+        *,
+        prefix: str,
+        effective_weights: dict[str, float],
+    ) -> dict[str, float]:
+        compact: dict[str, float] = {}
+        for key, value in metrics.items():
+            if not isinstance(value, (int, float)):
+                continue
+            value = float(value)
+            metric_name = key[len(prefix):] if key.startswith(prefix) else key
+            if metric_name == "patch_score_loss":
+                continue
+            if self._metric_should_be_logged(metric_name, value, effective_weights=effective_weights):
+                compact[key] = value
+        raw_losses = {
+            key: float(metrics[f"{prefix}{key}"])
+            for key in self._active_raw_loss_keys(effective_weights)
+            if f"{prefix}{key}" in metrics
+        }
+        for key, value in _loss_contribution_means(raw_losses, effective_weights).items():
+            compact[f"{prefix}weighted_{key}"] = value
+        return compact
+
+    def _format_interval_train_payload(
+        self,
+        *,
+        stats: dict[str, list[float]],
+        interval: int,
+        curriculum_stage: str,
+        effective_weights: dict[str, float],
+    ) -> dict[str, float]:
+        payload: dict[str, float] = {}
+        payload["train_step/total_loss"] = _safe_mean(stats["total_loss"][-interval:])
+        payload["train_step/denoise_gain_chamfer"] = _safe_mean(stats["denoise_gain_chamfer"][-interval:])
+        payload["train_step/curriculum_stage_index"] = float({"warmup": 0, "transition": 1, "main": 2}[curriculum_stage])
+        payload["train_step/lr"] = stats["lr"][-1]
+        payload["train_step/grad_norm"] = stats["grad_norm"][-1]
+        payload["train_step/batch_time"] = stats["batch_time"][-1]
+
+        raw_means = {
+            key: _safe_mean(stats[key][-interval:])
+            for key in self._active_raw_loss_keys(effective_weights)
+            if stats.get(key)
+        }
+        for key, value in raw_means.items():
+            if self._metric_should_be_logged(key, value, effective_weights=effective_weights):
+                short_key = key.removesuffix("_loss")
+                payload[f"train_step/loss_raw/{short_key}"] = value
+        for key, value in _loss_contribution_means(raw_means, effective_weights).items():
+            short_key = key.removesuffix("_loss")
+            payload[f"train_step/loss_weighted/{short_key}"] = value
+        return payload
 
     def _build_step_visual_examples(self) -> list[dict[str, Any]]:
         interval = int(self.train_config.get("step_visualization_interval_steps", 0) or 0)
@@ -363,10 +623,133 @@ class SS3DMPriorTrainer:
                 break
         return examples
 
-    def _maybe_log_step_visualization(self) -> None:
+    def _free_space_violation_scores(
+        self,
+        query_occupancy_logits: np.ndarray | None,
+        query_labels_all: np.ndarray | None,
+        query_ignore_mask: np.ndarray | None,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        if query_occupancy_logits is None or query_labels_all is None:
+            return np.zeros((0, 3), dtype=np.float32), np.zeros((0,), dtype=np.float32)
+        labels = np.asarray(query_labels_all, dtype=np.float32)
+        logits = np.asarray(query_occupancy_logits, dtype=np.float32)
+        ignore_mask = (
+            np.asarray(query_ignore_mask, dtype=bool)
+            if query_ignore_mask is not None
+            else np.zeros(labels.shape, dtype=bool)
+        )
+        free_mask = (labels <= 0.5) & (~ignore_mask)
+        if not np.any(free_mask):
+            return np.zeros((0, 3), dtype=np.float32), np.zeros((0,), dtype=np.float32)
+        return free_mask, 1.0 / (1.0 + np.exp(-logits[free_mask]))
+
+    def _render_v2_patch_artifacts(
+        self,
+        *,
+        example: dict[str, Any],
+        output_dir: Path,
+    ) -> dict[str, Path]:
+        if example.get("query_points_all") is None:
+            return {}
+        info_lines = [
+            f"town: {example['town_id']}",
+            f"sequence: {example['sequence_id']}",
+            f"patch: {example['patch_id']}",
+            f"visible_surface_fraction: {example.get('visible_surface_fraction', float('nan')):.4f}",
+            f"free_space_fraction: {example.get('free_space_fraction', float('nan')):.4f}",
+            f"unknown_fraction: {example.get('unknown_fraction', float('nan')):.4f}",
+            f"intrinsic_target: {example.get('intrinsic_target', float('nan')):.4f}",
+            f"intrinsic_pred: {example.get('intrinsic_pred', float('nan')):.4f}",
+        ]
+        visibility_path = render_visibility_panel(
+            clean_points=example["clean_points"],
+            observed_points=example["observed_points"],
+            surface_query_points=example.get("surface_query_points", np.zeros((0, 3), dtype=np.float32)),
+            free_query_points=example.get("free_query_points", np.zeros((0, 3), dtype=np.float32)),
+            unknown_query_points=example.get("unknown_query_points", np.zeros((0, 3), dtype=np.float32)),
+            info_lines=info_lines,
+            output_path=output_dir / f"{example['patch_id']}_visibility_panel.png",
+        )
+        free_mask, free_scores = self._free_space_violation_scores(
+            example.get("query_occupancy_logits"),
+            example.get("query_labels_all"),
+            example.get("query_ignore_mask"),
+        )
+        free_points = (
+            np.asarray(example["query_points_all"], dtype=np.float32)[free_mask]
+            if isinstance(free_mask, np.ndarray) and free_mask.size
+            else np.zeros((0, 3), dtype=np.float32)
+        )
+        prototype_summary_lines = [
+            f"prototype_id: {example.get('code_index', 'n/a')}",
+            f"prototype_entropy: {example.get('prototype_usage_entropy', float('nan')):.4f}",
+        ]
+        hybrid_path = render_hybrid_reconstruction_panel(
+            corrupted_points=example["corrupted_points"],
+            recon_points=example["recon_points"],
+            clean_points=example["clean_points"],
+            free_query_points=free_points,
+            free_query_violation_scores=free_scores,
+            intrinsic_pred=float(example.get("intrinsic_pred", float("nan"))),
+            intrinsic_target=float(example.get("intrinsic_target", float("nan"))),
+            prototype_summary_lines=prototype_summary_lines,
+            info_lines=[
+                f"score_target: {example['corruption_score_target']:.4f}",
+                f"score_pred: {example['pred_score']:.4f}",
+                f"gain: {example['gain']:.4f}",
+                f"chamfer_before: {example['chamfer_before']:.4f}",
+                f"chamfer_after: {example['chamfer_after']:.4f}",
+            ],
+            output_path=output_dir / f"{example['patch_id']}_hybrid_reconstruction_panel.png",
+        )
+        return {
+            "visibility_panel": visibility_path,
+            "hybrid_reconstruction_panel": hybrid_path,
+        }
+
+    def _select_sequence_ids_for_visualization(
+        self,
+        sequence_map_bank: dict[str, dict[str, list[Any]]],
+    ) -> list[tuple[str, str]]:
+        if not sequence_map_bank:
+            return []
+        sequence_rows = []
+        for sequence_id, seq_bank in sequence_map_bank.items():
+            sequence_rows.append(
+                {
+                    "sequence_id": sequence_id,
+                    "mean_gain": _safe_mean([float(x) for x in seq_bank.get("actual_gains", [])]),
+                    "mean_intrinsic": _safe_mean([float(x) for x in seq_bank.get("intrinsic_targets", [])]),
+                }
+            )
+        hardest = max(sequence_rows, key=lambda row: _safe_float(row["mean_intrinsic"], default=-1.0))
+        best_gain = max(sequence_rows, key=lambda row: _safe_float(row["mean_gain"], default=-1e9))
+        worst_gain = min(sequence_rows, key=lambda row: _safe_float(row["mean_gain"], default=1e9))
+        ordered = [
+            ("hardest_sequence", hardest["sequence_id"]),
+            ("best_gain_sequence", best_gain["sequence_id"]),
+            ("worst_gain_sequence", worst_gain["sequence_id"]),
+        ]
+        seen = set()
+        unique = []
+        for label, sequence_id in ordered:
+            key = (label, sequence_id)
+            if sequence_id in seen:
+                continue
+            seen.add(sequence_id)
+            unique.append(key)
+        return unique
+
+    def _maybe_log_step_visualization(self, *, epoch: int) -> None:
         interval = int(self.train_config.get("step_visualization_interval_steps", 0) or 0)
         if interval <= 0 or not self.step_visual_examples or self.global_step % interval != 0:
             return
+        current_loss_weights, _ = _merge_loss_weights_for_epoch(
+            self.model_config.get("loss_weights", {}),
+            self.train_config,
+            epoch,
+        )
+        effective_weights = _effective_loss_weights(current_loss_weights)
 
         step_dir = self.visual_dir / f"step_{self.global_step:06d}"
         step_dir.mkdir(parents=True, exist_ok=True)
@@ -377,8 +760,13 @@ class SS3DMPriorTrainer:
             for sample in self.step_visual_examples:
                 batch = _collate_samples([sample])
                 batch = self._move_batch_to_device(batch)
+                loss_weights, _ = _merge_loss_weights_for_epoch(
+                    self.model_config.get("loss_weights", {}),
+                    self.train_config,
+                    epoch,
+                )
                 with torch.autocast(device_type=self.device.type, enabled=self.amp_enabled):
-                    outputs, _ = self._forward_batch(batch)
+                    outputs, _ = self._forward_batch(batch, loss_weights=loss_weights)
                 point_defect_pred_raw = torch.expm1(torch.clamp(outputs["point_defect_pred"], min=0.0))
                 patch_score_pred_raw = torch.expm1(torch.clamp(outputs["patch_score_pred"], min=0.0))
                 chamfer_before = float(
@@ -405,7 +793,7 @@ class SS3DMPriorTrainer:
                     info_lines=info_lines,
                     output_path=step_dir / f"{batch['patch_id'][0]}_triptych.png",
                 )
-                panel_path = render_patch_denoise_panel(
+                render_patch_denoise_panel(
                     observed_points=batch["observed_points"][0].detach().cpu().numpy(),
                     corrupted_points=batch["corrupted_points"][0].detach().cpu().numpy(),
                     recon_points=outputs["recon_points"][0].detach().cpu().numpy(),
@@ -416,8 +804,53 @@ class SS3DMPriorTrainer:
                 )
                 if self.wandb_module is not None:
                     patch_id = batch["patch_id"][0]
-                    logged_images[f"viz_step/comparison/{patch_id}"] = self.wandb_module.Image(str(triptych_path))
-                    logged_images[f"viz_step/detail/{patch_id}"] = self.wandb_module.Image(str(panel_path))
+                    logged_images[f"viz_main_step/comparison/{patch_id}"] = self.wandb_module.Image(str(triptych_path))
+                if self.model_type == "hybrid_v2" and batch["query_points_all"].shape[1] > 0:
+                    intrinsic_pred = outputs["intrinsic_difficulty_pred"]
+                    example = {
+                        "town_id": batch["town_id"][0],
+                        "sequence_id": batch["sequence_id"][0],
+                        "patch_id": batch["patch_id"][0],
+                        "observed_points": batch["observed_points"][0].detach().cpu().numpy(),
+                        "corrupted_points": batch["corrupted_points"][0].detach().cpu().numpy(),
+                        "clean_points": batch["clean_points"][0].detach().cpu().numpy(),
+                        "recon_points": outputs["recon_points"][0].detach().cpu().numpy(),
+                        "surface_query_points": batch["surface_query_points"][0].detach().cpu().numpy(),
+                        "free_query_points": batch["free_query_points"][0].detach().cpu().numpy(),
+                        "unknown_query_points": batch["unknown_query_points"][0].detach().cpu().numpy(),
+                        "query_points_all": batch["query_points_all"][0].detach().cpu().numpy(),
+                        "query_labels_all": batch["query_labels_all"][0].detach().cpu().numpy(),
+                        "query_ignore_mask": batch["query_ignore_mask"][0].detach().cpu().numpy(),
+                        "query_occupancy_logits": outputs["query_occupancy_logits"][0].detach().cpu().numpy()
+                        if outputs.get("query_occupancy_logits") is not None
+                        else None,
+                        "corruption_score_target": float(batch["corruption_score_target"][0].detach().cpu()),
+                        "pred_score": float(patch_score_pred_raw[0].detach().cpu()),
+                        "gain": float(chamfer_before - chamfer_after),
+                        "chamfer_before": chamfer_before,
+                        "chamfer_after": chamfer_after,
+                        "visible_surface_fraction": float(batch["visible_surface_fraction"][0].detach().cpu()),
+                        "free_space_fraction": float(batch["free_space_fraction"][0].detach().cpu()),
+                        "unknown_fraction": float(batch["unknown_fraction"][0].detach().cpu()),
+                        "intrinsic_target": float(batch["intrinsic_patch_difficulty_target"][0].detach().cpu()),
+                        "intrinsic_pred": float(intrinsic_pred[0].detach().cpu()) if intrinsic_pred is not None else float("nan"),
+                        "code_index": int(outputs["code_indices"][0].detach().cpu()) if outputs.get("code_indices") is not None else -1,
+                        "prototype_usage_entropy": _safe_float(
+                            outputs.get("codebook_stats", {}).get("usage_entropy")
+                            if isinstance(outputs.get("codebook_stats"), dict)
+                            else None,
+                            default=float("nan"),
+                        ),
+                    }
+                    v2_paths = self._render_v2_patch_artifacts(example=example, output_dir=step_dir)
+                    if self.wandb_module is not None:
+                        for image_name, image_path in v2_paths.items():
+                            if image_name == "visibility_panel" and max(
+                                effective_weights.get("occupancy_bce_loss", 0.0),
+                                effective_weights.get("free_space_violation_loss", 0.0),
+                            ) <= 0.0:
+                                continue
+                            logged_images[f"viz_main_step/{image_name}/{patch_id}"] = self.wandb_module.Image(str(image_path))
         if was_training:
             self.model.train()
         if logged_images:
@@ -428,13 +861,18 @@ class SS3DMPriorTrainer:
         interval = int(self.train_config.get("log_interval", 10))
         stats = defaultdict(list)
         epoch_start = time.time()
+        current_loss_weights, curriculum_stage = _merge_loss_weights_for_epoch(
+            self.model_config.get("loss_weights", {}),
+            self.train_config,
+            epoch,
+        )
 
         for batch_idx, batch in enumerate(self.train_loader):
             iter_start = time.time()
             batch = self._move_batch_to_device(batch)
             self.optimizer.zero_grad(set_to_none=True)
             with torch.autocast(device_type=self.device.type, enabled=self.amp_enabled):
-                outputs, losses = self._forward_batch(batch)
+                outputs, losses = self._forward_batch(batch, loss_weights=current_loss_weights)
             self.scaler.scale(losses["total_loss"]).backward()
             if self.amp_enabled:
                 self.scaler.unscale_(self.optimizer)
@@ -445,7 +883,7 @@ class SS3DMPriorTrainer:
             self.scaler.step(self.optimizer)
             self.scaler.update()
             self.global_step += 1
-            self._maybe_log_step_visualization()
+            self._maybe_log_step_visualization(epoch=epoch)
 
             batch_time = time.time() - iter_start
             chamfer_before = float(
@@ -469,24 +907,18 @@ class SS3DMPriorTrainer:
 
             if (batch_idx + 1) % interval == 0:
                 self._log(
-                    {
-                        "train/total_loss": _safe_mean(stats["total_loss"][-interval:]),
-                        "train/recon_chamfer_loss": _safe_mean(stats["recon_chamfer_loss"][-interval:]),
-                        "train/recon_normal_loss": _safe_mean(stats["recon_normal_loss"][-interval:]),
-                        "train/point_defect_loss": _safe_mean(stats["point_defect_loss"][-interval:]),
-                        "train/patch_score_loss": _safe_mean(stats["patch_score_loss"][-interval:]),
-                        "train/latent_align_loss": _safe_mean(stats["latent_align_loss"][-interval:]),
-                        "train/retrieval_align_loss": _safe_mean(stats["retrieval_align_loss"][-interval:]),
-                        "train/denoise_gain_chamfer": _safe_mean(stats["denoise_gain_chamfer"][-interval:]),
-                        "train/lr": stats["lr"][-1],
-                        "train/grad_norm": stats["grad_norm"][-1],
-                        "train/batch_time": stats["batch_time"][-1],
-                    },
+                    self._format_interval_train_payload(
+                        stats=stats,
+                        interval=interval,
+                        curriculum_stage=curriculum_stage,
+                        effective_weights=_effective_loss_weights(current_loss_weights),
+                    ),
                     step=self.global_step,
                 )
 
         train_metrics = {f"train_{key}": _safe_mean(values) for key, values in stats.items()}
         train_metrics["train_epoch_time"] = float(time.time() - epoch_start)
+        train_metrics["train_curriculum_stage_index"] = float({"warmup": 0, "transition": 1, "main": 2}[curriculum_stage])
         return train_metrics
 
     def validate(self, epoch: int) -> dict[str, float]:
@@ -496,34 +928,78 @@ class SS3DMPriorTrainer:
         val_start = time.time()
         sequence_map_bank: dict[str, dict[str, list[Any]]] = defaultdict(lambda: defaultdict(list))
         patch_examples: list[dict[str, Any]] = []
+        prototype_examples_by_code: dict[int, dict[str, Any]] = {}
         clean_retrieval_embeddings: list[torch.Tensor] = []
         retrieval_embeddings: list[torch.Tensor] = []
         retrieval_bank_points: list[np.ndarray] = []
         retrieval_bank_ids: list[str] = []
+        retrieval_bank_sequence_ids: list[str] = []
         score_preds = []
         score_targets = []
         gain_targets = []
+        intrinsic_preds = []
+        intrinsic_targets = []
+        prototype_code_indices: list[torch.Tensor] = []
+        codebook_entropy_values: list[float] = []
 
         fixed_patch_ids = set(self.train_config.get("fixed_visualization_patch_ids", []) or [])
         max_examples = int(self.train_config.get("max_visualization_examples", 3))
+        current_loss_weights, _ = _merge_loss_weights_for_epoch(
+            self.model_config.get("loss_weights", {}),
+            self.train_config,
+            epoch,
+        )
 
         with torch.no_grad():
             for batch in self.val_loader:
                 batch = self._move_batch_to_device(batch)
                 with torch.autocast(device_type=self.device.type, enabled=self.amp_enabled):
-                    outputs, losses = self._forward_batch(batch)
+                    outputs, losses = self._forward_batch(batch, loss_weights=current_loss_weights)
 
                 for key, value in losses.items():
                     losses_acc[key].append(float(value.detach().cpu()))
 
                 point_defect_pred_raw = torch.expm1(torch.clamp(outputs["point_defect_pred"], min=0.0))
                 patch_score_pred_raw = torch.expm1(torch.clamp(outputs["patch_score_pred"], min=0.0))
+                intrinsic_pred_raw = outputs.get("intrinsic_difficulty_pred")
+                if intrinsic_pred_raw is not None:
+                    intrinsic_pred_raw = torch.clamp(intrinsic_pred_raw, min=0.0, max=1.0)
                 metrics_acc["score_mae"].append(
                     float(score_mae(patch_score_pred_raw, batch["corruption_score_target"]).detach().cpu())
                 )
                 metrics_acc["point_defect_mae"].append(
                     float(point_defect_mae(point_defect_pred_raw, batch["point_defect_target"]).detach().cpu())
                 )
+                if intrinsic_pred_raw is not None:
+                    metrics_acc["intrinsic_difficulty_mae"].append(
+                        intrinsic_difficulty_mae(
+                            intrinsic_pred_raw.detach().cpu(),
+                            batch["intrinsic_patch_difficulty_target"].detach().cpu(),
+                        )
+                    )
+                    intrinsic_preds.extend(intrinsic_pred_raw.detach().cpu().reshape(-1).tolist())
+                    intrinsic_targets.extend(batch["intrinsic_patch_difficulty_target"].detach().cpu().reshape(-1).tolist())
+                if outputs.get("query_occupancy_logits") is not None and batch["query_points_all"].shape[1] > 0:
+                    metrics_acc["occupancy_iou_visible"].append(
+                        occupancy_iou_visible(
+                            outputs["query_occupancy_logits"].detach().cpu(),
+                            batch["query_labels_all"].detach().cpu(),
+                            batch["query_ignore_mask"].detach().cpu(),
+                        )
+                    )
+                    metrics_acc["free_space_violation_rate"].append(
+                        free_space_violation_rate(
+                            outputs["query_occupancy_logits"].detach().cpu(),
+                            batch["query_labels_all"].detach().cpu(),
+                            batch["query_ignore_mask"].detach().cpu(),
+                        )
+                    )
+                if outputs.get("code_indices") is not None:
+                    prototype_code_indices.append(outputs["code_indices"].detach().cpu())
+                if isinstance(outputs.get("codebook_stats"), dict):
+                    codebook_entropy_values.append(
+                        _safe_float(outputs["codebook_stats"].get("usage_entropy"), default=float("nan"))
+                    )
 
                 retrieval_embeddings.append(outputs["retrieval_embedding"].detach().cpu())
                 if outputs["clean_retrieval_embedding"] is not None:
@@ -567,11 +1043,38 @@ class SS3DMPriorTrainer:
                     sequence_map_bank[sequence_id]["patch_centers"].append(patch_center)
                     sequence_map_bank[sequence_id]["pred_scores"].append(float(patch_score_pred_raw[sample_idx].detach().cpu()))
                     sequence_map_bank[sequence_id]["actual_gains"].append(float(gain))
+                    sequence_map_bank[sequence_id]["visible_surface_fraction"].append(
+                        float(batch["visible_surface_fraction"][sample_idx].detach().cpu())
+                    )
+                    sequence_map_bank[sequence_id]["free_space_fraction"].append(
+                        float(batch["free_space_fraction"][sample_idx].detach().cpu())
+                    )
+                    sequence_map_bank[sequence_id]["intrinsic_targets"].append(
+                        float(batch["intrinsic_patch_difficulty_target"][sample_idx].detach().cpu())
+                    )
                     retrieval_bank_points.append(batch["clean_points"][sample_idx].detach().cpu().numpy())
                     retrieval_bank_ids.append(patch_id)
+                    retrieval_bank_sequence_ids.append(sequence_id)
                     score_preds.append(float(patch_score_pred_raw[sample_idx].detach().cpu()))
                     score_targets.append(float(batch["corruption_score_target"][sample_idx].detach().cpu()))
                     gain_targets.append(float(gain))
+                    if intrinsic_pred_raw is not None:
+                        predicted_intrinsic = float(intrinsic_pred_raw[sample_idx].detach().cpu())
+                    else:
+                        predicted_intrinsic = float("nan")
+                    code_index = (
+                        int(outputs["code_indices"][sample_idx].detach().cpu())
+                        if outputs.get("code_indices") is not None
+                        else -1
+                    )
+                    if code_index >= 0 and code_index not in prototype_examples_by_code:
+                        prototype_examples_by_code[code_index] = {
+                            "patch_id": patch_id,
+                            "code_index": code_index,
+                            "clean_points": batch["clean_points"][sample_idx].detach().cpu().numpy(),
+                            "intrinsic_pred": f"{predicted_intrinsic:.4f}",
+                            "intrinsic_target": f"{float(batch['intrinsic_patch_difficulty_target'][sample_idx].detach().cpu()):.4f}",
+                        }
 
                     should_capture = len(patch_examples) < max_examples and (
                         not fixed_patch_ids or patch_id in fixed_patch_ids
@@ -587,8 +1090,29 @@ class SS3DMPriorTrainer:
                                 "clean_points": batch["clean_points"][sample_idx].detach().cpu().numpy(),
                                 "recon_points": outputs["recon_points"][sample_idx].detach().cpu().numpy(),
                                 "defect_scores": point_defect_pred_raw[sample_idx].detach().cpu().numpy(),
+                                "surface_query_points": batch["surface_query_points"][sample_idx].detach().cpu().numpy(),
+                                "free_query_points": batch["free_query_points"][sample_idx].detach().cpu().numpy(),
+                                "unknown_query_points": batch["unknown_query_points"][sample_idx].detach().cpu().numpy(),
+                                "query_points_all": batch["query_points_all"][sample_idx].detach().cpu().numpy(),
+                                "query_labels_all": batch["query_labels_all"][sample_idx].detach().cpu().numpy(),
+                                "query_ignore_mask": batch["query_ignore_mask"][sample_idx].detach().cpu().numpy(),
+                                "query_occupancy_logits": outputs["query_occupancy_logits"][sample_idx].detach().cpu().numpy()
+                                if outputs.get("query_occupancy_logits") is not None
+                                else None,
                                 "corruption_score_target": float(batch["corruption_score_target"][sample_idx].detach().cpu()),
                                 "pred_score": float(patch_score_pred_raw[sample_idx].detach().cpu()),
+                                "intrinsic_target": float(batch["intrinsic_patch_difficulty_target"][sample_idx].detach().cpu()),
+                                "intrinsic_pred": predicted_intrinsic,
+                                "code_index": code_index,
+                                "prototype_usage_entropy": _safe_float(
+                                    outputs.get("codebook_stats", {}).get("usage_entropy")
+                                    if isinstance(outputs.get("codebook_stats"), dict)
+                                    else None,
+                                    default=float("nan"),
+                                ),
+                                "visible_surface_fraction": float(batch["visible_surface_fraction"][sample_idx].detach().cpu()),
+                                "free_space_fraction": float(batch["free_space_fraction"][sample_idx].detach().cpu()),
+                                "unknown_fraction": float(batch["unknown_fraction"][sample_idx].detach().cpu()),
                                 "gain": float(gain),
                                 "chamfer_before": chamfer_before,
                                 "chamfer_after": chamfer_after,
@@ -598,12 +1122,65 @@ class SS3DMPriorTrainer:
         if clean_retrieval_embeddings and retrieval_embeddings:
             all_queries = torch.cat(retrieval_embeddings, dim=0)
             all_targets = torch.cat(clean_retrieval_embeddings, dim=0)
-            metrics_acc["retrieval_top1"].append(retrieval_top1(all_queries, all_targets))
-            metrics_acc["retrieval_top5"].append(retrieval_top5(all_queries, all_targets))
+            metrics_acc["retrieval_top1_self_aligned"].append(retrieval_top1_self_aligned(all_queries, all_targets))
+            metrics_acc["retrieval_top5_self_aligned"].append(retrieval_top5_self_aligned(all_queries, all_targets))
+            metrics_acc["retrieval_top1_nonself"].append(
+                retrieval_top1_nonself(
+                    all_queries,
+                    all_targets,
+                    query_patch_ids=retrieval_bank_ids,
+                    target_patch_ids=retrieval_bank_ids,
+                    query_sequence_ids=retrieval_bank_sequence_ids,
+                    target_sequence_ids=retrieval_bank_sequence_ids,
+                )
+            )
+            metrics_acc["retrieval_top5_nonself"].append(
+                retrieval_top5_nonself(
+                    all_queries,
+                    all_targets,
+                    query_patch_ids=retrieval_bank_ids,
+                    target_patch_ids=retrieval_bank_ids,
+                    query_sequence_ids=retrieval_bank_sequence_ids,
+                    target_sequence_ids=retrieval_bank_sequence_ids,
+                )
+            )
+            metrics_acc["retrieval_top1_cross_sequence"].append(
+                retrieval_top1_cross_sequence(
+                    all_queries,
+                    all_targets,
+                    query_patch_ids=retrieval_bank_ids,
+                    target_patch_ids=retrieval_bank_ids,
+                    query_sequence_ids=retrieval_bank_sequence_ids,
+                    target_sequence_ids=retrieval_bank_sequence_ids,
+                )
+            )
         else:
             warnings.warn("Retrieval metrics unavailable due to empty embedding bank.", stacklevel=2)
-            metrics_acc["retrieval_top1"].append(float("nan"))
-            metrics_acc["retrieval_top5"].append(float("nan"))
+            metrics_acc["retrieval_top1_self_aligned"].append(float("nan"))
+            metrics_acc["retrieval_top5_self_aligned"].append(float("nan"))
+            metrics_acc["retrieval_top1_nonself"].append(float("nan"))
+            metrics_acc["retrieval_top5_nonself"].append(float("nan"))
+            metrics_acc["retrieval_top1_cross_sequence"].append(float("nan"))
+
+        if intrinsic_preds and len(intrinsic_preds) >= 2:
+            metrics_acc["intrinsic_difficulty_spearman"].append(
+                intrinsic_difficulty_spearman(
+                    torch.tensor(intrinsic_preds, dtype=torch.float32),
+                    torch.tensor(intrinsic_targets, dtype=torch.float32),
+                )
+            )
+        else:
+            metrics_acc["intrinsic_difficulty_spearman"].append(float("nan"))
+        if prototype_code_indices:
+            all_code_indices = torch.cat(prototype_code_indices, dim=0)
+            codebook_size = int(self.model_config.get("model", {}).get("codebook_size", 0) or 0)
+            metrics_acc["prototype_usage_entropy"].append(
+                prototype_usage_entropy(all_code_indices, codebook_size=codebook_size if codebook_size > 0 else None)
+            )
+        elif codebook_entropy_values:
+            metrics_acc["prototype_usage_entropy"].append(_safe_mean(codebook_entropy_values))
+        else:
+            metrics_acc["prototype_usage_entropy"].append(float("nan"))
 
         if len(score_preds) >= 2:
             metrics_acc["score_spearman"].append(
@@ -640,6 +1217,7 @@ class SS3DMPriorTrainer:
             corrupted_latents=torch.cat(retrieval_embeddings, dim=0) if retrieval_embeddings else None,
             retrieval_bank_points=retrieval_bank_points,
             retrieval_bank_ids=retrieval_bank_ids,
+            prototype_examples=list(prototype_examples_by_code.values())[:6],
         )
         return val_metrics
 
@@ -653,9 +1231,16 @@ class SS3DMPriorTrainer:
         corrupted_latents: torch.Tensor | None,
         retrieval_bank_points: list[np.ndarray],
         retrieval_bank_ids: list[str],
+        prototype_examples: list[dict[str, Any]],
     ) -> None:
         if not patch_examples:
             return
+        current_loss_weights, _ = _merge_loss_weights_for_epoch(
+            self.model_config.get("loss_weights", {}),
+            self.train_config,
+            epoch,
+        )
+        effective_weights = _effective_loss_weights(current_loss_weights)
         epoch_dir = self.visual_dir / f"epoch_{epoch:03d}"
         epoch_dir.mkdir(parents=True, exist_ok=True)
         logged_images = {}
@@ -678,7 +1263,7 @@ class SS3DMPriorTrainer:
                 info_lines=info_lines,
                 output_path=epoch_dir / f"{example['patch_id']}_triptych.png",
             )
-            panel_path = render_patch_denoise_panel(
+            render_patch_denoise_panel(
                 observed_points=example["observed_points"],
                 corrupted_points=example["corrupted_points"],
                 recon_points=example["recon_points"],
@@ -688,21 +1273,45 @@ class SS3DMPriorTrainer:
                 output_path=epoch_dir / f"{example['patch_id']}_panel.png",
             )
             if self.wandb_module is not None:
-                logged_images[f"viz/comparison/{example['patch_id']}"] = self.wandb_module.Image(str(triptych_path))
-                logged_images[f"viz/patch_denoise_panel/{example['patch_id']}"] = self.wandb_module.Image(str(panel_path))
+                logged_images[f"viz_main/comparison/{example['patch_id']}"] = self.wandb_module.Image(str(triptych_path))
+            if self.model_type == "hybrid_v2" and example.get("query_points_all") is not None:
+                v2_paths = self._render_v2_patch_artifacts(example=example, output_dir=epoch_dir)
+                if self.wandb_module is not None:
+                    for image_name, image_path in v2_paths.items():
+                        if image_name == "visibility_panel" and max(
+                            effective_weights.get("occupancy_bce_loss", 0.0),
+                            effective_weights.get("free_space_violation_loss", 0.0),
+                        ) <= 0.0:
+                            continue
+                        logged_images[f"viz_main/{image_name}/{example['patch_id']}"] = self.wandb_module.Image(str(image_path))
 
-        first_sequence = next(iter(sequence_map_bank.keys()), None)
-        if first_sequence is not None:
-            seq_bank = sequence_map_bank[first_sequence]
-            seq_map_path = render_sequence_improvement_map(
+        for map_label, sequence_id in self._select_sequence_ids_for_visualization(sequence_map_bank):
+            seq_bank = sequence_map_bank[sequence_id]
+            render_sequence_improvement_map(
                 patch_centers_world=np.asarray(seq_bank["patch_centers"], dtype=np.float32),
                 predicted_scores=np.asarray(seq_bank["pred_scores"], dtype=np.float32),
                 actual_gains=np.asarray(seq_bank["actual_gains"], dtype=np.float32),
-                sequence_id=first_sequence,
-                output_path=epoch_dir / f"{first_sequence}_sequence_map.png",
+                sequence_id=sequence_id,
+                output_path=epoch_dir / f"{sequence_id}_{map_label}_gain_map.png",
+            )
+            visibility_map_path = render_sequence_visibility_map(
+                patch_centers_world=np.asarray(seq_bank["patch_centers"], dtype=np.float32),
+                visible_surface_fraction=np.asarray(seq_bank["visible_surface_fraction"], dtype=np.float32),
+                free_space_fraction=np.asarray(seq_bank["free_space_fraction"], dtype=np.float32),
+                intrinsic_targets=np.asarray(seq_bank["intrinsic_targets"], dtype=np.float32),
+                actual_gains=np.asarray(seq_bank["actual_gains"], dtype=np.float32),
+                sequence_id=sequence_id,
+                map_title=map_label.replace("_", " "),
+                output_path=epoch_dir / f"{sequence_id}_{map_label}_visibility_map.png",
             )
             if self.wandb_module is not None:
-                logged_images["viz/sequence_improvement_map"] = self.wandb_module.Image(str(seq_map_path))
+                if max(
+                    effective_weights.get("occupancy_bce_loss", 0.0),
+                    effective_weights.get("free_space_violation_loss", 0.0),
+                ) > 0.0:
+                    logged_images[f"viz_main/sequence_visibility_map/{map_label}"] = self.wandb_module.Image(
+                        str(visibility_map_path)
+                    )
 
         if clean_latents is not None and corrupted_latents is not None and len(patch_examples) >= 1:
             query_idx = 0
@@ -716,15 +1325,19 @@ class SS3DMPriorTrainer:
                 f"nearest_clean_patch: {retrieval_bank_ids[nearest_idx] if nearest_idx < len(retrieval_bank_ids) else 'n/a'}",
                 f"self_match: {retrieval_bank_ids[nearest_idx] == patch_examples[query_idx]['patch_id'] if nearest_idx < len(retrieval_bank_ids) else False}",
             ]
-            gallery_path = render_retrieval_gallery(
+            render_retrieval_gallery(
                 query_corrupted_points=patch_examples[query_idx]["corrupted_points"],
                 target_clean_points=patch_examples[query_idx]["clean_points"],
                 nearest_clean_points=retrieval_bank_points[nearest_idx] if nearest_idx < len(retrieval_bank_points) else patch_examples[query_idx]["clean_points"],
                 info_lines=info_lines,
                 output_path=epoch_dir / f"{patch_examples[query_idx]['patch_id']}_retrieval.png",
             )
-            if self.wandb_module is not None:
-                logged_images["viz/retrieval_gallery"] = self.wandb_module.Image(str(gallery_path))
+
+        if prototype_examples:
+            render_prototype_usage_gallery(
+                prototype_examples=prototype_examples,
+                output_path=epoch_dir / "prototype_usage_gallery.png",
+            )
 
         if logged_images:
             self._log(logged_images, step=self.global_step)
@@ -754,6 +1367,30 @@ class SS3DMPriorTrainer:
             )
         recon_metric = val_metrics.get("val_recon_chamfer_l1", float("inf"))
         gain_metric = val_metrics.get("val_denoise_gain_chamfer", float("-inf"))
+        composite_cfg = self.train_config.get("checkpoint_selection", {}) or {}
+        composite_score = _score_from_weights(
+            val_metrics,
+            composite_cfg.get(
+                "best_composite_weights",
+                {
+                    "val_denoise_gain_chamfer": 1.0,
+                    "val_recon_chamfer_l1": -1.0,
+                    "val_occupancy_iou_visible": 0.5,
+                    "val_free_space_violation_rate": -0.5,
+                    "val_intrinsic_difficulty_spearman": 0.2,
+                },
+            ),
+        )
+        visibility_score = _score_from_weights(
+            val_metrics,
+            composite_cfg.get(
+                "best_visibility_weights",
+                {
+                    "val_occupancy_iou_visible": 1.0,
+                    "val_free_space_violation_rate": -1.0,
+                },
+            ),
+        )
         if recon_metric < self.best_metrics["best_recon"]:
             self.best_metrics["best_recon"] = recon_metric
             save_checkpoint(
@@ -778,6 +1415,30 @@ class SS3DMPriorTrainer:
                 best_metrics=self.best_metrics,
                 run_config=self.run_metadata,
             )
+        if composite_score > self.best_metrics["best_composite"]:
+            self.best_metrics["best_composite"] = composite_score
+            save_checkpoint(
+                self.ckpt_dir / "best_composite.pt",
+                model=self.model,
+                optimizer=self.optimizer,
+                scaler=self.scaler,
+                epoch=epoch,
+                global_step=self.global_step,
+                best_metrics=self.best_metrics,
+                run_config=self.run_metadata,
+            )
+        if visibility_score > self.best_metrics["best_visibility"]:
+            self.best_metrics["best_visibility"] = visibility_score
+            save_checkpoint(
+                self.ckpt_dir / "best_visibility.pt",
+                model=self.model,
+                optimizer=self.optimizer,
+                scaler=self.scaler,
+                epoch=epoch,
+                global_step=self.global_step,
+                best_metrics=self.best_metrics,
+                run_config=self.run_metadata,
+            )
 
     def fit(self) -> dict[str, Any]:
         epochs = int(self.train_config.get("epochs", 1))
@@ -785,6 +1446,12 @@ class SS3DMPriorTrainer:
         history = []
         for epoch in range(self.start_epoch, epochs):
             train_metrics = self.train_one_epoch(epoch)
+            current_loss_weights, curriculum_stage = _merge_loss_weights_for_epoch(
+                self.model_config.get("loss_weights", {}),
+                self.train_config,
+                epoch,
+            )
+            effective_weights = _effective_loss_weights(current_loss_weights)
             if val_interval > 0 and ((epoch + 1) % val_interval == 0 or epoch == epochs - 1):
                 val_metrics = self.validate(epoch)
                 self.maybe_save_checkpoints(epoch, val_metrics)
@@ -800,9 +1467,53 @@ class SS3DMPriorTrainer:
                     best_metrics=self.best_metrics,
                     run_config=self.run_metadata,
                 )
-            merged = {"epoch": epoch, **train_metrics, **val_metrics}
-            history.append(merged)
-            log_payload = {f"epoch/{key}": value for key, value in merged.items() if key != "epoch"}
+            history_entry = {
+                "epoch": epoch,
+                **self._compact_history_metrics(train_metrics, prefix="train_", effective_weights=effective_weights),
+                **self._compact_history_metrics(val_metrics, prefix="val_", effective_weights=effective_weights),
+            }
+            history.append(history_entry)
+            log_payload = {"epoch/index": epoch, "epoch/curriculum_stage_index": float({"warmup": 0, "transition": 1, "main": 2}[curriculum_stage])}
+            for key, value in train_metrics.items():
+                if not isinstance(value, (int, float)):
+                    continue
+                value = float(value)
+                metric_name = key[len("train_"):] if key.startswith("train_") else key
+                if metric_name in {"patch_score_loss", "batch_time", "curriculum_stage_index"}:
+                    continue
+                if self._metric_should_be_logged(metric_name, value, effective_weights=effective_weights):
+                    log_payload[f"epoch/train/{metric_name}"] = value
+            for key, value in val_metrics.items():
+                if not isinstance(value, (int, float)):
+                    continue
+                value = float(value)
+                metric_name = key[len("val_"):] if key.startswith("val_") else key
+                if metric_name == "patch_score_loss":
+                    continue
+                if self._metric_should_be_logged(metric_name, value, effective_weights=effective_weights):
+                    log_payload[f"epoch/val/{metric_name}"] = value
+            train_raw = {
+                key: float(train_metrics[f"train_{key}"])
+                for key in self._active_raw_loss_keys(effective_weights)
+                if f"train_{key}" in train_metrics
+            }
+            val_raw = {
+                key: float(val_metrics[f"val_{key}"])
+                for key in self._active_raw_loss_keys(effective_weights)
+                if f"val_{key}" in val_metrics
+            }
+            for key, value in train_raw.items():
+                short_key = key.removesuffix("_loss")
+                log_payload[f"epoch/train_loss_raw/{short_key}"] = value
+            for key, value in _loss_contribution_means(train_raw, effective_weights).items():
+                short_key = key.removesuffix("_loss")
+                log_payload[f"epoch/train_loss_weighted/{short_key}"] = value
+            for key, value in val_raw.items():
+                short_key = key.removesuffix("_loss")
+                log_payload[f"epoch/val_loss_raw/{short_key}"] = value
+            for key, value in _loss_contribution_means(val_raw, effective_weights).items():
+                short_key = key.removesuffix("_loss")
+                log_payload[f"epoch/val_loss_weighted/{short_key}"] = value
             log_payload["epoch/index"] = epoch
             self._log(log_payload, step=self.global_step)
             if self.scheduler is not None:

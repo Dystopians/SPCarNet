@@ -1,0 +1,7 @@
+dataset:
+  name: meshfleet_car_whole_mesh
+  source: MeshFleet_TRELLIS
+  unit_of_index: car_mesh
+  notes:
+    - Whole-car route: each car mesh is one sample.
+    - The generated patch cache is built by `ss3dm_prior.tools.build_car_mesh_patch_cache`.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from ss3dm_prior.eval import main as eval_main
@@ -131,3 +132,9 @@ def test_eval_smoke(tmp_path: Path) -> None:
     assert (eval_dir / "patch_predictions.csv").exists()
     assert (eval_dir / "report.md").exists()
     assert list((eval_dir / "patch_panels").glob("*.png"))
+    summary = json.loads((eval_dir / "metrics_summary.json").read_text(encoding="utf-8"))
+    assert "protocol_valid" in summary
+    assert "protocol_warnings" in summary
+    assert "protocol_summary" in summary
+    report_text = (eval_dir / "report.md").read_text(encoding="utf-8")
+    assert "## Protocol Audit" in report_text

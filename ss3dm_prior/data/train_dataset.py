@@ -64,10 +64,20 @@ class TeacherPatchTrainDataset(Dataset):
         clean_points = np.asarray(patch["clean_points"], dtype=np.float32)
         clean_normals = np.asarray(patch["clean_normals"], dtype=np.float32)
         observed_points = np.asarray(patch["observed_points"], dtype=np.float32)
+        surface_query_points = np.asarray(patch.get("surface_query_points", np.zeros((0, 3), dtype=np.float32)), dtype=np.float32)
+        surface_query_labels = np.asarray(patch.get("surface_query_labels", np.zeros((0,), dtype=np.int8)))
+        free_query_points = np.asarray(patch.get("free_query_points", np.zeros((0, 3), dtype=np.float32)), dtype=np.float32)
+        free_query_labels = np.asarray(patch.get("free_query_labels", np.zeros((0,), dtype=np.int8)))
+        unknown_query_points = np.asarray(patch.get("unknown_query_points", np.zeros((0, 3), dtype=np.float32)), dtype=np.float32)
+        query_points_all = np.asarray(patch.get("query_points_all", np.zeros((0, 3), dtype=np.float32)), dtype=np.float32)
+        query_labels_all = np.asarray(patch.get("query_labels_all", np.zeros((0,), dtype=np.int8)))
+        query_ignore_mask = np.asarray(patch.get("query_ignore_mask", np.zeros((0,), dtype=bool)), dtype=bool)
         patch_center_world = np.asarray(patch["patch_center_world"], dtype=np.float32)
         patch_id = str(_scalar(patch["patch_id"]))
         town_id = str(_scalar(patch["town_id"]))
         sequence_id = str(_scalar(patch["sequence_id"]))
+        patch_cache_format_version = int(_scalar(patch.get("patch_cache_format_version", np.asarray(1, dtype=np.int32))))
+        difficulty_components_json = str(_scalar(patch.get("difficulty_components_json", np.asarray("{}"))))
         patch_metadata_json = str(_scalar(patch.get("patch_metadata_json", np.asarray("{}"))))
         if self.dynamic_corruption:
             visit_count = self._sample_visit_counts[patch_id]
@@ -95,10 +105,51 @@ class TeacherPatchTrainDataset(Dataset):
                 corruption.corruption_score_target,
                 dtype=torch.float32,
             ),
+            "surface_query_points": torch.from_numpy(surface_query_points),
+            "surface_query_labels": torch.from_numpy(surface_query_labels),
+            "free_query_points": torch.from_numpy(free_query_points),
+            "free_query_labels": torch.from_numpy(free_query_labels),
+            "unknown_query_points": torch.from_numpy(unknown_query_points),
+            "query_points_all": torch.from_numpy(query_points_all),
+            "query_labels_all": torch.from_numpy(query_labels_all),
+            "query_ignore_mask": torch.from_numpy(query_ignore_mask),
+            "camera_support_count": torch.tensor(
+                float(_scalar(patch.get("camera_support_count", np.asarray(0, dtype=np.int32)))),
+                dtype=torch.float32,
+            ),
+            "lidar_support_count": torch.tensor(
+                float(_scalar(patch.get("lidar_support_count", np.asarray(0, dtype=np.int32)))),
+                dtype=torch.float32,
+            ),
+            "visible_surface_fraction": torch.tensor(
+                float(_scalar(patch.get("visible_surface_fraction", np.asarray(0.0, dtype=np.float32)))),
+                dtype=torch.float32,
+            ),
+            "free_space_fraction": torch.tensor(
+                float(_scalar(patch.get("free_space_fraction", np.asarray(0.0, dtype=np.float32)))),
+                dtype=torch.float32,
+            ),
+            "unknown_fraction": torch.tensor(
+                float(_scalar(patch.get("unknown_fraction", np.asarray(0.0, dtype=np.float32)))),
+                dtype=torch.float32,
+            ),
+            "intrinsic_patch_difficulty_target": torch.tensor(
+                float(
+                    _scalar(
+                        patch.get(
+                            "intrinsic_patch_difficulty_target",
+                            np.asarray(0.0, dtype=np.float32),
+                        )
+                    )
+                ),
+                dtype=torch.float32,
+            ),
             "patch_center_world": torch.from_numpy(patch_center_world),
             "town_id": town_id,
             "sequence_id": sequence_id,
             "patch_id": patch_id,
+            "patch_cache_format_version": patch_cache_format_version,
+            "difficulty_components": json.loads(difficulty_components_json),
             "patch_metadata": json.loads(patch_metadata_json),
             "corruption_metadata": corruption.metadata,
         }
