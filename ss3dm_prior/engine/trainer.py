@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 import json
 import math
@@ -25,13 +26,18 @@ from ss3dm_prior.losses import compute_patch_losses
 from ss3dm_prior.metrics import (
     denoise_gain_chamfer,
     free_space_violation_rate,
+    free_space_fp_rate,
+    hidden_completion_gain_or_nan,
     intrinsic_difficulty_mae,
+    intrinsic_difficulty_calibration_mae,
     intrinsic_difficulty_spearman,
     occupancy_iou_visible,
     point_defect_mae,
     prototype_usage_entropy,
     recon_chamfer_l1,
+    recon_chamfer_l1_or_nan,
     recon_normal_cosine,
+    recon_normal_cosine_or_nan,
     retrieval_top1_cross_sequence,
     retrieval_top1_nonself,
     retrieval_top1_self_aligned,
@@ -43,11 +49,14 @@ from ss3dm_prior.metrics import (
 from ss3dm_prior.models.patch_denoiser import LocalPatchDenoiser
 from ss3dm_prior.utils.io import load_yaml
 from ss3dm_prior.viz.render_patch_panels import (
+    render_difficulty_calibration_panel,
+    render_free_space_error_panel,
     render_hybrid_reconstruction_panel,
     render_patch_denoise_panel,
     render_patch_triptych,
     render_prototype_usage_gallery,
     render_retrieval_gallery,
+    render_visible_vs_hidden_panel,
     render_visibility_panel,
 )
 from ss3dm_prior.viz.render_sequence_maps import (
@@ -93,15 +102,21 @@ def _effective_loss_weights(weights: dict[str, float]) -> dict[str, float]:
     return {
         "recon_chamfer_loss": float(weights.get("recon_chamfer_loss", 1.0)),
         "recon_normal_loss": float(weights.get("recon_normal_loss", 0.5)),
+        "nearest_neighbor_l1_loss": float(weights.get("nearest_neighbor_l1_loss", 0.0)),
+        "reverse_nearest_neighbor_l1_loss": float(weights.get("reverse_nearest_neighbor_l1_loss", 0.0)),
         "point_defect_loss": float(weights.get("point_defect_loss", 1.0)),
         "corruption_score_loss": corruption_score_weight,
         "intrinsic_difficulty_loss": float(weights.get("intrinsic_difficulty_loss", 0.0)),
         "occupancy_bce_loss": float(weights.get("occupancy_bce_loss", 0.0)),
         "free_space_violation_loss": float(weights.get("free_space_violation_loss", 0.0)),
+        "hidden_completion_chamfer_loss": float(weights.get("hidden_completion_chamfer_loss", 0.0)),
+        "visible_recon_chamfer_loss": float(weights.get("visible_recon_chamfer_loss", 0.0)),
         "vq_commitment_loss": float(weights.get("vq_commitment_loss", 0.0)),
         "prototype_diversity_loss": float(weights.get("prototype_diversity_loss", 0.0)),
         "latent_align_loss": float(weights.get("latent_align_loss", 0.25)),
         "retrieval_align_loss": float(weights.get("retrieval_align_loss", 0.0)),
+        "latent_flow_matching_loss": float(weights.get("latent_flow_matching_loss", 0.0)),
+        "symmetry_consistency_loss": float(weights.get("symmetry_consistency_loss", 0.0)),
     }
 
 
@@ -150,16 +165,25 @@ def _merge_loss_weights_for_epoch(
 ) -> tuple[dict[str, float], str]:
     merged = dict(base_weights)
     curriculum = train_config.get("curriculum", {}) or {}
-    warmup_epochs = int(curriculum.get("warmup_epochs", 0) or 0)
-    main_start_epoch = int(curriculum.get("main_start_epoch", warmup_epochs) or 0)
+    recon_warmup_epochs = int(curriculum.get("recon_warmup_epochs", curriculum.get("warmup_epochs", 0)) or 0)
+    main_start_epoch = int(curriculum.get("main_start_epoch", recon_warmup_epochs) or 0)
     occupancy_start_epoch = int(curriculum.get("occupancy_start_epoch", main_start_epoch) or 0)
     intrinsic_start_epoch = int(curriculum.get("intrinsic_start_epoch", main_start_epoch) or 0)
     vq_start_epoch = int(curriculum.get("vq_start_epoch", main_start_epoch) or 0)
     prototype_start_epoch = int(curriculum.get("prototype_start_epoch", main_start_epoch) or 0)
+    flow_matching_start_epoch = int(curriculum.get("flow_matching_start_epoch", main_start_epoch) or 0)
+    symmetry_start_epoch = int(curriculum.get("symmetry_start_epoch", main_start_epoch) or 0)
 
-    if epoch < warmup_epochs:
-        stage_name = "warmup"
-    elif epoch < max(occupancy_start_epoch, intrinsic_start_epoch, vq_start_epoch, prototype_start_epoch):
+    if epoch < recon_warmup_epochs:
+        stage_name = "recon_warmup"
+    elif epoch < max(
+        occupancy_start_epoch,
+        intrinsic_start_epoch,
+        vq_start_epoch,
+        prototype_start_epoch,
+        flow_matching_start_epoch,
+        symmetry_start_epoch,
+    ):
         stage_name = "transition"
     else:
         stage_name = "main"
@@ -173,9 +197,24 @@ def _merge_loss_weights_for_epoch(
         merged["vq_commitment_loss"] = 0.0
     if epoch < prototype_start_epoch:
         merged["prototype_diversity_loss"] = 0.0
-    if epoch < warmup_epochs:
+    if epoch < flow_matching_start_epoch:
+        merged["latent_flow_matching_loss"] = 0.0
+    if epoch < symmetry_start_epoch:
+        merged["symmetry_consistency_loss"] = 0.0
+    if epoch < recon_warmup_epochs:
         merged["retrieval_align_loss"] = 0.0
         merged["latent_align_loss"] = 0.0
+        # During warmup the main recon losses are boosted so the model is
+        # pushed hard toward an honest reconstruction before auxiliary heads
+        # can distract. Multipliers default to 1.0 (no-op) and are read from
+        # the curriculum block so individual configs can tune them.
+        recon_boost = float(curriculum.get("recon_chamfer_warmup_scale", 1.0))
+        normal_boost = float(curriculum.get("recon_normal_warmup_scale", 1.0))
+        nn_boost = float(curriculum.get("nearest_neighbor_warmup_scale", 1.0))
+        merged["recon_chamfer_loss"] = float(merged.get("recon_chamfer_loss", 0.0)) * recon_boost
+        merged["recon_normal_loss"] = float(merged.get("recon_normal_loss", 0.0)) * normal_boost
+        merged["nearest_neighbor_l1_loss"] = float(merged.get("nearest_neighbor_l1_loss", 0.0)) * nn_boost
+        merged["reverse_nearest_neighbor_l1_loss"] = float(merged.get("reverse_nearest_neighbor_l1_loss", 0.0)) * nn_boost
     return merged, stage_name
 
 
@@ -191,6 +230,55 @@ def _safe_grad_norm(parameters) -> float:
     return float(total**0.5) if found else 0.0
 
 
+class ExponentialMovingAverage:
+    def __init__(self, model: torch.nn.Module, *, decay: float) -> None:
+        self.decay = float(decay)
+        self.shadow = {
+            name: parameter.detach().clone()
+            for name, parameter in model.named_parameters()
+            if parameter.requires_grad
+        }
+        self.backup: dict[str, torch.Tensor] | None = None
+
+    def update(self, model: torch.nn.Module) -> None:
+        for name, parameter in model.named_parameters():
+            if not parameter.requires_grad or name not in self.shadow:
+                continue
+            self.shadow[name].mul_(self.decay).add_(parameter.detach(), alpha=1.0 - self.decay)
+
+    def apply_to(self, model: torch.nn.Module) -> None:
+        self.backup = {}
+        for name, parameter in model.named_parameters():
+            if not parameter.requires_grad or name not in self.shadow:
+                continue
+            self.backup[name] = parameter.detach().clone()
+            parameter.data.copy_(self.shadow[name])
+
+    def restore(self, model: torch.nn.Module) -> None:
+        if self.backup is None:
+            return
+        for name, parameter in model.named_parameters():
+            if not parameter.requires_grad or name not in self.backup:
+                continue
+            parameter.data.copy_(self.backup[name])
+        self.backup = None
+
+    def state_dict(self) -> dict[str, Any]:
+        return {
+            "decay": self.decay,
+            "shadow": {name: tensor.detach().cpu().clone() for name, tensor in self.shadow.items()},
+        }
+
+    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+        self.decay = float(state_dict.get("decay", self.decay))
+        shadow = state_dict.get("shadow", {}) or {}
+        self.shadow = {
+            name: tensor.detach().clone()
+            for name, tensor in shadow.items()
+            if isinstance(tensor, torch.Tensor)
+        }
+
+
 def _collate_samples(batch: list[dict[str, Any]]) -> dict[str, Any]:
     collated: dict[str, Any] = {}
     tensor_keys = {
@@ -201,6 +289,7 @@ def _collate_samples(batch: list[dict[str, Any]]) -> dict[str, Any]:
         "corrupted_normals",
         "point_defect_target",
         "corruption_score_target",
+        "surface_support_mask",
         "surface_query_points",
         "surface_query_labels",
         "free_query_points",
@@ -212,10 +301,19 @@ def _collate_samples(batch: list[dict[str, Any]]) -> dict[str, Any]:
         "camera_support_count",
         "lidar_support_count",
         "visible_surface_fraction",
+        "visible_support_fraction",
+        "hidden_surface_fraction",
         "free_space_fraction",
         "unknown_fraction",
+        "free_space_hard_negative_count",
         "intrinsic_patch_difficulty_target",
+        "symmetry_plane_normal",
+        "symmetry_plane_offset",
+        "symmetry_target_confidence",
+        "symmetry_chamfer_residual",
         "patch_center_world",
+        "patch_radius_m",
+        "scale_id",
     }
     for key in batch[0]:
         values = [sample[key] for sample in batch]
@@ -224,6 +322,36 @@ def _collate_samples(batch: list[dict[str, Any]]) -> dict[str, Any]:
         else:
             collated[key] = values
     return collated
+
+
+def _sample_optional_tensor(
+    value: torch.Tensor | list[torch.Tensor] | None,
+    index: int,
+    *,
+    device: torch.device,
+) -> torch.Tensor | None:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        if index >= len(value) or not isinstance(value[index], torch.Tensor):
+            return None
+        tensor = value[index].to(device)
+        return tensor.unsqueeze(0)
+    if isinstance(value, torch.Tensor):
+        if value.ndim == 2:
+            return value.unsqueeze(0).to(device)
+        return value[index : index + 1].to(device)
+    return None
+
+
+def _safe_tensor_float(value: torch.Tensor | None) -> float:
+    if value is None:
+        return float("nan")
+    return _safe_float(value.detach().cpu().item(), default=float("nan"))
+
+
+def _curriculum_stage_index(stage_name: str) -> float:
+    return float({"recon_warmup": 0, "transition": 1, "main": 2}.get(stage_name, -1))
 
 
 class _NullRun:
@@ -388,6 +516,11 @@ class SS3DMPriorTrainer:
         self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         set_global_seed(self.seed, device=self.device)
         self.amp_enabled = bool(train_config.get("amp", False)) and self.device.type == "cuda"
+        self.grad_accum_steps = max(int(train_config.get("grad_accum_steps", 1) or 1), 1)
+        ema_cfg = train_config.get("ema", {}) or {}
+        self.ema_enabled = bool(ema_cfg.get("enable", False))
+        self.ema_decay = float(ema_cfg.get("decay", 0.999))
+        self.ema_use_for_eval = bool(ema_cfg.get("use_for_eval", self.ema_enabled))
 
         self.datasets = build_datasets(
             patch_index_path=patch_index_path,
@@ -397,6 +530,14 @@ class SS3DMPriorTrainer:
             seed=self.seed,
         )
         self.model_type = str(model_config.get("model", {}).get("model_type", "legacy_v1")).strip().lower()
+        self.is_hybrid_v2_family = self.model_type in {
+            "hybrid_v2",
+            "hybrid_v2_wide",
+            "cross_attention_hybrid_v10",
+            "v10_cross_attention_hybrid",
+            "latent_flow_hybrid_v11",
+            "v11_latent_flow_hybrid",
+        }
         hard_sampling_cfg = train_config.get("hard_example_sampling", {}) or {}
         train_sampler = _build_hard_example_sampler(
             self.datasets.train_dataset.records,
@@ -422,6 +563,16 @@ class SS3DMPriorTrainer:
         )
 
         self.model = LocalPatchDenoiser(**model_config["model"]).to(self.device)
+        self.model_total_params = int(sum(parameter.numel() for parameter in self.model.parameters()))
+        self.model_trainable_params = int(
+            sum(parameter.numel() for parameter in self.model.parameters() if parameter.requires_grad)
+        )
+        print(
+            f"[trainer] model_type={self.model_type} "
+            f"model_total_params={self.model_total_params} "
+            f"model_trainable_params={self.model_trainable_params}",
+            flush=True,
+        )
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
             lr=float(train_config.get("lr", 1e-3)),
@@ -439,12 +590,14 @@ class SS3DMPriorTrainer:
         else:
             raise ValueError(f"Unsupported lr_scheduler: {scheduler_name}")
         self.scaler = torch.amp.GradScaler(device="cuda", enabled=self.amp_enabled)
+        self.ema = ExponentialMovingAverage(self.model, decay=self.ema_decay) if self.ema_enabled else None
 
         self.best_metrics = {
             "best_recon": float("inf"),
             "best_gain": float("-inf"),
             "best_composite": float("-inf"),
             "best_visibility": float("-inf"),
+            "best_paper": float("-inf"),
         }
         self.start_epoch = 0
         self.global_step = 0
@@ -459,6 +612,18 @@ class SS3DMPriorTrainer:
             self.start_epoch = int(payload.get("epoch", 0)) + 1
             self.global_step = int(payload.get("global_step", 0))
             self.best_metrics.update(payload.get("best_metrics", {}))
+            if self.ema is not None and isinstance(payload.get("ema_state_dict"), dict):
+                self.ema.load_state_dict(payload["ema_state_dict"])
+            # optimizer.load_state_dict overwrites param_groups[*]['lr'] with
+            # the saved (usually cosine-decayed) value, and CosineAnnealingLR's
+            # first step() snapshots the current lr rather than base_lrs when
+            # last_epoch hits 0 — the combined effect pins lr at the saved
+            # floor forever. Reset lr to the new train_config value so the
+            # fresh scheduler actually controls the resumed schedule.
+            configured_lr = float(train_config.get("lr", 1e-3))
+            for group in self.optimizer.param_groups:
+                group["lr"] = configured_lr
+                group["initial_lr"] = configured_lr
 
         self.wandb_module, self.wandb_run = _init_wandb(train_config, self.output_dir, run_name)
         self.visual_dir = self.output_dir / "visualizations"
@@ -470,13 +635,40 @@ class SS3DMPriorTrainer:
             encoding="utf-8",
         )
         self.is_whole_car_run = _is_effectively_whole_car_run(run_metadata)
+        self.total_epochs = int(self.train_config.get("epochs", 1))
+        self.epoch_visualization_interval = max(
+            int(self.train_config.get("epoch_visualization_interval_epochs", 5)),
+            1,
+        )
         self.step_visual_examples = self._build_step_visual_examples()
+
+    def _checkpoint_extra_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "ema_enabled": self.ema_enabled,
+            "ema_use_for_eval": self.ema_use_for_eval,
+        }
+        if self.ema is not None:
+            payload["ema_state_dict"] = self.ema.state_dict()
+        return payload
+
+    @contextmanager
+    def _evaluation_model_scope(self):
+        if self.ema is not None and self.ema_use_for_eval:
+            self.ema.apply_to(self.model)
+            try:
+                yield
+            finally:
+                self.ema.restore(self.model)
+        else:
+            yield
 
     def _move_batch_to_device(self, batch: dict[str, Any]) -> dict[str, Any]:
         moved = {}
         for key, value in batch.items():
             if isinstance(value, torch.Tensor):
                 moved[key] = value.to(self.device)
+            elif isinstance(value, list) and value and all(isinstance(item, torch.Tensor) for item in value):
+                moved[key] = [item.to(self.device) for item in value]
             else:
                 moved[key] = value
         return moved
@@ -494,6 +686,10 @@ class SS3DMPriorTrainer:
             clean_points=batch["clean_points"].float(),
             clean_normals=batch["clean_normals"].float(),
             query_points_all=batch.get("query_points_all").float() if batch.get("query_points_all") is not None else None,
+            visible_clean_points=batch.get("visible_clean_points"),
+            visible_clean_normals=batch.get("visible_clean_normals"),
+            hidden_clean_points=batch.get("hidden_clean_points"),
+            hidden_clean_normals=batch.get("hidden_clean_normals"),
         )
         losses = compute_patch_losses(outputs, batch, loss_weights or self.model_config.get("loss_weights", {}))
         return outputs, losses
@@ -518,9 +714,7 @@ class SS3DMPriorTrainer:
             return False
         if "intrinsic_difficulty" in metric_name and effective_weights.get("intrinsic_difficulty_loss", 0.0) <= 0.0:
             return False
-        if (
-            "occupancy" in metric_name or "free_space" in metric_name or "visible" in metric_name
-        ) and max(
+        if ("occupancy" in metric_name or "free_space" in metric_name) and max(
             effective_weights.get("occupancy_bce_loss", 0.0),
             effective_weights.get("free_space_violation_loss", 0.0),
         ) <= 0.0:
@@ -530,7 +724,18 @@ class SS3DMPriorTrainer:
             effective_weights.get("prototype_diversity_loss", 0.0),
         ) <= 0.0:
             return False
+        if "latent_flow_matching" in metric_name and effective_weights.get("latent_flow_matching_loss", 0.0) <= 0.0:
+            return False
         if metric_name.endswith("retrieval_top1_cross_sequence") and self.is_whole_car_run:
+            return False
+        # In whole-car runs each sample is its own sequence, so top-5 retrieval
+        # saturates to 1.0 within a handful of epochs and stops carrying signal.
+        # The self-aligned variants also plateau almost immediately.
+        if self.is_whole_car_run and (
+            metric_name.endswith("retrieval_top5_nonself")
+            or metric_name.endswith("retrieval_top5_self_aligned")
+            or metric_name.endswith("retrieval_top1_self_aligned")
+        ):
             return False
         return True
 
@@ -538,15 +743,21 @@ class SS3DMPriorTrainer:
         ordered = [
             "recon_chamfer_loss",
             "recon_normal_loss",
+            "nearest_neighbor_l1_loss",
+            "reverse_nearest_neighbor_l1_loss",
             "point_defect_loss",
             "corruption_score_loss",
             "intrinsic_difficulty_loss",
             "occupancy_bce_loss",
             "free_space_violation_loss",
+            "hidden_completion_chamfer_loss",
+            "visible_recon_chamfer_loss",
             "vq_commitment_loss",
             "prototype_diversity_loss",
             "latent_align_loss",
             "retrieval_align_loss",
+            "latent_flow_matching_loss",
+            "symmetry_consistency_loss",
         ]
         return [key for key in ordered if effective_weights.get(key, 0.0) > 0.0]
 
@@ -587,20 +798,35 @@ class SS3DMPriorTrainer:
         payload: dict[str, float] = {}
         payload["train_step/total_loss"] = _safe_mean(stats["total_loss"][-interval:])
         payload["train_step/denoise_gain_chamfer"] = _safe_mean(stats["denoise_gain_chamfer"][-interval:])
-        payload["train_step/curriculum_stage_index"] = float({"warmup": 0, "transition": 1, "main": 2}[curriculum_stage])
+        payload["train_step/curriculum_stage_index"] = _curriculum_stage_index(curriculum_stage)
         payload["train_step/lr"] = stats["lr"][-1]
-        payload["train_step/grad_norm"] = stats["grad_norm"][-1]
+        payload["train_step/grad_norm"] = _safe_mean(stats["grad_norm"][-interval:])
         payload["train_step/batch_time"] = stats["batch_time"][-1]
+        payload["train_step/grad_accum_steps"] = float(self.grad_accum_steps)
+        if stats.get("ema_decay"):
+            payload["train_step/ema_decay"] = stats["ema_decay"][-1]
+        for metric_key in [
+            "visible_recon_chamfer_l1",
+            "hidden_completion_chamfer_l1",
+            "visible_recon_normal_cosine",
+            "hidden_completion_gain",
+            "intrinsic_difficulty_calibration_mae",
+            "free_space_fp_rate",
+        ]:
+            if stats.get(metric_key):
+                value = _safe_mean(stats[metric_key][-interval:])
+                if self._metric_should_be_logged(metric_key, value, effective_weights=effective_weights):
+                    payload[f"train_step/{metric_key}"] = value
 
         raw_means = {
             key: _safe_mean(stats[key][-interval:])
             for key in self._active_raw_loss_keys(effective_weights)
             if stats.get(key)
         }
-        for key, value in raw_means.items():
-            if self._metric_should_be_logged(key, value, effective_weights=effective_weights):
-                short_key = key.removesuffix("_loss")
-                payload[f"train_step/loss_raw/{short_key}"] = value
+        # Per-step we only emit the weighted (contribution to total_loss) view.
+        # Raw per-loss means are available at epoch level; carrying both at step
+        # cadence produces redundant panels with identical trajectories scaled
+        # by a constant factor.
         for key, value in _loss_contribution_means(raw_means, effective_weights).items():
             short_key = key.removesuffix("_loss")
             payload[f"train_step/loss_weighted/{short_key}"] = value
@@ -643,6 +869,112 @@ class SS3DMPriorTrainer:
             return np.zeros((0, 3), dtype=np.float32), np.zeros((0,), dtype=np.float32)
         return free_mask, 1.0 / (1.0 + np.exp(-logits[free_mask]))
 
+    def _sample_visibility_metrics(
+        self,
+        *,
+        batch: dict[str, Any],
+        outputs: dict[str, torch.Tensor | None],
+        sample_idx: int,
+    ) -> dict[str, float]:
+        clean_points = batch["clean_points"][sample_idx : sample_idx + 1]
+        clean_normals = batch["clean_normals"][sample_idx : sample_idx + 1]
+        corrupted_points = batch["corrupted_points"][sample_idx : sample_idx + 1]
+        recon_points = outputs["recon_points"][sample_idx : sample_idx + 1]
+        recon_normals = outputs["recon_normals"][sample_idx : sample_idx + 1]
+        visible_clean_points = _sample_optional_tensor(
+            batch.get("visible_clean_points"),
+            sample_idx,
+            device=self.device,
+        )
+        visible_clean_normals = _sample_optional_tensor(
+            batch.get("visible_clean_normals"),
+            sample_idx,
+            device=self.device,
+        )
+        hidden_clean_points = _sample_optional_tensor(
+            batch.get("hidden_clean_points"),
+            sample_idx,
+            device=self.device,
+        )
+        query_logits = (
+            outputs["query_occupancy_logits"][sample_idx : sample_idx + 1]
+            if outputs.get("query_occupancy_logits") is not None
+            else None
+        )
+        query_labels_all = batch["query_labels_all"][sample_idx : sample_idx + 1]
+        query_ignore_mask = batch["query_ignore_mask"][sample_idx : sample_idx + 1]
+        intrinsic_pred = (
+            outputs["intrinsic_difficulty_pred"][sample_idx : sample_idx + 1]
+            if outputs.get("intrinsic_difficulty_pred") is not None
+            else None
+        )
+        intrinsic_target = batch["intrinsic_patch_difficulty_target"][sample_idx : sample_idx + 1]
+        visible_recon_chamfer = (
+            recon_chamfer_l1_or_nan(recon_points, visible_clean_points)
+            if visible_clean_points is not None
+            else float("nan")
+        )
+        visible_recon_normal = (
+            recon_normal_cosine_or_nan(recon_points, recon_normals, visible_clean_points, visible_clean_normals)
+            if visible_clean_points is not None and visible_clean_normals is not None
+            else float("nan")
+        )
+        hidden_completion_chamfer = (
+            recon_chamfer_l1_or_nan(recon_points, hidden_clean_points)
+            if hidden_clean_points is not None
+            else float("nan")
+        )
+        hidden_completion_gain = (
+            hidden_completion_gain_or_nan(corrupted_points, recon_points, hidden_clean_points)
+            if hidden_clean_points is not None
+            else float("nan")
+        )
+        occupancy_value = (
+            occupancy_iou_visible(
+                query_logits.detach().cpu(),
+                query_labels_all.detach().cpu(),
+                query_ignore_mask.detach().cpu(),
+            )
+            if query_logits is not None and int(query_labels_all.numel()) > 0
+            else float("nan")
+        )
+        free_space_violation_value = (
+            free_space_violation_rate(
+                query_logits.detach().cpu(),
+                query_labels_all.detach().cpu(),
+                query_ignore_mask.detach().cpu(),
+            )
+            if query_logits is not None and int(query_labels_all.numel()) > 0
+            else float("nan")
+        )
+        free_space_fp_value = (
+            free_space_fp_rate(
+                query_logits.detach().cpu(),
+                query_labels_all.detach().cpu(),
+                query_ignore_mask.detach().cpu(),
+            )
+            if query_logits is not None and int(query_labels_all.numel()) > 0
+            else float("nan")
+        )
+        intrinsic_calibration = (
+            intrinsic_difficulty_calibration_mae(
+                intrinsic_pred.detach().cpu(),
+                intrinsic_target.detach().cpu(),
+            )
+            if intrinsic_pred is not None
+            else float("nan")
+        )
+        return {
+            "visible_recon_chamfer_l1": visible_recon_chamfer,
+            "hidden_completion_chamfer_l1": hidden_completion_chamfer,
+            "visible_recon_normal_cosine": visible_recon_normal,
+            "hidden_completion_gain": hidden_completion_gain,
+            "intrinsic_difficulty_calibration_mae": intrinsic_calibration,
+            "free_space_fp_rate": free_space_fp_value,
+            "occupancy_iou_visible": occupancy_value,
+            "free_space_violation_rate": free_space_violation_value,
+        }
+
     def _render_v2_patch_artifacts(
         self,
         *,
@@ -651,6 +983,31 @@ class SS3DMPriorTrainer:
     ) -> dict[str, Path]:
         if example.get("query_points_all") is None:
             return {}
+        query_points_all = np.asarray(example.get("query_points_all"), dtype=np.float32)
+        visible_clean_points = np.asarray(
+            example.get("visible_clean_points", np.zeros((0, 3), dtype=np.float32)),
+            dtype=np.float32,
+        )
+        hidden_clean_points = np.asarray(
+            example.get("hidden_clean_points", np.zeros((0, 3), dtype=np.float32)),
+            dtype=np.float32,
+        )
+        free_query_points = np.asarray(
+            example.get("free_query_points", np.zeros((0, 3), dtype=np.float32)),
+            dtype=np.float32,
+        )
+        unknown_query_points = np.asarray(
+            example.get("unknown_query_points", np.zeros((0, 3), dtype=np.float32)),
+            dtype=np.float32,
+        )
+        surface_query_points = np.asarray(
+            example.get("surface_query_points", np.zeros((0, 3), dtype=np.float32)),
+            dtype=np.float32,
+        )
+        has_semantic_queries = bool(
+            len(surface_query_points) > 0 or len(free_query_points) > 0 or len(unknown_query_points) > 0
+        )
+        has_visibility_semantics = bool(len(visible_clean_points) > 0 or len(hidden_clean_points) > 0)
         info_lines = [
             f"town: {example['town_id']}",
             f"sequence: {example['sequence_id']}",
@@ -661,22 +1018,13 @@ class SS3DMPriorTrainer:
             f"intrinsic_target: {example.get('intrinsic_target', float('nan')):.4f}",
             f"intrinsic_pred: {example.get('intrinsic_pred', float('nan')):.4f}",
         ]
-        visibility_path = render_visibility_panel(
-            clean_points=example["clean_points"],
-            observed_points=example["observed_points"],
-            surface_query_points=example.get("surface_query_points", np.zeros((0, 3), dtype=np.float32)),
-            free_query_points=example.get("free_query_points", np.zeros((0, 3), dtype=np.float32)),
-            unknown_query_points=example.get("unknown_query_points", np.zeros((0, 3), dtype=np.float32)),
-            info_lines=info_lines,
-            output_path=output_dir / f"{example['patch_id']}_visibility_panel.png",
-        )
         free_mask, free_scores = self._free_space_violation_scores(
             example.get("query_occupancy_logits"),
             example.get("query_labels_all"),
             example.get("query_ignore_mask"),
         )
         free_points = (
-            np.asarray(example["query_points_all"], dtype=np.float32)[free_mask]
+            query_points_all[free_mask]
             if isinstance(free_mask, np.ndarray) and free_mask.size
             else np.zeros((0, 3), dtype=np.float32)
         )
@@ -702,10 +1050,67 @@ class SS3DMPriorTrainer:
             ],
             output_path=output_dir / f"{example['patch_id']}_hybrid_reconstruction_panel.png",
         )
-        return {
-            "visibility_panel": visibility_path,
+        outputs: dict[str, Path] = {
             "hybrid_reconstruction_panel": hybrid_path,
         }
+        # Panels are rendered when the underlying semantics are actually populated;
+        # empty caches fall through via the data-presence guards below.
+        if has_semantic_queries:
+            outputs["visibility_panel"] = render_visibility_panel(
+                clean_points=example["clean_points"],
+                observed_points=example["observed_points"],
+                surface_query_points=surface_query_points,
+                free_query_points=free_query_points,
+                unknown_query_points=unknown_query_points,
+                info_lines=info_lines,
+                output_path=output_dir / f"{example['patch_id']}_visibility_panel.png",
+            )
+        if has_visibility_semantics:
+            outputs["visible_vs_hidden_panel"] = render_visible_vs_hidden_panel(
+                observed_points=example["observed_points"],
+                clean_points=example["clean_points"],
+                visible_clean_points=visible_clean_points,
+                hidden_clean_points=hidden_clean_points,
+                recon_points=example["recon_points"],
+                info_lines=[
+                    f"patch: {example['patch_id']}",
+                    f"visible_recon_chamfer: {example.get('visible_recon_chamfer_l1', float('nan')):.4f}",
+                    f"hidden_completion_chamfer: {example.get('hidden_completion_chamfer_l1', float('nan')):.4f}",
+                    f"hidden_completion_gain: {example.get('hidden_completion_gain', float('nan')):.4f}",
+                ],
+                output_path=output_dir / f"{example['patch_id']}_visible_vs_hidden_panel.png",
+            )
+        if len(free_points) > 0 or example.get("free_space_hard_negatives") is not None:
+            outputs["free_space_error_panel"] = render_free_space_error_panel(
+                corrupted_points=example["corrupted_points"],
+                recon_points=example["recon_points"],
+                clean_points=example["clean_points"],
+                free_query_points=free_points,
+                free_query_violation_scores=free_scores,
+                free_space_hard_negatives=example.get("free_space_hard_negatives"),
+                info_lines=[
+                    f"patch: {example['patch_id']}",
+                    f"free_space_violation_rate: {example.get('free_space_violation_rate', float('nan')):.4f}",
+                    f"free_space_fp_rate: {example.get('free_space_fp_rate', float('nan')):.4f}",
+                    f"hard_negative_count: {example.get('free_space_hard_negative_count', float('nan')):.0f}",
+                ],
+                output_path=output_dir / f"{example['patch_id']}_free_space_error_panel.png",
+            )
+        if np.isfinite(float(example.get("intrinsic_pred", float("nan")))) or np.isfinite(
+            float(example.get("intrinsic_target", float("nan")))
+        ):
+            outputs["difficulty_calibration_panel"] = render_difficulty_calibration_panel(
+                predicted=np.asarray([example.get("intrinsic_pred", float("nan"))], dtype=np.float32),
+                target=np.asarray([example.get("intrinsic_target", float("nan"))], dtype=np.float32),
+                info_lines=[
+                    f"patch: {example['patch_id']}",
+                    f"intrinsic_pred: {example.get('intrinsic_pred', float('nan')):.4f}",
+                    f"intrinsic_target: {example.get('intrinsic_target', float('nan')):.4f}",
+                    f"calibration_mae: {example.get('intrinsic_difficulty_calibration_mae', float('nan')):.4f}",
+                ],
+                output_path=output_dir / f"{example['patch_id']}_difficulty_calibration_panel.png",
+            )
+        return outputs
 
     def _select_sequence_ids_for_visualization(
         self,
@@ -805,7 +1210,7 @@ class SS3DMPriorTrainer:
                 if self.wandb_module is not None:
                     patch_id = batch["patch_id"][0]
                     logged_images[f"viz_main_step/comparison/{patch_id}"] = self.wandb_module.Image(str(triptych_path))
-                if self.model_type == "hybrid_v2" and batch["query_points_all"].shape[1] > 0:
+                if self.is_hybrid_v2_family and batch["query_points_all"].shape[1] > 0:
                     intrinsic_pred = outputs["intrinsic_difficulty_pred"]
                     example = {
                         "town_id": batch["town_id"][0],
@@ -834,6 +1239,14 @@ class SS3DMPriorTrainer:
                         "unknown_fraction": float(batch["unknown_fraction"][0].detach().cpu()),
                         "intrinsic_target": float(batch["intrinsic_patch_difficulty_target"][0].detach().cpu()),
                         "intrinsic_pred": float(intrinsic_pred[0].detach().cpu()) if intrinsic_pred is not None else float("nan"),
+                        "intrinsic_difficulty_calibration_mae": float(
+                            intrinsic_difficulty_calibration_mae(
+                                intrinsic_pred[0:1].detach().cpu(),
+                                batch["intrinsic_patch_difficulty_target"][0:1].detach().cpu(),
+                            )
+                        )
+                        if intrinsic_pred is not None
+                        else float("nan"),
                         "code_index": int(outputs["code_indices"][0].detach().cpu()) if outputs.get("code_indices") is not None else -1,
                         "prototype_usage_entropy": _safe_float(
                             outputs.get("codebook_stats", {}).get("usage_entropy")
@@ -841,6 +1254,20 @@ class SS3DMPriorTrainer:
                             else None,
                             default=float("nan"),
                         ),
+                        "visible_clean_points": batch["visible_clean_points"][0].detach().cpu().numpy()
+                        if isinstance(batch.get("visible_clean_points"), list)
+                        else batch["visible_clean_points"][0].detach().cpu().numpy(),
+                        "hidden_clean_points": batch["hidden_clean_points"][0].detach().cpu().numpy()
+                        if isinstance(batch.get("hidden_clean_points"), list)
+                        else batch["hidden_clean_points"][0].detach().cpu().numpy(),
+                        "free_space_hard_negatives": batch["free_space_query_hard_negatives"][0].detach().cpu().numpy()
+                        if isinstance(batch.get("free_space_query_hard_negatives"), list)
+                        else (
+                            batch["free_space_query_hard_negatives"][0].detach().cpu().numpy()
+                            if batch.get("free_space_query_hard_negatives") is not None
+                            else np.zeros((0, 3), dtype=np.float32)
+                        ),
+                        **self._sample_visibility_metrics(batch=batch, outputs=outputs, sample_idx=0),
                     }
                     v2_paths = self._render_v2_patch_artifacts(example=example, output_dir=step_dir)
                     if self.wandb_module is not None:
@@ -858,6 +1285,8 @@ class SS3DMPriorTrainer:
 
     def train_one_epoch(self, epoch: int) -> dict[str, float]:
         self.model.train()
+        if hasattr(self.datasets.train_dataset, "set_epoch"):
+            self.datasets.train_dataset.set_epoch(epoch)
         interval = int(self.train_config.get("log_interval", 10))
         stats = defaultdict(list)
         epoch_start = time.time()
@@ -866,24 +1295,29 @@ class SS3DMPriorTrainer:
             self.train_config,
             epoch,
         )
-
+        self.optimizer.zero_grad(set_to_none=True)
         for batch_idx, batch in enumerate(self.train_loader):
             iter_start = time.time()
             batch = self._move_batch_to_device(batch)
-            self.optimizer.zero_grad(set_to_none=True)
             with torch.autocast(device_type=self.device.type, enabled=self.amp_enabled):
                 outputs, losses = self._forward_batch(batch, loss_weights=current_loss_weights)
-            self.scaler.scale(losses["total_loss"]).backward()
-            if self.amp_enabled:
-                self.scaler.unscale_(self.optimizer)
-            grad_clip_norm = float(self.train_config.get("grad_clip_norm", 0.0) or 0.0)
-            if grad_clip_norm > 0.0:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=grad_clip_norm)
-            grad_norm = _safe_grad_norm(self.model.parameters())
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-            self.global_step += 1
-            self._maybe_log_step_visualization(epoch=epoch)
+            self.scaler.scale(losses["total_loss"] / float(self.grad_accum_steps)).backward()
+            should_step = ((batch_idx + 1) % self.grad_accum_steps == 0) or ((batch_idx + 1) == len(self.train_loader))
+            grad_norm = float("nan")
+            if should_step:
+                if self.amp_enabled:
+                    self.scaler.unscale_(self.optimizer)
+                grad_clip_norm = float(self.train_config.get("grad_clip_norm", 0.0) or 0.0)
+                if grad_clip_norm > 0.0:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=grad_clip_norm)
+                grad_norm = _safe_grad_norm(self.model.parameters())
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+                if self.ema is not None:
+                    self.ema.update(self.model)
+                self.optimizer.zero_grad(set_to_none=True)
+                self.global_step += 1
+                self._maybe_log_step_visualization(epoch=epoch)
 
             batch_time = time.time() - iter_start
             chamfer_before = float(
@@ -901,9 +1335,23 @@ class SS3DMPriorTrainer:
                     continue
                 stats[key].append(float(value.detach().cpu()))
             stats["lr"].append(float(self.optimizer.param_groups[0]["lr"]))
-            stats["grad_norm"].append(float(grad_norm))
+            if np.isfinite(grad_norm):
+                stats["grad_norm"].append(float(grad_norm))
             stats["batch_time"].append(float(batch_time))
             stats["denoise_gain_chamfer"].append(batch_gain)
+            batch_visibility_metrics = defaultdict(list)
+            for sample_idx in range(batch["clean_points"].shape[0]):
+                sample_metrics = self._sample_visibility_metrics(batch=batch, outputs=outputs, sample_idx=sample_idx)
+                for key, value in sample_metrics.items():
+                    batch_visibility_metrics[key].append(value)
+            for key, values in batch_visibility_metrics.items():
+                stats[key].append(_safe_mean([float(value) for value in values]))
+            if batch_idx == 0 and hasattr(self.datasets.train_dataset, "current_corruption_severity_scale"):
+                stats["corruption_severity_scale"].append(
+                    float(self.datasets.train_dataset.current_corruption_severity_scale())
+                )
+            if self.ema_enabled:
+                stats["ema_decay"].append(self.ema_decay)
 
             if (batch_idx + 1) % interval == 0:
                 self._log(
@@ -917,8 +1365,12 @@ class SS3DMPriorTrainer:
                 )
 
         train_metrics = {f"train_{key}": _safe_mean(values) for key, values in stats.items()}
+        if hasattr(self.datasets.train_dataset, "current_corruption_severity_scale"):
+            train_metrics["train_corruption_severity_scale"] = float(
+                self.datasets.train_dataset.current_corruption_severity_scale()
+            )
         train_metrics["train_epoch_time"] = float(time.time() - epoch_start)
-        train_metrics["train_curriculum_stage_index"] = float({"warmup": 0, "transition": 1, "main": 2}[curriculum_stage])
+        train_metrics["train_curriculum_stage_index"] = _curriculum_stage_index(curriculum_stage)
         return train_metrics
 
     def validate(self, epoch: int) -> dict[str, float]:
@@ -977,6 +1429,12 @@ class SS3DMPriorTrainer:
                             batch["intrinsic_patch_difficulty_target"].detach().cpu(),
                         )
                     )
+                    metrics_acc["intrinsic_difficulty_calibration_mae"].append(
+                        intrinsic_difficulty_calibration_mae(
+                            intrinsic_pred_raw.detach().cpu(),
+                            batch["intrinsic_patch_difficulty_target"].detach().cpu(),
+                        )
+                    )
                     intrinsic_preds.extend(intrinsic_pred_raw.detach().cpu().reshape(-1).tolist())
                     intrinsic_targets.extend(batch["intrinsic_patch_difficulty_target"].detach().cpu().reshape(-1).tolist())
                 if outputs.get("query_occupancy_logits") is not None and batch["query_points_all"].shape[1] > 0:
@@ -989,6 +1447,13 @@ class SS3DMPriorTrainer:
                     )
                     metrics_acc["free_space_violation_rate"].append(
                         free_space_violation_rate(
+                            outputs["query_occupancy_logits"].detach().cpu(),
+                            batch["query_labels_all"].detach().cpu(),
+                            batch["query_ignore_mask"].detach().cpu(),
+                        )
+                    )
+                    metrics_acc["free_space_fp_rate"].append(
+                        free_space_fp_rate(
                             outputs["query_occupancy_logits"].detach().cpu(),
                             batch["query_labels_all"].detach().cpu(),
                             batch["query_ignore_mask"].detach().cpu(),
@@ -1039,6 +1504,19 @@ class SS3DMPriorTrainer:
                     metrics_acc["recon_chamfer_l1"].append(chamfer_after)
                     metrics_acc["recon_normal_cosine"].append(normal_cos)
                     metrics_acc["denoise_gain_chamfer"].append(gain)
+                    sample_visibility_metrics = self._sample_visibility_metrics(
+                        batch=batch,
+                        outputs=outputs,
+                        sample_idx=sample_idx,
+                    )
+                    for key in [
+                        "visible_recon_chamfer_l1",
+                        "hidden_completion_chamfer_l1",
+                        "visible_recon_normal_cosine",
+                        "hidden_completion_gain",
+                    ]:
+                        value = sample_visibility_metrics[key]
+                        metrics_acc[key].append(value)
                     patch_center = batch["patch_center_world"][sample_idx].detach().cpu().numpy()
                     sequence_map_bank[sequence_id]["patch_centers"].append(patch_center)
                     sequence_map_bank[sequence_id]["pred_scores"].append(float(patch_score_pred_raw[sample_idx].detach().cpu()))
@@ -1110,12 +1588,26 @@ class SS3DMPriorTrainer:
                                     else None,
                                     default=float("nan"),
                                 ),
+                                "visible_clean_points": batch["visible_clean_points"][sample_idx].detach().cpu().numpy()
+                                if isinstance(batch.get("visible_clean_points"), list)
+                                else batch["visible_clean_points"][sample_idx].detach().cpu().numpy(),
+                                "hidden_clean_points": batch["hidden_clean_points"][sample_idx].detach().cpu().numpy()
+                                if isinstance(batch.get("hidden_clean_points"), list)
+                                else batch["hidden_clean_points"][sample_idx].detach().cpu().numpy(),
+                                "free_space_hard_negatives": batch["free_space_query_hard_negatives"][sample_idx].detach().cpu().numpy()
+                                if isinstance(batch.get("free_space_query_hard_negatives"), list)
+                                else (
+                                    batch["free_space_query_hard_negatives"][sample_idx].detach().cpu().numpy()
+                                    if batch.get("free_space_query_hard_negatives") is not None
+                                    else np.zeros((0, 3), dtype=np.float32)
+                                ),
                                 "visible_surface_fraction": float(batch["visible_surface_fraction"][sample_idx].detach().cpu()),
                                 "free_space_fraction": float(batch["free_space_fraction"][sample_idx].detach().cpu()),
                                 "unknown_fraction": float(batch["unknown_fraction"][sample_idx].detach().cpu()),
                                 "gain": float(gain),
                                 "chamfer_before": chamfer_before,
                                 "chamfer_after": chamfer_after,
+                                **sample_visibility_metrics,
                             }
                         )
 
@@ -1218,6 +1710,8 @@ class SS3DMPriorTrainer:
             retrieval_bank_points=retrieval_bank_points,
             retrieval_bank_ids=retrieval_bank_ids,
             prototype_examples=list(prototype_examples_by_code.values())[:6],
+            intrinsic_preds=intrinsic_preds,
+            intrinsic_targets=intrinsic_targets,
         )
         return val_metrics
 
@@ -1232,8 +1726,20 @@ class SS3DMPriorTrainer:
         retrieval_bank_points: list[np.ndarray],
         retrieval_bank_ids: list[str],
         prototype_examples: list[dict[str, Any]],
+        intrinsic_preds: list[float],
+        intrinsic_targets: list[float],
     ) -> None:
         if not patch_examples:
+            return
+        is_final_epoch = (epoch + 1) >= self.total_epochs
+        is_first_epoch = epoch == self.start_epoch
+        interval = self.epoch_visualization_interval
+        if (
+            not is_final_epoch
+            and not is_first_epoch
+            and interval > 1
+            and (epoch % interval) != 0
+        ):
             return
         current_loss_weights, _ = _merge_loss_weights_for_epoch(
             self.model_config.get("loss_weights", {}),
@@ -1274,7 +1780,7 @@ class SS3DMPriorTrainer:
             )
             if self.wandb_module is not None:
                 logged_images[f"viz_main/comparison/{example['patch_id']}"] = self.wandb_module.Image(str(triptych_path))
-            if self.model_type == "hybrid_v2" and example.get("query_points_all") is not None:
+            if self.is_hybrid_v2_family and example.get("query_points_all") is not None:
                 v2_paths = self._render_v2_patch_artifacts(example=example, output_dir=epoch_dir)
                 if self.wandb_module is not None:
                     for image_name, image_path in v2_paths.items():
@@ -1334,10 +1840,26 @@ class SS3DMPriorTrainer:
             )
 
         if prototype_examples:
-            render_prototype_usage_gallery(
+            prototype_gallery_path = render_prototype_usage_gallery(
                 prototype_examples=prototype_examples,
                 output_path=epoch_dir / "prototype_usage_gallery.png",
             )
+            if self.wandb_module is not None:
+                logged_images["viz_main/prototype_usage_gallery"] = self.wandb_module.Image(str(prototype_gallery_path))
+
+        if intrinsic_preds and intrinsic_targets:
+            calibration_path = render_difficulty_calibration_panel(
+                predicted=np.asarray(intrinsic_preds, dtype=np.float32),
+                target=np.asarray(intrinsic_targets, dtype=np.float32),
+                info_lines=[
+                    f"epoch: {epoch}",
+                    f"samples: {len(intrinsic_preds)}",
+                    f"calibration_mae: {intrinsic_difficulty_calibration_mae(torch.tensor(intrinsic_preds), torch.tensor(intrinsic_targets)):.4f}",
+                ],
+                output_path=epoch_dir / "difficulty_calibration_panel.png",
+            )
+            if self.wandb_module is not None:
+                logged_images["viz_main/difficulty_calibration_panel"] = self.wandb_module.Image(str(calibration_path))
 
         if logged_images:
             self._log(logged_images, step=self.global_step)
@@ -1352,6 +1874,7 @@ class SS3DMPriorTrainer:
             global_step=self.global_step,
             best_metrics=self.best_metrics,
             run_config=self.run_metadata,
+            extra_payload=self._checkpoint_extra_payload(),
         )
         save_interval = int(self.train_config.get("save_interval", 1))
         if save_interval > 0 and (epoch + 1) % save_interval == 0:
@@ -1364,6 +1887,7 @@ class SS3DMPriorTrainer:
                 global_step=self.global_step,
                 best_metrics=self.best_metrics,
                 run_config=self.run_metadata,
+                extra_payload=self._checkpoint_extra_payload(),
             )
         recon_metric = val_metrics.get("val_recon_chamfer_l1", float("inf"))
         gain_metric = val_metrics.get("val_denoise_gain_chamfer", float("-inf"))
@@ -1391,6 +1915,20 @@ class SS3DMPriorTrainer:
                 },
             ),
         )
+        paper_score = _score_from_weights(
+            val_metrics,
+            composite_cfg.get(
+                "best_paper_weights",
+                {
+                    "val_denoise_gain_chamfer": 1.0,
+                    "val_recon_chamfer_l1": -1.0,
+                    "val_intrinsic_difficulty_spearman": 0.25,
+                    "val_occupancy_iou_visible": 0.5,
+                    "val_free_space_violation_rate": -0.5,
+                    "val_retrieval_top1_nonself": 0.25,
+                },
+            ),
+        )
         if recon_metric < self.best_metrics["best_recon"]:
             self.best_metrics["best_recon"] = recon_metric
             save_checkpoint(
@@ -1402,6 +1940,7 @@ class SS3DMPriorTrainer:
                 global_step=self.global_step,
                 best_metrics=self.best_metrics,
                 run_config=self.run_metadata,
+                extra_payload=self._checkpoint_extra_payload(),
             )
         if gain_metric > self.best_metrics["best_gain"]:
             self.best_metrics["best_gain"] = gain_metric
@@ -1414,6 +1953,7 @@ class SS3DMPriorTrainer:
                 global_step=self.global_step,
                 best_metrics=self.best_metrics,
                 run_config=self.run_metadata,
+                extra_payload=self._checkpoint_extra_payload(),
             )
         if composite_score > self.best_metrics["best_composite"]:
             self.best_metrics["best_composite"] = composite_score
@@ -1426,6 +1966,7 @@ class SS3DMPriorTrainer:
                 global_step=self.global_step,
                 best_metrics=self.best_metrics,
                 run_config=self.run_metadata,
+                extra_payload=self._checkpoint_extra_payload(),
             )
         if visibility_score > self.best_metrics["best_visibility"]:
             self.best_metrics["best_visibility"] = visibility_score
@@ -1438,6 +1979,20 @@ class SS3DMPriorTrainer:
                 global_step=self.global_step,
                 best_metrics=self.best_metrics,
                 run_config=self.run_metadata,
+                extra_payload=self._checkpoint_extra_payload(),
+            )
+        if paper_score > self.best_metrics["best_paper"]:
+            self.best_metrics["best_paper"] = paper_score
+            save_checkpoint(
+                self.ckpt_dir / "best_paper.pt",
+                model=self.model,
+                optimizer=self.optimizer,
+                scaler=self.scaler,
+                epoch=epoch,
+                global_step=self.global_step,
+                best_metrics=self.best_metrics,
+                run_config=self.run_metadata,
+                extra_payload=self._checkpoint_extra_payload(),
             )
 
     def fit(self) -> dict[str, Any]:
@@ -1453,8 +2008,9 @@ class SS3DMPriorTrainer:
             )
             effective_weights = _effective_loss_weights(current_loss_weights)
             if val_interval > 0 and ((epoch + 1) % val_interval == 0 or epoch == epochs - 1):
-                val_metrics = self.validate(epoch)
-                self.maybe_save_checkpoints(epoch, val_metrics)
+                with self._evaluation_model_scope():
+                    val_metrics = self.validate(epoch)
+                    self.maybe_save_checkpoints(epoch, val_metrics)
             else:
                 val_metrics = {}
                 save_checkpoint(
@@ -1466,6 +2022,7 @@ class SS3DMPriorTrainer:
                     global_step=self.global_step,
                     best_metrics=self.best_metrics,
                     run_config=self.run_metadata,
+                    extra_payload=self._checkpoint_extra_payload(),
                 )
             history_entry = {
                 "epoch": epoch,
@@ -1473,7 +2030,7 @@ class SS3DMPriorTrainer:
                 **self._compact_history_metrics(val_metrics, prefix="val_", effective_weights=effective_weights),
             }
             history.append(history_entry)
-            log_payload = {"epoch/index": epoch, "epoch/curriculum_stage_index": float({"warmup": 0, "transition": 1, "main": 2}[curriculum_stage])}
+            log_payload = {"epoch/index": epoch, "epoch/curriculum_stage_index": _curriculum_stage_index(curriculum_stage)}
             for key, value in train_metrics.items():
                 if not isinstance(value, (int, float)):
                     continue
@@ -1492,6 +2049,10 @@ class SS3DMPriorTrainer:
                     continue
                 if self._metric_should_be_logged(metric_name, value, effective_weights=effective_weights):
                     log_payload[f"epoch/val/{metric_name}"] = value
+            # Raw per-epoch loss means are already emitted above as
+            # epoch/{split}/<loss_name>. Keep only the "contribution to total_loss"
+            # view here (weight * mean) so the wandb run carries one canonical
+            # representation per loss plus a single weighted-contribution group.
             train_raw = {
                 key: float(train_metrics[f"train_{key}"])
                 for key in self._active_raw_loss_keys(effective_weights)
@@ -1502,15 +2063,9 @@ class SS3DMPriorTrainer:
                 for key in self._active_raw_loss_keys(effective_weights)
                 if f"val_{key}" in val_metrics
             }
-            for key, value in train_raw.items():
-                short_key = key.removesuffix("_loss")
-                log_payload[f"epoch/train_loss_raw/{short_key}"] = value
             for key, value in _loss_contribution_means(train_raw, effective_weights).items():
                 short_key = key.removesuffix("_loss")
                 log_payload[f"epoch/train_loss_weighted/{short_key}"] = value
-            for key, value in val_raw.items():
-                short_key = key.removesuffix("_loss")
-                log_payload[f"epoch/val_loss_raw/{short_key}"] = value
             for key, value in _loss_contribution_means(val_raw, effective_weights).items():
                 short_key = key.removesuffix("_loss")
                 log_payload[f"epoch/val_loss_weighted/{short_key}"] = value

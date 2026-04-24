@@ -214,6 +214,7 @@ def build_patch_from_tile(
         source_town_mesh_cache_dir=str(town_mesh_cache.cache_dir),
         source_sequence_observed_cache=str(observed_cache.cache_path),
         metadata=metadata,
+        scale_id=0,
     )
 
 
@@ -325,6 +326,7 @@ def build_patch_from_tile_v2(
         intrinsic_patch_difficulty_target=visibility_bundle.intrinsic_patch_difficulty_target,
         difficulty_components_json=visibility_bundle.difficulty_components_json,
         metadata=metadata,
+        scale_id=0,
     )
 
 
@@ -381,6 +383,8 @@ def build_teacher_patches_for_sequence(
             num_observed_points_raw=sample.num_observed_points_raw,
             num_clean_points=int(len(sample.clean_points)),
             num_observed_points=int(len(sample.observed_points)),
+            scale_id=0,
+            patch_radius_m=float(sample.patch_radius_m),
             teacher_area_local=float(sample.teacher_area_local),
             planarity_hint=float(sample.metadata.get("planarity_hint", 0.0)),
         )
@@ -448,6 +452,8 @@ def build_teacher_patches_for_sequence_v2(
             num_observed_points_raw=sample.num_observed_points_raw,
             num_clean_points=int(len(sample.clean_points)),
             num_observed_points=int(len(sample.observed_points)),
+            scale_id=0,
+            patch_radius_m=float(sample.patch_radius_m),
             teacher_area_local=float(sample.teacher_area_local),
             planarity_hint=float(sample.metadata.get("planarity_hint", 0.0)),
             patch_cache_format_version=2,

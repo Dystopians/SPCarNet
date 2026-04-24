@@ -29,8 +29,8 @@ train:
     main_start_epoch: 2
     occupancy_start_epoch: 2
     intrinsic_start_epoch: 999
-    vq_start_epoch: 2
-    prototype_start_epoch: 2
+    vq_start_epoch: 12
+    prototype_start_epoch: 12
   hard_example_sampling:
     enable: false
     alpha: 1.0

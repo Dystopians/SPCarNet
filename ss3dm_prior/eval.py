@@ -14,6 +14,7 @@ configured_mps_pipe = configure_isolated_mps_pipe_if_needed()
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data._utils.collate import default_collate
 from tqdm.auto import tqdm
@@ -21,13 +22,18 @@ from tqdm.auto import tqdm
 from ss3dm_prior.data.patch_index import read_patch_index_jsonl
 from ss3dm_prior.data.train_dataset import TeacherPatchTrainDataset
 from ss3dm_prior.metrics import (
+    free_space_fp_rate,
     free_space_violation_rate,
+    hidden_completion_gain_or_nan,
+    intrinsic_difficulty_calibration_mae,
     intrinsic_difficulty_spearman,
     occupancy_iou_visible,
     point_defect_mae,
     prototype_usage_entropy,
     recon_chamfer_l1,
+    recon_chamfer_l1_or_nan,
     recon_normal_cosine,
+    recon_normal_cosine_or_nan,
     retrieval_top1_cross_sequence,
     retrieval_top1_nonself,
     retrieval_top1_self_aligned,
@@ -46,9 +52,13 @@ from ss3dm_prior.reporting import (
 from ss3dm_prior.tools.audit_run_protocol import audit_run_protocol
 from ss3dm_prior.utils.io import load_yaml
 from ss3dm_prior.viz.render_patch_panels import (
+    render_difficulty_calibration_panel,
+    render_free_space_error_panel,
     render_hybrid_reconstruction_panel,
     render_patch_triptych,
     render_prototype_usage_gallery,
+    render_stochastic_candidate_gallery,
+    render_visible_vs_hidden_panel,
     render_visibility_panel,
 )
 from ss3dm_prior.viz.render_textured_mesh_panels import render_textured_whole_mesh_triptych
@@ -65,6 +75,7 @@ def _collate_samples(batch: list[dict[str, Any]]) -> dict[str, Any]:
         "corrupted_normals",
         "point_defect_target",
         "corruption_score_target",
+        "surface_support_mask",
         "patch_center_world",
         "surface_query_points",
         "surface_query_labels",
@@ -77,9 +88,14 @@ def _collate_samples(batch: list[dict[str, Any]]) -> dict[str, Any]:
         "camera_support_count",
         "lidar_support_count",
         "visible_surface_fraction",
+        "visible_support_fraction",
+        "hidden_surface_fraction",
         "free_space_fraction",
         "unknown_fraction",
+        "free_space_hard_negative_count",
         "intrinsic_patch_difficulty_target",
+        "patch_radius_m",
+        "scale_id",
     }
     for key in batch[0]:
         values = [sample[key] for sample in batch]
@@ -126,6 +142,37 @@ def _print_progress(message: str) -> None:
     print(message, flush=True)
 
 
+def _move_eval_batch_to_device(batch: dict[str, Any], device: torch.device) -> dict[str, Any]:
+    moved: dict[str, Any] = {}
+    for key, value in batch.items():
+        if isinstance(value, torch.Tensor):
+            moved[key] = value.to(device)
+        elif isinstance(value, list) and value and all(isinstance(item, torch.Tensor) for item in value):
+            moved[key] = [item.to(device) for item in value]
+        else:
+            moved[key] = value
+    return moved
+
+
+def _sample_optional_tensor(
+    value: torch.Tensor | list[torch.Tensor] | None,
+    index: int,
+    *,
+    device: torch.device,
+) -> torch.Tensor | None:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        if index >= len(value) or not isinstance(value[index], torch.Tensor):
+            return None
+        return value[index].to(device).unsqueeze(0)
+    if isinstance(value, torch.Tensor):
+        if value.ndim == 2:
+            return value.to(device).unsqueeze(0)
+        return value[index : index + 1].to(device)
+    return None
+
+
 def _free_query_violation_scores(
     query_occupancy_logits: torch.Tensor | None,
     query_labels_all: torch.Tensor,
@@ -144,6 +191,32 @@ def _free_query_violation_scores(
     if free_scores.shape[0] > expected_count:
         return free_scores[:expected_count].astype(np.float32)
     return None
+
+
+def _candidate_pairwise_diversity(candidate_points: list[torch.Tensor]) -> float:
+    if len(candidate_points) < 2:
+        return float("nan")
+    distances = []
+    for idx in range(len(candidate_points)):
+        for jdx in range(idx + 1, len(candidate_points)):
+            distances.append(recon_chamfer_l1_or_nan(candidate_points[idx], candidate_points[jdx]))
+    finite = [value for value in distances if np.isfinite(value)]
+    return float(np.mean(finite)) if finite else float("nan")
+
+
+def _observed_consistency_score(candidate_points: torch.Tensor, observed_points: torch.Tensor) -> float:
+    if observed_points.shape[1] == 0:
+        return float("nan")
+    return -recon_chamfer_l1_or_nan(candidate_points, observed_points)
+
+
+def _prototype_consistency_score(candidate_latent: torch.Tensor, prototype_latent: torch.Tensor) -> float:
+    cosine = F.cosine_similarity(
+        F.normalize(candidate_latent, dim=-1),
+        F.normalize(prototype_latent, dim=-1),
+        dim=-1,
+    )
+    return float(cosine.detach().cpu().item())
 
 
 def _select_sequence_ids_for_visualization(per_sequence_rows: list[dict[str, Any]]) -> list[tuple[str, str]]:
@@ -253,7 +326,22 @@ def _load_model_from_checkpoint(checkpoint_path: Path, device: torch.device) -> 
     run_config = payload["run_config"]
     model_cfg = run_config["model_config"]
     model = LocalPatchDenoiser(**model_cfg["model"]).to(device)
-    model.load_state_dict(payload["model"])
+    ema_cfg = (run_config.get("train_config", {}) or {}).get("ema", {}) or {}
+    use_ema_for_eval = bool(payload.get("ema_use_for_eval", ema_cfg.get("use_for_eval", ema_cfg.get("enable", False))))
+    if use_ema_for_eval and isinstance(payload.get("ema_state_dict"), dict):
+        state = payload["ema_state_dict"].get("shadow", {}) or {}
+        model_state = model.state_dict()
+        for name, tensor in state.items():
+            if name in model_state:
+                model_state[name] = tensor.to(device=device, dtype=model_state[name].dtype)
+        missing, unexpected = model.load_state_dict(model_state, strict=False)
+        if missing or unexpected:
+            warnings.warn(
+                f"Loaded EMA eval weights with missing={missing} unexpected={unexpected}; continuing with available keys.",
+                stacklevel=2,
+            )
+    else:
+        model.load_state_dict(payload["model"])
     model.eval()
     return model, run_config
 
@@ -298,6 +386,22 @@ def main(argv: list[str] | None = None) -> int:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     _print_progress(f"[eval] loading checkpoint on device={device}")
     model, run_config = _load_model_from_checkpoint(checkpoint_path, device)
+    model_type = str(run_config.get("model_config", {}).get("model", {}).get("model_type", "")).strip().lower()
+    is_stochastic_v11 = model_type in {"latent_flow_hybrid_v11", "v11_latent_flow_hybrid"}
+    stochastic_k_list = sorted(
+        {
+            int(value)
+            for value in run_config.get("model_config", {}).get("model", {}).get("stochastic_eval_k_list", [1, 4, 8])
+            if int(value) > 0
+        }
+    )
+    stochastic_max_k = max(stochastic_k_list) if stochastic_k_list else 0
+    stochastic_flow_steps = int(
+        run_config.get("model_config", {}).get("model", {}).get("stochastic_flow_steps", 8)
+    )
+    stochastic_safe_threshold = float(
+        run_config.get("model_config", {}).get("model", {}).get("stochastic_free_space_safe_threshold", 0.10)
+    )
     _print_progress("[eval] reading test records")
     records = _records_for_test_split(patch_cache_dir / "patch_index.jsonl", args.split_config)
     _print_progress(f"[eval] test_records={len(records)}")
@@ -327,11 +431,14 @@ def main(argv: list[str] | None = None) -> int:
     clean_bank_sequence_ids: list[str] = []
     prototype_code_indices: list[int] = []
     prototype_examples_by_code: dict[int, dict[str, object]] = {}
+    stochastic_metric_bank: dict[int, dict[str, list[float]]] = {
+        k: defaultdict(list) for k in stochastic_k_list
+    }
 
     with torch.no_grad():
         eval_iter = tqdm(loader, total=len(loader), desc="eval batches", dynamic_ncols=True)
         for batch_idx, batch in enumerate(eval_iter, start=1):
-            moved = {key: value.to(device) if isinstance(value, torch.Tensor) else value for key, value in batch.items()}
+            moved = _move_eval_batch_to_device(batch, device)
             outputs = model(
                 corrupted_points=moved["corrupted_points"].float(),
                 corrupted_normals=moved["corrupted_normals"].float(),
@@ -339,6 +446,12 @@ def main(argv: list[str] | None = None) -> int:
                 clean_points=moved["clean_points"].float(),
                 clean_normals=moved["clean_normals"].float(),
                 query_points_all=moved["query_points_all"].float(),
+                visible_clean_points=moved.get("visible_clean_points"),
+                visible_clean_normals=moved.get("visible_clean_normals"),
+                hidden_clean_points=moved.get("hidden_clean_points"),
+                hidden_clean_normals=moved.get("hidden_clean_normals"),
+                sample_latent_candidates_k=stochastic_max_k if is_stochastic_v11 else 0,
+                stochastic_flow_steps=stochastic_flow_steps if is_stochastic_v11 else None,
             )
             point_defect_pred_raw = torch.expm1(torch.clamp(outputs["point_defect_pred"], min=0.0))
             patch_score_pred_raw = torch.expm1(torch.clamp(outputs["patch_score_pred"], min=0.0))
@@ -358,9 +471,38 @@ def main(argv: list[str] | None = None) -> int:
                 recon_points = outputs["recon_points"][sample_idx : sample_idx + 1]
                 recon_normals = outputs["recon_normals"][sample_idx : sample_idx + 1]
                 clean_normals = moved["clean_normals"][sample_idx : sample_idx + 1]
+                visible_clean_points = _sample_optional_tensor(batch.get("visible_clean_points"), sample_idx, device=device)
+                visible_clean_normals = _sample_optional_tensor(batch.get("visible_clean_normals"), sample_idx, device=device)
+                hidden_clean_points = _sample_optional_tensor(batch.get("hidden_clean_points"), sample_idx, device=device)
+                hidden_clean_normals = _sample_optional_tensor(batch.get("hidden_clean_normals"), sample_idx, device=device)
+                free_space_hard_negatives = _sample_optional_tensor(
+                    batch.get("free_space_query_hard_negatives"),
+                    sample_idx,
+                    device=device,
+                )
 
                 chamfer_before = float(recon_chamfer_l1(corrupted_points, clean_points).detach().cpu())
                 chamfer_after = float(recon_chamfer_l1(recon_points, clean_points).detach().cpu())
+                visible_recon_chamfer = (
+                    recon_chamfer_l1_or_nan(recon_points, visible_clean_points)
+                    if visible_clean_points is not None
+                    else float("nan")
+                )
+                hidden_completion_chamfer = (
+                    recon_chamfer_l1_or_nan(recon_points, hidden_clean_points)
+                    if hidden_clean_points is not None
+                    else float("nan")
+                )
+                visible_recon_normal = (
+                    recon_normal_cosine_or_nan(recon_points, recon_normals, visible_clean_points, visible_clean_normals)
+                    if visible_clean_points is not None and visible_clean_normals is not None
+                    else float("nan")
+                )
+                hidden_completion_gain = (
+                    hidden_completion_gain_or_nan(corrupted_points, recon_points, hidden_clean_points)
+                    if hidden_clean_points is not None
+                    else float("nan")
+                )
                 normal_cos = float(recon_normal_cosine(recon_points, recon_normals, clean_points, clean_normals).detach().cpu())
                 denoise_gain = chamfer_before - chamfer_after
                 pred_score = float(patch_score_pred_raw[sample_idx].detach().cpu())
@@ -378,8 +520,13 @@ def main(argv: list[str] | None = None) -> int:
                 camera_support = _safe_float(moved["camera_support_count"][sample_idx].detach().cpu())
                 lidar_support = _safe_float(moved["lidar_support_count"][sample_idx].detach().cpu())
                 visible_surface_fraction = _safe_float(moved["visible_surface_fraction"][sample_idx].detach().cpu())
+                visible_support_fraction = _safe_float(moved["visible_support_fraction"][sample_idx].detach().cpu())
+                hidden_surface_fraction = _safe_float(moved["hidden_surface_fraction"][sample_idx].detach().cpu())
                 free_space_fraction = _safe_float(moved["free_space_fraction"][sample_idx].detach().cpu())
                 unknown_fraction = _safe_float(moved["unknown_fraction"][sample_idx].detach().cpu())
+                free_space_hard_negative_count = _safe_float(
+                    moved["free_space_hard_negative_count"][sample_idx].detach().cpu()
+                )
                 intrinsic_target = _safe_float(moved["intrinsic_patch_difficulty_target"][sample_idx].detach().cpu())
                 intrinsic_pred = (
                     _safe_float(outputs["intrinsic_difficulty_pred"][sample_idx].detach().cpu())
@@ -387,6 +534,14 @@ def main(argv: list[str] | None = None) -> int:
                     else float("nan")
                 )
                 intrinsic_abs_error = abs(intrinsic_pred - intrinsic_target) if np.isfinite(intrinsic_pred) and np.isfinite(intrinsic_target) else float("nan")
+                intrinsic_calibration_mae = (
+                    intrinsic_difficulty_calibration_mae(
+                        outputs["intrinsic_difficulty_pred"][sample_idx : sample_idx + 1].detach().cpu(),
+                        moved["intrinsic_patch_difficulty_target"][sample_idx : sample_idx + 1].detach().cpu(),
+                    )
+                    if outputs.get("intrinsic_difficulty_pred") is not None
+                    else float("nan")
+                )
                 query_logits = (
                     outputs["query_occupancy_logits"][sample_idx : sample_idx + 1]
                     if outputs.get("query_occupancy_logits") is not None
@@ -412,6 +567,15 @@ def main(argv: list[str] | None = None) -> int:
                     if query_logits is not None and int(query_labels_all.numel()) > 0
                     else float("nan")
                 )
+                free_space_fp_value = (
+                    free_space_fp_rate(
+                        query_logits.detach().cpu(),
+                        query_labels_all.detach().cpu(),
+                        query_ignore_mask.detach().cpu(),
+                    )
+                    if query_logits is not None and int(query_labels_all.numel()) > 0
+                    else float("nan")
+                )
                 code_index = (
                     int(outputs["code_indices"][sample_idx].detach().cpu().item())
                     if outputs.get("code_indices") is not None
@@ -430,6 +594,10 @@ def main(argv: list[str] | None = None) -> int:
                     "patch_score_pred": pred_score,
                     "score_abs_error": score_abs_error,
                     "recon_chamfer_l1": chamfer_after,
+                    "visible_recon_chamfer_l1": visible_recon_chamfer,
+                    "hidden_completion_chamfer_l1": hidden_completion_chamfer,
+                    "visible_recon_normal_cosine": visible_recon_normal,
+                    "hidden_completion_gain": hidden_completion_gain,
                     "recon_normal_cosine": normal_cos,
                     "denoise_gain_chamfer": denoise_gain,
                     "point_defect_mae": defect_mae,
@@ -437,18 +605,125 @@ def main(argv: list[str] | None = None) -> int:
                     "chamfer_after": chamfer_after,
                     "occupancy_iou_visible": occupancy_iou_value,
                     "free_space_violation_rate": free_space_violation_value,
+                    "free_space_fp_rate": free_space_fp_value,
                     "visible_support_count": visible_support_count,
                     "camera_support_count": camera_support,
                     "lidar_support_count": lidar_support,
                     "visible_surface_fraction": visible_surface_fraction,
+                    "visible_support_fraction": visible_support_fraction,
+                    "hidden_surface_fraction": hidden_surface_fraction,
                     "free_space_fraction": free_space_fraction,
                     "unknown_fraction": unknown_fraction,
+                    "free_space_hard_negative_count": free_space_hard_negative_count,
+                    "scale_id": _safe_float(moved["scale_id"][sample_idx].detach().cpu()),
+                    "patch_radius_m": _safe_float(moved["patch_radius_m"][sample_idx].detach().cpu()),
                     "intrinsic_difficulty_target": intrinsic_target,
                     "intrinsic_difficulty_pred": intrinsic_pred,
                     "intrinsic_difficulty_abs_error": intrinsic_abs_error,
+                    "intrinsic_difficulty_calibration_mae": intrinsic_calibration_mae,
                     "code_index": code_index,
-                    "hidden_completion_score": max(denoise_gain, 0.0) * max(unknown_fraction, 0.0),
+                    "hidden_completion_score": max(-hidden_completion_chamfer if np.isfinite(hidden_completion_chamfer) else 0.0, 0.0)
+                    + max(hidden_surface_fraction, 0.0),
                 }
+                candidate_gallery_points: list[np.ndarray] = []
+                candidate_gallery_info: list[list[str]] = []
+                if is_stochastic_v11 and outputs.get("stochastic_candidate_recon_points") is not None:
+                    candidate_points_tensor = outputs["stochastic_candidate_recon_points"][sample_idx]
+                    candidate_latents_tensor = outputs["stochastic_candidate_latents"][sample_idx]
+                    candidate_logits_tensor = (
+                        outputs["stochastic_candidate_query_occupancy_logits"][sample_idx]
+                        if outputs.get("stochastic_candidate_query_occupancy_logits") is not None
+                        else None
+                    )
+                    hidden_chamfers: list[float] = []
+                    free_space_rates: list[float] = []
+                    rerank_scores: list[float] = []
+                    for candidate_idx in range(candidate_points_tensor.shape[0]):
+                        candidate_points = candidate_points_tensor[candidate_idx : candidate_idx + 1]
+                        candidate_hidden = (
+                            recon_chamfer_l1_or_nan(candidate_points, hidden_clean_points)
+                            if hidden_clean_points is not None
+                            else float("nan")
+                        )
+                        candidate_visible = (
+                            recon_chamfer_l1_or_nan(candidate_points, visible_clean_points)
+                            if visible_clean_points is not None
+                            else float("nan")
+                        )
+                        observed_score = _observed_consistency_score(
+                            candidate_points,
+                            moved["observed_points"][sample_idx : sample_idx + 1],
+                        )
+                        free_score = (
+                            free_space_violation_rate(
+                                candidate_logits_tensor[candidate_idx : candidate_idx + 1].detach().cpu(),
+                                query_labels_all.detach().cpu(),
+                                query_ignore_mask.detach().cpu(),
+                            )
+                            if candidate_logits_tensor is not None and int(query_labels_all.numel()) > 0
+                            else float("nan")
+                        )
+                        prototype_score = _prototype_consistency_score(
+                            candidate_latents_tensor[candidate_idx : candidate_idx + 1],
+                            outputs["quantized_latent"][sample_idx : sample_idx + 1],
+                        )
+                        weights = outputs.get("stochastic_rerank_weights") if isinstance(outputs.get("stochastic_rerank_weights"), dict) else {}
+                        rerank = (
+                            float(weights.get("observed_consistency", 0.20)) * _safe_float(observed_score, default=0.0)
+                            + float(weights.get("visible_consistency", -0.35)) * _safe_float(candidate_visible, default=0.0)
+                            + float(weights.get("free_space_penalty", -0.30)) * _safe_float(free_score, default=0.0)
+                            + float(weights.get("prototype_consistency", 0.15)) * _safe_float(prototype_score, default=0.0)
+                        )
+                        hidden_chamfers.append(candidate_hidden)
+                        free_space_rates.append(free_score)
+                        rerank_scores.append(rerank)
+                        if candidate_idx < 4:
+                            candidate_gallery_points.append(candidate_points[0].detach().cpu().numpy())
+                            candidate_gallery_info.append(
+                                [
+                                    f"candidate: {candidate_idx + 1}",
+                                    f"hidden_chamfer: {_safe_float(candidate_hidden):.4f}",
+                                    f"free_space: {_safe_float(free_score):.4f}",
+                                    f"rerank: {_safe_float(rerank):.4f}",
+                                ]
+                            )
+                    for k in stochastic_k_list:
+                        limited_hidden = [value for value in hidden_chamfers[:k] if np.isfinite(value)]
+                        limited_free = free_space_rates[:k]
+                        limited_points = [
+                            candidate_points_tensor[idx : idx + 1]
+                            for idx in range(min(k, candidate_points_tensor.shape[0]))
+                        ]
+                        reranked_idx = int(np.nanargmax(np.asarray(rerank_scores[:k], dtype=np.float64))) if rerank_scores[:k] else 0
+                        safe_hidden = [
+                            hidden_chamfers[idx]
+                            for idx in range(min(k, len(hidden_chamfers)))
+                            if np.isfinite(hidden_chamfers[idx]) and np.isfinite(limited_free[idx]) and limited_free[idx] <= stochastic_safe_threshold
+                        ]
+                        stochastic_metric_bank[k]["best_of_k_hidden_completion"].append(
+                            min(limited_hidden) if limited_hidden else float("nan")
+                        )
+                        stochastic_metric_bank[k]["mean_of_k_hidden_completion"].append(
+                            float(np.mean(limited_hidden)) if limited_hidden else float("nan")
+                        )
+                        stochastic_metric_bank[k]["sample_diversity"].append(
+                            _candidate_pairwise_diversity(limited_points)
+                        )
+                        stochastic_metric_bank[k]["free_space_safe_best_of_k"].append(
+                            min(safe_hidden) if safe_hidden else float("nan")
+                        )
+                        stochastic_metric_bank[k]["reranked_hidden_completion"].append(
+                            hidden_chamfers[reranked_idx] if reranked_idx < len(hidden_chamfers) else float("nan")
+                        )
+                    if stochastic_max_k > 0:
+                        row["best_of_k_hidden_completion"] = stochastic_metric_bank[stochastic_max_k]["best_of_k_hidden_completion"][-1]
+                        row["mean_of_k_hidden_completion"] = stochastic_metric_bank[stochastic_max_k]["mean_of_k_hidden_completion"][-1]
+                        row["sample_diversity"] = stochastic_metric_bank[stochastic_max_k]["sample_diversity"][-1]
+                        row["free_space_safe_best_of_k"] = stochastic_metric_bank[stochastic_max_k]["free_space_safe_best_of_k"][-1]
+                        row["reranked_hidden_completion"] = stochastic_metric_bank[stochastic_max_k]["reranked_hidden_completion"][-1]
+                        row["stochastic_candidate_count"] = float(candidate_points_tensor.shape[0])
+                        row["candidate_gallery_points"] = candidate_gallery_points
+                        row["candidate_gallery_info"] = candidate_gallery_info
                 patch_rows.append(row)
                 sequence_map_bank[sequence_id]["patch_centers"].append(patch_center_world)
                 sequence_map_bank[sequence_id]["actual_gains"].append(denoise_gain)
@@ -545,7 +820,48 @@ def main(argv: list[str] | None = None) -> int:
             "prototype_usage_entropy": retrieval_metrics["prototype_usage_entropy"],
         },
     )
+    if is_stochastic_v11 and stochastic_metric_bank:
+        stochastic_summary: dict[str, dict[str, float]] = {}
+        for k, metric_lists in stochastic_metric_bank.items():
+            stochastic_summary[f"k={k}"] = {
+                metric_name: _safe_float(
+                    np.asarray(
+                        [value for value in values if np.isfinite(value)],
+                        dtype=np.float32,
+                    ).mean()
+                    if any(np.isfinite(value) for value in values)
+                    else float("nan")
+                )
+                for metric_name, values in metric_lists.items()
+            }
+        summary["best_of_k_hidden_completion"] = _safe_float(
+            stochastic_summary.get(f"k={stochastic_max_k}", {}).get("best_of_k_hidden_completion")
+        )
+        summary["mean_of_k_hidden_completion"] = _safe_float(
+            stochastic_summary.get(f"k={stochastic_max_k}", {}).get("mean_of_k_hidden_completion")
+        )
+        summary["sample_diversity"] = _safe_float(
+            stochastic_summary.get(f"k={stochastic_max_k}", {}).get("sample_diversity")
+        )
+        summary["free_space_safe_best_of_k"] = _safe_float(
+            stochastic_summary.get(f"k={stochastic_max_k}", {}).get("free_space_safe_best_of_k")
+        )
+        summary["stochastic_comparison"] = {
+            "deterministic": {
+                "hidden_completion_chamfer_l1": _safe_float(summary.get("hidden_completion_chamfer_l1")),
+                "free_space_violation_rate": _safe_float(summary.get("free_space_violation_rate")),
+            },
+            **stochastic_summary,
+        }
     summary.update(protocol_audit)
+    protocol_summary = protocol_audit.get("protocol_summary", {}) or {}
+    summary["strict_protocol_enabled"] = protocol_summary.get("strict_protocol_enabled")
+    summary["debug_split_enabled"] = protocol_summary.get("debug_split_enabled")
+    summary["debug_override_enabled"] = protocol_summary.get("debug_override_enabled")
+    summary["fallback_split_enabled"] = protocol_summary.get("fallback_split_enabled")
+    summary["train_towns"] = protocol_summary.get("train_towns")
+    summary["val_towns"] = protocol_summary.get("val_towns")
+    summary["test_towns"] = protocol_summary.get("test_towns")
     summary_path = write_summary_json(output_dir / "metrics_summary.json", summary)
     per_town_rows = aggregate_per_group(patch_rows, group_key="town_id")
     per_sequence_rows = aggregate_per_group(patch_rows, group_key="sequence_id")
@@ -557,14 +873,27 @@ def main(argv: list[str] | None = None) -> int:
             "patch_count",
             "sequence_count",
             "recon_chamfer_l1",
+            "visible_recon_chamfer_l1",
+            "hidden_completion_chamfer_l1",
+            "visible_recon_normal_cosine",
+            "hidden_completion_gain",
+            "best_of_k_hidden_completion",
+            "mean_of_k_hidden_completion",
+            "sample_diversity",
+            "free_space_safe_best_of_k",
             "recon_normal_cosine",
             "denoise_gain_chamfer",
             "intrinsic_difficulty_mae",
+            "intrinsic_difficulty_calibration_mae",
             "occupancy_iou_visible",
             "free_space_violation_rate",
+            "free_space_fp_rate",
             "score_mae",
             "point_defect_mae",
             "mean_visible_support",
+            "mean_corruption_score_target",
+            "mean_visible_support_fraction",
+            "mean_hidden_surface_fraction",
             "mean_intrinsic_difficulty",
             "prototype_usage_entropy",
         ],
@@ -576,17 +905,30 @@ def main(argv: list[str] | None = None) -> int:
             "sequence_id",
             "town_id",
             "patch_count",
+            "mean_corruption_score_target",
             "mean_corruption_severity",
             "mean_denoise_gain",
             "denoise_gain_chamfer",
             "recon_chamfer_l1",
+            "visible_recon_chamfer_l1",
+            "hidden_completion_chamfer_l1",
+            "visible_recon_normal_cosine",
+            "hidden_completion_gain",
+            "best_of_k_hidden_completion",
+            "mean_of_k_hidden_completion",
+            "sample_diversity",
+            "free_space_safe_best_of_k",
             "recon_normal_cosine",
             "intrinsic_difficulty_mae",
+            "intrinsic_difficulty_calibration_mae",
             "occupancy_iou_visible",
             "free_space_violation_rate",
+            "free_space_fp_rate",
             "score_mae",
             "point_defect_mae",
             "mean_visible_support",
+            "mean_visible_support_fraction",
+            "mean_hidden_surface_fraction",
             "mean_intrinsic_difficulty",
             "prototype_usage_entropy",
         ],
@@ -607,7 +949,10 @@ def main(argv: list[str] | None = None) -> int:
         if row is None:
             continue
         sample = patch_dataset[row["patch_id"]]
-        sample_device = {key: value.unsqueeze(0).to(device) if isinstance(value, torch.Tensor) else value for key, value in sample.items()}
+        sample_device = {
+            key: value.unsqueeze(0).to(device) if isinstance(value, torch.Tensor) else value
+            for key, value in sample.items()
+        }
         with torch.no_grad():
             outputs = model(
                 corrupted_points=sample_device["corrupted_points"].float(),
@@ -616,6 +961,20 @@ def main(argv: list[str] | None = None) -> int:
                 clean_points=sample_device["clean_points"].float(),
                 clean_normals=sample_device["clean_normals"].float(),
                 query_points_all=sample_device["query_points_all"].float(),
+                visible_clean_points=sample_device.get("visible_clean_points").float()
+                if isinstance(sample_device.get("visible_clean_points"), torch.Tensor)
+                else None,
+                visible_clean_normals=sample_device.get("visible_clean_normals").float()
+                if isinstance(sample_device.get("visible_clean_normals"), torch.Tensor)
+                else None,
+                hidden_clean_points=sample_device.get("hidden_clean_points").float()
+                if isinstance(sample_device.get("hidden_clean_points"), torch.Tensor)
+                else None,
+                hidden_clean_normals=sample_device.get("hidden_clean_normals").float()
+                if isinstance(sample_device.get("hidden_clean_normals"), torch.Tensor)
+                else None,
+                sample_latent_candidates_k=min(4, stochastic_max_k) if is_stochastic_v11 else 0,
+                stochastic_flow_steps=stochastic_flow_steps if is_stochastic_v11 else None,
             )
         code_index = int(outputs["code_indices"][0].detach().cpu().item()) if outputs.get("code_indices") is not None else -1
         prototype_summary_lines = [
@@ -695,6 +1054,73 @@ def main(argv: list[str] | None = None) -> int:
             output_path=patch_panels_dir / f"{gallery_name}__{row['patch_id']}.png",
         )
         qualitative_paths.append(hybrid_path)
+        visible_hidden_path = render_visible_vs_hidden_panel(
+            observed_points=sample["observed_points"].numpy(),
+            clean_points=sample["clean_points"].numpy(),
+            visible_clean_points=sample["visible_clean_points"].numpy(),
+            hidden_clean_points=sample["hidden_clean_points"].numpy(),
+            recon_points=outputs["recon_points"][0].detach().cpu().numpy(),
+            info_lines=[
+                f"gallery: {gallery_name}",
+                f"patch: {row['patch_id']}",
+                f"visible_recon_chamfer: {_safe_float(row.get('visible_recon_chamfer_l1')):.4f}",
+                f"hidden_completion_chamfer: {_safe_float(row.get('hidden_completion_chamfer_l1')):.4f}",
+                f"hidden_completion_gain: {_safe_float(row.get('hidden_completion_gain')):.4f}",
+            ],
+            output_path=patch_panels_dir / f"{gallery_name}__{row['patch_id']}__visible_vs_hidden_panel.png",
+        )
+        qualitative_paths.append(visible_hidden_path)
+        free_space_error_path = render_free_space_error_panel(
+            corrupted_points=sample["corrupted_points"].numpy(),
+            recon_points=outputs["recon_points"][0].detach().cpu().numpy(),
+            clean_points=sample["clean_points"].numpy(),
+            free_query_points=sample["free_query_points"].numpy(),
+            free_query_violation_scores=_free_query_violation_scores(
+                outputs.get("query_occupancy_logits"),
+                sample_device["query_labels_all"],
+                sample_device["query_ignore_mask"],
+                expected_count=int(sample["free_query_points"].shape[0]),
+            ),
+            free_space_hard_negatives=sample.get("free_space_query_hard_negatives").numpy()
+            if isinstance(sample.get("free_space_query_hard_negatives"), torch.Tensor)
+            else np.zeros((0, 3), dtype=np.float32),
+            info_lines=[
+                f"gallery: {gallery_name}",
+                f"patch: {row['patch_id']}",
+                f"free_space_violation_rate: {_safe_float(row.get('free_space_violation_rate')):.4f}",
+                f"free_space_fp_rate: {_safe_float(row.get('free_space_fp_rate')):.4f}",
+                f"hard_negative_count: {_safe_float(sample.get('free_space_hard_negative_count').item() if isinstance(sample.get('free_space_hard_negative_count'), torch.Tensor) else 0.0):.0f}",
+            ],
+            output_path=patch_panels_dir / f"{gallery_name}__{row['patch_id']}__free_space_error_panel.png",
+        )
+        qualitative_paths.append(free_space_error_path)
+        difficulty_panel_path = render_difficulty_calibration_panel(
+            predicted=np.asarray([_safe_float(row.get("intrinsic_difficulty_pred"))], dtype=np.float32),
+            target=np.asarray([_safe_float(row.get("intrinsic_difficulty_target"))], dtype=np.float32),
+            info_lines=[
+                f"gallery: {gallery_name}",
+                f"patch: {row['patch_id']}",
+                f"intrinsic_pred: {_safe_float(row.get('intrinsic_difficulty_pred')):.4f}",
+                f"intrinsic_target: {_safe_float(row.get('intrinsic_difficulty_target')):.4f}",
+                f"calibration_mae: {_safe_float(row.get('intrinsic_difficulty_calibration_mae')):.4f}",
+            ],
+            output_path=patch_panels_dir / f"{gallery_name}__{row['patch_id']}__difficulty_calibration_panel.png",
+        )
+        qualitative_paths.append(difficulty_panel_path)
+        if is_stochastic_v11 and outputs.get("stochastic_candidate_recon_points") is not None:
+            candidate_points = [
+                outputs["stochastic_candidate_recon_points"][0, idx].detach().cpu().numpy()
+                for idx in range(min(4, outputs["stochastic_candidate_recon_points"].shape[1]))
+            ]
+            candidate_gallery_path = render_stochastic_candidate_gallery(
+                corrupted_points=sample["corrupted_points"].numpy(),
+                clean_points=sample["clean_points"].numpy(),
+                hidden_clean_points=sample["hidden_clean_points"].numpy(),
+                candidate_recon_points=candidate_points,
+                candidate_info_lines=row.get("candidate_gallery_info", []) if isinstance(row, dict) else [],
+                output_path=patch_panels_dir / f"{gallery_name}__{row['patch_id']}__stochastic_candidates.png",
+            )
+            qualitative_paths.append(candidate_gallery_path)
         if gallery_name == "best_hidden_completion":
             visibility_path = render_visibility_panel(
                 clean_points=sample["clean_points"].numpy(),
@@ -739,6 +1165,18 @@ def main(argv: list[str] | None = None) -> int:
             output_path=prototype_dir / "prototype_gallery.png",
         )
         qualitative_paths.append(prototype_gallery_path)
+
+    difficulty_eval_path = render_difficulty_calibration_panel(
+        predicted=np.asarray([_safe_float(row.get("intrinsic_difficulty_pred")) for row in patch_rows], dtype=np.float32),
+        target=np.asarray([_safe_float(row.get("intrinsic_difficulty_target")) for row in patch_rows], dtype=np.float32),
+        info_lines=[
+            f"patch_count: {len(patch_rows)}",
+            f"intrinsic_difficulty_calibration_mae: {_safe_float(summary.get('intrinsic_difficulty_calibration_mae')):.4f}",
+            f"intrinsic_difficulty_spearman: {_safe_float(summary.get('intrinsic_difficulty_spearman')):.4f}",
+        ],
+        output_path=output_dir / "difficulty_calibration_panel.png",
+    )
+    qualitative_paths.append(difficulty_eval_path)
 
     report_path = write_report_md(
         output_dir / "report.md",

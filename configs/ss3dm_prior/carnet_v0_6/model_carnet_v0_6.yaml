@@ -1,0 +1,114 @@
+# CarNet_v0.6 — extend v0.4's loss direction with explicit visible/hidden
+# separation and further anti-copy pressure. Architecture stays at v0.2's
+# 37M (v0.3 and v0.5 both confirmed width expansion is net-neutral at best
+# in this architecture; abandon that path).
+#
+# Changes vs v0.4 (which was the proven baseline):
+#
+# 1. Split recon chamfer into explicit visible + hidden supervision.
+#    Previously recon_chamfer acted on the full 2048 clean points and the
+#    visible/hidden balance was controlled only by subset density (~75/25).
+#    With hidden_completion_chamfer at 2.0 on top of recon_chamfer at 1.0,
+#    hidden was over-supervised relative to visible — which explained v0.4's
+#    7% normal-cosine regression on visible points. In v0.6:
+#      recon_chamfer_loss            1.0 -> 0.3   (holistic regularizer only)
+#      hidden_completion_chamfer     2.0 -> 2.0   (unchanged)
+#      visible_recon_chamfer_loss    (new) -> 1.0 (explicit visible supervision)
+#    Net effect: visible gets ~1.3 chamfer gradient share, hidden gets ~2.3.
+#    Both now have dedicated heads and can't cannibalize each other.
+#
+# 2. Symmetry push harder: 0.5 -> 0.8. v0.4 showed symmetry was the most
+#    copy-incompatible prior (car halves must mirror); push further.
+#
+# 3. Corruption harder: dropout 0.25->0.30, jitter 0.06->0.075, hole_radius
+#    0.22->0.26. v0.4's corruption was already 20-30% harder than v0.2's and
+#    that pushed chamfer_before from 0.12 to 0.145. Pushing to ~0.17 should
+#    make the identity-copy solution even less attractive.
+#
+# 4. recon_normal_loss 0.5 -> 0.8 (carried over from v0.5's normal fix).
+#
+# Training schedule: unchanged from v0.2/v0.4/v0.5.
+
+dataset:
+  subsets:
+    - train
+  seed: 0
+
+corruptions:
+  target_corrupted_count: 2048
+  point_dropout: {enabled: true, dropout_ratio: 0.30}
+  gaussian_jitter: {enabled: true, sigma: 0.075, anisotropic: true}
+  normal_noise: {enabled: true, sigma: 0.10, flip_prob: 0.03}
+  local_hole_mask: {enabled: true, max_holes: 3, hole_radius: 0.26}
+  outlier_cluster: {enabled: true, cluster_size: 56, cluster_offset_sigma: 0.30, cluster_spread_sigma: 0.02}
+  density_imbalance: {enabled: true, region_radius: 0.22, thin_probability: 0.5, thin_ratio: 0.50, duplicate_count: 48}
+
+model:
+  model_type: v11_latent_flow_hybrid
+  latent_dim: 384
+  retrieval_dim: 192
+  recon_point_count: 2048
+  use_observed_condition: true
+  use_local_frame: true
+  use_residual_reconstruction: true
+  teacher_encoder_enabled: true
+  occupancy_hidden_dim: 256
+  use_vector_quantization: false
+  num_latent_queries: 32
+  num_cross_attention_layers: 3
+  num_latent_self_attention_layers: 2
+  attention_heads: 6
+  ffn_dim: 768
+  dropout: 0.10
+  token_hidden_dims: [256, 384]
+  decoder_hidden_dims: [768, 384]
+  point_defect_hidden_dims: [384, 192]
+  score_head_hidden_dims: [384, 192]
+  intrinsic_head_hidden_dims: [384, 192]
+  retrieval_head_hidden_dims: [384, 192]
+  occupancy_hidden_dims: [256, 256, 256]
+  latent_flow_hidden_dims: [768, 768]
+  latent_flow_time_embed_dim: 96
+  latent_flow_dropout: 0.05
+  latent_flow_target: hidden_residual
+  stochastic_eval_k_list: [1, 4, 8]
+  stochastic_flow_steps: 8
+  stochastic_free_space_safe_threshold: 0.10
+  stochastic_rerank_weights:
+    observed_consistency: 0.20
+    visible_consistency: -0.35
+    free_space_penalty: -0.30
+    prototype_consistency: 0.15
+  use_symmetry_head: true
+  symmetry_head_hidden_dim: 192
+  symmetry_head_dropout: 0.05
+  use_retrieval_anchors: true
+  num_retrieval_anchors: 3
+  retrieval_anchor_dropout: 0.1
+
+loss_weights:
+  # Full-cloud chamfer demoted — it now serves only as a gentle holistic
+  # regularizer; per-subset losses below do the heavy lifting.
+  recon_chamfer_loss: 0.3
+  recon_normal_loss: 0.8
+  nearest_neighbor_l1_loss: 3.5
+  reverse_nearest_neighbor_l1_loss: 3.5
+  point_defect_loss: 0.3
+  corruption_score_loss: 0.1
+  intrinsic_difficulty_loss: 0.15
+  intrinsic_difficulty_pairwise_weight: 0.25
+  intrinsic_difficulty_pairwise_margin: 0.05
+  occupancy_bce_loss: 0.35
+  free_space_violation_loss: 0.35
+  hidden_completion_chamfer_loss: 2.0
+  # NEW in v0.6 — explicit visible-subset chamfer with independent weight.
+  visible_recon_chamfer_loss: 1.0
+  vq_commitment_loss: 0.0
+  prototype_diversity_loss: 0.0
+  latent_align_loss: 0.01
+  retrieval_align_loss: 0.03
+  latent_flow_matching_loss: 0.10
+  symmetry_consistency_loss: 0.8
+  hard_example_reweight: 0.5
+  hard_weight_source: blend
+  hard_weight_blend_alpha: 0.4

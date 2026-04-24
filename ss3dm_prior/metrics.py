@@ -16,9 +16,29 @@ def _to_tensor(x: torch.Tensor | np.ndarray) -> torch.Tensor:
     return torch.from_numpy(np.asarray(x))
 
 
+def _cdist_fp32_safe(x: torch.Tensor, y: torch.Tensor, *, p: float) -> torch.Tensor:
+    """``torch.cdist`` wrapper that guarantees a fp32 CUDA computation.
+
+    ``cdist_cuda`` has no Half kernel, so metrics called on AMP fp16 outputs
+    fail on GPU. We upcast both inputs to float32 and wrap the call in
+    ``autocast(enabled=False)`` so the outer trainer's autocast context can't
+    demote us back to fp16.
+    """
+    device_type = x.device.type
+    with torch.autocast(device_type=device_type, enabled=False):
+        return torch.cdist(x.float(), y.float(), p=p)
+
+
 def recon_chamfer_l1(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-    dist = torch.cdist(x, y, p=1)
+    dist = _cdist_fp32_safe(x, y, p=1)
     return dist.min(dim=2).values.mean() + dist.min(dim=1).values.mean()
+
+
+def recon_chamfer_l1_or_nan(x: torch.Tensor, y: torch.Tensor) -> float:
+    if x.shape[1] == 0 or y.shape[1] == 0:
+        warnings.warn("recon_chamfer_l1_or_nan undefined for empty point sets.", stacklevel=2)
+        return float("nan")
+    return float(recon_chamfer_l1(x, y).detach().cpu().item())
 
 
 def recon_normal_cosine(
@@ -27,9 +47,21 @@ def recon_normal_cosine(
     clean_points: torch.Tensor,
     clean_normals: torch.Tensor,
 ) -> torch.Tensor:
-    idx = torch.cdist(recon_points, clean_points, p=2).argmin(dim=2)
+    idx = _cdist_fp32_safe(recon_points, clean_points, p=2).argmin(dim=2)
     matched = torch.gather(clean_normals, 1, idx[..., None].expand(-1, -1, clean_normals.shape[-1]))
     return F.cosine_similarity(recon_normals, matched, dim=-1).mean()
+
+
+def recon_normal_cosine_or_nan(
+    recon_points: torch.Tensor,
+    recon_normals: torch.Tensor,
+    clean_points: torch.Tensor,
+    clean_normals: torch.Tensor,
+) -> float:
+    if clean_points.shape[1] == 0 or clean_normals.shape[1] == 0:
+        warnings.warn("recon_normal_cosine_or_nan undefined for empty clean point or normal sets.", stacklevel=2)
+        return float("nan")
+    return float(recon_normal_cosine(recon_points, recon_normals, clean_points, clean_normals).detach().cpu().item())
 
 
 def denoise_gain_chamfer(
@@ -40,6 +72,21 @@ def denoise_gain_chamfer(
     return recon_chamfer_l1(corrupted_points, clean_points) - recon_chamfer_l1(recon_points, clean_points)
 
 
+def hidden_completion_gain_or_nan(
+    corrupted_points: torch.Tensor,
+    recon_points: torch.Tensor,
+    hidden_clean_points: torch.Tensor,
+) -> float:
+    if hidden_clean_points.shape[1] == 0:
+        warnings.warn("hidden_completion_gain_or_nan undefined for empty hidden clean point sets.", stacklevel=2)
+        return float("nan")
+    before = recon_chamfer_l1_or_nan(corrupted_points, hidden_clean_points)
+    after = recon_chamfer_l1_or_nan(recon_points, hidden_clean_points)
+    if not np.isfinite(before) or not np.isfinite(after):
+        return float("nan")
+    return float(before - after)
+
+
 def score_mae(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     return torch.mean(torch.abs(pred - target))
 
@@ -48,14 +95,11 @@ def score_spearman(pred: torch.Tensor, target: torch.Tensor) -> float:
     pred_np = pred.detach().cpu().numpy().reshape(-1)
     target_np = target.detach().cpu().numpy().reshape(-1)
     if len(pred_np) < 2:
-        warnings.warn("score_spearman undefined for fewer than two samples.", stacklevel=2)
         return float("nan")
     if np.allclose(pred_np, pred_np[0]) or np.allclose(target_np, target_np[0]):
-        warnings.warn("score_spearman undefined for constant inputs.", stacklevel=2)
         return float("nan")
     corr = spearmanr(pred_np, target_np).correlation
     if corr is None or np.isnan(corr):
-        warnings.warn("score_spearman undefined for constant inputs.", stacklevel=2)
         return float("nan")
     return float(corr)
 
@@ -100,8 +144,20 @@ def free_space_violation_rate(
     return float(violations.item())
 
 
+def free_space_fp_rate(
+    query_occupancy_logits: torch.Tensor,
+    query_labels_all: torch.Tensor,
+    query_ignore_mask: torch.Tensor | None = None,
+) -> float:
+    return free_space_violation_rate(query_occupancy_logits, query_labels_all, query_ignore_mask)
+
+
 def intrinsic_difficulty_mae(pred: torch.Tensor, target: torch.Tensor) -> float:
     return float(torch.mean(torch.abs(pred.reshape(-1) - target.reshape(-1))).item())
+
+
+def intrinsic_difficulty_calibration_mae(pred: torch.Tensor, target: torch.Tensor) -> float:
+    return intrinsic_difficulty_mae(pred, target)
 
 
 def intrinsic_difficulty_spearman(pred: torch.Tensor, target: torch.Tensor) -> float:

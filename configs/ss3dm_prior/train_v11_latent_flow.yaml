@@ -1,0 +1,63 @@
+train:
+  seed: 0
+  epochs: 60
+  batch_size: 4
+  grad_accum_steps: 2
+  num_workers: 4
+  lr: 0.00015
+  min_lr: 0.00001
+  lr_scheduler: cosine
+  weight_decay: 0.0005
+  grad_clip_norm: 1.0
+  amp: true
+  ema:
+    enable: true
+    decay: 0.999
+    use_for_eval: true
+  log_interval: 20
+  val_interval: 1
+  save_interval: 1
+  wandb_enable: true
+  wandb_project: ss3dm_prior
+  wandb_mode: offline
+  max_visualization_examples: 3
+  fixed_visualization_patch_ids: []
+  step_visualization_interval_steps: 500
+  step_visualization_num_examples: 1
+  step_visualization_patch_ids: []
+  debug_use_all_patches_for_train_val: false
+  allow_debug_split_override: false
+  allow_split_fallback: false
+  debug_val_fraction: 0.2
+  curriculum:
+    recon_warmup_epochs: 2
+    warmup_epochs: 2
+    main_start_epoch: 2
+    occupancy_start_epoch: 2
+    intrinsic_start_epoch: 2
+    vq_start_epoch: 2
+    prototype_start_epoch: 2
+  hard_example_sampling:
+    enable: true
+    alpha: 1.0
+    floor: 1.0
+    power: 1.0
+  checkpoint_selection:
+    best_composite_weights:
+      val_denoise_gain_chamfer: 1.0
+      val_recon_chamfer_l1: -1.0
+      val_visible_recon_chamfer_l1: -0.5
+      val_hidden_completion_chamfer_l1: -0.5
+      val_occupancy_iou_visible: 0.5
+      val_free_space_violation_rate: -0.5
+      val_intrinsic_difficulty_spearman: 0.2
+    best_visibility_weights:
+      val_occupancy_iou_visible: 1.0
+      val_free_space_violation_rate: -1.0
+    best_paper_weights:
+      val_denoise_gain_chamfer: 1.0
+      val_recon_chamfer_l1: -1.0
+      val_intrinsic_difficulty_spearman: 0.25
+      val_occupancy_iou_visible: 0.5
+      val_free_space_violation_rate: -0.5
+      val_retrieval_top1_nonself: 0.25

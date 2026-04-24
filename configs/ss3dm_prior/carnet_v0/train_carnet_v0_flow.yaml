@@ -1,0 +1,77 @@
+# CarNet_v0 flow-matching training config (Phase 1).
+#
+# 60 epochs with EMA + cosine LR + AMP. Flow matching head is active from
+# epoch 6 (after geometry warmup); VQ starts at epoch 12 per the v3.5 -> v4
+# collapse fix; occupancy from epoch 2 so it converges alongside the point
+# loss (cache now supplies real query supervision, v4 cache format).
+
+train:
+  seed: 0
+  epochs: 60
+  batch_size: 8
+  grad_accum_steps: 1
+  num_workers: 4
+  lr: 0.0002
+  min_lr: 0.00002
+  lr_scheduler: cosine
+  weight_decay: 0.0005
+  grad_clip_norm: 1.0
+  amp: true
+  ema:
+    enable: true
+    decay: 0.999
+    use_for_eval: true
+  log_interval: 20
+  val_interval: 1
+  save_interval: 2
+  wandb_enable: true
+  wandb_project: carnet_v0
+  wandb_mode: online
+  # Visualization throttling from the Phase-2 wandb cleanup.
+  epoch_visualization_interval_epochs: 5
+  max_visualization_examples: 2
+  fixed_visualization_patch_ids: []
+  step_visualization_interval_steps: 1000
+  step_visualization_num_examples: 1
+  step_visualization_patch_ids: []
+  debug_use_all_patches_for_train_val: false
+  allow_debug_split_override: false
+  allow_split_fallback: false
+  debug_val_fraction: 0.2
+  curriculum:
+    recon_warmup_epochs: 2
+    warmup_epochs: 2
+    main_start_epoch: 2
+    occupancy_start_epoch: 2
+    intrinsic_start_epoch: 4
+    vq_start_epoch: 12
+    prototype_start_epoch: 12
+    flow_matching_start_epoch: 6
+  hard_example_sampling:
+    enable: true
+    alpha: 1.0
+    floor: 1.0
+    power: 1.0
+  checkpoint_selection:
+    # CarNet_v0 primary metric: best_of_k_hidden_completion_chamfer.
+    # The stochastic rerank metric only lives in eval.py; during training we
+    # fall back to the deterministic K=1 path of the flow head plus the
+    # hidden/visible recon chamfer.
+    best_composite_weights:
+      val_denoise_gain_chamfer: 1.0
+      val_recon_chamfer_l1: -1.0
+      val_visible_recon_chamfer_l1: -0.5
+      val_hidden_completion_chamfer_l1: -0.5
+      val_occupancy_iou_visible: 0.4
+      val_free_space_violation_rate: -0.4
+      val_intrinsic_difficulty_spearman: 0.15
+    best_visibility_weights:
+      val_occupancy_iou_visible: 1.0
+      val_free_space_violation_rate: -1.0
+    best_paper_weights:
+      val_denoise_gain_chamfer: 1.0
+      val_recon_chamfer_l1: -1.0
+      val_hidden_completion_chamfer_l1: -0.5
+      val_occupancy_iou_visible: 0.4
+      val_free_space_violation_rate: -0.4
+      val_retrieval_top1_nonself: 0.15

@@ -1,0 +1,96 @@
+# CarNet_v0 FULL + LiDAR — full stack (A1 + A2 + A3) trained under a
+# LiDAR-realistic corruption pipeline (Phase 3). This is the transfer /
+# generalization variant — aimed at the Semantic-KITTI cars benchmark
+# (zero-shot + light-finetune per D5).
+
+dataset:
+  subsets:
+    - train
+  seed: 0
+
+corruptions:
+  target_corrupted_count: 2048
+  # Classical synthetic corruptions stay on but with reduced magnitude —
+  # LiDAR-realistic types below provide most of the signal.
+  point_dropout: {enabled: true, dropout_ratio: 0.10}
+  gaussian_jitter: {enabled: true, sigma: 0.01, anisotropic: true}
+  normal_noise: {enabled: true, sigma: 0.04, flip_prob: 0.01}
+  local_hole_mask: {enabled: false}
+  outlier_cluster: {enabled: false}
+  density_imbalance: {enabled: false}
+  lidar:
+    scanner:
+      radius: 3.0
+      min_elevation_deg: 5.0
+      max_elevation_deg: 45.0
+    beam_occlusion: {enabled: true, min_cosine: 0.05}
+    incidence_angle_dropout: {enabled: true, power: 3.0, min_keep_probability: 0.05}
+    range_dependent_noise: {enabled: true, base_sigma: 0.005, range_exponent: 2.0, reference_range: 2.0}
+    azimuthal_ring_sparsity: {enabled: true, num_bands: 6, band_width_deg: 4.0}
+
+model:
+  model_type: v11_latent_flow_hybrid
+  latent_dim: 512
+  retrieval_dim: 256
+  recon_point_count: 2048
+  use_observed_condition: true
+  use_local_frame: true
+  use_residual_reconstruction: true
+  teacher_encoder_enabled: true
+  occupancy_hidden_dim: 384
+  use_vector_quantization: true
+  codebook_size: 64
+  vq_commitment_cost: 0.25
+  num_latent_queries: 48
+  num_cross_attention_layers: 4
+  num_latent_self_attention_layers: 2
+  attention_heads: 8
+  ffn_dim: 1024
+  dropout: 0.1
+  token_hidden_dims: [256, 512]
+  decoder_hidden_dims: [1024, 512]
+  point_defect_hidden_dims: [512, 256]
+  score_head_hidden_dims: [512, 256]
+  intrinsic_head_hidden_dims: [512, 256]
+  retrieval_head_hidden_dims: [512, 256]
+  occupancy_hidden_dims: [384, 384, 384]
+  latent_flow_hidden_dims: [1024, 1024]
+  latent_flow_time_embed_dim: 128
+  latent_flow_dropout: 0.1
+  latent_flow_target: hidden_residual
+  stochastic_eval_k_list: [1, 4, 8]
+  stochastic_flow_steps: 16
+  stochastic_free_space_safe_threshold: 0.10
+  stochastic_rerank_weights:
+    observed_consistency: 0.20
+    visible_consistency: -0.35
+    free_space_penalty: -0.30
+    prototype_consistency: 0.15
+  # A2: symmetry head.
+  use_symmetry_head: true
+  symmetry_head_hidden_dim: 256
+  symmetry_head_dropout: 0.05
+  # A3: retrieval-augmented cross-attention.
+  use_retrieval_anchors: true
+  num_retrieval_anchors: 3
+  retrieval_anchor_dropout: 0.1
+
+loss_weights:
+  recon_chamfer_loss: 1.0
+  recon_normal_loss: 0.2
+  point_defect_loss: 0.3
+  corruption_score_loss: 0.1
+  intrinsic_difficulty_loss: 0.2
+  intrinsic_difficulty_pairwise_weight: 0.3
+  intrinsic_difficulty_pairwise_margin: 0.05
+  occupancy_bce_loss: 0.2
+  free_space_violation_loss: 0.2
+  vq_commitment_loss: 0.05
+  prototype_diversity_loss: 0.01
+  latent_align_loss: 0.01
+  retrieval_align_loss: 0.05
+  latent_flow_matching_loss: 0.10
+  symmetry_consistency_loss: 0.15
+  hard_example_reweight: 0.6
+  hard_weight_source: blend
+  hard_weight_blend_alpha: 0.5

@@ -1,0 +1,116 @@
+# CarNet_v0.4 — loss-architecture + corruption-severity probe.
+#
+# Diagnosis from v0.3 (75M) matching v0.2 (37M) on every reconstruction
+# metric: the bottleneck is not capacity, it's that both networks converge
+# to a "corrupted + minor smoothing" copy solution. Evidence: chamfer(recon,
+# clean) plateaus at ~0.092 while chamfer(corrupted, clean) is ~0.12 — the
+# model only removes 23% of the corruption.
+#
+# v0.4 keeps v0.2's architecture bit-for-bit (37M, latent_dim=384, 3+2 attn)
+# and pushes on two knobs instead:
+#
+# 1. Loss weights that fight identity-copy:
+#    hidden_completion_chamfer  0.5  -> 2.0   (hidden has no copy fallback)
+#    symmetry_consistency       0.12 -> 0.5   (car symmetry prior conflicts with copy)
+#    nearest_neighbor_l1        2.0  -> 3.5   (per-point target)
+#    reverse_nearest_neighbor_l1 2.0 -> 3.5   (coverage-side dual)
+#
+# 2. Corruption severity that makes copy itself expensive:
+#    point_dropout.dropout_ratio   0.18 -> 0.25
+#    gaussian_jitter.sigma         0.04 -> 0.06
+#    local_hole_mask.max_holes     2    -> 3
+#    local_hole_mask.hole_radius   0.18 -> 0.22
+#    outlier_cluster.cluster_size  32   -> 48
+#
+# Training config (train_carnet_v0_4.yaml) is identical to v0.2.
+
+dataset:
+  subsets:
+    - train
+  seed: 0
+
+corruptions:
+  target_corrupted_count: 2048
+  point_dropout: {enabled: true, dropout_ratio: 0.25}
+  gaussian_jitter: {enabled: true, sigma: 0.06, anisotropic: true}
+  normal_noise: {enabled: true, sigma: 0.08, flip_prob: 0.02}
+  local_hole_mask: {enabled: true, max_holes: 3, hole_radius: 0.22}
+  outlier_cluster: {enabled: true, cluster_size: 48, cluster_offset_sigma: 0.30, cluster_spread_sigma: 0.02}
+  density_imbalance: {enabled: true, region_radius: 0.22, thin_probability: 0.5, thin_ratio: 0.50, duplicate_count: 48}
+
+model:
+  model_type: v11_latent_flow_hybrid
+  latent_dim: 384
+  retrieval_dim: 192
+  recon_point_count: 2048
+  use_observed_condition: true
+  use_local_frame: true
+  use_residual_reconstruction: true
+  teacher_encoder_enabled: true
+  occupancy_hidden_dim: 256
+  use_vector_quantization: false
+  num_latent_queries: 32
+  num_cross_attention_layers: 3
+  num_latent_self_attention_layers: 2
+  attention_heads: 6
+  ffn_dim: 768
+  dropout: 0.10
+  token_hidden_dims: [256, 384]
+  decoder_hidden_dims: [768, 384]
+  point_defect_hidden_dims: [384, 192]
+  score_head_hidden_dims: [384, 192]
+  intrinsic_head_hidden_dims: [384, 192]
+  retrieval_head_hidden_dims: [384, 192]
+  occupancy_hidden_dims: [256, 256, 256]
+  latent_flow_hidden_dims: [768, 768]
+  latent_flow_time_embed_dim: 96
+  latent_flow_dropout: 0.05
+  latent_flow_target: hidden_residual
+  stochastic_eval_k_list: [1, 4, 8]
+  stochastic_flow_steps: 8
+  stochastic_free_space_safe_threshold: 0.10
+  stochastic_rerank_weights:
+    observed_consistency: 0.20
+    visible_consistency: -0.35
+    free_space_penalty: -0.30
+    prototype_consistency: 0.15
+  use_symmetry_head: true
+  symmetry_head_hidden_dim: 192
+  symmetry_head_dropout: 0.05
+  use_retrieval_anchors: true
+  num_retrieval_anchors: 3
+  retrieval_anchor_dropout: 0.1
+
+loss_weights:
+  recon_chamfer_loss: 1.0
+  recon_normal_loss: 0.5
+  # Per-point direct regression — primary anti-copy signal. v0.2 had 2.0;
+  # bumping +75% makes per-point matching pressure stronger than chamfer's
+  # permissive bidirectional loss.
+  nearest_neighbor_l1_loss: 3.5
+  reverse_nearest_neighbor_l1_loss: 3.5
+  point_defect_loss: 0.3
+  corruption_score_loss: 0.1
+  intrinsic_difficulty_loss: 0.15
+  intrinsic_difficulty_pairwise_weight: 0.25
+  intrinsic_difficulty_pairwise_margin: 0.05
+  occupancy_bce_loss: 0.35
+  free_space_violation_loss: 0.35
+  # Hidden completion pushed hard: corrupted has no useful sample density in
+  # camera-occluded regions, so the "copy input" shortcut does not apply.
+  # Heavy weight on this loss channels gradient into actual reconstruction
+  # rather than the copy basin. v0.2 had 0.5.
+  hidden_completion_chamfer_loss: 2.0
+  vq_commitment_loss: 0.0
+  prototype_diversity_loss: 0.0
+  latent_align_loss: 0.01
+  retrieval_align_loss: 0.03
+  latent_flow_matching_loss: 0.10
+  # Symmetry target regression + reflection chamfer — the car-symmetry prior
+  # is inconsistent with a copy-of-corrupted solution (corruption breaks
+  # symmetry), so raising this weight penalizes copy behavior structurally.
+  # v0.2 had 0.12.
+  symmetry_consistency_loss: 0.5
+  hard_example_reweight: 0.5
+  hard_weight_source: blend
+  hard_weight_blend_alpha: 0.4

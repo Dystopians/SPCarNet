@@ -18,6 +18,7 @@ def save_checkpoint(
     global_step: int,
     best_metrics: dict[str, float],
     run_config: dict[str, Any],
+    extra_payload: dict[str, Any] | None = None,
 ) -> Path:
     checkpoint_path = Path(checkpoint_path).expanduser().resolve()
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -30,6 +31,8 @@ def save_checkpoint(
         "best_metrics": best_metrics,
         "run_config": run_config,
     }
+    if extra_payload:
+        payload.update(extra_payload)
     torch.save(payload, checkpoint_path)
     return checkpoint_path
 

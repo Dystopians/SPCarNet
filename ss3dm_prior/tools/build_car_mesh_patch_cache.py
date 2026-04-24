@@ -15,6 +15,7 @@ import trimesh
 
 from ss3dm_prior.data.patch_index import write_patch_index_jsonl
 from ss3dm_prior.data.patch_types import PatchIndexRecord, TeacherPatchSample
+from ss3dm_prior.data.symmetry_targets import estimate_symmetry_plane
 from ss3dm_prior.utils.io import dump_json, dump_yaml
 
 
@@ -184,6 +185,151 @@ def _synthetic_camera_dirs(num_views: int) -> np.ndarray:
     return np.stack(dirs, axis=0)
 
 
+def _split_clean_by_visibility(
+    clean_points: np.ndarray,
+    clean_normals: np.ndarray,
+    *,
+    camera_dirs: np.ndarray,
+    cosine_threshold: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
+    if len(clean_points) == 0:
+        empty = np.zeros((0, 3), dtype=np.float32)
+        return empty, empty, empty, empty, 0.0
+    scores = clean_normals @ (-camera_dirs).T
+    best_scores = np.max(scores, axis=1)
+    visible_mask = best_scores >= float(cosine_threshold)
+    visible_points = clean_points[visible_mask].astype(np.float32)
+    visible_normals = clean_normals[visible_mask].astype(np.float32)
+    hidden_points = clean_points[~visible_mask].astype(np.float32)
+    hidden_normals = clean_normals[~visible_mask].astype(np.float32)
+    visible_fraction = float(visible_mask.mean())
+    return visible_points, visible_normals, hidden_points, hidden_normals, visible_fraction
+
+
+def _sample_in_ball(
+    count: int,
+    *,
+    radius: float,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    if count <= 0:
+        return np.zeros((0, 3), dtype=np.float32)
+    # Rejection-sample a unit ball then scale; cheap and unbiased.
+    candidates = rng.uniform(-1.0, 1.0, size=(count * 3, 3)).astype(np.float32)
+    norms = np.linalg.norm(candidates, axis=1)
+    keep = candidates[norms <= 1.0]
+    while len(keep) < count:
+        extra = rng.uniform(-1.0, 1.0, size=(count * 2, 3)).astype(np.float32)
+        extra = extra[np.linalg.norm(extra, axis=1) <= 1.0]
+        keep = np.concatenate([keep, extra], axis=0)
+    return (keep[:count] * float(radius)).astype(np.float32)
+
+
+def _build_occupancy_queries(
+    mesh: trimesh.Trimesh,
+    *,
+    surface_query_count: int,
+    free_query_count: int,
+    unknown_query_count: int,
+    query_ball_radius: float,
+    surface_query_eps: float,
+    free_query_eps: float,
+    hard_negative_count: int,
+    camera_dirs: np.ndarray,
+    rng: np.random.Generator,
+    distance_reference_count: int = 16384,
+) -> dict[str, np.ndarray]:
+    from scipy.spatial import cKDTree
+
+    surface_points: np.ndarray
+    if surface_query_count > 0 and mesh.area > 0.0 and len(mesh.faces) > 0:
+        surface_points, _ = _sample_surface(
+            mesh, sample_count=int(surface_query_count), rng=rng
+        )
+    else:
+        surface_points = np.zeros((0, 3), dtype=np.float32)
+
+    # Build a dense surface-point KD-tree so we can approximate point-to-surface
+    # distance without requiring the optional `rtree` dependency used by
+    # trimesh.proximity.closest_point. With >16k dense samples on a unit mesh
+    # the mean inter-sample spacing is well below the surface/free epsilons.
+    reference_count = int(max(distance_reference_count, surface_query_count * 4, 2048))
+    if mesh.area > 0.0 and len(mesh.faces) > 0:
+        reference_points, _ = _sample_surface(mesh, sample_count=reference_count, rng=rng)
+    else:
+        reference_points = np.zeros((0, 3), dtype=np.float32)
+    if len(reference_points) == 0:
+        free_points = np.zeros((0, 3), dtype=np.float32)
+        unknown_points = np.zeros((0, 3), dtype=np.float32)
+    else:
+        tree = cKDTree(reference_points)
+        oversample = max(int(free_query_count + unknown_query_count) * 6, 256)
+        candidates = _sample_in_ball(oversample, radius=float(query_ball_radius), rng=rng)
+        dists, _ = tree.query(candidates, k=1)
+        dists = np.asarray(dists, dtype=np.float32)
+        free_pool = candidates[dists > float(free_query_eps)]
+        unknown_pool = candidates[dists <= float(surface_query_eps)]
+
+        def _resample(pool: np.ndarray, count: int) -> np.ndarray:
+            if count <= 0 or len(pool) == 0:
+                return np.zeros((0, 3), dtype=np.float32)
+            if len(pool) >= count:
+                idx = rng.choice(len(pool), size=count, replace=False)
+            else:
+                idx = rng.choice(len(pool), size=count, replace=True)
+            return pool[idx].astype(np.float32)
+
+        free_points = _resample(free_pool, int(free_query_count))
+        unknown_points = _resample(unknown_pool, int(unknown_query_count))
+
+    hard_negatives: np.ndarray
+    if hard_negative_count > 0 and len(surface_points) > 0 and len(camera_dirs) > 0:
+        camera_distance = float(max(query_ball_radius, 1.0) * 2.0)
+        pick_count = int(min(hard_negative_count, len(surface_points)))
+        surface_pick = rng.choice(len(surface_points), size=pick_count, replace=False)
+        dir_indices = rng.integers(0, len(camera_dirs), size=pick_count)
+        cam_positions = -camera_dirs[dir_indices] * camera_distance
+        anchors = surface_points[surface_pick]
+        # Midway between camera and surface — guaranteed free-space region along line-of-sight.
+        t_midpoint = 0.5
+        hard_negatives = (1.0 - t_midpoint) * cam_positions + t_midpoint * anchors
+        hard_negatives = hard_negatives.astype(np.float32)
+    else:
+        hard_negatives = np.zeros((0, 3), dtype=np.float32)
+
+    query_points_all = np.concatenate(
+        [surface_points, free_points, unknown_points], axis=0
+    ).astype(np.float32) if (
+        len(surface_points) + len(free_points) + len(unknown_points)
+    ) > 0 else np.zeros((0, 3), dtype=np.float32)
+    query_labels_all = np.concatenate(
+        [
+            np.ones((len(surface_points),), dtype=np.int8),
+            np.zeros((len(free_points),), dtype=np.int8),
+            np.zeros((len(unknown_points),), dtype=np.int8),
+        ],
+        axis=0,
+    )
+    query_ignore_mask = np.concatenate(
+        [
+            np.zeros((len(surface_points),), dtype=bool),
+            np.zeros((len(free_points),), dtype=bool),
+            np.ones((len(unknown_points),), dtype=bool),
+        ],
+        axis=0,
+    )
+
+    return {
+        "surface_query_points": surface_points,
+        "free_query_points": free_points,
+        "unknown_query_points": unknown_points,
+        "free_space_query_hard_negatives": hard_negatives,
+        "query_points_all": query_points_all,
+        "query_labels_all": query_labels_all,
+        "query_ignore_mask": query_ignore_mask,
+    }
+
+
 def _build_observed_points(
     mesh: trimesh.Trimesh,
     *,
@@ -227,6 +373,14 @@ def _build_sample(
     normalized_radius: float,
     observed_view_count: int,
     min_visibility_cosine: float,
+    clean_visibility_cosine: float,
+    surface_query_count: int,
+    free_query_count: int,
+    unknown_query_count: int,
+    query_ball_radius: float,
+    surface_query_eps: float,
+    free_query_eps: float,
+    hard_negative_count: int,
     seed: int,
 ) -> PatchIndexRecord:
     car_id = str(row["car_id"])
@@ -236,7 +390,7 @@ def _build_sample(
     mesh = _load_mesh(mesh_path)
     normalized_mesh, original_centroid, original_radius = _normalize_mesh(mesh, target_radius=normalized_radius)
     clean_points, clean_normals = _sample_surface(normalized_mesh, sample_count=clean_sample_count, rng=rng)
-    observed_points, visible_fraction = _build_observed_points(
+    observed_points, observed_visible_fraction = _build_observed_points(
         normalized_mesh,
         observed_sample_count=observed_sample_count,
         clean_sample_count=clean_sample_count,
@@ -244,9 +398,45 @@ def _build_sample(
         min_visibility_cosine=min_visibility_cosine,
         rng=rng,
     )
+    camera_dirs = _synthetic_camera_dirs(observed_view_count)
+    (
+        visible_clean_points,
+        visible_clean_normals,
+        hidden_clean_points,
+        hidden_clean_normals,
+        visible_clean_fraction,
+    ) = _split_clean_by_visibility(
+        clean_points,
+        clean_normals,
+        camera_dirs=camera_dirs,
+        cosine_threshold=clean_visibility_cosine,
+    )
+    queries = _build_occupancy_queries(
+        normalized_mesh,
+        surface_query_count=int(surface_query_count),
+        free_query_count=int(free_query_count),
+        unknown_query_count=int(unknown_query_count),
+        query_ball_radius=float(query_ball_radius),
+        surface_query_eps=float(surface_query_eps),
+        free_query_eps=float(free_query_eps),
+        hard_negative_count=int(hard_negative_count),
+        camera_dirs=camera_dirs,
+        rng=rng,
+    )
+    total_queries = int(len(queries["query_points_all"]))
+    if total_queries > 0:
+        free_space_fraction = float(len(queries["free_query_points"]) / total_queries)
+        unknown_fraction = float(len(queries["unknown_query_points"]) / total_queries)
+    else:
+        free_space_fraction = 0.0
+        unknown_fraction = 0.0
+    hidden_clean_fraction = float(1.0 - visible_clean_fraction)
     teacher_area_local = float(normalized_mesh.area)
     planarity = _planarity_hint(clean_points)
-    intrinsic_target = float(np.clip(1.0 - visible_fraction, 0.0, 1.0))
+    intrinsic_target = float(np.clip(hidden_clean_fraction, 0.0, 1.0))
+    sym_normal, sym_offset, sym_confidence, sym_residual = estimate_symmetry_plane(
+        clean_points, rng=rng
+    )
     metadata = {
         "asset_id": car_id,
         "source_mesh_path": str(mesh_path),
@@ -257,6 +447,11 @@ def _build_sample(
         "normalized_radius": float(normalized_radius),
         "planarity_hint": planarity,
         "source_split_name": split_name,
+        "clean_visibility_cosine": float(clean_visibility_cosine),
+        "observed_min_visibility_cosine": float(min_visibility_cosine),
+        "surface_query_eps": float(surface_query_eps),
+        "free_query_eps": float(free_query_eps),
+        "query_ball_radius": float(query_ball_radius),
     }
 
     sample = TeacherPatchSample(
@@ -274,15 +469,35 @@ def _build_sample(
         teacher_area_local=teacher_area_local,
         source_town_mesh_cache_dir=str(mesh_path),
         source_sequence_observed_cache="synthetic_whole_car_views",
-        patch_cache_format_version=1,
+        patch_cache_format_version=3,
+        surface_query_points=queries["surface_query_points"],
+        surface_query_labels=np.ones((len(queries["surface_query_points"]),), dtype=np.int8),
+        free_query_points=queries["free_query_points"],
+        free_query_labels=np.zeros((len(queries["free_query_points"]),), dtype=np.int8),
+        free_space_query_hard_negatives=queries["free_space_query_hard_negatives"],
+        unknown_query_points=queries["unknown_query_points"],
+        query_points_all=queries["query_points_all"],
+        query_labels_all=queries["query_labels_all"],
+        query_ignore_mask=queries["query_ignore_mask"],
+        visible_clean_points=visible_clean_points,
+        visible_clean_normals=visible_clean_normals,
+        hidden_clean_points=hidden_clean_points,
+        hidden_clean_normals=hidden_clean_normals,
         camera_support_count=int(observed_view_count),
         lidar_support_count=0,
-        visible_surface_fraction=visible_fraction,
-        free_space_fraction=0.0,
-        unknown_fraction=0.0,
+        visible_surface_fraction=float(visible_clean_fraction),
+        visible_support_fraction=float(observed_visible_fraction),
+        hidden_surface_fraction=float(hidden_clean_fraction),
+        free_space_fraction=free_space_fraction,
+        unknown_fraction=unknown_fraction,
+        free_space_hard_negative_count=int(len(queries["free_space_query_hard_negatives"])),
         intrinsic_patch_difficulty_target=intrinsic_target,
-        difficulty_components_json={"one_minus_visible_surface_fraction": intrinsic_target},
+        difficulty_components_json={"one_minus_visible_clean_fraction": intrinsic_target},
         metadata=metadata,
+        symmetry_plane_normal=sym_normal,
+        symmetry_plane_offset=sym_offset,
+        symmetry_target_confidence=sym_confidence,
+        symmetry_chamfer_residual=sym_residual,
     )
     patch_dir = out_dir / town_id / car_id
     patch_path = patch_dir / f"{car_id}.npz"
@@ -299,12 +514,24 @@ def _build_sample(
         num_observed_points=int(len(observed_points)),
         teacher_area_local=teacher_area_local,
         planarity_hint=planarity,
-        patch_cache_format_version=1,
+        patch_cache_format_version=3,
+        num_surface_query_points=int(len(queries["surface_query_points"])),
+        num_free_query_points=int(len(queries["free_query_points"])),
+        num_unknown_query_points=int(len(queries["unknown_query_points"])),
         camera_support_count=int(observed_view_count),
         lidar_support_count=0,
-        visible_surface_fraction=visible_fraction,
+        visible_surface_fraction=float(visible_clean_fraction),
+        free_space_fraction=free_space_fraction,
+        unknown_fraction=unknown_fraction,
         intrinsic_patch_difficulty_target=intrinsic_target,
-        difficulty_components_json={"one_minus_visible_surface_fraction": intrinsic_target},
+        num_visible_clean_points=int(len(visible_clean_points)),
+        num_hidden_clean_points=int(len(hidden_clean_points)),
+        visible_support_fraction=float(observed_visible_fraction),
+        hidden_surface_fraction=float(hidden_clean_fraction),
+        free_space_hard_negative_count=int(len(queries["free_space_query_hard_negatives"])),
+        symmetry_target_confidence=float(sym_confidence),
+        symmetry_chamfer_residual=float(sym_residual),
+        difficulty_components_json={"one_minus_visible_clean_fraction": intrinsic_target},
     )
 
 
@@ -361,6 +588,14 @@ def _process_row(
     normalized_radius: float,
     observed_view_count: int,
     min_visibility_cosine: float,
+    clean_visibility_cosine: float,
+    surface_query_count: int,
+    free_query_count: int,
+    unknown_query_count: int,
+    query_ball_radius: float,
+    surface_query_eps: float,
+    free_query_eps: float,
+    hard_negative_count: int,
     seed: int,
     skip_existing: bool,
 ) -> dict[str, Any]:
@@ -386,6 +621,14 @@ def _process_row(
         normalized_radius=normalized_radius,
         observed_view_count=observed_view_count,
         min_visibility_cosine=min_visibility_cosine,
+        clean_visibility_cosine=clean_visibility_cosine,
+        surface_query_count=surface_query_count,
+        free_query_count=free_query_count,
+        unknown_query_count=unknown_query_count,
+        query_ball_radius=query_ball_radius,
+        surface_query_eps=surface_query_eps,
+        free_query_eps=free_query_eps,
+        hard_negative_count=hard_negative_count,
         seed=seed,
     )
     return {
@@ -409,6 +652,20 @@ def make_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--normalized_radius", type=float, default=1.0, help="Target radius after centering/scaling each mesh.")
     parser.add_argument("--observed_view_count", type=int, default=3, help="Number of synthetic camera directions used to form observed points.")
     parser.add_argument("--min_visibility_cosine", type=float, default=0.05, help="Visibility threshold for synthetic observed point selection.")
+    parser.add_argument(
+        "--clean_visibility_cosine",
+        type=float,
+        default=0.5,
+        help="Stricter cosine threshold used to split clean points into visible vs hidden subsets. "
+        "With 3 synthetic cameras, 0.5 yields roughly 20%% hidden clean points per car.",
+    )
+    parser.add_argument("--surface_query_count", type=int, default=512, help="Per-sample surface (label=1) query count.")
+    parser.add_argument("--free_query_count", type=int, default=512, help="Per-sample free-space (label=0) query count.")
+    parser.add_argument("--unknown_query_count", type=int, default=256, help="Per-sample near-surface (ignored) query count.")
+    parser.add_argument("--query_ball_radius", type=float, default=1.1, help="Radius of the sampling ball used for free/unknown queries.")
+    parser.add_argument("--surface_query_eps", type=float, default=0.025, help="Distance (normalized units) within which a random point is treated as ambiguous/unknown.")
+    parser.add_argument("--free_query_eps", type=float, default=0.04, help="Minimum distance from surface required to classify a random point as free.")
+    parser.add_argument("--hard_negative_count", type=int, default=128, help="Camera line-of-sight free-space hard negatives per sample.")
     parser.add_argument("--seed", type=int, default=0, help="Random seed.")
     parser.add_argument("--num_workers", type=int, default=1, help="Parallel worker processes.")
     parser.add_argument("--skip_existing", action="store_true", help="Reuse existing per-car NPZ samples when present.")
@@ -441,55 +698,80 @@ def main(argv: list[str] | None = None) -> int:
     all_rows = [*train_rows, *val_rows, *test_rows]
 
     records_by_car_id: dict[str, dict[str, Any]] = {}
+    shared_kwargs = {
+        "dataset_root": str(dataset_root),
+        "mesh_root": str(mesh_root),
+        "out_dir": str(out_dir),
+        "clean_sample_count": int(args.clean_sample_count),
+        "observed_sample_count": int(args.observed_sample_count),
+        "normalized_radius": float(args.normalized_radius),
+        "observed_view_count": int(args.observed_view_count),
+        "min_visibility_cosine": float(args.min_visibility_cosine),
+        "clean_visibility_cosine": float(args.clean_visibility_cosine),
+        "surface_query_count": int(args.surface_query_count),
+        "free_query_count": int(args.free_query_count),
+        "unknown_query_count": int(args.unknown_query_count),
+        "query_ball_radius": float(args.query_ball_radius),
+        "surface_query_eps": float(args.surface_query_eps),
+        "free_query_eps": float(args.free_query_eps),
+        "hard_negative_count": int(args.hard_negative_count),
+        "seed": int(args.seed),
+        "skip_existing": bool(args.skip_existing),
+    }
     num_workers = max(1, int(args.num_workers))
     if num_workers == 1:
-        results = [
-            _process_row(
-                row=row,
-                dataset_root=str(dataset_root),
-                mesh_root=str(mesh_root),
-                out_dir=str(out_dir),
-                clean_sample_count=int(args.clean_sample_count),
-                observed_sample_count=int(args.observed_sample_count),
-                normalized_radius=float(args.normalized_radius),
-                observed_view_count=int(args.observed_view_count),
-                min_visibility_cosine=float(args.min_visibility_cosine),
-                seed=int(args.seed),
-                skip_existing=bool(args.skip_existing),
-            )
-            for row in all_rows
-        ]
+        results = [_process_row(row=row, **shared_kwargs) for row in all_rows]
     else:
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            futures = [
-                executor.submit(
-                    _process_row,
-                    row=row,
-                    dataset_root=str(dataset_root),
-                    mesh_root=str(mesh_root),
-                    out_dir=str(out_dir),
-                    clean_sample_count=int(args.clean_sample_count),
-                    observed_sample_count=int(args.observed_sample_count),
-                    normalized_radius=float(args.normalized_radius),
-                    observed_view_count=int(args.observed_view_count),
-                    min_visibility_cosine=float(args.min_visibility_cosine),
-                    seed=int(args.seed),
-                    skip_existing=bool(args.skip_existing),
-                )
+            futures_and_rows = [
+                (executor.submit(_process_row, row=row, **shared_kwargs), row)
                 for row in all_rows
             ]
-            results = [future.result() for future in as_completed(futures)]
+            results = []
+            for fut, row in futures_and_rows:
+                try:
+                    results.append(fut.result())
+                except Exception as exc:
+                    # Per-mesh failures (bad GLBs that trimesh can't merge,
+                    # corrupt scenes, etc.) must not kill the whole build.
+                    # Log and surface them via a dedicated status so the
+                    # downstream index-writer skips them cleanly.
+                    car_id = str(row.get("car_id", row.get("sha256", "unknown")))
+                    split_name = str(row.get("split_name", ""))
+                    print(f"process_error: car_id={car_id} split={split_name} err={type(exc).__name__}:{exc}")
+                    results.append({
+                        "status": "process_error",
+                        "car_id": car_id,
+                        "split_name": split_name,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    })
 
     missing_count = 0
+    process_error_count = 0
     for result in results:
         if result["status"] == "missing_mesh":
             missing_count += 1
             print(f"missing_mesh: {result['car_id']} split={result['split_name']}")
             continue
+        if result["status"] == "process_error":
+            process_error_count += 1
+            # Already logged inline during future collection.
+            continue
         print(f"{result['status']}: {result['car_id']} split={result['split_name']}")
         patch_file = Path(result["patch_file"]).expanduser().resolve()
         payload = np.load(patch_file)
         try:
+            def _array_len(key: str) -> int:
+                if key in payload.files:
+                    value = payload[key]
+                    if value.ndim == 0:
+                        return int(value.item())
+                    return int(value.shape[0])
+                return 0
+
+            def _scalar(key: str, default: float = 0.0) -> float:
+                return float(payload[key].item()) if key in payload.files else float(default)
+
             patch_id = str(payload["patch_id"].item())
             records_by_car_id[patch_id] = {
                 "patch_id": patch_id,
@@ -504,11 +786,21 @@ def main(argv: list[str] | None = None) -> int:
                 "teacher_area_local": float(payload["teacher_area_local"].item()),
                 "planarity_hint": float(json.loads(str(payload["patch_metadata_json"].item())).get("planarity_hint", 0.0)),
                 "patch_cache_format_version": int(payload["patch_cache_format_version"].item()),
+                "num_surface_query_points": _array_len("surface_query_points"),
+                "num_free_query_points": _array_len("free_query_points"),
+                "num_unknown_query_points": _array_len("unknown_query_points"),
+                "num_visible_clean_points": _array_len("visible_clean_points"),
+                "num_hidden_clean_points": _array_len("hidden_clean_points"),
                 "camera_support_count": int(payload["camera_support_count"].item()),
                 "lidar_support_count": int(payload["lidar_support_count"].item()),
-                "visible_surface_fraction": float(payload["visible_surface_fraction"].item()),
-                "free_space_fraction": float(payload["free_space_fraction"].item()),
-                "unknown_fraction": float(payload["unknown_fraction"].item()),
+                "visible_surface_fraction": _scalar("visible_surface_fraction"),
+                "visible_support_fraction": _scalar("visible_support_fraction"),
+                "hidden_surface_fraction": _scalar("hidden_surface_fraction"),
+                "free_space_fraction": _scalar("free_space_fraction"),
+                "unknown_fraction": _scalar("unknown_fraction"),
+                "free_space_hard_negative_count": int(_scalar("free_space_hard_negative_count")),
+                "symmetry_target_confidence": _scalar("symmetry_target_confidence"),
+                "symmetry_chamfer_residual": _scalar("symmetry_chamfer_residual"),
                 "intrinsic_patch_difficulty_target": float(payload["intrinsic_patch_difficulty_target"].item()),
                 "difficulty_components_json": json.loads(str(payload["difficulty_components_json"].item())),
             }

@@ -27,6 +27,22 @@ def _deep_update(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any
     return merged
 
 
+def apply_cli_wandb_overrides(
+    train_config: dict[str, Any],
+    *,
+    wandb_project: str | None = None,
+    wandb_mode: str | None = None,
+) -> dict[str, Any]:
+    updated = dict(train_config)
+    if wandb_project is not None:
+        updated["wandb_project"] = wandb_project
+    if wandb_mode is not None:
+        normalized_mode = str(wandb_mode).strip()
+        updated["wandb_mode"] = normalized_mode
+        updated["wandb_enable"] = normalized_mode.lower() != "disabled"
+    return updated
+
+
 def make_argparser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Train the SS3DM prior local patch denoiser with logging and checkpointing."
@@ -71,16 +87,18 @@ def main(argv: list[str] | None = None) -> int:
     model_config = load_yaml(args.model_config)
     train_cfg_raw = load_yaml(args.train_config)
     train_config = train_cfg_raw.get("train", train_cfg_raw)
-    if args.wandb_project is not None:
-        train_config["wandb_project"] = args.wandb_project
-    if args.wandb_mode is not None:
-        train_config["wandb_mode"] = args.wandb_mode
-        train_config["wandb_enable"] = str(args.wandb_mode).strip().lower() != "disabled"
+    train_config = apply_cli_wandb_overrides(
+        train_config,
+        wandb_project=args.wandb_project,
+        wandb_mode=args.wandb_mode,
+    )
 
     patch_cache_dir = Path(args.patch_cache_dir).expanduser().resolve()
     patch_index_path = patch_cache_dir / "patch_index.jsonl"
     output_dir = Path(args.output_dir).expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
+    config_output_dir = output_dir / "configs"
+    config_output_dir.mkdir(parents=True, exist_ok=True)
     device = _resolve_device(args.device)
 
     resolved = {
@@ -100,10 +118,10 @@ def main(argv: list[str] | None = None) -> int:
             "resume": args.resume,
         },
     }
-    dump_yaml(output_dir / "configs" / "resolved_data_config.yaml", data_config or {})
-    dump_yaml(output_dir / "configs" / "resolved_model_config.yaml", model_config)
-    dump_yaml(output_dir / "configs" / "resolved_train_config.yaml", train_config)
-    (output_dir / "configs" / "resolved_run_metadata.json").write_text(
+    dump_yaml(config_output_dir / "resolved_data_config.yaml", data_config or {})
+    dump_yaml(config_output_dir / "resolved_model_config.yaml", model_config)
+    dump_yaml(config_output_dir / "resolved_train_config.yaml", train_config)
+    (config_output_dir / "resolved_run_metadata.json").write_text(
         json.dumps(resolved["cli"], indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )

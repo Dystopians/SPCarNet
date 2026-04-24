@@ -40,6 +40,8 @@ def _load_patch_record_v2(patch_file: Path) -> PatchIndexRecord:
         num_observed_points_raw=int(payload["num_observed_points_raw"].item()),
         num_clean_points=int(payload["clean_points"].shape[0]),
         num_observed_points=int(payload["observed_points"].shape[0]),
+        scale_id=int(payload.get("scale_id", 0).item()) if hasattr(payload.get("scale_id", 0), "item") else 0,
+        patch_radius_m=float(payload["patch_radius_m"].item()) if "patch_radius_m" in payload else 0.0,
         teacher_area_local=float(payload["teacher_area_local"].item()),
         planarity_hint=float(json.loads(str(payload["patch_metadata_json"].item())).get("planarity_hint", 0.0)),
         patch_cache_format_version=int(payload["patch_cache_format_version"].item()),

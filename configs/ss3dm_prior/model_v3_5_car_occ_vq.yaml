@@ -42,7 +42,7 @@ model:
   use_residual_reconstruction: true
   use_vector_quantization: true
   teacher_encoder_enabled: true
-  codebook_size: 128
+  codebook_size: 64
   occupancy_hidden_dim: 224
 
 loss_weights:
@@ -54,7 +54,7 @@ loss_weights:
   intrinsic_difficulty_pairwise_weight: 0.0
   occupancy_bce_loss: 0.2
   free_space_violation_loss: 0.2
-  vq_commitment_loss: 0.1
-  prototype_diversity_loss: 0.02
+  vq_commitment_loss: 0.05
+  prototype_diversity_loss: 0.01
   latent_align_loss: 0.01
   retrieval_align_loss: 0.01

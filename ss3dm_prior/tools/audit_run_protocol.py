@@ -115,6 +115,17 @@ def _protocol_state_complete(protocol_state: dict[str, Any]) -> bool:
     )
 
 
+def _derive_strict_protocol_enabled(protocol_state: dict[str, Any]) -> bool | None:
+    relevant = (
+        protocol_state.get("debug_use_all_patches_for_train_val"),
+        protocol_state.get("allow_debug_split_override"),
+        protocol_state.get("allow_split_fallback"),
+    )
+    if any(value is None for value in relevant):
+        return None
+    return not any(bool(value) for value in relevant)
+
+
 def audit_run_protocol(target: str | Path) -> dict[str, Any]:
     target_path = Path(target).expanduser().resolve()
     run_dir, checkpoint_path = _resolve_run_dir(target_path)
@@ -204,10 +215,17 @@ def audit_run_protocol(target: str | Path) -> dict[str, Any]:
         "debug_use_all_patches_for_train_val": protocol_state["debug_use_all_patches_for_train_val"],
         "allow_debug_split_override": protocol_state["allow_debug_split_override"],
         "allow_split_fallback": protocol_state["allow_split_fallback"],
+        "strict_protocol_enabled": _derive_strict_protocol_enabled(protocol_state),
+        "debug_split_enabled": protocol_state["debug_use_all_patches_for_train_val"],
+        "debug_override_enabled": protocol_state["allow_debug_split_override"],
+        "fallback_split_enabled": protocol_state["allow_split_fallback"],
         "split_config_path": protocol_state["split_config_path"],
         "expected_train_towns": expected_train_towns,
         "expected_val_towns": expected_val_towns,
         "expected_test_towns": expected_test_towns,
+        "train_towns": expected_train_towns,
+        "val_towns": expected_val_towns,
+        "test_towns": expected_test_towns,
         "metadata_sources": {
             "resolved_train_config": str(run_dir / "configs" / "resolved_train_config.yaml")
             if run_dir is not None and (run_dir / "configs" / "resolved_train_config.yaml").exists()

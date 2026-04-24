@@ -1,0 +1,91 @@
+# CarNet_v0.1 FULL — warm-restart resume from epoch 44 of carnet_v0_1_full.
+#
+# Motivation: history.json shows occupancy_iou_visible climbed 0 -> 0.81 over the
+# final 5 epochs while LR was already collapsing to min_lr (2e-5). Flow, total
+# loss, and denoise_gain were all still trending. This resume gives the model
+# 30 more epochs at a sustained 1e-4 LR floor so the occupancy head and free-
+# space calibration can catch up before cosine decays again.
+#
+# Schedule note: T_max = epochs (=75 here) is absolute in the trainer, and the
+# scheduler is freshly constructed at resume. With start_epoch=45 the scheduler
+# will only step 30 times total, so LR tracks cos(pi * [0..30] / 75), i.e. it
+# drifts ~1e-4 -> ~6.5e-5 over the resume window. This is intentional: we want
+# sustained training-speed LR, not another dive to the floor.
+#
+# One expected artifact: epoch 45 (the first resumed epoch) inherits the
+# optimizer's saved lr=2.05e-5 because scheduler.step() runs after the epoch,
+# not before. Treat epoch 45 as a single low-LR warm-up; real progress starts
+# at epoch 46.
+
+train:
+  seed: 0
+  epochs: 75            # adds 30 epochs on top of the original 45
+  batch_size: 8
+  grad_accum_steps: 1
+  num_workers: 4
+  lr: 1.0e-4            # warm-restart base (was 4.0e-4 in the original run)
+  min_lr: 2.0e-5
+  lr_scheduler: cosine
+  weight_decay: 0.001
+  grad_clip_norm: 0.5
+  amp: false
+  ema:
+    enable: true
+    decay: 0.999
+    use_for_eval: true
+  log_interval: 20
+  val_interval: 1
+  save_interval: 2
+  wandb_enable: true
+  wandb_project: carnet_v0_1
+  wandb_mode: online
+  epoch_visualization_interval_epochs: 5
+  max_visualization_examples: 2
+  fixed_visualization_patch_ids: []
+  step_visualization_interval_steps: 1000
+  step_visualization_num_examples: 1
+  step_visualization_patch_ids: []
+  debug_use_all_patches_for_train_val: false
+  allow_debug_split_override: false
+  allow_split_fallback: false
+  debug_val_fraction: 0.2
+  curriculum:
+    # start_epoch=45 is already well past every gate below, so warm-up
+    # multipliers are inert for the resume. Kept in sync with the original
+    # config so resolved_train_config.yaml stays comparable.
+    recon_warmup_epochs: 3
+    warmup_epochs: 3
+    main_start_epoch: 3
+    occupancy_start_epoch: 3
+    intrinsic_start_epoch: 6
+    vq_start_epoch: 999
+    prototype_start_epoch: 999
+    flow_matching_start_epoch: 6
+    symmetry_start_epoch: 4
+    recon_chamfer_warmup_scale: 3.0
+    recon_normal_warmup_scale: 2.0
+    nearest_neighbor_warmup_scale: 4.0
+  hard_example_sampling:
+    enable: true
+    alpha: 1.0
+    floor: 1.0
+    power: 1.0
+  checkpoint_selection:
+    best_composite_weights:
+      val_denoise_gain_chamfer: 1.0
+      val_recon_chamfer_l1: -1.0
+      val_visible_recon_chamfer_l1: -0.5
+      val_hidden_completion_chamfer_l1: -0.5
+      val_occupancy_iou_visible: 0.4
+      val_free_space_violation_rate: -0.4
+      val_intrinsic_difficulty_spearman: 0.15
+    best_visibility_weights:
+      val_occupancy_iou_visible: 1.0
+      val_free_space_violation_rate: -1.0
+    best_paper_weights:
+      val_denoise_gain_chamfer: 1.0
+      val_recon_chamfer_l1: -1.0
+      val_hidden_completion_chamfer_l1: -0.5
+      val_occupancy_iou_visible: 0.4
+      val_free_space_violation_rate: -0.4
+      val_retrieval_top1_nonself: 0.15
