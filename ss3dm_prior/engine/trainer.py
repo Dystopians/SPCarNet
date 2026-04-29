@@ -116,6 +116,7 @@ def _effective_loss_weights(weights: dict[str, float]) -> dict[str, float]:
         "latent_align_loss": float(weights.get("latent_align_loss", 0.25)),
         "retrieval_align_loss": float(weights.get("retrieval_align_loss", 0.0)),
         "latent_flow_matching_loss": float(weights.get("latent_flow_matching_loss", 0.0)),
+        "point_flow_matching_loss": float(weights.get("point_flow_matching_loss", 0.0)),
         "symmetry_consistency_loss": float(weights.get("symmetry_consistency_loss", 0.0)),
     }
 
@@ -710,6 +711,18 @@ class SS3DMPriorTrainer:
             return False
         if metric_name in {"patch_score_loss", "val_patch_score_loss", "train_patch_score_loss"}:
             return False
+        # The chamfer "loss" is exactly the chamfer L1 distance (weight=1 in
+        # compute_patch_losses). Emitting both produces twin panels with
+        # identical traces — keep only the *_chamfer_l1 family.
+        if metric_name in {
+            "recon_chamfer_loss",
+            "visible_recon_chamfer_loss",
+            "hidden_completion_chamfer_loss",
+        }:
+            return False
+        # Constants that produce flat panels with no signal.
+        if metric_name in {"corruption_severity_scale", "ema_decay", "grad_accum_steps"}:
+            return False
         if metric_name.endswith("prototype_usage_entropy") and effective_weights.get("vq_commitment_loss", 0.0) <= 0.0:
             return False
         if "intrinsic_difficulty" in metric_name and effective_weights.get("intrinsic_difficulty_loss", 0.0) <= 0.0:
@@ -757,6 +770,7 @@ class SS3DMPriorTrainer:
             "latent_align_loss",
             "retrieval_align_loss",
             "latent_flow_matching_loss",
+            "point_flow_matching_loss",
             "symmetry_consistency_loss",
         ]
         return [key for key in ordered if effective_weights.get(key, 0.0) > 0.0]
@@ -778,13 +792,12 @@ class SS3DMPriorTrainer:
                 continue
             if self._metric_should_be_logged(metric_name, value, effective_weights=effective_weights):
                 compact[key] = value
-        raw_losses = {
-            key: float(metrics[f"{prefix}{key}"])
-            for key in self._active_raw_loss_keys(effective_weights)
-            if f"{prefix}{key}" in metrics
-        }
-        for key, value in _loss_contribution_means(raw_losses, effective_weights).items():
-            compact[f"{prefix}weighted_{key}"] = value
+        # Note: weighted_X (= weight * raw) is emitted to the wandb dashboard
+        # under epoch/{train,val}_loss_weighted/X for at-a-glance contribution
+        # comparison. We do NOT replicate it in history.json — that file is
+        # the canonical record and weight × raw is trivially recoverable from
+        # the run config, so duplicating it here just doubles the column
+        # count.
         return compact
 
     def _format_interval_train_payload(
@@ -1328,7 +1341,17 @@ class SS3DMPriorTrainer:
                 .detach()
                 .cpu()
             )
+            recon_to_corrupted = float(
+                recon_chamfer_l1(
+                    outputs["recon_points"],
+                    batch["corrupted_points"],
+                )
+                .detach()
+                .cpu()
+            )
             batch_gain = chamfer_before - float(losses["recon_chamfer_loss"].detach().cpu())
+            stats["corrupted_chamfer_l1"].append(chamfer_before)
+            stats["recon_to_corrupted_chamfer_l1"].append(recon_to_corrupted)
             stats["total_loss"].append(float(losses["total_loss"].detach().cpu()))
             for key, value in losses.items():
                 if key == "total_loss":
@@ -1500,8 +1523,18 @@ class SS3DMPriorTrainer:
                         .detach()
                         .cpu()
                     )
+                    recon_to_corrupted = float(
+                        recon_chamfer_l1(
+                            outputs["recon_points"][sample_idx : sample_idx + 1],
+                            batch["corrupted_points"][sample_idx : sample_idx + 1],
+                        )
+                        .detach()
+                        .cpu()
+                    )
                     gain = chamfer_before - chamfer_after
                     metrics_acc["recon_chamfer_l1"].append(chamfer_after)
+                    metrics_acc["corrupted_chamfer_l1"].append(chamfer_before)
+                    metrics_acc["recon_to_corrupted_chamfer_l1"].append(recon_to_corrupted)
                     metrics_acc["recon_normal_cosine"].append(normal_cos)
                     metrics_acc["denoise_gain_chamfer"].append(gain)
                     sample_visibility_metrics = self._sample_visibility_metrics(

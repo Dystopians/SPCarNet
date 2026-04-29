@@ -1,0 +1,122 @@
+# CarNet_v0.8.1 — v0.8 with three targeted fixes (route A).
+#
+# v0.8 observation (see training log, epoch 46):
+#   - val_recon_chamfer_l1 plateaued at 0.128 (vs v0.7 baseline 0.100)
+#   - best_gain turned positive (+0.017) — architecture is sound, but the
+#     per-point MLP decoding from pure N(0, I) noise cannot recover fine
+#     car structure; velocity MSE held at 0.46 without further drop
+#   - occupancy_iou BEAT v0.7 (0.85 vs 0.80) -> encoder/latent are good,
+#     the bottleneck is squarely in the decoder
+#
+# Three fixes (orthogonal, all stack):
+#   1. point_flow_init_mode: corrupted_noise
+#      - x_0 = corrupted + 0.15 * z  (not pure Gaussian)
+#      - flow exploits corrupted as geometric prior (what v0.7 did right)
+#      - noise injection prevents identity attractor (what v0.7 did wrong)
+#      - target velocity = clean - x_0 is a properly-conditioned FM target
+#
+#   2. point_flow_use_edge_conv: true  (DGCNN-style neighbour aggregation)
+#      - after the input projection, each point sees its k=16 nearest
+#        neighbours in the current x_t position space
+#      - max-pool of edge features (neighbour_feat - point_feat)
+#      - gives the decoder explicit local structural context so recon
+#        produces coherent surfaces rather than independent per-point
+#        displacements
+#
+#   3. point_flow_steps: 4 -> 8
+#      - twice the Euler resolution at inference; cheap (compute ~2x)
+#      - should let fine-detail modes actually resolve
+#
+# Corruption and encoder config kept identical to v0.8, so the trajectory
+# is directly comparable.
+
+dataset:
+  subsets:
+    - train
+  seed: 0
+
+corruptions:
+  target_corrupted_count: 2048
+  point_dropout: {enabled: true, dropout_ratio: 0.25}
+  gaussian_jitter: {enabled: true, sigma: 0.06, anisotropic: true}
+  normal_noise: {enabled: true, sigma: 0.08, flip_prob: 0.02}
+  local_hole_mask: {enabled: true, max_holes: 3, hole_radius: 0.22}
+  outlier_cluster: {enabled: true, cluster_size: 48, cluster_offset_sigma: 0.30, cluster_spread_sigma: 0.02}
+  density_imbalance: {enabled: true, region_radius: 0.22, thin_probability: 0.5, thin_ratio: 0.50, duplicate_count: 48}
+
+model:
+  model_type: v12_point_flow_hybrid
+  latent_dim: 384
+  retrieval_dim: 192
+  recon_point_count: 2048
+  use_observed_condition: true
+  use_local_frame: true
+  teacher_encoder_enabled: true
+  occupancy_hidden_dim: 256
+  use_vector_quantization: false
+  num_latent_queries: 32
+  num_cross_attention_layers: 3
+  num_latent_self_attention_layers: 2
+  attention_heads: 6
+  ffn_dim: 768
+  dropout: 0.10
+  token_hidden_dims: [256, 384]
+  decoder_hidden_dims: [768, 384]
+  point_defect_hidden_dims: [384, 192]
+  score_head_hidden_dims: [384, 192]
+  intrinsic_head_hidden_dims: [384, 192]
+  retrieval_head_hidden_dims: [384, 192]
+  occupancy_hidden_dims: [256, 256, 256]
+  latent_flow_hidden_dims: [768, 768]
+  latent_flow_time_embed_dim: 96
+  latent_flow_dropout: 0.05
+  latent_flow_target: hidden_residual
+  stochastic_eval_k_list: [1, 4, 8]
+  stochastic_flow_steps: 8
+  stochastic_free_space_safe_threshold: 0.10
+  stochastic_rerank_weights:
+    observed_consistency: 0.20
+    visible_consistency: -0.35
+    free_space_penalty: -0.30
+    prototype_consistency: 0.15
+  use_symmetry_head: true
+  symmetry_head_hidden_dim: 192
+  symmetry_head_dropout: 0.05
+  use_retrieval_anchors: true
+  num_retrieval_anchors: 3
+  retrieval_anchor_dropout: 0.1
+  # Point flow decoder — three v0.8.1 changes below this line
+  point_flow_hidden_dims: [384, 384, 384]
+  point_flow_steps: 8                      # was 4
+  point_flow_time_embed_dim: 96
+  point_flow_dropout: 0.05
+  point_flow_normal_hidden_dims: [192, 192]
+  point_flow_init_mode: corrupted_noise    # was "noise"
+  point_flow_init_noise_scale: 0.15
+  point_flow_use_edge_conv: true           # was absent (false)
+  point_flow_edge_conv_k: 16
+
+loss_weights:
+  point_flow_matching_loss: 5.0
+  recon_chamfer_loss: 0.3
+  recon_normal_loss: 0.4
+  nearest_neighbor_l1_loss: 0.0
+  reverse_nearest_neighbor_l1_loss: 1.5
+  visible_recon_chamfer_loss: 0.5
+  hidden_completion_chamfer_loss: 1.0
+  point_defect_loss: 0.2
+  corruption_score_loss: 0.05
+  intrinsic_difficulty_loss: 0.1
+  intrinsic_difficulty_pairwise_weight: 0.15
+  intrinsic_difficulty_pairwise_margin: 0.05
+  occupancy_bce_loss: 0.3
+  free_space_violation_loss: 0.3
+  vq_commitment_loss: 0.0
+  prototype_diversity_loss: 0.0
+  latent_align_loss: 0.01
+  retrieval_align_loss: 0.03
+  latent_flow_matching_loss: 0.10
+  symmetry_consistency_loss: 0.6
+  hard_example_reweight: 0.5
+  hard_weight_source: blend
+  hard_weight_blend_alpha: 0.4

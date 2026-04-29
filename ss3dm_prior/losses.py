@@ -550,10 +550,19 @@ def compute_patch_losses(
             if outputs.get("latent_flow_matching_loss") is not None
             else recon_chamfer.new_zeros(())
         )
+        + float(weights.get("point_flow_matching_loss", 0.0))
+        * (
+            outputs.get("point_flow_matching_loss")
+            if outputs.get("point_flow_matching_loss") is not None
+            else recon_chamfer.new_zeros(())
+        )
     )
     latent_flow_matching = outputs.get("latent_flow_matching_loss")
     if latent_flow_matching is None:
         latent_flow_matching = recon_chamfer.new_zeros(())
+    point_flow_matching = outputs.get("point_flow_matching_loss")
+    if point_flow_matching is None:
+        point_flow_matching = recon_chamfer.new_zeros(())
 
     # Symmetry-consistency loss (CarNet_v0 / A2). Only active when the model
     # exposes a symmetry head AND the batch carries GT targets (cache format
@@ -618,6 +627,7 @@ def compute_patch_losses(
         "latent_align_loss": latent_align,
         "retrieval_align_loss": retrieval_align,
         "latent_flow_matching_loss": latent_flow_matching,
+        "point_flow_matching_loss": point_flow_matching,
         "symmetry_consistency_loss": sym_pack["symmetry_consistency_loss"],
         "symmetry_recon_component": sym_pack["symmetry_recon_component"],
         "symmetry_plane_component": sym_pack["symmetry_plane_component"],
