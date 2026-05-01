@@ -491,3 +491,37 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - Smoke report: `docs/car_model/meshprior_stage6_synthetic_damage_benchmark_smoke.md`
 
 ---
+
+## 2026-05-01 — MeshPrior Stage 7 (conservative snap proposals) — PASS
+
+**Outcome**: Implemented bounded vertex snap proposals with explicit risk evaluation and a downstream acceptance gate. This is the first MeshPrior stage that proposes geometry movement, so proposals remain passive unless a later scene gate accepts them.
+
+**Files added/updated**:
+- `ss3dm_prior/meshprior/snap.py`
+- `scripts/car_model/meshprior_make_snap_proposals.py`
+- `scripts/car_model/smoke_test_meshprior_stage7_snap.py`
+- `scripts/car_model/meshprior_run_synthetic_damage_benchmark.py`
+- `docs/car_model/meshprior_stage7_conservative_snap_design.md`
+- `docs/car_model/meshprior_stage7_conservative_snap_implementation_report.md`
+- `docs/car_model/meshprior_stage7_conservative_snap_smoke.md`
+
+**Smoke / verification**:
+- `micromamba run -n mesh_splatting python -m compileall scripts/car_model ss3dm_prior -q`: PASS.
+- `smoke_test_meshprior_stage7_snap.py`: PASS.
+- `smoke_test_meshprior_stage6_synthetic_damage.py`: PASS with 8 benchmark rows after adding `protect_prune_snap`.
+- Small M7 benchmark over `vertex_noise` and `floater`: PASS.
+
+**Benchmark gate detail**:
+- A first `snap_max_disp=0.02` benchmark trial improved vertex-noise surface distance but reduced valid-surface protect recall from `0.9167` to `0.8333`; this exceeded the 5 percent preservation tolerance.
+- The benchmark snap default was tightened to `0.005`.
+- Final `protect_prune_snap` on `vertex_noise` improved surface distance by `0.01073157787322998` while preserving valid-surface protect recall at `0.9166666666666666`.
+- Floater prune recall stayed `1.0`.
+
+**Decision**: M7 gate `PASS`. The next allowed stage is M8 guarded patch/fill proposals.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_stage7_conservative_snap_design.md`
+- Implementation report: `docs/car_model/meshprior_stage7_conservative_snap_implementation_report.md`
+- Smoke report: `docs/car_model/meshprior_stage7_conservative_snap_smoke.md`
+
+---
