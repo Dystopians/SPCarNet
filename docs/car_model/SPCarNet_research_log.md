@@ -525,3 +525,37 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - Smoke report: `docs/car_model/meshprior_stage7_conservative_snap_smoke.md`
 
 ---
+
+## 2026-05-01 — MeshPrior Stage 8 (guarded fill proposals) — PASS
+
+**Outcome**: Implemented guarded local hole-fill proposals. Fill remains proposal-only and is not approved for scene-level hidden-side completion until M9 evidence gates and rollback exist.
+
+**Files added/updated**:
+- `ss3dm_prior/meshprior/fill.py`
+- `scripts/car_model/meshprior_make_fill_proposals.py`
+- `scripts/car_model/smoke_test_meshprior_stage8_fill.py`
+- `scripts/car_model/meshprior_run_synthetic_damage_benchmark.py`
+- `docs/car_model/meshprior_stage8_guarded_fill_design.md`
+- `docs/car_model/meshprior_stage8_guarded_fill_implementation_report.md`
+- `docs/car_model/meshprior_stage8_guarded_fill_smoke.md`
+
+**Smoke / verification**:
+- `micromamba run -n mesh_splatting python -m compileall scripts/car_model ss3dm_prior -q`: PASS.
+- `smoke_test_meshprior_stage8_fill.py`: PASS.
+- `smoke_test_meshprior_stage6_synthetic_damage.py`: PASS.
+- Small local-hole benchmark over `damaged_input`, `guarded_fill`, and `snap_fill`: PASS.
+
+**Benchmark gate detail**:
+- `damaged_input` local hole had `boundary_edge_count=4`.
+- `guarded_fill` reduced boundary edges to `0`, added `4` faces, and kept component-count delta at `0`.
+- `snap_fill` also reduced boundary edges to `0`; snap moved no vertices in this case because boundary vertices are fixed by default.
+- Free-space violation stayed `0.0` in the controlled analytic benchmark.
+
+**Decision**: M8 gate `PASS`. The next allowed stage is M9 scene evidence gates and rollback.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_stage8_guarded_fill_design.md`
+- Implementation report: `docs/car_model/meshprior_stage8_guarded_fill_implementation_report.md`
+- Smoke report: `docs/car_model/meshprior_stage8_guarded_fill_smoke.md`
+
+---

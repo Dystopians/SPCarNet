@@ -16,6 +16,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from ss3dm_prior.meshprior.protect_prune import compute_triangle_scores
+from ss3dm_prior.meshprior.fill import build_fill_proposal, evaluate_fill_risk, find_boundary_loops
 from ss3dm_prior.meshprior.snap import evaluate_snap_risk, propose_vertex_snap
 from ss3dm_prior.meshprior.synthetic_damage import (
     add_floater_triangles,
@@ -65,13 +66,22 @@ def evaluate_damage(name: str, method: str, *, snap_max_disp: float = 0.005) -> 
     vertices, faces = make_box_mesh()
     damaged = _damage(vertices, faces, name)
     eval_vertices = damaged.vertices
+    eval_faces = damaged.faces
+    valid_mask = damaged.valid_face_mask.copy()
+    floater_mask = damaged.floater_face_mask.copy()
     snap_metrics: dict[str, float] = {
         "snap_mean_displacement": 0.0,
         "snap_max_displacement": 0.0,
         "snap_moved_vertex_fraction": 0.0,
         "snap_surface_distance_delta_mean": 0.0,
     }
-    if method == "protect_prune_snap":
+    fill_metrics: dict[str, float] = {
+        "fill_accepted": 0.0,
+        "fill_added_face_count": 0.0,
+        "fill_boundary_edge_delta": 0.0,
+        "fill_component_count_delta": 0.0,
+    }
+    if method in {"protect_prune_snap", "snap_fill"}:
         proposal = propose_vertex_snap(
             damaged.vertices,
             damaged.faces,
@@ -89,19 +99,36 @@ def evaluate_damage(name: str, method: str, *, snap_max_disp: float = 0.005) -> 
             "snap_moved_vertex_fraction": float(risk["moved_vertex_fraction"]),
             "snap_surface_distance_delta_mean": float(risk.get("surface_distance_delta_mean", 0.0)),
         }
-    elif method != "protect_prune_only":
+    if method in {"guarded_fill", "snap_fill"}:
+        loops = find_boundary_loops((eval_vertices, eval_faces))
+        if loops:
+            fill = build_fill_proposal((eval_vertices, eval_faces), loops[0], analytic_box_field, min_support=0.45)
+            fill_risk = evaluate_fill_risk(fill)
+            eval_vertices = fill.vertices_after
+            eval_faces = fill.faces_after
+            added = len(fill.added_face_indices)
+            if added:
+                valid_mask = np.concatenate([valid_mask, np.ones(added, dtype=bool)])
+                floater_mask = np.concatenate([floater_mask, np.zeros(added, dtype=bool)])
+            fill_metrics = {
+                "fill_accepted": float(bool(fill.accepted)),
+                "fill_added_face_count": float(fill_risk["added_face_count"]),
+                "fill_boundary_edge_delta": float(fill_risk["boundary_edge_delta"]),
+                "fill_component_count_delta": float(fill_risk["component_count_delta"]),
+            }
+    elif method not in {"protect_prune_only", "protect_prune_snap", "damaged_input"}:
         raise ValueError(f"unknown benchmark method: {method}")
     table = compute_triangle_scores(
         vertices=eval_vertices,
-        faces=damaged.faces,
+        faces=eval_faces,
         decoder=analytic_box_field,
         z=None,
         samples_per_face=4,
     )
     protect = np.asarray(table.protect_scores)
     prune = np.asarray(table.prune_scores)
-    floater = damaged.floater_face_mask
-    valid = damaged.valid_face_mask
+    floater = floater_mask
+    valid = valid_mask
     pred_prune = prune >= 0.5
     pred_protect = protect >= 0.5
     floater_tp = int(np.logical_and(pred_prune, floater).sum())
@@ -110,12 +137,12 @@ def evaluate_damage(name: str, method: str, *, snap_max_disp: float = 0.005) -> 
     precision = floater_tp / max(floater_tp + floater_fp, 1)
     recall = floater_tp / max(floater_tp + floater_fn, 1)
     protect_recall = int(np.logical_and(pred_protect, valid).sum()) / max(int(valid.sum()), 1)
-    hole = compute_hole_boundary_metrics(damaged.faces)
+    hole = compute_hole_boundary_metrics(eval_faces)
     return {
         "method": method,
         "damage_type": name,
-        "triangle_count": int(len(damaged.faces)),
-        "triangle_count_delta": int(len(damaged.faces) - len(faces)),
+        "triangle_count": int(len(eval_faces)),
+        "triangle_count_delta": int(len(eval_faces) - len(faces)),
         "floater_prune_precision": float(precision),
         "floater_prune_recall": float(recall),
         "valid_surface_protect_recall": float(protect_recall),
@@ -123,6 +150,7 @@ def evaluate_damage(name: str, method: str, *, snap_max_disp: float = 0.005) -> 
         "visible_preservation_error": 0.0,
         "mesh_extraction_success": True,
         **snap_metrics,
+        **fill_metrics,
         **hole,
     }
 
