@@ -273,3 +273,221 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - Implementation report: `docs/car_model/spcarnet_stage5_multihypothesis_implementation_report.md`
 
 ---
+
+## 2026-05-01 — MeshPrior Stage 0 (repository audit) — PASS / PROCEED
+
+**Outcome**: M0 repository integrity audit completed for the SP-CarNet → MeshPrior transition. No new method code was implemented.
+
+**Environment**:
+- Default shell Python is `3.13.2` and does not have `torch`; it is not the project environment.
+- `micromamba run -n mesh_splatting` provides Python `3.11.14`, `torch 2.7.1+cu126`, CUDA available, `cuda_device_count=8`.
+- `python -m compileall scripts/car_model ss3dm_prior -q` passes in the `mesh_splatting` environment.
+
+**Code audit**:
+- Required SP-CarNet source files are present, including `spcarnet_object_dataset.py`, `spcarnet_shape_field.py`, `spcarnet_posterior.py`, Stage-2/Stage-3 trainers, Stage-4 observation loss, and Stage-1/3/4/5 scripts.
+- `ss3dm_prior.models.spcarnet_shape_field` and `ss3dm_prior.models.spcarnet_posterior` import cleanly.
+- Worktree was already dirty before this audit: `scripts/car_model/eval_spcarnet_multihypothesis.py` modified, `docs/prompts.md` untracked, and two submodules reported as dirty/unknown.
+
+**Smoke tests**:
+- `smoke_test_spcarnet_stage1.py`: PASS.
+- `smoke_test_spcarnet_stage2.py`: PASS.
+- `smoke_test_spcarnet_stage3.py`: PASS.
+- `smoke_test_spcarnet_stage4.py`: PASS.
+- `smoke_test_spcarnet_stage5.py`: PASS.
+
+**Artifact audit**:
+- Stage-2/3/4/5 checkpoints and JSONs exist under `outputs/carnet/spcarnet/`.
+- Key reported metrics are supported by local JSONs, including Stage-3 `recon_chamfer_l1_mean=0.066391`, `free_space_violation_rate_mean=0.033535`, Stage-4 refinement `0.071490 -> 0.069032` chamfer and `0.035820 -> 0.014688` free-space violation, and Stage-5 K=8 oracle `0.065528` vs top1 reranked `0.073501`.
+
+**Decision**: M0 recommendation is `PROCEED`. The next allowed prompt is M1, the MeshPrior scene-optimization RFC, with no model-code changes.
+
+**Linked artefact**:
+- Audit report: `docs/car_model/meshprior_stage0_repository_audit.md`
+
+---
+
+## 2026-05-01 — MeshPrior Stage 1 (scene mesh-prior RFC) — COMPLETE / PROCEED_TO_M2
+
+**Outcome**: Wrote the MeshPrior research RFC that pivots SP-CarNet from object-only completion to object-prior-guided scene mesh optimization. No model code was changed.
+
+**Central claim**: learned object-centric shape posteriors can safely guide scene mesh optimization when converted into bounded local proposals and filtered by scene-level evidence gates.
+
+**Method slogan**: `Prior proposes; evidence disposes.`
+
+**Planned system layers**:
+- repository/object-prior integrity,
+- scene/object region mining,
+- object posterior inference in canonical frame,
+- mesh repair proposal generation,
+- scene evidence gates and rollback,
+- alternating scene optimization,
+- NeurIPS-grade evaluation and reporting.
+
+**Proposal order**: protect/prune first, snap second, guarded fill third, split/collapse refinement last.
+
+**Decision**: M1 is complete. The next allowed stage is M2 region mining.
+
+**Linked artefact**:
+- RFC: `docs/car_model/meshprior_stage1_scene_meshprior_RFC.md`
+
+---
+
+## 2026-05-01 — MeshPrior Stage 2 (scene/object region mining) — PASS
+
+**Outcome**: Implemented the first scene/object bridge for MeshPrior: a conservative region mining layer that can process PLY meshes when present and emits clean dry-run artifacts when no scene mesh or segmentation exists.
+
+**Files added**:
+- `ss3dm_prior/meshprior/__init__.py`
+- `ss3dm_prior/meshprior/region_types.py`
+- `scripts/car_model/meshprior_mine_regions.py`
+- `scripts/car_model/smoke_test_meshprior_stage2_region_mining.py`
+- `docs/car_model/meshprior_stage2_region_mining_design.md`
+- `docs/car_model/meshprior_stage2_region_mining_implementation_report.md`
+- `docs/car_model/meshprior_stage2_region_mining_smoke.md`
+
+**Smoke / verification**:
+- `micromamba run -n mesh_splatting python -m compileall scripts/car_model ss3dm_prior -q`: PASS.
+- `smoke_test_meshprior_stage2_region_mining.py`: PASS, synthetic two-component mesh produced `regions=2`, `eligible_for_posterior=1`.
+- Missing-data dry-run: PASS, emitted empty region set and exited cleanly.
+
+**Contract**:
+- Outputs `regions.json`, `regions_summary.csv`, and `region_mining_report.md`.
+- Very small components are retained as diagnostics but not marked eligible for posterior inference.
+- No SP-CarNet posterior inference and no scene geometry modification happen in M2.
+
+**Decision**: M2 gate `PASS`. The next allowed stage is M3 scene-region posterior inference.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_stage2_region_mining_design.md`
+- Implementation report: `docs/car_model/meshprior_stage2_region_mining_implementation_report.md`
+- Smoke report: `docs/car_model/meshprior_stage2_region_mining_smoke.md`
+
+---
+
+## 2026-05-01 — MeshPrior Stage 3 (scene-region posterior inference) — PASS
+
+**Outcome**: Implemented the wrapper that takes mined scene regions, samples region point clouds, canonicalizes them with a conservative bbox/PCA transform, runs the Stage-3 SP-CarNet posterior encoder, and writes posterior diagnostics for later proposal generation.
+
+**Files added**:
+- `ss3dm_prior/meshprior/scene_region_posterior.py`
+- `scripts/car_model/meshprior_infer_region_posterior.py`
+- `scripts/car_model/smoke_test_meshprior_stage3_region_posterior.py`
+- `docs/car_model/meshprior_stage3_scene_region_posterior_design.md`
+- `docs/car_model/meshprior_stage3_scene_region_posterior_implementation_report.md`
+- `docs/car_model/meshprior_stage3_scene_region_posterior_smoke.md`
+
+**Smoke / verification**:
+- `micromamba run -n mesh_splatting python -m compileall scripts/car_model ss3dm_prior -q`: PASS.
+- `smoke_test_meshprior_stage3_region_posterior.py`: PASS.
+- Missing-checkpoint path fails clearly with `posterior_checkpoint not found`.
+- With local checkpoint `outputs/carnet/spcarnet/posterior_encoder_v1/checkpoint_last.pt`, one synthetic region produced `z_mean.npy`, `z_logvar.npy`, `canonical_transform.json`, `posterior_summary.json`, sampled points, and an occupancy grid.
+
+**Diagnostics from smoke**:
+- `field_occupancy_ratio=0.070068`.
+- `posterior_mu_norm=2.835622`.
+- `posterior_logvar_mean=-3.936054`.
+- `uncertainty_score=0.146494`.
+- MC extraction succeeded at smoke resolution with `vertex_count=461`, `face_count=926`, watertight.
+
+**Decision**: M3 gate `PASS`. The next allowed stage is M4 protect/prune proposal generation.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_stage3_scene_region_posterior_design.md`
+- Implementation report: `docs/car_model/meshprior_stage3_scene_region_posterior_implementation_report.md`
+- Smoke report: `docs/car_model/meshprior_stage3_scene_region_posterior_smoke.md`
+
+---
+
+## 2026-05-01 — MeshPrior Stage 4 (protect/prune proposals) — PASS
+
+**Outcome**: Implemented the first safe MeshPrior proposal types: protect and prune. This stage only emits triangle-level scores and proposal records; it does not move vertices and does not fill holes.
+
+**Files added**:
+- `ss3dm_prior/meshprior/proposals.py`
+- `ss3dm_prior/meshprior/protect_prune.py`
+- `scripts/car_model/meshprior_make_protect_prune_proposals.py`
+- `scripts/car_model/smoke_test_meshprior_stage4_protect_prune.py`
+- `docs/car_model/meshprior_stage4_protect_prune_design.md`
+- `docs/car_model/meshprior_stage4_protect_prune_implementation_report.md`
+- `docs/car_model/meshprior_stage4_protect_prune_smoke.md`
+
+**Smoke / verification**:
+- `micromamba run -n mesh_splatting python -m compileall scripts/car_model ss3dm_prior -q`: PASS.
+- `smoke_test_meshprior_stage4_protect_prune.py`: PASS.
+
+**Synthetic scoring result**:
+- cube surface protect score mean `0.999990`.
+- floater protect score `0.000010`.
+- cube prune score mean `0.0`.
+- floater prune score `0.999980`.
+- both `protect` and `prune` proposal types generated.
+
+**Decision**: M4 gate `PASS`. The next allowed stage is M5 optimizer adapter.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_stage4_protect_prune_design.md`
+- Implementation report: `docs/car_model/meshprior_stage4_protect_prune_implementation_report.md`
+- Smoke report: `docs/car_model/meshprior_stage4_protect_prune_smoke.md`
+
+---
+
+## 2026-05-01 — MeshPrior Stage 5 (optimizer adapter) — PASS
+
+**Outcome**: Implemented a neutral optimizer adapter that exports MeshPrior protect/prune scores for downstream consumption without patching PRISM or overriding scene evidence.
+
+**Files added**:
+- `ss3dm_prior/meshprior/optimizer_adapter.py`
+- `scripts/car_model/meshprior_export_optimizer_scores.py`
+- `scripts/car_model/smoke_test_meshprior_stage5_optimizer_adapter.py`
+- `docs/car_model/meshprior_stage5_optimizer_adapter_design.md`
+- `docs/car_model/meshprior_stage5_optimizer_adapter_implementation_report.md`
+- `docs/car_model/meshprior_stage5_optimizer_adapter_smoke.md`
+
+**PRISM status**: PRISM is present (`utils/prism_scoring.py`, `utils/prism_counterfactual.py`, `utils/prism_pipeline.py`). M5 exports passive artifacts only; no `train.py` or PRISM internals were changed.
+
+**Smoke / verification**:
+- `micromamba run -n mesh_splatting python -m compileall scripts/car_model ss3dm_prior -q`: PASS.
+- `smoke_test_meshprior_stage5_optimizer_adapter.py`: PASS.
+- Generic NPZ and PRISM JSON export/reload verified.
+- Bounded-add rule verified: MeshPrior score delta cannot exceed configured weight (`0.25` in smoke).
+
+**Decision**: M5 gate `PASS`. The next allowed stage is M6 synthetic mesh-damage benchmark.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_stage5_optimizer_adapter_design.md`
+- Implementation report: `docs/car_model/meshprior_stage5_optimizer_adapter_implementation_report.md`
+- Smoke report: `docs/car_model/meshprior_stage5_optimizer_adapter_smoke.md`
+
+---
+
+## 2026-05-01 — MeshPrior Stage 6 (synthetic mesh-damage benchmark) — PASS
+
+**Outcome**: Implemented a controlled synthetic mesh-damage benchmark for proposal behavior before real scene integration.
+
+**Files added**:
+- `ss3dm_prior/meshprior/synthetic_damage.py`
+- `scripts/car_model/meshprior_run_synthetic_damage_benchmark.py`
+- `scripts/car_model/meshprior_make_synthetic_damage_report.py`
+- `scripts/car_model/smoke_test_meshprior_stage6_synthetic_damage.py`
+- `docs/car_model/meshprior_stage6_synthetic_damage_benchmark_design.md`
+- `docs/car_model/meshprior_stage6_synthetic_damage_benchmark_implementation_report.md`
+- `docs/car_model/meshprior_stage6_synthetic_damage_benchmark_smoke.md`
+
+**Smoke / verification**:
+- `micromamba run -n mesh_splatting python -m compileall scripts/car_model ss3dm_prior -q`: PASS.
+- `smoke_test_meshprior_stage6_synthetic_damage.py`: PASS.
+- Synthetic benchmark produced 4 rows across local hole, floater, vertex noise, and density imbalance.
+- Controlled floater case achieved `floater_prune_recall=1.0` and valid-surface protect recall >= 0.9.
+
+**Outputs**:
+- `metrics.json`, `metrics.csv`, `table_by_damage_type.csv`, `failure_cases.md`.
+- Markdown report generation verified.
+
+**Decision**: M6 gate `PASS`. The next allowed stage is M7 conservative snap.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_stage6_synthetic_damage_benchmark_design.md`
+- Implementation report: `docs/car_model/meshprior_stage6_synthetic_damage_benchmark_implementation_report.md`
+- Smoke report: `docs/car_model/meshprior_stage6_synthetic_damage_benchmark_smoke.md`
+
+---

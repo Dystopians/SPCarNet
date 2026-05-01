@@ -51,6 +51,53 @@ def _chamfer_l1(a: np.ndarray, b: np.ndarray) -> float:
     return float(0.5 * (d.min(dim=1).values.mean() + d.min(dim=0).values.mean()).item())
 
 
+def _symmetry_residual(points: np.ndarray) -> dict[str, float]:
+    """Min-over-axis self-chamfer after planar reflection through the centroid.
+
+    Cars are bilaterally symmetric. The cache is centred + unit-scaled but the
+    in-cache axis convention is *not* annotated (Stage 1 design §3.4): we test
+    reflection across each canonical axis through the centroid, take the
+    minimum residual as the dominant-symmetry score, and normalise by the RMS
+    radius so the score is scale-invariant.
+    """
+    if points.size == 0 or points.shape[0] < 32:
+        return {"sym_residual": float("nan"), "sym_axis": -1, "sym_residual_norm": float("nan")}
+    pts = np.asarray(points, dtype=np.float32)
+    centred = pts - pts.mean(axis=0, keepdims=True)
+    rms = float(np.sqrt(np.mean(np.sum(centred * centred, axis=1)) + 1e-12))
+    best_res, best_axis = float("inf"), -1
+    for axis in range(3):
+        reflected = pts.copy()
+        reflected[:, axis] = 2.0 * pts[:, axis].mean() - reflected[:, axis]
+        res = _chamfer_l1(pts, reflected)
+        if res < best_res:
+            best_res, best_axis = res, axis
+    return {
+        "sym_residual": float(best_res),
+        "sym_axis": int(best_axis),
+        "sym_residual_norm": float(best_res / max(rms, 1e-6)),
+    }
+
+
+def _rag_distance(z: torch.Tensor, latent_bank: torch.Tensor, top_k: int = 5) -> dict[str, float]:
+    """Mean L2 distance from candidate ``z`` to its top-K nearest train latents.
+
+    Lower = more on the train-latent manifold. The latent bank is the
+    Stage-2 autodecoder's per-train-object latent table.
+    """
+    if latent_bank.numel() == 0:
+        return {"rag_dist_mean": float("nan"), "rag_dist_min": float("nan")}
+    with torch.no_grad():
+        z_flat = z.reshape(1, -1).to(latent_bank.device).float()
+        d = torch.cdist(z_flat, latent_bank, p=2).squeeze(0)
+        kk = min(top_k, d.numel())
+        topk_vals = torch.topk(d, kk, largest=False).values
+    return {
+        "rag_dist_mean": float(topk_vals.mean().item()),
+        "rag_dist_min": float(topk_vals.min().item()),
+    }
+
+
 def _build_models(checkpoint: dict, device: torch.device) -> tuple[
     SPCarPosteriorCompletionModel, SPCarShapeFieldDecoder, SPCarPosteriorEncoder
 ]:
@@ -209,6 +256,9 @@ def _evaluate_one(
     weights: dict[str, float],
     free_violation_threshold: float,
     seed_base: int,
+    latent_bank: torch.Tensor | None = None,
+    enable_symmetry: bool = False,
+    enable_rag: bool = False,
 ) -> dict[str, Any]:
     partial_np = item.get("partial_observed_points")
     if partial_np is None or partial_np.size == 0:
@@ -294,6 +344,10 @@ def _evaluate_one(
                 cand["hidden_chamfer_l1"] = _chamfer_l1(
                     sampled, np.asarray(hidden, dtype=np.float32)
                 )
+            if enable_symmetry:
+                cand.update(_symmetry_residual(sampled))
+        if enable_rag and latent_bank is not None:
+            cand.update(_rag_distance(z_k, latent_bank))
         candidates.append(cand)
 
     # ------- diversity -------
@@ -432,6 +486,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--output_dir", required=True)
+    parser.add_argument("--enable_symmetry_score", action="store_true",
+                        help="Compute per-candidate sym_residual (mesh self-chamfer under planar reflection).")
+    parser.add_argument("--enable_rag_score", action="store_true",
+                        help="Compute per-candidate rag_dist_mean / rag_dist_min "
+                             "(top-K=5 NN distance to train latent bank).")
+    parser.add_argument("--latent_bank_checkpoint", default=None,
+                        help="Stage-2 autodecoder checkpoint with `latent_table` "
+                             "(used only when --enable_rag_score). Falls back to --shape_field_checkpoint.")
     args = parser.parse_args(argv)
 
     device = torch.device(
@@ -455,6 +517,18 @@ def main(argv: list[str] | None = None) -> int:
         "alpha_hard": args.alpha_hard,
     }
 
+    latent_bank: torch.Tensor | None = None
+    if args.enable_rag_score:
+        bank_path = args.latent_bank_checkpoint or args.shape_field_checkpoint
+        if bank_path is None:
+            raise SystemExit(
+                "--enable_rag_score requires --latent_bank_checkpoint or --shape_field_checkpoint"
+            )
+        bank_ckpt = torch.load(bank_path, map_location=device)
+        if "latent_table" not in bank_ckpt:
+            raise SystemExit(f"latent_table not found in {bank_path}")
+        latent_bank = bank_ckpt["latent_table"].to(device).float()
+
     dataset = SPCarObjectDataset(args.object_index, splits=(args.split,))
     n_total = len(dataset) if args.num_objects <= 0 else min(args.num_objects, len(dataset))
 
@@ -469,6 +543,9 @@ def main(argv: list[str] | None = None) -> int:
                 iso_level=args.iso_level, weights=weights,
                 free_violation_threshold=args.free_violation_threshold,
                 seed_base=args.seed * 1024 + i * args.K,
+                latent_bank=latent_bank,
+                enable_symmetry=args.enable_symmetry_score,
+                enable_rag=args.enable_rag_score,
             )
         except Exception as exc:
             entry = {
