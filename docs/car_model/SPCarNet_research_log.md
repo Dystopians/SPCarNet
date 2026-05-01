@@ -663,3 +663,37 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - Report: `docs/car_model/meshprior_stage11_scene_experiment_report.md`
 
 ---
+
+## 2026-05-01 — MeshPrior Stage 12 (prior calibration) — PASS
+
+**Outcome**: Implemented a post-hoc surface-support calibration profile for proposal reliability. The upgrade targets snap risk and valid-surface preservation, not object Chamfer.
+
+**Files added/updated**:
+- `ss3dm_prior/meshprior/calibration.py`
+- `scripts/car_model/meshprior_calibrate_prior.py`
+- `scripts/car_model/smoke_test_meshprior_stage12_prior_calibration.py`
+- `scripts/car_model/meshprior_run_pipeline.py`
+- `docs/car_model/meshprior_stage12_prior_calibration_design.md`
+- `docs/car_model/meshprior_stage12_prior_calibration_implementation_report.md`
+- `docs/car_model/meshprior_stage12_prior_calibration_smoke.md`
+
+**Evidence and calibration**:
+- Uncalibrated snap (`max_disp=0.02`) reduced valid-surface protect recall from `0.9167` to `0.8333`.
+- `surface_support_v1` snap (`max_disp=0.005`) preserved valid-surface protect recall at `0.9167`.
+- Calibrated snap still improved surface distance by `0.01073157787322998`.
+- Free-space violation delta remained `0.0`.
+
+**Smoke / verification**:
+- `micromamba run -n mesh_splatting python -m compileall scripts/car_model ss3dm_prior -q`: PASS.
+- `smoke_test_meshprior_stage12_prior_calibration.py`: PASS.
+- `smoke_test_meshprior_stage10_pipeline.py`: PASS.
+- Targeted experiment wrote `outputs/carnet/meshprior/prior_calibration/stage12_surface_support_v1/calibration_metrics.json`.
+
+**Decision**: M12 gate `PASS`. The next allowed stage is M13 evaluation protocol and matrix.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_stage12_prior_calibration_design.md`
+- Implementation report: `docs/car_model/meshprior_stage12_prior_calibration_implementation_report.md`
+- Smoke report: `docs/car_model/meshprior_stage12_prior_calibration_smoke.md`
+
+---

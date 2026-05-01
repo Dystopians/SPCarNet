@@ -14,6 +14,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from ss3dm_prior.meshprior.fill import build_fill_proposal, find_boundary_loops
+from ss3dm_prior.meshprior.calibration import calibrated_snap_max_disp
 from ss3dm_prior.meshprior.protect_prune import compute_triangle_scores
 from ss3dm_prior.meshprior.scene_gate import (
     accept_or_reject,
@@ -124,7 +125,13 @@ def _make_proposals(args: argparse.Namespace, output_dir: Path, mesh_path: Path)
         )
 
     if "snap" in args.proposal_types:
-        snap = propose_vertex_snap(vertices, faces, analytic_box_occupancy_field, max_disp=0.005, allow_boundary=False)
+        snap = propose_vertex_snap(
+            vertices,
+            faces,
+            analytic_box_occupancy_field,
+            max_disp=calibrated_snap_max_disp(args.calibration_profile),
+            allow_boundary=False,
+        )
         snap_path = proposal_dir / "snap_after.npz"
         _save_mesh(snap_path, snap.vertices_after, faces)
         records.append(
@@ -264,6 +271,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max_proposals", type=int, default=16)
     parser.add_argument("--require_gate_pass", action="store_true")
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--calibration_profile", default="surface_support_v1")
     return parser
 
 
