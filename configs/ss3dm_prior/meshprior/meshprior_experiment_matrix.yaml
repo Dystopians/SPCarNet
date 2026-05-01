@@ -1,0 +1,108 @@
+version: 1
+default_output_dir: outputs/carnet/meshprior/experiment_matrix
+experiments:
+  - id: v0_7_residual_baseline
+    group: object
+    method: v0.7 residual baseline
+    output_type: points
+    status_if_missing: MISSING
+    metrics_path: outputs/carnet/v0_7/full/history.json
+    metric_kind: history_last
+    oracle_only: false
+    dry_run: false
+  - id: v0_8_2_point_flow_baseline
+    group: object
+    method: v0.8.2 point-flow baseline
+    output_type: points
+    status_if_missing: MISSING
+    metrics_path: outputs/carnet/v0_8_2/full/history.json
+    metric_kind: history_last
+    oracle_only: false
+    dry_run: false
+  - id: spcarnet_stage3_posterior_encoder
+    group: object
+    method: SP-CarNet Stage 3 posterior encoder
+    output_type: mesh field
+    status_if_missing: MISSING
+    metrics_path: outputs/carnet/spcarnet/posterior_encoder_v1/eval_val.json
+    metric_kind: object_eval_summary
+    oracle_only: false
+    dry_run: false
+  - id: spcarnet_stage4_map_refinement
+    group: object
+    method: SP-CarNet Stage 4 MAP refinement
+    output_type: mesh field
+    status_if_missing: MISSING
+    metrics_path: outputs/carnet/spcarnet/map_refinement/val_50_default/metrics.json
+    metric_kind: object_eval_summary
+    oracle_only: false
+    dry_run: false
+  - id: spcarnet_stage5_oracle_k8
+    group: object
+    method: SP-CarNet Stage 5 oracle K=8 analysis
+    output_type: oracle mesh field
+    status_if_missing: MISSING
+    metrics_path: outputs/carnet/spcarnet/multihypothesis/val_50_K8/metrics.json
+    metric_kind: object_eval_summary
+    oracle_only: true
+    dry_run: false
+  - id: protect_prune_proposals
+    group: synthetic
+    method: protect/prune proposals
+    output_type: proposal scores
+    status_if_missing: MISSING
+    metrics_path: outputs/carnet/meshprior/synthetic_damage/latest/metrics.json
+    metric_kind: synthetic_damage
+    oracle_only: false
+    dry_run: true
+  - id: protect_prune_snap
+    group: synthetic
+    method: protect/prune + snap
+    output_type: proposal scores + snap
+    status_if_missing: MISSING
+    metrics_path: outputs/carnet/meshprior/prior_calibration/stage12_surface_support_v1/calibration_metrics.json
+    metric_kind: snap_calibration
+    oracle_only: false
+    dry_run: true
+  - id: protect_prune_snap_fill
+    group: synthetic
+    method: protect/prune + snap + fill
+    output_type: proposal scores + snap + fill
+    status_if_missing: MISSING
+    metrics_path: outputs/carnet/meshprior/scene_experiments/m11_synthetic_dryrun/metrics.json
+    metric_kind: scene_dryrun_metrics
+    oracle_only: false
+    dry_run: true
+  - id: surface_support_v1_calibration
+    group: synthetic
+    method: surface_support_v1 calibration
+    output_type: calibrated proposal profile
+    status_if_missing: MISSING
+    metrics_path: outputs/carnet/meshprior/prior_calibration/stage12_surface_support_v1/calibration_metrics.json
+    metric_kind: snap_calibration
+    oracle_only: false
+    dry_run: true
+  - id: scene_baseline_wandb_repair_smoke
+    group: scene
+    method: scene baseline, 200-iter no-cleanup smoke
+    scene: video_colmap_smoke
+    checkpoint: iteration_200
+    output_type: trained scene mesh
+    status_if_missing: MISSING
+    metrics_path: outputs/carnet/meshprior/wandb_train_m13_repair_no_cleanup/model/wandb/run-20260501_161205-3swt58x2/files/wandb-summary.json
+    geometry_path: outputs/carnet/meshprior/wandb_train_m13_repair_no_cleanup/model/geometry_eval_colmap/iter_200.json
+    cleanup_path: outputs/carnet/meshprior/wandb_train_m13_repair_no_cleanup/model/prism_debug/final_cleanup_summary.json
+    metric_kind: wandb_scene_summary
+    oracle_only: false
+    dry_run: false
+  - id: scene_baseline_meshprior_proposals
+    group: scene
+    method: scene baseline + MeshPrior proposals
+    scene: synthetic_local_hole
+    checkpoint: dry_run_synthetic
+    output_type: gated proposals
+    status_if_missing: MISSING
+    metrics_path: outputs/carnet/meshprior/scene_experiments/m11_synthetic_dryrun/metrics.json
+    metric_kind: scene_dryrun_metrics
+    oracle_only: false
+    dry_run: true

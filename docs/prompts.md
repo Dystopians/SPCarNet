@@ -8,6 +8,8 @@ Status before continuing to Prompt M13:
 - DONE: A 200-iteration wandb training smoke ran on GPU 1 and synced successfully.
 - BLOCKER FOUND: the training final cleanup path pruned a non-PRISM 200-iteration run from `5706` triangles to `15` triangles.
 - DONE BEFORE M13: final cleanup was repaired so ordinary non-PRISM training does not run destructive cleanup by default. A second 200-iteration wandb smoke preserved `5706` triangles and passed COLMAP sparse geometry evaluation.
+- DONE: M13 evaluation protocol, experiment matrix, dry-run matrix runner, NeurIPS-style report generator, smoke test, and generated report are implemented. Full dry-run matrix status: `11` total, `7` available, `4` `MISSING`.
+- TODO: Do not advance to M14 until M13 implementation report, smoke report, research log entry, commit, and push are complete.
 
 This document is meant to be copied, stage by stage, into Codex / Claude Code or another coding agent working inside `Dystopians/SPCarNet`.
 

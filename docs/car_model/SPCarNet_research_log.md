@@ -725,3 +725,56 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_training_cleanup_repair_report.md`
 
 ---
+
+## 2026-05-01 — MeshPrior Stage 13 (evaluation protocol and matrix) — PASS
+
+**Outcome**: Implemented the evaluation protocol, experiment matrix registry, dry-run matrix runner, and NeurIPS-style report generator.
+
+**Files added**:
+- `docs/car_model/meshprior_stage13_eval_protocol_design.md`
+- `configs/ss3dm_prior/meshprior/meshprior_experiment_matrix.yaml`
+- `scripts/car_model/meshprior_run_experiment_matrix.py`
+- `scripts/car_model/meshprior_make_neurips_report.py`
+- `scripts/car_model/smoke_test_meshprior_stage13_eval_protocol.py`
+- `docs/car_model/meshprior_stage13_eval_protocol_implementation_report.md`
+- `docs/car_model/meshprior_stage13_eval_protocol_smoke.md`
+- `docs/car_model/reports/meshprior_neurips_main_report.md`
+
+**Generated outputs**:
+- `outputs/carnet/meshprior/experiment_matrix/matrix_results.json`
+- `outputs/carnet/meshprior/reports/object_table.csv`
+- `outputs/carnet/meshprior/reports/synthetic_damage_table.csv`
+- `outputs/carnet/meshprior/reports/scene_table.csv`
+- `outputs/carnet/meshprior/reports/ablation_table.csv`
+- `outputs/carnet/meshprior/reports/failure_cases.md`
+
+**Full dry-run matrix**:
+- `total=11`
+- `available=7`
+- `missing=4`
+
+**Smoke / verification**:
+- `micromamba run -n mesh_splatting python -m compileall scripts/car_model ss3dm_prior -q`: PASS.
+- `smoke_test_meshprior_stage13_eval_protocol.py`: PASS.
+- Report generation from `outputs/carnet/meshprior/experiment_matrix/matrix_results.json`: PASS.
+
+**Key available evidence**:
+- Stage 3 posterior encoder: recon Chamfer L1 `0.0663909994752951`, hidden Chamfer L1 `0.0990753869336207`, mesh extraction success `1.0`.
+- `surface_support_v1` calibration preserves valid-surface protect recall at `0.9166666666666666`.
+- 200-iteration no-cleanup scene smoke preserved `5706` triangles and reports COLMAP depth AbsRel `0.10470779720655764`.
+
+**Missing rows retained**:
+- `v0_7_residual_baseline`
+- `spcarnet_stage4_map_refinement`
+- `spcarnet_stage5_oracle_k8`
+- `protect_prune_proposals`
+
+**Decision**: M13 gate `PASS`. The next allowed stage is M14, with the caveat that scene MeshPrior application is still dry-run/gated proposal evidence rather than real render-gated insertion.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_stage13_eval_protocol_design.md`
+- Implementation report: `docs/car_model/meshprior_stage13_eval_protocol_implementation_report.md`
+- Smoke report: `docs/car_model/meshprior_stage13_eval_protocol_smoke.md`
+- Generated report: `docs/car_model/reports/meshprior_neurips_main_report.md`
+
+---
