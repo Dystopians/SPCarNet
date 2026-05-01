@@ -559,3 +559,35 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - Smoke report: `docs/car_model/meshprior_stage8_guarded_fill_smoke.md`
 
 ---
+
+## 2026-05-01 — MeshPrior Stage 9 (scene gates and rollback) — PASS
+
+**Outcome**: Implemented dry-run scene evidence gates and rollback snapshots for MeshPrior proposals. Proposal acceptance now requires scene-side evidence; object-prior confidence alone is insufficient.
+
+**Files added**:
+- `ss3dm_prior/meshprior/scene_gate.py`
+- `scripts/car_model/meshprior_evaluate_proposals.py`
+- `scripts/car_model/smoke_test_meshprior_stage9_scene_gate.py`
+- `docs/car_model/meshprior_stage9_scene_gate_rollback_design.md`
+- `docs/car_model/meshprior_stage9_scene_gate_rollback_implementation_report.md`
+- `docs/car_model/meshprior_stage9_scene_gate_rollback_smoke.md`
+
+**Smoke / verification**:
+- `micromamba run -n mesh_splatting python -m compileall scripts/car_model ss3dm_prior -q`: PASS.
+- `smoke_test_meshprior_stage9_scene_gate.py`: PASS.
+- `smoke_test_meshprior_stage8_fill.py`: PASS.
+
+**Gate behavior**:
+- Topology-improving fill proposal accepted.
+- Disconnected-floater proposal rejected because component count increased.
+- Rollback snapshot and restore verified for vertices, faces, and metadata.
+- CLI dry-run report generated `accepted_count=1` and `rejected_count=1`.
+
+**Decision**: M9 gate `PASS`. The next allowed stage is M10 scene-level optimization integration.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_stage9_scene_gate_rollback_design.md`
+- Implementation report: `docs/car_model/meshprior_stage9_scene_gate_rollback_implementation_report.md`
+- Smoke report: `docs/car_model/meshprior_stage9_scene_gate_rollback_smoke.md`
+
+---
