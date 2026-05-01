@@ -621,3 +621,45 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - Smoke report: `docs/car_model/meshprior_stage10_alternating_runner_smoke.md`
 
 ---
+
+## 2026-05-01 — MeshPrior Stage 11 (scene experiment) — PASS
+
+**Outcome**: Ran one dry-run scene experiment on the synthetic local-hole scene produced by the M10 pipeline.
+
+**Files added**:
+- `docs/car_model/meshprior_stage11_scene_experiment_design.md`
+- `docs/car_model/meshprior_stage11_scene_experiment_report.md`
+- `scripts/car_model/meshprior_collect_scene_experiment.py`
+
+**Required outputs generated**:
+- `outputs/carnet/meshprior/scene_experiments/m11_synthetic_dryrun/commands.sh`
+- `outputs/carnet/meshprior/scene_experiments/m11_synthetic_dryrun/metrics.json`
+- `outputs/carnet/meshprior/scene_experiments/m11_synthetic_dryrun/summary.md`
+
+**Smoke / verification**:
+- `git status --short`: only existing dirty submodules and M11 files before commit.
+- `micromamba run -n mesh_splatting python -m compileall scripts/car_model ss3dm_prior -q`: PASS.
+- `nvidia-smi`: available with elevated permissions. No fully idle GPU was available because every GPU had active processes and memory allocations.
+- `smoke_test_meshprior_stage10_pipeline.py`: PASS.
+- Dry-run M11 experiment: PASS.
+
+**Metrics**:
+- `proposal_count=1`.
+- `accepted_count=1`.
+- `rejected_count=0`.
+- `boundary_edge_delta_sum=4.0`.
+- `component_count_delta_max=0.0`.
+- `floater_count_delta_max=0.0`.
+- `free_space_violation_delta_max=0.0`.
+
+**Wandb / training**:
+- Wandb is installed, but no online wandb run was started.
+- Full training was not launched because no fully idle GPU was available.
+
+**Decision**: M11 gate `PASS` for dry-run scene experiment. The next allowed stage is M12 prior calibration, with the caveat that render/COLMAP improvements remain unproven until a real scene checkpoint is evaluated.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_stage11_scene_experiment_design.md`
+- Report: `docs/car_model/meshprior_stage11_scene_experiment_report.md`
+
+---
