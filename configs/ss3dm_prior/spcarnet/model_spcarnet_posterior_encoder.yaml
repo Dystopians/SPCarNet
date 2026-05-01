@@ -1,0 +1,41 @@
+# SP-CarNet Stage 3 — posterior encoder model + loss config.
+#
+# Pairs with:
+#   configs/ss3dm_prior/spcarnet/train_spcarnet_posterior_encoder.yaml.
+#
+# Design: docs/car_model/spcarnet_stage3_posterior_encoder_design.md.
+
+model:
+  latent_dim: 256                   # MUST match the Stage-2 decoder.
+  encoder_feature_dim: 256
+  num_xattn_layers: 4
+  num_self_attn_layers: 2
+  num_latent_queries: 32
+  attention_heads: 8
+  ffn_dim: 1024
+  dropout: 0.1
+  posterior_kind: variational       # "variational" or "deterministic"
+  use_normals: false                # Cache normals only on clean; partial obs lacks them.
+  use_conditioning_adapter: true
+
+  # Stage-2 decoder (frozen by default).
+  decoder_checkpoint: outputs/carnet/spcarnet/autodecoder_v1/checkpoint_last.pt
+  decoder_finetune_enabled: false   # Stage-3 ablation switch.
+  decoder_finetune_tail_blocks: 2
+
+losses:
+  w_z: 10.0
+  w_z_warmup: 2.0                   # ramp from this to w_z over z_warmup_epochs.
+  w_kl: 1.0e-3
+  w_surf: 1.0
+  w_free: 1.0
+  w_hard: 0.5
+  w_mixed: 0.5
+  w_visible_chamfer: 0.0            # off — differentiable mesh-sampled chamfer is too slow at training time.
+  w_hidden_chamfer: 0.0
+  free_bits_per_dim: 0.1
+  kl_warmup_epochs: 10
+  z_warmup_epochs: 10
+  multi_sample_train_enabled: false
+  multi_sample_K: 4
+  w_diversity: 0.0

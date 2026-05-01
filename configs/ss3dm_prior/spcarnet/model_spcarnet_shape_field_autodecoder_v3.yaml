@@ -1,0 +1,32 @@
+# SP-CarNet Stage 2 — shape-field auto-decoder model + loss config (v3, larger decoder).
+#
+# Pairs with:
+#   configs/ss3dm_prior/spcarnet/train_spcarnet_shape_field_autodecoder_v3.yaml
+#
+# Design: docs/car_model/spcarnet_stage2_shape_field_design.md.
+#
+# v3 vs v2 deltas:
+#   latent_dim 256 -> 512
+#   hidden_dim 384 -> 768
+#   depth 6 -> 8
+# Hypothesis: v1/v2 plateau at recon_chamfer_l1 ~ 0.066 because the decoder family is
+# capacity-limited; quadrupling parameter count tests that.
+
+model:
+  # Implicit shape field decoder f(x; z).
+  field_kind: occupancy           # "occupancy" (default) or "sdf" (ablation)
+  latent_dim: 512
+  hidden_dim: 768
+  depth: 8
+  num_fourier_freqs: 32
+  feature_dim: 0                  # 0 disables auxiliary feature head; >0 reserved for Stage 3 conditioning.
+  latent_init_std: 0.01           # std of N(0, .) per-element latent init (DeepSDF default).
+
+losses:
+  w_surf: 1.0                     # BCE on clean_points + surface_query_points (positives).
+  w_free: 1.0                     # BCE on free_query_points (negatives).
+  w_hard: 0.5                     # BCE on free_space_query_hard_negatives (negatives, oversampled).
+  w_mixed: 0.5                    # BCE on (query_points_all minus ignore mask) — mixed labels.
+  w_zL2: 1.0e-4                   # Latent Gaussian prior weight (DeepSDF default scaled by d_z).
+  w_eik: 0.1                      # SDF-only: ||grad f|| ≈ 1 regulariser.
+  w_normal: 0.0                   # Optional: cosine alignment of grad-of-field with surface normals (off by default).

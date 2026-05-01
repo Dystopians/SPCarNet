@@ -1,0 +1,41 @@
+# SP-CarNet Stage 3 — posterior encoder training config.
+#
+# Pairs with:
+#   configs/ss3dm_prior/spcarnet/model_spcarnet_posterior_encoder.yaml.
+
+train:
+  # Object-level data
+  object_index_path: outputs/carnet/spcarnet/object_index_v1.json
+  train_splits: [train]
+  val_splits: [val]
+
+  # Output
+  output_dir: outputs/carnet/spcarnet/posterior_encoder_v1
+  run_name: spcarnet_posterior_encoder_v1
+
+  seed: 0
+
+  # Schedule
+  epochs: 150
+  batch_size: 16
+
+  # Per-object query budget.
+  queries_surface: 384
+  queries_free: 384
+  queries_hard: 128
+  queries_mixed: 128
+  queries_partial: 768
+
+  # Optim
+  lr_encoder: 3.0e-4
+  lr_decoder_finetune: 1.0e-5
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+
+  # Logging / eval
+  log_every: 50
+  eval_every_epochs: 10
+  save_every_epochs: 10
+
+  device: cuda
+  num_workers: 0

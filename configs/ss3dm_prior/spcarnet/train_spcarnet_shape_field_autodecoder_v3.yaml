@@ -1,0 +1,42 @@
+# SP-CarNet Stage 2 — auto-decoder training config (v3, bigger decoder retrain).
+#
+# Pairs with:
+#   configs/ss3dm_prior/spcarnet/model_spcarnet_shape_field_autodecoder_v3.yaml.
+
+train:
+  # Object-level data
+  object_index_path: outputs/carnet/spcarnet/object_index_v1.json
+  train_splits: [train]
+  val_splits: [val]
+
+  # Output
+  output_dir: outputs/carnet/spcarnet/autodecoder_v3
+  run_name: spcarnet_autodecoder_v3
+
+  seed: 0
+
+  # Schedule
+  epochs: 300
+  batch_size: 8
+
+  # Per-object query budget (sums to ~1024 queries per object per step).
+  queries_surface: 768
+  queries_free: 768
+  queries_hard: 256
+  queries_mixed: 256
+  queries_eikonal: 256            # SDF mode only.
+
+  # Optim
+  lr_decoder: 5.0e-4
+  lr_latent: 1.0e-3
+  weight_decay: 0.0
+  grad_clip: 1.0
+
+  # Logging / eval
+  log_every: 50
+  eval_every_epochs: 10
+  mc_resolution_smoke: 32
+  mc_resolution_full: 64
+
+  device: cuda
+  num_workers: 0
