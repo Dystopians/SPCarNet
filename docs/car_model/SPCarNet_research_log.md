@@ -697,3 +697,31 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - Smoke report: `docs/car_model/meshprior_stage12_prior_calibration_smoke.md`
 
 ---
+
+## 2026-05-01 — Training cleanup blocker repair before M13 — PASS
+
+**Outcome**: Repaired destructive final cleanup behavior found by the wandb training smoke.
+
+**Problem**:
+- A non-PRISM 200-iteration training run pruned `5706` triangles to `15` at final cleanup.
+- Root cause: final cleanup executed by default when PRISM was disabled.
+
+**Fix**:
+- `train.py` now executes final cleanup only when PRISM pruning is enabled and `prism_disable_final_cleanup_prune` is false.
+- Ordinary non-PRISM training skips the PRISM-specific destructive cleanup path.
+
+**Verification**:
+- `micromamba run -n mesh_splatting python -m compileall scripts/car_model ss3dm_prior -q`: PASS.
+- 200-iteration wandb repair run on GPU 1: PASS.
+- Wandb run: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/3swt58x2`.
+- Final cleanup summary: `final_cleanup_enabled=false`, `final_cleanup_pruned=0`.
+- Triangle count preserved: `5706 -> 5706`.
+- Vertex count preserved: `17118 -> 17118`.
+- COLMAP sparse geometry eval passed at iteration 200 with depth AbsRel `0.10470779720655764`, depth MAE `0.024122862845250084`, normal mean angle `37.51919533010328`.
+
+**Decision**: blocker `PASS`. M13 may proceed only after this repair is committed and pushed.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_training_cleanup_repair_report.md`
+
+---

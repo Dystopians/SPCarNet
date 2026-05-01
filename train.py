@@ -2944,8 +2944,8 @@ def training(
         ground_association_tracker.ensure_num_triangles(int(triangles._triangle_indices.shape[0]))
         ground_association_tracker.save_cache()
     prism_enabled = bool(getattr(opt, "enable_prism_pruning", False))
-    disable_final_cleanup = prism_enabled and bool(getattr(opt, "prism_disable_final_cleanup_prune", True))
-    cleanup_executed = not bool(disable_final_cleanup)
+    disable_final_cleanup = bool(getattr(opt, "prism_disable_final_cleanup_prune", True))
+    cleanup_executed = bool(prism_enabled and not disable_final_cleanup)
     cleanup_pruned = 0
     pre_cleanup_ckpt = ""
     post_cleanup_ckpt = ""

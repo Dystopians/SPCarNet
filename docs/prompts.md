@@ -1,5 +1,14 @@
 # prompts.md — SPCarNet → Object-Prior Guided Scene Mesh Optimization
 
+## Current Execution Note — 2026-05-01
+
+Status before continuing to Prompt M13:
+
+- DONE: M0-M12 are implemented, smoke-tested, documented, committed, and pushed to `spcarnet/main`.
+- DONE: A 200-iteration wandb training smoke ran on GPU 1 and synced successfully.
+- BLOCKER FOUND: the training final cleanup path pruned a non-PRISM 200-iteration run from `5706` triangles to `15` triangles.
+- DONE BEFORE M13: final cleanup was repaired so ordinary non-PRISM training does not run destructive cleanup by default. A second 200-iteration wandb smoke preserved `5706` triangles and passed COLMAP sparse geometry evaluation.
+
 This document is meant to be copied, stage by stage, into Codex / Claude Code or another coding agent working inside `Dystopians/SPCarNet`.
 
 The goal is not merely to improve an object-level car completion benchmark. The goal is to transform the current SP-CarNet work into a top-conference-grade research system for the downstream task the project actually cares about:
