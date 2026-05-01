@@ -591,3 +591,33 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - Smoke report: `docs/car_model/meshprior_stage9_scene_gate_rollback_smoke.md`
 
 ---
+
+## 2026-05-01 — MeshPrior Stage 10 (alternating runner) — PASS
+
+**Outcome**: Implemented a dry-run orchestration runner that connects synthetic scene setup, region artifacts, posterior summary, proposal generation, scene gate evaluation, accepted proposal export, and report generation.
+
+**Files added**:
+- `scripts/car_model/meshprior_run_pipeline.py`
+- `scripts/car_model/smoke_test_meshprior_stage10_pipeline.py`
+- `docs/car_model/meshprior_stage10_alternating_runner_design.md`
+- `docs/car_model/meshprior_stage10_alternating_runner_implementation_report.md`
+- `docs/car_model/meshprior_stage10_alternating_runner_smoke.md`
+
+**Smoke / verification**:
+- `micromamba run -n mesh_splatting python -m compileall scripts/car_model ss3dm_prior -q`: PASS.
+- `smoke_test_meshprior_stage10_pipeline.py`: PASS.
+- `smoke_test_meshprior_stage9_scene_gate.py`: PASS.
+
+**Pipeline output**:
+- Synthetic dry-run completed with `accepted_count=1` and `rejected_count=0`.
+- Artifacts written: `regions.json`, `posterior/posterior_summary.json`, proposal files, `scene_gate/gate_report.json`, `accepted_proposals.json`, and `pipeline_report.md`.
+- Geometry application remains disabled; `--apply` raises in M10.
+
+**Decision**: M10 gate `PASS`. The next allowed stage is M11 actual scene training/evaluation and wandb.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_stage10_alternating_runner_design.md`
+- Implementation report: `docs/car_model/meshprior_stage10_alternating_runner_implementation_report.md`
+- Smoke report: `docs/car_model/meshprior_stage10_alternating_runner_smoke.md`
+
+---
