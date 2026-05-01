@@ -55,7 +55,7 @@ def main() -> None:
         assert np.max(combined - base) <= 0.250001
         subprocess.run(
             [
-                "python",
+                sys.executable,
                 str(REPO_ROOT / "scripts/car_model/meshprior_export_optimizer_scores.py"),
                 "--triangle_scores",
                 str(src),

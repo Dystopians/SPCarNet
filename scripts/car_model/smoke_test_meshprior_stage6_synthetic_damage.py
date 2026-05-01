@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -14,7 +15,7 @@ def main() -> None:
         out = Path(td) / "benchmark"
         subprocess.run(
             [
-                "python",
+                sys.executable,
                 str(repo_root / "scripts/car_model/meshprior_run_synthetic_damage_benchmark.py"),
                 "--output_dir",
                 str(out),
@@ -30,7 +31,7 @@ def main() -> None:
         report = out / "report.md"
         subprocess.run(
             [
-                "python",
+                sys.executable,
                 str(repo_root / "scripts/car_model/meshprior_make_synthetic_damage_report.py"),
                 "--metrics_json",
                 str(out / "metrics.json"),

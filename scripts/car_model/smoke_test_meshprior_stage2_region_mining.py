@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -58,7 +59,7 @@ def main() -> None:
         out_dir = tmp / "out"
         _write_two_component_ply(mesh_path)
         cmd = [
-            "python",
+            sys.executable,
             str(repo_root / "scripts/car_model/meshprior_mine_regions.py"),
             "--scene_model",
             str(mesh_path),

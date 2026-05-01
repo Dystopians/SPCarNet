@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -57,7 +58,7 @@ def main() -> None:
         _write_box_ply(mesh_path)
         subprocess.run(
             [
-                "python",
+                sys.executable,
                 str(repo_root / "scripts/car_model/meshprior_mine_regions.py"),
                 "--scene_model",
                 str(mesh_path),
@@ -73,7 +74,7 @@ def main() -> None:
         )
         missing = subprocess.run(
             [
-                "python",
+                sys.executable,
                 str(repo_root / "scripts/car_model/meshprior_infer_region_posterior.py"),
                 "--regions_json",
                 str(mining_dir / "regions.json"),
@@ -99,7 +100,7 @@ def main() -> None:
             return
         subprocess.run(
             [
-                "python",
+                sys.executable,
                 str(repo_root / "scripts/car_model/meshprior_infer_region_posterior.py"),
                 "--regions_json",
                 str(mining_dir / "regions.json"),

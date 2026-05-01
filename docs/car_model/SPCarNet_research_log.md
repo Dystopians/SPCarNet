@@ -778,3 +778,35 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - Generated report: `docs/car_model/reports/meshprior_neurips_main_report.md`
 
 ---
+
+## 2026-05-01 — Pre-M14 stability audit — PASS
+
+**Outcome**: Ran a stability audit before starting M14 and fixed one reproducibility bug in the smoke tests.
+
+**Risk found and fixed**:
+- Some MeshPrior smoke tests used ambient `python` for subprocesses, which can resolve to the wrong interpreter and fail with missing dependencies.
+- Updated those subprocess calls to use `sys.executable`.
+
+**Files updated**:
+- `scripts/car_model/smoke_test_meshprior_stage2_region_mining.py`
+- `scripts/car_model/smoke_test_meshprior_stage3_region_posterior.py`
+- `scripts/car_model/smoke_test_meshprior_stage5_optimizer_adapter.py`
+- `scripts/car_model/smoke_test_meshprior_stage6_synthetic_damage.py`
+- `docs/car_model/meshprior_pre_m14_stability_audit.md`
+
+**Verification**:
+- Compileall over `scripts/car_model` and `ss3dm_prior`: PASS.
+- MeshPrior smoke tests M2, M3, M4, M5, M6, M7, M8, M9, M10, M12, and M13: PASS.
+- M13 matrix/report dry-run: PASS with `total=11`, `available=7`, `missing=4`.
+
+**Remaining non-collapse risks**:
+- Scene MeshPrior application is still dry-run/gated proposal evidence.
+- The 200-iteration scene result is a smoke run, not a full headline training run.
+- Historical missing rows remain intentionally visible as `MISSING`.
+
+**Decision**: Pre-M14 stability gate `PASS`.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_pre_m14_stability_audit.md`
+
+---
