@@ -810,3 +810,34 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_pre_m14_stability_audit.md`
 
 ---
+
+## 2026-05-01 — MeshPrior Stage 14 (paper roadmap and claim-risk analysis) — PASS
+
+**Outcome**: Wrote the paper-level roadmap and claim-risk analysis for the MeshPrior direction.
+
+**File added**:
+- `docs/car_model/MeshPrior_NeurIPS_paper_roadmap.md`
+
+**Recommendation**:
+- `MORE_SCENE_EVIDENCE_REQUIRED`
+
+**Reasoning**:
+- The proposal/gate/rollback direction is coherent and stable after M13 plus the pre-M14 audit.
+- Current evidence supports a research direction, not a submission-ready scene result.
+- Real render-gated MeshPrior insertion is not implemented.
+- The scene evidence remains a 200-iteration diagnostic smoke plus synthetic dry-run proposal evidence.
+
+**Required next evidence before strong submission**:
+- real scene baseline and gated MeshPrior rows under fixed split;
+- scene geometry improvement on COLMAP sparse AbsRel or normal proxy;
+- no meaningful render regression;
+- controlled triangle/FPS budget;
+- car ROI hole/floater reduction;
+- safety ablations showing direct prior insertion or gate removal is worse.
+
+**Decision**: M14 gate `PASS`. The next allowed stage is M15 only if we intentionally pursue retrieval-deformation fallback; otherwise the higher-priority engineering milestone is real scene proposal application and render-gated evaluation.
+
+**Linked artefact**:
+- `docs/car_model/MeshPrior_NeurIPS_paper_roadmap.md`
+
+---
