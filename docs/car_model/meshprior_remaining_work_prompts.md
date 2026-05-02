@@ -4,7 +4,7 @@ Date: 2026-05-01
 
 ## Current State
 
-SPCarNet MeshPrior is about `68%` complete as a research-codebase transformation. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, and 2000-iteration medium baseline comparison are implemented and pushed. The missing core is a real MeshPrior scene-optimization variant that is trained/evaluated at the same budget as clean Mesh Splatting, with topology control and multi-scene evidence.
+SPCarNet MeshPrior is about `72%` complete as a research-codebase transformation. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, and 7000-iteration single-scene diagnostic are implemented. The missing core is no longer "can the Stage17 MeshPrior resume run"; it is topology-controlled scene optimization plus multi-scene evidence. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -24,6 +24,9 @@ Known W&B runs:
 - Cleanup repair 200-iteration smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/3swt58x2`
 - Clean `origin/main` 2000 external log: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/142memiw`
 - Current branch 2000 training-time W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/nk2w04wn`
+- Clean `origin/main` 7000 external log: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/yiwb4d2n`
+- Current branch 7000 training-time W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/l5buxl3m`
+- Stage17 MeshPrior resume 7000 training-time W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/w3kczubb`
 
 ## Operating Rules
 
@@ -66,7 +69,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Real MeshPrior 2000-iteration variant | original prompts Layer F | PASS | Stage17 resumes a MeshPrior-cleaned checkpoint to 2000 iterations with training-time W&B and improves post-render / sparse geometry proxy metrics, but claim status remains soft due topology inflation. |
 | Topology-budget / efficiency-normalized comparison | execution finding | PASS | M18 collector emits JSON/CSV/Markdown and marks Stage17 as `QUALITY_GAIN_NOT_TOPOLOGY_NORMALIZED`; stronger paper claims remain blocked until topology control or budget-matched reporting. |
 | Multi-scene validation | original prompts Layer G | STOP | M20 audited parent directories and found no second suitable parking-lot COLMAP/image scene; user data is needed before multi-scene validation can proceed. |
-| Long-budget or paper-budget training | original prompts M11/M13/M14 | TODO | 2000 iterations is medium validation, not final headline evidence. |
+| Long-budget or paper-budget training | original prompts M11/M13/M14 | PASS / negative result | M21 completed 7000-iteration aligned single-scene runs. Clean/current are stable; Stage17 MeshPrior resume collapses at long budget. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
@@ -75,12 +78,13 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 These are not new research directions. They are constraints discovered while implementing the original prompts.
 
 1. `200` iterations is only a smoke budget. It can validate plumbing but must not drive method claims.
-2. The current branch's 2000-iteration result improves some metrics but uses far more triangles and vertices. A paper claim must account for topology and speed.
+2. The current branch's 2000- and 7000-iteration results improve some metrics but use far more triangles and vertices. A paper claim must account for topology and speed.
 3. `origin/main` lacks current training-time W&B flags. Historical runs require external summary logging unless the script is backported.
 4. The training final-cleanup path previously pruned non-PRISM models destructively. It has been repaired, but every new training run must record final-cleanup state.
 5. COLMAP geometry evaluation is a proxy, not ground-truth geometry. It is useful for diagnosis and consistency, not as a sole headline metric.
 6. Training internal metrics and post-render `metrics.py` values use different pathways. Reports must label them separately.
 7. The current parking scene is small. Generality requires at least one larger parking-lot COLMAP scene or another real scene.
+8. The Stage17 MeshPrior resume variant is unstable as a long-budget method: it improves at 2000 iterations but degrades badly by 7000 iterations.
 
 ---
 
@@ -247,6 +251,12 @@ Reduce single-scene overfitting risk by adding one larger parking-lot COLMAP/ima
 ---
 
 # Prompt M21 — Long-budget aligned experiments
+
+Status: `PASS` for aligned execution, `FAIL` for Stage17 MeshPrior resume as a long-budget candidate.
+
+Report: `docs/car_model/meshprior_stage21_long_budget_report.md`
+
+Key result: at 7000 iterations, current branch beats clean `origin/main` on independent render metrics but uses about `2.92x` more triangles; Stage17 MeshPrior resume collapses to PSNR `10.839708`, SSIM `0.285366`, LPIPS `0.662528`, and COLMAP depth AbsRel `0.744099`.
 
 ## Goal
 

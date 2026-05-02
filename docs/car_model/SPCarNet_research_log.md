@@ -1453,3 +1453,32 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_stage20_second_scene_implementation_report.md`
 
 ---
+
+## 2026-05-02 — Stage21 7000-iteration long-budget single-scene diagnostic — PASS / NEGATIVE METHOD RESULT
+
+**Outcome**: Completed the aligned 7000-iteration diagnostic requested after M20 stopped on second-scene availability. All three rows finished with checkpoints, W&B records, independent `render.py + metrics.py`, COLMAP proxy geometry evaluation, and topology counts.
+
+**W&B**:
+- clean `origin/main@1a714f3` external log: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/yiwb4d2n`
+- current branch training-time W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/l5buxl3m`
+- Stage17 MeshPrior resume training-time W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/w3kczubb`
+
+**Independent render metrics at 7000**:
+- clean `origin/main`: PSNR `16.134155`, SSIM `0.452130`, LPIPS `0.499124`, triangles `285187`
+- current branch: PSNR `17.204679`, SSIM `0.535045`, LPIPS `0.450750`, triangles `833775`
+- Stage17 MeshPrior resume: PSNR `10.839708`, SSIM `0.285366`, LPIPS `0.662528`, triangles `838883`
+
+**COLMAP proxy geometry at 7000**:
+- clean `origin/main`: depth AbsRel `0.084499`, normal mean angle `45.300650`
+- current branch: depth AbsRel `0.076126`, normal mean angle `45.561976`
+- Stage17 MeshPrior resume: depth AbsRel `0.744099`, normal mean angle `52.580674`
+
+**Decision**: M21 execution gate `PASS`, but the Stage17 MeshPrior resume variant is rejected as a long-budget method candidate. It improved the 2000-iteration diagnostic but collapses by 7000 iterations. Current branch is the best long-budget single-scene row, but its quality gain over clean MeshSplatting is not topology-normalized because it uses about `2.92x` more triangles.
+
+**Next priority**: topology control or scheduled cleanup on the current branch before M22 paper-evidence packaging. Do not launch a longer Stage17 MeshPrior resume sweep.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage21_long_budget_design.md`
+- `docs/car_model/meshprior_stage21_long_budget_report.md`
+
+---
