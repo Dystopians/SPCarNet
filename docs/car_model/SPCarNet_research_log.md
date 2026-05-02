@@ -1087,3 +1087,38 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_parking_metadata_gate_report.md`
 
 ---
+
+## 2026-05-01 — Parking phone tiny local mesh patch extraction — PASS
+
+**Outcome**: Extracted local mesh patches for metadata-gated parking targets from the trained triangle checkpoint.
+
+**Files added**:
+- `scripts/car_model/meshprior_extract_parking_mesh_patches.py`
+- `scripts/car_model/smoke_test_meshprior_parking_mesh_patch_extraction.py`
+- `docs/car_model/meshprior_parking_mesh_patch_extraction_report.md`
+
+**Full extraction output**:
+- `outputs/carnet/meshprior/parking_phone_tiny/mesh_patches/mesh_patch_summary.json`
+- `outputs/carnet/meshprior/parking_phone_tiny/mesh_patches/mesh_patch_summary.csv`
+- `outputs/carnet/meshprior/parking_phone_tiny/mesh_patches/mesh_patch_report.md`
+- `outputs/carnet/meshprior/parking_phone_tiny/mesh_patches/patches/*.npz`
+
+**Metrics**:
+- checkpoint vertices: `193491`
+- checkpoint triangles: `64497`
+- patches extracted: `8`
+- nonempty patches: `8`
+- total patch faces: `10826`
+- patch face range: `97` - `3902`
+- geometry edited: `false`
+
+**Verification**:
+- Compileall over `scripts/car_model` and `ss3dm_prior`: PASS.
+- `smoke_test_meshprior_parking_mesh_patch_extraction.py`: PASS.
+
+**Decision**: local patch extraction gate `PASS`. The parking pipeline now has real local mesh assets with original face/vertex indices for downstream before/after gates and rollback.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_parking_mesh_patch_extraction_report.md`
+
+---
