@@ -988,3 +988,35 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_parking_image_region_mining_report.md`
 
 ---
+
+## 2026-05-01 — Parking phone tiny region consolidation — PASS
+
+**Outcome**: Consolidated parking image ROI candidates into coarse multi-view 3D vehicle-region candidates.
+
+**Files added**:
+- `scripts/car_model/meshprior_cluster_parking_regions.py`
+- `scripts/car_model/smoke_test_meshprior_parking_region_consolidation.py`
+- `docs/car_model/meshprior_parking_region_consolidation_report.md`
+
+**Full consolidation output**:
+- `outputs/carnet/meshprior/parking_phone_tiny/region_consolidation/consolidated_regions.json`
+- `outputs/carnet/meshprior/parking_phone_tiny/region_consolidation/consolidated_regions_summary.csv`
+- `outputs/carnet/meshprior/parking_phone_tiny/region_consolidation/consolidation_report.md`
+
+**Metrics**:
+- input ROI regions: `340`
+- sparse-supported eligible inputs used: `140`
+- consolidated clusters: `17`
+- eligible clusters: `9`
+- top cluster support: `32` views and `3851` sparse points.
+
+**Verification**:
+- Compileall over `scripts/car_model` and `ss3dm_prior`: PASS.
+- `smoke_test_meshprior_parking_region_consolidation.py`: PASS.
+
+**Decision**: consolidation gate `PASS`. The next step is proposal scoring for the consolidated clusters; no scene geometry has been edited.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_parking_region_consolidation_report.md`
+
+---
