@@ -1288,3 +1288,28 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_parking_render_metric_comparison.md`
 
 ---
+
+## 2026-05-01 — Parking phone tiny origin/main baseline — SOFT PASS
+
+**Outcome**: Created a separate `/tmp/mesh-splatting-origin-main` worktree at `origin/main@1a714f3` and ran clean Mesh Splatting baseline candidates.
+
+**User-corrected baseline framing**:
+- 200-iteration results are smoke/stability evidence only.
+- The paper baseline should be clean/original Mesh Splatting under the same dataset and budget.
+
+**Runs**:
+- origin/main 200 iter: completed; post-render PSNR `5.8725734`, SSIM `0.0092272`, LPIPS `0.7112017`.
+- origin/main 2000 iter: completed; training internal test PSNR `16.46195650100708`, SSIM `0.4846517714085402`, LPIPS `0.5333475658187159`.
+- origin/main 2000 post-render metrics: PSNR `11.047659873962402`, SSIM `0.21993064880371094`, LPIPS `0.6417058110237122`, triangles `39079`, vertices `58458`.
+
+**W&B**:
+- origin/main has no current-branch `--enable_wandb` integration.
+- Added `scripts/car_model/meshprior_log_parking_run_to_wandb.py` for external summary logging.
+- Logged run: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/142memiw`
+
+**Decision**: origin/main baseline gate `SOFT PASS`. The true baseline path is now concrete and W&B-recorded, but fair medium comparisons require current-branch 2000-iteration engineering and MeshPrior variants with training-time W&B enabled.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_parking_origin_main_baseline_report.md`
+
+---
