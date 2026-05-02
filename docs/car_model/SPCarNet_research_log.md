@@ -1506,3 +1506,41 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `outputs/carnet/meshprior/parking_phone_tiny/stage21_5_topology_control/comparison/topology_control_ablation.md`
 
 ---
+
+## 2026-05-02 — Stage22 unified paper evidence package — SOFT PASS
+
+**Outcome**: Added a reproducible collector and smoke test that consolidate local MeshPrior evidence into separated paper-style metric classes. Missing rows remain explicit instead of being filtered from headline tables.
+
+**Files**:
+- `scripts/car_model/meshprior_collect_paper_evidence.py`
+- `scripts/car_model/smoke_test_meshprior_paper_evidence.py`
+- `docs/car_model/meshprior_stage22_paper_evidence_design.md`
+- `docs/car_model/meshprior_stage22_paper_evidence_report.md`
+
+**Output**:
+- `outputs/carnet/meshprior/paper_evidence/paper_evidence.json`
+- `outputs/carnet/meshprior/paper_evidence/scene_rows.csv`
+- `outputs/carnet/meshprior/paper_evidence/object_prior_rows.csv`
+- `outputs/carnet/meshprior/paper_evidence/synthetic_damage_rows.csv`
+- `outputs/carnet/meshprior/paper_evidence/proposal_gate_rows.csv`
+- `outputs/carnet/meshprior/paper_evidence/failure_case_rows.csv`
+- `outputs/carnet/meshprior/paper_evidence/missing_rows.csv`
+
+**Main scene rows**:
+- clean `origin/main` 7000: PSNR `16.134155`, SSIM `0.452130`, LPIPS `0.499124`, triangles `285187`, depth AbsRel `0.084499`
+- current branch `prune_50` 7000: PSNR `17.051889`, SSIM `0.523914`, LPIPS `0.465400`, triangles `416888`, depth AbsRel `0.083265`
+- Stage17 MeshPrior resume 7000: PSNR `10.839708`, SSIM `0.285366`, LPIPS `0.662528`, triangles `838883`, depth AbsRel `0.744099`
+
+**Missing rows kept visible**:
+- second real scene
+- integrated optimization-time topology control
+- render-gated full MeshPrior insertion
+
+**Verification**:
+- `scripts/car_model/smoke_test_meshprior_paper_evidence.py`: PASS
+- `python -m compileall scripts/car_model ss3dm_prior -q`: PASS
+- `git diff --check`: PASS
+
+**Decision**: M22 gate `SOFT PASS`. The paper-evidence package is reproducible and metric-separated, but remains under-evidenced for a strong method claim because multi-scene validation and integrated topology control are still missing. The next prompt should be M23 claim-risk audit, not more Stage17 training.
+
+---

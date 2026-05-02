@@ -4,7 +4,7 @@ Date: 2026-05-01
 
 ## Current State
 
-SPCarNet MeshPrior is about `76%` complete as a research-codebase transformation. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, and M21.5 topology-controlled current-branch ablation are implemented. The missing core is no longer "can the Stage17 MeshPrior resume run"; it is integrated topology control during optimization, multi-scene evidence, and paper-evidence packaging. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `80%` complete as a research-codebase transformation. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, and M22 unified paper-evidence package are implemented. The missing core is no longer "can the Stage17 MeshPrior resume run"; it is integrated topology control during optimization, multi-scene evidence, and final claim selection. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -17,6 +17,7 @@ Key codebase links:
 - Parking dataset view: `outputs/carnet/meshprior/parking_phone_tiny/dataset_view`
 - Main MeshPrior scripts: `scripts/car_model/meshprior_*.py`
 - MeshPrior modules: `ss3dm_prior/meshprior/`
+- Paper evidence package: `docs/car_model/meshprior_stage22_paper_evidence_report.md`
 
 Known W&B runs:
 
@@ -74,6 +75,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Multi-scene validation | original prompts Layer G | STOP | M20 audited parent directories and found no second suitable parking-lot COLMAP/image scene; user data is needed before multi-scene validation can proceed. |
 | Long-budget or paper-budget training | original prompts M11/M13/M14 | PASS / negative result | M21 completed 7000-iteration aligned single-scene runs. Clean/current are stable; Stage17 MeshPrior resume collapses at long budget. |
 | Topology-controlled current-branch 7000 row | execution finding | PASS | M21.5 post-training checkpoint-copy area pruning shows `prune_50` keeps render metrics above clean with `416888` triangles and depth AbsRel close to clean; use as M22 default topology-controlled row. |
+| Unified paper-evidence package | original prompts M22 | SOFT PASS | M22 collector/report/smoke are implemented and reproducible; missing rows stay visible for second scene, integrated topology control, and render-gated full insertion. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
@@ -313,6 +315,12 @@ Move from medium validation to paper-grade training budget, only after M17-M20 e
 ---
 
 # Prompt M22 — Unified paper table and failure-case package
+
+Status: `SOFT PASS`.
+
+Report: `docs/car_model/meshprior_stage22_paper_evidence_report.md`
+
+Key result: `scripts/car_model/meshprior_collect_paper_evidence.py` regenerates object-prior, synthetic-damage, scene render/geometry/topology, proposal-gate/rollback, failure-case, and missing-row tables under `outputs/carnet/meshprior/paper_evidence/`. The default paper-evidence scene row is `current_branch_prune_50_7000`; `stage17_meshprior_resume_7000` is retained as a failure case. Gate is `SOFT PASS` because important rows remain `MISSING`.
 
 ## Goal
 
