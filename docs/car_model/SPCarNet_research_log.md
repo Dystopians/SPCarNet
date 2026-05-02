@@ -4,6 +4,29 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage27 schedule ablation — SOFT PASS
+
+**Outcome**: Completed M27 schedule tuning after the topology-accounting fix. All valid current-branch runs used online W&B and were evaluated with independent `render.py + metrics.py`. The best schedule, `ratio0p02_geom1400`, gives a strong ETH3D `courtyard` result but does not reduce topology on Mip-NeRF 360 `bonsai`, so this is an interpretable `SOFT PASS`, not a final paper schedule.
+
+**W&B**:
+- `bonsai` ratio `0.01`, geometry acquisition until `1200`: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/mlftnbt5`
+- `courtyard` ratio `0.01`, geometry acquisition until `1200`: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/qvrnsj2v`
+- `bonsai` ratio `0.02`, geometry acquisition until `1400`: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/27vl4jnt`
+- `courtyard` ratio `0.02`, geometry acquisition until `1400`: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ffp07dua`
+
+**Key metrics**:
+- `bonsai` `ratio0p02_geom1400`: final `1357128` triangles, `0` commits, `6` rollbacks, validation `3/3` observable and `2/3` pass; independent PSNR `12.3005`, SSIM `0.2408`, LPIPS `0.6194`.
+- `courtyard` `ratio0p02_geom1400`: final `100858` triangles, `1` commit, `0` rollbacks, validation `4/4` observable and `3/4` pass; independent PSNR `15.0739`, SSIM `0.4857`, LPIPS `0.5794`.
+
+**Decision**: M27 confirms accounting is fixed and shows stronger topology pressure can work on ETH3D, but the fixed schedule is not cross-scene robust. The next prompt should make PRISM scheduling adaptive instead of launching a large fixed-schedule full-budget sweep.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage27_schedule_ablation_report.md`
+- `docs/car_model/meshprior_stage27_accounting_fix_report.md`
+- `outputs/carnet/meshprior/stage27_schedule_ablation/`
+
+---
+
 ## 2026-05-02 — Stage27.0 topology accounting fix — PASS
 
 **Outcome**: Fixed the topology accounting mismatch found during M26. The training loop previously logged W&B `mesh/triangle_count` before the end-of-iteration standard prune/densify block, while final checkpoints and `final_cleanup_summary.json` reflected the post-mutation topology. Future runs now log post-topology counts and final-checkpoint counts explicitly.
