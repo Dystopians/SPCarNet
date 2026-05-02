@@ -76,6 +76,38 @@ The copied checkpoint cleanup is render-stable and geometry-stable at this short
 
 This is not evidence of a final improvement. It is evidence that the local patch extraction, copied cleanup, checkpoint compaction, recovery model layout, geometry evaluation, and render metric pipeline do not collapse on the parking scene.
 
+## Machine-Readable Summary
+
+Added:
+
+- `scripts/car_model/meshprior_collect_parking_comparison.py`
+- `scripts/car_model/smoke_test_meshprior_parking_comparison.py`
+
+Command:
+
+```bash
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/meshprior_collect_parking_comparison.py --engineering_baseline_model outputs/carnet/meshprior/parking_phone_tiny/baseline_200iter/model --recovery_model outputs/carnet/meshprior/parking_phone_tiny/recovery_model_cleanup --output_dir outputs/carnet/meshprior/parking_phone_tiny/comparison_summary
+```
+
+Outputs:
+
+- `outputs/carnet/meshprior/parking_phone_tiny/comparison_summary/parking_comparison_summary.json`
+- `outputs/carnet/meshprior/parking_phone_tiny/comparison_summary/parking_comparison_summary.csv`
+- `outputs/carnet/meshprior/parking_phone_tiny/comparison_summary/parking_comparison_summary.md`
+
+Collector decision:
+
+- `SOFT_PASS_STABILITY_ONLY`
+- paper baseline status: `MISSING`
+
+Verification:
+
+```bash
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_meshprior_parking_comparison.py
+```
+
+Result: PASS.
+
 ## Gate
 
 Stage gate: SOFT PASS.

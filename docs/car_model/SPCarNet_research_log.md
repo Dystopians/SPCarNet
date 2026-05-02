@@ -1277,6 +1277,13 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 
 **Decision**: render comparison gate `SOFT PASS`. The cleanup checkpoint copy is render-stable but not meaningfully better. This supports stability, not a final improvement claim.
 
+**Comparison collector**:
+- Added `scripts/car_model/meshprior_collect_parking_comparison.py`
+- Added `scripts/car_model/smoke_test_meshprior_parking_comparison.py`
+- Output: `outputs/carnet/meshprior/parking_phone_tiny/comparison_summary/parking_comparison_summary.{json,csv,md}`
+- Collector decision: `SOFT_PASS_STABILITY_ONLY`
+- Paper baseline status: `MISSING`
+
 **Linked artefact**:
 - `docs/car_model/meshprior_parking_render_metric_comparison.md`
 

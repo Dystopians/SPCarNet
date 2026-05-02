@@ -25,6 +25,7 @@ Status before continuing to Prompt M13:
 - SOFT PASS: Parking phone tiny checkpoint-copy cleanup application is implemented. It applies 8 accepted copied-patch cleanup candidates to a duplicated checkpoint, reducing faces 64497 -> 63965 with consistent vertex/feature/per-face arrays; render validation is still pending.
 - SOFT PASS: Parking phone tiny recovery model evaluation is implemented. The cleaned checkpoint copy loads through the normal model layout and passes COLMAP geometry eval with effectively neutral deltas versus baseline.
 - SOFT PASS: Parking phone tiny recovery render metrics are evaluated against the current engineering baseline. Results are effectively neutral, so this is a stability milestone, not a paper-level improvement claim. The true paper baseline should be original/clean Mesh Splatting on the same data and budget.
+- DONE: Parking phone tiny comparison collector is implemented. It emits a machine-readable engineering-baseline vs recovery table and explicitly marks the paper baseline as `MISSING`.
 
 This document is meant to be copied, stage by stage, into Codex / Claude Code or another coding agent working inside `Dystopians/SPCarNet`.
 
