@@ -688,7 +688,7 @@ Only after M23, harden the codebase for external use without changing research r
 ## Result
 
 - dataset root: `/data/peilincai/mesh_datasets`
-- disk after setup: `/data` has `4.4T` free; M25 data uses about `30G`
+- disk after setup: `/data` has `4.3T` free; M25 data uses about `35G`
 - audit JSON: `outputs/carnet/meshprior/stage25_multidataset/dataset_audit.json`
 - report: `docs/car_model/meshprior_stage25_multidataset_validation_report.md`
 - trainable current-loader scenes: `10`
@@ -701,7 +701,7 @@ Representative W&B runs:
 
 ## Decision
 
-M25 is enough to proceed to cross-scene method validation on Mip-NeRF 360 and ETH3D. Tanks and Temples should not be used for geometry claims until official COLMAP tracks are acquired or generated locally.
+M25 is enough to proceed to cross-scene method validation on Mip-NeRF 360 and ETH3D. ETH3D's all-scene high-resolution training undistorted archive is downloaded, but only `courtyard` has been converted into the current loader layout. Tanks and Temples should not be used for geometry claims until official COLMAP tracks are acquired or generated locally.
 
 ## Next Prompt: M26
 

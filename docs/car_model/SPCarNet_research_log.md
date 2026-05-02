@@ -10,7 +10,7 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 **Data**:
 - Mip-NeRF 360 full `360_v2.zip` extracted; seven COLMAP scenes are trainable.
-- ETH3D `courtyard` downloaded and converted into the current `images + sparse/0` loader layout.
+- ETH3D `courtyard` downloaded and converted into the current `images + sparse/0` loader layout; the official all-scene high-resolution training undistorted archive is also complete at `/data/peilincai/mesh_datasets/eth3d/downloads/multi_view_training_dslr_undistorted.7z`.
 - Tanks and Temples official downloader was blocked by login/HTML responses, so `truck` and `barn` were prepared from the NSVF mirror using `scripts/car_model/meshprior_convert_nsvf_to_colmap.py`.
 
 **W&B**:

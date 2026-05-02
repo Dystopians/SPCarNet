@@ -10,10 +10,10 @@ Move beyond the single `parking_phone_tiny` scene by preparing public multiview 
 
 ## Data Sources And Space
 
-- disk before/after setup: `/data` has `4.4T` available, `84%` used; downloaded/prepared M25 data occupies about `30G`.
+- disk after setup: `/data` has `4.3T` available, `84%` used; downloaded/prepared M25 data occupies about `35G`.
 - Mip-NeRF 360 source: `http://storage.googleapis.com/gresearch/refraw360/360_v2.zip` as referenced by public Mip-NeRF 360 dataset instructions.
 - Tanks and Temples source attempted: `https://www.tanksandtemples.org/download`; the official downloader returned login/HTML payloads in this environment, so the usable data came from the NSVF mirror `https://dl.fbaipublicfiles.com/nsvf/dataset/TanksAndTemple.zip`.
-- ETH3D source: `https://www.eth3d.net/datasets`; representative `courtyard` DSLR undistorted, scan, and eval archives were downloaded. The all-scene high-resolution archive was started but interrupted because the single full archive was slow and unnecessary for the first M25 trainability milestone.
+- ETH3D source: `https://www.eth3d.net/datasets`; representative `courtyard` DSLR undistorted, scan, and eval archives were downloaded and extracted for training. The official all-scene high-resolution training undistorted archive is also downloaded at `/data/peilincai/mesh_datasets/eth3d/downloads/multi_view_training_dslr_undistorted.7z` (`5.5G`) for later scene expansion.
 
 ## Local Dataset Layout
 
@@ -83,12 +83,12 @@ Tanks and Temples is only a partial validation in the current environment. The N
 
 Reasons:
 
-- PASS: disk capacity is sufficient; all three requested dataset families have local data.
+- PASS: disk capacity is sufficient; all three requested dataset families have local data, and the ETH3D all-scene high-resolution training undistorted archive is now complete.
 - PASS: Mip-NeRF 360 and ETH3D are trainable and geometry-observable.
 - PASS: W&B was active for all representative training runs.
 - PASS: non-observable geometry reporting no longer crashes.
 - SOFT: Tanks and Temples is trainable but not yet geometry-validatable because the usable mirror is posed-image-only for our purposes.
-- SOFT: ETH3D full all-scene archive was not fully downloaded; one representative scene is prepared and validated.
+- SOFT: only ETH3D `courtyard` has been extracted into the current loader layout and trained so far; the all-scene archive is downloaded but not yet expanded into per-scene trainable views.
 
 ## Next Step
 
