@@ -1544,3 +1544,29 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 **Decision**: M22 gate `SOFT PASS`. The paper-evidence package is reproducible and metric-separated, but remains under-evidenced for a strong method claim because multi-scene validation and integrated topology control are still missing. The next prompt should be M23 claim-risk audit, not more Stage17 training.
 
 ---
+
+## 2026-05-02 — Stage23 claim-risk audit and paper decision — PASS
+
+**Outcome**: Completed the post-M22 claim-risk audit and updated the NeurIPS roadmap.
+
+**Decision**: strongest defensible story is `CLAIM_CONSERVATIVE_FRAMEWORK_NOT_FULL_METHOD`.
+
+**Supported claims**:
+- Stage 3 posterior is a strong object prior for this codebase.
+- Proposal gates and rollback reject obvious unsafe copied-patch edits.
+- Current branch and M21.5 `prune_50` provide a topology-aware single-scene diagnostic that beats clean MeshSplatting render metrics.
+
+**Refuted / unsafe claims**:
+- Stage17 MeshPrior resume is not a viable long-budget method candidate.
+- Full MeshPrior scene optimization improvement is unsafe to claim.
+- Multi-scene generalization is unsafe to claim until a second valid scene exists.
+
+**Next high-value paths**:
+- add a second real vehicle/parking COLMAP scene and rerun the evidence package;
+- or integrate M21.5 topology control into the training/optimization loop with render/geometry gates and rollback.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage23_claim_risk_audit.md`
+- `docs/car_model/MeshPrior_NeurIPS_paper_roadmap.md`
+
+---

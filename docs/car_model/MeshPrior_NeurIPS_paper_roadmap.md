@@ -186,6 +186,18 @@ These results can still be valuable as motivation, ablations, or negative result
 
 ## 11. Final Recommendation
 
+Update after M21-M23 on 2026-05-02: recommendation is now `CLAIM_CONSERVATIVE_FRAMEWORK_NOT_FULL_METHOD`.
+
+The current evidence is stronger than the original M14 state because it now includes:
+
+- clean/current/Stage17 7000-iteration single-scene runs with W&B and independent render/geometry metrics;
+- M21.5 topology-control ablation showing `prune_50` beats the clean 7000 baseline on render metrics with `416888` triangles;
+- M22 paper-evidence package that keeps missing rows and failure cases explicit.
+
+However, the full method claim remains under-evidenced. Stage17 MeshPrior resume is refuted as a long-budget method candidate, and M21.5 is post-hoc checkpoint-copy pruning rather than integrated optimization-time topology control. The paper story should therefore be a conservative proposal/gate/evidence framework with topology-aware diagnostics and honest negative results, unless a second scene or integrated topology controller is added.
+
+Legacy M14 recommendation retained below for provenance.
+
 Recommendation: `MORE_SCENE_EVIDENCE_REQUIRED`.
 
 The direction is coherent and currently stable:

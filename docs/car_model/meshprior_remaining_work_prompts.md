@@ -4,7 +4,7 @@ Date: 2026-05-01
 
 ## Current State
 
-SPCarNet MeshPrior is about `80%` complete as a research-codebase transformation. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, and M22 unified paper-evidence package are implemented. The missing core is no longer "can the Stage17 MeshPrior resume run"; it is integrated topology control during optimization, multi-scene evidence, and final claim selection. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `83%` complete as a research-codebase transformation. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, and M23 claim-risk audit are implemented. The missing core is integrated topology control during optimization and multi-scene evidence. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -18,6 +18,7 @@ Key codebase links:
 - Main MeshPrior scripts: `scripts/car_model/meshprior_*.py`
 - MeshPrior modules: `ss3dm_prior/meshprior/`
 - Paper evidence package: `docs/car_model/meshprior_stage22_paper_evidence_report.md`
+- Claim-risk audit: `docs/car_model/meshprior_stage23_claim_risk_audit.md`
 
 Known W&B runs:
 
@@ -76,6 +77,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Long-budget or paper-budget training | original prompts M11/M13/M14 | PASS / negative result | M21 completed 7000-iteration aligned single-scene runs. Clean/current are stable; Stage17 MeshPrior resume collapses at long budget. |
 | Topology-controlled current-branch 7000 row | execution finding | PASS | M21.5 post-training checkpoint-copy area pruning shows `prune_50` keeps render metrics above clean with `416888` triangles and depth AbsRel close to clean; use as M22 default topology-controlled row. |
 | Unified paper-evidence package | original prompts M22 | SOFT PASS | M22 collector/report/smoke are implemented and reproducible; missing rows stay visible for second scene, integrated topology control, and render-gated full insertion. |
+| Claim-risk audit and paper decision | original prompts M23 | PASS | Strongest defensible story is conservative proposal/gate framework plus topology-aware diagnostics, not a full scene-optimization improvement claim. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
@@ -361,6 +363,12 @@ Convert scattered engineering reports into a NeurIPS-style evidence package with
 ---
 
 # Prompt M23 — Claim-risk audit and paper decision
+
+Status: `PASS`.
+
+Report: `docs/car_model/meshprior_stage23_claim_risk_audit.md`
+
+Key result: strongest defensible current story is `CLAIM_CONSERVATIVE_FRAMEWORK_NOT_FULL_METHOD`. Supported: object-prior quality, proposal gate/rollback safety, single-scene current-branch/prune_50 diagnostics. Refuted: Stage17 MeshPrior resume as long-budget method. Unsafe to claim: full MeshPrior scene optimization and multi-scene generalization.
 
 ## Goal
 
