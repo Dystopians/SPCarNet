@@ -877,3 +877,37 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - Smoke report: `docs/car_model/meshprior_stage15_retrieval_deformation_smoke.md`
 
 ---
+
+## 2026-05-01 — MeshPrior scene application bridge — PASS
+
+**Outcome**: Implemented a safe accepted-proposal application bridge before attempting real scene recovery training.
+
+**Files added**:
+- `ss3dm_prior/meshprior/apply_proposals.py`
+- `scripts/car_model/meshprior_apply_accepted_proposals.py`
+- `scripts/car_model/smoke_test_meshprior_scene_application.py`
+- `docs/car_model/meshprior_scene_application_loop_design.md`
+- `docs/car_model/meshprior_scene_application_loop_implementation_report.md`
+- `docs/car_model/meshprior_scene_application_loop_smoke.md`
+
+**Verification**:
+- Compileall over `scripts/car_model` and `ss3dm_prior`: PASS.
+- Scene application smoke: PASS.
+- Applied existing M11 accepted synthetic fill proposal to a copy.
+
+**Synthetic application result**:
+- accepted proposals: `1`
+- applied proposals: `1`
+- initial mesh: `8` vertices, `10` faces
+- final mesh: `9` vertices, `14` faces
+- rollback written
+- recovery command plan written
+
+**Decision**: bridge gate `PASS`. The next step is real scene proposal application plus recovery optimization, but it requires user confirmation of target scene/model and GPU before launching.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_scene_application_loop_design.md`
+- Implementation report: `docs/car_model/meshprior_scene_application_loop_implementation_report.md`
+- Smoke report: `docs/car_model/meshprior_scene_application_loop_smoke.md`
+
+---
