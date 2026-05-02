@@ -4,6 +4,29 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage26 cross-scene method evidence — SOFT PASS
+
+**Outcome**: Ran aligned 2000-iteration sparse-depth baselines and M24.2 PRISM topology-retention rows on two public COLMAP-style scenes: Mip-NeRF 360 `bonsai` and ETH3D `courtyard`. All current-branch runs used online W&B. Independent `render.py + metrics.py` was completed for all four checkpoints, and a new collector writes JSON/CSV/Markdown summary tables.
+
+**W&B**:
+- `bonsai` sparse-depth baseline: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/xdct9uys`
+- `bonsai` M24.2 PRISM: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/dmasxcej`
+- `courtyard` sparse-depth baseline: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/mdan8yc2`
+- `courtyard` M24.2 PRISM: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/r9zgtuyp`
+
+**Metrics**:
+- `bonsai`: training delta `+0.0960` PSNR, `+0.0027` SSIM, `-0.0036` LPIPS; independent delta `-0.0304` PSNR, `+0.0305` SSIM, `-0.0060` LPIPS; W&B triangle delta `-0.50%`; PRISM `1` commit, `3` rollbacks, `2` no-candidate retries; validation `4/4` observable and `2/4` pass.
+- `courtyard`: training delta `+0.0103` PSNR, `+0.0011` SSIM, `-0.0011` LPIPS; independent delta `+0.1152` PSNR, `+0.0347` SSIM, `-0.0087` LPIPS; W&B triangle delta `-1.49%`; PRISM `3` commits, `0` rollbacks, `4` no-candidate retries; validation `5/5` observable and `3/5` pass.
+
+**Decision**: M26 proves the method transfers mechanically to public geometry-observable scenes, but direct 2000-iteration W&B topology reduction is still too small for a strong final paper claim. Checkpoint-topology deltas are larger but must be treated as schedule/accounting effects until runtime W&B topology, checkpoint topology, and final-cleanup summaries are reconciled. Next step is M27 schedule/accounting tuning before full-budget public-scene sweeps.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage26_cross_scene_report.md`
+- `scripts/car_model/meshprior_collect_stage26_cross_scene.py`
+- `outputs/carnet/meshprior/stage26_cross_scene/summary/stage26_cross_scene_summary.md`
+
+---
+
 ## 2026-05-02 — Stage25 public multidataset validation — SOFT PASS
 
 **Outcome**: Prepared public datasets under `/data/peilincai/mesh_datasets`, audited current-loader compatibility, ran three representative 700-iteration training checks with online W&B, and fixed PRISM validation reporting for non-observable geometry.
