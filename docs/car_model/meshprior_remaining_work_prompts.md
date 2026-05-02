@@ -4,7 +4,7 @@ Date: 2026-05-01
 
 ## Current State
 
-SPCarNet MeshPrior is about `72%` complete as a research-codebase transformation. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, and 7000-iteration single-scene diagnostic are implemented. The missing core is no longer "can the Stage17 MeshPrior resume run"; it is topology-controlled scene optimization plus multi-scene evidence. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `76%` complete as a research-codebase transformation. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, and M21.5 topology-controlled current-branch ablation are implemented. The missing core is no longer "can the Stage17 MeshPrior resume run"; it is integrated topology control during optimization, multi-scene evidence, and paper-evidence packaging. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -27,6 +27,9 @@ Known W&B runs:
 - Clean `origin/main` 7000 external log: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/yiwb4d2n`
 - Current branch 7000 training-time W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/l5buxl3m`
 - Stage17 MeshPrior resume 7000 training-time W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/w3kczubb`
+- M21.5 prune_25 external log: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/evid1gbt`
+- M21.5 prune_50 external log: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/w1ix6e9a`
+- M21.5 prune_66 external log: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/xzfqwpgi`
 
 ## Operating Rules
 
@@ -70,6 +73,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Topology-budget / efficiency-normalized comparison | execution finding | PASS | M18 collector emits JSON/CSV/Markdown and marks Stage17 as `QUALITY_GAIN_NOT_TOPOLOGY_NORMALIZED`; stronger paper claims remain blocked until topology control or budget-matched reporting. |
 | Multi-scene validation | original prompts Layer G | STOP | M20 audited parent directories and found no second suitable parking-lot COLMAP/image scene; user data is needed before multi-scene validation can proceed. |
 | Long-budget or paper-budget training | original prompts M11/M13/M14 | PASS / negative result | M21 completed 7000-iteration aligned single-scene runs. Clean/current are stable; Stage17 MeshPrior resume collapses at long budget. |
+| Topology-controlled current-branch 7000 row | execution finding | PASS | M21.5 post-training checkpoint-copy area pruning shows `prune_50` keeps render metrics above clean with `416888` triangles and depth AbsRel close to clean; use as M22 default topology-controlled row. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
@@ -85,6 +89,7 @@ These are not new research directions. They are constraints discovered while imp
 6. Training internal metrics and post-render `metrics.py` values use different pathways. Reports must label them separately.
 7. The current parking scene is small. Generality requires at least one larger parking-lot COLMAP scene or another real scene.
 8. The Stage17 MeshPrior resume variant is unstable as a long-budget method: it improves at 2000 iterations but degrades badly by 7000 iterations.
+9. M21.5 topology pruning is post-hoc checkpoint-copy pruning, not yet an integrated optimization-time topology controller. It is valid as a diagnostic evidence row, not as the final algorithm.
 
 ---
 
@@ -257,6 +262,23 @@ Status: `PASS` for aligned execution, `FAIL` for Stage17 MeshPrior resume as a l
 Report: `docs/car_model/meshprior_stage21_long_budget_report.md`
 
 Key result: at 7000 iterations, current branch beats clean `origin/main` on independent render metrics but uses about `2.92x` more triangles; Stage17 MeshPrior resume collapses to PSNR `10.839708`, SSIM `0.285366`, LPIPS `0.662528`, and COLMAP depth AbsRel `0.744099`.
+
+---
+
+# Prompt M21.5 — Topology-controlled current-branch ablation
+
+Status: `PASS`.
+
+Report: `docs/car_model/meshprior_stage21_5_topology_control_implementation_report.md`
+
+Key result: post-training checkpoint-copy area pruning on the current-branch 7000 checkpoint produces a useful topology-control row. `prune_50` reduces triangles from `833775` to `416888`, keeps PSNR / SSIM / LPIPS at `17.051889` / `0.523914` / `0.465400`, and keeps COLMAP depth AbsRel at `0.083265`, slightly better than the clean 7000 baseline `0.084499`.
+
+Use in M22:
+
+- default topology-controlled current row: `prune_50`
+- high-compression Pareto endpoint: `prune_66`
+- failure case: Stage17 MeshPrior resume at 7000
+- caveat: M21.5 is post-hoc topology pruning, not integrated optimization-time topology control
 
 ## Goal
 

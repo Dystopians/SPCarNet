@@ -24,6 +24,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     model_path = Path(args.model_path)
     results_path = model_path / "results.json"
     metrics = _load_json(results_path).get(f"ours_{args.iteration}", {})
+    geometry_path = model_path / "geometry_eval_colmap" / f"iter_{args.iteration}.json"
+    geometry = _load_json(geometry_path) if geometry_path.is_file() else {}
+    depth = geometry.get("depth", {})
+    normal = geometry.get("normal", {})
     state_path = model_path / "point_cloud" / f"iteration_{args.iteration}" / "point_cloud_state_dict.pt"
     triangles, vertices = _state_counts(state_path)
     payload = {
@@ -33,6 +37,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "render/LPIPS": float(metrics.get("LPIPS", float("nan"))),
         "mesh/triangles": triangles,
         "mesh/vertices": vertices,
+        "geometry/depth_absrel": float(depth.get("abs_rel", float("nan"))),
+        "geometry/depth_mae": float(depth.get("mae", float("nan"))),
+        "geometry/normal_mean_ang_deg": float(normal.get("mean_ang_deg", float("nan"))),
         "baseline/is_paper_baseline_candidate": bool(args.paper_baseline_candidate),
     }
     run_obj = wandb.init(
@@ -52,6 +59,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     wandb.log(payload, step=int(args.iteration))
     artifact = wandb.Artifact(name=args.artifact_name, type="parking_run_summary")
     artifact.add_file(str(results_path))
+    if geometry_path.is_file():
+        artifact.add_file(str(geometry_path))
+    if (model_path / "topology_control_ablation_report.json").is_file():
+        artifact.add_file(str(model_path / "topology_control_ablation_report.json"))
     if (model_path / "cfg_args").is_file():
         artifact.add_file(str(model_path / "cfg_args"))
     run_obj.log_artifact(artifact)

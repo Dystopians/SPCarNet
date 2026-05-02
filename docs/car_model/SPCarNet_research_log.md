@@ -1482,3 +1482,27 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_stage21_long_budget_report.md`
 
 ---
+
+## 2026-05-02 — Stage21.5 topology-controlled current-branch ablation — PASS
+
+**Outcome**: Added a post-training checkpoint-copy topology-control diagnostic for the current-branch 7000 checkpoint. The ablation prunes smallest-area triangles without editing the original checkpoint, then evaluates each copied model with independent render metrics, COLMAP proxy geometry, topology counts, and external W&B summary logs.
+
+**W&B**:
+- `prune_25`: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/evid1gbt`
+- `prune_50`: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/w1ix6e9a`
+- `prune_66`: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/xzfqwpgi`
+
+**Independent render / geometry metrics at 7000**:
+- clean `origin/main`: PSNR `16.134155`, SSIM `0.452130`, LPIPS `0.499124`, triangles `285187`, depth AbsRel `0.084499`
+- current branch: PSNR `17.204679`, SSIM `0.535045`, LPIPS `0.450750`, triangles `833775`, depth AbsRel `0.076126`
+- `prune_50`: PSNR `17.051889`, SSIM `0.523914`, LPIPS `0.465400`, triangles `416888`, depth AbsRel `0.083265`
+- `prune_66`: PSNR `16.429369`, SSIM `0.492480`, LPIPS `0.489681`, triangles `283484`, depth AbsRel `0.099246`
+
+**Decision**: M21.5 gate `PASS`. Use `prune_50` as the topology-controlled current-branch row in M22 because it keeps all render metrics above clean while reducing current topology by `50%` and keeping depth AbsRel close to clean. Keep `prune_66` as a high-compression Pareto endpoint. This is still a diagnostic post-hoc ablation, not integrated optimization-time topology control.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage21_5_topology_control_design.md`
+- `docs/car_model/meshprior_stage21_5_topology_control_implementation_report.md`
+- `outputs/carnet/meshprior/parking_phone_tiny/stage21_5_topology_control/comparison/topology_control_ablation.md`
+
+---
