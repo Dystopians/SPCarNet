@@ -146,6 +146,13 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "candidate_microbatch_gate": bool(getattr(opt, "prism_candidate_microbatch_gate", False)),
         "candidate_microbatch_size": int(getattr(opt, "prism_candidate_microbatch_size", 256)),
         "candidate_microbatch_max_batches": int(getattr(opt, "prism_candidate_microbatch_max_batches", 0)),
+        "candidate_quality_rank": bool(getattr(opt, "prism_candidate_quality_rank", False)),
+        "candidate_quality_prune_weight": float(getattr(opt, "prism_candidate_quality_prune_weight", 1.0)),
+        "candidate_quality_render_penalty": float(getattr(opt, "prism_candidate_quality_render_penalty", 0.5)),
+        "candidate_quality_geometry_penalty": float(getattr(opt, "prism_candidate_quality_geometry_penalty", 0.5)),
+        "candidate_quality_orientation_penalty": float(getattr(opt, "prism_candidate_quality_orientation_penalty", 0.25)),
+        "candidate_quality_utility_penalty": float(getattr(opt, "prism_candidate_quality_utility_penalty", 0.25)),
+        "candidate_quality_uncertainty_penalty": float(getattr(opt, "prism_candidate_quality_uncertainty_penalty", 0.25)),
         "adaptive_candidate_retry_on_rollback": bool(
             getattr(opt, "prism_adaptive_candidate_retry_on_rollback", False)
         ),
@@ -399,6 +406,14 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "last_candidate_microbatch_accepted_count": 0,
         "last_candidate_microbatch_rejected_count": 0,
         "last_candidate_microbatch_accepted_triangles": 0,
+        "last_candidate_quality_rank_enabled": 0,
+        "last_candidate_quality_score_mean": 0.0,
+        "last_candidate_prune_score_mean": 0.0,
+        "last_candidate_render_keep_mean": 0.0,
+        "last_candidate_geometry_keep_mean": 0.0,
+        "last_candidate_orientation_keep_mean": 0.0,
+        "last_candidate_utility_mean": 0.0,
+        "last_candidate_uncertainty_mean": 0.0,
         "teacher_cache": {},
         "teacher_rgb_lambda": float(getattr(opt, "prism_teacher_rgb_lambda", 0.01)),
         "teacher_depth_lambda": float(getattr(opt, "prism_teacher_depth_lambda", 0.002)),
@@ -1761,11 +1776,28 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     if prune_mode == "candidate":
         candidate_max_count = int(cfg.get("candidate_max_count_per_round", 0))
 
+    rank_score_t = None
+    if prune_mode == "candidate" and bool(cfg.get("candidate_quality_rank", False)):
+        rank_score_t = (
+            float(cfg.get("candidate_quality_prune_weight", 1.0)) * scores.prune_score_t.to(torch.float32)
+            - float(cfg.get("candidate_quality_render_penalty", 0.5)) * scores.render_keep_t.to(torch.float32)
+            - float(cfg.get("candidate_quality_geometry_penalty", 0.5)) * scores.geometry_keep_t.to(torch.float32)
+            - float(cfg.get("candidate_quality_orientation_penalty", 0.25)) * scores.orientation_keep_t.to(torch.float32)
+            - float(cfg.get("candidate_quality_utility_penalty", 0.25)) * scores.utility_t.to(torch.float32)
+            - float(cfg.get("candidate_quality_uncertainty_penalty", 0.25)) * scores.unc_t.to(torch.float32)
+        )
+        rank_score_t = torch.where(
+            scores.candidate_mask.to(torch.bool) | scores.dead_mask.to(torch.bool),
+            rank_score_t,
+            torch.full_like(rank_score_t, -1e9),
+        )
+
     candidate_ids = select_prism_candidate_ids(
         scores=scores,
         dead_prune_ratio=dead_ratio,
         candidate_prune_ratio=cand_ratio,
         candidate_max_count=candidate_max_count,
+        rank_score_t=rank_score_t,
     )
     candidate_pool_count = int(torch.count_nonzero(scores.candidate_mask).item())
     target_count = int(max(0.0, cand_ratio) * int(scores.prune_score_t.numel()))
@@ -1774,7 +1806,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
         capped_target_count = min(target_count, int(candidate_max_count))
     selected_count = int(candidate_ids.numel())
     if candidate_ids.numel() > 1:
-        order_scores = scores.prune_score_t[candidate_ids]
+        order_scores = rank_score_t[candidate_ids] if rank_score_t is not None else scores.prune_score_t[candidate_ids]
         _, order = torch.sort(order_scores, descending=True)
         candidate_ids = candidate_ids[order]
     prism_state["last_candidate_pool_count"] = candidate_pool_count
@@ -1785,6 +1817,27 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     prism_state["last_candidate_microbatch_accepted_count"] = 0
     prism_state["last_candidate_microbatch_rejected_count"] = 0
     prism_state["last_candidate_microbatch_accepted_triangles"] = 0
+    prism_state["last_candidate_quality_rank_enabled"] = 1 if rank_score_t is not None else 0
+    prism_state["last_candidate_quality_score_mean"] = 0.0
+    prism_state["last_candidate_prune_score_mean"] = 0.0
+    prism_state["last_candidate_render_keep_mean"] = 0.0
+    prism_state["last_candidate_geometry_keep_mean"] = 0.0
+    prism_state["last_candidate_orientation_keep_mean"] = 0.0
+    prism_state["last_candidate_utility_mean"] = 0.0
+    prism_state["last_candidate_uncertainty_mean"] = 0.0
+
+    def _candidate_quality_payload():
+        return {
+            "candidate_quality_rank_enabled": int(prism_state.get("last_candidate_quality_rank_enabled", 0)),
+            "candidate_quality_score_mean": float(prism_state.get("last_candidate_quality_score_mean", 0.0)),
+            "candidate_prune_score_mean": float(prism_state.get("last_candidate_prune_score_mean", 0.0)),
+            "candidate_render_keep_mean": float(prism_state.get("last_candidate_render_keep_mean", 0.0)),
+            "candidate_geometry_keep_mean": float(prism_state.get("last_candidate_geometry_keep_mean", 0.0)),
+            "candidate_orientation_keep_mean": float(prism_state.get("last_candidate_orientation_keep_mean", 0.0)),
+            "candidate_utility_mean": float(prism_state.get("last_candidate_utility_mean", 0.0)),
+            "candidate_uncertainty_mean": float(prism_state.get("last_candidate_uncertainty_mean", 0.0)),
+        }
+
     if candidate_ids.numel() == 0:
         return {
             "committed": False,
@@ -1797,7 +1850,17 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             "candidate_target_count": int(target_count),
             "candidate_cap_count": int(capped_target_count),
             "candidate_selected_count": int(selected_count),
+            **_candidate_quality_payload(),
         }
+
+    selected_rank_scores = rank_score_t[candidate_ids] if rank_score_t is not None else scores.prune_score_t[candidate_ids]
+    prism_state["last_candidate_quality_score_mean"] = float(selected_rank_scores.to(torch.float32).mean().item())
+    prism_state["last_candidate_prune_score_mean"] = float(scores.prune_score_t[candidate_ids].to(torch.float32).mean().item())
+    prism_state["last_candidate_render_keep_mean"] = float(scores.render_keep_t[candidate_ids].to(torch.float32).mean().item())
+    prism_state["last_candidate_geometry_keep_mean"] = float(scores.geometry_keep_t[candidate_ids].to(torch.float32).mean().item())
+    prism_state["last_candidate_orientation_keep_mean"] = float(scores.orientation_keep_t[candidate_ids].to(torch.float32).mean().item())
+    prism_state["last_candidate_utility_mean"] = float(scores.utility_t[candidate_ids].to(torch.float32).mean().item())
+    prism_state["last_candidate_uncertainty_mean"] = float(scores.unc_t[candidate_ids].to(torch.float32).mean().item())
 
     counterfactual_accept = 0
     rollback = 0
@@ -1872,6 +1935,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
                     "candidate_microbatch_accepted_count": int(accepted_batch_count),
                     "candidate_microbatch_rejected_count": int(rejected_count),
                     "candidate_microbatch_accepted_triangles": 0,
+                    **_candidate_quality_payload(),
                 }
             candidate_ids = accepted_ids
             counterfactual_accept = 1
@@ -1907,6 +1971,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
                     "candidate_microbatch_accepted_count": 0,
                     "candidate_microbatch_rejected_count": 0,
                     "candidate_microbatch_accepted_triangles": 0,
+                    **_candidate_quality_payload(),
                 }
             counterfactual_accept = 1
 
@@ -1943,6 +2008,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             "candidate_microbatch_accepted_count": int(prism_state.get("last_candidate_microbatch_accepted_count", 0)),
             "candidate_microbatch_rejected_count": int(prism_state.get("last_candidate_microbatch_rejected_count", 0)),
             "candidate_microbatch_accepted_triangles": int(prism_state.get("last_candidate_microbatch_accepted_triangles", 0)),
+            **_candidate_quality_payload(),
         }
     return {
         "committed": False,
@@ -1958,6 +2024,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
         "candidate_microbatch_accepted_count": int(prism_state.get("last_candidate_microbatch_accepted_count", 0)),
         "candidate_microbatch_rejected_count": int(prism_state.get("last_candidate_microbatch_rejected_count", 0)),
         "candidate_microbatch_accepted_triangles": int(prism_state.get("last_candidate_microbatch_accepted_triangles", 0)),
+        **_candidate_quality_payload(),
     }
 
 
@@ -2731,6 +2798,14 @@ def training(
                 tb_writer.add_scalar("prism/last_candidate_microbatch_accepted_count", float(prism_state.get("last_candidate_microbatch_accepted_count", 0)), iteration)
                 tb_writer.add_scalar("prism/last_candidate_microbatch_rejected_count", float(prism_state.get("last_candidate_microbatch_rejected_count", 0)), iteration)
                 tb_writer.add_scalar("prism/last_candidate_microbatch_accepted_triangles", float(prism_state.get("last_candidate_microbatch_accepted_triangles", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_quality_rank_enabled", float(prism_state.get("last_candidate_quality_rank_enabled", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_quality_score_mean", float(prism_state.get("last_candidate_quality_score_mean", 0.0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_prune_score_mean", float(prism_state.get("last_candidate_prune_score_mean", 0.0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_render_keep_mean", float(prism_state.get("last_candidate_render_keep_mean", 0.0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_geometry_keep_mean", float(prism_state.get("last_candidate_geometry_keep_mean", 0.0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_orientation_keep_mean", float(prism_state.get("last_candidate_orientation_keep_mean", 0.0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_utility_mean", float(prism_state.get("last_candidate_utility_mean", 0.0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_uncertainty_mean", float(prism_state.get("last_candidate_uncertainty_mean", 0.0)), iteration)
                 tb_writer.add_scalar("prism/validation_pass", float(prism_state.get("last_validation_pass", 1)), iteration)
                 tb_writer.add_scalar(
                     "prism/post_commit_recollect_remaining",
@@ -2800,6 +2875,14 @@ def training(
                     "prism/last_candidate_microbatch_accepted_count": float(prism_state.get("last_candidate_microbatch_accepted_count", 0)),
                     "prism/last_candidate_microbatch_rejected_count": float(prism_state.get("last_candidate_microbatch_rejected_count", 0)),
                     "prism/last_candidate_microbatch_accepted_triangles": float(prism_state.get("last_candidate_microbatch_accepted_triangles", 0)),
+                    "prism/last_candidate_quality_rank_enabled": float(prism_state.get("last_candidate_quality_rank_enabled", 0)),
+                    "prism/last_candidate_quality_score_mean": float(prism_state.get("last_candidate_quality_score_mean", 0.0)),
+                    "prism/last_candidate_prune_score_mean": float(prism_state.get("last_candidate_prune_score_mean", 0.0)),
+                    "prism/last_candidate_render_keep_mean": float(prism_state.get("last_candidate_render_keep_mean", 0.0)),
+                    "prism/last_candidate_geometry_keep_mean": float(prism_state.get("last_candidate_geometry_keep_mean", 0.0)),
+                    "prism/last_candidate_orientation_keep_mean": float(prism_state.get("last_candidate_orientation_keep_mean", 0.0)),
+                    "prism/last_candidate_utility_mean": float(prism_state.get("last_candidate_utility_mean", 0.0)),
+                    "prism/last_candidate_uncertainty_mean": float(prism_state.get("last_candidate_uncertainty_mean", 0.0)),
                     "prism/validation_pass": float(prism_state.get("last_validation_pass", 1)),
                     "prism/densification_frozen_after_commit": float(
                         prism_state.get("densification_frozen_after_prism_commit", 0)
@@ -3028,6 +3111,14 @@ def training(
                         "candidate_microbatch_accepted_count": int(prune_result.get("candidate_microbatch_accepted_count", 0)),
                         "candidate_microbatch_rejected_count": int(prune_result.get("candidate_microbatch_rejected_count", 0)),
                         "candidate_microbatch_accepted_triangles": int(prune_result.get("candidate_microbatch_accepted_triangles", 0)),
+                        "candidate_quality_rank_enabled": int(prune_result.get("candidate_quality_rank_enabled", 0)),
+                        "candidate_quality_score_mean": float(prune_result.get("candidate_quality_score_mean", 0.0)),
+                        "candidate_prune_score_mean": float(prune_result.get("candidate_prune_score_mean", 0.0)),
+                        "candidate_render_keep_mean": float(prune_result.get("candidate_render_keep_mean", 0.0)),
+                        "candidate_geometry_keep_mean": float(prune_result.get("candidate_geometry_keep_mean", 0.0)),
+                        "candidate_orientation_keep_mean": float(prune_result.get("candidate_orientation_keep_mean", 0.0)),
+                        "candidate_utility_mean": float(prune_result.get("candidate_utility_mean", 0.0)),
+                        "candidate_uncertainty_mean": float(prune_result.get("candidate_uncertainty_mean", 0.0)),
                         "pre_prune_triangle_count": int(pre_prune_triangle_count),
                         "post_prune_triangle_count": int(post_prune_triangle_count),
                         "recollect_iters_used": int(getattr(controller, "last_recollect_iters_used", 0) if controller is not None else 0),

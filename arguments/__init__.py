@@ -305,6 +305,13 @@ class OptimizationParams(ParamGroup):
         self.prism_candidate_microbatch_gate = False
         self.prism_candidate_microbatch_size = 256
         self.prism_candidate_microbatch_max_batches = 0
+        self.prism_candidate_quality_rank = False
+        self.prism_candidate_quality_prune_weight = 1.0
+        self.prism_candidate_quality_render_penalty = 0.5
+        self.prism_candidate_quality_geometry_penalty = 0.5
+        self.prism_candidate_quality_orientation_penalty = 0.25
+        self.prism_candidate_quality_utility_penalty = 0.25
+        self.prism_candidate_quality_uncertainty_penalty = 0.25
         self.prism_no_candidate_retry_iters = 10
         self.prism_adaptive_candidate_retry_on_rollback = False
         self.prism_adaptive_candidate_ratio_decay = 0.5

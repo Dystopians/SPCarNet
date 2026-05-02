@@ -4,6 +4,28 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage31 PRISM candidate-quality ranking — SOFT PASS / diagnostic PASS
+
+**Outcome**: Added opt-in candidate-quality ranking for PRISM candidate pruning. The selector can now rank cap-limited candidates by a blended score that rewards raw prune pressure while penalizing render, geometry, orientation, utility, and uncertainty risk. The mechanism is stable and logged, but it is not promoted as the default because the public-scene result is mixed.
+
+**W&B**:
+- parking smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ucqyou26`
+- `bonsai` quality-rank cap512: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/22r3et7s`
+- `courtyard` quality-rank cap512: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/xt4a2cn0`
+
+**Key metrics**:
+- parking smoke: iter `91` committed `64497 -> 63985`.
+- `bonsai`: iter `1501` committed `634299 -> 633787`; independent PSNR `12.1891`, SSIM `0.2756`, LPIPS `0.6136`.
+- `courtyard`: iter `1501` committed `102916 -> 102404`; independent PSNR `15.0732`, SSIM `0.4837`, LPIPS `0.5788`.
+
+**Decision**: Stage31 is useful as diagnostic infrastructure but not a default schedule. It improves `courtyard` versus M29 cap512, but `bonsai` only gains tiny PSNR while losing SSIM/LPIPS. The next step should use measured calibration-view impact for ranking, not only hand-weighted proxy tensors.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage31_candidate_quality_report.md`
+- `outputs/carnet/meshprior/stage31_candidate_quality/`
+
+---
+
 ## 2026-05-02 — Stage30 PRISM microbatch candidate gate — SOFT PASS / diagnostic PASS
 
 **Outcome**: Added opt-in microbatch counterfactual gating for candidate pruning. Large candidate sets can now be split into smaller cumulative batches, with only accepted batches committed. The mechanism works, but `1024 x 256` is not better than the Stage29 cap512 Pareto row on independent metrics.

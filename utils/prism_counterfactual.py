@@ -541,10 +541,14 @@ def select_prism_candidate_ids(
     dead_prune_ratio: float,
     candidate_prune_ratio: float,
     candidate_max_count: int = 0,
+    rank_score_t: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     t = int(scores.prune_score_t.numel())
     if t == 0:
         return torch.zeros((0,), dtype=torch.int64, device=scores.prune_score_t.device)
+    rank_scores = scores.prune_score_t
+    if rank_score_t is not None and int(rank_score_t.numel()) == t:
+        rank_scores = rank_score_t.to(device=scores.prune_score_t.device, dtype=torch.float32)
 
     dead_ids = torch.nonzero(scores.dead_mask, as_tuple=True)[0]
     cand_ids = torch.nonzero(scores.candidate_mask, as_tuple=True)[0]
@@ -556,12 +560,12 @@ def select_prism_candidate_ids(
 
     selected = []
     if dead_ids.numel() > 0 and dead_n > 0:
-        s = scores.prune_score_t[dead_ids]
+        s = rank_scores[dead_ids]
         k = min(dead_n, int(dead_ids.numel()))
         _, idx = torch.topk(s, k=k, largest=True, sorted=False)
         selected.append(dead_ids[idx])
     if cand_ids.numel() > 0 and cand_n > 0:
-        s = scores.prune_score_t[cand_ids]
+        s = rank_scores[cand_ids]
         k = min(cand_n, int(cand_ids.numel()))
         _, idx = torch.topk(s, k=k, largest=True, sorted=False)
         selected.append(cand_ids[idx])
