@@ -4,7 +4,7 @@ Date: 2026-05-02
 
 ## Current State
 
-SPCarNet MeshPrior is about `96%` complete as a research-codebase transformation and about `80%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, and M28 adaptive candidate scheduling are implemented. The remaining core is finer candidate selection for cross-scene topology pressure, metric-path reconciliation, full-budget public-scene evidence, and paper-grade visual/failure analysis. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `97%` complete as a research-codebase transformation and about `82%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, and M30 microbatch candidate gating are implemented. The remaining core is candidate-quality ranking for cross-scene topology pressure, metric-path reconciliation, full-budget public-scene evidence, and paper-grade visual/failure analysis. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -33,6 +33,7 @@ Key codebase links:
 - Candidate cap report: `docs/car_model/meshprior_stage29_candidate_cap_report.md`
 - Candidate cap medium report: `docs/car_model/meshprior_stage29_candidate_cap_medium_report.md`
 - Candidate cap sweep report: `docs/car_model/meshprior_stage29_candidate_cap_sweep_report.md`
+- Microbatch candidate gate report: `docs/car_model/meshprior_stage30_microbatch_gate_report.md`
 
 Known W&B runs:
 
@@ -77,6 +78,9 @@ Known W&B runs:
 - M29 ETH3D courtyard cap512 adaptive 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/1ey4qzbd`
 - M29 Mip-NeRF 360 bonsai cap256 adaptive 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/mzglj2qw`
 - M29 Mip-NeRF 360 bonsai cap1024 adaptive 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/j5v0debo`
+- M30 parking microbatch candidate gate smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/dioe1cz1`
+- M30 Mip-NeRF 360 bonsai microbatch1024x256 adaptive 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/mfvhexjb`
+- M30 ETH3D courtyard microbatch1024x256 adaptive 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ha9qi1ih`
 
 ## Operating Rules
 
@@ -134,6 +138,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Cross-scene topology-pressure tuning | execution finding / M27 | SOFT PASS | `ratio0p02_geom1400` strongly reduces ETH3D `courtyard` to `100858` triangles with better independent metrics, but `bonsai` rolls back all six candidate edits and remains near baseline topology. Fixed schedules are not yet cross-scene robust. |
 | Adaptive candidate scheduling | execution finding / M28 | SOFT PASS | Added opt-in rollback-driven candidate-ratio decay. Parking smoke verifies `0.04 -> 0.02 -> 0.01`; medium public-scene ablation preserves ETH3D but `bonsai` still rejects even a `0.005` global candidate set. |
 | Granular candidate selection | execution finding / M29 | SOFT PASS / diagnostic PASS | Added opt-in `--prism_candidate_max_count_per_round`. Parking smoke passes. Cap sweep shows `bonsai` cap512 is best among `256/512/1024`, giving `633787` triangles and improved SSIM/LPIPS vs M28, but PSNR remains below M28 and slightly below sparse-depth baseline. |
+| Microbatch candidate gating | execution finding / M30 | SOFT PASS / diagnostic PASS | Added opt-in `--prism_candidate_microbatch_gate`. Parking smoke passes. `bonsai` accepts `3/4` microbatches from cap1024 and `courtyard` accepts `4/4`, but cap512 remains the better conservative default because independent `bonsai` PSNR/LPIPS are worse. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
@@ -165,6 +170,7 @@ These are not new research directions. They are constraints discovered while imp
 22. M29 candidate-cap smoke shows small candidate edits can pass the same training-loop gate: cap `256` turns the parking smoke's third candidate attempt into an accepted `64497 -> 64241` edit. This is an implementation result; cross-scene validation is still pending.
 23. M29 cap512 medium ablation shows candidate caps are the right direction but not yet the final schedule. `bonsai` reaches `633787` triangles with better SSIM/LPIPS than M28 but lower PSNR; `courtyard` stays better than baseline but worse than the M27/M28 best. A cap sweep or microbatch gate is needed before full-budget claims.
 24. M29 cap sweep identifies a sharp candidate batch-size threshold on `bonsai`: `512` commits and improves SSIM/LPIPS with large topology reduction; `1024` rolls back and loses the topology benefit. This points to microbatch candidate gating as the next method step.
+25. M30 microbatch gating shows that the cap1024 failure is not all-or-nothing: `bonsai` accepts `768/1024` cumulative candidates before rejecting the full set. However, independent metrics do not improve over cap512, so the next bottleneck is candidate quality/ranking, not simply candidate batch size.
 
 ---
 
@@ -866,7 +872,7 @@ Fix the M28 failure mode where a small global candidate ratio still selects too 
    - PRISM validation artifacts,
    - counterfactual gate JSON,
    - final checkpoint topology and cleanup summary.
-7. TODO: Sweep cap values or promote the next M29 substep to microbatch candidate gating: split selected candidates into small batches, run counterfactual gates per batch, and commit only the accepted batches.
+7. DONE: Promote the next substep to M30 microbatch candidate gating: split selected candidates into small batches, run counterfactual gates per cumulative batch, and commit only accepted batches.
 8. DONE: Sweep `bonsai` cap values `256`, `512`, and `1024`; cap512 is the current best Pareto row, cap1024 rolls back.
 
 ## Required Outputs
@@ -885,3 +891,54 @@ Fix the M28 failure mode where a small global candidate ratio still selects too 
 `SOFT PASS` if it improves diagnosis or one scene but still misses cross-scene topology improvement.
 
 `FAIL` if it causes invalid checkpoints, missing W&B, or hidden topology/accounting mismatch.
+
+---
+
+# Prompt M30 — Microbatch PRISM candidate gating
+
+## Status
+
+`SOFT PASS / diagnostic PASS` on 2026-05-02.
+
+## Goal
+
+Recover useful accepted topology edits from candidate sets that are too large as a single counterfactual mutation. The method should split a cap-limited candidate set into smaller batches, gate each cumulative batch, and commit only accepted batches.
+
+## Result
+
+- Implemented default-off flags:
+  - `--prism_candidate_microbatch_gate`
+  - `--prism_candidate_microbatch_size`
+  - `--prism_candidate_microbatch_max_batches`
+- Added per-microbatch counterfactual JSON files, W&B counters, and PRISM round metadata.
+- Parking smoke W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/dioe1cz1`
+- `bonsai` W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/mfvhexjb`
+- `courtyard` W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ha9qi1ih`
+- Report: `docs/car_model/meshprior_stage30_microbatch_gate_report.md`
+- Output root: `outputs/carnet/meshprior/stage30_microbatch_gate/`
+
+## Evidence
+
+- Parking smoke: iter `91` selected `644` candidates, accepted `3/3` microbatches, and committed `64497 -> 63853`.
+- `bonsai`: iter `1501` selected `1024`, accepted `3/4`, committed `634299 -> 633531`, independent PSNR `12.1423`, SSIM `0.2770`, LPIPS `0.6136`.
+- `courtyard`: iter `1501` selected `1024`, accepted `4/4`, committed `102919 -> 101895`, independent PSNR `15.0635`, SSIM `0.4828`, LPIPS `0.5802`.
+
+## Gate
+
+`SOFT PASS / diagnostic PASS`.
+
+The mechanism is stable and useful for diagnosis. It is not promoted to the default schedule because Stage29 cap512 remains the better conservative `bonsai` topology-quality Pareto row.
+
+## Next Prompt: M31
+
+Candidate-quality calibration and ranking:
+
+1. Keep Stage29 cap512 as the current conservative default.
+2. Use M30 microbatch JSON to fit or design a better candidate ranking rule.
+3. Add opt-in candidate ranking that blends prune score with render-impact proxies:
+   - low changed-pixel proxy,
+   - low calibration-view image degradation,
+   - sparse-depth consistency if available,
+   - geometry/orientation keep safety.
+4. Run the same smoke and `bonsai` / `courtyard` medium ablation with online W&B.
+5. Gate as `PASS` only if it improves or matches cap512 independent metrics while preserving equal or lower topology on both public scenes.

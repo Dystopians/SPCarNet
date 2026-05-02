@@ -143,6 +143,9 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "candidate_prune_ratio": float(getattr(opt, "prism_candidate_prune_ratio", 0.0)),
         "candidate_prune_ratio_per_round": float(getattr(opt, "prism_candidate_prune_ratio_per_round", 0.015)),
         "candidate_max_count_per_round": int(getattr(opt, "prism_candidate_max_count_per_round", 0)),
+        "candidate_microbatch_gate": bool(getattr(opt, "prism_candidate_microbatch_gate", False)),
+        "candidate_microbatch_size": int(getattr(opt, "prism_candidate_microbatch_size", 256)),
+        "candidate_microbatch_max_batches": int(getattr(opt, "prism_candidate_microbatch_max_batches", 0)),
         "adaptive_candidate_retry_on_rollback": bool(
             getattr(opt, "prism_adaptive_candidate_retry_on_rollback", False)
         ),
@@ -392,6 +395,10 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "last_candidate_target_count": 0,
         "last_candidate_cap_count": 0,
         "last_candidate_selected_count": 0,
+        "last_candidate_microbatch_count": 0,
+        "last_candidate_microbatch_accepted_count": 0,
+        "last_candidate_microbatch_rejected_count": 0,
+        "last_candidate_microbatch_accepted_triangles": 0,
         "teacher_cache": {},
         "teacher_rgb_lambda": float(getattr(opt, "prism_teacher_rgb_lambda", 0.01)),
         "teacher_depth_lambda": float(getattr(opt, "prism_teacher_depth_lambda", 0.002)),
@@ -1766,10 +1773,18 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     if candidate_max_count > 0:
         capped_target_count = min(target_count, int(candidate_max_count))
     selected_count = int(candidate_ids.numel())
+    if candidate_ids.numel() > 1:
+        order_scores = scores.prune_score_t[candidate_ids]
+        _, order = torch.sort(order_scores, descending=True)
+        candidate_ids = candidate_ids[order]
     prism_state["last_candidate_pool_count"] = candidate_pool_count
     prism_state["last_candidate_target_count"] = target_count
     prism_state["last_candidate_cap_count"] = capped_target_count
     prism_state["last_candidate_selected_count"] = selected_count
+    prism_state["last_candidate_microbatch_count"] = 0
+    prism_state["last_candidate_microbatch_accepted_count"] = 0
+    prism_state["last_candidate_microbatch_rejected_count"] = 0
+    prism_state["last_candidate_microbatch_accepted_triangles"] = 0
     if candidate_ids.numel() == 0:
         return {
             "committed": False,
@@ -1787,37 +1802,113 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     counterfactual_accept = 0
     rollback = 0
     if (prune_mode == "candidate") and bool(cfg.get("use_counterfactual_gate", False)):
-        decision = run_counterfactual_simulation(
-            scene=scene,
-            triangles=triangles,
-            render_func=render,
-            pipe=prism_state.get("pipe", None),
-            background=prism_state.get("background", None),
-            candidate_triangle_ids=candidate_ids,
-            calibration_views=prism_state.get("calibration_views", []),
-            gate_cfg=prism_state["gate_cfg"],
-            proxy_ctx=prism_state.get("proxy_ctx", None),
-            proxy_cfg=prism_state.get("proxy_cfg", None),
-        )
-        prism_state["last_counterfactual_decision"] = decision
         debug_dir = os.path.join(prism_state["model_path"], "prism_debug")
         os.makedirs(debug_dir, exist_ok=True)
-        with open(os.path.join(debug_dir, f"counterfactual_gate_iter_{int(iteration):06d}.json"), "w", encoding="utf-8") as f:
-            json.dump(counterfactual_decision_to_dict(decision), f, indent=2)
-        if not bool(decision.accept):
-            rollback = 1
-            return {
-                "committed": False,
-                "pruned_count": 0,
-                "counterfactual_accept": 0,
-                "rollback": rollback,
-                "candidate_prune_ratio": float(cand_ratio),
-                "candidate_pool_count": int(candidate_pool_count),
-                "candidate_target_count": int(target_count),
-                "candidate_cap_count": int(capped_target_count),
-                "candidate_selected_count": int(selected_count),
-            }
-        counterfactual_accept = 1
+        if bool(cfg.get("candidate_microbatch_gate", False)):
+            microbatch_size = max(1, int(cfg.get("candidate_microbatch_size", 256)))
+            max_batches = max(0, int(cfg.get("candidate_microbatch_max_batches", 0)))
+            batches = list(torch.split(candidate_ids, microbatch_size))
+            if max_batches > 0:
+                batches = batches[:max_batches]
+            accepted_batches = []
+            rejected_count = 0
+            for batch_idx, batch_ids in enumerate(batches):
+                if batch_ids.numel() == 0:
+                    continue
+                if accepted_batches:
+                    cumulative_ids = torch.unique(torch.cat(accepted_batches + [batch_ids], dim=0))
+                else:
+                    cumulative_ids = batch_ids
+                decision = run_counterfactual_simulation(
+                    scene=scene,
+                    triangles=triangles,
+                    render_func=render,
+                    pipe=prism_state.get("pipe", None),
+                    background=prism_state.get("background", None),
+                    candidate_triangle_ids=cumulative_ids,
+                    calibration_views=prism_state.get("calibration_views", []),
+                    gate_cfg=prism_state["gate_cfg"],
+                    proxy_ctx=prism_state.get("proxy_ctx", None),
+                    proxy_cfg=prism_state.get("proxy_cfg", None),
+                )
+                prism_state["last_counterfactual_decision"] = decision
+                payload = counterfactual_decision_to_dict(decision)
+                payload["microbatch_index"] = int(batch_idx)
+                payload["microbatch_size"] = int(batch_ids.numel())
+                payload["cumulative_candidate_count"] = int(cumulative_ids.numel())
+                with open(
+                    os.path.join(debug_dir, f"counterfactual_gate_iter_{int(iteration):06d}_mb{batch_idx:03d}.json"),
+                    "w",
+                    encoding="utf-8",
+                ) as f:
+                    json.dump(payload, f, indent=2)
+                if bool(decision.accept):
+                    accepted_batches.append(batch_ids)
+                else:
+                    rejected_count += 1
+            accepted_ids = (
+                torch.unique(torch.cat(accepted_batches, dim=0))
+                if accepted_batches
+                else torch.zeros((0,), dtype=torch.int64, device=candidate_ids.device)
+            )
+            accepted_batch_count = len(accepted_batches)
+            prism_state["last_candidate_microbatch_count"] = len(batches)
+            prism_state["last_candidate_microbatch_accepted_count"] = accepted_batch_count
+            prism_state["last_candidate_microbatch_rejected_count"] = int(rejected_count)
+            prism_state["last_candidate_microbatch_accepted_triangles"] = int(accepted_ids.numel())
+            if accepted_ids.numel() == 0:
+                rollback = 1
+                return {
+                    "committed": False,
+                    "pruned_count": 0,
+                    "counterfactual_accept": 0,
+                    "rollback": rollback,
+                    "candidate_prune_ratio": float(cand_ratio),
+                    "candidate_pool_count": int(candidate_pool_count),
+                    "candidate_target_count": int(target_count),
+                    "candidate_cap_count": int(capped_target_count),
+                    "candidate_selected_count": int(selected_count),
+                    "candidate_microbatch_count": int(len(batches)),
+                    "candidate_microbatch_accepted_count": int(accepted_batch_count),
+                    "candidate_microbatch_rejected_count": int(rejected_count),
+                    "candidate_microbatch_accepted_triangles": 0,
+                }
+            candidate_ids = accepted_ids
+            counterfactual_accept = 1
+        else:
+            decision = run_counterfactual_simulation(
+                scene=scene,
+                triangles=triangles,
+                render_func=render,
+                pipe=prism_state.get("pipe", None),
+                background=prism_state.get("background", None),
+                candidate_triangle_ids=candidate_ids,
+                calibration_views=prism_state.get("calibration_views", []),
+                gate_cfg=prism_state["gate_cfg"],
+                proxy_ctx=prism_state.get("proxy_ctx", None),
+                proxy_cfg=prism_state.get("proxy_cfg", None),
+            )
+            prism_state["last_counterfactual_decision"] = decision
+            with open(os.path.join(debug_dir, f"counterfactual_gate_iter_{int(iteration):06d}.json"), "w", encoding="utf-8") as f:
+                json.dump(counterfactual_decision_to_dict(decision), f, indent=2)
+            if not bool(decision.accept):
+                rollback = 1
+                return {
+                    "committed": False,
+                    "pruned_count": 0,
+                    "counterfactual_accept": 0,
+                    "rollback": rollback,
+                    "candidate_prune_ratio": float(cand_ratio),
+                    "candidate_pool_count": int(candidate_pool_count),
+                    "candidate_target_count": int(target_count),
+                    "candidate_cap_count": int(capped_target_count),
+                    "candidate_selected_count": int(selected_count),
+                    "candidate_microbatch_count": 0,
+                    "candidate_microbatch_accepted_count": 0,
+                    "candidate_microbatch_rejected_count": 0,
+                    "candidate_microbatch_accepted_triangles": 0,
+                }
+            counterfactual_accept = 1
 
     # Optional teacher cache: snapshot round-pre-prune render targets.
     _build_prism_teacher_cache(prism_state=prism_state, scene=scene, triangles=triangles)
@@ -1848,6 +1939,10 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             "candidate_target_count": int(target_count),
             "candidate_cap_count": int(capped_target_count),
             "candidate_selected_count": int(selected_count),
+            "candidate_microbatch_count": int(prism_state.get("last_candidate_microbatch_count", 0)),
+            "candidate_microbatch_accepted_count": int(prism_state.get("last_candidate_microbatch_accepted_count", 0)),
+            "candidate_microbatch_rejected_count": int(prism_state.get("last_candidate_microbatch_rejected_count", 0)),
+            "candidate_microbatch_accepted_triangles": int(prism_state.get("last_candidate_microbatch_accepted_triangles", 0)),
         }
     return {
         "committed": False,
@@ -1859,6 +1954,10 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
         "candidate_target_count": int(target_count),
         "candidate_cap_count": int(capped_target_count),
         "candidate_selected_count": int(selected_count),
+        "candidate_microbatch_count": int(prism_state.get("last_candidate_microbatch_count", 0)),
+        "candidate_microbatch_accepted_count": int(prism_state.get("last_candidate_microbatch_accepted_count", 0)),
+        "candidate_microbatch_rejected_count": int(prism_state.get("last_candidate_microbatch_rejected_count", 0)),
+        "candidate_microbatch_accepted_triangles": int(prism_state.get("last_candidate_microbatch_accepted_triangles", 0)),
     }
 
 
@@ -2628,6 +2727,10 @@ def training(
                 tb_writer.add_scalar("prism/last_candidate_pool_count", float(prism_state.get("last_candidate_pool_count", 0)), iteration)
                 tb_writer.add_scalar("prism/last_candidate_cap_count", float(prism_state.get("last_candidate_cap_count", 0)), iteration)
                 tb_writer.add_scalar("prism/last_candidate_selected_count", float(prism_state.get("last_candidate_selected_count", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_microbatch_count", float(prism_state.get("last_candidate_microbatch_count", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_microbatch_accepted_count", float(prism_state.get("last_candidate_microbatch_accepted_count", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_microbatch_rejected_count", float(prism_state.get("last_candidate_microbatch_rejected_count", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_microbatch_accepted_triangles", float(prism_state.get("last_candidate_microbatch_accepted_triangles", 0)), iteration)
                 tb_writer.add_scalar("prism/validation_pass", float(prism_state.get("last_validation_pass", 1)), iteration)
                 tb_writer.add_scalar(
                     "prism/post_commit_recollect_remaining",
@@ -2693,6 +2796,10 @@ def training(
                     "prism/last_candidate_target_count": float(prism_state.get("last_candidate_target_count", 0)),
                     "prism/last_candidate_cap_count": float(prism_state.get("last_candidate_cap_count", 0)),
                     "prism/last_candidate_selected_count": float(prism_state.get("last_candidate_selected_count", 0)),
+                    "prism/last_candidate_microbatch_count": float(prism_state.get("last_candidate_microbatch_count", 0)),
+                    "prism/last_candidate_microbatch_accepted_count": float(prism_state.get("last_candidate_microbatch_accepted_count", 0)),
+                    "prism/last_candidate_microbatch_rejected_count": float(prism_state.get("last_candidate_microbatch_rejected_count", 0)),
+                    "prism/last_candidate_microbatch_accepted_triangles": float(prism_state.get("last_candidate_microbatch_accepted_triangles", 0)),
                     "prism/validation_pass": float(prism_state.get("last_validation_pass", 1)),
                     "prism/densification_frozen_after_commit": float(
                         prism_state.get("densification_frozen_after_prism_commit", 0)
@@ -2917,6 +3024,10 @@ def training(
                         "candidate_target_count": int(prune_result.get("candidate_target_count", 0)),
                         "candidate_cap_count": int(prune_result.get("candidate_cap_count", 0)),
                         "candidate_selected_count": int(prune_result.get("candidate_selected_count", 0)),
+                        "candidate_microbatch_count": int(prune_result.get("candidate_microbatch_count", 0)),
+                        "candidate_microbatch_accepted_count": int(prune_result.get("candidate_microbatch_accepted_count", 0)),
+                        "candidate_microbatch_rejected_count": int(prune_result.get("candidate_microbatch_rejected_count", 0)),
+                        "candidate_microbatch_accepted_triangles": int(prune_result.get("candidate_microbatch_accepted_triangles", 0)),
                         "pre_prune_triangle_count": int(pre_prune_triangle_count),
                         "post_prune_triangle_count": int(post_prune_triangle_count),
                         "recollect_iters_used": int(getattr(controller, "last_recollect_iters_used", 0) if controller is not None else 0),

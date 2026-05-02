@@ -4,6 +4,28 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage30 PRISM microbatch candidate gate — SOFT PASS / diagnostic PASS
+
+**Outcome**: Added opt-in microbatch counterfactual gating for candidate pruning. Large candidate sets can now be split into smaller cumulative batches, with only accepted batches committed. The mechanism works, but `1024 x 256` is not better than the Stage29 cap512 Pareto row on independent metrics.
+
+**W&B**:
+- parking smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/dioe1cz1`
+- `bonsai` microbatch1024x256: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/mfvhexjb`
+- `courtyard` microbatch1024x256: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ha9qi1ih`
+
+**Key metrics**:
+- parking smoke: iter `91` accepted `3/3` microbatches and committed `64497 -> 63853`.
+- `bonsai`: iter `1501` accepted `3/4` microbatches, committed `634299 -> 633531`; independent PSNR `12.1423`, SSIM `0.2770`, LPIPS `0.6136`.
+- `courtyard`: iter `1501` accepted `4/4` microbatches, committed `102919 -> 101895`; independent PSNR `15.0635`, SSIM `0.4828`, LPIPS `0.5802`.
+
+**Decision**: Stage30 is a useful diagnostic mechanism, not the next default. Keep cap512 as the current conservative topology-quality row. M31 should improve candidate quality/ranking, because simply accepting more microbatches trades independent PSNR/LPIPS away on `bonsai`.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage30_microbatch_gate_report.md`
+- `outputs/carnet/meshprior/stage30_microbatch_gate/`
+
+---
+
 ## 2026-05-02 — Stage29 bonsai candidate-cap sweep — PASS diagnostic
 
 **Outcome**: Completed a Mip-NeRF 360 `bonsai` cap sweep with online W&B and independent metrics. Cap `256` and `512` commit; cap `1024` rolls back all attempts. Cap `512` is the best current topology-quality Pareto row.
