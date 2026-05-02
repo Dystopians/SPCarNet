@@ -2899,6 +2899,21 @@ def training(
                         reason="prune_or_densify",
                     )
                     reset_ground_supervision_state("prune_or_densify")
+                    if wandb_run is not None and should_log_wandb_scalar:
+                        _wandb_log_filtered(
+                            wandb_run=wandb_run,
+                            payload={
+                                "mesh/triangle_count": float(post_triangles),
+                                "mesh/vertex_count": float(post_vertices),
+                                "mesh/post_topology_triangle_count": float(post_triangles),
+                                "mesh/post_topology_vertex_count": float(post_vertices),
+                                "mesh/pre_topology_triangle_count": float(pre_triangles),
+                                "mesh/pre_topology_vertex_count": float(pre_vertices),
+                                "prism/standard_topology_mutation": 1.0,
+                            },
+                            step=iteration,
+                            log_state=wandb_log_state,
+                        )
             elif iteration == run_restricted_delaunay:
                 need_delaunay = True
             elif iteration % 500 == 0 and iteration > run_restricted_delaunay + 1000:
@@ -3089,12 +3104,20 @@ def training(
                 "prism/final_cleanup_enabled": float(prism_state.get("final_cleanup_enabled", 0)),
                 "prism/final_cleanup_pruned": float(prism_state.get("final_cleanup_pruned", 0)),
                 "prism/pre_cleanup_checkpoint": 1.0 if str(pre_cleanup_ckpt) else 0.0,
+                "prism/final_pre_cleanup_triangle_count": float(pre_triangles),
+                "prism/final_post_cleanup_triangle_count": float(post_triangles),
+                "prism/final_pre_cleanup_vertex_count": float(pre_vertices),
+                "prism/final_post_cleanup_vertex_count": float(post_vertices),
                 "prism/post_commit_recollect_remaining": float(
                     getattr(prism_state.get("controller", None), "post_commit_recollect_remaining", 0)
                     if prism_state.get("controller", None) is not None
                     else 0
                 ),
                 "prism/topology_change_iter": float(prism_state.get("last_topology_change_iter", -1)),
+                "mesh/triangle_count": float(post_triangles),
+                "mesh/vertex_count": float(post_vertices),
+                "mesh/final_checkpoint_triangle_count": float(post_triangles),
+                "mesh/final_checkpoint_vertex_count": float(post_vertices),
             },
             step=int(iteration),
             log_state=wandb_log_state,

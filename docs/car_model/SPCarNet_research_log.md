@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage27.0 topology accounting fix — PASS
+
+**Outcome**: Fixed the topology accounting mismatch found during M26. The training loop previously logged W&B `mesh/triangle_count` before the end-of-iteration standard prune/densify block, while final checkpoints and `final_cleanup_summary.json` reflected the post-mutation topology. Future runs now log post-topology counts and final-checkpoint counts explicitly.
+
+**W&B**:
+- accounting smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/i6lfgt66`
+
+**Verification**:
+- smoke output: `outputs/carnet/meshprior/stage27_accounting/eth3d_courtyard_accounting_smoke_520iter/`
+- local W&B summary: `mesh/triangle_count = 33487`, `mesh/final_checkpoint_triangle_count = 33487`
+- final cleanup summary: `post_prune_triangle_count = 33487`
+- vertex counts also agree: `100461`
+
+**Decision**: M27.0 gate `PASS`. The next M27 work is schedule tuning for stronger direct cross-scene PRISM topology pressure.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage27_accounting_fix_report.md`
+
+---
+
 ## 2026-05-02 — Stage26 cross-scene method evidence — SOFT PASS
 
 **Outcome**: Ran aligned 2000-iteration sparse-depth baselines and M24.2 PRISM topology-retention rows on two public COLMAP-style scenes: Mip-NeRF 360 `bonsai` and ETH3D `courtyard`. All current-branch runs used online W&B. Independent `render.py + metrics.py` was completed for all four checkpoints, and a new collector writes JSON/CSV/Markdown summary tables.

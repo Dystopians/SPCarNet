@@ -26,6 +26,7 @@ Key codebase links:
 - Topology-retention report: `docs/car_model/meshprior_stage24_2_topology_retention_report.md`
 - Multidataset validation report: `docs/car_model/meshprior_stage25_multidataset_validation_report.md`
 - Cross-scene method evidence report: `docs/car_model/meshprior_stage26_cross_scene_report.md`
+- Accounting fix report: `docs/car_model/meshprior_stage27_accounting_fix_report.md`
 
 Known W&B runs:
 
@@ -57,6 +58,7 @@ Known W&B runs:
 - M26 Mip-NeRF 360 bonsai M24.2 PRISM 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/dmasxcej`
 - M26 ETH3D courtyard sparse-depth baseline 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/mdan8yc2`
 - M26 ETH3D courtyard M24.2 PRISM 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/r9zgtuyp`
+- M27 accounting smoke ETH3D courtyard 520: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/i6lfgt66`
 
 ## Operating Rules
 
@@ -110,6 +112,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Topology-retention after integrated edits | execution finding | PASS | M24.2 freezes densification after the first accepted PRISM candidate edit and reaches `254491` triangles with stronger independent metrics than M21.5 prune_50. |
 | Public multidataset trainability validation | original prompts Layer G / execution finding | SOFT PASS | M25 prepares Mip-NeRF 360, ETH3D, and Tanks and Temples-family data. Mip-NeRF 360 and ETH3D are geometry-observable COLMAP scenes; Tanks mirror trains but lacks true sparse tracks, so geometry validation reports `no_sparse_matches`. |
 | Cross-scene method evidence | original prompts Layer G / M26 | SOFT PASS | M26 runs aligned sparse-depth baselines and M24.2 PRISM on Mip-NeRF 360 `bonsai` and ETH3D `courtyard` with online W&B, independent render metrics, PRISM decisions, and geometry-observable validation. Direct W&B topology reduction is modest, so full paper claims need schedule tuning. |
+| Topology accounting reconciliation | execution finding / M27.0 | PASS | `train.py` now logs post-topology and final-checkpoint W&B counts; 520-iter ETH3D smoke confirms W&B `mesh/triangle_count` and final-cleanup checkpoint counts agree. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
@@ -134,6 +137,7 @@ These are not new research directions. They are constraints discovered while imp
 15. M24.2 shows topology-retention is the key missing schedule rule: freezing densification after accepted PRISM commits enables standard pruning to retain a low-topology final checkpoint without hurting render metrics.
 16. M25 shows public dataset support is uneven: Mip-NeRF 360 and ETH3D fit the current COLMAP contract, while the available Tanks and Temples mirror requires real COLMAP tracks before geometry claims are defensible.
 17. M26 shows the M24.2 PRISM schedule transfers mechanically to public scenes, but the 2000-iteration cross-scene direct W&B topology reduction is only `0.5%` to `1.5%`. Larger checkpoint-topology deltas must be labeled as schedule/checkpoint accounting effects until metric paths are reconciled.
+18. M27.0 identifies the topology mismatch root cause: W&B topology was logged before standard end-of-iteration prune/densify, while checkpoints were saved after it. Future runs now log post-topology and final-checkpoint counts explicitly.
 
 ---
 
@@ -743,15 +747,26 @@ M26 proves cross-scene trainability and validation for the current method, but i
 
 Tune cross-scene PRISM topology pressure and accounting:
 
+## Status
+
+`IN PROGRESS` as of 2026-05-02.
+
+## Completed
+
+- M27.0 accounting fix report: `docs/car_model/meshprior_stage27_accounting_fix_report.md`
+- W&B accounting smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/i6lfgt66`
+- verified future W&B `mesh/triangle_count` and `mesh/final_checkpoint_triangle_count` align with `final_cleanup_summary.json`.
+
+## Remaining
+
 1. Keep W&B online for every current-branch run.
 2. Use `mipnerf360_bonsai` and `eth3d_courtyard`; optional third scene only if it has true COLMAP tracks.
-3. Add or fix topology accounting so W&B runtime topology, checkpoint topology, and final-cleanup summary are reported side by side without ambiguity.
-4. Run short-to-medium schedule ablations that increase direct PRISM topology pressure without losing validation gates:
+3. Run short-to-medium schedule ablations that increase direct PRISM topology pressure without losing validation gates:
    - candidate ratio `0.01` and `0.02`;
    - earlier geometry-acquisition boundary such as `1200` or `1400`;
    - enough candidate rounds to observe commits and rollbacks before final finetune.
-5. Use independent `render.py + metrics.py` plus PRISM validation after each candidate row.
-6. Gate:
+4. Use independent `render.py + metrics.py` plus PRISM validation after each candidate row.
+5. Gate:
    - `PASS` if at least one row on both scenes achieves meaningful W&B topology reduction, geometry-observable validation, and non-worse independent SSIM/LPIPS against aligned sparse-depth baseline.
    - `SOFT PASS` if only one scene improves or topology reduction remains small but the failure mode is clear.
    - `FAIL` if stronger topology pressure breaks render quality or validation.
