@@ -4,6 +4,28 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage29 bonsai candidate-cap sweep — PASS diagnostic
+
+**Outcome**: Completed a Mip-NeRF 360 `bonsai` cap sweep with online W&B and independent metrics. Cap `256` and `512` commit; cap `1024` rolls back all attempts. Cap `512` is the best current topology-quality Pareto row.
+
+**W&B**:
+- cap256: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/mzglj2qw`
+- cap512: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ck157wtl`
+- cap1024: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/j5v0debo`
+
+**Key metrics**:
+- cap256: final `634043` triangles; independent PSNR `12.1430`, SSIM `0.2753`, LPIPS `0.6134`.
+- cap512: final `633787` triangles; independent PSNR `12.1859`, SSIM `0.2764`, LPIPS `0.6129`.
+- cap1024: final `1357128` triangles; independent PSNR `12.2882`, SSIM `0.2398`, LPIPS `0.6211`.
+
+**Decision**: Stage29 cap sweep is a `PASS` diagnostic. The next useful algorithmic step is microbatch candidate gating: cap1024 likely contains useful removable triangles, but the whole batch is too risky as one counterfactual edit.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage29_candidate_cap_sweep_report.md`
+- `outputs/carnet/meshprior/stage29_candidate_selection/`
+
+---
+
 ## 2026-05-02 — Stage29 candidate cap medium ablation — SOFT PASS
 
 **Outcome**: Ran the M29 cap512 public-scene medium ablation with online W&B and independent render metrics. Candidate capping makes `bonsai` accept a PRISM edit for the first time in the M27-M29 public-scene sequence, but quality/topology tradeoffs remain.
