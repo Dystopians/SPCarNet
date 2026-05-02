@@ -4,7 +4,7 @@ Date: 2026-05-02
 
 ## Current State
 
-SPCarNet MeshPrior is about `93%` complete as a research-codebase transformation and about `72%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, and M24.2 topology-retention row are implemented. The remaining core is multi-scene evidence and paper-grade visual/failure analysis. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `94%` complete as a research-codebase transformation and about `76%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, and M25 public multidataset trainability validation are implemented. The remaining core is cross-scene method evidence and paper-grade visual/failure analysis. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -24,6 +24,7 @@ Key codebase links:
 - Full integrated topology report: `docs/car_model/meshprior_stage24_full_integrated_topology_report.md`
 - Late-PRISM Pareto report: `docs/car_model/meshprior_stage24_1_late_prism_pareto_report.md`
 - Topology-retention report: `docs/car_model/meshprior_stage24_2_topology_retention_report.md`
+- Multidataset validation report: `docs/car_model/meshprior_stage25_multidataset_validation_report.md`
 
 Known W&B runs:
 
@@ -48,6 +49,9 @@ Known W&B runs:
 - M24.1 late PRISM 0.5% retryfix best topology row: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/jnn9yauw`
 - M24.1 late PRISM 1% retryfix throttle row: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/0n7kzim5`
 - M24.2 topology retention freeze-after-first-commit: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/vsv2bs79`
+- M25 Mip-NeRF 360 bonsai 700-iteration trainability: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/x75zddff`
+- M25 Tanks and Temples truck 700-iteration fixed trainability: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/5pre7o19`
+- M25 ETH3D courtyard 700-iteration trainability: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/78iu6goq`
 
 ## Operating Rules
 
@@ -99,6 +103,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Full-budget integrated topology-control run | execution finding | PASS | M24-v3 commits two late 1% PRISM edits at 7000 iterations with online W&B and independent metrics. Quality is close to current branch but topology reduction is small. |
 | Integrated topology Pareto sweep | execution finding | PASS | M24.1 best row commits five late PRISM edits and reduces final topology to `723438` triangles with near-current independent metrics; still not as topology-efficient as posthoc M21.5 `prune_50`. |
 | Topology-retention after integrated edits | execution finding | PASS | M24.2 freezes densification after the first accepted PRISM candidate edit and reaches `254491` triangles with stronger independent metrics than M21.5 prune_50. |
+| Public multidataset trainability validation | original prompts Layer G / execution finding | SOFT PASS | M25 prepares Mip-NeRF 360, ETH3D, and Tanks and Temples-family data. Mip-NeRF 360 and ETH3D are geometry-observable COLMAP scenes; Tanks mirror trains but lacks true sparse tracks, so geometry validation reports `no_sparse_matches`. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
@@ -121,6 +126,7 @@ These are not new research directions. They are constraints discovered while imp
 13. M24.1 shows no-candidate attempts must be logged separately from effective PRISM rounds. The controller now retries without consuming a candidate round and throttles retry attempts.
 14. M24.1 also shows that accepted integrated topology edits do not guarantee final topology retention because later densification can restore triangles.
 15. M24.2 shows topology-retention is the key missing schedule rule: freezing densification after accepted PRISM commits enables standard pruning to retain a low-topology final checkpoint without hurting render metrics.
+16. M25 shows public dataset support is uneven: Mip-NeRF 360 and ETH3D fit the current COLMAP contract, while the available Tanks and Temples mirror requires real COLMAP tracks before geometry claims are defensible.
 
 ---
 
@@ -670,3 +676,39 @@ Only after M23, harden the codebase for external use without changing research r
 `PASS` if the repo is easier to reproduce and no research outputs are changed.
 
 `FAIL` if hardening changes experimental behavior without rerunning affected metrics.
+
+---
+
+# Prompt M25 — Public multidataset trainability validation
+
+## Status
+
+`SOFT PASS` on 2026-05-02.
+
+## Result
+
+- dataset root: `/data/peilincai/mesh_datasets`
+- disk after setup: `/data` has `4.4T` free; M25 data uses about `30G`
+- audit JSON: `outputs/carnet/meshprior/stage25_multidataset/dataset_audit.json`
+- report: `docs/car_model/meshprior_stage25_multidataset_validation_report.md`
+- trainable current-loader scenes: `10`
+
+Representative W&B runs:
+
+- Mip-NeRF 360 `bonsai`: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/x75zddff`
+- Tanks and Temples `truck` converted from NSVF mirror: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/5pre7o19`
+- ETH3D `courtyard`: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/78iu6goq`
+
+## Decision
+
+M25 is enough to proceed to cross-scene method validation on Mip-NeRF 360 and ETH3D. Tanks and Temples should not be used for geometry claims until official COLMAP tracks are acquired or generated locally.
+
+## Next Prompt: M26
+
+Run cross-scene method evidence:
+
+1. Keep W&B online.
+2. Use at least `mipnerf360_bonsai` and `eth3d_courtyard`.
+3. Run an aligned current-branch baseline and M24.2 topology-retention schedule on each scene.
+4. Refuse sparse-geometry claims for any dataset whose validation reports `no_sparse_matches`.
+5. Produce a paper-style cross-scene table with render metrics, topology, PRISM decisions, geometry observability, and failure notes.

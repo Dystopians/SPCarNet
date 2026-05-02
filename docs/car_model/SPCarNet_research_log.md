@@ -4,6 +4,35 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage25 public multidataset validation — SOFT PASS
+
+**Outcome**: Prepared public datasets under `/data/peilincai/mesh_datasets`, audited current-loader compatibility, ran three representative 700-iteration training checks with online W&B, and fixed PRISM validation reporting for non-observable geometry.
+
+**Data**:
+- Mip-NeRF 360 full `360_v2.zip` extracted; seven COLMAP scenes are trainable.
+- ETH3D `courtyard` downloaded and converted into the current `images + sparse/0` loader layout.
+- Tanks and Temples official downloader was blocked by login/HTML responses, so `truck` and `barn` were prepared from the NSVF mirror using `scripts/car_model/meshprior_convert_nsvf_to_colmap.py`.
+
+**W&B**:
+- Mip-NeRF 360 `bonsai`: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/x75zddff`
+- Tanks and Temples `truck` fixed run: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/5pre7o19`
+- ETH3D `courtyard`: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/78iu6goq`
+
+**Metrics**:
+- Mip-NeRF 360 `bonsai`: test PSNR `17.2853 -> 20.1716`, SSIM `0.5920 -> 0.7247`, LPIPS `0.4395 -> 0.3105`.
+- ETH3D `courtyard`: test PSNR `16.5933 -> 17.9631`, SSIM `0.5596 -> 0.6043`, LPIPS `0.5460 -> 0.5050`.
+- Tanks `truck`: training completed after the validation-summary fix, but sparse geometry validation reports `no_sparse_matches` because the available mirror lacks real COLMAP image tracks.
+
+**Decision**: M25 is a multidataset trainability `SOFT PASS`. The code is ready for cross-scene method experiments on Mip-NeRF 360 and ETH3D. Tanks and Temples needs official reconstruction assets or a local COLMAP reconstruction before paper-grade geometry claims.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage25_multidataset_validation_report.md`
+- `scripts/car_model/meshprior_stage25_dataset_audit.py`
+- `scripts/car_model/meshprior_convert_nsvf_to_colmap.py`
+- `outputs/carnet/meshprior/stage25_multidataset/dataset_audit.json`
+
+---
+
 ## 2026-04-29 — Stage 1 (Object cache & canonicalization audit) — DONE
 
 **Outcome**: cache audit passed. SP-CarNet can proceed on real object-level data without any cache rebuild.

@@ -480,7 +480,7 @@ def save_validation_summary(
     iteration: int,
     phase_name: str,
     current_metrics: Dict[str, float],
-    stage_best_metrics: Dict[str, float],
+    stage_best_metrics: Optional[Dict[str, float]],
     deltas: Dict[str, float],
     pass_gate: bool,
     triggered_rules: Sequence[str],
@@ -517,8 +517,11 @@ def save_validation_summary(
         for k, v in current_metrics.items():
             f.write(f"- {k}: {v}\n")
         f.write("\n## Stage-Best Metrics\n")
-        for k, v in stage_best_metrics.items():
-            f.write(f"- {k}: {v}\n")
+        if stage_best_metrics is None:
+            f.write("- status: not_initialized\n")
+        else:
+            for k, v in stage_best_metrics.items():
+                f.write(f"- {k}: {v}\n")
         f.write("\n## Deltas\n")
         for k, v in deltas.items():
             f.write(f"- {k}: {v}\n")
