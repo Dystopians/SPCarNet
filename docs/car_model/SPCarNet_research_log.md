@@ -1227,3 +1227,37 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_parking_checkpoint_copy_cleanup_report.md`
 
 ---
+
+## 2026-05-01 — Parking phone tiny recovery model geometry eval — SOFT PASS
+
+**Outcome**: Wrapped the cleaned checkpoint copy in a loadable recovery model directory and ran COLMAP sparse geometry evaluation.
+
+**Files added**:
+- `scripts/car_model/meshprior_prepare_parking_recovery_model.py`
+- `scripts/car_model/smoke_test_meshprior_parking_recovery_model.py`
+- `docs/car_model/meshprior_parking_recovery_model_eval_report.md`
+
+**Recovery model output**:
+- `outputs/carnet/meshprior/parking_phone_tiny/recovery_model_cleanup/point_cloud/iteration_200/point_cloud_state_dict.pt`
+- `outputs/carnet/meshprior/parking_phone_tiny/recovery_model_cleanup/meshprior_recovery_model_report.json`
+- `outputs/carnet/meshprior/parking_phone_tiny/recovery_model_cleanup/geometry_eval_colmap/iter_200.json`
+
+**Metrics**:
+- recovery triangles: `63965`
+- recovery vertices: `191895`
+- evaluated views: `54`
+- depth count: `21910`
+- depth AbsRel baseline -> recovery: `0.32417137460470213` -> `0.3241717166185642`
+- normal mean angle baseline -> recovery: `51.68797353552561` -> `51.6880043093792`
+
+**Verification**:
+- Compileall over `scripts/car_model` and `ss3dm_prior`: PASS.
+- `smoke_test_meshprior_parking_recovery_model.py`: PASS.
+- GPU1 COLMAP geometry eval: PASS.
+
+**Decision**: recovery model eval gate `SOFT PASS`. The cleanup checkpoint copy is loadable and geometry-proxy stable, but its metric deltas are neutral; do not claim improvement before render-metric validation or a short resumed training run.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_parking_recovery_model_eval_report.md`
+
+---
