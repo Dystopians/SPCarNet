@@ -911,3 +911,47 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - Smoke report: `docs/car_model/meshprior_scene_application_loop_smoke.md`
 
 ---
+
+## 2026-05-01 — Parking phone tiny scene audit and short baseline — PASS
+
+**Outcome**: Audited the parking scene dataset, created a repo-local symlink view, and ran a 200-iteration wandb baseline.
+
+**Files added**:
+- `scripts/car_model/meshprior_prepare_parking_scene.py`
+- `docs/car_model/meshprior_parking_phone_tiny_scene_audit.md`
+- `docs/car_model/meshprior_parking_phone_tiny_baseline_200iter_report.md`
+
+**Dataset view**:
+- `outputs/carnet/meshprior/parking_phone_tiny/dataset_view`
+- images: `425`
+- COLMAP images: `425`
+- missing/extra image mismatch: `0`
+- segmentation masks: `425`
+- ground masks: `425`
+- out-of-train split present.
+
+**Training**:
+- GPU: `1`
+- iterations: `200`
+- wandb run: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/icjop1fq`
+- test PSNR: `11.576681349012587`
+- test SSIM: `0.3399546378188663`
+- test LPIPS: `0.6316130017792737`
+- test FPS: `374.0412913994465`
+- triangles: `64497`
+- vertices: `193491`
+- final cleanup pruned: `0`
+
+**Geometry eval**:
+- evaluated test views: `54`
+- depth AbsRel: `0.32417137460470213`
+- depth MAE: `3.6485552222775537`
+- normal mean angle: `51.68797353552561`
+
+**Decision**: parking scene readiness gate `PASS`. This is a short baseline smoke, not a final baseline. Next high-value step is vehicle/ground-aware region mining and gated MeshPrior recovery smoke on this scene, or a longer baseline if a stronger reference is needed first.
+
+**Linked artefacts**:
+- Scene audit: `docs/car_model/meshprior_parking_phone_tiny_scene_audit.md`
+- Baseline report: `docs/car_model/meshprior_parking_phone_tiny_baseline_200iter_report.md`
+
+---
