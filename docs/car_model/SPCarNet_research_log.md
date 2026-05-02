@@ -1051,3 +1051,39 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_parking_cluster_proposal_scoring_report.md`
 
 ---
+
+## 2026-05-01 — Parking phone tiny metadata proposal gate — PASS
+
+**Outcome**: Gated metadata-only parking proposals into a local mesh-extraction action plan.
+
+**Files added**:
+- `scripts/car_model/meshprior_gate_parking_metadata_proposals.py`
+- `scripts/car_model/smoke_test_meshprior_parking_metadata_gate.py`
+- `docs/car_model/meshprior_parking_metadata_gate_report.md`
+
+**Full gate output**:
+- `outputs/carnet/meshprior/parking_phone_tiny/metadata_gate/metadata_gate_report.json`
+- `outputs/carnet/meshprior/parking_phone_tiny/metadata_gate/action_plan.json`
+- `outputs/carnet/meshprior/parking_phone_tiny/metadata_gate/metadata_gate_results.csv`
+- `outputs/carnet/meshprior/parking_phone_tiny/metadata_gate/metadata_gate_report.md`
+
+**Metrics**:
+- proposals evaluated: `45`
+- candidate_extract: `24`
+- deferred: `17`
+- diagnostic: `1`
+- rejected: `3`
+- mesh extraction targets: `8`
+- diagnostic targets: `1`
+- geometry edited: `false`
+
+**Verification**:
+- Compileall over `scripts/car_model` and `ss3dm_prior`: PASS.
+- `smoke_test_meshprior_parking_metadata_gate.py`: PASS.
+
+**Decision**: metadata gate `PASS`. The next missing bridge is local scene mesh patch extraction with stable face IDs; prune remains deferred until real scene mesh evidence exists.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_parking_metadata_gate_report.md`
+
+---
