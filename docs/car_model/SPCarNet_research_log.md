@@ -955,3 +955,36 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - Baseline report: `docs/car_model/meshprior_parking_phone_tiny_baseline_200iter_report.md`
 
 ---
+
+## 2026-05-01 — Parking phone tiny image/COLMAP region mining — PASS
+
+**Outcome**: Implemented image/COLMAP ROI mining from segmentation masks, ground masks, and COLMAP sparse observations.
+
+**Files added**:
+- `scripts/car_model/meshprior_mine_parking_image_regions.py`
+- `scripts/car_model/smoke_test_meshprior_parking_image_regions.py`
+- `docs/car_model/meshprior_parking_image_region_mining_report.md`
+
+**Full mining output**:
+- `outputs/carnet/meshprior/parking_phone_tiny/image_region_mining/image_regions.json`
+- `outputs/carnet/meshprior/parking_phone_tiny/image_region_mining/image_regions_summary.csv`
+- `outputs/carnet/meshprior/parking_phone_tiny/image_region_mining/image_region_mining_report.md`
+
+**Metrics**:
+- images considered: `425`
+- candidate regions: `340`
+- eligible candidates: `273`
+- median sparse point count: `4`
+- median mask area fraction: `0.0030437403549382716`
+- max eligible ground overlap: `0.25251004016064255`
+
+**Verification**:
+- Compileall over `scripts/car_model` and `ss3dm_prior`: PASS.
+- `smoke_test_meshprior_parking_image_regions.py`: PASS.
+
+**Decision**: region mining gate `PASS`. The next step is multi-view clustering / 3D consolidation before proposal scoring; these 2D ROI candidates must not directly edit scene geometry.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_parking_image_region_mining_report.md`
+
+---

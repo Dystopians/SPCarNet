@@ -15,6 +15,7 @@ Status before continuing to Prompt M13:
 - DONE: M15 retrieval-deformation fallback is implemented and measured. Recommendation: `KEEP_AS_BASELINE`, not a pivot.
 - DONE: Pre-M16 scene application bridge is implemented. Accepted dry-run proposals can now be applied to a mesh copy with rollback and recovery command planning.
 - DONE: Parking phone tiny scene was audited and a 200-iteration wandb baseline was run. Dataset view is valid and geometry eval is available; this is a short baseline, not a final headline run.
+- DONE: Parking phone tiny image/COLMAP ROI mining is implemented. It produced 340 candidate image regions and 273 eligible candidates; these are proposal candidates only, not directly editable scene geometry.
 
 This document is meant to be copied, stage by stage, into Codex / Claude Code or another coding agent working inside `Dystopians/SPCarNet`.
 
