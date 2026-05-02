@@ -4,7 +4,7 @@ Date: 2026-05-01
 
 ## Current State
 
-SPCarNet MeshPrior is about `83%` complete as a research-codebase transformation. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, and M23 claim-risk audit are implemented. The missing core is integrated topology control during optimization and multi-scene evidence. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `86%` complete as a research-codebase transformation. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, and M23.5 integrated topology-control smoke are implemented. The remaining core is tuned medium/long integrated topology control plus multi-scene evidence. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -19,6 +19,7 @@ Key codebase links:
 - MeshPrior modules: `ss3dm_prior/meshprior/`
 - Paper evidence package: `docs/car_model/meshprior_stage22_paper_evidence_report.md`
 - Claim-risk audit: `docs/car_model/meshprior_stage23_claim_risk_audit.md`
+- Integrated topology smoke: `docs/car_model/meshprior_stage23_5_integrated_topology_implementation_report.md`
 
 Known W&B runs:
 
@@ -32,6 +33,9 @@ Known W&B runs:
 - M21.5 prune_25 external log: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/evid1gbt`
 - M21.5 prune_50 external log: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/w1ix6e9a`
 - M21.5 prune_66 external log: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/xzfqwpgi`
+- M23.5 integrated topology debug, protected 800 iter: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/5ekk5gjz`
+- M23.5 integrated topology debug, protected 350 iter: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/esyvtvwn`
+- M23.5 integrated topology trigger 180 iter: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/an7l2ec0`
 
 ## Operating Rules
 
@@ -78,6 +82,8 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Topology-controlled current-branch 7000 row | execution finding | PASS | M21.5 post-training checkpoint-copy area pruning shows `prune_50` keeps render metrics above clean with `416888` triangles and depth AbsRel close to clean; use as M22 default topology-controlled row. |
 | Unified paper-evidence package | original prompts M22 | SOFT PASS | M22 collector/report/smoke are implemented and reproducible; missing rows stay visible for second scene, integrated topology control, and render-gated full insertion. |
 | Claim-risk audit and paper decision | original prompts M23 | PASS | Strongest defensible story is conservative proposal/gate framework plus topology-aware diagnostics, not a full scene-optimization improvement claim. |
+| Integrated optimization-time topology control smoke | execution finding / original Layer F | PASS | M23.5 proves PRISM can commit a training-time candidate prune with rollback metadata and eval artifacts; 180-iter relaxed-threshold result is a mechanism proof, not a quality claim. |
+| Tuned medium integrated topology-control run | execution finding | TODO | Restore conservative thresholds enough for paper relevance while still allowing scheduled topology edits; run with online W&B, render metrics, COLMAP proxy geometry, and collector. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
@@ -94,6 +100,70 @@ These are not new research directions. They are constraints discovered while imp
 7. The current parking scene is small. Generality requires at least one larger parking-lot COLMAP scene or another real scene.
 8. The Stage17 MeshPrior resume variant is unstable as a long-budget method: it improves at 2000 iterations but degrades badly by 7000 iterations.
 9. M21.5 topology pruning is post-hoc checkpoint-copy pruning, not yet an integrated optimization-time topology controller. It is valid as a diagnostic evidence row, not as the final algorithm.
+10. M23.5 shows the integrated PRISM commit path works, but default protection is too conservative for short early smokes. Fully relaxed protection can trigger edits but is not a final paper setting.
+
+---
+
+# Prompt M23.5 — Integrated optimization-time topology-control smoke
+
+## Goal
+
+Move topology control from post-hoc checkpoint-copy pruning into the training loop and verify that a PRISM candidate edit can commit with rollback metadata, W&B, render metrics, COLMAP proxy geometry, and final-cleanup accounting.
+
+## Status
+
+`PASS` on 2026-05-02.
+
+## Result
+
+- successful run: `prism_unprotected_trigger_180iter`
+- W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/an7l2ec0`
+- committed PRISM edit: iteration `141`, candidate prune, `64497 -> 63208` triangles
+- independent render metrics: PSNR `10.790648`, SSIM `0.284250`, LPIPS `0.645548`
+- COLMAP proxy depth AbsRel: `0.327274`
+- collector gate: `PASS`
+
+## Caveat
+
+This is a mechanism proof. The successful trigger deliberately relaxed protection thresholds to verify that the commit path works. Do not use the 180-iteration metrics as evidence of paper-quality improvement.
+
+---
+
+# Prompt M23.6 — Tuned medium integrated topology-control run
+
+## Goal
+
+Turn the M23.5 mechanism proof into a meaningful medium-budget method row on `parking_phone_tiny`.
+
+## Required Work
+
+1. Start from M23.5 code and reports.
+2. Define a tuned PRISM schedule that is less conservative than the default all-protected short smoke but more defensible than the fully unprotected trigger.
+3. Run a short debug if needed, then a medium run with online W&B.
+4. Keep final cleanup disabled unless explicitly evaluated as a separate ablation.
+5. Evaluate:
+   - training internal metrics,
+   - independent `render.py + metrics.py`,
+   - `evaluate_geometry_colmap.py`,
+   - topology counts,
+   - PRISM commit/rollback metadata,
+   - final-cleanup summary.
+6. Compare against clean/current/M21.5 rows without hiding topology count.
+
+## Required Outputs
+
+- `docs/car_model/meshprior_stage23_6_tuned_integrated_topology_design.md`
+- `docs/car_model/meshprior_stage23_6_tuned_integrated_topology_report.md`
+- output root: `outputs/carnet/meshprior/parking_phone_tiny/stage23_6_tuned_integrated_topology/`
+- W&B URL file and command logs under the output root.
+
+## Gate
+
+`PASS` if the medium run completes with online W&B, at least one scheduled topology decision is recorded, all eval artifacts exist, and topology/quality tradeoffs are interpretable.
+
+`SOFT PASS` if the run completes but does not improve over the topology-controlled diagnostic row.
+
+`FAIL` if training crashes, W&B is missing without documented fallback, or rollback/final-cleanup accounting is absent.
 
 ---
 

@@ -1570,3 +1570,30 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/MeshPrior_NeurIPS_paper_roadmap.md`
 
 ---
+
+## 2026-05-02 — Stage23.5 integrated topology-control smoke — PASS
+
+**Outcome**: Moved topology-control validation from post-hoc checkpoint-copy pruning toward the training loop. The successful trigger run committed one PRISM candidate prune during optimization, wrote rollback/accounting metadata, kept final cleanup disabled, and passed independent render, COLMAP proxy geometry, and collector checks.
+
+**Task clarification**: the current paper setting is posed multi-view images plus COLMAP/camera geometry plus Mesh Splatting scene mesh optimization. It is not a radar-only mesh reconstruction pipeline.
+
+**W&B**:
+- protected 800-iteration debug: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/5ekk5gjz`
+- protected 350-iteration debug: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/esyvtvwn`
+- successful 180-iteration trigger: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/an7l2ec0`
+
+**Successful trigger metrics**:
+- PRISM commit: iteration `141`, candidate prune, `64497 -> 63208` triangles, rollback `0`
+- independent render metrics at iteration `180`: PSNR `10.790648`, SSIM `0.284250`, LPIPS `0.645548`
+- COLMAP proxy geometry: depth AbsRel `0.327274`, normal mean angle `51.771524`
+- final cleanup: disabled and not executed
+- collector gate: `PASS`
+
+**Decision**: M23.5 is a mechanism PASS, not a paper-quality row. The default PRISM protection rules are too conservative for short early smokes, while the fully relaxed trigger is useful for debugging but not final. Next priority is a tuned medium integrated-topology run with online W&B and topology-aware comparison.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage23_5_integrated_topology_design.md`
+- `docs/car_model/meshprior_stage23_5_integrated_topology_implementation_report.md`
+- `outputs/carnet/meshprior/parking_phone_tiny/stage23_5_integrated_topology/prism_unprotected_trigger_180iter/summary/stage23_5_integrated_topology_summary.md`
+
+---
