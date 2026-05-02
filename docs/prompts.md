@@ -20,6 +20,7 @@ Status before continuing to Prompt M13:
 - DONE: Parking phone tiny cluster proposal scoring is implemented. It emitted 45 metadata-only proposals from 9 eligible clusters and explicitly marks every proposal as requiring mesh extraction and scene gating before any geometry edit.
 - DONE: Parking phone tiny metadata proposal gate is implemented. It produced 8 mesh-extraction targets, 1 diagnostic target, and keeps all prune proposals deferred until explicit scene mesh evidence exists.
 - DONE: Parking phone tiny local mesh patch extraction is implemented. It extracted 8 nonempty local patches from the baseline triangle checkpoint, preserving original face and vertex indices and editing no geometry.
+- DONE: Parking phone tiny patch-level no-op/protect gate is implemented. All 8 extracted patches are `protect_ready`, rollback snapshots are written, and no geometry is edited.
 
 This document is meant to be copied, stage by stage, into Codex / Claude Code or another coding agent working inside `Dystopians/SPCarNet`.
 

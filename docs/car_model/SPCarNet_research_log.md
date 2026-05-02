@@ -1122,3 +1122,37 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_parking_mesh_patch_extraction_report.md`
 
 ---
+
+## 2026-05-01 — Parking phone tiny patch no-op/protect gate — PASS
+
+**Outcome**: Ran a no-op/protect readiness gate over extracted parking mesh patches and wrote rollback snapshots.
+
+**Files added**:
+- `scripts/car_model/meshprior_gate_parking_mesh_patches.py`
+- `scripts/car_model/smoke_test_meshprior_parking_mesh_patch_gate.py`
+- `docs/car_model/meshprior_parking_mesh_patch_gate_report.md`
+
+**Full gate output**:
+- `outputs/carnet/meshprior/parking_phone_tiny/patch_gate/patch_gate_report.json`
+- `outputs/carnet/meshprior/parking_phone_tiny/patch_gate/patch_gate_results.csv`
+- `outputs/carnet/meshprior/parking_phone_tiny/patch_gate/patch_gate_report.md`
+- `outputs/carnet/meshprior/parking_phone_tiny/patch_gate/rollback_snapshots/*.npz`
+
+**Metrics**:
+- patches evaluated: `8`
+- protect_ready: `8`
+- deferred: `0`
+- failed: `0`
+- rollback snapshots: `8`
+- geometry edited: `false`
+
+**Verification**:
+- Compileall over `scripts/car_model` and `ss3dm_prior`: PASS.
+- `smoke_test_meshprior_parking_mesh_patch_gate.py`: PASS.
+
+**Decision**: patch no-op/protect gate `PASS`. The parking real-scene bridge now has stable local mesh patches plus rollback snapshots; next step is copied-patch before/after proposal testing.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_parking_mesh_patch_gate_report.md`
+
+---
