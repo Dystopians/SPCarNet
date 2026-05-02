@@ -1345,3 +1345,47 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_parking_medium_baseline_2000iter_report.md`
 
 ---
+
+## 2026-05-01 — Stage17 real MeshPrior 2000-iteration variant — PASS / CLAIM SOFT
+
+**Outcome**: Built and evaluated the first real MeshPrior scene-training variant on `parking_phone_tiny`. The run starts from a MeshPrior-cleaned copied checkpoint at iteration `200` and resumes current-branch training to iteration `2000`.
+
+**W&B**:
+- smoke resumed-training run: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/y4432er1`
+- Stage17 2000-iteration run: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/vyrun0qo`
+
+**Proposal / gate inputs**:
+- accepted cleanup proposals: `8`
+- rejected no-op proposals: `8`
+- rejected floater proposals: `8`
+- source model edited: `false`
+
+**Training internal test metrics**:
+- iteration 300 smoke PSNR / SSIM / LPIPS: `11.5936053771` / `0.3349873807` / `0.6415096864`
+- iteration 1000 PSNR / SSIM / LPIPS: `13.1176037435` / `0.3794519540` / `0.6071134640`
+- iteration 2000 PSNR / SSIM / LPIPS / FPS: `13.4438069308` / `0.3471139595` / `0.6021583963` / `272.8530837309`
+
+**Post-render metrics at 2000**:
+- Stage17 PSNR / SSIM / LPIPS: `13.2782726288` / `0.3039793670` / `0.6076099277`
+- current branch PSNR / SSIM / LPIPS: `11.5994377136` / `0.2702677548` / `0.6347319484`
+- origin/main PSNR / SSIM / LPIPS: `11.0476598740` / `0.2199306488` / `0.6417058110`
+
+**COLMAP geometry proxy**:
+- Stage17 depth MAE / AbsRel: `3.8259249166` / `0.3666914408`
+- current branch depth MAE / AbsRel: `4.4141606252` / `0.4278796566`
+- Stage17 normal mean angle: `52.1695839576`
+- current branch normal mean angle: `52.5651849634`
+
+**Topology and cleanup**:
+- Stage17 triangles / vertices: `777251` / `816498`
+- final cleanup enabled: `false`
+- final cleanup pruned: `0`
+
+**Decision**: Stage17 execution gate `PASS`; claim status `SOFT`. The first real MeshPrior training variant is implemented, W&B-logged, and metric-positive on this scene, but topology remains very large. M18 topology-budget comparison is mandatory before any paper-level improvement claim.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage17_real_variant_design.md`
+- `docs/car_model/meshprior_stage17_real_variant_smoke.md`
+- `docs/car_model/meshprior_stage17_real_variant_implementation_report.md`
+
+---
