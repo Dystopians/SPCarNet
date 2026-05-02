@@ -1156,3 +1156,40 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_parking_mesh_patch_gate_report.md`
 
 ---
+
+## 2026-05-01 — Parking phone tiny copied-patch proposal tests — SOFT PASS
+
+**Outcome**: Ran copied-patch before/after tests over extracted parking mesh patches.
+
+**Files added**:
+- `scripts/car_model/meshprior_test_parking_patch_proposals.py`
+- `scripts/car_model/smoke_test_meshprior_parking_patch_proposals.py`
+- `docs/car_model/meshprior_parking_patch_proposal_test_report.md`
+
+**Full test output**:
+- `outputs/carnet/meshprior/parking_phone_tiny/patch_proposal_tests/patch_proposal_test_report.json`
+- `outputs/carnet/meshprior/parking_phone_tiny/patch_proposal_tests/patch_proposal_test_results.csv`
+- `outputs/carnet/meshprior/parking_phone_tiny/patch_proposal_tests/patch_proposal_test_report.md`
+- `outputs/carnet/meshprior/parking_phone_tiny/patch_proposal_tests/proposal_meshes/*/*.npz`
+- `outputs/carnet/meshprior/parking_phone_tiny/patch_proposal_tests/rollback_snapshots/*.npz`
+
+**Metrics**:
+- patches tested: `8`
+- proposal tests: `24`
+- accepted: `8`
+- rejected: `16`
+- protect_noop_rejected: `8`
+- cleanup_accepted: `8`
+- floater_rejected: `8`
+- source model edited: `false`
+
+**Verification**:
+- Compileall over `scripts/car_model` and `ss3dm_prior`: PASS.
+- `smoke_test_meshprior_parking_patch_proposals.py`: PASS.
+
+**Decision**: copied-patch proposal test gate `SOFT PASS`. The gate behaves correctly on copied local patches, but accepted cleanup candidates still need checkpoint-copy application and render/geometry validation before they can be treated as scene improvements.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_parking_patch_proposal_test_report.md`
+
+---
