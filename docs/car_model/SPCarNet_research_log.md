@@ -1261,3 +1261,23 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_parking_recovery_model_eval_report.md`
 
 ---
+
+## 2026-05-01 — Parking phone tiny render metric comparison — SOFT PASS
+
+**Outcome**: Rendered and evaluated the recovery cleanup model and the current engineering baseline with the same `render.py` + `metrics.py` pipeline.
+
+**Important baseline clarification**:
+- `parking_phone_tiny/baseline_200iter` is an engineering baseline: current repository, no MeshPrior proposal application, short 200-iteration run.
+- The paper baseline should be original/clean Mesh Splatting on the same data, budget, and evaluation scripts.
+
+**Metrics**:
+- engineering baseline SSIM / PSNR / LPIPS: `0.2898596525` / `10.9499864578` / `0.6441746354`
+- recovery cleanup SSIM / PSNR / LPIPS: `0.2898600996` / `10.9499950409` / `0.6441848874`
+- deltas: SSIM `+0.0000004470`, PSNR `+0.0000085831`, LPIPS `+0.0000102520`
+
+**Decision**: render comparison gate `SOFT PASS`. The cleanup checkpoint copy is render-stable but not meaningfully better. This supports stability, not a final improvement claim.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_parking_render_metric_comparison.md`
+
+---
