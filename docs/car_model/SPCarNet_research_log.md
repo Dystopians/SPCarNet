@@ -1313,3 +1313,35 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_parking_origin_main_baseline_report.md`
 
 ---
+
+## 2026-05-01 — Parking phone tiny medium 2000-iteration baseline comparison — SOFT PASS
+
+**Outcome**: Completed a medium-budget comparison between the clean `origin/main@1a714f3` Mesh Splatting candidate and the current `clean-submit` engineering branch on `parking_phone_tiny`.
+
+**W&B correction**:
+- Current branch 2000 iter used training-time online W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/nk2w04wn`
+- Clean `origin/main` lacks current W&B flags and was externally logged: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/142memiw`
+- Future current-branch training runs must use training-time W&B by default.
+
+**Training internal test metrics at 2000**:
+- origin/main PSNR / SSIM / LPIPS / FPS: `16.4619565010` / `0.4846517714` / `0.5333475658` / `271.3129810583`
+- current branch PSNR / SSIM / LPIPS / FPS: `16.4415020589` / `0.4834401826` / `0.5322314313` / `257.5665033592`
+
+**Post-render metrics at 2000**:
+- origin/main PSNR / SSIM / LPIPS: `11.0476598740` / `0.2199306488` / `0.6417058110`
+- current branch PSNR / SSIM / LPIPS: `11.5994377136` / `0.2702677548` / `0.6347319484`
+- origin/main topology: `39079` triangles, `58458` vertices
+- current branch topology: `782982` triangles, `820107` vertices
+
+**COLMAP geometry proxy**:
+- origin/main depth MAE / AbsRel: `13.7902993339` / `5.6119052058`
+- current branch depth MAE / AbsRel: `4.4141606252` / `0.4278796566`
+- origin/main normal mean angle: `52.1989385790`
+- current branch normal mean angle: `52.5651849634`
+
+**Decision**: medium baseline gate `SOFT PASS`. The current branch is better on post-render metrics and sparse depth proxy, but uses much more topology and is not yet a MeshPrior proposal-applied 2000-iteration variant. Do not make a paper-level improvement claim from this alone.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_parking_medium_baseline_2000iter_report.md`
+
+---
