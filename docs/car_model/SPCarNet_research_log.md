@@ -1193,3 +1193,37 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_parking_patch_proposal_test_report.md`
 
 ---
+
+## 2026-05-01 — Parking phone tiny checkpoint-copy cleanup — SOFT PASS
+
+**Outcome**: Applied accepted copied-patch cleanup candidates to a duplicated parking triangle checkpoint and verified state-array integrity.
+
+**Files added**:
+- `scripts/car_model/meshprior_apply_parking_patch_cleanup_to_checkpoint_copy.py`
+- `scripts/car_model/smoke_test_meshprior_parking_checkpoint_copy_cleanup.py`
+- `docs/car_model/meshprior_parking_checkpoint_copy_cleanup_report.md`
+
+**Full application output**:
+- `outputs/carnet/meshprior/parking_phone_tiny/checkpoint_copy_cleanup/point_cloud_state_dict.pt`
+- `outputs/carnet/meshprior/parking_phone_tiny/checkpoint_copy_cleanup/checkpoint_copy_application_report.json`
+- `outputs/carnet/meshprior/parking_phone_tiny/checkpoint_copy_cleanup/checkpoint_copy_application_rows.csv`
+- `outputs/carnet/meshprior/parking_phone_tiny/checkpoint_copy_cleanup/checkpoint_copy_application_report.md`
+
+**Metrics**:
+- cleanup applications: `8`
+- unique removed faces: `532`
+- faces: `64497` -> `63965`
+- vertices: `193491` -> `191895`
+- source model edited: `false`
+- checkpoint copy edited: `true`
+
+**Verification**:
+- Compileall over `scripts/car_model` and `ss3dm_prior`: PASS.
+- `smoke_test_meshprior_parking_checkpoint_copy_cleanup.py`: PASS.
+
+**Decision**: checkpoint-copy cleanup gate `SOFT PASS`. Writeback bookkeeping is valid, but render/geometry validation is still pending before this can be claimed as a scene improvement.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_parking_checkpoint_copy_cleanup_report.md`
+
+---
