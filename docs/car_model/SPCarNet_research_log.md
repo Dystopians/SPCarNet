@@ -4,6 +4,27 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage28 adaptive PRISM schedule smoke — PASS
+
+**Outcome**: Added an opt-in adaptive candidate retry path for PRISM. When a candidate prune is rejected by the counterfactual gate, the active candidate ratio can decay and retry before the controller consumes the effective candidate round. This directly targets the M27 `bonsai` failure mode where 2% candidates rolled back while lower-pressure schedules sometimes committed.
+
+**W&B**:
+- adaptive rollback-ratio smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/1kmwbu8g`
+
+**Verification**:
+- output: `outputs/carnet/meshprior/stage28_adaptive_schedule/parking_adaptive_retry_smoke_v5_140iter/model`
+- candidate retry sequence: `0.04 -> 0.02 -> 0.01`
+- candidate selected counts: `2579 -> 1289 -> 644`
+- all candidate attempts intentionally rolled back under a strict gate; final checkpoint accounting remained consistent at `64497` triangles.
+
+**Decision**: Stage28 implementation smoke `PASS`. The next step is a medium public-scene ablation comparing adaptive scheduling against M27 fixed `ratio0p02_geom1400` on `bonsai` and `courtyard`.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage28_adaptive_schedule_smoke_report.md`
+- `outputs/carnet/meshprior/stage28_adaptive_schedule/parking_adaptive_retry_smoke_v5_140iter/model`
+
+---
+
 ## 2026-05-02 — Stage27 schedule ablation — SOFT PASS
 
 **Outcome**: Completed M27 schedule tuning after the topology-accounting fix. All valid current-branch runs used online W&B and were evaluated with independent `render.py + metrics.py`. The best schedule, `ratio0p02_geom1400`, gives a strong ETH3D `courtyard` result but does not reduce topology on Mip-NeRF 360 `bonsai`, so this is an interpretable `SOFT PASS`, not a final paper schedule.

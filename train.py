@@ -142,6 +142,14 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "dead_prune_ratio": float(getattr(opt, "prism_dead_prune_ratio", 0.0)),
         "candidate_prune_ratio": float(getattr(opt, "prism_candidate_prune_ratio", 0.0)),
         "candidate_prune_ratio_per_round": float(getattr(opt, "prism_candidate_prune_ratio_per_round", 0.015)),
+        "adaptive_candidate_retry_on_rollback": bool(
+            getattr(opt, "prism_adaptive_candidate_retry_on_rollback", False)
+        ),
+        "adaptive_candidate_ratio_decay": float(getattr(opt, "prism_adaptive_candidate_ratio_decay", 0.5)),
+        "adaptive_candidate_min_ratio": float(getattr(opt, "prism_adaptive_candidate_min_ratio", 0.0025)),
+        "adaptive_candidate_max_rollback_retries": int(
+            getattr(opt, "prism_adaptive_candidate_max_rollback_retries", 3)
+        ),
         "recovery_iters": int(getattr(opt, "prism_recovery_iters", 0)),
         "use_counterfactual_gate": bool(getattr(opt, "prism_use_counterfactual_gate", False)),
         "use_ground_protect": bool(getattr(opt, "prism_use_ground_protect", False)),
@@ -377,6 +385,11 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "counterfactual_accept": 0,
         "rollback": 0,
         "rollback_by_validation": 0,
+        "adaptive_candidate_prune_ratio": float(getattr(opt, "prism_candidate_prune_ratio_per_round", 0.015)),
+        "adaptive_candidate_rollback_retries": 0,
+        "last_candidate_pool_count": 0,
+        "last_candidate_target_count": 0,
+        "last_candidate_selected_count": 0,
         "teacher_cache": {},
         "teacher_rgb_lambda": float(getattr(opt, "prism_teacher_rgb_lambda", 0.01)),
         "teacher_depth_lambda": float(getattr(opt, "prism_teacher_depth_lambda", 0.002)),
@@ -1731,7 +1744,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     dead_ratio = float(cfg.get("dead_prune_ratio", 0.0))
     cand_ratio = float(cfg.get("candidate_prune_ratio", 0.0))
     if prune_mode == "candidate":
-        cand_ratio = float(cfg.get("candidate_prune_ratio_per_round", cand_ratio))
+        cand_ratio = float(prism_state.get("adaptive_candidate_prune_ratio", cfg.get("candidate_prune_ratio_per_round", cand_ratio)))
         dead_ratio = 0.0
     elif prune_mode == "dead":
         cand_ratio = 0.0
@@ -1741,6 +1754,12 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
         dead_prune_ratio=dead_ratio,
         candidate_prune_ratio=cand_ratio,
     )
+    candidate_pool_count = int(torch.count_nonzero(scores.candidate_mask).item())
+    target_count = int(max(0.0, cand_ratio) * int(scores.prune_score_t.numel()))
+    selected_count = int(candidate_ids.numel())
+    prism_state["last_candidate_pool_count"] = candidate_pool_count
+    prism_state["last_candidate_target_count"] = target_count
+    prism_state["last_candidate_selected_count"] = selected_count
     if candidate_ids.numel() == 0:
         return {
             "committed": False,
@@ -1748,6 +1767,10 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             "counterfactual_accept": 0,
             "rollback": 0,
             "no_candidates": 1,
+            "candidate_prune_ratio": float(cand_ratio),
+            "candidate_pool_count": int(candidate_pool_count),
+            "candidate_target_count": int(target_count),
+            "candidate_selected_count": int(selected_count),
         }
 
     counterfactual_accept = 0
@@ -1772,7 +1795,16 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             json.dump(counterfactual_decision_to_dict(decision), f, indent=2)
         if not bool(decision.accept):
             rollback = 1
-            return {"committed": False, "pruned_count": 0, "counterfactual_accept": 0, "rollback": rollback}
+            return {
+                "committed": False,
+                "pruned_count": 0,
+                "counterfactual_accept": 0,
+                "rollback": rollback,
+                "candidate_prune_ratio": float(cand_ratio),
+                "candidate_pool_count": int(candidate_pool_count),
+                "candidate_target_count": int(target_count),
+                "candidate_selected_count": int(selected_count),
+            }
         counterfactual_accept = 1
 
     # Optional teacher cache: snapshot round-pre-prune render targets.
@@ -1799,8 +1831,21 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             "pruned_count": pruned_count,
             "counterfactual_accept": int(counterfactual_accept),
             "rollback": int(rollback),
+            "candidate_prune_ratio": float(cand_ratio),
+            "candidate_pool_count": int(candidate_pool_count),
+            "candidate_target_count": int(target_count),
+            "candidate_selected_count": int(selected_count),
         }
-    return {"committed": False, "pruned_count": 0, "counterfactual_accept": int(counterfactual_accept), "rollback": int(rollback)}
+    return {
+        "committed": False,
+        "pruned_count": 0,
+        "counterfactual_accept": int(counterfactual_accept),
+        "rollback": int(rollback),
+        "candidate_prune_ratio": float(cand_ratio),
+        "candidate_pool_count": int(candidate_pool_count),
+        "candidate_target_count": int(target_count),
+        "candidate_selected_count": int(selected_count),
+    }
 
 
 def training(
@@ -2564,6 +2609,10 @@ def training(
                 tb_writer.add_scalar("prism/counterfactual_accept", float(prism_state.get("counterfactual_accept", 0)), iteration)
                 tb_writer.add_scalar("prism/rollback", float(prism_state.get("rollback", 0)), iteration)
                 tb_writer.add_scalar("prism/rollback_by_validation", float(prism_state.get("rollback_by_validation", 0)), iteration)
+                tb_writer.add_scalar("prism/adaptive_candidate_prune_ratio", float(prism_state.get("adaptive_candidate_prune_ratio", 0.0)), iteration)
+                tb_writer.add_scalar("prism/adaptive_candidate_rollback_retries", float(prism_state.get("adaptive_candidate_rollback_retries", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_pool_count", float(prism_state.get("last_candidate_pool_count", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_selected_count", float(prism_state.get("last_candidate_selected_count", 0)), iteration)
                 tb_writer.add_scalar("prism/validation_pass", float(prism_state.get("last_validation_pass", 1)), iteration)
                 tb_writer.add_scalar(
                     "prism/post_commit_recollect_remaining",
@@ -2623,6 +2672,11 @@ def training(
                     "prism/counterfactual_accept": float(prism_state.get("counterfactual_accept", 0)),
                     "prism/rollback": float(prism_state.get("rollback", 0)),
                     "prism/rollback_by_validation": float(prism_state.get("rollback_by_validation", 0)),
+                    "prism/adaptive_candidate_prune_ratio": float(prism_state.get("adaptive_candidate_prune_ratio", 0.0)),
+                    "prism/adaptive_candidate_rollback_retries": float(prism_state.get("adaptive_candidate_rollback_retries", 0)),
+                    "prism/last_candidate_pool_count": float(prism_state.get("last_candidate_pool_count", 0)),
+                    "prism/last_candidate_target_count": float(prism_state.get("last_candidate_target_count", 0)),
+                    "prism/last_candidate_selected_count": float(prism_state.get("last_candidate_selected_count", 0)),
                     "prism/validation_pass": float(prism_state.get("last_validation_pass", 1)),
                     "prism/densification_frozen_after_commit": float(
                         prism_state.get("densification_frozen_after_prism_commit", 0)
@@ -2778,6 +2832,29 @@ def training(
                         controller.report_no_candidate_retry(
                             retry_iters=int(getattr(opt, "prism_no_candidate_retry_iters", 10))
                         )
+                    elif (
+                        str(phase_info.get("prune_mode", "candidate")) == "candidate"
+                        and bool(prism_state["cfg"].get("adaptive_candidate_retry_on_rollback", False))
+                        and bool(prune_result.get("rollback", 0))
+                        and not bool(prune_result.get("committed", False))
+                        and int(prism_state.get("adaptive_candidate_rollback_retries", 0))
+                        < int(prism_state["cfg"].get("adaptive_candidate_max_rollback_retries", 3))
+                    ):
+                        prism_state["adaptive_candidate_rollback_retries"] = (
+                            int(prism_state.get("adaptive_candidate_rollback_retries", 0)) + 1
+                        )
+                        current_ratio = float(prism_state.get(
+                            "adaptive_candidate_prune_ratio",
+                            prism_state["cfg"].get("candidate_prune_ratio_per_round", 0.015),
+                        ))
+                        next_ratio = max(
+                            float(prism_state["cfg"].get("adaptive_candidate_min_ratio", 0.0025)),
+                            current_ratio * float(prism_state["cfg"].get("adaptive_candidate_ratio_decay", 0.5)),
+                        )
+                        prism_state["adaptive_candidate_prune_ratio"] = float(next_ratio)
+                        controller.report_no_candidate_retry(
+                            retry_iters=int(getattr(opt, "prism_no_candidate_retry_iters", 10))
+                        )
                     else:
                         controller.report_prune_result(
                             prune_mode=str(phase_info.get("prune_mode", "candidate")),
@@ -2786,6 +2863,17 @@ def training(
                             counterfactual_accept=int(prune_result.get("counterfactual_accept", 0)),
                             rollback=int(prune_result.get("rollback", 0)),
                         )
+                        if (
+                            str(phase_info.get("prune_mode", "candidate")) == "candidate"
+                            and (
+                                bool(prune_result.get("committed", False))
+                                or not bool(prune_result.get("rollback", 0))
+                            )
+                        ):
+                            prism_state["adaptive_candidate_rollback_retries"] = 0
+                            prism_state["adaptive_candidate_prune_ratio"] = float(
+                                prism_state["cfg"].get("candidate_prune_ratio_per_round", 0.015)
+                            )
                 post_prune_triangle_count = int(triangles._triangle_indices.shape[0])
                 _save_prism_round_meta(
                     scene=scene,
@@ -2799,6 +2887,19 @@ def training(
                         "counterfactual_accept": int(prune_result.get("counterfactual_accept", 0)),
                         "rollback": int(prune_result.get("rollback", 0)),
                         "no_candidates": int(prune_result.get("no_candidates", 0)),
+                        "adaptive_candidate_retry_on_rollback": int(
+                            bool(prism_state["cfg"].get("adaptive_candidate_retry_on_rollback", False))
+                        ),
+                        "adaptive_candidate_rollback_retries": int(
+                            prism_state.get("adaptive_candidate_rollback_retries", 0)
+                        ),
+                        "candidate_prune_ratio": float(prune_result.get(
+                            "candidate_prune_ratio",
+                            prism_state.get("adaptive_candidate_prune_ratio", 0.0),
+                        )),
+                        "candidate_pool_count": int(prune_result.get("candidate_pool_count", 0)),
+                        "candidate_target_count": int(prune_result.get("candidate_target_count", 0)),
+                        "candidate_selected_count": int(prune_result.get("candidate_selected_count", 0)),
                         "pre_prune_triangle_count": int(pre_prune_triangle_count),
                         "post_prune_triangle_count": int(post_prune_triangle_count),
                         "recollect_iters_used": int(getattr(controller, "last_recollect_iters_used", 0) if controller is not None else 0),

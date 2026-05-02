@@ -302,6 +302,10 @@ class OptimizationParams(ParamGroup):
         self.prism_candidate_rounds = 3
         self.prism_candidate_prune_ratio_per_round = 0.015
         self.prism_no_candidate_retry_iters = 10
+        self.prism_adaptive_candidate_retry_on_rollback = False
+        self.prism_adaptive_candidate_ratio_decay = 0.5
+        self.prism_adaptive_candidate_min_ratio = 0.0025
+        self.prism_adaptive_candidate_max_rollback_retries = 3
         self.prism_freeze_densification_after_first_commit = False
         self.prism_recovery_iters = 400
         self.prism_post_commit_recollect_iters = 300

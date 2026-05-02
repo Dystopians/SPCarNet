@@ -28,6 +28,7 @@ Key codebase links:
 - Cross-scene method evidence report: `docs/car_model/meshprior_stage26_cross_scene_report.md`
 - Accounting fix report: `docs/car_model/meshprior_stage27_accounting_fix_report.md`
 - Schedule ablation report: `docs/car_model/meshprior_stage27_schedule_ablation_report.md`
+- Adaptive schedule smoke report: `docs/car_model/meshprior_stage28_adaptive_schedule_smoke_report.md`
 
 Known W&B runs:
 
@@ -64,6 +65,7 @@ Known W&B runs:
 - M27 ETH3D courtyard ratio0p01 geom1200: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/qvrnsj2v`
 - M27 Mip-NeRF 360 bonsai ratio0p02 geom1400: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/27vl4jnt`
 - M27 ETH3D courtyard ratio0p02 geom1400: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ffp07dua`
+- M28 adaptive rollback-ratio smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/1kmwbu8g`
 
 ## Operating Rules
 
@@ -119,6 +121,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Cross-scene method evidence | original prompts Layer G / M26 | SOFT PASS | M26 runs aligned sparse-depth baselines and M24.2 PRISM on Mip-NeRF 360 `bonsai` and ETH3D `courtyard` with online W&B, independent render metrics, PRISM decisions, and geometry-observable validation. Direct W&B topology reduction is modest, so full paper claims need schedule tuning. |
 | Topology accounting reconciliation | execution finding / M27.0 | PASS | `train.py` now logs post-topology and final-checkpoint W&B counts; 520-iter ETH3D smoke confirms W&B `mesh/triangle_count` and final-cleanup checkpoint counts agree. |
 | Cross-scene topology-pressure tuning | execution finding / M27 | SOFT PASS | `ratio0p02_geom1400` strongly reduces ETH3D `courtyard` to `100858` triangles with better independent metrics, but `bonsai` rolls back all six candidate edits and remains near baseline topology. Fixed schedules are not yet cross-scene robust. |
+| Adaptive candidate scheduling | execution finding / M28 | PASS / smoke | Added opt-in rollback-driven candidate-ratio decay. Parking smoke verifies `0.04 -> 0.02 -> 0.01` retry metadata and W&B logging under strict rollback gate. Medium public-scene ablation remains TODO. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
@@ -145,6 +148,7 @@ These are not new research directions. They are constraints discovered while imp
 17. M26 shows the M24.2 PRISM schedule transfers mechanically to public scenes, but the 2000-iteration cross-scene direct W&B topology reduction is only `0.5%` to `1.5%`. Larger checkpoint-topology deltas must be labeled as schedule/checkpoint accounting effects until metric paths are reconciled.
 18. M27.0 identifies the topology mismatch root cause: W&B topology was logged before standard end-of-iteration prune/densify, while checkpoints were saved after it. Future runs now log post-topology and final-checkpoint counts explicitly.
 19. M27 schedule tuning shows fixed topology-pressure schedules are not cross-scene robust. `ratio0p02_geom1400` is strong on ETH3D `courtyard`, but Mip-NeRF 360 `bonsai` rolls back all candidates, so the next method step should use adaptive candidate-window selection.
+20. M28 implementation smoke shows rollback-driven ratio decay works and is auditable. Short smokes need `--prism_recent_age_iters 0` when the goal is to exercise candidate logic early; otherwise recent-age protection can hide all candidates.
 
 ---
 
@@ -785,10 +789,29 @@ M27 is a `SOFT PASS`: ETH3D achieves meaningful topology reduction with non-wors
 
 Adaptive PRISM schedule selection:
 
+## Status
+
+`PASS` for implementation smoke on 2026-05-02. Medium public-scene ablation remains `TODO`.
+
+## Completed
+
+- code:
+  - `arguments/__init__.py`
+  - `train.py`
+- report: `docs/car_model/meshprior_stage28_adaptive_schedule_smoke_report.md`
+- W&B smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/1kmwbu8g`
+- smoke output: `outputs/carnet/meshprior/stage28_adaptive_schedule/parking_adaptive_retry_smoke_v5_140iter/model`
+- verified adaptive candidate ratio sequence: `0.04 -> 0.02 -> 0.01`
+
+## Remaining
+
 1. Add candidate-window diagnostics that summarize removable-topology mass before a candidate round.
-2. Add an adaptive trigger mode that waits for nonzero candidate mass and stable validation rather than using only fixed iteration boundaries.
-3. Run short-to-medium ablations on `mipnerf360_bonsai` and `eth3d_courtyard` with online W&B.
-4. Compare fixed `ratio0p02_geom1400` against adaptive scheduling using independent `render.py + metrics.py`, PRISM validation, and final checkpoint topology.
+2. Run short-to-medium ablations on `mipnerf360_bonsai` and `eth3d_courtyard` with online W&B:
+   - start from M27 fixed `ratio0p02_geom1400`;
+   - enable `--prism_adaptive_candidate_retry_on_rollback`;
+   - use decay `0.5`, min ratio `0.005`, max rollback retries `2` or `3`.
+3. Compare fixed `ratio0p02_geom1400` against adaptive scheduling using independent `render.py + metrics.py`, PRISM validation, and final checkpoint topology.
+4. Preserve ETH3D `courtyard` gains while trying to make `bonsai` accept lower-pressure candidate edits.
 5. Gate:
    - `PASS` if adaptive scheduling improves `bonsai` topology without hurting independent SSIM/LPIPS and preserves or improves the ETH3D result.
    - `SOFT PASS` if adaptive scheduling only improves one scene but gives a clear, logged decision policy.
