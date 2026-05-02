@@ -4,6 +4,27 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage29 candidate cap medium ablation — SOFT PASS
+
+**Outcome**: Ran the M29 cap512 public-scene medium ablation with online W&B and independent render metrics. Candidate capping makes `bonsai` accept a PRISM edit for the first time in the M27-M29 public-scene sequence, but quality/topology tradeoffs remain.
+
+**W&B**:
+- `bonsai` cap512: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ck157wtl`
+- `courtyard` cap512: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/1ey4qzbd`
+
+**Key metrics**:
+- `bonsai`: final `633787` triangles, `1` commit, independent PSNR `12.1859`, SSIM `0.2764`, LPIPS `0.6129`.
+- `courtyard`: final `102916` triangles, `1` commit, independent PSNR `15.0344`, SSIM `0.4812`, LPIPS `0.5804`.
+
+**Decision**: Stage29 medium ablation is a `SOFT PASS`. Cap512 is a strong Pareto diagnostic, not a final default. Next work should sweep cap sizes and diagnose why `courtyard` immediate topology `102404` returns to final `102916`.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage29_candidate_cap_medium_report.md`
+- `docs/car_model/meshprior_stage29_candidate_cap_report.md`
+- `outputs/carnet/meshprior/stage29_candidate_selection/`
+
+---
+
 ## 2026-05-02 — Stage29 PRISM candidate cap smoke — PASS
 
 **Outcome**: Added an opt-in cap for PRISM candidate prune count per round. This directly targets the M28 `bonsai` failure where even a `0.005` ratio selected `3171` triangles. Defaults are unchanged because the cap defaults to disabled.

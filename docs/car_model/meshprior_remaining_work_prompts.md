@@ -31,6 +31,7 @@ Key codebase links:
 - Adaptive schedule smoke report: `docs/car_model/meshprior_stage28_adaptive_schedule_smoke_report.md`
 - Adaptive schedule medium report: `docs/car_model/meshprior_stage28_adaptive_schedule_medium_report.md`
 - Candidate cap report: `docs/car_model/meshprior_stage29_candidate_cap_report.md`
+- Candidate cap medium report: `docs/car_model/meshprior_stage29_candidate_cap_medium_report.md`
 
 Known W&B runs:
 
@@ -71,6 +72,8 @@ Known W&B runs:
 - M28 Mip-NeRF 360 bonsai adaptive schedule 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/38p6bgw4`
 - M28 ETH3D courtyard adaptive schedule 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/piadupsm`
 - M29 parking candidate cap smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/rgvzhx6k`
+- M29 Mip-NeRF 360 bonsai cap512 adaptive 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ck157wtl`
+- M29 ETH3D courtyard cap512 adaptive 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/1ey4qzbd`
 
 ## Operating Rules
 
@@ -127,7 +130,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Topology accounting reconciliation | execution finding / M27.0 | PASS | `train.py` now logs post-topology and final-checkpoint W&B counts; 520-iter ETH3D smoke confirms W&B `mesh/triangle_count` and final-cleanup checkpoint counts agree. |
 | Cross-scene topology-pressure tuning | execution finding / M27 | SOFT PASS | `ratio0p02_geom1400` strongly reduces ETH3D `courtyard` to `100858` triangles with better independent metrics, but `bonsai` rolls back all six candidate edits and remains near baseline topology. Fixed schedules are not yet cross-scene robust. |
 | Adaptive candidate scheduling | execution finding / M28 | SOFT PASS | Added opt-in rollback-driven candidate-ratio decay. Parking smoke verifies `0.04 -> 0.02 -> 0.01`; medium public-scene ablation preserves ETH3D but `bonsai` still rejects even a `0.005` global candidate set. |
-| Granular candidate selection | execution finding / M29 | PASS / smoke | Added opt-in `--prism_candidate_max_count_per_round`. Parking smoke confirms ratio targets `2579/1289/644` are capped to `256`, logged to W&B, and can commit a small edit. Medium public-scene ablation remains TODO. |
+| Granular candidate selection | execution finding / M29 | SOFT PASS | Added opt-in `--prism_candidate_max_count_per_round`. Parking smoke passes. Cap512 medium ablation makes `bonsai` commit and drops final topology to `633787`, but PSNR falls and `courtyard` no longer preserves the exact M27/M28 best topology. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
@@ -157,6 +160,7 @@ These are not new research directions. They are constraints discovered while imp
 20. M28 implementation smoke shows rollback-driven ratio decay works and is auditable. Short smokes need `--prism_recent_age_iters 0` when the goal is to exercise candidate logic early; otherwise recent-age protection can hide all candidates.
 21. M28 medium ablation shows adaptive schedule decay is not enough by itself. On `bonsai`, the ratio decays to `0.005`, but the selected set is still `3171` triangles and remains gate-rejected. The next risk is over-large global candidate sets, not merely timing.
 22. M29 candidate-cap smoke shows small candidate edits can pass the same training-loop gate: cap `256` turns the parking smoke's third candidate attempt into an accepted `64497 -> 64241` edit. This is an implementation result; cross-scene validation is still pending.
+23. M29 cap512 medium ablation shows candidate caps are the right direction but not yet the final schedule. `bonsai` reaches `633787` triangles with better SSIM/LPIPS than M28 but lower PSNR; `courtyard` stays better than baseline but worse than the M27/M28 best. A cap sweep or microbatch gate is needed before full-budget claims.
 
 ---
 
@@ -830,7 +834,7 @@ Granular PRISM candidate selection:
 
 ## Status
 
-`PASS` for implementation smoke on 2026-05-02. Medium public-scene ablation remains `TODO`.
+`SOFT PASS` on 2026-05-02.
 
 ## Goal
 
@@ -847,23 +851,24 @@ Fix the M28 failure mode where a small global candidate ratio still selects too 
    - rejected/accepted gate result,
    - active adaptive ratio.
 4. DONE: Run a parking smoke that forces candidate selection and verifies the cap changes selected count without breaking rollback.
-5. TODO: Run `bonsai` / `courtyard` medium ablation against M28:
+5. DONE: Run `bonsai` / `courtyard` medium ablation against M28:
    - base schedule `ratio0p02_geom1400`,
    - adaptive retry enabled,
-   - cap candidates at a conservative value such as `512` or `1024`,
+   - cap candidates at `512`,
    - online W&B required.
-6. TODO: Evaluate with:
+6. DONE: Evaluate with:
    - training internal metrics,
    - independent `render.py + metrics.py`,
    - PRISM validation artifacts,
    - counterfactual gate JSON,
    - final checkpoint topology and cleanup summary.
-7. TODO: If the cap alone is insufficient, promote the next M29 substep to microbatch candidate gating: split selected candidates into small batches, run counterfactual gates per batch, and commit only the accepted batches.
+7. TODO: Sweep cap values or promote the next M29 substep to microbatch candidate gating: split selected candidates into small batches, run counterfactual gates per batch, and commit only the accepted batches.
 
 ## Required Outputs
 
 - code changes in `arguments/__init__.py`, `train.py`, and `utils/prism_counterfactual.py`.
 - `docs/car_model/meshprior_stage29_candidate_cap_report.md`
+- `docs/car_model/meshprior_stage29_candidate_cap_medium_report.md`
 - output root: `outputs/carnet/meshprior/stage29_candidate_selection/`
 - W&B URLs and exact command logs under the output root.
 
