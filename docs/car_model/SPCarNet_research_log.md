@@ -1020,3 +1020,34 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_parking_region_consolidation_report.md`
 
 ---
+
+## 2026-05-01 — Parking phone tiny cluster proposal scoring — PASS
+
+**Outcome**: Converted consolidated parking scene clusters into MeshPrior proposal metadata.
+
+**Files added**:
+- `scripts/car_model/meshprior_score_parking_clusters.py`
+- `scripts/car_model/smoke_test_meshprior_parking_cluster_scoring.py`
+- `docs/car_model/meshprior_parking_cluster_proposal_scoring_report.md`
+
+**Full scoring output**:
+- `outputs/carnet/meshprior/parking_phone_tiny/cluster_proposals/proposals.json`
+- `outputs/carnet/meshprior/parking_phone_tiny/cluster_proposals/proposal_scores.csv`
+- `outputs/carnet/meshprior/parking_phone_tiny/cluster_proposals/proposal_report.md`
+
+**Metrics**:
+- eligible clusters scored: `9`
+- proposals emitted: `45`
+- proposal types: `protect`, `prune`, `snap_candidate`, `fill_candidate`, `uncertainty`
+- metadata-only proposals: `45`
+
+**Verification**:
+- Compileall over `scripts/car_model` and `ss3dm_prior`: PASS.
+- `smoke_test_meshprior_parking_cluster_scoring.py`: PASS.
+
+**Decision**: proposal scoring gate `PASS`. These proposals are not yet geometry edits; every proposal is marked `requires_mesh_extraction` and `requires_scene_gate`.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_parking_cluster_proposal_scoring_report.md`
+
+---
