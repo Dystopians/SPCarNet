@@ -1389,3 +1389,30 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_stage17_real_variant_implementation_report.md`
 
 ---
+
+## 2026-05-01 — Stage18 topology-budget comparison — PASS / CLAIM BLOCKED
+
+**Outcome**: Added a reproducible topology-budget collector for the three 2000-iteration parking runs.
+
+**Files**:
+- `scripts/car_model/meshprior_collect_topology_budget_comparison.py`
+- `scripts/car_model/smoke_test_meshprior_topology_budget_comparison.py`
+- `docs/car_model/meshprior_stage18_topology_budget_design.md`
+- `docs/car_model/meshprior_stage18_topology_budget_implementation_report.md`
+
+**Output**:
+- `outputs/carnet/meshprior/parking_phone_tiny/topology_budget_comparison/topology_budget_comparison.json`
+- `outputs/carnet/meshprior/parking_phone_tiny/topology_budget_comparison/topology_budget_comparison.csv`
+- `outputs/carnet/meshprior/parking_phone_tiny/topology_budget_comparison/topology_budget_comparison.md`
+
+**Main table**:
+- origin/main: PSNR `11.047660`, SSIM `0.219931`, LPIPS `0.641706`, triangles `39079`, PSNR/100k tri `28.270068`, AbsRel `5.611905`, FPS `271.313`
+- current branch: PSNR `11.599438`, SSIM `0.270268`, LPIPS `0.634732`, triangles `782982`, PSNR/100k tri `1.481444`, AbsRel `0.427880`, FPS `257.567`
+- Stage17 MeshPrior: PSNR `13.278273`, SSIM `0.303979`, LPIPS `0.607610`, triangles `777251`, PSNR/100k tri `1.708364`, AbsRel `0.366691`, FPS `272.853`
+
+**Decision**: M18 gate `PASS`; collector decision `QUALITY_GAIN_NOT_TOPOLOGY_NORMALIZED`. Stage17 improves quality metrics versus current branch, but has `19.889x` the clean candidate triangle count. Stronger claims remain blocked until topology-control or budget-matched reporting is complete.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_stage18_topology_budget_implementation_report.md`
+
+---

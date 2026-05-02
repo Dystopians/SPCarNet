@@ -64,7 +64,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Clean Mesh Splatting baseline | execution finding | SOFT PASS | `origin/main@1a714f3` is a concrete candidate; still needs official-baseline confirmation if paper claims depend on it. |
 | Current branch medium baseline | execution | SOFT PASS | 2000-iteration W&B run exists; better render proxy but much larger topology. |
 | Real MeshPrior 2000-iteration variant | original prompts Layer F | PASS | Stage17 resumes a MeshPrior-cleaned checkpoint to 2000 iterations with training-time W&B and improves post-render / sparse geometry proxy metrics, but claim status remains soft due topology inflation. |
-| Topology-budget / efficiency-normalized comparison | execution finding | TODO | Stage17 still has `777251` triangles vs origin/main `39079`; quality-only comparison remains insufficient. |
+| Topology-budget / efficiency-normalized comparison | execution finding | PASS | M18 collector emits JSON/CSV/Markdown and marks Stage17 as `QUALITY_GAIN_NOT_TOPOLOGY_NORMALIZED`; stronger paper claims remain blocked until topology control or budget-matched reporting. |
 | Multi-scene validation | original prompts Layer G | TODO | Only `parking_phone_tiny` has meaningful scene evidence. |
 | Long-budget or paper-budget training | original prompts M11/M13/M14 | TODO | 2000 iterations is medium validation, not final headline evidence. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
