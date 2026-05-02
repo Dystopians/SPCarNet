@@ -4,6 +4,27 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage28 adaptive PRISM schedule medium ablation — SOFT PASS
+
+**Outcome**: Completed the M28 medium public-scene ablation with online W&B on Mip-NeRF 360 `bonsai` and ETH3D `courtyard`. Adaptive rollback-driven candidate-ratio decay is working and auditable, but it does not solve the `bonsai` topology failure. It preserves the strong ETH3D result from M27.
+
+**W&B**:
+- `bonsai` adaptive `0.02 -> 0.01 -> 0.005`: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/38p6bgw4`
+- `courtyard` adaptive `0.02`: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/piadupsm`
+
+**Key metrics**:
+- `bonsai`: final `1357119` triangles, `0` commits, `8` rejected candidate gates; independent PSNR `12.3054`, SSIM `0.2410`, LPIPS `0.6196`.
+- `courtyard`: final `100858` triangles, `1` commit, `41` no-candidate retries; independent PSNR `15.0919`, SSIM `0.4844`, LPIPS `0.5778`.
+
+**Decision**: Stage28 medium ablation is a `SOFT PASS`. The next technical bottleneck is candidate selection granularity: on `bonsai`, even the decayed `0.005` ratio still selects `3171` triangles and is rejected. M29 should cap or microbatch candidate sets and gate the smaller batches.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage28_adaptive_schedule_medium_report.md`
+- `docs/car_model/meshprior_stage28_adaptive_schedule_smoke_report.md`
+- `outputs/carnet/meshprior/stage28_adaptive_schedule/`
+
+---
+
 ## 2026-05-02 — Stage28 adaptive PRISM schedule smoke — PASS
 
 **Outcome**: Added an opt-in adaptive candidate retry path for PRISM. When a candidate prune is rejected by the counterfactual gate, the active candidate ratio can decay and retry before the controller consumes the effective candidate round. This directly targets the M27 `bonsai` failure mode where 2% candidates rolled back while lower-pressure schedules sometimes committed.
