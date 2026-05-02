@@ -30,6 +30,7 @@ Status before continuing to Prompt M13:
 - SOFT PASS: Parking phone tiny 2000-iteration medium baseline comparison is complete. Current branch training used online training-time W&B (`nk2w04wn`); clean `origin/main` was externally W&B-logged (`142memiw`). Current branch improves post-render metrics and sparse depth proxy but uses far more topology, so this is not yet a paper-level method claim.
 - PASS WITH CLAIM CAVEAT: Stage17 real MeshPrior 2000-iteration variant is complete. It resumes a MeshPrior-cleaned checkpoint from iteration 200 to 2000 with training-time W&B (`vyrun0qo`), improves post-render metrics and COLMAP sparse geometry proxy versus current branch, but still has large topology (`777251` triangles), so M18 topology-budget comparison remains mandatory.
 - PASS: M18 topology-budget comparison collector is complete. It compares clean `origin/main`, current branch, and Stage17 at 2000 iterations and returns `QUALITY_GAIN_NOT_TOPOLOGY_NORMALIZED`; Stage17 quality gains are real on this scene but paper-level claims remain blocked by topology budget.
+- PASS: M19 clean baseline audit confirms `origin/main@1a714f3` matches official `meshsplatting/mesh-splatting` `main`/`HEAD` at audit time. The existing `origin_main_2000iter` run is a valid clean medium-budget baseline, though not yet long-budget or multi-scene.
 
 This document is meant to be copied, stage by stage, into Codex / Claude Code or another coding agent working inside `Dystopians/SPCarNet`.
 

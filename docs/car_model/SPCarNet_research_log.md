@@ -1416,3 +1416,21 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_stage18_topology_budget_implementation_report.md`
 
 ---
+
+## 2026-05-01 — Stage19 clean MeshSplatting baseline audit — PASS
+
+**Outcome**: Confirmed that the clean baseline commit used for `origin_main_2000iter` matches the official MeshSplatting repository.
+
+**Remote evidence**:
+- official remote checked: `https://github.com/meshsplatting/mesh-splatting.git`
+- official `HEAD` / `main`: `1a714f33dd758a42be8fa86e1041c3c67df0d0a8`
+- local `origin/main`: `1a714f33dd758a42be8fa86e1041c3c67df0d0a8`
+
+**Decision**: M19 gate `PASS`. `origin/main@1a714f3` is a valid clean MeshSplatting medium-budget baseline for the current parking experiments.
+
+**Caveat**: This validates code lineage, not final experimental sufficiency. The baseline remains single-scene and 2000-iteration; long-budget and multi-scene evidence are still required for strong paper claims.
+
+**Linked artefact**:
+- `docs/car_model/meshprior_stage19_clean_baseline_audit.md`
+
+---
