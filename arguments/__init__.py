@@ -301,6 +301,7 @@ class OptimizationParams(ParamGroup):
         self.prism_dead_rounds = 1
         self.prism_candidate_rounds = 3
         self.prism_candidate_prune_ratio_per_round = 0.015
+        self.prism_candidate_max_count_per_round = 0
         self.prism_no_candidate_retry_iters = 10
         self.prism_adaptive_candidate_retry_on_rollback = False
         self.prism_adaptive_candidate_ratio_decay = 0.5

@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage29 PRISM candidate cap smoke — PASS
+
+**Outcome**: Added an opt-in cap for PRISM candidate prune count per round. This directly targets the M28 `bonsai` failure where even a `0.005` ratio selected `3171` triangles. Defaults are unchanged because the cap defaults to disabled.
+
+**W&B**:
+- parking cap smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/rgvzhx6k`
+
+**Verification**:
+- output: `outputs/carnet/meshprior/stage29_candidate_selection/parking_candidate_cap_smoke_256_140iter/model`
+- cap sequence: ratio targets `2579`, `1289`, `644`; cap target `256`; selected count `256` on all candidate attempts.
+- first two attempts rolled back under a strict gate; third attempt committed `64497 -> 64241` triangles.
+
+**Decision**: Stage29 implementation smoke `PASS`. The next step is the medium `bonsai` / `courtyard` public-scene ablation with candidate cap enabled.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage29_candidate_cap_report.md`
+- `outputs/carnet/meshprior/stage29_candidate_selection/parking_candidate_cap_smoke_256_140iter/model`
+
+---
+
 ## 2026-05-02 — Stage28 adaptive PRISM schedule medium ablation — SOFT PASS
 
 **Outcome**: Completed the M28 medium public-scene ablation with online W&B on Mip-NeRF 360 `bonsai` and ETH3D `courtyard`. Adaptive rollback-driven candidate-ratio decay is working and auditable, but it does not solve the `bonsai` topology failure. It preserves the strong ETH3D result from M27.

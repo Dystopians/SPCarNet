@@ -142,6 +142,7 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "dead_prune_ratio": float(getattr(opt, "prism_dead_prune_ratio", 0.0)),
         "candidate_prune_ratio": float(getattr(opt, "prism_candidate_prune_ratio", 0.0)),
         "candidate_prune_ratio_per_round": float(getattr(opt, "prism_candidate_prune_ratio_per_round", 0.015)),
+        "candidate_max_count_per_round": int(getattr(opt, "prism_candidate_max_count_per_round", 0)),
         "adaptive_candidate_retry_on_rollback": bool(
             getattr(opt, "prism_adaptive_candidate_retry_on_rollback", False)
         ),
@@ -389,6 +390,7 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "adaptive_candidate_rollback_retries": 0,
         "last_candidate_pool_count": 0,
         "last_candidate_target_count": 0,
+        "last_candidate_cap_count": 0,
         "last_candidate_selected_count": 0,
         "teacher_cache": {},
         "teacher_rgb_lambda": float(getattr(opt, "prism_teacher_rgb_lambda", 0.01)),
@@ -1748,17 +1750,25 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
         dead_ratio = 0.0
     elif prune_mode == "dead":
         cand_ratio = 0.0
+    candidate_max_count = 0
+    if prune_mode == "candidate":
+        candidate_max_count = int(cfg.get("candidate_max_count_per_round", 0))
 
     candidate_ids = select_prism_candidate_ids(
         scores=scores,
         dead_prune_ratio=dead_ratio,
         candidate_prune_ratio=cand_ratio,
+        candidate_max_count=candidate_max_count,
     )
     candidate_pool_count = int(torch.count_nonzero(scores.candidate_mask).item())
     target_count = int(max(0.0, cand_ratio) * int(scores.prune_score_t.numel()))
+    capped_target_count = target_count
+    if candidate_max_count > 0:
+        capped_target_count = min(target_count, int(candidate_max_count))
     selected_count = int(candidate_ids.numel())
     prism_state["last_candidate_pool_count"] = candidate_pool_count
     prism_state["last_candidate_target_count"] = target_count
+    prism_state["last_candidate_cap_count"] = capped_target_count
     prism_state["last_candidate_selected_count"] = selected_count
     if candidate_ids.numel() == 0:
         return {
@@ -1770,6 +1780,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             "candidate_prune_ratio": float(cand_ratio),
             "candidate_pool_count": int(candidate_pool_count),
             "candidate_target_count": int(target_count),
+            "candidate_cap_count": int(capped_target_count),
             "candidate_selected_count": int(selected_count),
         }
 
@@ -1803,6 +1814,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
                 "candidate_prune_ratio": float(cand_ratio),
                 "candidate_pool_count": int(candidate_pool_count),
                 "candidate_target_count": int(target_count),
+                "candidate_cap_count": int(capped_target_count),
                 "candidate_selected_count": int(selected_count),
             }
         counterfactual_accept = 1
@@ -1834,6 +1846,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             "candidate_prune_ratio": float(cand_ratio),
             "candidate_pool_count": int(candidate_pool_count),
             "candidate_target_count": int(target_count),
+            "candidate_cap_count": int(capped_target_count),
             "candidate_selected_count": int(selected_count),
         }
     return {
@@ -1844,6 +1857,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
         "candidate_prune_ratio": float(cand_ratio),
         "candidate_pool_count": int(candidate_pool_count),
         "candidate_target_count": int(target_count),
+        "candidate_cap_count": int(capped_target_count),
         "candidate_selected_count": int(selected_count),
     }
 
@@ -2612,6 +2626,7 @@ def training(
                 tb_writer.add_scalar("prism/adaptive_candidate_prune_ratio", float(prism_state.get("adaptive_candidate_prune_ratio", 0.0)), iteration)
                 tb_writer.add_scalar("prism/adaptive_candidate_rollback_retries", float(prism_state.get("adaptive_candidate_rollback_retries", 0)), iteration)
                 tb_writer.add_scalar("prism/last_candidate_pool_count", float(prism_state.get("last_candidate_pool_count", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_cap_count", float(prism_state.get("last_candidate_cap_count", 0)), iteration)
                 tb_writer.add_scalar("prism/last_candidate_selected_count", float(prism_state.get("last_candidate_selected_count", 0)), iteration)
                 tb_writer.add_scalar("prism/validation_pass", float(prism_state.get("last_validation_pass", 1)), iteration)
                 tb_writer.add_scalar(
@@ -2676,6 +2691,7 @@ def training(
                     "prism/adaptive_candidate_rollback_retries": float(prism_state.get("adaptive_candidate_rollback_retries", 0)),
                     "prism/last_candidate_pool_count": float(prism_state.get("last_candidate_pool_count", 0)),
                     "prism/last_candidate_target_count": float(prism_state.get("last_candidate_target_count", 0)),
+                    "prism/last_candidate_cap_count": float(prism_state.get("last_candidate_cap_count", 0)),
                     "prism/last_candidate_selected_count": float(prism_state.get("last_candidate_selected_count", 0)),
                     "prism/validation_pass": float(prism_state.get("last_validation_pass", 1)),
                     "prism/densification_frozen_after_commit": float(
@@ -2899,6 +2915,7 @@ def training(
                         )),
                         "candidate_pool_count": int(prune_result.get("candidate_pool_count", 0)),
                         "candidate_target_count": int(prune_result.get("candidate_target_count", 0)),
+                        "candidate_cap_count": int(prune_result.get("candidate_cap_count", 0)),
                         "candidate_selected_count": int(prune_result.get("candidate_selected_count", 0)),
                         "pre_prune_triangle_count": int(pre_prune_triangle_count),
                         "post_prune_triangle_count": int(post_prune_triangle_count),

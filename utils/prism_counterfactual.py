@@ -540,6 +540,7 @@ def select_prism_candidate_ids(
     scores: PrismScoreOutputs,
     dead_prune_ratio: float,
     candidate_prune_ratio: float,
+    candidate_max_count: int = 0,
 ) -> torch.Tensor:
     t = int(scores.prune_score_t.numel())
     if t == 0:
@@ -550,6 +551,8 @@ def select_prism_candidate_ids(
 
     dead_n = int(max(0, dead_prune_ratio) * t)
     cand_n = int(max(0, candidate_prune_ratio) * t)
+    if candidate_max_count > 0:
+        cand_n = min(cand_n, int(candidate_max_count))
 
     selected = []
     if dead_ids.numel() > 0 and dead_n > 0:
