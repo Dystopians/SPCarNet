@@ -1434,3 +1434,22 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_stage19_clean_baseline_audit.md`
 
 ---
+
+## 2026-05-01 — Stage20 second scene audit — STOP
+
+**Outcome**: Audited parent-directory data for a second real MeshPrior scene.
+
+**Findings**:
+- `/data/peilincai/parking_phone_tiny_anonymized`: valid current parking scene, already used.
+- `/data/peilincai/car_models`: object mesh data, not a COLMAP scene.
+- `/data/peilincai/vggt`: contains example image/sparse data, but not a supplied parking-lot / vehicle-rich target scene.
+- No second suitable parking-lot COLMAP/image scene was found under `/data/peilincai` at this audit depth.
+
+**Decision**: M20 gate `STOP`. This is a data availability stop, not a code failure. Multi-scene validation remains blocked until a second vehicle/parking COLMAP scene is added.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage20_second_scene_design.md`
+- `docs/car_model/meshprior_stage20_second_scene_audit.md`
+- `docs/car_model/meshprior_stage20_second_scene_implementation_report.md`
+
+---

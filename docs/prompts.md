@@ -31,6 +31,7 @@ Status before continuing to Prompt M13:
 - PASS WITH CLAIM CAVEAT: Stage17 real MeshPrior 2000-iteration variant is complete. It resumes a MeshPrior-cleaned checkpoint from iteration 200 to 2000 with training-time W&B (`vyrun0qo`), improves post-render metrics and COLMAP sparse geometry proxy versus current branch, but still has large topology (`777251` triangles), so M18 topology-budget comparison remains mandatory.
 - PASS: M18 topology-budget comparison collector is complete. It compares clean `origin/main`, current branch, and Stage17 at 2000 iterations and returns `QUALITY_GAIN_NOT_TOPOLOGY_NORMALIZED`; Stage17 quality gains are real on this scene but paper-level claims remain blocked by topology budget.
 - PASS: M19 clean baseline audit confirms `origin/main@1a714f3` matches official `meshsplatting/mesh-splatting` `main`/`HEAD` at audit time. The existing `origin_main_2000iter` run is a valid clean medium-budget baseline, though not yet long-budget or multi-scene.
+- STOP: M20 second-scene audit found no second suitable parking-lot COLMAP/image scene under `/data/peilincai`. `parking_phone_tiny_anonymized` remains the only valid scene; `car_models` is object-mesh data, and VGGT examples are not appropriate for the parking-scene paper claim.
 
 This document is meant to be copied, stage by stage, into Codex / Claude Code or another coding agent working inside `Dystopians/SPCarNet`.
 
