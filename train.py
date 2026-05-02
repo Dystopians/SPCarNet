@@ -153,6 +153,10 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "candidate_quality_orientation_penalty": float(getattr(opt, "prism_candidate_quality_orientation_penalty", 0.25)),
         "candidate_quality_utility_penalty": float(getattr(opt, "prism_candidate_quality_utility_penalty", 0.25)),
         "candidate_quality_uncertainty_penalty": float(getattr(opt, "prism_candidate_quality_uncertainty_penalty", 0.25)),
+        "candidate_measured_impact_rank": bool(getattr(opt, "prism_candidate_measured_impact_rank", False)),
+        "candidate_measured_pool_multiplier": float(getattr(opt, "prism_candidate_measured_pool_multiplier", 4.0)),
+        "candidate_measured_group_size": int(getattr(opt, "prism_candidate_measured_group_size", 256)),
+        "candidate_measured_max_groups": int(getattr(opt, "prism_candidate_measured_max_groups", 8)),
         "adaptive_candidate_retry_on_rollback": bool(
             getattr(opt, "prism_adaptive_candidate_retry_on_rollback", False)
         ),
@@ -414,6 +418,11 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "last_candidate_orientation_keep_mean": 0.0,
         "last_candidate_utility_mean": 0.0,
         "last_candidate_uncertainty_mean": 0.0,
+        "last_candidate_measured_rank_enabled": 0,
+        "last_candidate_measured_group_count": 0,
+        "last_candidate_measured_accepted_count": 0,
+        "last_candidate_measured_selected_count": 0,
+        "last_candidate_measured_best_score": 0.0,
         "teacher_cache": {},
         "teacher_rgb_lambda": float(getattr(opt, "prism_teacher_rgb_lambda", 0.01)),
         "teacher_depth_lambda": float(getattr(opt, "prism_teacher_depth_lambda", 0.002)),
@@ -1775,6 +1784,16 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     candidate_max_count = 0
     if prune_mode == "candidate":
         candidate_max_count = int(cfg.get("candidate_max_count_per_round", 0))
+    measured_rank_enabled = (
+        prune_mode == "candidate"
+        and bool(cfg.get("candidate_measured_impact_rank", False))
+        and bool(cfg.get("use_counterfactual_gate", False))
+    )
+    measured_final_cap = int(candidate_max_count)
+    selection_max_count = candidate_max_count
+    if measured_rank_enabled and measured_final_cap > 0:
+        measured_pool_multiplier = max(1.0, float(cfg.get("candidate_measured_pool_multiplier", 4.0)))
+        selection_max_count = max(measured_final_cap, int(round(measured_final_cap * measured_pool_multiplier)))
 
     rank_score_t = None
     if prune_mode == "candidate" and bool(cfg.get("candidate_quality_rank", False)):
@@ -1796,7 +1815,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
         scores=scores,
         dead_prune_ratio=dead_ratio,
         candidate_prune_ratio=cand_ratio,
-        candidate_max_count=candidate_max_count,
+        candidate_max_count=selection_max_count,
         rank_score_t=rank_score_t,
     )
     candidate_pool_count = int(torch.count_nonzero(scores.candidate_mask).item())
@@ -1825,6 +1844,11 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     prism_state["last_candidate_orientation_keep_mean"] = 0.0
     prism_state["last_candidate_utility_mean"] = 0.0
     prism_state["last_candidate_uncertainty_mean"] = 0.0
+    prism_state["last_candidate_measured_rank_enabled"] = 1 if measured_rank_enabled else 0
+    prism_state["last_candidate_measured_group_count"] = 0
+    prism_state["last_candidate_measured_accepted_count"] = 0
+    prism_state["last_candidate_measured_selected_count"] = 0
+    prism_state["last_candidate_measured_best_score"] = 0.0
 
     def _candidate_quality_payload():
         return {
@@ -1836,6 +1860,11 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             "candidate_orientation_keep_mean": float(prism_state.get("last_candidate_orientation_keep_mean", 0.0)),
             "candidate_utility_mean": float(prism_state.get("last_candidate_utility_mean", 0.0)),
             "candidate_uncertainty_mean": float(prism_state.get("last_candidate_uncertainty_mean", 0.0)),
+            "candidate_measured_rank_enabled": int(prism_state.get("last_candidate_measured_rank_enabled", 0)),
+            "candidate_measured_group_count": int(prism_state.get("last_candidate_measured_group_count", 0)),
+            "candidate_measured_accepted_count": int(prism_state.get("last_candidate_measured_accepted_count", 0)),
+            "candidate_measured_selected_count": int(prism_state.get("last_candidate_measured_selected_count", 0)),
+            "candidate_measured_best_score": float(prism_state.get("last_candidate_measured_best_score", 0.0)),
         }
 
     if candidate_ids.numel() == 0:
@@ -1867,6 +1896,97 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     if (prune_mode == "candidate") and bool(cfg.get("use_counterfactual_gate", False)):
         debug_dir = os.path.join(prism_state["model_path"], "prism_debug")
         os.makedirs(debug_dir, exist_ok=True)
+        if measured_rank_enabled and measured_final_cap > 0 and candidate_ids.numel() > measured_final_cap:
+            group_size = max(1, int(cfg.get("candidate_measured_group_size", 256)))
+            max_groups = max(0, int(cfg.get("candidate_measured_max_groups", 8)))
+            groups = list(torch.split(candidate_ids, group_size))
+            if max_groups > 0:
+                groups = groups[:max_groups]
+
+            def _finite(v, default=0.0):
+                try:
+                    value = float(v)
+                except Exception:
+                    return float(default)
+                return value if np.isfinite(value) else float(default)
+
+            measured_logs = []
+            for group_idx, group_ids in enumerate(groups):
+                decision = run_counterfactual_simulation(
+                    scene=scene,
+                    triangles=triangles,
+                    render_func=render,
+                    pipe=prism_state.get("pipe", None),
+                    background=prism_state.get("background", None),
+                    candidate_triangle_ids=group_ids,
+                    calibration_views=prism_state.get("calibration_views", []),
+                    gate_cfg=prism_state["gate_cfg"],
+                    proxy_ctx=prism_state.get("proxy_ctx", None),
+                    proxy_cfg=prism_state.get("proxy_cfg", None),
+                )
+                deltas = dict(getattr(decision, "deltas", {}) or {})
+                measured_score = (
+                    (1000.0 if bool(decision.accept) else 0.0)
+                    + 10.0 * _finite(deltas.get("delta_psnr", 0.0))
+                    - 500.0 * max(0.0, _finite(deltas.get("delta_mae", 0.0)))
+                    - 100.0 * max(0.0, _finite(deltas.get("delta_absrel", 0.0)))
+                    - 0.1 * max(0.0, _finite(deltas.get("delta_mean_angle", 0.0)))
+                    - 100.0 * max(0.0, _finite(deltas.get("changed_pixel_ratio", 0.0)))
+                )
+                payload = counterfactual_decision_to_dict(decision)
+                payload["measured_group_index"] = int(group_idx)
+                payload["measured_group_size"] = int(group_ids.numel())
+                payload["measured_score"] = float(measured_score)
+                with open(
+                    os.path.join(debug_dir, f"counterfactual_measured_rank_iter_{int(iteration):06d}_g{group_idx:03d}.json"),
+                    "w",
+                    encoding="utf-8",
+                ) as f:
+                    json.dump(payload, f, indent=2)
+                measured_logs.append(
+                    {
+                        "group_idx": int(group_idx),
+                        "group_ids": group_ids,
+                        "accept": bool(decision.accept),
+                        "score": float(measured_score),
+                    }
+                )
+
+            measured_logs = sorted(measured_logs, key=lambda x: float(x["score"]), reverse=True)
+            selected_groups = []
+            selected_total = 0
+            for entry in measured_logs:
+                if selected_total >= measured_final_cap:
+                    break
+                group_ids = entry["group_ids"]
+                remaining = max(0, measured_final_cap - selected_total)
+                if group_ids.numel() > remaining:
+                    group_ids = group_ids[:remaining]
+                if group_ids.numel() <= 0:
+                    continue
+                selected_groups.append(group_ids)
+                selected_total += int(group_ids.numel())
+            if selected_groups:
+                candidate_ids = torch.unique(torch.cat(selected_groups, dim=0))
+                if candidate_ids.numel() > measured_final_cap:
+                    candidate_ids = candidate_ids[:measured_final_cap]
+                selected_count = int(candidate_ids.numel())
+                prism_state["last_candidate_selected_count"] = int(selected_count)
+                prism_state["last_candidate_measured_selected_count"] = int(selected_count)
+            prism_state["last_candidate_measured_group_count"] = int(len(measured_logs))
+            prism_state["last_candidate_measured_accepted_count"] = int(sum(1 for x in measured_logs if bool(x["accept"])))
+            prism_state["last_candidate_measured_best_score"] = (
+                float(measured_logs[0]["score"]) if len(measured_logs) > 0 else 0.0
+            )
+            selected_rank_scores = rank_score_t[candidate_ids] if rank_score_t is not None else scores.prune_score_t[candidate_ids]
+            prism_state["last_candidate_quality_score_mean"] = float(selected_rank_scores.to(torch.float32).mean().item())
+            prism_state["last_candidate_prune_score_mean"] = float(scores.prune_score_t[candidate_ids].to(torch.float32).mean().item())
+            prism_state["last_candidate_render_keep_mean"] = float(scores.render_keep_t[candidate_ids].to(torch.float32).mean().item())
+            prism_state["last_candidate_geometry_keep_mean"] = float(scores.geometry_keep_t[candidate_ids].to(torch.float32).mean().item())
+            prism_state["last_candidate_orientation_keep_mean"] = float(scores.orientation_keep_t[candidate_ids].to(torch.float32).mean().item())
+            prism_state["last_candidate_utility_mean"] = float(scores.utility_t[candidate_ids].to(torch.float32).mean().item())
+            prism_state["last_candidate_uncertainty_mean"] = float(scores.unc_t[candidate_ids].to(torch.float32).mean().item())
+
         if bool(cfg.get("candidate_microbatch_gate", False)):
             microbatch_size = max(1, int(cfg.get("candidate_microbatch_size", 256)))
             max_batches = max(0, int(cfg.get("candidate_microbatch_max_batches", 0)))
@@ -2806,6 +2926,11 @@ def training(
                 tb_writer.add_scalar("prism/last_candidate_orientation_keep_mean", float(prism_state.get("last_candidate_orientation_keep_mean", 0.0)), iteration)
                 tb_writer.add_scalar("prism/last_candidate_utility_mean", float(prism_state.get("last_candidate_utility_mean", 0.0)), iteration)
                 tb_writer.add_scalar("prism/last_candidate_uncertainty_mean", float(prism_state.get("last_candidate_uncertainty_mean", 0.0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_measured_rank_enabled", float(prism_state.get("last_candidate_measured_rank_enabled", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_measured_group_count", float(prism_state.get("last_candidate_measured_group_count", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_measured_accepted_count", float(prism_state.get("last_candidate_measured_accepted_count", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_measured_selected_count", float(prism_state.get("last_candidate_measured_selected_count", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_measured_best_score", float(prism_state.get("last_candidate_measured_best_score", 0.0)), iteration)
                 tb_writer.add_scalar("prism/validation_pass", float(prism_state.get("last_validation_pass", 1)), iteration)
                 tb_writer.add_scalar(
                     "prism/post_commit_recollect_remaining",
@@ -2883,6 +3008,11 @@ def training(
                     "prism/last_candidate_orientation_keep_mean": float(prism_state.get("last_candidate_orientation_keep_mean", 0.0)),
                     "prism/last_candidate_utility_mean": float(prism_state.get("last_candidate_utility_mean", 0.0)),
                     "prism/last_candidate_uncertainty_mean": float(prism_state.get("last_candidate_uncertainty_mean", 0.0)),
+                    "prism/last_candidate_measured_rank_enabled": float(prism_state.get("last_candidate_measured_rank_enabled", 0)),
+                    "prism/last_candidate_measured_group_count": float(prism_state.get("last_candidate_measured_group_count", 0)),
+                    "prism/last_candidate_measured_accepted_count": float(prism_state.get("last_candidate_measured_accepted_count", 0)),
+                    "prism/last_candidate_measured_selected_count": float(prism_state.get("last_candidate_measured_selected_count", 0)),
+                    "prism/last_candidate_measured_best_score": float(prism_state.get("last_candidate_measured_best_score", 0.0)),
                     "prism/validation_pass": float(prism_state.get("last_validation_pass", 1)),
                     "prism/densification_frozen_after_commit": float(
                         prism_state.get("densification_frozen_after_prism_commit", 0)
@@ -3119,6 +3249,11 @@ def training(
                         "candidate_orientation_keep_mean": float(prune_result.get("candidate_orientation_keep_mean", 0.0)),
                         "candidate_utility_mean": float(prune_result.get("candidate_utility_mean", 0.0)),
                         "candidate_uncertainty_mean": float(prune_result.get("candidate_uncertainty_mean", 0.0)),
+                        "candidate_measured_rank_enabled": int(prune_result.get("candidate_measured_rank_enabled", 0)),
+                        "candidate_measured_group_count": int(prune_result.get("candidate_measured_group_count", 0)),
+                        "candidate_measured_accepted_count": int(prune_result.get("candidate_measured_accepted_count", 0)),
+                        "candidate_measured_selected_count": int(prune_result.get("candidate_measured_selected_count", 0)),
+                        "candidate_measured_best_score": float(prune_result.get("candidate_measured_best_score", 0.0)),
                         "pre_prune_triangle_count": int(pre_prune_triangle_count),
                         "post_prune_triangle_count": int(post_prune_triangle_count),
                         "recollect_iters_used": int(getattr(controller, "last_recollect_iters_used", 0) if controller is not None else 0),

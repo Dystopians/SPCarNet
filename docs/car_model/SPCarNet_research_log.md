@@ -4,6 +4,30 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage32 PRISM measured candidate-impact ranking — SOFT PASS / diagnostic PASS
+
+**Outcome**: Added opt-in measured candidate-impact ranking. The controller can now draw a larger candidate pool, split it into deterministic groups, evaluate each group with the existing counterfactual calibration path, and select the final cap-limited candidate set from measured impact. The mechanism is stable and improves `courtyard`, but it does not beat Stage29 cap512 on `bonsai`.
+
+**W&B**:
+- parking smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/xg4fsvd8`
+- `bonsai` measured rank: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/56l3tz23`
+- `courtyard` measured rank: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/fb7jfcaj`
+- `bonsai` measured+quality diagnostic: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/xooe27um`
+
+**Key metrics**:
+- parking smoke: iter `91` committed `64497 -> 63985` after `3/3` measured groups accepted.
+- `bonsai` measured: iter `1501` committed `634299 -> 633787`; independent PSNR `12.1742`, SSIM `0.2758`, LPIPS `0.6137`.
+- `courtyard` measured: iter `1501` committed `102916 -> 102404`; independent PSNR `15.1390`, SSIM `0.4850`, LPIPS `0.5792`.
+- `bonsai` measured+quality diagnostic: independent PSNR `12.1708`, SSIM `0.2760`, LPIPS `0.6133`.
+
+**Decision**: Stage32 is useful infrastructure but not a default. It gives the best `courtyard` PSNR/SSIM so far, yet fails the M32 gate on `bonsai`. The next step should improve calibration-view representativeness and candidate diversity instead of further hand-tuning local score weights.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage32_measured_candidate_rank_report.md`
+- `outputs/carnet/meshprior/stage32_measured_candidate_rank/`
+
+---
+
 ## 2026-05-02 — Stage31 PRISM candidate-quality ranking — SOFT PASS / diagnostic PASS
 
 **Outcome**: Added opt-in candidate-quality ranking for PRISM candidate pruning. The selector can now rank cap-limited candidates by a blended score that rewards raw prune pressure while penalizing render, geometry, orientation, utility, and uncertainty risk. The mechanism is stable and logged, but it is not promoted as the default because the public-scene result is mixed.

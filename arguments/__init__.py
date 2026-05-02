@@ -312,6 +312,10 @@ class OptimizationParams(ParamGroup):
         self.prism_candidate_quality_orientation_penalty = 0.25
         self.prism_candidate_quality_utility_penalty = 0.25
         self.prism_candidate_quality_uncertainty_penalty = 0.25
+        self.prism_candidate_measured_impact_rank = False
+        self.prism_candidate_measured_pool_multiplier = 4.0
+        self.prism_candidate_measured_group_size = 256
+        self.prism_candidate_measured_max_groups = 8
         self.prism_no_candidate_retry_iters = 10
         self.prism_adaptive_candidate_retry_on_rollback = False
         self.prism_adaptive_candidate_ratio_decay = 0.5
