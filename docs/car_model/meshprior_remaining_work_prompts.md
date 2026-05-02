@@ -4,7 +4,7 @@ Date: 2026-05-01
 
 ## Current State
 
-SPCarNet MeshPrior is about `86%` complete as a research-codebase transformation. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, and M23.5 integrated topology-control smoke are implemented. The remaining core is tuned medium/long integrated topology control plus multi-scene evidence. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `90%` complete as a research-codebase transformation and about `65%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, and M24 full-budget integrated topology control are implemented. The remaining core is an integrated topology Pareto sweep plus multi-scene evidence. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -20,6 +20,8 @@ Key codebase links:
 - Paper evidence package: `docs/car_model/meshprior_stage22_paper_evidence_report.md`
 - Claim-risk audit: `docs/car_model/meshprior_stage23_claim_risk_audit.md`
 - Integrated topology smoke: `docs/car_model/meshprior_stage23_5_integrated_topology_implementation_report.md`
+- Tuned medium integrated topology report: `docs/car_model/meshprior_stage23_6_tuned_integrated_topology_report.md`
+- Full integrated topology report: `docs/car_model/meshprior_stage24_full_integrated_topology_report.md`
 
 Known W&B runs:
 
@@ -36,6 +38,10 @@ Known W&B runs:
 - M23.5 integrated topology debug, protected 800 iter: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/5ekk5gjz`
 - M23.5 integrated topology debug, protected 350 iter: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/esyvtvwn`
 - M23.5 integrated topology trigger 180 iter: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/an7l2ec0`
+- M23.6 tuned medium v2: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/j0c8zwkx`
+- M24 full v1 early PRISM: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/7i6n8jfj`
+- M24 full v2 late 5% safety reject: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ytex9896`
+- M24 full v3 late 1% fine prune: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/e92jwttk`
 
 ## Operating Rules
 
@@ -83,7 +89,9 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Unified paper-evidence package | original prompts M22 | SOFT PASS | M22 collector/report/smoke are implemented and reproducible; missing rows stay visible for second scene, integrated topology control, and render-gated full insertion. |
 | Claim-risk audit and paper decision | original prompts M23 | PASS | Strongest defensible story is conservative proposal/gate framework plus topology-aware diagnostics, not a full scene-optimization improvement claim. |
 | Integrated optimization-time topology control smoke | execution finding / original Layer F | PASS | M23.5 proves PRISM can commit a training-time candidate prune with rollback metadata and eval artifacts; 180-iter relaxed-threshold result is a mechanism proof, not a quality claim. |
-| Tuned medium integrated topology-control run | execution finding | TODO | Restore conservative thresholds enough for paper relevance while still allowing scheduled topology edits; run with online W&B, render metrics, COLMAP proxy geometry, and collector. |
+| Tuned medium integrated topology-control run | execution finding | PASS | M23.6 v2 commits two training-time PRISM edits at 2000 iterations and improves over current-branch 2000 with far fewer triangles. |
+| Full-budget integrated topology-control run | execution finding | PASS | M24-v3 commits two late 1% PRISM edits at 7000 iterations with online W&B and independent metrics. Quality is close to current branch but topology reduction is small. |
+| Integrated topology Pareto sweep | execution finding | TODO | Need a stronger M24.1 row that approaches the M21.5 posthoc prune_50 topology/quality tradeoff inside training. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
@@ -101,6 +109,8 @@ These are not new research directions. They are constraints discovered while imp
 8. The Stage17 MeshPrior resume variant is unstable as a long-budget method: it improves at 2000 iterations but degrades badly by 7000 iterations.
 9. M21.5 topology pruning is post-hoc checkpoint-copy pruning, not yet an integrated optimization-time topology controller. It is valid as a diagnostic evidence row, not as the final algorithm.
 10. M23.5 shows the integrated PRISM commit path works, but default protection is too conservative for short early smokes. Fully relaxed protection can trigger edits but is not a final paper setting.
+11. M24-v1 shows that too many early PRISM rounds can suppress standard Mesh Splatting densification by keeping the controller in freeze/recovery/stat phases. Full runs should use late PRISM or explicitly account for densification windows.
+12. M24-v2/v3 show the counterfactual gate is conservative: `5%` late candidate pruning was fully rejected, while `1%` late candidate pruning committed twice and then rejected later rounds.
 
 ---
 
@@ -135,6 +145,19 @@ This is a mechanism proof. The successful trigger deliberately relaxed protectio
 
 Turn the M23.5 mechanism proof into a meaningful medium-budget method row on `parking_phone_tiny`.
 
+## Status
+
+`PASS` on 2026-05-02.
+
+## Result
+
+- successful run: `tuned_medium_v2_2000iter`
+- W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/j0c8zwkx`
+- committed PRISM edits: iteration `551` (`64497 -> 63853`) and `922` (`63853 -> 63215`)
+- independent render: PSNR `12.046110`, SSIM `0.286099`, LPIPS `0.629034`
+- COLMAP proxy: depth AbsRel `0.393866`, normal mean angle `51.945426`
+- collector gate: `PASS`
+
 ## Required Work
 
 1. Start from M23.5 code and reports.
@@ -164,6 +187,48 @@ Turn the M23.5 mechanism proof into a meaningful medium-budget method row on `pa
 `SOFT PASS` if the run completes but does not improve over the topology-controlled diagnostic row.
 
 `FAIL` if training crashes, W&B is missing without documented fallback, or rollback/final-cleanup accounting is absent.
+
+---
+
+# Prompt M24 — Full-budget integrated topology-control run
+
+## Goal
+
+Run full-budget 7000-iteration integrated topology control on `parking_phone_tiny`, compare against clean/current/M21.5 baselines, and identify whether the integrated controller is ready for paper evidence.
+
+## Status
+
+`PASS` on 2026-05-02.
+
+## Result
+
+- best current row: `full_v3_late_fine_prune_7000iter`
+- W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/e92jwttk`
+- PRISM decisions:
+  - iteration `6151`: `612458 -> 606334`, committed
+  - iteration `6272`: `606334 -> 600271`, committed
+  - iterations `6393` and `6394`: rejected
+- independent render: PSNR `17.042757`, SSIM `0.529476`, LPIPS `0.454884`
+- COLMAP proxy: depth AbsRel `0.082815`, normal mean angle `43.394721`
+- final topology: `823651` triangles, `1058219` vertices
+- collector gate: `PASS`
+
+## Decision
+
+M24 is a real integrated optimization-time topology-control milestone, but not yet a decisive paper headline. It proves safe training-time PRISM commits at full budget while preserving near-current render quality. It does not yet match the topology reduction of M21.5 `prune_50`.
+
+## Next Prompt: M24.1
+
+Run a late-PRISM Pareto sweep:
+
+1. Keep W&B online.
+2. Use late geometry acquisition (`6000` or later) so normal densification is not suppressed.
+3. Sweep candidate ratios `{0.005, 0.01, 0.02}` and candidate rounds `{4, 8}`.
+4. Keep counterfactual gate enabled.
+5. Report accepted/rejected rounds, topology, render metrics, COLMAP proxy geometry, and final-cleanup state.
+6. Stop when a row approaches M21.5 `prune_50` quality/topology from inside training or when the safety gate clearly blocks that Pareto region.
+
+Gate: `PASS` if at least one integrated row improves topology materially over current branch while preserving render metrics near current/M21.5. `SOFT PASS` if only safety-rejection evidence is obtained. `FAIL` if W&B, metrics, rollback, or final-cleanup accounting are missing.
 
 ---
 

@@ -1597,3 +1597,54 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `outputs/carnet/meshprior/parking_phone_tiny/stage23_5_integrated_topology/prism_unprotected_trigger_180iter/summary/stage23_5_integrated_topology_summary.md`
 
 ---
+
+## 2026-05-02 — Stage23.6 tuned medium integrated topology control — PASS
+
+**Outcome**: Ran tuned 2000-iteration integrated PRISM topology control. The first `tuned_medium_2000iter` attempt showed that `orientation_keep=1.0` protected all triangles under threshold `0.85`. The useful `tuned_medium_v2_2000iter` run set `--prism_keep_orientation_threshold 1.1`, committed two counterfactual-accepted PRISM candidate edits, and passed collector checks.
+
+**W&B**:
+- v1 diagnostic: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/3209wi9z`
+- v2 useful row: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/j0c8zwkx`
+
+**V2 metrics**:
+- PRISM commits: `551` (`64497 -> 63853`) and `922` (`63853 -> 63215`)
+- independent render: PSNR `12.046110`, SSIM `0.286099`, LPIPS `0.629034`
+- COLMAP proxy: depth AbsRel `0.393866`, normal mean angle `51.945426`
+- collector gate: `PASS`
+
+**Decision**: Stage23.6 is a medium-budget mechanism `PASS`. It validates tuned training-time PRISM commits, but does not provide a final long-budget paper claim.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage23_6_tuned_integrated_topology_design.md`
+- `docs/car_model/meshprior_stage23_6_tuned_integrated_topology_report.md`
+
+---
+
+## 2026-05-02 — Stage24 full integrated topology control — PASS
+
+**Outcome**: Ran three 7000-iteration M24 variants with online W&B and full post-evaluation. M24-v1 proved that early/repeated PRISM rounds can over-freeze standard densification and hurt quality. M24-v2 delayed PRISM and rejected aggressive 5% edits through the counterfactual gate. M24-v3 used late 1% PRISM edits and became the first full-budget integrated row with committed training-time topology edits.
+
+**W&B**:
+- v1 early PRISM: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/7i6n8jfj`
+- v2 late 5% reject: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ytex9896`
+- v3 late 1% commit: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/e92jwttk`
+
+**M24-v3 metrics**:
+- PRISM decisions: commit at `6151` (`612458 -> 606334`), commit at `6272` (`606334 -> 600271`), reject at `6393` and `6394`
+- independent render: PSNR `17.042757`, SSIM `0.529476`, LPIPS `0.454884`
+- COLMAP proxy: depth AbsRel `0.082815`, normal mean angle `43.394721`
+- final topology: `823651` triangles, `1058219` vertices
+- collector gate: `PASS`
+
+**Comparison**:
+- current branch 7000: PSNR `17.204679`, SSIM `0.535045`, LPIPS `0.450750`, depth AbsRel `0.076126`, normal `45.561976`, triangles `833775`
+- M21.5 `prune_50`: PSNR `17.051889`, SSIM `0.523914`, LPIPS `0.465400`, depth AbsRel `0.083265`, normal `45.825681`, triangles `416888`
+- M24-v3 preserves near-current render quality and improves normal proxy geometry, but topology reduction is still small compared with posthoc M21.5.
+
+**Decision**: Stage24 is a real integrated optimization-time topology-control `PASS`, not the final paper headline. The next technical prompt should be M24.1 late-PRISM Pareto sweep, plus second-scene data as soon as available.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage24_full_integrated_topology_design.md`
+- `docs/car_model/meshprior_stage24_full_integrated_topology_report.md`
+
+---

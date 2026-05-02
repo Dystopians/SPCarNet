@@ -1663,6 +1663,52 @@ M15 if the learned shape field is too weak or retrieval looks stronger.
 M16 if hidden-side proposals need symmetry/part confidence.
 ```
 
+## Current execution update — 2026-05-02
+
+The original prompt stack has been extended in `docs/car_model/meshprior_remaining_work_prompts.md` because execution uncovered additional required stages beyond M14.
+
+Current status:
+
+```text
+M23.5 integrated topology-control smoke: PASS
+M23.6 tuned medium integrated topology control: PASS
+M24 full-budget integrated topology control: PASS
+Next: M24.1 late-PRISM Pareto sweep
+```
+
+Key reports:
+
+```text
+docs/car_model/meshprior_stage23_5_integrated_topology_implementation_report.md
+docs/car_model/meshprior_stage23_6_tuned_integrated_topology_report.md
+docs/car_model/meshprior_stage24_full_integrated_topology_report.md
+docs/car_model/meshprior_remaining_work_prompts.md
+docs/car_model/SPCarNet_research_log.md
+```
+
+Best M24 row:
+
+```text
+run: full_v3_late_fine_prune_7000iter
+W&B: https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/e92jwttk
+PRISM commits: iter 6151 and 6272
+independent render: PSNR 17.042757, SSIM 0.529476, LPIPS 0.454884
+COLMAP proxy: depth AbsRel 0.082815, normal mean angle 43.394721
+topology: 823651 triangles, 1058219 vertices
+collector: PASS
+```
+
+Decision:
+
+```text
+M24 proves real full-budget training-time topology commits with rollback metadata,
+W&B tracking, independent metrics, and collector validation. It is a milestone
+for the codebase, but the empirical paper claim is still not complete because
+the topology reduction is modest relative to the posthoc M21.5 prune_50 row.
+The next prompt should seek a stronger integrated Pareto point before adding
+new method complexity.
+```
+
 ---
 
 ## Final desired research story
