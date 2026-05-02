@@ -171,6 +171,7 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "use_roi_protect": bool(getattr(opt, "prism_use_roi_protect", False)),
         "calib_num_hard_train_views": int(getattr(opt, "prism_calib_num_hard_train_views", 0)),
         "calib_num_buffer_views": int(getattr(opt, "prism_calib_num_buffer_views", 8)),
+        "calib_diverse_views": bool(getattr(opt, "prism_calib_diverse_views", False)),
         "save_debug_json": bool(getattr(opt, "prism_save_debug_json", False)),
         "disable_final_cleanup_prune": bool(getattr(opt, "prism_disable_final_cleanup_prune", True)),
         "save_pre_cleanup_checkpoint": bool(getattr(opt, "prism_save_pre_cleanup_checkpoint", True)),
@@ -297,6 +298,9 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
                 prefer_observable_views=bool(getattr(opt, "prism_calib_prefer_observable_views", True)),
                 min_depth_matches_per_view=int(getattr(opt, "prism_calib_min_depth_matches_per_view", 24)),
                 min_normal_matches_per_view=int(getattr(opt, "prism_calib_min_normal_matches_per_view", 8)),
+                diverse_views=bool(getattr(opt, "prism_calib_diverse_views", False)),
+                num_diverse_test_views=int(getattr(opt, "prism_calib_diverse_test_views", 0)),
+                num_diverse_train_views=int(getattr(opt, "prism_calib_diverse_train_views", 0)),
             )
             calibration_views = build_calibration_set(
                 scene=scene,
@@ -309,6 +313,20 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
                 proxy_ctx=proxy_ctx,
                 proxy_cfg=proxy_cfg,
             )
+            if bool(getattr(opt, "prism_save_debug_json", False)):
+                debug_dir = os.path.join(scene.model_path, "prism_debug")
+                os.makedirs(debug_dir, exist_ok=True)
+                manifest = getattr(calib_cfg, "_last_manifest", [])
+                with open(os.path.join(debug_dir, "calibration_views.json"), "w", encoding="utf-8") as f:
+                    json.dump(
+                        {
+                            "diverse_views": bool(getattr(opt, "prism_calib_diverse_views", False)),
+                            "num_views": int(len(calibration_views)),
+                            "views": manifest,
+                        },
+                        f,
+                        indent=2,
+                    )
     geom_acq_until = int(getattr(opt, "prism_geometry_acq_until_iter", -1))
     if geom_acq_until < 0:
         # Reuse existing staging landmarks: densification + restricted-delaunay settling.

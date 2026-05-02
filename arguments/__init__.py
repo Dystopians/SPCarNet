@@ -281,6 +281,9 @@ class OptimizationParams(ParamGroup):
         self.prism_calib_prefer_observable_views = True
         self.prism_calib_min_depth_matches_per_view = 24
         self.prism_calib_min_normal_matches_per_view = 8
+        self.prism_calib_diverse_views = False
+        self.prism_calib_diverse_test_views = 0
+        self.prism_calib_diverse_train_views = 0
         self.prism_save_debug_json = False
         self.prism_changed_pixel_threshold = 0.02
         self.prism_gate_min_delta_psnr_db = -0.05

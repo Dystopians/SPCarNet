@@ -1,7 +1,7 @@
 import json
 import os
 from dataclasses import asdict, dataclass
-from typing import Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 import torch
@@ -38,6 +38,9 @@ class CalibrationConfig:
     prefer_observable_views: bool = True
     min_depth_matches_per_view: int = 24
     min_normal_matches_per_view: int = 8
+    diverse_views: bool = False
+    num_diverse_test_views: int = 0
+    num_diverse_train_views: int = 0
 
 
 @dataclass
@@ -55,9 +58,9 @@ class CompactionSelectionConfig:
 class CounterfactualDecision:
     accept: bool
     num_candidates: int
-    deltas: Dict[str, float]
-    baseline: Dict[str, float]
-    counterfactual: Dict[str, float]
+    deltas: Dict[str, Any]
+    baseline: Dict[str, Any]
+    counterfactual: Dict[str, Any]
     reason: str
     num_views: int
     num_depth_views_used: int
@@ -163,6 +166,15 @@ def _compute_view_difficulty(
     return float(mae + depth_penalty + normal_penalty)
 
 
+def _observability_passes(obs: Dict[str, Any], proxy_cfg: GeometryProxyConfig, cfg: CalibrationConfig) -> bool:
+    if int(obs["depth_matches"]) < int(max(0, cfg.min_depth_matches_per_view)):
+        return False
+    if bool(proxy_cfg.compute_normal):
+        if int(obs["normal_matches"]) < int(max(0, cfg.min_normal_matches_per_view)):
+            return False
+    return True
+
+
 def _is_view_observable(
     view,
     proxy_ctx: GeometryProxyContext,
@@ -170,11 +182,57 @@ def _is_view_observable(
     cfg: CalibrationConfig,
 ) -> bool:
     obs = estimate_view_sparse_observability(view=view, ctx=proxy_ctx, cfg=proxy_cfg)
-    if int(obs["depth_matches"]) < int(max(0, cfg.min_depth_matches_per_view)):
+    return _observability_passes(obs, proxy_cfg, cfg)
+
+
+def _evenly_spaced(items: Sequence, count: int) -> List:
+    if count <= 0 or len(items) == 0:
+        return []
+    n = min(int(count), len(items))
+    if n == len(items):
+        return list(items)
+    idxs = np.linspace(0, len(items) - 1, num=n)
+    out = []
+    used = set()
+    for idx in idxs:
+        i = int(round(float(idx)))
+        if i in used:
+            continue
+        used.add(i)
+        out.append(items[i])
+    return out
+
+
+def _try_append_calibration_view(
+    selected: List,
+    selected_names: set,
+    cam,
+    source: str,
+    proxy_ctx: GeometryProxyContext,
+    proxy_cfg: GeometryProxyConfig,
+    cfg: CalibrationConfig,
+    manifest: Optional[List[Dict]] = None,
+) -> bool:
+    name = normalize_image_key(getattr(cam, "image_name", ""))
+    if not name or name in selected_names:
         return False
-    if bool(proxy_cfg.compute_normal):
-        if int(obs["normal_matches"]) < int(max(0, cfg.min_normal_matches_per_view)):
-            return False
+    obs = estimate_view_sparse_observability(view=cam, ctx=proxy_ctx, cfg=proxy_cfg)
+    if bool(cfg.prefer_observable_views) and not _observability_passes(obs, proxy_cfg, cfg):
+        return False
+    selected.append(cam)
+    selected_names.add(name)
+    if manifest is not None:
+        manifest.append(
+            {
+                "image_name": str(getattr(cam, "image_name", "")),
+                "normalized_name": str(name),
+                "source": str(source),
+                "depth_matches": int(obs.get("depth_matches", 0)),
+                "normal_matches": int(obs.get("normal_matches", 0)),
+                "observability_score": float(obs.get("score", 0.0)),
+                "observability_reason": str(obs.get("reason", "unknown")),
+            }
+        )
     return True
 
 
@@ -194,6 +252,34 @@ def build_calibration_set(
 
     selected: List = []
     selected_names = set()
+    manifest: List[Dict] = []
+
+    if bool(cfg.diverse_views):
+        n_test = int(cfg.num_diverse_test_views) if int(cfg.num_diverse_test_views) > 0 else int(cfg.num_buffer_views)
+        for cam in _evenly_spaced(test_cams, n_test):
+            _try_append_calibration_view(
+                selected=selected,
+                selected_names=selected_names,
+                cam=cam,
+                source="diverse_test",
+                proxy_ctx=proxy_ctx,
+                proxy_cfg=proxy_cfg,
+                cfg=cfg,
+                manifest=manifest,
+            )
+        train_pool = train_cams[: min(len(train_cams), int(cfg.hard_view_pool_size))]
+        n_train = int(cfg.num_diverse_train_views) if int(cfg.num_diverse_train_views) > 0 else int(cfg.num_hard_train_views)
+        for cam in _evenly_spaced(train_pool, n_train):
+            _try_append_calibration_view(
+                selected=selected,
+                selected_names=selected_names,
+                cam=cam,
+                source="diverse_train",
+                proxy_ctx=proxy_ctx,
+                proxy_cfg=proxy_cfg,
+                cfg=cfg,
+                manifest=manifest,
+            )
 
     dropped = []
     if getattr(dataset, "split_strategy", "") == "file":
@@ -208,6 +294,7 @@ def build_calibration_set(
                 if (not bool(cfg.prefer_observable_views)) or _is_view_observable(cam, proxy_ctx, proxy_cfg, cfg):
                     selected.append(cam)
                     selected_names.add(name)
+                    manifest.append({"image_name": str(getattr(cam, "image_name", "")), "normalized_name": str(name), "source": "split_dropped"})
                 if len(selected) >= int(cfg.num_buffer_views):
                     break
         if len(selected) < int(cfg.num_buffer_views):
@@ -222,6 +309,7 @@ def build_calibration_set(
                 if (not bool(cfg.prefer_observable_views)) or _is_view_observable(cam, proxy_ctx, proxy_cfg, cfg):
                     selected.append(cam)
                     selected_names.add(name)
+                    manifest.append({"image_name": str(getattr(cam, "image_name", "")), "normalized_name": str(name), "source": "split_dropped_all"})
                 if len(selected) >= int(cfg.num_buffer_views):
                     break
 
@@ -233,6 +321,18 @@ def build_calibration_set(
             if (not bool(cfg.prefer_observable_views)) or _is_view_observable(cam, proxy_ctx, proxy_cfg, cfg):
                 selected.append(cam)
                 selected_names.add(name)
+                obs = estimate_view_sparse_observability(view=cam, ctx=proxy_ctx, cfg=proxy_cfg)
+                manifest.append(
+                    {
+                        "image_name": str(getattr(cam, "image_name", "")),
+                        "normalized_name": str(name),
+                        "source": "test_prefix",
+                        "depth_matches": int(obs.get("depth_matches", 0)),
+                        "normal_matches": int(obs.get("normal_matches", 0)),
+                        "observability_score": float(obs.get("score", 0.0)),
+                        "observability_reason": str(obs.get("reason", "unknown")),
+                    }
+                )
             if len(selected) >= int(cfg.num_buffer_views):
                 break
 
@@ -269,6 +369,28 @@ def build_calibration_set(
                 continue
             selected.append(cam)
             selected_names.add(name)
+            obs = estimate_view_sparse_observability(view=cam, ctx=proxy_ctx, cfg=proxy_cfg)
+            manifest.append(
+                {
+                    "image_name": str(getattr(cam, "image_name", "")),
+                    "normalized_name": str(name),
+                    "source": "hard_train",
+                    "hardness": float(hardness[int(idx)]),
+                    "depth_matches": int(obs.get("depth_matches", 0)),
+                    "normal_matches": int(obs.get("normal_matches", 0)),
+                    "observability_score": float(obs.get("score", 0.0)),
+                    "observability_reason": str(obs.get("reason", "unknown")),
+                }
+            )
+    for i, cam in enumerate(selected):
+        try:
+            setattr(cam, "_prism_calibration_index", int(i))
+        except Exception:
+            pass
+    try:
+        setattr(cfg, "_last_manifest", manifest)
+    except Exception:
+        pass
     return selected
 
 
@@ -416,6 +538,32 @@ def run_counterfactual_simulation(
     counterfactual = _aggregate_from_entries(entries=cf_entries, compute_normal=bool(proxy_cfg.compute_normal))
     changed_vals = [float(e["changed_pixel_ratio"]) for e in cf_entries if np.isfinite(e["changed_pixel_ratio"])]
     counterfactual["changed_pixel_ratio"] = float(np.mean(changed_vals)) if len(changed_vals) > 0 else float("nan")
+    per_view_deltas = []
+    for i, v in enumerate(calibration_views):
+        b = baseline_entries[i]
+        c = cf_entries[i]
+        b_proxy = b.get("proxy", {})
+        c_proxy = c.get("proxy", {})
+        b_depth = b_proxy.get("depth_stats", None)
+        c_depth = c_proxy.get("depth_stats", None)
+        b_norm = b_proxy.get("normal_stats", None)
+        c_norm = c_proxy.get("normal_stats", None)
+        per_view_deltas.append(
+            {
+                "index": int(i),
+                "image_name": str(getattr(v, "image_name", "")),
+                "delta_psnr": float(c["psnr"] - b["psnr"]) if np.isfinite(c["psnr"]) and np.isfinite(b["psnr"]) else float("nan"),
+                "delta_mae": float(c["mae"] - b["mae"]) if np.isfinite(c["mae"]) and np.isfinite(b["mae"]) else float("nan"),
+                "changed_pixel_ratio": float(c.get("changed_pixel_ratio", float("nan"))),
+                "baseline_depth_points": int(b_proxy.get("depth_points", 0)),
+                "counterfactual_depth_points": int(c_proxy.get("depth_points", 0)),
+                "delta_absrel": float(c_depth["abs_rel"] - b_depth["abs_rel"]) if b_depth is not None and c_depth is not None else float("nan"),
+                "delta_mean_angle": float(c_norm["mean_ang_deg"] - b_norm["mean_ang_deg"]) if b_norm is not None and c_norm is not None else float("nan"),
+                "baseline_reason": str(b_proxy.get("reason", "unknown")),
+                "counterfactual_reason": str(c_proxy.get("reason", "unknown")),
+            }
+        )
+    counterfactual["per_view_deltas"] = per_view_deltas
 
     combined_reasons: Dict[str, int] = {}
     for reason_map in [baseline["dropped_views_reason_breakdown"], counterfactual["dropped_views_reason_breakdown"]]:

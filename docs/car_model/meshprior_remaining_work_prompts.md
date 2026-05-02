@@ -4,7 +4,7 @@ Date: 2026-05-02
 
 ## Current State
 
-SPCarNet MeshPrior is about `98%` complete as a research-codebase transformation and about `83%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, and M32 measured candidate-impact ranking are implemented. The remaining core is calibration-set representativeness, metric-path reconciliation, full-budget public-scene evidence, and paper-grade visual/failure analysis. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `98%` complete as a research-codebase transformation and about `84%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, M32 measured candidate-impact ranking, and M33 calibration-diversity diagnostics are implemented. The remaining core is post-commit candidate discovery, metric-path reconciliation, full-budget public-scene evidence, and paper-grade visual/failure analysis. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -36,6 +36,7 @@ Key codebase links:
 - Microbatch candidate gate report: `docs/car_model/meshprior_stage30_microbatch_gate_report.md`
 - Candidate-quality ranking report: `docs/car_model/meshprior_stage31_candidate_quality_report.md`
 - Measured candidate-rank report: `docs/car_model/meshprior_stage32_measured_candidate_rank_report.md`
+- Calibration-diversity report: `docs/car_model/meshprior_stage33_calibration_diversity_report.md`
 
 Known W&B runs:
 
@@ -90,6 +91,9 @@ Known W&B runs:
 - M32 Mip-NeRF 360 bonsai measured-rank cap512 adaptive 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/56l3tz23`
 - M32 ETH3D courtyard measured-rank cap512 adaptive 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/fb7jfcaj`
 - M32 Mip-NeRF 360 bonsai measured+quality diagnostic: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/xooe27um`
+- M33 parking diverse-calibration smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ms95810g`
+- M33 Mip-NeRF 360 bonsai diverse calibration 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/kg5htc8u`
+- M33 ETH3D courtyard diverse calibration 2000: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/w9c0b65f`
 
 ## Operating Rules
 
@@ -150,6 +154,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Microbatch candidate gating | execution finding / M30 | SOFT PASS / diagnostic PASS | Added opt-in `--prism_candidate_microbatch_gate`. Parking smoke passes. `bonsai` accepts `3/4` microbatches from cap1024 and `courtyard` accepts `4/4`, but cap512 remains the better conservative default because independent `bonsai` PSNR/LPIPS are worse. |
 | Candidate-quality ranking | execution finding / M31 | SOFT PASS / diagnostic PASS | Added opt-in `--prism_candidate_quality_rank`. Parking smoke passes. `courtyard` improves over M29 cap512, but `bonsai` is mixed, so the ranking is useful diagnostic infrastructure rather than a promoted default. |
 | Measured candidate-impact ranking | execution finding / M32 | SOFT PASS / diagnostic PASS | Added opt-in `--prism_candidate_measured_impact_rank`. Parking smoke passes and `courtyard` improves, but `bonsai` does not match Stage29 cap512, so no default promotion. |
+| Calibration-diversity diagnostics | execution finding / M33 | SOFT PASS / diagnostic PASS | Added opt-in `--prism_calib_diverse_views` plus manifest/per-view deltas. `bonsai` now exceeds Stage29 cap512 at equal topology; `courtyard` remains better than M29 but worse than M32 measured rank. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
@@ -184,6 +189,7 @@ These are not new research directions. They are constraints discovered while imp
 25. M30 microbatch gating shows that the cap1024 failure is not all-or-nothing: `bonsai` accepts `768/1024` cumulative candidates before rejecting the full set. However, independent metrics do not improve over cap512, so the next bottleneck is candidate quality/ranking, not simply candidate batch size.
 26. M31 hand-weighted candidate-quality ranking is mechanically stable and improves ETH3D `courtyard`, but it is not robust enough on Mip-NeRF 360 `bonsai`. The next ranking step should use measured calibration-view candidate impact instead of only local proxy tensors.
 27. M32 measured candidate-impact ranking shows local calibration acceptance is still not sufficient for public-scene test metrics: all measured groups can pass on `bonsai` while independent PSNR/SSIM/LPIPS remain worse than Stage29 cap512. The next bottleneck is calibration-set representativeness and view-diverse candidate diversity.
+28. M33 calibration diversity improves `bonsai` enough to beat Stage29 cap512 at equal topology, and the parking smoke demonstrates stricter view coverage can reject local degradations that a smaller calibration set misses. It does not solve the next bottleneck: after one cap512 edit, candidate selection often becomes empty, so the controller needs a second-stage post-commit candidate discovery path.
 
 ---
 
@@ -1030,6 +1036,46 @@ The mechanism is stable and useful, but it fails the M32 promotion gate because 
 
 ## Next Prompt: M33
 
+Completed below. The next active prompt is M34.
+
+# Prompt M33 — Calibration-set representativeness and view-diverse candidate selection
+
+## Status
+
+`SOFT PASS / diagnostic PASS` on 2026-05-02.
+
+## Goal
+
+Audit and improve PRISM counterfactual calibration representativeness so measured candidate ranking is not driven only by a small local hard-view set.
+
+## Result
+
+- Implemented default-off flags:
+  - `--prism_calib_diverse_views`
+  - `--prism_calib_diverse_test_views`
+  - `--prism_calib_diverse_train_views`
+- Added `prism_debug/calibration_views.json` with image name, source, sparse-match counts, observability reason, and hard-view score where applicable.
+- Added per-view counterfactual deltas to `counterfactual_gate_iter_*.json`.
+- Parking smoke W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ms95810g`
+- `bonsai` diverse-calibration W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/kg5htc8u`
+- `courtyard` diverse-calibration W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/w9c0b65f`
+- Report: `docs/car_model/meshprior_stage33_calibration_diversity_report.md`
+- Output root: `outputs/carnet/meshprior/stage33_calibration_diversity/`
+
+## Evidence
+
+- Parking smoke: strict diverse calibration rejected all edits; final topology stayed `64497`, and per-view deltas exposed local regressions.
+- `bonsai`: iter `1501` committed `634299 -> 633787`, calibration set had `24` views, independent PSNR `12.1999`, SSIM `0.2765`, LPIPS `0.6126`.
+- `courtyard`: iter `1501` committed `102919 -> 102407`, calibration set had `17` views, independent PSNR `15.0737`, SSIM `0.4840`, LPIPS `0.5790`.
+
+## Gate
+
+`SOFT PASS / diagnostic PASS`.
+
+Stage33 passes the `bonsai` promotion threshold against Stage29 cap512 with equal topology, and it improves over Stage29 on `courtyard`. It is not the universal default because Stage32 measured rank still gives the stronger `courtyard` PSNR/SSIM row.
+
+## Original Required Work
+
 Calibration-set representativeness and view-diverse candidate selection:
 
 1. Keep Stage29 cap512 as the conservative default.
@@ -1042,3 +1088,18 @@ Calibration-set representativeness and view-diverse candidate selection:
    - log the chosen view list and per-view counterfactual deltas.
 5. Rerun parking smoke, then `bonsai` first. Only rerun `courtyard` if `bonsai` reaches or exceeds Stage29 cap512 independent metrics.
 6. Gate as `PASS` only if `bonsai` and `courtyard` both match or improve Stage29 cap512 independent metrics with equal or lower topology.
+
+## Next Prompt: M34
+
+Post-commit candidate refresh and second-stage low-risk discovery:
+
+1. Keep Stage29 cap512, Stage32 measured rank, and Stage33 diverse calibration default-off unless explicitly selected.
+2. Investigate why candidate selection becomes empty after the first accepted cap512 edit on `bonsai` and `courtyard`.
+3. Add an opt-in post-commit candidate refresh mode that can search for a second low-risk candidate set after recovery:
+   - log raw eligible candidate count before the cap;
+   - log rejection reasons for no-candidate rounds;
+   - optionally relax only non-render risk thresholds after a successful recovery window;
+   - keep the counterfactual gate and rollback mandatory.
+4. Run a parking smoke with online W&B and strict debug JSON.
+5. Run `bonsai` first with Stage33 diverse calibration. Only run `courtyard` if `bonsai` keeps or improves Stage33 metrics and finds an additional committed edit or a well-explained no-candidate diagnosis.
+6. Gate as `PASS` only if a second useful edit is found without regressing independent `bonsai` metrics; otherwise gate as diagnostic if the no-candidate root cause is measured and documented.

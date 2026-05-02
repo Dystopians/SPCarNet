@@ -4,6 +4,28 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage33 PRISM calibration diversity diagnostics — SOFT PASS / diagnostic PASS
+
+**Outcome**: Added opt-in view-diverse PRISM calibration diagnostics. The counterfactual gate can now seed calibration with evenly spaced held-out/test views and train views before adding hard train views, writes `prism_debug/calibration_views.json`, and records per-view counterfactual deltas. This improves `bonsai` over Stage29 cap512 at equal topology, but does not beat Stage32 on `courtyard`.
+
+**W&B**:
+- parking diverse-calibration smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ms95810g`
+- `bonsai` diverse calibration: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/kg5htc8u`
+- `courtyard` diverse calibration: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/w9c0b65f`
+
+**Key metrics**:
+- parking smoke: diverse calibration rejected all candidate edits; final topology stayed `64497`, with per-view deltas exposing local regressions.
+- `bonsai`: iter `1501` committed `634299 -> 633787`; independent PSNR `12.1999`, SSIM `0.2765`, LPIPS `0.6126`.
+- `courtyard`: iter `1501` committed `102919 -> 102407`; independent PSNR `15.0737`, SSIM `0.4840`, LPIPS `0.5790`.
+
+**Decision**: Stage33 is useful safety and calibration infrastructure, not the new universal default. It should be used for diagnostic view coverage and scenes where local hard-view calibration was misleading. Stage29 cap512 remains the conservative baseline, while Stage32 remains the better `courtyard` measured-rank row.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage33_calibration_diversity_report.md`
+- `outputs/carnet/meshprior/stage33_calibration_diversity/`
+
+---
+
 ## 2026-05-02 — Stage32 PRISM measured candidate-impact ranking — SOFT PASS / diagnostic PASS
 
 **Outcome**: Added opt-in measured candidate-impact ranking. The controller can now draw a larger candidate pool, split it into deterministic groups, evaluate each group with the existing counterfactual calibration path, and select the final cap-limited candidate set from measured impact. The mechanism is stable and improves `courtyard`, but it does not beat Stage29 cap512 on `bonsai`.
