@@ -152,6 +152,9 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "disable_final_cleanup_prune": bool(getattr(opt, "prism_disable_final_cleanup_prune", True)),
         "save_pre_cleanup_checkpoint": bool(getattr(opt, "prism_save_pre_cleanup_checkpoint", True)),
         "post_commit_recollect_iters": int(getattr(opt, "prism_post_commit_recollect_iters", 300)),
+        "freeze_densification_after_first_commit": bool(
+            getattr(opt, "prism_freeze_densification_after_first_commit", False)
+        ),
         "force_recompute_scores_after_recollect": bool(
             getattr(opt, "prism_force_recompute_scores_after_recollect", True)
         ),
@@ -400,6 +403,8 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "round_snapshot": None,
         "last_topology_change_iter": int(init_iter),
         "last_topology_change_reason": "init",
+        "densification_frozen_after_prism_commit": 0,
+        "densification_freeze_iter": -1,
         "final_cleanup_enabled": 0,
         "final_cleanup_pruned": 0,
         "pre_cleanup_checkpoint": "",
@@ -1737,7 +1742,13 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
         candidate_prune_ratio=cand_ratio,
     )
     if candidate_ids.numel() == 0:
-        return {"committed": False, "pruned_count": 0, "counterfactual_accept": 0, "rollback": 0}
+        return {
+            "committed": False,
+            "pruned_count": 0,
+            "counterfactual_accept": 0,
+            "rollback": 0,
+            "no_candidates": 1,
+        }
 
     counterfactual_accept = 0
     rollback = 0
@@ -2563,6 +2574,11 @@ def training(
                 tb_writer.add_scalar("prism/final_cleanup_enabled", float(prism_state.get("final_cleanup_enabled", 0)), iteration)
                 tb_writer.add_scalar("prism/final_cleanup_pruned", float(prism_state.get("final_cleanup_pruned", 0)), iteration)
                 tb_writer.add_scalar(
+                    "prism/densification_frozen_after_commit",
+                    float(prism_state.get("densification_frozen_after_prism_commit", 0)),
+                    iteration,
+                )
+                tb_writer.add_scalar(
                     "prism/pre_cleanup_checkpoint",
                     1.0 if str(prism_state.get("pre_cleanup_checkpoint", "")) else 0.0,
                     iteration,
@@ -2608,6 +2624,9 @@ def training(
                     "prism/rollback": float(prism_state.get("rollback", 0)),
                     "prism/rollback_by_validation": float(prism_state.get("rollback_by_validation", 0)),
                     "prism/validation_pass": float(prism_state.get("last_validation_pass", 1)),
+                    "prism/densification_frozen_after_commit": float(
+                        prism_state.get("densification_frozen_after_prism_commit", 0)
+                    ),
                     "prism/post_commit_recollect_remaining": float(
                         getattr(controller, "post_commit_recollect_remaining", 0) if controller is not None else 0
                     ),
@@ -2755,13 +2774,18 @@ def training(
                 prism_state["counterfactual_accept"] = int(prune_result.get("counterfactual_accept", 0))
                 prism_state["rollback"] = int(prune_result.get("rollback", 0))
                 if controller is not None:
-                    controller.report_prune_result(
-                        prune_mode=str(phase_info.get("prune_mode", "candidate")),
-                        committed=bool(prune_result.get("committed", False)),
-                        pruned_count=int(prune_result.get("pruned_count", 0)),
-                        counterfactual_accept=int(prune_result.get("counterfactual_accept", 0)),
-                        rollback=int(prune_result.get("rollback", 0)),
-                    )
+                    if bool(prune_result.get("no_candidates", 0)):
+                        controller.report_no_candidate_retry(
+                            retry_iters=int(getattr(opt, "prism_no_candidate_retry_iters", 10))
+                        )
+                    else:
+                        controller.report_prune_result(
+                            prune_mode=str(phase_info.get("prune_mode", "candidate")),
+                            committed=bool(prune_result.get("committed", False)),
+                            pruned_count=int(prune_result.get("pruned_count", 0)),
+                            counterfactual_accept=int(prune_result.get("counterfactual_accept", 0)),
+                            rollback=int(prune_result.get("rollback", 0)),
+                        )
                 post_prune_triangle_count = int(triangles._triangle_indices.shape[0])
                 _save_prism_round_meta(
                     scene=scene,
@@ -2774,12 +2798,19 @@ def training(
                         "committed": bool(prune_result.get("committed", False)),
                         "counterfactual_accept": int(prune_result.get("counterfactual_accept", 0)),
                         "rollback": int(prune_result.get("rollback", 0)),
+                        "no_candidates": int(prune_result.get("no_candidates", 0)),
                         "pre_prune_triangle_count": int(pre_prune_triangle_count),
                         "post_prune_triangle_count": int(post_prune_triangle_count),
                         "recollect_iters_used": int(getattr(controller, "last_recollect_iters_used", 0) if controller is not None else 0),
                     },
                 )
                 if bool(prune_result.get("committed", False)):
+                    if (
+                        str(phase_info.get("prune_mode", "candidate")) == "candidate"
+                        and bool(prism_state["cfg"].get("freeze_densification_after_first_commit", False))
+                    ):
+                        prism_state["densification_frozen_after_prism_commit"] = 1
+                        prism_state["densification_freeze_iter"] = int(iteration)
                     if bool(getattr(opt, "prism_round_checkpoint", True)):
                         post_ckpt_dir = _save_prism_round_checkpoint(
                             scene=scene,
@@ -2836,9 +2867,12 @@ def training(
                     triangles.vertex_weight[triangles._triangle_indices]
                 )  # [T,3]
 
-                needs_densification = (iteration < opt.densify_until_iter and 
-                                     iteration % opt.densification_interval == 0 and 
-                                     iteration > opt.densify_from_iter)
+                needs_densification = (
+                    iteration < opt.densify_until_iter
+                    and iteration % opt.densification_interval == 0
+                    and iteration > opt.densify_from_iter
+                    and not bool(prism_state.get("densification_frozen_after_prism_commit", 0))
+                )
                 
                 if needs_densification:
                     triangles.add_new_gs(iteration, cap_max=opt.max_points, splitt_large_triangles=splitt_large_triangles)

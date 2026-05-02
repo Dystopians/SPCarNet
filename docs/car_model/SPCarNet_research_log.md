@@ -1648,3 +1648,62 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_stage24_full_integrated_topology_report.md`
 
 ---
+
+## 2026-05-02 — Stage24.1 late-PRISM Pareto sweep — PASS
+
+**Outcome**: Ran three late-PRISM 7000-iteration Pareto rows with online W&B and full post-evaluation. M24.1 produced the strongest integrated topology-control row so far: `pareto_ratio0p005_rounds8_retryfix_7000iter` commits five late candidate edits and ends at `723438` triangles, below both current branch 7000 (`833775`) and M24-v3 (`823651`) while keeping similar independent render and better normal proxy geometry.
+
+**W&B**:
+- 0.5% legacy no-candidate diagnostic: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/bqc4w18e`
+- 0.5% retryfix best topology row: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/jnn9yauw`
+- 1% retryfix throttle row: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/0n7kzim5`
+
+**Best M24.1 metrics**:
+- run: `pareto_ratio0p005_rounds8_retryfix_7000iter`
+- PRISM decisions: `5` effective rounds, `445` no-candidate retry events, `5` commits
+- independent render: PSNR `16.967005`, SSIM `0.530894`, LPIPS `0.465932`
+- COLMAP proxy: depth AbsRel `0.082264`, normal mean angle `42.667905`
+- final topology: `723438` triangles, `904493` vertices
+- collector gate: `PASS`
+
+**Comparison**:
+- current branch 7000: PSNR `17.204679`, SSIM `0.535045`, LPIPS `0.450750`, depth AbsRel `0.076126`, normal `45.561976`, triangles `833775`
+- M24-v3: PSNR `17.042757`, SSIM `0.529476`, LPIPS `0.454884`, depth AbsRel `0.082815`, normal `43.394721`, triangles `823651`
+- M21.5 `prune_50`: PSNR `17.051889`, SSIM `0.523914`, LPIPS `0.465400`, depth AbsRel `0.083265`, normal `45.825681`, triangles `416888`
+
+**Code finding**: no-candidate attempts were previously able to consume candidate rounds. The controller now records them as retry events, does not spend an effective candidate round, and throttles retry attempts with `prism_no_candidate_retry_iters`.
+
+**Decision**: M24.1 is an integrated topology-control `PASS`, but still not a final paper headline. The next prompt is M24.2 topology retention, because late densification can partially undo accepted PRISM topology edits.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage24_1_late_prism_pareto_design.md`
+- `docs/car_model/meshprior_stage24_1_late_prism_pareto_report.md`
+
+---
+
+## 2026-05-02 — Stage24.2 topology retention — PASS
+
+**Outcome**: Added an opt-in schedule flag, `--prism_freeze_densification_after_first_commit`, and ran a 7000-iteration topology-retention row. This is the strongest result so far: final topology drops to `254491` triangles while independent render and COLMAP proxy metrics improve over current branch, M21.5 `prune_50`, M24-v3, and M24.1 best on the available single scene.
+
+**W&B**:
+- freeze after first commit: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/vsv2bs79`
+
+**Metrics**:
+- PRISM decisions: `8` effective rounds, `27` no-candidate retry events, `2` commits, `6` rollback-protected rejects
+- independent render: PSNR `17.314823`, SSIM `0.559230`, LPIPS `0.442099`
+- COLMAP proxy: depth AbsRel `0.078840`, normal mean angle `41.010093`
+- final topology: `254491` triangles, `463687` vertices
+- collector gate: `PASS`
+
+**Comparison**:
+- M21.5 `prune_50`: PSNR `17.051889`, SSIM `0.523914`, LPIPS `0.465400`, depth AbsRel `0.083265`, normal `45.825681`, triangles `416888`
+- M24.1 best: PSNR `16.967005`, SSIM `0.530894`, LPIPS `0.465932`, depth AbsRel `0.082264`, normal `42.667905`, triangles `723438`
+- M24.2 improves both topology and metrics on this scene.
+
+**Decision**: M24.2 upgrades the project from a mechanism proof to a plausible single-scene method result. Remaining NeurIPS-level risk is now generality and evidence quality: the next stage should be M25 multi-scene validation plus paper-grade visual/failure analysis.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage24_2_topology_retention_design.md`
+- `docs/car_model/meshprior_stage24_2_topology_retention_report.md`
+
+---

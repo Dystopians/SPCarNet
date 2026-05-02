@@ -36,6 +36,7 @@ def _round_rows(model: Path) -> list[dict[str, Any]]:
                 "committed": payload.get("committed"),
                 "counterfactual_accept": payload.get("counterfactual_accept"),
                 "rollback": payload.get("rollback"),
+                "no_candidates": payload.get("no_candidates", 0),
                 "pre_prune_triangle_count": payload.get("pre_prune_triangle_count"),
                 "post_prune_triangle_count": payload.get("post_prune_triangle_count"),
                 "recollect_iters_used": payload.get("recollect_iters_used"),
@@ -52,12 +53,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     cleanup_path = model / "prism_debug" / "final_cleanup_summary.json"
     triangles, vertices = _state_counts(model, iteration)
     rows = _round_rows(model)
-    committed_rows = [row for row in rows if bool(row.get("committed"))]
-    rollback_rows = [row for row in rows if int(row.get("rollback") or 0) > 0]
+    effective_rows = [row for row in rows if int(row.get("no_candidates") or 0) == 0]
+    retry_rows = [row for row in rows if int(row.get("no_candidates") or 0) > 0]
+    committed_rows = [row for row in effective_rows if bool(row.get("committed"))]
+    rollback_rows = [row for row in effective_rows if int(row.get("rollback") or 0) > 0]
     required_artifacts_exist = results_path.is_file() and geometry_path.is_file() and cleanup_path.is_file()
-    if rows and required_artifacts_exist and committed_rows:
+    if effective_rows and required_artifacts_exist and committed_rows:
         gate = "PASS"
-    elif rows and required_artifacts_exist:
+    elif effective_rows and required_artifacts_exist:
         gate = "SOFT PASS"
     else:
         gate = "FAIL"
@@ -69,7 +72,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "model": str(model),
         "iteration": iteration,
         "gate": gate,
-        "round_count": len(rows),
+        "round_count": len(effective_rows),
+        "retry_event_count": len(retry_rows),
+        "total_event_count": len(rows),
         "committed_round_count": len(committed_rows),
         "rollback_round_count": len(rollback_rows),
         "triangles": triangles,
@@ -90,6 +95,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "This is a short integrated topology-control smoke, not a paper-budget run.",
             "PASS means at least one training-time PRISM topology edit committed and all eval artifacts exist.",
             "SOFT PASS means PRISM scheduling/gate metadata and eval artifacts exist, but the short smoke did not commit a topology edit.",
+            "no_candidates retry events are excluded from round_count because they do not consume a PRISM candidate round.",
         ],
     }
     out = Path(args.output_dir)
@@ -104,7 +110,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         f.write("# Stage23.5 Integrated Topology-Control Smoke Summary\n\n")
         f.write(f"Gate: `{report['gate']}`\n\n")
         f.write(f"- iteration: `{iteration}`\n")
-        f.write(f"- rounds: `{len(rows)}`\n")
+        f.write(f"- effective rounds: `{len(effective_rows)}`\n")
+        f.write(f"- retry events: `{len(retry_rows)}`\n")
         f.write(f"- committed rounds: `{len(committed_rows)}`\n")
         f.write(f"- rollback rounds: `{len(rollback_rows)}`\n")
         f.write(f"- triangles: `{triangles}`\n")
@@ -112,7 +119,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         f.write(f"- PSNR / SSIM / LPIPS: `{report['render']['PSNR']}` / `{report['render']['SSIM']}` / `{report['render']['LPIPS']}`\n")
         f.write(f"- depth AbsRel: `{report['geometry']['depth_absrel']}`\n")
         f.write(f"- final cleanup enabled: `{cleanup.get('final_cleanup_enabled')}`\n")
-    print(json.dumps({"gate": report["gate"], "rounds": len(rows), "committed": len(committed_rows)}, indent=2))
+    print(
+        json.dumps(
+            {
+                "gate": report["gate"],
+                "rounds": len(effective_rows),
+                "retry_events": len(retry_rows),
+                "committed": len(committed_rows),
+            },
+            indent=2,
+        )
+    )
     return report
 
 

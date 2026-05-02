@@ -84,6 +84,7 @@ class PrismRoundController:
         self.last_counterfactual_accept = 0
         self.last_rollback = 0
         self.last_recollect_iters_used = 0
+        self.no_candidate_retry_remaining = 0
 
     def _transition_if_needed(self, iteration: int):
         if not bool(self.cfg.enabled):
@@ -150,6 +151,8 @@ class PrismRoundController:
         elif self.phase == PrismPhase.CANDIDATE_PRUNE_ROUND:
             prune_mode = "candidate"
             should_attempt_prune = bool(self._prune_pending)
+        if should_attempt_prune and self.no_candidate_retry_remaining > 0:
+            should_attempt_prune = False
 
         return {
             "phase": self.phase,
@@ -159,6 +162,9 @@ class PrismRoundController:
             "prune_mode": prune_mode,
             "post_commit_recollect_remaining": int(self.post_commit_recollect_remaining),
         }
+
+    def report_no_candidate_retry(self, retry_iters: int):
+        self.no_candidate_retry_remaining = int(max(0, retry_iters))
 
     def report_prune_result(self, prune_mode: str, committed: bool, pruned_count: int, counterfactual_accept: int, rollback: int):
         self.pruned_this_round = int(max(0, pruned_count))
@@ -207,6 +213,8 @@ class PrismRoundController:
             self.post_commit_recollect_remaining -= 1
             if self.post_commit_recollect_remaining == 0 and bool(getattr(self.cfg, "force_recompute_scores_after_recollect", True)):
                 self._force_recompute_after_recollect = True
+        if self.no_candidate_retry_remaining > 0:
+            self.no_candidate_retry_remaining -= 1
 
     def consume_force_recompute_flag(self) -> bool:
         flag = bool(self._force_recompute_after_recollect)

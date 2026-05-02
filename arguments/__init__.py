@@ -301,6 +301,8 @@ class OptimizationParams(ParamGroup):
         self.prism_dead_rounds = 1
         self.prism_candidate_rounds = 3
         self.prism_candidate_prune_ratio_per_round = 0.015
+        self.prism_no_candidate_retry_iters = 10
+        self.prism_freeze_densification_after_first_commit = False
         self.prism_recovery_iters = 400
         self.prism_post_commit_recollect_iters = 300
         self.prism_force_recompute_scores_after_recollect = True
@@ -429,4 +431,3 @@ def update_indoor(params):
     params.depth_lambda_final = 0.0
     params.iteration_mesh = 12000
     return params
-

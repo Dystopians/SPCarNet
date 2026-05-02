@@ -1673,7 +1673,9 @@ Current status:
 M23.5 integrated topology-control smoke: PASS
 M23.6 tuned medium integrated topology control: PASS
 M24 full-budget integrated topology control: PASS
-Next: M24.1 late-PRISM Pareto sweep
+M24.1 late-PRISM Pareto sweep: PASS
+M24.2 topology-retention after accepted integrated edits: PASS
+Next: M25 multi-scene validation and paper evidence
 ```
 
 Key reports:
@@ -1682,31 +1684,33 @@ Key reports:
 docs/car_model/meshprior_stage23_5_integrated_topology_implementation_report.md
 docs/car_model/meshprior_stage23_6_tuned_integrated_topology_report.md
 docs/car_model/meshprior_stage24_full_integrated_topology_report.md
+docs/car_model/meshprior_stage24_1_late_prism_pareto_report.md
+docs/car_model/meshprior_stage24_2_topology_retention_report.md
 docs/car_model/meshprior_remaining_work_prompts.md
 docs/car_model/SPCarNet_research_log.md
 ```
 
-Best M24 row:
+Best integrated topology row:
 
 ```text
-run: full_v3_late_fine_prune_7000iter
-W&B: https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/e92jwttk
-PRISM commits: iter 6151 and 6272
-independent render: PSNR 17.042757, SSIM 0.529476, LPIPS 0.454884
-COLMAP proxy: depth AbsRel 0.082815, normal mean angle 43.394721
-topology: 823651 triangles, 1058219 vertices
+run: freeze_after_first_commit_7000iter
+W&B: https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/vsv2bs79
+PRISM commits: 2 late candidate edits, 6 rollback-protected rejected edits
+independent render: PSNR 17.314823, SSIM 0.559230, LPIPS 0.442099
+COLMAP proxy: depth AbsRel 0.078840, normal mean angle 41.010093
+topology: 254491 triangles, 463687 vertices
 collector: PASS
 ```
 
 Decision:
 
 ```text
-M24 proves real full-budget training-time topology commits with rollback metadata,
-W&B tracking, independent metrics, and collector validation. It is a milestone
-for the codebase, but the empirical paper claim is still not complete because
-the topology reduction is modest relative to the posthoc M21.5 prune_50 row.
-The next prompt should seek a stronger integrated Pareto point before adding
-new method complexity.
+M24.2 is the strongest integrated training-time topology-control row so far,
+with rollback metadata, W&B tracking, independent metrics, and collector
+validation. It beats the available M21.5 posthoc prune_50 diagnostic on this
+scene in both topology and metrics. The empirical paper claim is still not
+complete because this is single-scene evidence; the next prompt should validate
+generality and build paper-grade visual/failure analysis.
 ```
 
 ---
