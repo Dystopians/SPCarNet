@@ -841,3 +841,39 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/MeshPrior_NeurIPS_paper_roadmap.md`
 
 ---
+
+## 2026-05-01 — MeshPrior Stage 15 (retrieval-deformation fallback) — PASS
+
+**Outcome**: Implemented and measured a train-only retrieval-deformation fallback for MeshPrior proposals.
+
+**Files added**:
+- `ss3dm_prior/meshprior/retrieval_deformation.py`
+- `scripts/car_model/meshprior_build_anchor_bank.py`
+- `scripts/car_model/meshprior_eval_retrieval_deformation.py`
+- `scripts/car_model/smoke_test_meshprior_stage15_retrieval_deformation.py`
+- `docs/car_model/meshprior_stage15_retrieval_deformation_design.md`
+- `docs/car_model/meshprior_stage15_retrieval_deformation_implementation_report.md`
+- `docs/car_model/meshprior_stage15_retrieval_deformation_smoke.md`
+
+**Evaluation outputs**:
+- `outputs/carnet/meshprior/retrieval_deformation/stage15_anchor_bank.npz`
+- `outputs/carnet/meshprior/retrieval_deformation/stage15_eval/metrics.json`
+- `outputs/carnet/meshprior/retrieval_deformation/stage15_eval/summary.md`
+
+**Verification**:
+- Compileall over `scripts/car_model` and `ss3dm_prior`: PASS.
+- Stage 15 smoke: PASS.
+- Train-only anchor bank built from `outputs/carnet/spcarnet/object_index_v1.json`: `32` anchors, `512` points each.
+- Retrieval/deformation evaluation rows: `12`.
+
+**Decision**:
+- Stage gate: `PASS`.
+- Recommendation: `KEEP_AS_BASELINE`.
+- Retrieval-only did not beat the Stage 3 posterior proxy on synthetic proposal metrics, so no pivot to retrieval-deformation is recommended.
+
+**Linked artefacts**:
+- Design: `docs/car_model/meshprior_stage15_retrieval_deformation_design.md`
+- Implementation report: `docs/car_model/meshprior_stage15_retrieval_deformation_implementation_report.md`
+- Smoke report: `docs/car_model/meshprior_stage15_retrieval_deformation_smoke.md`
+
+---

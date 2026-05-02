@@ -12,6 +12,7 @@ Status before continuing to Prompt M13:
 - DONE: M13 implementation report, smoke report, research log entry, commit, and push are complete.
 - DONE: Pre-M14 stability audit passed after fixing smoke subprocess interpreter drift. Remaining risks are claim/research risks, not immediate code-collapse risks.
 - DONE: M14 paper roadmap and claim-risk analysis are complete. Final recommendation: `MORE_SCENE_EVIDENCE_REQUIRED`.
+- DONE: M15 retrieval-deformation fallback is implemented and measured. Recommendation: `KEEP_AS_BASELINE`, not a pivot.
 
 This document is meant to be copied, stage by stage, into Codex / Claude Code or another coding agent working inside `Dystopians/SPCarNet`.
 
