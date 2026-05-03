@@ -2880,3 +2880,27 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR15_01_04_multiscene_freeze_medium_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R16.01 courtyard full freeze — PASS
+
+**Outcome**: Ran the freeze-densify/skip-Delaunay schedule from `courtyard` iteration 2000 to 7000 with online W&B. The full-budget row preserves topology exactly and improves beyond the R15.01 medium row on render and depth proxy metrics.
+
+**W&B**:
+- `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/z2i5ndyu`
+
+**Metrics**:
+- topology: `410254` triangles, `444301` vertices, unchanged from the loaded 2000 checkpoint
+- independent render: PSNR `18.321131`, SSIM `0.594281`, LPIPS `0.440022`
+- COLMAP proxy: depth AbsRel `0.171453`, depth MAE `2.067510`, normal mean angle `37.575696`
+
+**Comparison**:
+- baseline 2000: PSNR `14.946162`, SSIM `0.438775`, LPIPS `0.592443`, AbsRel `0.354800`, normal `35.324712`
+- R15.01 medium 4000: PSNR `17.819637`, SSIM `0.578303`, LPIPS `0.460392`, AbsRel `0.243054`, normal `37.967884`
+- R16.01 improves over medium without topology growth; normal remains worse than baseline and should be handled as an explicit limitation.
+
+**Decision**: R16.01 is a full-budget schedule `PASS` on one public scene. The next full row should be `bonsai` or `parking_phone_tiny`, and the next method improvement should add a stronger selector or normal-aware recovery.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR16_01_courtyard_full_freeze_report.md`
+
+---
