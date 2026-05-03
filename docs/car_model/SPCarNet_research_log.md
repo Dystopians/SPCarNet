@@ -4,6 +4,27 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14.8 checkpoint topology evidence audit — PASS_WITH_EDGE_CSEF_FAIL
+
+**Outcome**: Added and ran a real checkpoint topology-evidence audit before automatic edit selection. The audit found that the saved triangle-splat checkpoint is a triangle-soup representation, not an edge-connected mesh.
+
+**Verification**:
+- vertices: `193491`
+- triangles: `64497`
+- connected components: `64497`
+- largest component faces: `1`
+- shared edges: `0`
+- boundary face fraction: `1.0`
+
+**Decision**: `PASS_WITH_EDGE_CSEF_FAIL`. The audit itself is successful, but shared-edge boundary-loop CSEF is invalid for real checkpoint proposal selection. Real edit selection must use spatial adjacency, render residuals, sparse COLMAP evidence, or checkpoint/raster evidence rather than mesh edge connectivity.
+
+**Linked artefacts**:
+- `scripts/car_model/meshsplatopt_audit_checkpoint_topology_evidence.py`
+- `docs/car_model/meshsplatopt_stageR14_8_checkpoint_topology_evidence_audit.md`
+- `outputs/carnet/meshsplatopt/stageR14_8_checkpoint_topology_evidence_audit/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14.7 teacher recovery tiny — PASS
 
 **Outcome**: Upgraded the teacher recovery runner from cache-only contract to a real tiny recovery path. The edited R14.5 checkpoint was copied, resumed from iteration 200, trained for 20 recovery steps to iteration 220 with W&B online, rendered, evaluated with independent metrics, and checked with sparse COLMAP geometry.
