@@ -4,6 +4,17 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R1 repair RFC — PASS
+
+**Outcome**: Wrote the MeshSplatOpt repair RFC. The method is locked as `MeshSplatOpt: Evidence-Certified Bidirectional Mesh Surgery for Mesh Splatting`, centered on the Counterfactual Surface Evidence Field and reversible edit calculus across protect, delete, collapse, snap, split, fill, and appearance recovery.
+
+**Decision**: `PASS`. The RFC explicitly separates pruning, constructive repair, and hallucination risk. Stage35 PRISM is a required retained-pruning baseline, while giant-hole repair and prior-supported fills require evidence certificates and uncertainty labels.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR1_repair_RFC.md`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R0 pivot audit — PASS
 
 **Outcome**: Created branch `neurips-meshsplatopt-repair`, read the required PRISM retrospective, handoff, reviewer-risk, RFC, roadmap, topology-retention, retained-refresh, metric-reconciliation, and remaining-work documents, and locked the pivot from delete-centric PRISM to evidence-certified bidirectional mesh surgery.
