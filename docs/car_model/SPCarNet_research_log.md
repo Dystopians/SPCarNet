@@ -4,6 +4,23 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14 medium scene pilot — STOP_BEFORE_GPU
+
+**Outcome**: Wrote the R14 medium public-scene pilot design and stop report. No GPU training was launched because the current MeshSplatOpt implementation is synthetic/generic-mesh only and lacks real checkpoint edit application, render-backed counterfactual validation, and real teacher recovery.
+
+**Verification**:
+- GPU availability checked; GPU 4 was the relatively light option at the check
+- Stage35 public-scene artifacts exist locally and remain baselines
+- no R14 training command was run
+
+**Decision**: `STOP_BEFORE_GPU`. Do not proceed to R15. Required next work is a real Mesh Splatting checkpoint adapter, render-backed edit gate, and at least one real tiny recovery run with W&B before medium public-scene claims.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_medium_scene_pilot_design.md`
+- `docs/car_model/meshsplatopt_stageR14_medium_scene_pilot_report.md`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R13 synthetic repair benchmark — PASS
 
 **Outcome**: Implemented a controlled synthetic repair benchmark and collector. The benchmark compares no repair, delete-only PRISM-style cleanup, and full MeshSplatOpt repair across synthetic damage categories.
