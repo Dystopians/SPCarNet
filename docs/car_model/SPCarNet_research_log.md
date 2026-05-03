@@ -4,6 +4,28 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14.9 area-outlier real edit selection — PASS
+
+**Outcome**: Added and ran the first automatic real-checkpoint edit selector after the topology audit. The selector uses checkpoint triangle-area statistics, not shared-edge boundary loops, and emits an auditable `DELETE_TRIANGLES` edit JSON for the largest extreme area outlier.
+
+**Verification**:
+- selected face: `55379`
+- selected area: `15501.270805580434`
+- median triangle area: `0.005547030811843575`
+- render-backed gate ran on GPU 4
+- triangles: `64497 -> 64496`
+- render deltas: PSNR `0.0`, SSIM `0.0`, LPIPS `0.0`
+- geometry deltas: AbsRel `0.0`, Depth MAE `0.0`, normal mean angle `0.0`
+
+**Decision**: `PASS`. The automatic real edit-selection chain now works end to end for a conservative checkpoint-statistics deletion. This is infrastructure evidence, not the final R14 full-repair claim.
+
+**Linked artefacts**:
+- `scripts/car_model/meshsplatopt_select_checkpoint_area_outlier_edit.py`
+- `docs/car_model/meshsplatopt_stageR14_9_area_outlier_real_edit_selection_report.md`
+- `outputs/carnet/meshsplatopt/stageR14_9_area_outlier_real_edit_selection/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14.8 checkpoint topology evidence audit — PASS_WITH_EDGE_CSEF_FAIL
 
 **Outcome**: Added and ran a real checkpoint topology-evidence audit before automatic edit selection. The audit found that the saved triangle-splat checkpoint is a triangle-soup representation, not an edge-connected mesh.
