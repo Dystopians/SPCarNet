@@ -3005,3 +3005,36 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR17_02_checkpoint_local_snap_gate_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R17.03-R17.05 local snap portfolio recovery — MIXED/FAIL
+
+**Outcome**: Extended the real-checkpoint local snap selector into a 16-vertex portfolio edit, validated it with the render-backed checkpoint gate, and ran equal-budget 200-step W&B recovery against a baseline continuation.
+
+**Selection**:
+- candidate faces above threshold: `7831`
+- candidate vertices: `443`
+- proposals: `1446`
+- valid proposals: `1291`
+- selected vertices: `16`
+- total expected local residual reduction: `2.5543751879508467`
+
+**Gate**:
+- status: `PASS`
+- topology unchanged at `782982` triangles and `820107` vertices
+- render/geometry deltas at iteration 2000 are numerical-noise level
+
+**W&B**:
+- baseline continuation: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/2puomo88`
+- portfolio snap: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/d6dc9qja`
+
+**Equal-budget 2200 result**:
+- baseline: PSNR `12.331465`, SSIM `0.298222`, LPIPS `0.622323`, AbsRel `0.409263`, Depth MAE `4.300273`, normal `52.595639`
+- portfolio: PSNR `12.326042`, SSIM `0.297809`, LPIPS `0.621754`, AbsRel `0.410215`, Depth MAE `4.307691`, normal `52.827494`
+- portfolio minus baseline: PSNR `-0.005423`, SSIM `-0.000413`, LPIPS `-0.000569`, AbsRel `+0.000952`, Depth MAE `+0.007418`, normal `+0.231855`
+
+**Decision**: `PORTFOLIO_SNAP_GATE_PASS_RECOVERY_QUALITY_FAIL`. The portfolio edit is safe and auditable but not better than continuation. The next selector must use stronger evidence, likely render residuals, sparse-depth residuals, normal disagreement, or defect-mined CSEF regions instead of large-area seeding alone.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR17_03_05_portfolio_snap_recovery_report.md`
+
+---

@@ -14,6 +14,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from ss3dm_prior.meshsplatopt.checkpoint_adapter import checkpoint_to_mesh_state, load_checkpoint_state
+from ss3dm_prior.meshsplatopt.edit_types import MeshEdit, MeshSplatOptEditType
 from ss3dm_prior.meshsplatopt.snap_proposals import make_snap_proposals
 from scripts.car_model.meshsplatopt_select_checkpoint_area_outlier_edit import triangle_areas_from_checkpoint
 
@@ -28,8 +29,42 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_displacement_fraction", type=float, default=0.02)
     parser.add_argument("--residual_threshold_fraction", type=float, default=0.002)
     parser.add_argument("--min_error_reduction", type=float, default=1e-7)
+    parser.add_argument("--max_selected_vertices", type=int, default=1)
+    parser.add_argument("--min_selected_vertex_distance", type=float, default=0.0)
     parser.add_argument("--chunk_size", type=int, default=250000)
     return parser.parse_args()
+
+
+def select_portfolio(proposals, vertices: np.ndarray, *, max_selected: int, min_distance: float) -> list:
+    best_by_vertex = {}
+    for proposal in proposals:
+        if proposal.rejected_reason:
+            continue
+        if not proposal.edit.affected_vertices:
+            continue
+        vid = int(proposal.edit.affected_vertices[0])
+        reduction = float(proposal.expected_error_before - proposal.expected_error_after)
+        current = best_by_vertex.get(vid)
+        if current is None or reduction > float(current.expected_error_before - current.expected_error_after):
+            best_by_vertex[vid] = proposal
+    ranked = sorted(
+        best_by_vertex.values(),
+        key=lambda p: (float(p.expected_error_before - p.expected_error_after), -float(p.uncertainty)),
+        reverse=True,
+    )
+    selected = []
+    selected_vertices: list[int] = []
+    for proposal in ranked:
+        vid = int(proposal.edit.affected_vertices[0])
+        if selected_vertices and min_distance > 0.0:
+            distances = [float(np.linalg.norm(vertices[vid] - vertices[other])) for other in selected_vertices]
+            if min(distances) < min_distance:
+                continue
+        selected.append(proposal)
+        selected_vertices.append(vid)
+        if len(selected) >= max(1, int(max_selected)):
+            break
+    return selected
 
 
 def main() -> None:
@@ -62,20 +97,56 @@ def main() -> None:
         for p in proposals
         if not p.rejected_reason and (p.expected_error_before - p.expected_error_after) >= float(args.min_error_reduction)
     ]
-    best = max(valid, key=lambda p: (p.expected_error_before - p.expected_error_after, -p.uncertainty), default=None)
-    status = "PASS" if best is not None else "NO_CANDIDATE"
-    if best is not None:
-        best_edit = best.edit.to_dict()
-        best_edit["edit_id"] = "real_checkpoint_csef_local_snap"
-        best_edit["defect_id"] = "checkpoint_local_surface_residual"
-        selected_vertices = best_edit.get("affected_vertices", [])
+    selected = select_portfolio(
+        valid,
+        state.vertices,
+        max_selected=int(args.max_selected_vertices),
+        min_distance=float(args.min_selected_vertex_distance),
+    )
+    status = "PASS" if selected else "NO_CANDIDATE"
+    if selected:
+        selected_vertices = [int(p.edit.affected_vertices[0]) for p in selected]
         selected_faces = [int(fid) for fid in ranked_faces if any(int(v) in selected_vertices for v in faces[int(fid)].tolist())]
-        best_edit["affected_faces"] = selected_faces[: int(args.top_k_faces)]
-        best_edit["evidence_summary"]["seed_selector"] = "large_triangle_area_candidates"
-        best_edit["evidence_summary"]["area_threshold"] = threshold
-        best_edit["evidence_summary"]["median_area"] = median
-        best_edit["evidence_summary"]["candidate_face_count"] = int(len(candidate_face_ids))
-        (out / "selected_local_snap_edit.json").write_text(json.dumps(best_edit, indent=2), encoding="utf-8")
+        target_positions: dict[str, list[float]] = {}
+        total_before = 0.0
+        total_after = 0.0
+        max_uncertainty = 0.0
+        for proposal in selected:
+            target_positions.update(proposal.edit.attribute_changes.get("target_positions", {}))
+            total_before += float(proposal.expected_error_before)
+            total_after += float(proposal.expected_error_after)
+            max_uncertainty = max(max_uncertainty, float(proposal.uncertainty))
+        edit = MeshEdit(
+            edit_id="real_checkpoint_csef_local_snap_portfolio",
+            edit_type=MeshSplatOptEditType.SNAP_VERTICES.value,
+            defect_id="checkpoint_local_surface_residual_portfolio",
+            affected_vertices=selected_vertices,
+            affected_faces=selected_faces[: int(args.top_k_faces)],
+            attribute_changes={
+                "target_positions": target_positions,
+                "selector": "checkpoint_area_seeded_local_plane_csef_portfolio",
+                "max_selected_vertices": int(args.max_selected_vertices),
+                "min_selected_vertex_distance": float(args.min_selected_vertex_distance),
+            },
+            topology_cost_delta=0.0,
+            evidence_summary={
+                "selector": "csef_local_plane_snap_portfolio",
+                "seed_selector": "large_triangle_area_candidates",
+                "area_threshold": threshold,
+                "median_area": median,
+                "candidate_face_count": int(len(candidate_face_ids)),
+                "selected_vertex_count": int(len(selected_vertices)),
+                "total_local_plane_residual_before": total_before,
+                "total_local_plane_residual_after": total_after,
+                "total_expected_residual_reduction": total_before - total_after,
+            },
+            risk_summary={
+                "free_space_risk": 0.0,
+                "max_uncertainty": max_uncertainty,
+                "requires_render_backed_gate": True,
+            },
+        )
+        (out / "selected_local_snap_edit.json").write_text(json.dumps(edit.to_dict(), indent=2), encoding="utf-8")
     report = {
         "status": status,
         "checkpoint_path": args.checkpoint_path,
@@ -91,8 +162,14 @@ def main() -> None:
         "candidate_vertices": candidate_vertices,
         "proposal_count": int(len(proposals)),
         "valid_proposal_count": int(len(valid)),
-        "selected": best.to_dict() if best is not None else None,
-        "edit_json": str(out / "selected_local_snap_edit.json") if best is not None else "",
+        "selected": selected[0].to_dict() if selected else None,
+        "selected_proposals": [p.to_dict() for p in selected],
+        "selected_vertex_count": int(len(selected)),
+        "selected_vertices": [int(p.edit.affected_vertices[0]) for p in selected],
+        "total_expected_residual_reduction": float(
+            sum(float(p.expected_error_before - p.expected_error_after) for p in selected)
+        ),
+        "edit_json": str(out / "selected_local_snap_edit.json") if selected else "",
         "note": "local-plane CSEF-style checkpoint SNAP proposal; render-backed gate is mandatory before acceptance",
     }
     (out / "local_snap_selection_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
