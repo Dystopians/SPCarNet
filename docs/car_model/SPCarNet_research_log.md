@@ -4,6 +4,32 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage34 post-commit candidate refresh — SOFT PASS / diagnostic PASS
+
+**Outcome**: Added opt-in post-commit candidate refresh and measured the root cause of the post-commit no-candidate failure. After a candidate commit, topology sync marks all surviving triangles as recent; `recent_t` then protects every triangle and also zeroes the normal prune score through `risk_t`. The new relaxed score removes only recent risk while keeping other risk and keep signals, and keeps the counterfactual gate mandatory.
+
+**W&B**:
+- parking refresh smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/rt3cxxhh`
+- parking recent0 smoke: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/kke60qhc`
+- bonsai root-cause v1: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/szkqpowq`
+- bonsai root-cause v2: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/npagb743`
+- bonsai relaxed-score v3: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/lt1v4652`
+- bonsai second-edit-only diagnostic v4: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/zhy368pr`
+
+**Best retained-topology result**:
+- run: `mipnerf360_bonsai_refresh_v3_relaxed_score_diverse_calib_measured_rank_cap512_adaptive_ratio0p02_geom1400_2000iter`
+- decisions: normal commit at `1501`, then relaxed commits at `1592`, `1683`, `1774`, and `1956`
+- final topology: `631739` triangles versus Stage33 `633787`
+- independent render: PSNR `12.2019978`, SSIM `0.2757282`, LPIPS `0.6129612`
+- Stage33 reference: PSNR `12.1999207`, SSIM `0.2765326`, LPIPS `0.6125830`, topology `633787`
+
+**Decision**: M34 is a mechanism and diagnosis success, not a default schedule. It lowers retained topology and slightly improves PSNR, but SSIM/LPIPS regress slightly. The next step is M35 conservative retained-edit control: allow one retained relaxed edit, log whether it survives recovery/final checkpoint, and gate it on stricter held-out or independent-metric proxy behavior before running `courtyard`.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage34_post_commit_refresh_report.md`
+
+---
+
 ## 2026-05-02 — Stage33 PRISM calibration diversity diagnostics — SOFT PASS / diagnostic PASS
 
 **Outcome**: Added opt-in view-diverse PRISM calibration diagnostics. The counterfactual gate can now seed calibration with evenly spaced held-out/test views and train views before adding hard train views, writes `prism_debug/calibration_views.json`, and records per-view counterfactual deltas. This improves `bonsai` over Stage29 cap512 at equal topology, but does not beat Stage32 on `courtyard`.

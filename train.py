@@ -157,6 +157,8 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "candidate_measured_pool_multiplier": float(getattr(opt, "prism_candidate_measured_pool_multiplier", 4.0)),
         "candidate_measured_group_size": int(getattr(opt, "prism_candidate_measured_group_size", 256)),
         "candidate_measured_max_groups": int(getattr(opt, "prism_candidate_measured_max_groups", 8)),
+        "post_commit_candidate_refresh": bool(getattr(opt, "prism_post_commit_candidate_refresh", False)),
+        "post_commit_refresh_min_prune_score": float(getattr(opt, "prism_post_commit_refresh_min_prune_score", 1e-6)),
         "adaptive_candidate_retry_on_rollback": bool(
             getattr(opt, "prism_adaptive_candidate_retry_on_rollback", False)
         ),
@@ -441,6 +443,9 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "last_candidate_measured_accepted_count": 0,
         "last_candidate_measured_selected_count": 0,
         "last_candidate_measured_best_score": 0.0,
+        "last_candidate_relaxed_refresh_used": 0,
+        "last_candidate_relaxed_pool_count": 0,
+        "candidate_commit_count": 0,
         "teacher_cache": {},
         "teacher_rgb_lambda": float(getattr(opt, "prism_teacher_rgb_lambda", 0.01)),
         "teacher_depth_lambda": float(getattr(opt, "prism_teacher_depth_lambda", 0.002)),
@@ -1792,6 +1797,83 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     if scores is None:
         return {"committed": False, "pruned_count": 0, "counterfactual_accept": 0, "rollback": 0}
 
+    def _post_commit_relaxed_candidates():
+        score_cfg = prism_state["score_cfg"]
+        render_keep_block = scores.render_keep_t > float(score_cfg.keep_render_threshold)
+        geometry_keep_block = scores.geometry_keep_t > float(score_cfg.keep_geometry_threshold)
+        orientation_keep_block = scores.orientation_keep_t > float(score_cfg.keep_orientation_threshold)
+        relaxed_risk_t = torch.stack(
+            [
+                scores.unc_t,
+                scores.boundary_t,
+                scores.nonmanifold_t,
+                scores.optional_groundprotect_t,
+                scores.optional_roiprotect_t,
+                geometry_keep_block.to(torch.float32),
+                orientation_keep_block.to(torch.float32),
+                render_keep_block.to(torch.float32),
+            ],
+            dim=1,
+        ).max(dim=1).values
+        relaxed_score_t = torch.clamp(scores.redund_t * (1.0 - scores.utility_t) * (1.0 - relaxed_risk_t), 0.0, 1.0)
+        min_score = float(cfg.get("post_commit_refresh_min_prune_score", 1e-6))
+        score_ok = relaxed_score_t >= min_score if min_score <= 0.0 else relaxed_score_t > min_score
+        relaxed_mask = (
+            (~scores.dead_mask.to(torch.bool))
+            & (scores.edge_t <= float(score_cfg.thresh_protected_edge))
+            & (scores.geo_t <= float(score_cfg.thresh_protected_geo))
+            & (scores.sens_t <= float(score_cfg.thresh_protected_sens))
+            & (scores.unc_t <= float(score_cfg.thresh_protected_unc))
+            & (~render_keep_block)
+            & (scores.optional_groundprotect_t <= 0.0)
+            & (scores.optional_roiprotect_t <= 0.0)
+            & score_ok
+        )
+        return relaxed_mask, relaxed_score_t, {
+            "candidate_diag_post_commit_relaxed_score_positive_count": int(
+                torch.count_nonzero(relaxed_score_t > 0.0).item()
+            ),
+            "candidate_diag_post_commit_relaxed_score_mean": float(relaxed_score_t.to(torch.float32).mean().item())
+            if relaxed_score_t.numel() > 0
+            else 0.0,
+            "candidate_diag_post_commit_relaxed_score_max": float(relaxed_score_t.to(torch.float32).max().item())
+            if relaxed_score_t.numel() > 0
+            else 0.0,
+        }
+
+    def _candidate_pool_diagnostics():
+        try:
+            total = int(scores.prune_score_t.numel())
+            active_mask = scores.triangle_state == 0
+            protected_raw = scores.protected_mask_raw.to(torch.bool)
+            render_keep_block = scores.render_keep_t > float(prism_state["score_cfg"].keep_render_threshold)
+            geometry_keep_block = scores.geometry_keep_t > float(prism_state["score_cfg"].keep_geometry_threshold)
+            orientation_keep_block = scores.orientation_keep_t > float(prism_state["score_cfg"].keep_orientation_threshold)
+            relaxed_mask, _, relaxed_score_payload = _post_commit_relaxed_candidates()
+            payload = {
+                "candidate_diag_total_triangles": total,
+                "candidate_diag_active_state_count": int(torch.count_nonzero(active_mask).item()),
+                "candidate_diag_protected_raw_count": int(torch.count_nonzero(protected_raw).item()),
+                "candidate_diag_protected_dilated_count": int(torch.count_nonzero(scores.protected_mask_dilated).item()),
+                "candidate_diag_dead_count": int(torch.count_nonzero(scores.dead_mask).item()),
+                "candidate_diag_suspicious_count": int(torch.count_nonzero(scores.suspicious_mask).item()),
+                "candidate_diag_block_edge_count": int(torch.count_nonzero(scores.edge_t > float(prism_state["score_cfg"].thresh_protected_edge)).item()),
+                "candidate_diag_block_geo_count": int(torch.count_nonzero(scores.geo_t > float(prism_state["score_cfg"].thresh_protected_geo)).item()),
+                "candidate_diag_block_sens_count": int(torch.count_nonzero(scores.sens_t > float(prism_state["score_cfg"].thresh_protected_sens)).item()),
+                "candidate_diag_block_unc_count": int(torch.count_nonzero(scores.unc_t > float(prism_state["score_cfg"].thresh_protected_unc)).item()),
+                "candidate_diag_block_recent_count": int(torch.count_nonzero(scores.recent_t > 0.0).item()),
+                "candidate_diag_block_geometry_keep_count": int(torch.count_nonzero(geometry_keep_block).item()),
+                "candidate_diag_block_orientation_keep_count": int(torch.count_nonzero(orientation_keep_block).item()),
+                "candidate_diag_block_render_keep_count": int(torch.count_nonzero(render_keep_block).item()),
+                "candidate_diag_block_candidate_geometry_keep_count": int(torch.count_nonzero(scores.candidate_blocked_by_geometry_keep).item()),
+                "candidate_diag_block_candidate_dilated_count": int(torch.count_nonzero(scores.candidate_blocked_by_dilated_protect).item()),
+                "candidate_relaxed_pool_count": int(torch.count_nonzero(relaxed_mask).item()),
+            }
+            payload.update(relaxed_score_payload)
+            return payload
+        except Exception:
+            return {}
+
     dead_ratio = float(cfg.get("dead_prune_ratio", 0.0))
     cand_ratio = float(cfg.get("candidate_prune_ratio", 0.0))
     if prune_mode == "candidate":
@@ -1842,10 +1924,36 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     if candidate_max_count > 0:
         capped_target_count = min(target_count, int(candidate_max_count))
     selected_count = int(candidate_ids.numel())
+    candidate_diag_payload = _candidate_pool_diagnostics()
+    relaxed_refresh_used = 0
+    relaxed_pool_count = int(candidate_diag_payload.get("candidate_relaxed_pool_count", 0))
+    relaxed_rank_score_t = None
+    if (
+        prune_mode == "candidate"
+        and selected_count == 0
+        and bool(cfg.get("post_commit_candidate_refresh", False))
+        and int(prism_state.get("candidate_commit_count", 0)) > 0
+        and relaxed_pool_count > 0
+    ):
+        relaxed_mask, relaxed_score_t, _ = _post_commit_relaxed_candidates()
+        relaxed_ids = torch.nonzero(relaxed_mask, as_tuple=True)[0]
+        if relaxed_ids.numel() > 0:
+            relaxed_target = int(selection_max_count) if int(selection_max_count) > 0 else int(target_count)
+            relaxed_target = min(max(1, relaxed_target), int(relaxed_ids.numel()))
+            relaxed_scores = relaxed_score_t[relaxed_ids].to(torch.float32)
+            _, relaxed_order = torch.topk(relaxed_scores, k=relaxed_target, largest=True, sorted=True)
+            candidate_ids = relaxed_ids[relaxed_order]
+            selected_count = int(candidate_ids.numel())
+            relaxed_refresh_used = 1
+            relaxed_rank_score_t = torch.full_like(relaxed_score_t.to(torch.float32), -1e9)
+            relaxed_rank_score_t[relaxed_ids] = relaxed_score_t[relaxed_ids].to(torch.float32)
     if candidate_ids.numel() > 1:
-        order_scores = rank_score_t[candidate_ids] if rank_score_t is not None else scores.prune_score_t[candidate_ids]
+        order_score_t = relaxed_rank_score_t if relaxed_rank_score_t is not None else rank_score_t
+        order_scores = order_score_t[candidate_ids] if order_score_t is not None else scores.prune_score_t[candidate_ids]
         _, order = torch.sort(order_scores, descending=True)
         candidate_ids = candidate_ids[order]
+    if relaxed_rank_score_t is not None:
+        rank_score_t = relaxed_rank_score_t
     prism_state["last_candidate_pool_count"] = candidate_pool_count
     prism_state["last_candidate_target_count"] = target_count
     prism_state["last_candidate_cap_count"] = capped_target_count
@@ -1867,6 +1975,8 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     prism_state["last_candidate_measured_accepted_count"] = 0
     prism_state["last_candidate_measured_selected_count"] = 0
     prism_state["last_candidate_measured_best_score"] = 0.0
+    prism_state["last_candidate_relaxed_refresh_used"] = int(relaxed_refresh_used)
+    prism_state["last_candidate_relaxed_pool_count"] = int(relaxed_pool_count)
 
     def _candidate_quality_payload():
         return {
@@ -1883,6 +1993,9 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             "candidate_measured_accepted_count": int(prism_state.get("last_candidate_measured_accepted_count", 0)),
             "candidate_measured_selected_count": int(prism_state.get("last_candidate_measured_selected_count", 0)),
             "candidate_measured_best_score": float(prism_state.get("last_candidate_measured_best_score", 0.0)),
+            "candidate_relaxed_refresh_used": int(prism_state.get("last_candidate_relaxed_refresh_used", 0)),
+            "candidate_relaxed_pool_count": int(prism_state.get("last_candidate_relaxed_pool_count", 0)),
+            **candidate_diag_payload,
         }
 
     if candidate_ids.numel() == 0:
@@ -2132,6 +2245,8 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             iteration=int(iteration),
             reason=f"prism_{str(prune_mode)}_commit",
         )
+        if str(prune_mode) == "candidate":
+            prism_state["candidate_commit_count"] = int(prism_state.get("candidate_commit_count", 0)) + 1
         return {
             "committed": True,
             "pruned_count": pruned_count,
@@ -2949,6 +3064,8 @@ def training(
                 tb_writer.add_scalar("prism/last_candidate_measured_accepted_count", float(prism_state.get("last_candidate_measured_accepted_count", 0)), iteration)
                 tb_writer.add_scalar("prism/last_candidate_measured_selected_count", float(prism_state.get("last_candidate_measured_selected_count", 0)), iteration)
                 tb_writer.add_scalar("prism/last_candidate_measured_best_score", float(prism_state.get("last_candidate_measured_best_score", 0.0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_relaxed_refresh_used", float(prism_state.get("last_candidate_relaxed_refresh_used", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_relaxed_pool_count", float(prism_state.get("last_candidate_relaxed_pool_count", 0)), iteration)
                 tb_writer.add_scalar("prism/validation_pass", float(prism_state.get("last_validation_pass", 1)), iteration)
                 tb_writer.add_scalar(
                     "prism/post_commit_recollect_remaining",
@@ -3031,6 +3148,8 @@ def training(
                     "prism/last_candidate_measured_accepted_count": float(prism_state.get("last_candidate_measured_accepted_count", 0)),
                     "prism/last_candidate_measured_selected_count": float(prism_state.get("last_candidate_measured_selected_count", 0)),
                     "prism/last_candidate_measured_best_score": float(prism_state.get("last_candidate_measured_best_score", 0.0)),
+                    "prism/last_candidate_relaxed_refresh_used": float(prism_state.get("last_candidate_relaxed_refresh_used", 0)),
+                    "prism/last_candidate_relaxed_pool_count": float(prism_state.get("last_candidate_relaxed_pool_count", 0)),
                     "prism/validation_pass": float(prism_state.get("last_validation_pass", 1)),
                     "prism/densification_frozen_after_commit": float(
                         prism_state.get("densification_frozen_after_prism_commit", 0)
@@ -3272,6 +3391,33 @@ def training(
                         "candidate_measured_accepted_count": int(prune_result.get("candidate_measured_accepted_count", 0)),
                         "candidate_measured_selected_count": int(prune_result.get("candidate_measured_selected_count", 0)),
                         "candidate_measured_best_score": float(prune_result.get("candidate_measured_best_score", 0.0)),
+                        "candidate_relaxed_refresh_used": int(prune_result.get("candidate_relaxed_refresh_used", 0)),
+                        "candidate_relaxed_pool_count": int(prune_result.get("candidate_relaxed_pool_count", 0)),
+                        "candidate_diag_total_triangles": int(prune_result.get("candidate_diag_total_triangles", 0)),
+                        "candidate_diag_active_state_count": int(prune_result.get("candidate_diag_active_state_count", 0)),
+                        "candidate_diag_protected_raw_count": int(prune_result.get("candidate_diag_protected_raw_count", 0)),
+                        "candidate_diag_protected_dilated_count": int(prune_result.get("candidate_diag_protected_dilated_count", 0)),
+                        "candidate_diag_dead_count": int(prune_result.get("candidate_diag_dead_count", 0)),
+                        "candidate_diag_suspicious_count": int(prune_result.get("candidate_diag_suspicious_count", 0)),
+                        "candidate_diag_block_edge_count": int(prune_result.get("candidate_diag_block_edge_count", 0)),
+                        "candidate_diag_block_geo_count": int(prune_result.get("candidate_diag_block_geo_count", 0)),
+                        "candidate_diag_block_sens_count": int(prune_result.get("candidate_diag_block_sens_count", 0)),
+                        "candidate_diag_block_unc_count": int(prune_result.get("candidate_diag_block_unc_count", 0)),
+                        "candidate_diag_block_recent_count": int(prune_result.get("candidate_diag_block_recent_count", 0)),
+                        "candidate_diag_block_geometry_keep_count": int(prune_result.get("candidate_diag_block_geometry_keep_count", 0)),
+                        "candidate_diag_block_orientation_keep_count": int(prune_result.get("candidate_diag_block_orientation_keep_count", 0)),
+                        "candidate_diag_block_render_keep_count": int(prune_result.get("candidate_diag_block_render_keep_count", 0)),
+                        "candidate_diag_block_candidate_geometry_keep_count": int(prune_result.get("candidate_diag_block_candidate_geometry_keep_count", 0)),
+                        "candidate_diag_block_candidate_dilated_count": int(prune_result.get("candidate_diag_block_candidate_dilated_count", 0)),
+                        "candidate_diag_post_commit_relaxed_score_positive_count": int(
+                            prune_result.get("candidate_diag_post_commit_relaxed_score_positive_count", 0)
+                        ),
+                        "candidate_diag_post_commit_relaxed_score_mean": float(
+                            prune_result.get("candidate_diag_post_commit_relaxed_score_mean", 0.0)
+                        ),
+                        "candidate_diag_post_commit_relaxed_score_max": float(
+                            prune_result.get("candidate_diag_post_commit_relaxed_score_max", 0.0)
+                        ),
                         "pre_prune_triangle_count": int(pre_prune_triangle_count),
                         "post_prune_triangle_count": int(post_prune_triangle_count),
                         "recollect_iters_used": int(getattr(controller, "last_recollect_iters_used", 0) if controller is not None else 0),
