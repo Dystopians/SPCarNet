@@ -674,6 +674,8 @@ def _compute_sparse_colmap_depth_loss(
     proxy_cfg: GeometryProxyConfig,
     min_matches: int,
     lam: float,
+    loss_space: str = "depth",
+    robust_beta: float = 0.05,
     rng: Optional[np.random.Generator] = None,
 ):
     if proxy_ctx is None or lam <= 0.0:
@@ -711,14 +713,30 @@ def _compute_sparse_colmap_depth_loss(
     gt_t = torch.from_numpy(corr["gt_depth"]).to(device=device, dtype=pred_depth.dtype)
 
     pred_t = pred_depth[py_t, px_t]
-    # Robust sparse depth supervision.
-    loss_pure = F.smooth_l1_loss(pred_t, gt_t, reduction="mean", beta=0.05)
+    # Robust sparse depth supervision.  Relative/log spaces keep far COLMAP
+    # points from dominating the gradient and better match AbsRel reporting.
+    space = str(loss_space or "depth").strip().lower()
+    beta = float(max(1e-6, robust_beta))
+    if space == "relative":
+        denom = torch.clamp(gt_t.detach().abs(), min=1e-3)
+        loss_pure = F.smooth_l1_loss((pred_t - gt_t) / denom, torch.zeros_like(gt_t), reduction="mean", beta=beta)
+    elif space == "log":
+        pred_log = torch.log(torch.clamp(pred_t, min=1e-4))
+        gt_log = torch.log(torch.clamp(gt_t, min=1e-4))
+        loss_pure = F.smooth_l1_loss(pred_log, gt_log, reduction="mean", beta=beta)
+    elif space == "inverse":
+        pred_inv = 1.0 / torch.clamp(pred_t, min=1e-4)
+        gt_inv = 1.0 / torch.clamp(gt_t, min=1e-4)
+        loss_pure = F.smooth_l1_loss(pred_inv, gt_inv, reduction="mean", beta=beta)
+    else:
+        loss_pure = F.smooth_l1_loss(pred_t, gt_t, reduction="mean", beta=beta)
     loss_weighted = float(lam) * loss_pure
     return {
         "loss_pure": loss_pure,
         "loss_weighted": loss_weighted,
         "valid_matches": int(valid_matches),
         "reason": "ok",
+        "loss_space": space,
     }
 
 
@@ -2879,6 +2897,8 @@ def training(
                 proxy_cfg=sparse_colmap_depth_proxy_cfg,
                 min_matches=int(getattr(opt, "sparse_colmap_depth_min_matches", 32)),
                 lam=float(sparse_colmap_depth_lambda),
+                loss_space=str(getattr(opt, "sparse_colmap_depth_loss_space", "depth")),
+                robust_beta=float(getattr(opt, "sparse_colmap_depth_robust_beta", 0.05)),
                 rng=sparse_colmap_depth_rng,
             )
             if sparse_res is not None:

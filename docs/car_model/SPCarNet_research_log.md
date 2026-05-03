@@ -3335,3 +3335,34 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR27_sparse_depth_recovery_report.md`
 
 ---
+
+## 2026-05-03 - R28-R30 full sparse recovery pivot
+
+**Goal**: push the parking repair path beyond the small medium-run gains and determine whether the boundary grid-fill edit or sparse COLMAP depth recovery is the real full-budget contributor.
+
+**Full-budget attribution**:
+- R28.01 grid-fill+sparse, 2000->7000, W&B `94pkp05l`: PSNR `15.770156`, SSIM `0.459545`, LPIPS `0.519976`, AbsRel `0.240156`, normal `46.143910`
+- R28.02 baseline+sparse, 2000->7000, W&B `zm1ztyf4`: PSNR `15.822877`, SSIM `0.458552`, LPIPS `0.519231`, AbsRel `0.231866`, normal `45.929940`
+- R28.03 grid-fill+sparse lower weight, 2000->7000, W&B `7u0onsok`: PSNR `15.741236`, SSIM `0.455811`, LPIPS `0.520650`
+
+**Decision**: `GRID_FILL_REJECTED_AT_FULL_BUDGET`. The current boundary fill edit does not beat the matched baseline+sparse control at full budget. The method narrative must pivot to sparse-geometry-guided recovery.
+
+**Loss-space diagnostic**:
+- Added optional sparse depth loss spaces: `depth`, `relative`, `log`, and `inverse`.
+- R29.01 relative loss, W&B `zk7dfh9z`: PSNR `15.643266`, SSIM `0.454726`, LPIPS `0.522929`
+- R29.02 log loss, W&B `j93ejnsk`: PSNR `15.608345`, SSIM `0.452642`, LPIPS `0.525190`
+
+**Decision**: `METRIC_DEPTH_SMOOTH_L1_RETAINED`. Relative/log variants hurt parking full-budget rendering.
+
+**Long-run breakthrough**:
+- R30.01 baseline+sparse, 7000->12000, W&B `9oi1skys`: PSNR `16.872860`, SSIM `0.514039`, LPIPS `0.475757`, AbsRel `0.192306`, normal `42.638562`
+- R30.02 baseline+sparse, 12000->16000, W&B `6gsab26p`: PSNR `17.081682`, SSIM `0.531858`, LPIPS `0.458050`, AbsRel `0.185581`, normal `41.859201`
+
+**Delta vs R16 full baseline**: PSNR `+1.511117`, SSIM `+0.083646`, LPIPS `-0.070003`.
+
+**Decision**: `LONG_HORIZON_SPARSE_RECOVERY_FULL_PASS`. This is now the strongest parking result and should be the new main experimental axis.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
+
+---
