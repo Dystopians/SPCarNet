@@ -4,6 +4,28 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14.2 real checkpoint dry-run — PASS
+
+**Outcome**: Applied a low-risk `DELETE_TRIANGLES` dry-run edit to a real `parking_phone_tiny` 200-iteration checkpoint copy and created a normal model directory layout for future render/metrics evaluation.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- command: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/meshsplatopt_real_checkpoint_dryrun.py`
+- input schema valid: `true`
+- output schema valid: `true`
+- triangles: `64497 -> 64496`
+- planned eval commands written for `render.py`, `metrics.py`, and `evaluate_geometry_colmap.py`
+
+**Decision**: `PASS`. Real checkpoint-copy path works for delete/snap style edits. It is still a path-validation result, not a MeshSplatOpt method-quality result.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_2_real_checkpoint_dryrun_design.md`
+- `docs/car_model/meshsplatopt_stageR14_2_real_checkpoint_dryrun_implementation_report.md`
+- `docs/car_model/meshsplatopt_stageR14_2_real_checkpoint_dryrun_smoke.md`
+- `outputs/carnet/meshsplatopt/stageR14_2_real_checkpoint_dryrun/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14.1 checkpoint adapter — PASS
 
 **Outcome**: Implemented a conservative Mesh Splatting checkpoint adapter for MeshSplatOpt edits. It can apply `DELETE_TRIANGLES` and `SNAP_VERTICES` to checkpoint copies while preserving schema consistency, and it rejects fill/split/collapse/merge edits that require radiance/optimizer attribute initialization.
