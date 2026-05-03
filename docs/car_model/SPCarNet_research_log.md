@@ -4,6 +4,53 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage43 final handoff and experiment trigger — PASS
+
+**Outcome**: Added a concise final handoff report describing the method, strongest evidence, main artifacts, forbidden claims, and exact trigger conditions for any future full-budget public Stage35 run.
+
+**Artifact**:
+- `docs/car_model/reports/meshprior_prism_final_handoff.md`
+
+**Decision**: Stage43 `PASS`. Full-budget public Stage35 training remains `NO_GO_FOR_NOW`. The trigger for more GPU work is now explicit: a named missing row that would change the core claim or reviewer risk, on a geometry-observable scene, with W&B and GPU check.
+
+---
+
+## 2026-05-02 — Stage42 figure index, bibliography draft, reviewer-risk checklist — PASS
+
+**Outcome**: Added handoff-oriented paper assets: final figure index, draft BibTeX file, and reviewer-risk checklist covering claims, metrics, datasets, and implementation risks.
+
+**Artifacts**:
+- `docs/car_model/reports/meshprior_prism_figure_index.md`
+- `docs/car_model/reports/meshprior_prism_bibliography_draft.bib`
+- `docs/car_model/reports/meshprior_prism_reviewer_risk_checklist.md`
+
+**Decision**: Stage42 `PASS`. Paper assets now preserve source traceability for figures and citations. Full-budget public Stage35 training remains `NO_GO_FOR_NOW` until a concrete table gap appears.
+
+---
+
+## 2026-05-02 — Stage41 citation-backed related work and claim tightening — PASS
+
+**Outcome**: Replaced the related-work placeholder in the PRISM manuscript draft with citation-backed draft text covering NeRF, Instant-NGP, 3D Gaussian Splatting, Gaussian-to-mesh / mesh-aligned splatting, COLMAP SfM/MVS, and the distinction between generic simplification and PRISM's rollback-audited topology control.
+
+**Artifacts**:
+- `docs/car_model/reports/meshprior_prism_manuscript_draft.md`
+- `docs/car_model/reports/meshprior_prism_related_work_sources.md`
+
+**Decision**: Stage41 `PASS`. Claims remain evidence-aligned: PRISM is framed as auditable topology control under scene-evidence gates, not universal quality dominance and not a radar-only reconstruction method. No training was run because no specific paper-table gap emerged.
+
+---
+
+## 2026-05-02 — Stage40 manuscript integration and evidence-gap review — PASS
+
+**Outcome**: Expanded the PRISM skeleton into a fuller manuscript draft with introduction, related-work placeholders, method, experimental setup, results, diagnostics, limitations, conclusion, and final evidence-gap review.
+
+**Artifact**:
+- `docs/car_model/reports/meshprior_prism_manuscript_draft.md`
+
+**Decision**: Stage40 `PASS`. The final evidence-gap decision remains `NO_GO_FOR_NOW` for full-budget public-scene training. The manuscript draft is coherent enough for human editing and citation work; the next work should be citation-backed related work, figure formatting, and reviewer-facing claim tightening.
+
+---
+
 ## 2026-05-02 — Stage39 manuscript skeleton and reproducibility appendix — PASS
 
 **Outcome**: Drafted a manuscript skeleton and reproducibility appendix from the M35-M38 evidence chain. The draft keeps claims aligned with the evidence: PRISM is framed as an auditable topology-control layer, not as a universal image-quality optimizer or radar-only reconstruction method.

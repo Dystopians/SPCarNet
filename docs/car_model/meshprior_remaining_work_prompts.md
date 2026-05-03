@@ -4,7 +4,7 @@ Date: 2026-05-02
 
 ## Current State
 
-SPCarNet MeshPrior is about `99%` complete as a research-codebase transformation and about `92%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, M32 measured candidate-impact ranking, M33 calibration-diversity diagnostics, M34 post-commit candidate refresh diagnostics, M35 conservative retained relaxed refresh, M36 metric reconciliation, M37 visual/failure packaging, M38 paper assets, and M39 manuscript skeleton are implemented. The remaining core is manuscript integration and any optional full-budget public-scene run after a specific table gap is identified. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `99%` complete as a research-codebase transformation and about `97%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, M32 measured candidate-impact ranking, M33 calibration-diversity diagnostics, M34 post-commit candidate refresh diagnostics, M35 conservative retained relaxed refresh, M36 metric reconciliation, M37 visual/failure packaging, M38 paper assets, M39 manuscript skeleton, M40 manuscript draft, M41 citation-backed related work, M42 handoff assets, and M43 final handoff are implemented. The remaining core is final human editing, exact BibTeX verification for TODO authors, and optional targeted full-budget training only if the explicit M43 trigger fires. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -47,6 +47,12 @@ Key codebase links:
 - Paper assets script: `scripts/car_model/meshprior_make_paper_assets.py`
 - Manuscript skeleton: `docs/car_model/reports/meshprior_prism_manuscript_skeleton.md`
 - Reproducibility appendix: `docs/car_model/reports/meshprior_prism_reproducibility_appendix.md`
+- Manuscript draft: `docs/car_model/reports/meshprior_prism_manuscript_draft.md`
+- Related-work source notes: `docs/car_model/reports/meshprior_prism_related_work_sources.md`
+- Figure index: `docs/car_model/reports/meshprior_prism_figure_index.md`
+- Bibliography draft: `docs/car_model/reports/meshprior_prism_bibliography_draft.bib`
+- Reviewer-risk checklist: `docs/car_model/reports/meshprior_prism_reviewer_risk_checklist.md`
+- Final handoff: `docs/car_model/reports/meshprior_prism_final_handoff.md`
 
 Known W&B runs:
 
@@ -368,7 +374,16 @@ Create a paper-draft skeleton and reproducibility appendix from M35-M38 without 
 
 Turn the skeleton into a more complete manuscript draft and make a final evidence-gap decision.
 
-## Required Steps
+## Status
+
+`PASS` on 2026-05-02.
+
+## Result
+
+- manuscript draft: `docs/car_model/reports/meshprior_prism_manuscript_draft.md`
+- final evidence-gap decision: full-budget public Stage35 run remains `NO_GO_FOR_NOW`
+
+## Completed Steps
 
 1. Expand the skeleton into a structured draft with introduction, related-work placeholders, method, experiments, limitations, and reproducibility notes.
 2. Add a final evidence-gap table: missing full-budget public scene, Tanks geometry tracks, LPIPS tradeoff, and object-prior narrative status.
@@ -377,7 +392,92 @@ Turn the skeleton into a more complete manuscript draft and make a final evidenc
 
 ## Gate
 
-`PASS` if the manuscript draft is coherent enough for human editing and the final evidence-gap decision is explicit.
+`PASS`: the manuscript draft is coherent enough for human editing and the final evidence-gap decision is explicit.
+
+# Prompt M41 — Citation-backed related work and final claim tightening
+
+## Goal
+
+Replace related-work placeholders with citation-backed text and tighten reviewer-facing claims without adding unsupported results.
+
+## Status
+
+`PASS` on 2026-05-02.
+
+## Result
+
+- updated draft: `docs/car_model/reports/meshprior_prism_manuscript_draft.md`
+- source notes: `docs/car_model/reports/meshprior_prism_related_work_sources.md`
+- no training run; no specific paper-table gap emerged.
+
+## Completed Steps
+
+1. Use only verified papers or official project pages for related-work citations.
+2. Cover mesh splatting, differentiable mesh/radiance-field optimization, 3D Gaussian splatting, COLMAP/MVS scene geometry, and mesh simplification/remeshing.
+3. Keep PRISM's claim narrow: auditable topology control for mesh splatting under scene-evidence gates.
+4. Add a bibliography draft or citation TODO list if exact BibTeX is not available.
+5. Do not run training unless a specific paper-table gap emerges.
+6. Update research log and commit/push.
+
+## Gate
+
+`PASS`: related work is no longer placeholder-only and every claim remains evidence-aligned.
+
+# Prompt M42 — Figure formatting and BibTeX cleanup
+
+## Goal
+
+Make the paper package easier to hand off: final figure list, BibTeX/TODO bibliography, and a concise reviewer-risk checklist.
+
+## Status
+
+`PASS` on 2026-05-02.
+
+## Result
+
+- figure index: `docs/car_model/reports/meshprior_prism_figure_index.md`
+- bibliography draft: `docs/car_model/reports/meshprior_prism_bibliography_draft.bib`
+- reviewer-risk checklist: `docs/car_model/reports/meshprior_prism_reviewer_risk_checklist.md`
+- full-budget public Stage35 run remains `NO_GO_FOR_NOW`.
+
+## Completed Steps
+
+1. Create a final figure index mapping each figure/panel to a caption, source output, and paper section.
+2. Create a bibliography draft with BibTeX entries or exact TODOs for every citation key.
+3. Create a reviewer-risk checklist for claims, metrics, datasets, and topology audits.
+4. Do not run training unless a concrete evidence gap appears.
+5. Update research log and commit/push.
+
+## Gate
+
+`PASS`: paper assets can be handed to a human writer without losing source traceability.
+
+# Prompt M43 — Final handoff summary and optional targeted experiment trigger
+
+## Goal
+
+Prepare a concise human-facing handoff summary and define the exact condition that would trigger one more GPU experiment.
+
+## Status
+
+`PASS` on 2026-05-02.
+
+## Result
+
+- final handoff: `docs/car_model/reports/meshprior_prism_final_handoff.md`
+- experiment trigger: full-budget public Stage35 run only if a named missing table row would change the core claim or reviewer risk.
+- current training decision: `NO_GO_FOR_NOW`.
+
+## Completed Steps
+
+1. Summarize current method, evidence, artifacts, and known limits in one short report.
+2. Define the exact missing result that would justify a full-budget public Stage35 run.
+3. If no exact missing result exists, record no-go and do not train.
+4. Update research log and commit/push.
+
+## Gate
+
+`PASS`: a new collaborator can read the handoff and know what to edit, what not to claim, and when to run more experiments.
 
 # Prompt M23.5 — Integrated optimization-time topology-control smoke
 
