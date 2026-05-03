@@ -3038,3 +3038,30 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR17_03_05_portfolio_snap_recovery_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R17.06 risk-filtered local snap gate — PASS
+
+**Outcome**: Added proposal-risk controls to the checkpoint local snap selector and validated a non-boundary, uncertainty-filtered 16-vertex portfolio through the render-backed checkpoint gate.
+
+**Implementation**:
+- `--max_proposal_uncertainty`
+- `--exclude_boundary_vertices`
+
+**Selection**:
+- candidate faces above threshold: `11746`
+- selected vertices: `16`
+- all selected proposals are non-boundary vertices
+- max selected uncertainty: `0.35`
+- total expected local residual reduction: `0.8844110663521292`
+
+**Gate**:
+- status: `PASS`
+- topology unchanged at `782982` triangles and `820107` vertices
+- deltas are numerical-noise level: PSNR `-0.000001`, SSIM `-0.00000018`, LPIPS `+0.00000054`, AbsRel `0.0`, Depth MAE `0.0`, normal `-0.00000125`
+
+**Decision**: This is a selector safety improvement, not a quality claim. Because R17.03-R17.05 already showed area-seeded snap portfolios fail equal-budget recovery, the next selector should use render residuals, sparse-depth residuals, normal disagreement, or CSEF defect regions.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR17_06_risk_filtered_snap_gate_report.md`
+
+---

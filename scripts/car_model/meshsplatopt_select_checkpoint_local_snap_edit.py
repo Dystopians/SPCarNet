@@ -31,6 +31,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_error_reduction", type=float, default=1e-7)
     parser.add_argument("--max_selected_vertices", type=int, default=1)
     parser.add_argument("--min_selected_vertex_distance", type=float, default=0.0)
+    parser.add_argument("--max_proposal_uncertainty", type=float, default=1.0)
+    parser.add_argument("--exclude_boundary_vertices", action="store_true")
     parser.add_argument("--chunk_size", type=int, default=250000)
     return parser.parse_args()
 
@@ -96,6 +98,8 @@ def main() -> None:
         p
         for p in proposals
         if not p.rejected_reason and (p.expected_error_before - p.expected_error_after) >= float(args.min_error_reduction)
+        and float(p.uncertainty) <= float(args.max_proposal_uncertainty)
+        and not (bool(args.exclude_boundary_vertices) and bool(p.edit.risk_summary.get("boundary_vertex", False)))
     ]
     selected = select_portfolio(
         valid,
@@ -127,6 +131,8 @@ def main() -> None:
                 "selector": "checkpoint_area_seeded_local_plane_csef_portfolio",
                 "max_selected_vertices": int(args.max_selected_vertices),
                 "min_selected_vertex_distance": float(args.min_selected_vertex_distance),
+                "max_proposal_uncertainty": float(args.max_proposal_uncertainty),
+                "exclude_boundary_vertices": bool(args.exclude_boundary_vertices),
             },
             topology_cost_delta=0.0,
             evidence_summary={
@@ -139,6 +145,8 @@ def main() -> None:
                 "total_local_plane_residual_before": total_before,
                 "total_local_plane_residual_after": total_after,
                 "total_expected_residual_reduction": total_before - total_after,
+                "max_proposal_uncertainty": float(args.max_proposal_uncertainty),
+                "exclude_boundary_vertices": bool(args.exclude_boundary_vertices),
             },
             risk_summary={
                 "free_space_risk": 0.0,
@@ -162,6 +170,8 @@ def main() -> None:
         "candidate_vertices": candidate_vertices,
         "proposal_count": int(len(proposals)),
         "valid_proposal_count": int(len(valid)),
+        "max_proposal_uncertainty": float(args.max_proposal_uncertainty),
+        "exclude_boundary_vertices": bool(args.exclude_boundary_vertices),
         "selected": selected[0].to_dict() if selected else None,
         "selected_proposals": [p.to_dict() for p in selected],
         "selected_vertex_count": int(len(selected)),
