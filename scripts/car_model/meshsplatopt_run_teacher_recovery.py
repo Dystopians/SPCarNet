@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -40,6 +41,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--train_densify_from_iter", type=int, default=None)
     parser.add_argument("--train_densification_interval", type=int, default=None)
     parser.add_argument("--train_skip_restricted_delaunay", action="store_true")
+    parser.add_argument(
+        "--train_extra_args",
+        default="",
+        help="Optional shell-style extra arguments appended to train.py for diagnostic recovery runs.",
+    )
     return parser.parse_args()
 
 
@@ -117,6 +123,8 @@ def run_real_tiny_recovery(args: argparse.Namespace) -> dict[str, object]:
         train_cmd.extend(["--densification_interval", str(int(args.train_densification_interval))])
     if bool(args.train_skip_restricted_delaunay):
         train_cmd.append("--skip_restricted_delaunay")
+    if str(args.train_extra_args).strip():
+        train_cmd.extend(shlex.split(str(args.train_extra_args)))
     train_code = run_command(train_cmd, cwd=REPO_ROOT, env=env, log_path=logs / "train_recovery.log")
     render_code = metrics_code = None
     if train_code == 0:
@@ -156,6 +164,7 @@ def run_real_tiny_recovery(args: argparse.Namespace) -> dict[str, object]:
             "densify_from_iter": args.train_densify_from_iter,
             "densification_interval": args.train_densification_interval,
             "skip_restricted_delaunay": bool(args.train_skip_restricted_delaunay),
+            "extra_args": str(args.train_extra_args),
         },
         "exit_codes": {
             "nvidia_smi": nvidia_code,

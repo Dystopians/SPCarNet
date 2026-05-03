@@ -3299,3 +3299,39 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR24_R26_fill_init_and_grid_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R27 sparse-depth recovery — MEDIUM PASS
+
+**Outcome**: Found the first strong parking medium-budget repair gain. Low-weight sparse COLMAP depth recovery (`lambda=0.005`) makes the R26 grid fill edit outperform the strong frozen-topology baseline on render and geometry, and it also beats a matched baseline+sparse control.
+
+**Implementation**:
+- `scripts/car_model/meshsplatopt_run_teacher_recovery.py` now supports `--train_extra_args` for reproducible recovery diagnostics.
+
+**Negative diagnostic**:
+- high sparse-depth weight `0.05` failed.
+- W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/hrug0itm`
+- result: PSNR `12.315643`, AbsRel `0.411106`, normal `52.800506`
+
+**Short pass**:
+- R27.02 output: `outputs/carnet/meshsplatopt/stageR27_02_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to2200`
+- W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ogabx44c`
+- result: PSNR `12.362178`, SSIM `0.299357`, LPIPS `0.621872`, AbsRel `0.407613`, Depth MAE `4.307866`, normal `52.595478`
+- decision: best short-run render and AbsRel among parking repair variants.
+
+**Medium pass**:
+- R27.03 output: `outputs/carnet/meshsplatopt/stageR27_03_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to4000`
+- W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/81hryi53`
+- result: PSNR `14.325891`, SSIM `0.385450`, LPIPS `0.567749`, AbsRel `0.306381`, Depth MAE `3.605697`, normal `49.906129`
+
+**Matched control**:
+- R27.04 baseline+sparse output: `outputs/carnet/meshsplatopt/stageR27_04_parking_baseline_sparse_depth_lam0p005_2000to4000`
+- W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/b726rga8`
+- baseline+sparse result: PSNR `14.301250`, SSIM `0.384772`, LPIPS `0.567846`, AbsRel `0.309894`, Depth MAE `3.666060`, normal `50.012948`
+- edit+sparse delta versus matched sparse control: PSNR `+0.024641`, SSIM `+0.000678`, LPIPS `-0.000097`, AbsRel `-0.003513`, Depth MAE `-0.060363`, normal `-0.106820`
+
+**Decision**: `SPARSE_DEPTH_REPAIR_MEDIUM_PASS`. This is not yet a full paper result because sparse recovery is the dominant contributor, but the repair edit adds measurable benefit under an identical recovery setting. Next step: cross-scene sparse recovery controls and edit-region metrics.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR27_sparse_depth_recovery_report.md`
+
+---
