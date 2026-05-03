@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14.11 bonsai area-outlier diagnostic — PASS_DIAGNOSTIC
+
+**Outcome**: Ran the automatic checkpoint area-outlier selector and render-backed gate on a second public scene, Mip-NeRF 360 `bonsai`. The selector was also optimized to compute triangle areas with torch chunking for large checkpoints.
+
+**Verification**:
+- selected face: `2462659`
+- selected area: `164.05824279785156`
+- median triangle area: `0.0002083771105390042`
+- triangles: `2487474 -> 2487473`
+- render deltas: PSNR `-0.0003681182861328125`, SSIM `-0.000012442469596862793`, LPIPS `-0.0000036954879760742188`
+- geometry deltas: AbsRel `0.0`, Depth MAE `0.0`, normal mean angle `0.000000008903604964416445`
+
+**Decision**: `PASS_DIAGNOSTIC`. This validates second-scene stability for conservative checkpoint-statistics selection and render-backed gating. It is not a second W&B medium recovery run, so it does not by itself upgrade R14 to full `PASS`.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_11_bonsai_area_outlier_diagnostic_report.md`
+- `outputs/carnet/meshsplatopt/stageR14_11_bonsai_area_outlier_diagnostic/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14.10 medium area-outlier pilot — SOFT PASS_SINGLE_SCENE
 
 **Outcome**: Ran the first W&B-logged medium-budget MeshSplatOpt candidate on `parking_phone_tiny`. The run starts from the R14.9 automatic area-outlier edit at iteration 200, resumes training to iteration 2000, renders independently, runs `metrics.py`, and evaluates sparse COLMAP geometry.

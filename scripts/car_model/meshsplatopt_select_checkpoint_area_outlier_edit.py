@@ -7,13 +7,13 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from ss3dm_prior.meshsplatopt.checkpoint_adapter import checkpoint_to_mesh_state, load_checkpoint_state
-from ss3dm_prior.meshsplatopt.csef_builder import triangle_geometry
+from ss3dm_prior.meshsplatopt.checkpoint_adapter import load_checkpoint_state
 from ss3dm_prior.meshsplatopt.edit_types import MeshEdit, MeshSplatOptEditType
 
 
@@ -24,15 +24,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top_k", type=int, default=1)
     parser.add_argument("--min_area_ratio_to_median", type=float, default=1000.0)
     parser.add_argument("--min_percentile", type=float, default=99.9)
+    parser.add_argument("--chunk_size", type=int, default=250000)
     return parser.parse_args()
+
+
+def triangle_areas_from_checkpoint(payload: dict, *, chunk_size: int) -> np.ndarray:
+    vertices = payload["triangles_points"].detach().cpu().to(dtype=torch.float32)
+    faces = payload["_triangle_indices"].detach().cpu().to(dtype=torch.long)
+    chunks: list[torch.Tensor] = []
+    for start in range(0, int(faces.shape[0]), int(chunk_size)):
+        face_chunk = faces[start : start + int(chunk_size)]
+        tri = vertices[face_chunk]
+        cross = torch.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0], dim=1)
+        chunks.append(0.5 * torch.linalg.norm(cross, dim=1))
+    return torch.cat(chunks, dim=0).numpy()
 
 
 def main() -> None:
     args = parse_args()
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    state = checkpoint_to_mesh_state(load_checkpoint_state(args.checkpoint_path))
-    _, _, areas = triangle_geometry(state.vertices, state.faces)
+    payload = load_checkpoint_state(args.checkpoint_path)
+    areas = triangle_areas_from_checkpoint(payload, chunk_size=args.chunk_size)
+    triangle_count = int(payload["_triangle_indices"].shape[0])
+    vertex_count = int(payload["triangles_points"].shape[0])
     median = float(np.median(areas)) if len(areas) else 0.0
     percentile_threshold = float(np.percentile(areas, args.min_percentile)) if len(areas) else 0.0
     ratio_threshold = median * float(args.min_area_ratio_to_median)
@@ -67,8 +82,8 @@ def main() -> None:
     report = {
         "status": status,
         "checkpoint_path": args.checkpoint_path,
-        "triangles": int(len(state.faces)),
-        "vertices": int(len(state.vertices)),
+        "triangles": triangle_count,
+        "vertices": vertex_count,
         "median_area": median,
         "max_area": float(np.max(areas)) if len(areas) else 0.0,
         "percentile_threshold": percentile_threshold,
