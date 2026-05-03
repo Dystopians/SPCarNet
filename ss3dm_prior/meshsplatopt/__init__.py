@@ -6,11 +6,13 @@ from .counterfactual_edit_gate import CounterfactualGateReport, validate_edit_co
 from .defect_mining import mine_defects, write_defect_outputs
 from .defect_types import DefectRecord, DefectType
 from .edit_apply import apply_edit, summarize_topology_delta, verify_mesh_integrity
+from .edit_portfolio import PortfolioItem, rank_portfolio
 from .edit_snapshot import create_snapshot, rollback_edit
 from .edit_types import MeshEdit, MeshSplatOptEditType, MeshState
 from .ground_void_fill import make_ground_plane_void_fill
 from .hole_fill import FillProposal, find_boundary_loops, make_boundary_loop_fill
 from .object_prior_repair import ObjectRepairProposal, make_object_prior_repair_proposals
+from .repair_state_machine import run_repair_state_machine
 from .snap_proposals import SnapProposal, make_snap_proposals
 from .teacher_recovery import TeacherRecoveryPlan, run_teacher_recovery_contract
 from .topology_baselines import TopologyBaselineRun, run_topology_baselines
@@ -27,6 +29,7 @@ __all__ = [
     "MeshSplatOptEditType",
     "MeshState",
     "ObjectRepairProposal",
+    "PortfolioItem",
     "SnapProposal",
     "TeacherRecoveryPlan",
     "TopologyBaselineRun",
@@ -39,6 +42,8 @@ __all__ = [
     "make_object_prior_repair_proposals",
     "make_snap_proposals",
     "mine_defects",
+    "rank_portfolio",
+    "run_repair_state_machine",
     "run_topology_baselines",
     "run_teacher_recovery_contract",
     "rollback_edit",

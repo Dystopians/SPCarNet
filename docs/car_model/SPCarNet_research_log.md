@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R12 edit portfolio state machine — PASS
+
+**Outcome**: Implemented portfolio scoring and a repair state machine with auditable trace, accepted/rejected edits, and final audit outputs. The synthetic smoke accepts cleanup, snap, fill, and appearance-reset classes while rejecting a prior-only fill in normal mode.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- smoke command: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_meshsplatopt_stageR12_portfolio.py`
+- smoke status: `PASS`
+- accepted edit classes: `DELETE_TRIANGLES`, `SNAP_VERTICES`, `FILL_PATCH`, `APPEARANCE_RESET`
+
+**Decision**: `PASS`. The state machine executes at least three edit classes on synthetic data and produces an auditable trace.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR12_edit_portfolio_design.md`
+- `docs/car_model/meshsplatopt_stageR12_edit_portfolio_implementation_report.md`
+- `docs/car_model/meshsplatopt_stageR12_portfolio_smoke.md`
+- `outputs/carnet/meshsplatopt/stageR12_portfolio_smoke/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R11 teacher recovery contract — SOFT PASS
 
 **Outcome**: Implemented teacher recovery cache and report contract. The smoke writes RGB/depth/normal/alpha/visibility/edit-region placeholder cache files and clearly marks real recovery metrics unavailable when no renderable model path exists.
