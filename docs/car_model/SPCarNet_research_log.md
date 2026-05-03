@@ -4,6 +4,23 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Deep retrospective on PRISM/MeshPrior — FAIL as NeurIPS-strength method result
+
+**Outcome**: Added a frank retrospective after reviewing the final M35-M43 evidence. The conclusion is that the engineering infrastructure is strong, but the empirical method result and innovation level are not sufficient for a NeurIPS-level claim.
+
+**Key judgment**:
+- `bonsai` M35 vs Stage33 improves by only `+0.067 dB` PSNR, `+0.001084` SSIM, `-0.000644` LPIPS, and `-512` triangles.
+- `courtyard` M35 improves topology/PSNR/SSIM but regresses LPIPS.
+- Public full-budget Stage35 evidence is missing.
+- The method accumulated too many modules relative to the measured payoff.
+
+**Decision**: Do not continue incremental PRISM gate/schedule tuning by default. The next defensible step is a short, decisive Pareto feasibility experiment for topology compression, or a pivot back to a more clearly novel task/dataset formulation.
+
+**Artifact**:
+- `docs/car_model/reports/meshprior_prism_deep_retrospective.md`
+
+---
+
 ## 2026-05-02 — Stage43 final handoff and experiment trigger — PASS
 
 **Outcome**: Added a concise final handoff report describing the method, strongest evidence, main artifacts, forbidden claims, and exact trigger conditions for any future full-budget public Stage35 run.

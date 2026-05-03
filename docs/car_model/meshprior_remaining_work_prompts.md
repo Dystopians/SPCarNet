@@ -4,7 +4,7 @@ Date: 2026-05-02
 
 ## Current State
 
-SPCarNet MeshPrior is about `99%` complete as a research-codebase transformation and about `97%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, M32 measured candidate-impact ranking, M33 calibration-diversity diagnostics, M34 post-commit candidate refresh diagnostics, M35 conservative retained relaxed refresh, M36 metric reconciliation, M37 visual/failure packaging, M38 paper assets, M39 manuscript skeleton, M40 manuscript draft, M41 citation-backed related work, M42 handoff assets, and M43 final handoff are implemented. The remaining core is final human editing, exact BibTeX verification for TODO authors, and optional targeted full-budget training only if the explicit M43 trigger fires. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `99%` complete as a research-codebase transformation, but only about `35-45%` complete as a NeurIPS-strength method result. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, M32 measured candidate-impact ranking, M33 calibration-diversity diagnostics, M34 post-commit candidate refresh diagnostics, M35 conservative retained relaxed refresh, M36 metric reconciliation, M37 visual/failure packaging, M38 paper assets, M39 manuscript skeleton, M40 manuscript draft, M41 citation-backed related work, M42 handoff assets, and M43 final handoff are implemented. A deep retrospective concludes that the current empirical gains are too small and the innovation is not sharp enough for a top-tier method paper. The next defensible step is not more packaging; it is either a decisive topology-compression Pareto experiment or a pivot to a clearer task/dataset formulation.
 
 Key codebase links:
 
@@ -53,6 +53,7 @@ Key codebase links:
 - Bibliography draft: `docs/car_model/reports/meshprior_prism_bibliography_draft.bib`
 - Reviewer-risk checklist: `docs/car_model/reports/meshprior_prism_reviewer_risk_checklist.md`
 - Final handoff: `docs/car_model/reports/meshprior_prism_final_handoff.md`
+- Deep retrospective: `docs/car_model/reports/meshprior_prism_deep_retrospective.md`
 
 Known W&B runs:
 
@@ -478,6 +479,30 @@ Prepare a concise human-facing handoff summary and define the exact condition th
 ## Gate
 
 `PASS`: a new collaborator can read the handoff and know what to edit, what not to claim, and when to run more experiments.
+
+# Prompt M44 — Decisive topology-compression Pareto feasibility experiment
+
+## Goal
+
+Test whether PRISM can become a real paper by showing a meaningfully better topology-quality Pareto frontier, rather than marginal metric gains.
+
+## Premise
+
+The deep retrospective concludes that the current M35 result is not NeurIPS-strength. Do not continue small gate/schedule tuning unless this Pareto experiment shows a large effect.
+
+## Required Steps
+
+1. Select at least two public COLMAP-compatible scenes, preferably `bonsai` and `courtyard`; add a third if GPU time is reasonable.
+2. Build or script topology-budget sweeps at target retained topology levels, for example `90%`, `75%`, `50%`, and `25%`.
+3. Compare PRISM-controlled pruning against simple post-hoc pruning/simplification baselines.
+4. Use independent `render.py + metrics.py` only for paper-facing metrics.
+5. Activate W&B for any training; check GPU before launch.
+6. Stop early if the first scene shows no meaningful Pareto advantage.
+7. Continue PRISM only if it achieves a clear topology reduction, e.g. `30-70%` fewer triangles at matched or bounded-degradation quality.
+
+## Gate
+
+`PASS` only if PRISM gives a clearly better Pareto frontier than simple baselines. `FAIL/PIVOT` if gains remain marginal.
 
 # Prompt M23.5 — Integrated optimization-time topology-control smoke
 
