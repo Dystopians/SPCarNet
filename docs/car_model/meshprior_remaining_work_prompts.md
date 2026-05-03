@@ -4,7 +4,7 @@ Date: 2026-05-02
 
 ## Current State
 
-SPCarNet MeshPrior is about `99%` complete as a research-codebase transformation and about `89%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, M32 measured candidate-impact ranking, M33 calibration-diversity diagnostics, M34 post-commit candidate refresh diagnostics, M35 conservative retained relaxed refresh, and M36 metric reconciliation are implemented. The remaining core is visual/failure-case packaging and full-budget public-scene evidence. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `99%` complete as a research-codebase transformation and about `90%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, M32 measured candidate-impact ranking, M33 calibration-diversity diagnostics, M34 post-commit candidate refresh diagnostics, M35 conservative retained relaxed refresh, M36 metric reconciliation, and M37 visual/failure packaging are implemented. The remaining core is final paper figure/table polishing and an explicit full-budget public-scene training decision. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -41,6 +41,8 @@ Key codebase links:
 - Retained relaxed refresh report: `docs/car_model/meshprior_stage35_retained_refresh_report.md`
 - Metric reconciliation report: `docs/car_model/meshprior_stage36_metric_reconciliation_report.md`
 - Metric reconciliation collector: `scripts/car_model/meshprior_collect_metric_reconciliation.py`
+- Visual/failure package report: `docs/car_model/meshprior_stage37_visual_failure_package_report.md`
+- Visual/failure package script: `scripts/car_model/meshprior_package_visual_failures.py`
 
 Known W&B runs:
 
@@ -170,7 +172,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Post-commit candidate refresh | execution finding / M34 | SOFT PASS / diagnostic PASS | Added opt-in `--prism_post_commit_candidate_refresh` and no-candidate diagnostics. Root cause is `recent_t` protecting all triangles and zeroing prune score after topology sync. Relaxed-score v3 keeps additional `bonsai` topology reduction (`633787 -> 631739`) with PSNR up but SSIM/LPIPS slightly down, so no default promotion. |
 | Conservative retained relaxed refresh | execution finding / M35 | PASS | Added retained relaxed commit cap, strict relaxed counterfactual proxy gate, validation-rollback records, final topology audit, and W&B audit scalars. `bonsai` reaches `633275` triangles and improves independent PSNR/SSIM/LPIPS versus Stage33; `courtyard` confirms active relaxed commit retention. |
 | Metric-path reconciliation | execution finding / M36 | PASS | Added reproducible JSON/CSV/Markdown collector for M24-M35 evidence rows. Independent `render.py + metrics.py` values are the paper-facing path; training eval fields remain separate diagnostics. |
-| Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
+| Final claim table and failure cases | original prompts Layer G / M37 | PASS | Added three render-vs-GT panels, six concrete failure cases, and paper-safe claim wording. Full-budget public-scene training is deferred until figure/table needs are fixed. |
 
 ## Execution-Discovered Risks
 
@@ -272,7 +274,20 @@ Convert M24-M35 into a paper-facing evidence package that separates training-tim
 
 Turn M35/M36 from engineering evidence into a paper-ready result section: visual panels, failure taxonomy, claim wording, and a decision on whether to spend GPU time on full-budget public-scene Stage35 runs.
 
-## Required Steps
+## Status
+
+`PASS` on 2026-05-02.
+
+## Result
+
+- script: `scripts/car_model/meshprior_package_visual_failures.py`
+- report: `docs/car_model/meshprior_stage37_visual_failure_package_report.md`
+- output: `outputs/carnet/meshprior/stage37_visual_failure_package/`
+- visual panels: parking M24.2, `bonsai` M35, `courtyard` M35
+- failure cases: post-commit no-candidate, validation rollback, relaxed cap reached, metric-path mismatch, dataset geometry observability, perceptual metric tradeoff
+- training decision: do not start full-budget public-scene training yet; polish final paper figures/tables first.
+
+## Completed Steps
 
 1. Use the M36 table to identify the best rows per scene and the rows that expose tradeoffs.
 2. Build qualitative panels for at least `bonsai`, `courtyard`, and the parking M24.2 row if renders exist.
@@ -284,7 +299,25 @@ Turn M35/M36 from engineering evidence into a paper-ready result section: visual
 
 ## Gate
 
-`PASS` if visual/failure evidence is linked to reproducible artifacts and the next full-budget decision is explicit.
+`PASS`: visual/failure evidence is linked to reproducible artifacts and the next full-budget decision is explicit.
+
+# Prompt M38 — Final paper assets and optional full-budget public-scene run
+
+## Goal
+
+Convert M36/M37 artifacts into final paper assets: camera-ready table text, figure captions, method limitations, and a narrow go/no-go decision for one full-budget Stage35 public-scene run.
+
+## Required Steps
+
+1. Produce a final paper table markdown that includes only independent metrics and selected rows.
+2. Produce figure captions for the parking, `bonsai`, and `courtyard` panels.
+3. Write a concise method limitations section using the M37 failure taxonomy.
+4. Decide whether to run one full-budget Stage35 public-scene experiment. If yes, check GPU with `nvidia-smi`, activate W&B, record command/URL, then run render+metrics and update tables. If no, document why.
+5. Update research log and commit/push.
+
+## Gate
+
+`PASS` if the final table/caption/limitations package is usable as a paper draft section, with the full-budget training decision recorded.
 
 # Prompt M23.5 — Integrated optimization-time topology-control smoke
 

@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage37 visual/failure package — PASS
+
+**Outcome**: Added a packaging script for visual panels, failure cases, and paper-safe claim wording. It generated render-vs-GT panels for parking M24.2, `bonsai` M35, and `courtyard` M35, plus a six-row failure table tied to concrete local artifacts.
+
+**Generated artifacts**:
+- `outputs/carnet/meshprior/stage37_visual_failure_package/visual_failure_package.json`
+- `outputs/carnet/meshprior/stage37_visual_failure_package/failure_case_table.md`
+- `outputs/carnet/meshprior/stage37_visual_failure_package/paper_claim_wording.md`
+- `outputs/carnet/meshprior/stage37_visual_failure_package/visual_panels/parking_m24_2_retention_7000.png`
+- `outputs/carnet/meshprior/stage37_visual_failure_package/visual_panels/bonsai_m35_retained_relaxed.png`
+- `outputs/carnet/meshprior/stage37_visual_failure_package/visual_panels/courtyard_m35_retained_relaxed.png`
+
+**Decision**: Stage37 `PASS`. Do not start full-budget public-scene training yet. The current highest-value work is polishing the final paper figures/tables and only then deciding whether one full-budget Stage35 public-scene run is worth the GPU time.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage37_visual_failure_package_report.md`
+- `scripts/car_model/meshprior_package_visual_failures.py`
+
+---
+
 ## 2026-05-02 — Stage36 metric reconciliation evidence table — PASS
 
 **Outcome**: Added a reproducible collector for paper-facing MeshPrior evidence rows. The collector reads local M24-M35 artifacts, exports JSON/CSV/Markdown tables, preserves W&B links, records topology/audit metadata, and keeps training-time metrics separate from independent `render.py + metrics.py` metrics.
