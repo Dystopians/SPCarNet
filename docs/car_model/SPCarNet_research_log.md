@@ -4,6 +4,23 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R0 pivot audit — PASS
+
+**Outcome**: Created branch `neurips-meshsplatopt-repair`, read the required PRISM retrospective, handoff, reviewer-risk, RFC, roadmap, topology-retention, retained-refresh, metric-reconciliation, and remaining-work documents, and locked the pivot from delete-centric PRISM to evidence-certified bidirectional mesh surgery.
+
+**Verification**:
+- repository compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- branch: `neurips-meshsplatopt-repair`
+- commit at audit time: `6344a0c`
+- dirty files before R0 docs: untracked `docs/NeurIPSRepairPrompts.md` and untracked submodule directories only
+
+**Decision**: `PROCEED_TO_R1`. Stage35 remains a named retained-PRISM baseline, not the final method. MeshSplatOpt must support reversible delete, collapse, snap, split, fill, protect, and appearance-recovery operations under CSEF and counterfactual gates.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR0_pivot_audit.md`
+
+---
+
 ## 2026-05-02 — Deep retrospective on PRISM/MeshPrior — FAIL as NeurIPS-strength method result
 
 **Outcome**: Added a frank retrospective after reviewing the final M35-M43 evidence. The conclusion is that the engineering infrastructure is strong, but the empirical method result and innovation level are not sufficient for a NeurIPS-level claim.
