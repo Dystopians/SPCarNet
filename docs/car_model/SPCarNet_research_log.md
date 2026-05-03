@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14.1 checkpoint adapter — PASS
+
+**Outcome**: Implemented a conservative Mesh Splatting checkpoint adapter for MeshSplatOpt edits. It can apply `DELETE_TRIANGLES` and `SNAP_VERTICES` to checkpoint copies while preserving schema consistency, and it rejects fill/split/collapse/merge edits that require radiance/optimizer attribute initialization.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- smoke command: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_meshsplatopt_stageR14_1_checkpoint_adapter.py`
+- smoke status: `PASS`
+- delete synchronizes per-face fields; snap updates vertex positions; fill is explicitly deferred
+
+**Decision**: `PASS`. R14 is partially unblocked for real checkpoint-copy delete/snap experiments. Certified public-scene fill still requires radiance initialization and render/recovery integration.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_1_checkpoint_adapter_design.md`
+- `docs/car_model/meshsplatopt_stageR14_1_checkpoint_adapter_implementation_report.md`
+- `docs/car_model/meshsplatopt_stageR14_1_checkpoint_adapter_smoke.md`
+- `outputs/carnet/meshsplatopt/stageR14_1_checkpoint_adapter_smoke/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14 medium scene pilot — STOP_BEFORE_GPU
 
 **Outcome**: Wrote the R14 medium public-scene pilot design and stop report. No GPU training was launched because the current MeshSplatOpt implementation is synthetic/generic-mesh only and lacks real checkpoint edit application, render-backed counterfactual validation, and real teacher recovery.

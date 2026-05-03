@@ -2,6 +2,7 @@
 
 from .csef_builder import build_csef, write_csef_outputs
 from .csef_types import CSEFBuildResult, CSEFRegion, CSEFSample
+from .checkpoint_adapter import CheckpointEditReport, apply_edit_to_checkpoint_copy
 from .counterfactual_edit_gate import CounterfactualGateReport, validate_edit_counterfactual
 from .defect_mining import mine_defects, write_defect_outputs
 from .defect_types import DefectRecord, DefectType
@@ -22,6 +23,7 @@ __all__ = [
     "CSEFBuildResult",
     "CSEFRegion",
     "CSEFSample",
+    "CheckpointEditReport",
     "CounterfactualGateReport",
     "DefectRecord",
     "DefectType",
@@ -35,6 +37,7 @@ __all__ = [
     "TeacherRecoveryPlan",
     "TopologyBaselineRun",
     "apply_edit",
+    "apply_edit_to_checkpoint_copy",
     "build_csef",
     "create_snapshot",
     "find_boundary_loops",
