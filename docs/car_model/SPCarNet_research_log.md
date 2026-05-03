@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14.13 bonsai post-edit recovery diagnostic — PASS_DIAGNOSTIC_NOT_EQUAL_BUDGET
+
+**Outcome**: Ran a W&B-logged 200-step recovery diagnostic on `bonsai` after the R14.11 accepted area-outlier edit. The edited checkpoint resumed from iteration 2000 and trained to iteration 2200, then rendered and evaluated independently.
+
+**W&B**: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/z498br53`
+
+**Verification**:
+- train/render/metrics exit codes: `0/0/0`
+- topology after recovery: `2487473` triangles, `2478890` vertices
+- render metrics at 2200: PSNR `13.276382446289062`, SSIM `0.24055197834968567`, LPIPS `0.6113873720169067`
+- sparse geometry at 2200: AbsRel `0.4733479577347401`, Depth MAE `4.762276469029142`, normal mean angle `49.21947049923495`
+
+**Decision**: `PASS_DIAGNOSTIC_NOT_EQUAL_BUDGET`. Recovery is stable and improves metrics versus the 2000iter baseline, but it uses 200 extra training steps and must not be reported as an equal-budget R14 win.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_13_bonsai_postedit_recovery_diagnostic_report.md`
+- `outputs/carnet/meshsplatopt/stageR14_13_bonsai_postedit_recovery_diagnostic/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14.12 courtyard area-outlier diagnostic — PASS_DIAGNOSTIC
 
 **Outcome**: Ran the automatic checkpoint area-outlier selector and render-backed gate on ETH3D `courtyard`, the third scene tested by this conservative real checkpoint edit path.
