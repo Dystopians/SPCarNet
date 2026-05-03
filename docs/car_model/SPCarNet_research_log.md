@@ -4,6 +4,27 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14.6 render-backed checkpoint gate — PASS
+
+**Outcome**: Added a reusable checkpoint-level counterfactual gate that compares baseline and edited candidate models using independent render metrics, sparse COLMAP geometry metrics, and checkpoint topology.
+
+**Verification**:
+- script compiles: `scripts/car_model/meshsplatopt_render_backed_checkpoint_gate.py`
+- validation ran on GPU 4
+- baseline: `64497` triangles, `193491` vertices
+- candidate: `64498` triangles, `193494` vertices
+- render deltas: PSNR `0.0`, SSIM `0.0`, LPIPS `0.0`
+- geometry deltas: AbsRel `0.0`, Depth MAE `0.0`, normal mean angle `-0.00004203616886400141`
+
+**Decision**: `PASS`. The gate now turns checkpoint-copy edits into auditable render/geometry accept-reject decisions. This validates the infrastructure path only; R14 still needs real edit selection, teacher recovery, and medium-budget W&B-logged public-scene comparison before paper-facing claims.
+
+**Linked artefacts**:
+- `scripts/car_model/meshsplatopt_render_backed_checkpoint_gate.py`
+- `docs/car_model/meshsplatopt_stageR14_6_render_backed_checkpoint_gate_report.md`
+- `outputs/carnet/meshsplatopt/stageR14_6_render_backed_checkpoint_gate/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14.5 real checkpoint fill dry-run — PASS
 
 **Outcome**: Materialized a tiny constructive `FILL_PATCH` on a real 200-iteration checkpoint copy, rendered it, ran independent metrics, and ran comparable COLMAP geometry evaluation.
