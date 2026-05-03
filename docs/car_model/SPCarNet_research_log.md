@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt R14.17 bonsai snap recovery — PASS_DIAGNOSTIC_NOT_EQUAL_BUDGET
+
+**Outcome**: Ran a W&B-logged 200-step recovery diagnostic on the accepted `bonsai` non-delete `SNAP_VERTICES` checkpoint. Training resumed from iteration `2000` to `2200`, then rendered, evaluated with image metrics, and passed sparse COLMAP geometry evaluation.
+
+**W&B**: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/8qdzfu6h`
+
+**Verification**:
+- train/render/metrics exit codes: `0/0/0`
+- topology after recovery: `2487474` triangles, `2478890` vertices
+- render metrics at 2200: PSNR `13.273988723754883`, SSIM `0.24039088189601898`, LPIPS `0.6116319894790649`
+- sparse geometry at 2200: AbsRel `0.47445281696526337`, Depth MAE `4.772623802825101`, normal mean angle `49.315686202793366`
+
+**Decision**: `PASS_DIAGNOSTIC_NOT_EQUAL_BUDGET`. Non-delete recovery is stable and improves over the 2000iter baseline, but it uses 200 extra steps and is slightly weaker than the R14.13 delete-recovery diagnostic.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_17_bonsai_snap_postedit_recovery_diagnostic_report.md`
+- `outputs/carnet/meshsplatopt/stageR14_17_bonsai_snap_postedit_recovery_diagnostic/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt R14.14-R14.16 non-delete snap gates — PASS
 
 **Outcome**: Implemented a real checkpoint area-outlier `SNAP_VERTICES` selector and validated it with render-backed gates on `parking_phone_tiny`, `bonsai`, and `courtyard`. This is the first R14 real-checkpoint non-delete edit pass across multiple scenes.

@@ -6,7 +6,7 @@ Date: 2026-05-02
 
 `SOFT PASS`.
 
-R14 now has one W&B-logged medium-budget recovery result with clear single-scene gains, two public-scene delete gate diagnostics, one public-scene recovery diagnostic, and a three-scene non-delete `SNAP_VERTICES` gate pass. This is enough to continue method development and unblock public-scene recovery training, but not enough to claim a full NeurIPS-level repair result.
+R14 now has one W&B-logged medium-budget recovery result with clear single-scene gains, two public-scene delete gate diagnostics, two public-scene recovery diagnostics, and a three-scene non-delete `SNAP_VERTICES` gate pass. This is enough to continue method development and unblock equal-budget public-scene runs, but not enough to claim a full NeurIPS-level repair result.
 
 ## Evidence Summary
 
@@ -17,6 +17,7 @@ R14 now has one W&B-logged medium-budget recovery result with clear single-scene
 | R14.12 | `courtyard` | posthoc edit + render-backed gate, iter 2000 | `PASS_DIAGNOSTIC` | Conservative area-outlier edit is accepted with negligible render/geometry deltas |
 | R14.13 | `bonsai` | W&B post-edit recovery diagnostic, iter 2000 -> 2200 | `PASS_DIAGNOSTIC_NOT_EQUAL_BUDGET` | Recovery is stable and improves metrics, but uses 200 extra steps |
 | R14.14-R14.16 | `parking_phone_tiny`, `bonsai`, `courtyard` | non-delete `SNAP_VERTICES` + render-backed gate, iter 2000 | `PASS_DIAGNOSTIC_CROSS_SCENE` | Real checkpoint area-outlier snap edits pass all render/geometry gates |
+| R14.17 | `bonsai` | W&B non-delete snap recovery diagnostic, iter 2000 -> 2200 | `PASS_DIAGNOSTIC_NOT_EQUAL_BUDGET` | Non-delete snap recovery is stable and improves over 2000iter baseline, but is not equal-budget |
 
 ## Parking Medium Result
 
@@ -71,11 +72,30 @@ https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshp
 
 This diagnostic is useful because it verifies recovery stability on a second public scene. It is not an equal-budget win because it evaluates at iteration 2200 against a 2000iter baseline.
 
+## Bonsai Non-Delete Snap Recovery Diagnostic
+
+W&B:
+
+```text
+https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/8qdzfu6h
+```
+
+| metric | baseline 2000 | snap recovery 2200 | delta |
+|---|---:|---:|---:|
+| PSNR | `12.201611518859863` | `13.273988723754883` | `+1.0723772048950195` |
+| SSIM | `0.20731531083583832` | `0.24039088189601898` | `+0.033075571060180664` |
+| LPIPS | `0.6242585182189941` | `0.6116319894790649` | `-0.0126265287399292` |
+| AbsRel | `0.49587362441894434` | `0.47445281696526337` | `-0.02142080745368097` |
+| Depth MAE | `4.907808996255763` | `4.772623802825101` | `-0.1351851934306621` |
+| normal mean deg | `50.118300749023625` | `49.315686202793366` | `-0.8026145462302589` |
+
+This diagnostic is useful because it verifies W&B recovery stability for a real non-delete edit. It is not an equal-budget win because it evaluates at iteration 2200 against a 2000iter baseline.
+
 ## What This Proves
 
 - Real checkpoint edit materialization works for delete, fill, and non-delete vertex snap.
 - Render-backed acceptance works on three scenes.
-- Teacher/recovery training can resume edited checkpoints with W&B online.
+- Teacher/recovery training can resume delete and non-delete edited checkpoints with W&B online.
 - A medium-budget parking run can improve independent render metrics and sparse-depth geometry.
 - Edge-connected CSEF is invalid for real Mesh Splatting checkpoint proposal selection because the saved representation is triangle soup.
 
