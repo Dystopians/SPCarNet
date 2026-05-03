@@ -3487,3 +3487,24 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
 
 ---
+
+## 2026-05-03 - R39 sparse-depth lambda fine sweep and table collector
+
+**Goal**: raise completion by checking whether the R38 `lambda=0.003` point is actually optimal, and by adding a reproducible collector for sparse-recovery paper tables.
+
+**Implementation**:
+- added `scripts/car_model/meshsplatopt_collect_sparse_recovery_results.py`;
+- collector reads independent `results.json` plus `geometry_eval_colmap/iter_*_max500.json`;
+- collector writes JSON, CSV, and Markdown under `outputs/carnet/meshsplatopt/sparse_recovery_tables`.
+
+**R39 parking lambda fine sweep**:
+- R39.01 fraction `0.50`, lambda `0.002`, W&B `jqcn7cwc`: PSNR `17.142246`, SSIM `0.534422`, LPIPS `0.456627`, AbsRel `0.181240`, Depth MAE `2.825327`, normal `41.812617`
+- R39.02 fraction `0.50`, lambda `0.004`, W&B `o9f9e03g`: PSNR `17.088505`, SSIM `0.532507`, LPIPS `0.457398`, AbsRel `0.184764`, Depth MAE `2.956959`, normal `41.736803`
+
+**Decision**: `NEW_STRONGEST_PARKING_RESULT_AND_LAMBDA_CURVE_PASS`. R39.01 supersedes R38.01. Versus R38.01 it improves PSNR by `+0.018061`, SSIM by `+0.001067`, LPIPS by `-0.000051`, AbsRel by `-0.002219`, and Depth MAE by `-0.120237`. R39.02 confirms that increasing lambda back toward `0.005` loses both render and depth geometry. The current best sparse-depth lambda for parking is therefore `0.002`.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
+- `scripts/car_model/meshsplatopt_collect_sparse_recovery_results.py`
+
+---

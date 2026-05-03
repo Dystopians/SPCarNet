@@ -178,6 +178,27 @@ R38 lowers the sparse depth lambda from `0.005` to `0.003` in the parking 12000-
 
 Decision: `NEW_PARKING_RENDER_AND_GEOMETRY_BEST`. R38.01 is the new parking table row. Relative to R32.02b, it improves PSNR by `+0.018696`, SSIM by `+0.000712`, LPIPS by `-0.001181`, AbsRel by `-0.000915`, Depth MAE by `-0.012425`, and normal angle by `-0.084849`. R38.02 is the geometry-biased variant and is useful for a Pareto table: compared with R38.01, it further improves AbsRel by `-0.000204`, Depth MAE by `-0.011921`, and normal angle by `-0.047269`.
 
+## R39 Parking Lambda Fine Sweep and Result Collector
+
+R39 checks the local lambda curve around R38.01 using the same `0.50` trusted/random fraction:
+
+| Row | fraction | lambda | W&B | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | normal angle |
+| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| R39.01 | `0.50` | `0.002` | `jqcn7cwc` | `17.142246` | `0.534422` | `0.456627` | `0.181240` | `2.825327` | `41.812617` |
+| R38.01 | `0.50` | `0.003` | `yo6oxofn` | `17.124186` | `0.533355` | `0.456678` | `0.183460` | `2.945563` | `41.679295` |
+| R39.02 | `0.50` | `0.004` | `o9f9e03g` | `17.088505` | `0.532507` | `0.457398` | `0.184764` | `2.956959` | `41.736803` |
+| R32.02b | `0.50` | `0.005` | `j58gdh9q` | `17.105490` | `0.532643` | `0.457859` | `0.184374` | `2.957988` | `41.764144` |
+
+Decision: `NEW_STRONGEST_PARKING_RESULT_AND_LAMBDA_CURVE_PASS`. R39.01 is the new parking table row and the strongest validated render/depth result. Relative to R38.01, it improves PSNR by `+0.018061`, SSIM by `+0.001067`, LPIPS by `-0.000051`, AbsRel by `-0.002219`, and Depth MAE by `-0.120237`. Relative to R32.02b, it improves PSNR by `+0.036756`, SSIM by `+0.001779`, LPIPS by `-0.001232`, AbsRel by `-0.003134`, and Depth MAE by `-0.132661`.
+
+Reproducible table generation is now handled by:
+
+```bash
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/meshsplatopt_collect_sparse_recovery_results.py
+```
+
+The collector writes paper-facing JSON/CSV/Markdown tables under `outputs/carnet/meshsplatopt/sparse_recovery_tables`.
+
 ## Current Interpretation
 
-The strongest validated parking render result is now R38.01 at 16000. Compared with R16.03 full baseline, it improves PSNR by `+1.553621`, SSIM by `+0.085143`, and LPIPS by `-0.071374`, while improving sparse COLMAP depth agreement. R31 adds an important early-stop result and two cross-scene positives. R32 adds a concrete algorithmic improvement on top of long-horizon sparse-geometry-guided recovery: confidence-aware COLMAP sparse correspondence sampling. R33-R36 narrow the claim into a stronger paper-safe version: trusted sampling is a tunable confidence knob, not a universal constant fraction. R38 then converts that tuning into a new parking best result by lowering the sparse-depth lambda to `0.003`, improving both render and sparse geometry over the prior best R32.02b.
+The strongest validated parking render/depth result is now R39.01 at 16000. Compared with R16.03 full baseline, it improves PSNR by `+1.571681`, SSIM by `+0.086210`, and LPIPS by `-0.071425`, while substantially improving sparse COLMAP depth agreement. R31 adds an important early-stop result and two cross-scene positives. R32 adds a concrete algorithmic improvement on top of long-horizon sparse-geometry-guided recovery: confidence-aware COLMAP sparse correspondence sampling. R33-R36 narrow the claim into a stronger paper-safe version: trusted sampling is a tunable confidence knob, not a universal constant fraction. R38-R39 then convert that tuning into a stronger lambda curve, showing that `lambda=0.002` is the current best parking setting for the `0.50` trusted/random mixture.
