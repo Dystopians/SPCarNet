@@ -2857,3 +2857,26 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR14_21_22_freeze_densify_recovery_control_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R15.01-R15.04 multi-scene freeze medium — PASS
+
+**Outcome**: Extended the freeze-densify/skip-Delaunay recovery schedule to `courtyard` and `parking_phone_tiny`, with online W&B and full render/geometry evaluation. Together with the previous `bonsai` rows, the schedule now has three-scene medium-budget support. The current `SNAP_VERTICES` area-outlier selector remains weak under equal schedule controls.
+
+**W&B**:
+- courtyard baseline freeze: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/cvf6t7do`
+- courtyard snap freeze: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/d3h2ruj3`
+- parking baseline freeze: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/evj36lvp`
+- parking snap freeze: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/3r7inkj0`
+
+**Key schedule gains**:
+- `courtyard` baseline 2000 -> freeze 4000: PSNR `14.946162 -> 17.819637`, SSIM `0.438775 -> 0.578303`, LPIPS `0.592443 -> 0.460392`, AbsRel `0.354800 -> 0.243054`, topology unchanged at `410254` triangles.
+- `parking_phone_tiny` baseline 2000 -> freeze 4000: PSNR `11.599438 -> 14.251087`, SSIM `0.270268 -> 0.383800`, LPIPS `0.634732 -> 0.569749`, AbsRel `0.427880 -> 0.324794`, topology unchanged at `782982` triangles.
+
+**Selector finding**: snap-freeze is slightly negative versus baseline-freeze on `courtyard` and `parking_phone_tiny`; it remains only a safe edit materialization path, not a performance selector.
+
+**Decision**: R15 is now a genuine multi-scene schedule `PASS`. The next high-value work is a full-budget freeze run and a stronger edit/proposal selector.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR15_01_04_multiscene_freeze_medium_report.md`
+
+---

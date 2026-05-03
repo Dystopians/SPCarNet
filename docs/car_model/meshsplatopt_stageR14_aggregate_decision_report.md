@@ -186,3 +186,11 @@ Proceed to R15 full or multi-scene validation only if:
 4. the non-delete snap selector remains behind render-backed acceptance.
 
 Full-budget R15 is now justified for the topology-retention schedule, but snap-specific claims remain blocked until multi-scene or stronger-selector evidence exists.
+
+## R15 Follow-Up
+
+R15.01-R15.04 completed this next gate on 2026-05-03 for medium-budget multi-scene validation. See:
+
+- `docs/car_model/meshsplatopt_stageR15_01_04_multiscene_freeze_medium_report.md`
+
+The updated decision is: freeze-densify plus skip-Delaunay is a three-scene medium-budget schedule `PASS`; the current area-outlier `SNAP_VERTICES` selector is safe but weak and should not be the headline method claim.
