@@ -2904,3 +2904,27 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR16_01_courtyard_full_freeze_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R16.02 bonsai full freeze — PASS
+
+**Outcome**: Ran the same full-budget freeze-densify/skip-Delaunay schedule on `bonsai` from iteration 2000 to 7000. This gives two public full-budget rows: `courtyard` and `bonsai`.
+
+**W&B**:
+- `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/nsj76h7d`
+
+**Metrics**:
+- topology: `2487474` triangles, `2478890` vertices, unchanged from the loaded 2000 checkpoint
+- independent render: PSNR `18.303303`, SSIM `0.455556`, LPIPS `0.490660`
+- COLMAP proxy: depth AbsRel `0.220888`, depth MAE `2.392198`, normal mean angle `41.233611`
+
+**Comparison**:
+- baseline 2000: PSNR `12.201612`, SSIM `0.207315`, LPIPS `0.624259`, AbsRel `0.495874`, normal `50.118301`
+- freeze medium 4000: PSNR `17.429750`, SSIM `0.432352`, LPIPS `0.506490`, AbsRel `0.271062`, normal `43.347689`
+- full freeze improves over both while preserving topology exactly.
+
+**Decision**: R16 is now a two-scene full-budget schedule `PASS`. The next method gap is selector strength, not schedule validation.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR16_01_02_two_scene_full_freeze_report.md`
+
+---
