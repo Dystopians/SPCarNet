@@ -4,6 +4,28 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R7 snap/deform proposals — PASS
+
+**Outcome**: Implemented safe snap/deform proposal generation using plane-fit targets, capped displacements, step sizes `0.1/0.25/0.5`, unsupported-floater rejection, and R5-compatible `SNAP_VERTICES` edits.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- smoke command: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_meshsplatopt_stageR7_snap.py`
+- smoke status: `PASS`
+- dent error reduced from `0.03072` to `0.019831720797113993`
+- misalignment error reduced from `0.019200000000000002` to `0.009984000000000002`
+- unsupported floater rejected and rollback exact
+
+**Decision**: `PASS`. R8 can add fill/patch proposals using the same reversible edit contract.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR7_snap_deform_design.md`
+- `docs/car_model/meshsplatopt_stageR7_snap_deform_implementation_report.md`
+- `docs/car_model/meshsplatopt_stageR7_snap_smoke.md`
+- `outputs/carnet/meshsplatopt/stageR7_snap_smoke/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R6 topology baselines — PASS
 
 **Outcome**: Implemented topology-reduction baselines for delete, random delete, low-visibility delete, boundary-protected delete, greedy QEM-style edge collapse, planar face merge, and an explicit external-simplification JSON contract placeholder.
