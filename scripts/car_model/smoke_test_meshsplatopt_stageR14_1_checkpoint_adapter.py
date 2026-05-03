@@ -62,12 +62,15 @@ def main() -> None:
     fill_report = apply_edit_to_checkpoint_copy(ckpt, fill, out / "fill")
     delete_payload = load_checkpoint_state(out / "delete" / "point_cloud_state_dict.pt")
     snap_payload = load_checkpoint_state(out / "snap" / "point_cloud_state_dict.pt")
+    fill_payload = load_checkpoint_state(out / "fill" / "point_cloud_state_dict.pt")
     delete_valid, _ = validate_checkpoint_schema(delete_payload)
     snap_valid, _ = validate_checkpoint_schema(snap_payload)
+    fill_valid, _ = validate_checkpoint_schema(fill_payload)
     checks = {
         "delete_updates_face_arrays": delete_report.triangles_after == 1 and int(delete_payload["importance_score"].shape[0]) == 1,
         "snap_updates_vertex": abs(float(snap_payload["triangles_points"][2, 2]) - 0.25) < 1e-6,
-        "fill_rejected_clear_reason": not fill_report.supported and "deferred" in fill_report.reason,
+        "fill_appends_vertices_faces": fill_report.supported and fill_report.vertices_after == 7 and fill_report.triangles_after == 3,
+        "fill_schema_valid": fill_valid,
         "delete_schema_valid": delete_valid,
         "snap_schema_valid": snap_valid,
     }

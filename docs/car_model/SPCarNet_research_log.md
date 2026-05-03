@@ -4,6 +4,25 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14.4 constructive checkpoint fill — PASS
+
+**Outcome**: Added `FILL_PATCH` support to the checkpoint adapter. New vertices are initialized from nearest existing vertex radiance/weight attributes, and new per-face stats are initialized conservatively to zero.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- smoke command: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_meshsplatopt_stageR14_1_checkpoint_adapter.py`
+- smoke status: `PASS`
+- fill appends vertices/faces and keeps checkpoint schema valid
+
+**Decision**: `PASS`. R8 fill proposals can now be materialized in checkpoint copies. Teacher recovery and render-backed gates remain required before medium-scene claims.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_4_constructive_checkpoint_fill_design.md`
+- `docs/car_model/meshsplatopt_stageR14_4_constructive_checkpoint_fill_report.md`
+- `outputs/carnet/meshsplatopt/stageR14_1_checkpoint_adapter_smoke/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14.3 render eval dry-run — PASS
 
 **Outcome**: Ran `render.py`, `metrics.py`, and comparable `evaluate_geometry_colmap.py` on the R14.2 real checkpoint dry-run copy. The edited checkpoint loads and evaluates through the normal independent paths.

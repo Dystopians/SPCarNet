@@ -22,16 +22,16 @@ Updated:
 
 - `DELETE_TRIANGLES`: removes selected faces and synchronizes per-face fields.
 - `SNAP_VERTICES`: updates `triangles_points`.
+- `FILL_PATCH`: appends new vertices/faces and initializes new vertex radiance from nearest existing vertices.
 - `PROTECT` / `APPEARANCE_RESET`: metadata/no geometry change.
 
 ## Deferred Edits
 
-- `FILL_PATCH`
 - `SPLIT_TRIANGLES`
 - `EDGE_COLLAPSE`
 - `FACE_MERGE`
 
-These require robust per-vertex radiance initialization, face/vertex remapping, and optimizer-state handling. R14.1 rejects them rather than writing unsafe checkpoint copies.
+These require topology remapping and/or optimizer-state handling.
 
 ## Verification
 
@@ -46,7 +46,7 @@ Smoke checks:
 
 - delete updates per-face arrays;
 - snap updates vertex position;
-- fill is rejected with clear deferred-reason;
+- fill appends vertices/faces with valid initialized attributes;
 - output checkpoint schemas remain valid.
 
 ## Artifacts
@@ -57,4 +57,4 @@ Smoke checks:
 
 ## Decision
 
-`PASS`. This partially unblocks R14 for delete/snap checkpoint-copy experiments, but certified fill/split public-scene runs still require radiance initialization support.
+`PASS`. This unblocks checkpoint-copy delete/snap/fill experiments, but certified public-scene fill still requires render-backed gates and teacher recovery.

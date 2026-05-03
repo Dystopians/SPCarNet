@@ -12,7 +12,8 @@ Date: 2026-05-02
 |---|---|
 | delete updates face arrays | `PASS` |
 | snap updates vertex | `PASS` |
-| fill rejected with clear reason | `PASS` |
+| fill appends vertices/faces | `PASS` |
+| fill checkpoint schema valid | `PASS` |
 | delete checkpoint schema valid | `PASS` |
 | snap checkpoint schema valid | `PASS` |
 
