@@ -2,6 +2,7 @@
 
 from .csef_builder import build_csef, write_csef_outputs
 from .csef_types import CSEFBuildResult, CSEFRegion, CSEFSample
+from .counterfactual_edit_gate import CounterfactualGateReport, validate_edit_counterfactual
 from .defect_mining import mine_defects, write_defect_outputs
 from .defect_types import DefectRecord, DefectType
 from .edit_apply import apply_edit, summarize_topology_delta, verify_mesh_integrity
@@ -17,6 +18,7 @@ __all__ = [
     "CSEFBuildResult",
     "CSEFRegion",
     "CSEFSample",
+    "CounterfactualGateReport",
     "DefectRecord",
     "DefectType",
     "FillProposal",
@@ -38,6 +40,7 @@ __all__ = [
     "run_topology_baselines",
     "rollback_edit",
     "summarize_topology_delta",
+    "validate_edit_counterfactual",
     "verify_mesh_integrity",
     "write_defect_outputs",
     "write_csef_outputs",

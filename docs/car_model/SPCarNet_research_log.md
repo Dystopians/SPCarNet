@@ -4,6 +4,27 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R10 generalized counterfactual edit gate — PASS
+
+**Outcome**: Implemented generalized edit validation for arbitrary reversible edits. The gate snapshots state, applies an edit, checks topology and risk/certificate metadata, accepts or rejects, and rolls back rejected edits exactly. Render/sparse/changed-pixel fields are present but marked unavailable when no render path exists.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- smoke command: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_meshsplatopt_stageR10_counterfactual_edits.py`
+- smoke status: `PASS`
+- good fill accepted
+- bad floater insertion, snap through free space, and delete-supported-surface edits rejected with rollback
+
+**Decision**: `PASS`. At least one non-delete edit is accepted and harmful non-delete edits are rejected in smoke.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR10_generalized_counterfactual_design.md`
+- `docs/car_model/meshsplatopt_stageR10_counterfactual_edits_implementation_report.md`
+- `docs/car_model/meshsplatopt_stageR10_counterfactual_edits_smoke.md`
+- `outputs/carnet/meshsplatopt/stageR10_counterfactual_edits_smoke/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R9 object-prior repair proposals — PASS
 
 **Outcome**: Implemented a bounded object-prior proposal generator for vehicle regions. Confident priors can emit protect, snap, and discontinuity-fill candidates; uncertain priors are restricted to protect metadata. Every proposal records that scene counterfactual validation is required.
