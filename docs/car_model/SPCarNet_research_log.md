@@ -4,6 +4,28 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14.10 medium area-outlier pilot — SOFT PASS_SINGLE_SCENE
+
+**Outcome**: Ran the first W&B-logged medium-budget MeshSplatOpt candidate on `parking_phone_tiny`. The run starts from the R14.9 automatic area-outlier edit at iteration 200, resumes training to iteration 2000, renders independently, runs `metrics.py`, and evaluates sparse COLMAP geometry.
+
+**W&B**: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/81kwhzr3`
+
+**Verification**:
+- train/render/metrics exit codes: `0/0/0`
+- candidate topology: `783509` triangles, `822064` vertices
+- current-branch 2000iter baseline render: PSNR `11.599437713623047`, SSIM `0.2702677547931671`, LPIPS `0.6347319483757019`
+- MeshSplatOpt candidate render: PSNR `13.276764869689941`, SSIM `0.30384060740470886`, LPIPS `0.6081721186637878`
+- baseline geometry: AbsRel `0.42787965657189714`, Depth MAE `4.414160625200222`, normal mean angle `52.565184963415106`
+- candidate geometry: AbsRel `0.3640420630578014`, Depth MAE `3.806375643108584`, normal mean angle `52.672900862227785`
+
+**Decision**: `SOFT PASS_SINGLE_SCENE`. The candidate improves all independent render metrics and sparse depth geometry on one scene, with small topology growth and a small normal-angle regression. Full R14 PASS still requires at least a second scene and stronger baseline comparison where compatible.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_10_medium_area_outlier_pilot_report.md`
+- `outputs/carnet/meshsplatopt/stageR14_10_medium_area_outlier_recovery/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14.9 area-outlier real edit selection — PASS
 
 **Outcome**: Added and ran the first automatic real-checkpoint edit selector after the topology audit. The selector uses checkpoint triangle-area statistics, not shared-edge boundary loops, and emits an auditable `DELETE_TRIANGLES` edit JSON for the largest extreme area outlier.
