@@ -3104,3 +3104,35 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR18_01_03_residual_snap_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R19.01-R19.08 cross-scene residual snap — MIXED POSITIVE
+
+**Outcome**: Generalized residual-aware local snap from parking to courtyard and bonsai, added automatic camera-offset inference, calibrated proposal uncertainty from `0.35` to `0.55`, ran held-out gates on both new scenes, and completed same-source W&B 200-step recovery baselines/candidates.
+
+**Implementation**:
+- automatic `camera_index_offset` inference in `scripts/car_model/meshsplatopt_select_checkpoint_residual_snap_edit.py`
+- richer selector audit fields: render-view count, rejection reasons, pre/post risk-filter counts
+- default `--max_proposal_uncertainty` changed to `0.55` after cross-scene gate calibration
+
+**Selection/gate**:
+- strict `0.35` returned `NO_CANDIDATE` on courtyard and bonsai
+- calibrated `0.55` selected `16` vertices on both scenes
+- courtyard gate: `PASS`, topology unchanged, PSNR delta `-0.000409`, LPIPS delta `+0.000014`, normal delta `-0.000597`
+- bonsai gate: `PASS`, topology unchanged, PSNR delta `-0.000010`, LPIPS delta `+0.000003`, normal delta `+0.0000003`
+
+**W&B**:
+- courtyard baseline: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ajvqp7ou`
+- courtyard residual snap: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/mhjbnm2t`
+- bonsai baseline: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/b9miy649`
+- bonsai residual snap: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/p33pm98r`
+
+**Equal-budget recovery**:
+- courtyard residual snap minus baseline: PSNR `-0.002344`, SSIM `-0.000018`, LPIPS `-0.000183`, AbsRel `-0.000306`, Depth MAE `-0.002072`, normal `+0.285845`
+- bonsai residual snap minus baseline: PSNR `-0.000485`, SSIM `-0.000061`, LPIPS `-0.000112`, AbsRel `-0.000154`, Depth MAE `-0.001383`, normal `-0.035446`
+
+**Decision**: `CROSS_SCENE_RESIDUAL_SNAP_GATE_PASS_RECOVERY_MIXED_POSITIVE`. This materially reduces the single-scene risk and shows consistent LPIPS/depth improvements on two new scenes, but the effect sizes remain small and PSNR/SSIM are slightly negative. Next required step is patch-level residual repair rather than isolated vertex snaps.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR19_01_08_cross_scene_residual_snap_report.md`
+
+---

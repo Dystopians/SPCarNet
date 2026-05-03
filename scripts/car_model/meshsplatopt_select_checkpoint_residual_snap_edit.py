@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import sys
 from pathlib import Path
@@ -26,7 +27,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model_path", required=True)
     parser.add_argument("--render_set", default="test", choices=["train", "test"])
     parser.add_argument("--iteration", type=int, default=2000)
-    parser.add_argument("--camera_index_offset", type=int, default=0)
+    parser.add_argument(
+        "--camera_index_offset",
+        type=int,
+        default=None,
+        help="Offset from residual image index to cameras.json index. Defaults to auto inference.",
+    )
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--top_k_faces", type=int, default=2048)
     parser.add_argument("--min_percentile", type=float, default=98.0)
@@ -37,7 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_selected_vertex_distance", type=float, default=0.25)
     parser.add_argument("--max_displacement_fraction", type=float, default=0.01)
     parser.add_argument("--residual_threshold_fraction", type=float, default=0.001)
-    parser.add_argument("--max_proposal_uncertainty", type=float, default=0.35)
+    parser.add_argument("--max_proposal_uncertainty", type=float, default=0.55)
     parser.add_argument("--exclude_boundary_vertices", action="store_true")
     parser.add_argument("--min_error_reduction", type=float, default=1e-7)
     parser.add_argument("--chunk_size", type=int, default=250000)
@@ -52,7 +58,7 @@ def load_residual(path_render: Path, path_gt: Path) -> np.ndarray:
     return np.mean(np.abs(render - gt), axis=2)
 
 
-def load_residual_views(model_path: Path, render_set: str, iteration: int, *, max_views: int, quantile: float) -> list[dict]:
+def load_residual_views(model_path: Path, render_set: str, iteration: int, *, max_views: int, quantile: float) -> tuple[list[dict], int]:
     root = model_path / render_set / f"ours_{iteration}"
     render_dir = root / "renders"
     gt_dir = root / "gt"
@@ -77,7 +83,20 @@ def load_residual_views(model_path: Path, render_set: str, iteration: int, *, ma
     threshold = float(np.quantile([r["mean_residual"] for r in rows], float(quantile)))
     selected = [r for r in rows if float(r["mean_residual"]) >= threshold]
     selected = sorted(selected, key=lambda r: float(r["mean_residual"]), reverse=True)[: max(1, int(max_views))]
-    return selected
+    return selected, len(rows)
+
+
+def infer_camera_index_offset(render_set: str, num_render_views: int, num_cameras: int, explicit_offset: int | None) -> int:
+    if explicit_offset is not None:
+        return int(explicit_offset)
+    if render_set == "test":
+        return 0
+    inferred = int(num_cameras) - int(num_render_views)
+    if inferred < 0:
+        raise ValueError(
+            f"Cannot infer camera offset: num_render_views={num_render_views} exceeds num_cameras={num_cameras}"
+        )
+    return inferred
 
 
 def project_vertices(vertices: np.ndarray, camera: dict, image_shape: tuple[int, int]) -> tuple[np.ndarray, np.ndarray]:
@@ -151,17 +170,23 @@ def main() -> None:
     candidate_vertices = sorted({int(v) for fid in ranked_faces for v in faces[int(fid)].tolist()})
 
     cameras = json.loads((Path(args.model_path) / "cameras.json").read_text(encoding="utf-8"))
-    residual_views = load_residual_views(
+    residual_views, num_render_views = load_residual_views(
         Path(args.model_path),
         args.render_set,
         int(args.iteration),
         max_views=int(args.max_views),
         quantile=float(args.residual_view_quantile),
     )
+    camera_index_offset = infer_camera_index_offset(
+        args.render_set,
+        num_render_views,
+        len(cameras),
+        args.camera_index_offset,
+    )
     candidate_array = vertices[np.asarray(candidate_vertices, dtype=np.int64)]
     residual_samples: dict[int, list[float]] = {int(v): [] for v in candidate_vertices}
     for view in residual_views:
-        camera_index = int(view["index"]) + int(args.camera_index_offset)
+        camera_index = int(view["index"]) + int(camera_index_offset)
         if camera_index >= len(cameras):
             continue
         residual = view["residual"]
@@ -184,12 +209,16 @@ def main() -> None:
         residual_threshold_fraction=float(args.residual_threshold_fraction),
         evidence_source=f"{args.render_set}_render_residual_local_plane_csef",
     )
-    valid = [
+    accepted_before_risk = [
         p
         for p in proposals
         if not p.rejected_reason
         and (p.expected_error_before - p.expected_error_after) >= float(args.min_error_reduction)
-        and float(p.uncertainty) <= float(args.max_proposal_uncertainty)
+    ]
+    valid = [
+        p
+        for p in accepted_before_risk
+        if float(p.uncertainty) <= float(args.max_proposal_uncertainty)
         and not (bool(args.exclude_boundary_vertices) and bool(p.edit.risk_summary.get("boundary_vertex", False)))
     ]
     selected = select_portfolio(
@@ -223,13 +252,14 @@ def main() -> None:
                 "target_positions": target_positions,
                 "selector": "render_residual_seeded_local_plane_csef_portfolio",
                 "render_set": args.render_set,
-                "camera_index_offset": int(args.camera_index_offset),
+                "camera_index_offset": int(camera_index_offset),
             },
             topology_cost_delta=0.0,
             evidence_summary={
                 "selector": "render_residual_seeded_local_plane_csef_portfolio",
                 "render_set": args.render_set,
-                "camera_index_offset": int(args.camera_index_offset),
+                "camera_index_offset": int(camera_index_offset),
+                "num_render_views": int(num_render_views),
                 "uses_gt_residual": True,
                 "candidate_face_count": int(len(candidate_face_ids)),
                 "candidate_vertex_count": int(len(candidate_vertices)),
@@ -265,7 +295,9 @@ def main() -> None:
         "checkpoint_path": args.checkpoint_path,
         "model_path": args.model_path,
         "render_set": args.render_set,
-        "camera_index_offset": int(args.camera_index_offset),
+        "camera_index_offset": int(camera_index_offset),
+        "camera_index_offset_mode": "explicit" if args.camera_index_offset is not None else "auto",
+        "num_render_views": int(num_render_views),
         "uses_gt_residual": True,
         "triangles": int(faces.shape[0]),
         "vertices": int(vertices.shape[0]),
@@ -273,7 +305,20 @@ def main() -> None:
         "candidate_vertex_count": int(len(candidate_vertices)),
         "scored_vertex_count": int(len(residual_scores)),
         "proposal_count": int(len(proposals)),
+        "accepted_before_risk_filter_count": int(len(accepted_before_risk)),
         "valid_proposal_count": int(len(valid)),
+        "rejection_reasons": dict(Counter(str(p.rejected_reason or "accepted") for p in proposals)),
+        "risk_filter_rejections": {
+            "uncertainty": int(
+                sum(float(p.uncertainty) > float(args.max_proposal_uncertainty) for p in accepted_before_risk)
+            ),
+            "boundary": int(
+                sum(
+                    bool(args.exclude_boundary_vertices) and bool(p.edit.risk_summary.get("boundary_vertex", False))
+                    for p in accepted_before_risk
+                )
+            ),
+        },
         "selected_vertex_count": int(len(selected)),
         "selected": compact_selected,
         "edit_json": edit_json,
