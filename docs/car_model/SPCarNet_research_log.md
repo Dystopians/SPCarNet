@@ -2975,3 +2975,33 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR17_01_csef_local_snap_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R17.02 real checkpoint local snap gate — PASS
+
+**Outcome**: Added a real-checkpoint local snap selector and validated its selected non-delete edit through the existing render-backed counterfactual gate on `parking_phone_tiny`.
+
+**Implementation**:
+- `scripts/car_model/meshsplatopt_select_checkpoint_local_snap_edit.py`
+- optimized `make_snap_proposals` to evaluate only explicit candidate vertices when provided
+
+**Selection**:
+- checkpoint: `outputs/carnet/meshprior/parking_phone_tiny/current_branch_2000iter/model/point_cloud/iteration_2000/point_cloud_state_dict.pt`
+- candidate faces above threshold: `3915`
+- candidate vertices: `45`
+- proposals: `135`
+- valid proposals: `113`
+- selected vertex: `704480`
+- expected local residual: `0.042196625106825536 -> 0.021098312553412768`
+
+**Gate**:
+- status: `PASS`
+- topology: `782982` triangles and `820107` vertices before/after
+- render deltas: PSNR `-9.5367431640625e-07`, SSIM `0.0`, LPIPS `+1.7881393432617188e-07`
+- geometry deltas: AbsRel `+2.4770185902411868e-11`, Depth MAE `+4.0913414878218646e-09`, normal mean deg `+4.2470329475463586e-07`
+
+**Decision**: Real-checkpoint local snap is now integrated and gate-safe. The result is a safety/integration pass, not a quality-gain claim; next is multi-candidate portfolio selection before W&B recovery.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR17_02_checkpoint_local_snap_gate_report.md`
+
+---

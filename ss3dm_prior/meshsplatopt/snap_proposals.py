@@ -122,15 +122,19 @@ def make_snap_proposals(
     neighbors = vertex_neighbors(state.faces, len(vertices))
 
     local_models: dict[int, tuple[np.ndarray, float, float]] = {}
-    residual_abs = np.zeros((len(vertices),), dtype=np.float64)
-    for vid in range(len(vertices)):
+    residual_by_vertex: dict[int, float] = {}
+    model_vertex_ids = range(len(vertices)) if candidate_vertices is None else [int(v) for v in candidate_vertices]
+    for vid in model_vertex_ids:
         support_points = _local_plane_support(vertices, neighbors, vid)
         normal, d = fit_plane(support_points)
         residual = float(point_plane_residual(vertices[int(vid)].reshape(1, 3), normal, d)[0])
         local_models[int(vid)] = (normal, d, residual)
-        residual_abs[int(vid)] = abs(residual)
+        residual_by_vertex[int(vid)] = abs(residual)
 
     if candidate_vertices is None:
+        residual_abs = np.zeros((len(vertices),), dtype=np.float64)
+        for vid, residual in residual_by_vertex.items():
+            residual_abs[int(vid)] = residual
         candidate_vertices = [int(i) for i in np.where(residual_abs > residual_threshold)[0]]
     proposals: list[SnapProposal] = []
     for vid in candidate_vertices:
@@ -151,8 +155,8 @@ def make_snap_proposals(
                     target_type="local_plane",
                     step_size=0.0,
                     max_displacement=max_disp,
-                    expected_error_before=float(residual_abs[vid]),
-                    expected_error_after=float(residual_abs[vid]),
+                    expected_error_before=float(residual_by_vertex[vid]),
+                    expected_error_after=float(residual_by_vertex[vid]),
                     uncertainty=max(0.95, uncertainty_evidence),
                     evidence_source=evidence_source,
                     rejected_reason="unsupported_vertex_no_snap",
@@ -179,8 +183,8 @@ def make_snap_proposals(
                     target_type="local_plane",
                     step_size=0.0,
                     max_displacement=max_disp,
-                    expected_error_before=float(residual_abs[vid]),
-                    expected_error_after=float(residual_abs[vid]),
+                    expected_error_before=float(residual_by_vertex[vid]),
+                    expected_error_after=float(residual_by_vertex[vid]),
                     uncertainty=max(0.9, uncertainty_evidence),
                     evidence_source=evidence_source,
                     rejected_reason="negative_free_space_evidence",
