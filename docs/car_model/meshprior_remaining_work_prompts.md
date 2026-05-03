@@ -4,7 +4,7 @@ Date: 2026-05-02
 
 ## Current State
 
-SPCarNet MeshPrior is about `99%` complete as a research-codebase transformation and about `91%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, M32 measured candidate-impact ranking, M33 calibration-diversity diagnostics, M34 post-commit candidate refresh diagnostics, M35 conservative retained relaxed refresh, M36 metric reconciliation, M37 visual/failure packaging, and M38 paper assets are implemented. The remaining core is manuscript writing and any optional full-budget public-scene run after a specific table gap is identified. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `99%` complete as a research-codebase transformation and about `92%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, M32 measured candidate-impact ranking, M33 calibration-diversity diagnostics, M34 post-commit candidate refresh diagnostics, M35 conservative retained relaxed refresh, M36 metric reconciliation, M37 visual/failure packaging, M38 paper assets, and M39 manuscript skeleton are implemented. The remaining core is manuscript integration and any optional full-budget public-scene run after a specific table gap is identified. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -45,6 +45,8 @@ Key codebase links:
 - Visual/failure package script: `scripts/car_model/meshprior_package_visual_failures.py`
 - Paper assets report: `docs/car_model/meshprior_stage38_paper_assets_report.md`
 - Paper assets script: `scripts/car_model/meshprior_make_paper_assets.py`
+- Manuscript skeleton: `docs/car_model/reports/meshprior_prism_manuscript_skeleton.md`
+- Reproducibility appendix: `docs/car_model/reports/meshprior_prism_reproducibility_appendix.md`
 
 Known W&B runs:
 
@@ -338,7 +340,17 @@ Convert M36/M37 artifacts into final paper assets: camera-ready table text, figu
 
 Create a paper-draft skeleton and reproducibility appendix from M35-M38 without overclaiming.
 
-## Required Steps
+## Status
+
+`PASS` on 2026-05-02.
+
+## Result
+
+- manuscript skeleton: `docs/car_model/reports/meshprior_prism_manuscript_skeleton.md`
+- reproducibility appendix: `docs/car_model/reports/meshprior_prism_reproducibility_appendix.md`
+- full-budget public-scene decision: still deferred until a concrete table gap is identified.
+
+## Completed Steps
 
 1. Draft an abstract, method summary, experiment setup, result table text, limitations, and conclusion in `docs/car_model/reports/`.
 2. Add a reproducibility appendix listing datasets, commands, W&B links, output directories, and metric paths.
@@ -348,7 +360,24 @@ Create a paper-draft skeleton and reproducibility appendix from M35-M38 without 
 
 ## Gate
 
-`PASS` if the draft skeleton is internally consistent, cites local artifacts, and keeps metric-path separation explicit.
+`PASS`: the draft skeleton is internally consistent, cites local artifacts, and keeps metric-path separation explicit.
+
+# Prompt M40 — Manuscript integration and final evidence gap review
+
+## Goal
+
+Turn the skeleton into a more complete manuscript draft and make a final evidence-gap decision.
+
+## Required Steps
+
+1. Expand the skeleton into a structured draft with introduction, related-work placeholders, method, experiments, limitations, and reproducibility notes.
+2. Add a final evidence-gap table: missing full-budget public scene, Tanks geometry tracks, LPIPS tradeoff, and object-prior narrative status.
+3. Decide whether any one gap is worth immediate GPU training. If yes, check GPU and use W&B; otherwise record no-go.
+4. Update research log and commit/push.
+
+## Gate
+
+`PASS` if the manuscript draft is coherent enough for human editing and the final evidence-gap decision is explicit.
 
 # Prompt M23.5 — Integrated optimization-time topology-control smoke
 

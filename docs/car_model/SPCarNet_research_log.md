@@ -4,6 +4,18 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage39 manuscript skeleton and reproducibility appendix — PASS
+
+**Outcome**: Drafted a manuscript skeleton and reproducibility appendix from the M35-M38 evidence chain. The draft keeps claims aligned with the evidence: PRISM is framed as an auditable topology-control layer, not as a universal image-quality optimizer or radar-only reconstruction method.
+
+**Artifacts**:
+- `docs/car_model/reports/meshprior_prism_manuscript_skeleton.md`
+- `docs/car_model/reports/meshprior_prism_reproducibility_appendix.md`
+
+**Decision**: Stage39 `PASS`. No full-budget public-scene run is justified yet because the current missing work is manuscript integration, not a specific absent row. Any future full-budget run must identify the exact table gap first and use W&B plus a GPU availability check.
+
+---
+
 ## 2026-05-02 — Stage38 final paper assets — PASS
 
 **Outcome**: Added a paper-asset builder that turns the M36 metric table and M37 visual/failure package into selected paper rows, figure captions, limitations, and a full-budget training decision.
