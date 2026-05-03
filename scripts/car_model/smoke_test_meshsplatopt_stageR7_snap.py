@@ -73,6 +73,14 @@ def main() -> None:
     floater_proposals = make_snap_proposals(floater_state, candidate_vertices=[floater_vid], supported_vertices=set())
     floater_rejected = bool(floater_proposals and floater_proposals[0].rejected_reason)
 
+    free_space_proposals = make_snap_proposals(
+        state,
+        candidate_vertices=[dent_vid],
+        supported_vertices={dent_vid},
+        vertex_evidence={dent_vid: {"positive_surface_evidence": 0.8, "negative_free_space_evidence": 0.9, "uncertainty": 0.2}},
+    )
+    free_space_rejected = bool(free_space_proposals and free_space_proposals[0].rejected_reason == "negative_free_space_evidence")
+
     misaligned_state, mid = make_dented_plane()
     misaligned_state.vertices[mid, 2] = 0.25
     mis_props = make_snap_proposals(misaligned_state, candidate_vertices=[mid], supported_vertices={mid})
@@ -85,6 +93,7 @@ def main() -> None:
     checks = {
         "dent_error_reduced": after_error < before_error,
         "floater_rejected_without_support": floater_rejected,
+        "negative_free_space_rejected": free_space_rejected,
         "misalignment_error_reduced": mis_after < mis_before,
         "rollback_exact": rollback_exact,
     }

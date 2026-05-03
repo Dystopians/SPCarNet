@@ -2952,3 +2952,26 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR16_01_03_three_scene_full_freeze_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R17.01 CSEF local snap selector — PASS
+
+**Outcome**: Strengthened the weak `SNAP_VERTICES` selector by replacing global-plane snap targets with local neighbor plane targets and adding explicit CSEF-style evidence/risk metadata plus negative free-space rejection.
+
+**Implementation**:
+- `ss3dm_prior/meshsplatopt/snap_proposals.py`
+- `scripts/car_model/smoke_test_meshsplatopt_stageR7_snap.py`
+
+**Smoke**:
+- compileall over `scripts/car_model`, `ss3dm_prior`, and `utils`: `PASS`
+- dent plane error: `0.03072 -> 0.019831720797113993`
+- misalignment plane error: `0.019200000000000002 -> 0.0096`
+- unsupported floater rejected: `true`
+- negative free-space snap rejected: `true`
+- rollback exact: `true`
+
+**Decision**: This is a selector-quality `PASS`, not yet a real-scene performance claim. The next gate should generate a real-checkpoint CSEF-local snap proposal, run the render-backed counterfactual gate, and only then launch W&B recovery.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR17_01_csef_local_snap_report.md`
+
+---
