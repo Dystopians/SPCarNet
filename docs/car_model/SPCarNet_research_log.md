@@ -3199,3 +3199,44 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR21_01_03_patch_snap_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R22.01-R22.04 boundary fill — GATE PASS / SHORT PROMISING / MEDIUM FAIL
+
+**Outcome**: Added and validated the first real checkpoint boundary-loop `FILL_PATCH` selector. The edit passes held-out gate and trains successfully, but naive centroid-fan fill does not survive medium-budget comparison.
+
+**Implementation**:
+- new selector: `scripts/car_model/meshsplatopt_select_checkpoint_boundary_fill_edit.py`
+- selects checkpoint boundary loops by loop length and XY area
+- emits checkpoint-compatible `FILL_PATCH` with boundary certificate
+
+**Selected fill**:
+- parking boundary loops found: `48858`
+- filtered candidates: `4545`
+- selected loop vertices: `6`
+- selected XY area: `24.723803`
+- topology delta: `+1` vertex, `+6` triangles
+
+**Gate**:
+- status: `PASS`
+- deltas: PSNR `+0.000097`, SSIM `-0.00000039`, LPIPS `+0.00000364`, AbsRel `0.0`, Depth MAE `0.0`, normal `+0.00000110`
+
+**W&B**:
+- short fill recovery: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/jzxzz4g2`
+- medium fill recovery: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/1tqd66ah`
+
+**Short 2200 result**:
+- baseline: PSNR `12.331465`, SSIM `0.298222`, LPIPS `0.622323`, AbsRel `0.409263`, Depth MAE `4.300273`, normal `52.595639`
+- boundary fill: PSNR `12.354150`, SSIM `0.298658`, LPIPS `0.621934`, AbsRel `0.410232`, Depth MAE `4.302468`, normal `52.328850`
+- decision: `FILL_SHORT_RECOVERY_APPEARANCE_NORMAL_PASS_DEPTH_FAIL`
+
+**Medium 4000 result**:
+- baseline: PSNR `14.251087`, SSIM `0.383800`, LPIPS `0.569749`, AbsRel `0.324794`, Depth MAE `3.636891`, normal `51.043451`
+- boundary fill: PSNR `14.224104`, SSIM `0.381926`, LPIPS `0.570877`, AbsRel `0.329337`, Depth MAE `3.645573`, normal `51.527010`
+- decision: `FILL_MEDIUM_RECOVERY_FAIL`
+
+**Decision**: `BOUNDARY_FILL_GATE_PASS_SHORT_PROMISING_MEDIUM_FAIL`. The codebase now supports real topology-adding repair with gate and recovery evidence. The weakness is selector/geometry quality: centroid fan fill is too naive. Next step should be residual/depth-aware fill placement and local fairing.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR22_01_04_boundary_fill_report.md`
+
+---
