@@ -4,6 +4,18 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R2 related-work and baseline matrix — PASS
+
+**Outcome**: Wrote the related-work/novelty-threat matrix and baseline plan. The plan explicitly names threats from Mesh Splatting, mesh-aware splatting, 3DGS compression/pruning, QEM, classical hole filling, COLMAP/MVS, plane priors, object priors, and depth/normal priors.
+
+**Decision**: `PASS`. The strongest novelty is constrained to unified CSEF, reversible bidirectional edit calculus, and certified giant-hole repair. Training-time pruning, mesh simplification, geometry priors, and counterfactual validation alone are not treated as novel.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR2_related_work_matrix.md`
+- `docs/car_model/meshsplatopt_stageR2_baseline_plan.md`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R1 repair RFC — PASS
 
 **Outcome**: Wrote the MeshSplatOpt repair RFC. The method is locked as `MeshSplatOpt: Evidence-Certified Bidirectional Mesh Surgery for Mesh Splatting`, centered on the Counterfactual Surface Evidence Field and reversible edit calculus across protect, delete, collapse, snap, split, fill, and appearance recovery.
