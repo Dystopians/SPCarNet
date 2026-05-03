@@ -106,7 +106,11 @@ def apply_edit(mesh_or_state: MeshState, edit: MeshEdit) -> MeshState:
             raise ValueError("FILL_PATCH requires inserted vertices and faces")
         offset = len(vertices)
         vertices = np.vstack([vertices, patch_vertices.reshape(-1, 3)])
-        faces = np.vstack([faces, patch_faces.reshape(-1, 3) + offset])
+        if edit.attribute_changes.get("faces_are_global_indices", False):
+            faces_to_add = patch_faces.reshape(-1, 3)
+        else:
+            faces_to_add = patch_faces.reshape(-1, 3) + offset
+        faces = np.vstack([faces, faces_to_add])
     else:
         raise ValueError(f"Unsupported edit type: {edit.edit_type}")
 

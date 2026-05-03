@@ -4,6 +4,29 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R8 giant void fill proposals — PASS
+
+**Outcome**: Implemented boundary-loop fill, ground-plane void fill, fill certificates, prior-only diagnostic fill labeling, normal-mode unknown-void rejection, and rollback-compatible `FILL_PATCH` proposals.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- smoke command: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_meshsplatopt_stageR8_giant_void_fill.py`
+- smoke status: `PASS`
+- small-hole boundary count reduced from `20` to `4`
+- giant ground void patch valid
+- unknown void rejected in normal mode
+- diagnostic prior-only fill emitted with `prior_only_flag=true`
+
+**Decision**: `PASS`. Giant ground void synthetic repair works and unknown voids are not silently filled in normal mode.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR8_giant_void_fill_design.md`
+- `docs/car_model/meshsplatopt_stageR8_giant_void_fill_implementation_report.md`
+- `docs/car_model/meshsplatopt_stageR8_giant_void_fill_smoke.md`
+- `outputs/carnet/meshsplatopt/stageR8_giant_void_fill_smoke/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R7 snap/deform proposals — PASS
 
 **Outcome**: Implemented safe snap/deform proposal generation using plane-fit targets, capped displacements, step sizes `0.1/0.25/0.5`, unsupported-floater rejection, and R5-compatible `SNAP_VERTICES` edits.
