@@ -109,6 +109,7 @@ class OptimizationParams(ParamGroup):
 
         self.densify_from_iter = 500
         self.densify_until_iter = 10000
+        self.skip_restricted_delaunay = False
 
         self.random_background = False
         

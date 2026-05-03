@@ -3693,7 +3693,7 @@ def training(
                             step=iteration,
                             log_state=wandb_log_state,
                         )
-            elif iteration == run_restricted_delaunay:
+            elif iteration == run_restricted_delaunay and not bool(getattr(opt, "skip_restricted_delaunay", False)):
                 need_delaunay = True
             elif iteration % 500 == 0 and iteration > run_restricted_delaunay + 1000:
 

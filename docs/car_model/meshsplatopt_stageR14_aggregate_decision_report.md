@@ -4,9 +4,9 @@ Date: 2026-05-02
 
 ## Decision
 
-`SOFT PASS`.
+`TOPOLOGY_RETENTION PASS`.
 
-R14 now has one W&B-logged medium-budget parking recovery result with clear single-scene gains, two public-scene delete gate diagnostics, two public-scene recovery diagnostics, a three-scene non-delete `SNAP_VERTICES` gate pass, one short equal-step public-scene control, and one medium public-scene control. This is enough to continue method development, but not enough to claim a full NeurIPS-level repair result.
+R14 now has one W&B-logged medium-budget parking recovery result with clear single-scene gains, two public-scene delete gate diagnostics, two public-scene recovery diagnostics, a three-scene non-delete `SNAP_VERTICES` gate pass, one short equal-step public-scene control, one medium public-scene control, and a medium topology-retention recovery control. The current snap selector remains only weakly positive under equal topology-retention control, but freeze-densify plus skip-Delaunay is a strong new schedule result and justifies a full or multi-scene R15 validation.
 
 ## Evidence Summary
 
@@ -20,6 +20,7 @@ R14 now has one W&B-logged medium-budget parking recovery result with clear sing
 | R14.17 | `bonsai` | W&B non-delete snap recovery diagnostic, iter 2000 -> 2200 | `PASS_DIAGNOSTIC_NOT_EQUAL_BUDGET` | Non-delete snap recovery is stable and improves over 2000iter baseline, but is not equal-budget |
 | R14.18 | `bonsai` | W&B unedited baseline continuation, iter 2000 -> 2200 | `CONTROL_PASS_NEGATIVE_FOR_SNAP_GAIN` | Equal-step control is slightly stronger than snap recovery on most metrics |
 | R14.19-R14.20 | `bonsai` | W&B medium continuation, iter 2000 -> 4000 | `MEDIUM_CONTROL_PASS_NEGATIVE_FOR_SNAP_GAIN` | Baseline continuation beats snap on render/depth metrics; snap only improves normal proxy |
+| R14.21-R14.22 | `bonsai` | W&B freeze-densify continuation, iter 2000 -> 4000 | `TOPOLOGY_RETENTION_PASS` | Freeze-densify plus skip-Delaunay cuts triangles by 51.1% vs unfrozen medium baseline while improving render and geometry proxies |
 
 ## Parking Medium Result
 
@@ -134,12 +135,35 @@ baseline: https://wandb.ai/karamazovaniki-university-of-southern-california/spca
 
 This medium control blocks a full-budget R15 run from the current snap selector. Both rows grow to about `5.09M` triangles by iteration 4000, and the unedited continuation is better on render and sparse-depth metrics.
 
+## Bonsai Freeze-Densify Medium Control
+
+W&B:
+
+```text
+baseline freeze: https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/qdwbbpob
+snap freeze:     https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/srdr58z6
+```
+
+| metric | R14.20 unfrozen baseline 4000 | R14.21b baseline freeze 4000 | R14.22 snap freeze 4000 |
+|---|---:|---:|---:|
+| triangles | `5090601` | `2487474` | `2487474` |
+| vertices | `4270293` | `2478890` | `2478890` |
+| PSNR | `15.834700584411621` | `17.429750442504883` | `17.437725067138672` |
+| SSIM | `0.33469849824905396` | `0.43235236406326294` | `0.4337323307991028` |
+| LPIPS | `0.5714929699897766` | `0.5064895749092102` | `0.5067973732948303` |
+| AbsRel | `0.40514114339865287` | `0.27106212926722306` | `0.2728521602266819` |
+| Depth MAE | `4.241773913061498` | `2.897163412813164` | `2.8930862576166856` |
+| normal mean deg | `48.11943889631045` | `43.347689336379396` | `43.570728874963045` |
+
+Freeze-densify plus `--skip_restricted_delaunay` is the strongest R14 schedule result. Relative to the unfrozen medium baseline, it reduces triangles by `2603127` (`51.135946%`) and improves all independent render metrics plus both sparse geometry proxies. Snap under the same schedule gives small mixed deltas versus the freeze baseline: PSNR `+0.007975`, SSIM `+0.001380`, LPIPS `+0.000308`, AbsRel `+0.001790`, Depth MAE `-0.004077`, normal mean angle `+0.223040`.
+
 ## What This Proves
 
 - Real checkpoint edit materialization works for delete, fill, and non-delete vertex snap.
 - Render-backed acceptance works on three scenes.
 - Teacher/recovery training can resume delete and non-delete edited checkpoints with W&B online.
 - A medium-budget parking run can improve independent render metrics and sparse-depth geometry.
+- Freeze-densify plus skip-Delaunay is a strong topology-retention schedule for medium recovery on `bonsai`.
 - Edge-connected CSEF is invalid for real Mesh Splatting checkpoint proposal selection because the saved representation is triangle soup.
 
 ## What This Does Not Prove Yet
@@ -147,17 +171,18 @@ This medium control blocks a full-budget R15 run from the current snap selector.
 - It does not prove equal-budget training gains from non-delete edits.
 - It does not show a second W&B medium-scene recovery improvement.
 - The current non-delete snap selector does not beat equal-step unedited continuation on `bonsai`.
-- Medium continuation from the current non-delete snap selector also does not beat unedited continuation on `bonsai`.
+- Medium continuation from the current non-delete snap selector does not beat unedited continuation under the unfrozen schedule.
+- Under the topology-retention schedule, snap-vs-baseline deltas are small and mixed rather than a decisive method win.
 - It does not beat Stage35 across public scenes.
-- It actively argues against full-budget 7000+ sweeps for this selector without topology retention or a stronger proposal signal.
 - It does not validate giant-hole repair on real public scenes.
 
 ## Next Gate
 
-Proceed to R14.17 public-scene W&B recovery only if:
+Proceed to R15 full or multi-scene validation only if:
 
-1. public-scene recovery uses W&B online logging;
-2. Stage35 comparison tables are added for `parking_phone_tiny`, `bonsai`, and `courtyard`;
-3. the non-delete snap selector remains behind render-backed acceptance.
+1. recovery uses W&B online logging;
+2. the default recovery schedule uses `--densify_until_iter <load_iteration>` and `--skip_restricted_delaunay`;
+3. Stage35 comparison tables are added for `parking_phone_tiny`, `bonsai`, and `courtyard`;
+4. the non-delete snap selector remains behind render-backed acceptance.
 
-Full-budget R15 should remain blocked until a second W&B medium-scene improvement exists.
+Full-budget R15 is now justified for the topology-retention schedule, but snap-specific claims remain blocked until multi-scene or stronger-selector evidence exists.

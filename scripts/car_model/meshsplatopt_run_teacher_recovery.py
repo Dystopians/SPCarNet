@@ -36,6 +36,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--wandb_project", default="spcarnet_meshprior")
     parser.add_argument("--wandb_group", default="meshsplatopt_teacher_recovery")
     parser.add_argument("--wandb_name", default="")
+    parser.add_argument("--train_densify_until_iter", type=int, default=None)
+    parser.add_argument("--train_densify_from_iter", type=int, default=None)
+    parser.add_argument("--train_densification_interval", type=int, default=None)
+    parser.add_argument("--train_skip_restricted_delaunay", action="store_true")
     return parser.parse_args()
 
 
@@ -105,6 +109,14 @@ def run_real_tiny_recovery(args: argparse.Namespace) -> dict[str, object]:
         train_cmd.append("--eval")
     if bool(getattr(source_cfg, "white_background", False)):
         train_cmd.append("--white_background")
+    if args.train_densify_until_iter is not None:
+        train_cmd.extend(["--densify_until_iter", str(int(args.train_densify_until_iter))])
+    if args.train_densify_from_iter is not None:
+        train_cmd.extend(["--densify_from_iter", str(int(args.train_densify_from_iter))])
+    if args.train_densification_interval is not None:
+        train_cmd.extend(["--densification_interval", str(int(args.train_densification_interval))])
+    if bool(args.train_skip_restricted_delaunay):
+        train_cmd.append("--skip_restricted_delaunay")
     train_code = run_command(train_cmd, cwd=REPO_ROOT, env=env, log_path=logs / "train_recovery.log")
     render_code = metrics_code = None
     if train_code == 0:
@@ -139,6 +151,12 @@ def run_real_tiny_recovery(args: argparse.Namespace) -> dict[str, object]:
         "wandb_project": args.wandb_project,
         "wandb_group": args.wandb_group,
         "wandb_name": wandb_name,
+        "train_overrides": {
+            "densify_until_iter": args.train_densify_until_iter,
+            "densify_from_iter": args.train_densify_from_iter,
+            "densification_interval": args.train_densification_interval,
+            "skip_restricted_delaunay": bool(args.train_skip_restricted_delaunay),
+        },
         "exit_codes": {
             "nvidia_smi": nvidia_code,
             "train": train_code,

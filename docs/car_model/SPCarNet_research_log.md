@@ -2827,3 +2827,33 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshprior_stage24_2_topology_retention_report.md`
 
 ---
+
+## 2026-05-02 — MeshSplatOpt R14.21-R14.22 freeze-densify recovery — PASS
+
+**Outcome**: Added recovery-time densification overrides and an opt-in `--skip_restricted_delaunay` train flag. The first freeze-only diagnostic run stalled at the delayed Delaunay refresh, which established that topology-retention recovery must disable that refresh when `densify_until_iter` is pinned to the loaded checkpoint. The successful W&B rows use `--densify_until_iter 2000 --skip_restricted_delaunay`.
+
+**W&B**:
+- aborted freeze-only diagnostic: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/gpqeybmc`
+- baseline freeze: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/qdwbbpob`
+- snap freeze: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/srdr58z6`
+
+**Best medium result**:
+- row: R14.22 snap freeze, `bonsai` 2000->4000
+- independent render: PSNR `17.437725`, SSIM `0.433732`, LPIPS `0.506797`
+- COLMAP proxy: depth AbsRel `0.272852`, depth MAE `2.893086`, normal mean angle `43.570729`
+- final topology: `2487474` triangles, `2478890` vertices
+
+**Comparison to R14.20 unfrozen medium baseline**:
+- triangles: `5090601 -> 2487474` (`-51.135946%`)
+- PSNR: `15.834701 -> 17.437725`
+- SSIM: `0.334698 -> 0.433732`
+- LPIPS: `0.571493 -> 0.506797`
+- depth AbsRel: `0.405141 -> 0.272852`
+- normal mean angle: `48.119439 -> 43.570729`
+
+**Decision**: R14.21-R14.22 is a topology-retention `PASS`. It does not yet make the snap selector itself a strong standalone method claim, because snap-vs-freeze-baseline deltas are small and mixed. It does justify a full or multi-scene R15 schedule using freeze-densify plus skip-Delaunay as the default recovery policy.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR14_21_22_freeze_densify_recovery_control_report.md`
+
+---
