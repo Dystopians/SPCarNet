@@ -4,7 +4,7 @@ Date: 2026-05-02
 
 ## Current State
 
-SPCarNet MeshPrior is about `99%` complete as a research-codebase transformation and about `87%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, M32 measured candidate-impact ranking, M33 calibration-diversity diagnostics, M34 post-commit candidate refresh diagnostics, and M35 conservative retained relaxed refresh are implemented. The remaining core is metric-path reconciliation, full-budget public-scene evidence, unified paper-grade tables, and visual/failure analysis. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `99%` complete as a research-codebase transformation and about `89%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, M32 measured candidate-impact ranking, M33 calibration-diversity diagnostics, M34 post-commit candidate refresh diagnostics, M35 conservative retained relaxed refresh, and M36 metric reconciliation are implemented. The remaining core is visual/failure-case packaging and full-budget public-scene evidence. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -39,6 +39,8 @@ Key codebase links:
 - Calibration-diversity report: `docs/car_model/meshprior_stage33_calibration_diversity_report.md`
 - Post-commit candidate refresh report: `docs/car_model/meshprior_stage34_post_commit_refresh_report.md`
 - Retained relaxed refresh report: `docs/car_model/meshprior_stage35_retained_refresh_report.md`
+- Metric reconciliation report: `docs/car_model/meshprior_stage36_metric_reconciliation_report.md`
+- Metric reconciliation collector: `scripts/car_model/meshprior_collect_metric_reconciliation.py`
 
 Known W&B runs:
 
@@ -167,7 +169,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Calibration-diversity diagnostics | execution finding / M33 | SOFT PASS / diagnostic PASS | Added opt-in `--prism_calib_diverse_views` plus manifest/per-view deltas. `bonsai` now exceeds Stage29 cap512 at equal topology; `courtyard` remains better than M29 but worse than M32 measured rank. |
 | Post-commit candidate refresh | execution finding / M34 | SOFT PASS / diagnostic PASS | Added opt-in `--prism_post_commit_candidate_refresh` and no-candidate diagnostics. Root cause is `recent_t` protecting all triangles and zeroing prune score after topology sync. Relaxed-score v3 keeps additional `bonsai` topology reduction (`633787 -> 631739`) with PSNR up but SSIM/LPIPS slightly down, so no default promotion. |
 | Conservative retained relaxed refresh | execution finding / M35 | PASS | Added retained relaxed commit cap, strict relaxed counterfactual proxy gate, validation-rollback records, final topology audit, and W&B audit scalars. `bonsai` reaches `633275` triangles and improves independent PSNR/SSIM/LPIPS versus Stage33; `courtyard` confirms active relaxed commit retention. |
-| Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
+| Metric-path reconciliation | execution finding / M36 | PASS | Added reproducible JSON/CSV/Markdown collector for M24-M35 evidence rows. Independent `render.py + metrics.py` values are the paper-facing path; training eval fields remain separate diagnostics. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
 ## Execution-Discovered Risks
@@ -237,7 +239,20 @@ Keep M34 default-off, add retained relaxed commit control, prevent silent erasur
 
 Convert M24-M35 into a paper-facing evidence package that separates training-time metrics, independent render metrics, topology counts, and validation/audit metadata.
 
-## Required Steps
+## Status
+
+`PASS` on 2026-05-02.
+
+## Result
+
+- collector: `scripts/car_model/meshprior_collect_metric_reconciliation.py`
+- report: `docs/car_model/meshprior_stage36_metric_reconciliation_report.md`
+- output: `outputs/carnet/meshprior/stage36_metric_reconciliation/`
+- rows: `10`
+- visual panels: `2`
+- gate: reproducible from local artifacts and metric paths are separated.
+
+## Completed Steps
 
 1. Build a collector that reads selected runs from `outputs/carnet/meshprior/`, including final-cleanup summaries, retained-topology audits, independent `results.json`, train logs, and W&B URLs.
 2. Produce one canonical CSV/Markdown table with columns for scene, method row, schedule, W&B run, final checkpoint triangles, active PRISM commits, rolled-back commits, independent PSNR/SSIM/LPIPS, and metric path.
@@ -249,7 +264,27 @@ Convert M24-M35 into a paper-facing evidence package that separates training-tim
 
 ## Gate
 
-`PASS` only if the evidence table is reproducible from local artifacts and does not mix training-time and independent metric paths.
+`PASS`: the evidence table is reproducible from local artifacts and does not mix training-time and independent metric paths.
+
+# Prompt M37 — Visual/failure-case packaging and public-scene full-budget decision
+
+## Goal
+
+Turn M35/M36 from engineering evidence into a paper-ready result section: visual panels, failure taxonomy, claim wording, and a decision on whether to spend GPU time on full-budget public-scene Stage35 runs.
+
+## Required Steps
+
+1. Use the M36 table to identify the best rows per scene and the rows that expose tradeoffs.
+2. Build qualitative panels for at least `bonsai`, `courtyard`, and the parking M24.2 row if renders exist.
+3. Add a failure-case table that links each failure type to at least one concrete run or metadata file.
+4. Draft paper-safe claim wording that avoids saying Stage35 universally dominates when LPIPS trades off on `courtyard`.
+5. Decide whether the next GPU run should be full-budget public-scene Stage35, a cap sweep, or no training until visuals are complete.
+6. If training is run, activate W&B, check GPU availability first, and record commands and run URLs.
+7. Update research log and commit/push.
+
+## Gate
+
+`PASS` if visual/failure evidence is linked to reproducible artifacts and the next full-budget decision is explicit.
 
 # Prompt M23.5 — Integrated optimization-time topology-control smoke
 

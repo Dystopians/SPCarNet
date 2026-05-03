@@ -4,6 +4,27 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage36 metric reconciliation evidence table — PASS
+
+**Outcome**: Added a reproducible collector for paper-facing MeshPrior evidence rows. The collector reads local M24-M35 artifacts, exports JSON/CSV/Markdown tables, preserves W&B links, records topology/audit metadata, and keeps training-time metrics separate from independent `render.py + metrics.py` metrics.
+
+**Generated artifacts**:
+- `outputs/carnet/meshprior/stage36_metric_reconciliation/metric_reconciliation_report.json`
+- `outputs/carnet/meshprior/stage36_metric_reconciliation/metric_reconciliation_table.csv`
+- `outputs/carnet/meshprior/stage36_metric_reconciliation/metric_reconciliation_table.md`
+- `outputs/carnet/meshprior/stage36_metric_reconciliation/visual_panels/bonsai_m35_retained_relaxed.png`
+- `outputs/carnet/meshprior/stage36_metric_reconciliation/visual_panels/courtyard_m35_retained_relaxed.png`
+
+**Key result**: Stage35 is the current best `bonsai` retained-edit row: `633275` triangles, PSNR `12.267367`, SSIM `0.277617`, LPIPS `0.611939`, with `1` active relaxed commit and `4` validation-rolled-back relaxed commits explicitly recorded. On `courtyard`, Stage35 has the best selected-row PSNR/SSIM and lowest topology, but LPIPS is worse than Stage32/33, so paper wording must report a scene-dependent perceptual tradeoff.
+
+**Decision**: Stage36 `PASS`. The evidence table is reproducible from local artifacts and metric paths are no longer mixed. The next step should be visual/failure-case packaging and, if compute allows, full-budget public-scene validation of the Stage35 retained-refresh row.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage36_metric_reconciliation_report.md`
+- `scripts/car_model/meshprior_collect_metric_reconciliation.py`
+
+---
+
 ## 2026-05-02 — Stage35 retained relaxed refresh control — PASS
 
 **Outcome**: Added conservative retained-edit control for Stage34 post-commit relaxed candidate refresh. The controller now caps active retained relaxed commits, records validation rollbacks explicitly, writes a final retained-topology audit, and can require a strict counterfactual proxy gate before relaxed commits. Defaults remain unchanged and all new behavior is opt-in.
