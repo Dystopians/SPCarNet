@@ -2928,3 +2928,27 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR16_01_02_two_scene_full_freeze_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R16.03 parking full freeze — PASS
+
+**Outcome**: Completed the third full-budget freeze-densify/skip-Delaunay row on `parking_phone_tiny`, again with online W&B and exact topology preservation. R16 is now a three-scene full-budget validation set.
+
+**W&B**:
+- `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/dq8urgr7`
+
+**Metrics**:
+- topology: `782982` triangles, `820107` vertices, unchanged from the loaded 2000 checkpoint
+- independent render: PSNR `15.570565`, SSIM `0.448212`, LPIPS `0.528052`
+- COLMAP proxy: depth AbsRel `0.257815`, depth MAE `3.085023`, normal mean angle `49.789749`
+
+**Comparison**:
+- baseline 2000: PSNR `11.599438`, SSIM `0.270268`, LPIPS `0.634732`, AbsRel `0.427880`, normal `52.565185`
+- freeze medium 4000: PSNR `14.251087`, SSIM `0.383800`, LPIPS `0.569749`, AbsRel `0.324794`, normal `51.043451`
+- full freeze improves over both on render, depth, and sparse-normal proxy metrics while preserving topology exactly.
+
+**Decision**: R16 is now a three-scene full-budget schedule `PASS`. The method claim should center on topology-retained recovery/continuation; the next critical gap is a stronger selector or normal-aware recovery term.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR16_01_03_three_scene_full_freeze_report.md`
+
+---
