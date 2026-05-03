@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14.12 courtyard area-outlier diagnostic — PASS_DIAGNOSTIC
+
+**Outcome**: Ran the automatic checkpoint area-outlier selector and render-backed gate on ETH3D `courtyard`, the third scene tested by this conservative real checkpoint edit path.
+
+**Verification**:
+- selected face: `404443`
+- selected area: `873.2474365234375`
+- median triangle area: `0.007861965335905552`
+- triangles: `410254 -> 410253`
+- render deltas: PSNR `-0.0005950927734375`, SSIM `0.000011831521987915039`, LPIPS `0.00007200241088867188`
+- geometry deltas: AbsRel `0.0`, Depth MAE `0.0`, normal mean angle `0.0`
+
+**Decision**: `PASS_DIAGNOSTIC`. The conservative area-outlier selector and render-backed gate are stable on a third scene. This supports safety/infrastructure, not the final repair-quality claim.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_12_courtyard_area_outlier_diagnostic_report.md`
+- `outputs/carnet/meshsplatopt/stageR14_12_courtyard_area_outlier_diagnostic/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14.11 bonsai area-outlier diagnostic — PASS_DIAGNOSTIC
 
 **Outcome**: Ran the automatic checkpoint area-outlier selector and render-backed gate on a second public scene, Mip-NeRF 360 `bonsai`. The selector was also optimized to compute triangle areas with torch chunking for large checkpoints.
