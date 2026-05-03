@@ -3443,3 +3443,20 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
 
 ---
+
+## 2026-05-03 - R34-R35 parking trusted-fraction ablation
+
+**Goal**: improve completion by replacing a single trusted/random mixture result with a measured ablation over trusted COLMAP-track fractions.
+
+**Runs**:
+- R34.01 fraction `0.25`, W&B `jfcn9ug0`: PSNR `17.098461`, SSIM `0.531578`, LPIPS `0.458490`, AbsRel `0.184467`, Depth MAE `2.964016`, normal `41.684424`
+- R32.02b fraction `0.50`, W&B `j58gdh9q`: PSNR `17.105490`, SSIM `0.532643`, LPIPS `0.457859`, AbsRel `0.184374`, Depth MAE `2.957988`, normal `41.764144`
+- R35.01 fraction `0.625`, W&B `t8y6ryn9`: PSNR `17.105064`, SSIM `0.532436`, LPIPS `0.457493`, AbsRel `0.183602`, Depth MAE `2.959589`, normal `41.472216`
+- R34.02 fraction `0.75`, W&B `ympoevql`: PSNR `17.099464`, SSIM `0.532346`, LPIPS `0.457681`, AbsRel `0.183488`, Depth MAE `2.959905`, normal `41.606181`
+
+**Decision**: `TRUSTED_FRACTION_PARETO_PASS`. Fraction `0.50` remains PSNR/SSIM-best. Fraction `0.625` is the geometry-balanced Pareto setting: it gives up only `0.000425` PSNR versus R32.02b while improving LPIPS by `0.000366`, AbsRel by `0.000772`, and normal angle by `0.291927` degrees.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
+
+---
