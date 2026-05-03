@@ -4,6 +4,24 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage38 final paper assets — PASS
+
+**Outcome**: Added a paper-asset builder that turns the M36 metric table and M37 visual/failure package into selected paper rows, figure captions, limitations, and a full-budget training decision.
+
+**Generated artifacts**:
+- `outputs/carnet/meshprior/stage38_paper_assets/paper_assets_package.json`
+- `outputs/carnet/meshprior/stage38_paper_assets/final_paper_table.md`
+- `outputs/carnet/meshprior/stage38_paper_assets/figure_captions.md`
+- `outputs/carnet/meshprior/stage38_paper_assets/limitations.md`
+
+**Decision**: Stage38 `PASS`. Full-budget public-scene Stage35 training is `NO_GO_FOR_NOW`: the next blocker is paper table/figure clarity, not the absence of a short-run signal. If a full-budget public run is revisited, W&B and GPU availability checks remain mandatory.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage38_paper_assets_report.md`
+- `scripts/car_model/meshprior_make_paper_assets.py`
+
+---
+
 ## 2026-05-02 — Stage37 visual/failure package — PASS
 
 **Outcome**: Added a packaging script for visual panels, failure cases, and paper-safe claim wording. It generated render-vs-GT panels for parking M24.2, `bonsai` M35, and `courtyard` M35, plus a six-row failure table tied to concrete local artifacts.
