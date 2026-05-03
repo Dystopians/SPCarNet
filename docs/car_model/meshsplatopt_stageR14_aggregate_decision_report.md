@@ -6,7 +6,7 @@ Date: 2026-05-02
 
 `SOFT PASS`.
 
-R14 now has one W&B-logged medium-budget recovery result with clear single-scene gains, two public-scene delete gate diagnostics, two public-scene recovery diagnostics, and a three-scene non-delete `SNAP_VERTICES` gate pass. This is enough to continue method development and unblock equal-budget public-scene runs, but not enough to claim a full NeurIPS-level repair result.
+R14 now has one W&B-logged medium-budget recovery result with clear single-scene gains, two public-scene delete gate diagnostics, two public-scene recovery diagnostics, a three-scene non-delete `SNAP_VERTICES` gate pass, and one equal-step public-scene control. This is enough to continue method development, but not enough to claim a full NeurIPS-level repair result.
 
 ## Evidence Summary
 
@@ -18,6 +18,7 @@ R14 now has one W&B-logged medium-budget recovery result with clear single-scene
 | R14.13 | `bonsai` | W&B post-edit recovery diagnostic, iter 2000 -> 2200 | `PASS_DIAGNOSTIC_NOT_EQUAL_BUDGET` | Recovery is stable and improves metrics, but uses 200 extra steps |
 | R14.14-R14.16 | `parking_phone_tiny`, `bonsai`, `courtyard` | non-delete `SNAP_VERTICES` + render-backed gate, iter 2000 | `PASS_DIAGNOSTIC_CROSS_SCENE` | Real checkpoint area-outlier snap edits pass all render/geometry gates |
 | R14.17 | `bonsai` | W&B non-delete snap recovery diagnostic, iter 2000 -> 2200 | `PASS_DIAGNOSTIC_NOT_EQUAL_BUDGET` | Non-delete snap recovery is stable and improves over 2000iter baseline, but is not equal-budget |
+| R14.18 | `bonsai` | W&B unedited baseline continuation, iter 2000 -> 2200 | `CONTROL_PASS_NEGATIVE_FOR_SNAP_GAIN` | Equal-step control is slightly stronger than snap recovery on most metrics |
 
 ## Parking Medium Result
 
@@ -91,6 +92,25 @@ https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshp
 
 This diagnostic is useful because it verifies W&B recovery stability for a real non-delete edit. It is not an equal-budget win because it evaluates at iteration 2200 against a 2000iter baseline.
 
+## Bonsai Equal-Step Control
+
+W&B:
+
+```text
+https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/kic0euiq
+```
+
+| metric | baseline continuation 2200 | snap recovery 2200 | snap minus control |
+|---|---:|---:|---:|
+| PSNR | `13.274771690368652` | `13.273988723754883` | `-0.0007829666137695312` |
+| SSIM | `0.2403060346841812` | `0.24039088189601898` | `+0.00008484721183776855` |
+| LPIPS | `0.6113919019699097` | `0.6116319894790649` | `+0.00024008750915527344` |
+| AbsRel | `0.47338970412280024` | `0.47445281696526337` | `+0.0010631128424631347` |
+| Depth MAE | `4.765895956720541` | `4.772623802825101` | `+0.006727846104559882` |
+| normal mean deg | `49.19677426124215` | `49.315686202793366` | `+0.11891194155121613` |
+
+The equal-step control is negative for a snap performance-gain claim. It strengthens the paper discipline by forcing the R14 snap path to be framed as real-edit safety/stability infrastructure unless a better selector or equal-budget run changes this result.
+
 ## What This Proves
 
 - Real checkpoint edit materialization works for delete, fill, and non-delete vertex snap.
@@ -103,6 +123,7 @@ This diagnostic is useful because it verifies W&B recovery stability for a real 
 
 - It does not prove equal-budget training gains from non-delete edits.
 - It does not show a second W&B medium-scene recovery improvement.
+- The current non-delete snap selector does not beat equal-step unedited continuation on `bonsai`.
 - It does not beat Stage35 across public scenes.
 - It does not justify full-budget 7000+ sweeps yet.
 - It does not validate giant-hole repair on real public scenes.

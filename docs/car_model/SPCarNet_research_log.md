@@ -4,6 +4,33 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt R14.18 bonsai equal-step control — CONTROL_PASS_NEGATIVE_FOR_SNAP_GAIN
+
+**Outcome**: Ran a W&B-logged 200-step unedited baseline continuation on `bonsai` from iteration `2000` to `2200`, matching the R14.17 snap-recovery budget.
+
+**W&B**: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/kic0euiq`
+
+**Verification**:
+- train/render/metrics exit codes: `0/0/0`
+- topology after continuation: `2487474` triangles, `2478890` vertices
+- render metrics at 2200: PSNR `13.274771690368652`, SSIM `0.2403060346841812`, LPIPS `0.6113919019699097`
+- sparse geometry at 2200: AbsRel `0.47338970412280024`, Depth MAE `4.765895956720541`, normal mean angle `49.19677426124215`
+
+**Comparison to R14.17 snap recovery**:
+- snap is lower on PSNR by `0.0007829666137695312`
+- snap is higher on SSIM by `0.00008484721183776855`
+- snap is worse on LPIPS by `0.00024008750915527344`
+- snap is worse on AbsRel by `0.0010631128424631347`
+- snap is worse on normal mean angle by `0.11891194155121613`
+
+**Decision**: `CONTROL_PASS_NEGATIVE_FOR_SNAP_GAIN`. R14 snap remains a safe real-edit and recovery-stability mechanism, but this selector should not be claimed as an equal-step quality improvement.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_18_bonsai_equal_step_control_report.md`
+- `outputs/carnet/meshsplatopt/stageR14_18_bonsai_baseline_continuation_200step/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt R14.17 bonsai snap recovery — PASS_DIAGNOSTIC_NOT_EQUAL_BUDGET
 
 **Outcome**: Ran a W&B-logged 200-step recovery diagnostic on the accepted `bonsai` non-delete `SNAP_VERTICES` checkpoint. Training resumed from iteration `2000` to `2200`, then rendered, evaluated with image metrics, and passed sparse COLMAP geometry evaluation.
