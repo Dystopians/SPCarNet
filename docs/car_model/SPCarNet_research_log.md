@@ -3065,3 +3065,42 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR17_06_risk_filtered_snap_gate_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R18.01-R18.03 train-residual local snap recovery — MOSTLY POSITIVE
+
+**Outcome**: Added a residual-aware checkpoint snap selector and validated a 16-vertex train-residual portfolio through held-out render-backed gate plus equal-budget W&B recovery.
+
+**Implementation**:
+- new selector: `scripts/car_model/meshsplatopt_select_checkpoint_residual_snap_edit.py`
+- proposal evidence: input/train render residuals, large-area candidate prefilter, local plane CSEF snap residual reduction
+- protocol guard: test residual selection is marked diagnostic; paper-valid selection used `render_set=train` and `camera_index_offset=54`
+
+**Train-residual selection**:
+- status: `PASS`
+- candidate faces: `19575`
+- candidate vertices: `4469`
+- scored vertices: `3918`
+- proposals: `3000`
+- valid proposals: `438`
+- selected vertices: `16`
+- top selected vertices: `730295`, `500770`, `676458`
+
+**Gate**:
+- status: `PASS`
+- topology unchanged at `782982` triangles and `820107` vertices
+- held-out deltas at iteration 2000: PSNR `0.0`, SSIM `-1.4901161193847656e-07`, LPIPS `+1.7881393432617188e-07`, AbsRel `0.0`, Depth MAE `0.0`, normal `-2.47278670428841e-07`
+
+**W&B**:
+- train-residual snap recovery: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/1oqymqmp`
+
+**Equal-budget 2200 result**:
+- baseline continuation: PSNR `12.331465`, SSIM `0.298222`, LPIPS `0.622323`, AbsRel `0.409263`, Depth MAE `4.300273`, normal `52.595639`
+- area portfolio snap: PSNR `12.326042`, SSIM `0.297809`, LPIPS `0.621754`, AbsRel `0.410215`, Depth MAE `4.307691`, normal `52.827494`
+- train-residual snap: PSNR `12.342549`, SSIM `0.298893`, LPIPS `0.622299`, AbsRel `0.408892`, Depth MAE `4.302941`, normal `52.354489`
+
+**Decision**: `TRAIN_RESIDUAL_SNAP_GATE_PASS_RECOVERY_MOSTLY_POSITIVE`. This fixes the main R17 selector weakness: the portfolio is now tied to observed residual evidence and beats same-budget continuation on PSNR, SSIM, AbsRel, and normal angle. Effect size remains small and Depth MAE is slightly worse, so the next step is multi-scene validation and richer residual evidence.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR18_01_03_residual_snap_report.md`
+
+---
