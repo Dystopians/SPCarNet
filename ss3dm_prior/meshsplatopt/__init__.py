@@ -9,6 +9,7 @@ from .edit_snapshot import create_snapshot, rollback_edit
 from .edit_types import MeshEdit, MeshSplatOptEditType, MeshState
 from .ground_void_fill import make_ground_plane_void_fill
 from .hole_fill import FillProposal, find_boundary_loops, make_boundary_loop_fill
+from .object_prior_repair import ObjectRepairProposal, make_object_prior_repair_proposals
 from .snap_proposals import SnapProposal, make_snap_proposals
 from .topology_baselines import TopologyBaselineRun, run_topology_baselines
 
@@ -22,6 +23,7 @@ __all__ = [
     "MeshEdit",
     "MeshSplatOptEditType",
     "MeshState",
+    "ObjectRepairProposal",
     "SnapProposal",
     "TopologyBaselineRun",
     "apply_edit",
@@ -30,6 +32,7 @@ __all__ = [
     "find_boundary_loops",
     "make_boundary_loop_fill",
     "make_ground_plane_void_fill",
+    "make_object_prior_repair_proposals",
     "make_snap_proposals",
     "mine_defects",
     "run_topology_baselines",

@@ -4,6 +4,28 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R9 object-prior repair proposals — PASS
+
+**Outcome**: Implemented a bounded object-prior proposal generator for vehicle regions. Confident priors can emit protect, snap, and discontinuity-fill candidates; uncertain priors are restricted to protect metadata. Every proposal records that scene counterfactual validation is required.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- smoke command: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_meshsplatopt_stageR9_object_prior_repair.py`
+- smoke status: `PASS`
+- confident synthetic vehicle package includes protect and fill
+- uncertain prior emits no fill
+- all proposals record `prior_proposes_evidence_disposes=true`
+
+**Decision**: `PASS`. Object-prior proposals are bounded and cannot bypass scene gates.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR9_object_prior_repair_design.md`
+- `docs/car_model/meshsplatopt_stageR9_object_prior_repair_implementation_report.md`
+- `docs/car_model/meshsplatopt_stageR9_object_prior_repair_smoke.md`
+- `outputs/carnet/meshsplatopt/stageR9_object_prior_repair_smoke/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R8 giant void fill proposals — PASS
 
 **Outcome**: Implemented boundary-loop fill, ground-plane void fill, fill certificates, prior-only diagnostic fill labeling, normal-mode unknown-void rejection, and rollback-compatible `FILL_PATCH` proposals.
