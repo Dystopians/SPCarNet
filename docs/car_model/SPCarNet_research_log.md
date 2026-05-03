@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R11 teacher recovery contract — SOFT PASS
+
+**Outcome**: Implemented teacher recovery cache and report contract. The smoke writes RGB/depth/normal/alpha/visibility/edit-region placeholder cache files and clearly marks real recovery metrics unavailable when no renderable model path exists.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- smoke command: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_meshsplatopt_stageR11_teacher_recovery.py`
+- smoke status: `SOFT PASS`
+- real recovery run: `false`
+
+**Decision**: `SOFT PASS`. The contract works, but public-scene claims still require a real renderable recovery run.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR11_teacher_recovery_design.md`
+- `docs/car_model/meshsplatopt_stageR11_teacher_recovery_implementation_report.md`
+- `docs/car_model/meshsplatopt_stageR11_teacher_recovery_smoke.md`
+- `outputs/carnet/meshsplatopt/stageR11_teacher_recovery_smoke/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R10 generalized counterfactual edit gate — PASS
 
 **Outcome**: Implemented generalized edit validation for arbitrary reversible edits. The gate snapshots state, applies an edit, checks topology and risk/certificate metadata, accepts or rejects, and rolls back rejected edits exactly. Render/sparse/changed-pixel fields are present but marked unavailable when no render path exists.
