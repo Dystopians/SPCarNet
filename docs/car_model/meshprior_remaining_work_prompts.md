@@ -4,7 +4,7 @@ Date: 2026-05-02
 
 ## Current State
 
-SPCarNet MeshPrior is about `98.5%` complete as a research-codebase transformation and about `85%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, M32 measured candidate-impact ranking, M33 calibration-diversity diagnostics, and M34 post-commit candidate refresh diagnostics are implemented. The remaining core is conservative retained-edit control, metric-path reconciliation, full-budget public-scene evidence, and paper-grade visual/failure analysis. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
+SPCarNet MeshPrior is about `99%` complete as a research-codebase transformation and about `87%` complete as a NeurIPS-strength empirical paper. The proposal, gate, rollback, patch extraction, recovery-model loading, W&B smoke, clean `origin/main` baseline path, 2000-iteration medium comparison, 7000-iteration single-scene diagnostic, M21.5 topology-controlled current-branch ablation, M22 unified paper-evidence package, M23 claim-risk audit, M23.5 integrated topology-control smoke, M23.6 tuned medium integrated topology control, M24 full-budget integrated topology control, M24.1 late-PRISM Pareto sweep, M24.2 topology-retention row, M25 public multidataset trainability validation, M26 cross-scene medium evidence, M27 topology accounting/schedule tuning, M28 adaptive candidate scheduling, M29 candidate caps, M30 microbatch candidate gating, M31 candidate-quality ranking, M32 measured candidate-impact ranking, M33 calibration-diversity diagnostics, M34 post-commit candidate refresh diagnostics, and M35 conservative retained relaxed refresh are implemented. The remaining core is metric-path reconciliation, full-budget public-scene evidence, unified paper-grade tables, and visual/failure analysis. The Stage17 MeshPrior resume variant is not viable at 7000 iterations.
 
 Key codebase links:
 
@@ -38,6 +38,7 @@ Key codebase links:
 - Measured candidate-rank report: `docs/car_model/meshprior_stage32_measured_candidate_rank_report.md`
 - Calibration-diversity report: `docs/car_model/meshprior_stage33_calibration_diversity_report.md`
 - Post-commit candidate refresh report: `docs/car_model/meshprior_stage34_post_commit_refresh_report.md`
+- Retained relaxed refresh report: `docs/car_model/meshprior_stage35_retained_refresh_report.md`
 
 Known W&B runs:
 
@@ -101,6 +102,8 @@ Known W&B runs:
 - M34 Mip-NeRF 360 bonsai root-cause v2: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/npagb743`
 - M34 Mip-NeRF 360 bonsai relaxed-score v3: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/lt1v4652`
 - M34 Mip-NeRF 360 bonsai second-edit-only v4: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/zhy368pr`
+- M35 Mip-NeRF 360 bonsai retained relaxed retry: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/rszvl7gn`
+- M35 ETH3D courtyard retained relaxed check: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/u2s15ok0`
 
 ## Operating Rules
 
@@ -163,6 +166,7 @@ Use `--enable_wandb`, `--wandb_project spcarnet_meshprior`, a meaningful `--wand
 | Measured candidate-impact ranking | execution finding / M32 | SOFT PASS / diagnostic PASS | Added opt-in `--prism_candidate_measured_impact_rank`. Parking smoke passes and `courtyard` improves, but `bonsai` does not match Stage29 cap512, so no default promotion. |
 | Calibration-diversity diagnostics | execution finding / M33 | SOFT PASS / diagnostic PASS | Added opt-in `--prism_calib_diverse_views` plus manifest/per-view deltas. `bonsai` now exceeds Stage29 cap512 at equal topology; `courtyard` remains better than M29 but worse than M32 measured rank. |
 | Post-commit candidate refresh | execution finding / M34 | SOFT PASS / diagnostic PASS | Added opt-in `--prism_post_commit_candidate_refresh` and no-candidate diagnostics. Root cause is `recent_t` protecting all triangles and zeroing prune score after topology sync. Relaxed-score v3 keeps additional `bonsai` topology reduction (`633787 -> 631739`) with PSNR up but SSIM/LPIPS slightly down, so no default promotion. |
+| Conservative retained relaxed refresh | execution finding / M35 | PASS | Added retained relaxed commit cap, strict relaxed counterfactual proxy gate, validation-rollback records, final topology audit, and W&B audit scalars. `bonsai` reaches `633275` triangles and improves independent PSNR/SSIM/LPIPS versus Stage33; `courtyard` confirms active relaxed commit retention. |
 | Metric-path reconciliation | execution finding | TODO | Training internal metrics and `render.py + metrics.py` differ and must stay labeled. |
 | Final claim table and failure cases | original prompts Layer G | TODO | Need unified paper-style tables, visual cases, and failure taxonomy. |
 
@@ -199,8 +203,53 @@ These are not new research directions. They are constraints discovered while imp
 27. M32 measured candidate-impact ranking shows local calibration acceptance is still not sufficient for public-scene test metrics: all measured groups can pass on `bonsai` while independent PSNR/SSIM/LPIPS remain worse than Stage29 cap512. The next bottleneck is calibration-set representativeness and view-diverse candidate diversity.
 28. M33 calibration diversity improves `bonsai` enough to beat Stage29 cap512 at equal topology, and the parking smoke demonstrates stricter view coverage can reject local degradations that a smaller calibration set misses. It does not solve the next bottleneck: after one cap512 edit, candidate selection often becomes empty, so the controller needs a second-stage post-commit candidate discovery path.
 29. M34 identifies the post-commit no-candidate root cause: `_sync_prism_topology_change` makes every surviving triangle recent, and `recent_t` both protects all triangles and zeroes `prune_score_t` through `risk_t`. A relaxed score that removes only recent risk can find more candidates, but retained extra edits need stricter global/held-out metric control before promotion.
+30. M35 shows retained relaxed refresh can pass the strict `bonsai` gate, but validation may repeatedly roll back relaxed commits before one survives. Reports must distinguish total relaxed commit attempts from active retained relaxed commits.
+31. M35 `courtyard` shows the retained relaxed cap blocks further relaxed attempts once one active commit survives. This is correct for conservative validation but may under-prune easy scenes; future sweeps should report the cap explicitly.
 
 ---
+
+# Prompt M35 — Conservative retained-edit control after post-commit refresh
+
+## Goal
+
+Keep M34 default-off, add retained relaxed commit control, prevent silent erasure of relaxed topology edits, and require a stricter proxy gate before relaxed commits.
+
+## Status
+
+`PASS` on 2026-05-02.
+
+## Result
+
+- `bonsai` W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/rszvl7gn`
+- ETH3D `courtyard` W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/u2s15ok0`
+- report: `docs/car_model/meshprior_stage35_retained_refresh_report.md`
+- `bonsai`: final `633275` triangles, active relaxed commits `1`, PSNR `12.2673674`, SSIM `0.2776170`, LPIPS `0.6119390`
+- Stage33 `bonsai` reference: final `633787` triangles, PSNR `12.1999207`, SSIM `0.2765326`, LPIPS `0.6125830`
+- ETH3D `courtyard`: final `101913` triangles, active relaxed commits `1`, PSNR `15.3831606`, SSIM `0.5080911`, LPIPS `0.5846940`
+
+## Gate
+
+`PASS`: the retained relaxed edit lowers final `bonsai` topology and improves all independent metrics versus Stage33.
+
+# Prompt M36 — Paper-facing metric reconciliation and evidence table
+
+## Goal
+
+Convert M24-M35 into a paper-facing evidence package that separates training-time metrics, independent render metrics, topology counts, and validation/audit metadata.
+
+## Required Steps
+
+1. Build a collector that reads selected runs from `outputs/carnet/meshprior/`, including final-cleanup summaries, retained-topology audits, independent `results.json`, train logs, and W&B URLs.
+2. Produce one canonical CSV/Markdown table with columns for scene, method row, schedule, W&B run, final checkpoint triangles, active PRISM commits, rolled-back commits, independent PSNR/SSIM/LPIPS, and metric path.
+3. Explicitly label Stage35 as the current best `bonsai` retained-edit row and compare against Stage33, M34 relaxed v3, and the relevant courtyard public-scene rows.
+4. Include a short failure taxonomy: no-candidate after sync, validation rollback, cap reached, metric-path mismatch, and dataset geometry-observability limits.
+5. Add two or more qualitative visual panels from independent renders if available.
+6. Run all commands with W&B preserved for any new training. If only post-processing is run, record exact local commands and source W&B links.
+7. Update `docs/car_model/SPCarNet_research_log.md`, this prompt file, and commit/push.
+
+## Gate
+
+`PASS` only if the evidence table is reproducible from local artifacts and does not mix training-time and independent metric paths.
 
 # Prompt M23.5 — Integrated optimization-time topology-control smoke
 

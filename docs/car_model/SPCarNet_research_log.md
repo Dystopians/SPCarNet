@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — Stage35 retained relaxed refresh control — PASS
+
+**Outcome**: Added conservative retained-edit control for Stage34 post-commit relaxed candidate refresh. The controller now caps active retained relaxed commits, records validation rollbacks explicitly, writes a final retained-topology audit, and can require a strict counterfactual proxy gate before relaxed commits. Defaults remain unchanged and all new behavior is opt-in.
+
+**W&B**:
+- `bonsai` retained relaxed retry: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/rszvl7gn`
+- ETH3D `courtyard` retained relaxed check: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/u2s15ok0`
+
+**Key metrics**:
+- `bonsai`: final `633275` triangles, `1` active retained relaxed commit, independent PSNR `12.2673674`, SSIM `0.2776170`, LPIPS `0.6119390`.
+- Stage33 `bonsai` reference: `633787` triangles, PSNR `12.1999207`, SSIM `0.2765326`, LPIPS `0.6125830`.
+- ETH3D `courtyard`: final `101913` triangles, `1` active retained relaxed commit, independent PSNR `15.3831606`, SSIM `0.5080911`, LPIPS `0.5846940`.
+
+**Decision**: Stage35 is a real `PASS`: `bonsai` keeps the additional relaxed edit in the final checkpoint and improves all independent metrics versus Stage33 while reducing topology. `courtyard` confirms the retained relaxed cap and final audit transfer to a second public scene. The next step is to turn this into a paper-facing method row: metric-path reconciliation, unified tables, visuals, and full-budget validation.
+
+**Linked artefacts**:
+- `docs/car_model/meshprior_stage35_retained_refresh_report.md`
+
+---
+
 ## 2026-05-02 — Stage34 post-commit candidate refresh — SOFT PASS / diagnostic PASS
 
 **Outcome**: Added opt-in post-commit candidate refresh and measured the root cause of the post-commit no-candidate failure. After a candidate commit, topology sync marks all surviving triangles as recent; `recent_t` then protects every triangle and also zeroes the normal prune score through `risk_t`. The new relaxed score removes only recent risk while keeping other risk and keep signals, and keeps the counterfactual gate mandatory.

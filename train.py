@@ -159,6 +159,15 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "candidate_measured_max_groups": int(getattr(opt, "prism_candidate_measured_max_groups", 8)),
         "post_commit_candidate_refresh": bool(getattr(opt, "prism_post_commit_candidate_refresh", False)),
         "post_commit_refresh_min_prune_score": float(getattr(opt, "prism_post_commit_refresh_min_prune_score", 1e-6)),
+        "post_commit_relaxed_max_commits": int(getattr(opt, "prism_post_commit_relaxed_max_commits", 0)),
+        "post_commit_relaxed_strict_gate": bool(getattr(opt, "prism_post_commit_relaxed_strict_gate", False)),
+        "post_commit_relaxed_min_delta_psnr": float(getattr(opt, "prism_post_commit_relaxed_min_delta_psnr", 0.0)),
+        "post_commit_relaxed_max_delta_mae": float(getattr(opt, "prism_post_commit_relaxed_max_delta_mae", 0.0)),
+        "post_commit_relaxed_max_delta_absrel": float(getattr(opt, "prism_post_commit_relaxed_max_delta_absrel", 0.0)),
+        "post_commit_relaxed_max_delta_mean_angle": float(getattr(opt, "prism_post_commit_relaxed_max_delta_mean_angle", 0.0)),
+        "post_commit_relaxed_max_changed_pixel_ratio": float(
+            getattr(opt, "prism_post_commit_relaxed_max_changed_pixel_ratio", 0.0025)
+        ),
         "adaptive_candidate_retry_on_rollback": bool(
             getattr(opt, "prism_adaptive_candidate_retry_on_rollback", False)
         ),
@@ -445,7 +454,13 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "last_candidate_measured_best_score": 0.0,
         "last_candidate_relaxed_refresh_used": 0,
         "last_candidate_relaxed_pool_count": 0,
+        "last_candidate_relaxed_reject_reason": "",
+        "last_candidate_relaxed_strict_gate_pass": 1,
+        "last_candidate_relaxed_strict_gate_reason": "",
         "candidate_commit_count": 0,
+        "relaxed_candidate_commit_count": 0,
+        "relaxed_commit_records": [],
+        "last_commit_relaxed_refresh_used": 0,
         "teacher_cache": {},
         "teacher_rgb_lambda": float(getattr(opt, "prism_teacher_rgb_lambda", 0.01)),
         "teacher_depth_lambda": float(getattr(opt, "prism_teacher_depth_lambda", 0.002)),
@@ -1796,6 +1811,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     scores = prism_state.get("last_scores", None)
     if scores is None:
         return {"committed": False, "pruned_count": 0, "counterfactual_accept": 0, "rollback": 0}
+    prism_state["last_commit_relaxed_refresh_used"] = 0
 
     def _post_commit_relaxed_candidates():
         score_cfg = prism_state["score_cfg"]
@@ -1928,12 +1944,17 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     relaxed_refresh_used = 0
     relaxed_pool_count = int(candidate_diag_payload.get("candidate_relaxed_pool_count", 0))
     relaxed_rank_score_t = None
+    relaxed_reject_reason = ""
+    relaxed_max_commits = int(cfg.get("post_commit_relaxed_max_commits", 0))
+    relaxed_commit_count = int(prism_state.get("relaxed_candidate_commit_count", 0))
+    relaxed_commit_cap_reached = bool(relaxed_max_commits > 0 and relaxed_commit_count >= relaxed_max_commits)
     if (
         prune_mode == "candidate"
         and selected_count == 0
         and bool(cfg.get("post_commit_candidate_refresh", False))
         and int(prism_state.get("candidate_commit_count", 0)) > 0
         and relaxed_pool_count > 0
+        and not relaxed_commit_cap_reached
     ):
         relaxed_mask, relaxed_score_t, _ = _post_commit_relaxed_candidates()
         relaxed_ids = torch.nonzero(relaxed_mask, as_tuple=True)[0]
@@ -1947,6 +1968,14 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             relaxed_refresh_used = 1
             relaxed_rank_score_t = torch.full_like(relaxed_score_t.to(torch.float32), -1e9)
             relaxed_rank_score_t[relaxed_ids] = relaxed_score_t[relaxed_ids].to(torch.float32)
+    elif (
+        prune_mode == "candidate"
+        and selected_count == 0
+        and bool(cfg.get("post_commit_candidate_refresh", False))
+        and int(prism_state.get("candidate_commit_count", 0)) > 0
+        and relaxed_commit_cap_reached
+    ):
+        relaxed_reject_reason = "relaxed_commit_cap_reached"
     if candidate_ids.numel() > 1:
         order_score_t = relaxed_rank_score_t if relaxed_rank_score_t is not None else rank_score_t
         order_scores = order_score_t[candidate_ids] if order_score_t is not None else scores.prune_score_t[candidate_ids]
@@ -1977,6 +2006,9 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     prism_state["last_candidate_measured_best_score"] = 0.0
     prism_state["last_candidate_relaxed_refresh_used"] = int(relaxed_refresh_used)
     prism_state["last_candidate_relaxed_pool_count"] = int(relaxed_pool_count)
+    prism_state["last_candidate_relaxed_reject_reason"] = str(relaxed_reject_reason)
+    prism_state["last_candidate_relaxed_strict_gate_pass"] = 1
+    prism_state["last_candidate_relaxed_strict_gate_reason"] = ""
 
     def _candidate_quality_payload():
         return {
@@ -1995,6 +2027,14 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             "candidate_measured_best_score": float(prism_state.get("last_candidate_measured_best_score", 0.0)),
             "candidate_relaxed_refresh_used": int(prism_state.get("last_candidate_relaxed_refresh_used", 0)),
             "candidate_relaxed_pool_count": int(prism_state.get("last_candidate_relaxed_pool_count", 0)),
+            "candidate_relaxed_reject_reason": str(prism_state.get("last_candidate_relaxed_reject_reason", "")),
+            "candidate_relaxed_commit_count": int(prism_state.get("relaxed_candidate_commit_count", 0)),
+            "candidate_relaxed_max_commits": int(cfg.get("post_commit_relaxed_max_commits", 0)),
+            "candidate_relaxed_strict_gate_enabled": int(bool(cfg.get("post_commit_relaxed_strict_gate", False))),
+            "candidate_relaxed_strict_gate_pass": int(prism_state.get("last_candidate_relaxed_strict_gate_pass", 1)),
+            "candidate_relaxed_strict_gate_reason": str(
+                prism_state.get("last_candidate_relaxed_strict_gate_reason", "")
+            ),
             **candidate_diag_payload,
         }
 
@@ -2024,6 +2064,61 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
 
     counterfactual_accept = 0
     rollback = 0
+
+    def _finite_delta(deltas, key: str, default: float = 0.0) -> float:
+        try:
+            value = float((deltas or {}).get(key, default))
+        except Exception:
+            return float(default)
+        return value if np.isfinite(value) else float(default)
+
+    def _relaxed_strict_gate_decision(decision):
+        if not int(relaxed_refresh_used):
+            return True, "not_relaxed_refresh"
+        if not bool(cfg.get("post_commit_relaxed_strict_gate", False)):
+            return True, "strict_gate_disabled"
+        deltas = dict(getattr(decision, "deltas", {}) or {})
+        checks = [
+            (
+                "delta_psnr",
+                _finite_delta(deltas, "delta_psnr"),
+                ">=",
+                float(cfg.get("post_commit_relaxed_min_delta_psnr", 0.0)),
+            ),
+            (
+                "delta_mae",
+                _finite_delta(deltas, "delta_mae"),
+                "<=",
+                float(cfg.get("post_commit_relaxed_max_delta_mae", 0.0)),
+            ),
+            (
+                "delta_absrel",
+                _finite_delta(deltas, "delta_absrel"),
+                "<=",
+                float(cfg.get("post_commit_relaxed_max_delta_absrel", 0.0)),
+            ),
+            (
+                "delta_mean_angle",
+                _finite_delta(deltas, "delta_mean_angle"),
+                "<=",
+                float(cfg.get("post_commit_relaxed_max_delta_mean_angle", 0.0)),
+            ),
+            (
+                "changed_pixel_ratio",
+                _finite_delta(deltas, "changed_pixel_ratio"),
+                "<=",
+                float(cfg.get("post_commit_relaxed_max_changed_pixel_ratio", 0.0025)),
+            ),
+        ]
+        failures = []
+        for key, value, op, threshold in checks:
+            ok = value >= threshold if op == ">=" else value <= threshold
+            if not bool(ok):
+                failures.append(f"{key}{op}{threshold:g}_got_{value:g}")
+        if failures:
+            return False, "relaxed_strict_gate_reject:" + ",".join(failures)
+        return True, "relaxed_strict_gate_pass"
+
     if (prune_mode == "candidate") and bool(cfg.get("use_counterfactual_gate", False)):
         debug_dir = os.path.join(prism_state["model_path"], "prism_debug")
         os.makedirs(debug_dir, exist_ok=True)
@@ -2224,6 +2319,36 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
                     "candidate_microbatch_accepted_triangles": 0,
                     **_candidate_quality_payload(),
                 }
+            strict_ok, strict_reason = _relaxed_strict_gate_decision(decision)
+            prism_state["last_candidate_relaxed_strict_gate_pass"] = 1 if bool(strict_ok) else 0
+            prism_state["last_candidate_relaxed_strict_gate_reason"] = str(strict_reason)
+            if not bool(strict_ok):
+                rollback = 1
+                reject_payload = counterfactual_decision_to_dict(decision)
+                reject_payload["relaxed_strict_gate_pass"] = False
+                reject_payload["relaxed_strict_gate_reason"] = str(strict_reason)
+                with open(
+                    os.path.join(debug_dir, f"counterfactual_relaxed_strict_gate_iter_{int(iteration):06d}.json"),
+                    "w",
+                    encoding="utf-8",
+                ) as f:
+                    json.dump(reject_payload, f, indent=2)
+                return {
+                    "committed": False,
+                    "pruned_count": 0,
+                    "counterfactual_accept": 0,
+                    "rollback": rollback,
+                    "candidate_prune_ratio": float(cand_ratio),
+                    "candidate_pool_count": int(candidate_pool_count),
+                    "candidate_target_count": int(target_count),
+                    "candidate_cap_count": int(capped_target_count),
+                    "candidate_selected_count": int(selected_count),
+                    "candidate_microbatch_count": 0,
+                    "candidate_microbatch_accepted_count": 0,
+                    "candidate_microbatch_rejected_count": 0,
+                    "candidate_microbatch_accepted_triangles": 0,
+                    **_candidate_quality_payload(),
+                }
             counterfactual_accept = 1
 
     # Optional teacher cache: snapshot round-pre-prune render targets.
@@ -2234,6 +2359,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
         dtype=torch.bool,
         device=triangles._triangle_indices.device,
     )
+    pre_commit_triangle_count = int(triangles._triangle_indices.shape[0])
     valid = (candidate_ids >= 0) & (candidate_ids < keep_mask.numel())
     if torch.any(valid):
         pruned_count = int(valid.sum().item())
@@ -2247,6 +2373,24 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
         )
         if str(prune_mode) == "candidate":
             prism_state["candidate_commit_count"] = int(prism_state.get("candidate_commit_count", 0)) + 1
+            if int(relaxed_refresh_used):
+                prism_state["last_commit_relaxed_refresh_used"] = 1
+                prism_state["relaxed_candidate_commit_count"] = int(
+                    prism_state.get("relaxed_candidate_commit_count", 0)
+                ) + 1
+                records = list(prism_state.get("relaxed_commit_records", []))
+                records.append(
+                    {
+                        "iteration": int(iteration),
+                        "pre_commit_triangle_count": int(pre_commit_triangle_count),
+                        "post_commit_triangle_count": int(triangles._triangle_indices.shape[0]),
+                        "pruned_count": int(pruned_count),
+                        "strict_gate_enabled": bool(cfg.get("post_commit_relaxed_strict_gate", False)),
+                        "strict_gate_pass": int(prism_state.get("last_candidate_relaxed_strict_gate_pass", 1)),
+                        "strict_gate_reason": str(prism_state.get("last_candidate_relaxed_strict_gate_reason", "")),
+                    }
+                )
+                prism_state["relaxed_commit_records"] = records
         return {
             "committed": True,
             "pruned_count": pruned_count,
@@ -3066,6 +3210,8 @@ def training(
                 tb_writer.add_scalar("prism/last_candidate_measured_best_score", float(prism_state.get("last_candidate_measured_best_score", 0.0)), iteration)
                 tb_writer.add_scalar("prism/last_candidate_relaxed_refresh_used", float(prism_state.get("last_candidate_relaxed_refresh_used", 0)), iteration)
                 tb_writer.add_scalar("prism/last_candidate_relaxed_pool_count", float(prism_state.get("last_candidate_relaxed_pool_count", 0)), iteration)
+                tb_writer.add_scalar("prism/relaxed_candidate_commit_count", float(prism_state.get("relaxed_candidate_commit_count", 0)), iteration)
+                tb_writer.add_scalar("prism/last_candidate_relaxed_strict_gate_pass", float(prism_state.get("last_candidate_relaxed_strict_gate_pass", 1)), iteration)
                 tb_writer.add_scalar("prism/validation_pass", float(prism_state.get("last_validation_pass", 1)), iteration)
                 tb_writer.add_scalar(
                     "prism/post_commit_recollect_remaining",
@@ -3150,6 +3296,8 @@ def training(
                     "prism/last_candidate_measured_best_score": float(prism_state.get("last_candidate_measured_best_score", 0.0)),
                     "prism/last_candidate_relaxed_refresh_used": float(prism_state.get("last_candidate_relaxed_refresh_used", 0)),
                     "prism/last_candidate_relaxed_pool_count": float(prism_state.get("last_candidate_relaxed_pool_count", 0)),
+                    "prism/relaxed_candidate_commit_count": float(prism_state.get("relaxed_candidate_commit_count", 0)),
+                    "prism/last_candidate_relaxed_strict_gate_pass": float(prism_state.get("last_candidate_relaxed_strict_gate_pass", 1)),
                     "prism/validation_pass": float(prism_state.get("last_validation_pass", 1)),
                     "prism/densification_frozen_after_commit": float(
                         prism_state.get("densification_frozen_after_prism_commit", 0)
@@ -3393,6 +3541,18 @@ def training(
                         "candidate_measured_best_score": float(prune_result.get("candidate_measured_best_score", 0.0)),
                         "candidate_relaxed_refresh_used": int(prune_result.get("candidate_relaxed_refresh_used", 0)),
                         "candidate_relaxed_pool_count": int(prune_result.get("candidate_relaxed_pool_count", 0)),
+                        "candidate_relaxed_reject_reason": str(prune_result.get("candidate_relaxed_reject_reason", "")),
+                        "candidate_relaxed_commit_count": int(prune_result.get("candidate_relaxed_commit_count", 0)),
+                        "candidate_relaxed_max_commits": int(prune_result.get("candidate_relaxed_max_commits", 0)),
+                        "candidate_relaxed_strict_gate_enabled": int(
+                            prune_result.get("candidate_relaxed_strict_gate_enabled", 0)
+                        ),
+                        "candidate_relaxed_strict_gate_pass": int(
+                            prune_result.get("candidate_relaxed_strict_gate_pass", 1)
+                        ),
+                        "candidate_relaxed_strict_gate_reason": str(
+                            prune_result.get("candidate_relaxed_strict_gate_reason", "")
+                        ),
                         "candidate_diag_total_triangles": int(prune_result.get("candidate_diag_total_triangles", 0)),
                         "candidate_diag_active_state_count": int(prune_result.get("candidate_diag_active_state_count", 0)),
                         "candidate_diag_protected_raw_count": int(prune_result.get("candidate_diag_protected_raw_count", 0)),
@@ -3589,6 +3749,21 @@ def training(
                             if restored:
                                 prism_state["rollback"] = 1
                                 prism_state["rollback_by_validation"] = 1
+                                if int(prism_state.get("last_commit_relaxed_refresh_used", 0)):
+                                    records = list(prism_state.get("relaxed_commit_records", []))
+                                    for record in reversed(records):
+                                        if not bool(record.get("validation_rollback", False)):
+                                            record["validation_rollback"] = True
+                                            record["validation_rollback_iter"] = int(iteration)
+                                            record["post_rollback_triangle_count"] = int(
+                                                triangles._triangle_indices.shape[0]
+                                            )
+                                            break
+                                    prism_state["relaxed_commit_records"] = records
+                                    prism_state["relaxed_candidate_commit_count"] = max(
+                                        0, int(prism_state.get("relaxed_candidate_commit_count", 0)) - 1
+                                    )
+                                    prism_state["last_commit_relaxed_refresh_used"] = 0
                                 reset_ground_supervision_state("prism_validation_rollback")
                         prism_state["round_snapshot"] = None
                 if controller is not None:
@@ -3703,10 +3878,40 @@ def training(
         "pre_prune_vertex_count": int(pre_vertices),
         "post_prune_vertex_count": int(post_vertices),
     }
+    relaxed_records = list(prism_state.get("relaxed_commit_records", []))
+    active_relaxed_records = [r for r in relaxed_records if not bool(r.get("validation_rollback", False))]
+    last_active_relaxed = active_relaxed_records[-1] if active_relaxed_records else None
+    retained_audit = {
+        "iteration": int(iteration),
+        "final_triangle_count": int(post_triangles),
+        "relaxed_commit_count": int(len(relaxed_records)),
+        "active_relaxed_commit_count": int(len(active_relaxed_records)),
+        "validation_rolled_back_relaxed_commit_count": int(len(relaxed_records) - len(active_relaxed_records)),
+        "relaxed_commit_records": relaxed_records,
+        "last_relaxed_post_commit_triangle_count": int(last_active_relaxed["post_commit_triangle_count"])
+        if last_active_relaxed is not None
+        else 0,
+        "relaxed_topology_retained": bool(
+            last_active_relaxed is not None and int(post_triangles) <= int(last_active_relaxed["post_commit_triangle_count"])
+        ),
+        "relaxed_topology_erased": bool(
+            last_active_relaxed is not None and int(post_triangles) > int(last_active_relaxed["post_commit_triangle_count"])
+        ),
+        "triangle_delta_vs_last_relaxed_commit": int(
+            post_triangles - int(last_active_relaxed["post_commit_triangle_count"])
+        )
+        if last_active_relaxed is not None
+        else 0,
+    }
+    final_cleanup_payload["relaxed_retained_topology_audit"] = retained_audit
+    prism_state["relaxed_topology_retained"] = 1 if bool(retained_audit["relaxed_topology_retained"]) else 0
+    prism_state["relaxed_topology_erased"] = 1 if bool(retained_audit["relaxed_topology_erased"]) else 0
     debug_dir = os.path.join(scene.model_path, "prism_debug")
     os.makedirs(debug_dir, exist_ok=True)
     with open(os.path.join(debug_dir, "final_cleanup_summary.json"), "w", encoding="utf-8") as f:
         json.dump(final_cleanup_payload, f, indent=2)
+    with open(os.path.join(debug_dir, "relaxed_retained_topology_audit.json"), "w", encoding="utf-8") as f:
+        json.dump(retained_audit, f, indent=2)
     print(
         "[PRISM][FinalCleanup] enabled={} pruned={} pre_ckpt={} post_ckpt={}".format(
             bool(cleanup_executed),
@@ -3727,6 +3932,16 @@ def training(
                 "prism/final_post_cleanup_triangle_count": float(post_triangles),
                 "prism/final_pre_cleanup_vertex_count": float(pre_vertices),
                 "prism/final_post_cleanup_vertex_count": float(post_vertices),
+                "prism/relaxed_commit_count": float(len(relaxed_records)),
+                "prism/active_relaxed_commit_count": float(len(active_relaxed_records)),
+                "prism/validation_rolled_back_relaxed_commit_count": float(
+                    len(relaxed_records) - len(active_relaxed_records)
+                ),
+                "prism/relaxed_topology_retained": float(prism_state.get("relaxed_topology_retained", 0)),
+                "prism/relaxed_topology_erased": float(prism_state.get("relaxed_topology_erased", 0)),
+                "prism/relaxed_triangle_delta_vs_last_commit": float(
+                    retained_audit.get("triangle_delta_vs_last_relaxed_commit", 0)
+                ),
                 "prism/post_commit_recollect_remaining": float(
                     getattr(prism_state.get("controller", None), "post_commit_recollect_remaining", 0)
                     if prism_state.get("controller", None) is not None

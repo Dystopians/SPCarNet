@@ -321,6 +321,13 @@ class OptimizationParams(ParamGroup):
         self.prism_candidate_measured_max_groups = 8
         self.prism_post_commit_candidate_refresh = False
         self.prism_post_commit_refresh_min_prune_score = 1e-6
+        self.prism_post_commit_relaxed_max_commits = 0
+        self.prism_post_commit_relaxed_strict_gate = False
+        self.prism_post_commit_relaxed_min_delta_psnr = 0.0
+        self.prism_post_commit_relaxed_max_delta_mae = 0.0
+        self.prism_post_commit_relaxed_max_delta_absrel = 0.0
+        self.prism_post_commit_relaxed_max_delta_mean_angle = 0.0
+        self.prism_post_commit_relaxed_max_changed_pixel_ratio = 0.0025
         self.prism_no_candidate_retry_iters = 10
         self.prism_adaptive_candidate_retry_on_rollback = False
         self.prism_adaptive_candidate_ratio_decay = 0.5
