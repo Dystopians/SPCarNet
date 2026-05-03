@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R5 reversible edit abstraction — PASS
+
+**Outcome**: Implemented generic numpy mesh state, edit records, snapshot/rollback, edit application, topology delta summary, and mesh integrity checks. All required edit types are reversible through snapshots; protect and appearance reset are metadata-only operations in R5.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- smoke command: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_meshsplatopt_stageR5_reversible_edits.py`
+- smoke status: `PASS`
+- integrity checker catches invalid indices and degenerate faces
+
+**Decision**: `PASS`. Delete, snap, fill, collapse, split, protect, and appearance reset round-trip through exact rollback. R6 can build topology baselines on this edit contract.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR5_reversible_edits_design.md`
+- `docs/car_model/meshsplatopt_stageR5_reversible_edits_implementation_report.md`
+- `docs/car_model/meshsplatopt_stageR5_reversible_edits_smoke.md`
+- `outputs/carnet/meshsplatopt/stageR5_reversible_edits_smoke/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R4 defect mining — PASS
 
 **Outcome**: Implemented defect records and CSEF-driven defect mining. The miner emits auditable JSON/CSV/Markdown artifacts and distinguishes boundary-supported giant ground voids from unknown/unobserved voids that cannot be repaired in normal mode.
