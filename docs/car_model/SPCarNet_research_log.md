@@ -3240,3 +3240,29 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR22_01_04_boundary_fill_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R23.01 residual-aware boundary fill selector — PASS
+
+**Outcome**: Upgraded the boundary-loop fill selector to support train-residual ranking, aligning fill proposals with CSEF explanation debt instead of area-only selection.
+
+**Implementation**:
+- `scripts/car_model/meshsplatopt_select_checkpoint_boundary_fill_edit.py` now supports `--rank residual`
+- residual mode projects candidate loop vertices into high-residual train views and ranks by `mean_loop_residual * sqrt(area)`
+- camera offset is auto-inferred using the same protocol as residual snap
+
+**Parking selection**:
+- loop count: `48858`
+- candidates: `4545`
+- selected loop index: `46134`
+- loop vertices: `6`
+- area: `24.723803`
+- train residual score: `0.387146`
+- rank score: `1.925007`
+- camera offset: `54`
+
+**Decision**: `RESIDUAL_BOUNDARY_FILL_SELECTOR_PASS_GEOMETRY_STILL_WEAK`. The selector is now evidence-aligned, but it chose the same loop as R22; therefore R22's medium failure is more likely due to crude centroid-fan geometry than proposal ranking. Next fix should target depth-aware/fair inserted geometry.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR23_01_residual_boundary_fill_selector_report.md`
+
+---
