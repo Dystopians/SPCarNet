@@ -4,6 +4,32 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R3 CSEF data model and diagnostics — PASS
+
+**Outcome**: Implemented the first CSEF data contract and diagnostic builder under `ss3dm_prior/meshsplatopt/`, plus a CLI and synthetic smoke. The builder samples faces, computes boundary/component/area diagnostics, writes CSEF NPZ/JSON/CSV/Markdown artifacts, and does not modify geometry.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- smoke command: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_meshsplatopt_stageR3_csef.py`
+- smoke status: `PASS`
+- CLI check wrote `outputs/carnet/meshsplatopt/stageR3_csef_cli_check/`
+
+**Smoke metrics**:
+- normal debt: `0.18554923879355764`
+- hole boundary debt: `0.34568891727769624`
+- floater uncertainty: `0.9`
+- floater positive surface evidence: `0.10520833333333335`
+
+**Decision**: `PASS`. Synthetic CSEF separates normal surface, floater, and hole/debt region. R4 can mine actionable defect regions from these diagnostics.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR3_csef_design.md`
+- `docs/car_model/meshsplatopt_stageR3_csef_implementation_report.md`
+- `docs/car_model/meshsplatopt_stageR3_csef_smoke.md`
+- `outputs/carnet/meshsplatopt/stageR3_csef_smoke/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R2 related-work and baseline matrix — PASS
 
 **Outcome**: Wrote the related-work/novelty-threat matrix and baseline plan. The plan explicitly names threats from Mesh Splatting, mesh-aware splatting, 3DGS compression/pruning, QEM, classical hole filling, COLMAP/MVS, plane priors, object priors, and depth/normal priors.
