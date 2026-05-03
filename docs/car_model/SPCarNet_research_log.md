@@ -4,6 +4,27 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt R14.19-R14.20 bonsai medium continuation — MEDIUM_CONTROL_PASS_NEGATIVE_FOR_SNAP_GAIN
+
+**Outcome**: Ran W&B-logged medium continuations from iteration `2000` to `4000` on `bonsai` for both accepted non-delete snap and unedited baseline continuation.
+
+**W&B**:
+- snap: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/fjzy6lun`
+- baseline: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/gxeskhta`
+
+**Metrics at 4000**:
+- snap: PSNR `15.81759262084961`, SSIM `0.33459141850471497`, LPIPS `0.5731096863746643`, AbsRel `0.40904864176963485`, normal `47.83674765098326`, triangles `5090526`
+- baseline continuation: PSNR `15.834700584411621`, SSIM `0.33469849824905396`, LPIPS `0.5714929699897766`, AbsRel `0.40514114339865287`, normal `48.11943889631045`, triangles `5090601`
+
+**Decision**: `MEDIUM_CONTROL_PASS_NEGATIVE_FOR_SNAP_GAIN`. The current snap selector is not a full-budget candidate. It remains useful as safety/stability infrastructure, but R15 needs topology retention, render-residual proposal selection, or a stronger equal-budget gate before 7000iter sweeps.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_19_20_bonsai_medium_continuation_report.md`
+- `outputs/carnet/meshsplatopt/stageR14_19_bonsai_snap_medium_continuation_2000step/`
+- `outputs/carnet/meshsplatopt/stageR14_20_bonsai_baseline_medium_continuation_2000step/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt R14.18 bonsai equal-step control — CONTROL_PASS_NEGATIVE_FOR_SNAP_GAIN
 
 **Outcome**: Ran a W&B-logged 200-step unedited baseline continuation on `bonsai` from iteration `2000` to `2200`, matching the R14.17 snap-recovery budget.

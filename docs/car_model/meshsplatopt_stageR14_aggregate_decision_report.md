@@ -6,7 +6,7 @@ Date: 2026-05-02
 
 `SOFT PASS`.
 
-R14 now has one W&B-logged medium-budget recovery result with clear single-scene gains, two public-scene delete gate diagnostics, two public-scene recovery diagnostics, a three-scene non-delete `SNAP_VERTICES` gate pass, and one equal-step public-scene control. This is enough to continue method development, but not enough to claim a full NeurIPS-level repair result.
+R14 now has one W&B-logged medium-budget parking recovery result with clear single-scene gains, two public-scene delete gate diagnostics, two public-scene recovery diagnostics, a three-scene non-delete `SNAP_VERTICES` gate pass, one short equal-step public-scene control, and one medium public-scene control. This is enough to continue method development, but not enough to claim a full NeurIPS-level repair result.
 
 ## Evidence Summary
 
@@ -19,6 +19,7 @@ R14 now has one W&B-logged medium-budget recovery result with clear single-scene
 | R14.14-R14.16 | `parking_phone_tiny`, `bonsai`, `courtyard` | non-delete `SNAP_VERTICES` + render-backed gate, iter 2000 | `PASS_DIAGNOSTIC_CROSS_SCENE` | Real checkpoint area-outlier snap edits pass all render/geometry gates |
 | R14.17 | `bonsai` | W&B non-delete snap recovery diagnostic, iter 2000 -> 2200 | `PASS_DIAGNOSTIC_NOT_EQUAL_BUDGET` | Non-delete snap recovery is stable and improves over 2000iter baseline, but is not equal-budget |
 | R14.18 | `bonsai` | W&B unedited baseline continuation, iter 2000 -> 2200 | `CONTROL_PASS_NEGATIVE_FOR_SNAP_GAIN` | Equal-step control is slightly stronger than snap recovery on most metrics |
+| R14.19-R14.20 | `bonsai` | W&B medium continuation, iter 2000 -> 4000 | `MEDIUM_CONTROL_PASS_NEGATIVE_FOR_SNAP_GAIN` | Baseline continuation beats snap on render/depth metrics; snap only improves normal proxy |
 
 ## Parking Medium Result
 
@@ -111,6 +112,28 @@ https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshp
 
 The equal-step control is negative for a snap performance-gain claim. It strengthens the paper discipline by forcing the R14 snap path to be framed as real-edit safety/stability infrastructure unless a better selector or equal-budget run changes this result.
 
+## Bonsai Medium Continuation Control
+
+W&B:
+
+```text
+snap:     https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/fjzy6lun
+baseline: https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/gxeskhta
+```
+
+| metric | snap 4000 | baseline continuation 4000 | snap minus control |
+|---|---:|---:|---:|
+| triangles | `5090526` | `5090601` | `-75` |
+| vertices | `4270548` | `4270293` | `+255` |
+| PSNR | `15.81759262084961` | `15.834700584411621` | `-0.01710796356201172` |
+| SSIM | `0.33459141850471497` | `0.33469849824905396` | `-0.00010707974433898926` |
+| LPIPS | `0.5731096863746643` | `0.5714929699897766` | `+0.0016167163848876953` |
+| AbsRel | `0.40904864176963485` | `0.40514114339865287` | `+0.00390749837098198` |
+| Depth MAE | `4.261201179402033` | `4.241773913061498` | `+0.019427266340535047` |
+| normal mean deg | `47.83674765098326` | `48.11943889631045` | `-0.2826912453271897` |
+
+This medium control blocks a full-budget R15 run from the current snap selector. Both rows grow to about `5.09M` triangles by iteration 4000, and the unedited continuation is better on render and sparse-depth metrics.
+
 ## What This Proves
 
 - Real checkpoint edit materialization works for delete, fill, and non-delete vertex snap.
@@ -124,8 +147,9 @@ The equal-step control is negative for a snap performance-gain claim. It strengt
 - It does not prove equal-budget training gains from non-delete edits.
 - It does not show a second W&B medium-scene recovery improvement.
 - The current non-delete snap selector does not beat equal-step unedited continuation on `bonsai`.
+- Medium continuation from the current non-delete snap selector also does not beat unedited continuation on `bonsai`.
 - It does not beat Stage35 across public scenes.
-- It does not justify full-budget 7000+ sweeps yet.
+- It actively argues against full-budget 7000+ sweeps for this selector without topology retention or a stronger proposal signal.
 - It does not validate giant-hole repair on real public scenes.
 
 ## Next Gate
