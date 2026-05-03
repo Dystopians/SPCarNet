@@ -67,6 +67,36 @@ R30.02 continues R30.01 from iteration 12000 to 16000:
 - Metrics at 16000: PSNR `17.081682`, SSIM `0.531858`, LPIPS `0.458050`
 - Geometry at 16000: AbsRel `0.185581`, Depth MAE `2.961570`, normal angle `41.859201`
 
+R31.01 continues R30.02 from iteration 16000 to 20000:
+
+- Output: `outputs/carnet/meshsplatopt/stageR31_01_parking_baseline_sparse_depth_lam0p005_16000to20000/recovery_model`
+- W&B: `ekcjc7qi`
+- Metrics at 20000: PSNR `17.027088`, SSIM `0.532724`, LPIPS `0.455719`
+- Geometry at 20000: AbsRel `0.187616`, Depth MAE `3.017283`, normal angle `41.740965`
+- Decision: `RENDER_EARLY_STOP_AT_16000`. The 20000-step run improves LPIPS and normal angle slightly, but loses PSNR and sparse depth versus 16000.
+
+## R31 Cross-Scene Generalization
+
+Courtyard Stage35 sparse-depth continuation:
+
+- Output: `outputs/carnet/meshsplatopt/stageR31_02_courtyard_stage35_sparse_depth_lam0p005_2000to7000/recovery_model`
+- W&B: `s35bmzau`
+- Baseline at 2000: PSNR `15.383161`, SSIM `0.508091`, LPIPS `0.584694`
+- Sparse recovery at 7000: PSNR `16.313482`, SSIM `0.547770`, LPIPS `0.520214`
+- Delta: PSNR `+0.930322`, SSIM `+0.039679`, LPIPS `-0.064480`
+- Geometry at 7000: AbsRel `0.127543`, Depth MAE `1.571374`, normal angle `30.207450`
+
+Bonsai Stage35 sparse-depth continuation:
+
+- Output: `outputs/carnet/meshsplatopt/stageR31_03_bonsai_stage35_sparse_depth_lam0p005_2000to7000/recovery_model`
+- W&B: `3wygm9u4`
+- Baseline at 2000: PSNR `12.267367`, SSIM `0.277617`, LPIPS `0.611939`
+- Sparse recovery at 7000: PSNR `20.299246`, SSIM `0.606873`, LPIPS `0.388372`
+- Delta: PSNR `+8.031878`, SSIM `+0.329256`, LPIPS `-0.223567`
+- Geometry at 7000: AbsRel `0.130567`, Depth MAE `1.452105`, normal angle `34.987466`
+
+Decision: `CROSS_SCENE_SPARSE_RECOVERY_PASS`. Sparse-geometry-guided recovery now has positive evidence on parking, courtyard, and bonsai.
+
 ## Current Interpretation
 
-The strongest validated full result is R30.02. Compared with R16.03 full baseline, it improves PSNR by `+1.511117`, SSIM by `+0.083646`, and LPIPS by `-0.070003`, while substantially improving sparse COLMAP depth agreement. Compared with R28.02, extending the validated sparse-depth recovery from 7000 to 16000 adds another `+1.258805` PSNR, `+0.073306` SSIM, and `-0.061182` LPIPS. The main paper method should pivot from the boundary fill edit to long-horizon sparse-geometry-guided recovery unless a later structural edit beats the R30 control.
+The strongest validated parking render result remains R30.02 at 16000. Compared with R16.03 full baseline, it improves PSNR by `+1.511117`, SSIM by `+0.083646`, and LPIPS by `-0.070003`, while substantially improving sparse COLMAP depth agreement. R31 adds an important early-stop result and two cross-scene positives. The main paper method should pivot from the boundary fill edit to long-horizon sparse-geometry-guided recovery.

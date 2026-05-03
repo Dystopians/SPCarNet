@@ -3366,3 +3366,31 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
 
 ---
+
+## 2026-05-03 - R31 early-stop and cross-scene sparse recovery
+
+**Goal**: raise completion beyond the single parking-scene breakthrough by testing saturation and cross-scene generalization.
+
+**Parking saturation**:
+- R31.01 continued R30.02 from 16000 to 20000, W&B `ekcjc7qi`
+- 20000 result: PSNR `17.027088`, SSIM `0.532724`, LPIPS `0.455719`, AbsRel `0.187616`, normal `41.740965`
+- Compared with R30.02 at 16000: PSNR `-0.054594`, SSIM `+0.000866`, LPIPS `-0.002330`, AbsRel `+0.002035`, normal `-0.118235`
+
+**Decision**: `EARLY_STOP_16000_FOR_RENDER`. Use R30.02/16000 as the main parking table entry; mention R31.01 as saturation evidence.
+
+**Cross-scene pass**:
+- R31.02 courtyard Stage35 sparse-depth continuation, W&B `s35bmzau`
+  - 2000 baseline: PSNR `15.383161`, SSIM `0.508091`, LPIPS `0.584694`
+  - 7000 recovery: PSNR `16.313482`, SSIM `0.547770`, LPIPS `0.520214`, AbsRel `0.127543`, normal `30.207450`
+  - delta: PSNR `+0.930322`, SSIM `+0.039679`, LPIPS `-0.064480`
+- R31.03 bonsai Stage35 sparse-depth continuation, W&B `3wygm9u4`
+  - 2000 baseline: PSNR `12.267367`, SSIM `0.277617`, LPIPS `0.611939`
+  - 7000 recovery: PSNR `20.299246`, SSIM `0.606873`, LPIPS `0.388372`, AbsRel `0.130567`, normal `34.987466`
+  - delta: PSNR `+8.031878`, SSIM `+0.329256`, LPIPS `-0.223567`
+
+**Decision**: `CROSS_SCENE_SPARSE_RECOVERY_PASS`. The method now has positive evidence on parking, courtyard, and bonsai.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
+
+---
