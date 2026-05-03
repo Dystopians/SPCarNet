@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R6 topology baselines — PASS
+
+**Outcome**: Implemented topology-reduction baselines for delete, random delete, low-visibility delete, boundary-protected delete, greedy QEM-style edge collapse, planar face merge, and an explicit external-simplification JSON contract placeholder.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- smoke command: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_meshsplatopt_stageR6_topology_baselines.py`
+- smoke status: `PASS`
+- delete and boundary-protected delete hit target counts; collapse/merge-style baselines produce valid meshes
+
+**Decision**: `PASS`. Future repair claims now have stronger topology baselines than random or weak deletion.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR6_topology_baselines_design.md`
+- `docs/car_model/meshsplatopt_stageR6_topology_baselines_implementation_report.md`
+- `docs/car_model/meshsplatopt_stageR6_topology_baselines_smoke.md`
+- `outputs/carnet/meshsplatopt/stageR6_topology_baselines_smoke/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R5 reversible edit abstraction — PASS
 
 **Outcome**: Implemented generic numpy mesh state, edit records, snapshot/rollback, edit application, topology delta summary, and mesh integrity checks. All required edit types are reversible through snapshots; protect and appearance reset are metadata-only operations in R5.
