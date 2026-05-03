@@ -199,6 +199,23 @@ Reproducible table generation is now handled by:
 
 The collector writes paper-facing JSON/CSV/Markdown tables under `outputs/carnet/meshsplatopt/sparse_recovery_tables`.
 
+## R40 Low-Lambda Pareto and Cross-Scene Breakthrough
+
+R40 extends the lambda sweep below R39 and applies the stronger low-lambda setting to the tuned courtyard fraction.
+
+| Row | scene | fraction | lambda | W&B | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | normal angle |
+| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| R40.01 | parking | `0.50` | `0.001` | `czebaxco` | `17.145630` | `0.534154` | `0.456297` | `0.181336` | `2.849124` | `42.151608` |
+| R39.01 | parking | `0.50` | `0.002` | `jqcn7cwc` | `17.142246` | `0.534422` | `0.456627` | `0.181240` | `2.825327` | `41.812617` |
+| R40.02 | courtyard | `0.625` | `0.002` | `coqls9rm` | `16.801973` | `0.559031` | `0.508579` | `0.106783` | `1.388936` | `29.394197` |
+| R36.01b | courtyard | `0.625` | `0.005` | `qguqasou` | `16.376713` | `0.548868` | `0.520534` | `0.126731` | `1.564874` | `29.581638` |
+| R41.01 | bonsai | `0.50` | `0.002` | `poh8k4be` | `21.601114` | `0.677450` | `0.347170` | `0.161510` | `1.824463` | `36.047671` |
+| R31.03 | bonsai | random | `0.005` | `3wygm9u4` | `20.299246` | `0.606873` | `0.388372` | `0.130567` | `1.452105` | `34.987466` |
+
+Decision: `LOW_LAMBDA_CROSS_SCENE_STRONG_PASS`. R40.01 is the parking render/LPIPS Pareto row; R39.01 remains the cleaner parking depth row. R40.02 is the stronger paper milestone because it improves every tracked courtyard metric relative to R36.01b: PSNR `+0.425260`, SSIM `+0.010163`, LPIPS `-0.011955`, AbsRel `-0.019948`, Depth MAE `-0.175938`, and normal angle `-0.187441`. Relative to the original courtyard random sparse-depth row R31.02, R40.02 improves PSNR by `+0.488491`, SSIM by `+0.011261`, LPIPS by `-0.011635`, AbsRel by `-0.020760`, Depth MAE by `-0.182438`, and normal angle by `-0.813253`.
+
+R41.01 removes the remaining bonsai render weakness: relative to R31.03 random sparse-depth it improves PSNR by `+1.301868`, SSIM by `+0.070577`, and LPIPS by `-0.041202`. The tradeoff is geometry: AbsRel increases by `+0.030943`, Depth MAE by `+0.372358`, and normal angle by `+1.060204`. This should be used as a render/geometry Pareto branch rather than an all-metric win.
+
 ## Current Interpretation
 
-The strongest validated parking render/depth result is now R39.01 at 16000. Compared with R16.03 full baseline, it improves PSNR by `+1.571681`, SSIM by `+0.086210`, and LPIPS by `-0.071425`, while substantially improving sparse COLMAP depth agreement. R31 adds an important early-stop result and two cross-scene positives. R32 adds a concrete algorithmic improvement on top of long-horizon sparse-geometry-guided recovery: confidence-aware COLMAP sparse correspondence sampling. R33-R36 narrow the claim into a stronger paper-safe version: trusted sampling is a tunable confidence knob, not a universal constant fraction. R38-R39 then convert that tuning into a stronger lambda curve, showing that `lambda=0.002` is the current best parking setting for the `0.50` trusted/random mixture.
+The strongest validated parking render result is now R40.01 at 16000. Compared with R16.03 full baseline, it improves PSNR by `+1.575065`, SSIM by `+0.085942`, and LPIPS by `-0.071755`, while substantially improving sparse COLMAP depth agreement. R39.01 remains the strongest parking depth-balanced low-lambda row. R31 adds an important early-stop result and two cross-scene positives. R32 adds a concrete algorithmic improvement on top of long-horizon sparse-geometry-guided recovery: confidence-aware COLMAP sparse correspondence sampling. R33-R36 narrow the claim into a stronger paper-safe version: trusted sampling is a tunable confidence knob, not a universal constant fraction. R38-R41 then convert that tuning into a stronger lambda curve and a cross-scene result: `lambda=0.001-0.002` is now the validated low-lambda regime, with a large all-metric courtyard improvement at `lambda=0.002` and a large bonsai render Pareto improvement at `lambda=0.002`.

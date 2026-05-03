@@ -12,7 +12,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[2]
-WANDB_ROOT = "https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs"
+WANDB_ENTITY = "karamazovaniki-university-of-southern-california"
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,7 @@ class SparseRecoveryRow:
     trusted_fraction: float | None
     sparse_lambda: float
     role: str
+    wandb_project: str = "spcarnet_meshprior"
 
 
 ROWS: tuple[SparseRecoveryRow, ...] = (
@@ -38,12 +39,15 @@ ROWS: tuple[SparseRecoveryRow, ...] = (
     SparseRecoveryRow("R38.02", "parking_phone_tiny", "R38", "mixed_trusted_random_lambda_refined", "outputs/carnet/meshsplatopt/stageR38_02_parking_mixed_frac0p625_lam0p003_12000to16000/recovery_model", 16000, "j8t2tyc9", "mixed_low_error", 0.625, 0.003, "geometry-biased lambda-refined row"),
     SparseRecoveryRow("R39.01", "parking_phone_tiny", "R39", "mixed_trusted_random_lambda_refined", "outputs/carnet/meshsplatopt/stageR39_01_parking_mixed_frac0p50_lam0p002_12000to16000/recovery_model", 16000, "jqcn7cwc", "mixed_low_error", 0.50, 0.002, "current render/depth best"),
     SparseRecoveryRow("R39.02", "parking_phone_tiny", "R39", "mixed_trusted_random_lambda_refined", "outputs/carnet/meshsplatopt/stageR39_02_parking_mixed_frac0p50_lam0p004_12000to16000/recovery_model", 16000, "o9f9e03g", "mixed_low_error", 0.50, 0.004, "lambda upper-side check"),
+    SparseRecoveryRow("R40.01", "parking_phone_tiny", "R40", "mixed_trusted_random_lambda_refined", "outputs/carnet/meshsplatopt/stageR40_01_parking_mixed_frac0p50_lam0p001_12000to16000/recovery_model", 16000, "czebaxco", "mixed_low_error", 0.50, 0.001, "parking render/LPIPS Pareto best"),
     SparseRecoveryRow("R31.02", "eth3d_courtyard", "R31", "random_sparse_depth", "outputs/carnet/meshsplatopt/stageR31_02_courtyard_stage35_sparse_depth_lam0p005_2000to7000/recovery_model", 7000, "s35bmzau", "random", None, 0.005, "cross-scene random baseline"),
     SparseRecoveryRow("R33.01", "eth3d_courtyard", "R33", "mixed_trusted_random", "outputs/carnet/meshsplatopt/stageR33_01_courtyard_stage35_mixed_sparse_depth_lam0p005_2000to7000/recovery_model", 7000, "s1po8x07", "mixed_low_error", 0.50, 0.005, "cross-scene trusted geometry check"),
     SparseRecoveryRow("R36.01b", "eth3d_courtyard", "R36", "mixed_trusted_random", "outputs/carnet/meshsplatopt/stageR36_01b_courtyard_stage35_mixed_sparse_depth_frac0p625_lam0p005_2000to7000/recovery_model", 7000, "qguqasou", "mixed_low_error", 0.625, 0.005, "courtyard tuned render best"),
+    SparseRecoveryRow("R40.02", "eth3d_courtyard", "R40", "mixed_trusted_random_lambda_refined", "outputs/carnet/meshsplatopt/stageR40_02_courtyard_mixed_frac0p625_lam0p002_2000to7000/recovery_model", 7000, "coqls9rm", "mixed_low_error", 0.625, 0.002, "courtyard all-metric best"),
     SparseRecoveryRow("R31.03", "mipnerf360_bonsai", "R31", "random_sparse_depth", "outputs/carnet/meshsplatopt/stageR31_03_bonsai_stage35_sparse_depth_lam0p005_2000to7000/recovery_model", 7000, "3wygm9u4", "random", None, 0.005, "cross-scene random baseline"),
     SparseRecoveryRow("R33.02", "mipnerf360_bonsai", "R33", "mixed_trusted_random", "outputs/carnet/meshsplatopt/stageR33_02_bonsai_stage35_mixed_sparse_depth_lam0p005_2000to7000/recovery_model", 7000, "xj2ng1s1", "mixed_low_error", 0.50, 0.005, "cross-scene trusted geometry check"),
     SparseRecoveryRow("R36.02b", "mipnerf360_bonsai", "R36", "mixed_trusted_random", "outputs/carnet/meshsplatopt/stageR36_02b_bonsai_stage35_mixed_sparse_depth_frac0p625_lam0p005_2000to7000/recovery_model", 7000, "xq21lzsm", "mixed_low_error", 0.625, 0.005, "bonsai fraction stress test"),
+    SparseRecoveryRow("R41.01", "mipnerf360_bonsai", "R41", "mixed_trusted_random_lambda_refined", "outputs/carnet/meshsplatopt/stageR41_01_bonsai_mixed_frac0p50_lam0p002_2000to7000/recovery_model", 7000, "poh8k4be", "mixed_low_error", 0.50, 0.002, "bonsai render breakthrough, geometry tradeoff", "mesh-splatting"),
 )
 
 
@@ -111,7 +115,7 @@ def _row(spec: SparseRecoveryRow) -> dict[str, Any]:
         "depth_mae": geometry["depth_mae"],
         "normal_mean_ang_deg": geometry["normal_mean_ang_deg"],
         "wandb_run": spec.wandb_run,
-        "wandb_url": f"{WANDB_ROOT}/{spec.wandb_run}" if spec.wandb_run else "",
+        "wandb_url": f"https://wandb.ai/{WANDB_ENTITY}/{spec.wandb_project}/runs/{spec.wandb_run}" if spec.wandb_run else "",
         "model_path": spec.model_path,
         "role": spec.role,
     }

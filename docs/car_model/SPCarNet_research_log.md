@@ -3508,3 +3508,25 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `scripts/car_model/meshsplatopt_collect_sparse_recovery_results.py`
 
 ---
+
+## 2026-05-03 - R40 low-lambda sparse-depth Pareto and cross-scene jump
+
+**Goal**: respond to the weak-gain bottleneck by testing whether the R39 `lambda=0.002` optimum is a parking-only point or part of a broader lower-lambda regime.
+
+**Runs**:
+- R40.01 parking fraction `0.50`, lambda `0.001`, W&B `czebaxco`: PSNR `17.145630`, SSIM `0.534154`, LPIPS `0.456297`, AbsRel `0.181336`, Depth MAE `2.849124`, normal `42.151608`
+- R40.02 courtyard fraction `0.625`, lambda `0.002`, W&B `coqls9rm`: PSNR `16.801973`, SSIM `0.559031`, LPIPS `0.508579`, AbsRel `0.106783`, Depth MAE `1.388936`, normal `29.394197`
+
+**Decision**: `LOW_LAMBDA_CROSS_SCENE_STRONG_PASS`. R40.01 becomes the parking render/LPIPS Pareto row: relative to R39.01 it improves PSNR by `+0.003384` and LPIPS by `-0.000330`, while giving back `0.000267` SSIM and a small amount of sparse-depth geometry. R40.02 is the more important milestone: relative to the previous courtyard tuned row R36.01b it improves PSNR by `+0.425260`, SSIM by `+0.010163`, LPIPS by `-0.011955`, AbsRel by `-0.019948`, Depth MAE by `-0.175938`, and normal angle by `-0.187441`. This upgrades the claim from a parking-tuned result to a cross-scene low-lambda sparse-depth regime with a large courtyard gain.
+
+**R41 bonsai follow-up**:
+- R41.01 bonsai fraction `0.50`, lambda `0.002`, W&B `poh8k4be`: PSNR `21.601114`, SSIM `0.677450`, LPIPS `0.347170`, AbsRel `0.161510`, Depth MAE `1.824463`, normal `36.047671`
+- relative to R31.03 random sparse-depth, R41.01 improves PSNR by `+1.301868`, SSIM by `+0.070577`, and LPIPS by `-0.041202`, but worsens AbsRel by `+0.030943`, Depth MAE by `+0.372358`, and normal angle by `+1.060204`
+
+**R41 decision**: `BONSAI_RENDER_BREAKTHROUGH_GEOMETRY_TRADEOFF`. This closes the previous bonsai render weakness and makes the low-lambda regime cross-scene-render-positive, but it should be presented as a render/geometry Pareto branch rather than a universal geometry improvement.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
+- `scripts/car_model/meshsplatopt_collect_sparse_recovery_results.py`
+
+---
