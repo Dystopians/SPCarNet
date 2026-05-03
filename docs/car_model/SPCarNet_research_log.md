@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14.7 teacher recovery tiny — PASS
+
+**Outcome**: Upgraded the teacher recovery runner from cache-only contract to a real tiny recovery path. The edited R14.5 checkpoint was copied, resumed from iteration 200, trained for 20 recovery steps to iteration 220 with W&B online, rendered, evaluated with independent metrics, and checked with sparse COLMAP geometry.
+
+**Verification**:
+- W&B run: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/n05mce4y`
+- train/render/metrics exit codes: `0/0/0`
+- topology after recovery: `64498` triangles, `193494` vertices
+- render metrics after recovery: PSNR `10.995698928833008`, SSIM `0.29370972514152527`, LPIPS `0.6429890990257263`
+- geometry after recovery: AbsRel `0.325047677579098`, Depth MAE `3.6494193758930376`, normal mean angle `51.93818681106907`
+
+**Decision**: `PASS`. This validates real checkpoint resume/recovery with W&B and independent evaluation. It remains a tiny functionality test; R14 still needs real public-scene edit selection and medium-budget comparison before paper-facing claims.
+
+**Linked artefacts**:
+- `scripts/car_model/meshsplatopt_run_teacher_recovery.py`
+- `docs/car_model/meshsplatopt_stageR14_7_teacher_recovery_tiny_report.md`
+- `outputs/carnet/meshsplatopt/stageR14_7_teacher_recovery_tiny/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14.6 render-backed checkpoint gate — PASS
 
 **Outcome**: Added a reusable checkpoint-level counterfactual gate that compares baseline and edited candidate models using independent render metrics, sparse COLMAP geometry metrics, and checkpoint topology.
