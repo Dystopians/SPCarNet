@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R4 defect mining — PASS
+
+**Outcome**: Implemented defect records and CSEF-driven defect mining. The miner emits auditable JSON/CSV/Markdown artifacts and distinguishes boundary-supported giant ground voids from unknown/unobserved voids that cannot be repaired in normal mode.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- smoke command: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_meshsplatopt_stageR4_defect_mining.py`
+- smoke status: `PASS`
+- emitted defect types: `GIANT_GROUND_VOID`, `UNKNOWN_UNOBSERVED_VOID`
+
+**Decision**: `PASS`. Huge ground holes are explicitly detected and distinguished from unknown/unobserved voids. R5 can implement reversible edit records on top of this defect contract.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR4_defect_mining_design.md`
+- `docs/car_model/meshsplatopt_stageR4_defect_mining_implementation_report.md`
+- `docs/car_model/meshsplatopt_stageR4_defect_mining_smoke.md`
+- `outputs/carnet/meshsplatopt/stageR4_defect_mining_smoke/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R3 CSEF data model and diagnostics — PASS
 
 **Outcome**: Implemented the first CSEF data contract and diagnostic builder under `ss3dm_prior/meshsplatopt/`, plus a CLI and synthetic smoke. The builder samples faces, computes boundary/component/area diagnostics, writes CSEF NPZ/JSON/CSV/Markdown artifacts, and does not modify geometry.
