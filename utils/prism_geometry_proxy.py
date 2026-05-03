@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -43,6 +43,8 @@ class GeometryProxyConfig:
     normal_knn: int = 24
     compute_normal: bool = True
     seed: int = 7
+    sample_mode: str = "random"
+    low_error_fraction: float = 1.0
 
 
 @dataclass
@@ -116,6 +118,42 @@ def _estimate_point_normal(pid: int, ctx: GeometryProxyContext) -> Optional[np.n
     n = n / max(np.linalg.norm(n), 1e-10)
     ctx.normal_cache[int(pid)] = n
     return n
+
+
+def _subsample_sparse_points(
+    xys_valid: np.ndarray,
+    pids_valid: np.ndarray,
+    ctx: GeometryProxyContext,
+    cfg: GeometryProxyConfig,
+    rng: Optional[np.random.Generator],
+) -> Tuple[np.ndarray, np.ndarray]:
+    max_points = int(cfg.max_points_per_view)
+    if max_points <= 0 or xys_valid.shape[0] <= max_points:
+        return xys_valid, pids_valid
+    mode = str(getattr(cfg, "sample_mode", "random") or "random").strip().lower()
+    if rng is None:
+        rng = np.random.default_rng(int(cfg.seed))
+    if mode in {"low_error", "lowest_error", "trusted"}:
+        errors = np.array([ctx.pid_to_error.get(int(pid), 1e9) for pid in pids_valid], dtype=np.float64)
+        order = np.argsort(errors, kind="stable")
+        pick = order[:max_points]
+    elif mode in {"mixed_low_error", "mixed"}:
+        fraction = float(getattr(cfg, "low_error_fraction", 0.5))
+        fraction = min(1.0, max(0.0, fraction))
+        trusted_count = min(max_points, int(round(float(max_points) * fraction)))
+        errors = np.array([ctx.pid_to_error.get(int(pid), 1e9) for pid in pids_valid], dtype=np.float64)
+        order = np.argsort(errors, kind="stable")
+        trusted = order[:trusted_count]
+        if trusted_count < max_points:
+            remaining = order[trusted_count:]
+            random_count = min(max_points - trusted_count, remaining.shape[0])
+            random_pick = rng.choice(remaining, size=random_count, replace=False) if random_count > 0 else np.zeros((0,), dtype=np.int64)
+            pick = np.concatenate([trusted, random_pick], axis=0)
+        else:
+            pick = trusted
+    else:
+        pick = rng.choice(xys_valid.shape[0], size=max_points, replace=False)
+    return xys_valid[pick], pids_valid[pick]
 
 
 def estimate_view_sparse_observability(
@@ -240,11 +278,13 @@ def evaluate_view_sparse_geometry_proxy(
     xys_valid = xys_np[valid]
     pids_valid = pids_np[valid]
     if int(cfg.max_points_per_view) > 0 and xys_valid.shape[0] > int(cfg.max_points_per_view):
-        if rng is None:
-            rng = np.random.default_rng(int(cfg.seed))
-        pick = rng.choice(xys_valid.shape[0], size=int(cfg.max_points_per_view), replace=False)
-        xys_valid = xys_valid[pick]
-        pids_valid = pids_valid[pick]
+        xys_valid, pids_valid = _subsample_sparse_points(
+            xys_valid=xys_valid,
+            pids_valid=pids_valid,
+            ctx=ctx,
+            cfg=cfg,
+            rng=rng,
+        )
 
     outputs = _extract_render_outputs(render_pkg=render_pkg)
     pred_depth = outputs["pred_depth"]
@@ -378,11 +418,13 @@ def collect_view_sparse_depth_correspondences(
     xys_valid = xys_np[valid]
     pids_valid = pids_np[valid]
     if int(cfg.max_points_per_view) > 0 and xys_valid.shape[0] > int(cfg.max_points_per_view):
-        if rng is None:
-            rng = np.random.default_rng(int(cfg.seed))
-        pick = rng.choice(xys_valid.shape[0], size=int(cfg.max_points_per_view), replace=False)
-        xys_valid = xys_valid[pick]
-        pids_valid = pids_valid[pick]
+        xys_valid, pids_valid = _subsample_sparse_points(
+            xys_valid=xys_valid,
+            pids_valid=pids_valid,
+            ctx=ctx,
+            cfg=cfg,
+            rng=rng,
+        )
 
     cam_w = int(getattr(cam_info, "width", 0))
     cam_h = int(getattr(cam_info, "height", 0))
@@ -502,4 +544,3 @@ def evaluate_views_sparse_geometry_proxy(
         else "normal evaluation disabled",
         "per_view": per_view_summary,
     }
-

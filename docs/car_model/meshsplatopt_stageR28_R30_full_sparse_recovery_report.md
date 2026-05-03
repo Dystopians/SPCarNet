@@ -97,6 +97,30 @@ Bonsai Stage35 sparse-depth continuation:
 
 Decision: `CROSS_SCENE_SPARSE_RECOVERY_PASS`. Sparse-geometry-guided recovery now has positive evidence on parking, courtyard, and bonsai.
 
+## R32 Trusted Sparse Correspondence Sampling
+
+R32 adds a targeted sparse-supervision sampling improvement. Instead of always subsampling visible COLMAP points uniformly, sparse depth training and geometry evaluation can now prioritize low-reprojection-error COLMAP tracks:
+
+- `--sparse_colmap_depth_sample_mode random`: previous default.
+- `--sparse_colmap_depth_sample_mode low_error`: choose the lowest-error visible tracks.
+- `--sparse_colmap_depth_sample_mode mixed_low_error --sparse_colmap_depth_low_error_fraction 0.5`: use half trusted low-error tracks and half random tracks.
+
+Parking low-error-only continuation from R30.01, 12000 to 16000:
+
+- Output: `outputs/carnet/meshsplatopt/stageR32_01b_parking_sparse_depth_low_error_lam0p005_12000to16000/recovery_model`
+- W&B: `m8fu6936`
+- Metrics at 16000: PSNR `17.086828`, SSIM `0.532577`, LPIPS `0.457497`
+- Geometry at 16000: AbsRel `0.185512`, Depth MAE `2.966934`, normal angle `41.771796`
+
+Parking mixed trusted/random continuation from R30.01, 12000 to 16000:
+
+- Output: `outputs/carnet/meshsplatopt/stageR32_02b_parking_sparse_depth_mixed_low_error_lam0p005_12000to16000/recovery_model`
+- W&B: `j58gdh9q`
+- Metrics at 16000: PSNR `17.105490`, SSIM `0.532643`, LPIPS `0.457859`
+- Geometry at 16000: AbsRel `0.184374`, Depth MAE `2.957988`, normal angle `41.764144`
+
+Decision: `TRUSTED_MIXED_SPARSE_SAMPLING_PASS`. Mixed trusted/random sampling is the new strongest parking result. Relative to R30.02, it improves PSNR by `+0.023808`, SSIM by `+0.000785`, LPIPS by `-0.000191`, AbsRel by `-0.001207`, Depth MAE by `-0.003582`, and normal angle by `-0.095057`.
+
 ## Current Interpretation
 
-The strongest validated parking render result remains R30.02 at 16000. Compared with R16.03 full baseline, it improves PSNR by `+1.511117`, SSIM by `+0.083646`, and LPIPS by `-0.070003`, while substantially improving sparse COLMAP depth agreement. R31 adds an important early-stop result and two cross-scene positives. The main paper method should pivot from the boundary fill edit to long-horizon sparse-geometry-guided recovery.
+The strongest validated parking render result is now R32.02b at 16000. Compared with R16.03 full baseline, it improves PSNR by `+1.534925`, SSIM by `+0.084431`, and LPIPS by `-0.070193`, while substantially improving sparse COLMAP depth agreement. R31 adds an important early-stop result and two cross-scene positives. R32 adds a concrete algorithmic improvement on top of long-horizon sparse-geometry-guided recovery: confidence-aware sparse correspondence sampling.

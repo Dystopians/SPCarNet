@@ -2606,6 +2606,8 @@ def training(
         normal_knn=int(getattr(opt, "prism_proxy_normal_knn", 24)),
         compute_normal=False,
         seed=7,
+        sample_mode=str(getattr(opt, "sparse_colmap_depth_sample_mode", "random")),
+        low_error_fraction=float(getattr(opt, "sparse_colmap_depth_low_error_fraction", 1.0)),
     )
     sparse_colmap_depth_rng = np.random.default_rng(7)
     if bool(getattr(opt, "enable_sparse_colmap_depth_loss", False)):

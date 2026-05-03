@@ -172,6 +172,8 @@ class OptimizationParams(ParamGroup):
         self.sparse_colmap_depth_min_matches = 32
         self.sparse_colmap_depth_loss_space = "depth"
         self.sparse_colmap_depth_robust_beta = 0.05
+        self.sparse_colmap_depth_sample_mode = "random"
+        self.sparse_colmap_depth_low_error_fraction = 1.0
         self.sparse_colmap_depth_enable_in_recovery = False
         self.sparse_colmap_depth_enable_in_final_finetune = False
 

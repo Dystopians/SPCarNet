@@ -3394,3 +3394,33 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
 
 ---
+
+## 2026-05-03 - R32 trusted sparse correspondence sampling
+
+**Goal**: improve the strongest sparse-depth recovery path with a real algorithmic change, not just longer training. The new option replaces uniform visible-COLMAP-point subsampling with reprojection-error-aware sparse correspondence sampling.
+
+**Implementation**:
+- added `--sparse_colmap_depth_sample_mode` with `random`, `low_error`, and `mixed_low_error`;
+- added `--sparse_colmap_depth_low_error_fraction` for trusted/random mixtures;
+- reused the same sampler in sparse depth training and sparse geometry evaluation paths.
+
+**Parking trusted-sampling validation**:
+- R32.01b low-error-only, 12000->16000, W&B `m8fu6936`
+  - result: PSNR `17.086828`, SSIM `0.532577`, LPIPS `0.457497`, AbsRel `0.185512`, Depth MAE `2.966934`, normal `41.771796`
+- R32.02b mixed low-error/random, 12000->16000, W&B `j58gdh9q`
+  - result: PSNR `17.105490`, SSIM `0.532643`, LPIPS `0.457859`, AbsRel `0.184374`, Depth MAE `2.957988`, normal `41.764144`
+
+**Delta versus previous best R30.02**:
+- PSNR `+0.023808`
+- SSIM `+0.000785`
+- LPIPS `-0.000191`
+- AbsRel `-0.001207`
+- Depth MAE `-0.003582`
+- normal angle `-0.095057`
+
+**Decision**: `TRUSTED_MIXED_SPARSE_SAMPLING_PASS`. R32.02b is the new strongest parking result and gives the paper a cleaner method contribution: confidence-aware COLMAP sparse correspondence sampling on top of long-horizon sparse-geometry recovery.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
+
+---
