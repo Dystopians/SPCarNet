@@ -6,7 +6,7 @@ Date: 2026-05-02
 
 `SOFT PASS`.
 
-R14 now has one W&B-logged medium-budget recovery result with clear single-scene gains, plus two additional public-scene render-backed gate diagnostics. This is enough to continue method development, but not enough to claim a full NeurIPS-level repair result.
+R14 now has one W&B-logged medium-budget recovery result with clear single-scene gains, two public-scene delete gate diagnostics, one public-scene recovery diagnostic, and a three-scene non-delete `SNAP_VERTICES` gate pass. This is enough to continue method development and unblock public-scene recovery training, but not enough to claim a full NeurIPS-level repair result.
 
 ## Evidence Summary
 
@@ -16,6 +16,7 @@ R14 now has one W&B-logged medium-budget recovery result with clear single-scene
 | R14.11 | `bonsai` | posthoc edit + render-backed gate, iter 2000 | `PASS_DIAGNOSTIC` | Conservative area-outlier edit is accepted with negligible render/geometry deltas |
 | R14.12 | `courtyard` | posthoc edit + render-backed gate, iter 2000 | `PASS_DIAGNOSTIC` | Conservative area-outlier edit is accepted with negligible render/geometry deltas |
 | R14.13 | `bonsai` | W&B post-edit recovery diagnostic, iter 2000 -> 2200 | `PASS_DIAGNOSTIC_NOT_EQUAL_BUDGET` | Recovery is stable and improves metrics, but uses 200 extra steps |
+| R14.14-R14.16 | `parking_phone_tiny`, `bonsai`, `courtyard` | non-delete `SNAP_VERTICES` + render-backed gate, iter 2000 | `PASS_DIAGNOSTIC_CROSS_SCENE` | Real checkpoint area-outlier snap edits pass all render/geometry gates |
 
 ## Parking Medium Result
 
@@ -43,6 +44,14 @@ https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshp
 | `bonsai` | `-1` | `-0.0003681182861328125` | `-0.000012442469596862793` | `-0.0000036954879760742188` | `0.0` | `0.0` |
 | `courtyard` | `-1` | `-0.0005950927734375` | `0.000011831521987915039` | `0.00007200241088867188` | `0.0` | `0.0` |
 
+## Non-Delete Snap Gate Diagnostics
+
+| scene | selected face | area before | area after | PSNR delta | SSIM delta | LPIPS delta | AbsRel delta | Depth MAE delta |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `parking_phone_tiny` | `727102` | `247.02622985839844` | `15.439142227172852` | `0.00000286102294921875` | `-0.0000012516975402832031` | `-0.000002086162567138672` | `0.0` | `0.0` |
+| `bonsai` | `2462659` | `164.05824279785156` | `10.253642082214355` | `-0.00019073486328125` | `-0.000013679265975952148` | `-0.00005561113357543945` | `0.0` | `0.0` |
+| `courtyard` | `404443` | `873.2474365234375` | `54.57794952392578` | `-0.005673408508300781` | `0.000041097402572631836` | `0.0000642538070678711` | `0.0` | `0.0` |
+
 ## Bonsai Recovery Diagnostic
 
 W&B:
@@ -64,7 +73,7 @@ This diagnostic is useful because it verifies recovery stability on a second pub
 
 ## What This Proves
 
-- Real checkpoint edit materialization works for delete and fill.
+- Real checkpoint edit materialization works for delete, fill, and non-delete vertex snap.
 - Render-backed acceptance works on three scenes.
 - Teacher/recovery training can resume edited checkpoints with W&B online.
 - A medium-budget parking run can improve independent render metrics and sparse-depth geometry.
@@ -72,7 +81,7 @@ This diagnostic is useful because it verifies recovery stability on a second pub
 
 ## What This Does Not Prove Yet
 
-- It does not prove bidirectional repair beyond conservative delete/fill path validation.
+- It does not prove equal-budget training gains from non-delete edits.
 - It does not show a second W&B medium-scene recovery improvement.
 - It does not beat Stage35 across public scenes.
 - It does not justify full-budget 7000+ sweeps yet.
@@ -80,10 +89,10 @@ This diagnostic is useful because it verifies recovery stability on a second pub
 
 ## Next Gate
 
-Proceed to R14.13/R14.14 only if:
+Proceed to R14.17 public-scene W&B recovery only if:
 
-1. a second W&B recovery diagnostic finishes without render collapse;
+1. public-scene recovery uses W&B online logging;
 2. Stage35 comparison tables are added for `parking_phone_tiny`, `bonsai`, and `courtyard`;
-3. a non-delete spatial-adjacency or render-residual proposal is implemented and tested through the same gate.
+3. the non-delete snap selector remains behind render-backed acceptance.
 
-Full-budget R15 should remain blocked until at least one non-delete real edit or a second W&B medium-scene improvement exists.
+Full-budget R15 should remain blocked until a second W&B medium-scene improvement exists.

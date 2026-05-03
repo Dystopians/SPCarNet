@@ -4,6 +4,28 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt R14.14-R14.16 non-delete snap gates — PASS
+
+**Outcome**: Implemented a real checkpoint area-outlier `SNAP_VERTICES` selector and validated it with render-backed gates on `parking_phone_tiny`, `bonsai`, and `courtyard`. This is the first R14 real-checkpoint non-delete edit pass across multiple scenes.
+
+**Selection**:
+- parking: selected face `727102`, area `247.026230 -> 15.439142`, max displacement `12.383613`
+- bonsai: selected face `2462659`, area `164.058243 -> 10.253642`, max displacement `10.094805`
+- courtyard: selected face `404443`, area `873.247437 -> 54.577950`, max displacement `23.436289`
+
+**Gate deltas**:
+- parking: PSNR `+0.000002861`, SSIM `-0.000001252`, LPIPS `-0.000002086`, AbsRel `0.0`
+- bonsai: PSNR `-0.000190735`, SSIM `-0.000013679`, LPIPS `-0.000055611`, AbsRel `0.0`
+- courtyard: PSNR `-0.005673409`, SSIM `+0.000041097`, LPIPS `+0.000064254`, AbsRel `0.0`
+
+**Decision**: `PASS_DIAGNOSTIC_CROSS_SCENE`. This unblocks public-scene W&B recovery for non-delete edits, but it is still not an equal-budget training win.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_14_16_snap_nondelete_cross_scene_report.md`
+- `docs/car_model/meshsplatopt_stageR14_aggregate_decision_report.md`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14.13 bonsai post-edit recovery diagnostic — PASS_DIAGNOSTIC_NOT_EQUAL_BUDGET
 
 **Outcome**: Ran a W&B-logged 200-step recovery diagnostic on `bonsai` after the R14.11 accepted area-outlier edit. The edited checkpoint resumed from iteration 2000 and trained to iteration 2200, then rendered and evaluated independently.
