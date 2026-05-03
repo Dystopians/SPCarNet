@@ -4,6 +4,27 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R13 synthetic repair benchmark — PASS
+
+**Outcome**: Implemented a controlled synthetic repair benchmark and collector. The benchmark compares no repair, delete-only PRISM-style cleanup, and full MeshSplatOpt repair across synthetic damage categories.
+
+**Verification**:
+- compile gate: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed
+- benchmark commands completed with project Python environment
+- benchmark status: `PASS`
+- full MeshSplatOpt improves five categories over delete-only: `giant_ground_void`, `ground_wall_misalignment`, `local_dent`, `noisy_rough_patch`, `small_hole`
+- prior-only unknown void rejected
+
+**Decision**: `PASS`. Synthetic gate is satisfied. R14 medium public-scene pilot is now the next stage before any full-budget GPU sweep.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR13_synthetic_repair_benchmark_design.md`
+- `docs/car_model/meshsplatopt_stageR13_synthetic_repair_benchmark_implementation_report.md`
+- `docs/car_model/meshsplatopt_stageR13_synthetic_repair_benchmark_smoke.md`
+- `outputs/carnet/meshsplatopt/stageR13_synthetic_repair_benchmark/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R12 edit portfolio state machine — PASS
 
 **Outcome**: Implemented portfolio scoring and a repair state machine with auditable trace, accepted/rejected edits, and final audit outputs. The synthetic smoke accepts cleanup, snap, fill, and appearance-reset classes while rejecting a prior-only fill in normal mode.
