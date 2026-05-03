@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14.3 render eval dry-run — PASS
+
+**Outcome**: Ran `render.py`, `metrics.py`, and comparable `evaluate_geometry_colmap.py` on the R14.2 real checkpoint dry-run copy. The edited checkpoint loads and evaluates through the normal independent paths.
+
+**Verification**:
+- render command completed on GPU 4
+- metrics command completed on GPU 4
+- geometry command completed on GPU 4 with `--max_points_per_view 500`
+- dry-run delete-one render metrics: PSNR `10.949986457824707`, SSIM `0.28985968232154846`, LPIPS `0.6441748142242432`
+- comparable sparse geometry: AbsRel `0.32417137460470213`, Depth MAE `3.6485552222775537`, normal mean angle `51.68804758349445`
+
+**Decision**: `PASS`. Adapter outputs are renderable and independently evaluable. This remains a path-validation result, not a medium public-scene MeshSplatOpt repair pilot.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_3_render_eval_dryrun_report.md`
+- `outputs/carnet/meshsplatopt/stageR14_2_real_checkpoint_dryrun/model/results.json`
+- `outputs/carnet/meshsplatopt/stageR14_2_real_checkpoint_dryrun/model/geometry_eval_colmap/iter_200_max500.json`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14.2 real checkpoint dry-run — PASS
 
 **Outcome**: Applied a low-risk `DELETE_TRIANGLES` dry-run edit to a real `parking_phone_tiny` 200-iteration checkpoint copy and created a normal model directory layout for future render/metrics evaluation.
