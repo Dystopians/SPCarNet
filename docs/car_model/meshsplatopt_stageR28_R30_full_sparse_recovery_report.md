@@ -121,6 +121,28 @@ Parking mixed trusted/random continuation from R30.01, 12000 to 16000:
 
 Decision: `TRUSTED_MIXED_SPARSE_SAMPLING_PASS`. Mixed trusted/random sampling is the new strongest parking result. Relative to R30.02, it improves PSNR by `+0.023808`, SSIM by `+0.000785`, LPIPS by `-0.000191`, AbsRel by `-0.001207`, Depth MAE by `-0.003582`, and normal angle by `-0.095057`.
 
+## R33 Cross-Scene Trusted Sampling Check
+
+R33 reruns the R31 cross-scene 2000-to-7000 sparse-depth setting with `mixed_low_error` sampling to test whether R32 generalizes as a render improvement or mainly as a geometry-confidence regularizer.
+
+Courtyard Stage35 mixed trusted/random sparse-depth continuation:
+
+- Output: `outputs/carnet/meshsplatopt/stageR33_01_courtyard_stage35_mixed_sparse_depth_lam0p005_2000to7000/recovery_model`
+- W&B: `s1po8x07`
+- Metrics at 7000: PSNR `16.304310`, SSIM `0.545805`, LPIPS `0.521787`
+- Geometry at 7000: AbsRel `0.123796`, Depth MAE `1.536491`, normal angle `29.875990`
+- Delta versus R31.02 random sampling: PSNR `-0.009172`, SSIM `-0.001965`, LPIPS `+0.001573`, AbsRel `-0.003747`, Depth MAE `-0.034883`, normal angle `-0.331460`
+
+Bonsai Stage35 mixed trusted/random sparse-depth continuation:
+
+- Output: `outputs/carnet/meshsplatopt/stageR33_02_bonsai_stage35_mixed_sparse_depth_lam0p005_2000to7000/recovery_model`
+- W&B: `xj2ng1s1`
+- Metrics at 7000: PSNR `20.279762`, SSIM `0.605154`, LPIPS `0.390035`
+- Geometry at 7000: AbsRel `0.128458`, Depth MAE `1.417768`, normal angle `35.109088`
+- Delta versus R31.03 random sampling: PSNR `-0.019484`, SSIM `-0.001719`, LPIPS `+0.001663`, AbsRel `-0.002109`, Depth MAE `-0.034337`, normal angle `+0.121622`
+
+Decision: `TRUSTED_SAMPLING_GEOMETRY_PASS_RENDER_MIXED`. The trusted/random sampler is not a universal cross-scene render win at the tested 50/50 mixture, but it consistently improves sparse depth AbsRel and Depth MAE on both cross-scene checks and improves courtyard normal agreement. The paper should report R32 as the parking render-best setting and describe trusted sampling as a geometry-confidence knob whose mixture requires validation per scene.
+
 ## Current Interpretation
 
-The strongest validated parking render result is now R32.02b at 16000. Compared with R16.03 full baseline, it improves PSNR by `+1.534925`, SSIM by `+0.084431`, and LPIPS by `-0.070193`, while substantially improving sparse COLMAP depth agreement. R31 adds an important early-stop result and two cross-scene positives. R32 adds a concrete algorithmic improvement on top of long-horizon sparse-geometry-guided recovery: confidence-aware sparse correspondence sampling.
+The strongest validated parking render result is now R32.02b at 16000. Compared with R16.03 full baseline, it improves PSNR by `+1.534925`, SSIM by `+0.084431`, and LPIPS by `-0.070193`, while substantially improving sparse COLMAP depth agreement. R31 adds an important early-stop result and two cross-scene positives. R32 adds a concrete algorithmic improvement on top of long-horizon sparse-geometry-guided recovery: confidence-aware sparse correspondence sampling. R33 narrows the claim: trusted sampling improves sparse-depth geometry on courtyard and bonsai at 50/50 mixture, but the render-best cross-scene setting remains the original random sampler unless further per-scene tuning is validated.

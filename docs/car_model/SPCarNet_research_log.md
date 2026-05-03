@@ -3424,3 +3424,22 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
 
 ---
+
+## 2026-05-03 - R33 cross-scene trusted sampling check
+
+**Goal**: test whether R32 mixed trusted/random sampling generalizes as a render improvement or mainly acts as a geometry-confidence regularizer.
+
+**Runs**:
+- R33.01 courtyard Stage35 mixed trusted/random sparse-depth, 2000->7000, W&B `s1po8x07`
+  - result: PSNR `16.304310`, SSIM `0.545805`, LPIPS `0.521787`, AbsRel `0.123796`, Depth MAE `1.536491`, normal `29.875990`
+  - delta versus R31.02 random: PSNR `-0.009172`, SSIM `-0.001965`, LPIPS `+0.001573`, AbsRel `-0.003747`, Depth MAE `-0.034883`, normal `-0.331460`
+- R33.02 bonsai Stage35 mixed trusted/random sparse-depth, 2000->7000, W&B `xj2ng1s1`
+  - result: PSNR `20.279762`, SSIM `0.605154`, LPIPS `0.390035`, AbsRel `0.128458`, Depth MAE `1.417768`, normal `35.109088`
+  - delta versus R31.03 random: PSNR `-0.019484`, SSIM `-0.001719`, LPIPS `+0.001663`, AbsRel `-0.002109`, Depth MAE `-0.034337`, normal `+0.121622`
+
+**Decision**: `TRUSTED_SAMPLING_GEOMETRY_PASS_RENDER_MIXED`. R33 strengthens the geometry side of the trusted sampler claim but prevents overclaiming render generalization. The current paper-safe conclusion is: random sparse sampling remains cross-scene render-best at this budget; mixed trusted sampling is parking render-best and cross-scene sparse-depth-geometry-best for AbsRel/MAE.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
+
+---
