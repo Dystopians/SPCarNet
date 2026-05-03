@@ -4,6 +4,26 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-02 — MeshSplatOpt Stage R14.5 real checkpoint fill dry-run — PASS
+
+**Outcome**: Materialized a tiny constructive `FILL_PATCH` on a real 200-iteration checkpoint copy, rendered it, ran independent metrics, and ran comparable COLMAP geometry evaluation.
+
+**Verification**:
+- fill checkpoint schema valid
+- triangles: `64497 -> 64498`
+- vertices: `193491 -> 193494`
+- render completed on GPU 4
+- metrics completed on GPU 4: PSNR `10.949986457824707`, SSIM `0.2898596525192261`, LPIPS `0.6441746354103088`
+- comparable geometry completed on GPU 4: AbsRel `0.32417137460470213`, Depth MAE `3.6485552222775537`, normal mean angle `51.68793149935674`
+
+**Decision**: `PASS`. Constructive checkpoint materialization is renderable. R14 still requires real edit selection, counterfactual acceptance, and teacher recovery before medium-scene claims.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR14_5_real_checkpoint_fill_dryrun_report.md`
+- `outputs/carnet/meshsplatopt/stageR14_5_real_checkpoint_fill_dryrun/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt Stage R14.4 constructive checkpoint fill — PASS
 
 **Outcome**: Added `FILL_PATCH` support to the checkpoint adapter. New vertices are initialized from nearest existing vertex radiance/weight attributes, and new per-face stats are initialized conservatively to zero.
