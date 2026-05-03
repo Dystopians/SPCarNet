@@ -3136,3 +3136,30 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR19_01_08_cross_scene_residual_snap_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R20.01 parking medium residual snap — DEPTH GAIN / RENDER FAIL
+
+**Outcome**: Ran a medium-budget W&B recovery for the R18 train-residual parking snap candidate from `2000` to `4000` iterations on GPU 4.
+
+**W&B**:
+- `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/tu85uksa`
+
+**Protocol**:
+- source: R18 train-residual snap gate candidate
+- load iteration: `2000`
+- train until: `4000`
+- densify until: `2000`
+- restricted Delaunay: skipped
+- train/render/metrics exit codes: `0/0/0`
+
+**Medium result vs existing parking baseline**:
+- baseline 2000->4000: PSNR `14.251087`, SSIM `0.383800`, LPIPS `0.569749`, AbsRel `0.324794`, Depth MAE `3.636891`, normal `51.043451`
+- residual snap 2000->4000: PSNR `14.207231`, SSIM `0.383298`, LPIPS `0.570288`, AbsRel `0.323844`, Depth MAE `3.589209`, normal `51.225949`
+- residual snap minus baseline: PSNR `-0.043857`, SSIM `-0.000501`, LPIPS `+0.000539`, AbsRel `-0.000951`, Depth MAE `-0.047682`, normal `+0.182499`
+
+**Decision**: `MEDIUM_RESIDUAL_SNAP_DEPTH_GAIN_RENDER_QUALITY_FAIL`. The edit improves depth but does not survive medium-budget appearance-quality comparison. Isolated vertex snaps are not enough for a top-tier headline; the next required method step is clustered patch repair or fill/split proposals.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR20_01_parking_medium_residual_snap_report.md`
+
+---
