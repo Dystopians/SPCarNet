@@ -3525,6 +3525,12 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 
 **R41 decision**: `BONSAI_RENDER_BREAKTHROUGH_GEOMETRY_TRADEOFF`. This closes the previous bonsai render weakness and makes the low-lambda regime cross-scene-render-positive, but it should be presented as a render/geometry Pareto branch rather than a universal geometry improvement.
 
+**R42 fraction repair check**:
+- R42.01 bonsai fraction `0.625`, lambda `0.002`, W&B `l2inxutg`: PSNR `21.543251`, SSIM `0.672968`, LPIPS `0.349113`, AbsRel `0.161678`, Depth MAE `1.824630`, normal `35.622191`
+- relative to R41.01, R42.01 gives up PSNR `-0.057863`, SSIM `-0.004483`, and LPIPS `+0.001943`; it slightly improves normal angle by `-0.425480`, with effectively unchanged depth
+
+**R42 decision**: `BONSAI_FRACTION_REPAIR_BOUNDARY`. Raising the trusted fraction does not recover bonsai depth geometry, so the best current bonsai claim remains R41.01 as a render Pareto breakthrough.
+
 **Linked artefacts**:
 - `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
 - `scripts/car_model/meshsplatopt_collect_sparse_recovery_results.py`

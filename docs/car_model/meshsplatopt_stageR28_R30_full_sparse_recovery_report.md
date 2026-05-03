@@ -210,11 +210,12 @@ R40 extends the lambda sweep below R39 and applies the stronger low-lambda setti
 | R40.02 | courtyard | `0.625` | `0.002` | `coqls9rm` | `16.801973` | `0.559031` | `0.508579` | `0.106783` | `1.388936` | `29.394197` |
 | R36.01b | courtyard | `0.625` | `0.005` | `qguqasou` | `16.376713` | `0.548868` | `0.520534` | `0.126731` | `1.564874` | `29.581638` |
 | R41.01 | bonsai | `0.50` | `0.002` | `poh8k4be` | `21.601114` | `0.677450` | `0.347170` | `0.161510` | `1.824463` | `36.047671` |
+| R42.01 | bonsai | `0.625` | `0.002` | `l2inxutg` | `21.543251` | `0.672968` | `0.349113` | `0.161678` | `1.824630` | `35.622191` |
 | R31.03 | bonsai | random | `0.005` | `3wygm9u4` | `20.299246` | `0.606873` | `0.388372` | `0.130567` | `1.452105` | `34.987466` |
 
 Decision: `LOW_LAMBDA_CROSS_SCENE_STRONG_PASS`. R40.01 is the parking render/LPIPS Pareto row; R39.01 remains the cleaner parking depth row. R40.02 is the stronger paper milestone because it improves every tracked courtyard metric relative to R36.01b: PSNR `+0.425260`, SSIM `+0.010163`, LPIPS `-0.011955`, AbsRel `-0.019948`, Depth MAE `-0.175938`, and normal angle `-0.187441`. Relative to the original courtyard random sparse-depth row R31.02, R40.02 improves PSNR by `+0.488491`, SSIM by `+0.011261`, LPIPS by `-0.011635`, AbsRel by `-0.020760`, Depth MAE by `-0.182438`, and normal angle by `-0.813253`.
 
-R41.01 removes the remaining bonsai render weakness: relative to R31.03 random sparse-depth it improves PSNR by `+1.301868`, SSIM by `+0.070577`, and LPIPS by `-0.041202`. The tradeoff is geometry: AbsRel increases by `+0.030943`, Depth MAE by `+0.372358`, and normal angle by `+1.060204`. This should be used as a render/geometry Pareto branch rather than an all-metric win.
+R41.01 removes the remaining bonsai render weakness: relative to R31.03 random sparse-depth it improves PSNR by `+1.301868`, SSIM by `+0.070577`, and LPIPS by `-0.041202`. The tradeoff is geometry: AbsRel increases by `+0.030943`, Depth MAE by `+0.372358`, and normal angle by `+1.060204`. R42.01 checks whether raising the trusted fraction to `0.625` repairs this geometry tradeoff. It does not recover depth, and relative to R41.01 it gives up PSNR `-0.057863`, SSIM `-0.004483`, and LPIPS `+0.001943`, while only improving normal angle by `-0.425480`. This should be used as a render/geometry Pareto branch rather than an all-metric win.
 
 ## Current Interpretation
 

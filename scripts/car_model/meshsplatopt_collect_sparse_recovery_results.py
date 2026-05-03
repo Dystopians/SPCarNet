@@ -48,6 +48,7 @@ ROWS: tuple[SparseRecoveryRow, ...] = (
     SparseRecoveryRow("R33.02", "mipnerf360_bonsai", "R33", "mixed_trusted_random", "outputs/carnet/meshsplatopt/stageR33_02_bonsai_stage35_mixed_sparse_depth_lam0p005_2000to7000/recovery_model", 7000, "xj2ng1s1", "mixed_low_error", 0.50, 0.005, "cross-scene trusted geometry check"),
     SparseRecoveryRow("R36.02b", "mipnerf360_bonsai", "R36", "mixed_trusted_random", "outputs/carnet/meshsplatopt/stageR36_02b_bonsai_stage35_mixed_sparse_depth_frac0p625_lam0p005_2000to7000/recovery_model", 7000, "xq21lzsm", "mixed_low_error", 0.625, 0.005, "bonsai fraction stress test"),
     SparseRecoveryRow("R41.01", "mipnerf360_bonsai", "R41", "mixed_trusted_random_lambda_refined", "outputs/carnet/meshsplatopt/stageR41_01_bonsai_mixed_frac0p50_lam0p002_2000to7000/recovery_model", 7000, "poh8k4be", "mixed_low_error", 0.50, 0.002, "bonsai render breakthrough, geometry tradeoff", "mesh-splatting"),
+    SparseRecoveryRow("R42.01", "mipnerf360_bonsai", "R42", "mixed_trusted_random_lambda_refined", "outputs/carnet/meshsplatopt/stageR42_01_bonsai_mixed_frac0p625_lam0p002_2000to7000/recovery_model", 7000, "l2inxutg", "mixed_low_error", 0.625, 0.002, "bonsai fraction repair check"),
 )
 
 
