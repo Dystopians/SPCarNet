@@ -3266,3 +3266,36 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR23_01_residual_boundary_fill_selector_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R24-R26 fill initialization and grid fill — ENGINEERING PASS / MEDIUM FAIL
+
+**Outcome**: Tested three follow-ups to the R22 boundary-fill weakness: nearest-face checkpoint field initialization, unrestricted densification recovery, and a denser plane-grid Delaunay fill. The implementation and gates passed, but the medium-budget public-scene result still does not beat the strong baseline.
+
+**Implementation**:
+- `ss3dm_prior/meshsplatopt/checkpoint_adapter.py` now initializes appended `FILL_PATCH` face fields from nearest old faces instead of zeros.
+- added `scripts/car_model/meshsplatopt_expand_boundary_fill_to_grid.py` for checkpoint-compatible plane-grid Delaunay fill expansion.
+
+**R24 gate and short recovery**:
+- gate: `PASS`, topology `+1` vertex / `+6` triangles, PSNR delta `+0.000097`
+- W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/1iam7x3c`
+- 2200 result: PSNR `12.347798`, SSIM `0.297994`, LPIPS `0.621984`, AbsRel `0.409399`, Depth MAE `4.302556`, normal `52.568240`
+
+**R25 densification-on diagnostic**:
+- W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/hkzqqedj`
+- result: PSNR `12.031141`, SSIM `0.310603`, LPIPS `0.641519`
+- topology exploded to `5,889,468` triangles / `4,964,968` vertices
+- decision: unrestricted post-edit densification is rejected.
+
+**R26 grid fill**:
+- generated grid fill from R22 loop: `+51` vertices / `+106` triangles
+- gate: `PASS`, PSNR delta `+0.0000925`
+- short W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/bg5cflp8`
+- medium W&B: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/phki0fj4`
+- 4000 result: PSNR `14.212496`, SSIM `0.383164`, LPIPS `0.570729`, AbsRel `0.329141`, Depth MAE `3.667578`, normal `51.594204`
+
+**Decision**: `FILL_INIT_GRID_ENGINEERING_PASS_MEDIUM_REPAIR_FAIL`. The system now has stronger topology-adding edit machinery, but real-scene gains remain insufficient. The next high-value fix is true external-edit teacher recovery: pre-edit teacher render/depth cache, unedited-region distillation, and edit-region metrics.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR24_R26_fill_init_and_grid_report.md`
+
+---

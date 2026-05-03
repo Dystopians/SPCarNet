@@ -99,6 +99,23 @@ def _nearest_vertex_indices(existing: torch.Tensor, new_vertices: torch.Tensor) 
     return torch.argmin(distances, dim=1).to(dtype=torch.long)
 
 
+def _nearest_face_indices(vertices: torch.Tensor, old_faces: torch.Tensor, new_faces: torch.Tensor) -> torch.Tensor:
+    if int(old_faces.shape[0]) == 0:
+        return torch.zeros((int(new_faces.shape[0]),), dtype=torch.long, device=new_faces.device)
+    old_centers = vertices[old_faces.long()].mean(dim=1)
+    new_centers = vertices[new_faces.long()].mean(dim=1)
+    distances = torch.cdist(new_centers.to(dtype=torch.float32), old_centers.to(dtype=torch.float32))
+    return torch.argmin(distances, dim=1).to(dtype=torch.long)
+
+
+def _scaled_face_field_seed(field: torch.Tensor, nearest_faces: torch.Tensor, scale: float) -> torch.Tensor:
+    fill = field[nearest_faces.to(device=field.device)].clone()
+    if torch.is_floating_point(fill):
+        return fill * scale
+    scaled = torch.round(fill.to(dtype=torch.float32) * scale)
+    return torch.clamp(scaled, min=0).to(dtype=field.dtype)
+
+
 def _append_checkpoint_fill_patch(payload: dict[str, Any], edit: MeshEdit) -> dict[str, Any]:
     if not edit.inserted_vertices or not edit.inserted_faces:
         raise ValueError("FILL_PATCH requires inserted vertices and faces")
@@ -120,15 +137,17 @@ def _append_checkpoint_fill_patch(payload: dict[str, Any], edit: MeshEdit) -> di
         out["features_dc"] = torch.cat([out["features_dc"], out["features_dc"][nearest].clone()], dim=0)
     if "features_rest" in out and torch.is_tensor(out["features_rest"]):
         out["features_rest"] = torch.cat([out["features_rest"], out["features_rest"][nearest].clone()], dim=0)
+    all_vertices = out["triangles_points"]
+    nearest_faces = _nearest_face_indices(all_vertices, out["_triangle_indices"], new_faces)
     out["_triangle_indices"] = torch.cat([out["_triangle_indices"], new_faces], dim=0)
     add_f = int(new_faces.shape[0])
+    face_field_init = str(edit.attribute_changes.get("face_field_init", "nearest"))
+    face_field_init_scale = float(edit.attribute_changes.get("face_field_init_scale", 0.5))
     for key in FACE_FIELDS:
         if key not in out or not torch.is_tensor(out[key]) or int(out[key].shape[0]) != old_f:
             continue
-        if key == "pixel_count":
-            fill = torch.zeros((add_f,), dtype=out[key].dtype, device=out[key].device)
-        elif key == "importance_score":
-            fill = torch.zeros((add_f,), dtype=out[key].dtype, device=out[key].device)
+        if face_field_init == "nearest" and old_f > 0:
+            fill = _scaled_face_field_seed(out[key], nearest_faces, face_field_init_scale)
         else:
             fill = torch.zeros((add_f,), dtype=out[key].dtype, device=out[key].device)
         out[key] = torch.cat([out[key], fill], dim=0)
@@ -158,7 +177,7 @@ def apply_edit_to_checkpoint_copy(
         payload = _snap_checkpoint_vertices(payload, edit.attribute_changes.get("target_positions", {}))
     elif edit_type == MeshSplatOptEditType.FILL_PATCH:
         payload = _append_checkpoint_fill_patch(payload, edit)
-        reason = "fill_patch_initialized_from_nearest_vertex_radiance"
+        reason = "fill_patch_initialized_from_nearest_vertex_radiance_and_nearest_face_stats"
     elif edit_type in {MeshSplatOptEditType.PROTECT, MeshSplatOptEditType.APPEARANCE_RESET}:
         reason = "metadata_only_no_checkpoint_geometry_change"
     else:
