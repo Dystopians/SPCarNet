@@ -3163,3 +3163,39 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR20_01_parking_medium_residual_snap_report.md`
 
 ---
+
+## 2026-05-03 — MeshSplatOpt R21.01-R21.03 residual patch snap — MIXED
+
+**Outcome**: Added the first checkpoint-compatible patch-level residual repair primitive by expanding train-residual snap seed vertices to local mesh neighborhoods, then validated it with held-out gate and 200-step W&B recovery.
+
+**Implementation**:
+- new script: `scripts/car_model/meshsplatopt_expand_snap_edit_to_patch.py`
+- edit type remains `SNAP_VERTICES`, so rollback/checkpoint gate support is preserved
+- patch policy: k-hop adjacency, radius filter, distance-weighted seed displacement
+
+**Patch candidate**:
+- seed vertices: `16`
+- patch vertices: `95`
+- affected faces: `217`
+- max displacement: `0.074180`
+- mean displacement: `0.018138`
+
+**Gate**:
+- status: `PASS`
+- topology unchanged at `782982` triangles and `820107` vertices
+- gate deltas: PSNR `+0.00000095`, SSIM `+0.00000009`, LPIPS `-0.00000089`, AbsRel `0.0`, Depth MAE `0.0`, normal `-0.00000130`
+
+**W&B**:
+- patch recovery: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/76fgy4z5`
+
+**Equal-budget 2200 result**:
+- baseline continuation: PSNR `12.331465`, SSIM `0.298222`, LPIPS `0.622323`, AbsRel `0.409263`, Depth MAE `4.300273`, normal `52.595639`
+- single residual snap: PSNR `12.342549`, SSIM `0.298893`, LPIPS `0.622299`, AbsRel `0.408892`, Depth MAE `4.302941`, normal `52.354489`
+- patch residual snap: PSNR `12.329646`, SSIM `0.298382`, LPIPS `0.622157`, AbsRel `0.409988`, Depth MAE `4.303037`, normal `52.586082`
+
+**Decision**: `PATCH_SNAP_GATE_PASS_RECOVERY_MIXED`. This fixes the missing patch-primitive architecture, but the naive displacement-diffusion policy is not yet a dominant method result. Next step: residual-cluster optimization or fill/split proposals with an explicit render/depth objective.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR21_01_03_patch_snap_report.md`
+
+---
