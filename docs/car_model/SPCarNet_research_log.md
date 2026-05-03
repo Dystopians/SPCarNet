@@ -3460,3 +3460,30 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
 
 ---
+
+## 2026-05-03 - R36-R38 trusted-sampling refinement and lambda sweep
+
+**Goal**: turn the trusted/random sparse correspondence sampler from a single parking gain into a stronger, better-supported method contribution with cross-scene tuning evidence and a new parking best result.
+
+**R36 cross-scene fraction `0.625` checks**:
+- R36.01b courtyard, W&B `qguqasou`: PSNR `16.376713`, SSIM `0.548868`, LPIPS `0.520534`, AbsRel `0.126731`, Depth MAE `1.564874`, normal `29.581638`
+- R36.02b bonsai, W&B `xq21lzsm`: PSNR `20.267965`, SSIM `0.605809`, LPIPS `0.391068`, AbsRel `0.130851`, Depth MAE `1.441631`, normal `35.098674`
+
+**R36 decision**: `CROSS_SCENE_FRACTION_TUNING_PARTIAL_PASS`. The `0.625` mixture is a strong courtyard setting, improving PSNR over R31.02 by `+0.063231` and normal angle by `-0.625812`. It is not a bonsai render improvement, so the paper-safe claim is scene-dependent trusted-fraction selection rather than a universal fraction.
+
+**R37 stratified-sampling probe**:
+- R37.01 courtyard, W&B `tn0uxiwy`: PSNR `16.273159`, SSIM `0.546080`, LPIPS `0.521507`, AbsRel `0.128638`, Depth MAE `1.577220`, normal `30.181338`
+- R37.02 bonsai, W&B `nrylaqan`: PSNR `20.252667`, SSIM `0.605428`, LPIPS `0.390547`, AbsRel `0.128677`, Depth MAE `1.423667`, normal `35.203336`
+
+**R37 decision**: `STRATIFIED_SAMPLING_NOT_RETAINED`. Error-stratified sampling improved bonsai sparse-depth geometry relative to R36 but hurt courtyard and did not improve render. The implementation probe was therefore not kept in the main code path.
+
+**R38 parking sparse-loss lambda refinement**:
+- R38.01 fraction `0.50`, lambda `0.003`, W&B `yo6oxofn`: PSNR `17.124186`, SSIM `0.533355`, LPIPS `0.456678`, AbsRel `0.183460`, Depth MAE `2.945563`, normal `41.679295`
+- R38.02 fraction `0.625`, lambda `0.003`, W&B `j8t2tyc9`: PSNR `17.107119`, SSIM `0.532528`, LPIPS `0.456906`, AbsRel `0.183256`, Depth MAE `2.933642`, normal `41.632026`
+
+**R38 decision**: `NEW_PARKING_RENDER_AND_GEOMETRY_BEST`. R38.01 is the new strongest parking render result. Versus R32.02b it improves PSNR by `+0.018696`, SSIM by `+0.000712`, LPIPS by `-0.001181`, AbsRel by `-0.000915`, Depth MAE by `-0.012425`, and normal angle by `-0.084849`. R38.02 is the geometry-biased lambda-refined variant: it gives up PSNR versus R38.01 but further improves AbsRel, Depth MAE, and normal angle.
+
+**Linked artefact**:
+- `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md`
+
+---

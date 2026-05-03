@@ -156,6 +156,28 @@ R34 and R35 refine the parking trusted/random mixture around the R32 best settin
 
 Decision: `TRUSTED_FRACTION_PARETO_PASS`. The `0.50` mixture remains the parking render-table choice for PSNR and SSIM. The `0.625` mixture is a stronger Pareto point for perceptual/geometry quality: it nearly matches the best PSNR (`-0.000425`) while improving LPIPS by `-0.000366`, AbsRel by `-0.000772`, and normal angle by `-0.291927` versus R32.02b. The paper should report `0.50` as render-best and `0.625` as the geometry-balanced variant.
 
+## R36-R38 Trusted-Fraction and Lambda Refinement
+
+R36 tests whether the parking `0.625` trusted/random fraction gives useful cross-scene behavior:
+
+| Row | Scene | fraction | W&B | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | normal angle |
+| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| R36.01b | courtyard | `0.625` | `qguqasou` | `16.376713` | `0.548868` | `0.520534` | `0.126731` | `1.564874` | `29.581638` |
+| R36.02b | bonsai | `0.625` | `xq21lzsm` | `20.267965` | `0.605809` | `0.391068` | `0.130851` | `1.441631` | `35.098674` |
+
+Decision: `CROSS_SCENE_FRACTION_TUNING_PARTIAL_PASS`. Fraction `0.625` is the current courtyard render-best setting, beating R31.02 by PSNR `+0.063231` and SSIM `+0.001098`, while improving normal angle by `-0.625812`. Bonsai remains better with the original random sparse sampling for render metrics, so the cross-scene claim should be scene-dependent trusted-fraction selection.
+
+R37 probed an error-stratified sampler, but it was not retained because it degraded courtyard and did not improve bonsai render. Its results are logged in `SPCarNet_research_log.md` as a controlled negative.
+
+R38 lowers the sparse depth lambda from `0.005` to `0.003` in the parking 12000-to-16000 setting:
+
+| Row | fraction | lambda | W&B | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | normal angle |
+| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| R38.01 | `0.50` | `0.003` | `yo6oxofn` | `17.124186` | `0.533355` | `0.456678` | `0.183460` | `2.945563` | `41.679295` |
+| R38.02 | `0.625` | `0.003` | `j8t2tyc9` | `17.107119` | `0.532528` | `0.456906` | `0.183256` | `2.933642` | `41.632026` |
+
+Decision: `NEW_PARKING_RENDER_AND_GEOMETRY_BEST`. R38.01 is the new parking table row. Relative to R32.02b, it improves PSNR by `+0.018696`, SSIM by `+0.000712`, LPIPS by `-0.001181`, AbsRel by `-0.000915`, Depth MAE by `-0.012425`, and normal angle by `-0.084849`. R38.02 is the geometry-biased variant and is useful for a Pareto table: compared with R38.01, it further improves AbsRel by `-0.000204`, Depth MAE by `-0.011921`, and normal angle by `-0.047269`.
+
 ## Current Interpretation
 
-The strongest validated parking render result is still R32.02b at 16000. Compared with R16.03 full baseline, it improves PSNR by `+1.534925`, SSIM by `+0.084431`, and LPIPS by `-0.070193`, while substantially improving sparse COLMAP depth agreement. R31 adds an important early-stop result and two cross-scene positives. R32 adds a concrete algorithmic improvement on top of long-horizon sparse-geometry-guided recovery: confidence-aware sparse correspondence sampling. R33 narrows the claim: trusted sampling improves sparse-depth geometry on courtyard and bonsai at 50/50 mixture, but the render-best cross-scene setting remains the original random sampler unless further per-scene tuning is validated. R34-R35 further raise completion by turning the sampling fraction into a measured Pareto knob: `0.50` is render-best, while `0.625` is geometry-balanced and improves LPIPS/AbsRel/normal with negligible PSNR loss.
+The strongest validated parking render result is now R38.01 at 16000. Compared with R16.03 full baseline, it improves PSNR by `+1.553621`, SSIM by `+0.085143`, and LPIPS by `-0.071374`, while improving sparse COLMAP depth agreement. R31 adds an important early-stop result and two cross-scene positives. R32 adds a concrete algorithmic improvement on top of long-horizon sparse-geometry-guided recovery: confidence-aware COLMAP sparse correspondence sampling. R33-R36 narrow the claim into a stronger paper-safe version: trusted sampling is a tunable confidence knob, not a universal constant fraction. R38 then converts that tuning into a new parking best result by lowering the sparse-depth lambda to `0.003`, improving both render and sparse geometry over the prior best R32.02b.
