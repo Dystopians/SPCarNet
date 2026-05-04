@@ -4,6 +4,34 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-04 — MeshSplatOpt F39 real gate-removed ablation — PASS_LOAD_BEARING_MEDIUM_ABLATION
+
+**Outcome**: Ran a same-schedule real-scene parking PRISM ablation at ratio `0.04`,
+with the counterfactual gate enabled and removed. Both rows used online W&B and the
+same `500`-iteration integrated topology-control configuration.
+
+**W&B**:
+- gated: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/1aggpvnr`
+- no-gate: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/rx6tp8oi`
+
+**Verification**:
+- first candidate round: iter `141`, selected `2579` triangles in both rows
+- gated row: `committed=False`, `counterfactual_accept=0`, `rollback=1`, topology remains `64,497` triangles
+- no-gate row: `committed=True`, `counterfactual_accept=0`, `rollback=0`, topology drops to `61,918` triangles
+- no-gate minus gated: PSNR `-0.005994`, SSIM `-0.000044`, LPIPS `+0.000501`, AbsRel `+0.001795`, Depth MAE `+0.011814`, normal `-0.309979`
+- supplemental ratio `0.02` 2000-iteration matched control completed: gate-on accepts the first `1289`-candidate edit, so it is not a gate-necessity negative case; it is retained as evidence that the gate permits milder topology edits.
+
+**Decision**: `PASS_LOAD_BEARING_MEDIUM_ABLATION`. This closes the real-scene
+medium-budget gate-removal gap: the gate prevents an aggressive candidate commit that
+the no-gate run accepts, and the accepted no-gate topology is slightly worse on most
+independent metrics.
+
+**Linked artefacts**:
+- `docs/car_model/final_stageF39_real_gate_removed_ablation_report.md`
+- `outputs/carnet/meshprior/stageF39_real_no_counterfactual_gate/summary_ratio004_500iter/`
+
+---
+
 ## 2026-05-04 — MeshSplatOpt F38 counterfactual gate ablation — MECHANISM_PASS
 
 **Outcome**: Added and ran an identical-edit counterfactual ablation for the
