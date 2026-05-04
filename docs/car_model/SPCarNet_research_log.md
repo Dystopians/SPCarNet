@@ -4,6 +4,33 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-04 — MeshSplatOpt F34 parking sparse-depth long continuation — FAIL_KEEP_F33_26K
+
+**Outcome**: Ran a W&B-logged long-continuation control for the current strongest
+`parking_phone_tiny` row. The run starts from F33 CSEF70 + sparse-depth at iteration
+`26000`, keeps strict topology freeze, continues to `30000`, then renders and evaluates
+with independent image metrics and sparse COLMAP geometry.
+
+**W&B**: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/d3nyktd4`
+
+**Verification**:
+- topology at 30000: `2,564,473` triangles, `1,661,616` vertices
+- independent render metrics: PSNR `18.51044464111328`, SSIM `0.632079541683197`, LPIPS `0.3543379008769989`
+- sparse geometry: AbsRel `0.07902251998756822`, Depth MAE `1.8474553216191132`, normal mean angle `44.42787469632362`
+- comparison to F33: PSNR `-0.201885`, SSIM `-0.015650`, LPIPS `+0.016079`, AbsRel `-0.000048`, Depth MAE `-0.006560`, normal `+0.392167`
+
+**Decision**: `FAIL_KEEP_F33_26K`. F34 answers the long-budget fairness concern:
+continuing the best sparse-depth parking row from `26k` to `30k` slightly improves
+sparse depth proxies but visibly and quantitatively hurts render quality. F33 remains
+the validated parking headline row; F34 is recorded as a negative long-continuation
+control.
+
+**Linked artefacts**:
+- `docs/car_model/final_stageF34_parking_long_continuation_report.md`
+- `outputs/carnet/meshsplatopt/final_stageF34_parking_sparse_depth_long_continuation/`
+
+---
+
 ## 2026-05-02 — MeshSplatOpt R14.19-R14.20 bonsai medium continuation — MEDIUM_CONTROL_PASS_NEGATIVE_FOR_SNAP_GAIN
 
 **Outcome**: Ran W&B-logged medium continuations from iteration `2000` to `4000` on `bonsai` for both accepted non-delete snap and unedited baseline continuation.

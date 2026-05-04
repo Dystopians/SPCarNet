@@ -56,9 +56,9 @@ ROWS = [
         "group": "compact_recovery",
         "row": "extended_fixed_topology_recovery",
         "scene": "parking_phone_tiny",
-        "status": "FAIL",
-        "evidence": "docs/car_model/parking_clean_to_compact_repair_report.md",
-        "finding": "R56/R50-style continuation does not improve the accepted 26k compact row",
+        "status": "FAIL_LONG_CONTINUATION",
+        "evidence": "docs/car_model/final_stageF34_parking_long_continuation_report.md",
+        "finding": "F34 continues the strongest F33 sparse-depth row from 26k to 30k at identical topology; sparse depth proxies improve slightly, but PSNR, SSIM, LPIPS, and normal regress, so F33 remains the validated parking stopping point",
     },
     {
         "group": "compact_recovery",
@@ -359,7 +359,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F28/F29/F30/F31/F32/F33 now replicate explicit sparse-depth compact recovery on all five final scenes, supporting a geometry/perceptual regularizer claim but not a universal PSNR-improvement claim. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
+        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F28/F29/F30/F31/F32/F33 now replicate explicit sparse-depth compact recovery on all five final scenes, supporting a geometry/perceptual regularizer claim but not a universal PSNR-improvement claim. F34 adds a long-continuation control showing the best parking row should stop at 26k rather than blindly continue to 30k. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
         "",
     ]
     DOC.write_text("\n".join(lines))
