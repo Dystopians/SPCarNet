@@ -3836,3 +3836,22 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F5_CHECKPOINT_COMPACTION_PASS`. Area70 exactly reproduces the R53 pre-recovery topology count, and CSEF70 produces a valid renderable checkpoint. Proceed to F6 strict topology-frozen recovery runner.
 
 ---
+
+## 2026-05-04 - Final F6 strict topology-frozen recovery runner
+
+**Goal**: make compact recovery reproducible and prevent the old `--skip_restricted_delaunay` topology-control ambiguity.
+
+**Implementation**:
+- added `scripts/car_model/meshsplatopt_run_strict_compact_recovery.py`;
+- added `docs/car_model/final_stageF6_strict_recovery_design.md`;
+- added `docs/car_model/final_stageF6_strict_recovery_report.md`.
+
+**R53 contract audit**:
+- load checkpoint 22k: `2,564,473` triangles, `1,661,616` vertices;
+- final checkpoint 26k: `2,564,473` triangles, `1,661,616` vertices;
+- `topology_unchanged`: `true`;
+- W&B run: `q15qg2b8`.
+
+**Decision**: `FINAL_F6_STRICT_RECOVERY_RUNNER_PASS`. The runner writes exact W&B-enabled train, render, metrics, and geometry commands and verifies the R53 topology-freeze contract. No new long training was launched because GPUs were high-memory occupied.
+
+---
