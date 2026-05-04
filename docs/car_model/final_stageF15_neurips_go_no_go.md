@@ -20,7 +20,7 @@ Decision: `NEURIPS_BORDERLINE_NEEDS_STRICT_ABLATIONS`.
 
 | risk | current answer | mitigation |
 | --- | --- | --- |
-| This is just area pruning plus finetuning. | Parking headline uses area70; public scenes use CSEF boundary-protected settings, but matched selector ablations are incomplete. | Run area-only, CSEF, and random same-count controls on at least courtyard and counter. |
+| This is just area pruning plus finetuning. | Counter area40 beats CSEF40, so the selector story is mixed; random40 fails badly, proving arbitrary pruning is not enough. | Run area-only, CSEF, and random same-count controls on courtyard and one more public scene. |
 | Sparse depth does all the work. | Sparse depth is load-bearing in recovery. | Add no-sparse-depth compact-recovery ablation on parking and one public scene. |
 | Only one scene works. | No longer true: F12 has five scene-matched long-baseline rows. | Keep F12 main table prominent. |
 | Triangle soup means mesh repair is not real mesh repair. | Correct; edge-loop repair was rejected. | Frame as compact-repair optimization, not classical watertight mesh repair. |
@@ -36,7 +36,7 @@ Recommended label: `NEURIPS_BORDERLINE_NEEDS_STRICT_ABLATIONS`.
 Minimum remaining work before submission:
 
 - final area-only versus CSEF selector ablation;
-- random same-count compaction control beyond the completed counter control;
+- selector ablation beyond the completed counter controls;
 - no-sparse-depth recovery control;
 - no-freeze recovery control;
 - posthoc QEM/decimation baseline;

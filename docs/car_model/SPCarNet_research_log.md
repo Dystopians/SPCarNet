@@ -4038,6 +4038,12 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 | CSEF40 26k | 50,300 | 14.212033 | 0.518401 | 0.450481 | 0.085542 | 0.406373 | 43.476972 |
 | random40 26k | 50,300 | 13.875822 | 0.482349 | 0.485052 | 0.099779 | 0.444684 | 43.941494 |
 
-**Decision**: `FINAL_F16_COUNTER_RANDOM_SAME_COUNT_CONTROL_PASS_FOR_CSEF`. Random same-count pruning fails the clean-long gate and is much worse than CSEF40 at the same triangle count. This strengthens the selector story on counter, although the same control still needs replication on at least one larger public scene.
+**Area40 follow-up**:
+- compact model: `outputs/carnet/meshsplatopt/final_stageF16_counter_area_selector_control/prune40/compact_model`;
+- recovery model: `outputs/carnet/meshsplatopt/final_stageF16_counter_area_selector_control/prune40/recovery_model`;
+- W&B: `85lmm0lr`;
+- independent metrics: PSNR `14.314330`, SSIM `0.536892`, LPIPS `0.431104`, AbsRel `0.072751`, Depth MAE `0.357914`, Normal `43.715882`.
+
+**Decision**: `FINAL_F16_COUNTER_SELECTOR_CONTROL_PASS_AREA40_BEST`. Random same-count pruning fails the clean-long gate and is much worse than CSEF40 at the same triangle count, proving that arbitrary pruning is not enough. However, area40 is stronger than CSEF40 on counter and becomes the new recommended counter row. The paper story must be updated honestly: counter supports compact-recovery strongly, but does not support a universal CSEF-over-area selector claim.
 
 ---

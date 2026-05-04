@@ -110,16 +110,16 @@ SCENES = [
         "clean_absrel": 0.076996,
         "clean_depth_mae": 0.369973,
         "clean_normal": 44.287035,
-        "best_method": "CSEF40 strict recovery 26k",
+        "best_method": "area40 strict recovery 26k",
         "best_triangles": 50300,
-        "best_psnr": 14.212033,
-        "best_ssim": 0.518401,
-        "best_lpips": 0.450481,
-        "best_absrel": 0.085542,
-        "best_depth_mae": 0.406373,
-        "best_normal": 43.476972,
-        "wandb": "glzzth4b",
-        "evidence": "docs/car_model/final_stageF10_fourth_scene_counter_report.md",
+        "best_psnr": 14.314330,
+        "best_ssim": 0.536892,
+        "best_lpips": 0.431104,
+        "best_absrel": 0.072751,
+        "best_depth_mae": 0.357914,
+        "best_normal": 43.715882,
+        "wandb": "85lmm0lr",
+        "evidence": "docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md",
         "decision": "PASS_PARETO",
     },
 ]
@@ -128,6 +128,8 @@ NEGATIVE_ROWS = [
     {"scene": "bonsai", "row": "CSEF70", "finding": "70 percent compaction fails SSIM gate", "evidence": "docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md"},
     {"scene": "counter", "row": "CSEF50", "finding": "50 percent compaction is a boundary case and misses SSIM by 0.003827", "evidence": "docs/car_model/final_stageF10_fourth_scene_counter_report.md"},
     {"scene": "counter", "row": "CSEF50 30k", "finding": "extended recovery worsens SSIM and LPIPS", "evidence": "docs/car_model/final_stageF10_fourth_scene_counter_report.md"},
+    {"scene": "counter", "row": "random40", "finding": "same-count random compaction loses badly to area40 and CSEF40", "evidence": "docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md"},
+    {"scene": "counter", "row": "CSEF40", "finding": "passes clean-long but is not the strongest selector on counter; area40 is better", "evidence": "docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md"},
     {"scene": "parking_phone_tiny", "row": "grid fill full-budget", "finding": "fill branch does not beat matched sparse-depth control", "evidence": "docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md"},
 ]
 
@@ -214,4 +216,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

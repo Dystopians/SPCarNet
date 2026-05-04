@@ -90,7 +90,15 @@ ROWS = [
         "scene": "counter",
         "status": "PASS",
         "evidence": "docs/car_model/final_stageF10_fourth_scene_counter_report.md",
-        "finding": "40 percent CSEF is the recommended counter Pareto point and improves PSNR, SSIM, LPIPS, and normal",
+        "finding": "40 percent CSEF improves PSNR, SSIM, LPIPS, and normal versus clean-long, but F16 shows area40 is stronger on counter",
+    },
+    {
+        "group": "compact_recovery",
+        "row": "area_smallest_40",
+        "scene": "counter",
+        "status": "PASS_SELECTOR_BEST",
+        "evidence": "docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md",
+        "finding": "area40 is the strongest counter selector row and beats both clean-long and CSEF40 on independent metrics",
     },
     {
         "group": "compact_recovery",
@@ -137,7 +145,7 @@ ROWS = [
 MISSING = [
     "full no-freeze matched compact-recovery row on the final CSEF selector",
     "final CSEF selector versus area-only selector on every public scene",
-    "random same-count compaction control beyond counter, ideally courtyard plus one more public scene",
+    "selector ablation beyond counter, ideally courtyard plus one more public scene",
     "posthoc QEM/decimation baseline with equal recovery budget",
     "full no-sparse-depth compact-recovery row on at least parking plus one public scene",
     "full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations",

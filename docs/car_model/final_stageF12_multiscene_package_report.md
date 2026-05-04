@@ -13,7 +13,7 @@ Scenes with PSNR+SSIM improvement and LPIPS non-regression tolerance: `5/5`.
 | bonsai | 88,460 | 44,230 | 50.0% | 0.013149 | 0.001910 | 0.000257 | -0.009069 | -0.078595 | -1.864381 | PASS |
 | courtyard | 1,677,484 | 838,742 | 50.0% | 0.452301 | 0.041625 | -0.024231 | -0.032415 | -0.220612 | 0.008508 | PASS |
 | room | 84,506 | 42,253 | 50.0% | 0.128784 | 0.014090 | -0.010638 | 0.018745 | 0.122800 | -0.799860 | PASS |
-| counter | 83,834 | 50,300 | 40.0% | 0.075851 | 0.005599 | -0.001568 | 0.008546 | 0.036400 | -0.810063 | PASS_PARETO |
+| counter | 83,834 | 50,300 | 40.0% | 0.178148 | 0.024090 | -0.020945 | -0.004245 | -0.012059 | -0.571153 | PASS_PARETO |
 
 ## Per-Scene Evidence
 
@@ -23,7 +23,7 @@ Scenes with PSNR+SSIM improvement and LPIPS non-regression tolerance: `5/5`.
 | bonsai | clean-long 22k | CSEF50 strict recovery 26k | `irdsa4c8` | `docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md` |
 | courtyard | clean-long 22k | CSEF50 strict recovery 26k | `jz93wrbc` | `docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md` |
 | room | clean-long 22k | CSEF50 strict recovery 26k | `pb1tg4p2` | `docs/car_model/final_stageF9_third_scene_room_and_qualitative_report.md` |
-| counter | clean-long 22k | CSEF40 strict recovery 26k | `glzzth4b` | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
+| counter | clean-long 22k | area40 strict recovery 26k | `85lmm0lr` | `docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md` |
 
 ## Negative Result Table
 
@@ -32,6 +32,8 @@ Scenes with PSNR+SSIM improvement and LPIPS non-regression tolerance: `5/5`.
 | bonsai | CSEF70 | 70 percent compaction fails SSIM gate | `docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md` |
 | counter | CSEF50 | 50 percent compaction is a boundary case and misses SSIM by 0.003827 | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
 | counter | CSEF50 30k | extended recovery worsens SSIM and LPIPS | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
+| counter | random40 | same-count random compaction loses badly to area40 and CSEF40 | `docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md` |
+| counter | CSEF40 | passes clean-long but is not the strongest selector on counter; area40 is better | `docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md` |
 | parking_phone_tiny | grid fill full-budget | fill branch does not beat matched sparse-depth control | `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md` |
 
 ## Gate
