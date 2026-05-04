@@ -3790,3 +3790,24 @@ Against the best clean long render baseline, R44.01 is worse on PSNR by `-1.3104
 - `docs/car_model/final_stageF3_cross_scene_compact_plan.md`
 
 ---
+
+## 2026-05-04 - Final F4 CSEF-compatible compact selector
+
+**Goal**: move beyond smallest-area-only compaction by implementing a CSEF-compatible face selector with protected repair regions and count-matched controls.
+
+**Implementation**:
+- added `ss3dm_prior/meshsplatopt/compact_selector.py`;
+- added `scripts/car_model/meshsplatopt_select_compaction_candidates.py`;
+- added `scripts/car_model/smoke_test_final_stageF4_compact_selector.py`;
+- added `docs/car_model/final_stageF4_compact_selector_design.md`;
+- added `docs/car_model/final_stageF4_compact_selector_report.md`.
+
+**Smoke result**:
+
+```text
+F4 selector smoke PASS: area=[2, 3, 6] csef=[2, 3, 7] random=[2, 3, 7]
+```
+
+**Decision**: `FINAL_F4_COMPACT_SELECTOR_PASS`. The boundary-protected CSEF selector differs from area-only on synthetic data: it protects a high-debt repair region that area-only would prune, while selecting redundant small triangles and a floater. This satisfies the non-area selector gate and enables F5 real-checkpoint compaction.
+
+---
