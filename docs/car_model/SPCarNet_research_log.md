@@ -3750,3 +3750,26 @@ Against the best clean long render baseline, R44.01 is worse on PSNR by `-1.3104
 - `docs/car_model/final_stageF1_method_spec.md`
 
 ---
+
+## 2026-05-04 - Final F2 baseline registry and metric-integrity collector
+
+**Goal**: build one fair-baseline registry so final tables cannot compare long method runs against short clean baselines or mix training-time metrics with independent metrics.
+
+**Implementation**:
+- added `scripts/car_model/final_collect_baselines_and_results.py`;
+- added `docs/car_model/final_stageF2_baseline_registry_design.md`;
+- added `docs/car_model/final_stageF2_baseline_registry_report.md`.
+
+**Collector outputs**:
+- `outputs/carnet/meshsplatopt/final_baseline_registry/final_results.json`
+- `outputs/carnet/meshsplatopt/final_baseline_registry/final_results.csv`
+- `outputs/carnet/meshsplatopt/final_baseline_registry/final_results.md`
+
+**Integrity gate**:
+- `r53_vs_clean22k_reproduced`: `true`;
+- `r44_flagged_render_losing_vs_clean22k`: `true`;
+- `forbidden_long_method_vs_clean7k_headline`: `false`.
+
+**Decision**: `FINAL_F2_BASELINE_REGISTRY_PASS`. The collector makes R53 the clean-to-compact headline, keeps R44 as a documented render-losing topology/normal Pareto point, and explicitly flags non-independent or missing metrics.
+
+---
