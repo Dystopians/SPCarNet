@@ -4047,3 +4047,25 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F16_COUNTER_SELECTOR_CONTROL_PASS_AREA40_BEST`. Random same-count pruning fails the clean-long gate and is much worse than CSEF40 at the same triangle count, proving that arbitrary pruning is not enough. However, area40 is stronger than CSEF40 on counter and becomes the new recommended counter row. The paper story must be updated honestly: counter supports compact-recovery strongly, but does not support a universal CSEF-over-area selector claim.
 
 ---
+
+## 2026-05-04 - Final F17 courtyard selector ablation
+
+**Goal**: replicate selector controls on a larger public scene after counter showed that area40 can outperform CSEF40.
+
+**W&B runs**:
+- CSEF50: `jz93wrbc`;
+- area50: `hctwxtbe`;
+- random50: `faz0c00o`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 1,677,484 | 12.103508 | 0.296648 | 0.569308 | 0.354648 | 3.829044 | 40.821649 |
+| CSEF50 26k | 838,742 | 12.555809 | 0.338273 | 0.545077 | 0.322233 | 3.608432 | 40.830157 |
+| area50 26k | 838,742 | 12.552895 | 0.338469 | 0.544993 | 0.324157 | 3.630241 | 40.907990 |
+| random50 26k | 838,742 | 11.383848 | 0.264778 | 0.587667 | 0.371186 | 4.015910 | 41.158282 |
+
+**Decision**: `FINAL_F17_COURTYARD_SELECTOR_ABLATION_PASS_STRUCTURED_SELECTION`. Random same-count pruning fails badly, so arbitrary topology removal is not sufficient. CSEF50 and area50 are near-tied on render, but CSEF50 remains the geometry-balanced courtyard row because it has better PSNR, AbsRel, Depth MAE, and Normal.
+
+---

@@ -70,6 +70,22 @@ ROWS = [
     },
     {
         "group": "compact_recovery",
+        "row": "area_smallest_50",
+        "scene": "courtyard",
+        "status": "PASS_TIE_RENDER_GEOMETRY_SLIGHTLY_WORSE",
+        "evidence": "docs/car_model/final_stageF17_courtyard_selector_ablation_report.md",
+        "finding": "area50 nearly ties CSEF50 on render but has slightly weaker sparse geometry; CSEF50 remains geometry-balanced",
+    },
+    {
+        "group": "compact_recovery",
+        "row": "random_same_count_50",
+        "scene": "courtyard",
+        "status": "FAIL_CONTROL_SUPPORTS_STRUCTURED_SELECTION",
+        "evidence": "docs/car_model/final_stageF17_courtyard_selector_ablation_report.md",
+        "finding": "random50 fails clean-long and is far worse than CSEF50/area50 at the same triangle count",
+    },
+    {
+        "group": "compact_recovery",
         "row": "cross_scene_csef50",
         "scene": "room",
         "status": "PASS",
@@ -145,7 +161,7 @@ ROWS = [
 MISSING = [
     "full no-freeze matched compact-recovery row on the final CSEF selector",
     "final CSEF selector versus area-only selector on every public scene",
-    "selector ablation beyond counter, ideally courtyard plus one more public scene",
+    "selector ablation beyond counter and courtyard, ideally one more public scene",
     "posthoc QEM/decimation baseline with equal recovery budget",
     "full no-sparse-depth compact-recovery row on at least parking plus one public scene",
     "full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations",
