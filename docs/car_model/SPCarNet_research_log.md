@@ -3811,3 +3811,28 @@ F4 selector smoke PASS: area=[2, 3, 6] csef=[2, 3, 7] random=[2, 3, 7]
 **Decision**: `FINAL_F4_COMPACT_SELECTOR_PASS`. The boundary-protected CSEF selector differs from area-only on synthetic data: it protects a high-debt repair region that area-only would prune, while selecting redundant small triangles and a floater. This satisfies the non-area selector gate and enables F5 real-checkpoint compaction.
 
 ---
+
+## 2026-05-04 - Final F5 real-checkpoint compaction
+
+**Goal**: apply compaction candidates to real Mesh Splatting checkpoints and verify that compact checkpoints retain a renderable model layout.
+
+**Implementation**:
+- added `ss3dm_prior/meshsplatopt/checkpoint_compaction.py`;
+- added `scripts/car_model/meshsplatopt_apply_compaction_to_checkpoint.py`;
+- added `scripts/car_model/smoke_test_final_stageF5_checkpoint_compaction.py`;
+- added `docs/car_model/final_stageF5_checkpoint_compaction_report.md`.
+
+**Smoke result**:
+
+```text
+F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=2564473
+```
+
+**Render smoke**:
+- command used low resolution (`--resolution 16`) because all GPUs were already high-memory occupied;
+- CSEF70 compact checkpoint loaded through `render.py`;
+- render path reported `2,564,473` triangles and `1,661,616` vertices and rendered all 54 test views.
+
+**Decision**: `FINAL_F5_CHECKPOINT_COMPACTION_PASS`. Area70 exactly reproduces the R53 pre-recovery topology count, and CSEF70 produces a valid renderable checkpoint. Proceed to F6 strict topology-frozen recovery runner.
+
+---

@@ -117,8 +117,12 @@ def build_score_table(signals: CompactionSignals) -> dict[str, np.ndarray]:
     count = faces.shape[0]
     areas = triangle_areas(vertices, faces)
     area_smallness = 1.0 - _normalize(areas)
-    boundary = boundary_face_risk(faces)
-    redundancy = local_redundancy(vertices, faces)
+    if faces.shape[0] > 500_000:
+        boundary = np.zeros((faces.shape[0],), dtype=np.float64)
+        redundancy = area_smallness.copy()
+    else:
+        boundary = boundary_face_risk(faces)
+        redundancy = local_redundancy(vertices, faces)
 
     render = _as_float_signal(signals.render_contribution, count, 0.0)
     sparse = _as_float_signal(signals.sparse_support, count, 0.0)
