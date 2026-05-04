@@ -4069,3 +4069,28 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F17_COURTYARD_SELECTOR_ABLATION_PASS_STRUCTURED_SELECTION`. Random same-count pruning fails badly, so arbitrary topology removal is not sufficient. CSEF50 and area50 are near-tied on render, but CSEF50 remains the geometry-balanced courtyard row because it has better PSNR, AbsRel, Depth MAE, and Normal.
 
 ---
+
+## 2026-05-04 - Final F18 counter no-freeze control
+
+**Goal**: test whether strict topology freezing is a real mechanism or only redundant syntax after `--skip_restricted_delaunay`.
+
+**Run**:
+- scene: `counter`;
+- source compact checkpoint: `outputs/carnet/meshsplatopt/final_stageF16_counter_area_selector_control/prune40/compact_model`;
+- recovery checkpoint: `outputs/carnet/meshsplatopt/final_stageF18_counter_no_freeze_control/area40/recovery_model`;
+- schedule: `22000->26000`;
+- W&B: `g5pmw9lk`;
+- deliberate control: omitted `--freeze_topology_updates`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| area40 frozen 26k | 50,300 | 14.314330 | 0.536892 | 0.431104 | 0.072751 | 0.357914 | 43.715882 |
+| area40 no-freeze 26k | 18,693 | 13.641099 | 0.467266 | 0.483981 | 0.104043 | 0.442218 | 45.148206 |
+
+**Decision**: `FINAL_F18_COUNTER_NO_FREEZE_CONTROL_FAIL_SUPPORTS_STRICT_TOPOLOGY_FREEZE`. `--skip_restricted_delaunay` alone still allows standard topology changes. The no-freeze control collapses the compact topology and loses badly on independent render and COLMAP sparse-geometry metrics, proving that strict topology freezing is load-bearing for the final compact-recovery contract.
+
+**Documentation correction**: the final F8-F18 compact-recovery main rows use independent COLMAP sparse geometry evaluation, but their training commands did not enable sparse-depth loss. Sparse-depth-guided recovery remains an earlier useful branch and should not be described as the active final main-row recovery mechanism unless new rows explicitly enable it.
+
+---

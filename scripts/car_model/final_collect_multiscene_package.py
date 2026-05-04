@@ -130,6 +130,7 @@ NEGATIVE_ROWS = [
     {"scene": "counter", "row": "CSEF50 30k", "finding": "extended recovery worsens SSIM and LPIPS", "evidence": "docs/car_model/final_stageF10_fourth_scene_counter_report.md"},
     {"scene": "counter", "row": "random40", "finding": "same-count random compaction loses badly to area40 and CSEF40", "evidence": "docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md"},
     {"scene": "counter", "row": "CSEF40", "finding": "passes clean-long but is not the strongest selector on counter; area40 is better", "evidence": "docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md"},
+    {"scene": "counter", "row": "area40 no-freeze", "finding": "omitting strict topology freeze collapses topology to 18,693 triangles and loses badly to frozen area40", "evidence": "docs/car_model/final_stageF18_counter_no_freeze_control_report.md"},
     {"scene": "parking_phone_tiny", "row": "grid fill full-budget", "finding": "fill branch does not beat matched sparse-depth control", "evidence": "docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md"},
 ]
 
@@ -205,7 +206,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but missing matched ablations against area-only, random same-count compaction, no-sparse-depth, no-freeze, and posthoc simplification controls.",
+        "PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but missing matched ablations against area-only, random same-count compaction beyond the completed controls, replicated no-freeze controls, explicit sparse-depth-loss variants if claimed, and posthoc simplification controls.",
         "",
     ]
     DOC.write_text("\n".join(lines))

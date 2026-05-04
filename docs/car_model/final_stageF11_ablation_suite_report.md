@@ -21,21 +21,22 @@ This report is an auditable registry of completed ablation evidence. It does not
 | compact_recovery | cross_scene_csef50 | counter | BORDERLINE | 50 percent CSEF is near the gate but misses SSIM by 0.003827 | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
 | compact_recovery | cross_scene_csef40 | counter | PASS | 40 percent CSEF improves PSNR, SSIM, LPIPS, and normal versus clean-long, but F16 shows area40 is stronger on counter | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
 | compact_recovery | area_smallest_40 | counter | PASS_SELECTOR_BEST | area40 is the strongest counter selector row and beats both clean-long and CSEF40 on independent metrics | `docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md` |
+| compact_recovery | no_freeze_area40 | counter | FAIL_CONTROL_SUPPORTS_FREEZE | removing strict topology freeze collapses the area40 compact row from 50,300 to 18,693 triangles and sharply worsens independent render/geometry metrics | `docs/car_model/final_stageF18_counter_no_freeze_control_report.md` |
 | compact_recovery | random_same_count_40 | counter | FAIL_CONTROL_SUPPORTS_CSEF | random 40 percent compaction at the same triangle count loses badly to CSEF40 and clean-long on independent render/geometry metrics | `docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md` |
-| sparse_depth | sparse_depth_recovery | parking/courtyard/bonsai | PASS | sparse COLMAP depth is load-bearing for recovery; trusted sampling is scene dependent | `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md` |
+| sparse_depth | sparse_depth_recovery | parking/courtyard/bonsai | PASS | earlier sparse-depth recovery branch is useful but separate from the final compact-recovery main rows, which use independent COLMAP sparse geometry evaluation | `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md` |
 | repair_operations | snap_only | real checkpoints | SAFETY_PASS_QUALITY_UNPROVEN | local snap can pass safety gates but is not a headline quality-improving method | `docs/car_model/meshsplatopt_stageR17_02_checkpoint_local_snap_gate_report.md` |
 | repair_operations | fill_only | parking_phone_tiny | FAIL | grid fill plus sparse recovery does not beat matched sparse-depth controls at full budget | `docs/car_model/meshsplatopt_stageR24_R26_fill_init_and_grid_report.md` |
 | counterfactual_certification | rollback_and_gate | implementation | MECHANISM_PASS_LOAD_BEARING_PARTIAL | rollback and gate infrastructure is implemented; full no-gate ablation remains missing | `docs/car_model/meshprior_stage28_adaptive_schedule_smoke_report.md` |
 
 ## Missing Rows Required For A Strict NeurIPS Ablation Claim
 
-- full no-freeze matched compact-recovery row on the final CSEF selector
+- replicate no-freeze compact-recovery control beyond counter
 - final CSEF selector versus area-only selector on every public scene
 - selector ablation beyond counter and courtyard, ideally one more public scene
 - posthoc QEM/decimation baseline with equal recovery budget
-- full no-sparse-depth compact-recovery row on at least parking plus one public scene
+- separate final compact-recovery rows that explicitly enable sparse-depth loss, if the manuscript wants to claim sparse-depth-guided recovery
 - full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations
 
 ## Gate
 
-Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, and sparse COLMAP recovery. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.
+Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, and structured selection versus random pruning. The earlier sparse-depth branch is useful but should not be conflated with the final compact-recovery main rows unless new rows explicitly enable that loss. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.

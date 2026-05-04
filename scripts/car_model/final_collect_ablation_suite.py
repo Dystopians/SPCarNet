@@ -118,6 +118,14 @@ ROWS = [
     },
     {
         "group": "compact_recovery",
+        "row": "no_freeze_area40",
+        "scene": "counter",
+        "status": "FAIL_CONTROL_SUPPORTS_FREEZE",
+        "evidence": "docs/car_model/final_stageF18_counter_no_freeze_control_report.md",
+        "finding": "removing strict topology freeze collapses the area40 compact row from 50,300 to 18,693 triangles and sharply worsens independent render/geometry metrics",
+    },
+    {
+        "group": "compact_recovery",
         "row": "random_same_count_40",
         "scene": "counter",
         "status": "FAIL_CONTROL_SUPPORTS_CSEF",
@@ -130,7 +138,7 @@ ROWS = [
         "scene": "parking/courtyard/bonsai",
         "status": "PASS",
         "evidence": "docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md",
-        "finding": "sparse COLMAP depth is load-bearing for recovery; trusted sampling is scene dependent",
+        "finding": "earlier sparse-depth recovery branch is useful but separate from the final compact-recovery main rows, which use independent COLMAP sparse geometry evaluation",
     },
     {
         "group": "repair_operations",
@@ -159,11 +167,11 @@ ROWS = [
 ]
 
 MISSING = [
-    "full no-freeze matched compact-recovery row on the final CSEF selector",
+    "replicate no-freeze compact-recovery control beyond counter",
     "final CSEF selector versus area-only selector on every public scene",
     "selector ablation beyond counter and courtyard, ideally one more public scene",
     "posthoc QEM/decimation baseline with equal recovery budget",
-    "full no-sparse-depth compact-recovery row on at least parking plus one public scene",
+    "separate final compact-recovery rows that explicitly enable sparse-depth loss, if the manuscript wants to claim sparse-depth-guided recovery",
     "full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations",
 ]
 
@@ -207,7 +215,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, and sparse COLMAP recovery. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
+        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, and structured selection versus random pruning. The earlier sparse-depth branch is useful but should not be conflated with the final compact-recovery main rows unless new rows explicitly enable that loss. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
         "",
     ]
     DOC.write_text("\n".join(lines))

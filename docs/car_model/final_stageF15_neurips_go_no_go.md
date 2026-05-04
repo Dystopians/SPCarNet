@@ -13,7 +13,7 @@ Decision: `NEURIPS_BORDERLINE_NEEDS_STRICT_ABLATIONS`.
 
 - Strongest novelty: evidence-compatible compact-recovery with strict topology freeze and auditable rollback.
 - CSEF is used in public-scene selector naming/logic, but area-only versus CSEF separation is still incomplete across all final rows.
-- Sparse-depth recovery is load-bearing and must be framed as part of the method, not hidden.
+- Sparse-depth recovery is an earlier useful branch, but the final compact-recovery main rows should be described as topology-frozen appearance recovery with independent COLMAP sparse-geometry evaluation unless new sparse-depth-loss rows are launched.
 - Repair operations are auxiliary. Snap/fill are not currently load-bearing headline improvements.
 
 ## Reviewer Risks
@@ -21,7 +21,7 @@ Decision: `NEURIPS_BORDERLINE_NEEDS_STRICT_ABLATIONS`.
 | risk | current answer | mitigation |
 | --- | --- | --- |
 | This is just area pruning plus finetuning. | Counter area40 beats CSEF40; courtyard CSEF50 and area50 are near-tied, while random controls fail badly on both scenes. | Run one more public-scene selector triplet and include the mixed selector result honestly. |
-| Sparse depth does all the work. | Sparse depth is load-bearing in recovery. | Add no-sparse-depth compact-recovery ablation on parking and one public scene. |
+| Sparse depth does all the work. | The final main rows did not enable sparse-depth loss; they use COLMAP sparse geometry for independent evaluation. | Keep sparse-depth as a separate branch, or launch explicit sparse-depth-loss compact-recovery variants before claiming it as part of the final method. |
 | Only one scene works. | No longer true: F12 has five scene-matched long-baseline rows. | Keep F12 main table prominent. |
 | Triangle soup means mesh repair is not real mesh repair. | Correct; edge-loop repair was rejected. | Frame as compact-repair optimization, not classical watertight mesh repair. |
 | Hole fill is synthetic or weak. | Correct for current real-scene evidence. | Do not headline fill; keep it in limitations/negative results. |
@@ -37,7 +37,7 @@ Minimum remaining work before submission:
 
 - final area-only versus CSEF selector ablation;
 - selector ablation beyond completed counter and courtyard controls;
-- no-sparse-depth recovery control;
-- no-freeze recovery control;
+- replicated no-freeze recovery controls beyond counter;
+- explicit sparse-depth-loss compact-recovery variants if sparse-depth is claimed as final-method training;
 - posthoc QEM/decimation baseline;
 - final paper figures from `outputs/carnet/meshsplatopt/final_paper_assets/`.

@@ -8,7 +8,7 @@ MeshSplatOpt: Counterfactually Certified Compact-Repair Optimization for Mesh Sp
 
 ## Abstract
 
-Mesh Splatting can produce strong view synthesis quality, but high-quality scene checkpoints often contain far more topology than needed and naive local mesh repair can damage rendering. MeshSplatOpt treats scene optimization as a counterfactually certified compact-repair problem. Starting from a clean long-run Mesh Splatting checkpoint, it estimates surface evidence, applies evidence-compatible topology compaction, freezes topology updates, and recovers appearance and sparse geometry. Across five validated scenes, MeshSplatOpt reduces triangle counts by 40-70 percent while matching or improving clean-long render quality under independent evaluation. Negative ablations show that snap/fill edits and aggressive continuation are not yet load-bearing headline methods; the current robust contribution is compact-recovery with auditable rollback.
+Mesh Splatting can produce strong view synthesis quality, but high-quality scene checkpoints often contain far more topology than needed and naive local mesh repair can damage rendering. MeshSplatOpt treats scene optimization as a counterfactually certified compact-repair problem. Starting from a clean long-run Mesh Splatting checkpoint, it estimates surface evidence, applies evidence-compatible topology compaction, freezes topology updates, and recovers appearance under a fixed topology, then certifies the result with independent render and COLMAP sparse-geometry evaluation. Across five validated scenes, MeshSplatOpt reduces triangle counts by 40-70 percent while matching or improving clean-long render quality under independent evaluation. Negative ablations show that snap/fill edits, aggressive continuation, random pruning, and no-freeze recovery are not headline methods; the current robust contribution is compact-recovery with auditable rollback.
 
 ## 1. Introduction
 
@@ -50,7 +50,7 @@ Render/geometry gates reject edits that damage changed pixels, sparse geometry, 
 
 ### 3.6 Strict Topology-Frozen Recovery
 
-After compaction, training resumes with topology updates frozen and sparse COLMAP geometry guidance enabled. This prevents topology re-inflation and isolates recovery from hidden densification.
+After compaction, training resumes with topology updates frozen. This prevents hidden densification or pruning during recovery and isolates appearance recovery from topology drift. The final main rows are independently checked against COLMAP sparse-geometry proxies; sparse-depth-loss training is an earlier branch and should only be claimed as part of the final method if explicit sparse-depth compact-recovery rows are added.
 
 ### 3.7 Optional Repair Branches
 
@@ -88,7 +88,7 @@ Show quality versus triangle count. Include parking R48/R53/R55, bonsai CSEF50/C
 
 ### 4.6 Ablations
 
-Use `docs/car_model/final_stageF11_ablation_suite_report.md`. The current strict ablation gap is area-only versus CSEF across all public scenes, random same-count compaction, no-sparse-depth, no-freeze, and no-gate controls.
+Use `docs/car_model/final_stageF11_ablation_suite_report.md`. The current strict ablation gap is area-only versus CSEF across all public scenes, random same-count compaction beyond completed controls, replicated no-freeze controls, explicit sparse-depth-loss compact-recovery variants if claimed, posthoc simplification, and no-gate controls.
 
 ### 4.7 Qualitative Results
 
@@ -104,4 +104,3 @@ Use assets from `outputs/carnet/meshsplatopt/final_paper_assets/`.
 ## 5. Conclusion
 
 MeshSplatOpt should be presented as an evidence-certified compact-repair optimizer. The strongest contribution is not arbitrary local repair; it is auditable movement along the quality/topology Pareto frontier using clean-long initialization, certified compaction, and topology-frozen recovery.
-

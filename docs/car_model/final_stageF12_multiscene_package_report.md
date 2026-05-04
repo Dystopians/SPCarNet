@@ -34,8 +34,9 @@ Scenes with PSNR+SSIM improvement and LPIPS non-regression tolerance: `5/5`.
 | counter | CSEF50 30k | extended recovery worsens SSIM and LPIPS | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
 | counter | random40 | same-count random compaction loses badly to area40 and CSEF40 | `docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md` |
 | counter | CSEF40 | passes clean-long but is not the strongest selector on counter; area40 is better | `docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md` |
+| counter | area40 no-freeze | omitting strict topology freeze collapses topology to 18,693 triangles and loses badly to frozen area40 | `docs/car_model/final_stageF18_counter_no_freeze_control_report.md` |
 | parking_phone_tiny | grid fill full-budget | fill branch does not beat matched sparse-depth control | `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md` |
 
 ## Gate
 
-PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but missing matched ablations against area-only, random same-count compaction, no-sparse-depth, no-freeze, and posthoc simplification controls.
+PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but missing matched ablations against area-only, random same-count compaction beyond the completed controls, replicated no-freeze controls, explicit sparse-depth-loss variants if claimed, and posthoc simplification controls.
