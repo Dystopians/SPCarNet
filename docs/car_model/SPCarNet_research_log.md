@@ -3984,3 +3984,35 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 - `outputs/carnet/meshsplatopt/final_stageF10_qualitative_evidence/room_counter_clean_vs_csef_report.md`.
 
 ---
+
+## 2026-05-04 - Final F11-F15 evidence package, assets, and go/no-go
+
+**Goal**: convert the newly validated F8-F10 long-baseline evidence into a traceable paper package instead of leaving results scattered across stage logs.
+
+**Created scripts**:
+- `scripts/car_model/final_collect_ablation_suite.py`;
+- `scripts/car_model/final_collect_multiscene_package.py`;
+- `scripts/car_model/final_make_paper_assets.py`;
+- `scripts/car_model/final_run_multiscene_package.py`.
+
+**Created reports**:
+- `docs/car_model/final_stageF11_ablation_suite_report.md`;
+- `docs/car_model/final_stageF12_multiscene_package_report.md`;
+- `docs/car_model/final_stageF13_paper_assets_report.md`;
+- `docs/car_model/final_meshsplatopt_neurips_manuscript_skeleton.md`;
+- `docs/car_model/final_meshsplatopt_related_work_notes.md`;
+- `docs/car_model/final_meshsplatopt_bib_plan.md`;
+- `docs/car_model/final_stageF15_neurips_go_no_go.md`.
+
+**Generated assets**:
+- `outputs/carnet/meshsplatopt/final_multiscene_package/main_quantitative_table.csv`;
+- `outputs/carnet/meshsplatopt/final_multiscene_package/negative_result_table.csv`;
+- `outputs/carnet/meshsplatopt/final_paper_assets/paper_assets_manifest.json`;
+- `outputs/carnet/meshsplatopt/final_paper_assets/meshsplatopt_method_diagram.png`;
+- `outputs/carnet/meshsplatopt/final_paper_assets/triangle_count_bar_chart.png`.
+
+**Main package result**: `FINAL_F12_MULTISCENE_PACKAGE_PASS_WITH_ABLATION_GAPS`. Five scenes now have scene-matched clean-long versus compact-recovery comparisons, with 40-70 percent triangle reduction and non-regressing/improving render metrics under the accepted per-scene operating point.
+
+**Go/no-go**: `NEURIPS_BORDERLINE_NEEDS_STRICT_ABLATIONS`. The scene-count and long-baseline weaknesses are now largely repaired. The remaining critical risk is strict ablation coverage: area-only versus CSEF, random same-count compaction, no-sparse-depth, no-freeze, and posthoc simplification baselines.
+
+---
