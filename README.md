@@ -1,6 +1,10 @@
 <h1 align="center">MeshSplatOpt</h1>
 <p align="center"><em>Evidence-Certified Bidirectional Mesh Surgery for Mesh Splatting</em></p>
 
+<p align="center">
+  <strong>English</strong> &nbsp;|&nbsp; <a href="README.zh.md">中文</a>
+</p>
+
 <div align="center">
   <a href="docs/NeurIPSRepairPrompts.md">NeurIPS roadmap</a> &nbsp;|&nbsp;
   <a href="docs/car_model/parking_clean_to_compact_repair_report.md">Clean-to-compact repair</a> &nbsp;|&nbsp;
@@ -193,14 +197,55 @@ Giant-hole policy distinguishes **observed**, **prior-supported**, and **unknown
 
 ---
 
-## Validated recovery recipe (parking, the only fully-tuned scene)
+## Validated recovery recipes
+
+Two recipes are validated. **Clean-to-compact (R53)** is the headline route — it dominates the strongest clean long baseline on every independent metric while keeping 30 % of the triangles. **Sparse-depth recovery (R44)** remains the cross-scene path and the very-low-topology Pareto point, but loses on render against clean 22k.
+
+### Recipe A — clean-to-compact (R53, headline, parking)
+
+Three steps: train a strong clean long mesh, prune the smallest-area 70 % of triangles by area, recover with strict topology freeze.
 
 ```bash
-# Edit + recovery on a real Mesh Splatting checkpoint. The edit is reversible and
-# gate-checked, but at full budget the dominant contributor is sparse-depth
-# supervision with a decay window — keep both rows in the report.
+# 1) Train (or reuse) a strong clean long Mesh Splatting checkpoint.
+python train.py -s <scene> -m outputs/clean_long --eval --iterations 22000
+
+# 2) Smallest-area 70% triangle compaction (R53). The same script supports
+#    65/75/80/90% via --prune_fraction; 70% is the all-metric headline.
+python scripts/car_model/meshprior_apply_topology_control_ablation.py \
+    --source_model outputs/clean_long \
+    --source_checkpoint outputs/clean_long/point_cloud/iteration_22000/point_cloud_state_dict.pt \
+    --output_model outputs/compact70/model \
+    --prune_fraction 0.70
+
+# 3) Strict fixed-topology recovery 22000 → 26000. The two flags together are
+#    required: --skip_restricted_delaunay alone leaves the standard 500-step
+#    prune/densify branch active until densify_until_iter + 1000 (R49 caught
+#    this; R50 verifies the fix preserves the exact triangle count).
+export WANDB_PROJECT=spcarnet_meshprior
+export WANDB_MODE=online
 python scripts/car_model/meshsplatopt_run_teacher_recovery.py \
-    --model_path <checkpoint_dir> \
+    --model_path  outputs/compact70/model \
+    --output_dir  outputs/carnet/meshsplatopt/<run_name> \
+    --load_iteration 22000 --iterations 4000 \
+    --train_extra_args "--freeze_topology_updates --skip_restricted_delaunay"
+
+# 4) Independent paper-facing eval.
+python render.py  -m outputs/carnet/meshsplatopt/<run_name>/recovery_model
+python metrics.py -m outputs/carnet/meshsplatopt/<run_name>/recovery_model
+python evaluate_geometry_colmap.py -s <scene> \
+    -m outputs/carnet/meshsplatopt/<run_name>/recovery_model --iteration 26000 --eval \
+    --output outputs/carnet/meshsplatopt/<run_name>/recovery_model/geometry_eval_colmap/iter_26000.json
+```
+
+Pareto knob: lower `--prune_fraction` (e.g. `0.65`, R55) gives best LPIPS / normal but uses more triangles; higher (`0.80`, R47/R48) gives more compact 20 %-triangle Pareto with slightly worse LPIPS; `0.90` is rejected (R47 prune90 PSNR drops by 2 dB). Continuation past 26k is rejected (R56 at 28k loses ~0.35 dB PSNR; R49/R50 at 30k also lose).
+
+### Recipe B — sparse-depth low-λ recovery with decay (R44, cross-scene)
+
+Use this when you want the **lowest-topology** parking point (782 982 triangles) or for cross-scene recovery on `courtyard` and `bonsai`. On parking it loses on render vs. clean 22k and is now the normal-proxy / topology Pareto column, not the headline.
+
+```bash
+python scripts/car_model/meshsplatopt_run_teacher_recovery.py \
+    --model_path <low_topology_checkpoint_dir> \
     --edit_json   <accepted_edits.json> \
     --output_dir  outputs/carnet/meshsplatopt/<run_name> \
     --load_iteration 16000 --iterations 6000 \
@@ -217,18 +262,19 @@ python scripts/car_model/meshsplatopt_run_teacher_recovery.py \
        --sparse_colmap_depth_decay_end_iter   20000 \
        --sparse_colmap_depth_decay_final_mult 0.0 \
        --sparse_colmap_depth_enable_in_final_finetune"
-
-# Independent paper-facing eval (never mixed with training metrics).
-python render.py  -m outputs/carnet/meshsplatopt/<run_name>/recovery_model
-python metrics.py -m outputs/carnet/meshsplatopt/<run_name>/recovery_model
-python evaluate_geometry_colmap.py -s <scene> \
-    -m outputs/carnet/meshsplatopt/<run_name>/recovery_model --iteration 22000 --eval \
-    --output outputs/carnet/meshsplatopt/<run_name>/recovery_model/geometry_eval_colmap/iter_22000.json
 ```
 
 For courtyard the validated regime is fraction `0.625`, λ `0.002`, `7k → 20k` with decay starting at 7k. For bonsai the validated regime is fraction `0.50`, λ `0.002`, `2k → 7k` (longer continuation has not yet been validated).
 
-Reproducible paper-facing tables are written by:
+### Rejected directions (do not retry without new evidence)
+
+- **Teacher-render distillation from R44** (R45 lambda 0.5 / 1.0; R46 counterfactual mask) — all worsen render.
+- **Direct LPIPS training loss** (R51 λ = 0.02; R52 λ = 0.05) on top of R48 — both worsen PSNR/SSIM and do not improve LPIPS over the clean-long target. The repair was a less-aggressive prune, not a perceptual loss.
+- **30k continuation of R48 / R53** (R49 legacy, R50 strict fixed-topology, R56 fixed-topology 28k) — accepted checkpoint stays at 26k.
+- **Alternative sparse-depth loss spaces** (R29 relative / log / inverse) — original metric-depth Smooth-L1 wins.
+- **Unfrozen post-edit densification** (R25) — grew parking to 5.89 M triangles and still lost render.
+
+### Reproducible paper-facing tables
 
 ```bash
 python scripts/car_model/meshsplatopt_collect_sparse_recovery_results.py
@@ -394,3 +440,14 @@ The MeshSplatOpt branch is ongoing work; please cite the MeshSplatting foundatio
 ## Acknowledgements
 
 J. Held is funded by the F.R.S.-FNRS. The present research benefited from computational resources made available on Lucia, the Tier-1 supercomputer of the Walloon Region, infrastructure funded by the Walloon Region under the grant agreement n°1910247. We thank Bernhard Kerbl and George Kopanas for helpful feedback and proofreading on the original MeshSplatting paper.
+
+---
+
+## Documentation maintenance
+
+This README is mirrored in two languages:
+
+- [`README.md`](README.md) — English (canonical)
+- [`README.zh.md`](README.zh.md) — 中文
+
+**Whenever this file is edited, the Chinese mirror must be updated in the same change**, and vice versa. Both files share the same section structure so a section-by-section diff is enough. A new R-stage entry must be reflected in: (i) the project-status tables, (ii) the "Where the method actually stands today" lists, (iii) the headline result table if it touches the Pareto frontier, and (iv) the validated recipe blocks if it adds a new flag or recipe.
