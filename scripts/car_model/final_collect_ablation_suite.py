@@ -240,9 +240,17 @@ ROWS = [
         "group": "posthoc_simplification",
         "row": "open3d_qem40_strict_recovery",
         "scene": "counter",
-        "status": "PASS_STRONG_BASELINE_OR_OPERATOR",
+        "status": "PASS_STRONG_BASELINE_SUPERSEDED_BY_SPARSE_DEPTH_PARETO",
         "evidence": "docs/car_model/final_stageF21_counter_posthoc_qem_baseline_report.md",
-        "finding": "Open3D QEM40 plus strict topology-frozen recovery becomes the strongest counter row on PSNR, SSIM, LPIPS, AbsRel, and Depth MAE",
+        "finding": "Open3D QEM40 plus strict topology-frozen recovery is the strongest counter PSNR/Depth row, but F32 sparse-depth improves SSIM, LPIPS, AbsRel, and normal at negligible PSNR/Depth cost",
+    },
+    {
+        "group": "sparse_depth",
+        "row": "qem40_sparse_depth_strict_recovery",
+        "scene": "counter",
+        "status": "PASS_GEOMETRY_PERCEPTUAL_PARETO",
+        "evidence": "docs/car_model/final_stageF32_counter_qem_sparse_depth_report.md",
+        "finding": "QEM40 plus sparse-depth improves SSIM, LPIPS, AbsRel, and normal relative to QEM40 at identical topology, while remaining an all-metric clean-long win",
     },
     {
         "group": "compact_recovery",
@@ -299,7 +307,7 @@ MISSING = [
     "final CSEF selector versus area-only selector on every public scene beyond the completed bonsai, courtyard, room, and counter controls",
     "selector ablation on any additional scenes added to the final benchmark",
     "a matched 70 percent parking posthoc simplification baseline that can actually reach the R53/F7 triangle target; Open3D QEM failed this target",
-    "replicate explicit sparse-depth compact-recovery beyond the completed bonsai, room, and courtyard rows if the manuscript wants a universal sparse-depth-guided recovery claim across every final scene",
+    "replicate explicit sparse-depth compact-recovery beyond the completed bonsai, room, courtyard, and counter rows if the manuscript wants a universal sparse-depth-guided recovery claim across every final scene",
     "full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations",
 ]
 
@@ -343,7 +351,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F28/F29/F30/F31 now replicate explicit sparse-depth compact recovery on bonsai, room, and courtyard, supporting a geometry/perceptual regularizer claim but not a universal PSNR-improvement claim. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
+        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F28/F29/F30/F31/F32 now replicate explicit sparse-depth compact recovery on bonsai, room, courtyard, and counter, supporting a geometry/perceptual regularizer claim but not a universal PSNR-improvement claim. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
         "",
     ]
     DOC.write_text("\n".join(lines))

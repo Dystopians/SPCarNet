@@ -4345,3 +4345,22 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F30_F31_COURTYARD_SPARSE_DEPTH_MIXED_CONTROLS_CSEF_REMAINS_MAIN`. F30 fixes the CSEF50 normal regression and improves AbsRel, but gives back small PSNR/LPIPS/Depth margins. F31 improves QEM50 on PSNR, SSIM, AbsRel, and Depth MAE, but remains weaker than CSEF50 on PSNR and sparse depth. Sparse depth is now replicated on bonsai, room, and courtyard as a geometry/perceptual regularizer, not a universal PSNR improver.
 
 ---
+
+## 2026-05-04 - Final F32 counter sparse-depth compact recovery
+
+**Goal**: replicate explicit sparse COLMAP depth compact recovery on a fourth accepted final scene and test whether the counter QEM40 row can be improved without changing topology.
+
+**W&B run**:
+- F32 QEM40 + sparse-depth strict recovery `22000->26000`: `x9b89ssf`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 83,834 | 14.136182 | 0.512802 | 0.452049 | 0.076996 | 0.369973 | 44.287035 |
+| QEM40 frozen 26k | 50,300 | 14.409434 | 0.547456 | 0.420855 | 0.068076 | 0.338664 | 43.716007 |
+| QEM40 + sparse-depth 26k | 50,300 | 14.408769 | 0.547570 | 0.420202 | 0.068014 | 0.339115 | 43.585215 |
+
+**Decision**: `FINAL_F32_COUNTER_QEM_SPARSE_DEPTH_PARETO_PASS_PROMOTE_GEOMETRY_PERCEPTUAL`. F32 improves SSIM, LPIPS, AbsRel, and normal relative to QEM40 at identical topology while giving back only `0.000665 dB` PSNR and `0.000451` Depth MAE. It remains an all-metric clean-long win and becomes the counter geometry/perceptual headline.
+
+---
