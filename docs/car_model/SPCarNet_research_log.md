@@ -3680,3 +3680,29 @@ Against the best clean long render baseline, R44.01 is worse on PSNR by `-1.3104
 **Decision**: `R15_R17_INTERFACES_PARTIAL_PASS`. The interfaces are now present and executable. The project is not yet a full NeurIPS main-conference package because R15 still needs cross-scene full-budget replication and R16 still has four interface-only ablations.
 
 ---
+
+## 2026-05-03 - R57-R58 public-scene matched clean-to-compact validation
+
+**Goal**: test whether the R53 clean-to-compact result transfers beyond parking under a fair matched continuation: clean 7000-to-9000 versus prune70 compact 7000-to-9000, with W&B online logging and independent render/geometry evaluation.
+
+**Implemented interface repair**:
+- Added `scripts/car_model/meshsplatopt_collect_cross_scene_matched_results.py` to collect public-scene matched clean-to-compact tables from independent `results.json` and COLMAP sparse-geometry JSON files.
+- Extended `scripts/car_model/meshsplatopt_run_full_budget_sweep.py` with per-job `images` and `resolution` fields, so public scenes no longer rely on parking's fixed loader settings.
+
+**Runs**:
+- R57.01 courtyard prune70 recovery `7000->9000`, W&B `kgazucjj`.
+- R57.02 courtyard clean continuation `7000->9000`, W&B `ucqyn1ym`.
+- R58.01 bonsai prune70 recovery `7000->9000`, W&B `82v2cg9z`.
+- R58.02 bonsai clean continuation `7000->9000`, W&B `ulv6dpku`.
+
+**Independent matched results**:
+- Courtyard compact versus clean: PSNR `-0.001726`, SSIM `-0.000522`, LPIPS `+0.027805`, AbsRel `+0.035424`, Depth MAE `+0.209014`, normal `-1.032962`, triangle reduction `0.700000`. This is a controlled failure on render/depth.
+- Bonsai compact versus clean: PSNR `+0.280336`, SSIM `+0.017475`, LPIPS `-0.007539`, AbsRel `-0.006582`, Depth MAE `-0.062115`, normal `-0.515667`, triangle reduction `0.700000`. This is a public-scene all-metric dominance result.
+
+**Decision**: `PUBLIC_SCENE_REPLICATION_PARTIAL_PASS`. The method now has one strong parking all-metric long-budget result and one public-scene matched-screen all-metric result, plus one public-scene negative that identifies scene sensitivity. The work is materially stronger than before, but it still needs either another public-scene positive or a selector that predicts compaction success before a NeurIPS-main claim is defensible.
+
+**Linked artefacts**:
+- `docs/car_model/meshsplatopt_stageR57_R58_cross_scene_matched_report.md`
+- `outputs/carnet/meshsplatopt/cross_scene_clean_to_compact_tables/cross_scene_clean_to_compact_results.md`
+
+---

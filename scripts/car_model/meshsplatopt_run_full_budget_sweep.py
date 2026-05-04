@@ -21,6 +21,8 @@ class FullBudgetJob:
     output_path: str
     load_iteration: int
     final_iteration: int
+    images: str = "images"
+    resolution: int = 4
     prune_fraction: float | None = None
     wandb_project: str = "MeshSplatOpt-NeurIPS-Repair"
     wandb_group: str = "full_budget_sweep"
@@ -36,9 +38,9 @@ class FullBudgetJob:
             "-m",
             self.output_path,
             "--images",
-            "images",
+            self.images,
             "--resolution",
-            "4",
+            str(self.resolution),
             "--eval",
             "--load_iteration",
             str(self.load_iteration),
@@ -77,9 +79,9 @@ class FullBudgetJob:
             "-m",
             self.output_path,
             "--images",
-            "images",
+            self.images,
             "--resolution",
-            "4",
+            str(self.resolution),
             "--eval",
             "--iteration",
             str(self.final_iteration),
@@ -98,7 +100,7 @@ class FullBudgetJob:
             "-m",
             self.output_path,
             "--images",
-            "images",
+            self.images,
             "--eval",
             "--iteration",
             str(self.final_iteration),
@@ -111,6 +113,8 @@ class FullBudgetJob:
 
 def default_jobs() -> list[FullBudgetJob]:
     parking_source = "outputs/carnet/meshprior/parking_phone_tiny/dataset_view"
+    courtyard_source = "/data/peilincai/mesh_datasets/eth3d_colmap/courtyard"
+    bonsai_source = "/data/peilincai/mesh_datasets/mipnerf360/bonsai"
     return [
         FullBudgetJob(
             job_id="R53_full_parking_prune70_22000to26000",
@@ -121,6 +125,8 @@ def default_jobs() -> list[FullBudgetJob]:
             output_path="outputs/carnet/meshsplatopt/stageR53_01_prune70_clean_recovery_22000to26000/recovery_model",
             load_iteration=22000,
             final_iteration=26000,
+            images="images",
+            resolution=4,
             prune_fraction=0.70,
             notes="Validated headline row; rerun only when reproducing.",
         ),
@@ -133,8 +139,40 @@ def default_jobs() -> list[FullBudgetJob]:
             output_path="outputs/carnet/meshsplatopt/stageR55_01_prune65_clean_recovery_22000to26000/recovery_model",
             load_iteration=22000,
             final_iteration=26000,
+            images="images",
+            resolution=4,
             prune_fraction=0.65,
             notes="Validated LPIPS/normal Pareto row.",
+        ),
+        FullBudgetJob(
+            job_id="R57_matched_courtyard_prune70_7000to9000",
+            scene="courtyard",
+            method="clean_to_compact_prune70_matched_screen",
+            source_path=courtyard_source,
+            model_path="outputs/carnet/meshsplatopt/stageR57_courtyard_clean7k_area_compaction/prune70/model",
+            output_path="outputs/carnet/meshsplatopt/stageR57_01_courtyard_prune70_recovery_7000to9000/recovery_model",
+            load_iteration=7000,
+            final_iteration=9000,
+            images="images",
+            resolution=8,
+            prune_fraction=0.70,
+            wandb_group="cross_scene_clean_to_compact",
+            notes="Validated negative matched-screen row; compact improves normal/topology but loses render and depth.",
+        ),
+        FullBudgetJob(
+            job_id="R58_matched_bonsai_prune70_7000to9000",
+            scene="bonsai",
+            method="clean_to_compact_prune70_matched_screen",
+            source_path=bonsai_source,
+            model_path="outputs/carnet/meshsplatopt/stageR58_bonsai_clean7k_area_compaction/prune70/model",
+            output_path="outputs/carnet/meshsplatopt/stageR58_01_bonsai_prune70_recovery_7000to9000/recovery_model",
+            load_iteration=7000,
+            final_iteration=9000,
+            images="images_4",
+            resolution=4,
+            prune_fraction=0.70,
+            wandb_group="cross_scene_clean_to_compact",
+            notes="Validated public-scene positive row; dominates matched clean continuation on render, depth, normal, and topology.",
         ),
     ]
 
@@ -183,4 +221,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
