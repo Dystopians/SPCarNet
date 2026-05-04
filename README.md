@@ -15,7 +15,7 @@
 
 > **In one sentence (intent).** Existing Mesh-Splatting / 3DGS pruning methods ask *which primitives can be removed*; MeshSplatOpt asks *which local surface edit best reduces scene-evidence debt while remaining counterfactually certified by held-out rendering and sparse geometry.* The same edit calculus is meant to handle deletion, collapse, snapping, splitting, hole filling, and appearance recovery — every committed edit must clear render, sparse-depth, normal, free-space, and topology certificates, otherwise it rolls back.
 
-> **In one sentence (current evidence).** As of 2026-05-03, the R44 sparse-depth low-topology path failed against the strongest clean long baseline, but the new **clean-to-compact recovery path** (clean 22k -> 80% area-prune -> fixed-topology recovery) restores clean-level render quality with only 20% of the clean-long triangles: R48.01 reaches PSNR 18.620 / SSIM 0.642 / LPIPS 0.349 at 1.71M triangles, beating clean 22k on PSNR, SSIM, AbsRel, and Depth MAE while nearly tying LPIPS.
+> **In one sentence (current evidence).** As of 2026-05-03, the R44 sparse-depth low-topology path failed against the strongest clean long baseline, but the repaired **clean-to-compact recovery path** (clean 22k -> 70% area-prune -> fixed-topology recovery) now beats the clean long baselines on independent render and sparse geometry while using only 30% of the clean-long triangles: R53.01 reaches PSNR 18.706 / SSIM 0.648 / LPIPS 0.338 at 2.56M triangles, versus clean 22k at PSNR 18.480 / SSIM 0.635 / LPIPS 0.347 with 8.55M triangles.
 
 The method scaffold (CSEF + reversible edit calculus + counterfactual certificates) and the recovery recipe are kept honest by separating *what passed every gate* from *what actually improved the headline metrics*. This README documents both.
 
@@ -23,7 +23,7 @@ The method scaffold (CSEF + reversible edit calculus + counterfactual certificat
 
 ## Honest project status
 
-R0 → R48. Stages with `_FAIL`, `REJECTED`, or `MIXED` decisions are the failure-evidence backbone of the current paper-discipline story.
+R0 → R53. Stages with `_FAIL`, `REJECTED`, or `MIXED` decisions are the failure-evidence backbone of the current paper-discipline story.
 
 ### Method scaffold (R0–R15)
 
@@ -62,7 +62,7 @@ R0 → R48. Stages with `_FAIL`, `REJECTED`, or `MIXED` decisions are the failur
 | R25 | unfrozen densification post-edit (diagnostic) | `FAIL` — topology blew up to 5.89M tri |
 | R26 | plane-grid Delaunay fill (51 v / 106 f) | `FILL_INIT_GRID_ENGINEERING_PASS_MEDIUM_REPAIR_FAIL` |
 
-### Recovery-recipe wins and the clean-baseline correction (R27–R48)
+### Recovery-recipe wins and the clean-baseline correction (R27–R53)
 
 | stage | scope | decision |
 |---|---|---|
@@ -78,9 +78,11 @@ R0 → R48. Stages with `_FAIL`, `REJECTED`, or `MIXED` decisions are the failur
 | R43 | long-horizon validation 16k → 30k / 7k → 20k | `LONG_HORIZON_VALIDATION_SPLIT` (parking overtraining; courtyard render-only) |
 | R44 | sparse-depth **decay** schedule | `SPARSE_DECAY_LONG_HORIZON_REPAIR_PARTIAL_PASS_CLEAN_LONG_RENDER_FAIL` |
 | R45–R46 | clean-render teacher loss from the low-topology R44 checkpoint | `LOW_TOPOLOGY_TEACHER_DISTILLATION_REJECTED` |
-| R47–R50 | clean 22k -> area compaction -> topology-frozen recovery | `CLEAN_TO_COMPACT_RECOVERY_PASS_EARLY_STOP_AT_26K` |
+| R47–R50 | clean 22k -> 80% area compaction -> topology-frozen recovery | `CLEAN_TO_COMPACT_RECOVERY_PASS_EARLY_STOP_AT_26K` |
+| R51–R52 | direct LPIPS-loss recovery from R48 | `DIRECT_LPIPS_LOSS_REJECTED` |
+| R53–R56 | clean 22k -> 65/70/75% area compaction + continuation checks | `CLEAN_TO_COMPACT_DOMINATES_CLEAN_LONG_BASELINES` |
 
-The **R44.01 vs clean 22k** comparison is the load-bearing failure evidence — see `docs/car_model/parking_best_clean_long_vs_method_long_report.md`. The R48 repair that follows it is documented in `docs/car_model/parking_clean_to_compact_repair_report.md`.
+The **R44.01 vs clean 22k** comparison is the load-bearing failure evidence — see `docs/car_model/parking_best_clean_long_vs_method_long_report.md`. The R48-to-R53 repair that follows it is documented in `docs/car_model/parking_clean_to_compact_repair_report.md`.
 
 ---
 
@@ -89,7 +91,7 @@ The **R44.01 vs clean 22k** comparison is the load-bearing failure evidence — 
 ### What is validated
 
 - **Sparse-COLMAP-depth supervision during recovery** is the dominant contributor to every measurable metric improvement on parking, courtyard, and bonsai. Validated regime: λ ∈ [0.001, 0.002], `mixed_low_error` correspondence sampling with a per-scene trusted fraction (parking 0.50, courtyard 0.625, bonsai 0.50), decay window after the geometry has anchored.
-- **Clean-to-compact recovery is now the strongest parking route.** R48.01 starts from clean 22k, prunes the smallest-area 80% of triangles, freezes topology, and recovers from 22k to 26k. It reaches PSNR 18.620 / SSIM 0.642 / LPIPS 0.349 with 1,709,648 triangles, versus clean 22k at PSNR 18.480 / SSIM 0.635 / LPIPS 0.347 with 8,548,242 triangles. R49/R50 reject continuation to 30k, so R48.01 is the accepted early-stop checkpoint.
+- **Clean-to-compact recovery is now the strongest parking route.** R53.01 starts from clean 22k, prunes the smallest-area 70% of triangles, freezes topology, and recovers from 22k to 26k. It reaches independent PSNR 18.706 / SSIM 0.648 / LPIPS 0.338 with 2,564,473 triangles, versus clean 22k at PSNR 18.480 / SSIM 0.635 / LPIPS 0.347 with 8,548,242 triangles. R55.01 is the LPIPS-best 65%-pruned Pareto row, and R48 remains the more compact 80%-pruned Pareto row.
 - **Topology-retention freeze schedule** keeps checkpoint connectivity through the recovery window. Use `--freeze_topology_updates --skip_restricted_delaunay` for strict fixed-topology continuation; older runs that used only `--densify_until_iter <load_iter> --skip_restricted_delaunay` are topology-retention schedules, not a hard no-mutation guarantee. Without topology retention, R25 demonstrates that unbounded post-edit densification grows parking from 0.78M -> 5.89M triangles and *still* loses render.
 - **Strict topology-freeze now has an explicit guard.** Use `--freeze_topology_updates --skip_restricted_delaunay` for fixed-topology continuation. `--skip_restricted_delaunay` alone skips only the Delaunay refresh; it does not disable the standard prune/densify branch.
 - **The full reversible edit pipeline** — proposal JSON → snapshot → apply → render-backed counterfactual gate → automatic rollback — works end-to-end on real Mesh Splatting checkpoints for `SNAP_VERTICES`, `FILL_PATCH` (fan and Delaunay grid), and the synthetic R13 set.
@@ -114,10 +116,10 @@ A short summary of the "what does and does not work" carved out of R0–R44 live
 
 ## Headline result figure (clean long vs ours, parking)
 
-The fair comparison: each row is one held-out test view; columns are GT, the strongest clean long-horizon baselines (current-branch 22k and 30k), the failed low-topology R44 branch, and the repaired R48 clean-to-compact branch.
+The fair comparison: each row is one held-out test view; columns are GT, the strongest clean long-horizon baselines (current-branch 22k and 30k), the more compact R48 row, and the quality-dominating R53 clean-to-compact branch.
 
 <div align="center">
-  <img src="assets/meshsplatopt_clean_vs_ours_montage.png" width="900" alt="Clean long baseline vs ours, parking_phone_tiny">
+  <img src="assets/meshsplatopt_clean_vs_r53_montage.png" width="900" alt="Clean long baseline vs R53, parking_phone_tiny">
 </div>
 
 | run | iter | PSNR ↑ | SSIM ↑ | LPIPS ↓ | AbsRel ↓ | Depth MAE ↓ | Normal ° ↓ | triangles |
@@ -126,11 +128,14 @@ The fair comparison: each row is one held-out test view; columns are GT, the str
 | **clean 22k (strongest baseline)** | 22 000 | **18.48** | **0.635** | **0.347** | 0.082 | **1.87** | 45.11 | 8 548 242 |
 | clean 30k | 30 000 | 18.41 | 0.632 | 0.351 | **0.082** | 1.87 | 44.84 | 8 548 242 |
 | **ours R44 22k (decay)** | 22 000 | 17.17 | 0.549 | 0.442 | 0.187 | 2.92 | **42.22** | **782 982** |
-| **ours R48 26k (clean-to-compact)** | 26 000 | **18.62** | **0.642** | 0.349 | **0.080** | **1.85** | 44.74 | 1 709 648 |
+| ours R48 26k (80% prune) | 26 000 | 18.62 | 0.642 | 0.349 | 0.080 | **1.85** | 44.74 | 1 709 648 |
+| **ours R53 26k (70% prune)** | 26 000 | **18.71** | **0.648** | **0.338** | **0.080** | **1.85** | **44.26** | 2 564 473 |
+| ours R55 26k (65% prune, LPIPS Pareto) | 26 000 | 18.70 | 0.648 | **0.337** | **0.080** | 1.86 | **44.24** | 2 991 885 |
+| ours R56 28k (R53 continuation) | 28 000 | 18.36 | 0.624 | 0.367 | n/a | n/a | n/a | 2 564 473 |
 | ours R50 30k (true topology-frozen continuation) | 30 000 | 18.45 | 0.629 | 0.361 | 0.081 | 1.84 | 45.32 | 1 709 648 |
 | ours R43 30k (no decay) | 30 000 | 16.25 | 0.511 | 0.477 | 0.194 | 3.02 | 43.71 | 782 982 |
 
-`clean 22k` dominates the old R44 low-topology branch, but R48.01 repairs the failure by preserving clean-level render quality after 80% area compaction. Pre-R44 comparisons that quoted the `clean 7k` baseline were misleading and are now retired.
+`clean 22k` dominates the old R44 low-topology branch, but R53.01 repairs the failure decisively: it beats clean 22k and clean 30k on independent PSNR, SSIM, LPIPS, AbsRel, Depth MAE, and normal angle after 70% area compaction. Pre-R44 comparisons that quoted the `clean 7k` baseline were misleading and are now retired.
 
 The earlier multi-scene medium-budget panel (R14.21b / R15.01–R15.04, three scenes at iter 4000 under the freeze schedule) is kept as intermediate diagnostic evidence:
 

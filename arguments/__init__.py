@@ -194,6 +194,10 @@ class OptimizationParams(ParamGroup):
         self.teacher_render_decay_start_iter = -1
         self.teacher_render_decay_end_iter = -1
         self.teacher_render_decay_final_mult = 1.0
+        self.lambda_lpips_loss = 0.0
+        self.lpips_loss_start_iter = 0
+        self.lpips_loss_warmup_iters = 1000
+        self.lpips_loss_max_side = 512
 
         # Ground-plane estimation (for ground-aware regularization).
         self.enable_ground_plane_estimation = False

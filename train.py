@@ -775,6 +775,33 @@ def _compute_teacher_render_loss(
     }
 
 
+def _lpips_loss_lambda(iteration: int, opt) -> float:
+    base = float(getattr(opt, "lambda_lpips_loss", 0.0))
+    if base <= 0.0:
+        return 0.0
+    start_iter = int(getattr(opt, "lpips_loss_start_iter", 0))
+    if int(iteration) < start_iter:
+        return 0.0
+    warmup_iters = max(1, int(getattr(opt, "lpips_loss_warmup_iters", 1)))
+    warmup = min(1.0, max(0.0, float(int(iteration) - start_iter) / float(warmup_iters)))
+    return base * warmup
+
+
+def _compute_lpips_training_loss(image, gt_image, max_side: int = 512):
+    max_side = max(64, int(max_side))
+    pred = image
+    target = gt_image
+    h, w = int(image.shape[-2]), int(image.shape[-1])
+    long_side = max(h, w)
+    if long_side > max_side:
+        scale = float(max_side) / float(long_side)
+        new_h = max(1, int(round(h * scale)))
+        new_w = max(1, int(round(w * scale)))
+        pred = F.interpolate(pred.unsqueeze(0), size=(new_h, new_w), mode="bilinear", align_corners=False).squeeze(0)
+        target = F.interpolate(target.unsqueeze(0), size=(new_h, new_w), mode="bilinear", align_corners=False).squeeze(0)
+    return lpips_fn(pred, target.detach()).mean()
+
+
 def _compute_sparse_colmap_depth_loss(
     viewpoint_cam,
     render_pkg,
@@ -2949,6 +2976,18 @@ def training(
 
         # FINAL LOSS
         loss = loss_image
+        lpips_loss_pure = 0
+        lpips_loss_weighted = 0
+        lpips_loss_lambda = _lpips_loss_lambda(iteration=int(iteration), opt=opt)
+        if lpips_loss_lambda > 0.0:
+            lpips_loss_pure = _compute_lpips_training_loss(
+                image=image,
+                gt_image=gt_image,
+                max_side=int(getattr(opt, "lpips_loss_max_side", 512)),
+            )
+            lpips_loss_weighted = float(lpips_loss_lambda) * lpips_loss_pure
+            if torch.is_tensor(lpips_loss_weighted) and torch.isfinite(lpips_loss_weighted):
+                loss += lpips_loss_weighted
         teacher_render_loss_pure = 0
         teacher_render_loss = 0
         teacher_render_l1 = 0
@@ -3536,6 +3575,9 @@ def training(
                         "loss_components/loss_normal_super": float(normal_loss_super) if isinstance(normal_loss_super, (float, int)) else float(normal_loss_super.detach().item()),
                         "loss_components/loss_teacher_render": float(teacher_render_loss) if isinstance(teacher_render_loss, (float, int)) else float(teacher_render_loss.detach().item()),
                         "loss_components/loss_teacher_render_pure": float(teacher_render_loss_pure) if isinstance(teacher_render_loss_pure, (float, int)) else float(teacher_render_loss_pure.detach().item()),
+                        "loss_components/loss_lpips_train": float(lpips_loss_weighted) if isinstance(lpips_loss_weighted, (float, int)) else float(lpips_loss_weighted.detach().item()),
+                        "loss_components/loss_lpips_train_pure": float(lpips_loss_pure) if isinstance(lpips_loss_pure, (float, int)) else float(lpips_loss_pure.detach().item()),
+                        "lpips_train/lambda": float(lpips_loss_lambda),
                         "teacher_render/lambda": float(teacher_render_lambda),
                         "teacher_render/l1": float(teacher_render_l1) if isinstance(teacher_render_l1, (float, int)) else float(teacher_render_l1.detach().item()),
                         "teacher_render/ssim": float(teacher_render_ssim) if isinstance(teacher_render_ssim, (float, int)) else float(teacher_render_ssim.detach().item()),

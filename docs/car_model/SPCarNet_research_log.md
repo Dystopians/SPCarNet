@@ -3611,3 +3611,44 @@ Against the best clean long render baseline, R44.01 is worse on PSNR by `-1.3104
 - `docs/car_model/parking_clean_to_compact_repair_report.md`
 
 ---
+
+## 2026-05-03 - R51-R56 clean-to-compact dominance repair
+
+**Goal**: close the remaining R48 weakness. R48.01 beat clean 22k on PSNR/SSIM/depth but still lost LPIPS by `+0.002457`, so it was not a true all-metric clean-long win.
+
+**Implementation**:
+- added optional direct LPIPS training supervision:
+  - `--lambda_lpips_loss`
+  - `--lpips_loss_start_iter`
+  - `--lpips_loss_warmup_iters`
+  - `--lpips_loss_max_side`
+- default behavior is unchanged because the LPIPS training loss is disabled at lambda `0.0`.
+
+**Negative LPIPS-loss screen**:
+- R51.01, R48.01 plus direct LPIPS loss lambda `0.02`, `26000->27000`, W&B `fss9t32k`: training-eval PSNR `18.314338`, SSIM `0.621097`, LPIPS `0.361453`.
+- R52.01, R48.01 plus direct LPIPS loss lambda `0.05`, `26000->27000`, W&B `dxzdhl2m`: training-eval PSNR `18.291863`, SSIM `0.619340`, LPIPS `0.355752`.
+
+**Decision**: `DIRECT_LPIPS_LOSS_REJECTED`. Direct LPIPS optimization from the compact R48 checkpoint worsens render quality and does not solve the clean-long comparison. The failure points to topology budget, not a missing perceptual term.
+
+**Less-aggressive clean-to-compact repair**:
+- R53 prune70: prune the smallest-area 70% of clean 22k triangles, yielding `2564473` triangles and `1661616` vertices.
+- R54 prune75: prune the smallest-area 75% of clean 22k triangles, yielding `2137060` triangles and `1510147` vertices.
+- R55 prune65: prune the smallest-area 65% of clean 22k triangles, yielding `2991885` triangles and `1783669` vertices.
+- R53.01, R53 prune70 fixed-topology recovery `22000->26000`, W&B `q15qg2b8`: training eval PSNR `18.739616`, SSIM `0.648180`, LPIPS `0.338372`; independent metrics PSNR `18.7057381`, SSIM `0.6478074`, LPIPS `0.3384919`; geometry AbsRel `0.0795553`, Depth MAE `1.8537511`, normal `44.2613910`.
+- R54.01, R54 prune75 fixed-topology recovery `22000->26000`, W&B `4cmm2tdb`: training eval PSNR `18.721855`, SSIM `0.646616`, LPIPS `0.342506`. This is promising but not independently promoted because R53 is stronger in the screen.
+- R55.01, R55 prune65 fixed-topology recovery `22000->26000`, W&B `ja7t57cx`: training eval PSNR `18.731598`, SSIM `0.647960`, LPIPS `0.336811`; independent metrics PSNR `18.6975975`, SSIM `0.6475888`, LPIPS `0.3369454`; geometry AbsRel `0.0799188`, Depth MAE `1.8624248`, normal `44.2353729`.
+- R56.01, R53 true fixed-topology continuation `26000->28000`, W&B `bwf2up51`: training eval PSNR `18.356278`, SSIM `0.623526`, LPIPS `0.367352`. This rejects continuation past 26k for the R53 topology budget.
+
+**Clean-long deltas for R53.01**:
+- versus clean 22k: PSNR `+0.225748`, SSIM `+0.013184`, LPIPS `-0.008421`, AbsRel `-0.002622`, Depth MAE `-0.014647`, normal `-0.847046`, triangles `-5983769` (`-69.999999%`).
+- versus clean 30k: PSNR `+0.296911`, SSIM `+0.016303`, LPIPS `-0.012475`, AbsRel `-0.002084`, Depth MAE `-0.012060`, normal `-0.577527`, triangles `-5983769` (`-69.999999%`).
+
+**Decision**: `CLEAN_TO_COMPACT_DOMINATES_CLEAN_LONG_BASELINES`. R53.01 is the first corrected parking checkpoint that beats the strongest clean long baselines on independent PSNR, SSIM, LPIPS, sparse COLMAP depth, and normal proxy while retaining only 30% of clean-long triangles. R48.01 remains the more compact 20%-triangle Pareto point; R53.01 is now the headline quality-dominating result.
+
+**Pareto update**: R55.01 becomes the LPIPS/normal Pareto row, with LPIPS `0.3369454` and normal `44.2353729`, but it is not the headline row because it gives back PSNR (`-0.008141`) and uses `427412` more triangles than R53.01. R56.01 confirms that the 26k early stop is not cosmetic; continuing the same fixed topology to 28k sharply worsens all render metrics.
+
+**Linked artefacts**:
+- `docs/car_model/parking_clean_to_compact_repair_report.md`
+- `assets/meshsplatopt_clean_vs_r53_montage.png`
+
+---
