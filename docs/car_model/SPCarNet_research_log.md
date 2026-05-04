@@ -4539,3 +4539,26 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F33_PARKING_CSEF_SPARSE_DEPTH_PARETO_PASS_PROMOTE`. F33 is promoted as the parking Pareto headline because it improves PSNR, LPIPS, AbsRel, and normal over F7 at identical topology, with negligible SSIM cost and a small Depth MAE tradeoff. Explicit sparse-depth compact recovery is now replicated on all five final scenes.
 
 ---
+
+## 2026-05-04 - Final F40 fair clean-long qualitative package
+
+**Goal**: eliminate the remaining qualitative-comparison fairness risk by comparing every final method-best row only against the scene-matched clean-long 22k baseline, not against old 7k parking baselines or mixed control rows.
+
+**Generated assets**:
+- `outputs/carnet/meshsplatopt/final_stageF40_clean_vs_method_assets/clean_long_22k_vs_method_best_26k_montage.png`
+- `outputs/carnet/meshsplatopt/final_stageF40_clean_vs_method_assets/clean_long_22k_vs_method_best_manifest.json`
+- per-scene panels under `outputs/carnet/meshsplatopt/final_stageF40_clean_vs_method_assets/panels/`
+- report `docs/car_model/final_stageF40_clean_vs_method_assets_report.md`
+
+**Audit result**:
+
+| claim | result |
+| --- | --- |
+| PSNR+SSIM+LPIPS better than clean-long 22k | 5/5 scenes |
+| AbsRel+Depth MAE better than clean-long 22k | 5/5 scenes |
+| normal angle better than clean-long 22k | 4/5 scenes |
+| topology reduction range | 40.0% to 70.0% |
+
+**Decision**: `FINAL_F40_FAIR_QUALITATIVE_AND_CLAIM_AUDIT_PASS`. The paper-facing qualitative package now matches the strongest clean-long baseline comparison used in F12. The safe claim is all-scene render-quality and sparse-depth-proxy improvement under substantial topology reduction. The unsafe claim remains universal geometry-proxy dominance, because courtyard normal is essentially tied but slightly worse and F37 fast-QEM is stronger on some parking sparse geometry proxies while much worse on render quality.
+
+---
