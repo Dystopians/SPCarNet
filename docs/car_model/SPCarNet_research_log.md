@@ -4304,3 +4304,44 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision F28**: `FINAL_F28_BONSAI_QEM_SPARSE_DEPTH_PARETO_PASS`. Explicit sparse COLMAP depth loss is active and improves LPIPS, AbsRel, Depth MAE, and normal relative to QEM50 at identical topology, while giving back only `0.000791 dB` PSNR and `0.000001` SSIM. This becomes the bonsai geometry/perceptual headline and the first final compact-recovery row that explicitly supports the sparse-depth-guided recovery claim.
 
 ---
+
+## 2026-05-04 - Final F29 room sparse-depth replication
+
+**Goal**: replicate the explicit sparse COLMAP depth compact-recovery branch beyond bonsai on the accepted room QEM50 topology.
+
+**W&B run**:
+- F29 QEM50 + sparse-depth strict recovery `22000->26000`: `wl94n5bp`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 84,506 | 14.258379 | 0.400864 | 0.578919 | 0.206282 | 1.480230 | 55.442653 |
+| QEM50 frozen 26k | 42,253 | 15.061190 | 0.481082 | 0.516805 | 0.181129 | 1.345221 | 54.900779 |
+| QEM50 + sparse-depth 26k | 42,253 | 15.060190 | 0.481189 | 0.516350 | 0.181065 | 1.344086 | 54.841056 |
+
+**Decision**: `FINAL_F29_ROOM_QEM_SPARSE_DEPTH_MIXED_GEOMETRY_PASS_QEM_REMAINS_MAIN`. Sparse depth improves SSIM, LPIPS, AbsRel, Depth MAE, and normal at identical topology, but gives back `0.001000 dB` PSNR, so the pure QEM50 frozen row remains the room PSNR headline.
+
+---
+
+## 2026-05-04 - Final F30/F31 courtyard sparse-depth controls
+
+**Goal**: address courtyard's remaining normal-angle weakness and test whether sparse-depth recovery can improve CSEF50 or QEM50 without breaking the accepted CSEF50 main row.
+
+**W&B runs**:
+- F30 CSEF50 + sparse-depth strict recovery `22000->26000`: `9aaku1yn`;
+- F31 QEM50 + sparse-depth strict recovery `22000->26000`, `lambda=0.0005`: `hbt9x0kg`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 1,677,484 | 12.103508 | 0.296648 | 0.569308 | 0.354648 | 3.829044 | 40.821649 |
+| CSEF50 26k | 838,742 | 12.555809 | 0.338273 | 0.545077 | 0.322233 | 3.608432 | 40.830157 |
+| QEM50 26k | 838,741 | 12.530957 | 0.339798 | 0.543378 | 0.332515 | 3.694743 | 40.804188 |
+| CSEF50 + sparse-depth 26k | 838,742 | 12.552447 | 0.338854 | 0.545612 | 0.321690 | 3.618295 | 40.613745 |
+| QEM50 + sparse-depth 26k | 838,741 | 12.531974 | 0.340074 | 0.543645 | 0.330244 | 3.689526 | 40.810260 |
+
+**Decision**: `FINAL_F30_F31_COURTYARD_SPARSE_DEPTH_MIXED_CONTROLS_CSEF_REMAINS_MAIN`. F30 fixes the CSEF50 normal regression and improves AbsRel, but gives back small PSNR/LPIPS/Depth margins. F31 improves QEM50 on PSNR, SSIM, AbsRel, and Depth MAE, but remains weaker than CSEF50 on PSNR and sparse depth. Sparse depth is now replicated on bonsai, room, and courtyard as a geometry/perceptual regularizer, not a universal PSNR improver.
+
+---

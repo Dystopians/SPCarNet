@@ -141,6 +141,22 @@ ROWS = [
         "finding": "Open3D QEM50 improves SSIM, LPIPS, and normal relative to CSEF50, but CSEF50 remains stronger on PSNR, AbsRel, and Depth MAE",
     },
     {
+        "group": "sparse_depth",
+        "row": "csef50_sparse_depth_strict_recovery",
+        "scene": "courtyard",
+        "status": "MIXED_NORMAL_ABSREL_PASS_CSEF_REMAINS_MAIN",
+        "evidence": "docs/car_model/final_stageF30_F31_courtyard_sparse_depth_controls_report.md",
+        "finding": "CSEF50 plus sparse-depth fixes the courtyard normal regression and improves AbsRel, but gives back small PSNR, LPIPS, and Depth MAE margins",
+    },
+    {
+        "group": "sparse_depth",
+        "row": "qem50_sparse_depth_strict_recovery",
+        "scene": "courtyard",
+        "status": "MIXED_QEM_CONTROL_CSEF_REMAINS_MAIN",
+        "evidence": "docs/car_model/final_stageF30_F31_courtyard_sparse_depth_controls_report.md",
+        "finding": "QEM50 plus lighter sparse-depth improves QEM50 on PSNR, SSIM, AbsRel, and Depth MAE, but remains weaker than CSEF50 on PSNR and sparse depth",
+    },
+    {
         "group": "compact_recovery",
         "row": "random_same_count_50",
         "scene": "courtyard",
@@ -179,6 +195,14 @@ ROWS = [
         "status": "PASS_STRONG_BASELINE_OR_OPERATOR",
         "evidence": "docs/car_model/final_stageF20_room_posthoc_qem_baseline_report.md",
         "finding": "Open3D QEM50 plus strict topology-frozen recovery is the strongest room row on render, AbsRel, and Depth MAE; this baseline must be reported honestly",
+    },
+    {
+        "group": "sparse_depth",
+        "row": "qem50_sparse_depth_strict_recovery",
+        "scene": "room",
+        "status": "MIXED_GEOMETRY_PERCEPTUAL_PASS_QEM_REMAINS_MAIN",
+        "evidence": "docs/car_model/final_stageF29_room_qem_sparse_depth_report.md",
+        "finding": "QEM50 plus sparse-depth improves SSIM, LPIPS, AbsRel, Depth MAE, and normal at identical room topology, but gives back 0.001 dB PSNR",
     },
     {
         "group": "compact_recovery",
@@ -275,7 +299,7 @@ MISSING = [
     "final CSEF selector versus area-only selector on every public scene beyond the completed bonsai, courtyard, room, and counter controls",
     "selector ablation on any additional scenes added to the final benchmark",
     "a matched 70 percent parking posthoc simplification baseline that can actually reach the R53/F7 triangle target; Open3D QEM failed this target",
-    "replicate explicit sparse-depth compact-recovery beyond the completed bonsai row, if the manuscript wants a universal sparse-depth-guided recovery claim",
+    "replicate explicit sparse-depth compact-recovery beyond the completed bonsai, room, and courtyard rows if the manuscript wants a universal sparse-depth-guided recovery claim across every final scene",
     "full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations",
 ]
 
@@ -319,7 +343,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F28 now provides an explicit sparse-depth compact-recovery row on bonsai, but a universal sparse-depth claim still needs replication. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
+        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F28/F29/F30/F31 now replicate explicit sparse-depth compact recovery on bonsai, room, and courtyard, supporting a geometry/perceptual regularizer claim but not a universal PSNR-improvement claim. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
         "",
     ]
     DOC.write_text("\n".join(lines))

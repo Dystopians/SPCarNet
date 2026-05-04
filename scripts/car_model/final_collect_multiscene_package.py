@@ -132,6 +132,8 @@ NEGATIVE_ROWS = [
     {"scene": "bonsai", "row": "area50", "finding": "strong structured Pareto row: slightly behind QEM50 on PSNR/SSIM, but better on LPIPS, AbsRel, Depth MAE, and normal", "evidence": "docs/car_model/final_stageF26_bonsai_selector_ablation_report.md"},
     {"scene": "bonsai", "row": "random50", "finding": "same-count random compaction loses badly to clean-long, area50, CSEF50, and QEM50 on render and AbsRel", "evidence": "docs/car_model/final_stageF26_bonsai_selector_ablation_report.md"},
     {"scene": "courtyard", "row": "Open3D QEM50", "finding": "improves SSIM, LPIPS, and normal but is weaker than CSEF50 on PSNR, AbsRel, and Depth MAE", "evidence": "docs/car_model/final_stageF23_courtyard_posthoc_qem_baseline_report.md"},
+    {"scene": "courtyard", "row": "CSEF50 + sparse-depth", "finding": "fixes the courtyard normal regression and slightly improves AbsRel, but gives back small PSNR, LPIPS, and Depth MAE margins, so CSEF50 remains the balanced headline", "evidence": "docs/car_model/final_stageF30_F31_courtyard_sparse_depth_controls_report.md"},
+    {"scene": "courtyard", "row": "QEM50 + sparse-depth", "finding": "improves QEM50 on PSNR, SSIM, AbsRel, and Depth MAE, but remains weaker than CSEF50 on PSNR and sparse depth", "evidence": "docs/car_model/final_stageF30_F31_courtyard_sparse_depth_controls_report.md"},
     {"scene": "counter", "row": "CSEF50", "finding": "50 percent compaction is a boundary case and misses SSIM by 0.003827", "evidence": "docs/car_model/final_stageF10_fourth_scene_counter_report.md"},
     {"scene": "counter", "row": "CSEF50 30k", "finding": "extended recovery worsens SSIM and LPIPS", "evidence": "docs/car_model/final_stageF10_fourth_scene_counter_report.md"},
     {"scene": "counter", "row": "random40", "finding": "same-count random compaction loses badly to area40 and CSEF40", "evidence": "docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md"},
@@ -141,6 +143,7 @@ NEGATIVE_ROWS = [
     {"scene": "parking_phone_tiny", "row": "R53.01 area70", "finding": "strong area-only control at the same triangle count; superseded by CSEF70 on PSNR, LPIPS, AbsRel, Depth MAE, and normal with negligible SSIM loss", "evidence": "docs/car_model/final_stageF7_parking_pareto_report.md"},
     {"scene": "parking_phone_tiny", "row": "Open3D QEM70", "finding": "Open3D QEM did not reach the matched 2,564,473-triangle target on the 8.55M-triangle parking mesh, stopping at 8,125,970 triangles, so it is rejected as an unmatched compression control", "evidence": "docs/car_model/final_stageF25_parking_posthoc_qem_baseline_report.md"},
     {"scene": "room", "row": "QEM50 no-freeze", "finding": "omitting strict topology freeze collapses topology to 20,742 triangles and loses badly to frozen QEM50", "evidence": "docs/car_model/final_stageF24_room_qem_no_freeze_control_report.md"},
+    {"scene": "room", "row": "QEM50 + sparse-depth", "finding": "improves SSIM, LPIPS, AbsRel, Depth MAE, and normal at identical topology, but gives back 0.001 dB PSNR, so QEM50 remains the room PSNR headline", "evidence": "docs/car_model/final_stageF29_room_qem_sparse_depth_report.md"},
     {"scene": "room", "row": "random50", "finding": "same-count random compaction loses badly to area50 and clean-long", "evidence": "docs/car_model/final_stageF19_room_selector_ablation_report.md"},
     {"scene": "room", "row": "CSEF50", "finding": "passes clean-long but is superseded by area50 on all tracked independent metrics", "evidence": "docs/car_model/final_stageF19_room_selector_ablation_report.md"},
     {"scene": "room", "row": "area50", "finding": "strong structured selector row but superseded by Open3D QEM50 on render, AbsRel, and Depth MAE", "evidence": "docs/car_model/final_stageF20_room_posthoc_qem_baseline_report.md"},
@@ -219,7 +222,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but matched selector ablations on scenes beyond the completed bonsai/courtyard/room/counter controls, no-freeze controls beyond the completed bonsai/counter/room controls, sparse-depth-loss replication beyond the completed bonsai row, and the fact that Open3D QEM is strong on small/medium meshes but cannot reach the matched 70 percent parking target.",
+        "PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but matched selector ablations on scenes beyond the completed bonsai/courtyard/room/counter controls, no-freeze controls beyond the completed bonsai/counter/room controls, sparse-depth-loss replication on every final scene if a universal sparse-depth claim is desired, and the fact that Open3D QEM is strong on small/medium meshes but cannot reach the matched 70 percent parking target.",
         "",
     ]
     DOC.write_text("\n".join(lines))
