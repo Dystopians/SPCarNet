@@ -4189,3 +4189,29 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F22_BONSAI_POSTHOC_QEM_STRONG_PASS_SUPERSEDES_CSEF50_ON_RENDER`. QEM50 becomes the new strongest bonsai row on render, AbsRel, and normal, while CSEF50 remains better on Depth MAE. This upgrades F12's bonsai main row and means QEM is now a replicated strong compact operator on three scenes, not a one-off baseline.
 
 ---
+
+## 2026-05-04 - Final F23 courtyard posthoc QEM baseline
+
+**Goal**: replicate the Open3D QEM posthoc simplification baseline on a larger scene after positive bonsai, room, and counter QEM rows.
+
+**Implementation**:
+- script: `scripts/car_model/meshsplatopt_apply_open3d_qem_decimation_to_checkpoint.py`;
+- Open3D QEM compacted `courtyard` clean-long from `1,677,484` to `838,741` triangles;
+- transferred vertex tensors by nearest source vertex and face tensors by nearest source face centroid;
+- topology audit: `degenerate_face_count=0`, `invalid_index_count=0`;
+- failed launch `tuqvfmaz` used an incorrect dataset path and is excluded from results;
+- accepted W&B run: `60tdigdj`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 1,677,484 | 12.103508 | 0.296648 | 0.569308 | 0.354648 | 3.829044 | 40.821649 |
+| CSEF50 26k | 838,742 | 12.555809 | 0.338273 | 0.545077 | 0.322233 | 3.608432 | 40.830157 |
+| area50 26k | 838,742 | 12.552895 | 0.338469 | 0.544993 | 0.324157 | 3.630241 | 40.907990 |
+| random50 26k | 838,742 | 11.383848 | 0.264778 | 0.587667 | 0.371186 | 4.015910 | 41.158282 |
+| Open3D QEM50 26k | 838,741 | 12.530957 | 0.339798 | 0.543378 | 0.332515 | 3.694743 | 40.804188 |
+
+**Decision**: `FINAL_F23_COURTYARD_POSTHOC_QEM_MIXED_PASS_CSEF50_REMAINS_MAIN`. QEM50 improves SSIM, LPIPS, and normal relative to CSEF50, but is weaker on PSNR, AbsRel, and Depth MAE. CSEF50 remains the courtyard main row. The QEM claim is now stronger but more nuanced: it is a strong compact operator under fixed-topology recovery, not a universally dominant operator.
+
+---

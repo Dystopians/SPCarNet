@@ -31,6 +31,7 @@ Scenes with PSNR+SSIM improvement and LPIPS non-regression tolerance: `5/5`.
 | --- | --- | --- | --- |
 | bonsai | CSEF70 | 70 percent compaction fails SSIM gate | `docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md` |
 | bonsai | CSEF50 | passes clean-long but is superseded by Open3D QEM50 on render, AbsRel, and normal | `docs/car_model/final_stageF22_bonsai_posthoc_qem_baseline_report.md` |
+| courtyard | Open3D QEM50 | improves SSIM, LPIPS, and normal but is weaker than CSEF50 on PSNR, AbsRel, and Depth MAE | `docs/car_model/final_stageF23_courtyard_posthoc_qem_baseline_report.md` |
 | counter | CSEF50 | 50 percent compaction is a boundary case and misses SSIM by 0.003827 | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
 | counter | CSEF50 30k | extended recovery worsens SSIM and LPIPS | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
 | counter | random40 | same-count random compaction loses badly to area40 and CSEF40 | `docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md` |
@@ -44,4 +45,4 @@ Scenes with PSNR+SSIM improvement and LPIPS non-regression tolerance: `5/5`.
 
 ## Gate
 
-PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but missing matched ablations against area-only, random same-count compaction beyond the completed controls, replicated no-freeze controls, explicit sparse-depth-loss variants if claimed, and posthoc simplification controls beyond the completed bonsai/room/counter QEM rows.
+PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but missing matched ablations against area-only, random same-count compaction beyond the completed controls, replicated no-freeze controls, explicit sparse-depth-loss variants if claimed, and posthoc simplification controls beyond the completed bonsai/courtyard/room/counter QEM rows.

@@ -17,6 +17,7 @@ This report is an auditable registry of completed ablation evidence. It does not
 | compact_recovery | cross_scene_csef70 | bonsai | FAIL | 70 percent CSEF compact-recovery is too aggressive and fails the SSIM gate | `docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md` |
 | compact_recovery | cross_scene_csef50 | courtyard | PASS | 50 percent CSEF compact-recovery improves render and sparse geometry while halving topology | `docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md` |
 | compact_recovery | area_smallest_50 | courtyard | PASS_TIE_RENDER_GEOMETRY_SLIGHTLY_WORSE | area50 nearly ties CSEF50 on render but has slightly weaker sparse geometry; CSEF50 remains geometry-balanced | `docs/car_model/final_stageF17_courtyard_selector_ablation_report.md` |
+| posthoc_simplification | open3d_qem50_strict_recovery | courtyard | MIXED_STRONG_CONTROL_CSEF_REMAINS_MAIN | Open3D QEM50 improves SSIM, LPIPS, and normal relative to CSEF50, but CSEF50 remains stronger on PSNR, AbsRel, and Depth MAE | `docs/car_model/final_stageF23_courtyard_posthoc_qem_baseline_report.md` |
 | compact_recovery | random_same_count_50 | courtyard | FAIL_CONTROL_SUPPORTS_STRUCTURED_SELECTION | random50 fails clean-long and is far worse than CSEF50/area50 at the same triangle count | `docs/car_model/final_stageF17_courtyard_selector_ablation_report.md` |
 | compact_recovery | cross_scene_csef50 | room | PASS | 50 percent CSEF compact-recovery improves render metrics, but F19 shows area50 is stronger on room | `docs/car_model/final_stageF9_third_scene_room_and_qualitative_report.md` |
 | compact_recovery | area_smallest_50 | room | PASS_SELECTOR_BEST_SUPERSEDED_BY_QEM | area50 beats clean-long, CSEF50, and random50 on all tracked independent metrics, but F20 QEM50 is stronger on render and depth | `docs/car_model/final_stageF19_room_selector_ablation_report.md` |
@@ -38,10 +39,10 @@ This report is an auditable registry of completed ablation evidence. It does not
 - replicate no-freeze compact-recovery control beyond counter
 - final CSEF selector versus area-only selector on every public scene
 - selector ablation on remaining scenes beyond completed counter, courtyard, and room controls
-- replicate posthoc QEM/decimation baseline beyond completed bonsai, room, and counter rows
+- replicate posthoc QEM/decimation baseline beyond completed bonsai, courtyard, room, and counter rows
 - separate final compact-recovery rows that explicitly enable sparse-depth loss, if the manuscript wants to claim sparse-depth-guided recovery
 - full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations
 
 ## Gate
 
-Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/room/counter Open3D-QEM recovery baselines/operators. The earlier sparse-depth branch is useful but should not be conflated with the final compact-recovery main rows unless new rows explicitly enable that loss. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.
+Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. The earlier sparse-depth branch is useful but should not be conflated with the final compact-recovery main rows unless new rows explicitly enable that loss. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.
