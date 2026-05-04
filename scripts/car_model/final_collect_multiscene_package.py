@@ -88,16 +88,16 @@ SCENES = [
         "clean_absrel": 0.206282,
         "clean_depth_mae": 1.480230,
         "clean_normal": 55.442653,
-        "best_method": "area50 strict recovery 26k",
+        "best_method": "Open3D QEM50 strict recovery 26k",
         "best_triangles": 42253,
-        "best_psnr": 14.844683,
-        "best_ssim": 0.461875,
-        "best_lpips": 0.530461,
-        "best_absrel": 0.185703,
-        "best_depth_mae": 1.353216,
-        "best_normal": 54.615295,
-        "wandb": "eagvu7em",
-        "evidence": "docs/car_model/final_stageF19_room_selector_ablation_report.md",
+        "best_psnr": 15.061190,
+        "best_ssim": 0.481082,
+        "best_lpips": 0.516805,
+        "best_absrel": 0.181129,
+        "best_depth_mae": 1.345221,
+        "best_normal": 54.900779,
+        "wandb": "9wri3owt",
+        "evidence": "docs/car_model/final_stageF20_room_posthoc_qem_baseline_report.md",
         "decision": "PASS",
     },
     {
@@ -133,6 +133,7 @@ NEGATIVE_ROWS = [
     {"scene": "counter", "row": "area40 no-freeze", "finding": "omitting strict topology freeze collapses topology to 18,693 triangles and loses badly to frozen area40", "evidence": "docs/car_model/final_stageF18_counter_no_freeze_control_report.md"},
     {"scene": "room", "row": "random50", "finding": "same-count random compaction loses badly to area50 and clean-long", "evidence": "docs/car_model/final_stageF19_room_selector_ablation_report.md"},
     {"scene": "room", "row": "CSEF50", "finding": "passes clean-long but is superseded by area50 on all tracked independent metrics", "evidence": "docs/car_model/final_stageF19_room_selector_ablation_report.md"},
+    {"scene": "room", "row": "area50", "finding": "strong structured selector row but superseded by Open3D QEM50 on render, AbsRel, and Depth MAE", "evidence": "docs/car_model/final_stageF20_room_posthoc_qem_baseline_report.md"},
     {"scene": "parking_phone_tiny", "row": "grid fill full-budget", "finding": "fill branch does not beat matched sparse-depth control", "evidence": "docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md"},
 ]
 
@@ -208,7 +209,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but missing matched ablations against area-only, random same-count compaction beyond the completed controls, replicated no-freeze controls, explicit sparse-depth-loss variants if claimed, and posthoc simplification controls.",
+        "PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but missing matched ablations against area-only, random same-count compaction beyond the completed controls, replicated no-freeze controls, explicit sparse-depth-loss variants if claimed, and posthoc simplification controls beyond the completed room QEM row.",
         "",
     ]
     DOC.write_text("\n".join(lines))

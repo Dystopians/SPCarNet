@@ -4115,3 +4115,27 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F19_ROOM_SELECTOR_ABLATION_PASS_AREA50_BEST_RANDOM_FAIL`. Area50 becomes the new room best row and improves every tracked independent render/geometry metric versus clean-long while halving triangles. Random50 fails badly at the same triangle count. This upgrades the selector-control evidence to three scenes and strengthens the non-random compaction claim, while keeping the selector conclusion honest: area is strongest on counter/room, CSEF is slightly more geometry-balanced on courtyard.
 
 ---
+
+## 2026-05-04 - Final F20 room posthoc QEM baseline
+
+**Goal**: remove the posthoc QEM/decimation missing-baseline risk with a real Open3D quadric-decimation checkpoint and equal fixed-topology recovery budget.
+
+**Implementation**:
+- added `scripts/car_model/meshsplatopt_apply_open3d_qem_decimation_to_checkpoint.py`;
+- Open3D QEM compacted `room` clean-long from `84,506` to `42,253` triangles;
+- transferred vertex tensors by nearest source vertex and face tensors by nearest source face centroid;
+- topology audit: `degenerate_face_count=0`, `invalid_index_count=0`.
+
+**W&B**: `9wri3owt`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 84,506 | 14.258379 | 0.400864 | 0.578919 | 0.206282 | 1.480230 | 55.442653 |
+| area50 26k | 42,253 | 14.844683 | 0.461875 | 0.530461 | 0.185703 | 1.353216 | 54.615295 |
+| Open3D QEM50 26k | 42,253 | 15.061190 | 0.481082 | 0.516805 | 0.181129 | 1.345221 | 54.900779 |
+
+**Decision**: `FINAL_F20_ROOM_POSTHOC_QEM_STRONG_PASS_SUPERSEDES_AREA50_ON_RENDER_DEPTH`. QEM50 plus strict topology-frozen recovery is the new strongest room row on render, AbsRel, and Depth MAE, while area50 remains slightly better on normal. This is not a weak baseline; it must be reported honestly. The method framing should shift from universal CSEF/area superiority to a stronger and cleaner claim: MeshSplatOpt is a fixed-topology certified recovery framework that can evaluate and absorb compact operators, with random pruning rejected and QEM emerging as a strong collapse-style operator on room.
+
+---

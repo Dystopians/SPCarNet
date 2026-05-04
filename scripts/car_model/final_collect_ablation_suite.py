@@ -96,9 +96,17 @@ ROWS = [
         "group": "compact_recovery",
         "row": "area_smallest_50",
         "scene": "room",
-        "status": "PASS_SELECTOR_BEST",
+        "status": "PASS_SELECTOR_BEST_SUPERSEDED_BY_QEM",
         "evidence": "docs/car_model/final_stageF19_room_selector_ablation_report.md",
-        "finding": "area50 is the strongest room selector row and beats clean-long, CSEF50, and random50 on all tracked independent metrics",
+        "finding": "area50 beats clean-long, CSEF50, and random50 on all tracked independent metrics, but F20 QEM50 is stronger on render and depth",
+    },
+    {
+        "group": "posthoc_simplification",
+        "row": "open3d_qem50_strict_recovery",
+        "scene": "room",
+        "status": "PASS_STRONG_BASELINE_OR_OPERATOR",
+        "evidence": "docs/car_model/final_stageF20_room_posthoc_qem_baseline_report.md",
+        "finding": "Open3D QEM50 plus strict topology-frozen recovery is the strongest room row on render, AbsRel, and Depth MAE; this baseline must be reported honestly",
     },
     {
         "group": "compact_recovery",
@@ -186,7 +194,7 @@ MISSING = [
     "replicate no-freeze compact-recovery control beyond counter",
     "final CSEF selector versus area-only selector on every public scene",
     "selector ablation on remaining scenes beyond completed counter, courtyard, and room controls",
-    "posthoc QEM/decimation baseline with equal recovery budget",
+    "replicate posthoc QEM/decimation baseline beyond room",
     "separate final compact-recovery rows that explicitly enable sparse-depth loss, if the manuscript wants to claim sparse-depth-guided recovery",
     "full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations",
 ]
@@ -231,7 +239,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, and structured selection versus random pruning. The earlier sparse-depth branch is useful but should not be conflated with the final compact-recovery main rows unless new rows explicitly enable that loss. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
+        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and a strong room Open3D-QEM recovery baseline/operator. The earlier sparse-depth branch is useful but should not be conflated with the final compact-recovery main rows unless new rows explicitly enable that loss. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
         "",
     ]
     DOC.write_text("\n".join(lines))
