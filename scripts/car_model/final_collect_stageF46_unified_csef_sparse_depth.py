@@ -26,6 +26,15 @@ CLEAN = {
     "bonsai": Baseline(88460, 10.944348, 0.222848, 0.586158, 0.194249, 1.816410, 45.358356),
     "room": Baseline(84506, 14.258379, 0.400864, 0.578919, 0.206282, 1.480230, 55.442653),
     "counter": Baseline(83834, 14.136182, 0.512802, 0.452049, 0.076996, 0.369973, 44.287035),
+    "parking_phone_tiny": Baseline(
+        8548242,
+        18.479990,
+        0.634623,
+        0.346913,
+        0.082177,
+        1.868398,
+        45.108437,
+    ),
 }
 
 CSEF_REFERENCE = {
@@ -37,12 +46,14 @@ CSEF_REFERENCE = {
 
 RUNS = [
     ("bonsai", "prune50", "xpv6dd08", "fixed CSEF50 + sparse-depth"),
+    ("bonsai", "prune20", "jfzol3f8", "validation-budget CSEF20 + sparse-depth"),
     ("room", "prune50", "7fq1dnqk", "fixed CSEF50 + sparse-depth"),
     ("room", "prune20", "v7ld1o0x", "validation-budget CSEF20 + sparse-depth"),
     ("counter", "prune50", "vuvaul2s", "fixed CSEF50 + sparse-depth"),
     ("counter", "prune40", "ihoyzp1a", "validation-budget CSEF40 + sparse-depth"),
     ("counter", "prune30", "panxl9lh", "validation-budget CSEF30 + sparse-depth"),
     ("counter", "prune20", "pijpv7ny", "validation-budget CSEF20 + sparse-depth"),
+    ("parking_phone_tiny", "prune50", "8l96pfjx", "fixed CSEF50 + sparse-depth"),
 ]
 
 
@@ -169,11 +180,11 @@ def main() -> int:
             "",
             "## Interpretation",
             "",
-            "F46 does not rescue the claim that one fixed CSEF50 hyperparameter is universally enough. Fixed CSEF50 remains weak on counter and mixed on room depth. That limitation should stay visible in the paper.",
+            "F46 does not rescue the claim that one fixed CSEF50 hyperparameter is universally enough. Fixed CSEF50 passes all tracked metrics on parking, but remains weak on counter and mixed on bonsai LPIPS and room depth. That limitation should stay visible in the paper.",
             "",
-            "F46 does, however, materially repairs the fairness story: using the same CSEF selector family, sparse-depth strict recovery, and a conservative validation-selected budget, both previously weak public scenes now have all-metric clean-long wins. Room CSEF20 improves PSNR, SSIM, LPIPS, AbsRel, Depth MAE, and normal while keeping 20% topology reduction. Counter CSEF20 does the same while keeping 20% topology reduction. Counter CSEF30 is also near-all-metric, missing only small depth margins, and CSEF40 improves every tracked metric over the earlier CSEF40 row.",
+            "F46 does, however, materially repairs most of the fairness story: using the same CSEF selector family, sparse-depth strict recovery, and conservative validation-selected budgets, room and counter now have all-metric clean-long wins. Bonsai CSEF20 fixes the fixed-CSEF50 LPIPS regression and improves PSNR, SSIM, AbsRel, and normal, but it gives back Depth MAE, so bonsai still needs a follow-up repair. Parking CSEF50 adds a direct matched fixed-CSEF50 long row that beats the strongest clean-long parking baseline on all tracked render and sparse-geometry metrics while removing half the triangles. Counter CSEF30 is also near-all-metric, missing only small depth margins, and CSEF40 improves every tracked metric over the earlier CSEF40 row.",
             "",
-            "The safe claim is now: MeshSplatOpt supports a validation-selected CSEF-family compact-recovery protocol with conservative fallback budgets, and this protocol can produce all-metric clean-long wins on the formerly weak room/counter scenes without switching to QEM. The stronger F12 table may still use QEM rows as a posthoc simplification/operator baseline, but the method no longer depends on QEM to pass those scenes.",
+            "The safe F46-only claim is now: MeshSplatOpt supports a validation-selected CSEF-family compact-recovery protocol with conservative fallback budgets, and this protocol can produce all-metric clean-long wins on the formerly weak room/counter scenes without switching to QEM. Bonsai remains an explicit F46 limitation and is handled by the later F47 LPIPS-loss repair.",
         ]
     )
     OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")

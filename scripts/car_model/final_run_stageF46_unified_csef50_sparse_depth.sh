@@ -15,6 +15,14 @@ case "${SCENE}" in
     RESOLUTION="4"
     COMPACT_MODEL="outputs/carnet/meshsplatopt/final_stageF8_cross_scene_compact_pilot/bonsai/csef_low_evidence_boundary_protected/prune50/compact_model"
     ;;
+  bonsai20)
+    SOURCE_PATH="/data/peilincai/mesh_datasets/mipnerf360/bonsai"
+    IMAGES="images_4"
+    RESOLUTION="4"
+    COMPACT_MODEL="${ROOT}/bonsai/prune20/compact_model"
+    CLEAN_MODEL="outputs/carnet/meshsplatopt/finalF3_bonsai_clean_long_9000to22000"
+    TARGET_PRUNE_FRACTION="0.20"
+    ;;
   room)
     SOURCE_PATH="/data/peilincai/mesh_datasets/mipnerf360/room"
     IMAGES="images_4"
@@ -57,8 +65,16 @@ case "${SCENE}" in
     CLEAN_MODEL="outputs/carnet/meshsplatopt/finalF10_counter_clean_long_9000to22000"
     TARGET_PRUNE_FRACTION="0.20"
     ;;
+  parking50)
+    SOURCE_PATH="outputs/carnet/meshprior/parking_phone_tiny/dataset_view"
+    IMAGES="images"
+    RESOLUTION="4"
+    COMPACT_MODEL="${ROOT}/parking_phone_tiny/prune50/compact_model"
+    CLEAN_MODEL="outputs/carnet/meshprior/parking_phone_tiny/stage44_clean_long/current_branch_clean_7000to22000/model"
+    TARGET_PRUNE_FRACTION="0.50"
+    ;;
   *)
-    echo "Unknown SCENE=${SCENE}. Expected bonsai, room, room20, counter, counter40, counter30, or counter20." >&2
+    echo "Unknown SCENE=${SCENE}. Expected bonsai, bonsai20, room, room20, counter, counter40, counter30, counter20, or parking50." >&2
     exit 2
     ;;
 esac
@@ -72,6 +88,9 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
 if [[ "${SCENE}" == "counter40" ]]; then
   OUT_DIR="${ROOT}/counter/prune40"
   WANDB_SCENE="counter_csef40"
+elif [[ "${SCENE}" == "bonsai20" ]]; then
+  OUT_DIR="${ROOT}/bonsai/prune20"
+  WANDB_SCENE="bonsai_csef20"
 elif [[ "${SCENE}" == "room20" ]]; then
   OUT_DIR="${ROOT}/room/prune20"
   WANDB_SCENE="room_csef20"
@@ -81,6 +100,9 @@ elif [[ "${SCENE}" == "counter30" ]]; then
 elif [[ "${SCENE}" == "counter20" ]]; then
   OUT_DIR="${ROOT}/counter/prune20"
   WANDB_SCENE="counter_csef20"
+elif [[ "${SCENE}" == "parking50" ]]; then
+  OUT_DIR="${ROOT}/parking_phone_tiny/prune50"
+  WANDB_SCENE="parking_csef50"
 else
   OUT_DIR="${ROOT}/${SCENE}/prune50"
   WANDB_SCENE="${SCENE}_csef50"

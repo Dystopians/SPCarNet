@@ -99,6 +99,19 @@ def _train_args(args: argparse.Namespace) -> list[str]:
                 str(args.sparse_decay_final_mult),
             ]
         )
+    if args.lpips_lambda > 0.0:
+        cmd.extend(
+            [
+                "--lambda_lpips_loss",
+                str(args.lpips_lambda),
+                "--lpips_loss_start_iter",
+                str(args.lpips_start_iter),
+                "--lpips_loss_warmup_iters",
+                str(args.lpips_warmup_iters),
+                "--lpips_loss_max_side",
+                str(args.lpips_max_side),
+            ]
+        )
     return cmd
 
 
@@ -218,6 +231,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sparse_decay_start", type=int, default=0)
     parser.add_argument("--sparse_decay_end", type=int, default=0)
     parser.add_argument("--sparse_decay_final_mult", type=float, default=0.0)
+    parser.add_argument("--lpips_lambda", type=float, default=0.0)
+    parser.add_argument("--lpips_start_iter", type=int, default=22000)
+    parser.add_argument("--lpips_warmup_iters", type=int, default=300)
+    parser.add_argument("--lpips_max_side", type=int, default=512)
     parser.add_argument("--wandb_project", default="spcarnet_meshprior")
     parser.add_argument("--wandb_group", default="finalF6_strict_recovery")
     parser.add_argument("--wandb_name", required=True)

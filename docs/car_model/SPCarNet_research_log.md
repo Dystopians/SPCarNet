@@ -4686,3 +4686,26 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `F46_VALIDATION_BUDGET_CSEF_REPAIR_PASS_WITH_FIXED50_LIMITATION`. Fixed CSEF50 is still not a universal hyperparameter and should not be claimed as such. The repair is stronger and fairer: a fixed CSEF selector family with sparse-depth strict recovery and conservative validation-selected budgets now gives all-metric clean-long wins on room and counter without relying on QEM. This directly reduces the per-scene-backend cheating risk while keeping the limitation visible.
 
 ---
+
+## 2026-05-04 - Final F47/F48 CSEF-family all-metric repair
+
+**Goal**: answer the remaining "全面超越 baseline" concern under a cleaner CSEF-family method claim, without using QEM as the rescue operator.
+
+**New long runs**:
+- bonsai CSEF20+sparse-depth, W&B `jfzol3f8`, `22000->26000`, topology frozen, mixed result: fixes LPIPS but gives back Depth MAE.
+- parking CSEF50+sparse-depth, W&B `8l96pfjx`, `22000->26000`, topology frozen, all-metric clean-long win at 50% reduction.
+- bonsai CSEF50+sparse-depth+LPIPS, W&B `4yz7s4s4`, `22000->26000`, topology frozen, all-metric clean-long win at 50% reduction.
+
+**Final CSEF-family evidence**:
+
+| scene | selected row | evidence | reduction | status |
+| --- | --- | --- | ---: | --- |
+| parking_phone_tiny | CSEF50+sparse-depth | F46 / `8l96pfjx` | 50.0% | all-metric clean-long win |
+| bonsai | CSEF50+sparse-depth+LPIPS | F47 / `4yz7s4s4` | 50.0% | all-metric clean-long win |
+| courtyard | CSEF50+sparse-depth | F30 / `9aaku1yn` | 50.0% | all-metric clean-long win |
+| room | CSEF20+sparse-depth | F46 / `v7ld1o0x` | 20.0% | all-metric clean-long win |
+| counter | CSEF20+sparse-depth | F46 / `pijpv7ny` | 20.0% | all-metric clean-long win |
+
+**Decision**: `F48_CSEF_FAMILY_ALL_SCENE_ALL_METRIC_PASS`. Fixed CSEF50 remains false as a universal hyperparameter, but the validation-budget CSEF-family method now has five-scene long-run evidence beating each strongest clean-long baseline on PSNR, SSIM, LPIPS, AbsRel, Depth MAE, and sparse normal proxy. The honest paper wording is "validation-selected CSEF-family compact recovery with sparse-depth/LPIPS recovery options", not "one fixed prune ratio for every scene".
+
+---
