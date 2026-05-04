@@ -4,6 +4,30 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-04 — MeshSplatOpt F35 courtyard CSEF no-freeze control — FAIL_SUPPORTS_STRICT_FREEZE
+
+**Outcome**: Ran a W&B-logged no-freeze control on `courtyard` from the accepted CSEF50
+compact checkpoint. The run matched the frozen main row's `22000->26000` budget and kept
+`--skip_restricted_delaunay`, but deliberately omitted `--freeze_topology_updates`.
+
+**W&B**: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/3bk0z0vs`
+
+**Verification**:
+- topology drift: `838,742 -> 1,317,435` triangles
+- independent render metrics: PSNR `8.646639823913574`, SSIM `0.1112719178199768`, LPIPS `0.6750112175941467`
+- sparse geometry: AbsRel `0.5137620075416697`, Depth MAE `5.539791213704346`, normal mean angle `42.71011518240413`
+- comparison to frozen CSEF50: PSNR `-3.909169`, SSIM `-0.227001`, LPIPS `+0.129934`, AbsRel `+0.191529`, Depth MAE `+1.931359`, normal `+1.879958`
+
+**Decision**: `FAIL_SUPPORTS_STRICT_FREEZE`. This fourth-scene no-freeze control
+confirms that strict topology freeze is a load-bearing mechanism, not an implementation
+detail. Without it, the model leaves the compact topology contract and loses badly.
+
+**Linked artefacts**:
+- `docs/car_model/final_stageF35_courtyard_csef_no_freeze_control_report.md`
+- `outputs/carnet/meshsplatopt/final_stageF35_courtyard_csef_no_freeze_control/`
+
+---
+
 ## 2026-05-04 — MeshSplatOpt F34 parking sparse-depth long continuation — FAIL_KEEP_F33_26K
 
 **Outcome**: Ran a W&B-logged long-continuation control for the current strongest

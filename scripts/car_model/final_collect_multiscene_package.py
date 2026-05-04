@@ -134,6 +134,7 @@ NEGATIVE_ROWS = [
     {"scene": "courtyard", "row": "Open3D QEM50", "finding": "improves SSIM, LPIPS, and normal but is weaker than CSEF50 on PSNR, AbsRel, and Depth MAE", "evidence": "docs/car_model/final_stageF23_courtyard_posthoc_qem_baseline_report.md"},
     {"scene": "courtyard", "row": "CSEF50 + sparse-depth", "finding": "fixes the courtyard normal regression and slightly improves AbsRel, but gives back small PSNR, LPIPS, and Depth MAE margins, so CSEF50 remains the balanced headline", "evidence": "docs/car_model/final_stageF30_F31_courtyard_sparse_depth_controls_report.md"},
     {"scene": "courtyard", "row": "QEM50 + sparse-depth", "finding": "improves QEM50 on PSNR, SSIM, AbsRel, and Depth MAE, but remains weaker than CSEF50 on PSNR and sparse depth", "evidence": "docs/car_model/final_stageF30_F31_courtyard_sparse_depth_controls_report.md"},
+    {"scene": "courtyard", "row": "CSEF50 no-freeze", "finding": "omitting strict topology freeze makes CSEF50 drift to 1,317,435 triangles and lose badly on render and sparse depth, supporting the frozen recovery contract", "evidence": "docs/car_model/final_stageF35_courtyard_csef_no_freeze_control_report.md"},
     {"scene": "counter", "row": "CSEF50", "finding": "50 percent compaction is a boundary case and misses SSIM by 0.003827", "evidence": "docs/car_model/final_stageF10_fourth_scene_counter_report.md"},
     {"scene": "counter", "row": "CSEF50 30k", "finding": "extended recovery worsens SSIM and LPIPS", "evidence": "docs/car_model/final_stageF10_fourth_scene_counter_report.md"},
     {"scene": "counter", "row": "random40", "finding": "same-count random compaction loses badly to area40 and CSEF40", "evidence": "docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md"},
@@ -225,7 +226,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "PASS with ablation gaps. Five scenes show compact-recovery benefit over fair clean-long baselines, and all five have auditable long-baseline comparisons. F34 adds a parking long-continuation rejection showing that simply training the best sparse-depth row from 26k to 30k hurts visual quality, so F33 is the validated stopping point. The remaining NeurIPS risk is not scene count, but no-freeze controls beyond the completed bonsai/counter/room rows, a matched 70 percent parking posthoc simplification baseline that can actually reach the target topology, and full no-gate/no-rollback counterfactual ablations.",
+        "PASS with ablation gaps. Five scenes show compact-recovery benefit over fair clean-long baselines, and all five have auditable long-baseline comparisons. F34 adds a parking long-continuation rejection showing that simply training the best sparse-depth row from 26k to 30k hurts visual quality, so F33 is the validated stopping point. F35 extends no-freeze failure evidence to four scenes, leaving parking as the only largest-scene freeze-control gap. The remaining NeurIPS risk is not scene count, but a matched 70 percent parking posthoc simplification baseline that can actually reach the target topology and full no-gate/no-rollback counterfactual ablations.",
         "",
     ]
     DOC.write_text("\n".join(lines))
