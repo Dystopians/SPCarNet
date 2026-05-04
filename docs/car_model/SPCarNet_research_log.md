@@ -3956,3 +3956,27 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F9_THIRD_SCENE_ROOM_PASS`. Room passes the same CSEF50 gate used in F8, giving the method three non-parking transfer-style positives when counting bonsai, courtyard, and room, plus the parking anchor. The remaining gap is to refresh the montage with room included and add a fourth public scene such as counter.
 
 ---
+
+## 2026-05-04 - Final F10 fourth-scene counter Pareto pass
+
+**Goal**: add a fourth public-scene validation point and explicitly test whether the counter scene prefers the fixed 50 percent compact point or a gentler Pareto point.
+
+**W&B runs**:
+- counter clean-long 9k->22k: `jl5vtp4m`;
+- counter CSEF50 strict topology-frozen recovery 22k->26k: `58od8x2f`;
+- counter CSEF50 extension 26k->30k: `erjis9bc`;
+- counter CSEF40 failed first launch due missing copied compact checkpoint: `ag6wtjwh`;
+- counter CSEF40 retry 22k->26k: `glzzth4b`.
+
+**Independent results**:
+
+| method | iteration | triangles | reduction | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long | 22000 | 83,834 | - | 14.136182 | 0.512802 | 0.452049 | 0.076996 | 0.369973 | 44.287035 |
+| CSEF50 | 26000 | 41,917 | 50.0% | 14.077559 | 0.498974 | 0.468391 | 0.094731 | 0.438932 | 43.823390 |
+| CSEF50 extended | 30000 | 41,917 | 50.0% | 14.099902 | 0.485554 | 0.479640 | 0.092779 | 0.431583 | 44.029069 |
+| CSEF40 | 26000 | 50,300 | 40.0% | 14.212033 | 0.518401 | 0.450481 | 0.085542 | 0.406373 | 43.476972 |
+
+**Decision**: `FINAL_F10_FOURTH_SCENE_COUNTER_PARETO_PASS`. The strict 50 percent point is a boundary case on counter because SSIM misses the gate by `0.003827`, and the 30k extension is rejected because it worsens SSIM and LPIPS. The 40 percent CSEF Pareto point is strong: it removes 33,534 triangles and improves PSNR, SSIM, LPIPS, and Normal against the fair clean-long baseline, with mild depth regressions still inside the same tolerance.
+
+---
