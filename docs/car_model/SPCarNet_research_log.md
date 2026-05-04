@@ -3925,3 +3925,34 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F8_CROSS_SCENE_COMPACT_PILOT_PASS`. The same CSEF boundary-protected 50 percent compact setting passes on two non-parking scenes against fair clean-long baselines. Courtyard is the strongest transfer result so far because it removes half the triangles and improves PSNR, SSIM, LPIPS, AbsRel, and Depth MAE against a 1.68M-triangle clean baseline.
 
 ---
+
+## 2026-05-04 - Final F9 third-scene room and qualitative evidence
+
+**Goal**: push beyond the two-scene F8 transfer gate by adding a third public scene and generating cross-scene qualitative material.
+
+**W&B runs**:
+- room clean-long 9k->22k: `kqyusaoe`;
+- room CSEF50 strict topology-frozen recovery 22k->26k: `pb1tg4p2`.
+
+**Room independent results**:
+
+| method | triangles | reduction | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 84,506 | - | 14.258379 | 0.400864 | 0.578919 | 0.206282 | 1.480230 | 55.442653 |
+| CSEF50 26k | 42,253 | 50.0% | 14.387163 | 0.414954 | 0.568281 | 0.225027 | 1.603030 | 54.642793 |
+
+**Deltas**:
+- PSNR `+0.128784`;
+- SSIM `+0.014090`;
+- LPIPS `-0.010638`;
+- AbsRel `+0.018745`;
+- Depth MAE `+0.122800`;
+- Normal `-0.799860`.
+
+**Qualitative output**:
+- `outputs/carnet/meshsplatopt/final_stageF9_qualitative_evidence/mesh_splat_opt_cross_scene_qualitative_montage.png`;
+- `outputs/carnet/meshsplatopt/final_stageF9_qualitative_evidence/mesh_splat_opt_cross_scene_qualitative_report.md`.
+
+**Decision**: `FINAL_F9_THIRD_SCENE_ROOM_PASS`. Room passes the same CSEF50 gate used in F8, giving the method three non-parking transfer-style positives when counting bonsai, courtyard, and room, plus the parking anchor. The remaining gap is to refresh the montage with room included and add a fourth public scene such as counter.
+
+---
