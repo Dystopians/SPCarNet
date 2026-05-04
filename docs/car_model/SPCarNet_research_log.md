@@ -4,6 +4,29 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-04 — MeshSplatOpt F38 counterfactual gate ablation — MECHANISM_PASS
+
+**Outcome**: Added and ran an identical-edit counterfactual ablation for the
+MeshSplatOpt safety gate. Each proposal is evaluated once through the gated rollback
+path and once through an unsafe no-gate/no-rollback path.
+
+**Verification**:
+- supported fill survives the gate
+- bad floater is rejected with `free_space_gate_failed` and `fill_boundary_certificate_failed`; no-gate adds `3` vertices and `1` unobserved face
+- free-space snap is rejected with `free_space_gate_failed` and `snap_free_space_rejected`; no-gate moves a vertex by `5.0`
+- supported-surface delete is rejected with `delete_supported_surface_rejected`; no-gate removes `1` face
+- every rejected gated case restores the pre-edit state exactly
+
+**Decision**: `MECHANISM_PASS`. F38 closes the implementation-level no-gate/no-rollback
+counterfactual gap. It does not replace a full real-scene gate-removed training ablation,
+but it proves that the safety mechanism is load-bearing on concrete damaging edits.
+
+**Linked artefacts**:
+- `docs/car_model/final_stageF38_counterfactual_gate_ablation_report.md`
+- `outputs/carnet/meshsplatopt/final_stageF38_counterfactual_gate_ablation/`
+
+---
+
 ## 2026-05-04 — MeshSplatOpt F37 parking matched fast-QEM baseline — MIXED_RENDER_FAIL_GEOMETRY_STRONG_CONTROL
 
 **Outcome**: Added a `fast_simplification` backend to the QEM checkpoint simplifier and
