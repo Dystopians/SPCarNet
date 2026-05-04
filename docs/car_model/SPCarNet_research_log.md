@@ -3550,3 +3550,29 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 **Paper implication**: the method needs a budget-aware Pareto claim. R40.02 is the all-metric courtyard row, R43.02b is the courtyard render-best long row, and R43.01b proves that parking should not be blindly extended beyond the validated 16000 budget.
 
 ---
+
+## 2026-05-03 - R44 sparse-depth decay long-horizon repair and clean baseline comparison
+
+**Goal**: answer the long-training weakness found by R43 and produce direct clean-baseline render evidence.
+
+**Implementation**:
+- added a sparse COLMAP depth loss decay schedule:
+  - `--sparse_colmap_depth_decay_start_iter`
+  - `--sparse_colmap_depth_decay_end_iter`
+  - `--sparse_colmap_depth_decay_final_mult`
+- default behavior is unchanged because decay is disabled unless the start/end window is set.
+
+**Runs**:
+- R44.01 parking fraction `0.50`, lambda `0.001`, decay `16000->20000` to zero, trained `16000->22000`, W&B `c1rxa6q6`: PSNR `17.169540`, SSIM `0.548714`, LPIPS `0.441888`, AbsRel `0.187067`, Depth MAE `2.919396`, normal `42.218251`
+- R44.02 courtyard fraction `0.625`, lambda `0.002`, decay `7000->14000` to `0.25x`, trained `7000->20000`, W&B `5tleod3c`: PSNR `17.829701`, SSIM `0.561812`, LPIPS `0.493252`, AbsRel `0.147102`, Depth MAE `1.915970`, normal `26.520612`
+
+**Decision**: `SPARSE_DECAY_LONG_HORIZON_REPAIR_PASS`. R44.01 repairs the R43 parking overtraining failure: relative to R43.01b it improves PSNR by `+0.920386`, SSIM by `+0.037679`, LPIPS by `-0.035538`, AbsRel by `-0.006612`, and Depth MAE by `-0.098728`. It also becomes the strongest parking render row versus R40.01, with PSNR `+0.023911`, SSIM `+0.014560`, and LPIPS `-0.014409`, while giving back a small amount of sparse depth. R44.02 improves the R43 courtyard long row on every tracked metric: PSNR `+0.036665`, SSIM `+0.000836`, LPIPS `-0.003472`, AbsRel `-0.011805`, Depth MAE `-0.075598`, and normal angle `-2.429404`.
+
+**Clean baseline comparison artefacts**:
+- `outputs/carnet/meshsplatopt/baseline_vs_method_qualitative/parking_clean_baseline_vs_ours_render_montage.png`
+- `outputs/carnet/meshsplatopt/baseline_vs_method_qualitative/parking_clean_baseline_vs_ours_abs_error_montage.png`
+- `outputs/carnet/meshsplatopt/baseline_vs_method_qualitative/parking_clean_baseline_vs_ours_summary.md`
+
+Against the stronger R16.03 clean 7000-iteration baseline, R44.01 improves PSNR by `+1.598975`, SSIM by `+0.100502`, LPIPS by `-0.086165`, Depth MAE by `-0.165627`, AbsRel by `-0.070748`, and normal angle by `-7.571498`.
+
+---

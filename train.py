@@ -664,7 +664,14 @@ def _sparse_colmap_depth_lambda(
 
     warmup_iters = max(1, int(getattr(opt, "sparse_colmap_depth_warmup_iters", 1)))
     warmup = min(1.0, max(0.0, float(int(iteration) - start_iter) / float(warmup_iters)))
-    return float(getattr(opt, "lambda_sparse_colmap_depth", 0.0)) * warmup
+    decay = 1.0
+    decay_start = int(getattr(opt, "sparse_colmap_depth_decay_start_iter", -1))
+    decay_end = int(getattr(opt, "sparse_colmap_depth_decay_end_iter", -1))
+    decay_final = float(getattr(opt, "sparse_colmap_depth_decay_final_mult", 1.0))
+    if decay_start >= 0 and decay_end > decay_start and int(iteration) >= decay_start:
+        progress = min(1.0, max(0.0, float(int(iteration) - decay_start) / float(decay_end - decay_start)))
+        decay = (1.0 - progress) + progress * max(0.0, decay_final)
+    return float(getattr(opt, "lambda_sparse_colmap_depth", 0.0)) * warmup * decay
 
 
 def _compute_sparse_colmap_depth_loss(

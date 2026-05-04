@@ -169,6 +169,9 @@ class OptimizationParams(ParamGroup):
         self.lambda_sparse_colmap_depth = 0.01
         self.sparse_colmap_depth_start_iter = 1000
         self.sparse_colmap_depth_warmup_iters = 3000
+        self.sparse_colmap_depth_decay_start_iter = -1
+        self.sparse_colmap_depth_decay_end_iter = -1
+        self.sparse_colmap_depth_decay_final_mult = 1.0
         self.sparse_colmap_depth_min_matches = 32
         self.sparse_colmap_depth_loss_space = "depth"
         self.sparse_colmap_depth_robust_beta = 0.05
