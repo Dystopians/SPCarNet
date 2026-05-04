@@ -3706,3 +3706,24 @@ Against the best clean long render baseline, R44.01 is worse on PSNR by `-1.3104
 - `outputs/carnet/meshsplatopt/cross_scene_clean_to_compact_tables/cross_scene_clean_to_compact_results.md`
 
 ---
+
+## 2026-05-04 - Final F0 current-state audit and claim reset
+
+**Goal**: stop blind trial-and-error and align the remaining NeurIPS repair work to the new final planning prompt.
+
+**Audit actions**:
+- read the required final-planning context, corrected clean-long reports, R14/R15/R28-R30/R57-R58 evidence, and the original MeshSplatOpt repair RFC;
+- ran `/home/peilincai/micromamba/envs/mesh_splatting/bin/python -m compileall scripts/car_model ss3dm_prior utils -q`, which passed;
+- recorded branch `neurips-meshsplatopt-repair`, commit `97b9d6d`, and current dirty/untracked files;
+- completed independent sparse-geometry evaluation for the R59/R60 matched room/counter screens.
+
+**R59/R60 addendum**:
+- R59 room compact beats the matched clean row on independent render metrics (PSNR `+0.438885`, SSIM `+0.005325`, LPIPS `-0.000389`) while regressing sparse geometry slightly (AbsRel `+0.002058`, Depth MAE `+0.006847`, normal `+0.610254`). This is useful as render-positive evidence but not an all-metric cross-scene pass.
+- R60 counter is mixed/negative: compact improves PSNR by `+0.134289` but worsens SSIM, LPIPS, AbsRel, Depth MAE, and normal angle. This reinforces that area-only prune70 requires a scene-aware selector.
+
+**Decision**: `FINAL_F0_AUDIT_PASS_PROCEED_TO_F1`. The final claim is reset to evidence-certified compact-repair optimization. R53/R48/R55 are stronger than R44 and should replace R44 as the parking headline. Snap/fill remain rollback-compatible edit interfaces and diagnostics, not the headline claim.
+
+**Linked artefact**:
+- `docs/car_model/final_stageF0_current_state_audit.md`
+
+---
