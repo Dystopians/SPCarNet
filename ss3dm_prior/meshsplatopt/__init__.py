@@ -10,6 +10,7 @@ from .edit_apply import apply_edit, summarize_topology_delta, verify_mesh_integr
 from .edit_portfolio import PortfolioItem, rank_portfolio
 from .edit_snapshot import create_snapshot, rollback_edit
 from .edit_types import MeshEdit, MeshSplatOptEditType, MeshState
+from .evaluation_contracts import MethodResult, MetricTargets, PairwiseComparison, compare_to_baseline
 from .ground_void_fill import make_ground_plane_void_fill
 from .hole_fill import FillProposal, find_boundary_loops, make_boundary_loop_fill
 from .object_prior_repair import ObjectRepairProposal, make_object_prior_repair_proposals
@@ -31,7 +32,10 @@ __all__ = [
     "MeshEdit",
     "MeshSplatOptEditType",
     "MeshState",
+    "MethodResult",
+    "MetricTargets",
     "ObjectRepairProposal",
+    "PairwiseComparison",
     "PortfolioItem",
     "SnapProposal",
     "TeacherRecoveryPlan",
@@ -39,6 +43,7 @@ __all__ = [
     "apply_edit",
     "apply_edit_to_checkpoint_copy",
     "build_csef",
+    "compare_to_baseline",
     "create_snapshot",
     "find_boundary_loops",
     "make_boundary_loop_fill",

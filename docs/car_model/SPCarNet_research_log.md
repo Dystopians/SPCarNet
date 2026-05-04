@@ -3652,3 +3652,31 @@ Against the best clean long render baseline, R44.01 is worse on PSNR by `-1.3104
 - `assets/meshsplatopt_clean_vs_r53_montage.png`
 
 ---
+
+## 2026-05-03 - R15-R17 interface completion
+
+**Goal**: turn the validated R53/R55 results into paper-grade interfaces for full-budget sweeps, ablations, and manuscript packaging.
+
+**Implemented interfaces**:
+- `ss3dm_prior/meshsplatopt/evaluation_contracts.py`: shared `MethodResult`, `MetricTargets`, and `PairwiseComparison` contracts for baseline dominance checks.
+- `scripts/car_model/meshsplatopt_collect_clean_to_compact_results.py`: writes JSON/CSV/Markdown clean-to-compact tables from independent `results.json` and sparse-geometry JSON files.
+- `scripts/car_model/meshsplatopt_run_full_budget_sweep.py`: writes reproducible R15 job manifests and optional shell runner with W&B-enabled train/render/metrics/geometry commands.
+- `scripts/car_model/meshsplatopt_run_ablation_suite.py`: writes the R16 14-row ablation contract and evidence status summary.
+- `scripts/car_model/meshsplatopt_make_neurips_package.py`: writes R17 paper-package scaffolds and a final go/no-go document.
+
+**Generated artefacts**:
+- `outputs/carnet/meshsplatopt/clean_to_compact_tables/clean_to_compact_results.md`
+- `outputs/carnet/meshsplatopt/full_budget_sweep/full_budget_jobs.json`
+- `outputs/carnet/meshsplatopt/ablation_suite/ablation_suite_contract.md`
+- `outputs/carnet/meshsplatopt/neurips_package/manifest.json`
+- `docs/car_model/meshsplatopt_stageR15_full_budget_sweep_design.md`
+- `docs/car_model/meshsplatopt_stageR16_ablation_design.md`
+- `docs/car_model/meshsplatopt_stageR17_paper_package_report.md`
+
+**Current table result**:
+- R53.01 passes all clean22k dominance targets under default thresholds, with PSNR `+0.225748`, SSIM `+0.013184`, LPIPS `-0.008421`, AbsRel `-0.002621`, Depth MAE `-0.014647`, normal `-0.847046`, and triangle reduction `0.700000`.
+- R55.01 also passes all clean22k dominance targets, with better LPIPS (`-0.009967` delta) and normal (`-0.873064` delta) but lower PSNR than R53 and more triangles.
+
+**Decision**: `R15_R17_INTERFACES_PARTIAL_PASS`. The interfaces are now present and executable. The project is not yet a full NeurIPS main-conference package because R15 still needs cross-scene full-budget replication and R16 still has four interface-only ablations.
+
+---
