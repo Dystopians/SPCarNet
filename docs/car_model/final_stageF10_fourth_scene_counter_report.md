@@ -64,4 +64,5 @@ geometry tolerance used by the cross-scene gate.
 - CSEF40 recovery: `outputs/carnet/meshsplatopt/final_stageF10_fourth_scene_counter/csef_low_evidence_boundary_protected/prune40/recovery_model`
 - CSEF40 renders: `outputs/carnet/meshsplatopt/final_stageF10_fourth_scene_counter/csef_low_evidence_boundary_protected/prune40/recovery_model/test/ours_26000`
 - CSEF40 geometry: `outputs/carnet/meshsplatopt/final_stageF10_fourth_scene_counter/csef_low_evidence_boundary_protected/prune40/recovery_model/geometry_eval_colmap/iter_26000_max500.json`
-
+- qualitative montage: `outputs/carnet/meshsplatopt/final_stageF10_qualitative_evidence/room_counter_clean_vs_csef_montage.png`
+- qualitative manifest: `outputs/carnet/meshsplatopt/final_stageF10_qualitative_evidence/room_counter_clean_vs_csef_manifest.json`

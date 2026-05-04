@@ -3979,4 +3979,8 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 
 **Decision**: `FINAL_F10_FOURTH_SCENE_COUNTER_PARETO_PASS`. The strict 50 percent point is a boundary case on counter because SSIM misses the gate by `0.003827`, and the 30k extension is rejected because it worsens SSIM and LPIPS. The 40 percent CSEF Pareto point is strong: it removes 33,534 triangles and improves PSNR, SSIM, LPIPS, and Normal against the fair clean-long baseline, with mild depth regressions still inside the same tolerance.
 
+**Qualitative evidence**:
+- `outputs/carnet/meshsplatopt/final_stageF10_qualitative_evidence/room_counter_clean_vs_csef_montage.png`;
+- `outputs/carnet/meshsplatopt/final_stageF10_qualitative_evidence/room_counter_clean_vs_csef_report.md`.
+
 ---
