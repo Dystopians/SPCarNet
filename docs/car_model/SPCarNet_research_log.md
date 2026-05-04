@@ -4710,3 +4710,22 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `F49_CSEF_FAMILY_ALL_SCENE_ALL_METRIC_PASS_MARGIN_STRENGTHENED`. Fixed CSEF50 remains false as a universal hyperparameter, but the validation-budget CSEF-family method now has five-scene long-run evidence beating each strongest clean-long baseline on PSNR, SSIM, LPIPS, AbsRel, Depth MAE, and sparse normal proxy. The honest paper wording is "validation-selected CSEF-family compact recovery with sparse-depth/LPIPS recovery options", not "one fixed prune ratio for every scene". The weakest remaining result is bonsai's render margin, but F49 improves the PSNR, SSIM, AbsRel, and Depth MAE margins while preserving all-metric dominance.
 
 ---
+
+## 2026-05-04 - Final F50 parking calibrated-gate replication
+
+**Goal**: replicate the F44 calibrated-gate repair beyond bonsai using the completed F42 parking ratio0.04 7000-step strict/no-gate references.
+
+**New long run**:
+- parking calibrated gate ratio0.04 7000 iterations, W&B `k2rr83jh`, online W&B, full train/render/metrics/COLMAP geometry complete on GPU 7.
+
+**Result**:
+
+| row | W&B | commits | rollbacks | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| strict gate F42 | `era2si2w` | 0 | 1 | 822,904 | 17.254513 | 0.535237 | 0.453228 | 0.077416 | 1.775428 | 45.816557 |
+| calibrated gate F50 | `k2rr83jh` | 0 | 1 | 829,157 | 17.166624 | 0.533479 | 0.453611 | 0.076883 | 1.756994 | 45.744147 |
+| no-gate F42 | `o05nx4za` | 1 | 0 | 829,354 | 17.145130 | 0.532351 | 0.454033 | 0.076173 | 1.723636 | 45.640697 |
+
+**Decision**: `F50_CALIBRATED_GATE_REPLICATION_MIXED`. F50 does not reproduce the F44 bonsai mechanism repair: the calibrated gate still rejects and rolls back the same no-accept candidate round as strict gate. It does, however, remain render-positive versus no-gate while improving sparse geometry proxies relative to strict gate. The honest claim is therefore narrow: calibrated thresholds are a promising scene-aware tradeoff, but broad calibrated-gate superiority is not proven.
+
+---
