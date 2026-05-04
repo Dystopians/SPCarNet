@@ -4687,7 +4687,7 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 
 ---
 
-## 2026-05-04 - Final F47/F48 CSEF-family all-metric repair
+## 2026-05-04 - Final F47/F48/F49 CSEF-family all-metric repair
 
 **Goal**: answer the remaining "全面超越 baseline" concern under a cleaner CSEF-family method claim, without using QEM as the rescue operator.
 
@@ -4695,17 +4695,18 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 - bonsai CSEF20+sparse-depth, W&B `jfzol3f8`, `22000->26000`, topology frozen, mixed result: fixes LPIPS but gives back Depth MAE.
 - parking CSEF50+sparse-depth, W&B `8l96pfjx`, `22000->26000`, topology frozen, all-metric clean-long win at 50% reduction.
 - bonsai CSEF50+sparse-depth+LPIPS, W&B `4yz7s4s4`, `22000->26000`, topology frozen, all-metric clean-long win at 50% reduction.
+- bonsai CSEF50+sparse-depth+LPIPS0.005, W&B `cuq7olfd`, `22000->26000`, topology frozen, all-metric clean-long win at 50% reduction with stronger PSNR, SSIM, AbsRel, and Depth MAE margins than F47.
 
 **Final CSEF-family evidence**:
 
 | scene | selected row | evidence | reduction | status |
 | --- | --- | --- | ---: | --- |
 | parking_phone_tiny | CSEF50+sparse-depth | F46 / `8l96pfjx` | 50.0% | all-metric clean-long win |
-| bonsai | CSEF50+sparse-depth+LPIPS | F47 / `4yz7s4s4` | 50.0% | all-metric clean-long win |
+| bonsai | CSEF50+sparse-depth+LPIPS | F49 / `cuq7olfd` | 50.0% | all-metric clean-long win |
 | courtyard | CSEF50+sparse-depth | F30 / `9aaku1yn` | 50.0% | all-metric clean-long win |
 | room | CSEF20+sparse-depth | F46 / `v7ld1o0x` | 20.0% | all-metric clean-long win |
 | counter | CSEF20+sparse-depth | F46 / `pijpv7ny` | 20.0% | all-metric clean-long win |
 
-**Decision**: `F48_CSEF_FAMILY_ALL_SCENE_ALL_METRIC_PASS`. Fixed CSEF50 remains false as a universal hyperparameter, but the validation-budget CSEF-family method now has five-scene long-run evidence beating each strongest clean-long baseline on PSNR, SSIM, LPIPS, AbsRel, Depth MAE, and sparse normal proxy. The honest paper wording is "validation-selected CSEF-family compact recovery with sparse-depth/LPIPS recovery options", not "one fixed prune ratio for every scene".
+**Decision**: `F49_CSEF_FAMILY_ALL_SCENE_ALL_METRIC_PASS_MARGIN_STRENGTHENED`. Fixed CSEF50 remains false as a universal hyperparameter, but the validation-budget CSEF-family method now has five-scene long-run evidence beating each strongest clean-long baseline on PSNR, SSIM, LPIPS, AbsRel, Depth MAE, and sparse normal proxy. The honest paper wording is "validation-selected CSEF-family compact recovery with sparse-depth/LPIPS recovery options", not "one fixed prune ratio for every scene". The weakest remaining result is bonsai's render margin, but F49 improves the PSNR, SSIM, AbsRel, and Depth MAE margins while preserving all-metric dominance.
 
 ---
