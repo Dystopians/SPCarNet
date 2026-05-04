@@ -4016,3 +4016,28 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Go/no-go**: `NEURIPS_BORDERLINE_NEEDS_STRICT_ABLATIONS`. The scene-count and long-baseline weaknesses are now largely repaired. The remaining critical risk is strict ablation coverage: area-only versus CSEF, random same-count compaction, no-sparse-depth, no-freeze, and posthoc simplification baselines.
 
 ---
+
+## 2026-05-04 - Final F16 counter random same-count control
+
+**Goal**: reduce the strongest reviewer risk that counter CSEF40 is just arbitrary 40 percent pruning plus recovery.
+
+**Run**:
+- selector: `random_same_count`;
+- scene: `counter`;
+- seed: `20260504`;
+- clean source: `outputs/carnet/meshsplatopt/finalF10_counter_clean_long_9000to22000`;
+- compact model: `outputs/carnet/meshsplatopt/final_stageF16_counter_random_same_count_control/prune40/compact_model`;
+- recovery model: `outputs/carnet/meshsplatopt/final_stageF16_counter_random_same_count_control/prune40/recovery_model`;
+- W&B: `0hlz8q0u`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 83,834 | 14.136182 | 0.512802 | 0.452049 | 0.076996 | 0.369973 | 44.287035 |
+| CSEF40 26k | 50,300 | 14.212033 | 0.518401 | 0.450481 | 0.085542 | 0.406373 | 43.476972 |
+| random40 26k | 50,300 | 13.875822 | 0.482349 | 0.485052 | 0.099779 | 0.444684 | 43.941494 |
+
+**Decision**: `FINAL_F16_COUNTER_RANDOM_SAME_COUNT_CONTROL_PASS_FOR_CSEF`. Random same-count pruning fails the clean-long gate and is much worse than CSEF40 at the same triangle count. This strengthens the selector story on counter, although the same control still needs replication on at least one larger public scene.
+
+---

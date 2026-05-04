@@ -93,6 +93,14 @@ ROWS = [
         "finding": "40 percent CSEF is the recommended counter Pareto point and improves PSNR, SSIM, LPIPS, and normal",
     },
     {
+        "group": "compact_recovery",
+        "row": "random_same_count_40",
+        "scene": "counter",
+        "status": "FAIL_CONTROL_SUPPORTS_CSEF",
+        "evidence": "docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md",
+        "finding": "random 40 percent compaction at the same triangle count loses badly to CSEF40 and clean-long on independent render/geometry metrics",
+    },
+    {
         "group": "sparse_depth",
         "row": "sparse_depth_recovery",
         "scene": "parking/courtyard/bonsai",
@@ -129,7 +137,7 @@ ROWS = [
 MISSING = [
     "full no-freeze matched compact-recovery row on the final CSEF selector",
     "final CSEF selector versus area-only selector on every public scene",
-    "random same-count compaction control on every public scene",
+    "random same-count compaction control beyond counter, ideally courtyard plus one more public scene",
     "posthoc QEM/decimation baseline with equal recovery budget",
     "full no-sparse-depth compact-recovery row on at least parking plus one public scene",
     "full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations",
@@ -186,4 +194,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

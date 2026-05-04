@@ -18,6 +18,7 @@ This report is an auditable registry of completed ablation evidence. It does not
 | compact_recovery | cross_scene_csef50 | room | PASS | 50 percent CSEF compact-recovery improves render metrics; depth tradeoff stays inside gate | `docs/car_model/final_stageF9_third_scene_room_and_qualitative_report.md` |
 | compact_recovery | cross_scene_csef50 | counter | BORDERLINE | 50 percent CSEF is near the gate but misses SSIM by 0.003827 | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
 | compact_recovery | cross_scene_csef40 | counter | PASS | 40 percent CSEF is the recommended counter Pareto point and improves PSNR, SSIM, LPIPS, and normal | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
+| compact_recovery | random_same_count_40 | counter | FAIL_CONTROL_SUPPORTS_CSEF | random 40 percent compaction at the same triangle count loses badly to CSEF40 and clean-long on independent render/geometry metrics | `docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md` |
 | sparse_depth | sparse_depth_recovery | parking/courtyard/bonsai | PASS | sparse COLMAP depth is load-bearing for recovery; trusted sampling is scene dependent | `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md` |
 | repair_operations | snap_only | real checkpoints | SAFETY_PASS_QUALITY_UNPROVEN | local snap can pass safety gates but is not a headline quality-improving method | `docs/car_model/meshsplatopt_stageR17_02_checkpoint_local_snap_gate_report.md` |
 | repair_operations | fill_only | parking_phone_tiny | FAIL | grid fill plus sparse recovery does not beat matched sparse-depth controls at full budget | `docs/car_model/meshsplatopt_stageR24_R26_fill_init_and_grid_report.md` |
@@ -27,7 +28,7 @@ This report is an auditable registry of completed ablation evidence. It does not
 
 - full no-freeze matched compact-recovery row on the final CSEF selector
 - final CSEF selector versus area-only selector on every public scene
-- random same-count compaction control on every public scene
+- random same-count compaction control beyond counter, ideally courtyard plus one more public scene
 - posthoc QEM/decimation baseline with equal recovery budget
 - full no-sparse-depth compact-recovery row on at least parking plus one public scene
 - full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations

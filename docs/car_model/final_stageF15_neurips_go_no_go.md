@@ -36,9 +36,8 @@ Recommended label: `NEURIPS_BORDERLINE_NEEDS_STRICT_ABLATIONS`.
 Minimum remaining work before submission:
 
 - final area-only versus CSEF selector ablation;
-- random same-count compaction control;
+- random same-count compaction control beyond the completed counter control;
 - no-sparse-depth recovery control;
 - no-freeze recovery control;
 - posthoc QEM/decimation baseline;
 - final paper figures from `outputs/carnet/meshsplatopt/final_paper_assets/`.
-
