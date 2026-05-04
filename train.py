@@ -674,6 +674,107 @@ def _sparse_colmap_depth_lambda(
     return float(getattr(opt, "lambda_sparse_colmap_depth", 0.0)) * warmup * decay
 
 
+def _teacher_render_lambda(iteration: int, opt) -> float:
+    if not bool(getattr(opt, "enable_teacher_render_loss", False)):
+        return 0.0
+    base = float(getattr(opt, "lambda_teacher_render", 0.0))
+    if base <= 0.0:
+        return 0.0
+    start_iter = int(getattr(opt, "teacher_render_start_iter", 0))
+    if int(iteration) < start_iter:
+        return 0.0
+    warmup_iters = max(1, int(getattr(opt, "teacher_render_warmup_iters", 1)))
+    warmup = min(1.0, max(0.0, float(int(iteration) - start_iter) / float(warmup_iters)))
+    decay = 1.0
+    decay_start = int(getattr(opt, "teacher_render_decay_start_iter", -1))
+    decay_end = int(getattr(opt, "teacher_render_decay_end_iter", -1))
+    decay_final = float(getattr(opt, "teacher_render_decay_final_mult", 1.0))
+    if decay_start >= 0 and decay_end > decay_start and int(iteration) >= decay_start:
+        progress = min(1.0, max(0.0, float(int(iteration) - decay_start) / float(decay_end - decay_start)))
+        decay = (1.0 - progress) + progress * max(0.0, decay_final)
+    return base * warmup * decay
+
+
+def _load_teacher_render_cache(render_dir: str, train_cameras) -> dict:
+    render_dir = str(render_dir or "").strip()
+    if not render_dir:
+        return {}
+    if not os.path.isdir(render_dir):
+        print(f"[TeacherRender] disabled: render_dir not found: {render_dir}")
+        return {}
+    cache = {}
+    for idx, cam in enumerate(list(train_cameras)):
+        path = os.path.join(render_dir, f"{idx:05d}.png")
+        if not os.path.exists(path):
+            continue
+        try:
+            arr = np.asarray(Image.open(path).convert("RGB"), dtype=np.float32) / 255.0
+            tensor = torch.from_numpy(arr).permute(2, 0, 1).contiguous()
+            cache[str(getattr(cam, "image_name", idx))] = tensor
+        except Exception as exc:
+            print(f"[TeacherRender] skipped {path}: {exc}")
+    print(f"[TeacherRender] loaded {len(cache)}/{len(list(train_cameras))} train renders from {render_dir}")
+    return cache
+
+
+def _compute_teacher_render_loss(
+    viewpoint_cam,
+    image,
+    gt_image,
+    teacher_cache: dict,
+    lam: float,
+    dssim_weight: float,
+    mask_mode: str = "none",
+    error_margin: float = 0.0,
+):
+    if lam <= 0.0 or not teacher_cache:
+        return None
+    key = str(getattr(viewpoint_cam, "image_name", ""))
+    teacher = teacher_cache.get(key, None)
+    if teacher is None:
+        return None
+    teacher = teacher.to(device=image.device, dtype=image.dtype, non_blocking=True)
+    if teacher.shape[-2:] != image.shape[-2:]:
+        teacher = F.interpolate(
+            teacher.unsqueeze(0),
+            size=(int(image.shape[-2]), int(image.shape[-1])),
+            mode="bilinear",
+            align_corners=False,
+        ).squeeze(0)
+    teacher = torch.clamp(teacher, 0.0, 1.0).detach()
+    dssim_weight = min(1.0, max(0.0, float(dssim_weight)))
+    mask = None
+    mode = str(mask_mode or "none").strip().lower()
+    if mode == "teacher_better":
+        pred_err = torch.mean(torch.abs(image.detach() - gt_image.detach()), dim=0, keepdim=True)
+        teacher_err = torch.mean(torch.abs(teacher - gt_image.detach()), dim=0, keepdim=True)
+        mask = (teacher_err + float(max(0.0, error_margin)) < pred_err).to(dtype=image.dtype)
+        if float(mask.mean().detach().item()) <= 1e-6:
+            return None
+    if mask is not None:
+        teacher_l1 = (torch.abs(image - teacher) * mask).sum() / torch.clamp(mask.sum() * image.shape[0], min=1.0)
+    else:
+        teacher_l1 = l1_loss(image, teacher)
+    if dssim_weight > 0.0:
+        if FUSED_SSIM_AVAILABLE:
+            teacher_ssim = fused_ssim(image.unsqueeze(0), teacher.unsqueeze(0))
+        else:
+            teacher_ssim = ssim(image, teacher)
+        # SSIM is kept global. The counterfactual mask gates the L1 term, which
+        # carries the localized corrective signal.
+        pure = (1.0 - dssim_weight) * teacher_l1 + dssim_weight * (1.0 - teacher_ssim)
+    else:
+        teacher_ssim = None
+        pure = teacher_l1
+    return {
+        "loss_pure": pure,
+        "loss_weighted": float(lam) * pure,
+        "l1": teacher_l1,
+        "ssim": teacher_ssim,
+        "mask_fraction": float(mask.mean().detach().item()) if mask is not None else 1.0,
+    }
+
+
 def _compute_sparse_colmap_depth_loss(
     viewpoint_cam,
     render_pkg,
@@ -2497,6 +2598,14 @@ def training(
 
     viewpoint_stack = scene.getTrainCameras().copy()
     number_of_training_views = len(viewpoint_stack)
+    teacher_render_cache = {}
+    if bool(getattr(opt, "enable_teacher_render_loss", False)):
+        teacher_render_cache = _load_teacher_render_cache(
+            render_dir=str(getattr(opt, "teacher_render_dir", "")),
+            train_cameras=scene.getTrainCameras(),
+        )
+        if len(teacher_render_cache) == 0:
+            print("[TeacherRender] disabled for this run: no teacher renders were loaded.")
 
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
@@ -2840,6 +2949,30 @@ def training(
 
         # FINAL LOSS
         loss = loss_image
+        teacher_render_loss_pure = 0
+        teacher_render_loss = 0
+        teacher_render_l1 = 0
+        teacher_render_ssim = 0
+        teacher_render_mask_fraction = 0
+        teacher_render_lambda = _teacher_render_lambda(iteration=int(iteration), opt=opt)
+        teacher_render_res = _compute_teacher_render_loss(
+            viewpoint_cam=viewpoint_cam,
+            image=image,
+            gt_image=gt_image,
+            teacher_cache=teacher_render_cache,
+            lam=float(teacher_render_lambda),
+            dssim_weight=float(getattr(opt, "teacher_render_dssim", 0.2)),
+            mask_mode=str(getattr(opt, "teacher_render_mask_mode", "none")),
+            error_margin=float(getattr(opt, "teacher_render_error_margin", 0.0)),
+        )
+        if teacher_render_res is not None:
+            teacher_render_loss_pure = teacher_render_res["loss_pure"]
+            teacher_render_loss = teacher_render_res["loss_weighted"]
+            teacher_render_l1 = teacher_render_res["l1"]
+            teacher_render_ssim = teacher_render_res["ssim"] if teacher_render_res["ssim"] is not None else 0
+            teacher_render_mask_fraction = float(teacher_render_res.get("mask_fraction", 1.0))
+            if torch.is_tensor(teacher_render_loss) and torch.isfinite(teacher_render_loss):
+                loss += teacher_render_loss
 
         # Opacity loss
         Lweight_pure = 0.0
@@ -3401,6 +3534,12 @@ def training(
                         "loss_components/loss_depth_l1": float(Ll1depth) if isinstance(Ll1depth, (float, int)) else float(Ll1depth.detach().item()),
                         "loss_components/loss_normal": float(Lnormal) if isinstance(Lnormal, (float, int)) else float(Lnormal.detach().item()),
                         "loss_components/loss_normal_super": float(normal_loss_super) if isinstance(normal_loss_super, (float, int)) else float(normal_loss_super.detach().item()),
+                        "loss_components/loss_teacher_render": float(teacher_render_loss) if isinstance(teacher_render_loss, (float, int)) else float(teacher_render_loss.detach().item()),
+                        "loss_components/loss_teacher_render_pure": float(teacher_render_loss_pure) if isinstance(teacher_render_loss_pure, (float, int)) else float(teacher_render_loss_pure.detach().item()),
+                        "teacher_render/lambda": float(teacher_render_lambda),
+                        "teacher_render/l1": float(teacher_render_l1) if isinstance(teacher_render_l1, (float, int)) else float(teacher_render_l1.detach().item()),
+                        "teacher_render/ssim": float(teacher_render_ssim) if isinstance(teacher_render_ssim, (float, int)) else float(teacher_render_ssim.detach().item()),
+                        "teacher_render/mask_fraction": float(teacher_render_mask_fraction),
                     }
                 )
                 if ground_reg_logs is not None:
@@ -3631,7 +3770,12 @@ def training(
                     continue
                 prism_state["round_snapshot"] = None
 
-            if (iteration % 500 == 0 and iteration < run_restricted_delaunay and bool(phase_info.get("allow_topology_mutation", True))):
+            if (
+                iteration % 500 == 0
+                and iteration < run_restricted_delaunay
+                and bool(phase_info.get("allow_topology_mutation", True))
+                and not bool(getattr(opt, "freeze_topology_updates", False))
+            ):
                 pre_triangles = int(triangles._triangle_indices.shape[0])
                 pre_vertices = int(triangles.vertices.shape[0])
                 
@@ -3722,7 +3866,11 @@ def training(
                             step=iteration,
                             log_state=wandb_log_state,
                         )
-            elif iteration == run_restricted_delaunay and not bool(getattr(opt, "skip_restricted_delaunay", False)):
+            elif (
+                iteration == run_restricted_delaunay
+                and not bool(getattr(opt, "skip_restricted_delaunay", False))
+                and not bool(getattr(opt, "freeze_topology_updates", False))
+            ):
                 need_delaunay = True
             elif iteration % 500 == 0 and iteration > run_restricted_delaunay + 1000:
 

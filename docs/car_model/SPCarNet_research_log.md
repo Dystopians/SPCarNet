@@ -3584,3 +3584,30 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 Against the best clean long render baseline, R44.01 is worse on PSNR by `-1.310450`, SSIM by `-0.085909`, LPIPS by `+0.094975`, AbsRel by `+0.104890`, and Depth MAE by `+1.050998`. R44.01 only wins on the normal proxy by `-2.890186` degrees and on topology size (`782982` vs `8548242` triangles). The defensible parking claim is therefore topology/normal Pareto under much lower topology, not render-quality dominance over the strongest clean long baseline.
 
 ---
+
+## 2026-05-03 - R45-R48 clean-to-compact repair
+
+**Goal**: repair the R44 clean-baseline failure by finding a route that preserves clean-long render quality while removing most of the clean-long topology.
+
+**Negative controls**:
+- R45.01, R44.01 plus full-image clean-render teacher loss, lambda `0.5`, DSSIM `0.2`, W&B `1vmbmftd`: PSNR `16.975172`, SSIM `0.538638`, LPIPS `0.454413`
+- R45.02, R44.01 plus full-image clean-render teacher loss, lambda `1.0`, DSSIM `0.4`, W&B `1lsrbnys`: PSNR `16.925661`, SSIM `0.532397`, LPIPS `0.461958`
+- R46.01, R44.01 plus counterfactual teacher mask (`teacher_better`, margin `0.005`), W&B `awwaei5j`: PSNR `16.967775`, SSIM `0.535215`, LPIPS `0.455750`
+
+**Negative-control decision**: `LOW_TOPOLOGY_TEACHER_DISTILLATION_REJECTED`. Starting from the 0.78M-triangle R44 checkpoint is too constrained; render-teacher supervision does not recover clean-level appearance or geometry.
+
+**Clean-to-compact runs**:
+- R47 prune80: prune the smallest-area 80% of clean 22k triangles, yielding `1709648` triangles and `1322214` vertices. Independent metrics: PSNR `17.9758396`, SSIM `0.5996068`, LPIPS `0.3873217`; geometry: AbsRel `0.0811635`, Depth MAE `1.8489281`, normal `45.0001905`.
+- R47 prune90: prune the smallest-area 90% of clean 22k triangles, yielding `854824` triangles and `806482` vertices. Independent metrics: PSNR `16.0933704`, SSIM `0.5029448`, LPIPS `0.4616031`. This is rejected as too aggressive.
+- R48.01: recovery from R47 prune80, `22000->26000`, W&B `1n6jv232`. Independent metrics: PSNR `18.6200047`, SSIM `0.6417572`, LPIPS `0.3493703`; geometry: AbsRel `0.0802411`, Depth MAE `1.8474095`, normal `44.7432287`; topology unchanged at `1709648` triangles.
+- R49.01: continuation `26000->30000` with the legacy `--skip_restricted_delaunay` control, W&B `xdaixz33`. Independent metrics: PSNR `18.3612633`, SSIM `0.6288872`, LPIPS `0.3608204`; geometry: AbsRel `0.0820096`, Depth MAE `1.8361890`, normal `45.3555216`; topology dropped to `934205` triangles.
+- R50.01: true fixed-topology continuation `26000->30000` after adding `--freeze_topology_updates`, W&B `zwafhpte`. Independent metrics: PSNR `18.4548378`, SSIM `0.6287037`, LPIPS `0.3614763`; geometry: AbsRel `0.0809017`, Depth MAE `1.8447213`, normal `45.3189719`; topology preserved at `1709648` triangles.
+
+**Implementation repair**: added `--freeze_topology_updates`. The old `--skip_restricted_delaunay` flag skipped only the Delaunay refresh; the standard 500-step prune/densify branch could still run before `densify_until_iter + 1000`, which is exactly what R49 exposed. The new flag disables both the standard prune/densify branch and the Delaunay refresh for strict topology-frozen continuation.
+
+**Decision**: `CLEAN_TO_COMPACT_RECOVERY_PASS_EARLY_STOP_AT_26K`. R48.01 is the first corrected parking result that beats the strongest clean 22k baseline on independent PSNR (`+0.140015`), SSIM (`+0.007134`), AbsRel (`-0.001936`), and Depth MAE (`-0.020989`) while using 20.0% of the clean long triangles. LPIPS is nearly tied but slightly worse (`+0.002457`). Relative to R44.01, it improves PSNR by `+1.450465`, SSIM by `+0.093043`, LPIPS by `-0.092518`, AbsRel by `-0.106826`, and Depth MAE by `-1.071986`, at the cost of `2.18x` more triangles and a weaker normal proxy. R49 and R50 reject 30k continuation; R48.01 remains the accepted checkpoint.
+
+**Linked artefact**:
+- `docs/car_model/parking_clean_to_compact_repair_report.md`
+
+---

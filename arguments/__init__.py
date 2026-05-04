@@ -110,6 +110,7 @@ class OptimizationParams(ParamGroup):
         self.densify_from_iter = 500
         self.densify_until_iter = 10000
         self.skip_restricted_delaunay = False
+        self.freeze_topology_updates = False
 
         self.random_background = False
         
@@ -179,6 +180,20 @@ class OptimizationParams(ParamGroup):
         self.sparse_colmap_depth_low_error_fraction = 1.0
         self.sparse_colmap_depth_enable_in_recovery = False
         self.sparse_colmap_depth_enable_in_final_finetune = False
+        # Optional render-teacher distillation from a pre-rendered stronger
+        # checkpoint. This is disabled by default and is intended for topology-
+        # constrained recovery rows that need to regain clean-baseline appearance.
+        self.enable_teacher_render_loss = False
+        self.teacher_render_dir = ""
+        self.lambda_teacher_render = 0.0
+        self.teacher_render_dssim = 0.2
+        self.teacher_render_mask_mode = "none"
+        self.teacher_render_error_margin = 0.0
+        self.teacher_render_start_iter = 0
+        self.teacher_render_warmup_iters = 1000
+        self.teacher_render_decay_start_iter = -1
+        self.teacher_render_decay_end_iter = -1
+        self.teacher_render_decay_final_mult = 1.0
 
         # Ground-plane estimation (for ground-aware regularization).
         self.enable_ground_plane_estimation = False
