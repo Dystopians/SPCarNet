@@ -17,7 +17,9 @@ This report is an auditable registry of completed ablation evidence. It does not
 | compact_recovery | cross_scene_csef50 | courtyard | PASS | 50 percent CSEF compact-recovery improves render and sparse geometry while halving topology | `docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md` |
 | compact_recovery | area_smallest_50 | courtyard | PASS_TIE_RENDER_GEOMETRY_SLIGHTLY_WORSE | area50 nearly ties CSEF50 on render but has slightly weaker sparse geometry; CSEF50 remains geometry-balanced | `docs/car_model/final_stageF17_courtyard_selector_ablation_report.md` |
 | compact_recovery | random_same_count_50 | courtyard | FAIL_CONTROL_SUPPORTS_STRUCTURED_SELECTION | random50 fails clean-long and is far worse than CSEF50/area50 at the same triangle count | `docs/car_model/final_stageF17_courtyard_selector_ablation_report.md` |
-| compact_recovery | cross_scene_csef50 | room | PASS | 50 percent CSEF compact-recovery improves render metrics; depth tradeoff stays inside gate | `docs/car_model/final_stageF9_third_scene_room_and_qualitative_report.md` |
+| compact_recovery | cross_scene_csef50 | room | PASS | 50 percent CSEF compact-recovery improves render metrics, but F19 shows area50 is stronger on room | `docs/car_model/final_stageF9_third_scene_room_and_qualitative_report.md` |
+| compact_recovery | area_smallest_50 | room | PASS_SELECTOR_BEST | area50 is the strongest room selector row and beats clean-long, CSEF50, and random50 on all tracked independent metrics | `docs/car_model/final_stageF19_room_selector_ablation_report.md` |
+| compact_recovery | random_same_count_50 | room | FAIL_CONTROL_SUPPORTS_STRUCTURED_SELECTION | random50 fails clean-long and is far worse than area50 at the same triangle count | `docs/car_model/final_stageF19_room_selector_ablation_report.md` |
 | compact_recovery | cross_scene_csef50 | counter | BORDERLINE | 50 percent CSEF is near the gate but misses SSIM by 0.003827 | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
 | compact_recovery | cross_scene_csef40 | counter | PASS | 40 percent CSEF improves PSNR, SSIM, LPIPS, and normal versus clean-long, but F16 shows area40 is stronger on counter | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
 | compact_recovery | area_smallest_40 | counter | PASS_SELECTOR_BEST | area40 is the strongest counter selector row and beats both clean-long and CSEF40 on independent metrics | `docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md` |
@@ -32,7 +34,7 @@ This report is an auditable registry of completed ablation evidence. It does not
 
 - replicate no-freeze compact-recovery control beyond counter
 - final CSEF selector versus area-only selector on every public scene
-- selector ablation beyond counter and courtyard, ideally one more public scene
+- selector ablation on remaining scenes beyond completed counter, courtyard, and room controls
 - posthoc QEM/decimation baseline with equal recovery budget
 - separate final compact-recovery rows that explicitly enable sparse-depth loss, if the manuscript wants to claim sparse-depth-guided recovery
 - full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations

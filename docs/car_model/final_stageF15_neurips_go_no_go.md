@@ -20,7 +20,7 @@ Decision: `NEURIPS_BORDERLINE_NEEDS_STRICT_ABLATIONS`.
 
 | risk | current answer | mitigation |
 | --- | --- | --- |
-| This is just area pruning plus finetuning. | Counter area40 beats CSEF40; courtyard CSEF50 and area50 are near-tied, while random controls fail badly on both scenes. | Run one more public-scene selector triplet and include the mixed selector result honestly. |
+| This is just area pruning plus finetuning. | Counter and room favor area, courtyard is near-tied with CSEF slightly more geometry-balanced, and random same-count controls fail badly on all three controlled scenes. | Present the selector conclusion honestly as structured compact selection versus random pruning, not universal CSEF dominance. |
 | Sparse depth does all the work. | The final main rows did not enable sparse-depth loss; they use COLMAP sparse geometry for independent evaluation. | Keep sparse-depth as a separate branch, or launch explicit sparse-depth-loss compact-recovery variants before claiming it as part of the final method. |
 | Only one scene works. | No longer true: F12 has five scene-matched long-baseline rows. | Keep F12 main table prominent. |
 | Triangle soup means mesh repair is not real mesh repair. | Correct; edge-loop repair was rejected. | Frame as compact-repair optimization, not classical watertight mesh repair. |
@@ -35,8 +35,7 @@ Recommended label: `NEURIPS_BORDERLINE_NEEDS_STRICT_ABLATIONS`.
 
 Minimum remaining work before submission:
 
-- final area-only versus CSEF selector ablation;
-- selector ablation beyond completed counter and courtyard controls;
+- remaining area-only versus CSEF selector ablations beyond completed counter, courtyard, and room controls;
 - replicated no-freeze recovery controls beyond counter;
 - explicit sparse-depth-loss compact-recovery variants if sparse-depth is claimed as final-method training;
 - posthoc QEM/decimation baseline;

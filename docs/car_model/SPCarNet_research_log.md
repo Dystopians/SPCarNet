@@ -4094,3 +4094,24 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Documentation correction**: the final F8-F18 compact-recovery main rows use independent COLMAP sparse geometry evaluation, but their training commands did not enable sparse-depth loss. Sparse-depth-guided recovery remains an earlier useful branch and should not be described as the active final main-row recovery mechanism unless new rows explicitly enable it.
 
 ---
+
+## 2026-05-04 - Final F19 room selector ablation
+
+**Goal**: extend the selector ablation from counter/courtyard to a third public scene and check whether room prefers CSEF50, area50, or random50 at the same 50 percent compact target.
+
+**W&B runs**:
+- area50: `eagvu7em`;
+- random50: `p0vxzf01`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 84,506 | 14.258379 | 0.400864 | 0.578919 | 0.206282 | 1.480230 | 55.442653 |
+| CSEF50 26k | 42,253 | 14.387163 | 0.414954 | 0.568281 | 0.225027 | 1.603030 | 54.642793 |
+| area50 26k | 42,253 | 14.844683 | 0.461875 | 0.530461 | 0.185703 | 1.353216 | 54.615295 |
+| random50 26k | 42,253 | 13.428182 | 0.345278 | 0.609467 | 0.272092 | 1.873476 | 54.469912 |
+
+**Decision**: `FINAL_F19_ROOM_SELECTOR_ABLATION_PASS_AREA50_BEST_RANDOM_FAIL`. Area50 becomes the new room best row and improves every tracked independent render/geometry metric versus clean-long while halving triangles. Random50 fails badly at the same triangle count. This upgrades the selector-control evidence to three scenes and strengthens the non-random compaction claim, while keeping the selector conclusion honest: area is strongest on counter/room, CSEF is slightly more geometry-balanced on courtyard.
+
+---

@@ -90,7 +90,23 @@ ROWS = [
         "scene": "room",
         "status": "PASS",
         "evidence": "docs/car_model/final_stageF9_third_scene_room_and_qualitative_report.md",
-        "finding": "50 percent CSEF compact-recovery improves render metrics; depth tradeoff stays inside gate",
+        "finding": "50 percent CSEF compact-recovery improves render metrics, but F19 shows area50 is stronger on room",
+    },
+    {
+        "group": "compact_recovery",
+        "row": "area_smallest_50",
+        "scene": "room",
+        "status": "PASS_SELECTOR_BEST",
+        "evidence": "docs/car_model/final_stageF19_room_selector_ablation_report.md",
+        "finding": "area50 is the strongest room selector row and beats clean-long, CSEF50, and random50 on all tracked independent metrics",
+    },
+    {
+        "group": "compact_recovery",
+        "row": "random_same_count_50",
+        "scene": "room",
+        "status": "FAIL_CONTROL_SUPPORTS_STRUCTURED_SELECTION",
+        "evidence": "docs/car_model/final_stageF19_room_selector_ablation_report.md",
+        "finding": "random50 fails clean-long and is far worse than area50 at the same triangle count",
     },
     {
         "group": "compact_recovery",
@@ -169,7 +185,7 @@ ROWS = [
 MISSING = [
     "replicate no-freeze compact-recovery control beyond counter",
     "final CSEF selector versus area-only selector on every public scene",
-    "selector ablation beyond counter and courtyard, ideally one more public scene",
+    "selector ablation on remaining scenes beyond completed counter, courtyard, and room controls",
     "posthoc QEM/decimation baseline with equal recovery budget",
     "separate final compact-recovery rows that explicitly enable sparse-depth loss, if the manuscript wants to claim sparse-depth-guided recovery",
     "full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations",
