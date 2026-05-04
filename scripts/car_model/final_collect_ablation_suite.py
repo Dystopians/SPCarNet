@@ -82,7 +82,15 @@ ROWS = [
         "scene": "parking_phone_tiny",
         "status": "FAIL_UNMATCHED_COMPRESSION",
         "evidence": "docs/car_model/final_stageF25_parking_posthoc_qem_baseline_report.md",
-        "finding": "Open3D QEM was requested to match the 2,564,473-triangle parking target but stopped at 8,125,970 triangles; no recovery was launched because the compression level is not comparable",
+        "finding": "Open3D QEM was requested to match the 2,564,473-triangle parking target but stopped at 8,125,970 triangles; superseded by the matched F37 fast-QEM control",
+    },
+    {
+        "group": "posthoc_simplification",
+        "row": "fast_qem70_matched_strict_recovery",
+        "scene": "parking_phone_tiny",
+        "status": "MIXED_RENDER_FAIL_GEOMETRY_STRONG_CONTROL",
+        "evidence": "docs/car_model/final_stageF37_parking_fast_qem_matched_baseline_report.md",
+        "finding": "matched fast-QEM reaches the F7/F33 parking topology within 9 triangles and is strong on sparse geometry proxies, but it collapses render quality relative to clean-long and F33",
     },
     {
         "group": "compact_recovery",
@@ -329,7 +337,6 @@ ROWS = [
 MISSING = [
     "final CSEF selector versus area-only selector on every public scene beyond the completed bonsai, courtyard, room, and counter controls",
     "selector ablation on any additional scenes added to the final benchmark",
-    "a matched 70 percent parking posthoc simplification baseline that can actually reach the R53/F7 triangle target; Open3D QEM failed this target",
     "replicate explicit sparse-depth compact-recovery on any additional scenes added beyond the completed parking, bonsai, room, courtyard, and counter final rows",
     "full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations",
 ]
@@ -374,7 +381,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F36 closes no-freeze failure replication on all five final-package scenes, including the largest parking scene. F28/F29/F30/F31/F32/F33 now replicate explicit sparse-depth compact recovery on all five final scenes, supporting a geometry/perceptual regularizer claim but not a universal PSNR-improvement claim. F34 adds a long-continuation control showing the best parking row should stop at 26k rather than blindly continue to 30k. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
+        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F36 closes no-freeze failure replication on all five final-package scenes, including the largest parking scene. F37 closes the matched parking posthoc simplification gap: fast-QEM reaches the target topology but collapses render quality while improving sparse geometry proxies. F28/F29/F30/F31/F32/F33 now replicate explicit sparse-depth compact recovery on all five final scenes, supporting a geometry/perceptual regularizer claim but not a universal PSNR-improvement claim. F34 adds a long-continuation control showing the best parking row should stop at 26k rather than blindly continue to 30k. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
         "",
     ]
     DOC.write_text("\n".join(lines))

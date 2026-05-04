@@ -23,7 +23,7 @@ from ss3dm_prior.meshsplatopt.checkpoint_compaction import (  # noqa: E402
 )
 
 
-def _simplify(vertices: np.ndarray, faces: np.ndarray, target_faces: int) -> tuple[np.ndarray, np.ndarray]:
+def _simplify_open3d(vertices: np.ndarray, faces: np.ndarray, target_faces: int) -> tuple[np.ndarray, np.ndarray]:
     import open3d as o3d
 
     mesh = o3d.geometry.TriangleMesh(
@@ -42,6 +42,29 @@ def _simplify(vertices: np.ndarray, faces: np.ndarray, target_faces: int) -> tup
     if out_faces.size == 0:
         raise RuntimeError("Open3D QEM returned an empty mesh")
     return out_vertices, out_faces
+
+
+def _simplify_fast(vertices: np.ndarray, faces: np.ndarray, target_faces: int) -> tuple[np.ndarray, np.ndarray]:
+    import fast_simplification
+
+    out_vertices, out_faces = fast_simplification.simplify(
+        vertices.astype(np.float64, copy=False),
+        faces.astype(np.int64, copy=False),
+        target_count=int(target_faces),
+    )
+    out_vertices = np.asarray(out_vertices, dtype=np.float32)
+    out_faces = np.asarray(out_faces, dtype=np.int64)
+    if out_faces.size == 0:
+        raise RuntimeError("fast_simplification returned an empty mesh")
+    return out_vertices, out_faces
+
+
+def _simplify(vertices: np.ndarray, faces: np.ndarray, target_faces: int, backend: str) -> tuple[np.ndarray, np.ndarray]:
+    if backend == "open3d":
+        return _simplify_open3d(vertices, faces, target_faces)
+    if backend == "fast_simplification":
+        return _simplify_fast(vertices, faces, target_faces)
+    raise ValueError(f"Unknown backend: {backend}")
 
 
 def _nearest_indices(query: np.ndarray, reference: np.ndarray) -> np.ndarray:
@@ -85,6 +108,7 @@ def main() -> int:
     parser.add_argument("--output_model", required=True)
     parser.add_argument("--target_faces", type=int, default=0)
     parser.add_argument("--target_fraction", type=float, default=0.5)
+    parser.add_argument("--backend", choices=["open3d", "fast_simplification"], default="open3d")
     args = parser.parse_args()
 
     src_model = Path(args.source_model)
@@ -99,7 +123,7 @@ def main() -> int:
     faces = state["_triangle_indices"].detach().cpu().long().numpy()
     target_faces = int(args.target_faces) if args.target_faces > 0 else int(round(faces.shape[0] * args.target_fraction))
     target_faces = max(1, min(int(faces.shape[0] - 1), target_faces))
-    qem_vertices, qem_faces = _simplify(vertices, faces, target_faces)
+    qem_vertices, qem_faces = _simplify(vertices, faces, target_faces, args.backend)
     out_state = _transfer_state(state, qem_vertices, qem_faces)
     degenerate, invalid = validate_faces(out_state["triangles_points"], out_state["_triangle_indices"])
     torch.save(out_state, out_checkpoint)
@@ -110,7 +134,8 @@ def main() -> int:
         "output_model": str(out_model),
         "output_checkpoint": str(out_checkpoint),
         "iteration": int(args.iteration),
-        "method": "open3d_qem_quadric_decimation",
+        "method": f"{args.backend}_quadric_decimation",
+        "backend": args.backend,
         "target_faces": int(target_faces),
         "pre_triangles": int(faces.shape[0]),
         "post_triangles": int(qem_faces.shape[0]),

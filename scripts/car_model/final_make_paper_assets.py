@@ -22,9 +22,9 @@ QUALITATIVE_SCENES = [
         "scene": "parking_phone_tiny",
         "gt": "outputs/carnet/meshsplatopt/final_stageF7_parking_pareto/csef_low_evidence_boundary_protected/prune70/recovery_model/test/ours_26000/gt",
         "clean": "outputs/carnet/meshprior/parking_phone_tiny/stage44_clean_long/current_branch_clean_7000to22000/model/test/ours_22000/renders",
-        "control": "outputs/carnet/meshsplatopt/stageR53_01_prune70_clean_recovery_22000to26000/recovery_model/test/ours_26000/renders",
+        "control": "outputs/carnet/meshsplatopt/final_stageF37_parking_fast_qem_matched_baseline/prune70_pass6/recovery_model/test/ours_26000/renders",
         "ours": "outputs/carnet/meshsplatopt/final_stageF33_parking_csef_sparse_depth/prune70/recovery_model/test/ours_26000/renders",
-        "control_label": "area70",
+        "control_label": "fast-QEM70",
         "ours_label": "CSEF70+sparse",
     },
     {

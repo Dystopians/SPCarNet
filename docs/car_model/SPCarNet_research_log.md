@@ -4,6 +4,31 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-04 — MeshSplatOpt F37 parking matched fast-QEM baseline — MIXED_RENDER_FAIL_GEOMETRY_STRONG_CONTROL
+
+**Outcome**: Added a `fast_simplification` backend to the QEM checkpoint simplifier and
+used repeated QEM passes to create the first matched parking posthoc simplification
+baseline at the F7/F33 target topology. The final compact checkpoint has `2,564,464`
+triangles, only `9` fewer than the `2,564,473` target.
+
+**W&B**: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/23bqvu1k`
+
+**Verification**:
+- topology: `2,564,464` triangles, `284,830` vertices
+- independent render metrics: PSNR `15.263328552246094`, SSIM `0.5002103447914124`, LPIPS `0.4852917492389679`
+- sparse geometry: AbsRel `0.07642529900637018`, Depth MAE `1.252606223775163`, normal mean angle `40.286478478177486`
+- comparison to F33: PSNR `-3.449001`, SSIM `-0.147520`, LPIPS `+0.147032`, AbsRel `-0.002646`, Depth MAE `-0.601409`, normal `-3.749230`
+
+**Decision**: `MIXED_RENDER_FAIL_GEOMETRY_STRONG_CONTROL`. F37 is the missing fair
+parking posthoc simplification control. It is not a visual-quality competitor, but it is
+a strong geometry-biased baseline and should be reported honestly.
+
+**Linked artefacts**:
+- `docs/car_model/final_stageF37_parking_fast_qem_matched_baseline_report.md`
+- `outputs/carnet/meshsplatopt/final_stageF37_parking_fast_qem_matched_baseline/`
+
+---
+
 ## 2026-05-04 — MeshSplatOpt F36 parking CSEF no-freeze control — FAIL_SUPPORTS_STRICT_FREEZE
 
 **Outcome**: Ran a W&B-logged no-freeze control on the largest final scene,
