@@ -3536,3 +3536,17 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - `scripts/car_model/meshsplatopt_collect_sparse_recovery_results.py`
 
 ---
+
+## 2026-05-03 - R43 long-horizon validation
+
+**Goal**: answer whether the R40-R42 medium/full rows are enough, or whether longer training changes the conclusion.
+
+**Runs**:
+- R43.01b parking fraction `0.50`, lambda `0.001`, `16000->30000`, W&B `mhz6t8ps`: PSNR `16.249155`, SSIM `0.511035`, LPIPS `0.477426`, AbsRel `0.193679`, Depth MAE `3.018124`, normal `43.714506`
+- R43.02b courtyard fraction `0.625`, lambda `0.002`, `7000->20000`, W&B `cla3utia`: PSNR `17.793036`, SSIM `0.560976`, LPIPS `0.496724`, AbsRel `0.158907`, Depth MAE `1.991568`, normal `28.950016`
+
+**Decision**: `LONG_HORIZON_VALIDATION_SPLIT`. Parking long-horizon continuation is a clear overtraining/failure boundary: relative to R40.01 it drops PSNR by `-0.896475`, SSIM by `-0.023119`, LPIPS worsens by `+0.021129`, AbsRel worsens by `+0.012343`, and Depth MAE worsens by `+0.168999`. Courtyard long-horizon continuation improves render strongly relative to R40.02, with PSNR `+0.991062`, SSIM `+0.001944`, and LPIPS `-0.011855`, while sacrificing sparse depth agreement by AbsRel `+0.052124` and Depth MAE `+0.602633`; normal angle improves by `-0.444181`.
+
+**Paper implication**: the method needs a budget-aware Pareto claim. R40.02 is the all-metric courtyard row, R43.02b is the courtyard render-best long row, and R43.01b proves that parking should not be blindly extended beyond the validated 16000 budget.
+
+---
