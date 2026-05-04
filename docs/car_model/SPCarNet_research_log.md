@@ -3855,3 +3855,25 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F6_STRICT_RECOVERY_RUNNER_PASS`. The runner writes exact W&B-enabled train, render, metrics, and geometry commands and verifies the R53 topology-freeze contract. No new long training was launched because GPUs were high-memory occupied.
 
 ---
+
+## 2026-05-04 - Final F7 parking compact Pareto
+
+**Goal**: stop relying on a single area-only compact result by implementing a reproducible parking Pareto sweep and validating the first non-area CSEF boundary-protected compact recovery.
+
+**Implementation**:
+- added `scripts/car_model/final_run_parking_compact_pareto.py`;
+- added `scripts/car_model/final_collect_parking_compact_pareto.py`;
+- added `scripts/car_model/meshsplatopt_eval_render_metrics_single_iteration.py`;
+- added `docs/car_model/final_stageF7_parking_pareto_report.md`.
+
+**Validated run**:
+- selector: `csef_low_evidence_boundary_protected`;
+- prune fraction: 70 percent;
+- W&B run: `oqpkykcw`;
+- topology: `2,564,473` triangles and `1,661,616` vertices at both 22k and 26k;
+- independent render metrics at 26k: PSNR `18.706079`, SSIM `0.647764`, LPIPS `0.338282`;
+- sparse geometry at 26k: AbsRel `0.079404`, Depth MAE `1.852816`, Normal `44.204497`.
+
+**Decision**: `FINAL_F7_PARKING_PARETO_PASS`. F7.csef70 beats clean22k on render and sparse geometry while reducing triangles by 70 percent. At identical topology to R53, it slightly improves PSNR, LPIPS, AbsRel, Depth MAE, and normal angle, with only a negligible SSIM decrease.
+
+---
