@@ -209,7 +209,7 @@ def scene_configs() -> list[SceneConfig]:
         ),
         SceneConfig(
             scene="courtyard",
-            source_path="/data/peilincai/mesh_datasets/ETH3D/courtyard",
+            source_path="/data/peilincai/mesh_datasets/eth3d_colmap/courtyard",
             images="images",
             resolution=8,
             clean_model="outputs/carnet/meshsplatopt/finalF3_courtyard_clean_long_9000to22000",

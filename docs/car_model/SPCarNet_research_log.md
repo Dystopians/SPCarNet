@@ -3897,3 +3897,31 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F8_IN_PROGRESS`. The interface and honest collector are in place, but F8 cannot pass until at least one non-parking scene completes clean-long plus compact recovery and at least two scenes satisfy the fair clean-long gate.
 
 ---
+
+## 2026-05-04 - Final F8 cross-scene compact pilot pass
+
+**Goal**: complete the fair non-parking evidence that was missing from F8 and stop comparing short clean baselines against long compact recoveries.
+
+**Completed evidence**:
+- bonsai clean-long 9k->22k W&B run: `r8ozggn1`;
+- bonsai CSEF50 strict topology-frozen recovery W&B run: `irdsa4c8`;
+- bonsai CSEF70 strict topology-frozen recovery W&B run: `ou72x2zw`;
+- courtyard clean-long successful retry W&B run: `5ptlupv8`;
+- courtyard CSEF50 strict topology-frozen recovery W&B run: `jz93wrbc`.
+
+**Resource note**:
+- courtyard clean-long retry `eqjygth6` failed near the final stage with a CUDA OOM because another same-card process occupied roughly 36GB;
+- retry `5ptlupv8` kept online W&B scalar logging enabled but disabled inline image logging and deferred render/metrics/geometry to independent commands, which completed successfully.
+
+**Independent results**:
+
+| scene | method | triangles | reduction | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal | decision |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| bonsai | clean-long 22k | 88,460 | - | 10.944348 | 0.222848 | 0.586158 | 0.194249 | 1.816410 | 45.358356 | baseline |
+| bonsai | CSEF50 26k | 44,230 | 50.0% | 10.957497 | 0.224758 | 0.586415 | 0.185180 | 1.737815 | 43.493975 | PASS |
+| courtyard | clean-long 22k | 1,677,484 | - | 12.103508 | 0.296648 | 0.569308 | 0.354648 | 3.829044 | 40.821649 | baseline |
+| courtyard | CSEF50 26k | 838,742 | 50.0% | 12.555809 | 0.338273 | 0.545077 | 0.322233 | 3.608432 | 40.830157 | PASS |
+
+**Decision**: `FINAL_F8_CROSS_SCENE_COMPACT_PILOT_PASS`. The same CSEF boundary-protected 50 percent compact setting passes on two non-parking scenes against fair clean-long baselines. Courtyard is the strongest transfer result so far because it removes half the triangles and improves PSNR, SSIM, LPIPS, AbsRel, and Depth MAE against a 1.68M-triangle clean baseline.
+
+---
