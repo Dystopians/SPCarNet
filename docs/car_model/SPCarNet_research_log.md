@@ -3727,3 +3727,26 @@ Against the best clean long render baseline, R44.01 is worse on PSNR by `-1.3104
 - `docs/car_model/final_stageF0_current_state_audit.md`
 
 ---
+
+## 2026-05-04 - Final F1 paper story and method spec
+
+**Goal**: convert the F0 claim reset into a paper-facing method spec that can guide implementation, baselines, figures, and reviewer-risk checks.
+
+**Spec decision**: `FINAL_F1_METHOD_SPEC_PASS`. MeshSplatOpt is now framed as counterfactually certified compact-repair optimization. The one-paragraph story leads with CSEF-scored compaction/repair candidates, rollback-compatible gates, strict topology-frozen recovery, and independent render/sparse-geometry certification against the strongest matched clean baseline.
+
+**Load-bearing branch**:
+- R53.01 is the headline parking result because it beats clean 22k/30k on independent render, sparse depth, normal proxy, and topology.
+- R48.01 is the more compact 20-percent-triangle Pareto row.
+- R55.01 is the LPIPS/normal Pareto row.
+- R58 is the public-scene all-metric positive.
+- R57/R60 and R59's geometry tradeoff are retained as selector-motivation evidence.
+
+**Guardrails**:
+- R44 is explicitly demoted to topology/normal Pareto evidence, not a render win.
+- Snap/fill/object-prior/ground-void edits are optional repair branches until equal-budget controls prove benefit.
+- The spec forbids long-method-vs-short-clean headline comparisons and training-metric/independent-metric mixing.
+
+**Linked artefact**:
+- `docs/car_model/final_stageF1_method_spec.md`
+
+---
