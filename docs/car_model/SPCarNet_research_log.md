@@ -3566,13 +3566,21 @@ K=4 same pattern (no_prior best non-oracle at 0.0725, still +0.0010 over K=1). *
 - R44.01 parking fraction `0.50`, lambda `0.001`, decay `16000->20000` to zero, trained `16000->22000`, W&B `c1rxa6q6`: PSNR `17.169540`, SSIM `0.548714`, LPIPS `0.441888`, AbsRel `0.187067`, Depth MAE `2.919396`, normal `42.218251`
 - R44.02 courtyard fraction `0.625`, lambda `0.002`, decay `7000->14000` to `0.25x`, trained `7000->20000`, W&B `5tleod3c`: PSNR `17.829701`, SSIM `0.561812`, LPIPS `0.493252`, AbsRel `0.147102`, Depth MAE `1.915970`, normal `26.520612`
 
-**Decision**: `SPARSE_DECAY_LONG_HORIZON_REPAIR_PASS`. R44.01 repairs the R43 parking overtraining failure: relative to R43.01b it improves PSNR by `+0.920386`, SSIM by `+0.037679`, LPIPS by `-0.035538`, AbsRel by `-0.006612`, and Depth MAE by `-0.098728`. It also becomes the strongest parking render row versus R40.01, with PSNR `+0.023911`, SSIM `+0.014560`, and LPIPS `-0.014409`, while giving back a small amount of sparse depth. R44.02 improves the R43 courtyard long row on every tracked metric: PSNR `+0.036665`, SSIM `+0.000836`, LPIPS `-0.003472`, AbsRel `-0.011805`, Depth MAE `-0.075598`, and normal angle `-2.429404`.
+**Decision**: `SPARSE_DECAY_LONG_HORIZON_REPAIR_PARTIAL_PASS_CLEAN_LONG_RENDER_FAIL`. R44.01 repairs the R43 parking overtraining failure: relative to R43.01b it improves PSNR by `+0.920386`, SSIM by `+0.037679`, LPIPS by `-0.035538`, AbsRel by `-0.006612`, and Depth MAE by `-0.098728`. It also improves the prior sparse-recovery parking rows R40.01/R39.01 on render, but that is not sufficient for a clean-baseline claim. After a corrected long-horizon clean comparison, the strongest parking render row is the clean current-branch 22000-iteration baseline, not R44.01. R44.02 improves the R43 courtyard long row on every tracked metric: PSNR `+0.036665`, SSIM `+0.000836`, LPIPS `-0.003472`, AbsRel `-0.011805`, Depth MAE `-0.075598`, and normal angle `-2.429404`.
 
 **Clean baseline comparison artefacts**:
 - `outputs/carnet/meshsplatopt/baseline_vs_method_qualitative/parking_clean_baseline_vs_ours_render_montage.png`
 - `outputs/carnet/meshsplatopt/baseline_vs_method_qualitative/parking_clean_baseline_vs_ours_abs_error_montage.png`
 - `outputs/carnet/meshsplatopt/baseline_vs_method_qualitative/parking_clean_baseline_vs_ours_summary.md`
+- `outputs/carnet/meshsplatopt/best_clean_long_vs_method_long/best_clean_long_vs_method_long_render_montage.png`
+- `outputs/carnet/meshsplatopt/best_clean_long_vs_method_long/best_clean_long_vs_method_long_summary.md`
+- `docs/car_model/parking_best_clean_long_vs_method_long_report.md`
 
-Against the stronger R16.03 clean 7000-iteration baseline, R44.01 improves PSNR by `+1.598975`, SSIM by `+0.100502`, LPIPS by `-0.086165`, Depth MAE by `-0.165627`, AbsRel by `-0.070748`, and normal angle by `-7.571498`.
+**Corrected clean-long comparison**: the earlier R16.03 clean 7000-iteration comparison is only a historical weak-clean reference and must not be used as the main claim. A proper same-scene long-horizon clean comparison was run with online W&B:
+- clean current-branch `7000` baseline: PSNR `17.204679`, SSIM `0.535045`, LPIPS `0.450750`, AbsRel `0.0761`, Depth MAE `1.7522`, normal `45.5620`, triangles `833775`
+- clean current-branch `7000->22000`, W&B `uus7fi39`: PSNR `18.479990`, SSIM `0.634623`, LPIPS `0.346913`, AbsRel `0.082177`, Depth MAE `1.868398`, normal `45.108437`, triangles `8548242`
+- clean current-branch `22000->30000`, W&B `2q807xuf`: PSNR `18.408827`, SSIM `0.631504`, LPIPS `0.350967`, AbsRel `0.081639`, Depth MAE `1.865811`, normal `44.838918`, triangles `8548242`
+
+Against the best clean long render baseline, R44.01 is worse on PSNR by `-1.310450`, SSIM by `-0.085909`, LPIPS by `+0.094975`, AbsRel by `+0.104890`, and Depth MAE by `+1.050998`. R44.01 only wins on the normal proxy by `-2.890186` degrees and on topology size (`782982` vs `8548242` triangles). The defensible parking claim is therefore topology/normal Pareto under much lower topology, not render-quality dominance over the strongest clean long baseline.
 
 ---
