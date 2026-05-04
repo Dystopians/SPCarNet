@@ -3773,3 +3773,20 @@ Against the best clean long render baseline, R44.01 is worse on PSNR by `-1.3104
 **Decision**: `FINAL_F2_BASELINE_REGISTRY_PASS`. The collector makes R53 the clean-to-compact headline, keeps R44 as a documented render-losing topology/normal Pareto point, and explicitly flags non-independent or missing metrics.
 
 ---
+
+## 2026-05-04 - Final F3 cross-scene clean-to-compact plan
+
+**Goal**: stop launching cross-scene compaction blindly by naming exact clean baselines, missing clean-long commands, output paths, and launch order.
+
+**Audit result**:
+- parking has clean long 22k/30k and remains the headline validated scene;
+- bonsai/courtyard/room/counter currently have matched 9k clean continuations, not true clean-long baselines;
+- flowers is not present under `/data/peilincai/mesh_datasets`;
+- R58 bonsai is the strongest public-scene positive, so the first missing-baseline run should be `finalF3_bonsai_clean_long_9000to22000`.
+
+**Decision**: `FINAL_F3_CROSS_SCENE_PLAN_PASS`. Do not launch broad cross-scene compaction before the bonsai clean-long baseline exists and F4's non-area CSEF-compatible selector passes. The plan names the sweep fractions, output layout, recovery template, and scene risk levels.
+
+**Linked artefact**:
+- `docs/car_model/final_stageF3_cross_scene_compact_plan.md`
+
+---
