@@ -4281,3 +4281,26 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F26_BONSAI_SELECTOR_ABLATION_PASS_AREA_PARETO_RANDOM_FAIL`. Random same-count pruning fails as a clean-long control and loses badly to structured selectors at the same triangle count. Area50 is a strong geometry/perceptual Pareto row: it is slightly behind QEM50 on PSNR and SSIM, but better on LPIPS, AbsRel, Depth MAE, and normal. QEM50 remains the bonsai render-headline row; area50 becomes the bonsai selector Pareto control.
 
 ---
+
+## 2026-05-04 - Final F27/F28 bonsai freeze and sparse-depth compact recovery
+
+**Goal**: remove two remaining F11 weaknesses on a fast public scene: replicate no-freeze failure beyond counter/room, and run a final compact-recovery row that explicitly enables sparse COLMAP depth loss.
+
+**W&B runs**:
+- F27 QEM50 no-freeze `22000->26000`: `0wskvq3h`;
+- F28 QEM50 + sparse-depth strict recovery `22000->26000`: `07k1ii1d`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 88,460 | 10.944348 | 0.222848 | 0.586158 | 0.194249 | 1.816410 | 45.358356 |
+| QEM50 frozen 26k | 44,230 | 11.082405 | 0.243249 | 0.570177 | 0.182966 | 1.793852 | 42.889339 |
+| QEM50 no-freeze 26k | 17,962 | 10.560091 | 0.176992 | 0.609218 | 0.229736 | 1.718488 | 46.233158 |
+| QEM50 + sparse-depth 26k | 44,230 | 11.081614 | 0.243248 | 0.569658 | 0.181698 | 1.779783 | 42.425734 |
+
+**Decision F27**: `FINAL_F27_BONSAI_QEM_NO_FREEZE_FAIL_SUPPORTS_STRICT_TOPOLOGY_FREEZE`. No-freeze collapses topology and loses badly to frozen QEM50 on PSNR, SSIM, LPIPS, AbsRel, and normal. With counter and room, strict topology freeze is now replicated across three scenes.
+
+**Decision F28**: `FINAL_F28_BONSAI_QEM_SPARSE_DEPTH_PARETO_PASS`. Explicit sparse COLMAP depth loss is active and improves LPIPS, AbsRel, Depth MAE, and normal relative to QEM50 at identical topology, while giving back only `0.000791 dB` PSNR and `0.000001` SSIM. This becomes the bonsai geometry/perceptual headline and the first final compact-recovery row that explicitly supports the sparse-depth-guided recovery claim.
+
+---
