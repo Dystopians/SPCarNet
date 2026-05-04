@@ -4657,4 +4657,32 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 
 **Decision**: `FINAL_F44_BONSAI_CALIBRATED_GATE_REPAIR_PASS_CLOSE_TO_NO_GATE`. This is the first strong repair of the F43 weakness. It proves the problem was not that gating must be removed; the strict immediate threshold was too conservative for recoverable bonsai edits. The calibrated gate keeps the counterfactual interface on, accepts the first three recoverable rounds, rejects the later three, beats strict gate by large margins on every tracked metric, and lands close to no-gate while being more compact. The remaining evidence gap is replication of calibrated gate thresholds on another scene before claiming broad calibrated-gate superiority.
 
+## 2026-05-04 - Final F45 unified-preset fairness audit
+
+**Goal**: directly address the per-scene-parameter concern by auditing whether the current F12 package can be described as one fixed CSEF50 method.
+
+**Artifact**: `docs/car_model/final_stageF45_unified_preset_fairness_report.md`.
+
+**Finding**: fixed CSEF50 is not yet a five-scene all-metric win. Among completed long rows, courtyard is a clear pass, bonsai is borderline because LPIPS slightly regresses, room is mixed because depth metrics regress, and counter fails. Parking has no matched CSEF50 long row because the F12 parking headline uses CSEF70+sparse-depth. The F12 package must therefore be framed as a validation-selected compact-recovery operator family, not as a universal fixed CSEF50 hyperparameter setting.
+
+**Repair launched**: F46 defines the next fair protocol: unified `CSEF50 + sparse-depth strict topology-frozen recovery` on the missing/weak CSEF50 scenes, using W&B online, `22000->26000`, independent render metrics, COLMAP geometry, and topology-freeze audit.
+
+## 2026-05-04 - Final F46 unified CSEF sparse-depth fairness repair
+
+**Goal**: repair the F45 fixed-preset weakness without hiding it. First test fixed CSEF50+sparse-depth on the weak rows; then use the same CSEF selector family with conservative validation-selected budgets where fixed CSEF50 remains weak.
+
+**Runs**: all online W&B, `22000->26000`, strict topology freeze, sparse-depth enabled, independent render metrics, COLMAP geometry, and topology audit.
+
+| scene | row | W&B | triangles | clean-long delta summary |
+| --- | --- | --- | ---: | --- |
+| bonsai | CSEF50+sparse | `xpv6dd08` | 44,230 | mixed: render PSNR/SSIM and geometry improve, LPIPS slightly regresses |
+| room | CSEF50+sparse | `7fq1dnqk` | 42,253 | mixed: render and normal improve, depth metrics still regress |
+| room | CSEF20+sparse | `v7ld1o0x` | 67,605 | all-metric clean-long win at 20% topology reduction |
+| counter | CSEF50+sparse | `vuvaul2s` | 41,917 | fail: fixed CSEF50 remains too aggressive |
+| counter | CSEF40+sparse | `ihoyzp1a` | 50,300 | mixed but improves every metric over previous CSEF40 |
+| counter | CSEF30+sparse | `panxl9lh` | 58,684 | near pass; render/normal win, depth margins remain small regressions |
+| counter | CSEF20+sparse | `pijpv7ny` | 67,067 | all-metric clean-long win at 20% topology reduction |
+
+**Decision**: `F46_VALIDATION_BUDGET_CSEF_REPAIR_PASS_WITH_FIXED50_LIMITATION`. Fixed CSEF50 is still not a universal hyperparameter and should not be claimed as such. The repair is stronger and fairer: a fixed CSEF selector family with sparse-depth strict recovery and conservative validation-selected budgets now gives all-metric clean-long wins on room and counter without relying on QEM. This directly reduces the per-scene-backend cheating risk while keeping the limitation visible.
+
 ---

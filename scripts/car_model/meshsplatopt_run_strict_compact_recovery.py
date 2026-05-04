@@ -73,8 +73,15 @@ def _train_args(args: argparse.Namespace) -> list[str]:
     if args.preset in ("compact_sparse_low_lambda", "compact_sparse_decay"):
         cmd.extend(
             [
+                "--enable_sparse_colmap_depth_loss",
                 "--lambda_sparse_colmap_depth",
                 str(args.sparse_lambda),
+                "--sparse_colmap_depth_start_iter",
+                str(args.sparse_start_iter),
+                "--sparse_colmap_depth_warmup_iters",
+                str(args.sparse_warmup_iters),
+                "--sparse_colmap_depth_min_matches",
+                str(args.sparse_min_matches),
                 "--sparse_colmap_depth_sample_mode",
                 args.sparse_sample_mode,
                 "--sparse_colmap_depth_low_error_fraction",
@@ -143,6 +150,32 @@ def run(args: argparse.Namespace) -> int:
     geometry_cmd = _geometry_args(args)
 
     load_topology = _topology(Path(args.output_path), args.load_iteration)
+    summary = {
+        "preset": args.preset,
+        "source_path": args.source_path,
+        "output_path": args.output_path,
+        "load_iteration": args.load_iteration,
+        "final_iteration": args.final_iteration,
+        "wandb_project": args.wandb_project,
+        "wandb_group": args.wandb_group,
+        "wandb_name": args.wandb_name,
+        "execute": bool(args.execute),
+        "topology_unchanged": None,
+    }
+    (out / "exact_train_command.txt").write_text(shlex.join(train_cmd) + "\n", encoding="utf-8")
+    (out / "render_command.txt").write_text(shlex.join(render_cmd) + "\n", encoding="utf-8")
+    (out / "metrics_command.txt").write_text(shlex.join(metrics_cmd) + "\n", encoding="utf-8")
+    (out / "geometry_command.txt").write_text(shlex.join(geometry_cmd) + "\n", encoding="utf-8")
+    (out / "wandb_url.txt").write_text(
+        f"https://wandb.ai/karamazovaniki-university-of-southern-california/{args.wandb_project}/runs/{args.wandb_name}\n",
+        encoding="utf-8",
+    )
+    (out / "recovery_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    if args.execute:
+        subprocess.run(train_cmd, cwd=ROOT, check=True)
+        subprocess.run(render_cmd, cwd=ROOT, check=True)
+        subprocess.run(metrics_cmd, cwd=ROOT, check=True)
+        subprocess.run(geometry_cmd, cwd=ROOT, check=True)
     try:
         final_checkpoint_present = checkpoint_path(Path(args.output_path), args.final_iteration).is_file()
     except FileNotFoundError:
@@ -158,31 +191,11 @@ def run(args: argparse.Namespace) -> int:
         "final": final_topology,
         "topology_unchanged": topology_unchanged,
         "required_flags": ["--freeze_topology_updates", "--skip_restricted_delaunay"],
+        "sparse_depth_enabled": "--enable_sparse_colmap_depth_loss" in train_cmd,
     }
-    summary = {
-        "preset": args.preset,
-        "source_path": args.source_path,
-        "output_path": args.output_path,
-        "load_iteration": args.load_iteration,
-        "final_iteration": args.final_iteration,
-        "wandb_project": args.wandb_project,
-        "wandb_group": args.wandb_group,
-        "wandb_name": args.wandb_name,
-        "execute": bool(args.execute),
-        "topology_unchanged": topology_unchanged,
-    }
-    (out / "exact_train_command.txt").write_text(shlex.join(train_cmd) + "\n", encoding="utf-8")
-    (out / "render_command.txt").write_text(shlex.join(render_cmd) + "\n", encoding="utf-8")
-    (out / "metrics_command.txt").write_text(shlex.join(metrics_cmd) + "\n", encoding="utf-8")
-    (out / "geometry_command.txt").write_text(shlex.join(geometry_cmd) + "\n", encoding="utf-8")
-    (out / "wandb_url.txt").write_text(
-        f"https://wandb.ai/karamazovaniki-university-of-southern-california/{args.wandb_project}/runs/{args.wandb_name}\n",
-        encoding="utf-8",
-    )
+    summary["topology_unchanged"] = topology_unchanged
     (out / "topology_audit.json").write_text(json.dumps(topology_audit, indent=2) + "\n", encoding="utf-8")
     (out / "recovery_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    if args.execute:
-        subprocess.run(train_cmd, cwd=ROOT, check=True)
     print(json.dumps({"summary": summary, "topology_audit": topology_audit}, indent=2))
     return 0 if topology_unchanged or args.allow_missing_final else 1
 
@@ -197,6 +210,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resolution", type=int, default=4)
     parser.add_argument("--preset", choices=PRESETS, default="compact_render_only")
     parser.add_argument("--sparse_lambda", type=float, default=0.001)
+    parser.add_argument("--sparse_start_iter", type=int, default=22000)
+    parser.add_argument("--sparse_warmup_iters", type=int, default=300)
+    parser.add_argument("--sparse_min_matches", type=int, default=16)
     parser.add_argument("--sparse_sample_mode", default="mixed_low_error")
     parser.add_argument("--sparse_fraction", type=float, default=0.5)
     parser.add_argument("--sparse_decay_start", type=int, default=0)
