@@ -12,7 +12,8 @@ This report is an auditable registry of completed ablation evidence. It does not
 | compact_recovery | compaction_only | parking_phone_tiny | diagnostic | 70/80/90 percent prune-only checkpoints define topology endpoints but are not headline rows without recovery | `docs/car_model/parking_clean_to_compact_repair_report.md` |
 | compact_recovery | compaction_plus_strict_recovery | parking_phone_tiny | PASS | R53.01 dominates clean 22k while removing about 70 percent of triangles | `docs/car_model/parking_clean_to_compact_repair_report.md` |
 | compact_recovery | extended_fixed_topology_recovery | parking_phone_tiny | FAIL | R56/R50-style continuation does not improve the accepted 26k compact row | `docs/car_model/parking_clean_to_compact_repair_report.md` |
-| compact_recovery | cross_scene_csef50 | bonsai | PASS | 50 percent CSEF compact-recovery beats fair clean-long on PSNR, SSIM, depth, and normal | `docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md` |
+| compact_recovery | cross_scene_csef50 | bonsai | PASS_SUPERSEDED_BY_QEM | 50 percent CSEF compact-recovery beats fair clean-long, but F22 QEM50 is stronger on render, AbsRel, and normal | `docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md` |
+| posthoc_simplification | open3d_qem50_strict_recovery | bonsai | PASS_STRONG_BASELINE_OR_OPERATOR | Open3D QEM50 plus strict topology-frozen recovery becomes the strongest bonsai row on render, AbsRel, and normal, with Depth MAE slightly weaker than CSEF50 | `docs/car_model/final_stageF22_bonsai_posthoc_qem_baseline_report.md` |
 | compact_recovery | cross_scene_csef70 | bonsai | FAIL | 70 percent CSEF compact-recovery is too aggressive and fails the SSIM gate | `docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md` |
 | compact_recovery | cross_scene_csef50 | courtyard | PASS | 50 percent CSEF compact-recovery improves render and sparse geometry while halving topology | `docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md` |
 | compact_recovery | area_smallest_50 | courtyard | PASS_TIE_RENDER_GEOMETRY_SLIGHTLY_WORSE | area50 nearly ties CSEF50 on render but has slightly weaker sparse geometry; CSEF50 remains geometry-balanced | `docs/car_model/final_stageF17_courtyard_selector_ablation_report.md` |
@@ -37,10 +38,10 @@ This report is an auditable registry of completed ablation evidence. It does not
 - replicate no-freeze compact-recovery control beyond counter
 - final CSEF selector versus area-only selector on every public scene
 - selector ablation on remaining scenes beyond completed counter, courtyard, and room controls
-- replicate posthoc QEM/decimation baseline beyond completed room and counter rows
+- replicate posthoc QEM/decimation baseline beyond completed bonsai, room, and counter rows
 - separate final compact-recovery rows that explicitly enable sparse-depth loss, if the manuscript wants to claim sparse-depth-guided recovery
 - full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations
 
 ## Gate
 
-Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong room/counter Open3D-QEM recovery baselines/operators. The earlier sparse-depth branch is useful but should not be conflated with the final compact-recovery main rows unless new rows explicitly enable that loss. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.
+Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/room/counter Open3D-QEM recovery baselines/operators. The earlier sparse-depth branch is useful but should not be conflated with the final compact-recovery main rows unless new rows explicitly enable that loss. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.

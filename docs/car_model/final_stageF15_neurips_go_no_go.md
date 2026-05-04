@@ -25,7 +25,7 @@ Decision: `NEURIPS_BORDERLINE_NEEDS_STRICT_ABLATIONS`.
 | Only one scene works. | No longer true: F12 has five scene-matched long-baseline rows. | Keep F12 main table prominent. |
 | Triangle soup means mesh repair is not real mesh repair. | Correct; edge-loop repair was rejected. | Frame as compact-repair optimization, not classical watertight mesh repair. |
 | Hole fill is synthetic or weak. | Correct for current real-scene evidence. | Do not headline fill; keep it in limitations/negative results. |
-| Baselines are weak. | Clean-long baseline is fair and room/counter now have equal-budget Open3D QEM baselines; QEM is strong and supersedes area rows on render/depth in both tested scenes. | Replicate QEM on more scenes and frame QEM as a strong operator/baseline, not a strawman. |
+| Baselines are weak. | Clean-long baseline is fair and bonsai/room/counter now have equal-budget Open3D QEM baselines; QEM is strong and supersedes prior compact rows on key render metrics in all three tested scenes. | Replicate QEM on more scenes and frame QEM as a strong operator/baseline, not a strawman. |
 
 ## Go/No-Go
 
@@ -38,5 +38,5 @@ Minimum remaining work before submission:
 - remaining area-only versus CSEF selector ablations beyond completed counter, courtyard, and room controls;
 - replicated no-freeze recovery controls beyond counter;
 - explicit sparse-depth-loss compact-recovery variants if sparse-depth is claimed as final-method training;
-- replicated posthoc QEM/decimation baselines beyond the completed room and counter rows;
+- replicated posthoc QEM/decimation baselines beyond the completed bonsai, room, and counter rows;
 - final paper figures from `outputs/carnet/meshsplatopt/final_paper_assets/`.

@@ -4165,3 +4165,27 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F21_COUNTER_POSTHOC_QEM_STRONG_PASS_SUPERSEDES_AREA40_ON_RENDER_DEPTH`. QEM40 becomes the new strongest counter row on render, AbsRel, and Depth MAE, while normal is effectively tied with area40. This upgrades F12's counter main row and reduces the posthoc simplification missing-baseline risk from one scene to two scenes. The paper framing should treat QEM as a strong compact operator under the fixed-topology recovery framework, not as a weak baseline.
 
 ---
+
+## 2026-05-04 - Final F22 bonsai posthoc QEM baseline
+
+**Goal**: replicate the Open3D QEM posthoc simplification baseline on a third scene after the positive `room` and `counter` QEM rows.
+
+**Implementation**:
+- script: `scripts/car_model/meshsplatopt_apply_open3d_qem_decimation_to_checkpoint.py`;
+- Open3D QEM compacted `bonsai` clean-long from `88,460` to `44,230` triangles;
+- transferred vertex tensors by nearest source vertex and face tensors by nearest source face centroid;
+- topology audit: `degenerate_face_count=0`, `invalid_index_count=0`.
+
+**W&B**: `bsed9ik1`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 88,460 | 10.944348 | 0.222848 | 0.586158 | 0.194249 | 1.816410 | 45.358356 |
+| CSEF50 26k | 44,230 | 10.957497 | 0.224758 | 0.586415 | 0.185180 | 1.737815 | 43.493975 |
+| Open3D QEM50 26k | 44,230 | 11.082405 | 0.243249 | 0.570177 | 0.182966 | 1.793852 | 42.889339 |
+
+**Decision**: `FINAL_F22_BONSAI_POSTHOC_QEM_STRONG_PASS_SUPERSEDES_CSEF50_ON_RENDER`. QEM50 becomes the new strongest bonsai row on render, AbsRel, and normal, while CSEF50 remains better on Depth MAE. This upgrades F12's bonsai main row and means QEM is now a replicated strong compact operator on three scenes, not a one-off baseline.
+
+---

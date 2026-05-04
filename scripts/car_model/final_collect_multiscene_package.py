@@ -44,16 +44,16 @@ SCENES = [
         "clean_absrel": 0.194249,
         "clean_depth_mae": 1.816410,
         "clean_normal": 45.358356,
-        "best_method": "CSEF50 strict recovery 26k",
+        "best_method": "Open3D QEM50 strict recovery 26k",
         "best_triangles": 44230,
-        "best_psnr": 10.957497,
-        "best_ssim": 0.224758,
-        "best_lpips": 0.586415,
-        "best_absrel": 0.185180,
-        "best_depth_mae": 1.737815,
-        "best_normal": 43.493975,
-        "wandb": "irdsa4c8",
-        "evidence": "docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md",
+        "best_psnr": 11.082405,
+        "best_ssim": 0.243249,
+        "best_lpips": 0.570177,
+        "best_absrel": 0.182966,
+        "best_depth_mae": 1.793852,
+        "best_normal": 42.889339,
+        "wandb": "bsed9ik1",
+        "evidence": "docs/car_model/final_stageF22_bonsai_posthoc_qem_baseline_report.md",
         "decision": "PASS",
     },
     {
@@ -126,6 +126,7 @@ SCENES = [
 
 NEGATIVE_ROWS = [
     {"scene": "bonsai", "row": "CSEF70", "finding": "70 percent compaction fails SSIM gate", "evidence": "docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md"},
+    {"scene": "bonsai", "row": "CSEF50", "finding": "passes clean-long but is superseded by Open3D QEM50 on render, AbsRel, and normal", "evidence": "docs/car_model/final_stageF22_bonsai_posthoc_qem_baseline_report.md"},
     {"scene": "counter", "row": "CSEF50", "finding": "50 percent compaction is a boundary case and misses SSIM by 0.003827", "evidence": "docs/car_model/final_stageF10_fourth_scene_counter_report.md"},
     {"scene": "counter", "row": "CSEF50 30k", "finding": "extended recovery worsens SSIM and LPIPS", "evidence": "docs/car_model/final_stageF10_fourth_scene_counter_report.md"},
     {"scene": "counter", "row": "random40", "finding": "same-count random compaction loses badly to area40 and CSEF40", "evidence": "docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md"},
@@ -210,7 +211,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but missing matched ablations against area-only, random same-count compaction beyond the completed controls, replicated no-freeze controls, explicit sparse-depth-loss variants if claimed, and posthoc simplification controls beyond the completed room/counter QEM rows.",
+        "PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but missing matched ablations against area-only, random same-count compaction beyond the completed controls, replicated no-freeze controls, explicit sparse-depth-loss variants if claimed, and posthoc simplification controls beyond the completed bonsai/room/counter QEM rows.",
         "",
     ]
     DOC.write_text("\n".join(lines))
