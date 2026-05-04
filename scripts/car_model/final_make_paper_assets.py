@@ -65,6 +65,18 @@ QUALITATIVE_SCENES = [
     },
 ]
 
+FREEZE_FAILURE_SCENES = [
+    {
+        "scene": "courtyard",
+        "gt": "outputs/carnet/meshsplatopt/final_stageF8_cross_scene_compact_pilot/courtyard/csef_low_evidence_boundary_protected/prune50/recovery_model/test/ours_26000/gt",
+        "clean": "outputs/carnet/meshsplatopt/finalF3_courtyard_clean_long_9000to22000/test/ours_22000/renders",
+        "frozen": "outputs/carnet/meshsplatopt/final_stageF8_cross_scene_compact_pilot/courtyard/csef_low_evidence_boundary_protected/prune50/recovery_model/test/ours_26000/renders",
+        "no_freeze": "outputs/carnet/meshsplatopt/final_stageF35_courtyard_csef_no_freeze_control/csef50/recovery_model/test/ours_26000/renders",
+        "frozen_label": "CSEF50 frozen",
+        "no_freeze_label": "CSEF50 no-freeze",
+    },
+]
+
 
 def load_rows() -> list[dict[str, str]]:
     table = PKG / "main_quantitative_table.csv"
@@ -244,6 +256,50 @@ def make_qualitative_assets(out_dir: Path) -> tuple[list[dict[str, str]], Path]:
     return panels, montage
 
 
+def make_freeze_failure_panel(spec: dict[str, str], out_dir: Path) -> dict[str, str]:
+    paths = {key: ROOT / spec[key] for key in ("gt", "clean", "frozen", "no_freeze")}
+    frame = select_frame(list(paths.values()))
+    gt = paths["gt"] / frame
+    clean = paths["clean"] / frame
+    frozen = paths["frozen"] / frame
+    no_freeze = paths["no_freeze"] / frame
+    row = concat_h(
+        [
+            captioned(fit_image(gt), "GT", frame),
+            captioned(fit_image(clean), "clean long", "22k"),
+            captioned(fit_image(frozen), spec["frozen_label"], "838,742 tri"),
+            captioned(fit_image(no_freeze), spec["no_freeze_label"], "1,317,435 tri"),
+            captioned(error_heatmap(gt, no_freeze), "no-freeze error", "abs RGB"),
+        ]
+    )
+    path = out_dir / f"{spec['scene']}_no_freeze_failure_panel.png"
+    row.save(path)
+    return {
+        "scene": spec["scene"],
+        "frame": frame,
+        "panel": str(path),
+        "gt": str(gt),
+        "clean": str(clean),
+        "frozen": str(frozen),
+        "no_freeze": str(no_freeze),
+    }
+
+
+def make_freeze_failure_assets(out_dir: Path) -> tuple[list[dict[str, str]], Path | None]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    panels = []
+    images = []
+    for spec in FREEZE_FAILURE_SCENES:
+        panel = make_freeze_failure_panel(spec, out_dir)
+        panels.append(panel)
+        images.append(Image.open(panel["panel"]).convert("RGB"))
+    if not images:
+        return panels, None
+    montage = out_dir / "freeze_failure_montage.png"
+    concat_v(images).save(montage)
+    return panels, montage
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     rows = load_rows()
@@ -254,6 +310,7 @@ def main() -> None:
     make_triangle_bar(rows, bars)
     make_pareto_summary(rows, pareto)
     qualitative, qualitative_montage = make_qualitative_assets(OUT / "qualitative_panels")
+    freeze_failures, freeze_failure_montage = make_freeze_failure_assets(OUT / "freeze_failure_panels")
 
     source_montages = [
         ROOT / "outputs/carnet/meshsplatopt/final_stageF9_qualitative_evidence/mesh_splat_opt_cross_scene_qualitative_montage.png",
@@ -273,6 +330,8 @@ def main() -> None:
         "copied_montages": [str(p) for p in copied],
         "qualitative_panels": qualitative,
         "qualitative_montage": str(qualitative_montage),
+        "freeze_failure_panels": freeze_failures,
+        "freeze_failure_montage": str(freeze_failure_montage) if freeze_failure_montage else "",
         "source_table": str(PKG / "main_quantitative_table.csv"),
     }
     (OUT / "paper_assets_manifest.json").write_text(json.dumps(manifest, indent=2))
@@ -288,17 +347,20 @@ def main() -> None:
         f"- triangle count bar chart: `{bars}`",
         f"- Pareto summary JSON: `{pareto}`",
         f"- multi-scene qualitative montage: `{qualitative_montage}`",
+        f"- freeze-failure montage: `{freeze_failure_montage}`",
         f"- manifest: `{OUT / 'paper_assets_manifest.json'}`",
     ]
     for item in qualitative:
         lines.append(f"- {item['scene']} qualitative panel: `{item['panel']}`")
+    for item in freeze_failures:
+        lines.append(f"- {item['scene']} no-freeze failure panel: `{item['panel']}`")
     for p in copied:
         lines.append(f"- qualitative montage: `{p}`")
     lines += [
         "",
         "## Traceability",
         "",
-        "All quantitative assets are generated from `outputs/carnet/meshsplatopt/final_multiscene_package/main_quantitative_table.csv`. The new qualitative panels use independent render outputs and record every source image path plus the selected frame in `paper_assets_manifest.json`.",
+        "All quantitative assets are generated from `outputs/carnet/meshsplatopt/final_multiscene_package/main_quantitative_table.csv`. The new qualitative panels use independent render outputs and record every source image path plus the selected frame in `paper_assets_manifest.json`. The freeze-failure panel uses the F35 independent no-freeze render and shows why the strict topology-frozen recovery contract is visually load-bearing.",
         "",
     ]
     DOC.write_text("\n".join(lines))
