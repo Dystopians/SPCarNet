@@ -134,6 +134,7 @@ NEGATIVE_ROWS = [
     {"scene": "counter", "row": "CSEF40", "finding": "passes clean-long but is not the strongest selector on counter; area40 and QEM40 are better", "evidence": "docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md"},
     {"scene": "counter", "row": "area40", "finding": "strong structured selector row but superseded by Open3D QEM40 on render, AbsRel, and Depth MAE", "evidence": "docs/car_model/final_stageF21_counter_posthoc_qem_baseline_report.md"},
     {"scene": "counter", "row": "area40 no-freeze", "finding": "omitting strict topology freeze collapses topology to 18,693 triangles and loses badly to frozen area40", "evidence": "docs/car_model/final_stageF18_counter_no_freeze_control_report.md"},
+    {"scene": "room", "row": "QEM50 no-freeze", "finding": "omitting strict topology freeze collapses topology to 20,742 triangles and loses badly to frozen QEM50", "evidence": "docs/car_model/final_stageF24_room_qem_no_freeze_control_report.md"},
     {"scene": "room", "row": "random50", "finding": "same-count random compaction loses badly to area50 and clean-long", "evidence": "docs/car_model/final_stageF19_room_selector_ablation_report.md"},
     {"scene": "room", "row": "CSEF50", "finding": "passes clean-long but is superseded by area50 on all tracked independent metrics", "evidence": "docs/car_model/final_stageF19_room_selector_ablation_report.md"},
     {"scene": "room", "row": "area50", "finding": "strong structured selector row but superseded by Open3D QEM50 on render, AbsRel, and Depth MAE", "evidence": "docs/car_model/final_stageF20_room_posthoc_qem_baseline_report.md"},
@@ -212,7 +213,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but missing matched ablations against area-only, random same-count compaction beyond the completed controls, replicated no-freeze controls, explicit sparse-depth-loss variants if claimed, and posthoc simplification controls beyond the completed bonsai/courtyard/room/counter QEM rows.",
+        "PASS with ablation gaps. At least two scenes show meaningful compact-recovery benefit over fair clean-long baselines; five scenes now have auditable long-baseline comparisons. The remaining NeurIPS risk is not scene count, but missing matched ablations against area-only, random same-count compaction beyond the completed controls, further replicated no-freeze controls beyond the completed counter/room controls, explicit sparse-depth-loss variants if claimed, and posthoc simplification controls beyond the completed bonsai/courtyard/room/counter QEM rows.",
         "",
     ]
     DOC.write_text("\n".join(lines))

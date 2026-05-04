@@ -21,6 +21,7 @@ This report is an auditable registry of completed ablation evidence. It does not
 | compact_recovery | random_same_count_50 | courtyard | FAIL_CONTROL_SUPPORTS_STRUCTURED_SELECTION | random50 fails clean-long and is far worse than CSEF50/area50 at the same triangle count | `docs/car_model/final_stageF17_courtyard_selector_ablation_report.md` |
 | compact_recovery | cross_scene_csef50 | room | PASS | 50 percent CSEF compact-recovery improves render metrics, but F19 shows area50 is stronger on room | `docs/car_model/final_stageF9_third_scene_room_and_qualitative_report.md` |
 | compact_recovery | area_smallest_50 | room | PASS_SELECTOR_BEST_SUPERSEDED_BY_QEM | area50 beats clean-long, CSEF50, and random50 on all tracked independent metrics, but F20 QEM50 is stronger on render and depth | `docs/car_model/final_stageF19_room_selector_ablation_report.md` |
+| compact_recovery | no_freeze_qem50 | room | FAIL_CONTROL_SUPPORTS_FREEZE | removing strict topology freeze collapses the QEM50 compact row from 42,253 to 20,742 triangles and sharply worsens independent render/geometry metrics | `docs/car_model/final_stageF24_room_qem_no_freeze_control_report.md` |
 | posthoc_simplification | open3d_qem50_strict_recovery | room | PASS_STRONG_BASELINE_OR_OPERATOR | Open3D QEM50 plus strict topology-frozen recovery is the strongest room row on render, AbsRel, and Depth MAE; this baseline must be reported honestly | `docs/car_model/final_stageF20_room_posthoc_qem_baseline_report.md` |
 | compact_recovery | random_same_count_50 | room | FAIL_CONTROL_SUPPORTS_STRUCTURED_SELECTION | random50 fails clean-long and is far worse than area50 at the same triangle count | `docs/car_model/final_stageF19_room_selector_ablation_report.md` |
 | compact_recovery | cross_scene_csef50 | counter | BORDERLINE | 50 percent CSEF is near the gate but misses SSIM by 0.003827 | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
@@ -36,7 +37,7 @@ This report is an auditable registry of completed ablation evidence. It does not
 
 ## Missing Rows Required For A Strict NeurIPS Ablation Claim
 
-- replicate no-freeze compact-recovery control beyond counter
+- replicate no-freeze compact-recovery control beyond completed counter and room rows
 - final CSEF selector versus area-only selector on every public scene
 - selector ablation on remaining scenes beyond completed counter, courtyard, and room controls
 - replicate posthoc QEM/decimation baseline beyond completed bonsai, courtyard, room, and counter rows

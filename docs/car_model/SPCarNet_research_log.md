@@ -4215,3 +4215,27 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F23_COURTYARD_POSTHOC_QEM_MIXED_PASS_CSEF50_REMAINS_MAIN`. QEM50 improves SSIM, LPIPS, and normal relative to CSEF50, but is weaker on PSNR, AbsRel, and Depth MAE. CSEF50 remains the courtyard main row. The QEM claim is now stronger but more nuanced: it is a strong compact operator under fixed-topology recovery, not a universally dominant operator.
 
 ---
+
+## 2026-05-04 - Final F24 room QEM no-freeze control
+
+**Goal**: replicate the no-freeze failure mode beyond counter and test whether strict topology freeze remains load-bearing for a strong QEM compact operator.
+
+**Run**:
+- scene: `room`;
+- source compact checkpoint: `outputs/carnet/meshsplatopt/final_stageF20_room_posthoc_qem_baseline/prune50/compact_model`;
+- recovery checkpoint: `outputs/carnet/meshsplatopt/final_stageF24_room_qem_no_freeze_control/prune50/recovery_model`;
+- schedule: `22000->26000`;
+- W&B: `byjyx9zx`;
+- deliberate control: omitted `--freeze_topology_updates`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 84,506 | 14.258379 | 0.400864 | 0.578919 | 0.206282 | 1.480230 | 55.442653 |
+| QEM50 frozen 26k | 42,253 | 15.061190 | 0.481082 | 0.516805 | 0.181129 | 1.345221 | 54.900779 |
+| QEM50 no-freeze 26k | 20,742 | 13.789439 | 0.399147 | 0.567857 | 0.212804 | 1.497902 | 55.443601 |
+
+**Decision**: `FINAL_F24_ROOM_QEM_NO_FREEZE_FAIL_SUPPORTS_STRICT_TOPOLOGY_FREEZE`. No-freeze collapses the compact topology from `42,253` to `20,742` triangles and loses badly to frozen QEM50 on every independent render and sparse-geometry metric. Together with F18 counter no-freeze, this establishes strict topology freezing as a replicated load-bearing mechanism.
+
+---

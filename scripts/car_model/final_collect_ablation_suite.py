@@ -117,6 +117,14 @@ ROWS = [
         "finding": "area50 beats clean-long, CSEF50, and random50 on all tracked independent metrics, but F20 QEM50 is stronger on render and depth",
     },
     {
+        "group": "compact_recovery",
+        "row": "no_freeze_qem50",
+        "scene": "room",
+        "status": "FAIL_CONTROL_SUPPORTS_FREEZE",
+        "evidence": "docs/car_model/final_stageF24_room_qem_no_freeze_control_report.md",
+        "finding": "removing strict topology freeze collapses the QEM50 compact row from 42,253 to 20,742 triangles and sharply worsens independent render/geometry metrics",
+    },
+    {
         "group": "posthoc_simplification",
         "row": "open3d_qem50_strict_recovery",
         "scene": "room",
@@ -215,7 +223,7 @@ ROWS = [
 ]
 
 MISSING = [
-    "replicate no-freeze compact-recovery control beyond counter",
+    "replicate no-freeze compact-recovery control beyond completed counter and room rows",
     "final CSEF selector versus area-only selector on every public scene",
     "selector ablation on remaining scenes beyond completed counter, courtyard, and room controls",
     "replicate posthoc QEM/decimation baseline beyond completed bonsai, courtyard, room, and counter rows",
