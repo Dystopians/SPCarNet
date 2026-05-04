@@ -4239,3 +4239,23 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F24_ROOM_QEM_NO_FREEZE_FAIL_SUPPORTS_STRICT_TOPOLOGY_FREEZE`. No-freeze collapses the compact topology from `42,253` to `20,742` triangles and loses badly to frozen QEM50 on every independent render and sparse-geometry metric. Together with F18 counter no-freeze, this establishes strict topology freezing as a replicated load-bearing mechanism.
 
 ---
+
+## 2026-05-04 - Final F25 parking QEM target-failure control and headline row cleanup
+
+**Goal**: close a fairness gap in the final package: parking had strong area and CSEF 70 percent rows, but did not yet test whether Open3D QEM could provide a matched posthoc simplification control at the same `2,564,473`-triangle budget.
+
+**Executed control**:
+- source: clean-long 22k parking checkpoint `outputs/carnet/meshprior/parking_phone_tiny/stage44_clean_long/current_branch_clean_7000to22000/model`;
+- requested target: `2,564,473` triangles, matching R53/F7;
+- output: `outputs/carnet/meshsplatopt/final_stageF25_parking_posthoc_qem_baseline/prune70/compact_model`;
+- observed topology: `8,548,242 -> 8,125,970` triangles and `2,286,499 -> 1,897,393` vertices;
+- invalid indices / degenerate faces: `0 / 0`.
+
+**Package cleanup**:
+- promoted F7 CSEF70 to the parking main row in `final_collect_multiscene_package.py` because it slightly supersedes R53 at the same topology on PSNR, LPIPS, AbsRel, Depth MAE, and normal angle, with negligible SSIM loss;
+- added F25 to the negative-result table and ablation registry as an unmatched-compression QEM failure;
+- left R53.01 as the strong same-count area-only control.
+
+**Decision**: `FINAL_F25_PARKING_QEM70_REJECT_UNMATCHED_COMPRESSION`. Open3D QEM does not provide a fair matched 70 percent parking baseline because it reaches only `4.94%` triangle removal on the 8.55M-triangle mesh. No W&B recovery was launched for this row because it would retain `3.17x` more triangles than the accepted compact method and would create a misleading comparison. The final parking headline is now the already W&B-validated F7 CSEF70 run (`oqpkykcw`), with R53 as area-only control and F25 as a documented posthoc simplification failure.
+
+---
