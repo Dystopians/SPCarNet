@@ -4562,3 +4562,27 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F40_FAIR_QUALITATIVE_AND_CLAIM_AUDIT_PASS`. The paper-facing qualitative package now matches the strongest clean-long baseline comparison used in F12. The safe claim is all-scene render-quality and sparse-depth-proxy improvement under substantial topology reduction. The unsafe claim remains universal geometry-proxy dominance, because courtyard normal is essentially tied but slightly worse and F37 fast-QEM is stronger on some parking sparse geometry proxies while much worse on render quality.
 
 ---
+
+## 2026-05-04 - Final F41 long real gate-removed ratio0.04 ablation
+
+**Goal**: answer the reviewer-risk question left by F39: whether the real-scene gate-removed evidence survives beyond the 500-step aggressive ratio0.04 case.
+
+**W&B runs**:
+- gated ratio0.04 2000 iterations: `eaz8fh2o`
+- no-gate ratio0.04 2000 iterations: `vyi2uf4h`
+
+**Independent result**:
+
+| row | committed | rollback | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| gated ratio0.04 long | false | 1 | 783,009 | 11.637346 | 0.265729 | 0.635825 | 0.422537 | 4.285561 | 52.706472 |
+| no-gate ratio0.04 long | true | 0 | 751,960 | 11.667192 | 0.270661 | 0.635146 | 0.418002 | 4.323293 | 52.965324 |
+
+**Candidate round**:
+- same schedule selects `2,579` candidates at iter `141`;
+- gated row has `counterfactual_accept=0`, rolls back, and keeps `64,497` triangles at the first candidate round;
+- no-gate row has `counterfactual_accept=0`, commits, and drops to `61,918` triangles at the first candidate round.
+
+**Decision**: `FINAL_F41_LONG_GATE_REMOVED_MECHANISM_PASS_METRICS_MIXED`. F41 closes the specific complaint that there was no longer real gate-removed run: the long run confirms that the gate/rollback path prevents a no-accept candidate commit that the gate-removed path applies. It is not a clean final-metric win for gate-on: no-gate is slightly better on PSNR, SSIM, LPIPS, and AbsRel, while gated is better on Depth MAE and normal and preserves more topology. The paper should use F41 as unsafe-edit rejection evidence, not as a monotonic performance-improvement claim.
+
+---

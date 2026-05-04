@@ -121,7 +121,7 @@ def write_report(out: Path, gated: dict[str, Any], nogate: dict[str, Any]) -> di
         "",
         "## Interpretation",
         "",
-        "If complete, F41 is the long-budget real-scene counterpart to F38/F39 for the aggressive ratio0.04 edit schedule. The desired evidence is not that the gate rejects every edit; it is that the gate/rollback path prevents unsafe candidate commits under the same schedule while preserving or improving final independent render and geometry metrics.",
+        "F41 is the long-budget real-scene counterpart to F38/F39 for the aggressive ratio0.04 edit schedule. The mechanism evidence is strong: the gated run rolls back the same no-counterfactual-accept candidate set that the gate-removed run commits. The final metrics are mixed rather than a clean gate-on win: no-gate is slightly better on PSNR, SSIM, LPIPS, and AbsRel, while gated is better on Depth MAE and normal and preserves more topology. This should be reported as long-budget gate/rollback necessity evidence for unsafe edit rejection, not as proof that the gate monotonically improves every final metric.",
         "",
     ]
     DOC.write_text("\n".join(lines), encoding="utf-8")
