@@ -4610,3 +4610,51 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F42_LONG_GATE_REMOVED_RENDER_PASS_GEOMETRY_MIXED`. F42 is the strongest real gate-removed evidence so far: under a 7000-step schedule the gate/rollback mechanism again blocks the no-accept candidate commit, and the gated row wins all three held-out render metrics versus no-gate. The sparse geometry proxies still favor no-gate slightly, so the paper claim must remain render-quality/visual Pareto and unsafe-edit rejection, not universal geometry dominance.
 
 ---
+
+## 2026-05-04 - Final F43 bonsai 7000-step real gate-removed ablation
+
+**Goal**: answer the remaining multi-scene gate-evidence weakness by running a same-schedule 7000-iteration bonsai gate-on/gate-off ablation with online W&B, full render metrics, and sparse COLMAP geometry evaluation.
+
+**W&B runs**:
+- gated bonsai ratio0.02 7000 iterations: `xymcrg63`
+- no-gate bonsai ratio0.02 7000 iterations: `1vnfreq6`
+
+**Independent result**:
+
+| row | committed rounds | rollback rounds | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| gated bonsai ratio0.02 7000 | 0 | 6 | 123,115 | 23.025888 | 0.732148 | 0.300588 | 0.106861 | 1.211684 | 41.492277 |
+| no-gate bonsai ratio0.02 7000 | 6 | 0 | 21,231 | 24.719440 | 0.837326 | 0.184327 | 0.017143 | 0.143226 | 23.980772 |
+
+**Candidate behavior**:
+- first round is matched at iter `1501` with `12,685` selected candidates and `counterfactual_accept=0`;
+- gated row rolls back the first round and ultimately rolls back all six rounds;
+- no-gate row commits the first round and ultimately commits all six rounds.
+
+**Decision**: `FINAL_F43_BONSAI_LONG_GATE_REMOVED_NEGATIVE`. F43 is important because it prevents overclaiming. The current gate/rollback policy is not broadly superior across scenes: on bonsai it is overconservative or steers the recovery trajectory poorly, while the no-gate row is much better on all tracked render and sparse-geometry metrics with a smaller final mesh. This does not invalidate the main compact-recovery F12 table, where the final method rows beat fair clean-long baselines on five scenes, but it means the paper must not claim universal gate dominance. The next method fix should target adaptive scene-aware gate calibration rather than more blind long training.
+
+---
+
+## 2026-05-04 - Final F44 bonsai calibrated-gate 7000-step repair
+
+**Goal**: convert the F43 negative result into a concrete method repair: keep counterfactual gating enabled, but calibrate the immediate gate for large recoverable bonsai edits and rely on recovery-window validation as the second-stage safety check.
+
+**W&B run**:
+- calibrated gate bonsai ratio0.02 7000 iterations: `umc23i5h`
+
+**Independent result**:
+
+| row | committed rounds | rollback rounds | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| strict gate F43 | 0 | 6 | 123,115 | 23.025888 | 0.732148 | 0.300588 | 0.106861 | 1.211684 | 41.492277 |
+| calibrated gate F44 | 3 | 3 | 19,226 | 24.471493 | 0.832768 | 0.191326 | 0.018155 | 0.148973 | 24.164780 |
+| no-gate F43 | 6 | 0 | 21,231 | 24.719440 | 0.837326 | 0.184327 | 0.017143 | 0.143226 | 23.980772 |
+
+**Deltas**:
+- F44 vs strict gate: PSNR `+1.445604`, SSIM `+0.100621`, LPIPS `-0.109262`, AbsRel `-0.088706`, Depth MAE `-1.062711`, normal `-17.327497`;
+- F44 vs no-gate: PSNR `-0.247948`, SSIM `-0.004558`, LPIPS `+0.006999`, AbsRel `+0.001012`, Depth MAE `+0.005747`, normal `+0.184008`;
+- F44 has fewer final triangles than no-gate: `19,226` vs `21,231`.
+
+**Decision**: `FINAL_F44_BONSAI_CALIBRATED_GATE_REPAIR_PASS_CLOSE_TO_NO_GATE`. This is the first strong repair of the F43 weakness. It proves the problem was not that gating must be removed; the strict immediate threshold was too conservative for recoverable bonsai edits. The calibrated gate keeps the counterfactual interface on, accepts the first three recoverable rounds, rejects the later three, beats strict gate by large margins on every tracked metric, and lands close to no-gate while being more compact. The remaining evidence gap is replication of calibrated gate thresholds on another scene before claiming broad calibrated-gate superiority.
+
+---

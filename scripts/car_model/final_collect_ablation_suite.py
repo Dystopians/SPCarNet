@@ -364,13 +364,29 @@ ROWS = [
         "evidence": "docs/car_model/final_stageF42_gate_removed_ratio004_7000_report.md",
         "finding": "same-schedule 7000-iteration parking ablation: gate-on rolls back the 2579-triangle no-accept candidate set while gate-off commits it; gated wins PSNR, SSIM, and LPIPS, while no-gate is slightly better on sparse AbsRel, Depth MAE, and normal",
     },
+    {
+        "group": "counterfactual_certification",
+        "row": "real_scene_gate_removed_bonsai_ratio002_7000",
+        "scene": "bonsai",
+        "status": "NEGATIVE_LONG_ABLATION_GATE_OVERCONSERVATIVE",
+        "evidence": "docs/car_model/final_stageF43_bonsai_gate_removed_7000_report.md",
+        "finding": "same-schedule 7000-iteration bonsai ablation exposes a current weakness: gate-on rolls back all six candidate rounds while gate-off commits all six, and no-gate wins PSNR, SSIM, LPIPS, AbsRel, Depth MAE, and normal with a smaller final mesh",
+    },
+    {
+        "group": "counterfactual_certification",
+        "row": "bonsai_calibrated_gate_ratio002_7000",
+        "scene": "bonsai",
+        "status": "REPAIR_PASS_CLOSE_TO_NO_GATE",
+        "evidence": "docs/car_model/final_stageF44_bonsai_calibrated_gate_7000_report.md",
+        "finding": "calibrated gate keeps counterfactual validation enabled, commits three recoverable candidate rounds, rejects three later rounds, improves over strict gate by +1.445604 PSNR, +0.100621 SSIM, -0.109262 LPIPS, and finishes close to no-gate with fewer triangles",
+    },
 ]
 
 MISSING = [
     "final CSEF selector versus area-only selector on every public scene beyond the completed bonsai, courtyard, room, and counter controls",
     "selector ablation on any additional scenes added to the final benchmark",
     "replicate explicit sparse-depth compact-recovery on any additional scenes added beyond the completed parking, bonsai, room, courtyard, and counter final rows",
-    "additional multi-scene long-budget real-scene gate-removed training ablations if the paper wants a broad gate-necessity claim beyond the completed F42 parking evidence",
+    "replicate F44-style adaptive scene-aware gate calibration on at least one additional scene before making any broad calibrated-gate superiority claim",
 ]
 
 
@@ -413,7 +429,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F36 closes no-freeze failure replication on all five final-package scenes, including the largest parking scene. F37 closes the matched parking posthoc simplification gap: fast-QEM reaches the target topology but collapses render quality while improving sparse geometry proxies. F38 closes the implementation-level no-gate/no-rollback counterfactual by proving that the same bad edits are rejected and exactly rolled back by the gate but commit damage without it. F39 adds a same-schedule real-scene parking ablation: gate-on rolls back an aggressive ratio0.04 edit, while gate-off commits it and is worse on most independent metrics. F41 adds a longer 2000-step counterpart with the same rollback/commit mechanism but mixed final metrics. F42 extends this to 7000 steps with online W&B and full render/geometry evaluation: gate-on again rolls back the no-accept candidate set, gate-off commits it, and the gated row wins PSNR, SSIM, and LPIPS while sparse geometry proxies remain slightly better for no-gate. F28/F29/F30/F31/F32/F33 now replicate explicit sparse-depth compact recovery on all five final scenes, supporting a geometry/perceptual regularizer claim but not a universal PSNR-improvement claim. F34 adds a long-continuation control showing the best parking row should stop at 26k rather than blindly continue to 30k. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires multi-scene long-budget gate-removed ablations if the paper wants a broad final-budget gate-necessity claim.",
+        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F36 closes no-freeze failure replication on all five final-package scenes, including the largest parking scene. F37 closes the matched parking posthoc simplification gap: fast-QEM reaches the target topology but collapses render quality while improving sparse geometry proxies. F38 closes the implementation-level no-gate/no-rollback counterfactual by proving that the same bad edits are rejected and exactly rolled back by the gate but commit damage without it. F39 adds a same-schedule real-scene parking ablation: gate-on rolls back an aggressive ratio0.04 edit, while gate-off commits it and is worse on most independent metrics. F41 adds a longer 2000-step counterpart with the same rollback/commit mechanism but mixed final metrics. F42 extends this to 7000 steps with online W&B and full render/geometry evaluation: gate-on again rolls back the no-accept candidate set, gate-off commits it, and the gated row wins PSNR, SSIM, and LPIPS while sparse geometry proxies remain slightly better for no-gate. F43 adds the requested multi-scene long-budget stress test on bonsai and is a negative result for strict universal gate superiority. F44 converts that weakness into a concrete repair: calibrated gate commits recoverable early rounds, rejects later rounds, beats strict gate on every tracked metric, and finishes close to no-gate while preserving counterfactual metadata. F28/F29/F30/F31/F32/F33 now replicate explicit sparse-depth compact recovery on all five final scenes, supporting a geometry/perceptual regularizer claim but not a universal PSNR-improvement claim. F34 adds a long-continuation control showing the best parking row should stop at 26k rather than blindly continue to 30k. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS now requires replicating calibrated scene-aware gating beyond bonsai if the paper wants a broad final-budget gate-superiority claim.",
         "",
     ]
     DOC.write_text("\n".join(lines))
