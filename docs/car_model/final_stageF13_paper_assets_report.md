@@ -15,10 +15,11 @@ Decision: `FINAL_F13_PAPER_ASSETS_PASS_TRACEABLE`.
 - courtyard qualitative panel: `/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/final_paper_assets/qualitative_panels/courtyard_qualitative_panel.png`
 - room qualitative panel: `/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/final_paper_assets/qualitative_panels/room_qualitative_panel.png`
 - counter qualitative panel: `/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/final_paper_assets/qualitative_panels/counter_qualitative_panel.png`
+- parking_phone_tiny no-freeze failure panel: `/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/final_paper_assets/freeze_failure_panels/parking_phone_tiny_no_freeze_failure_panel.png`
 - courtyard no-freeze failure panel: `/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/final_paper_assets/freeze_failure_panels/courtyard_no_freeze_failure_panel.png`
 - qualitative montage: `/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/final_paper_assets/mesh_splat_opt_cross_scene_qualitative_montage.png`
 - qualitative montage: `/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/final_paper_assets/room_counter_clean_vs_csef_montage.png`
 
 ## Traceability
 
-All quantitative assets are generated from `outputs/carnet/meshsplatopt/final_multiscene_package/main_quantitative_table.csv`. The new qualitative panels use independent render outputs and record every source image path plus the selected frame in `paper_assets_manifest.json`. The freeze-failure panel uses the F35 independent no-freeze render and shows why the strict topology-frozen recovery contract is visually load-bearing.
+All quantitative assets are generated from `outputs/carnet/meshsplatopt/final_multiscene_package/main_quantitative_table.csv`. The new qualitative panels use independent render outputs and record every source image path plus the selected frame in `paper_assets_manifest.json`. The freeze-failure panels use the F35/F36 independent no-freeze renders and show why the strict topology-frozen recovery contract is visually load-bearing.

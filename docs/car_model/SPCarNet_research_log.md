@@ -4,6 +4,30 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-04 — MeshSplatOpt F36 parking CSEF no-freeze control — FAIL_SUPPORTS_STRICT_FREEZE
+
+**Outcome**: Ran a W&B-logged no-freeze control on the largest final scene,
+`parking_phone_tiny`. The run matched the F7/F33 `22000->26000` recovery budget and
+kept `--skip_restricted_delaunay`, but deliberately omitted `--freeze_topology_updates`.
+
+**W&B**: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/ist00zs5`
+
+**Verification**:
+- topology drift: `2,564,473 -> 3,533,325` triangles
+- independent render metrics: PSNR `17.367448806762695`, SSIM `0.589928150177002`, LPIPS `0.36359116435050964`
+- sparse geometry: AbsRel `0.09789265916478002`, Depth MAE `1.873920935883728`, normal mean angle `44.81286111192565`
+- comparison to frozen sparse-depth F33: PSNR `-1.344881`, SSIM `-0.057802`, LPIPS `+0.025332`, AbsRel `+0.018822`, Depth MAE `+0.019906`, normal `+0.777153`
+
+**Decision**: `FAIL_SUPPORTS_STRICT_FREEZE`. F36 closes the largest-scene freeze-control
+gap. Without strict topology freeze, parking leaves the compact topology contract and
+falls below clean-long on render and sparse-depth metrics.
+
+**Linked artefacts**:
+- `docs/car_model/final_stageF36_parking_csef_no_freeze_control_report.md`
+- `outputs/carnet/meshsplatopt/final_stageF36_parking_csef_no_freeze_control/`
+
+---
+
 ## 2026-05-04 — MeshSplatOpt F35 courtyard CSEF no-freeze control — FAIL_SUPPORTS_STRICT_FREEZE
 
 **Outcome**: Ran a W&B-logged no-freeze control on `courtyard` from the accepted CSEF50

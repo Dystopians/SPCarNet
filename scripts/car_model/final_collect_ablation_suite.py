@@ -48,9 +48,17 @@ ROWS = [
         "group": "sparse_depth",
         "row": "csef70_sparse_depth_strict_recovery",
         "scene": "parking_phone_tiny",
-        "status": "PASS_PARETO_HEADLINE",
+        "status": "PASS_PARETO_HEADLINE_STRICT_FREEZE_LOAD_BEARING",
         "evidence": "docs/car_model/final_stageF33_parking_csef_sparse_depth_report.md",
-        "finding": "CSEF70 plus sparse-depth is the strongest parking Pareto row: it improves PSNR, LPIPS, AbsRel, and normal over CSEF70 at identical topology and remains an all-metric clean-long win",
+        "finding": "CSEF70 plus sparse-depth is the strongest parking Pareto row: it improves PSNR, LPIPS, AbsRel, and normal over CSEF70 at identical topology and remains an all-metric clean-long win; F36 shows strict freeze is load-bearing on the largest scene",
+    },
+    {
+        "group": "compact_recovery",
+        "row": "no_freeze_csef70",
+        "scene": "parking_phone_tiny",
+        "status": "FAIL_CONTROL_SUPPORTS_FREEZE",
+        "evidence": "docs/car_model/final_stageF36_parking_csef_no_freeze_control_report.md",
+        "finding": "omitting strict topology freeze makes parking CSEF70 drift from 2,564,473 to 3,533,325 triangles and lose badly to frozen CSEF70/sparse-depth on render and sparse depth",
     },
     {
         "group": "compact_recovery",
@@ -319,7 +327,6 @@ ROWS = [
 ]
 
 MISSING = [
-    "replicate no-freeze compact-recovery control on parking if a universal largest-scene freeze claim is desired; bonsai, courtyard, counter, and room are completed",
     "final CSEF selector versus area-only selector on every public scene beyond the completed bonsai, courtyard, room, and counter controls",
     "selector ablation on any additional scenes added to the final benchmark",
     "a matched 70 percent parking posthoc simplification baseline that can actually reach the R53/F7 triangle target; Open3D QEM failed this target",
@@ -367,7 +374,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F35 extends the no-freeze failure replication to four final-package scenes, leaving only parking if a universal largest-scene freeze claim is desired. F28/F29/F30/F31/F32/F33 now replicate explicit sparse-depth compact recovery on all five final scenes, supporting a geometry/perceptual regularizer claim but not a universal PSNR-improvement claim. F34 adds a long-continuation control showing the best parking row should stop at 26k rather than blindly continue to 30k. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
+        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F36 closes no-freeze failure replication on all five final-package scenes, including the largest parking scene. F28/F29/F30/F31/F32/F33 now replicate explicit sparse-depth compact recovery on all five final scenes, supporting a geometry/perceptual regularizer claim but not a universal PSNR-improvement claim. F34 adds a long-continuation control showing the best parking row should stop at 26k rather than blindly continue to 30k. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
         "",
     ]
     DOC.write_text("\n".join(lines))

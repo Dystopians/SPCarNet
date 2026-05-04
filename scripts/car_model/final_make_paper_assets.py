@@ -67,6 +67,15 @@ QUALITATIVE_SCENES = [
 
 FREEZE_FAILURE_SCENES = [
     {
+        "scene": "parking_phone_tiny",
+        "gt": "outputs/carnet/meshsplatopt/final_stageF33_parking_csef_sparse_depth/prune70/recovery_model/test/ours_26000/gt",
+        "clean": "outputs/carnet/meshprior/parking_phone_tiny/stage44_clean_long/current_branch_clean_7000to22000/model/test/ours_22000/renders",
+        "frozen": "outputs/carnet/meshsplatopt/final_stageF33_parking_csef_sparse_depth/prune70/recovery_model/test/ours_26000/renders",
+        "no_freeze": "outputs/carnet/meshsplatopt/final_stageF36_parking_csef_no_freeze_control/prune70/recovery_model/test/ours_26000/renders",
+        "frozen_label": "CSEF70+sparse frozen",
+        "no_freeze_label": "CSEF70 no-freeze",
+    },
+    {
         "scene": "courtyard",
         "gt": "outputs/carnet/meshsplatopt/final_stageF8_cross_scene_compact_pilot/courtyard/csef_low_evidence_boundary_protected/prune50/recovery_model/test/ours_26000/gt",
         "clean": "outputs/carnet/meshsplatopt/finalF3_courtyard_clean_long_9000to22000/test/ours_22000/renders",
@@ -360,7 +369,7 @@ def main() -> None:
         "",
         "## Traceability",
         "",
-        "All quantitative assets are generated from `outputs/carnet/meshsplatopt/final_multiscene_package/main_quantitative_table.csv`. The new qualitative panels use independent render outputs and record every source image path plus the selected frame in `paper_assets_manifest.json`. The freeze-failure panel uses the F35 independent no-freeze render and shows why the strict topology-frozen recovery contract is visually load-bearing.",
+        "All quantitative assets are generated from `outputs/carnet/meshsplatopt/final_multiscene_package/main_quantitative_table.csv`. The new qualitative panels use independent render outputs and record every source image path plus the selected frame in `paper_assets_manifest.json`. The freeze-failure panels use the F35/F36 independent no-freeze renders and show why the strict topology-frozen recovery contract is visually load-bearing.",
         "",
     ]
     DOC.write_text("\n".join(lines))
