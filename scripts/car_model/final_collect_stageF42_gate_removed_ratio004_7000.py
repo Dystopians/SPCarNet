@@ -36,6 +36,64 @@ def _delta(a: Any, b: Any) -> Any:
     return a - b
 
 
+def _interpret(payload: dict[str, Any]) -> str:
+    if payload["decision"] != "F42_COMPLETE":
+        return (
+            "F42 is still incomplete. Do not draw metric conclusions until both rows have train, render, "
+            "image metrics, geometry metrics, and W&B records."
+        )
+
+    gated = payload["gated"]
+    nogate = payload["no_gate"]
+    d = payload["deltas_no_gate_minus_gated"]
+    render_gate_wins = (
+        d.get("psnr") is not None
+        and d["psnr"] < 0
+        and d.get("ssim") is not None
+        and d["ssim"] < 0
+        and d.get("lpips") is not None
+        and d["lpips"] > 0
+    )
+    geometry_nogate_wins = (
+        d.get("absrel") is not None
+        and d["absrel"] < 0
+        and d.get("depth_mae") is not None
+        and d["depth_mae"] < 0
+        and d.get("normal") is not None
+        and d["normal"] < 0
+    )
+    mechanism_pass = (
+        gated["committed_rounds"] == 0
+        and gated["rollback_rounds"] > 0
+        and nogate["committed_rounds"] > 0
+        and nogate["rollback_rounds"] == 0
+    )
+
+    parts = []
+    if mechanism_pass:
+        parts.append(
+            "Mechanism pass: both rows select the same 2579-candidate ratio0.04 edit at iter 141; "
+            "the gated row records counterfactual_accept=0 and rolls back, while the gate-removed row commits it."
+        )
+    if render_gate_wins:
+        parts.append(
+            "7000-step render evidence favors the gate: gated improves PSNR by "
+            f"{-d['psnr']:.6f}, improves SSIM by {-d['ssim']:.6f}, "
+            f"and reduces LPIPS by {d['lpips']:.6f} versus no-gate."
+        )
+    if geometry_nogate_wins:
+        parts.append(
+            "Sparse geometry proxies favor no-gate at this budget: AbsRel, Depth MAE, and normal angle are "
+            f"lower by {-d['absrel']:.6f}, {-d['depth_mae']:.6f}, and {-d['normal']:.6f}."
+        )
+    parts.append(
+        "The safe paper claim is therefore stronger than F41 for visual/held-out-render gate necessity, "
+        "but still not universal metric dominance: use F42 as long-budget parking evidence that rollback "
+        "prevents an unsafe no-accept topology edit and improves render quality, while geometry proxies remain mixed."
+    )
+    return " ".join(parts)
+
+
 def write_report(out: Path, gated: dict[str, Any], nogate: dict[str, Any]) -> dict[str, Any]:
     payload = {
         "decision": "F42_COMPLETE" if gated["results_ready"] and nogate["results_ready"] else "F42_IN_PROGRESS",
@@ -47,6 +105,7 @@ def write_report(out: Path, gated: dict[str, Any], nogate: dict[str, Any]) -> di
             for key in ("psnr", "ssim", "lpips", "absrel", "depth_mae", "normal")
         },
     }
+    payload["interpretation"] = _interpret(payload)
     out.mkdir(parents=True, exist_ok=True)
     json_path = out / "final_stageF42_gate_removed_ratio004_7000.json"
     json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -121,7 +180,7 @@ def write_report(out: Path, gated: dict[str, Any], nogate: dict[str, Any]) -> di
         "",
         "## Interpretation",
         "",
-        "If complete, F42 should be interpreted with the same discipline as F41: the main question is whether the gate/rollback mechanism blocks a no-accept candidate commit under a longer schedule. Final metric deltas decide whether the long schedule also supports a performance claim.",
+        payload["interpretation"],
         "",
     ]
     DOC.write_text("\n".join(lines), encoding="utf-8")

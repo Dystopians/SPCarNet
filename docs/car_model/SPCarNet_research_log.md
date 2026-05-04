@@ -4586,3 +4586,27 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F41_LONG_GATE_REMOVED_MECHANISM_PASS_METRICS_MIXED`. F41 closes the specific complaint that there was no longer real gate-removed run: the long run confirms that the gate/rollback path prevents a no-accept candidate commit that the gate-removed path applies. It is not a clean final-metric win for gate-on: no-gate is slightly better on PSNR, SSIM, LPIPS, and AbsRel, while gated is better on Depth MAE and normal and preserves more topology. The paper should use F41 as unsafe-edit rejection evidence, not as a monotonic performance-improvement claim.
 
 ---
+
+## 2026-05-04 - Final F42 7000-step real gate-removed ratio0.04 ablation
+
+**Goal**: replace the weak "no long ablation" position with a same-schedule 7000-iteration gate-on/gate-off parking run, both with online W&B, full render metrics, and sparse COLMAP geometry evaluation.
+
+**W&B runs**:
+- gated ratio0.04 7000 iterations: `era2si2w`
+- no-gate ratio0.04 7000 iterations: `o05nx4za`
+
+**Independent result**:
+
+| row | committed | rollback | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| gated ratio0.04 7000 | false | 1 | 822,904 | 17.254513 | 0.535237 | 0.453228 | 0.077416 | 1.775428 | 45.816557 |
+| no-gate ratio0.04 7000 | true | 0 | 829,354 | 17.145130 | 0.532351 | 0.454033 | 0.076173 | 1.723636 | 45.640697 |
+
+**Candidate round**:
+- same schedule selects `2,579` candidates at iter `141`;
+- gated row has `counterfactual_accept=0`, rolls back, and keeps `64,497` triangles at the first candidate round;
+- no-gate row has `counterfactual_accept=0`, commits, and drops to `61,918` triangles at the first candidate round.
+
+**Decision**: `FINAL_F42_LONG_GATE_REMOVED_RENDER_PASS_GEOMETRY_MIXED`. F42 is the strongest real gate-removed evidence so far: under a 7000-step schedule the gate/rollback mechanism again blocks the no-accept candidate commit, and the gated row wins all three held-out render metrics versus no-gate. The sparse geometry proxies still favor no-gate slightly, so the paper claim must remain render-quality/visual Pareto and unsafe-edit rejection, not universal geometry dominance.
+
+---
