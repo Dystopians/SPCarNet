@@ -3877,3 +3877,23 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F7_PARKING_PARETO_PASS`. F7.csef70 beats clean22k on render and sparse geometry while reducing triangles by 70 percent. At identical topology to R53, it slightly improves PSNR, LPIPS, AbsRel, Depth MAE, and normal angle, with only a negligible SSIM decrease.
 
 ---
+
+## 2026-05-04 - Final F8 cross-scene pilot setup and bonsai clean-long launch
+
+**Goal**: move beyond parking by creating a fair cross-scene compact pilot that refuses short-baseline comparisons and starts the first missing clean-long public-scene baseline.
+
+**Implementation**:
+- added `scripts/car_model/final_run_cross_scene_compact_pilot.py`;
+- added `scripts/car_model/final_collect_cross_scene_compact_pilot.py`;
+- added `docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md`.
+
+**Launched run**:
+- scene: `bonsai`;
+- output: `outputs/carnet/meshsplatopt/finalF3_bonsai_clean_long_9000to22000`;
+- continuation: 9k to 22k from `stageR58_02_bonsai_clean_continue_7000to9000`;
+- W&B run: `r8ozggn1`;
+- W&B URL: `https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet_meshprior/runs/r8ozggn1`.
+
+**Decision**: `FINAL_F8_IN_PROGRESS`. The interface and honest collector are in place, but F8 cannot pass until at least one non-parking scene completes clean-long plus compact recovery and at least two scenes satisfy the fair clean-long gate.
+
+---
