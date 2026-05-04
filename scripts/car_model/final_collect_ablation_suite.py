@@ -58,7 +58,7 @@ ROWS = [
         "scene": "bonsai",
         "status": "PASS_SUPERSEDED_BY_QEM",
         "evidence": "docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md",
-        "finding": "50 percent CSEF compact-recovery beats fair clean-long, but F22 QEM50 is stronger on render, AbsRel, and normal",
+        "finding": "50 percent CSEF compact-recovery beats fair clean-long, but F22/F26 show QEM50 is stronger on render and area50 is stronger on most geometry/perceptual metrics",
     },
     {
         "group": "posthoc_simplification",
@@ -69,12 +69,28 @@ ROWS = [
         "finding": "Open3D QEM was requested to match the 2,564,473-triangle parking target but stopped at 8,125,970 triangles; no recovery was launched because the compression level is not comparable",
     },
     {
+        "group": "compact_recovery",
+        "row": "area_smallest_50",
+        "scene": "bonsai",
+        "status": "PASS_GEOMETRY_PARETO",
+        "evidence": "docs/car_model/final_stageF26_bonsai_selector_ablation_report.md",
+        "finding": "area50 is slightly behind QEM50 on PSNR/SSIM but better on LPIPS, AbsRel, Depth MAE, and normal at the same triangle count",
+    },
+    {
+        "group": "compact_recovery",
+        "row": "random_same_count_50",
+        "scene": "bonsai",
+        "status": "FAIL_CONTROL_SUPPORTS_STRUCTURED_SELECTION",
+        "evidence": "docs/car_model/final_stageF26_bonsai_selector_ablation_report.md",
+        "finding": "random50 fails clean-long on render and AbsRel and loses badly to structured selectors at the same triangle count",
+    },
+    {
         "group": "posthoc_simplification",
         "row": "open3d_qem50_strict_recovery",
         "scene": "bonsai",
         "status": "PASS_STRONG_BASELINE_OR_OPERATOR",
         "evidence": "docs/car_model/final_stageF22_bonsai_posthoc_qem_baseline_report.md",
-        "finding": "Open3D QEM50 plus strict topology-frozen recovery becomes the strongest bonsai row on render, AbsRel, and normal, with Depth MAE slightly weaker than CSEF50",
+        "finding": "Open3D QEM50 plus strict topology-frozen recovery remains the strongest bonsai render row; F26 area50 is slightly better on LPIPS and sparse geometry",
     },
     {
         "group": "compact_recovery",
@@ -240,8 +256,8 @@ ROWS = [
 
 MISSING = [
     "replicate no-freeze compact-recovery control beyond completed counter and room rows",
-    "final CSEF selector versus area-only selector on every public scene",
-    "selector ablation on remaining scenes beyond completed counter, courtyard, and room controls",
+    "final CSEF selector versus area-only selector on every public scene beyond the completed bonsai, courtyard, room, and counter controls",
+    "selector ablation on any additional scenes added to the final benchmark",
     "a matched 70 percent parking posthoc simplification baseline that can actually reach the R53/F7 triangle target; Open3D QEM failed this target",
     "separate final compact-recovery rows that explicitly enable sparse-depth loss, if the manuscript wants to claim sparse-depth-guided recovery",
     "full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations",

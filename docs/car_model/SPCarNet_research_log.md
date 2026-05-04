@@ -4259,3 +4259,25 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F25_PARKING_QEM70_REJECT_UNMATCHED_COMPRESSION`. Open3D QEM does not provide a fair matched 70 percent parking baseline because it reaches only `4.94%` triangle removal on the 8.55M-triangle mesh. No W&B recovery was launched for this row because it would retain `3.17x` more triangles than the accepted compact method and would create a misleading comparison. The final parking headline is now the already W&B-validated F7 CSEF70 run (`oqpkykcw`), with R53 as area-only control and F25 as a documented posthoc simplification failure.
 
 ---
+
+## 2026-05-04 - Final F26 bonsai selector ablation
+
+**Goal**: close the bonsai selector-control gap with matched long-horizon area and random rows at the same 50 percent topology budget as CSEF50/QEM50.
+
+**W&B runs**:
+- area50 strict recovery `22000->26000`: `a29ayt8w`;
+- random50 strict recovery `22000->26000`: `noqp4nhp`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 88,460 | 10.944348 | 0.222848 | 0.586158 | 0.194249 | 1.816410 | 45.358356 |
+| CSEF50 26k | 44,230 | 10.957497 | 0.224758 | 0.586415 | 0.185180 | 1.737815 | 43.493975 |
+| Open3D QEM50 26k | 44,230 | 11.082405 | 0.243249 | 0.570177 | 0.182966 | 1.793852 | 42.889339 |
+| area50 26k | 44,230 | 11.072339 | 0.242361 | 0.570040 | 0.179402 | 1.755109 | 42.834537 |
+| random50 26k | 44,230 | 10.725461 | 0.197036 | 0.603335 | 0.210644 | 1.736676 | 43.797014 |
+
+**Decision**: `FINAL_F26_BONSAI_SELECTOR_ABLATION_PASS_AREA_PARETO_RANDOM_FAIL`. Random same-count pruning fails as a clean-long control and loses badly to structured selectors at the same triangle count. Area50 is a strong geometry/perceptual Pareto row: it is slightly behind QEM50 on PSNR and SSIM, but better on LPIPS, AbsRel, Depth MAE, and normal. QEM50 remains the bonsai render-headline row; area50 becomes the bonsai selector Pareto control.
+
+---
