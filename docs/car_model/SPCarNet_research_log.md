@@ -4139,3 +4139,29 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F20_ROOM_POSTHOC_QEM_STRONG_PASS_SUPERSEDES_AREA50_ON_RENDER_DEPTH`. QEM50 plus strict topology-frozen recovery is the new strongest room row on render, AbsRel, and Depth MAE, while area50 remains slightly better on normal. This is not a weak baseline; it must be reported honestly. The method framing should shift from universal CSEF/area superiority to a stronger and cleaner claim: MeshSplatOpt is a fixed-topology certified recovery framework that can evaluate and absorb compact operators, with random pruning rejected and QEM emerging as a strong collapse-style operator on room.
 
 ---
+
+## 2026-05-04 - Final F21 counter posthoc QEM baseline
+
+**Goal**: replicate the F20 Open3D QEM posthoc simplification baseline beyond `room`, using `counter` where area40 had been the strongest compact row.
+
+**Implementation**:
+- script: `scripts/car_model/meshsplatopt_apply_open3d_qem_decimation_to_checkpoint.py`;
+- Open3D QEM compacted `counter` clean-long from `83,834` to `50,300` triangles;
+- transferred vertex tensors by nearest source vertex and face tensors by nearest source face centroid;
+- topology audit: `degenerate_face_count=0`, `invalid_index_count=0`.
+
+**W&B**: `kr8565st`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 83,834 | 14.136182 | 0.512802 | 0.452049 | 0.076996 | 0.369973 | 44.287035 |
+| CSEF40 26k | 50,300 | 14.212033 | 0.518401 | 0.450481 | 0.085542 | 0.406373 | 43.476972 |
+| area40 26k | 50,300 | 14.314330 | 0.536892 | 0.431104 | 0.072751 | 0.357914 | 43.715882 |
+| random40 26k | 50,300 | 13.875822 | 0.482349 | 0.485052 | 0.099779 | 0.444684 | 43.941494 |
+| Open3D QEM40 26k | 50,300 | 14.409434 | 0.547456 | 0.420855 | 0.068076 | 0.338664 | 43.716007 |
+
+**Decision**: `FINAL_F21_COUNTER_POSTHOC_QEM_STRONG_PASS_SUPERSEDES_AREA40_ON_RENDER_DEPTH`. QEM40 becomes the new strongest counter row on render, AbsRel, and Depth MAE, while normal is effectively tied with area40. This upgrades F12's counter main row and reduces the posthoc simplification missing-baseline risk from one scene to two scenes. The paper framing should treat QEM as a strong compact operator under the fixed-topology recovery framework, not as a weak baseline.
+
+---

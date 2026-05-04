@@ -23,7 +23,8 @@ This report is an auditable registry of completed ablation evidence. It does not
 | compact_recovery | random_same_count_50 | room | FAIL_CONTROL_SUPPORTS_STRUCTURED_SELECTION | random50 fails clean-long and is far worse than area50 at the same triangle count | `docs/car_model/final_stageF19_room_selector_ablation_report.md` |
 | compact_recovery | cross_scene_csef50 | counter | BORDERLINE | 50 percent CSEF is near the gate but misses SSIM by 0.003827 | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
 | compact_recovery | cross_scene_csef40 | counter | PASS | 40 percent CSEF improves PSNR, SSIM, LPIPS, and normal versus clean-long, but F16 shows area40 is stronger on counter | `docs/car_model/final_stageF10_fourth_scene_counter_report.md` |
-| compact_recovery | area_smallest_40 | counter | PASS_SELECTOR_BEST | area40 is the strongest counter selector row and beats both clean-long and CSEF40 on independent metrics | `docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md` |
+| compact_recovery | area_smallest_40 | counter | PASS_SELECTOR_BEST_SUPERSEDED_BY_QEM | area40 beats clean-long and CSEF40 on independent metrics, but F21 QEM40 is stronger on render and depth | `docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md` |
+| posthoc_simplification | open3d_qem40_strict_recovery | counter | PASS_STRONG_BASELINE_OR_OPERATOR | Open3D QEM40 plus strict topology-frozen recovery becomes the strongest counter row on PSNR, SSIM, LPIPS, AbsRel, and Depth MAE | `docs/car_model/final_stageF21_counter_posthoc_qem_baseline_report.md` |
 | compact_recovery | no_freeze_area40 | counter | FAIL_CONTROL_SUPPORTS_FREEZE | removing strict topology freeze collapses the area40 compact row from 50,300 to 18,693 triangles and sharply worsens independent render/geometry metrics | `docs/car_model/final_stageF18_counter_no_freeze_control_report.md` |
 | compact_recovery | random_same_count_40 | counter | FAIL_CONTROL_SUPPORTS_CSEF | random 40 percent compaction at the same triangle count loses badly to CSEF40 and clean-long on independent render/geometry metrics | `docs/car_model/final_stageF16_counter_random_same_count_ablation_report.md` |
 | sparse_depth | sparse_depth_recovery | parking/courtyard/bonsai | PASS | earlier sparse-depth recovery branch is useful but separate from the final compact-recovery main rows, which use independent COLMAP sparse geometry evaluation | `docs/car_model/meshsplatopt_stageR28_R30_full_sparse_recovery_report.md` |
@@ -36,10 +37,10 @@ This report is an auditable registry of completed ablation evidence. It does not
 - replicate no-freeze compact-recovery control beyond counter
 - final CSEF selector versus area-only selector on every public scene
 - selector ablation on remaining scenes beyond completed counter, courtyard, and room controls
-- replicate posthoc QEM/decimation baseline beyond room
+- replicate posthoc QEM/decimation baseline beyond completed room and counter rows
 - separate final compact-recovery rows that explicitly enable sparse-depth loss, if the manuscript wants to claim sparse-depth-guided recovery
 - full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations
 
 ## Gate
 
-Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and a strong room Open3D-QEM recovery baseline/operator. The earlier sparse-depth branch is useful but should not be conflated with the final compact-recovery main rows unless new rows explicitly enable that loss. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.
+Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong room/counter Open3D-QEM recovery baselines/operators. The earlier sparse-depth branch is useful but should not be conflated with the final compact-recovery main rows unless new rows explicitly enable that loss. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.
