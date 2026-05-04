@@ -4364,3 +4364,27 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `FINAL_F32_COUNTER_QEM_SPARSE_DEPTH_PARETO_PASS_PROMOTE_GEOMETRY_PERCEPTUAL`. F32 improves SSIM, LPIPS, AbsRel, and normal relative to QEM40 at identical topology while giving back only `0.000665 dB` PSNR and `0.000451` Depth MAE. It remains an all-metric clean-long win and becomes the counter geometry/perceptual headline.
 
 ---
+
+## 2026-05-04 - Final F33 parking sparse-depth compact recovery and qualitative assets
+
+**Goal**: close the explicit sparse-depth replication gap on the final remaining headline scene and improve the paper-facing qualitative package.
+
+**W&B run**:
+- F33 CSEF70 + sparse-depth strict recovery `22000->26000`: `x6rmhhlp`.
+
+**Independent result**:
+
+| method | triangles | PSNR | SSIM | LPIPS | AbsRel | Depth MAE | Normal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean-long 22k | 8,548,242 | 18.480000 | 0.635000 | 0.347000 | 0.082000 | 1.868000 | 45.108000 |
+| CSEF70 26k | 2,564,473 | 18.706079 | 0.647764 | 0.338282 | 0.079404 | 1.852816 | 44.204497 |
+| CSEF70 + sparse-depth 26k | 2,564,473 | 18.712330 | 0.647730 | 0.338259 | 0.079071 | 1.854015 | 44.035708 |
+
+**Qualitative update**:
+- extended `scripts/car_model/final_make_paper_assets.py` to build per-scene GT / clean-long / strong-control / ours / error panels from independent renders;
+- generated `outputs/carnet/meshsplatopt/final_paper_assets/qualitative_panels/final_multiscene_qualitative_montage.png`;
+- manifest records every source image and selected frame.
+
+**Decision**: `FINAL_F33_PARKING_CSEF_SPARSE_DEPTH_PARETO_PASS_PROMOTE`. F33 is promoted as the parking Pareto headline because it improves PSNR, LPIPS, AbsRel, and normal over F7 at identical topology, with negligible SSIM cost and a small Depth MAE tradeoff. Explicit sparse-depth compact recovery is now replicated on all five final scenes.
+
+---

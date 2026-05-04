@@ -40,9 +40,17 @@ ROWS = [
         "group": "compact_recovery",
         "row": "csef70_strict_recovery",
         "scene": "parking_phone_tiny",
-        "status": "PASS_HEADLINE",
+        "status": "PASS_SUPERSEDED_BY_SPARSE_DEPTH_PARETO",
         "evidence": "docs/car_model/final_stageF7_parking_pareto_report.md",
-        "finding": "CSEF70 is the strongest parking same-topology row: it beats clean 22k on render and sparse geometry and slightly supersedes R53 area70",
+        "finding": "CSEF70 beats clean 22k on render and sparse geometry and supersedes R53 area70, but F33 sparse-depth improves PSNR, LPIPS, AbsRel, and normal at identical topology",
+    },
+    {
+        "group": "sparse_depth",
+        "row": "csef70_sparse_depth_strict_recovery",
+        "scene": "parking_phone_tiny",
+        "status": "PASS_PARETO_HEADLINE",
+        "evidence": "docs/car_model/final_stageF33_parking_csef_sparse_depth_report.md",
+        "finding": "CSEF70 plus sparse-depth is the strongest parking Pareto row: it improves PSNR, LPIPS, AbsRel, and normal over CSEF70 at identical topology and remains an all-metric clean-long win",
     },
     {
         "group": "compact_recovery",
@@ -307,7 +315,7 @@ MISSING = [
     "final CSEF selector versus area-only selector on every public scene beyond the completed bonsai, courtyard, room, and counter controls",
     "selector ablation on any additional scenes added to the final benchmark",
     "a matched 70 percent parking posthoc simplification baseline that can actually reach the R53/F7 triangle target; Open3D QEM failed this target",
-    "replicate explicit sparse-depth compact-recovery beyond the completed bonsai, room, courtyard, and counter rows if the manuscript wants a universal sparse-depth-guided recovery claim across every final scene",
+    "replicate explicit sparse-depth compact-recovery on any additional scenes added beyond the completed parking, bonsai, room, courtyard, and counter final rows",
     "full no-render-gate/no-geometry-gate/no-rollback counterfactual ablations",
 ]
 
@@ -351,7 +359,7 @@ def main() -> None:
         "",
         "## Gate",
         "",
-        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F28/F29/F30/F31/F32 now replicate explicit sparse-depth compact recovery on bonsai, room, courtyard, and counter, supporting a geometry/perceptual regularizer claim but not a universal PSNR-improvement claim. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
+        "Soft pass only. The current evidence identifies load-bearing components: compact-recovery, strict topology freezing, structured selection versus random pruning, and strong bonsai/courtyard/room/counter Open3D-QEM recovery baselines/operators. F28/F29/F30/F31/F32/F33 now replicate explicit sparse-depth compact recovery on all five final scenes, supporting a geometry/perceptual regularizer claim but not a universal PSNR-improvement claim. Snap/fill are explicitly not load-bearing headline rows. A strict F11 PASS still requires the missing matched ablations above.",
         "",
     ]
     DOC.write_text("\n".join(lines))

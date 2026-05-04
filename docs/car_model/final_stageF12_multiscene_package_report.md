@@ -9,7 +9,7 @@ Scenes with PSNR+SSIM improvement and LPIPS non-regression tolerance: `5/5`.
 
 | scene | clean triangles | ours triangles | reduction | dPSNR | dSSIM | dLPIPS | dAbsRel | dDepth MAE | dNormal | decision |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| parking_phone_tiny | 8,548,242 | 2,564,473 | 70.0% | 0.226079 | 0.012764 | -0.008718 | -0.002596 | -0.015184 | -0.903503 | PASS |
+| parking_phone_tiny | 8,548,242 | 2,564,473 | 70.0% | 0.232330 | 0.012730 | -0.008741 | -0.002929 | -0.013985 | -1.072292 | PASS_PARETO |
 | bonsai | 88,460 | 44,230 | 50.0% | 0.137266 | 0.020400 | -0.016500 | -0.012551 | -0.036627 | -2.932622 | PASS |
 | courtyard | 1,677,484 | 838,742 | 50.0% | 0.452301 | 0.041625 | -0.024231 | -0.032415 | -0.220612 | 0.008508 | PASS |
 | room | 84,506 | 42,253 | 50.0% | 0.802811 | 0.080218 | -0.062114 | -0.025153 | -0.135009 | -0.541874 | PASS |
@@ -19,7 +19,7 @@ Scenes with PSNR+SSIM improvement and LPIPS non-regression tolerance: `5/5`.
 
 | scene | clean row | best row | W&B | evidence |
 | --- | --- | --- | --- | --- |
-| parking_phone_tiny | clean-long 22k | CSEF70 strict recovery 26k | `oqpkykcw` | `docs/car_model/final_stageF7_parking_pareto_report.md` |
+| parking_phone_tiny | clean-long 22k | CSEF70 + sparse-depth strict recovery 26k | `x6rmhhlp` | `docs/car_model/final_stageF33_parking_csef_sparse_depth_report.md` |
 | bonsai | clean-long 22k | Open3D QEM50 + sparse-depth strict recovery 26k | `07k1ii1d` | `docs/car_model/final_stageF28_bonsai_qem_sparse_depth_report.md` |
 | courtyard | clean-long 22k | CSEF50 strict recovery 26k | `jz93wrbc` | `docs/car_model/final_stageF8_cross_scene_compact_pilot_report.md` |
 | room | clean-long 22k | Open3D QEM50 strict recovery 26k | `9wri3owt` | `docs/car_model/final_stageF20_room_posthoc_qem_baseline_report.md` |
@@ -46,6 +46,7 @@ Scenes with PSNR+SSIM improvement and LPIPS non-regression tolerance: `5/5`.
 | counter | QEM40 frozen | strong PSNR/Depth row, but QEM40 + sparse-depth improves SSIM, LPIPS, AbsRel, and normal at the same topology with negligible PSNR/Depth cost | `docs/car_model/final_stageF32_counter_qem_sparse_depth_report.md` |
 | counter | area40 no-freeze | omitting strict topology freeze collapses topology to 18,693 triangles and loses badly to frozen area40 | `docs/car_model/final_stageF18_counter_no_freeze_control_report.md` |
 | parking_phone_tiny | R53.01 area70 | strong area-only control at the same triangle count; superseded by CSEF70 on PSNR, LPIPS, AbsRel, Depth MAE, and normal with negligible SSIM loss | `docs/car_model/final_stageF7_parking_pareto_report.md` |
+| parking_phone_tiny | CSEF70 | strong all-metric clean-long win, but CSEF70 + sparse-depth improves PSNR, LPIPS, AbsRel, and normal at identical topology with negligible SSIM cost and a small Depth MAE tradeoff | `docs/car_model/final_stageF33_parking_csef_sparse_depth_report.md` |
 | parking_phone_tiny | Open3D QEM70 | Open3D QEM did not reach the matched 2,564,473-triangle target on the 8.55M-triangle parking mesh, stopping at 8,125,970 triangles, so it is rejected as an unmatched compression control | `docs/car_model/final_stageF25_parking_posthoc_qem_baseline_report.md` |
 | room | QEM50 no-freeze | omitting strict topology freeze collapses topology to 20,742 triangles and loses badly to frozen QEM50 | `docs/car_model/final_stageF24_room_qem_no_freeze_control_report.md` |
 | room | QEM50 + sparse-depth | improves SSIM, LPIPS, AbsRel, Depth MAE, and normal at identical topology, but gives back 0.001 dB PSNR, so QEM50 remains the room PSNR headline | `docs/car_model/final_stageF29_room_qem_sparse_depth_report.md` |
