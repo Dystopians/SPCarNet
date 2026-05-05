@@ -46,6 +46,8 @@ def _train_args(args: argparse.Namespace) -> list[str]:
         "--eval",
         "--load_iteration",
         str(args.load_iteration),
+        "--seed",
+        str(args.train_seed),
         "--iterations",
         str(args.final_iteration),
         "--test_iterations",
@@ -172,6 +174,7 @@ def run(args: argparse.Namespace) -> int:
         "wandb_project": args.wandb_project,
         "wandb_group": args.wandb_group,
         "wandb_name": args.wandb_name,
+        "train_seed": int(args.train_seed),
         "execute": bool(args.execute),
         "topology_unchanged": None,
     }
@@ -238,6 +241,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--wandb_project", default="spcarnet_meshprior")
     parser.add_argument("--wandb_group", default="finalF6_strict_recovery")
     parser.add_argument("--wandb_name", required=True)
+    parser.add_argument("--train_seed", type=int, default=0)
     parser.add_argument("--contract_out_dir", required=True)
     parser.add_argument("--python", default="/home/peilincai/micromamba/envs/mesh_splatting/bin/python")
     parser.add_argument("--execute", action="store_true")

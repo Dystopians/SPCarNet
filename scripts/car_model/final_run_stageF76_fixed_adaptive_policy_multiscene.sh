@@ -10,6 +10,12 @@ STAGE_ID="${STAGE_ID:-F76}"
 STAGE_GROUP="${STAGE_GROUP:-final_stage${STAGE_ID}_fixed_adaptive_policy_multiscene}"
 ROOT="${ROOT:-outputs/carnet/meshsplatopt/${STAGE_GROUP}}"
 POLICY_TAG="${POLICY_TAG:-adaptive_f75_policy}"
+SELECTOR_SEED="${SELECTOR_SEED:-0}"
+TRAIN_SEED="${TRAIN_SEED:-0}"
+RECOVERY_PRESET="${RECOVERY_PRESET:-compact_sparse_low_lambda}"
+SPARSE_LAMBDA="${SPARSE_LAMBDA:-0.001}"
+SPARSE_FRACTION="${SPARSE_FRACTION:-0.5}"
+LPIPS_LAMBDA="${LPIPS_LAMBDA:-0.00025}"
 
 case "${SCENE}" in
   bonsai)
@@ -68,6 +74,7 @@ if [[ ! -f "${COMPACT_MODEL}/point_cloud/iteration_22000/point_cloud_state_dict.
     --output_model "${COMPACT_MODEL}" \
     --selector_mode csef_adaptive_policy \
     --selector_out_dir "${OUT_DIR}/selector" \
+    --seed "${SELECTOR_SEED}" \
     2>&1 | tee "${OUT_DIR}/logs/compaction.log"
 fi
 
@@ -83,20 +90,21 @@ fi
   --final_iteration 26000 \
   --images "${IMAGES}" \
   --resolution "${RESOLUTION}" \
-  --preset compact_sparse_low_lambda \
-  --sparse_lambda 0.001 \
+  --preset "${RECOVERY_PRESET}" \
+  --sparse_lambda "${SPARSE_LAMBDA}" \
   --sparse_start_iter 22000 \
   --sparse_warmup_iters 300 \
   --sparse_min_matches 16 \
   --sparse_sample_mode mixed_low_error \
-  --sparse_fraction 0.5 \
-  --lpips_lambda 0.00025 \
+  --sparse_fraction "${SPARSE_FRACTION}" \
+  --lpips_lambda "${LPIPS_LAMBDA}" \
   --lpips_start_iter 22000 \
   --lpips_warmup_iters 300 \
   --lpips_max_side 512 \
   --wandb_project "${WANDB_PROJECT}" \
   --wandb_group "${STAGE_GROUP}" \
-  --wandb_name "${STAGE_ID}_${SCENE}_fixed_adaptive_policy_sparse_lpips0p00025_22000to26000" \
+  --wandb_name "${STAGE_ID}_${SCENE}_${POLICY_TAG}_seed${TRAIN_SEED}_22000to26000" \
+  --train_seed "${TRAIN_SEED}" \
   --contract_out_dir "${CONTRACT_DIR}" \
   --python "${PYTHON_BIN}" \
   --execute \

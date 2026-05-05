@@ -443,7 +443,8 @@ def decide_adaptive_compaction_policy(
     else:
         min_risk = min(float(row["risk"]) for row in rows)
         fallback_rows = [row for row in rows if float(row["risk"]) <= min_risk + 0.035]
-        evidence_safe_rows = [row for row in fallback_rows if float(row["positive_risk"]) <= 0.90]
+        positive_risk_cap = 0.885 if face_count < 150_000 else 0.90
+        evidence_safe_rows = [row for row in fallback_rows if float(row["positive_risk"]) <= positive_risk_cap]
         if evidence_safe_rows:
             fallback_rows = evidence_safe_rows
         best_row = max(fallback_rows, key=lambda row: (float(row["objective"]), float(row["fraction"])))

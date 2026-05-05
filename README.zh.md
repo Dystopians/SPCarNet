@@ -9,7 +9,7 @@
   <a href="docs/NeurIPSRepairPrompts.md">NeurIPS 路线图</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageF12_multiscene_package_report.md">多场景 package（F12）</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageF47_F48_csef_family_all_metric_repair_report.md">CSEF 家族全指标（F47–F49）</a> &nbsp;|&nbsp;
-  <a href="docs/car_model/final_stageF79_fixed_policy_multiscene_report.md">固定自适应策略（F79）</a>
+  <a href="docs/car_model/final_stageF82_policy_v5_robustness_report.md">固定自适应策略 v5（F82）</a>
 </div>
 
 <br>
@@ -20,7 +20,7 @@
 
 > **方法目标（一句话）**。现有 Mesh-Splatting / 3DGS 的剪枝方法问的是 *哪些图元可以被移除*；MeshSplatOpt 反过来问 *在保留视图渲染与稀疏几何反事实认证的前提下，哪个局部表面编辑能最大限度地降低场景证据债务*。同一套编辑微积分应同时支持删除（delete）、坍缩（collapse）、对齐（snap）、细分（split）、孔洞填充（fill）和外观恢复（appearance recovery）——每一次提交的编辑都必须通过渲染、稀疏深度、法向量、自由空间、拓扑等所有反事实证书；任一项不通过即自动回滚。
 
-> **当前证据（一句话）**。截至 2026-05-05，**validation-budget CSEF 家族 compact-recovery 协议**（clean long → CSEF 家族按面积 / 局部冗余压缩 → 严格拓扑冻结恢复 + 稀疏深度 + 必要时小幅 LPIPS）在 **5 / 5 个选定场景**（`parking_phone_tiny`、`bonsai`、`courtyard`、`room`、`counter`）上的独立 PSNR / SSIM / LPIPS / AbsRel / Depth MAE 全部击败最强 clean-long baseline；后续 **F79 固定自适应策略** 在剩余 4 个多场景验证场景上也不经逐场景重调，全部击败同场景 clean-long baseline。F79 从 checkpoint 证据中自动选择压缩预算，压缩幅度覆盖 18.5 % 到 72.0 %。
+> **当前证据（一句话）**。截至 2026-05-05，**validation-budget CSEF 家族 compact-recovery 协议**在 **5 / 5 个选定场景**上击败最强 clean-long baseline；后续 **F82 固定自适应策略 v5** 在剩余 4 个多场景验证场景上跨两个 seed 不经逐场景重调，全部击败同场景 clean-long baseline。F82 从 checkpoint 证据中自动选择压缩预算，达到 `8 / 8` 全指标胜出，压缩幅度覆盖 15.25 % 到 72.0 %。
 
 方法骨架（CSEF + 可逆编辑微积分 + 反事实证书）和恢复 recipe 通过区分 *什么通过了所有 gate* 与 *什么真正改进了头条指标* 来保持诚实。F45 的 fixed-CSEF50 审计明确记录单一 prune 比例并不适用所有场景；公开的论文 claim 因此是 validation-selected CSEF 家族协议，而不是单一通用超参。
 
@@ -28,7 +28,7 @@
 
 ## 项目诚实状态
 
-R0 → R56（骨架 + parking 单场景线）以及 **F1 → F79（最终跨场景线）**。带有 `_FAIL` / `REJECTED` / `MIXED` 标记的阶段，是当前论文纪律的失败证据骨架。
+R0 → R56（骨架 + parking 单场景线）以及 **F1 → F82（最终跨场景线）**。带有 `_FAIL` / `REJECTED` / `MIXED` 标记的阶段，是当前论文纪律的失败证据骨架。
 
 ### 方法骨架（R0–R15）
 
@@ -89,7 +89,7 @@ R0 → R56（骨架 + parking 单场景线）以及 **F1 → F79（最终跨场�
 
 **R44.01 vs clean 22k** 是承重的 parking 失败证据 —— 详见 `docs/car_model/parking_best_clean_long_vs_method_long_report.md`；后续从 R48 到 R53 的修复记录在 `docs/car_model/parking_clean_to_compact_repair_report.md`。
 
-### 跨场景终版 package 与自适应策略线（F1–F79）
+### 跨场景终版 package 与自适应策略线（F1–F82）
 
 | 阶段 | 范围 | 决策 |
 |---|---|---|
@@ -122,6 +122,8 @@ R0 → R56（骨架 + parking 单场景线）以及 **F1 → F79（最终跨场�
 | F76 | F75 风格固定策略多场景复刻 | `FAILED_TRANSFER` —— 暴露小场景压缩过强的问题 |
 | F77 / F78 | 全局自适应策略修复 | `PARTIAL_PASS` —— 各自修复一个短板，但仍留下一个混合指标 |
 | **F79** | **固定全局自适应策略 v4，验证 bonsai / courtyard / room / counter** | **`FIXED_POLICY_MULTISCENE_PASS`** —— 4 / 4 全指标击败 clean-long，且无逐场景重调 |
+| F80 | 用 `train_seed=1` 复验 F79 | `SEED_MARGIN_FAIL` —— bonsai Depth MAE 仅差 +0.000481 |
+| **F81 / F82** | **固定全局自适应策略 v5，seed 1 与 seed 0** | **`FIXED_POLICY_V5_TWO_SEED_PASS`** —— 8 / 8 全指标击败 clean-long |
 
 ---
 
@@ -130,7 +132,7 @@ R0 → R56（骨架 + parking 单场景线）以及 **F1 → F79（最终跨场�
 ### 已被验证
 
 - **validation-budget CSEF 家族 compact-recovery 协议在 5 / 5 个选定场景上通过**。每个场景都有一行长程结果在独立 PSNR / SSIM / LPIPS / AbsRel / Depth MAE 上击败最强 clean-long 22k baseline，拓扑减少 40 – 70 %；稀疏法向量代理在 4 / 5 场景上改进（courtyard 持平于 +0.0085° —— 显式披露，未声称胜出）。各场景所选行：parking CSEF50 + 稀疏深度（F46）、bonsai CSEF50 + 稀疏深度 + LPIPS λ = 0.005（F49）、courtyard CSEF50 + 稀疏深度（F30）、room CSEF20 + 稀疏深度（F46）、counter CSEF20 + 稀疏深度（F46）—— prune 比例由同一 CSEF 选择器家族在每场景 validation-selected 决定。
-- **自适应 CSEF 策略已被两种形式验证**。F75 是 parking 最强单行结果：从 checkpoint 证据中读出 prune 比例（parking → 70 %），按 area / 局部冗余主导排序，把渲染证据仅作为风险 / 审计信号。F79 是固定多场景版本：同一个 policy、同一个恢复 recipe，在 bonsai、courtyard、room、counter 上不经逐场景重调全部胜出。
+- **自适应 CSEF 策略已被两种形式验证**。F75 是 parking 最强单行结果：从 checkpoint 证据中读出 prune 比例（parking → 70 %），按 area / 局部冗余主导排序，把渲染证据仅作为风险 / 审计信号。F82 是固定多场景版本：同一个 policy、同一个恢复 recipe，在 bonsai、courtyard、room、counter 上跨两个 seed 不经逐场景重调全部胜出。
 - **恢复阶段的稀疏 COLMAP 深度监督是主要贡献者**。已验证区间：λ ∈ [0.001, 0.005] 因场景而异；`mixed_low_error` 对应采样，每场景调整可信比例；几何稳住后启用 decay 窗口。
 - **严格拓扑冻结必须执行**。固定拓扑续训必须同时使用 `--freeze_topology_updates --skip_restricted_delaunay`；单独 `--skip_restricted_delaunay` 只跳过 Delaunay 刷新，标准 prune / densify 分支仍会继续运行。F27 / F35 / F36 / F18 / F24 在每个 final-package 场景上证明：去掉严格冻结即拓扑塌陷或漂移并丢失渲染。
 - **反事实 gate 按设计工作于不安全编辑拒绝**。F38（合成 no-gate / no-rollback）证明 gate 完美回滚所有不安全编辑；F39 / F41 / F42（parking 真实 gate-removed 在 500 / 2000 / 7000 步）证明 gate-on 回滚 gate-off 提交的同一 no-accept 候选，且在 7000 步上 gate-on 在渲染指标上胜出；F44 校准 gate 在 bonsai 上保留 gate、接受 3 个可恢复轮、拒绝 3 个后续轮，并以更小网格逼近 no-gate。
@@ -151,7 +153,7 @@ R0 → R56（骨架 + parking 单场景线）以及 **F1 → F79（最终跨场�
 - **编辑后不冻结致密化不是恢复策略** —— R25 把 parking 长到 5.89M 三角形仍只有 PSNR 12.03。
 - **替代稀疏深度损失空间（`relative` / `log` / `inverse`）被拒绝**：parking 全预算下，原始度量深度 Smooth-L1 仍是已验证的形式。
 
-R0–R56 + F1–F79 的 "什么有效 / 什么无效" 简版总结见 [`docs/car_model/SPCarNet_research_log.md`](docs/car_model/SPCarNet_research_log.md)。
+R0–R56 + F1–F82 的 "什么有效 / 什么无效" 简版总结见 [`docs/car_model/SPCarNet_research_log.md`](docs/car_model/SPCarNet_research_log.md)。
 
 ---
 
@@ -199,18 +201,18 @@ parking 场景同时维护一条单场景线，承载失败证据骨架（R44 vs
 | ours R56 28k（R53 续训，已拒绝） | 28 000 | 18.36 | 0.624 | 0.367 | n/a | n/a | n/a | 2 564 473 |
 | ours R43 30k（无 decay，已拒绝） | 30 000 | 16.25 | 0.511 | 0.477 | 0.194 | 3.02 | 43.71 | 782 982 |
 
-F75 是 parking 单场景的接受头条 —— 在同样拓扑下，比 F7 改进 ΔPSNR +0.0058、ΔLPIPS −0.000773、ΔAbsRel −0.000531、ΔDepth MAE −0.002774、ΔNormal 角度 −0.2495°。后续 F79 固定全局策略是当前接受的多场景公平验证。
+F75 是 parking 单场景的接受头条 —— 在同样拓扑下，比 F7 改进 ΔPSNR +0.0058、ΔLPIPS −0.000773、ΔAbsRel −0.000531、ΔDepth MAE −0.002774、ΔNormal 角度 −0.2495°。后续 F82 固定全局策略 v5 是当前接受的多场景公平验证。
 
-### 固定自适应策略验证（F79）
+### 固定自适应策略验证（F82 v5）
 
-F79 在四个剩余选定场景上使用同一个 selector policy 和同一个恢复 recipe。它不是逐场景参数表：选择器从 checkpoint 证据中自适应选择预算；稀疏深度 lambda、LPIPS lambda、拓扑冻结和恢复长度保持固定。
+F82 v5 在四个剩余选定场景上使用同一个 selector policy 和同一个恢复 recipe。它不是逐场景参数表：选择器从 checkpoint 证据中自适应选择预算；稀疏深度 lambda、LPIPS lambda、拓扑冻结和恢复长度保持固定。F81/F82 用两个 seed 复验同一 policy，达到 8 / 8 全指标胜出。
 
 | 场景 | 自适应剪枝 | 削减 | ΔPSNR ↑ | ΔSSIM ↑ | ΔLPIPS ↓ | ΔAbsRel ↓ | ΔDepth MAE ↓ | ΔNormal ° ↓ | W&B |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| `bonsai` | 0.2825 | 28.3 % | +0.1218 | +0.0180 | -0.0132 | -0.0122 | -0.0118 | -3.1293 | `6y0kyntt` |
-| `courtyard` | 0.7200 | 72.0 % | +0.1033 | +0.0125 | -0.0027 | -0.0528 | -0.4922 | -0.5076 | `xv4xvi32` |
-| `room` | 0.1850 | 18.5 % | +0.8609 | +0.0827 | -0.0615 | -0.0160 | -0.0851 | -1.4677 | `pcde5er3` |
-| `counter` | 0.1850 | 18.5 % | +0.2618 | +0.0308 | -0.0243 | -0.0067 | -0.0187 | -1.1181 | `fgdue0tb` |
+| `bonsai` | 0.2500 | 25.0 % | +0.1248 | +0.0183 | -0.0132 | -0.0129 | -0.0106 | -3.2110 | `f5zh2jda` |
+| `courtyard` | 0.7200 | 72.0 % | +0.0951 | +0.0120 | -0.0026 | -0.0528 | -0.4892 | -0.6059 | `mie1nxrx` |
+| `room` | 0.1525 | 15.2 % | +0.9011 | +0.0880 | -0.0659 | -0.0196 | -0.1049 | -1.4035 | `hezmbm8v` |
+| `counter` | 0.1525 | 15.3 % | +0.2796 | +0.0336 | -0.0277 | -0.0087 | -0.0291 | -1.2209 | `3egx4xqv` |
 
 ---
 

@@ -105,7 +105,7 @@ CLEAN_MODELS = {
 }
 
 
-def _build_specs(stage_group: str, policy_tag: str) -> list[SceneSpec]:
+def _build_specs(stage_group: str, policy_tag: str, scenes: list[str]) -> list[SceneSpec]:
     return [
         SceneSpec(
             scene,
@@ -116,6 +116,7 @@ def _build_specs(stage_group: str, policy_tag: str) -> list[SceneSpec]:
             "",
         )
         for scene, clean_model in CLEAN_MODELS.items()
+        if scene in scenes
     ]
 
 
@@ -289,12 +290,14 @@ def main() -> int:
     parser.add_argument("--stage-id", default="F76")
     parser.add_argument("--stage-group", default="")
     parser.add_argument("--policy-tag", default="adaptive_f75_policy")
+    parser.add_argument("--scenes", default=",".join(CLEAN_MODELS.keys()))
     parser.add_argument("--out-dir", default="")
     args = parser.parse_args()
     stage_group = args.stage_group or f"final_stage{args.stage_id}_fixed_adaptive_policy_multiscene"
     out_dir = ROOT / (args.out_dir or f"outputs/carnet/meshsplatopt/{stage_group}")
     out_dir.mkdir(parents=True, exist_ok=True)
-    specs = _build_specs(stage_group, args.policy_tag)
+    scenes = [scene.strip() for scene in args.scenes.split(",") if scene.strip()]
+    specs = _build_specs(stage_group, args.policy_tag, scenes)
     rows = [_row(spec) for spec in specs]
     payload = [row.to_dict() for row in rows]
     (out_dir / "fixed_adaptive_policy_multiscene_results.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
