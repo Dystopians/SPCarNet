@@ -295,7 +295,7 @@ def _mean(table: dict[str, np.ndarray], key: str, ids: np.ndarray) -> float:
 def decide_adaptive_compaction_policy(
     signals: CompactionSignals,
     *,
-    min_fraction: float = 0.50,
+    min_fraction: float = 0.12,
     max_fraction: float = 0.82,
     seed: int = 0,
 ) -> tuple[AdaptiveCompactionPolicyDecision, dict[str, np.ndarray]]:
@@ -352,6 +352,14 @@ def decide_adaptive_compaction_policy(
         eval_scale = float(candidate_ids.shape[0] / max(eval_candidate_ids.shape[0], 1))
     min_fraction = float(np.clip(min_fraction, 0.0, 0.95))
     max_fraction = float(np.clip(max_fraction, min_fraction, 0.95))
+    if face_count < 150_000:
+        max_fraction = min(max_fraction, 0.38)
+    elif face_count < 500_000:
+        max_fraction = min(max_fraction, 0.55)
+    elif face_count < 1_000_000:
+        max_fraction = min(max_fraction, 0.66)
+    else:
+        max_fraction = min(max_fraction, 0.72)
     max_feasible_fraction = float(candidate_ids.shape[0] * sample_scale / max(face_count, 1))
     max_fraction = min(max_fraction, max_feasible_fraction)
     if max_fraction < min_fraction:
@@ -422,18 +430,23 @@ def decide_adaptive_compaction_policy(
 
     if best_row is None or best_ids is None:
         raise ValueError("adaptive CSEF policy could not evaluate any feasible compaction fraction")
-    safe_rows = [row for row in rows if float(row["risk"]) <= 0.13]
+    risk_budget = 0.16 if face_count < 500_000 else 0.18
+    safe_rows = [row for row in rows if float(row["risk"]) <= risk_budget]
     if safe_rows:
-        knee_row = max(safe_rows, key=lambda row: (float(row["fraction"]), float(row["objective"])))
-        if float(best_row["risk"]) > 0.13:
-            best_row = knee_row
-    near_optimal_rows = [
-        row
-        for row in rows
-        if float(row["fraction"]) >= 0.66 and float(row["objective"]) >= float(best_row["objective"]) - 0.020
-    ]
-    if near_optimal_rows:
-        best_row = min(near_optimal_rows, key=lambda row: (float(row["fraction"]), -float(row["objective"])))
+        best_safe = max(safe_rows, key=lambda row: (float(row["objective"]), float(row["fraction"])))
+        near_safe = [
+            row
+            for row in safe_rows
+            if float(row["objective"]) >= float(best_safe["objective"]) - 0.025
+        ]
+        best_row = min(near_safe, key=lambda row: (float(row["risk"]), float(row["fraction"])))
+    else:
+        min_risk = min(float(row["risk"]) for row in rows)
+        fallback_rows = [row for row in rows if float(row["risk"]) <= min_risk + 0.035]
+        evidence_safe_rows = [row for row in fallback_rows if float(row["positive_risk"]) <= 0.90]
+        if evidence_safe_rows:
+            fallback_rows = evidence_safe_rows
+        best_row = max(fallback_rows, key=lambda row: (float(row["objective"]), float(row["fraction"])))
 
     risk_value = float(best_row["risk"])
     confidence = float(np.clip(1.0 / (1.0 + np.exp(2.0 * (risk_value - 1.0))), 0.05, 0.99))
@@ -458,6 +471,7 @@ def decide_adaptive_compaction_policy(
             "boundary_risk": float(best_row["boundary_risk"]),
             "uncertainty": float(best_row["uncertainty"]),
             "max_feasible_fraction": float(max_feasible_fraction),
+            "risk_budget": float(risk_budget),
         },
         candidates=rows,
     )

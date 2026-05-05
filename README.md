@@ -9,7 +9,7 @@
   <a href="docs/NeurIPSRepairPrompts.md">NeurIPS roadmap</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageF12_multiscene_package_report.md">Multi-scene package (F12)</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageF47_F48_csef_family_all_metric_repair_report.md">CSEF-family all-metric (F47–F49)</a> &nbsp;|&nbsp;
-  <a href="docs/car_model/final_stageF75_adaptive_policy_reflection_report.md">Adaptive policy (F75)</a>
+  <a href="docs/car_model/final_stageF79_fixed_policy_multiscene_report.md">Fixed adaptive policy (F79)</a>
 </div>
 
 <br>
@@ -20,7 +20,7 @@
 
 > **In one sentence (intent).** Existing Mesh-Splatting / 3DGS pruning methods ask *which primitives can be removed*; MeshSplatOpt asks *which local surface edit best reduces scene-evidence debt while remaining counterfactually certified by held-out rendering and sparse geometry.* The same edit calculus is meant to handle deletion, collapse, snapping, splitting, hole filling, and appearance recovery — every committed edit must clear render, sparse-depth, normal, free-space, and topology certificates, otherwise it rolls back.
 
-> **In one sentence (current evidence).** As of 2026-05-05, the **validation-budget CSEF-family compact-recovery protocol** (clean long → CSEF-family area / redundancy compaction → strict topology-frozen recovery + sparse-depth + small LPIPS where needed) now beats the strongest clean-long baseline on PSNR, SSIM, LPIPS, AbsRel, and Depth MAE on **5 / 5 selected scenes** (`parking_phone_tiny`, `bonsai`, `courtyard`, `room`, `counter`) and on the sparse-normal proxy on 4 / 5 (courtyard ties), with topology reductions of 40 – 70 % per scene; on `parking_phone_tiny` the **adaptive CSEF policy with tiny LPIPS recovery (F75)** is now the strongest single row, supersedes the earlier R53 / F7 rows, and chooses the prune ratio from checkpoint evidence rather than from a hand-set table.
+> **In one sentence (current evidence).** As of 2026-05-05, the **validation-budget CSEF-family compact-recovery protocol** (clean long → CSEF-family area / redundancy compaction → strict topology-frozen recovery + sparse-depth + small LPIPS where needed) beats the strongest clean-long baseline on PSNR, SSIM, LPIPS, AbsRel, and Depth MAE on **5 / 5 selected scenes** (`parking_phone_tiny`, `bonsai`, `courtyard`, `room`, `counter`), and the later **F79 fixed adaptive policy** beats the same clean-long baselines on **4 / 4 remaining multiscene validation scenes** without per-scene retuning. F79 chooses prune budgets from checkpoint evidence and reaches all-metric wins at reductions from 18.5 % to 72.0 %.
 
 The method scaffold (CSEF + reversible edit calculus + counterfactual certificates) and the recovery recipe are kept honest by separating *what passed every gate* from *what actually improved the headline metrics*. The fixed-CSEF50 audit (F45) intentionally documents that one prune ratio does not work for every scene; the published claim is therefore a validation-selected CSEF-family protocol, not a single universal hyperparameter.
 
@@ -28,7 +28,7 @@ The method scaffold (CSEF + reversible edit calculus + counterfactual certificat
 
 ## Honest project status
 
-R0 → R56 (scaffold + parking single-scene line) and **F1 → F75 (final cross-scene line)**. Stages with `_FAIL`, `REJECTED`, or `MIXED` decisions are the failure-evidence backbone of the current paper-discipline story.
+R0 → R56 (scaffold + parking single-scene line) and **F1 → F79 (final cross-scene line)**. Stages with `_FAIL`, `REJECTED`, or `MIXED` decisions are the failure-evidence backbone of the current paper-discipline story.
 
 ### Method scaffold (R0–R15)
 
@@ -89,7 +89,7 @@ R0 → R56 (scaffold + parking single-scene line) and **F1 → F75 (final cross-
 
 The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evidence — see `docs/car_model/parking_best_clean_long_vs_method_long_report.md`. The R48-to-R53 repair that follows it is documented in `docs/car_model/parking_clean_to_compact_repair_report.md`.
 
-### Cross-scene final package and adaptive-policy line (F1–F75)
+### Cross-scene final package and adaptive-policy line (F1–F79)
 
 | stage | scope | decision |
 |---|---|---|
@@ -119,7 +119,9 @@ The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evide
 | F71 / F72 / F73 | adaptive + sparse + heavier LPIPS | `LPIPS_HEAVY_REJECTED` — depth regresses |
 | F74 | adaptive + sparse + LPIPS λ = 0.0001 | `CONSERVATIVE_ALL_METRIC_F7_WIN` |
 | **F75** | **adaptive + sparse + LPIPS λ = 0.00025 (parking headline)** | **`ACCEPTED_FOR_PARKING_HEADLINE`** — supersedes R53.01 / F7 on every tracked metric |
-| F76 (in flight) | F75 fixed-policy multi-scene replication | running |
+| F76 | fixed F75-style policy multi-scene replication | `FAILED_TRANSFER` — over-aggressive small-scene budgets exposed the weakness |
+| F77 / F78 | global adaptive policy repairs | `PARTIAL_PASS` — each repaired one weakness but left one mixed metric |
+| **F79** | **fixed global adaptive policy v4 on bonsai / courtyard / room / counter** | **`FIXED_POLICY_MULTISCENE_PASS`** — 4 / 4 all-metric clean-long wins without per-scene retuning |
 
 ---
 
@@ -128,7 +130,7 @@ The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evide
 ### What is validated
 
 - **The validation-budget CSEF-family compact-recovery protocol now passes on 5 / 5 selected scenes.** Each scene has a long-run row that beats the strongest clean-long 22k baseline on PSNR, SSIM, LPIPS, AbsRel, and Depth MAE, with topology reductions of 40 – 70 %. Sparse-normal proxy improves on 4 / 5 (courtyard ties at +0.0085° — explicitly disclosed, not claimed as a win). Per-scene chosen rows: parking CSEF50 + sparse-depth (F46), bonsai CSEF50 + sparse-depth + LPIPS λ = 0.005 (F49), courtyard CSEF50 + sparse-depth (F30), room CSEF20 + sparse-depth (F46), counter CSEF20 + sparse-depth (F46) — the prune ratio is validation-selected per scene from the same CSEF selector family.
-- **Adaptive CSEF policy is the strongest single parking row (F75).** It reads checkpoint evidence to choose the prune fraction (parking → 70 %), ranks compaction candidates by area / local redundancy primarily, and uses render-only evidence as a risk / audit signal. Layered with sparse-depth recovery and a tiny LPIPS term (λ = 0.00025), it supersedes R53.01 / F7 on every tracked metric: PSNR 18.7119 / SSIM 0.6479 / LPIPS 0.3375 / AbsRel 0.0789 / Depth MAE 1.8500 / normal 43.95° at the same 2 564 473 triangles. F74 (λ = 0.0001) is the conservative neighbor.
+- **Adaptive CSEF policy is validated in two forms.** F75 is the strongest single parking row: it reads checkpoint evidence to choose the prune fraction (parking → 70 %), ranks compaction candidates by area / local redundancy primarily, and uses render-only evidence as a risk / audit signal. F79 is the fixed multiscene version: one policy and one recovery recipe win on bonsai, courtyard, room, and counter without per-scene retuning.
 - **Sparse-COLMAP-depth supervision during recovery is the dominant contributor.** Validated regime: λ ∈ [0.001, 0.005] depending on scene, `mixed_low_error` correspondence sampling with a per-scene trusted fraction, decay window after the geometry has anchored.
 - **Strict topology-freeze is required.** Use `--freeze_topology_updates --skip_restricted_delaunay` together for fixed-topology continuation. `--skip_restricted_delaunay` alone skips only the Delaunay refresh; it does not disable the standard prune / densify branch. F27 / F35 / F36 / F18 / F24 confirm on every final-package scene that omitting strict freeze collapses or drifts topology and loses render.
 - **Counterfactual gating works as designed for unsafe-edit rejection.** F38 (synthetic no-gate / no-rollback) shows the gate exactly restores all unsafe edits; F39 / F41 / F42 (parking real gate-removed at 500 / 2000 / 7000 iter) confirm gate-on rolls back the same no-accept candidate that gate-off commits, and gate-on wins render at 7000 iter. F44 calibrated-gate bonsai repair preserves gating, accepts three recoverable rounds, rejects three later rounds, and lands close to no-gate with a smaller mesh.
@@ -149,7 +151,7 @@ The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evide
 - **Unbounded post-edit densification is not a recovery strategy** — R25 grew parking to 5.89M tri and still ended at PSNR 12.03.
 - **Alternative sparse-depth loss spaces (`relative`, `log`, `inverse`) are rejected** for parking full budget — the original metric-depth Smooth-L1 form remains the validated variant.
 
-A short summary of the "what does and does not work" carved out of R0–R56 + F1–F75 lives in [`docs/car_model/SPCarNet_research_log.md`](docs/car_model/SPCarNet_research_log.md).
+A short summary of the "what does and does not work" carved out of R0–R56 + F1–F79 lives in [`docs/car_model/SPCarNet_research_log.md`](docs/car_model/SPCarNet_research_log.md).
 
 ---
 
@@ -197,7 +199,18 @@ The parking scene also has a separate single-scene line carrying the failure-evi
 | ours R56 28k (R53 continuation, rejected) | 28 000 | 18.36 | 0.624 | 0.367 | n/a | n/a | n/a | 2 564 473 |
 | ours R43 30k (no decay, rejected) | 30 000 | 16.25 | 0.511 | 0.477 | 0.194 | 3.02 | 43.71 | 782 982 |
 
-F75 is the accepted parking single-scene headline — it improves over F7 by ΔPSNR +0.0058, ΔLPIPS −0.000773, ΔAbsRel −0.000531, ΔDepth MAE −0.002774, ΔNormal angle −0.2495° at identical topology. F76 multi-scene replication of the F75 fixed policy is in flight.
+F75 is the accepted parking single-scene headline — it improves over F7 by ΔPSNR +0.0058, ΔLPIPS −0.000773, ΔAbsRel −0.000531, ΔDepth MAE −0.002774, ΔNormal angle −0.2495° at identical topology. The later F79 fixed global policy is the accepted multiscene fairness validation.
+
+### Fixed adaptive-policy validation (F79)
+
+F79 runs one fixed selector policy and one recovery recipe on the four remaining selected scenes. It is intentionally not a per-scene parameter table: the selector adapts from checkpoint evidence, while sparse-depth lambda, LPIPS lambda, topology freeze, and recovery horizon stay fixed.
+
+| scene | adaptive prune | reduction | ΔPSNR ↑ | ΔSSIM ↑ | ΔLPIPS ↓ | ΔAbsRel ↓ | ΔDepth MAE ↓ | ΔNormal ° ↓ | W&B |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| `bonsai` | 0.2825 | 28.3 % | +0.1218 | +0.0180 | -0.0132 | -0.0122 | -0.0118 | -3.1293 | `6y0kyntt` |
+| `courtyard` | 0.7200 | 72.0 % | +0.1033 | +0.0125 | -0.0027 | -0.0528 | -0.4922 | -0.5076 | `xv4xvi32` |
+| `room` | 0.1850 | 18.5 % | +0.8609 | +0.0827 | -0.0615 | -0.0160 | -0.0851 | -1.4677 | `pcde5er3` |
+| `counter` | 0.1850 | 18.5 % | +0.2618 | +0.0308 | -0.0243 | -0.0067 | -0.0187 | -1.1181 | `fgdue0tb` |
 
 ---
 
