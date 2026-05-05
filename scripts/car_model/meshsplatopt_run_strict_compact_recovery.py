@@ -140,6 +140,26 @@ def _train_args(args: argparse.Namespace) -> list[str]:
                 str(args.teacher_render_decay_final_mult),
             ]
         )
+    if args.checkpoint_geometry_anchor_lambda > 0.0:
+        cmd.extend(
+            [
+                "--enable_checkpoint_geometry_anchor",
+                "--lambda_checkpoint_geometry_anchor",
+                str(args.checkpoint_geometry_anchor_lambda),
+                "--checkpoint_geometry_anchor_start_iter",
+                str(args.checkpoint_geometry_anchor_start_iter),
+                "--checkpoint_geometry_anchor_warmup_iters",
+                str(args.checkpoint_geometry_anchor_warmup_iters),
+                "--checkpoint_geometry_anchor_decay_start_iter",
+                str(args.checkpoint_geometry_anchor_decay_start_iter),
+                "--checkpoint_geometry_anchor_decay_end_iter",
+                str(args.checkpoint_geometry_anchor_decay_end_iter),
+                "--checkpoint_geometry_anchor_decay_final_mult",
+                str(args.checkpoint_geometry_anchor_decay_final_mult),
+                "--checkpoint_geometry_anchor_huber_delta",
+                str(args.checkpoint_geometry_anchor_huber_delta),
+            ]
+        )
     return cmd
 
 
@@ -204,6 +224,8 @@ def run(args: argparse.Namespace) -> int:
         "teacher_render_lambda": float(args.teacher_render_lambda),
         "teacher_render_dir": args.teacher_render_dir,
         "teacher_render_mask_mode": args.teacher_render_mask_mode,
+        "checkpoint_geometry_anchor_lambda": float(args.checkpoint_geometry_anchor_lambda),
+        "checkpoint_geometry_anchor_huber_delta": float(args.checkpoint_geometry_anchor_huber_delta),
         "execute": bool(args.execute),
         "topology_unchanged": None,
     }
@@ -277,6 +299,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--teacher_render_decay_start_iter", type=int, default=-1)
     parser.add_argument("--teacher_render_decay_end_iter", type=int, default=-1)
     parser.add_argument("--teacher_render_decay_final_mult", type=float, default=1.0)
+    parser.add_argument("--checkpoint_geometry_anchor_lambda", type=float, default=0.0)
+    parser.add_argument("--checkpoint_geometry_anchor_start_iter", type=int, default=0)
+    parser.add_argument("--checkpoint_geometry_anchor_warmup_iters", type=int, default=300)
+    parser.add_argument("--checkpoint_geometry_anchor_decay_start_iter", type=int, default=-1)
+    parser.add_argument("--checkpoint_geometry_anchor_decay_end_iter", type=int, default=-1)
+    parser.add_argument("--checkpoint_geometry_anchor_decay_final_mult", type=float, default=1.0)
+    parser.add_argument("--checkpoint_geometry_anchor_huber_delta", type=float, default=0.01)
     parser.add_argument("--wandb_project", default="spcarnet_meshprior")
     parser.add_argument("--wandb_group", default="finalF6_strict_recovery")
     parser.add_argument("--wandb_name", required=True)

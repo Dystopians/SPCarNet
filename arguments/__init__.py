@@ -194,6 +194,18 @@ class OptimizationParams(ParamGroup):
         self.teacher_render_decay_start_iter = -1
         self.teacher_render_decay_end_iter = -1
         self.teacher_render_decay_final_mult = 1.0
+        # Optional checkpoint geometry anchor for topology-frozen recovery.
+        # It keeps vertices close to the loaded checkpoint while appearance
+        # losses refine radiance, preventing teacher-render finetuning from
+        # drifting sparse depth geometry.
+        self.enable_checkpoint_geometry_anchor = False
+        self.lambda_checkpoint_geometry_anchor = 0.0
+        self.checkpoint_geometry_anchor_start_iter = 0
+        self.checkpoint_geometry_anchor_warmup_iters = 1000
+        self.checkpoint_geometry_anchor_decay_start_iter = -1
+        self.checkpoint_geometry_anchor_decay_end_iter = -1
+        self.checkpoint_geometry_anchor_decay_final_mult = 1.0
+        self.checkpoint_geometry_anchor_huber_delta = 0.01
         self.lambda_lpips_loss = 0.0
         self.lpips_loss_start_iter = 0
         self.lpips_loss_warmup_iters = 1000

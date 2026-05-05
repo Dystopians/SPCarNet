@@ -739,6 +739,47 @@ def _teacher_render_lambda(iteration: int, opt) -> float:
     return base * warmup * decay
 
 
+def _checkpoint_geometry_anchor_lambda(iteration: int, opt) -> float:
+    if not bool(getattr(opt, "enable_checkpoint_geometry_anchor", False)):
+        return 0.0
+    base = float(getattr(opt, "lambda_checkpoint_geometry_anchor", 0.0))
+    if base <= 0.0:
+        return 0.0
+    start_iter = int(getattr(opt, "checkpoint_geometry_anchor_start_iter", 0))
+    if int(iteration) < start_iter:
+        return 0.0
+    warmup_iters = max(1, int(getattr(opt, "checkpoint_geometry_anchor_warmup_iters", 1)))
+    warmup = min(1.0, max(0.0, float(int(iteration) - start_iter) / float(warmup_iters)))
+    decay = 1.0
+    decay_start = int(getattr(opt, "checkpoint_geometry_anchor_decay_start_iter", -1))
+    decay_end = int(getattr(opt, "checkpoint_geometry_anchor_decay_end_iter", -1))
+    decay_final = float(getattr(opt, "checkpoint_geometry_anchor_decay_final_mult", 1.0))
+    if decay_start >= 0 and decay_end > decay_start and int(iteration) >= decay_start:
+        progress = min(1.0, max(0.0, float(int(iteration) - decay_start) / float(decay_end - decay_start)))
+        decay = (1.0 - progress) + progress * max(0.0, decay_final)
+    return base * warmup * decay
+
+
+def _compute_checkpoint_geometry_anchor_loss(triangles, anchor_vertices: torch.Tensor | None, lam: float, huber_delta: float):
+    if anchor_vertices is None or lam <= 0.0:
+        return None
+    vertices = triangles.vertices
+    if tuple(vertices.shape) != tuple(anchor_vertices.shape):
+        return None
+    anchor = anchor_vertices.to(device=vertices.device, dtype=vertices.dtype)
+    delta = vertices - anchor
+    per_vertex = torch.linalg.norm(delta, dim=-1)
+    beta = max(float(huber_delta), 1e-8)
+    loss_pure = F.smooth_l1_loss(per_vertex, torch.zeros_like(per_vertex), beta=beta, reduction="mean")
+    loss_weighted = float(lam) * loss_pure
+    return {
+        "loss_pure": loss_pure,
+        "loss_weighted": loss_weighted,
+        "mean_displacement": per_vertex.detach().mean(),
+        "max_displacement": per_vertex.detach().max(),
+    }
+
+
 def _load_teacher_render_cache(render_dir: str, train_cameras) -> dict:
     render_dir = str(render_dir or "").strip()
     if not render_dir:
@@ -2874,6 +2915,14 @@ def training(
         )
         if len(teacher_render_cache) == 0:
             print("[TeacherRender] disabled for this run: no teacher renders were loaded.")
+    checkpoint_geometry_anchor_vertices = None
+    if bool(getattr(opt, "enable_checkpoint_geometry_anchor", False)):
+        checkpoint_geometry_anchor_vertices = triangles.vertices.detach().clone()
+        print(
+            "[CheckpointGeometryAnchor] enabled: "
+            f"vertices={int(checkpoint_geometry_anchor_vertices.shape[0])}, "
+            f"lambda={float(getattr(opt, 'lambda_checkpoint_geometry_anchor', 0.0))}"
+        )
 
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
@@ -3253,6 +3302,25 @@ def training(
             teacher_render_mask_fraction = float(teacher_render_res.get("mask_fraction", 1.0))
             if torch.is_tensor(teacher_render_loss) and torch.isfinite(teacher_render_loss):
                 loss += teacher_render_loss
+
+        checkpoint_geometry_anchor_loss_pure = 0
+        checkpoint_geometry_anchor_loss = 0
+        checkpoint_geometry_anchor_mean_disp = 0
+        checkpoint_geometry_anchor_max_disp = 0
+        checkpoint_geometry_anchor_lambda = _checkpoint_geometry_anchor_lambda(iteration=int(iteration), opt=opt)
+        checkpoint_geometry_anchor_res = _compute_checkpoint_geometry_anchor_loss(
+            triangles=triangles,
+            anchor_vertices=checkpoint_geometry_anchor_vertices,
+            lam=float(checkpoint_geometry_anchor_lambda),
+            huber_delta=float(getattr(opt, "checkpoint_geometry_anchor_huber_delta", 0.01)),
+        )
+        if checkpoint_geometry_anchor_res is not None:
+            checkpoint_geometry_anchor_loss_pure = checkpoint_geometry_anchor_res["loss_pure"]
+            checkpoint_geometry_anchor_loss = checkpoint_geometry_anchor_res["loss_weighted"]
+            checkpoint_geometry_anchor_mean_disp = checkpoint_geometry_anchor_res["mean_displacement"]
+            checkpoint_geometry_anchor_max_disp = checkpoint_geometry_anchor_res["max_displacement"]
+            if torch.is_tensor(checkpoint_geometry_anchor_loss) and torch.isfinite(checkpoint_geometry_anchor_loss):
+                loss += checkpoint_geometry_anchor_loss
 
         # Opacity loss
         Lweight_pure = 0.0
@@ -3816,6 +3884,8 @@ def training(
                         "loss_components/loss_normal_super": float(normal_loss_super) if isinstance(normal_loss_super, (float, int)) else float(normal_loss_super.detach().item()),
                         "loss_components/loss_teacher_render": float(teacher_render_loss) if isinstance(teacher_render_loss, (float, int)) else float(teacher_render_loss.detach().item()),
                         "loss_components/loss_teacher_render_pure": float(teacher_render_loss_pure) if isinstance(teacher_render_loss_pure, (float, int)) else float(teacher_render_loss_pure.detach().item()),
+                        "loss_components/loss_checkpoint_geometry_anchor": float(checkpoint_geometry_anchor_loss) if isinstance(checkpoint_geometry_anchor_loss, (float, int)) else float(checkpoint_geometry_anchor_loss.detach().item()),
+                        "loss_components/loss_checkpoint_geometry_anchor_pure": float(checkpoint_geometry_anchor_loss_pure) if isinstance(checkpoint_geometry_anchor_loss_pure, (float, int)) else float(checkpoint_geometry_anchor_loss_pure.detach().item()),
                         "loss_components/loss_lpips_train": float(lpips_loss_weighted) if isinstance(lpips_loss_weighted, (float, int)) else float(lpips_loss_weighted.detach().item()),
                         "loss_components/loss_lpips_train_pure": float(lpips_loss_pure) if isinstance(lpips_loss_pure, (float, int)) else float(lpips_loss_pure.detach().item()),
                         "lpips_train/lambda": float(lpips_loss_lambda),
@@ -3823,6 +3893,9 @@ def training(
                         "teacher_render/l1": float(teacher_render_l1) if isinstance(teacher_render_l1, (float, int)) else float(teacher_render_l1.detach().item()),
                         "teacher_render/ssim": float(teacher_render_ssim) if isinstance(teacher_render_ssim, (float, int)) else float(teacher_render_ssim.detach().item()),
                         "teacher_render/mask_fraction": float(teacher_render_mask_fraction),
+                        "checkpoint_geometry_anchor/lambda": float(checkpoint_geometry_anchor_lambda),
+                        "checkpoint_geometry_anchor/mean_displacement": float(checkpoint_geometry_anchor_mean_disp) if isinstance(checkpoint_geometry_anchor_mean_disp, (float, int)) else float(checkpoint_geometry_anchor_mean_disp.detach().item()),
+                        "checkpoint_geometry_anchor/max_displacement": float(checkpoint_geometry_anchor_max_disp) if isinstance(checkpoint_geometry_anchor_max_disp, (float, int)) else float(checkpoint_geometry_anchor_max_disp.detach().item()),
                     }
                 )
                 if ground_reg_logs is not None:
