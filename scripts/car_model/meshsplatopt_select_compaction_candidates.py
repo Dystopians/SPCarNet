@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
 from ss3dm_prior.meshsplatopt.compact_selector import (  # noqa: E402
     SELECTOR_MODES,
     CompactionSignals,
+    decide_adaptive_compaction_policy,
     select_faces,
     write_selector_outputs,
 )
@@ -72,20 +73,35 @@ def main() -> int:
     parser.add_argument("--source_model", required=True)
     parser.add_argument("--iteration", type=int, required=True)
     parser.add_argument("--mode", choices=SELECTOR_MODES, default="csef_low_evidence_boundary_protected")
-    parser.add_argument("--target_prune_fraction", type=float, required=True)
+    parser.add_argument("--target_prune_fraction", type=float, default=-1.0)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
     signals = _load_checkpoint_signals(Path(args.source_model), args.iteration)
-    selected, table = select_faces(
-        signals,
-        mode=args.mode,
-        target_prune_fraction=args.target_prune_fraction,
-        seed=args.seed,
-    )
-    payload = write_selector_outputs(args.out_dir, selected, table, args.mode, args.target_prune_fraction)
-    print(f"Wrote {len(payload['selected_faces'])} candidates to {args.out_dir}")
+    policy = None
+    target_prune_fraction = float(args.target_prune_fraction)
+    if args.mode == "csef_adaptive_policy":
+        policy, table = decide_adaptive_compaction_policy(signals, seed=args.seed)
+        target_prune_fraction = float(policy.target_prune_fraction)
+        selected, table = select_faces(
+            signals,
+            mode=args.mode,
+            target_prune_fraction=target_prune_fraction,
+            seed=args.seed,
+        )
+    else:
+        if target_prune_fraction < 0.0:
+            raise ValueError("--target_prune_fraction is required unless --mode csef_adaptive_policy is used")
+        selected, table = select_faces(
+            signals,
+            mode=args.mode,
+            target_prune_fraction=target_prune_fraction,
+            seed=args.seed,
+        )
+    payload = write_selector_outputs(args.out_dir, selected, table, args.mode, target_prune_fraction, policy_decision=policy)
+    selected_count = payload.get("selected_faces_count", len(payload.get("selected_faces", [])))
+    print(f"Wrote {selected_count} candidates to {args.out_dir}")
     return 0
 
 

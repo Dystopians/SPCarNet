@@ -316,6 +316,7 @@ class OptimizationParams(ParamGroup):
         self.prism_gate_min_delta_psnr_db = -0.05
         self.prism_gate_max_delta_mae = 0.002
         self.prism_gate_max_delta_absrel = 0.0008
+        self.prism_gate_max_baseline_absrel_for_absrel_check = float("inf")
         self.prism_gate_max_delta_mean_angle_deg = 0.3
         self.prism_gate_max_changed_pixel_ratio = 0.005
         self.prism_gate_min_valid_depth_matches = 128
@@ -360,6 +361,38 @@ class OptimizationParams(ParamGroup):
         self.prism_adaptive_candidate_ratio_decay = 0.5
         self.prism_adaptive_candidate_min_ratio = 0.0025
         self.prism_adaptive_candidate_max_rollback_retries = 3
+        # Adaptive CSEF edit policy. This replaces fixed ratio sweeps with a
+        # scene-state controller when enabled.
+        self.prism_enable_adaptive_csef_policy = False
+        self.prism_adaptive_policy_min_ratio = 0.006
+        self.prism_adaptive_policy_max_ratio = 0.020
+        self.prism_adaptive_policy_initial_ratio = 0.012
+        self.prism_adaptive_policy_target_accept_margin = 0.55
+        self.prism_adaptive_policy_rollback_decay = 0.55
+        self.prism_adaptive_policy_accept_growth = 1.18
+        self.prism_adaptive_policy_no_candidate_decay = 0.75
+        self.prism_adaptive_policy_cooldown_iters = 20
+        self.prism_adaptive_policy_max_candidate_count = 0
+        self.prism_adaptive_policy_min_candidate_count = 512
+        self.prism_adaptive_policy_depth_degrade_absrel = 0.004
+        self.prism_adaptive_policy_normal_degrade_deg = 0.10
+        self.prism_adaptive_policy_render_degrade_psnr = -0.05
+        self.prism_adaptive_policy_uncertainty_high = 0.35
+        self.prism_adaptive_policy_geometry_keep_high = 0.04
+        self.prism_adaptive_policy_orientation_keep_high = 0.04
+        self.prism_adaptive_policy_reliable_absrel_max = 2.0
+        self.prism_adaptive_policy_strict_gate_after_rejects = 1
+        self.prism_adaptive_policy_normal_repair_penalty_boost = 0.8
+        self.prism_adaptive_policy_geometry_repair_penalty_boost = 0.8
+        self.prism_adaptive_policy_uncertainty_penalty_boost = 0.6
+        self.prism_adaptive_policy_cold_start_rounds = 1
+        self.prism_adaptive_policy_cold_start_gate_scale = 0.70
+        self.prism_adaptive_policy_cold_start_ratio_damping = 0.96
+        self.prism_adaptive_policy_cold_start_quality_rank = False
+        self.prism_adaptive_policy_enable_measured_rank = True
+        self.prism_adaptive_policy_enable_microbatch_gate = True
+        self.prism_adaptive_policy_microbatch_size = 512
+        self.prism_adaptive_policy_microbatch_max_batches = 0
         self.prism_freeze_densification_after_first_commit = False
         self.prism_recovery_iters = 400
         self.prism_post_commit_recollect_iters = 300

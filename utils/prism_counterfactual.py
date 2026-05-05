@@ -23,6 +23,7 @@ class CounterfactualGateConfig:
     min_delta_psnr_db: float = -0.05
     max_delta_mae: float = 0.002
     max_delta_absrel: float = 0.0008
+    max_baseline_absrel_for_absrel_check: float = float("inf")
     max_delta_mean_angle_deg: float = 0.3
     max_changed_pixel_ratio: float = 0.005
     changed_pixel_threshold: float = 0.02
@@ -640,17 +641,24 @@ def run_counterfactual_simulation(
         "changed_pixel_ratio": counterfactual["changed_pixel_ratio"],
     }
 
+    absrel_check_reliable = True
+    if np.isfinite(baseline["absrel"]):
+        absrel_check_reliable = baseline["absrel"] <= float(gate_cfg.max_baseline_absrel_for_absrel_check)
+
     checks = []
     if np.isfinite(deltas["delta_psnr"]):
         checks.append(deltas["delta_psnr"] >= float(gate_cfg.min_delta_psnr_db))
     if np.isfinite(deltas["delta_mae"]):
         checks.append(deltas["delta_mae"] <= float(gate_cfg.max_delta_mae))
-    if np.isfinite(deltas["delta_absrel"]):
+    if np.isfinite(deltas["delta_absrel"]) and bool(absrel_check_reliable):
         checks.append(deltas["delta_absrel"] <= float(gate_cfg.max_delta_absrel))
     if np.isfinite(deltas["delta_mean_angle"]):
         checks.append(deltas["delta_mean_angle"] <= float(gate_cfg.max_delta_mean_angle_deg))
     if np.isfinite(deltas["changed_pixel_ratio"]):
         checks.append(deltas["changed_pixel_ratio"] <= float(gate_cfg.max_changed_pixel_ratio))
+
+    deltas["absrel_check_reliable"] = bool(absrel_check_reliable)
+    deltas["max_baseline_absrel_for_absrel_check"] = float(gate_cfg.max_baseline_absrel_for_absrel_check)
 
     accept = bool(all(checks)) if len(checks) > 0 else False
     return CounterfactualDecision(

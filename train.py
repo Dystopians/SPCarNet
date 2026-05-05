@@ -98,6 +98,11 @@ from utils.prism_pipeline import (
     PrismRoundController,
     PrismPhase,
 )
+from utils.prism_adaptive_policy import (
+    AdaptiveCSEFPolicyConfig,
+    decide_adaptive_csef_policy,
+    update_adaptive_csef_policy_after_prune,
+)
 from utils.prism_validation import (
     PrismValidationConfig,
     build_prism_validation_views,
@@ -176,6 +181,7 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "adaptive_candidate_max_rollback_retries": int(
             getattr(opt, "prism_adaptive_candidate_max_rollback_retries", 3)
         ),
+        "enable_adaptive_csef_policy": bool(getattr(opt, "prism_enable_adaptive_csef_policy", False)),
         "recovery_iters": int(getattr(opt, "prism_recovery_iters", 0)),
         "use_counterfactual_gate": bool(getattr(opt, "prism_use_counterfactual_gate", False)),
         "use_ground_protect": bool(getattr(opt, "prism_use_ground_protect", False)),
@@ -293,6 +299,9 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         min_delta_psnr_db=float(getattr(opt, "prism_gate_min_delta_psnr_db", -0.05)),
         max_delta_mae=float(getattr(opt, "prism_gate_max_delta_mae", 0.002)),
         max_delta_absrel=float(getattr(opt, "prism_gate_max_delta_absrel", 0.0008)),
+        max_baseline_absrel_for_absrel_check=float(
+            getattr(opt, "prism_gate_max_baseline_absrel_for_absrel_check", float("inf"))
+        ),
         max_delta_mean_angle_deg=float(getattr(opt, "prism_gate_max_delta_mean_angle_deg", 0.3)),
         max_changed_pixel_ratio=float(getattr(opt, "prism_gate_max_changed_pixel_ratio", 0.005)),
         changed_pixel_threshold=float(getattr(opt, "prism_changed_pixel_threshold", 0.02)),
@@ -402,6 +411,39 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
             proxy_cfg=proxy_cfg,
         )
 
+    adaptive_policy_cfg = AdaptiveCSEFPolicyConfig(
+        enabled=bool(getattr(opt, "prism_enable_adaptive_csef_policy", False)),
+        min_ratio=float(getattr(opt, "prism_adaptive_policy_min_ratio", 0.006)),
+        max_ratio=float(getattr(opt, "prism_adaptive_policy_max_ratio", 0.020)),
+        initial_ratio=float(getattr(opt, "prism_adaptive_policy_initial_ratio", 0.012)),
+        target_accept_margin=float(getattr(opt, "prism_adaptive_policy_target_accept_margin", 0.55)),
+        rollback_decay=float(getattr(opt, "prism_adaptive_policy_rollback_decay", 0.55)),
+        accept_growth=float(getattr(opt, "prism_adaptive_policy_accept_growth", 1.18)),
+        no_candidate_decay=float(getattr(opt, "prism_adaptive_policy_no_candidate_decay", 0.75)),
+        cooldown_iters=int(getattr(opt, "prism_adaptive_policy_cooldown_iters", 20)),
+        max_candidate_count=int(getattr(opt, "prism_adaptive_policy_max_candidate_count", 0)),
+        min_candidate_count=int(getattr(opt, "prism_adaptive_policy_min_candidate_count", 512)),
+        depth_degrade_absrel=float(getattr(opt, "prism_adaptive_policy_depth_degrade_absrel", 0.004)),
+        normal_degrade_deg=float(getattr(opt, "prism_adaptive_policy_normal_degrade_deg", 0.10)),
+        render_degrade_psnr=float(getattr(opt, "prism_adaptive_policy_render_degrade_psnr", -0.05)),
+        uncertainty_high=float(getattr(opt, "prism_adaptive_policy_uncertainty_high", 0.35)),
+        geometry_keep_high=float(getattr(opt, "prism_adaptive_policy_geometry_keep_high", 0.04)),
+        orientation_keep_high=float(getattr(opt, "prism_adaptive_policy_orientation_keep_high", 0.04)),
+        reliable_absrel_max=float(getattr(opt, "prism_adaptive_policy_reliable_absrel_max", 2.0)),
+        strict_gate_after_rejects=int(getattr(opt, "prism_adaptive_policy_strict_gate_after_rejects", 1)),
+        normal_repair_penalty_boost=float(getattr(opt, "prism_adaptive_policy_normal_repair_penalty_boost", 0.8)),
+        geometry_repair_penalty_boost=float(getattr(opt, "prism_adaptive_policy_geometry_repair_penalty_boost", 0.8)),
+        uncertainty_penalty_boost=float(getattr(opt, "prism_adaptive_policy_uncertainty_penalty_boost", 0.6)),
+        cold_start_rounds=int(getattr(opt, "prism_adaptive_policy_cold_start_rounds", 1)),
+        cold_start_gate_scale=float(getattr(opt, "prism_adaptive_policy_cold_start_gate_scale", 0.70)),
+        cold_start_ratio_damping=float(getattr(opt, "prism_adaptive_policy_cold_start_ratio_damping", 0.96)),
+        cold_start_quality_rank=bool(getattr(opt, "prism_adaptive_policy_cold_start_quality_rank", False)),
+        enable_measured_rank=bool(getattr(opt, "prism_adaptive_policy_enable_measured_rank", True)),
+        enable_microbatch_gate=bool(getattr(opt, "prism_adaptive_policy_enable_microbatch_gate", True)),
+        microbatch_size=int(getattr(opt, "prism_adaptive_policy_microbatch_size", 512)),
+        microbatch_max_batches=int(getattr(opt, "prism_adaptive_policy_microbatch_max_batches", 0)),
+    )
+
     return {
         "cfg": cfg,
         "collect_enabled": collect_enabled,
@@ -472,6 +514,8 @@ def _prepare_prism_state(opt, scene, triangles, init_iter, dataset=None, pipe=No
         "proxy_cfg": proxy_cfg,
         "proxy_ctx": proxy_ctx,
         "compaction_cfg": compaction_cfg,
+        "adaptive_policy_cfg": adaptive_policy_cfg,
+        "adaptive_csef_policy": {"ratio": float(adaptive_policy_cfg.initial_ratio)},
         "stage_best_checkpoint_dir": "",
         "last_validation_pass_checkpoint_dir": "",
         "compaction_source_checkpoint_dir": "",
@@ -2043,21 +2087,46 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
         except Exception:
             return {}
 
+    policy_decision = None
+    if prune_mode == "candidate" and bool(cfg.get("enable_adaptive_csef_policy", False)):
+        policy_decision = decide_adaptive_csef_policy(
+            cfg=prism_state.get("adaptive_policy_cfg", AdaptiveCSEFPolicyConfig(enabled=False)),
+            prism_state=prism_state,
+            scores_summary=prism_state.get("last_scores_summary", {}),
+            iteration=int(iteration),
+            total_triangles=int(scores.prune_score_t.numel()),
+        )
+        prism_state["last_adaptive_policy_decision"] = policy_decision.to_dict()
+
     dead_ratio = float(cfg.get("dead_prune_ratio", 0.0))
     cand_ratio = float(cfg.get("candidate_prune_ratio", 0.0))
     if prune_mode == "candidate":
-        cand_ratio = float(prism_state.get("adaptive_candidate_prune_ratio", cfg.get("candidate_prune_ratio_per_round", cand_ratio)))
+        if policy_decision is not None and bool(policy_decision.enabled):
+            cand_ratio = float(policy_decision.ratio)
+            prism_state["adaptive_candidate_prune_ratio"] = float(cand_ratio)
+        else:
+            cand_ratio = float(prism_state.get("adaptive_candidate_prune_ratio", cfg.get("candidate_prune_ratio_per_round", cand_ratio)))
         dead_ratio = 0.0
     elif prune_mode == "dead":
         cand_ratio = 0.0
     candidate_max_count = 0
     if prune_mode == "candidate":
         candidate_max_count = int(cfg.get("candidate_max_count_per_round", 0))
+        if policy_decision is not None and bool(policy_decision.enabled):
+            candidate_max_count = int(policy_decision.candidate_max_count)
     measured_rank_enabled = (
         prune_mode == "candidate"
         and bool(cfg.get("candidate_measured_impact_rank", False))
         and bool(cfg.get("use_counterfactual_gate", False))
     )
+    if (
+        prune_mode == "candidate"
+        and policy_decision is not None
+        and bool(policy_decision.enabled)
+        and bool(policy_decision.use_measured_rank)
+        and bool(cfg.get("use_counterfactual_gate", False))
+    ):
+        measured_rank_enabled = True
     measured_final_cap = int(candidate_max_count)
     selection_max_count = candidate_max_count
     if measured_rank_enabled and measured_final_cap > 0:
@@ -2065,14 +2134,28 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
         selection_max_count = max(measured_final_cap, int(round(measured_final_cap * measured_pool_multiplier)))
 
     rank_score_t = None
-    if prune_mode == "candidate" and bool(cfg.get("candidate_quality_rank", False)):
+    quality_rank_enabled = bool(cfg.get("candidate_quality_rank", False))
+    if policy_decision is not None and bool(policy_decision.enabled):
+        quality_rank_enabled = bool(policy_decision.use_quality_rank)
+    if prune_mode == "candidate" and quality_rank_enabled:
+        render_penalty = float(cfg.get("candidate_quality_render_penalty", 0.5))
+        geometry_penalty = float(cfg.get("candidate_quality_geometry_penalty", 0.5))
+        orientation_penalty = float(cfg.get("candidate_quality_orientation_penalty", 0.25))
+        utility_penalty = float(cfg.get("candidate_quality_utility_penalty", 0.25))
+        uncertainty_penalty = float(cfg.get("candidate_quality_uncertainty_penalty", 0.25))
+        if policy_decision is not None and bool(policy_decision.enabled):
+            render_penalty = float(policy_decision.render_penalty)
+            geometry_penalty = float(policy_decision.geometry_penalty)
+            orientation_penalty = float(policy_decision.orientation_penalty)
+            utility_penalty = float(policy_decision.utility_penalty)
+            uncertainty_penalty = float(policy_decision.uncertainty_penalty)
         rank_score_t = (
             float(cfg.get("candidate_quality_prune_weight", 1.0)) * scores.prune_score_t.to(torch.float32)
-            - float(cfg.get("candidate_quality_render_penalty", 0.5)) * scores.render_keep_t.to(torch.float32)
-            - float(cfg.get("candidate_quality_geometry_penalty", 0.5)) * scores.geometry_keep_t.to(torch.float32)
-            - float(cfg.get("candidate_quality_orientation_penalty", 0.25)) * scores.orientation_keep_t.to(torch.float32)
-            - float(cfg.get("candidate_quality_utility_penalty", 0.25)) * scores.utility_t.to(torch.float32)
-            - float(cfg.get("candidate_quality_uncertainty_penalty", 0.25)) * scores.unc_t.to(torch.float32)
+            - render_penalty * scores.render_keep_t.to(torch.float32)
+            - geometry_penalty * scores.geometry_keep_t.to(torch.float32)
+            - orientation_penalty * scores.orientation_keep_t.to(torch.float32)
+            - utility_penalty * scores.utility_t.to(torch.float32)
+            - uncertainty_penalty * scores.unc_t.to(torch.float32)
         )
         rank_score_t = torch.where(
             scores.candidate_mask.to(torch.bool) | scores.dead_mask.to(torch.bool),
@@ -2080,13 +2163,23 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             torch.full_like(rank_score_t, -1e9),
         )
 
+    selection_ratio = cand_ratio
+    if measured_rank_enabled:
+        measured_pool_multiplier = max(1.0, float(cfg.get("candidate_measured_pool_multiplier", 4.0)))
+        selection_ratio = float(cand_ratio) * measured_pool_multiplier
     candidate_ids = select_prism_candidate_ids(
         scores=scores,
         dead_prune_ratio=dead_ratio,
-        candidate_prune_ratio=cand_ratio,
+        candidate_prune_ratio=selection_ratio,
         candidate_max_count=selection_max_count,
         rank_score_t=rank_score_t,
     )
+    raw_final_candidate_ids = None
+    if measured_rank_enabled and measured_final_cap > 0 and candidate_ids.numel() > measured_final_cap:
+        base_rank_scores = rank_score_t if rank_score_t is not None else scores.prune_score_t
+        k_raw = min(int(measured_final_cap), int(candidate_ids.numel()))
+        _, raw_order = torch.topk(base_rank_scores[candidate_ids].to(torch.float32), k=k_raw, largest=True, sorted=True)
+        raw_final_candidate_ids = candidate_ids[raw_order]
     candidate_pool_count = int(torch.count_nonzero(scores.candidate_mask).item())
     target_count = int(max(0.0, cand_ratio) * int(scores.prune_score_t.numel()))
     capped_target_count = target_count
@@ -2188,6 +2281,8 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             "candidate_relaxed_strict_gate_reason": str(
                 prism_state.get("last_candidate_relaxed_strict_gate_reason", "")
             ),
+            "adaptive_policy_enabled": int(bool(cfg.get("enable_adaptive_csef_policy", False))),
+            "adaptive_policy_decision": dict(prism_state.get("last_adaptive_policy_decision", {}) or {}),
             **candidate_diag_payload,
         }
 
@@ -2217,6 +2312,15 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
 
     counterfactual_accept = 0
     rollback = 0
+    effective_gate_cfg = prism_state["gate_cfg"]
+    if policy_decision is not None and bool(policy_decision.enabled):
+        gate_scale = float(policy_decision.gate_scale)
+        effective_gate_cfg = copy.copy(prism_state["gate_cfg"])
+        effective_gate_cfg.min_delta_psnr_db = float(effective_gate_cfg.min_delta_psnr_db) * gate_scale
+        effective_gate_cfg.max_delta_mae = float(effective_gate_cfg.max_delta_mae) * gate_scale
+        effective_gate_cfg.max_delta_absrel = float(effective_gate_cfg.max_delta_absrel) * gate_scale
+        effective_gate_cfg.max_delta_mean_angle_deg = float(effective_gate_cfg.max_delta_mean_angle_deg) * gate_scale
+        effective_gate_cfg.max_changed_pixel_ratio = float(effective_gate_cfg.max_changed_pixel_ratio) * gate_scale
 
     def _finite_delta(deltas, key: str, default: float = 0.0) -> float:
         try:
@@ -2275,9 +2379,15 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
     if (prune_mode == "candidate") and bool(cfg.get("use_counterfactual_gate", False)):
         debug_dir = os.path.join(prism_state["model_path"], "prism_debug")
         os.makedirs(debug_dir, exist_ok=True)
+        candidate_arbitration_selected_policy = ""
         if measured_rank_enabled and measured_final_cap > 0 and candidate_ids.numel() > measured_final_cap:
             group_size = max(1, int(cfg.get("candidate_measured_group_size", 256)))
             max_groups = max(0, int(cfg.get("candidate_measured_max_groups", 8)))
+            if policy_decision is not None and bool(policy_decision.enabled) and bool(policy_decision.use_measured_rank):
+                group_size = max(group_size, int(policy_decision.microbatch_size))
+                if max_groups > 0:
+                    min_cover = int(np.ceil(float(measured_final_cap) / float(max(1, group_size))))
+                    max_groups = max(max_groups, min_cover + 1)
             groups = list(torch.split(candidate_ids, group_size))
             if max_groups > 0:
                 groups = groups[:max_groups]
@@ -2299,18 +2409,27 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
                     background=prism_state.get("background", None),
                     candidate_triangle_ids=group_ids,
                     calibration_views=prism_state.get("calibration_views", []),
-                    gate_cfg=prism_state["gate_cfg"],
+                    gate_cfg=effective_gate_cfg,
                     proxy_ctx=prism_state.get("proxy_ctx", None),
                     proxy_cfg=prism_state.get("proxy_cfg", None),
                 )
                 deltas = dict(getattr(decision, "deltas", {}) or {})
+                delta_psnr = _finite(deltas.get("delta_psnr", 0.0))
+                delta_mae = _finite(deltas.get("delta_mae", 0.0))
+                delta_absrel = _finite(deltas.get("delta_absrel", 0.0))
+                delta_normal = _finite(deltas.get("delta_mean_angle", 0.0))
+                changed_pixel = _finite(deltas.get("changed_pixel_ratio", 0.0))
                 measured_score = (
-                    (1000.0 if bool(decision.accept) else 0.0)
-                    + 10.0 * _finite(deltas.get("delta_psnr", 0.0))
-                    - 500.0 * max(0.0, _finite(deltas.get("delta_mae", 0.0)))
-                    - 100.0 * max(0.0, _finite(deltas.get("delta_absrel", 0.0)))
-                    - 0.1 * max(0.0, _finite(deltas.get("delta_mean_angle", 0.0)))
-                    - 100.0 * max(0.0, _finite(deltas.get("changed_pixel_ratio", 0.0)))
+                    (1000.0 if bool(decision.accept) else -1000.0)
+                    + 250.0 * max(0.0, -delta_absrel)
+                    + 60.0 * max(0.0, -delta_mae)
+                    + 2.0 * max(0.0, -delta_normal)
+                    + 2.0 * max(0.0, delta_psnr)
+                    - 2200.0 * max(0.0, delta_absrel)
+                    - 1400.0 * max(0.0, delta_mae)
+                    - 4.0 * max(0.0, delta_normal)
+                    - 0.8 * max(0.0, -delta_psnr)
+                    - 120.0 * max(0.0, changed_pixel)
                 )
                 payload = counterfactual_decision_to_dict(decision)
                 payload["measured_group_index"] = int(group_idx)
@@ -2328,10 +2447,25 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
                         "group_ids": group_ids,
                         "accept": bool(decision.accept),
                         "score": float(measured_score),
+                        "delta_absrel": float(delta_absrel),
+                        "delta_mae": float(delta_mae),
+                        "delta_normal": float(delta_normal),
+                        "delta_psnr": float(delta_psnr),
+                        "changed_pixel_ratio": float(changed_pixel),
                     }
                 )
 
-            measured_logs = sorted(measured_logs, key=lambda x: float(x["score"]), reverse=True)
+            measured_logs = sorted(
+                measured_logs,
+                key=lambda x: (
+                    bool(x["accept"]),
+                    -max(0.0, float(x["delta_absrel"])),
+                    -max(0.0, float(x["delta_mae"])),
+                    -max(0.0, float(x["delta_normal"])),
+                    float(x["score"]),
+                ),
+                reverse=True,
+            )
             selected_groups = []
             selected_total = 0
             for entry in measured_logs:
@@ -2346,12 +2480,107 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
                 selected_groups.append(group_ids)
                 selected_total += int(group_ids.numel())
             if selected_groups:
-                candidate_ids = torch.unique(torch.cat(selected_groups, dim=0))
+                # The selected groups are disjoint slices from the ranked candidate list.
+                # Preserve that rank order for the downstream counterfactual microbatch gate;
+                # torch.unique would sort ids and silently destroy the policy ordering.
+                candidate_ids = torch.cat(selected_groups, dim=0)
                 if candidate_ids.numel() > measured_final_cap:
                     candidate_ids = candidate_ids[:measured_final_cap]
+                if candidate_ids.numel() < measured_final_cap:
+                    selected_mask = torch.zeros(
+                        int(scores.prune_score_t.numel()),
+                        dtype=torch.bool,
+                        device=candidate_ids.device,
+                    )
+                    selected_mask[candidate_ids] = True
+                    remaining_ids = candidate_ids.new_zeros((0,))
+                    for entry in measured_logs:
+                        group_ids = entry["group_ids"]
+                        group_ids = group_ids[~selected_mask[group_ids]]
+                        if group_ids.numel() <= 0:
+                            continue
+                        remaining = max(0, measured_final_cap - int(candidate_ids.numel()) - int(remaining_ids.numel()))
+                        if remaining <= 0:
+                            break
+                        remaining_ids = torch.cat([remaining_ids, group_ids[:remaining]], dim=0)
+                        selected_mask[group_ids[:remaining]] = True
+                    if remaining_ids.numel() > 0:
+                        candidate_ids = torch.cat([candidate_ids, remaining_ids], dim=0)
+                    if candidate_ids.numel() > measured_final_cap:
+                        candidate_ids = candidate_ids[:measured_final_cap]
                 selected_count = int(candidate_ids.numel())
                 prism_state["last_candidate_selected_count"] = int(selected_count)
                 prism_state["last_candidate_measured_selected_count"] = int(selected_count)
+                if raw_final_candidate_ids is not None and raw_final_candidate_ids.numel() > 0:
+                    def _policy_set_score(decision):
+                        deltas = dict(getattr(decision, "deltas", {}) or {})
+                        delta_psnr = _finite(deltas.get("delta_psnr", 0.0))
+                        delta_mae = _finite(deltas.get("delta_mae", 0.0))
+                        delta_absrel = _finite(deltas.get("delta_absrel", 0.0))
+                        delta_normal = _finite(deltas.get("delta_mean_angle", 0.0))
+                        changed_pixel = _finite(deltas.get("changed_pixel_ratio", 0.0))
+                        return (
+                            (1000.0 if bool(decision.accept) else -1000.0)
+                            + 800.0 * max(0.0, -delta_absrel)
+                            + 80.0 * max(0.0, -delta_mae)
+                            + 3.0 * max(0.0, -delta_normal)
+                            + 2.0 * max(0.0, delta_psnr)
+                            - 2600.0 * max(0.0, delta_absrel)
+                            - 1600.0 * max(0.0, delta_mae)
+                            - 5.0 * max(0.0, delta_normal)
+                            - 1.0 * max(0.0, -delta_psnr)
+                            - 160.0 * max(0.0, changed_pixel)
+                        )
+
+                    measured_decision = run_counterfactual_simulation(
+                        scene=scene,
+                        triangles=triangles,
+                        render_func=render,
+                        pipe=prism_state.get("pipe", None),
+                        background=prism_state.get("background", None),
+                        candidate_triangle_ids=candidate_ids,
+                        calibration_views=prism_state.get("calibration_views", []),
+                        gate_cfg=effective_gate_cfg,
+                        proxy_ctx=prism_state.get("proxy_ctx", None),
+                        proxy_cfg=prism_state.get("proxy_cfg", None),
+                    )
+                    raw_decision = run_counterfactual_simulation(
+                        scene=scene,
+                        triangles=triangles,
+                        render_func=render,
+                        pipe=prism_state.get("pipe", None),
+                        background=prism_state.get("background", None),
+                        candidate_triangle_ids=raw_final_candidate_ids,
+                        calibration_views=prism_state.get("calibration_views", []),
+                        gate_cfg=effective_gate_cfg,
+                        proxy_ctx=prism_state.get("proxy_ctx", None),
+                        proxy_cfg=prism_state.get("proxy_cfg", None),
+                    )
+                    measured_set_score = float(_policy_set_score(measured_decision))
+                    raw_set_score = float(_policy_set_score(raw_decision))
+                    arbitration_payload = {
+                        "iteration": int(iteration),
+                        "measured_count": int(candidate_ids.numel()),
+                        "raw_count": int(raw_final_candidate_ids.numel()),
+                        "measured_score": measured_set_score,
+                        "raw_score": raw_set_score,
+                        "measured_decision": counterfactual_decision_to_dict(measured_decision),
+                        "raw_decision": counterfactual_decision_to_dict(raw_decision),
+                        "selected_policy": "measured",
+                    }
+                    if raw_set_score > measured_set_score:
+                        candidate_ids = raw_final_candidate_ids
+                        selected_count = int(candidate_ids.numel())
+                        prism_state["last_candidate_selected_count"] = int(selected_count)
+                        prism_state["last_candidate_measured_selected_count"] = int(selected_count)
+                        arbitration_payload["selected_policy"] = "raw_fallback"
+                    candidate_arbitration_selected_policy = str(arbitration_payload["selected_policy"])
+                    with open(
+                        os.path.join(debug_dir, f"counterfactual_policy_arbitration_iter_{int(iteration):06d}.json"),
+                        "w",
+                        encoding="utf-8",
+                    ) as f:
+                        json.dump(arbitration_payload, f, indent=2)
             prism_state["last_candidate_measured_group_count"] = int(len(measured_logs))
             prism_state["last_candidate_measured_accepted_count"] = int(sum(1 for x in measured_logs if bool(x["accept"])))
             prism_state["last_candidate_measured_best_score"] = (
@@ -2366,9 +2595,18 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
             prism_state["last_candidate_utility_mean"] = float(scores.utility_t[candidate_ids].to(torch.float32).mean().item())
             prism_state["last_candidate_uncertainty_mean"] = float(scores.unc_t[candidate_ids].to(torch.float32).mean().item())
 
-        if bool(cfg.get("candidate_microbatch_gate", False)):
+        policy_microbatch_enabled = (
+            policy_decision is not None
+            and bool(policy_decision.enabled)
+            and bool(policy_decision.use_microbatch_gate)
+            and candidate_arbitration_selected_policy != "raw_fallback"
+        )
+        if bool(cfg.get("candidate_microbatch_gate", False)) or bool(policy_microbatch_enabled):
             microbatch_size = max(1, int(cfg.get("candidate_microbatch_size", 256)))
             max_batches = max(0, int(cfg.get("candidate_microbatch_max_batches", 0)))
+            if policy_microbatch_enabled:
+                microbatch_size = max(1, int(policy_decision.microbatch_size))
+                max_batches = max(0, int(policy_decision.microbatch_max_batches))
             batches = list(torch.split(candidate_ids, microbatch_size))
             if max_batches > 0:
                 batches = batches[:max_batches]
@@ -2378,7 +2616,9 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
                 if batch_ids.numel() == 0:
                     continue
                 if accepted_batches:
-                    cumulative_ids = torch.unique(torch.cat(accepted_batches + [batch_ids], dim=0))
+                    # Accepted batches are disjoint slices from candidate_ids. Keep policy order
+                    # stable for cumulative counterfactual checks.
+                    cumulative_ids = torch.cat(accepted_batches + [batch_ids], dim=0)
                 else:
                     cumulative_ids = batch_ids
                 decision = run_counterfactual_simulation(
@@ -2389,7 +2629,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
                     background=prism_state.get("background", None),
                     candidate_triangle_ids=cumulative_ids,
                     calibration_views=prism_state.get("calibration_views", []),
-                    gate_cfg=prism_state["gate_cfg"],
+                    gate_cfg=effective_gate_cfg,
                     proxy_ctx=prism_state.get("proxy_ctx", None),
                     proxy_cfg=prism_state.get("proxy_cfg", None),
                 )
@@ -2409,7 +2649,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
                 else:
                     rejected_count += 1
             accepted_ids = (
-                torch.unique(torch.cat(accepted_batches, dim=0))
+                torch.cat(accepted_batches, dim=0)
                 if accepted_batches
                 else torch.zeros((0,), dtype=torch.int64, device=candidate_ids.device)
             )
@@ -2447,7 +2687,7 @@ def _prism_maybe_prune(prism_state, iteration, triangles, scene, render_pkg, pru
                 background=prism_state.get("background", None),
                 candidate_triangle_ids=candidate_ids,
                 calibration_views=prism_state.get("calibration_views", []),
-                gate_cfg=prism_state["gate_cfg"],
+                gate_cfg=effective_gate_cfg,
                 proxy_ctx=prism_state.get("proxy_ctx", None),
                 proxy_cfg=prism_state.get("proxy_cfg", None),
             )
@@ -2584,6 +2824,7 @@ def training(
         pipe,
         testing_iterations,
         saving_iterations,
+        checkpoint_iterations,
         checkpoint, 
         debug_from,
         scene_name,
@@ -3623,6 +3864,10 @@ def training(
             if iteration in saving_iterations:
                 print("\n[ITER {}] Saving model".format(iteration))
                 scene.save(iteration)
+            if iteration in checkpoint_iterations:
+                checkpoint_path = scene.model_path + "/chkpnt" + str(iteration) + ".pth"
+                print("\n[ITER {}] Saving Checkpoint: {}".format(iteration, checkpoint_path))
+                torch.save((triangles.capture(), iteration), checkpoint_path)
 
             # Handle pruning operations
             prism_state["pruned_this_round"] = 0
@@ -3658,6 +3903,17 @@ def training(
                 prism_state["pruned_this_round"] = int(prune_result.get("pruned_count", 0))
                 prism_state["counterfactual_accept"] = int(prune_result.get("counterfactual_accept", 0))
                 prism_state["rollback"] = int(prune_result.get("rollback", 0))
+                if bool(prism_state["cfg"].get("enable_adaptive_csef_policy", False)):
+                    update_adaptive_csef_policy_after_prune(
+                        prism_state=prism_state,
+                        committed=bool(prune_result.get("committed", False)),
+                        rollback=bool(prune_result.get("rollback", 0)),
+                        no_candidates=bool(prune_result.get("no_candidates", 0)),
+                        ratio=float(prune_result.get(
+                            "candidate_prune_ratio",
+                            prism_state.get("adaptive_candidate_prune_ratio", 0.0),
+                        )),
+                    )
                 if controller is not None:
                     if bool(prune_result.get("no_candidates", 0)):
                         controller.report_no_candidate_retry(
@@ -3724,6 +3980,10 @@ def training(
                         "adaptive_candidate_rollback_retries": int(
                             prism_state.get("adaptive_candidate_rollback_retries", 0)
                         ),
+                        "adaptive_csef_policy_enabled": int(
+                            bool(prism_state["cfg"].get("enable_adaptive_csef_policy", False))
+                        ),
+                        "adaptive_csef_policy": dict(prune_result.get("adaptive_policy_decision", {}) or {}),
                         "candidate_prune_ratio": float(prune_result.get(
                             "candidate_prune_ratio",
                             prism_state.get("adaptive_candidate_prune_ratio", 0.0),
@@ -4684,6 +4944,7 @@ if __name__ == "__main__":
              pps,
              args.test_iterations,
              args.save_iterations,
+             args.checkpoint_iterations,
              args.start_checkpoint,
              args.debug_from,
              args.scene_name,
