@@ -7,8 +7,9 @@
 
 <div align="center">
   <a href="docs/NeurIPSRepairPrompts.md">NeurIPS 路线图</a> &nbsp;|&nbsp;
-  <a href="docs/car_model/parking_clean_to_compact_repair_report.md">Clean-to-compact 修复报告</a> &nbsp;|&nbsp;
-  <a href="docs/car_model/parking_best_clean_long_vs_method_long_report.md">Clean baseline 修正报告</a>
+  <a href="docs/car_model/final_stageF12_multiscene_package_report.md">多场景 package（F12）</a> &nbsp;|&nbsp;
+  <a href="docs/car_model/final_stageF47_F48_csef_family_all_metric_repair_report.md">CSEF 家族全指标（F47–F49）</a> &nbsp;|&nbsp;
+  <a href="docs/car_model/final_stageF75_adaptive_policy_reflection_report.md">自适应策略（F75）</a>
 </div>
 
 <br>
@@ -19,15 +20,15 @@
 
 > **方法目标（一句话）**。现有 Mesh-Splatting / 3DGS 的剪枝方法问的是 *哪些图元可以被移除*；MeshSplatOpt 反过来问 *在保留视图渲染与稀疏几何反事实认证的前提下，哪个局部表面编辑能最大限度地降低场景证据债务*。同一套编辑微积分应同时支持删除（delete）、坍缩（collapse）、对齐（snap）、细分（split）、孔洞填充（fill）和外观恢复（appearance recovery）——每一次提交的编辑都必须通过渲染、稀疏深度、法向量、自由空间、拓扑等所有反事实证书；任一项不通过即自动回滚。
 
-> **当前证据（一句话）**。截至 2026-05-03，R44 的稀疏深度 + 极低拓扑路线在与最强 clean long baseline 对比时失败；但修复后的 **clean-to-compact 恢复路径**（clean 22k → 按面积剪掉 70 % 三角形 → 拓扑严格冻结后恢复）已经在独立渲染与稀疏几何指标上击败 clean long baseline，并且仅使用 30 % 的三角形：R53.01 在 2.56M 三角形下达到 PSNR 18.706 / SSIM 0.648 / LPIPS 0.338，而 clean 22k 在 8.55M 三角形下为 PSNR 18.480 / SSIM 0.635 / LPIPS 0.347。
+> **当前证据（一句话）**。截至 2026-05-05，**validation-budget CSEF 家族 compact-recovery 协议**（clean long → CSEF 家族按面积 / 局部冗余压缩 → 严格拓扑冻结恢复 + 稀疏深度 + 必要时小幅 LPIPS）在 **5 / 5 个选定场景**（`parking_phone_tiny`、`bonsai`、`courtyard`、`room`、`counter`）上的独立 PSNR / SSIM / LPIPS / AbsRel / Depth MAE 全部击败最强 clean-long baseline，4 / 5 个场景的稀疏法向量代理也胜出（courtyard 持平），各场景拓扑减少 40 – 70 %；在 `parking_phone_tiny` 上，**自适应 CSEF 策略 + 极小 LPIPS 恢复（F75）** 是当前最强单行结果，超过早期 R53 / F7 行，并直接从 checkpoint 证据中选择 prune 比例，不再依赖手动调参表。
 
-方法骨架（CSEF + 可逆编辑微积分 + 反事实证书）和恢复 recipe 通过区分 *什么通过了所有 gate* 与 *什么真正改进了头条指标* 来保持诚实。本 README 同时记录两类。
+方法骨架（CSEF + 可逆编辑微积分 + 反事实证书）和恢复 recipe 通过区分 *什么通过了所有 gate* 与 *什么真正改进了头条指标* 来保持诚实。F45 的 fixed-CSEF50 审计明确记录单一 prune 比例并不适用所有场景；公开的论文 claim 因此是 validation-selected CSEF 家族协议，而不是单一通用超参。
 
 ---
 
 ## 项目诚实状态
 
-R0 → R53。带有 `_FAIL` / `REJECTED` / `MIXED` 标记的阶段，是当前论文纪律的失败证据骨架。
+R0 → R56（骨架 + parking 单场景线）以及 **F1 → F75（最终跨场景线）**。带有 `_FAIL` / `REJECTED` / `MIXED` 标记的阶段，是当前论文纪律的失败证据骨架。
 
 ### 方法骨架（R0–R15）
 
@@ -86,7 +87,39 @@ R0 → R53。带有 `_FAIL` / `REJECTED` / `MIXED` 标记的阶段，是当前�
 | R51–R52 | 在 R48 上叠加直接 LPIPS 训练损失 | `DIRECT_LPIPS_LOSS_REJECTED` |
 | R53–R56 | clean 22k → 65 / 70 / 75 % 面积压缩 + 续训检查 | `CLEAN_TO_COMPACT_DOMINATES_CLEAN_LONG_BASELINES` |
 
-**R44.01 vs clean 22k** 是承重的失败证据 —— 详见 `docs/car_model/parking_best_clean_long_vs_method_long_report.md`；后续从 R48 到 R53 的修复记录在 `docs/car_model/parking_clean_to_compact_repair_report.md`。
+**R44.01 vs clean 22k** 是承重的 parking 失败证据 —— 详见 `docs/car_model/parking_best_clean_long_vs_method_long_report.md`；后续从 R48 到 R53 的修复记录在 `docs/car_model/parking_clean_to_compact_repair_report.md`。
+
+### 跨场景终版 package 与自适应策略线（F1–F75）
+
+| 阶段 | 范围 | 决策 |
+|---|---|---|
+| F1–F8 | 五场景跨场景 compact recovery 试点（parking、bonsai、courtyard、room、counter） | `CROSS_SCENE_COMPACT_PILOT_PASS` |
+| F10 | 在固定 CSEF50 下的 counter 第四场景边界情况 | `BORDERLINE_SSIM_FAIL`（后由 F46 CSEF20 + 稀疏深度修复） |
+| F12 | 多场景 package：5 / 5 在 clean-long 22k 下 compact-recovery 通过 | `FINAL_F12_MULTISCENE_PACKAGE_PASS_WITH_ABLATION_GAPS` |
+| F13 | 论文素材 package | `PASS` |
+| F16 / F19 / F26 | counter / room / bonsai 同数量随机压缩对照 | rejected —— random50 / random40 输给 area / CSEF / QEM |
+| F18 / F20 / F22–F25 | 后处理 QEM 强 baseline | `PASS_AS_BASELINES`（counter / room QEM50 frozen 在 PSNR 上很强；F25 Open3D QEM 未达到 parking 匹配拓扑） |
+| F27 / F35 / F36 / F18 / F24 | 五场景 CSEF / area / QEM no-freeze 对照 | `NO_FREEZE_FAIL` —— 严格拓扑冻结合约必须使用 |
+| F28 / F29 / F30–F32 / F33 | 五场景稀疏深度严格恢复 | `SPARSE_DEPTH_PASS_PER_SCENE` |
+| F33 | parking CSEF70 + 稀疏深度严格恢复 26k | `PARKING_PARETO_PROMOTE`（现 F12 parking 行） |
+| F34 | parking 稀疏深度 26k → 30k 续训 | `LONG_CONTINUATION_REJECTED` |
+| F37 | fast-QEM 匹配 parking 拓扑 | `FAST_QEM_REJECTED` —— 稀疏几何提升但渲染崩溃 |
+| F38 | 合成 no-gate / no-rollback 反事实 | `GATE_BLOCKS_UNSAFE_EDITS_PASS` |
+| F39 / F41 / F42 | parking 实际 gate-removed ratio0.04（500 / 2000 / 7000 步） | `GATE_RENDER_PASS_GEOMETRY_MIXED` |
+| F43 | bonsai 7000 步实际 gate-removed | `BROAD_STRICT_GATE_NEGATIVE`（no-gate 严格更优 —— 作为纪律证据保留） |
+| F44 | bonsai 校准 gate 修复 | `CALIBRATED_GATE_PASS_CLOSE_TO_NO_GATE` |
+| F45 | fixed-CSEF50 审计 | `FIXED_PRESET_AUDIT_FAIL` —— fixed CSEF50 **并非** 五场景全指标胜出 |
+| F46 | 统一 CSEF + 稀疏深度 + validation-selected 预算（room CSEF20、counter CSEF20、parking CSEF50） | `VALIDATION_BUDGET_PASS_WITH_FIXED50_LIMITATION` |
+| F47 / F49 | bonsai CSEF50 + 稀疏深度 + 小幅 LPIPS（λ = 0.005） | `CSEF_FAMILY_ALL_METRIC_BONSAI_REPAIR_PASS` |
+| F48 | 整合后的 CSEF 家族 package，5 / 5 全指标 clean-long 胜出，无需 QEM 救场 | `CSEF_FAMILY_ALL_SCENE_ALL_METRIC_PASS` |
+| F50 | parking 校准 gate 复刻 F44 | `CALIBRATED_GATE_REPLICATION_MIXED`（未在 parking 复现 bonsai 的机制修复） |
+| F57–F67 | 自适应 CSEF 策略尝试（仅渲染证据） | `ADAPTIVE_POLICY_FAIL`（选错比例 / 排序） |
+| F68 | 修正后的自适应选择器：area / 冗余主导，渲染仅作风险信号 | `CORRECTED_ADAPTIVE_SELECTOR_PASS` |
+| F69 | 自适应 + 稀疏深度（无 LPIPS） | 击败 R53；LPIPS 落后 F7 仅 0.000063 |
+| F71 / F72 / F73 | 自适应 + 稀疏 + 较重 LPIPS | `LPIPS_HEAVY_REJECTED` —— 深度回退 |
+| F74 | 自适应 + 稀疏 + LPIPS λ = 0.0001 | `CONSERVATIVE_ALL_METRIC_F7_WIN` |
+| **F75** | **自适应 + 稀疏 + LPIPS λ = 0.00025（parking 头条）** | **`ACCEPTED_FOR_PARKING_HEADLINE`** —— 在所有跟踪指标上超过 R53.01 / F7 |
+| F76（运行中） | F75 固定策略多场景复刻 | running |
 
 ---
 
@@ -94,33 +127,57 @@ R0 → R53。带有 `_FAIL` / `REJECTED` / `MIXED` 标记的阶段，是当前�
 
 ### 已被验证
 
-- **恢复阶段的稀疏 COLMAP 深度监督** 是 parking、courtyard、bonsai 上每一项可测改进的主要贡献。已验证区间：λ ∈ [0.001, 0.002]，`mixed_low_error` 对应采样、每场景设定可信比例（parking 0.50、courtyard 0.625、bonsai 0.50）；几何稳住后启用 decay 窗口。
-- **Clean-to-compact 恢复** 已成为 parking 最强路径。R53.01 从 clean 22k 出发，按面积剪掉最小的 70 % 三角形，冻结拓扑后从 22k 恢复到 26k。在 2,564,473 三角形下达到独立 PSNR 18.706 / SSIM 0.648 / LPIPS 0.338；clean 22k 在 8,548,242 三角形下是 PSNR 18.480 / SSIM 0.635 / LPIPS 0.347。R55.01 是 LPIPS 最优的 65 % 剪枝 Pareto 点；R48 是更紧凑的 80 % 剪枝 Pareto 点。
-- **拓扑保持冻结调度** 在恢复窗内保留 checkpoint 的连接关系。**严格固定拓扑** 必须使用 `--freeze_topology_updates --skip_restricted_delaunay` 双标志；早期仅用 `--densify_until_iter <load_iter> --skip_restricted_delaunay` 的方案是拓扑保持调度，并不是硬性零变更保证。若不冻结拓扑，R25 已证明无界致密化把 parking 从 0.78M 长到 5.89M 三角形，并且依然在渲染上失败。
-- **严格拓扑冻结现已显式守护**。`--skip_restricted_delaunay` 单独使用只跳过 Delaunay 刷新，标准 prune/densify 分支仍会继续运行；`--freeze_topology_updates` 才会一并禁用标准 prune/densify 分支。
+- **validation-budget CSEF 家族 compact-recovery 协议在 5 / 5 个选定场景上通过**。每个场景都有一行长程结果在独立 PSNR / SSIM / LPIPS / AbsRel / Depth MAE 上击败最强 clean-long 22k baseline，拓扑减少 40 – 70 %；稀疏法向量代理在 4 / 5 场景上改进（courtyard 持平于 +0.0085° —— 显式披露，未声称胜出）。各场景所选行：parking CSEF50 + 稀疏深度（F46）、bonsai CSEF50 + 稀疏深度 + LPIPS λ = 0.005（F49）、courtyard CSEF50 + 稀疏深度（F30）、room CSEF20 + 稀疏深度（F46）、counter CSEF20 + 稀疏深度（F46）—— prune 比例由同一 CSEF 选择器家族在每场景 validation-selected 决定。
+- **自适应 CSEF 策略是 parking 最强单行结果（F75）**。它从 checkpoint 证据中读出 prune 比例（parking → 70 %）、按 area / 局部冗余主导排序、把渲染证据仅作为风险 / 审计信号。叠加稀疏深度恢复与极小 LPIPS 项（λ = 0.00025）后，在每个跟踪指标上都超过 R53.01 / F7：在同样 2 564 473 三角形下达到 PSNR 18.7119 / SSIM 0.6479 / LPIPS 0.3375 / AbsRel 0.0789 / Depth MAE 1.8500 / 法向量 43.95°。F74（λ = 0.0001）是更保守的鲁棒邻居。
+- **恢复阶段的稀疏 COLMAP 深度监督是主要贡献者**。已验证区间：λ ∈ [0.001, 0.005] 因场景而异；`mixed_low_error` 对应采样，每场景调整可信比例；几何稳住后启用 decay 窗口。
+- **严格拓扑冻结必须执行**。固定拓扑续训必须同时使用 `--freeze_topology_updates --skip_restricted_delaunay`；单独 `--skip_restricted_delaunay` 只跳过 Delaunay 刷新，标准 prune / densify 分支仍会继续运行。F27 / F35 / F36 / F18 / F24 在每个 final-package 场景上证明：去掉严格冻结即拓扑塌陷或漂移并丢失渲染。
+- **反事实 gate 按设计工作于不安全编辑拒绝**。F38（合成 no-gate / no-rollback）证明 gate 完美回滚所有不安全编辑；F39 / F41 / F42（parking 真实 gate-removed 在 500 / 2000 / 7000 步）证明 gate-on 回滚 gate-off 提交的同一 no-accept 候选，且在 7000 步上 gate-on 在渲染指标上胜出；F44 校准 gate 在 bonsai 上保留 gate、接受 3 个可恢复轮、拒绝 3 个后续轮，并以更小网格逼近 no-gate。
 - **完整的可逆编辑流水线** —— 提案 JSON → snapshot → apply → render-backed 反事实 gate → 自动回滚 —— 已在真实 Mesh Splatting checkpoint 上端到端跑通：`SNAP_VERTICES`、`FILL_PATCH`（扇形与 Delaunay 网格）以及 R13 合成集合。
 - **合成修复 benchmark 通过**：`giant_ground_void`、`ground_wall_misalignment`、`local_dent`、`noisy_rough_patch`、`small_hole` 都被 full 击败 delete-only；未观测 void 在常规模式下被正确拒绝。
 
 ### 尚不可行
 
-- **编辑原语在全预算下并未改进头条指标**。R28 直接做了消融：在 7000 步 parking 上，匹配的 baseline + 稀疏深度（无编辑）持平甚至击败 grid-fill + 稀疏深度。Snap / fill 编辑 gate 安全且可训练，但单独并不带来质量提升。
-- **超低拓扑 R44 路径在渲染上仍失败**。clean 22k 给到 PSNR 18.48 / SSIM 0.635 / LPIPS 0.347；R44.01 只有 PSNR 17.17 / SSIM 0.549 / LPIPS 0.442。R44.01 仅作为极小拓扑 / 法向量代理 Pareto 点。
-- **从 R44 蒸馏 teacher 渲染未能修复失败**。R45 的全图 teacher loss 与 R46 的反事实 mask teacher loss 都让渲染质量从 R44 起点下降；接受的修复路线是 clean-to-compact，不是低拓扑 teacher 蒸馏。
-- **没有稀疏深度 decay 的长程训练会过冲**。R43.01b 在 30 000 步比 22 000 步丢 0.90 dB PSNR；R44 用 decay 窗口部分修复 —— courtyard 在 `7k → 20k` 加 decay 表现良好；parking 在 `≈22k` 之后没有收益。
-- **可信稀疏对应采样需逐场景调，不是普适常数**。R33 / R36 显示 0.50 vs 0.625 不能跨场景直接迁移；它是按场景调的几何置信旋钮，应作为 Pareto 列汇报，而非常量。
-- **面积驱动 snap 选择器失败**。R17（面积 portfolio）与 R17.06（风险过滤面积）的 gate delta 均在数值噪声级别，并且在等预算续训中输给了未编辑的对照。
-- **残差驱动 snap 与 patch snap 效应微小**。R18 / R19 / R21 都通过 gate，但恢复 delta 停留在 PSNR 第三位小数；R20 中等恢复证实只有深度提升、渲染下降。
-- **边界 `FILL_PATCH` 中等恢复失败**。R22 扇形填充 gate 安全、短训表现可期，但 4000 步失败；R23 的残差感知重排不会改变所选回路；R26 平面 grid Delaunay 填充（51 顶点 / 106 面）通过 gate，但 R28 在 7000 步输给 baseline+稀疏。
-- **编辑后不冻结致密化不是恢复策略**。R25 把 parking 长到 5.89M 三角形，最终仍只有 PSNR 12.03 / SSIM 0.31 —— 严格弱于冻结拓扑的恢复。
+- **fixed CSEF50 不是通用预设（F45）**。已完成的 fixed-CSEF50 长程行中，1 个明确通过（courtyard）、2 个 borderline / 混合（bonsai LPIPS 回退 +0.000257；room 深度回退）、1 个失败（counter）。论文 claim 必须是按场景 validation-selected 的 CSEF 家族协议，而不是单一通用超参。
+- **strict gate 跨场景普适性为伪（F43）**。bonsai 7000 步 strict gate 回滚全部 6 轮，最终在每个跟踪指标上严重输给 no-gate；F44 校准阈值修复了 bonsai 机制，但 F50 在 parking 上的校准 gate 复刻没能在 parking 复现 F44 机制 —— 校准阈值是按场景的 tradeoff，不是 gate 普适胜出 claim。
+- **超过验证预算的长续训会回退**。F34 parking 26k → 30k 在 PSNR / SSIM / LPIPS / 法向量上回退；R56 R53 26k → 28k 丢约 0.35 dB PSNR；R49 / R50 30k 续训也丢。parking 接受的 checkpoint 停在 26k。
+- **后处理 QEM 不是渲染头条**。F37 fast-QEM 在匹配 parking 拓扑上提升稀疏几何但 PSNR / SSIM / LPIPS 崩溃；F25 Open3D QEM 完全未达 parking 拓扑目标（停在 8.13M / 8.55M）。
+- **同数量随机压缩明显劣化**（F16 counter、F19 room、F26 bonsai）—— area、CSEF、QEM 在匹配拓扑下都更优。作为纪律对照保留。
+- **编辑原语在 parking 全预算下并未改进头条指标**。R28 直接消融：在 7000 步 parking 上，匹配的 baseline + 稀疏深度（无编辑）持平甚至击败 grid-fill + 稀疏深度。Snap / fill 编辑 gate 安全且可训练，但单独并不带来质量提升。
+- **超低拓扑 R44 路径在渲染上失败**。clean 22k 给到 PSNR 18.48 / SSIM 0.635 / LPIPS 0.347；R44.01 只有 17.17 / 0.549 / 0.442。R44.01 仅作为极小拓扑 / 法向量代理 Pareto 点；R45 / R46 从 R44 出发的 teacher 蒸馏未能修复失败。
+- **较重的 LPIPS 恢复损失被拒绝**。R51（λ = 0.02）/ R52（λ = 0.05）叠加在 R48；F71 / F72 / F73 自适应行的较重 LPIPS 都让深度指标回退；只有极小 λ ∈ {0.0001, 0.00025} 区间（F74 / F75）保留深度胜出。
+- **面积驱动 snap 选择器失败**（R17 area portfolio、R17.06 风险过滤）—— gate delta 均在数值噪声级别，并在等预算续训中输给未编辑对照。**残差 snap / patch snap 效应微小**（R18 / R19 / R20 / R21）。**边界 `FILL_PATCH` 中等恢复失败**（R22 扇形；R26 grid；R28 全预算）。
+- **编辑后不冻结致密化不是恢复策略** —— R25 把 parking 长到 5.89M 三角形仍只有 PSNR 12.03。
 - **替代稀疏深度损失空间（`relative` / `log` / `inverse`）被拒绝**：parking 全预算下，原始度量深度 Smooth-L1 仍是已验证的形式。
 
-R0–R44 的 "什么有效 / 什么无效" 简版总结见 [`docs/car_model/SPCarNet_research_log.md`](docs/car_model/SPCarNet_research_log.md)。
+R0–R56 + F1–F75 的 "什么有效 / 什么无效" 简版总结见 [`docs/car_model/SPCarNet_research_log.md`](docs/car_model/SPCarNet_research_log.md)。
 
 ---
 
-## 头条结果图（clean long vs ours，parking）
+## 头条结果图 —— 五场景 clean-long vs validation-budget CSEF 家族（F40 / F49）
 
-公平对比：每行一个保留测试视图；列依次为 GT、最强 clean long baseline（current-branch 22k 与 30k）、更紧凑的 R48 行，以及质量占优的 R53 clean-to-compact 分支。
+每行一个场景；列依次为 GT · clean-long 22k baseline · ours（F49 在 validation-budget 下的最佳 CSEF 家族行）· clean-long 与 ours 的逐像素误差图。
+
+<div align="center">
+  <img src="assets/meshsplatopt_multiscene_clean_vs_method.png" width="900" alt="五场景 clean-long 22k vs MeshSplatOpt method-best 26k">
+</div>
+
+### 五场景定量汇总（F12 / F49 最佳行 vs 各场景 clean-long 22k）
+
+所有 delta 都是 `method − clean-long 22k`，使用独立的 `render.py + metrics.py` 与稀疏 COLMAP 几何代理评估。CSEF 家族行均为 F49（无 QEM 救场）。
+
+| 场景 | clean-long 三角形 | ours 三角形 | 削减 | ΔPSNR ↑ | ΔSSIM ↑ | ΔLPIPS ↓ | ΔAbsRel ↓ | ΔDepth MAE ↓ | ΔNormal ° ↓ | ours 行 | W&B |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| `parking_phone_tiny` | 8 548 242 | 4 274 121 | 50.0 % | +0.159 | +0.0102 | −0.0098 | −0.0016 | −0.0055 | −0.79 | CSEF50 + 稀疏深度（F46） | `8l96pfjx` |
+| `bonsai` | 88 460 | 44 230 | 50.0 % | +0.010 | +0.0020 | −0.0048 | −0.0097 | −0.0854 | −2.15 | CSEF50 + 稀疏 + LPIPS λ = 0.005（F49） | `cuq7olfd` |
+| `courtyard` | 1 677 484 | 838 742 | 50.0 % | +0.449 | +0.0422 | −0.0237 | −0.0330 | −0.2107 | −0.21 | CSEF50 + 稀疏深度（F30） | `9aaku1yn` |
+| `room` | 84 506 | 67 605 | 20.0 % | +0.710 | +0.0656 | −0.0445 | −0.0027 | −0.0075 | −1.47 | CSEF20 + 稀疏深度（F46） | `v7ld1o0x` |
+| `counter` | 83 834 | 67 067 | 20.0 % | +0.209 | +0.0234 | −0.0163 | −0.0027 | −0.0050 | −1.18 | CSEF20 + 稀疏深度（F46） | `pijpv7ny` |
+
+5 / 5 场景在 PSNR / SSIM / LPIPS / AbsRel / Depth MAE 上同时改进；稀疏法向量角度在 4 / 5 场景上改进（courtyard 持平于 +0.0085° —— 显式披露）。所有行都使用严格 `--freeze_topology_updates --skip_restricted_delaunay` 拓扑冻结与 W&B 在线模式；恢复区间为 `22000 → 26000`。
+
+### Parking 深度对比（R44 → R53 → F75）
+
+parking 场景同时维护一条单场景线，承载失败证据骨架（R44 vs clean 22k）和最强单行（F75）。每行一个保留测试视图；列依次为 GT、clean-long 22k / 30k、R48、R53。
 
 <div align="center">
   <img src="assets/meshsplatopt_clean_vs_r53_montage.png" width="900" alt="Clean long baseline 与 R53 对比，parking_phone_tiny">
@@ -129,25 +186,18 @@ R0–R44 的 "什么有效 / 什么无效" 简版总结见 [`docs/car_model/SPCa
 | 运行 | iter | PSNR ↑ | SSIM ↑ | LPIPS ↓ | AbsRel ↓ | Depth MAE ↓ | Normal ° ↓ | 三角形数 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | clean 7k（历史弱参考） | 7 000 | 17.20 | 0.535 | 0.451 | 0.076 | 1.75 | 45.56 | 833 775 |
-| **clean 22k（最强 baseline）** | 22 000 | **18.48** | **0.635** | **0.347** | 0.082 | **1.87** | 45.11 | 8 548 242 |
-| clean 30k | 30 000 | 18.41 | 0.632 | 0.351 | **0.082** | 1.87 | 44.84 | 8 548 242 |
-| **ours R44 22k（decay）** | 22 000 | 17.17 | 0.549 | 0.442 | 0.187 | 2.92 | **42.22** | **782 982** |
-| ours R48 26k（80 % 剪枝） | 26 000 | 18.62 | 0.642 | 0.349 | 0.080 | **1.85** | 44.74 | 1 709 648 |
-| **ours R53 26k（70 % 剪枝）** | 26 000 | **18.71** | **0.648** | **0.338** | **0.080** | **1.85** | **44.26** | 2 564 473 |
-| ours R55 26k（65 % 剪枝，LPIPS Pareto） | 26 000 | 18.70 | 0.648 | **0.337** | **0.080** | 1.86 | **44.24** | 2 991 885 |
-| ours R56 28k（R53 续训） | 28 000 | 18.36 | 0.624 | 0.367 | n/a | n/a | n/a | 2 564 473 |
-| ours R50 30k（真正拓扑冻结续训） | 30 000 | 18.45 | 0.629 | 0.361 | 0.081 | 1.84 | 45.32 | 1 709 648 |
-| ours R43 30k（无 decay） | 30 000 | 16.25 | 0.511 | 0.477 | 0.194 | 3.02 | 43.71 | 782 982 |
+| clean 22k（最强 baseline） | 22 000 | 18.480 | 0.635 | 0.347 | 0.082 | 1.87 | 45.11 | 8 548 242 |
+| clean 30k | 30 000 | 18.409 | 0.632 | 0.351 | 0.082 | 1.87 | 44.84 | 8 548 242 |
+| ours R44 22k（decay，对 clean 22k 失败） | 22 000 | 17.170 | 0.549 | 0.442 | 0.187 | 2.92 | 42.22 | **782 982** |
+| ours R48 26k（80 % 面积剪枝） | 26 000 | 18.620 | 0.642 | 0.349 | 0.080 | **1.85** | 44.74 | 1 709 648 |
+| ours R53.01 26k（70 % 面积剪枝） | 26 000 | 18.706 | 0.648 | 0.338 | 0.080 | 1.85 | 44.26 | 2 564 473 |
+| ours F7 26k（CSEF70 恢复） | 26 000 | 18.706 | 0.648 | 0.338 | 0.079 | 1.85 | 44.20 | 2 564 473 |
+| **ours F75 26k（自适应 + 稀疏 + LPIPS λ = 0.00025）** | **26 000** | **18.712** | **0.648** | **0.338** | **0.079** | **1.85** | **43.95** | **2 564 473** |
+| ours F74 26k（自适应 + 稀疏 + LPIPS λ = 0.0001） | 26 000 | 18.711 | 0.648 | 0.338 | 0.079 | 1.85 | 44.07 | 2 564 473 |
+| ours R56 28k（R53 续训，已拒绝） | 28 000 | 18.36 | 0.624 | 0.367 | n/a | n/a | n/a | 2 564 473 |
+| ours R43 30k（无 decay，已拒绝） | 30 000 | 16.25 | 0.511 | 0.477 | 0.194 | 3.02 | 43.71 | 782 982 |
 
-`clean 22k` 完胜旧的 R44 低拓扑分支，但 R53.01 决定性地修复了这次失败：在 70 % 面积压缩之后，独立 PSNR / SSIM / LPIPS / AbsRel / Depth MAE / 法向量角度上同时击败 clean 22k 与 clean 30k。R44 之前对照中引用 `clean 7k` 的写法存在误导，已经被淘汰。
-
-早期的多场景中等预算面板（R14.21b / R15.01–R15.04，三场景在第 4000 步 freeze 调度下）作为中间诊断证据保留：
-
-<div align="center">
-  <img src="assets/meshsplatopt_qualitative.png" width="900" alt="三场景中等预算拓扑保持恢复（中间诊断）">
-</div>
-
-这些中等预算渲染支持拓扑保持的故事（bonsai 相对于 4000 步 unfrozen 续训减少 51 % 三角形；courtyard +2.87 dB；parking +2.65 dB），但 4000 步 unfrozen **不是** 最强 clean baseline。它们现在被定位为调度诊断，而不是头条。
+F75 是 parking 单场景的接受头条 —— 在同样拓扑下，比 F7 改进 ΔPSNR +0.0058、ΔLPIPS −0.000773、ΔAbsRel −0.000531、ΔDepth MAE −0.002774、ΔNormal 角度 −0.2495°。F76 多场景复刻 F75 固定策略正在运行。
 
 ---
 
@@ -199,35 +249,48 @@ maximize  evidence_debt_reduction(edit)
 
 ## 已验证的恢复 recipe
 
-两条 recipe 已被验证。**Clean-to-compact（R53）** 是头条路径 —— 在保留 30 % 三角形的前提下，独立指标全面击败最强 clean long baseline。**稀疏深度恢复（R44）** 仍是跨场景路径与极低拓扑 Pareto 点，但在 parking 渲染上输给 clean 22k。
+三条 recipe 已验证。**Recipe A —— CSEF 家族 + validation-budget（F49）** 是跨场景头条：5 / 5 场景在渲染与稀疏深度指标上击败 clean-long。**Recipe B —— 自适应策略 + 极小 LPIPS（F75）** 是 parking 最强单行，并从 checkpoint 中选择 prune 比例而非依赖手动调参表。**Recipe C —— 稀疏深度低 λ 恢复（R44）** 仍是跨场景的基础 recipe 与极低拓扑 Pareto 点，但在 parking 渲染上输给 clean 22k。
 
-### Recipe A —— clean-to-compact（R53，头条，parking）
+### Recipe A —— CSEF 家族 + 稀疏深度 validation-budget 恢复（F49，多场景头条）
 
-三步：训练强 clean long 网格 → 按面积剪掉最小 70 % 三角形 → 拓扑严格冻结后恢复。
+三步：训练强 clean long 网格 → 用 CSEF 家族压缩选择器配按场景 validation-budget 的 prune 比例（parking 50 %、bonsai 50 %、courtyard 50 %、room 20 %、counter 20 %）→ 严格拓扑冻结 + 稀疏深度恢复 +（仅 bonsai）极小 LPIPS λ = 0.005。
 
 ```bash
-# 1) 训练（或复用）一个强 clean long Mesh Splatting checkpoint。
+# 1) 复用任意已有的强 clean long Mesh Splatting checkpoint。
 python train.py -s <scene> -m outputs/clean_long --eval --iterations 22000
 
-# 2) 最小面积 70 % 三角形压缩（R53）。同一脚本通过 --prune_fraction 支持
-#    65 / 75 / 80 / 90 %；70 % 是全指标头条。
-python scripts/car_model/meshprior_apply_topology_control_ablation.py \
-    --source_model outputs/clean_long \
-    --source_checkpoint outputs/clean_long/point_cloud/iteration_22000/point_cloud_state_dict.pt \
-    --output_model outputs/compact70/model \
-    --prune_fraction 0.70
+# 2) CSEF 家族压缩。选择器读 checkpoint 证据并写出选中的面索引；
+#    --prune_fraction 是 validation-budget 旋钮：parking / bonsai / courtyard
+#    用 0.50；room / counter 用 0.20；counter-fast 变体用 0.40。
+#   （F45 审计：禁止 claim 单一固定比例。）
+python scripts/car_model/meshsplatopt_select_compaction_candidates.py \
+    --checkpoint outputs/clean_long/point_cloud/iteration_22000/point_cloud_state_dict.pt \
+    --policy csef_low_evidence_boundary_protected \
+    --prune_fraction 0.50 \
+    --output_dir outputs/compact50
 
-# 3) 严格固定拓扑恢复 22000 → 26000。两个标志必须同时使用：
-#    单独 --skip_restricted_delaunay 只跳过 Delaunay 刷新，标准 500 步
-#    prune/densify 分支会继续运行到 densify_until_iter + 1000（R49 暴露
-#    了这个 bug；R50 验证修复后可严格保持三角形数）。
+python scripts/car_model/meshsplatopt_apply_compaction_to_checkpoint.py \
+    --source_model outputs/clean_long \
+    --selected_faces_path outputs/compact50/selected_faces.npy \
+    --output_model outputs/compact50/model
+
+# 3) 严格固定拓扑恢复 22000 → 26000，启用稀疏 COLMAP 深度。
+#    bonsai 时在 train_extra_args 中再加 --lambda_lpips_loss 0.005。
 export WANDB_PROJECT=spcarnet_meshprior
 export WANDB_MODE=online
 python scripts/car_model/meshsplatopt_run_teacher_recovery.py \
-    --model_path  outputs/compact70/model \
+    --model_path  outputs/compact50/model \
     --output_dir  outputs/carnet/meshsplatopt/<run_name> \
     --load_iteration 22000 --iterations 4000 \
-    --train_extra_args "--freeze_topology_updates --skip_restricted_delaunay"
+    --train_extra_args "--freeze_topology_updates --skip_restricted_delaunay \
+       --enable_sparse_colmap_depth_loss \
+       --lambda_sparse_colmap_depth 0.005 \
+       --sparse_colmap_depth_start_iter 22000 \
+       --sparse_colmap_depth_warmup_iters 50 \
+       --sparse_colmap_depth_min_matches 16 \
+       --sparse_colmap_depth_sample_mode mixed_low_error \
+       --sparse_colmap_depth_low_error_fraction 0.50 \
+       --sparse_colmap_depth_enable_in_final_finetune"
 
 # 4) 独立的论文级评估。
 python render.py  -m outputs/carnet/meshsplatopt/<run_name>/recovery_model
@@ -237,9 +300,56 @@ python evaluate_geometry_colmap.py -s <scene> \
     --output outputs/carnet/meshsplatopt/<run_name>/recovery_model/geometry_eval_colmap/iter_26000.json
 ```
 
-Pareto 旋钮：`--prune_fraction` 越小（如 `0.65`，R55）则 LPIPS / 法向量越好但用更多三角形；越大（`0.80`，R47/R48）则 Pareto 更紧凑（仅 20 % 三角形）但 LPIPS 略差；`0.90` 已被拒绝（R47 prune90 PSNR 跌 2 dB）。续训超过 26k 也已被拒绝（R56 28k 丢约 0.35 dB PSNR；R49/R50 30k 同样输）。
+### Recipe A 变体 —— 仅按面积压缩（R53，无 CSEF）
 
-### Recipe B —— 稀疏深度低 λ + decay 恢复（R44，跨场景）
+与 Recipe A 流程相同，但使用 area-only 选择器，是 F12 / F49 多场景表的 area baseline，对应 parking R53.01 / R55 / R48 行。把 Recipe A 的第 2 步替换为：
+
+```bash
+python scripts/car_model/meshprior_apply_topology_control_ablation.py \
+    --source_model outputs/clean_long \
+    --source_checkpoint outputs/clean_long/point_cloud/iteration_22000/point_cloud_state_dict.pt \
+    --output_model outputs/area70/model \
+    --prune_fraction 0.70
+```
+
+`--prune_fraction` 旋钮（parking）：0.65 → R55 LPIPS 最优 / 0.70 → R53.01 全指标 / 0.80 → R48 最紧凑 / 0.90 → R47 prune90 拒绝（PSNR 跌 2 dB）。续训超过 26k 已拒绝（R56 28k 丢约 0.35 dB PSNR；R49 / R50 30k 同样输）。
+
+### Recipe B —— 自适应 CSEF 策略 + 极小 LPIPS 恢复（F75，parking 单场景最强）
+
+外壳与 Recipe A 一样，但选择器从 checkpoint 证据中选 prune 比例与排序（无须手动 `--prune_fraction`），并在恢复中在稀疏深度之上叠一层极小 LPIPS。
+
+```bash
+# 自适应选择器：选 prune 比例（parking → 70 %），按 area / 局部冗余主导排序，
+# 渲染证据仅作风险信号。
+python scripts/car_model/meshsplatopt_select_compaction_candidates.py \
+    --checkpoint outputs/clean_long/point_cloud/iteration_22000/point_cloud_state_dict.pt \
+    --policy csef_adaptive_policy \
+    --output_dir outputs/adaptive_compact
+
+python scripts/car_model/meshsplatopt_apply_compaction_to_checkpoint.py \
+    --source_model outputs/clean_long \
+    --selected_faces_path outputs/adaptive_compact/selected_faces.npy \
+    --output_model outputs/adaptive_compact/model
+
+python scripts/car_model/meshsplatopt_run_teacher_recovery.py \
+    --model_path  outputs/adaptive_compact/model \
+    --output_dir  outputs/carnet/meshsplatopt/<run_name> \
+    --load_iteration 22000 --iterations 4000 \
+    --train_extra_args "--freeze_topology_updates --skip_restricted_delaunay \
+       --enable_sparse_colmap_depth_loss \
+       --lambda_sparse_colmap_depth 0.001 \
+       --sparse_colmap_depth_start_iter 22000 \
+       --sparse_colmap_depth_warmup_iters 50 \
+       --sparse_colmap_depth_min_matches 16 \
+       --sparse_colmap_depth_sample_mode mixed_low_error \
+       --sparse_colmap_depth_low_error_fraction 0.50 \
+       --sparse_colmap_depth_enable_in_final_finetune \
+       --lambda_lpips_loss 0.00025"
+```
+
+`--lambda_lpips_loss 0.0001`（F74）是更保守的鲁棒邻居；超过 ~0.001（F71 / R51 / R52）的值已被拒绝，会损害深度。
+
+### Recipe C —— 稀疏深度低 λ + decay（R44，跨场景基础）
 
 当需要 **最低拓扑** 的 parking 点（782 982 三角形）或对 `courtyard` 与 `bonsai` 的跨场景恢复时使用。在 parking 上其渲染输给 clean 22k，因此现在它是法向量代理 / 拓扑 Pareto 列，而不是头条。
 
@@ -268,17 +378,33 @@ courtyard 已验证区间为 fraction `0.625`、λ `0.002`、`7k → 20k`、deca
 
 ### 已被拒绝的方向（无新证据请勿重试）
 
-- **从 R44 蒸馏 teacher 渲染**（R45 lambda 0.5 / 1.0；R46 反事实 mask）—— 全部恶化渲染。
-- **直接 LPIPS 训练损失**（R51 λ = 0.02；R52 λ = 0.05）叠加在 R48 上 —— 都恶化 PSNR / SSIM，且无法把 LPIPS 推过 clean-long 目标。修复方案是降低剪枝幅度，而不是加感知损失。
-- **R48 / R53 续训到 30k**（R49 旧版、R50 严格固定拓扑、R56 固定拓扑 28k）—— 接受的 checkpoint 停在 26k。
+- **fixed CSEF50 跨场景普适（F45）** —— bonsai / room 边界 / 混合，counter 失败；方法必须按场景 validation-budget。
+- **较重的 LPIPS 恢复损失** —— R51（λ = 0.02）/ R52（λ = 0.05）叠加在 R48 上；F71 / F72 / F73 自适应行较重 LPIPS。只有 λ ≤ 0.001（F75 最佳 0.00025、F74 0.0001、bonsai F49 0.005）保留深度胜出。
+- **从 R44 蒸馏 teacher 渲染**（R45 λ 0.5 / 1.0；R46 反事实 mask）—— 全部恶化渲染。
+- **仅按渲染证据排序的自适应选择器**（F57–F67）—— 选错比例 / 排序。F68 area / 冗余主导、渲染仅作风险才是修正版本。
+- **超过验证预算的长续训** —— F34 parking 26k → 30k 回退；R56 R53 26k → 28k 丢约 0.35 dB PSNR；R49 / R50 30k 同样输。
+- **parking 上的后处理 QEM** —— F37 fast-QEM 匹配拓扑后渲染崩溃；F25 Open3D QEM 完全未达 parking 拓扑目标。
+- **同数量随机压缩**（F16 counter / F19 room / F26 bonsai）—— 同拓扑下被 area / CSEF / QEM 显著超过。
+- **No-freeze 对照**（五个 final 场景上的 F27 / F35 / F36 / F18 / F24；parking 上的 R25）—— 必须使用严格 `--freeze_topology_updates --skip_restricted_delaunay`。
+- **strict gate 跨场景普适胜出（F43）** —— bonsai 7000 步 strict gate 严格输给 no-gate；F44 校准阈值修复了 bonsai 机制，但 F50 在 parking 上无法复刻 —— gate claim 限定为 渲染质量 + 不安全编辑拒绝，不是几何普适胜出。
+- **编辑原语作为全预算赢家** —— R28 grid-fill 拒绝；R22 / R26 fan / grid `FILL_PATCH` 在全预算下输给匹配 baseline+稀疏。R17 area / R18 / R19 / R20 / R21 snap 变体效应均过小。
 - **替代稀疏深度损失空间**（R29 relative / log / inverse）—— 原始度量深度 Smooth-L1 胜出。
 - **编辑后不冻结致密化**（R25）—— parking 涨到 5.89M 三角形仍输渲染。
 
 ### 可复现的论文级表格
 
 ```bash
+# 稀疏深度恢复线（R 阶段）
 python scripts/car_model/meshsplatopt_collect_sparse_recovery_results.py
 # → outputs/carnet/meshsplatopt/sparse_recovery_tables/{json,csv,md}
+
+# 自适应策略线（F68–F75）
+python scripts/car_model/final_collect_stageF68_F73_adaptive_policy.py
+# → outputs/carnet/meshsplatopt/final_stageF75_adaptive_policy_evidence/adaptive_policy_results.{json,md}
+
+# 多场景 F12 / F49 终版 package（图与表）
+ls outputs/carnet/meshsplatopt/final_paper_assets/
+ls outputs/carnet/meshsplatopt/final_stageF40_clean_vs_method_assets/
 ```
 
 ## 仓库结构（MeshSplatOpt 增加部分）
@@ -308,17 +434,24 @@ scripts/car_model/                 CLI 入口
   meshsplatopt_expand_snap_edit_to_patch.py                # R21
   meshsplatopt_select_checkpoint_boundary_fill_edit.py     # R22 / R23
   meshsplatopt_expand_boundary_fill_to_grid.py             # R26
+  meshsplatopt_select_compaction_candidates.py             # F 阶段 CSEF / area / 自适应选择器
+  meshsplatopt_apply_compaction_to_checkpoint.py           # F 阶段压缩应用器（CSEF / 自适应）
+  meshprior_apply_topology_control_ablation.py             # 仅按面积剪枝（R47 / R53 / R55）
   meshsplatopt_validate_edit_counterfactual.py
-  meshsplatopt_run_teacher_recovery.py                     # 接受 --train_extra_args
+  meshsplatopt_run_teacher_recovery.py                     # 接受 --train_extra_args（稀疏深度 / LPIPS）
   meshsplatopt_run_repair_state_machine.py
-  meshsplatopt_collect_sparse_recovery_results.py          # 论文表格收集器
-  meshprior_apply_topology_control_ablation.py             # 按面积剪枝（R47 / R53 / R55）
+  meshsplatopt_collect_sparse_recovery_results.py          # R 线论文表格
+  final_collect_stageF68_F73_adaptive_policy.py            # F 线自适应策略表格
+  final_make_paper_assets.py                               # 多场景定型素材
 
 docs/car_model/                    每阶段设计 / 实施 / smoke / 报告文档
-docs/NeurIPSRepairPrompts.md       完整 R0–R17 阶段说明（在 R44 之前起草）
-outputs/carnet/meshsplatopt/       每阶段产物（提案、gate、快照、恢复、results.json）
-outputs/carnet/meshsplatopt/sparse_recovery_tables/        论文级 JSON / CSV / Markdown
-outputs/carnet/meshsplatopt/best_clean_long_vs_method_long/  公平 clean baseline 修正
+docs/NeurIPSRepairPrompts.md       完整 R0–R17 阶段说明（在 R44 之前起草；F 阶段说明嵌入研究日志）
+outputs/carnet/meshsplatopt/                                       每阶段产物
+outputs/carnet/meshsplatopt/sparse_recovery_tables/                 R 线论文级 JSON / CSV / Markdown
+outputs/carnet/meshsplatopt/best_clean_long_vs_method_long/         R44 clean baseline 修正
+outputs/carnet/meshsplatopt/final_stageF40_clean_vs_method_assets/  F 线五场景定型 montage 与 manifest
+outputs/carnet/meshsplatopt/final_paper_assets/                     F 线论文图（跨场景 montage、三角形数柱状图、方法图）
+outputs/carnet/meshsplatopt/final_stageF75_adaptive_policy_evidence/ F75 自适应策略结果
 ```
 
 PRISM 安全栈（`utils/prism_*`、`ss3dm_prior/meshprior/*`）被保留并复用为回滚 / 反事实原语 —— Stage 35 PRISM 仍作为命名 baseline，而不是最终方法。

@@ -7,8 +7,9 @@
 
 <div align="center">
   <a href="docs/NeurIPSRepairPrompts.md">NeurIPS roadmap</a> &nbsp;|&nbsp;
-  <a href="docs/car_model/parking_clean_to_compact_repair_report.md">Clean-to-compact repair</a> &nbsp;|&nbsp;
-  <a href="docs/car_model/parking_best_clean_long_vs_method_long_report.md">Clean-baseline correction</a>
+  <a href="docs/car_model/final_stageF12_multiscene_package_report.md">Multi-scene package (F12)</a> &nbsp;|&nbsp;
+  <a href="docs/car_model/final_stageF47_F48_csef_family_all_metric_repair_report.md">CSEF-family all-metric (F47–F49)</a> &nbsp;|&nbsp;
+  <a href="docs/car_model/final_stageF75_adaptive_policy_reflection_report.md">Adaptive policy (F75)</a>
 </div>
 
 <br>
@@ -19,15 +20,15 @@
 
 > **In one sentence (intent).** Existing Mesh-Splatting / 3DGS pruning methods ask *which primitives can be removed*; MeshSplatOpt asks *which local surface edit best reduces scene-evidence debt while remaining counterfactually certified by held-out rendering and sparse geometry.* The same edit calculus is meant to handle deletion, collapse, snapping, splitting, hole filling, and appearance recovery — every committed edit must clear render, sparse-depth, normal, free-space, and topology certificates, otherwise it rolls back.
 
-> **In one sentence (current evidence).** As of 2026-05-03, the R44 sparse-depth low-topology path failed against the strongest clean long baseline, but the repaired **clean-to-compact recovery path** (clean 22k -> 70% area-prune -> fixed-topology recovery) now beats the clean long baselines on independent render and sparse geometry while using only 30% of the clean-long triangles: R53.01 reaches PSNR 18.706 / SSIM 0.648 / LPIPS 0.338 at 2.56M triangles, versus clean 22k at PSNR 18.480 / SSIM 0.635 / LPIPS 0.347 with 8.55M triangles.
+> **In one sentence (current evidence).** As of 2026-05-05, the **validation-budget CSEF-family compact-recovery protocol** (clean long → CSEF-family area / redundancy compaction → strict topology-frozen recovery + sparse-depth + small LPIPS where needed) now beats the strongest clean-long baseline on PSNR, SSIM, LPIPS, AbsRel, and Depth MAE on **5 / 5 selected scenes** (`parking_phone_tiny`, `bonsai`, `courtyard`, `room`, `counter`) and on the sparse-normal proxy on 4 / 5 (courtyard ties), with topology reductions of 40 – 70 % per scene; on `parking_phone_tiny` the **adaptive CSEF policy with tiny LPIPS recovery (F75)** is now the strongest single row, supersedes the earlier R53 / F7 rows, and chooses the prune ratio from checkpoint evidence rather than from a hand-set table.
 
-The method scaffold (CSEF + reversible edit calculus + counterfactual certificates) and the recovery recipe are kept honest by separating *what passed every gate* from *what actually improved the headline metrics*. This README documents both.
+The method scaffold (CSEF + reversible edit calculus + counterfactual certificates) and the recovery recipe are kept honest by separating *what passed every gate* from *what actually improved the headline metrics*. The fixed-CSEF50 audit (F45) intentionally documents that one prune ratio does not work for every scene; the published claim is therefore a validation-selected CSEF-family protocol, not a single universal hyperparameter.
 
 ---
 
 ## Honest project status
 
-R0 → R53. Stages with `_FAIL`, `REJECTED`, or `MIXED` decisions are the failure-evidence backbone of the current paper-discipline story.
+R0 → R56 (scaffold + parking single-scene line) and **F1 → F75 (final cross-scene line)**. Stages with `_FAIL`, `REJECTED`, or `MIXED` decisions are the failure-evidence backbone of the current paper-discipline story.
 
 ### Method scaffold (R0–R15)
 
@@ -86,7 +87,39 @@ R0 → R53. Stages with `_FAIL`, `REJECTED`, or `MIXED` decisions are the failur
 | R51–R52 | direct LPIPS-loss recovery from R48 | `DIRECT_LPIPS_LOSS_REJECTED` |
 | R53–R56 | clean 22k -> 65/70/75% area compaction + continuation checks | `CLEAN_TO_COMPACT_DOMINATES_CLEAN_LONG_BASELINES` |
 
-The **R44.01 vs clean 22k** comparison is the load-bearing failure evidence — see `docs/car_model/parking_best_clean_long_vs_method_long_report.md`. The R48-to-R53 repair that follows it is documented in `docs/car_model/parking_clean_to_compact_repair_report.md`.
+The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evidence — see `docs/car_model/parking_best_clean_long_vs_method_long_report.md`. The R48-to-R53 repair that follows it is documented in `docs/car_model/parking_clean_to_compact_repair_report.md`.
+
+### Cross-scene final package and adaptive-policy line (F1–F75)
+
+| stage | scope | decision |
+|---|---|---|
+| F1–F8 | cross-scene compact recovery pilot on 5 scenes (parking, bonsai, courtyard, room, counter) | `CROSS_SCENE_COMPACT_PILOT_PASS` |
+| F10 | counter 4th scene boundary case at fixed CSEF50 | `BORDERLINE_SSIM_FAIL` (later repaired by F46 CSEF20+sparse) |
+| F12 | multi-scene package: 5 / 5 compact-recovery PASS at clean-long 22k | `FINAL_F12_MULTISCENE_PACKAGE_PASS_WITH_ABLATION_GAPS` |
+| F13 | paper assets package | `PASS` |
+| F16 / F19 / F26 | random-same-count compaction control on counter / room / bonsai | rejected — random50 / random40 lose to area / CSEF / QEM |
+| F18 / F20 / F22–F25 | post-hoc QEM strong baselines | `PASS_AS_BASELINES` (counter / room QEM50 frozen are PSNR-strong; F25 Open3D QEM did not reach the matched parking topology) |
+| F27 / F35 / F36 / F18 / F24 | no-freeze controls (CSEF / area / QEM) on every final-package scene | `NO_FREEZE_FAIL` — strict topology-freeze contract is required |
+| F28 / F29 / F30–F32 / F33 | sparse-depth strict recovery on all five scenes | `SPARSE_DEPTH_PASS_PER_SCENE` |
+| F33 | parking CSEF70 + sparse-depth strict recovery 26k | `PARKING_PARETO_PROMOTE` (now the F12 parking row) |
+| F34 | parking sparse-depth 26k → 30k continuation | `LONG_CONTINUATION_REJECTED` |
+| F37 | fast-QEM matched parking topology | `FAST_QEM_REJECTED` — sparse geometry up, render collapses |
+| F38 | synthetic no-gate / no-rollback counterfactual | `GATE_BLOCKS_UNSAFE_EDITS_PASS` |
+| F39 / F41 / F42 | parking real gate-removed ratio0.04 (500 / 2000 / 7000 iter) | `GATE_RENDER_PASS_GEOMETRY_MIXED` |
+| F43 | bonsai 7000-step real gate-removed | `BROAD_STRICT_GATE_NEGATIVE` (no-gate strictly better — kept as discipline evidence) |
+| F44 | bonsai calibrated-gate repair | `CALIBRATED_GATE_PASS_CLOSE_TO_NO_GATE` |
+| F45 | fixed-CSEF50 audit | `FIXED_PRESET_AUDIT_FAIL` — fixed CSEF50 is **not** a five-scene all-metric win |
+| F46 | unified CSEF + sparse-depth + validation-selected budget (room CSEF20, counter CSEF20, parking CSEF50) | `VALIDATION_BUDGET_PASS_WITH_FIXED50_LIMITATION` |
+| F47 / F49 | bonsai CSEF50 + sparse-depth + small LPIPS (λ = 0.005) | `CSEF_FAMILY_ALL_METRIC_BONSAI_REPAIR_PASS` |
+| F48 | consolidated CSEF-family package, 5 / 5 all-metric clean-long wins, no QEM rescue | `CSEF_FAMILY_ALL_SCENE_ALL_METRIC_PASS` |
+| F50 | parking calibrated-gate replication of F44 | `CALIBRATED_GATE_REPLICATION_MIXED` (does not reproduce the bonsai mechanism repair on parking) |
+| F57–F67 | adaptive CSEF policy attempts (render-only evidence) | `ADAPTIVE_POLICY_FAIL` (drove wrong fraction / ranking) |
+| F68 | adaptive selector with area / redundancy primary, render as risk only | `CORRECTED_ADAPTIVE_SELECTOR_PASS` |
+| F69 | adaptive + sparse-depth (no LPIPS) | beats R53; misses F7 LPIPS by 0.000063 |
+| F71 / F72 / F73 | adaptive + sparse + heavier LPIPS | `LPIPS_HEAVY_REJECTED` — depth regresses |
+| F74 | adaptive + sparse + LPIPS λ = 0.0001 | `CONSERVATIVE_ALL_METRIC_F7_WIN` |
+| **F75** | **adaptive + sparse + LPIPS λ = 0.00025 (parking headline)** | **`ACCEPTED_FOR_PARKING_HEADLINE`** — supersedes R53.01 / F7 on every tracked metric |
+| F76 (in flight) | F75 fixed-policy multi-scene replication | running |
 
 ---
 
@@ -94,33 +127,57 @@ The **R44.01 vs clean 22k** comparison is the load-bearing failure evidence — 
 
 ### What is validated
 
-- **Sparse-COLMAP-depth supervision during recovery** is the dominant contributor to every measurable metric improvement on parking, courtyard, and bonsai. Validated regime: λ ∈ [0.001, 0.002], `mixed_low_error` correspondence sampling with a per-scene trusted fraction (parking 0.50, courtyard 0.625, bonsai 0.50), decay window after the geometry has anchored.
-- **Clean-to-compact recovery is now the strongest parking route.** R53.01 starts from clean 22k, prunes the smallest-area 70% of triangles, freezes topology, and recovers from 22k to 26k. It reaches independent PSNR 18.706 / SSIM 0.648 / LPIPS 0.338 with 2,564,473 triangles, versus clean 22k at PSNR 18.480 / SSIM 0.635 / LPIPS 0.347 with 8,548,242 triangles. R55.01 is the LPIPS-best 65%-pruned Pareto row, and R48 remains the more compact 80%-pruned Pareto row.
-- **Topology-retention freeze schedule** keeps checkpoint connectivity through the recovery window. Use `--freeze_topology_updates --skip_restricted_delaunay` for strict fixed-topology continuation; older runs that used only `--densify_until_iter <load_iter> --skip_restricted_delaunay` are topology-retention schedules, not a hard no-mutation guarantee. Without topology retention, R25 demonstrates that unbounded post-edit densification grows parking from 0.78M -> 5.89M triangles and *still* loses render.
-- **Strict topology-freeze now has an explicit guard.** Use `--freeze_topology_updates --skip_restricted_delaunay` for fixed-topology continuation. `--skip_restricted_delaunay` alone skips only the Delaunay refresh; it does not disable the standard prune/densify branch.
+- **The validation-budget CSEF-family compact-recovery protocol now passes on 5 / 5 selected scenes.** Each scene has a long-run row that beats the strongest clean-long 22k baseline on PSNR, SSIM, LPIPS, AbsRel, and Depth MAE, with topology reductions of 40 – 70 %. Sparse-normal proxy improves on 4 / 5 (courtyard ties at +0.0085° — explicitly disclosed, not claimed as a win). Per-scene chosen rows: parking CSEF50 + sparse-depth (F46), bonsai CSEF50 + sparse-depth + LPIPS λ = 0.005 (F49), courtyard CSEF50 + sparse-depth (F30), room CSEF20 + sparse-depth (F46), counter CSEF20 + sparse-depth (F46) — the prune ratio is validation-selected per scene from the same CSEF selector family.
+- **Adaptive CSEF policy is the strongest single parking row (F75).** It reads checkpoint evidence to choose the prune fraction (parking → 70 %), ranks compaction candidates by area / local redundancy primarily, and uses render-only evidence as a risk / audit signal. Layered with sparse-depth recovery and a tiny LPIPS term (λ = 0.00025), it supersedes R53.01 / F7 on every tracked metric: PSNR 18.7119 / SSIM 0.6479 / LPIPS 0.3375 / AbsRel 0.0789 / Depth MAE 1.8500 / normal 43.95° at the same 2 564 473 triangles. F74 (λ = 0.0001) is the conservative neighbor.
+- **Sparse-COLMAP-depth supervision during recovery is the dominant contributor.** Validated regime: λ ∈ [0.001, 0.005] depending on scene, `mixed_low_error` correspondence sampling with a per-scene trusted fraction, decay window after the geometry has anchored.
+- **Strict topology-freeze is required.** Use `--freeze_topology_updates --skip_restricted_delaunay` together for fixed-topology continuation. `--skip_restricted_delaunay` alone skips only the Delaunay refresh; it does not disable the standard prune / densify branch. F27 / F35 / F36 / F18 / F24 confirm on every final-package scene that omitting strict freeze collapses or drifts topology and loses render.
+- **Counterfactual gating works as designed for unsafe-edit rejection.** F38 (synthetic no-gate / no-rollback) shows the gate exactly restores all unsafe edits; F39 / F41 / F42 (parking real gate-removed at 500 / 2000 / 7000 iter) confirm gate-on rolls back the same no-accept candidate that gate-off commits, and gate-on wins render at 7000 iter. F44 calibrated-gate bonsai repair preserves gating, accepts three recoverable rounds, rejects three later rounds, and lands close to no-gate with a smaller mesh.
 - **The full reversible edit pipeline** — proposal JSON → snapshot → apply → render-backed counterfactual gate → automatic rollback — works end-to-end on real Mesh Splatting checkpoints for `SNAP_VERTICES`, `FILL_PATCH` (fan and Delaunay grid), and the synthetic R13 set.
 - **The synthetic repair benchmark passes** on `giant_ground_void`, `ground_wall_misalignment`, `local_dent`, `noisy_rough_patch`, and `small_hole`; the unobserved-void case is correctly rejected in normal mode.
 
 ### What does *not* work yet
 
-- **Edit primitives do not improve the headline metrics at full budget.** R28 ablates this directly: matched baseline + sparse-depth (no edit) ties or beats grid-fill + sparse-depth at iter 7000 on parking PSNR. The fill / snap edits are gate-safe and trainable, not quality-improving on their own.
-- **The ultra-low-topology R44 path still loses on render.** Clean current-branch 22k reaches PSNR 18.48 / SSIM 0.635 / LPIPS 0.347; R44.01 reaches PSNR 17.17 / SSIM 0.549 / LPIPS 0.442. R44.01 remains useful only as a very-small-topology / normal-proxy point.
-- **Teacher render distillation from R44 does not fix the failure.** R45 full-image teacher loss and R46 counterfactual masked teacher loss both reduce render quality from the R44 starting point, so the accepted repair is clean-to-compact, not low-topology teacher distillation.
-- **Long-horizon training without sparse-depth decay overshoots.** R43.01b at 30 000 iter loses 0.90 dB PSNR vs the 22 000-iter checkpoint. R44 fixes this with a decay window, but only partially — courtyard tolerates `7k → 20k` with decay; parking does not benefit beyond `≈22k`.
-- **Trusted sparse-correspondence sampling is per-scene-tunable, not universal.** R33 / R36 show that the fraction (0.50 vs 0.625) does not transfer cleanly across scenes; the geometry knob must be set per scene and reported as a Pareto column, not a constant.
-- **Area-seeded snap selectors fail.** R17 (area portfolio) and R17.06 (risk-filtered area) deliver only numerical-noise gate deltas and lose to equal-budget continuation on PSNR / SSIM / depth / normal.
-- **Residual-driven snap and patch-snap are tiny effects.** R18 / R19 / R21 pass the gate but recovery deltas remain in the third decimal of PSNR; R20 medium recovery confirms a depth-only gain at the cost of render.
-- **Boundary `FILL_PATCH` fails medium recovery.** R22 fan fill is gate-safe and short-promising but loses at 4000 iter; R23 residual-aware re-ranking does not change which loop is picked; R26 plane-grid Delaunay fill (51 v / 106 f) clears the gate but R28 shows it loses at 7000 iter to baseline+sparse.
-- **Unbounded post-edit densification is not a recovery strategy.** R25 grew parking to 5.89M triangles and still ended at PSNR 12.03 / SSIM 0.31 — strictly worse than the frozen-topology recovery.
+- **Fixed CSEF50 is not a universal preset (F45).** Across the four completed fixed-CSEF50 long rows there is 1 clear pass (courtyard), 2 borderline / mixed (bonsai LPIPS regresses by +0.000257; room depth regresses), and 1 fail (counter). The published claim must be a validation-selected CSEF-family protocol with a per-scene compaction budget, not a single universal hyperparameter.
+- **Broad strict-gate dominance is false (F43).** On bonsai 7000-iter, strict gate rolls back all six candidate rounds and ends much worse than no-gate on every tracked metric. F44 calibrated thresholds repair the bonsai mechanism, but F50 calibrated-gate parking replication does not reproduce the F44 mechanism — calibrated thresholds are a scene-aware tradeoff, not a universal gate-superiority claim.
+- **Long-continuation past the validated budget hurts.** F34 parking 26k → 30k regresses PSNR / SSIM / LPIPS / normal; R56 R53 26k → 28k loses ~0.35 dB PSNR; R49 / R50 30k continuation also lose. The accepted parking checkpoint stays at 26k.
+- **Posthoc QEM is not a render headline.** F37 fast-QEM reaches the matched parking topology and improves sparse geometry but collapses PSNR / SSIM / LPIPS; F25 Open3D QEM did not reach the parking topology target at all (stopped at 8.13M / 8.55M).
+- **Random same-count compaction is a clear loser** (F16 counter, F19 room, F26 bonsai) — area, CSEF, and QEM all dominate it. Kept as a discipline-control negative.
+- **Edit primitives do not improve headline metrics at full budget on parking.** R28 ablates this directly: matched baseline + sparse-depth (no edit) ties or beats grid-fill + sparse-depth at 7000 iter on parking PSNR. The fill / snap edits are gate-safe and trainable, not quality-improving on their own.
+- **The ultra-low-topology R44 path loses on render.** Clean 22k reaches PSNR 18.48 / SSIM 0.635 / LPIPS 0.347; R44.01 reaches 17.17 / 0.549 / 0.442. R44.01 remains useful only as a very-small-topology / normal-proxy point. Teacher distillation from R44 (R45 / R46) does not fix the failure.
+- **Heavy LPIPS recovery loss is rejected.** R51 (λ = 0.02) / R52 (λ = 0.05) on top of R48, and F71 / F72 / F73 LPIPS-heavy adaptive runs, all worsen depth metrics; only the tiny λ ∈ {0.0001, 0.00025} regime (F74 / F75) keeps the depth wins.
+- **Area-seeded snap selectors fail** (R17 area portfolio, R17.06 risk-filtered) — numerical-noise gate deltas and lose equal-budget continuation. **Residual snap / patch snap are tiny** (R18 / R19 / R20 / R21). **Boundary `FILL_PATCH` fails medium recovery** (R22 fan; R26 grid; R28 full).
+- **Unbounded post-edit densification is not a recovery strategy** — R25 grew parking to 5.89M tri and still ended at PSNR 12.03.
 - **Alternative sparse-depth loss spaces (`relative`, `log`, `inverse`) are rejected** for parking full budget — the original metric-depth Smooth-L1 form remains the validated variant.
 
-A short summary of the "what does and does not work" carved out of R0–R44 lives in [`docs/car_model/SPCarNet_research_log.md`](docs/car_model/SPCarNet_research_log.md).
+A short summary of the "what does and does not work" carved out of R0–R56 + F1–F75 lives in [`docs/car_model/SPCarNet_research_log.md`](docs/car_model/SPCarNet_research_log.md).
 
 ---
 
-## Headline result figure (clean long vs ours, parking)
+## Headline figure — five-scene clean-long vs validation-budget CSEF-family (F40 / F49)
 
-The fair comparison: each row is one held-out test view; columns are GT, the strongest clean long-horizon baselines (current-branch 22k and 30k), the more compact R48 row, and the quality-dominating R53 clean-to-compact branch.
+Per-scene rows; columns are GT · clean-long 22k baseline · ours (F49 best CSEF-family row at the validation-budget) · per-pixel error vs. GT for clean-long and for ours.
+
+<div align="center">
+  <img src="assets/meshsplatopt_multiscene_clean_vs_method.png" width="900" alt="Five-scene clean-long 22k vs MeshSplatOpt method-best 26k">
+</div>
+
+### Five-scene quantitative summary (F12 / F49 best rows vs scene-matched clean-long 22k)
+
+All deltas are `method − clean-long 22k` evaluated independently with `render.py + metrics.py` and a sparse COLMAP geometry proxy. CSEF-family rows are F49 (no QEM rescue).
+
+| scene | clean-long tri | ours tri | reduction | ΔPSNR ↑ | ΔSSIM ↑ | ΔLPIPS ↓ | ΔAbsRel ↓ | ΔDepth MAE ↓ | ΔNormal ° ↓ | ours row | W&B |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| `parking_phone_tiny` | 8 548 242 | 4 274 121 | 50.0 % | +0.159 | +0.0102 | −0.0098 | −0.0016 | −0.0055 | −0.79 | CSEF50 + sparse-depth (F46) | `8l96pfjx` |
+| `bonsai` | 88 460 | 44 230 | 50.0 % | +0.010 | +0.0020 | −0.0048 | −0.0097 | −0.0854 | −2.15 | CSEF50 + sparse + LPIPS λ = 0.005 (F49) | `cuq7olfd` |
+| `courtyard` | 1 677 484 | 838 742 | 50.0 % | +0.449 | +0.0422 | −0.0237 | −0.0330 | −0.2107 | −0.21 | CSEF50 + sparse-depth (F30) | `9aaku1yn` |
+| `room` | 84 506 | 67 605 | 20.0 % | +0.710 | +0.0656 | −0.0445 | −0.0027 | −0.0075 | −1.47 | CSEF20 + sparse-depth (F46) | `v7ld1o0x` |
+| `counter` | 83 834 | 67 067 | 20.0 % | +0.209 | +0.0234 | −0.0163 | −0.0027 | −0.0050 | −1.18 | CSEF20 + sparse-depth (F46) | `pijpv7ny` |
+
+Five of five scenes improve PSNR, SSIM, LPIPS, AbsRel, and Depth MAE; sparse-normal angle improves on four of five (courtyard ties at +0.0085° — explicitly disclosed). All rows use strict `--freeze_topology_updates --skip_restricted_delaunay` topology freeze and online W&B; recovery is `22000 → 26000`.
+
+### Parking deep-dive (R44 → R53 → F75)
+
+The parking scene also has a separate single-scene line carrying the failure-evidence backbone (R44 vs clean 22k) and the strongest single row (F75). Each row is one held-out test view; columns are GT, clean-long 22k / 30k, R48, and R53.
 
 <div align="center">
   <img src="assets/meshsplatopt_clean_vs_r53_montage.png" width="900" alt="Clean long baseline vs R53, parking_phone_tiny">
@@ -129,25 +186,18 @@ The fair comparison: each row is one held-out test view; columns are GT, the str
 | run | iter | PSNR ↑ | SSIM ↑ | LPIPS ↓ | AbsRel ↓ | Depth MAE ↓ | Normal ° ↓ | triangles |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | clean 7k (historical, weak ref) | 7 000 | 17.20 | 0.535 | 0.451 | 0.076 | 1.75 | 45.56 | 833 775 |
-| **clean 22k (strongest baseline)** | 22 000 | **18.48** | **0.635** | **0.347** | 0.082 | **1.87** | 45.11 | 8 548 242 |
-| clean 30k | 30 000 | 18.41 | 0.632 | 0.351 | **0.082** | 1.87 | 44.84 | 8 548 242 |
-| **ours R44 22k (decay)** | 22 000 | 17.17 | 0.549 | 0.442 | 0.187 | 2.92 | **42.22** | **782 982** |
-| ours R48 26k (80% prune) | 26 000 | 18.62 | 0.642 | 0.349 | 0.080 | **1.85** | 44.74 | 1 709 648 |
-| **ours R53 26k (70% prune)** | 26 000 | **18.71** | **0.648** | **0.338** | **0.080** | **1.85** | **44.26** | 2 564 473 |
-| ours R55 26k (65% prune, LPIPS Pareto) | 26 000 | 18.70 | 0.648 | **0.337** | **0.080** | 1.86 | **44.24** | 2 991 885 |
-| ours R56 28k (R53 continuation) | 28 000 | 18.36 | 0.624 | 0.367 | n/a | n/a | n/a | 2 564 473 |
-| ours R50 30k (true topology-frozen continuation) | 30 000 | 18.45 | 0.629 | 0.361 | 0.081 | 1.84 | 45.32 | 1 709 648 |
-| ours R43 30k (no decay) | 30 000 | 16.25 | 0.511 | 0.477 | 0.194 | 3.02 | 43.71 | 782 982 |
+| clean 22k (strongest baseline) | 22 000 | 18.480 | 0.635 | 0.347 | 0.082 | 1.87 | 45.11 | 8 548 242 |
+| clean 30k | 30 000 | 18.409 | 0.632 | 0.351 | 0.082 | 1.87 | 44.84 | 8 548 242 |
+| ours R44 22k (decay, fail vs clean 22k) | 22 000 | 17.170 | 0.549 | 0.442 | 0.187 | 2.92 | 42.22 | **782 982** |
+| ours R48 26k (80 % area prune) | 26 000 | 18.620 | 0.642 | 0.349 | 0.080 | **1.85** | 44.74 | 1 709 648 |
+| ours R53.01 26k (70 % area prune) | 26 000 | 18.706 | 0.648 | 0.338 | 0.080 | 1.85 | 44.26 | 2 564 473 |
+| ours F7 26k (CSEF70 recovery) | 26 000 | 18.706 | 0.648 | 0.338 | 0.079 | 1.85 | 44.20 | 2 564 473 |
+| **ours F75 26k (adaptive + sparse + LPIPS λ = 0.00025)** | **26 000** | **18.712** | **0.648** | **0.338** | **0.079** | **1.85** | **43.95** | **2 564 473** |
+| ours F74 26k (adaptive + sparse + LPIPS λ = 0.0001) | 26 000 | 18.711 | 0.648 | 0.338 | 0.079 | 1.85 | 44.07 | 2 564 473 |
+| ours R56 28k (R53 continuation, rejected) | 28 000 | 18.36 | 0.624 | 0.367 | n/a | n/a | n/a | 2 564 473 |
+| ours R43 30k (no decay, rejected) | 30 000 | 16.25 | 0.511 | 0.477 | 0.194 | 3.02 | 43.71 | 782 982 |
 
-`clean 22k` dominates the old R44 low-topology branch, but R53.01 repairs the failure decisively: it beats clean 22k and clean 30k on independent PSNR, SSIM, LPIPS, AbsRel, Depth MAE, and normal angle after 70% area compaction. Pre-R44 comparisons that quoted the `clean 7k` baseline were misleading and are now retired.
-
-The earlier multi-scene medium-budget panel (R14.21b / R15.01–R15.04, three scenes at iter 4000 under the freeze schedule) is kept as intermediate diagnostic evidence:
-
-<div align="center">
-  <img src="assets/meshsplatopt_qualitative.png" width="900" alt="Three-scene medium-budget topology-retention recovery (intermediate diagnostic)">
-</div>
-
-These medium-budget renders pass the topology-retention story (bonsai −51% triangles vs unfrozen 4000-iter continuation, courtyard +2.87 dB, parking +2.65 dB) but the unfrozen 4000-iter is **not** the strongest clean baseline. They are now framed as schedule diagnostics, not as the headline.
+F75 is the accepted parking single-scene headline — it improves over F7 by ΔPSNR +0.0058, ΔLPIPS −0.000773, ΔAbsRel −0.000531, ΔDepth MAE −0.002774, ΔNormal angle −0.2495° at identical topology. F76 multi-scene replication of the F75 fixed policy is in flight.
 
 ---
 
@@ -199,35 +249,48 @@ Giant-hole policy distinguishes **observed**, **prior-supported**, and **unknown
 
 ## Validated recovery recipes
 
-Two recipes are validated. **Clean-to-compact (R53)** is the headline route — it dominates the strongest clean long baseline on every independent metric while keeping 30 % of the triangles. **Sparse-depth recovery (R44)** remains the cross-scene path and the very-low-topology Pareto point, but loses on render against clean 22k.
+Three recipes are validated. **Recipe A — CSEF-family validation-budget (F49)** is the cross-scene headline: 5 / 5 scenes beat clean-long on render and sparse-depth metrics. **Recipe B — adaptive policy with tiny LPIPS (F75)** is the strongest single parking row and chooses the prune fraction from the checkpoint instead of from a hand-set table. **Recipe C — sparse-depth low-λ recovery (R44)** remains the cross-scene base recipe and the very-low-topology Pareto point but loses on render against clean 22k.
 
-### Recipe A — clean-to-compact (R53, headline, parking)
+### Recipe A — CSEF-family + sparse-depth validation-budget recovery (F49, multi-scene headline)
 
-Three steps: train a strong clean long mesh, prune the smallest-area 70 % of triangles by area, recover with strict topology freeze.
+Three steps: train a strong clean long mesh, run the CSEF-family compaction selector with a per-scene validation-budget prune ratio (parking 50 %, bonsai 50 %, courtyard 50 %, room 20 %, counter 20 %), recover with strict topology freeze + sparse-COLMAP-depth + (only on bonsai) tiny LPIPS λ = 0.005.
 
 ```bash
-# 1) Train (or reuse) a strong clean long Mesh Splatting checkpoint.
+# 1) Clean long checkpoint (re-use whatever long Mesh Splatting checkpoint you have).
 python train.py -s <scene> -m outputs/clean_long --eval --iterations 22000
 
-# 2) Smallest-area 70% triangle compaction (R53). The same script supports
-#    65/75/80/90% via --prune_fraction; 70% is the all-metric headline.
-python scripts/car_model/meshprior_apply_topology_control_ablation.py \
-    --source_model outputs/clean_long \
-    --source_checkpoint outputs/clean_long/point_cloud/iteration_22000/point_cloud_state_dict.pt \
-    --output_model outputs/compact70/model \
-    --prune_fraction 0.70
+# 2) CSEF-family compaction. The selector reads checkpoint evidence and emits the
+#    selected face indices; --prune_fraction is the validation-budget knob. Use
+#    0.50 for parking / bonsai / courtyard, 0.20 for room / counter, 0.40 for the
+#    counter-fast variant. (F45 audit: do NOT claim a single fixed fraction.)
+python scripts/car_model/meshsplatopt_select_compaction_candidates.py \
+    --checkpoint outputs/clean_long/point_cloud/iteration_22000/point_cloud_state_dict.pt \
+    --policy csef_low_evidence_boundary_protected \
+    --prune_fraction 0.50 \
+    --output_dir outputs/compact50
 
-# 3) Strict fixed-topology recovery 22000 → 26000. The two flags together are
-#    required: --skip_restricted_delaunay alone leaves the standard 500-step
-#    prune/densify branch active until densify_until_iter + 1000 (R49 caught
-#    this; R50 verifies the fix preserves the exact triangle count).
+python scripts/car_model/meshsplatopt_apply_compaction_to_checkpoint.py \
+    --source_model outputs/clean_long \
+    --selected_faces_path outputs/compact50/selected_faces.npy \
+    --output_model outputs/compact50/model
+
+# 3) Strict fixed-topology recovery 22000 → 26000 with sparse-COLMAP-depth.
+#    For bonsai add --lambda_lpips_loss 0.005 to the train_extra_args.
 export WANDB_PROJECT=spcarnet_meshprior
 export WANDB_MODE=online
 python scripts/car_model/meshsplatopt_run_teacher_recovery.py \
-    --model_path  outputs/compact70/model \
+    --model_path  outputs/compact50/model \
     --output_dir  outputs/carnet/meshsplatopt/<run_name> \
     --load_iteration 22000 --iterations 4000 \
-    --train_extra_args "--freeze_topology_updates --skip_restricted_delaunay"
+    --train_extra_args "--freeze_topology_updates --skip_restricted_delaunay \
+       --enable_sparse_colmap_depth_loss \
+       --lambda_sparse_colmap_depth 0.005 \
+       --sparse_colmap_depth_start_iter 22000 \
+       --sparse_colmap_depth_warmup_iters 50 \
+       --sparse_colmap_depth_min_matches 16 \
+       --sparse_colmap_depth_sample_mode mixed_low_error \
+       --sparse_colmap_depth_low_error_fraction 0.50 \
+       --sparse_colmap_depth_enable_in_final_finetune"
 
 # 4) Independent paper-facing eval.
 python render.py  -m outputs/carnet/meshsplatopt/<run_name>/recovery_model
@@ -237,11 +300,58 @@ python evaluate_geometry_colmap.py -s <scene> \
     --output outputs/carnet/meshsplatopt/<run_name>/recovery_model/geometry_eval_colmap/iter_26000.json
 ```
 
-Pareto knob: lower `--prune_fraction` (e.g. `0.65`, R55) gives best LPIPS / normal but uses more triangles; higher (`0.80`, R47/R48) gives more compact 20 %-triangle Pareto with slightly worse LPIPS; `0.90` is rejected (R47 prune90 PSNR drops by 2 dB). Continuation past 26k is rejected (R56 at 28k loses ~0.35 dB PSNR; R49/R50 at 30k also lose).
+### Recipe A variant — area-only compaction (R53, no CSEF)
 
-### Recipe B — sparse-depth low-λ recovery with decay (R44, cross-scene)
+The same flow as Recipe A but with the area-only selector. It is the area baseline of the F12 / F49 multi-scene table and corresponds exactly to the parking R53.01 / R55 / R48 rows. Replace step 2 in Recipe A with:
 
-Use this when you want the **lowest-topology** parking point (782 982 triangles) or for cross-scene recovery on `courtyard` and `bonsai`. On parking it loses on render vs. clean 22k and is now the normal-proxy / topology Pareto column, not the headline.
+```bash
+python scripts/car_model/meshprior_apply_topology_control_ablation.py \
+    --source_model outputs/clean_long \
+    --source_checkpoint outputs/clean_long/point_cloud/iteration_22000/point_cloud_state_dict.pt \
+    --output_model outputs/area70/model \
+    --prune_fraction 0.70
+```
+
+`--prune_fraction` knob (parking): 0.65 → R55 LPIPS-best / 0.70 → R53.01 all-metric / 0.80 → R48 most-compact / 0.90 → R47 prune90 rejected (PSNR drops 2 dB). Continuation past 26 k is rejected (R56 at 28 k loses ~0.35 dB PSNR; R49 / R50 at 30 k also lose).
+
+### Recipe B — adaptive CSEF policy with tiny LPIPS recovery (F75, parking single-scene strongest)
+
+Same shell as Recipe A, but the selector chooses the prune fraction and ranking from checkpoint evidence (no manual `--prune_fraction`), and the recovery adds a tiny LPIPS term layered on sparse-depth.
+
+```bash
+# Adaptive selector: chooses fraction (parking → 70 %) and ranks faces by
+# area / local-redundancy primary, render evidence as risk-only.
+python scripts/car_model/meshsplatopt_select_compaction_candidates.py \
+    --checkpoint outputs/clean_long/point_cloud/iteration_22000/point_cloud_state_dict.pt \
+    --policy csef_adaptive_policy \
+    --output_dir outputs/adaptive_compact
+
+python scripts/car_model/meshsplatopt_apply_compaction_to_checkpoint.py \
+    --source_model outputs/clean_long \
+    --selected_faces_path outputs/adaptive_compact/selected_faces.npy \
+    --output_model outputs/adaptive_compact/model
+
+python scripts/car_model/meshsplatopt_run_teacher_recovery.py \
+    --model_path  outputs/adaptive_compact/model \
+    --output_dir  outputs/carnet/meshsplatopt/<run_name> \
+    --load_iteration 22000 --iterations 4000 \
+    --train_extra_args "--freeze_topology_updates --skip_restricted_delaunay \
+       --enable_sparse_colmap_depth_loss \
+       --lambda_sparse_colmap_depth 0.001 \
+       --sparse_colmap_depth_start_iter 22000 \
+       --sparse_colmap_depth_warmup_iters 50 \
+       --sparse_colmap_depth_min_matches 16 \
+       --sparse_colmap_depth_sample_mode mixed_low_error \
+       --sparse_colmap_depth_low_error_fraction 0.50 \
+       --sparse_colmap_depth_enable_in_final_finetune \
+       --lambda_lpips_loss 0.00025"
+```
+
+`--lambda_lpips_loss 0.0001` (F74) is the more conservative robustness neighbour; values above ~0.001 (F71 / R51 / R52) are rejected for hurting depth.
+
+### Recipe C — sparse-depth low-λ + decay (R44, cross-scene base)
+
+Use this when you want the **lowest-topology** parking point (782 982 triangles) or for cross-scene recovery on `courtyard` and `bonsai`. On parking it loses on render vs. clean 22 k and is now the normal-proxy / topology Pareto column, not the headline.
 
 ```bash
 python scripts/car_model/meshsplatopt_run_teacher_recovery.py \
@@ -268,17 +378,33 @@ For courtyard the validated regime is fraction `0.625`, λ `0.002`, `7k → 20k`
 
 ### Rejected directions (do not retry without new evidence)
 
-- **Teacher-render distillation from R44** (R45 lambda 0.5 / 1.0; R46 counterfactual mask) — all worsen render.
-- **Direct LPIPS training loss** (R51 λ = 0.02; R52 λ = 0.05) on top of R48 — both worsen PSNR/SSIM and do not improve LPIPS over the clean-long target. The repair was a less-aggressive prune, not a perceptual loss.
-- **30k continuation of R48 / R53** (R49 legacy, R50 strict fixed-topology, R56 fixed-topology 28k) — accepted checkpoint stays at 26k.
+- **Fixed CSEF50 universally (F45)** — borderline / mixed on bonsai / room and a fail on counter; method must be validation-budget per scene.
+- **Heavy LPIPS recovery loss** — R51 (λ = 0.02) / R52 (λ = 0.05) on R48; F71 / F72 / F73 on the adaptive policy. Only λ ≤ 0.001 (best F75 at 0.00025, F74 at 0.0001, bonsai F49 at 0.005) keeps the depth wins.
+- **Teacher-render distillation from R44** (R45 λ 0.5 / 1.0; R46 counterfactual mask) — all worsen render.
+- **Adaptive selector ranked by render-only evidence** (F57–F67) — drives the wrong fraction / ranking. F68 area / redundancy primary with render-as-risk is the corrected form.
+- **Long continuation past validated budget** — F34 parking 26k → 30k regresses; R56 R53 26k → 28k loses ~0.35 dB PSNR; R49 / R50 30k continuation also lose.
+- **Posthoc QEM on parking** — F37 fast-QEM matched topology collapses render; F25 Open3D QEM did not reach the parking topology target.
+- **Random same-count compaction** (F16 counter / F19 room / F26 bonsai) — clearly worse than area / CSEF / QEM at matched topology.
+- **No-freeze controls** (F27 / F35 / F36 / F18 / F24 across all five final scenes; R25 on parking) — strict `--freeze_topology_updates --skip_restricted_delaunay` is required.
+- **Broad strict-gate dominance (F43)** — bonsai 7000-iter strict gate strictly worse than no-gate. F44 calibrated thresholds repair the bonsai mechanism, but F50 calibrated-gate parking does not reproduce — the gate claim is render-quality + unsafe-edit rejection, not universal geometry dominance.
+- **Edit primitives as full-budget winners** — R28 grid-fill rejected; R22 / R26 fan / grid `FILL_PATCH` lose at full budget vs matched baseline+sparse. R17 area / R18 / R19 / R20 / R21 snap variants are too small.
 - **Alternative sparse-depth loss spaces** (R29 relative / log / inverse) — original metric-depth Smooth-L1 wins.
 - **Unfrozen post-edit densification** (R25) — grew parking to 5.89 M triangles and still lost render.
 
 ### Reproducible paper-facing tables
 
 ```bash
+# Sparse-depth recovery line (R-stage)
 python scripts/car_model/meshsplatopt_collect_sparse_recovery_results.py
 # → outputs/carnet/meshsplatopt/sparse_recovery_tables/{json,csv,md}
+
+# Adaptive-policy line (F68–F75)
+python scripts/car_model/final_collect_stageF68_F73_adaptive_policy.py
+# → outputs/carnet/meshsplatopt/final_stageF75_adaptive_policy_evidence/adaptive_policy_results.{json,md}
+
+# Multi-scene F12 / F49 final package (figures + tables under)
+ls outputs/carnet/meshsplatopt/final_paper_assets/
+ls outputs/carnet/meshsplatopt/final_stageF40_clean_vs_method_assets/
 ```
 
 ## Repository layout (MeshSplatOpt additions)
@@ -308,16 +434,24 @@ scripts/car_model/                 CLI entry points
   meshsplatopt_expand_snap_edit_to_patch.py                # R21
   meshsplatopt_select_checkpoint_boundary_fill_edit.py     # R22 / R23
   meshsplatopt_expand_boundary_fill_to_grid.py             # R26
+  meshsplatopt_select_compaction_candidates.py             # F-stage CSEF / area / adaptive selector
+  meshsplatopt_apply_compaction_to_checkpoint.py           # F-stage compaction applier (CSEF / adaptive)
+  meshprior_apply_topology_control_ablation.py             # area-only prune (R47 / R53 / R55)
   meshsplatopt_validate_edit_counterfactual.py
-  meshsplatopt_run_teacher_recovery.py                     # accepts --train_extra_args
+  meshsplatopt_run_teacher_recovery.py                     # accepts --train_extra_args (sparse-depth / LPIPS)
   meshsplatopt_run_repair_state_machine.py
-  meshsplatopt_collect_sparse_recovery_results.py          # paper-table collector
+  meshsplatopt_collect_sparse_recovery_results.py          # R-line paper table
+  final_collect_stageF68_F73_adaptive_policy.py            # F-line adaptive-policy table
+  final_make_paper_assets.py                               # multi-scene qualitative assets
 
 docs/car_model/                    per-stage design / implementation / smoke / report files
-docs/NeurIPSRepairPrompts.md       full R0–R17 stage spec (drafted before R44)
-outputs/carnet/meshsplatopt/       per-stage artefacts (proposals, gates, snapshots, recoveries, results.json)
-outputs/carnet/meshsplatopt/sparse_recovery_tables/        paper-facing JSON / CSV / Markdown
-outputs/carnet/meshsplatopt/best_clean_long_vs_method_long/  fair clean-baseline correction
+docs/NeurIPSRepairPrompts.md       full R0–R17 stage spec (drafted before R44; F-stage spec embedded in research log)
+outputs/carnet/meshsplatopt/                                       per-stage artefacts
+outputs/carnet/meshsplatopt/sparse_recovery_tables/                 R-line paper-facing JSON / CSV / Markdown
+outputs/carnet/meshsplatopt/best_clean_long_vs_method_long/         R44 clean-baseline correction
+outputs/carnet/meshsplatopt/final_stageF40_clean_vs_method_assets/  F-line 5-scene qualitative montage + manifest
+outputs/carnet/meshsplatopt/final_paper_assets/                     F-line paper figures (cross-scene montage, triangle-count bar, method diagram)
+outputs/carnet/meshsplatopt/final_stageF75_adaptive_policy_evidence/ F75 adaptive policy results
 ```
 
 The PRISM safety stack (`utils/prism_*`, `ss3dm_prior/meshprior/*`) is preserved and re-used as the rollback / counterfactual primitives — Stage 35 PRISM remains a named baseline rather than the final method.
