@@ -105,14 +105,14 @@ CLEAN_MODELS = {
 }
 
 
-def _build_specs(stage_group: str, policy_tag: str, scenes: list[str]) -> list[SceneSpec]:
+def _build_specs(stage_group: str, policy_tag: str, scenes: list[str], clean_iteration: int, method_iteration: int) -> list[SceneSpec]:
     return [
         SceneSpec(
             scene,
             clean_model,
-            22000,
+            clean_iteration,
             f"outputs/carnet/meshsplatopt/{stage_group}/{scene}/{policy_tag}/recovery_model",
-            26000,
+            method_iteration,
             "",
         )
         for scene, clean_model in CLEAN_MODELS.items()
@@ -252,11 +252,11 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
-def _write_md(path: Path, rows: list[Row], stage_id: str) -> None:
+def _write_md(path: Path, rows: list[Row], stage_id: str, clean_iteration: int, method_iteration: int) -> None:
     lines = [
         f"# Final Stage {stage_id} Fixed Adaptive Policy Multiscene Validation",
         "",
-        "All rows use the same policy: `csef_adaptive_policy` compaction, strict topology freeze, sparse-depth lambda `0.001`, LPIPS lambda `0.00025`, and `22000->26000` recovery.",
+        f"All rows use the same policy path and are compared against clean iteration `{clean_iteration}`. Method metrics are collected at iteration `{method_iteration}`.",
         "",
         "| scene | W&B | adaptive prune | triangles | reduction | PSNR | SSIM | LPIPS | AbsRel | DepthMAE | Normal | dPSNR | dSSIM | dLPIPS | dAbsRel | dDepth | dNormal | topology | status |",
         "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
@@ -291,18 +291,20 @@ def main() -> int:
     parser.add_argument("--stage-group", default="")
     parser.add_argument("--policy-tag", default="adaptive_f75_policy")
     parser.add_argument("--scenes", default=",".join(CLEAN_MODELS.keys()))
+    parser.add_argument("--clean-iteration", type=int, default=22000)
+    parser.add_argument("--method-iteration", type=int, default=26000)
     parser.add_argument("--out-dir", default="")
     args = parser.parse_args()
     stage_group = args.stage_group or f"final_stage{args.stage_id}_fixed_adaptive_policy_multiscene"
     out_dir = ROOT / (args.out_dir or f"outputs/carnet/meshsplatopt/{stage_group}")
     out_dir.mkdir(parents=True, exist_ok=True)
     scenes = [scene.strip() for scene in args.scenes.split(",") if scene.strip()]
-    specs = _build_specs(stage_group, args.policy_tag, scenes)
+    specs = _build_specs(stage_group, args.policy_tag, scenes, args.clean_iteration, args.method_iteration)
     rows = [_row(spec) for spec in specs]
     payload = [row.to_dict() for row in rows]
     (out_dir / "fixed_adaptive_policy_multiscene_results.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     _write_csv(out_dir / "fixed_adaptive_policy_multiscene_results.csv", payload)
-    _write_md(out_dir / "fixed_adaptive_policy_multiscene_results.md", rows, args.stage_id)
+    _write_md(out_dir / "fixed_adaptive_policy_multiscene_results.md", rows, args.stage_id, args.clean_iteration, args.method_iteration)
     print(f"Wrote {len(rows)} rows to {out_dir}; available={sum(r.status != 'PENDING_OR_MISSING_EVAL' for r in rows)}")
     return 0
 

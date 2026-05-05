@@ -15,19 +15,15 @@ ROOT = Path(__file__).resolve().parents[2]
 SCENES = {
     "bonsai": {
         "clean": "outputs/carnet/meshsplatopt/finalF3_bonsai_clean_long_9000to22000",
-        "method": "outputs/carnet/meshsplatopt/final_stageF82_fixed_adaptive_policy_multiscene/bonsai/adaptive_global_policy_v5_seed0/recovery_model",
     },
     "courtyard": {
         "clean": "outputs/carnet/meshsplatopt/finalF3_courtyard_clean_long_9000to22000",
-        "method": "outputs/carnet/meshsplatopt/final_stageF82_fixed_adaptive_policy_multiscene/courtyard/adaptive_global_policy_v5_seed0/recovery_model",
     },
     "room": {
         "clean": "outputs/carnet/meshsplatopt/finalF9_room_clean_long_9000to22000",
-        "method": "outputs/carnet/meshsplatopt/final_stageF82_fixed_adaptive_policy_multiscene/room/adaptive_global_policy_v5_seed0/recovery_model",
     },
     "counter": {
         "clean": "outputs/carnet/meshsplatopt/finalF10_counter_clean_long_9000to22000",
-        "method": "outputs/carnet/meshsplatopt/final_stageF82_fixed_adaptive_policy_multiscene/counter/adaptive_global_policy_v5_seed0/recovery_model",
     },
 }
 
@@ -86,9 +82,9 @@ def _rel(path: Path, base: Path) -> str:
     return os.path.relpath(path, start=base)
 
 
-def _scene_rows(scene: str, clean_root: Path, method_root: Path) -> list[dict[str, Any]]:
-    clean_iter = "ours_22000"
-    method_iter = "ours_26000"
+def _scene_rows(scene: str, clean_root: Path, method_root: Path, clean_iteration: int, method_iteration: int) -> list[dict[str, Any]]:
+    clean_iter = f"ours_{clean_iteration}"
+    method_iter = f"ours_{method_iteration}"
     clean_render = clean_root / "test" / clean_iter / "renders"
     clean_gt = clean_root / "test" / clean_iter / "gt"
     method_render = method_root / "test" / method_iter / "renders"
@@ -115,11 +111,11 @@ def _scene_rows(scene: str, clean_root: Path, method_root: Path) -> list[dict[st
     return rows
 
 
-def _write_md(path: Path, selected: list[dict[str, Any]], all_rows: list[dict[str, Any]]) -> None:
+def _write_md(path: Path, selected: list[dict[str, Any]], all_rows: list[dict[str, Any]], label: str) -> None:
     lines = [
-        "# F82 Qualitative Gallery Manifest",
+        f"# {label} Qualitative Gallery Manifest",
         "",
-        "This manifest aligns the strongest clean-long baseline render with the F82 fixed-policy method render at identical held-out test views.",
+        f"This manifest aligns the strongest clean-long baseline render with the {label} method render at identical held-out test views.",
         "Views are selected mechanically per scene from per-view PSNR deltas: worst, median, and best method-vs-clean views, plus evenly spaced extras when requested.",
         "",
         "## Scene Coverage",
@@ -152,7 +148,7 @@ def _write_md(path: Path, selected: list[dict[str, Any]], all_rows: list[dict[st
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _write_html(path: Path, selected: list[dict[str, Any]]) -> None:
+def _write_html(path: Path, selected: list[dict[str, Any]], label: str) -> None:
     def img(src: str) -> str:
         return f'<img src="{_rel(Path(src), path.parent)}" loading="lazy">'
 
@@ -164,7 +160,7 @@ def _write_html(path: Path, selected: list[dict[str, Any]]) -> None:
             "<div class='grid'>"
             f"<figure>{img(row['gt'])}<figcaption>GT</figcaption></figure>"
             f"<figure>{img(row['clean_render'])}<figcaption>clean 22k</figcaption></figure>"
-            f"<figure>{img(row['method_render'])}<figcaption>F82 fixed policy</figcaption></figure>"
+            f"<figure>{img(row['method_render'])}<figcaption>{label}</figcaption></figure>"
             "</div>"
             "</section>"
         )
@@ -172,7 +168,7 @@ def _write_html(path: Path, selected: list[dict[str, Any]]) -> None:
 <html>
 <head>
 <meta charset="utf-8">
-<title>F82 qualitative gallery</title>
+<title>""" + label + """ qualitative gallery</title>
 <style>
 body { font-family: system-ui, sans-serif; margin: 24px; background: #f6f6f4; color: #1b1b1b; }
 h1 { font-size: 24px; margin-bottom: 8px; }
@@ -185,16 +181,21 @@ figcaption { font-size: 13px; margin-top: 6px; color: #555; }
 </style>
 </head>
 <body>
-<h1>F82 fixed-policy qualitative gallery</h1>
-<p>Each row compares GT, strongest clean-long baseline, and F82 on the same held-out view.</p>
+<h1>""" + label + """ qualitative gallery</h1>
+<p>Each row compares GT, strongest clean-long baseline, and """ + label + """ on the same held-out view.</p>
 """ + "\n".join(rows) + "\n</body>\n</html>\n"
     path.write_text(html, encoding="utf-8")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build a fair clean-long vs F82 qualitative gallery.")
+    parser = argparse.ArgumentParser(description="Build a fair clean-long vs method qualitative gallery.")
     parser.add_argument("--scenes", default=",".join(SCENES.keys()))
     parser.add_argument("--per-scene", type=int, default=5)
+    parser.add_argument("--stage-group", default="final_stageF82_fixed_adaptive_policy_multiscene")
+    parser.add_argument("--policy-tag", default="adaptive_global_policy_v5_seed0")
+    parser.add_argument("--clean-iteration", type=int, default=22000)
+    parser.add_argument("--method-iteration", type=int, default=26000)
+    parser.add_argument("--label", default="F82")
     parser.add_argument("--out-dir", default="outputs/carnet/meshsplatopt/final_stageF82_qualitative_gallery")
     args = parser.parse_args()
     out = ROOT / args.out_dir
@@ -203,13 +204,14 @@ def main() -> int:
     selected: list[dict[str, Any]] = []
     for scene in [item.strip() for item in args.scenes.split(",") if item.strip()]:
         spec = SCENES[scene]
-        rows = _scene_rows(scene, ROOT / spec["clean"], ROOT / spec["method"])
+        method = ROOT / "outputs/carnet/meshsplatopt" / args.stage_group / scene / args.policy_tag / "recovery_model"
+        rows = _scene_rows(scene, ROOT / spec["clean"], method, args.clean_iteration, args.method_iteration)
         all_rows.extend(rows)
         selected.extend(_pick_views(rows, args.per_scene))
     (out / "all_views.json").write_text(json.dumps(all_rows, indent=2) + "\n", encoding="utf-8")
     (out / "selected_views.json").write_text(json.dumps(selected, indent=2) + "\n", encoding="utf-8")
-    _write_md(out / "gallery_manifest.md", selected, all_rows)
-    _write_html(out / "gallery.html", selected)
+    _write_md(out / "gallery_manifest.md", selected, all_rows, args.label)
+    _write_html(out / "gallery.html", selected, args.label)
     print(f"Wrote qualitative gallery to {out}")
     return 0
 

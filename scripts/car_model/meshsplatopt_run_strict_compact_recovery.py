@@ -114,6 +114,32 @@ def _train_args(args: argparse.Namespace) -> list[str]:
                 str(args.lpips_max_side),
             ]
         )
+    if args.teacher_render_lambda > 0.0:
+        cmd.extend(
+            [
+                "--enable_teacher_render_loss",
+                "--teacher_render_dir",
+                args.teacher_render_dir,
+                "--lambda_teacher_render",
+                str(args.teacher_render_lambda),
+                "--teacher_render_dssim",
+                str(args.teacher_render_dssim),
+                "--teacher_render_mask_mode",
+                args.teacher_render_mask_mode,
+                "--teacher_render_error_margin",
+                str(args.teacher_render_error_margin),
+                "--teacher_render_start_iter",
+                str(args.teacher_render_start_iter),
+                "--teacher_render_warmup_iters",
+                str(args.teacher_render_warmup_iters),
+                "--teacher_render_decay_start_iter",
+                str(args.teacher_render_decay_start_iter),
+                "--teacher_render_decay_end_iter",
+                str(args.teacher_render_decay_end_iter),
+                "--teacher_render_decay_final_mult",
+                str(args.teacher_render_decay_final_mult),
+            ]
+        )
     return cmd
 
 
@@ -175,6 +201,9 @@ def run(args: argparse.Namespace) -> int:
         "wandb_group": args.wandb_group,
         "wandb_name": args.wandb_name,
         "train_seed": int(args.train_seed),
+        "teacher_render_lambda": float(args.teacher_render_lambda),
+        "teacher_render_dir": args.teacher_render_dir,
+        "teacher_render_mask_mode": args.teacher_render_mask_mode,
         "execute": bool(args.execute),
         "topology_unchanged": None,
     }
@@ -238,6 +267,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lpips_start_iter", type=int, default=22000)
     parser.add_argument("--lpips_warmup_iters", type=int, default=300)
     parser.add_argument("--lpips_max_side", type=int, default=512)
+    parser.add_argument("--teacher_render_dir", default="")
+    parser.add_argument("--teacher_render_lambda", type=float, default=0.0)
+    parser.add_argument("--teacher_render_dssim", type=float, default=0.0)
+    parser.add_argument("--teacher_render_mask_mode", default="teacher_better")
+    parser.add_argument("--teacher_render_error_margin", type=float, default=0.0)
+    parser.add_argument("--teacher_render_start_iter", type=int, default=22000)
+    parser.add_argument("--teacher_render_warmup_iters", type=int, default=300)
+    parser.add_argument("--teacher_render_decay_start_iter", type=int, default=-1)
+    parser.add_argument("--teacher_render_decay_end_iter", type=int, default=-1)
+    parser.add_argument("--teacher_render_decay_final_mult", type=float, default=1.0)
     parser.add_argument("--wandb_project", default="spcarnet_meshprior")
     parser.add_argument("--wandb_group", default="finalF6_strict_recovery")
     parser.add_argument("--wandb_name", required=True)
