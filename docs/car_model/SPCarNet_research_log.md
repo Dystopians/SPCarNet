@@ -5028,3 +5028,25 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Real courtyard diagnostic**: running proposals on `best28600_train_policy` ECG produced `895` proposals and `0` accepted edits because real clusters lack the required surface/free-space certificates. This is the correct conservative behavior.
 
 **Decision**: `SCE9_SYNTHETIC_PASS_REAL_COURTYARD_ROLLBACK_ONLY`. Do not claim real local surgery benefit yet.
+
+---
+
+## 2026-05-06 - SCE10 ablation package and qualitative gallery builders
+
+**Goal**: implement the original SCE10 package in addition to the broader SCE16 reviewer-killer collector.
+
+**Implementation**: added `scripts/car_model/final_collect_stageSCE10_ablation_package.py`, `scripts/car_model/final_build_stageSCE10_tables.py`, `scripts/car_model/final_build_stageSCE10_qualitative_gallery.py`, and SCE10 report/checklist/claims docs.
+
+**Verification**: compileall passed. Initial courtyard package wrote `outputs/carnet/meshsplatopt/final_stageSCE10_ablation_package/courtyard_initial`, including CSV/JSON/Markdown table and HTML qualitative gallery builder output.
+
+**Decision**: `SCE10_PACKAGE_IMPLEMENTED_PARTIAL_EVIDENCE`. The package is usable, but final paper-quality evidence still needs matched full rows.
+
+---
+
+## 2026-05-06 - SCE11 release-ready method package
+
+**Goal**: provide method spec, experiment protocol, reproducibility checklist, paper outline, and final decision for drafting.
+
+**Documents**: added `final_stageSCE11_method_spec.md`, `final_stageSCE11_experiment_protocol.md`, `final_stageSCE11_reproducibility_checklist.md`, `final_stageSCE11_paper_outline.md`, and `final_stageSCE11_final_decision.md`.
+
+**Decision**: `READY_FOR_WORKSHOP_OR_ARXIV`. Not yet ready for a full top-conference claim without SCE8 multiscene completion or a real non-rollback surgery win.
