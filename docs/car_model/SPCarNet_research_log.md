@@ -4755,3 +4755,19 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Finding**: F95 is sparse-depth worse on the sampled test correspondences: AbsRel `0.324888045 -> 0.325786638` and Depth MAE `3.516864341 -> 3.533150427`. The failure is view/localized rather than uniform; two views improve while three regress.
 
 **Decision**: `SCE1_PASS`. Next is SCE2 train/calibration sentinel cache construction without test leakage.
+
+---
+
+## 2026-05-06 - Final SCE2 sparse-depth sentinel cache
+
+**Goal**: build a deterministic train/calibration sentinel cache for later one-sided parent rollback loss, without using test correspondences.
+
+**Implementation**: added `utils/sparse_depth_sentinel_cache.py`, `scripts/car_model/meshsplatopt_build_sparse_depth_sentinel_cache.py`, and a synthetic smoke test. The builder rejects `--split test`, keeps only parent-valid sentinels, and records `no_test_leakage=true`.
+
+**Smoke**: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_stageSCE2_sentinel_cache.py` passed.
+
+**Real cache**: courtyard train split, F82 parent 26000 with optional F95 candidate 27000, ran on GPU 7 and wrote `outputs/carnet/meshsplatopt/final_stageSCE2_sentinel_cache/courtyard/sentinel_cache.npz`.
+
+**Manifest summary**: `split=train`, `no_test_leakage=true`, `num_views=32`, `num_sentinels=13630`, `num_regressed_candidate=4985`, `seed=7`.
+
+**Decision**: `SCE2_PASS`. Next is SCE3 one-sided parent rollback sparse-depth loss.
