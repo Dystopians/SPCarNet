@@ -4986,3 +4986,17 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Verification**: compileall passed; CSV/JSON/Markdown/LaTeX table generation passed.
 
 **Decision**: `SCE16_COLLECTOR_PASS_INITIAL_TABLE_PARTIAL`. The ablation infrastructure is ready, but a final reviewer-killer table still needs matched no-sentinel, global-render-depth, vertex-anchor, freeze-only, QEM/delete-only, and LPIPS-heavy rows if those artifacts are not already present.
+
+---
+
+## 2026-05-06 - SCE17 paper method spec and claim lock
+
+**Goal**: freeze the paper-facing method description and prevent accidental overclaiming.
+
+**Document**: `docs/car_model/final_stageSCE17_paper_method_spec_and_claim_lock.md`.
+
+**Primary name**: `MeshSplatOpt-SCE`.
+
+**Claim lock**: current safe tier is Tier C. We can claim a rigorous evidence-sentinel recovery framework with ECG/planner/stress-test infrastructure and strong courtyard partial results. We cannot yet claim full all-metric F82 superiority, universal multiscene SCE transfer, or real-scene bidirectional surgery wins.
+
+**Decision**: `SCE17_CLAIM_LOCK_PASS`.
