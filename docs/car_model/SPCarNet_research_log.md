@@ -5282,3 +5282,42 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Per-view risk**: average scene metrics still pass all selected scenes, but the gallery audit finds one bonsai held-out view with negative PSNR delta (`-0.1971`).  The paper claim should therefore be average-render-metric improvement with explicit per-view risk disclosure, not universal per-view dominance.
 
 **Decision**: `ELA7_PROMOTED_DISTILLATION_NOT_PROMOTED`.  ELA7 is the promoted method for the selected-scene clean-baseline comparison.  ELA8 checkpoint distillation is currently a rejected path; the bottleneck is that training a persistent mesh-splat checkpoint from teacher renders loses the renderer-side evidence advantage on held-out views.
+
+---
+
+## 2026-05-06 - Strict multi-axis audit after RGB-only ELA7
+
+**Goal**: correct the success criterion.  The required claim is not only PSNR/SSIM/LPIPS; it must include sparse geometry proxies and triangle count, and it should include cross-scene/cross-dataset validation.
+
+**Implementation**: added `scripts/car_model/meshsplatopt_collect_strict_multiaxis_audit.py`.  The audit compares ELA7 and legacy compact-recovery rows against the strongest clean baseline for the selected clean9000 scenes, using PSNR, SSIM, LPIPS, sparse AbsRel, sparse Depth MAE, sparse normal angle, triangle count, and vertex count.  It also includes parking as an additional cross-dataset compact-recovery row.
+
+**Strict result**: selected-scene full-pass count is `0/8`.  ELA7 wins RGB but inherits clean geometry/topology, so it fails geometry/triangle superiority.  Legacy compact-recovery rows often reduce triangles but lose heavily against clean9000 RGB, and several lose geometry as well.  Parking remains a genuine compact-recovery full-pass row against its fair clean-long baseline (`+0.232340` PSNR, `+0.013107` SSIM, `-0.008653` LPIPS, `-0.003106` AbsRel, `-0.014383` Depth MAE, `-1.072729` normal, `70.00%` triangle reduction), but it does not solve the selected clean9000 scenes.
+
+**Artifacts**:
+- report: `docs/car_model/stageELA9_strict_multiaxis_audit_report.md`
+- JSON: `outputs/carnet/meshsplatopt/stageELA9_strict_multiaxis_audit/strict_multiaxis_audit.json`
+- selected-scene CSV: `outputs/carnet/meshsplatopt/stageELA9_strict_multiaxis_audit/selected_scene_strict_rows.csv`
+- cross-dataset CSV: `outputs/carnet/meshsplatopt/stageELA9_strict_multiaxis_audit/cross_dataset_rows.csv`
+
+**Decision**: `STRICT_MULTIAXIS_NOT_SOLVED`.  The next required branch is unified rather than rhetorical: strong clean9000 checkpoint -> compact topology -> topology-frozen recovery with teacher/rollback safeguards -> ELA-style appearance evidence -> full RGB/geometry/topology evaluation.
+
+---
+
+## 2026-05-06 - ELA10 room strict multi-axis repair
+
+**Goal**: fix the strict failure exposed after ELA7.  The target is no longer RGB-only improvement; a valid method row must beat clean Mesh Splatting on PSNR, SSIM, LPIPS, sparse AbsRel, sparse Depth MAE, sparse normal angle, and triangle count.
+
+**Implementation**: built a fixed recovery policy instead of another scene-specific parameter scan.  Starting from clean room `ours_9000`, the branch applies Open3D QEM decimation with `target_fraction=0.5` (50% triangles remain), builds a train-only sparse sentinel cache against the clean parent, and runs topology-frozen 9000->12000 recovery with sparse COLMAP depth, sparse parent rollback, checkpoint geometry anchoring, and parent render rollback.  The final appearance repair applies the train-only ELA safe adapter on the recovered 12000 checkpoint.
+
+**Negative ablations**:
+- QEM50 sparse teacher rollback won RGB/topology but failed strict geometry: `+0.153080` PSNR, `+0.003044` SSIM, `-0.002497` LPIPS, `+0.000052` AbsRel, `+0.001910` Depth MAE, `-0.213866` normal, `50.00%` triangle reduction.
+- QEM50 compact + ELA safe gave strong RGB/topology but still missed AbsRel by `+0.000033`: `+2.820644` PSNR, `+0.043782` SSIM, `-0.053010` LPIPS, `-0.001857` Depth MAE, `-0.088153` normal, `50.00%` triangle reduction.
+- QEM30/QEM20 sparse teacher rollback did not fix the problem; both failed independent RGB and sparse-depth geometry despite smaller topology changes.
+
+**Promoted room result**:
+- QEM50 sparse parent rollback recovery, W&B `7cmz8vhv`: `+0.692919` PSNR, `+0.013745` SSIM, `-0.015990` LPIPS, `-0.002331` AbsRel, `-0.019509` Depth MAE, `-1.824378` normal, `50.00%` triangle reduction.
+- QEM50 sparse parent rollback + ELA safe, W&B `9t01dwd8`: `+3.304691` PSNR, `+0.050085` SSIM, `-0.062170` LPIPS, with the same improved geometry and `50.00%` triangle reduction.
+
+**Updated audit**: `docs/car_model/stageELA9_strict_multiaxis_audit_report.md` now records `2/18` selected-scene rows as strict full-pass, both on room.  Parking remains a cross-dataset full-pass row, but that evidence is kept separate from the selected clean9000 scenes.
+
+**Decision**: `ROOM_STRICT_MULTIAXIS_SOLVED_GLOBAL_SELECTED_SCENES_NOT_YET`.  This is the first real strict success against the pure Mesh Splatting baseline on RGB, geometry, and topology simultaneously.  The remaining requirement is fixed-policy replication on bonsai, courtyard, and counter, followed by a fair multi-scene table rather than a room-only claim.
