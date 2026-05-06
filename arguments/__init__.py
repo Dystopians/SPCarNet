@@ -206,6 +206,12 @@ class OptimizationParams(ParamGroup):
         self.checkpoint_geometry_anchor_decay_end_iter = -1
         self.checkpoint_geometry_anchor_decay_final_mult = 1.0
         self.checkpoint_geometry_anchor_huber_delta = 0.01
+        self.enable_checkpoint_render_geometry_anchor = False
+        self.lambda_checkpoint_render_depth_anchor = 0.0
+        self.lambda_checkpoint_render_normal_anchor = 0.0
+        self.checkpoint_render_geometry_anchor_start_iter = 0
+        self.checkpoint_render_geometry_anchor_warmup_iters = 1000
+        self.checkpoint_render_geometry_anchor_huber_delta = 0.02
         self.lambda_lpips_loss = 0.0
         self.lpips_loss_start_iter = 0
         self.lpips_loss_warmup_iters = 1000

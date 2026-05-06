@@ -166,6 +166,22 @@ def _train_args(args: argparse.Namespace) -> list[str]:
                 str(args.checkpoint_geometry_anchor_huber_delta),
             ]
         )
+    if args.checkpoint_render_depth_anchor_lambda > 0.0 or args.checkpoint_render_normal_anchor_lambda > 0.0:
+        cmd.extend(
+            [
+                "--enable_checkpoint_render_geometry_anchor",
+                "--lambda_checkpoint_render_depth_anchor",
+                str(args.checkpoint_render_depth_anchor_lambda),
+                "--lambda_checkpoint_render_normal_anchor",
+                str(args.checkpoint_render_normal_anchor_lambda),
+                "--checkpoint_render_geometry_anchor_start_iter",
+                str(args.checkpoint_render_geometry_anchor_start_iter),
+                "--checkpoint_render_geometry_anchor_warmup_iters",
+                str(args.checkpoint_render_geometry_anchor_warmup_iters),
+                "--checkpoint_render_geometry_anchor_huber_delta",
+                str(args.checkpoint_render_geometry_anchor_huber_delta),
+            ]
+        )
     return cmd
 
 
@@ -232,6 +248,9 @@ def run(args: argparse.Namespace) -> int:
         "teacher_render_mask_mode": args.teacher_render_mask_mode,
         "checkpoint_geometry_anchor_lambda": float(args.checkpoint_geometry_anchor_lambda),
         "checkpoint_geometry_anchor_huber_delta": float(args.checkpoint_geometry_anchor_huber_delta),
+        "checkpoint_render_depth_anchor_lambda": float(args.checkpoint_render_depth_anchor_lambda),
+        "checkpoint_render_normal_anchor_lambda": float(args.checkpoint_render_normal_anchor_lambda),
+        "checkpoint_render_geometry_anchor_huber_delta": float(args.checkpoint_render_geometry_anchor_huber_delta),
         "lr_triangles_points_init": args.lr_triangles_points_init,
         "feature_lr": args.feature_lr,
         "weight_lr": args.weight_lr,
@@ -315,6 +334,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint_geometry_anchor_decay_end_iter", type=int, default=-1)
     parser.add_argument("--checkpoint_geometry_anchor_decay_final_mult", type=float, default=1.0)
     parser.add_argument("--checkpoint_geometry_anchor_huber_delta", type=float, default=0.01)
+    parser.add_argument("--checkpoint_render_depth_anchor_lambda", type=float, default=0.0)
+    parser.add_argument("--checkpoint_render_normal_anchor_lambda", type=float, default=0.0)
+    parser.add_argument("--checkpoint_render_geometry_anchor_start_iter", type=int, default=0)
+    parser.add_argument("--checkpoint_render_geometry_anchor_warmup_iters", type=int, default=300)
+    parser.add_argument("--checkpoint_render_geometry_anchor_huber_delta", type=float, default=0.02)
     parser.add_argument("--lr_triangles_points_init", type=float, default=None)
     parser.add_argument("--feature_lr", type=float, default=None)
     parser.add_argument("--weight_lr", type=float, default=None)

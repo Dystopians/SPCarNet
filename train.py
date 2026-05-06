@@ -780,6 +780,84 @@ def _compute_checkpoint_geometry_anchor_loss(triangles, anchor_vertices: torch.T
     }
 
 
+def _checkpoint_render_geometry_anchor_lambda(iteration: int, opt, kind: str) -> float:
+    if not bool(getattr(opt, "enable_checkpoint_render_geometry_anchor", False)):
+        return 0.0
+    if kind == "normal":
+        base = float(getattr(opt, "lambda_checkpoint_render_normal_anchor", 0.0))
+    else:
+        base = float(getattr(opt, "lambda_checkpoint_render_depth_anchor", 0.0))
+    if base <= 0.0:
+        return 0.0
+    start_iter = int(getattr(opt, "checkpoint_render_geometry_anchor_start_iter", 0))
+    if int(iteration) < start_iter:
+        return 0.0
+    warmup_iters = max(1, int(getattr(opt, "checkpoint_render_geometry_anchor_warmup_iters", 1)))
+    warmup = min(1.0, max(0.0, float(int(iteration) - start_iter) / float(warmup_iters)))
+    return base * warmup
+
+
+def _camera_cache_key(cam) -> str:
+    return str(getattr(cam, "image_name", getattr(cam, "uid", "")))
+
+
+def _build_checkpoint_render_geometry_cache(train_cameras, triangles, pipe, background) -> dict:
+    cache = {}
+    with torch.no_grad():
+        for cam in train_cameras:
+            pkg = render(cam, triangles, pipe, background)
+            entry = {}
+            if "surf_depth" in pkg:
+                entry["surf_depth"] = pkg["surf_depth"].detach().clone()
+            if "surf_normal" in pkg:
+                entry["surf_normal"] = pkg["surf_normal"].detach().clone()
+            if entry:
+                cache[_camera_cache_key(cam)] = entry
+    return cache
+
+
+def _resize_like(anchor: torch.Tensor, target: torch.Tensor, mode: str = "bilinear") -> torch.Tensor:
+    if tuple(anchor.shape[-2:]) == tuple(target.shape[-2:]):
+        return anchor
+    if anchor.ndim == 2:
+        return F.interpolate(anchor[None, None], size=target.shape[-2:], mode="nearest").squeeze(0).squeeze(0)
+    if anchor.ndim == 3:
+        return F.interpolate(anchor[None], size=target.shape[-2:], mode=mode, align_corners=False).squeeze(0)
+    return anchor
+
+
+def _compute_checkpoint_render_geometry_anchor_loss(render_pkg, viewpoint_cam, cache: dict, depth_lam: float, normal_lam: float, huber_delta: float):
+    if not cache or (depth_lam <= 0.0 and normal_lam <= 0.0):
+        return None
+    entry = cache.get(_camera_cache_key(viewpoint_cam), None)
+    if entry is None:
+        return None
+    device = render_pkg["render"].device
+    total = torch.tensor(0.0, device=device)
+    depth_pure = torch.tensor(0.0, device=device)
+    normal_pure = torch.tensor(0.0, device=device)
+    if depth_lam > 0.0 and "surf_depth" in render_pkg and "surf_depth" in entry:
+        pred = render_pkg["surf_depth"]
+        anchor = entry["surf_depth"].to(device=pred.device, dtype=pred.dtype)
+        anchor = _resize_like(anchor, pred, mode="nearest")
+        mask = torch.isfinite(pred) & torch.isfinite(anchor) & (anchor > 0)
+        if bool(mask.any()):
+            delta = pred[mask] - anchor[mask]
+            depth_pure = F.smooth_l1_loss(delta, torch.zeros_like(delta), beta=max(float(huber_delta), 1e-8), reduction="mean")
+            total = total + float(depth_lam) * depth_pure
+    if normal_lam > 0.0 and "surf_normal" in render_pkg and "surf_normal" in entry:
+        pred_n = F.normalize(render_pkg["surf_normal"], dim=0, eps=1e-6)
+        anchor_n = entry["surf_normal"].to(device=pred_n.device, dtype=pred_n.dtype)
+        anchor_n = _resize_like(anchor_n, pred_n, mode="bilinear")
+        anchor_n = F.normalize(anchor_n, dim=0, eps=1e-6)
+        valid = torch.isfinite(pred_n).all(dim=0) & torch.isfinite(anchor_n).all(dim=0)
+        if bool(valid.any()):
+            cos = torch.clamp((pred_n * anchor_n).sum(dim=0), -1.0, 1.0)
+            normal_pure = (1.0 - cos[valid]).mean()
+            total = total + float(normal_lam) * normal_pure
+    return {"loss_weighted": total, "depth_pure": depth_pure, "normal_pure": normal_pure}
+
+
 def _load_teacher_render_cache(render_dir: str, train_cameras) -> dict:
     render_dir = str(render_dir or "").strip()
     if not render_dir:
@@ -2923,6 +3001,20 @@ def training(
             f"vertices={int(checkpoint_geometry_anchor_vertices.shape[0])}, "
             f"lambda={float(getattr(opt, 'lambda_checkpoint_geometry_anchor', 0.0))}"
         )
+    checkpoint_render_geometry_cache = {}
+    if bool(getattr(opt, "enable_checkpoint_render_geometry_anchor", False)):
+        checkpoint_render_geometry_cache = _build_checkpoint_render_geometry_cache(
+            train_cameras=scene.getTrainCameras(),
+            triangles=triangles,
+            pipe=pipe,
+            background=background,
+        )
+        print(
+            "[CheckpointRenderGeometryAnchor] enabled: "
+            f"views={len(checkpoint_render_geometry_cache)}, "
+            f"depth_lambda={float(getattr(opt, 'lambda_checkpoint_render_depth_anchor', 0.0))}, "
+            f"normal_lambda={float(getattr(opt, 'lambda_checkpoint_render_normal_anchor', 0.0))}"
+        )
 
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
@@ -3321,6 +3413,30 @@ def training(
             checkpoint_geometry_anchor_max_disp = checkpoint_geometry_anchor_res["max_displacement"]
             if torch.is_tensor(checkpoint_geometry_anchor_loss) and torch.isfinite(checkpoint_geometry_anchor_loss):
                 loss += checkpoint_geometry_anchor_loss
+
+        checkpoint_render_geometry_anchor_loss = 0
+        checkpoint_render_depth_anchor_loss_pure = 0
+        checkpoint_render_normal_anchor_loss_pure = 0
+        checkpoint_render_depth_anchor_lambda = _checkpoint_render_geometry_anchor_lambda(
+            iteration=int(iteration), opt=opt, kind="depth"
+        )
+        checkpoint_render_normal_anchor_lambda = _checkpoint_render_geometry_anchor_lambda(
+            iteration=int(iteration), opt=opt, kind="normal"
+        )
+        checkpoint_render_geometry_anchor_res = _compute_checkpoint_render_geometry_anchor_loss(
+            render_pkg=render_pkg,
+            viewpoint_cam=viewpoint_cam,
+            cache=checkpoint_render_geometry_cache,
+            depth_lam=float(checkpoint_render_depth_anchor_lambda),
+            normal_lam=float(checkpoint_render_normal_anchor_lambda),
+            huber_delta=float(getattr(opt, "checkpoint_render_geometry_anchor_huber_delta", 0.02)),
+        )
+        if checkpoint_render_geometry_anchor_res is not None:
+            checkpoint_render_geometry_anchor_loss = checkpoint_render_geometry_anchor_res["loss_weighted"]
+            checkpoint_render_depth_anchor_loss_pure = checkpoint_render_geometry_anchor_res["depth_pure"]
+            checkpoint_render_normal_anchor_loss_pure = checkpoint_render_geometry_anchor_res["normal_pure"]
+            if torch.is_tensor(checkpoint_render_geometry_anchor_loss) and torch.isfinite(checkpoint_render_geometry_anchor_loss):
+                loss += checkpoint_render_geometry_anchor_loss
 
         # Opacity loss
         Lweight_pure = 0.0
@@ -3886,6 +4002,9 @@ def training(
                         "loss_components/loss_teacher_render_pure": float(teacher_render_loss_pure) if isinstance(teacher_render_loss_pure, (float, int)) else float(teacher_render_loss_pure.detach().item()),
                         "loss_components/loss_checkpoint_geometry_anchor": float(checkpoint_geometry_anchor_loss) if isinstance(checkpoint_geometry_anchor_loss, (float, int)) else float(checkpoint_geometry_anchor_loss.detach().item()),
                         "loss_components/loss_checkpoint_geometry_anchor_pure": float(checkpoint_geometry_anchor_loss_pure) if isinstance(checkpoint_geometry_anchor_loss_pure, (float, int)) else float(checkpoint_geometry_anchor_loss_pure.detach().item()),
+                        "loss_components/loss_checkpoint_render_geometry_anchor": float(checkpoint_render_geometry_anchor_loss) if isinstance(checkpoint_render_geometry_anchor_loss, (float, int)) else float(checkpoint_render_geometry_anchor_loss.detach().item()),
+                        "loss_components/loss_checkpoint_render_depth_anchor_pure": float(checkpoint_render_depth_anchor_loss_pure) if isinstance(checkpoint_render_depth_anchor_loss_pure, (float, int)) else float(checkpoint_render_depth_anchor_loss_pure.detach().item()),
+                        "loss_components/loss_checkpoint_render_normal_anchor_pure": float(checkpoint_render_normal_anchor_loss_pure) if isinstance(checkpoint_render_normal_anchor_loss_pure, (float, int)) else float(checkpoint_render_normal_anchor_loss_pure.detach().item()),
                         "loss_components/loss_lpips_train": float(lpips_loss_weighted) if isinstance(lpips_loss_weighted, (float, int)) else float(lpips_loss_weighted.detach().item()),
                         "loss_components/loss_lpips_train_pure": float(lpips_loss_pure) if isinstance(lpips_loss_pure, (float, int)) else float(lpips_loss_pure.detach().item()),
                         "lpips_train/lambda": float(lpips_loss_lambda),
@@ -3896,6 +4015,8 @@ def training(
                         "checkpoint_geometry_anchor/lambda": float(checkpoint_geometry_anchor_lambda),
                         "checkpoint_geometry_anchor/mean_displacement": float(checkpoint_geometry_anchor_mean_disp) if isinstance(checkpoint_geometry_anchor_mean_disp, (float, int)) else float(checkpoint_geometry_anchor_mean_disp.detach().item()),
                         "checkpoint_geometry_anchor/max_displacement": float(checkpoint_geometry_anchor_max_disp) if isinstance(checkpoint_geometry_anchor_max_disp, (float, int)) else float(checkpoint_geometry_anchor_max_disp.detach().item()),
+                        "checkpoint_render_geometry_anchor/depth_lambda": float(checkpoint_render_depth_anchor_lambda),
+                        "checkpoint_render_geometry_anchor/normal_lambda": float(checkpoint_render_normal_anchor_lambda),
                     }
                 )
                 if ground_reg_logs is not None:
