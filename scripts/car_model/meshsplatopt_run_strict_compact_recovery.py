@@ -72,6 +72,12 @@ def _train_args(args: argparse.Namespace) -> list[str]:
         "--wandb_scalar_log_interval",
         "50",
     ]
+    if args.lr_triangles_points_init is not None:
+        cmd.extend(["--lr_triangles_points_init", str(args.lr_triangles_points_init)])
+    if args.feature_lr is not None:
+        cmd.extend(["--feature_lr", str(args.feature_lr)])
+    if args.weight_lr is not None:
+        cmd.extend(["--weight_lr", str(args.weight_lr)])
     if args.preset in ("compact_sparse_low_lambda", "compact_sparse_decay"):
         cmd.extend(
             [
@@ -226,6 +232,9 @@ def run(args: argparse.Namespace) -> int:
         "teacher_render_mask_mode": args.teacher_render_mask_mode,
         "checkpoint_geometry_anchor_lambda": float(args.checkpoint_geometry_anchor_lambda),
         "checkpoint_geometry_anchor_huber_delta": float(args.checkpoint_geometry_anchor_huber_delta),
+        "lr_triangles_points_init": args.lr_triangles_points_init,
+        "feature_lr": args.feature_lr,
+        "weight_lr": args.weight_lr,
         "execute": bool(args.execute),
         "topology_unchanged": None,
     }
@@ -306,6 +315,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint_geometry_anchor_decay_end_iter", type=int, default=-1)
     parser.add_argument("--checkpoint_geometry_anchor_decay_final_mult", type=float, default=1.0)
     parser.add_argument("--checkpoint_geometry_anchor_huber_delta", type=float, default=0.01)
+    parser.add_argument("--lr_triangles_points_init", type=float, default=None)
+    parser.add_argument("--feature_lr", type=float, default=None)
+    parser.add_argument("--weight_lr", type=float, default=None)
     parser.add_argument("--wandb_project", default="spcarnet_meshprior")
     parser.add_argument("--wandb_group", default="finalF6_strict_recovery")
     parser.add_argument("--wandb_name", required=True)
