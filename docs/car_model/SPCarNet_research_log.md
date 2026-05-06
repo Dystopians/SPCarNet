@@ -4729,3 +4729,13 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `F50_CALIBRATED_GATE_REPLICATION_MIXED`. F50 does not reproduce the F44 bonsai mechanism repair: the calibrated gate still rejects and rolls back the same no-accept candidate round as strict gate. It does, however, remain render-positive versus no-gate while improving sparse geometry proxies relative to strict gate. The honest claim is therefore narrow: calibrated thresholds are a promising scene-aware tradeoff, but broad calibrated-gate superiority is not proven.
 
 ---
+
+## 2026-05-06 - Final SCE0 state audit
+
+**Goal**: lock the source of truth before starting the SCE-Repair line.
+
+**Preflight**: `python -m compileall scripts/car_model ss3dm_prior utils -q` passed. The only untracked user/current-session artifacts were the new prompt file and two untracked submodule directories.
+
+**Finding**: F82 fixed adaptive policy v5 remains the accepted baseline. F95 is the strongest rejected repair candidate because it improves courtyard PSNR, SSIM, LPIPS, every fixed per-view PSNR sample, and normal angle, but still fails parent-Pareto on sparse AbsRel / Depth MAE.
+
+**Decision**: `PROCEED_TO_SCE1`. The next step must be per-correspondence sparse-depth parent-vs-candidate analysis before launching more full recovery runs.
