@@ -16,12 +16,16 @@ The policy uses the following fixed behavior:
 2. If sentinel aggregate AbsRel or MAE regresses, activate one-sided parent rollback.
 3. Use a short high-vertex-LR geometry phase, because SCE6 showed default late-stage vertex LR is too small to move geometry.
 4. Use absrel rollback by default; MAE-only rollback is rejected by SCE6 evidence.
-5. Use early stopping to pick the first parent-Pareto-safe knee instead of blindly extending training.
+5. Restrict rollback to regressed sentinel clusters when the cache contains F82-vs-F95 candidate deltas.
+6. Use early stopping to pick the first parent-Pareto-safe knee instead of blindly extending training.
 
 Default knobs:
 
 - rollback loss: `absrel`
 - rollback lambda: `1.0`
+- rollback regressed-only: `true`
+- rollback cluster top-k: `0` by default; set a fixed positive value for conflict-cluster stress tests
+- combined MAE beta: `1.0` by default; only used when policy selects `combined`
 - sparse COLMAP lambda: `0.003`
 - render normal anchor: `0.01`
 - render depth anchor: `0.0`
@@ -51,3 +55,7 @@ SCE7 is an interface and policy decision layer. It does not claim final multisce
 - Contract run: `outputs/carnet/meshsplatopt/final_stageSCE7_automatic_sce_policy/courtyard/contract`
 
 The contract run consumed the dense F82-vs-F95 sentinel gate and correctly selected `run_targeted_rollback` with `activate_rollback=true`, writing a strict recovery command with fixed SCE v1 defaults.
+
+## 2026-05-06 Update
+
+The SCE3 rollback loss now exposes the prompt-specified combined formula `AbsRel + beta * MAE`, plus `regressed_only` and `cluster_top_k` selection. This makes SCE7 less like manual hyperparameter tuning: the policy can target the exact sentinel conflicts that rejected a candidate, while leaving non-regressed evidence untouched.

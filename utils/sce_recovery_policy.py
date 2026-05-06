@@ -20,7 +20,9 @@ class SCEPolicyConfig:
     rollback_activation_depth_delta: float = 0.0
     rollback_lambda_base: float = 1.0
     rollback_loss_space: str = "absrel"
+    rollback_combined_mae_beta: float = 1.0
     rollback_cluster_top_k: int = 0
+    rollback_regressed_only: bool = True
     sparse_lambda: float = 0.003
     render_normal_anchor_lambda: float = 0.01
     render_depth_anchor_lambda: float = 0.0
@@ -130,4 +132,3 @@ def load_json_mapping(path: str | Path) -> dict[str, Any]:
     if not p.is_file():
         raise FileNotFoundError(str(p))
     return json.loads(p.read_text(encoding="utf-8"))
-

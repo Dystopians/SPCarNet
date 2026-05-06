@@ -23,10 +23,12 @@ The active violation is one-sided:
 absrel:   ReLU(current_rel - parent_rel - margin_rel)
 mae:      ReLU(current_abs - parent_abs - margin_abs)
 combined: ReLU(current_rel - parent_rel - margin_rel)
-        + ReLU(current_abs - parent_abs - margin_abs)
+        + beta * ReLU(current_abs - parent_abs - margin_abs)
 ```
 
 The final loss is a weighted Smooth-L1 average over sentinel points, multiplied by `lambda_sparse_depth_parent_rollback`.
+
+The `beta` term is explicit because AbsRel and MAE have different units. The default `beta=1.0` preserves the first SCE3 contract, while SCE7 can set a smaller value to stabilize MAE without letting meter-scale errors dominate AbsRel.
 
 ## Safety Rules
 
@@ -48,7 +50,10 @@ The final loss is a weighted Smooth-L1 average over sentinel points, multiplied 
 --sparse_depth_parent_rollback_margin_abs <float>
 --sparse_depth_parent_rollback_margin_rel <float>
 --sparse_depth_parent_rollback_huber_delta <float>
+--sparse_depth_parent_rollback_combined_mae_beta <float>
 --sparse_depth_parent_rollback_cluster_balance
+--sparse_depth_parent_rollback_regressed_only
+--sparse_depth_parent_rollback_cluster_top_k <int>
 --sparse_depth_parent_rollback_max_points_per_view <int>
 --sparse_depth_parent_rollback_loss_space absrel|mae|combined
 --sparse_depth_parent_rollback_allow_test_cache
@@ -57,3 +62,4 @@ The final loss is a weighted Smooth-L1 average over sentinel points, multiplied 
 
 The strict recovery wrapper exposes the main training flags and records them in `recovery_summary.json` and `exact_train_command.txt`.
 
+`--sparse_depth_parent_rollback_regressed_only` and `--sparse_depth_parent_rollback_cluster_top_k` implement the SCE7 requirement that rollback can be restricted to regressed sentinel clusters instead of globally weighting every cached sparse point.

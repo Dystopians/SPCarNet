@@ -4859,3 +4859,20 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 - contract run under `outputs/carnet/meshsplatopt/final_stageSCE7_automatic_sce_policy/courtyard/contract` consumed the dense F82-vs-F95 gate and correctly wrote a targeted rollback command.
 
 **Decision**: `SCE7_INTERFACE_IMPLEMENTED_PENDING_MULTISCENE_VALIDATION`. The interface is now available, but it does not close the remaining Depth MAE gap until SCE8 fixed-policy multiscene validation is run.
+
+---
+
+## 2026-05-06 - SCE7 policy-loss upgrade for conflict-targeted rollback
+
+**Goal**: remove the last manual-tuning weakness in the SCE rollback path before more long validation runs.
+
+**Implementation**: extended the opt-in parent rollback loss with the prompt-specified `combined = AbsRel + beta * MAE` formula, explicit `--sparse_depth_parent_rollback_combined_mae_beta`, `--sparse_depth_parent_rollback_regressed_only`, and `--sparse_depth_parent_rollback_cluster_top_k`. The strict recovery wrapper and SCE7 policy runner now expose these controls and record them in the command/summary artifacts.
+
+**Why this matters**: earlier `combined` rollback directly added unitless AbsRel and meter-scale MAE, making the loss poorly calibrated. The new interface lets the fixed policy target only candidate-regressed sentinel clusters and use a controlled MAE term instead of sweeping unrelated global depth anchors.
+
+**Verification**:
+- `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_stageSCE3_parent_rollback_loss.py` passed, including beta, regressed-only, and top-cluster checks.
+- `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_stageSCE7_sce_policy.py` passed.
+- `/home/peilincai/micromamba/envs/mesh_splatting/bin/python -m compileall scripts/car_model ss3dm_prior utils -q` passed.
+
+**Decision**: `SCE7_POLICY_LOSS_UPGRADE_PASS`. Next experiment should be a fixed, conflict-targeted courtyard continuation from the current best SCE6 candidate, then SCE8 multiscene validation if it closes or materially improves the remaining Depth MAE gap.

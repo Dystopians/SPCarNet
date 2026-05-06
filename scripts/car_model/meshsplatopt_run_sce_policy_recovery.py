@@ -88,9 +88,15 @@ def _wrapper_command(args: argparse.Namespace, cfg: SCEPolicyConfig, *, activate
                 str(args.rollback_max_points_per_view),
                 "--sparse_depth_parent_rollback_loss_space",
                 cfg.rollback_loss_space,
+                "--sparse_depth_parent_rollback_combined_mae_beta",
+                str(cfg.rollback_combined_mae_beta),
                 "--sparse_depth_parent_rollback_cluster_balance",
             ]
         )
+        if bool(cfg.rollback_regressed_only):
+            cmd.append("--sparse_depth_parent_rollback_regressed_only")
+        if int(cfg.rollback_cluster_top_k) > 0:
+            cmd.extend(["--sparse_depth_parent_rollback_cluster_top_k", str(int(cfg.rollback_cluster_top_k))])
     if bool(args.execute):
         cmd.append("--execute")
     return cmd
@@ -105,6 +111,9 @@ def run(args: argparse.Namespace) -> int:
         recovery_phase_iters=int(args.recovery_phase_iters),
         rollback_lambda_base=float(args.rollback_lambda_base),
         rollback_loss_space=str(args.rollback_loss_space),
+        rollback_combined_mae_beta=float(args.rollback_combined_mae_beta),
+        rollback_cluster_top_k=int(args.rollback_cluster_top_k),
+        rollback_regressed_only=bool(args.rollback_regressed_only),
         sparse_lambda=float(args.sparse_lambda),
         render_normal_anchor_lambda=float(args.render_normal_anchor_lambda),
         render_depth_anchor_lambda=float(args.render_depth_anchor_lambda),
@@ -158,6 +167,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--recovery_phase_iters", type=int, default=500)
     parser.add_argument("--rollback_lambda_base", type=float, default=1.0)
     parser.add_argument("--rollback_loss_space", choices=("absrel", "mae", "combined"), default="absrel")
+    parser.add_argument("--rollback_combined_mae_beta", type=float, default=1.0)
+    parser.add_argument("--rollback_cluster_top_k", type=int, default=0)
+    parser.add_argument("--rollback_regressed_only", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--rollback_max_points_per_view", type=int, default=2000)
     parser.add_argument("--sparse_lambda", type=float, default=0.003)
     parser.add_argument("--render_normal_anchor_lambda", type=float, default=0.01)
@@ -179,4 +191,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

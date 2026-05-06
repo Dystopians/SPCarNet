@@ -3567,7 +3567,11 @@ def training(
                 margin_rel=float(getattr(opt, "sparse_depth_parent_rollback_margin_rel", 0.0)),
                 huber_delta=float(getattr(opt, "sparse_depth_parent_rollback_huber_delta", 0.05)),
                 loss_space=str(getattr(opt, "sparse_depth_parent_rollback_loss_space", "combined")),
+                combined_mae_beta=float(getattr(opt, "sparse_depth_parent_rollback_combined_mae_beta", 1.0)),
                 max_points_per_view=int(getattr(opt, "sparse_depth_parent_rollback_max_points_per_view", 0)),
+                cluster_balance=bool(getattr(opt, "sparse_depth_parent_rollback_cluster_balance", False)),
+                regressed_only=bool(getattr(opt, "sparse_depth_parent_rollback_regressed_only", False)),
+                cluster_top_k=int(getattr(opt, "sparse_depth_parent_rollback_cluster_top_k", 0)),
                 strict=bool(getattr(opt, "sparse_depth_parent_rollback_strict", False)),
             )
             sparse_parent_rollback_reason = str(rollback_res.get("reason", "unknown"))

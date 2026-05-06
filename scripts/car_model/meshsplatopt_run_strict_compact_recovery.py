@@ -200,6 +200,8 @@ def _train_args(args: argparse.Namespace) -> list[str]:
                 str(args.sparse_depth_parent_rollback_margin_rel),
                 "--sparse_depth_parent_rollback_huber_delta",
                 str(args.sparse_depth_parent_rollback_huber_delta),
+                "--sparse_depth_parent_rollback_combined_mae_beta",
+                str(args.sparse_depth_parent_rollback_combined_mae_beta),
                 "--sparse_depth_parent_rollback_max_points_per_view",
                 str(args.sparse_depth_parent_rollback_max_points_per_view),
                 "--sparse_depth_parent_rollback_loss_space",
@@ -208,6 +210,10 @@ def _train_args(args: argparse.Namespace) -> list[str]:
         )
         if args.sparse_depth_parent_rollback_cluster_balance:
             cmd.append("--sparse_depth_parent_rollback_cluster_balance")
+        if args.sparse_depth_parent_rollback_regressed_only:
+            cmd.append("--sparse_depth_parent_rollback_regressed_only")
+        if args.sparse_depth_parent_rollback_cluster_top_k > 0:
+            cmd.extend(["--sparse_depth_parent_rollback_cluster_top_k", str(args.sparse_depth_parent_rollback_cluster_top_k)])
     return cmd
 
 
@@ -280,6 +286,9 @@ def run(args: argparse.Namespace) -> int:
         "sparse_depth_parent_rollback_cache": args.sparse_depth_parent_rollback_cache,
         "sparse_depth_parent_rollback_lambda": float(args.sparse_depth_parent_rollback_lambda),
         "sparse_depth_parent_rollback_loss_space": args.sparse_depth_parent_rollback_loss_space,
+        "sparse_depth_parent_rollback_combined_mae_beta": float(args.sparse_depth_parent_rollback_combined_mae_beta),
+        "sparse_depth_parent_rollback_regressed_only": bool(args.sparse_depth_parent_rollback_regressed_only),
+        "sparse_depth_parent_rollback_cluster_top_k": int(args.sparse_depth_parent_rollback_cluster_top_k),
         "sparse_depth_parent_rollback_margin_abs": float(args.sparse_depth_parent_rollback_margin_abs),
         "sparse_depth_parent_rollback_margin_rel": float(args.sparse_depth_parent_rollback_margin_rel),
         "lr_triangles_points_init": args.lr_triangles_points_init,
@@ -377,7 +386,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sparse_depth_parent_rollback_margin_abs", type=float, default=0.0)
     parser.add_argument("--sparse_depth_parent_rollback_margin_rel", type=float, default=0.0)
     parser.add_argument("--sparse_depth_parent_rollback_huber_delta", type=float, default=0.05)
+    parser.add_argument("--sparse_depth_parent_rollback_combined_mae_beta", type=float, default=1.0)
     parser.add_argument("--sparse_depth_parent_rollback_cluster_balance", action="store_true")
+    parser.add_argument("--sparse_depth_parent_rollback_regressed_only", action="store_true")
+    parser.add_argument("--sparse_depth_parent_rollback_cluster_top_k", type=int, default=0)
     parser.add_argument("--sparse_depth_parent_rollback_max_points_per_view", type=int, default=500)
     parser.add_argument("--sparse_depth_parent_rollback_loss_space", choices=("absrel", "mae", "combined"), default="combined")
     parser.add_argument("--lr_triangles_points_init", type=float, default=None)

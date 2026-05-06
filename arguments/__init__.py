@@ -223,7 +223,10 @@ class OptimizationParams(ParamGroup):
         self.sparse_depth_parent_rollback_margin_abs = 0.0
         self.sparse_depth_parent_rollback_margin_rel = 0.0
         self.sparse_depth_parent_rollback_huber_delta = 0.05
+        self.sparse_depth_parent_rollback_combined_mae_beta = 1.0
         self.sparse_depth_parent_rollback_cluster_balance = False
+        self.sparse_depth_parent_rollback_regressed_only = False
+        self.sparse_depth_parent_rollback_cluster_top_k = 0
         self.sparse_depth_parent_rollback_max_points_per_view = 500
         self.sparse_depth_parent_rollback_loss_space = "combined"
         self.sparse_depth_parent_rollback_allow_test_cache = False

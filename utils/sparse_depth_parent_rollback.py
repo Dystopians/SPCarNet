@@ -65,7 +65,11 @@ def compute_sparse_depth_parent_rollback_loss(
     margin_rel: float,
     huber_delta: float,
     loss_space: str,
+    combined_mae_beta: float = 1.0,
     max_points_per_view: int = 0,
+    cluster_balance: bool = False,
+    regressed_only: bool = False,
+    cluster_top_k: int = 0,
     strict: bool = False,
 ) -> dict[str, Any]:
     if lam <= 0.0:
@@ -86,6 +90,10 @@ def compute_sparse_depth_parent_rollback_loss(
     parent_abs_np = np.asarray(entry["parent_abs_error"], dtype=np.float64).reshape(-1)
     parent_rel_np = np.asarray(entry["parent_abs_rel"], dtype=np.float64).reshape(-1)
     weights_np = np.asarray(entry.get("sentinel_weight", np.ones_like(gt_np)), dtype=np.float64).reshape(-1)
+    cluster_np = np.asarray(entry.get("cluster_id", np.full_like(gt_np, -1)), dtype=np.int64).reshape(-1)
+    regressed_np = np.asarray(entry.get("is_regressed_candidate", np.ones_like(gt_np, dtype=bool)), dtype=bool).reshape(-1)
+    candidate_delta_abs_np = np.asarray(entry.get("candidate_delta_abs_error", np.zeros_like(gt_np)), dtype=np.float64).reshape(-1)
+    candidate_delta_rel_np = np.asarray(entry.get("candidate_delta_abs_rel", np.zeros_like(gt_np)), dtype=np.float64).reshape(-1)
     finite = (
         np.isfinite(px_np)
         & np.isfinite(py_np)
@@ -106,6 +114,66 @@ def compute_sparse_depth_parent_rollback_loss(
     parent_abs_np = parent_abs_np[finite]
     parent_rel_np = parent_rel_np[finite]
     weights_np = weights_np[finite]
+    cluster_np = cluster_np[finite] if cluster_np.shape[0] == finite.shape[0] else np.full_like(gt_np, -1, dtype=np.int64)
+    regressed_np = regressed_np[finite] if regressed_np.shape[0] == finite.shape[0] else np.ones_like(gt_np, dtype=bool)
+    candidate_delta_abs_np = (
+        candidate_delta_abs_np[finite] if candidate_delta_abs_np.shape[0] == finite.shape[0] else np.zeros_like(gt_np)
+    )
+    candidate_delta_rel_np = (
+        candidate_delta_rel_np[finite] if candidate_delta_rel_np.shape[0] == finite.shape[0] else np.zeros_like(gt_np)
+    )
+    if bool(regressed_only):
+        keep = regressed_np
+        if not np.any(keep):
+            return {"loss_pure": 0.0, "loss_weighted": 0.0, "reason": "no_regressed_candidate_sentinels", "active_points": 0}
+        px_np = px_np[keep]
+        py_np = py_np[keep]
+        width_np = width_np[keep] if width_np.shape[0] == keep.shape[0] else np.zeros_like(px_np)
+        height_np = height_np[keep] if height_np.shape[0] == keep.shape[0] else np.zeros_like(py_np)
+        gt_np = gt_np[keep]
+        parent_abs_np = parent_abs_np[keep]
+        parent_rel_np = parent_rel_np[keep]
+        weights_np = weights_np[keep]
+        cluster_np = cluster_np[keep]
+        regressed_np = regressed_np[keep]
+        candidate_delta_abs_np = candidate_delta_abs_np[keep]
+        candidate_delta_rel_np = candidate_delta_rel_np[keep]
+    if int(cluster_top_k) > 0 and cluster_np.shape[0] == gt_np.shape[0] and np.any(cluster_np >= 0):
+        severity = np.maximum(candidate_delta_rel_np, 0.0) + float(max(0.0, combined_mae_beta)) * np.maximum(candidate_delta_abs_np, 0.0)
+        cluster_scores: dict[int, float] = {}
+        for cid, score in zip(cluster_np.tolist(), severity.tolist()):
+            if int(cid) < 0:
+                continue
+            cluster_scores[int(cid)] = max(float(cluster_scores.get(int(cid), 0.0)), float(score))
+        selected_clusters = {
+            cid
+            for cid, _ in sorted(cluster_scores.items(), key=lambda kv: (-kv[1], kv[0]))[: int(cluster_top_k)]
+        }
+        keep_cluster = np.asarray([int(cid) in selected_clusters for cid in cluster_np], dtype=bool)
+        if not np.any(keep_cluster):
+            return {"loss_pure": 0.0, "loss_weighted": 0.0, "reason": "no_selected_rollback_clusters", "active_points": 0}
+        px_np = px_np[keep_cluster]
+        py_np = py_np[keep_cluster]
+        width_np = width_np[keep_cluster] if width_np.shape[0] == keep_cluster.shape[0] else np.zeros_like(px_np)
+        height_np = height_np[keep_cluster] if height_np.shape[0] == keep_cluster.shape[0] else np.zeros_like(py_np)
+        gt_np = gt_np[keep_cluster]
+        parent_abs_np = parent_abs_np[keep_cluster]
+        parent_rel_np = parent_rel_np[keep_cluster]
+        weights_np = weights_np[keep_cluster]
+        cluster_np = cluster_np[keep_cluster]
+        regressed_np = regressed_np[keep_cluster]
+        candidate_delta_abs_np = candidate_delta_abs_np[keep_cluster]
+        candidate_delta_rel_np = candidate_delta_rel_np[keep_cluster]
+    if bool(cluster_balance) and cluster_np.shape[0] == weights_np.shape[0] and np.any(cluster_np >= 0):
+        unique, counts = np.unique(cluster_np[cluster_np >= 0], return_counts=True)
+        count_map = {int(cid): int(count) for cid, count in zip(unique.tolist(), counts.tolist())}
+        weights_np = np.asarray(
+            [
+                float(wi) / np.sqrt(max(1, count_map.get(int(cid), 1)))
+                for wi, cid in zip(weights_np.tolist(), cluster_np.tolist())
+            ],
+            dtype=np.float64,
+        )
     pick = _select_indices(weights_np, int(max_points_per_view))
     px_np = px_np[pick]
     py_np = py_np[pick]
@@ -157,7 +225,7 @@ def compute_sparse_depth_parent_rollback_loss(
     elif space == "mae":
         violation = violation_abs
     elif space == "combined":
-        violation = violation_rel + violation_abs
+        violation = violation_rel + float(combined_mae_beta) * violation_abs
     else:
         raise ValueError(f"unknown sparse parent rollback loss space: {loss_space}")
     zeros = torch.zeros_like(violation)
