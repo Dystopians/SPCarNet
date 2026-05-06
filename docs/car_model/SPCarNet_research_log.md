@@ -5240,3 +5240,23 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 - counter: PSNR `+2.413528`, SSIM `+0.060425`, LPIPS `-0.059244`.
 
 **Decision**: `ELA4_CLEAN9000_ALL_SCENE_RENDER_WIN`.  This is the first current branch that directly beats the strongest pure Mesh Splatting baseline on all selected scenes and all reported RGB metrics.  The remaining paper-critical caveat is that ELA4 is still a renderer-side evidence adapter; the next method step should distill it into a compact persistent neural texture or residual field, measure overhead, and run leakage/ablation audits.
+
+---
+
+## 2026-05-06 - ELA7 Pareto evidence portfolio
+
+**Goal**: improve the remaining weak scene, courtyard, without breaking the strong ELA4 gains on bonsai, room, and counter.
+
+**Implementation**: added `scripts/car_model/meshsplatopt_blend_evidence_portfolio.py` and extended ELA auto policy to optionally search `direction_weight` and use uniform calibration sampling.  ELA7 combines two train-only evidence branches: an ELA4-safe benefit-gated branch and a global broad no-benefit residual branch.  The portfolio weight is selected on train views only, with a Pareto guard requiring non-negative train PSNR, SSIM, and LPIPS gains versus the safe branch.
+
+**Diagnostics**: uniform calibration and direction-weight search exposed courtyard's trade-off: broad residual evidence improves LPIPS but can reduce PSNR/SSIM.  A naive balanced portfolio selected bonsai weight `0.2` and improved SSIM/LPIPS but reduced PSNR, so the final selector added the Pareto guard.
+
+**Promoted W&B**: bonsai `fp5081np`, courtyard `o6b52oti`, room `4vzm6b6v`, counter `wreb7cia`.
+
+**Final independent test metrics vs clean9000 Mesh Splatting**:
+- bonsai: PSNR `+1.338095`, SSIM `+0.058450`, LPIPS `-0.024570`; portfolio weight `0.0`.
+- courtyard: PSNR `+0.203512`, SSIM `+0.011716`, LPIPS `-0.018648`; portfolio weight `0.5`.
+- room: PSNR `+2.751766`, SSIM `+0.043678`, LPIPS `-0.052810`; portfolio weight `0.0`.
+- counter: PSNR `+2.413528`, SSIM `+0.060425`, LPIPS `-0.059244`; portfolio weight `0.0`.
+
+**Decision**: `ELA7_PARETO_PORTFOLIO_CLEAN9000_ALL_SCENE_WIN`.  ELA7 preserves ELA4 on scenes where broad evidence is unsafe and gives courtyard an additional all-metric improvement over ELA4 (`+0.011250` PSNR, `+0.001617` SSIM, `-0.005751` LPIPS).  This is the best current response to the original baseline failure: the method now directly beats the strongest pure Mesh Splatting clean9000 baseline on all selected scenes and all RGB metrics, with train-only selection.

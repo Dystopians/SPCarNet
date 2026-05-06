@@ -352,11 +352,32 @@ def _calibration_candidates(
     train_frames: Sequence[FrameRecord],
     calib_stride: int,
     calib_max_views: int,
+    calib_sampler: str = "stride_first",
 ) -> list[FrameRecord]:
-    stride = max(int(calib_stride), 1)
-    candidates = list(train_frames[::stride])
-    if int(calib_max_views) > 0:
-        candidates = candidates[: int(calib_max_views)]
+    if not train_frames:
+        return []
+    sampler = str(calib_sampler)
+    if sampler not in {"stride_first", "uniform"}:
+        raise ValueError(f"Unsupported calibration sampler: {calib_sampler}")
+    max_views = int(calib_max_views)
+    if sampler == "uniform":
+        if max_views <= 0 or len(train_frames) <= max_views:
+            candidates = list(train_frames)
+        elif max_views == 1:
+            candidates = [train_frames[len(train_frames) // 2]]
+        else:
+            raw = torch.linspace(0, len(train_frames) - 1, steps=max_views).round().to(torch.int64).tolist()
+            seen: set[int] = set()
+            candidates = []
+            for idx in raw:
+                if idx not in seen:
+                    seen.add(idx)
+                    candidates.append(train_frames[int(idx)])
+    else:
+        stride = max(int(calib_stride), 1)
+        candidates = list(train_frames[::stride])
+        if max_views > 0:
+            candidates = candidates[:max_views]
     if not candidates and train_frames:
         candidates = [train_frames[0]]
     return candidates
@@ -446,6 +467,7 @@ def fit_benefit_calibrator(
     depth_abs_tol: float,
     depth_rel_tol: float,
     direction_weight: float,
+    calib_sampler: str = "stride_first",
     bins: int = 5,
     min_gain: float = 0.0,
     min_bin_count: int = 64,
@@ -464,7 +486,7 @@ def fit_benefit_calibrator(
         )
     device = torch.device(device)
     loader = FrameLoader(device=device)
-    candidates = _calibration_candidates(train_frames, calib_stride, calib_max_views)
+    candidates = _calibration_candidates(train_frames, calib_stride, calib_max_views, calib_sampler)
     conf_values: list[torch.Tensor] = []
     mag_values: list[torch.Tensor] = []
     gain_values: list[torch.Tensor] = []
@@ -615,12 +637,13 @@ def calibrate_alpha(
     ssim_weight: float = 20.0,
     lpips_weight: float = 20.0,
     compute_lpips: bool = False,
+    calib_sampler: str = "stride_first",
     device: torch.device | str = "cuda",
 ) -> dict[str, object]:
     if not train_frames:
         return {"alpha": 0.0, "reason": "no_train_frames", "rows": []}
     device = torch.device(device)
-    candidates = _calibration_candidates(train_frames, calib_stride, calib_max_views)
+    candidates = _calibration_candidates(train_frames, calib_stride, calib_max_views, calib_sampler)
     loader = FrameLoader(device=device)
     use_ssim = policy_objective != "psnr"
     lpips_model = None
@@ -731,6 +754,7 @@ def calibrate_alpha(
         "alpha": best_alpha,
         "rows": row_list,
         "calibration_views": [frame.name for frame in candidates],
+        "calibration_sampler": str(calib_sampler),
         "policy_objective": policy_objective,
         "ssim_weight": float(ssim_weight),
         "lpips_weight": float(lpips_weight),

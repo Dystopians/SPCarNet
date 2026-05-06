@@ -62,10 +62,11 @@ def _fit_optional_benefit(args: argparse.Namespace, train_frames, policy: dict, 
         mode=str(policy["mode"]),
         calib_stride=args.calib_stride,
         calib_max_views=args.calib_max_views,
+        calib_sampler=args.calib_sampler,
         residual_clip=float(policy["residual_clip"]),
         depth_abs_tol=float(policy["depth_abs_tol"]),
         depth_rel_tol=float(policy["depth_rel_tol"]),
-        direction_weight=args.direction_weight,
+        direction_weight=float(policy.get("direction_weight", args.direction_weight)),
         bins=args.benefit_bins,
         min_gain=args.benefit_min_gain,
         min_bin_count=args.benefit_min_bin_count,
@@ -87,6 +88,7 @@ def _choose_policy(
             "residual_clip": float(args.residual_clip),
             "depth_abs_tol": float(args.depth_abs_tol),
             "depth_rel_tol": float(args.depth_rel_tol),
+            "direction_weight": float(args.direction_weight),
         }
         benefit_calibrator = _fit_optional_benefit(args, train_frames, policy, device)
         calibration = calibrate_alpha(
@@ -96,10 +98,11 @@ def _choose_policy(
             mode=str(policy["mode"]),
             calib_stride=args.calib_stride,
             calib_max_views=args.calib_max_views,
+            calib_sampler=args.calib_sampler,
             residual_clip=float(policy["residual_clip"]),
             depth_abs_tol=float(policy["depth_abs_tol"]),
             depth_rel_tol=float(policy["depth_rel_tol"]),
-            direction_weight=args.direction_weight,
+            direction_weight=float(policy.get("direction_weight", args.direction_weight)),
             benefit_calibrator=benefit_calibrator,
             policy_objective=args.policy_objective,
             ssim_weight=args.policy_ssim_weight,
@@ -115,59 +118,67 @@ def _choose_policy(
     k_values = _parse_int_grid(args.policy_k_values)
     depth_rel_values = _parse_float_grid(args.policy_depth_rel_values)
     clip_values = _parse_float_grid(args.policy_residual_clip_values)
+    direction_weight_values = (
+        _parse_float_grid(args.policy_direction_weight_values)
+        if args.policy_direction_weight_values.strip()
+        else [float(args.direction_weight)]
+    )
     order = 0
     for mode in modes:
         for k in k_values:
             for depth_rel in depth_rel_values:
                 for residual_clip in clip_values:
-                    policy = {
-                        "mode": mode,
-                        "k": int(k),
-                        "residual_clip": float(residual_clip),
-                        "depth_abs_tol": float(args.depth_abs_tol),
-                        "depth_rel_tol": float(depth_rel),
-                    }
-                    benefit_calibrator = _fit_optional_benefit(args, train_frames, policy, device)
-                    calibration = calibrate_alpha(
-                        train_frames,
-                        alpha_grid=alpha_grid,
-                        k=int(k),
-                        mode=mode,
-                        calib_stride=args.calib_stride,
-                        calib_max_views=args.calib_max_views,
-                        residual_clip=float(residual_clip),
-                        depth_abs_tol=args.depth_abs_tol,
-                        depth_rel_tol=float(depth_rel),
-                        direction_weight=args.direction_weight,
-                        benefit_calibrator=benefit_calibrator,
-                        policy_objective=args.policy_objective,
-                        ssim_weight=args.policy_ssim_weight,
-                        lpips_weight=args.policy_lpips_weight,
-                        compute_lpips=args.calib_lpips,
-                        device=device,
-                    )
-                    alpha = float(calibration["alpha"])
-                    row = _selected_calibration_row(calibration, alpha)
-                    score = float(row.get("selection_score", row.get("psnr_gain", 0.0)))
-                    candidate_rows.append(
-                        {
-                            **policy,
-                            "alpha": alpha,
-                            "calib_selection_score": score,
-                            "calib_psnr_gain": row.get("psnr_gain"),
-                            "calib_ssim_gain": row.get("ssim_gain"),
-                            "calib_lpips_gain": row.get("lpips_gain"),
-                            "calib_psnr": row.get("psnr"),
-                            "calib_base_psnr": row.get("base_psnr"),
-                            "benefit_accepted_bins": (
-                                benefit_calibrator.to_json().get("accepted_bins") if benefit_calibrator is not None else None
-                            ),
+                    for direction_weight in direction_weight_values:
+                        policy = {
+                            "mode": mode,
+                            "k": int(k),
+                            "residual_clip": float(residual_clip),
+                            "depth_abs_tol": float(args.depth_abs_tol),
+                            "depth_rel_tol": float(depth_rel),
+                            "direction_weight": float(direction_weight),
                         }
-                    )
-                    rank = (score, -order)
-                    if best is None or rank > (best[0], best[1]):
-                        best = (score, -order, policy, calibration, benefit_calibrator)
-                    order += 1
+                        benefit_calibrator = _fit_optional_benefit(args, train_frames, policy, device)
+                        calibration = calibrate_alpha(
+                            train_frames,
+                            alpha_grid=alpha_grid,
+                            k=int(k),
+                            mode=mode,
+                            calib_stride=args.calib_stride,
+                            calib_max_views=args.calib_max_views,
+                            calib_sampler=args.calib_sampler,
+                            residual_clip=float(residual_clip),
+                            depth_abs_tol=args.depth_abs_tol,
+                            depth_rel_tol=float(depth_rel),
+                            direction_weight=float(direction_weight),
+                            benefit_calibrator=benefit_calibrator,
+                            policy_objective=args.policy_objective,
+                            ssim_weight=args.policy_ssim_weight,
+                            lpips_weight=args.policy_lpips_weight,
+                            compute_lpips=args.calib_lpips,
+                            device=device,
+                        )
+                        alpha = float(calibration["alpha"])
+                        row = _selected_calibration_row(calibration, alpha)
+                        score = float(row.get("selection_score", row.get("psnr_gain", 0.0)))
+                        candidate_rows.append(
+                            {
+                                **policy,
+                                "alpha": alpha,
+                                "calib_selection_score": score,
+                                "calib_psnr_gain": row.get("psnr_gain"),
+                                "calib_ssim_gain": row.get("ssim_gain"),
+                                "calib_lpips_gain": row.get("lpips_gain"),
+                                "calib_psnr": row.get("psnr"),
+                                "calib_base_psnr": row.get("base_psnr"),
+                                "benefit_accepted_bins": (
+                                    benefit_calibrator.to_json().get("accepted_bins") if benefit_calibrator is not None else None
+                                ),
+                            }
+                        )
+                        rank = (score, -order)
+                        if best is None or rank > (best[0], best[1]):
+                            best = (score, -order, policy, calibration, benefit_calibrator)
+                        order += 1
     assert best is not None
     return best[2], best[3], candidate_rows, best[4]
 
@@ -206,6 +217,8 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
             "direction_weight": args.direction_weight,
             "target_split": args.target_split,
             "method_name": args.method_name,
+            "calib_sampler": args.calib_sampler,
+            "policy_direction_weight_values": args.policy_direction_weight_values,
             "policy_objective": args.policy_objective,
             "calib_lpips": args.calib_lpips,
             "benefit_policy": args.benefit_policy,
@@ -215,6 +228,7 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
         "ela/alpha": float(report.get("alpha", 0.0)),
         "ela/k": int(report.get("k", 0)),
         "ela/depth_rel_tol": float(report.get("depth_rel_tol", 0.0)),
+        "ela/direction_weight": float(report.get("direction_weight", 0.0)),
         "ela/residual_clip": float(report.get("residual_clip", 0.0)),
         "ela/target_frames": int(report.get("target_frames", 0)),
         "ela/mean_covered_fraction": float(report.get("mean_covered_fraction", 0.0)),
@@ -257,7 +271,7 @@ def run(args: argparse.Namespace) -> dict:
             min_confidence=args.min_confidence,
             depth_abs_tol=float(policy["depth_abs_tol"]),
             depth_rel_tol=float(policy["depth_rel_tol"]),
-            direction_weight=args.direction_weight,
+            direction_weight=float(policy.get("direction_weight", args.direction_weight)),
             benefit_calibrator=benefit_calibrator,
             loader=loader,
             device=device,
@@ -284,13 +298,14 @@ def run(args: argparse.Namespace) -> dict:
         "policy_ssim_weight": float(args.policy_ssim_weight),
         "policy_lpips_weight": float(args.policy_lpips_weight),
         "calib_lpips": bool(args.calib_lpips),
+        "calib_sampler": str(args.calib_sampler),
         "benefit_policy": benefit_calibrator.to_json() if benefit_calibrator is not None else None,
         "mode": str(policy["mode"]),
         "k": int(policy["k"]),
         "residual_clip": float(policy["residual_clip"]),
         "depth_abs_tol": float(policy["depth_abs_tol"]),
         "depth_rel_tol": float(policy["depth_rel_tol"]),
-        "direction_weight": float(args.direction_weight),
+        "direction_weight": float(policy.get("direction_weight", args.direction_weight)),
         "mean_covered_fraction": float(sum(float(x["covered_fraction"]) for x in infos) / max(len(infos), 1)),
         "mean_confidence": float(sum(float(x["mean_confidence"]) for x in infos) / max(len(infos), 1)),
         "mean_benefit_accept_fraction": float(
@@ -319,6 +334,7 @@ def main() -> int:
     parser.add_argument("--policy_k_values", default="4,8")
     parser.add_argument("--policy_depth_rel_values", default="0.06,0.12")
     parser.add_argument("--policy_residual_clip_values", default="0.25")
+    parser.add_argument("--policy_direction_weight_values", default="")
     parser.add_argument("--policy_objective", choices=("psnr", "balanced"), default="psnr")
     parser.add_argument("--policy_ssim_weight", default=20.0, type=float)
     parser.add_argument("--policy_lpips_weight", default=20.0, type=float)
@@ -332,6 +348,7 @@ def main() -> int:
     parser.add_argument("--alpha_grid", default="0,0.125,0.25,0.5,0.75,1.0")
     parser.add_argument("--calib_stride", default=16, type=int)
     parser.add_argument("--calib_max_views", default=16, type=int)
+    parser.add_argument("--calib_sampler", choices=("stride_first", "uniform"), default="stride_first")
     parser.add_argument("--residual_clip", default=0.25, type=float)
     parser.add_argument("--min_confidence", default=1e-4, type=float)
     parser.add_argument("--depth_abs_tol", default=0.02, type=float)
