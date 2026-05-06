@@ -23,6 +23,11 @@ class SCEPolicyConfig:
     rollback_combined_mae_beta: float = 1.0
     rollback_cluster_top_k: int = 0
     rollback_regressed_only: bool = True
+    rollback_aggregation: str = "mean"
+    rollback_cvar_fraction: float = 0.2
+    rollback_cvar_min_points: int = 16
+    rollback_pixel_radius: int = 0
+    rollback_patch_reduce: str = "center"
     sparse_lambda: float = 0.003
     render_normal_anchor_lambda: float = 0.01
     render_depth_anchor_lambda: float = 0.0

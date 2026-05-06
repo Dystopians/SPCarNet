@@ -3572,6 +3572,11 @@ def training(
                 cluster_balance=bool(getattr(opt, "sparse_depth_parent_rollback_cluster_balance", False)),
                 regressed_only=bool(getattr(opt, "sparse_depth_parent_rollback_regressed_only", False)),
                 cluster_top_k=int(getattr(opt, "sparse_depth_parent_rollback_cluster_top_k", 0)),
+                aggregation=str(getattr(opt, "sparse_depth_parent_rollback_aggregation", "mean")),
+                cvar_fraction=float(getattr(opt, "sparse_depth_parent_rollback_cvar_fraction", 0.2)),
+                cvar_min_points=int(getattr(opt, "sparse_depth_parent_rollback_cvar_min_points", 16)),
+                pixel_radius=int(getattr(opt, "sparse_depth_parent_rollback_pixel_radius", 0)),
+                patch_reduce=str(getattr(opt, "sparse_depth_parent_rollback_patch_reduce", "center")),
                 strict=bool(getattr(opt, "sparse_depth_parent_rollback_strict", False)),
             )
             sparse_parent_rollback_reason = str(rollback_res.get("reason", "unknown"))

@@ -5098,3 +5098,27 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Guarded table**: `outputs/carnet/meshsplatopt/final_stageSCE20_mae_first_guarded_recovery/guarded_policy_table_courtyard_bonsai` has two non-regression no-op rows and zero strict-improvement rows.
 
 **Decision**: `SCE20_NEGATIVE_BUT_POLICY_GUARD_CAUGHT`. The method is more reliable, but the remaining courtyard depth gap is still not solved.
+
+---
+
+## 2026-05-06 - SCE21 Conditional Tail-Risk Sentinel Envelope closes courtyard Depth MAE gap
+
+**Goal**: replace mean sentinel rollback with a research-grade tail-risk objective aimed at the true bottleneck: a small number of sparse-depth certificate violations dominating held-out geometry metrics.
+
+**Mechanism**: implemented CTR-SCE, Conditional Tail-Risk Sentinel Envelope. The sparse parent rollback loss now supports `mean`, `cvar`, and `cluster_cvar` aggregation plus local pixel envelopes via `pixel_radius` and `patch_reduce`. Defaults remain unchanged, so the feature is opt-in.
+
+**Literature basis**: CVaR tail-risk optimization (Rockafellar and Uryasev, 2000), conformal risk control, influence-style local evidence debugging, and sparse SfM / DS-NeRF depth evidence as geometry certificates.
+
+**Smoke**: SCE21 tail-risk rollback smoke, SCE7 policy smoke, and compileall passed.
+
+**Run 1**: `outputs/carnet/meshsplatopt/final_stageSCE21_tail_risk_sentinel/courtyard/cluster_cvar_patch1_28600to28780_seed0/recovery_model`, W&B `uhbivqf7`, 28600 to 28780, regressed-only cluster-CVaR, 1px max-violation envelope, topology unchanged. Result: PSNR `12.612520`, SSIM `0.338573`, LPIPS `0.559891`, AbsRel `0.298388`, Depth MAE `3.337240`, Normal `39.329123`.
+
+**Run 2**: `outputs/carnet/meshsplatopt/final_stageSCE21_tail_risk_sentinel/courtyard/all_sentinel_cvar_patch1_28780to28880_seed0/recovery_model`, W&B `i4eewtbz`, 28780 to 28880, all-sentinel cluster-CVaR, 1px max-violation envelope, topology unchanged. Result: PSNR `12.616089`, SSIM `0.338898`, LPIPS `0.559881`, AbsRel `0.298215`, Depth MAE `3.336610`, Normal `39.339078`.
+
+**Result vs F82 max500**: SCE21 28880 beats all tracked metrics: PSNR `+0.417478`, SSIM `+0.030249`, LPIPS `-0.006806`, AbsRel `-0.003668`, Depth MAE `-0.003262`, Normal `-0.876624`.
+
+**Robustness max1000**: F82 AbsRel/MAE/Normal `0.306570/3.353679/39.744123`; SCE21 28880 `0.295966/3.280159/38.343424`, also all better.
+
+**Diagnostic caveat**: test correspondence analyzer still shows sampled MAE `+0.017089` and `DSC_0318` as a local weak view. This diagnostic is not used for training. The aggregate independent geometry gate is solved, but not every sampled held-out correspondence is locally non-regressing.
+
+**Decision**: `SCE21_COURTYARD_ALL_METRIC_PASS_VS_F82`. This is the first real milestone that closes the courtyard Depth MAE gap while preserving unchanged topology. Multiscene CTR-SCE validation remains required before making a universal F82-superiority claim.

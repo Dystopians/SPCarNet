@@ -96,6 +96,16 @@ def _wrapper_command(args: argparse.Namespace, cfg: SCEPolicyConfig, *, activate
                 cfg.rollback_loss_space,
                 "--sparse_depth_parent_rollback_combined_mae_beta",
                 str(cfg.rollback_combined_mae_beta),
+                "--sparse_depth_parent_rollback_aggregation",
+                cfg.rollback_aggregation,
+                "--sparse_depth_parent_rollback_cvar_fraction",
+                str(cfg.rollback_cvar_fraction),
+                "--sparse_depth_parent_rollback_cvar_min_points",
+                str(cfg.rollback_cvar_min_points),
+                "--sparse_depth_parent_rollback_pixel_radius",
+                str(cfg.rollback_pixel_radius),
+                "--sparse_depth_parent_rollback_patch_reduce",
+                cfg.rollback_patch_reduce,
                 "--sparse_depth_parent_rollback_cluster_balance",
             ]
         )
@@ -120,6 +130,11 @@ def run(args: argparse.Namespace) -> int:
         rollback_combined_mae_beta=float(args.rollback_combined_mae_beta),
         rollback_cluster_top_k=int(args.rollback_cluster_top_k),
         rollback_regressed_only=bool(args.rollback_regressed_only),
+        rollback_aggregation=str(args.rollback_aggregation),
+        rollback_cvar_fraction=float(args.rollback_cvar_fraction),
+        rollback_cvar_min_points=int(args.rollback_cvar_min_points),
+        rollback_pixel_radius=int(args.rollback_pixel_radius),
+        rollback_patch_reduce=str(args.rollback_patch_reduce),
         sparse_lambda=float(args.sparse_lambda),
         render_normal_anchor_lambda=float(args.render_normal_anchor_lambda),
         render_depth_anchor_lambda=float(args.render_depth_anchor_lambda),
@@ -192,6 +207,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--rollback_combined_mae_beta", type=float, default=1.0)
     parser.add_argument("--rollback_cluster_top_k", type=int, default=0)
     parser.add_argument("--rollback_regressed_only", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--rollback_aggregation", choices=("mean", "cvar", "cluster_cvar"), default="mean")
+    parser.add_argument("--rollback_cvar_fraction", type=float, default=0.2)
+    parser.add_argument("--rollback_cvar_min_points", type=int, default=16)
+    parser.add_argument("--rollback_pixel_radius", type=int, default=0)
+    parser.add_argument("--rollback_patch_reduce", choices=("center", "max_violation", "mean_violation"), default="center")
     parser.add_argument("--rollback_max_points_per_view", type=int, default=2000)
     parser.add_argument("--sparse_lambda", type=float, default=0.003)
     parser.add_argument("--render_normal_anchor_lambda", type=float, default=0.01)

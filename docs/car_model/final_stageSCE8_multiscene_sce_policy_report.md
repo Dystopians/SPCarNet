@@ -30,6 +30,17 @@ This is useful negative evidence. SCE v1 does not supersede F82 as a universal m
 
 Follow-up SCE19 implements the required policy guard. With strict opt-in render protection, the bonsai SCE8 candidate is rejected as `accept_parent_noop` because PSNR/SSIM decrease and LPIPS increases, despite sparse depth improvement. This turns the failure into controlled negative-transfer prevention rather than a manual scene exception.
 
+Follow-up SCE21 implements CTR-SCE tail-risk sentinel rollback. On courtyard seed0 it is the first candidate to beat F82 on all six tracked independent metrics with unchanged topology:
+
+- PSNR `+0.417478`
+- SSIM `+0.030249`
+- LPIPS `-0.006806`
+- AbsRel `-0.003668`
+- Depth MAE `-0.003262`
+- Normal `-0.876624`
+
+This updates the courtyard status from partial to all-metric pass, but does not change the multiscene decision label yet because bonsai/room/counter fixed-policy validation remains incomplete.
+
 ## Next Validation Requirement
 
-Before claiming SCE-Repair fully beats F82, run a revised policy on bonsai, room, and counter with stronger appearance protection or early-stop gates, then use the collector to build the final SCE8 table. Current label is `SCE_POLICY_V1_RENDER_PASS_GEOMETRY_MIXED`, not pass.
+Before claiming SCE-Repair fully beats F82, run CTR-SCE guarded fixed policy on bonsai, room, and counter with no per-scene retuning, then use the collector to build the final SCE8 table. Current multiscene label remains `SCE_POLICY_V1_RENDER_PASS_GEOMETRY_MIXED`; courtyard alone is now `SCE21_COURTYARD_ALL_METRIC_PASS_VS_F82`.

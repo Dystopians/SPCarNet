@@ -206,6 +206,16 @@ def _train_args(args: argparse.Namespace) -> list[str]:
                 str(args.sparse_depth_parent_rollback_max_points_per_view),
                 "--sparse_depth_parent_rollback_loss_space",
                 args.sparse_depth_parent_rollback_loss_space,
+                "--sparse_depth_parent_rollback_aggregation",
+                args.sparse_depth_parent_rollback_aggregation,
+                "--sparse_depth_parent_rollback_cvar_fraction",
+                str(args.sparse_depth_parent_rollback_cvar_fraction),
+                "--sparse_depth_parent_rollback_cvar_min_points",
+                str(args.sparse_depth_parent_rollback_cvar_min_points),
+                "--sparse_depth_parent_rollback_pixel_radius",
+                str(args.sparse_depth_parent_rollback_pixel_radius),
+                "--sparse_depth_parent_rollback_patch_reduce",
+                args.sparse_depth_parent_rollback_patch_reduce,
             ]
         )
         if args.sparse_depth_parent_rollback_cluster_balance:
@@ -392,6 +402,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sparse_depth_parent_rollback_cluster_top_k", type=int, default=0)
     parser.add_argument("--sparse_depth_parent_rollback_max_points_per_view", type=int, default=500)
     parser.add_argument("--sparse_depth_parent_rollback_loss_space", choices=("absrel", "mae", "combined"), default="combined")
+    parser.add_argument("--sparse_depth_parent_rollback_aggregation", choices=("mean", "cvar", "cluster_cvar"), default="mean")
+    parser.add_argument("--sparse_depth_parent_rollback_cvar_fraction", type=float, default=0.2)
+    parser.add_argument("--sparse_depth_parent_rollback_cvar_min_points", type=int, default=16)
+    parser.add_argument("--sparse_depth_parent_rollback_pixel_radius", type=int, default=0)
+    parser.add_argument("--sparse_depth_parent_rollback_patch_reduce", choices=("center", "max_violation", "mean_violation"), default="center")
     parser.add_argument("--lr_triangles_points_init", type=float, default=None)
     parser.add_argument("--feature_lr", type=float, default=None)
     parser.add_argument("--weight_lr", type=float, default=None)

@@ -229,6 +229,11 @@ class OptimizationParams(ParamGroup):
         self.sparse_depth_parent_rollback_cluster_top_k = 0
         self.sparse_depth_parent_rollback_max_points_per_view = 500
         self.sparse_depth_parent_rollback_loss_space = "combined"
+        self.sparse_depth_parent_rollback_aggregation = "mean"
+        self.sparse_depth_parent_rollback_cvar_fraction = 0.2
+        self.sparse_depth_parent_rollback_cvar_min_points = 16
+        self.sparse_depth_parent_rollback_pixel_radius = 0
+        self.sparse_depth_parent_rollback_patch_reduce = "center"
         self.sparse_depth_parent_rollback_allow_test_cache = False
         self.sparse_depth_parent_rollback_strict = False
         self.lambda_lpips_loss = 0.0
