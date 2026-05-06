@@ -5014,3 +5014,17 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `NO_GO_FULL_TOP_CONFERENCE_YET_CONTINUE_RESEARCH_OR_WORKSHOP`. The method object and engineering discipline are strong, but current evidence still has the courtyard Depth MAE gap, incomplete SCE8 multiscene validation, no real non-rollback SCE15 win, and partial SCE16 ablations.
 
 **Recommended title**: `MeshSplatOpt-SCE: Evidence-Sentinel Certified Recovery for Compact Mesh Splatting`.
+
+---
+
+## 2026-05-06 - SCE9 sentinel-guided local surgery
+
+**Goal**: implement local surgery proposal logic that only triggers snap/split/fill/appearance-reset when sentinel evidence and local support justify it.
+
+**Implementation**: added `ss3dm_prior/meshsplatopt/sce_local_surgery.py`, `scripts/car_model/meshsplatopt_make_sce_local_surgery_proposals.py`, `scripts/car_model/meshsplatopt_apply_sce_local_surgery.py`, `scripts/car_model/smoke_test_stageSCE9_sce_local_surgery.py`, plus SCE9 design/report docs.
+
+**Verification**: compileall passed; smoke test passed. Synthetic cases produce `SNAP_VERTICES`, `SPLIT_TRIANGLES`, `FILL_PATCH`, `APPEARANCE_RESET`, and reject unknown unobserved voids. Synthetic accepted edits reduce sentinel error.
+
+**Real courtyard diagnostic**: running proposals on `best28600_train_policy` ECG produced `895` proposals and `0` accepted edits because real clusters lack the required surface/free-space certificates. This is the correct conservative behavior.
+
+**Decision**: `SCE9_SYNTHETIC_PASS_REAL_COURTYARD_ROLLBACK_ONLY`. Do not claim real local surgery benefit yet.
