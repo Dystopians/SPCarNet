@@ -4928,3 +4928,33 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Verification**: compileall passed. Courtyard current table wrote `outputs/carnet/meshsplatopt/final_stageSCE8_multiscene_sce_policy/courtyard_current_table` and correctly reports `all_pass=0`, with deltas PSNR `+0.411804`, SSIM `+0.029528`, LPIPS `-0.006609`, AbsRel `-0.002983`, Depth MAE `+0.001787`, Normal `-0.847397`.
 
 **Decision**: `SCE8_COLLECTOR_PASS_COURTYARD_STILL_PARTIAL`. The collector is ready; the fixed-policy multiscene claim still requires actual SCE runs on bonsai/room/counter and a final courtyard MAE closure or an explicit limitation.
+
+---
+
+## 2026-05-06 - SCE7 current-residual sentinel negative result
+
+**Goal**: rebuild train-only sentinels from the current best 28600 candidate rather than the older F95 candidate, then test whether a gentle residual rollback closes the last Depth MAE gap.
+
+**Train evidence**: current best 28600 already improves train split globally over F82: AbsRel `0.389850 -> 0.385679`, Depth MAE `4.864911 -> 4.844891`. It still has `13274` local regressed sentinels and `1906` gate-critical sentinels.
+
+**Cache**: `sentinel_cache_current_residual_dense1500` has `42245` train sentinels, `14945` current-regressed sentinels, `33` train views, and `no_test_leakage=true`.
+
+**Recovery**: `currentres_beta0p02_28600to28650_seed0`, W&B `hfkzouma`, gentle rollback `lambda=0.2`, LR `0.002`, worsened Depth MAE to `3.343615` compared with the 28600 knee `3.341660`.
+
+**ECG/planner**: train ECG top conflict is `cluster 876`; SCE13 emits only `ROLLBACK_ONLY`, with no train-certified snap/split/fill/delete evidence.
+
+**Decision**: `RESIDUAL_CURRENT_SENTINEL_DID_NOT_BEAT_28600_KNEE`. The best courtyard candidate remains SCE7 28600; further topology surgery is not justified by current train evidence.
+
+---
+
+## 2026-05-06 - SCE14 mesh surgery stress-test benchmark
+
+**Goal**: add a controlled downstream benchmark so the paper is not only a compact-recovery metric table.
+
+**Implementation**: added `ss3dm_prior/meshsplatopt/stress_test_defects.py`, `scripts/car_model/meshsplatopt_make_stress_test_defects.py`, `scripts/car_model/meshsplatopt_run_stress_test_suite.py`, `scripts/car_model/meshsplatopt_collect_stress_test_results.py`, `scripts/car_model/smoke_test_stageSCE14_stress_test_defects.py`, and `docs/car_model/final_stageSCE14_mesh_surgery_stress_test_design.md`.
+
+**Defects**: floater insertion, supported surface delete, dent deform, rough surface noise, boundary hole, ground void, appearance ghost, and overcompact cluster.
+
+**Verification**: smoke test passed; compileall passed. Synthetic seed-3 artifacts are under `outputs/carnet/meshsplatopt/final_stageSCE14_mesh_surgery_stress_test/synthetic_seed3`. All `8/8` defects are reversible; the scoring suite evaluates `7` methods and only `sce_certificate_planner` passes the synthetic gate by repairing at least `5/8` defect families without false repair.
+
+**Decision**: `SCE14_SYNTHETIC_BENCHMARK_PASS`. This is infrastructure-level evidence, not a real-scene win yet; the next stage should use it for a real local surgery pilot only where train ECG gives certificates beyond rollback-only.
