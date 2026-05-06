@@ -4958,3 +4958,17 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Verification**: smoke test passed; compileall passed. Synthetic seed-3 artifacts are under `outputs/carnet/meshsplatopt/final_stageSCE14_mesh_surgery_stress_test/synthetic_seed3`. All `8/8` defects are reversible; the scoring suite evaluates `7` methods and only `sce_certificate_planner` passes the synthetic gate by repairing at least `5/8` defect families without false repair.
 
 **Decision**: `SCE14_SYNTHETIC_BENCHMARK_PASS`. This is infrastructure-level evidence, not a real-scene win yet; the next stage should use it for a real local surgery pilot only where train ECG gives certificates beyond rollback-only.
+
+---
+
+## 2026-05-06 - SCE15 real-scene local surgery pilot plan and safe wrappers
+
+**Goal**: prepare a real-scene local surgery pilot without overclaiming topology edits from insufficient evidence.
+
+**Implementation**: added `docs/car_model/final_stageSCE15_real_scene_local_surgery_pilot_plan.md`, `scripts/car_model/meshsplatopt_materialize_certificate_edit_plan.py`, `scripts/car_model/meshsplatopt_run_certificate_edit_recovery.py`, and `scripts/car_model/meshsplatopt_gate_certificate_edit_result.py`.
+
+**Courtyard evidence**: train and held-out ECGs identify sparse-depth certificate conflicts, but SCE13 emits only `ROLLBACK_ONLY`. The train materializer wrote `outputs/carnet/meshsplatopt/final_stageSCE15_real_scene_local_surgery/courtyard/train_plan_materialized` with one selected rollback-only action and no topology edit.
+
+**Verification**: compileall passed; materializer smoke on the real train plan passed.
+
+**Decision**: `SCE15_PLAN_AND_SAFE_MATERIALIZER_IMPLEMENTED_NO_TOPOLOGY_PROMOTION`. Do not claim real bidirectional surgery from courtyard yet; only promote non-rollback local surgery when train/calibration ECG provides explicit snap/split/fill/delete certificates and independent gates pass.
