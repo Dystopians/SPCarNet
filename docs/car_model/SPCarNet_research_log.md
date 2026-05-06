@@ -5000,3 +5000,17 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Claim lock**: current safe tier is Tier C. We can claim a rigorous evidence-sentinel recovery framework with ECG/planner/stress-test infrastructure and strong courtyard partial results. We cannot yet claim full all-metric F82 superiority, universal multiscene SCE transfer, or real-scene bidirectional surgery wins.
 
 **Decision**: `SCE17_CLAIM_LOCK_PASS`.
+
+---
+
+## 2026-05-06 - SCE18 top-conference readiness decision
+
+**Goal**: make an honest Go/No-Go decision for a top-conference full paper.
+
+**Document**: `docs/car_model/final_stageSCE18_top_conference_readiness_decision.md`.
+
+**Score**: `35/50`.
+
+**Decision**: `NO_GO_FULL_TOP_CONFERENCE_YET_CONTINUE_RESEARCH_OR_WORKSHOP`. The method object and engineering discipline are strong, but current evidence still has the courtyard Depth MAE gap, incomplete SCE8 multiscene validation, no real non-rollback SCE15 win, and partial SCE16 ablations.
+
+**Recommended title**: `MeshSplatOpt-SCE: Evidence-Sentinel Certified Recovery for Compact Mesh Splatting`.
