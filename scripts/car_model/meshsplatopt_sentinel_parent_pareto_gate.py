@@ -53,12 +53,22 @@ def _views_by_key(scene):
     return {normalize_image_key(getattr(v, "image_name", "")): v for v in views}
 
 
-def _sample_depth(render_pkg: dict[str, Any], px: np.ndarray, py: np.ndarray) -> np.ndarray:
+def _sample_depth(
+    render_pkg: dict[str, Any],
+    px: np.ndarray,
+    py: np.ndarray,
+    width: np.ndarray | None = None,
+    height: np.ndarray | None = None,
+) -> np.ndarray:
     surf_depth = render_pkg.get("surf_depth", None)
     if surf_depth is None:
         return np.full(px.shape, np.nan, dtype=np.float64)
     depth = surf_depth[0].detach().cpu().numpy()
     h, w = depth.shape
+    if width is not None and np.asarray(width).shape[0] == px.shape[0] and np.any(np.asarray(width) > 0):
+        px = np.rint(px.astype(np.float64) * (float(w) / np.maximum(np.asarray(width, dtype=np.float64), 1.0))).astype(np.int64)
+    if height is not None and np.asarray(height).shape[0] == py.shape[0] and np.any(np.asarray(height) > 0):
+        py = np.rint(py.astype(np.float64) * (float(h) / np.maximum(np.asarray(height, dtype=np.float64), 1.0))).astype(np.int64)
     x = np.clip(px.astype(np.int64), 0, w - 1)
     y = np.clip(py.astype(np.int64), 0, h - 1)
     return depth[y, x].astype(np.float64)
@@ -96,10 +106,12 @@ def run(args) -> int:
                 continue
             px = np.asarray(entry["px"], dtype=np.int64).reshape(-1)
             py = np.asarray(entry["py"], dtype=np.int64).reshape(-1)
+            cache_width = np.asarray(entry.get("width", np.zeros_like(px)), dtype=np.int64).reshape(-1)
+            cache_height = np.asarray(entry.get("height", np.zeros_like(py)), dtype=np.int64).reshape(-1)
             parent_pkg = render(view, parent_triangles, pipe, background)
             candidate_pkg = render(view, candidate_triangles, pipe, background)
-            parent_depth = _sample_depth(parent_pkg, px, py)
-            candidate_depth = _sample_depth(candidate_pkg, px, py)
+            parent_depth = _sample_depth(parent_pkg, px, py, cache_width, cache_height)
+            candidate_depth = _sample_depth(candidate_pkg, px, py, cache_width, cache_height)
             depth_image = parent_pkg["surf_depth"][0]
             height = int(depth_image.shape[0])
             width = int(depth_image.shape[1])

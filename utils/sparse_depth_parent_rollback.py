@@ -80,6 +80,8 @@ def compute_sparse_depth_parent_rollback_loss(
 
     px_np = np.asarray(entry["px"], dtype=np.int64).reshape(-1)
     py_np = np.asarray(entry["py"], dtype=np.int64).reshape(-1)
+    width_np = np.asarray(entry.get("width", np.zeros_like(px_np)), dtype=np.int64).reshape(-1)
+    height_np = np.asarray(entry.get("height", np.zeros_like(py_np)), dtype=np.int64).reshape(-1)
     gt_np = np.asarray(entry["gt_depth"], dtype=np.float64).reshape(-1)
     parent_abs_np = np.asarray(entry["parent_abs_error"], dtype=np.float64).reshape(-1)
     parent_rel_np = np.asarray(entry["parent_abs_rel"], dtype=np.float64).reshape(-1)
@@ -98,6 +100,8 @@ def compute_sparse_depth_parent_rollback_loss(
         return {"loss_pure": 0.0, "loss_weighted": 0.0, "reason": "no_valid_cache_points", "active_points": 0}
     px_np = px_np[finite]
     py_np = py_np[finite]
+    width_np = width_np[finite] if width_np.shape[0] == finite.shape[0] else np.zeros_like(px_np)
+    height_np = height_np[finite] if height_np.shape[0] == finite.shape[0] else np.zeros_like(py_np)
     gt_np = gt_np[finite]
     parent_abs_np = parent_abs_np[finite]
     parent_rel_np = parent_rel_np[finite]
@@ -105,6 +109,8 @@ def compute_sparse_depth_parent_rollback_loss(
     pick = _select_indices(weights_np, int(max_points_per_view))
     px_np = px_np[pick]
     py_np = py_np[pick]
+    width_np = width_np[pick] if width_np.shape[0] == pick.shape[0] or width_np.shape[0] == gt_np.shape[0] else np.zeros_like(px_np)
+    height_np = height_np[pick] if height_np.shape[0] == pick.shape[0] or height_np.shape[0] == gt_np.shape[0] else np.zeros_like(py_np)
     gt_np = gt_np[pick]
     parent_abs_np = parent_abs_np[pick]
     parent_rel_np = parent_rel_np[pick]
@@ -114,6 +120,12 @@ def compute_sparse_depth_parent_rollback_loss(
     if pred_depth.dim() == 3:
         pred_depth = pred_depth[0]
     h, w = int(pred_depth.shape[0]), int(pred_depth.shape[1])
+    if width_np.shape[0] == px_np.shape[0] and np.any(width_np > 0):
+        sx = float(w) / np.maximum(width_np.astype(np.float64), 1.0)
+        px_np = np.rint(px_np.astype(np.float64) * sx).astype(np.int64)
+    if height_np.shape[0] == py_np.shape[0] and np.any(height_np > 0):
+        sy = float(h) / np.maximum(height_np.astype(np.float64), 1.0)
+        py_np = np.rint(py_np.astype(np.float64) * sy).astype(np.int64)
     px_np = np.clip(px_np, 0, w - 1)
     py_np = np.clip(py_np, 0, h - 1)
     device = pred_depth.device

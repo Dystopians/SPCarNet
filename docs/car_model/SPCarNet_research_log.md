@@ -4801,3 +4801,20 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Finding**: F95 fails sentinel parent-Pareto: AbsRel `0.385219713 -> 0.386472855`, Depth MAE `4.806230962 -> 4.833562309`, `4985` regressed sentinels, `636` gate-critical sentinels.
 
 **Decision**: `SCE4_PASS_AS_IMPLEMENTATION_F95_FAILS_GATE`. Next is SCE5 diagnostic packaging and SCE6 targeted rollback recovery.
+
+---
+
+## 2026-05-06 - Final SCE5/SCE6 sparse sentinel diagnostic and preliminary rollback
+
+**Goal**: package the F82-vs-F95 sparse correspondence failure and test whether one-sided parent rollback can preserve F95 visual gains while fixing courtyard sparse-depth parent-Pareto.
+
+**SCE5 finding**: train/calibration sentinels predict the independent test failure. Corrected resolution-8 train cache has `14167` sentinels across `32` train views, `5394` F95-regressed candidate sentinels, and `no_test_leakage=true`. The corrected train sentinel gate fails in the same direction as the test analyzer: AbsRel `0.398396218 -> 0.400966688`, Depth MAE `4.962074933 -> 4.997632539`.
+
+**Implementation lesson**: sentinel caches must be resolution-aware. The first cache was built at resolution 4 while the F95/SCE6 recovery path renders at resolution 8. The cache now records per-point `width`/`height`, and rollback/gate consumers rescale cached `px/py` to the current render depth resolution before sampling.
+
+**SCE6 runs**:
+- historical/resolution-mismatched rollback `0.01`, W&B `dpcqn150`: invalid as evidence after the cache-resolution issue was found.
+- corrected res8 rollback `0.05`, W&B `omp7409e`: PSNR/SSIM improve but AbsRel `0.308244` and Depth MAE `3.421661` remain worse than F82.
+- corrected res8 rollback `0.5`, W&B `xhvmsv8m`: PSNR `12.313520`, SSIM `0.319199`, LPIPS `0.565644`, normal `40.117207`, but AbsRel `0.307620` and Depth MAE `3.423940` still fail F82 parent-Pareto.
+
+**Decision**: `SCE_TARGETED_ROLLBACK_PARTIAL_NEEDS_DENSE_GEOMETRY_PHASE`. The interfaces are now real, opt-in, logged, and resolution-safe; the remaining blocker is insufficient sparse sentinel density/weight against the F95-style visual recovery forces. Next step is a denser resolution-8 sentinel cache plus geometry-first rollback before appearance recovery.

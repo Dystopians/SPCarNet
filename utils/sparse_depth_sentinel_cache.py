@@ -65,11 +65,17 @@ def build_sparse_depth_sentinel_cache(
     point_id = _arr(table, "point3D_id", np.int64)
     px = _arr(table, "px", np.int64)
     py = _arr(table, "py", np.int64)
+    width = _arr(table, "width", np.int64)
+    height = _arr(table, "height", np.int64)
     gt = _arr(table, "gt_depth", np.float64)
     parent_pred = _arr(table, "parent_pred_depth", np.float64)
     candidate_pred = _arr(table, "candidate_pred_depth", np.float64)
     if candidate_pred.shape[0] == 0:
         candidate_pred = np.full(gt.shape, np.nan, dtype=np.float64)
+    if width.shape[0] == 0:
+        width = np.zeros(gt.shape, dtype=np.int64)
+    if height.shape[0] == 0:
+        height = np.zeros(gt.shape, dtype=np.int64)
     n = int(gt.shape[0])
     for key, value in {
         "image_name": image_name,
@@ -77,6 +83,8 @@ def build_sparse_depth_sentinel_cache(
         "point3D_id": point_id,
         "px": px,
         "py": py,
+        "width": width,
+        "height": height,
         "parent_pred_depth": parent_pred,
         "candidate_pred_depth": candidate_pred,
     }.items():
@@ -93,6 +101,8 @@ def build_sparse_depth_sentinel_cache(
     point_id = point_id[keep_parent_valid]
     px = px[keep_parent_valid]
     py = py[keep_parent_valid]
+    width = width[keep_parent_valid]
+    height = height[keep_parent_valid]
     gt = gt[keep_parent_valid]
     parent_pred = parent_pred[keep_parent_valid]
     candidate_pred = candidate_pred[keep_parent_valid]
@@ -155,6 +165,8 @@ def build_sparse_depth_sentinel_cache(
             "image_key": image_key,
             "px": px.astype(np.int64),
             "py": py.astype(np.int64),
+            "width": width.astype(np.int64),
+            "height": height.astype(np.int64),
             "gt_depth": gt.astype(np.float64),
             "point3D_id": point_id.astype(np.int64),
             "parent_pred_depth": parent_pred.astype(np.float64),
