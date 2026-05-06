@@ -5050,3 +5050,17 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Documents**: added `final_stageSCE11_method_spec.md`, `final_stageSCE11_experiment_protocol.md`, `final_stageSCE11_reproducibility_checklist.md`, `final_stageSCE11_paper_outline.md`, and `final_stageSCE11_final_decision.md`.
 
 **Decision**: `READY_FOR_WORKSHOP_OR_ARXIV`. Not yet ready for a full top-conference claim without SCE8 multiscene completion or a real non-rollback surgery win.
+
+---
+
+## 2026-05-06 - SCE8 bonsai fixed-policy probe
+
+**Goal**: test whether SCE v1 can directly supersede F82 on another scene without per-scene retuning.
+
+**Run**: `outputs/carnet/meshsplatopt/final_stageSCE8_multiscene_sce_policy/bonsai/sce_probe_v1_26000to26200_seed0/recovery_model`, W&B `s6yztj51`, 200-step fixed knobs from F82 26000 to 26200, topology unchanged.
+
+**Result vs F82 bonsai**: RGB worsened: PSNR `-0.176259`, SSIM `-0.044556`, LPIPS `+0.030025`. Sparse geometry improved: AbsRel `-0.022422`, Depth MAE `-0.265169`. Normal slightly worsened `+0.043792`.
+
+**Combined SCE8 table**: `outputs/carnet/meshsplatopt/final_stageSCE8_multiscene_sce_policy/current_courtyard_bonsai_table` has `2` rows and `0` all-pass rows.
+
+**Decision**: `SCE_POLICY_V1_RENDER_PASS_GEOMETRY_MIXED`. SCE v1 is not a universal F82 replacement; it is currently a targeted repair module. Next policy revision needs appearance-preserving early stop/teacher protection for non-courtyard scenes.
