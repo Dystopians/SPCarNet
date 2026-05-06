@@ -35,6 +35,7 @@ class SCEPolicyConfig:
     max_ssim_drop: float = 0.0
     max_lpips_increase: float = 0.0
     min_render_score_delta: float = 0.0
+    require_parent_pareto_for_acceptance: bool = False
 
 
 def _metric_delta(candidate: Mapping[str, float], parent: Mapping[str, float], key: str) -> float:
@@ -89,6 +90,30 @@ def render_guard_pass(
     return len(reasons) == 0, reasons, deltas
 
 
+def parent_pareto_guard_pass(
+    candidate: Mapping[str, float] | None,
+    parent: Mapping[str, float] | None,
+    cfg: SCEPolicyConfig,
+) -> tuple[bool, list[str], dict[str, float]]:
+    if not candidate or not parent:
+        if bool(cfg.require_parent_pareto_for_acceptance):
+            return False, ["missing_parent_pareto_metrics"], {}
+        return True, [], {}
+    deltas: dict[str, float] = {}
+    reasons: list[str] = []
+    tol = float(cfg.parent_tolerance)
+    for key in sorted(HIGHER_IS_BETTER | LOWER_IS_BETTER):
+        if key not in candidate or key not in parent:
+            continue
+        delta = _metric_delta(candidate, parent, key)
+        deltas[f"delta_{key}"] = delta
+        if key in HIGHER_IS_BETTER and delta + tol < 0.0:
+            reasons.append(f"{key}_below_parent")
+        if key in LOWER_IS_BETTER and delta > tol:
+            reasons.append(f"{key}_above_parent")
+    return len(reasons) == 0, reasons, deltas
+
+
 def decide_sce_policy_action(
     *,
     sentinel_gate: Mapping[str, Any] | None,
@@ -124,6 +149,19 @@ def decide_sce_policy_action(
             "render_deltas": render_deltas,
             "policy": asdict(cfg),
         }
+    pareto_ok, pareto_reasons, pareto_deltas = parent_pareto_guard_pass(candidate_metrics, parent_metrics, cfg)
+    if not pareto_ok:
+        return {
+            "action": "accept_parent_noop",
+            "activate_rollback": False,
+            "execute_recovery": False,
+            "reason": "parent_pareto_guard_failed",
+            "parent_pareto_guard_reasons": pareto_reasons,
+            "parent_pareto_deltas": pareto_deltas,
+            "render_guard_reasons": render_reasons,
+            "render_deltas": render_deltas,
+            "policy": asdict(cfg),
+        }
     return {
         "action": "run_targeted_rollback" if degraded else "continue_or_accept_visual_recovery",
         "activate_rollback": bool(degraded),
@@ -131,6 +169,8 @@ def decide_sce_policy_action(
         "reason": "sentinel_degraded" if degraded else "sentinel_non_degrading",
         "render_guard_reasons": render_reasons,
         "render_deltas": render_deltas,
+        "parent_pareto_guard_reasons": pareto_reasons,
+        "parent_pareto_deltas": pareto_deltas,
         "policy": asdict(cfg),
     }
 

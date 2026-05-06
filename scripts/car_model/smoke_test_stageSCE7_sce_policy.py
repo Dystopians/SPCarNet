@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 from utils.sce_recovery_policy import (  # noqa: E402
     SCEPolicyConfig,
     decide_sce_policy_action,
+    parent_pareto_guard_pass,
     render_guard_pass,
     select_early_stop_candidate,
 )
@@ -58,6 +59,23 @@ def main() -> int:
     )
     assert action["action"] == "accept_parent_noop"
     assert action["reason"] == "render_guard_failed"
+
+    pareto_guarded = SCEPolicyConfig(require_parent_pareto_for_acceptance=True)
+    parent_all = {"psnr": 10.0, "ssim": 0.2, "lpips": 0.5, "absrel": 0.3, "depth_mae": 3.0, "normal": 40.0}
+    rgb_better_geom_worse = {"psnr": 10.1, "ssim": 0.21, "lpips": 0.49, "absrel": 0.31, "depth_mae": 3.1, "normal": 39.0}
+    ok, reasons, deltas = parent_pareto_guard_pass(rgb_better_geom_worse, parent_all, pareto_guarded)
+    assert ok is False
+    assert "absrel_above_parent" in reasons
+    assert "depth_mae_above_parent" in reasons
+    assert deltas["delta_psnr"] > 0.0
+    action = decide_sce_policy_action(
+        sentinel_gate=passing_gate,
+        cfg=pareto_guarded,
+        candidate_metrics=rgb_better_geom_worse,
+        parent_metrics=parent_all,
+    )
+    assert action["action"] == "accept_parent_noop"
+    assert action["reason"] == "parent_pareto_guard_failed"
 
     parent = {
         "psnr": 10.0,

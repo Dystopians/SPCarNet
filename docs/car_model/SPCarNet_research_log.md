@@ -5080,3 +5080,21 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Verification**: SCE7 policy smoke test and compileall passed.
 
 **Decision**: `SCE_POLICY_GUARD_IMPLEMENTED_BONSAI_NEGATIVE_CAUGHT`. This improves reliability and prevents negative transfer, but it is not a new metric win. The next fair multiscene validation should use guarded SCE v2: improve or no-op, with no per-scene retuning.
+
+---
+
+## 2026-05-06 - SCE20 MAE-first courtyard recovery and full-metric guard
+
+**Goal**: try a narrow, MAE-first continuation from the current SCE7 best courtyard checkpoint to close the remaining Depth MAE gap, then make sure the policy rejects RGB-only wins that worsen sparse geometry.
+
+**Run**: `outputs/carnet/meshsplatopt/final_stageSCE20_mae_first_guarded_recovery/courtyard/mae_rollback_low_lr_28600to28720_seed0_v2/recovery_model`, W&B `g500vmma`, 28600 to 28720, topology unchanged, sparse lambda `0.001`, MAE rollback lambda `0.75`, top-k `12`, LR `0.001`, normal anchor `0.02`.
+
+**Path correction**: the first attempt used the wrong source path `mipnerf360/courtyard` and failed before training; W&B `a9lt2r49` is only a failed launch record. The corrected ETH3D path run is the valid one.
+
+**Result vs SCE7 28600**: PSNR `+0.005254`, SSIM `+0.000620`, LPIPS `-0.000360`, normal `-0.006834`, but AbsRel `+0.000086` and Depth MAE `+0.001074`. The candidate is rejected.
+
+**Policy update**: added opt-in full parent-Pareto acceptance guard, `require_parent_pareto_for_acceptance`, covering PSNR, SSIM, LPIPS, AbsRel, Depth MAE, and normal. SCE20 is rejected as `parent_pareto_guard_failed` with `absrel_above_parent` and `depth_mae_above_parent`.
+
+**Guarded table**: `outputs/carnet/meshsplatopt/final_stageSCE20_mae_first_guarded_recovery/guarded_policy_table_courtyard_bonsai` has two non-regression no-op rows and zero strict-improvement rows.
+
+**Decision**: `SCE20_NEGATIVE_BUT_POLICY_GUARD_CAUGHT`. The method is more reliable, but the remaining courtyard depth gap is still not solved.

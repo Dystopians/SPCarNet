@@ -131,6 +131,7 @@ def run(args: argparse.Namespace) -> int:
         max_ssim_drop=float(args.max_ssim_drop),
         max_lpips_increase=float(args.max_lpips_increase),
         min_render_score_delta=float(args.min_render_score_delta),
+        require_parent_pareto_for_acceptance=bool(args.require_parent_pareto_for_acceptance),
     )
     gate = load_json_mapping(args.sentinel_gate_json) if args.sentinel_gate_json else None
     if gate is not None and "gate" in gate:
@@ -203,6 +204,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max_ssim_drop", type=float, default=0.0)
     parser.add_argument("--max_lpips_increase", type=float, default=0.0)
     parser.add_argument("--min_render_score_delta", type=float, default=0.0)
+    parser.add_argument("--require_parent_pareto_for_acceptance", action="store_true")
     parser.add_argument("--wandb_project", default="spcarnet_meshprior")
     parser.add_argument("--wandb_group", default="finalSCE7_policy_recovery")
     parser.add_argument("--wandb_name", required=True)

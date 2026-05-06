@@ -13,6 +13,7 @@ SCE19 hardens the automatic policy with opt-in recovery guards:
 - require a sentinel gate before executing guarded recovery
 - require measured parent/candidate render metrics before executing guarded recovery
 - reject candidates whose PSNR or SSIM drop, LPIPS increases, or combined render score falls below the configured threshold
+- optionally require full parent-Pareto non-regression across PSNR, SSIM, LPIPS, AbsRel, Depth MAE, and normal before accepting a measured candidate
 - return `accept_parent_noop` instead of launching another recovery run when guards fail
 
 The original `sce_v1` defaults remain unchanged. The new behavior is opt-in through policy config or CLI flags.
@@ -33,11 +34,13 @@ New policy fields:
 - `max_ssim_drop`
 - `max_lpips_increase`
 - `min_render_score_delta`
+- `require_parent_pareto_for_acceptance`
 
 New decision behavior:
 
 - missing required sentinel gate -> `accept_parent_noop`
 - measured render guard failure -> `accept_parent_noop`
+- measured full-metric parent-Pareto failure -> `accept_parent_noop`
 - sentinel degradation with render pass -> `run_targeted_rollback`
 - sentinel non-degradation with render pass -> `continue_or_accept_visual_recovery`
 
