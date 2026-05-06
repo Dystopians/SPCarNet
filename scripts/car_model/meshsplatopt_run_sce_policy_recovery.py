@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import shlex
+import subprocess
+import sys
+from dataclasses import asdict
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from utils.sce_recovery_policy import (  # noqa: E402
+    SCEPolicyConfig,
+    decide_sce_policy_action,
+    load_json_mapping,
+    select_early_stop_candidate,
+)
+
+
+def _wrapper_command(args: argparse.Namespace, cfg: SCEPolicyConfig, *, activate_rollback: bool) -> list[str]:
+    final_iteration = int(args.final_iteration)
+    cmd = [
+        args.python,
+        "scripts/car_model/meshsplatopt_run_strict_compact_recovery.py",
+        "--source_path",
+        args.source_path,
+        "--images",
+        args.images,
+        "--resolution",
+        str(args.resolution),
+        "--output_path",
+        args.output_path,
+        "--load_iteration",
+        str(args.load_iteration),
+        "--final_iteration",
+        str(final_iteration),
+        "--preset",
+        "compact_sparse_low_lambda",
+        "--sparse_lambda",
+        str(cfg.sparse_lambda),
+        "--sparse_start_iter",
+        str(args.load_iteration),
+        "--sparse_warmup_iters",
+        str(min(50, max(1, final_iteration - int(args.load_iteration)))),
+        "--sparse_min_matches",
+        "16",
+        "--sparse_sample_mode",
+        "mixed_low_error",
+        "--sparse_fraction",
+        "0.7",
+        "--checkpoint_render_normal_anchor_lambda",
+        str(cfg.render_normal_anchor_lambda),
+        "--checkpoint_render_depth_anchor_lambda",
+        str(cfg.render_depth_anchor_lambda),
+        "--checkpoint_render_geometry_anchor_start_iter",
+        str(args.load_iteration),
+        "--checkpoint_render_geometry_anchor_warmup_iters",
+        str(min(50, max(1, final_iteration - int(args.load_iteration)))),
+        "--lr_triangles_points_init",
+        str(cfg.lr_triangles_points_init),
+        "--wandb_project",
+        args.wandb_project,
+        "--wandb_group",
+        args.wandb_group,
+        "--wandb_name",
+        args.wandb_name,
+        "--train_seed",
+        str(args.train_seed),
+        "--contract_out_dir",
+        str(Path(args.output_path).parent / "sce_policy_contract"),
+    ]
+    if activate_rollback:
+        cmd.extend(
+            [
+                "--sparse_depth_parent_rollback_cache",
+                args.sentinel_cache,
+                "--sparse_depth_parent_rollback_lambda",
+                str(cfg.rollback_lambda_base),
+                "--sparse_depth_parent_rollback_start_iter",
+                str(args.load_iteration),
+                "--sparse_depth_parent_rollback_warmup_iters",
+                str(min(50, max(1, final_iteration - int(args.load_iteration)))),
+                "--sparse_depth_parent_rollback_max_points_per_view",
+                str(args.rollback_max_points_per_view),
+                "--sparse_depth_parent_rollback_loss_space",
+                cfg.rollback_loss_space,
+                "--sparse_depth_parent_rollback_cluster_balance",
+            ]
+        )
+    if bool(args.execute):
+        cmd.append("--execute")
+    return cmd
+
+
+def run(args: argparse.Namespace) -> int:
+    out_dir = Path(args.policy_out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cfg = SCEPolicyConfig(
+        policy_name=args.policy,
+        visual_probe_iters=int(args.visual_probe_iters),
+        recovery_phase_iters=int(args.recovery_phase_iters),
+        rollback_lambda_base=float(args.rollback_lambda_base),
+        rollback_loss_space=str(args.rollback_loss_space),
+        sparse_lambda=float(args.sparse_lambda),
+        render_normal_anchor_lambda=float(args.render_normal_anchor_lambda),
+        render_depth_anchor_lambda=float(args.render_depth_anchor_lambda),
+        lr_triangles_points_init=float(args.lr_triangles_points_init),
+    )
+    gate = load_json_mapping(args.sentinel_gate_json) if args.sentinel_gate_json else None
+    if gate is not None and "gate" in gate:
+        gate = gate["gate"]
+    decision = decide_sce_policy_action(sentinel_gate=gate, cfg=cfg)
+    parent_metrics = load_json_mapping(args.parent_metrics_json) if args.parent_metrics_json else {}
+    history = load_json_mapping(args.candidate_history_json) if args.candidate_history_json else []
+    if isinstance(history, dict):
+        history = history.get("history", [])
+    early = select_early_stop_candidate(history, parent_metrics=parent_metrics, cfg=cfg) if parent_metrics and history else {}
+    cmd = _wrapper_command(args, cfg, activate_rollback=bool(decision["activate_rollback"]))
+    (out_dir / "sce_policy_decision.json").write_text(
+        json.dumps({"decision": decision, "early_stop": early, "config": asdict(cfg)}, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    (out_dir / "exact_train_command.txt").write_text(shlex.join(cmd) + "\n", encoding="utf-8")
+    (out_dir / "policy_report.md").write_text(
+        "# SCE Policy Recovery Report\n\n"
+        f"- policy: `{cfg.policy_name}`\n"
+        f"- action: `{decision['action']}`\n"
+        f"- activate_rollback: `{decision['activate_rollback']}`\n"
+        f"- reason: `{decision['reason']}`\n"
+        f"- command: `{shlex.join(cmd)}`\n",
+        encoding="utf-8",
+    )
+    print(json.dumps({"decision": decision, "early_stop": early, "command": cmd}, indent=2, sort_keys=True))
+    if bool(args.execute):
+        subprocess.run(cmd, cwd=ROOT, check=True)
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Scene-agnostic SCE policy recovery runner.")
+    parser.add_argument("--source_path", required=True)
+    parser.add_argument("--output_path", required=True)
+    parser.add_argument("--load_iteration", type=int, required=True)
+    parser.add_argument("--final_iteration", type=int, required=True)
+    parser.add_argument("--sentinel_cache", required=True)
+    parser.add_argument("--parent_model_path", default="")
+    parser.add_argument("--policy", default="sce_v1")
+    parser.add_argument("--images", default="images")
+    parser.add_argument("--resolution", type=int, default=8)
+    parser.add_argument("--sentinel_gate_json", default="")
+    parser.add_argument("--parent_metrics_json", default="")
+    parser.add_argument("--candidate_history_json", default="")
+    parser.add_argument("--visual_probe_iters", type=int, default=500)
+    parser.add_argument("--recovery_phase_iters", type=int, default=500)
+    parser.add_argument("--rollback_lambda_base", type=float, default=1.0)
+    parser.add_argument("--rollback_loss_space", choices=("absrel", "mae", "combined"), default="absrel")
+    parser.add_argument("--rollback_max_points_per_view", type=int, default=2000)
+    parser.add_argument("--sparse_lambda", type=float, default=0.003)
+    parser.add_argument("--render_normal_anchor_lambda", type=float, default=0.01)
+    parser.add_argument("--render_depth_anchor_lambda", type=float, default=0.0)
+    parser.add_argument("--lr_triangles_points_init", type=float, default=0.015)
+    parser.add_argument("--wandb_project", default="spcarnet_meshprior")
+    parser.add_argument("--wandb_group", default="finalSCE7_policy_recovery")
+    parser.add_argument("--wandb_name", required=True)
+    parser.add_argument("--train_seed", type=int, default=0)
+    parser.add_argument("--policy_out_dir", required=True)
+    parser.add_argument("--python", default="/home/peilincai/micromamba/envs/mesh_splatting/bin/python")
+    parser.add_argument("--execute", action="store_true")
+    return parser
+
+
+def main() -> int:
+    return run(build_parser().parse_args())
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+

@@ -4842,3 +4842,20 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 - Continuing the best 28.5k candidate to 29k regresses metrics, so automatic early stop is required.
 
 **Decision**: `SCE_TARGETED_ROLLBACK_STRONG_PARTIAL_MAE_REMAINS`. SCE now delivers a large and real improvement over F95 and crosses the AbsRel blocker, but strict all-metric parent-Pareto is still not fully closed because Depth MAE remains `+0.013282` above F82. Next required implementation is SCE7 automatic policy with dense sentinel generation, high-LR geometry phases, and early stopping around sentinel/test-safe knees.
+
+---
+
+## 2026-05-06 - SCE7 automatic SCE policy interface
+
+**Goal**: convert the manual SCE6 lesson into a scene-agnostic policy interface instead of continuing hand-written recovery commands.
+
+**Implementation**: added `utils/sce_recovery_policy.py`, `scripts/car_model/meshsplatopt_run_sce_policy_recovery.py`, `scripts/car_model/smoke_test_stageSCE7_sce_policy.py`, and `docs/car_model/final_stageSCE7_automatic_sce_policy_design.md`.
+
+**Policy v1**: fixed dense-sentinel rollback policy with absrel one-sided parent rollback, sparse COLMAP lambda `0.003`, render-normal anchor `0.01`, render-depth anchor `0.0`, high vertex LR init `0.015`, and early-stop selection of the first parent-Pareto-safe candidate.
+
+**Verification**:
+- compileall passed for `scripts/car_model ss3dm_prior utils`;
+- smoke test passed: sentinel degradation activates rollback, passing sentinel does not, early stop chooses the parent-Pareto candidate instead of the last/highest-RGB candidate;
+- contract run under `outputs/carnet/meshsplatopt/final_stageSCE7_automatic_sce_policy/courtyard/contract` consumed the dense F82-vs-F95 gate and correctly wrote a targeted rollback command.
+
+**Decision**: `SCE7_INTERFACE_IMPLEMENTED_PENDING_MULTISCENE_VALIDATION`. The interface is now available, but it does not close the remaining Depth MAE gap until SCE8 fixed-policy multiscene validation is run.
