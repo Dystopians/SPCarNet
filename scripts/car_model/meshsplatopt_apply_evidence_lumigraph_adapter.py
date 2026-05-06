@@ -16,9 +16,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from utils.evidence_lumigraph_adapter import (
+    BenefitCalibrator,
     FrameLoader,
     adapt_frame,
     calibrate_alpha,
+    fit_benefit_calibrator,
     load_split_frames,
     save_image_tensor,
 )
@@ -51,21 +53,34 @@ def _selected_calibration_row(calibration: dict, alpha: float) -> dict:
     return {}
 
 
-def _choose_policy(args: argparse.Namespace, train_frames, alpha_grid: list[float], device: torch.device) -> tuple[dict, dict, list[dict]]:
+def _fit_optional_benefit(args: argparse.Namespace, train_frames, policy: dict, device: torch.device) -> BenefitCalibrator | None:
+    if not args.benefit_policy or str(policy["mode"]) != "residual":
+        return None
+    return fit_benefit_calibrator(
+        train_frames,
+        k=int(policy["k"]),
+        mode=str(policy["mode"]),
+        calib_stride=args.calib_stride,
+        calib_max_views=args.calib_max_views,
+        residual_clip=float(policy["residual_clip"]),
+        depth_abs_tol=float(policy["depth_abs_tol"]),
+        depth_rel_tol=float(policy["depth_rel_tol"]),
+        direction_weight=args.direction_weight,
+        bins=args.benefit_bins,
+        min_gain=args.benefit_min_gain,
+        min_bin_count=args.benefit_min_bin_count,
+        max_pixels_per_view=args.benefit_max_pixels_per_view,
+        device=device,
+    )
+
+
+def _choose_policy(
+    args: argparse.Namespace,
+    train_frames,
+    alpha_grid: list[float],
+    device: torch.device,
+) -> tuple[dict, dict, list[dict], BenefitCalibrator | None]:
     if not args.auto_policy:
-        calibration = calibrate_alpha(
-            train_frames,
-            alpha_grid=alpha_grid,
-            k=args.k,
-            mode=args.mode,
-            calib_stride=args.calib_stride,
-            calib_max_views=args.calib_max_views,
-            residual_clip=args.residual_clip,
-            depth_abs_tol=args.depth_abs_tol,
-            depth_rel_tol=args.depth_rel_tol,
-            direction_weight=args.direction_weight,
-            device=device,
-        )
         policy = {
             "mode": args.mode,
             "k": int(args.k),
@@ -73,10 +88,29 @@ def _choose_policy(args: argparse.Namespace, train_frames, alpha_grid: list[floa
             "depth_abs_tol": float(args.depth_abs_tol),
             "depth_rel_tol": float(args.depth_rel_tol),
         }
-        return policy, calibration, []
+        benefit_calibrator = _fit_optional_benefit(args, train_frames, policy, device)
+        calibration = calibrate_alpha(
+            train_frames,
+            alpha_grid=alpha_grid,
+            k=int(policy["k"]),
+            mode=str(policy["mode"]),
+            calib_stride=args.calib_stride,
+            calib_max_views=args.calib_max_views,
+            residual_clip=float(policy["residual_clip"]),
+            depth_abs_tol=float(policy["depth_abs_tol"]),
+            depth_rel_tol=float(policy["depth_rel_tol"]),
+            direction_weight=args.direction_weight,
+            benefit_calibrator=benefit_calibrator,
+            policy_objective=args.policy_objective,
+            ssim_weight=args.policy_ssim_weight,
+            lpips_weight=args.policy_lpips_weight,
+            compute_lpips=args.calib_lpips,
+            device=device,
+        )
+        return policy, calibration, [], benefit_calibrator
 
     candidate_rows: list[dict] = []
-    best: tuple[float, int, dict, dict] | None = None
+    best: tuple[float, int, dict, dict, BenefitCalibrator | None] | None = None
     modes = [m.strip() for m in args.policy_modes.split(",") if m.strip()]
     k_values = _parse_int_grid(args.policy_k_values)
     depth_rel_values = _parse_float_grid(args.policy_depth_rel_values)
@@ -86,6 +120,14 @@ def _choose_policy(args: argparse.Namespace, train_frames, alpha_grid: list[floa
         for k in k_values:
             for depth_rel in depth_rel_values:
                 for residual_clip in clip_values:
+                    policy = {
+                        "mode": mode,
+                        "k": int(k),
+                        "residual_clip": float(residual_clip),
+                        "depth_abs_tol": float(args.depth_abs_tol),
+                        "depth_rel_tol": float(depth_rel),
+                    }
+                    benefit_calibrator = _fit_optional_benefit(args, train_frames, policy, device)
                     calibration = calibrate_alpha(
                         train_frames,
                         alpha_grid=alpha_grid,
@@ -97,33 +139,37 @@ def _choose_policy(args: argparse.Namespace, train_frames, alpha_grid: list[floa
                         depth_abs_tol=args.depth_abs_tol,
                         depth_rel_tol=float(depth_rel),
                         direction_weight=args.direction_weight,
+                        benefit_calibrator=benefit_calibrator,
+                        policy_objective=args.policy_objective,
+                        ssim_weight=args.policy_ssim_weight,
+                        lpips_weight=args.policy_lpips_weight,
+                        compute_lpips=args.calib_lpips,
                         device=device,
                     )
                     alpha = float(calibration["alpha"])
                     row = _selected_calibration_row(calibration, alpha)
-                    gain = float(row.get("psnr_gain", 0.0))
-                    policy = {
-                        "mode": mode,
-                        "k": int(k),
-                        "residual_clip": float(residual_clip),
-                        "depth_abs_tol": float(args.depth_abs_tol),
-                        "depth_rel_tol": float(depth_rel),
-                    }
+                    score = float(row.get("selection_score", row.get("psnr_gain", 0.0)))
                     candidate_rows.append(
                         {
                             **policy,
                             "alpha": alpha,
-                            "calib_psnr_gain": gain,
+                            "calib_selection_score": score,
+                            "calib_psnr_gain": row.get("psnr_gain"),
+                            "calib_ssim_gain": row.get("ssim_gain"),
+                            "calib_lpips_gain": row.get("lpips_gain"),
                             "calib_psnr": row.get("psnr"),
                             "calib_base_psnr": row.get("base_psnr"),
+                            "benefit_accepted_bins": (
+                                benefit_calibrator.to_json().get("accepted_bins") if benefit_calibrator is not None else None
+                            ),
                         }
                     )
-                    rank = (gain, -order)
+                    rank = (score, -order)
                     if best is None or rank > (best[0], best[1]):
-                        best = (gain, -order, policy, calibration)
+                        best = (score, -order, policy, calibration, benefit_calibrator)
                     order += 1
     assert best is not None
-    return best[2], best[3], candidate_rows
+    return best[2], best[3], candidate_rows, best[4]
 
 
 def _copy_gt(target_frames, out_gt: Path) -> None:
@@ -160,6 +206,9 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
             "direction_weight": args.direction_weight,
             "target_split": args.target_split,
             "method_name": args.method_name,
+            "policy_objective": args.policy_objective,
+            "calib_lpips": args.calib_lpips,
+            "benefit_policy": args.benefit_policy,
         },
     )
     flat = {
@@ -170,6 +219,7 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
         "ela/target_frames": int(report.get("target_frames", 0)),
         "ela/mean_covered_fraction": float(report.get("mean_covered_fraction", 0.0)),
         "ela/mean_confidence": float(report.get("mean_confidence", 0.0)),
+        "ela/mean_benefit_accept_fraction": float(report.get("mean_benefit_accept_fraction", 0.0)),
     }
     run.log(flat)
     run.summary.update(flat)
@@ -186,7 +236,7 @@ def run(args: argparse.Namespace) -> dict:
     train_frames = load_split_frames(base_model, "train", base_method)
     target_frames = load_split_frames(base_model, args.target_split, base_method)
     alpha_grid = _parse_alpha_grid(args.alpha_grid)
-    policy, calibration, policy_candidates = _choose_policy(args, train_frames, alpha_grid, device)
+    policy, calibration, policy_candidates, benefit_calibrator = _choose_policy(args, train_frames, alpha_grid, device)
     alpha = float(args.alpha) if args.alpha >= 0.0 else float(calibration["alpha"])
     out_method = output_model / args.target_split / method_name
     out_render = out_method / "renders"
@@ -208,6 +258,7 @@ def run(args: argparse.Namespace) -> dict:
             depth_abs_tol=float(policy["depth_abs_tol"]),
             depth_rel_tol=float(policy["depth_rel_tol"]),
             direction_weight=args.direction_weight,
+            benefit_calibrator=benefit_calibrator,
             loader=loader,
             device=device,
         )
@@ -229,6 +280,11 @@ def run(args: argparse.Namespace) -> dict:
         "auto_policy": bool(args.auto_policy),
         "policy": policy,
         "policy_candidates": policy_candidates,
+        "policy_objective": args.policy_objective,
+        "policy_ssim_weight": float(args.policy_ssim_weight),
+        "policy_lpips_weight": float(args.policy_lpips_weight),
+        "calib_lpips": bool(args.calib_lpips),
+        "benefit_policy": benefit_calibrator.to_json() if benefit_calibrator is not None else None,
         "mode": str(policy["mode"]),
         "k": int(policy["k"]),
         "residual_clip": float(policy["residual_clip"]),
@@ -237,6 +293,9 @@ def run(args: argparse.Namespace) -> dict:
         "direction_weight": float(args.direction_weight),
         "mean_covered_fraction": float(sum(float(x["covered_fraction"]) for x in infos) / max(len(infos), 1)),
         "mean_confidence": float(sum(float(x["mean_confidence"]) for x in infos) / max(len(infos), 1)),
+        "mean_benefit_accept_fraction": float(
+            sum(float(x.get("benefit_accept_fraction", 0.0)) for x in infos) / max(len(infos), 1)
+        ),
         "frames": infos,
     }
     (out_method / "ela_report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
@@ -260,6 +319,15 @@ def main() -> int:
     parser.add_argument("--policy_k_values", default="4,8")
     parser.add_argument("--policy_depth_rel_values", default="0.06,0.12")
     parser.add_argument("--policy_residual_clip_values", default="0.25")
+    parser.add_argument("--policy_objective", choices=("psnr", "balanced"), default="psnr")
+    parser.add_argument("--policy_ssim_weight", default=20.0, type=float)
+    parser.add_argument("--policy_lpips_weight", default=20.0, type=float)
+    parser.add_argument("--calib_lpips", action="store_true")
+    parser.add_argument("--benefit_policy", action="store_true")
+    parser.add_argument("--benefit_bins", default=5, type=int)
+    parser.add_argument("--benefit_min_gain", default=0.0, type=float)
+    parser.add_argument("--benefit_min_bin_count", default=64, type=int)
+    parser.add_argument("--benefit_max_pixels_per_view", default=4096, type=int)
     parser.add_argument("--alpha", default=-1.0, type=float, help="Override alpha. Default <0 uses train-only calibration.")
     parser.add_argument("--alpha_grid", default="0,0.125,0.25,0.5,0.75,1.0")
     parser.add_argument("--calib_stride", default=16, type=int)

@@ -5196,3 +5196,29 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 - counter: PSNR `+0.209131`, SSIM `+0.046395`, LPIPS `-0.054157`; auto policy residual k4 rel0.12 alpha 1.0.
 
 **Decision**: `ELA2_RENDER_WIN_VS_F82_WITH_GEOMETRY_INHERITED`. ELA2 improves or no-ops on all selected scenes for RGB metrics, and geometry metrics are unchanged because the adapter does not alter checkpoint topology/geometry. This is the strongest method-level pivot after the SCE bottleneck, but it is still not enough to claim best-clean superiority: clean9000 remains far ahead on several Mip-NeRF 360 scenes. Next serious step is ELA3, distilling this evidence into a compact learned residual/neural-texture field rather than keeping a runtime multi-view evidence cache.
+
+---
+
+## 2026-05-06 - ELA3 benefit-calibrated evidence policy
+
+**Goal**: make ELA2 less like a residual-blend heuristic and more like a train-only decision policy. ELA2's PSNR-only calibration left a clear weakness: it no-oped courtyard and selected a room policy that favored PSNR over visual/perceptual quality.
+
+**Implementation**: extended `utils/evidence_lumigraph_adapter.py` with `EvidenceSignal`, `BenefitCalibrator`, `compute_evidence_signal`, and `fit_benefit_calibrator`. For held-out train views, ELA3 computes the counterfactual per-pixel gain of applying warped train residuals, bins pixels by `log(1 + confidence)` and residual magnitude, and accepts only bins with positive mean benefit and sufficient support. The apply script now supports `--policy_objective balanced|psnr`, `--calib_lpips`, and `--benefit_policy`, and logs benefit acceptance to W&B. Cached LPIPS model construction fixed a major calibration slowdown.
+
+**Validation**: smoke test passed; full four-scene ELA3 apply and independent `metrics.py` ran on GPU 4 with W&B online.
+
+**Balanced W&B**: bonsai `tx0vjczq`, courtyard `w7j7bzpq`, room `oj4f0fzo`, counter `xblf3mn7`.
+
+**PSNR-route W&B**: bonsai `zu15b26q`, courtyard `lezpplck`, room `bt62zdzl`, counter `6zsoxq87`.
+
+**ELA3-balanced result vs F82**:
+- bonsai: PSNR `+0.044863`, SSIM `+0.018794`, LPIPS `-0.014121`.
+- courtyard: PSNR `+0.005633`, SSIM `+0.000957`, LPIPS `-0.002226`.
+- room: PSNR `+0.205841`, SSIM `+0.021178`, LPIPS `-0.018029`.
+- counter: PSNR `+0.209131`, SSIM `+0.046395`, LPIPS `-0.054157`.
+
+**Relative to ELA2**: ELA3-balanced improves bonsai and courtyard on all render metrics, matches counter, and trades room PSNR `-0.010164` for SSIM `+0.003031` and LPIPS `-0.003500`. The PSNR route preserves ELA2's room/counter metrics while retaining the benefit-calibrated implementation.
+
+**Qualitative assets**: generated GT/F82/ELA2/ELA3 montages with deterministic per-view LPIPS-improvement selection under `outputs/carnet/meshsplatopt/stageELA3_benefit_calibrated_policy/qualitative/`.
+
+**Decision**: `ELA3_ALL_SCENE_RGB_WIN_VS_F82_WITH_TRAIN_ONLY_BENEFIT_POLICY`. This is a stronger and more defensible renderer-side innovation than ELA2. It still does not close the best-clean-9000 gap, so the next paper-level step remains persistent distillation into a compact neural texture/residual field rather than relying on runtime evidence cache.

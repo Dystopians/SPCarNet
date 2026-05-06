@@ -296,12 +296,77 @@ class FrameLoader:
         return residual
 
 
-def adapt_frame(
+@dataclass
+class EvidenceSignal:
+    base: torch.Tensor
+    signal: torch.Tensor
+    confidence: torch.Tensor
+    valid: torch.Tensor
+    support_names: list[str]
+
+
+@dataclass
+class BenefitCalibrator:
+    confidence_edges: tuple[float, ...]
+    magnitude_edges: tuple[float, ...]
+    gain_table: tuple[tuple[float, ...], ...]
+    count_table: tuple[tuple[int, ...], ...]
+    accept_table: tuple[tuple[bool, ...], ...]
+    min_gain: float = 0.0
+    min_bin_count: int = 64
+
+    def to_json(self) -> dict[str, object]:
+        return {
+            "confidence_edges": list(self.confidence_edges),
+            "magnitude_edges": list(self.magnitude_edges),
+            "gain_table": [list(row) for row in self.gain_table],
+            "count_table": [list(row) for row in self.count_table],
+            "accept_table": [list(row) for row in self.accept_table],
+            "min_gain": float(self.min_gain),
+            "min_bin_count": int(self.min_bin_count),
+            "accepted_bins": int(sum(int(v) for row in self.accept_table for v in row)),
+        }
+
+    def acceptance_mask(
+        self,
+        confidence: torch.Tensor,
+        signal: torch.Tensor,
+        *,
+        device: torch.device | str | None = None,
+    ) -> torch.Tensor:
+        device = torch.device(device or confidence.device)
+        confidence = confidence.to(device=device, dtype=torch.float32)
+        signal = signal.to(device=device, dtype=torch.float32)
+        conf_feature = torch.log1p(torch.clamp(confidence.squeeze(0), min=0.0))
+        mag_feature = torch.linalg.vector_norm(signal, dim=0)
+        conf_edges = torch.tensor(self.confidence_edges, device=device, dtype=torch.float32)
+        mag_edges = torch.tensor(self.magnitude_edges, device=device, dtype=torch.float32)
+        accept = torch.tensor(self.accept_table, device=device, dtype=torch.bool)
+        conf_idx = torch.bucketize(conf_feature.reshape(-1), conf_edges[1:-1], right=False)
+        mag_idx = torch.bucketize(mag_feature.reshape(-1), mag_edges[1:-1], right=False)
+        mask = accept[conf_idx, mag_idx].reshape(conf_feature.shape)
+        return mask.unsqueeze(0)
+
+
+def _calibration_candidates(
+    train_frames: Sequence[FrameRecord],
+    calib_stride: int,
+    calib_max_views: int,
+) -> list[FrameRecord]:
+    stride = max(int(calib_stride), 1)
+    candidates = list(train_frames[::stride])
+    if int(calib_max_views) > 0:
+        candidates = candidates[: int(calib_max_views)]
+    if not candidates and train_frames:
+        candidates = [train_frames[0]]
+    return candidates
+
+
+def compute_evidence_signal(
     target: FrameRecord,
     support_frames: Sequence[FrameRecord],
     *,
     k: int = 4,
-    alpha: float = 1.0,
     mode: str = "residual",
     residual_clip: float = 0.25,
     min_confidence: float = 1e-4,
@@ -310,7 +375,7 @@ def adapt_frame(
     direction_weight: float = 0.35,
     loader: FrameLoader | None = None,
     device: torch.device | str = "cuda",
-) -> tuple[torch.Tensor, dict[str, float | int | list[str]]]:
+) -> EvidenceSignal:
     loader = loader or FrameLoader(device=device)
     device = torch.device(device)
     base = loader.render(str(target.render_path)).to(device)
@@ -351,17 +416,181 @@ def adapt_frame(
         used.append(support_frame.name)
     valid = weight_den > float(min_confidence)
     signal = torch.where(valid, signal_num / torch.clamp(weight_den, min=1e-8), torch.zeros_like(signal_num))
+    return EvidenceSignal(base=base, signal=signal, confidence=weight_den, valid=valid, support_names=used)
+
+
+def _sample_1d(values: torch.Tensor, max_samples: int) -> torch.Tensor:
+    values = values.reshape(-1)
+    if values.numel() <= int(max_samples):
+        return values
+    idx = torch.linspace(0, values.numel() - 1, steps=int(max_samples), device=values.device).long()
+    return values[idx]
+
+
+def _strictly_increasing_edges(edges: torch.Tensor) -> torch.Tensor:
+    edges = edges.clone()
+    for idx in range(1, int(edges.numel())):
+        if float(edges[idx].item()) <= float(edges[idx - 1].item()):
+            edges[idx] = edges[idx - 1] + 1e-8
+    return edges
+
+
+def fit_benefit_calibrator(
+    train_frames: Sequence[FrameRecord],
+    *,
+    k: int,
+    mode: str,
+    calib_stride: int,
+    calib_max_views: int,
+    residual_clip: float,
+    depth_abs_tol: float,
+    depth_rel_tol: float,
+    direction_weight: float,
+    bins: int = 5,
+    min_gain: float = 0.0,
+    min_bin_count: int = 64,
+    max_pixels_per_view: int = 4096,
+    device: torch.device | str = "cuda",
+) -> BenefitCalibrator:
+    if mode != "residual" or not train_frames:
+        return BenefitCalibrator(
+            confidence_edges=(0.0, 1.0),
+            magnitude_edges=(0.0, 1.0),
+            gain_table=((0.0,),),
+            count_table=((0,),),
+            accept_table=((False,),),
+            min_gain=min_gain,
+            min_bin_count=min_bin_count,
+        )
+    device = torch.device(device)
+    loader = FrameLoader(device=device)
+    candidates = _calibration_candidates(train_frames, calib_stride, calib_max_views)
+    conf_values: list[torch.Tensor] = []
+    mag_values: list[torch.Tensor] = []
+    gain_values: list[torch.Tensor] = []
+    for target in candidates:
+        support = [frame for frame in train_frames if frame.name != target.name]
+        gt = loader.gt(str(target.gt_path)).to(device)
+        ev = compute_evidence_signal(
+            target,
+            support,
+            k=k,
+            mode=mode,
+            residual_clip=residual_clip,
+            min_confidence=1e-8,
+            depth_abs_tol=depth_abs_tol,
+            depth_rel_tol=depth_rel_tol,
+            direction_weight=direction_weight,
+            loader=loader,
+            device=device,
+        )
+        candidate = torch.clamp(ev.base + ev.signal, 0.0, 1.0)
+        benefit = torch.mean((ev.base - gt) ** 2 - (candidate - gt) ** 2, dim=0)
+        valid = ev.valid.squeeze(0)
+        if not bool(valid.any().item()):
+            continue
+        conf = torch.log1p(torch.clamp(ev.confidence.squeeze(0), min=0.0))[valid]
+        mag = torch.linalg.vector_norm(ev.signal, dim=0)[valid]
+        gain = benefit[valid]
+        max_samples = max(int(max_pixels_per_view), 1)
+        conf_values.append(_sample_1d(conf.detach(), max_samples).cpu())
+        mag_values.append(_sample_1d(mag.detach(), max_samples).cpu())
+        gain_values.append(_sample_1d(gain.detach(), max_samples).cpu())
+    if not conf_values:
+        return BenefitCalibrator(
+            confidence_edges=(0.0, 1.0),
+            magnitude_edges=(0.0, 1.0),
+            gain_table=((0.0,),),
+            count_table=((0,),),
+            accept_table=((False,),),
+            min_gain=min_gain,
+            min_bin_count=min_bin_count,
+        )
+    conf_all = torch.cat(conf_values).float()
+    mag_all = torch.cat(mag_values).float()
+    gain_all = torch.cat(gain_values).float()
+    bin_count = max(int(bins), 1)
+    quantiles = torch.linspace(0.0, 1.0, steps=bin_count + 1)
+    conf_edges = torch.quantile(conf_all, quantiles).float()
+    mag_edges = torch.quantile(mag_all, quantiles).float()
+    conf_edges[0] = min(conf_edges[0], conf_all.min()) - 1e-6
+    conf_edges[-1] = max(conf_edges[-1], conf_all.max()) + 1e-6
+    mag_edges[0] = min(mag_edges[0], mag_all.min()) - 1e-6
+    mag_edges[-1] = max(mag_edges[-1], mag_all.max()) + 1e-6
+    conf_edges = _strictly_increasing_edges(conf_edges)
+    mag_edges = _strictly_increasing_edges(mag_edges)
+    conf_idx = torch.bucketize(conf_all, conf_edges[1:-1], right=False)
+    mag_idx = torch.bucketize(mag_all, mag_edges[1:-1], right=False)
+    gain_sum = torch.zeros((bin_count, bin_count), dtype=torch.float64)
+    counts = torch.zeros((bin_count, bin_count), dtype=torch.int64)
+    for c, m, g in zip(conf_idx.tolist(), mag_idx.tolist(), gain_all.tolist()):
+        gain_sum[c, m] += float(g)
+        counts[c, m] += 1
+    mean_gain = torch.where(counts > 0, gain_sum / torch.clamp(counts, min=1), torch.zeros_like(gain_sum))
+    accept = (mean_gain > float(min_gain)) & (counts >= int(min_bin_count))
+    return BenefitCalibrator(
+        confidence_edges=tuple(float(x) for x in conf_edges.tolist()),
+        magnitude_edges=tuple(float(x) for x in mag_edges.tolist()),
+        gain_table=tuple(tuple(float(v) for v in row) for row in mean_gain.tolist()),
+        count_table=tuple(tuple(int(v) for v in row) for row in counts.tolist()),
+        accept_table=tuple(tuple(bool(v) for v in row) for row in accept.tolist()),
+        min_gain=float(min_gain),
+        min_bin_count=int(min_bin_count),
+    )
+
+
+def adapt_frame(
+    target: FrameRecord,
+    support_frames: Sequence[FrameRecord],
+    *,
+    k: int = 4,
+    alpha: float = 1.0,
+    mode: str = "residual",
+    residual_clip: float = 0.25,
+    min_confidence: float = 1e-4,
+    depth_abs_tol: float = 0.02,
+    depth_rel_tol: float = 0.03,
+    direction_weight: float = 0.35,
+    benefit_calibrator: BenefitCalibrator | None = None,
+    loader: FrameLoader | None = None,
+    device: torch.device | str = "cuda",
+) -> tuple[torch.Tensor, dict[str, float | int | list[str]]]:
+    loader = loader or FrameLoader(device=device)
+    device = torch.device(device)
+    evidence = compute_evidence_signal(
+        target,
+        support_frames,
+        k=k,
+        mode=mode,
+        residual_clip=residual_clip,
+        min_confidence=min_confidence,
+        depth_abs_tol=depth_abs_tol,
+        depth_rel_tol=depth_rel_tol,
+        direction_weight=direction_weight,
+        loader=loader,
+        device=device,
+    )
+    base = evidence.base
+    signal = evidence.signal
+    valid = evidence.valid
+    benefit_accept = None
+    if benefit_calibrator is not None and mode == "residual":
+        benefit_accept = benefit_calibrator.acceptance_mask(evidence.confidence, signal, device=device)
+        valid = valid & benefit_accept
+        signal = torch.where(valid, signal, torch.zeros_like(signal))
     if mode == "residual":
         adapted = torch.clamp(base + float(alpha) * signal, 0.0, 1.0)
     else:
         blend = torch.clamp(signal, 0.0, 1.0)
         adapted = torch.where(valid, torch.clamp(base * (1.0 - float(alpha)) + blend * float(alpha), 0.0, 1.0), base)
     info = {
-        "support_count": int(len(used)),
-        "support_names": used,
-        "mean_confidence": float(weight_den.mean().detach().cpu().item()),
+        "support_count": int(len(evidence.support_names)),
+        "support_names": evidence.support_names,
+        "mean_confidence": float(evidence.confidence.mean().detach().cpu().item()),
         "covered_fraction": float(valid.to(torch.float32).mean().detach().cpu().item()),
     }
+    if benefit_accept is not None:
+        info["benefit_accept_fraction"] = float(benefit_accept.to(torch.float32).mean().detach().cpu().item())
     return adapted, info
 
 
@@ -381,23 +610,52 @@ def calibrate_alpha(
     depth_abs_tol: float,
     depth_rel_tol: float,
     direction_weight: float,
+    benefit_calibrator: BenefitCalibrator | None = None,
+    policy_objective: str = "psnr",
+    ssim_weight: float = 20.0,
+    lpips_weight: float = 20.0,
+    compute_lpips: bool = False,
     device: torch.device | str = "cuda",
 ) -> dict[str, object]:
     if not train_frames:
         return {"alpha": 0.0, "reason": "no_train_frames", "rows": []}
-    stride = max(int(calib_stride), 1)
-    candidates = list(train_frames[::stride])
-    if int(calib_max_views) > 0:
-        candidates = candidates[: int(calib_max_views)]
-    if not candidates:
-        candidates = [train_frames[0]]
+    device = torch.device(device)
+    candidates = _calibration_candidates(train_frames, calib_stride, calib_max_views)
     loader = FrameLoader(device=device)
-    rows = {float(alpha): {"mse": 0.0, "base_mse": 0.0, "count": 0} for alpha in alpha_grid}
+    use_ssim = policy_objective != "psnr"
+    lpips_model = None
+    if compute_lpips:
+        from lpipsPyTorch.modules.lpips import LPIPS
+
+        lpips_model = LPIPS("vgg").to(device).eval()
+        for param in lpips_model.parameters():
+            param.requires_grad_(False)
+    rows = {
+        float(alpha): {
+            "mse": 0.0,
+            "base_mse": 0.0,
+            "ssim": 0.0,
+            "base_ssim": 0.0,
+            "lpips": 0.0,
+            "base_lpips": 0.0,
+            "count": 0,
+        }
+        for alpha in alpha_grid
+    }
     for target in candidates:
         support = [frame for frame in train_frames if frame.name != target.name]
         gt = loader.gt(str(target.gt_path))
         base = loader.render(str(target.render_path))
         base_mse = float(torch.mean((base - gt) ** 2).detach().cpu().item())
+        base_ssim = 0.0
+        base_lpips = 0.0
+        if use_ssim:
+            from utils.loss_utils import ssim
+
+            base_ssim = float(ssim(base.unsqueeze(0), gt.unsqueeze(0)).detach().cpu().item())
+        if lpips_model is not None:
+            with torch.no_grad():
+                base_lpips = float(lpips_model(base.unsqueeze(0), gt.unsqueeze(0)).detach().cpu().item())
         adapted_residual, _ = adapt_frame(
             target,
             support,
@@ -408,6 +666,7 @@ def calibrate_alpha(
             depth_abs_tol=depth_abs_tol,
             depth_rel_tol=depth_rel_tol,
             direction_weight=direction_weight,
+            benefit_calibrator=benefit_calibrator,
             loader=loader,
             device=device,
         )
@@ -417,15 +676,33 @@ def calibrate_alpha(
             mse = float(torch.mean((pred - gt) ** 2).detach().cpu().item())
             rows[float(alpha)]["mse"] += mse
             rows[float(alpha)]["base_mse"] += base_mse
+            if use_ssim:
+                rows[float(alpha)]["ssim"] += float(ssim(pred.unsqueeze(0), gt.unsqueeze(0)).detach().cpu().item())
+                rows[float(alpha)]["base_ssim"] += base_ssim
+            if lpips_model is not None:
+                with torch.no_grad():
+                    rows[float(alpha)]["lpips"] += float(lpips_model(pred.unsqueeze(0), gt.unsqueeze(0)).detach().cpu().item())
+                rows[float(alpha)]["base_lpips"] += base_lpips
             rows[float(alpha)]["count"] += 1
     row_list = []
     best_alpha = 0.0
-    best_mse = float("inf")
+    best_score = -float("inf")
     for alpha, row in rows.items():
         count = max(int(row["count"]), 1)
         mean_mse = float(row["mse"]) / count
         mean_base = float(row["base_mse"]) / count
         calib_gain = mse_to_psnr(mean_mse) - mse_to_psnr(mean_base)
+        mean_ssim = float(row["ssim"]) / count
+        mean_base_ssim = float(row["base_ssim"]) / count
+        mean_lpips = float(row["lpips"]) / count
+        mean_base_lpips = float(row["base_lpips"]) / count
+        ssim_gain = mean_ssim - mean_base_ssim if use_ssim else 0.0
+        lpips_gain = mean_base_lpips - mean_lpips if lpips_model is not None else 0.0
+        selection_score = calib_gain
+        if use_ssim:
+            selection_score += float(ssim_weight) * ssim_gain
+        if lpips_model is not None:
+            selection_score += float(lpips_weight) * lpips_gain
         row_out = {
             "alpha": float(alpha),
             "mse": mean_mse,
@@ -433,18 +710,29 @@ def calibrate_alpha(
             "psnr": mse_to_psnr(mean_mse),
             "base_psnr": mse_to_psnr(mean_base),
             "psnr_gain": calib_gain,
+            "ssim": mean_ssim if use_ssim else None,
+            "base_ssim": mean_base_ssim if use_ssim else None,
+            "ssim_gain": ssim_gain if use_ssim else None,
+            "lpips": mean_lpips if lpips_model is not None else None,
+            "base_lpips": mean_base_lpips if lpips_model is not None else None,
+            "lpips_gain": lpips_gain if lpips_model is not None else None,
+            "selection_score": selection_score,
             "views": count,
         }
         row_list.append(row_out)
-        if mean_mse < best_mse:
-            best_mse = mean_mse
+        if selection_score > best_score:
+            best_score = selection_score
             best_alpha = float(alpha)
     row_list.sort(key=lambda x: float(x["alpha"]))
     zero_row = next((row for row in row_list if abs(float(row["alpha"])) < 1e-9), None)
-    if zero_row is not None and best_mse >= float(zero_row["mse"]):
+    if zero_row is not None and best_score <= float(zero_row["selection_score"]):
         best_alpha = 0.0
     return {
         "alpha": best_alpha,
         "rows": row_list,
         "calibration_views": [frame.name for frame in candidates],
+        "policy_objective": policy_objective,
+        "ssim_weight": float(ssim_weight),
+        "lpips_weight": float(lpips_weight),
+        "compute_lpips": bool(compute_lpips),
     }

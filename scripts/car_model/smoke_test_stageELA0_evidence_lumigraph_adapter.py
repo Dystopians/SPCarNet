@@ -17,7 +17,9 @@ if str(ROOT) not in sys.path:
 from utils.evidence_lumigraph_adapter import (
     CameraRecord,
     FrameRecord,
+    adapt_frame,
     calibrate_alpha,
+    fit_benefit_calibrator,
     save_camera_index,
     warp_support_residual,
 )
@@ -97,6 +99,38 @@ def main() -> int:
             device="cpu",
         )
         assert float(calib["alpha"]) == 1.0, calib
+
+        benefit = fit_benefit_calibrator(
+            [support, target],
+            k=1,
+            mode="residual",
+            calib_stride=1,
+            calib_max_views=2,
+            residual_clip=1.0,
+            depth_abs_tol=0.001,
+            depth_rel_tol=0.001,
+            direction_weight=0.0,
+            bins=2,
+            min_bin_count=1,
+            device="cpu",
+        )
+        assert benefit.to_json()["accepted_bins"] > 0, benefit.to_json()
+        adapted, info = adapt_frame(
+            target,
+            [support],
+            k=1,
+            alpha=1.0,
+            mode="residual",
+            residual_clip=1.0,
+            depth_abs_tol=0.001,
+            depth_rel_tol=0.001,
+            direction_weight=0.0,
+            benefit_calibrator=benefit,
+            device="cpu",
+        )
+        target_tensor = torch.from_numpy(gt.transpose(2, 0, 1))
+        assert torch.mean(torch.abs(adapted.cpu() - target_tensor)).item() < 1e-2
+        assert float(info["covered_fraction"]) > 0.1, info
     print("[ELA smoke] passed")
     return 0
 
