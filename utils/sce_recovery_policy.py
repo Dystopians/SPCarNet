@@ -31,6 +31,13 @@ class SCEPolicyConfig:
     sparse_lambda: float = 0.003
     render_normal_anchor_lambda: float = 0.01
     render_depth_anchor_lambda: float = 0.0
+    parent_render_rollback_lambda: float = 0.0
+    parent_render_rollback_aggregation: str = "mean"
+    parent_render_rollback_cvar_fraction: float = 0.1
+    parent_render_rollback_cvar_min_pixels: int = 1024
+    parent_render_rollback_patch_radius: int = 0
+    parent_render_rollback_patch_reduce: str = "center"
+    parent_render_rollback_error_space: str = "l1"
     lr_triangles_points_init: float = 0.015
     early_stop_patience: int = 1
     parent_tolerance: float = 0.0

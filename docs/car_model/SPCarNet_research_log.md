@@ -5138,3 +5138,19 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Collector**: `outputs/carnet/meshsplatopt/final_stageSCE21_tail_risk_sentinel/current_courtyard_bonsai_table` has `2` rows and `1` all-pass row.
 
 **Decision**: `SCE21_BONSAI_MIXED_NOT_PASS`. CTR-SCE is a real courtyard breakthrough and safer than the earlier bonsai v1 negative transfer, but it is not yet a universal multiscene F82 replacement.
+
+---
+
+## 2026-05-06 - SCE23/SCE24 appearance-risk recovery and certified selection
+
+**Goal**: stop treating bonsai as a parameter-search problem and turn recovery into a certified decision: submit the recovered checkpoint only when train-only evidence shows no protected RGB/perceptual regression.
+
+**Implementation**: added ATR, an appearance tail-risk parent rollback loss in `train.py`, exposed through `arguments/__init__.py`, `scripts/car_model/meshsplatopt_run_strict_compact_recovery.py`, and `scripts/car_model/meshsplatopt_run_sce_policy_recovery.py`. Added `utils/certified_model_selection.py`, `scripts/car_model/evaluate_render_split_metrics.py`, `scripts/car_model/select_certified_recovery.py`, and `scripts/car_model/smoke_test_stageSCE23_parent_render_tail_rollback.py`.
+
+**SCE23 run**: `outputs/carnet/meshsplatopt/final_stageSCE23_dual_tail_risk_trust_region/bonsai/atr_cvar_patch1_26000to26800_seed0/recovery_model`, W&B `qxuyi2vz`, ATR CVaR patch1 plus CTR-SCE geometry. Result vs F82 bonsai: PSNR `+0.004035`, SSIM `-0.002041`, LPIPS `+0.001659`, AbsRel `+0.000049`, Depth MAE `-0.001572`, Normal `+0.018996`. Rejected.
+
+**SCE24 run**: `outputs/carnet/meshsplatopt/final_stageSCE24_balanced_appearance_risk/bonsai/atr_mean_lpips_26000to26200_seed0/recovery_model`, W&B `pcngvjn4`, mean ATR plus small GT-LPIPS and lighter normal anchor. Result vs F82 bonsai: PSNR `+0.000994`, SSIM `-0.000898`, LPIPS `+0.000105`, AbsRel `-0.000110`, Depth MAE `-0.001864`, Normal `+0.001304`. Rejected.
+
+**Train-only guard**: full train render metrics for SCE24 show parent `PSNR/SSIM/LPIPS = 11.508512/0.290483/0.549275` and candidate `11.511419/0.289623/0.549478`. The certified selector rejects the candidate with `ssim_regression` and `lpips_regression`, selecting `parent`.
+
+**Decision**: `SCE24_CERTIFIED_POLICY_REJECTS_BONSAI_RECOVERY`. This is not a bonsai improvement, but it is a reliability upgrade: the method now has a reproducible train-only acceptance rule that prevents unsafe recovery from being reported as progress. Current truthful claim is courtyard all-metric improvement plus bonsai safe no-op, not universal strict superiority.

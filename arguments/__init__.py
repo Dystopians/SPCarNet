@@ -194,6 +194,28 @@ class OptimizationParams(ParamGroup):
         self.teacher_render_decay_start_iter = -1
         self.teacher_render_decay_end_iter = -1
         self.teacher_render_decay_final_mult = 1.0
+        # Optional one-sided parent appearance rollback. Unlike teacher-render
+        # distillation, this loss does not copy the parent image. It penalizes
+        # only pixels where the current render is worse than the parent render
+        # against the ground-truth training image, optionally aggregating the
+        # worst residual tail with CVaR.
+        self.enable_parent_render_rollback_loss = False
+        self.parent_render_rollback_dir = ""
+        self.lambda_parent_render_rollback = 0.0
+        self.parent_render_rollback_start_iter = 0
+        self.parent_render_rollback_warmup_iters = 1000
+        self.parent_render_rollback_decay_start_iter = -1
+        self.parent_render_rollback_decay_end_iter = -1
+        self.parent_render_rollback_decay_final_mult = 1.0
+        self.parent_render_rollback_margin_abs = 0.0
+        self.parent_render_rollback_margin_rel = 0.0
+        self.parent_render_rollback_huber_delta = 0.02
+        self.parent_render_rollback_aggregation = "mean"
+        self.parent_render_rollback_cvar_fraction = 0.1
+        self.parent_render_rollback_cvar_min_pixels = 1024
+        self.parent_render_rollback_patch_radius = 0
+        self.parent_render_rollback_patch_reduce = "center"
+        self.parent_render_rollback_error_space = "l1"
         # Optional checkpoint geometry anchor for topology-frozen recovery.
         # It keeps vertices close to the loaded checkpoint while appearance
         # losses refine radiance, preventing teacher-render finetuning from

@@ -79,6 +79,31 @@ def _wrapper_command(args: argparse.Namespace, cfg: SCEPolicyConfig, *, activate
         "--contract_out_dir",
         str(Path(args.output_path).parent / "sce_policy_contract"),
     ]
+    if float(cfg.parent_render_rollback_lambda) > 0.0:
+        cmd.extend(
+            [
+                "--parent_render_rollback_dir",
+                args.parent_render_rollback_dir,
+                "--parent_render_rollback_lambda",
+                str(cfg.parent_render_rollback_lambda),
+                "--parent_render_rollback_start_iter",
+                str(args.load_iteration),
+                "--parent_render_rollback_warmup_iters",
+                str(min(50, max(1, final_iteration - int(args.load_iteration)))),
+                "--parent_render_rollback_aggregation",
+                cfg.parent_render_rollback_aggregation,
+                "--parent_render_rollback_cvar_fraction",
+                str(cfg.parent_render_rollback_cvar_fraction),
+                "--parent_render_rollback_cvar_min_pixels",
+                str(cfg.parent_render_rollback_cvar_min_pixels),
+                "--parent_render_rollback_patch_radius",
+                str(cfg.parent_render_rollback_patch_radius),
+                "--parent_render_rollback_patch_reduce",
+                cfg.parent_render_rollback_patch_reduce,
+                "--parent_render_rollback_error_space",
+                cfg.parent_render_rollback_error_space,
+            ]
+        )
     if activate_rollback:
         cmd.extend(
             [
@@ -138,6 +163,13 @@ def run(args: argparse.Namespace) -> int:
         sparse_lambda=float(args.sparse_lambda),
         render_normal_anchor_lambda=float(args.render_normal_anchor_lambda),
         render_depth_anchor_lambda=float(args.render_depth_anchor_lambda),
+        parent_render_rollback_lambda=float(args.parent_render_rollback_lambda),
+        parent_render_rollback_aggregation=str(args.parent_render_rollback_aggregation),
+        parent_render_rollback_cvar_fraction=float(args.parent_render_rollback_cvar_fraction),
+        parent_render_rollback_cvar_min_pixels=int(args.parent_render_rollback_cvar_min_pixels),
+        parent_render_rollback_patch_radius=int(args.parent_render_rollback_patch_radius),
+        parent_render_rollback_patch_reduce=str(args.parent_render_rollback_patch_reduce),
+        parent_render_rollback_error_space=str(args.parent_render_rollback_error_space),
         lr_triangles_points_init=float(args.lr_triangles_points_init),
         parent_tolerance=float(args.parent_tolerance),
         require_sentinel_gate_for_recovery=bool(args.require_sentinel_gate_for_recovery),
@@ -216,6 +248,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sparse_lambda", type=float, default=0.003)
     parser.add_argument("--render_normal_anchor_lambda", type=float, default=0.01)
     parser.add_argument("--render_depth_anchor_lambda", type=float, default=0.0)
+    parser.add_argument("--parent_render_rollback_dir", default="")
+    parser.add_argument("--parent_render_rollback_lambda", type=float, default=0.0)
+    parser.add_argument("--parent_render_rollback_aggregation", choices=("mean", "cvar"), default="mean")
+    parser.add_argument("--parent_render_rollback_cvar_fraction", type=float, default=0.1)
+    parser.add_argument("--parent_render_rollback_cvar_min_pixels", type=int, default=1024)
+    parser.add_argument("--parent_render_rollback_patch_radius", type=int, default=0)
+    parser.add_argument("--parent_render_rollback_patch_reduce", choices=("center", "max_violation", "mean_violation"), default="center")
+    parser.add_argument("--parent_render_rollback_error_space", choices=("l1", "l2", "channel_max"), default="l1")
     parser.add_argument("--lr_triangles_points_init", type=float, default=0.015)
     parser.add_argument("--parent_tolerance", type=float, default=0.0)
     parser.add_argument("--require_sentinel_gate_for_recovery", action="store_true")

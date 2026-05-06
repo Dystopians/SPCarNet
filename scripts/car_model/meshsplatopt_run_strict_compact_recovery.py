@@ -146,6 +146,44 @@ def _train_args(args: argparse.Namespace) -> list[str]:
                 str(args.teacher_render_decay_final_mult),
             ]
         )
+    if args.parent_render_rollback_lambda > 0.0:
+        cmd.extend(
+            [
+                "--enable_parent_render_rollback_loss",
+                "--parent_render_rollback_dir",
+                args.parent_render_rollback_dir,
+                "--lambda_parent_render_rollback",
+                str(args.parent_render_rollback_lambda),
+                "--parent_render_rollback_start_iter",
+                str(args.parent_render_rollback_start_iter),
+                "--parent_render_rollback_warmup_iters",
+                str(args.parent_render_rollback_warmup_iters),
+                "--parent_render_rollback_decay_start_iter",
+                str(args.parent_render_rollback_decay_start_iter),
+                "--parent_render_rollback_decay_end_iter",
+                str(args.parent_render_rollback_decay_end_iter),
+                "--parent_render_rollback_decay_final_mult",
+                str(args.parent_render_rollback_decay_final_mult),
+                "--parent_render_rollback_margin_abs",
+                str(args.parent_render_rollback_margin_abs),
+                "--parent_render_rollback_margin_rel",
+                str(args.parent_render_rollback_margin_rel),
+                "--parent_render_rollback_huber_delta",
+                str(args.parent_render_rollback_huber_delta),
+                "--parent_render_rollback_aggregation",
+                args.parent_render_rollback_aggregation,
+                "--parent_render_rollback_cvar_fraction",
+                str(args.parent_render_rollback_cvar_fraction),
+                "--parent_render_rollback_cvar_min_pixels",
+                str(args.parent_render_rollback_cvar_min_pixels),
+                "--parent_render_rollback_patch_radius",
+                str(args.parent_render_rollback_patch_radius),
+                "--parent_render_rollback_patch_reduce",
+                args.parent_render_rollback_patch_reduce,
+                "--parent_render_rollback_error_space",
+                args.parent_render_rollback_error_space,
+            ]
+        )
     if args.checkpoint_geometry_anchor_lambda > 0.0:
         cmd.extend(
             [
@@ -288,6 +326,14 @@ def run(args: argparse.Namespace) -> int:
         "teacher_render_lambda": float(args.teacher_render_lambda),
         "teacher_render_dir": args.teacher_render_dir,
         "teacher_render_mask_mode": args.teacher_render_mask_mode,
+        "parent_render_rollback_lambda": float(args.parent_render_rollback_lambda),
+        "parent_render_rollback_dir": args.parent_render_rollback_dir,
+        "parent_render_rollback_aggregation": args.parent_render_rollback_aggregation,
+        "parent_render_rollback_cvar_fraction": float(args.parent_render_rollback_cvar_fraction),
+        "parent_render_rollback_cvar_min_pixels": int(args.parent_render_rollback_cvar_min_pixels),
+        "parent_render_rollback_patch_radius": int(args.parent_render_rollback_patch_radius),
+        "parent_render_rollback_patch_reduce": args.parent_render_rollback_patch_reduce,
+        "parent_render_rollback_error_space": args.parent_render_rollback_error_space,
         "checkpoint_geometry_anchor_lambda": float(args.checkpoint_geometry_anchor_lambda),
         "checkpoint_geometry_anchor_huber_delta": float(args.checkpoint_geometry_anchor_huber_delta),
         "checkpoint_render_depth_anchor_lambda": float(args.checkpoint_render_depth_anchor_lambda),
@@ -377,6 +423,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--teacher_render_decay_start_iter", type=int, default=-1)
     parser.add_argument("--teacher_render_decay_end_iter", type=int, default=-1)
     parser.add_argument("--teacher_render_decay_final_mult", type=float, default=1.0)
+    parser.add_argument("--parent_render_rollback_dir", default="")
+    parser.add_argument("--parent_render_rollback_lambda", type=float, default=0.0)
+    parser.add_argument("--parent_render_rollback_start_iter", type=int, default=22000)
+    parser.add_argument("--parent_render_rollback_warmup_iters", type=int, default=300)
+    parser.add_argument("--parent_render_rollback_decay_start_iter", type=int, default=-1)
+    parser.add_argument("--parent_render_rollback_decay_end_iter", type=int, default=-1)
+    parser.add_argument("--parent_render_rollback_decay_final_mult", type=float, default=1.0)
+    parser.add_argument("--parent_render_rollback_margin_abs", type=float, default=0.0)
+    parser.add_argument("--parent_render_rollback_margin_rel", type=float, default=0.0)
+    parser.add_argument("--parent_render_rollback_huber_delta", type=float, default=0.02)
+    parser.add_argument("--parent_render_rollback_aggregation", choices=("mean", "cvar"), default="mean")
+    parser.add_argument("--parent_render_rollback_cvar_fraction", type=float, default=0.1)
+    parser.add_argument("--parent_render_rollback_cvar_min_pixels", type=int, default=1024)
+    parser.add_argument("--parent_render_rollback_patch_radius", type=int, default=0)
+    parser.add_argument("--parent_render_rollback_patch_reduce", choices=("center", "max_violation", "mean_violation"), default="center")
+    parser.add_argument("--parent_render_rollback_error_space", choices=("l1", "l2", "channel_max"), default="l1")
     parser.add_argument("--checkpoint_geometry_anchor_lambda", type=float, default=0.0)
     parser.add_argument("--checkpoint_geometry_anchor_start_iter", type=int, default=0)
     parser.add_argument("--checkpoint_geometry_anchor_warmup_iters", type=int, default=300)

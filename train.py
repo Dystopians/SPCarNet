@@ -864,12 +864,12 @@ def _compute_checkpoint_render_geometry_anchor_loss(render_pkg, viewpoint_cam, c
     return {"loss_weighted": total, "depth_pure": depth_pure, "normal_pure": normal_pure}
 
 
-def _load_teacher_render_cache(render_dir: str, train_cameras) -> dict:
+def _load_teacher_render_cache(render_dir: str, train_cameras, label: str = "TeacherRender") -> dict:
     render_dir = str(render_dir or "").strip()
     if not render_dir:
         return {}
     if not os.path.isdir(render_dir):
-        print(f"[TeacherRender] disabled: render_dir not found: {render_dir}")
+        print(f"[{label}] disabled: render_dir not found: {render_dir}")
         return {}
     cache = {}
     for idx, cam in enumerate(list(train_cameras)):
@@ -881,8 +881,8 @@ def _load_teacher_render_cache(render_dir: str, train_cameras) -> dict:
             tensor = torch.from_numpy(arr).permute(2, 0, 1).contiguous()
             cache[str(getattr(cam, "image_name", idx))] = tensor
         except Exception as exc:
-            print(f"[TeacherRender] skipped {path}: {exc}")
-    print(f"[TeacherRender] loaded {len(cache)}/{len(list(train_cameras))} train renders from {render_dir}")
+            print(f"[{label}] skipped {path}: {exc}")
+    print(f"[{label}] loaded {len(cache)}/{len(list(train_cameras))} train renders from {render_dir}")
     return cache
 
 
@@ -941,6 +941,132 @@ def _compute_teacher_render_loss(
         "l1": teacher_l1,
         "ssim": teacher_ssim,
         "mask_fraction": float(mask.mean().detach().item()) if mask is not None else 1.0,
+    }
+
+
+def _parent_render_rollback_lambda(iteration: int, opt) -> float:
+    if not bool(getattr(opt, "enable_parent_render_rollback_loss", False)):
+        return 0.0
+    base = float(getattr(opt, "lambda_parent_render_rollback", 0.0))
+    if base <= 0.0:
+        return 0.0
+    start_iter = int(getattr(opt, "parent_render_rollback_start_iter", 0))
+    if int(iteration) < start_iter:
+        return 0.0
+    warmup_iters = max(1, int(getattr(opt, "parent_render_rollback_warmup_iters", 1)))
+    warmup = min(1.0, max(0.0, float(int(iteration) - start_iter) / float(warmup_iters)))
+    decay = 1.0
+    decay_start = int(getattr(opt, "parent_render_rollback_decay_start_iter", -1))
+    decay_end = int(getattr(opt, "parent_render_rollback_decay_end_iter", -1))
+    decay_final = float(getattr(opt, "parent_render_rollback_decay_final_mult", 1.0))
+    if decay_start >= 0 and decay_end > decay_start and int(iteration) >= decay_start:
+        progress = min(1.0, max(0.0, float(int(iteration) - decay_start) / float(decay_end - decay_start)))
+        decay = (1.0 - progress) + progress * max(0.0, decay_final)
+    return base * warmup * decay
+
+
+def _compute_parent_render_rollback_loss(
+    viewpoint_cam,
+    image,
+    gt_image,
+    parent_cache: dict,
+    lam: float,
+    margin_abs: float = 0.0,
+    margin_rel: float = 0.0,
+    huber_delta: float = 0.02,
+    aggregation: str = "mean",
+    cvar_fraction: float = 0.1,
+    cvar_min_pixels: int = 1024,
+    patch_radius: int = 0,
+    patch_reduce: str = "center",
+    error_space: str = "l1",
+):
+    if lam <= 0.0 or not parent_cache:
+        return None
+    key = str(getattr(viewpoint_cam, "image_name", ""))
+    parent = parent_cache.get(key, None)
+    if parent is None:
+        return None
+    parent = parent.to(device=image.device, dtype=image.dtype, non_blocking=True)
+    if parent.shape[-2:] != image.shape[-2:]:
+        parent = F.interpolate(
+            parent.unsqueeze(0),
+            size=(int(image.shape[-2]), int(image.shape[-1])),
+            mode="bilinear",
+            align_corners=False,
+        ).squeeze(0)
+    parent = torch.clamp(parent, 0.0, 1.0).detach()
+    gt_detached = gt_image.detach()
+    space = str(error_space or "l1").strip().lower()
+    if space == "l2":
+        current_err = torch.sqrt(torch.mean((image - gt_image) ** 2, dim=0) + 1e-12)
+        parent_err = torch.sqrt(torch.mean((parent - gt_detached) ** 2, dim=0) + 1e-12)
+    elif space == "channel_max":
+        current_err = torch.max(torch.abs(image - gt_image), dim=0).values
+        parent_err = torch.max(torch.abs(parent - gt_detached), dim=0).values
+    else:
+        current_err = torch.mean(torch.abs(image - gt_image), dim=0)
+        parent_err = torch.mean(torch.abs(parent - gt_detached), dim=0)
+        space = "l1"
+    margin = float(max(0.0, margin_abs)) + float(max(0.0, margin_rel)) * parent_err.detach()
+    violation = current_err - parent_err.detach() - margin
+    positive = F.relu(violation)
+    active_mask_raw = positive.detach() > 0
+    if not bool(active_mask_raw.any()):
+        return None
+    beta = max(float(huber_delta), 1e-8)
+    per_pixel_loss = torch.where(
+        positive < beta,
+        0.5 * positive * positive / beta,
+        positive - 0.5 * beta,
+    )
+    patch_radius = max(0, int(patch_radius))
+    reduce_mode = str(patch_reduce or "center").strip().lower()
+    if patch_radius > 0 and reduce_mode in ("max_violation", "mean_violation"):
+        kernel = 2 * patch_radius + 1
+        if reduce_mode == "max_violation":
+            per_pixel_loss = F.max_pool2d(
+                per_pixel_loss[None, None],
+                kernel_size=kernel,
+                stride=1,
+                padding=patch_radius,
+            ).squeeze(0).squeeze(0)
+        else:
+            per_pixel_loss = F.avg_pool2d(
+                per_pixel_loss[None, None],
+                kernel_size=kernel,
+                stride=1,
+                padding=patch_radius,
+                count_include_pad=False,
+            ).squeeze(0).squeeze(0)
+    active_mask = per_pixel_loss.detach() > 0
+    values = per_pixel_loss.reshape(-1)[active_mask.reshape(-1)]
+    if values.numel() == 0:
+        return None
+    agg = str(aggregation or "mean").strip().lower()
+    tail_fraction = min(1.0, max(1e-6, float(cvar_fraction)))
+    if agg == "cvar":
+        k = int(np.ceil(float(values.numel()) * tail_fraction))
+        k = min(int(values.numel()), max(1, int(cvar_min_pixels), k))
+        selected = torch.topk(values, k=k, largest=True, sorted=False).values
+        loss_pure = selected.mean()
+        tail_pixels = int(k)
+    else:
+        agg = "mean"
+        loss_pure = values.mean()
+        tail_pixels = int(values.numel())
+    raw_positive = positive.detach()[active_mask_raw]
+    return {
+        "loss_pure": loss_pure,
+        "loss_weighted": float(lam) * loss_pure,
+        "active_pixels": int(active_mask_raw.sum().item()),
+        "total_pixels": int(active_mask_raw.numel()),
+        "active_fraction": float(active_mask_raw.to(torch.float32).mean().item()),
+        "mean_violation": float(raw_positive.mean().item()),
+        "max_violation": float(raw_positive.max().item()),
+        "tail_pixels": tail_pixels,
+        "aggregation": agg,
+        "error_space": space,
     }
 
 
@@ -2996,9 +3122,19 @@ def training(
         teacher_render_cache = _load_teacher_render_cache(
             render_dir=str(getattr(opt, "teacher_render_dir", "")),
             train_cameras=scene.getTrainCameras(),
+            label="TeacherRender",
         )
         if len(teacher_render_cache) == 0:
             print("[TeacherRender] disabled for this run: no teacher renders were loaded.")
+    parent_render_rollback_cache = {}
+    if bool(getattr(opt, "enable_parent_render_rollback_loss", False)):
+        parent_render_rollback_cache = _load_teacher_render_cache(
+            render_dir=str(getattr(opt, "parent_render_rollback_dir", "")),
+            train_cameras=scene.getTrainCameras(),
+            label="ParentRenderRollback",
+        )
+        if len(parent_render_rollback_cache) == 0:
+            print("[ParentRenderRollback] disabled for this run: no parent renders were loaded.")
     checkpoint_geometry_anchor_vertices = None
     if bool(getattr(opt, "enable_checkpoint_geometry_anchor", False)):
         checkpoint_geometry_anchor_vertices = triangles.vertices.detach().clone()
@@ -3417,6 +3553,43 @@ def training(
             if torch.is_tensor(teacher_render_loss) and torch.isfinite(teacher_render_loss):
                 loss += teacher_render_loss
 
+        parent_render_rollback_loss_pure = 0
+        parent_render_rollback_loss = 0
+        parent_render_rollback_lambda_value = _parent_render_rollback_lambda(iteration=int(iteration), opt=opt)
+        parent_render_rollback_active_pixels = 0
+        parent_render_rollback_total_pixels = 0
+        parent_render_rollback_active_fraction = 0.0
+        parent_render_rollback_mean_violation = 0.0
+        parent_render_rollback_max_violation = 0.0
+        parent_render_rollback_tail_pixels = 0
+        parent_render_rollback_res = _compute_parent_render_rollback_loss(
+            viewpoint_cam=viewpoint_cam,
+            image=image,
+            gt_image=gt_image,
+            parent_cache=parent_render_rollback_cache,
+            lam=float(parent_render_rollback_lambda_value),
+            margin_abs=float(getattr(opt, "parent_render_rollback_margin_abs", 0.0)),
+            margin_rel=float(getattr(opt, "parent_render_rollback_margin_rel", 0.0)),
+            huber_delta=float(getattr(opt, "parent_render_rollback_huber_delta", 0.02)),
+            aggregation=str(getattr(opt, "parent_render_rollback_aggregation", "mean")),
+            cvar_fraction=float(getattr(opt, "parent_render_rollback_cvar_fraction", 0.1)),
+            cvar_min_pixels=int(getattr(opt, "parent_render_rollback_cvar_min_pixels", 1024)),
+            patch_radius=int(getattr(opt, "parent_render_rollback_patch_radius", 0)),
+            patch_reduce=str(getattr(opt, "parent_render_rollback_patch_reduce", "center")),
+            error_space=str(getattr(opt, "parent_render_rollback_error_space", "l1")),
+        )
+        if parent_render_rollback_res is not None:
+            parent_render_rollback_loss_pure = parent_render_rollback_res["loss_pure"]
+            parent_render_rollback_loss = parent_render_rollback_res["loss_weighted"]
+            parent_render_rollback_active_pixels = int(parent_render_rollback_res.get("active_pixels", 0))
+            parent_render_rollback_total_pixels = int(parent_render_rollback_res.get("total_pixels", 0))
+            parent_render_rollback_active_fraction = float(parent_render_rollback_res.get("active_fraction", 0.0))
+            parent_render_rollback_mean_violation = float(parent_render_rollback_res.get("mean_violation", 0.0))
+            parent_render_rollback_max_violation = float(parent_render_rollback_res.get("max_violation", 0.0))
+            parent_render_rollback_tail_pixels = int(parent_render_rollback_res.get("tail_pixels", 0))
+            if torch.is_tensor(parent_render_rollback_loss) and torch.isfinite(parent_render_rollback_loss):
+                loss += parent_render_rollback_loss
+
         checkpoint_geometry_anchor_loss_pure = 0
         checkpoint_geometry_anchor_loss = 0
         checkpoint_geometry_anchor_mean_disp = 0
@@ -3750,6 +3923,16 @@ def training(
                 tb_writer.add_scalar("train/sparse_parent_rollback_loss", sparse_parent_rollback_scalar, iteration)
                 tb_writer.add_scalar("train/sparse_parent_rollback_active_points", float(sparse_parent_rollback_active_points), iteration)
                 tb_writer.add_scalar("train/sparse_parent_rollback_lambda", float(sparse_parent_rollback_lambda_value), iteration)
+                parent_render_rollback_scalar = (
+                    float(parent_render_rollback_loss.detach().item())
+                    if torch.is_tensor(parent_render_rollback_loss)
+                    else float(parent_render_rollback_loss)
+                    if isinstance(parent_render_rollback_loss, (float, int))
+                    else 0.0
+                )
+                tb_writer.add_scalar("train/parent_render_rollback_loss", parent_render_rollback_scalar, iteration)
+                tb_writer.add_scalar("train/parent_render_rollback_active_pixels", float(parent_render_rollback_active_pixels), iteration)
+                tb_writer.add_scalar("train/parent_render_rollback_lambda", float(parent_render_rollback_lambda_value), iteration)
 
             if bool(getattr(opt, "prism_save_debug_json", False)) and (int(iteration) % max(1, int(getattr(opt, "prism_collect_interval", 100))) == 0):
                 out_dir = os.path.join(scene.model_path, "prism_debug")
@@ -3836,6 +4019,15 @@ def training(
                         ),
                         "train/sparse_parent_rollback_active_points": float(sparse_parent_rollback_active_points),
                         "train/sparse_parent_rollback_lambda": float(sparse_parent_rollback_lambda_value),
+                        "train/parent_render_rollback_loss": float(
+                            parent_render_rollback_loss.detach().item()
+                            if torch.is_tensor(parent_render_rollback_loss)
+                            else parent_render_rollback_loss
+                            if isinstance(parent_render_rollback_loss, (float, int))
+                            else 0.0
+                        ),
+                        "train/parent_render_rollback_active_pixels": float(parent_render_rollback_active_pixels),
+                        "train/parent_render_rollback_lambda": float(parent_render_rollback_lambda_value),
                     },
                     step=iteration,
                     log_state=wandb_log_state,
@@ -4088,6 +4280,8 @@ def training(
                         "loss_components/loss_normal_super": float(normal_loss_super) if isinstance(normal_loss_super, (float, int)) else float(normal_loss_super.detach().item()),
                         "loss_components/loss_teacher_render": float(teacher_render_loss) if isinstance(teacher_render_loss, (float, int)) else float(teacher_render_loss.detach().item()),
                         "loss_components/loss_teacher_render_pure": float(teacher_render_loss_pure) if isinstance(teacher_render_loss_pure, (float, int)) else float(teacher_render_loss_pure.detach().item()),
+                        "loss_components/loss_parent_render_rollback": float(parent_render_rollback_loss) if isinstance(parent_render_rollback_loss, (float, int)) else float(parent_render_rollback_loss.detach().item()),
+                        "loss_components/loss_parent_render_rollback_pure": float(parent_render_rollback_loss_pure) if isinstance(parent_render_rollback_loss_pure, (float, int)) else float(parent_render_rollback_loss_pure.detach().item()),
                         "loss_components/loss_checkpoint_geometry_anchor": float(checkpoint_geometry_anchor_loss) if isinstance(checkpoint_geometry_anchor_loss, (float, int)) else float(checkpoint_geometry_anchor_loss.detach().item()),
                         "loss_components/loss_checkpoint_geometry_anchor_pure": float(checkpoint_geometry_anchor_loss_pure) if isinstance(checkpoint_geometry_anchor_loss_pure, (float, int)) else float(checkpoint_geometry_anchor_loss_pure.detach().item()),
                         "loss_components/loss_checkpoint_render_geometry_anchor": float(checkpoint_render_geometry_anchor_loss) if isinstance(checkpoint_render_geometry_anchor_loss, (float, int)) else float(checkpoint_render_geometry_anchor_loss.detach().item()),
@@ -4102,6 +4296,13 @@ def training(
                         "teacher_render/l1": float(teacher_render_l1) if isinstance(teacher_render_l1, (float, int)) else float(teacher_render_l1.detach().item()),
                         "teacher_render/ssim": float(teacher_render_ssim) if isinstance(teacher_render_ssim, (float, int)) else float(teacher_render_ssim.detach().item()),
                         "teacher_render/mask_fraction": float(teacher_render_mask_fraction),
+                        "parent_render_rollback/lambda": float(parent_render_rollback_lambda_value),
+                        "parent_render_rollback/active_pixels": float(parent_render_rollback_active_pixels),
+                        "parent_render_rollback/total_pixels": float(parent_render_rollback_total_pixels),
+                        "parent_render_rollback/active_fraction": float(parent_render_rollback_active_fraction),
+                        "parent_render_rollback/mean_violation": float(parent_render_rollback_mean_violation),
+                        "parent_render_rollback/max_violation": float(parent_render_rollback_max_violation),
+                        "parent_render_rollback/tail_pixels": float(parent_render_rollback_tail_pixels),
                         "checkpoint_geometry_anchor/lambda": float(checkpoint_geometry_anchor_lambda),
                         "checkpoint_geometry_anchor/mean_displacement": float(checkpoint_geometry_anchor_mean_disp) if isinstance(checkpoint_geometry_anchor_mean_disp, (float, int)) else float(checkpoint_geometry_anchor_mean_disp.detach().item()),
                         "checkpoint_geometry_anchor/max_displacement": float(checkpoint_geometry_anchor_max_disp) if isinstance(checkpoint_geometry_anchor_max_disp, (float, int)) else float(checkpoint_geometry_anchor_max_disp.detach().item()),
