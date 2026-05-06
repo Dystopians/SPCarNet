@@ -4916,3 +4916,15 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Verification**: compileall passed; synthetic smoke covers all seven action classes. Real SCE7 courtyard test ECG plan wrote `outputs/carnet/meshsplatopt/final_stageSCE13_certificate_edit_planner/courtyard/best28600_test_audit_plan`; because the real audit contains sparse-depth certificate violations without certified hole/split/delete evidence, the planner correctly emits `ROLLBACK_ONLY` plans rather than inventing topology edits from held-out evidence.
 
 **Decision**: `SCE13_PASS_REAL_AUDIT_ROLLBACK_ONLY`. Next real improvement stage should build a train/calibration ECG and only run local topology surgery when train evidence provides split/fill/delete certificates.
+
+---
+
+## 2026-05-06 - SCE8 multiscene collector
+
+**Goal**: provide a fixed table builder for fair SCE8 multiscene validation instead of hand-copying numbers.
+
+**Implementation**: added `scripts/car_model/final_collect_stageSCE8_multiscene_policy.py` and `docs/car_model/final_stageSCE8_multiscene_sce_policy_report.md`.
+
+**Verification**: compileall passed. Courtyard current table wrote `outputs/carnet/meshsplatopt/final_stageSCE8_multiscene_sce_policy/courtyard_current_table` and correctly reports `all_pass=0`, with deltas PSNR `+0.411804`, SSIM `+0.029528`, LPIPS `-0.006609`, AbsRel `-0.002983`, Depth MAE `+0.001787`, Normal `-0.847397`.
+
+**Decision**: `SCE8_COLLECTOR_PASS_COURTYARD_STILL_PARTIAL`. The collector is ready; the fixed-policy multiscene claim still requires actual SCE runs on bonsai/room/counter and a final courtyard MAE closure or an explicit limitation.
