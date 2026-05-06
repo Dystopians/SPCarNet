@@ -5176,3 +5176,23 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Decision**: `SCE27_BONSAI_STILL_MIXED`. The teacher and structural losses reduce LPIPS damage but do not solve SSIM/perceptual non-regression. None should supersede F82 on bonsai.
 
 **Clean-best finding**: clean bonsai 9000 is much stronger than clean 22000/F82 (`18.541/0.463/0.483` vs F82 `11.069/0.241/0.573` for PSNR/SSIM/LPIPS). Future fairness claims must compare against best clean, not only clean 22000. SCE28 started a clean-best reset from the 2.49M-triangle clean9000 checkpoint, but generic checkpoint scanning/compaction is currently a CPU bottleneck. Added face-only compaction hooks; next step is cached or streaming low-evidence selection followed by clean-best compact recovery.
+
+---
+
+## 2026-05-06 - ELA2 auto evidence-lumigraph policy
+
+**Goal**: break out of pruning/recovery parameter tuning by adding a research-level appearance mechanism: use the compact mesh-splat as geometry/base render, then recover view-dependent appearance from training-view evidence through depth-consistent residual warping.
+
+**Implementation**: added `utils/evidence_lumigraph_adapter.py`, `scripts/car_model/meshsplatopt_render_evidence_maps.py`, `scripts/car_model/meshsplatopt_apply_evidence_lumigraph_adapter.py`, and `scripts/car_model/smoke_test_stageELA0_evidence_lumigraph_adapter.py`. The adapter saves train/test RGB, GT, `surf_depth`, and camera matrices; projects target pixels into train views; accepts only depth-consistent evidence; blends warped train residuals; and selects mode/k/depth tolerance/alpha using train-only held-out calibration. A color-lumigraph variant was tested but rejected by calibration/metrics on bonsai.
+
+**Literature pivot**: ELA follows image-based rendering/surface light-field ideas and modern view-dependent Gaussian appearance work rather than treating all quality loss as geometry-recovery failure. See the full report for citations.
+
+**Final ELA2 W&B**: bonsai `4cullr68`, courtyard `vzpna2vs`, room `frk7ces0`, counter `k3ko2bj0`.
+
+**Result vs F82 seed0 render metrics**:
+- bonsai: PSNR `+0.042578`, SSIM `+0.013080`, LPIPS `-0.008452`; auto policy residual k4 rel0.12 alpha 0.5.
+- courtyard: no-op, all deltas `0.0`; auto policy alpha 0.0.
+- room: PSNR `+0.216005`, SSIM `+0.018147`, LPIPS `-0.014529`; auto policy residual k8 rel0.12 alpha 1.0.
+- counter: PSNR `+0.209131`, SSIM `+0.046395`, LPIPS `-0.054157`; auto policy residual k4 rel0.12 alpha 1.0.
+
+**Decision**: `ELA2_RENDER_WIN_VS_F82_WITH_GEOMETRY_INHERITED`. ELA2 improves or no-ops on all selected scenes for RGB metrics, and geometry metrics are unchanged because the adapter does not alter checkpoint topology/geometry. This is the strongest method-level pivot after the SCE bottleneck, but it is still not enough to claim best-clean superiority: clean9000 remains far ahead on several Mip-NeRF 360 scenes. Next serious step is ELA3, distilling this evidence into a compact learned residual/neural-texture field rather than keeping a runtime multi-view evidence cache.
