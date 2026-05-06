@@ -5222,3 +5222,21 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Qualitative assets**: generated GT/F82/ELA2/ELA3 montages with deterministic per-view LPIPS-improvement selection under `outputs/carnet/meshsplatopt/stageELA3_benefit_calibrated_policy/qualitative/`.
 
 **Decision**: `ELA3_ALL_SCENE_RGB_WIN_VS_F82_WITH_TRAIN_ONLY_BENEFIT_POLICY`. This is a stronger and more defensible renderer-side innovation than ELA2. It still does not close the best-clean-9000 gap, so the next paper-level step remains persistent distillation into a compact neural texture/residual field rather than relying on runtime evidence cache.
+
+---
+
+## 2026-05-06 - ELA4 clean9000 superiority pivot
+
+**Goal**: stop comparing against weak or over-trained baselines and directly answer the central question: can the proposed method improve the strongest pure Mesh Splatting checkpoint available for each selected scene?  For bonsai, courtyard, room, and counter, the correct pure Mesh Splatting baseline is clean `ours_9000`.
+
+**Implementation**: rendered clean9000 train/test evidence maps with RGB, GT, `surf_depth`, and camera matrices, then applied the ELA3 benefit-calibrated residual adapter directly on top of clean9000.  The promoted ELA4-fast policy uses residual mode, k4 neighbors, depth relative tolerance `{0.06, 0.12}`, residual clip `0.10`, train-only PSNR calibration, benefit bins, and W&B online logging.  It does not use test GT for policy selection.
+
+**W&B**: bonsai `263psrr4`, courtyard `kxtsbw3e`, room `9g4ev6rh`, counter `m43j8tmy`.
+
+**Independent test metrics vs clean9000 Mesh Splatting**:
+- bonsai: PSNR `+1.338095`, SSIM `+0.058450`, LPIPS `-0.024570`.
+- courtyard: PSNR `+0.192263`, SSIM `+0.010099`, LPIPS `-0.012896`.
+- room: PSNR `+2.751766`, SSIM `+0.043678`, LPIPS `-0.052810`.
+- counter: PSNR `+2.413528`, SSIM `+0.060425`, LPIPS `-0.059244`.
+
+**Decision**: `ELA4_CLEAN9000_ALL_SCENE_RENDER_WIN`.  This is the first current branch that directly beats the strongest pure Mesh Splatting baseline on all selected scenes and all reported RGB metrics.  The remaining paper-critical caveat is that ELA4 is still a renderer-side evidence adapter; the next method step should distill it into a compact persistent neural texture or residual field, measure overhead, and run leakage/ablation audits.
