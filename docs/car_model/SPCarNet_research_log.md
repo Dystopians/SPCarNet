@@ -4972,3 +4972,17 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Verification**: compileall passed; materializer smoke on the real train plan passed.
 
 **Decision**: `SCE15_PLAN_AND_SAFE_MATERIALIZER_IMPLEMENTED_NO_TOPOLOGY_PROMOTION`. Do not claim real bidirectional surgery from courtyard yet; only promote non-rollback local surgery when train/calibration ECG provides explicit snap/split/fill/delete certificates and independent gates pass.
+
+---
+
+## 2026-05-06 - SCE16 reviewer-killer ablation collector
+
+**Goal**: build a reviewer-facing ablation collector that directly tests whether the gains can be explained by simpler alternatives or parameter games.
+
+**Implementation**: added `docs/car_model/final_stageSCE16_reviewer_killer_ablation_plan.md`, `scripts/car_model/meshsplatopt_collect_reviewer_killer_ablations.py`, and `scripts/car_model/meshsplatopt_make_ablation_latex_tables.py`.
+
+**Initial courtyard table**: wrote `outputs/carnet/meshsplatopt/final_stageSCE16_reviewer_killer_ablation/courtyard_initial`. Rows include `sentinel_conflict_only`, `sentinel_topk_overfit`, `hardfar_proxy`, `stronger_sparse`, and `residual_current_continue`. None passes strict all-metric parent-Pareto; the best row is still `sentinel_conflict_only`, missing only Depth MAE by `+0.001787`.
+
+**Verification**: compileall passed; CSV/JSON/Markdown/LaTeX table generation passed.
+
+**Decision**: `SCE16_COLLECTOR_PASS_INITIAL_TABLE_PARTIAL`. The ablation infrastructure is ready, but a final reviewer-killer table still needs matched no-sentinel, global-render-depth, vertex-anchor, freeze-only, QEM/delete-only, and LPIPS-heavy rows if those artifacts are not already present.
