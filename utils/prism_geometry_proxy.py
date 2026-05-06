@@ -376,6 +376,7 @@ def collect_view_sparse_depth_correspondences(
     Returns:
     - reason
     - num_matches
+    - point3D_id (int64 numpy array)
     - px, py (int64 numpy arrays in rendered image coordinates)
     - gt_depth (float64 numpy array)
     """
@@ -385,6 +386,7 @@ def collect_view_sparse_depth_correspondences(
             "image_name": getattr(view, "image_name", ""),
             "reason": reason,
             "num_matches": 0,
+            "point3D_id": np.zeros((0,), dtype=np.int64),
             "px": np.zeros((0,), dtype=np.int64),
             "py": np.zeros((0,), dtype=np.int64),
             "gt_depth": np.zeros((0,), dtype=np.float64),
@@ -450,12 +452,14 @@ def collect_view_sparse_depth_correspondences(
         return _empty("no_valid_depth_matches")
     px = px[keep]
     py = py[keep]
+    pids_valid = pids_valid[keep]
     gt_depth = gt_depth[keep]
 
     return {
         "image_name": getattr(view, "image_name", ""),
         "reason": "ok",
         "num_matches": int(gt_depth.shape[0]),
+        "point3D_id": pids_valid.astype(np.int64),
         "px": px.astype(np.int64),
         "py": py.astype(np.int64),
         "gt_depth": gt_depth.astype(np.float64),

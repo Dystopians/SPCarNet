@@ -4739,3 +4739,19 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Finding**: F82 fixed adaptive policy v5 remains the accepted baseline. F95 is the strongest rejected repair candidate because it improves courtyard PSNR, SSIM, LPIPS, every fixed per-view PSNR sample, and normal angle, but still fails parent-Pareto on sparse AbsRel / Depth MAE.
 
 **Decision**: `PROCEED_TO_SCE1`. The next step must be per-correspondence sparse-depth parent-vs-candidate analysis before launching more full recovery runs.
+
+---
+
+## 2026-05-06 - Final SCE1 sparse-depth regression analyzer
+
+**Goal**: build the required parent-vs-candidate analyzer at the exact sparse COLMAP correspondence level.
+
+**Implementation**: added `utils/sparse_depth_regression.py`, `scripts/car_model/meshsplatopt_sparse_depth_regression_analyzer.py`, and a synthetic smoke test. `collect_view_sparse_depth_correspondences` now returns `point3D_id`.
+
+**Smoke**: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_stageSCE1_sparse_depth_regression.py` passed.
+
+**Real diagnostic**: courtyard F82 parent 26000 vs F95 candidate 27000 ran on GPU 7. The analyzer produced all required CSV/NPZ/JSON/Markdown outputs under `outputs/carnet/meshsplatopt/final_stageSCE1_sparse_depth_regression/courtyard`.
+
+**Finding**: F95 is sparse-depth worse on the sampled test correspondences: AbsRel `0.324888045 -> 0.325786638` and Depth MAE `3.516864341 -> 3.533150427`. The failure is view/localized rather than uniform; two views improve while three regress.
+
+**Decision**: `SCE1_PASS`. Next is SCE2 train/calibration sentinel cache construction without test leakage.
