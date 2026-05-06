@@ -4818,3 +4818,27 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 - corrected res8 rollback `0.5`, W&B `xhvmsv8m`: PSNR `12.313520`, SSIM `0.319199`, LPIPS `0.565644`, normal `40.117207`, but AbsRel `0.307620` and Depth MAE `3.423940` still fail F82 parent-Pareto.
 
 **Decision**: `SCE_TARGETED_ROLLBACK_PARTIAL_NEEDS_DENSE_GEOMETRY_PHASE`. The interfaces are now real, opt-in, logged, and resolution-safe; the remaining blocker is insufficient sparse sentinel density/weight against the F95-style visual recovery forces. Next step is a denser resolution-8 sentinel cache plus geometry-first rollback before appearance recovery.
+
+---
+
+## 2026-05-06 - SCE6 dense high-LR rollback breakthrough and remaining MAE blocker
+
+**Goal**: close the courtyard F82-vs-F95 sparse-depth blocker using train-only dense sentinels and high-LR geometry rollback, while retaining F95 visual gains.
+
+**New cache**: `sentinel_cache_res8_dense2k` has `55634` train sentinels, `21462` F95-regressed sentinels, and `no_test_leakage=true`. A later `hardfar4k` cache has `93386` train sentinels and `33880` regressed sentinels but did not improve held-out MAE.
+
+**Key result**: high vertex-LR absrel rollback (`jgvk6zfe`) is the current best courtyard SCE candidate:
+- PSNR `12.606700` vs F82 `12.198611`
+- SSIM `0.337344` vs F82 `0.308649`
+- LPIPS `0.560571` vs F82 `0.566687`
+- AbsRel `0.298651` vs F82 `0.301884`
+- Normal angle `39.392915` vs F82 `40.215702`
+- Depth MAE `3.353155` vs F82 `3.339872`
+
+**Negative controls**:
+- Default late-stage vertex LR with dense rollback still fails geometry.
+- MAE-only rollback worsens AbsRel/MAE.
+- Hard/far-biased 4k cache worsens held-out sparse geometry.
+- Continuing the best 28.5k candidate to 29k regresses metrics, so automatic early stop is required.
+
+**Decision**: `SCE_TARGETED_ROLLBACK_STRONG_PARTIAL_MAE_REMAINS`. SCE now delivers a large and real improvement over F95 and crosses the AbsRel blocker, but strict all-metric parent-Pareto is still not fully closed because Depth MAE remains `+0.013282` above F82. Next required implementation is SCE7 automatic policy with dense sentinel generation, high-LR geometry phases, and early stopping around sentinel/test-safe knees.
