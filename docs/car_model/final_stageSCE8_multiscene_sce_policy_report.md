@@ -41,6 +41,17 @@ Follow-up SCE21 implements CTR-SCE tail-risk sentinel rollback. On courtyard see
 
 This updates the courtyard status from partial to all-metric pass, but does not change the multiscene decision label yet because bonsai/room/counter fixed-policy validation remains incomplete.
 
+First CTR-SCE bonsai probe with F82-fair `images_4`/resolution `4` settings is mixed rather than passing:
+
+- PSNR `+0.001048`
+- SSIM `-0.000914`
+- LPIPS `+0.000470`
+- AbsRel `-0.000101`
+- Depth MAE `-0.001859`
+- Normal `+0.000579`
+
+The current courtyard+bonsai table has `1/2` all-pass rows. This is useful: CTR-SCE fixes the courtyard bottleneck but still needs policy-level accept/no-op behavior or better appearance coupling for bonsai-like scenes.
+
 ## Next Validation Requirement
 
 Before claiming SCE-Repair fully beats F82, run CTR-SCE guarded fixed policy on bonsai, room, and counter with no per-scene retuning, then use the collector to build the final SCE8 table. Current multiscene label remains `SCE_POLICY_V1_RENDER_PASS_GEOMETRY_MIXED`; courtyard alone is now `SCE21_COURTYARD_ALL_METRIC_PASS_VS_F82`.

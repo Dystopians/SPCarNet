@@ -94,6 +94,35 @@ It shows:
 
 Interpretation: SCE21 solves the aggregate independent geometry gate and the max1000 robustness check, but it does not prove every sparse correspondence or every held-out view is locally non-regressing.
 
+## First Multiscene Probe
+
+Bonsai fixed-policy probe:
+
+`outputs/carnet/meshsplatopt/final_stageSCE21_tail_risk_sentinel/bonsai/all_sentinel_cvar_patch1_26000to26200_seed0/recovery_model`
+
+- W&B: `5eg8309n`
+- source settings from F82 contract: `images_4`, resolution `4`
+- train-only parent sentinel cache: `16136` sentinels, `32` train views, `no_test_leakage=true`
+- topology unchanged: `true`
+
+Result vs F82 bonsai:
+
+- PSNR: `+0.001048`
+- SSIM: `-0.000914`
+- LPIPS: `+0.000470`
+- AbsRel: `-0.000101`
+- Depth MAE: `-0.001859`
+- Normal: `+0.000579`
+
+This is not an all-metric pass. It is a much safer result than the earlier SCE8 bonsai v1 negative transfer, but CTR-SCE is still not a universal F82 replacement.
+
+Current two-scene collector:
+
+`outputs/carnet/meshsplatopt/final_stageSCE21_tail_risk_sentinel/current_courtyard_bonsai_table/stageSCE8_multiscene_policy_report.md`
+
+- rows: `2`
+- all-pass rows: `1`
+
 ## Verification
 
 Commands passed:
@@ -110,4 +139,4 @@ Commands passed:
 
 This is a real milestone over SCE7/SCE20: the remaining courtyard Depth MAE gap is closed while preserving RGB, perceptual, AbsRel, normal, and unchanged topology.
 
-The claim should still be scoped: SCE21 currently proves a courtyard breakthrough and a general mechanism implementation. It does not yet prove multiscene universal superiority over F82.
+The claim should still be scoped: SCE21 currently proves a courtyard breakthrough and a general mechanism implementation. A first fair bonsai probe is mixed, so SCE21 does not yet prove multiscene universal superiority over F82.

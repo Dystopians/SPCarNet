@@ -5122,3 +5122,19 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Diagnostic caveat**: test correspondence analyzer still shows sampled MAE `+0.017089` and `DSC_0318` as a local weak view. This diagnostic is not used for training. The aggregate independent geometry gate is solved, but not every sampled held-out correspondence is locally non-regressing.
 
 **Decision**: `SCE21_COURTYARD_ALL_METRIC_PASS_VS_F82`. This is the first real milestone that closes the courtyard Depth MAE gap while preserving unchanged topology. Multiscene CTR-SCE validation remains required before making a universal F82-superiority claim.
+
+---
+
+## 2026-05-06 - SCE21 first fair bonsai probe is mixed
+
+**Goal**: check whether CTR-SCE transfers to bonsai under the same data settings as the F82 bonsai parent.
+
+**Sentinel cache**: `outputs/carnet/meshsplatopt/final_stageSCE21_tail_risk_sentinel/bonsai/train_parent_only_sentinel_cache/sentinel_cache.npz`, train-only, `16136` sentinels, `32` train views, `no_test_leakage=true`.
+
+**Run**: `outputs/carnet/meshsplatopt/final_stageSCE21_tail_risk_sentinel/bonsai/all_sentinel_cvar_patch1_26000to26200_seed0/recovery_model`, W&B `5eg8309n`, F82 contract settings `images_4`/resolution `4`, topology unchanged.
+
+**Result vs F82 bonsai**: PSNR `+0.001048`, SSIM `-0.000914`, LPIPS `+0.000470`, AbsRel `-0.000101`, Depth MAE `-0.001859`, Normal `+0.000579`.
+
+**Collector**: `outputs/carnet/meshsplatopt/final_stageSCE21_tail_risk_sentinel/current_courtyard_bonsai_table` has `2` rows and `1` all-pass row.
+
+**Decision**: `SCE21_BONSAI_MIXED_NOT_PASS`. CTR-SCE is a real courtyard breakthrough and safer than the earlier bonsai v1 negative transfer, but it is not yet a universal multiscene F82 replacement.
