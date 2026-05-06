@@ -4876,3 +4876,43 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 - `/home/peilincai/micromamba/envs/mesh_splatting/bin/python -m compileall scripts/car_model ss3dm_prior utils -q` passed.
 
 **Decision**: `SCE7_POLICY_LOSS_UPGRADE_PASS`. Next experiment should be a fixed, conflict-targeted courtyard continuation from the current best SCE6 candidate, then SCE8 multiscene validation if it closes or materially improves the remaining Depth MAE gap.
+
+---
+
+## 2026-05-06 - SCE7 conflict-targeted courtyard validation
+
+**Goal**: validate the new fixed SCE7 rollback controls on the remaining courtyard Depth MAE blocker.
+
+**Best run**: `combined_beta0p02_regressed_28500to28600_seed0`, W&B `lyhtoty4`, using dense train-only sentinels, `combined` rollback with `beta=0.02`, `regressed_only=true`, no top-k truncation, LR `0.005`, and 100-step early stop.
+
+**Result vs F82**: PSNR `12.610288 > 12.198611`, SSIM `0.338174 > 0.308649`, LPIPS `0.560069 < 0.566687`, AbsRel `0.298901 < 0.301884`, normal `39.368305 < 40.215702`; Depth MAE remains slightly worse, `3.341660` vs `3.339872`.
+
+**Negative controls**: top-16 conflict clusters (`3.360691` MAE), 50 more steps from the best (`3.343629`), higher MAE beta (`3.341664`), stronger sparse loss (`3.342886`), seed 1 (`3.342438`), and hard/far train cache (`3.349863`) all failed to beat the 100-step dense regressed-only policy.
+
+**Diagnosis**: independent test analyzer shows the remaining MAE regression is localized almost entirely to held-out `DSC_0318` (`+0.419859` MAE delta), while the other test views improve. This is a localized evidence-conflict problem, not a global-loss problem.
+
+**Decision**: `SCE7_STRONG_PARTIAL_MAE_GAP_REDUCED_TO_0P0018`. Stop sweeping global losses for this stage; proceed to SCE12 Evidence Conflict Graph and SCE13 certificate planner to make the localized conflict a first-class method object.
+
+---
+
+## 2026-05-06 - SCE12 Evidence Conflict Graph
+
+**Goal**: upgrade SCE from a rollback loss into an explicit graph of views, sparse points, pixel samples, approximate mesh clusters, certificates, and local edit actions.
+
+**Implementation**: added `ss3dm_prior/meshsplatopt/evidence_conflict_graph.py`, `scripts/car_model/meshsplatopt_build_evidence_conflict_graph.py`, `scripts/car_model/smoke_test_stageSCE12_evidence_conflict_graph.py`, and `docs/car_model/final_stageSCE12_evidence_conflict_graph_design.md`.
+
+**Verification**: compileall passed; smoke test passed. Real audit on the best SCE7 courtyard candidate wrote `outputs/carnet/meshsplatopt/final_stageSCE12_evidence_conflict_graph/courtyard/best28600_test_audit`. The top concrete conflict is `cluster 27`, with certificate pressure `78.401848`, `8` gate-critical correspondences, and suggested `ROLLBACK_ONLY`. Test ECG is audit-only and not used for training.
+
+**Decision**: `SCE12_PASS_REAL_AUDIT_AVAILABLE`.
+
+---
+
+## 2026-05-06 - SCE13 Certificate-Carrying Edit Planner
+
+**Goal**: turn ECG clusters into certificate-carrying local action plans: rollback-only, appearance-only, snap, split, fill, delete/collapse, or reject.
+
+**Implementation**: added `ss3dm_prior/meshsplatopt/certificate_edit_planner.py`, `scripts/car_model/meshsplatopt_plan_certificate_edits.py`, `scripts/car_model/smoke_test_stageSCE13_certificate_edit_planner.py`, and `docs/car_model/final_stageSCE13_certificate_carrying_edit_planner_design.md`.
+
+**Verification**: compileall passed; synthetic smoke covers all seven action classes. Real SCE7 courtyard test ECG plan wrote `outputs/carnet/meshsplatopt/final_stageSCE13_certificate_edit_planner/courtyard/best28600_test_audit_plan`; because the real audit contains sparse-depth certificate violations without certified hole/split/delete evidence, the planner correctly emits `ROLLBACK_ONLY` plans rather than inventing topology edits from held-out evidence.
+
+**Decision**: `SCE13_PASS_REAL_AUDIT_ROLLBACK_ONLY`. Next real improvement stage should build a train/calibration ECG and only run local topology surgery when train evidence provides split/fill/delete certificates.
