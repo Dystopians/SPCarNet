@@ -4771,3 +4771,17 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Manifest summary**: `split=train`, `no_test_leakage=true`, `num_views=32`, `num_sentinels=13630`, `num_regressed_candidate=4985`, `seed=7`.
 
 **Decision**: `SCE2_PASS`. Next is SCE3 one-sided parent rollback sparse-depth loss.
+
+---
+
+## 2026-05-06 - Final SCE3 one-sided parent rollback loss
+
+**Goal**: implement the opt-in one-sided sparse-depth parent rollback loss required to repair F95-style sparse-depth regressions without pulling all geometry back to the parent.
+
+**Implementation**: added `utils/sparse_depth_parent_rollback.py`, `scripts/car_model/smoke_test_stageSCE3_parent_rollback_loss.py`, new train flags in `arguments/__init__.py`, train-loop integration in `train.py`, and wrapper exposure in `scripts/car_model/meshsplatopt_run_strict_compact_recovery.py`.
+
+**Smoke**: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_stageSCE3_parent_rollback_loss.py` passed. Equal/improved current depth gives zero loss; worse current depth gives positive loss; test caches are rejected.
+
+**Wrapper contract**: non-execute strict recovery contract wrote `outputs/carnet/meshsplatopt/final_stageSCE3_parent_rollback_loss/contract_smoke/exact_train_command.txt` and includes `--enable_sparse_depth_parent_rollback_loss` plus the SCE2 train cache path.
+
+**Decision**: `SCE3_PASS`. Next is SCE4 sentinel-aware parent-Pareto gate before launching expensive recovery runs.

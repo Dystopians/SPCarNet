@@ -90,6 +90,12 @@ from utils.prism_geometry_proxy import (
     GeometryProxyConfig,
     build_geometry_proxy_context,
     collect_view_sparse_depth_correspondences,
+    normalize_image_key,
+)
+from utils.sparse_depth_parent_rollback import (
+    compute_sparse_depth_parent_rollback_loss,
+    load_sparse_depth_parent_rollback_cache,
+    sparse_depth_parent_rollback_lambda,
 )
 from utils.prism_pipeline import (
     PrismCompactionConfig,
@@ -3159,6 +3165,22 @@ def training(
         "last_loss": 0.0,
         "last_reason": "disabled",
     }
+    sparse_parent_rollback_cache = None
+    sparse_parent_rollback_cache_split = ""
+    if bool(getattr(opt, "enable_sparse_depth_parent_rollback_loss", False)):
+        sparse_parent_rollback_cache = load_sparse_depth_parent_rollback_cache(
+            getattr(opt, "sparse_depth_parent_rollback_cache", ""),
+            allow_test_cache=bool(getattr(opt, "sparse_depth_parent_rollback_allow_test_cache", False)),
+        )
+        sparse_parent_rollback_cache_split = str(
+            sparse_parent_rollback_cache.get("manifest", {}).get("split", "")
+        )
+        print(
+            "[SparseParentRollback] enabled: "
+            f"split={sparse_parent_rollback_cache_split}, "
+            f"views={len(sparse_parent_rollback_cache.get('by_image_key', {}))}, "
+            f"lambda={float(getattr(opt, 'lambda_sparse_depth_parent_rollback', 0.0))}"
+        )
 
     prism_state = _prepare_prism_state(
         opt=opt,
@@ -3523,6 +3545,44 @@ def training(
         )
         sparse_colmap_depth_debug["last_reason"] = str(sparse_colmap_depth_reason)
 
+        # One-sided parent rollback loss on train/calibration sentinel sparse points.
+        sparse_parent_rollback_loss_pure = 0
+        sparse_parent_rollback_loss = 0
+        sparse_parent_rollback_lambda_value = sparse_depth_parent_rollback_lambda(iteration=int(iteration), opt=opt)
+        sparse_parent_rollback_active_points = 0
+        sparse_parent_rollback_total_points = 0
+        sparse_parent_rollback_active_fraction = 0.0
+        sparse_parent_rollback_mean_violation_rel = 0.0
+        sparse_parent_rollback_max_violation_rel = 0.0
+        sparse_parent_rollback_mean_violation_abs = 0.0
+        sparse_parent_rollback_max_violation_abs = 0.0
+        sparse_parent_rollback_reason = "disabled"
+        if sparse_parent_rollback_cache is not None and sparse_parent_rollback_lambda_value > 0.0:
+            rollback_res = compute_sparse_depth_parent_rollback_loss(
+                current_depth=render_pkg.get("surf_depth", None),
+                cache_by_image_key=sparse_parent_rollback_cache.get("by_image_key", {}),
+                image_key=normalize_image_key(getattr(viewpoint_cam, "image_name", "")),
+                lam=float(sparse_parent_rollback_lambda_value),
+                margin_abs=float(getattr(opt, "sparse_depth_parent_rollback_margin_abs", 0.0)),
+                margin_rel=float(getattr(opt, "sparse_depth_parent_rollback_margin_rel", 0.0)),
+                huber_delta=float(getattr(opt, "sparse_depth_parent_rollback_huber_delta", 0.05)),
+                loss_space=str(getattr(opt, "sparse_depth_parent_rollback_loss_space", "combined")),
+                max_points_per_view=int(getattr(opt, "sparse_depth_parent_rollback_max_points_per_view", 0)),
+                strict=bool(getattr(opt, "sparse_depth_parent_rollback_strict", False)),
+            )
+            sparse_parent_rollback_reason = str(rollback_res.get("reason", "unknown"))
+            sparse_parent_rollback_loss_pure = rollback_res.get("loss_pure", 0)
+            sparse_parent_rollback_loss = rollback_res.get("loss_weighted", 0)
+            sparse_parent_rollback_active_points = int(rollback_res.get("active_points", 0))
+            sparse_parent_rollback_total_points = int(rollback_res.get("total_points", 0))
+            sparse_parent_rollback_active_fraction = float(rollback_res.get("active_fraction", 0.0))
+            sparse_parent_rollback_mean_violation_rel = float(rollback_res.get("mean_violation_rel", 0.0))
+            sparse_parent_rollback_max_violation_rel = float(rollback_res.get("max_violation_rel", 0.0))
+            sparse_parent_rollback_mean_violation_abs = float(rollback_res.get("mean_violation_abs", 0.0))
+            sparse_parent_rollback_max_violation_abs = float(rollback_res.get("max_violation_abs", 0.0))
+            if torch.is_tensor(sparse_parent_rollback_loss) and torch.isfinite(sparse_parent_rollback_loss):
+                loss += sparse_parent_rollback_loss
+
         rend_normal = render_pkg['rend_normal']
         surf_normal = render_pkg['surf_normal']
 
@@ -3671,6 +3731,16 @@ def training(
                 tb_writer.add_scalar("train/sparse_colmap_depth_loss", sparse_loss_scalar, iteration)
                 tb_writer.add_scalar("train/sparse_colmap_depth_valid_matches", float(sparse_colmap_depth_valid_matches), iteration)
                 tb_writer.add_scalar("train/sparse_colmap_depth_lambda", float(sparse_colmap_depth_lambda), iteration)
+                sparse_parent_rollback_scalar = (
+                    float(sparse_parent_rollback_loss.detach().item())
+                    if torch.is_tensor(sparse_parent_rollback_loss)
+                    else float(sparse_parent_rollback_loss)
+                    if isinstance(sparse_parent_rollback_loss, (float, int))
+                    else 0.0
+                )
+                tb_writer.add_scalar("train/sparse_parent_rollback_loss", sparse_parent_rollback_scalar, iteration)
+                tb_writer.add_scalar("train/sparse_parent_rollback_active_points", float(sparse_parent_rollback_active_points), iteration)
+                tb_writer.add_scalar("train/sparse_parent_rollback_lambda", float(sparse_parent_rollback_lambda_value), iteration)
 
             if bool(getattr(opt, "prism_save_debug_json", False)) and (int(iteration) % max(1, int(getattr(opt, "prism_collect_interval", 100))) == 0):
                 out_dir = os.path.join(scene.model_path, "prism_debug")
@@ -3748,6 +3818,15 @@ def training(
                         ),
                         "train/sparse_colmap_depth_valid_matches": float(sparse_colmap_depth_valid_matches),
                         "train/sparse_colmap_depth_lambda": float(sparse_colmap_depth_lambda),
+                        "train/sparse_parent_rollback_loss": float(
+                            sparse_parent_rollback_loss.detach().item()
+                            if torch.is_tensor(sparse_parent_rollback_loss)
+                            else sparse_parent_rollback_loss
+                            if isinstance(sparse_parent_rollback_loss, (float, int))
+                            else 0.0
+                        ),
+                        "train/sparse_parent_rollback_active_points": float(sparse_parent_rollback_active_points),
+                        "train/sparse_parent_rollback_lambda": float(sparse_parent_rollback_lambda_value),
                     },
                     step=iteration,
                     log_state=wandb_log_state,
@@ -4005,6 +4084,8 @@ def training(
                         "loss_components/loss_checkpoint_render_geometry_anchor": float(checkpoint_render_geometry_anchor_loss) if isinstance(checkpoint_render_geometry_anchor_loss, (float, int)) else float(checkpoint_render_geometry_anchor_loss.detach().item()),
                         "loss_components/loss_checkpoint_render_depth_anchor_pure": float(checkpoint_render_depth_anchor_loss_pure) if isinstance(checkpoint_render_depth_anchor_loss_pure, (float, int)) else float(checkpoint_render_depth_anchor_loss_pure.detach().item()),
                         "loss_components/loss_checkpoint_render_normal_anchor_pure": float(checkpoint_render_normal_anchor_loss_pure) if isinstance(checkpoint_render_normal_anchor_loss_pure, (float, int)) else float(checkpoint_render_normal_anchor_loss_pure.detach().item()),
+                        "loss_components/loss_sparse_parent_rollback": float(sparse_parent_rollback_loss) if isinstance(sparse_parent_rollback_loss, (float, int)) else float(sparse_parent_rollback_loss.detach().item()),
+                        "loss_components/loss_sparse_parent_rollback_pure": float(sparse_parent_rollback_loss_pure) if isinstance(sparse_parent_rollback_loss_pure, (float, int)) else float(sparse_parent_rollback_loss_pure.detach().item()),
                         "loss_components/loss_lpips_train": float(lpips_loss_weighted) if isinstance(lpips_loss_weighted, (float, int)) else float(lpips_loss_weighted.detach().item()),
                         "loss_components/loss_lpips_train_pure": float(lpips_loss_pure) if isinstance(lpips_loss_pure, (float, int)) else float(lpips_loss_pure.detach().item()),
                         "lpips_train/lambda": float(lpips_loss_lambda),
@@ -4017,6 +4098,15 @@ def training(
                         "checkpoint_geometry_anchor/max_displacement": float(checkpoint_geometry_anchor_max_disp) if isinstance(checkpoint_geometry_anchor_max_disp, (float, int)) else float(checkpoint_geometry_anchor_max_disp.detach().item()),
                         "checkpoint_render_geometry_anchor/depth_lambda": float(checkpoint_render_depth_anchor_lambda),
                         "checkpoint_render_geometry_anchor/normal_lambda": float(checkpoint_render_normal_anchor_lambda),
+                        "sparse_parent_rollback/lambda": float(sparse_parent_rollback_lambda_value),
+                        "sparse_parent_rollback/active_points": float(sparse_parent_rollback_active_points),
+                        "sparse_parent_rollback/total_points": float(sparse_parent_rollback_total_points),
+                        "sparse_parent_rollback/active_fraction": float(sparse_parent_rollback_active_fraction),
+                        "sparse_parent_rollback/mean_violation_rel": float(sparse_parent_rollback_mean_violation_rel),
+                        "sparse_parent_rollback/max_violation_rel": float(sparse_parent_rollback_max_violation_rel),
+                        "sparse_parent_rollback/mean_violation_abs": float(sparse_parent_rollback_mean_violation_abs),
+                        "sparse_parent_rollback/max_violation_abs": float(sparse_parent_rollback_max_violation_abs),
+                        "sparse_parent_rollback/cache_split_id": float(0.0 if sparse_parent_rollback_cache_split != "test" else 1.0),
                     }
                 )
                 if ground_reg_logs is not None:

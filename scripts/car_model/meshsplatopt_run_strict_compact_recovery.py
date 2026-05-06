@@ -182,6 +182,32 @@ def _train_args(args: argparse.Namespace) -> list[str]:
                 str(args.checkpoint_render_geometry_anchor_huber_delta),
             ]
         )
+    if args.sparse_depth_parent_rollback_lambda > 0.0:
+        cmd.extend(
+            [
+                "--enable_sparse_depth_parent_rollback_loss",
+                "--sparse_depth_parent_rollback_cache",
+                args.sparse_depth_parent_rollback_cache,
+                "--lambda_sparse_depth_parent_rollback",
+                str(args.sparse_depth_parent_rollback_lambda),
+                "--sparse_depth_parent_rollback_start_iter",
+                str(args.sparse_depth_parent_rollback_start_iter),
+                "--sparse_depth_parent_rollback_warmup_iters",
+                str(args.sparse_depth_parent_rollback_warmup_iters),
+                "--sparse_depth_parent_rollback_margin_abs",
+                str(args.sparse_depth_parent_rollback_margin_abs),
+                "--sparse_depth_parent_rollback_margin_rel",
+                str(args.sparse_depth_parent_rollback_margin_rel),
+                "--sparse_depth_parent_rollback_huber_delta",
+                str(args.sparse_depth_parent_rollback_huber_delta),
+                "--sparse_depth_parent_rollback_max_points_per_view",
+                str(args.sparse_depth_parent_rollback_max_points_per_view),
+                "--sparse_depth_parent_rollback_loss_space",
+                args.sparse_depth_parent_rollback_loss_space,
+            ]
+        )
+        if args.sparse_depth_parent_rollback_cluster_balance:
+            cmd.append("--sparse_depth_parent_rollback_cluster_balance")
     return cmd
 
 
@@ -251,6 +277,11 @@ def run(args: argparse.Namespace) -> int:
         "checkpoint_render_depth_anchor_lambda": float(args.checkpoint_render_depth_anchor_lambda),
         "checkpoint_render_normal_anchor_lambda": float(args.checkpoint_render_normal_anchor_lambda),
         "checkpoint_render_geometry_anchor_huber_delta": float(args.checkpoint_render_geometry_anchor_huber_delta),
+        "sparse_depth_parent_rollback_cache": args.sparse_depth_parent_rollback_cache,
+        "sparse_depth_parent_rollback_lambda": float(args.sparse_depth_parent_rollback_lambda),
+        "sparse_depth_parent_rollback_loss_space": args.sparse_depth_parent_rollback_loss_space,
+        "sparse_depth_parent_rollback_margin_abs": float(args.sparse_depth_parent_rollback_margin_abs),
+        "sparse_depth_parent_rollback_margin_rel": float(args.sparse_depth_parent_rollback_margin_rel),
         "lr_triangles_points_init": args.lr_triangles_points_init,
         "feature_lr": args.feature_lr,
         "weight_lr": args.weight_lr,
@@ -339,6 +370,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint_render_geometry_anchor_start_iter", type=int, default=0)
     parser.add_argument("--checkpoint_render_geometry_anchor_warmup_iters", type=int, default=300)
     parser.add_argument("--checkpoint_render_geometry_anchor_huber_delta", type=float, default=0.02)
+    parser.add_argument("--sparse_depth_parent_rollback_cache", default="")
+    parser.add_argument("--sparse_depth_parent_rollback_lambda", type=float, default=0.0)
+    parser.add_argument("--sparse_depth_parent_rollback_start_iter", type=int, default=0)
+    parser.add_argument("--sparse_depth_parent_rollback_warmup_iters", type=int, default=300)
+    parser.add_argument("--sparse_depth_parent_rollback_margin_abs", type=float, default=0.0)
+    parser.add_argument("--sparse_depth_parent_rollback_margin_rel", type=float, default=0.0)
+    parser.add_argument("--sparse_depth_parent_rollback_huber_delta", type=float, default=0.05)
+    parser.add_argument("--sparse_depth_parent_rollback_cluster_balance", action="store_true")
+    parser.add_argument("--sparse_depth_parent_rollback_max_points_per_view", type=int, default=500)
+    parser.add_argument("--sparse_depth_parent_rollback_loss_space", choices=("absrel", "mae", "combined"), default="combined")
     parser.add_argument("--lr_triangles_points_init", type=float, default=None)
     parser.add_argument("--feature_lr", type=float, default=None)
     parser.add_argument("--weight_lr", type=float, default=None)

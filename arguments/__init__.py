@@ -212,6 +212,22 @@ class OptimizationParams(ParamGroup):
         self.checkpoint_render_geometry_anchor_start_iter = 0
         self.checkpoint_render_geometry_anchor_warmup_iters = 1000
         self.checkpoint_render_geometry_anchor_huber_delta = 0.02
+        # Optional one-sided sparse-depth parent rollback loss. This consumes a
+        # train/calibration sentinel cache and penalizes only current-vs-parent
+        # sparse-depth regressions, never improvements over the parent.
+        self.enable_sparse_depth_parent_rollback_loss = False
+        self.sparse_depth_parent_rollback_cache = ""
+        self.lambda_sparse_depth_parent_rollback = 0.0
+        self.sparse_depth_parent_rollback_start_iter = 0
+        self.sparse_depth_parent_rollback_warmup_iters = 1000
+        self.sparse_depth_parent_rollback_margin_abs = 0.0
+        self.sparse_depth_parent_rollback_margin_rel = 0.0
+        self.sparse_depth_parent_rollback_huber_delta = 0.05
+        self.sparse_depth_parent_rollback_cluster_balance = False
+        self.sparse_depth_parent_rollback_max_points_per_view = 500
+        self.sparse_depth_parent_rollback_loss_space = "combined"
+        self.sparse_depth_parent_rollback_allow_test_cache = False
+        self.sparse_depth_parent_rollback_strict = False
         self.lambda_lpips_loss = 0.0
         self.lpips_loss_start_iter = 0
         self.lpips_loss_warmup_iters = 1000
