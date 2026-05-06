@@ -4785,3 +4785,19 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Wrapper contract**: non-execute strict recovery contract wrote `outputs/carnet/meshsplatopt/final_stageSCE3_parent_rollback_loss/contract_smoke/exact_train_command.txt` and includes `--enable_sparse_depth_parent_rollback_loss` plus the SCE2 train cache path.
 
 **Decision**: `SCE3_PASS`. Next is SCE4 sentinel-aware parent-Pareto gate before launching expensive recovery runs.
+
+---
+
+## 2026-05-06 - Final SCE4 sentinel parent-Pareto gate
+
+**Goal**: implement a sentinel-level parent-vs-candidate gate that can reject sparse-depth regressions before expensive full recovery acceptance.
+
+**Implementation**: added `utils/sentinel_parent_pareto_gate.py`, `scripts/car_model/meshsplatopt_sentinel_parent_pareto_gate.py`, and a synthetic smoke test.
+
+**Smoke**: `/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_stageSCE4_sentinel_gate.py` passed.
+
+**Real gate**: courtyard F82 parent 26000 vs F95 candidate 27000 on the SCE2 train sentinel cache ran on GPU 7 and wrote `outputs/carnet/meshsplatopt/final_stageSCE4_sentinel_gate/courtyard_f82_vs_f95`.
+
+**Finding**: F95 fails sentinel parent-Pareto: AbsRel `0.385219713 -> 0.386472855`, Depth MAE `4.806230962 -> 4.833562309`, `4985` regressed sentinels, `636` gate-critical sentinels.
+
+**Decision**: `SCE4_PASS_AS_IMPLEMENTATION_F95_FAILS_GATE`. Next is SCE5 diagnostic packaging and SCE6 targeted rollback recovery.
