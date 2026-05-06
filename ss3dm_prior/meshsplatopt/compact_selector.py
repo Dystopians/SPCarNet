@@ -84,7 +84,7 @@ def _normalize(value: np.ndarray) -> np.ndarray:
 def triangle_areas(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
     vertices = np.asarray(vertices, dtype=np.float64)
     faces = np.asarray(faces, dtype=np.int64)
-    if faces.shape[0] > 1_000_000:
+    if faces.shape[0] > 250_000:
         out = np.empty((faces.shape[0],), dtype=np.float32)
         chunk = 250_000
         for start in range(0, faces.shape[0], chunk):
@@ -190,7 +190,7 @@ def build_score_table(signals: CompactionSignals, *, fast_large_mesh: bool = Fal
     csef_boundary_protected = csef_low_evidence.copy()
     csef_boundary_protected[protected | (_normalize(debt) > 0.65)] = -np.inf
 
-    if count > 1_000_000:
+    if count > 500_000:
         pareto = 0.5 * _normalize(area_smallness) + 0.5 * _normalize(csef_low_evidence)
     else:
         area_rank = np.argsort(np.argsort(-area_smallness)).astype(np.float64)
@@ -502,8 +502,14 @@ def select_faces(
         candidate_ids = np.flatnonzero(finite)
         target = int(decision.selected_count)
         target = min(target, int(candidate_ids.shape[0]))
-        order = candidate_ids[np.argsort(scores[candidate_ids])[::-1]]
-        selected = np.sort(order[:target].astype(np.int64))
+        if candidate_ids.shape[0] > 500_000 and target < candidate_ids.shape[0]:
+            candidate_scores = scores[candidate_ids]
+            part = np.argpartition(candidate_scores, candidate_scores.shape[0] - target)[-target:]
+            selected = candidate_ids[part]
+        else:
+            order = candidate_ids[np.argsort(scores[candidate_ids])[::-1]]
+            selected = order[:target]
+        selected = np.sort(selected.astype(np.int64))
         return selected, table
     table = build_score_table(signals)
     count = table["face_id"].shape[0]
@@ -522,8 +528,14 @@ def select_faces(
     candidate_ids = np.flatnonzero(finite)
     if candidate_ids.shape[0] < target:
         raise ValueError(f"mode {mode} has only {candidate_ids.shape[0]} selectable faces for target {target}")
-    order = candidate_ids[np.argsort(scores[candidate_ids])[::-1]]
-    return np.sort(order[:target].astype(np.int64)), table
+    if candidate_ids.shape[0] > 500_000 and target < candidate_ids.shape[0]:
+        candidate_scores = scores[candidate_ids]
+        part = np.argpartition(candidate_scores, candidate_scores.shape[0] - target)[-target:]
+        selected = candidate_ids[part]
+    else:
+        order = candidate_ids[np.argsort(scores[candidate_ids])[::-1]]
+        selected = order[:target]
+    return np.sort(selected.astype(np.int64)), table
 
 
 def summarize_selection(selected: np.ndarray, table: dict[str, np.ndarray], labels: np.ndarray | None = None) -> dict[str, Any]:

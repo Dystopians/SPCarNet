@@ -56,7 +56,12 @@ def copy_model_metadata(source_model: str | Path, output_model: str | Path) -> N
             shutil.copy2(src, out_model / name)
 
 
-def _compact_state(state: dict[str, Any], selected_faces: np.ndarray) -> tuple[dict[str, Any], dict[str, int]]:
+def _compact_state(
+    state: dict[str, Any],
+    selected_faces: np.ndarray,
+    *,
+    keep_unused_vertices: bool = False,
+) -> tuple[dict[str, Any], dict[str, int]]:
     faces = state["_triangle_indices"].detach().cpu().long()
     vertices = state["triangles_points"].detach().cpu()
     face_count_before = int(faces.shape[0])
@@ -68,6 +73,25 @@ def _compact_state(state: dict[str, Any], selected_faces: np.ndarray) -> tuple[d
         remove_mask[selected] = True
     keep_mask = ~remove_mask
     kept_faces = faces[keep_mask]
+    if bool(keep_unused_vertices):
+        out: dict[str, Any] = {}
+        for key, value in state.items():
+            if torch.is_tensor(value):
+                if key == "_triangle_indices":
+                    out[key] = kept_faces.to(dtype=state["_triangle_indices"].dtype).clone()
+                elif key in FACE_KEYS and value.shape[0] == face_count_before:
+                    out[key] = value.detach().cpu()[keep_mask].clone()
+                else:
+                    out[key] = value.detach().cpu().clone()
+            else:
+                out[key] = value
+        return out, {
+            "pre_triangles": face_count_before,
+            "post_triangles": int(kept_faces.shape[0]),
+            "pre_vertices": int(vertices.shape[0]),
+            "post_vertices": int(vertices.shape[0]),
+        }
+
     used_vertices = torch.unique(kept_faces.reshape(-1), sorted=True)
     remap = torch.full((int(faces.max().item()) + 1,), -1, dtype=torch.long)
     remap[used_vertices] = torch.arange(len(used_vertices), dtype=torch.long)
@@ -112,6 +136,8 @@ def apply_compaction(
     iteration: int,
     selected_faces: np.ndarray,
     selector_mode: str,
+    *,
+    keep_unused_vertices: bool = False,
 ) -> CompactionAudit:
     src_model = Path(source_model)
     out_model = Path(output_model)
@@ -121,7 +147,7 @@ def apply_compaction(
     copy_model_metadata(src_model, out_model)
 
     state = torch.load(src_checkpoint, map_location="cpu")
-    compact_state, stats = _compact_state(state, selected_faces)
+    compact_state, stats = _compact_state(state, selected_faces, keep_unused_vertices=bool(keep_unused_vertices))
     degenerate, invalid = validate_faces(compact_state["triangles_points"], compact_state["_triangle_indices"])
     torch.save(compact_state, out_checkpoint)
 
@@ -153,6 +179,7 @@ def apply_compaction(
                 f"- triangles: `{audit.pre_triangles}` -> `{audit.post_triangles}`",
                 f"- vertices: `{audit.pre_vertices}` -> `{audit.post_vertices}`",
                 f"- removed fraction: `{audit.removed_fraction:.6f}`",
+                f"- keep unused vertices: `{bool(keep_unused_vertices)}`",
                 f"- degenerate face count: `{audit.degenerate_face_count}`",
                 f"- invalid index count: `{audit.invalid_index_count}`",
             ]

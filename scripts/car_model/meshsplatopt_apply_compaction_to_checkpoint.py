@@ -69,6 +69,11 @@ def main() -> int:
     parser.add_argument("--target_prune_fraction", type=float, default=0.70)
     parser.add_argument("--selector_out_dir", default="")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--keep_unused_vertices",
+        action="store_true",
+        help="Delete selected faces without remapping vertices. This is faster for very large checkpoints but keeps vertex count unchanged.",
+    )
     args = parser.parse_args()
 
     if args.candidates_json:
@@ -86,7 +91,14 @@ def main() -> int:
         mode = args.selector_mode
         selector_out = Path(args.selector_out_dir) if args.selector_out_dir else Path(args.output_model) / "selector"
         write_selector_outputs(selector_out, selected, table, args.selector_mode, target_prune_fraction, policy_decision=policy)
-    audit = apply_compaction(args.source_model, args.output_model, args.iteration, selected, mode)
+    audit = apply_compaction(
+        args.source_model,
+        args.output_model,
+        args.iteration,
+        selected,
+        mode,
+        keep_unused_vertices=bool(args.keep_unused_vertices),
+    )
     print(json.dumps(audit.to_dict(), indent=2))
     return 0 if audit.invalid_index_count == 0 and audit.degenerate_face_count == 0 else 1
 

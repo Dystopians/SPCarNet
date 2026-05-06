@@ -965,6 +965,43 @@ def _parent_render_rollback_lambda(iteration: int, opt) -> float:
     return base * warmup * decay
 
 
+def _local_dssim_map(img1: torch.Tensor, img2: torch.Tensor, window_size: int = 11) -> torch.Tensor:
+    window_size = max(3, int(window_size))
+    if window_size % 2 == 0:
+        window_size += 1
+    x = img1.unsqueeze(0)
+    y = img2.unsqueeze(0)
+    pad = window_size // 2
+    mu_x = F.avg_pool2d(x, kernel_size=window_size, stride=1, padding=pad)
+    mu_y = F.avg_pool2d(y, kernel_size=window_size, stride=1, padding=pad)
+    sigma_x = F.avg_pool2d(x * x, kernel_size=window_size, stride=1, padding=pad) - mu_x * mu_x
+    sigma_y = F.avg_pool2d(y * y, kernel_size=window_size, stride=1, padding=pad) - mu_y * mu_y
+    sigma_xy = F.avg_pool2d(x * y, kernel_size=window_size, stride=1, padding=pad) - mu_x * mu_y
+    c1 = 0.01 ** 2
+    c2 = 0.03 ** 2
+    local_ssim = ((2.0 * mu_x * mu_y + c1) * (2.0 * sigma_xy + c2)) / (
+        (mu_x * mu_x + mu_y * mu_y + c1) * (sigma_x + sigma_y + c2)
+    )
+    return torch.clamp((1.0 - local_ssim.squeeze(0).mean(dim=0)) * 0.5, min=0.0, max=1.0)
+
+
+def _edge_magnitude_map(image: torch.Tensor) -> torch.Tensor:
+    gray = image.mean(dim=0, keepdim=True).unsqueeze(0)
+    kernel_x = torch.tensor(
+        [[-1.0, 0.0, 1.0], [-2.0, 0.0, 2.0], [-1.0, 0.0, 1.0]],
+        device=image.device,
+        dtype=image.dtype,
+    ).view(1, 1, 3, 3) / 8.0
+    kernel_y = torch.tensor(
+        [[-1.0, -2.0, -1.0], [0.0, 0.0, 0.0], [1.0, 2.0, 1.0]],
+        device=image.device,
+        dtype=image.dtype,
+    ).view(1, 1, 3, 3) / 8.0
+    gx = F.conv2d(gray, kernel_x, padding=1)
+    gy = F.conv2d(gray, kernel_y, padding=1)
+    return torch.sqrt(gx.squeeze(0).squeeze(0) ** 2 + gy.squeeze(0).squeeze(0) ** 2 + 1e-12)
+
+
 def _compute_parent_render_rollback_loss(
     viewpoint_cam,
     image,
@@ -980,6 +1017,10 @@ def _compute_parent_render_rollback_loss(
     patch_radius: int = 0,
     patch_reduce: str = "center",
     error_space: str = "l1",
+    dssim_weight: float = 0.0,
+    edge_weight: float = 0.0,
+    ssim_window: int = 11,
+    edge_guidance_weight: float = 0.0,
 ):
     if lam <= 0.0 or not parent_cache:
         return None
@@ -998,6 +1039,12 @@ def _compute_parent_render_rollback_loss(
     parent = torch.clamp(parent, 0.0, 1.0).detach()
     gt_detached = gt_image.detach()
     space = str(error_space or "l1").strip().lower()
+    dssim_weight = float(max(0.0, dssim_weight))
+    edge_weight = float(max(0.0, edge_weight))
+    if "dssim" in space and dssim_weight <= 0.0:
+        dssim_weight = 1.0
+    if "edge" in space and edge_weight <= 0.0:
+        edge_weight = 0.25
     if space == "l2":
         current_err = torch.sqrt(torch.mean((image - gt_image) ** 2, dim=0) + 1e-12)
         parent_err = torch.sqrt(torch.mean((parent - gt_detached) ** 2, dim=0) + 1e-12)
@@ -1007,10 +1054,27 @@ def _compute_parent_render_rollback_loss(
     else:
         current_err = torch.mean(torch.abs(image - gt_image), dim=0)
         parent_err = torch.mean(torch.abs(parent - gt_detached), dim=0)
-        space = "l1"
+        if not any(token in space for token in ("dssim", "edge")):
+            space = "l1"
+    if dssim_weight > 0.0:
+        current_dssim = _local_dssim_map(image, gt_image, window_size=int(ssim_window))
+        parent_dssim = _local_dssim_map(parent, gt_detached, window_size=int(ssim_window)).detach()
+        current_err = current_err + dssim_weight * current_dssim
+        parent_err = parent_err + dssim_weight * parent_dssim
+    if edge_weight > 0.0:
+        gt_edge = _edge_magnitude_map(gt_detached).detach()
+        current_edge_err = torch.abs(_edge_magnitude_map(image) - gt_edge)
+        parent_edge_err = torch.abs(_edge_magnitude_map(parent) - gt_edge).detach()
+        current_err = current_err + edge_weight * current_edge_err
+        parent_err = parent_err + edge_weight * parent_edge_err
     margin = float(max(0.0, margin_abs)) + float(max(0.0, margin_rel)) * parent_err.detach()
     violation = current_err - parent_err.detach() - margin
     positive = F.relu(violation)
+    edge_guidance_weight = float(max(0.0, edge_guidance_weight))
+    if edge_guidance_weight > 0.0:
+        edge_guidance = _edge_magnitude_map(gt_detached).detach()
+        denom = torch.clamp(edge_guidance.detach().mean(), min=1e-6)
+        positive = positive * (1.0 + edge_guidance_weight * torch.clamp(edge_guidance / denom, max=4.0))
     active_mask_raw = positive.detach() > 0
     if not bool(active_mask_raw.any()):
         return None
@@ -3577,6 +3641,10 @@ def training(
             patch_radius=int(getattr(opt, "parent_render_rollback_patch_radius", 0)),
             patch_reduce=str(getattr(opt, "parent_render_rollback_patch_reduce", "center")),
             error_space=str(getattr(opt, "parent_render_rollback_error_space", "l1")),
+            dssim_weight=float(getattr(opt, "parent_render_rollback_dssim_weight", 0.0)),
+            edge_weight=float(getattr(opt, "parent_render_rollback_edge_weight", 0.0)),
+            ssim_window=int(getattr(opt, "parent_render_rollback_ssim_window", 11)),
+            edge_guidance_weight=float(getattr(opt, "parent_render_rollback_edge_guidance_weight", 0.0)),
         )
         if parent_render_rollback_res is not None:
             parent_render_rollback_loss_pure = parent_render_rollback_res["loss_pure"]

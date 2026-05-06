@@ -216,6 +216,10 @@ class OptimizationParams(ParamGroup):
         self.parent_render_rollback_patch_radius = 0
         self.parent_render_rollback_patch_reduce = "center"
         self.parent_render_rollback_error_space = "l1"
+        self.parent_render_rollback_dssim_weight = 0.0
+        self.parent_render_rollback_edge_weight = 0.0
+        self.parent_render_rollback_ssim_window = 11
+        self.parent_render_rollback_edge_guidance_weight = 0.0
         # Optional checkpoint geometry anchor for topology-frozen recovery.
         # It keeps vertices close to the loaded checkpoint while appearance
         # losses refine radiance, preventing teacher-render finetuning from

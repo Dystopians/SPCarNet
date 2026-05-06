@@ -5154,3 +5154,25 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Train-only guard**: full train render metrics for SCE24 show parent `PSNR/SSIM/LPIPS = 11.508512/0.290483/0.549275` and candidate `11.511419/0.289623/0.549478`. The certified selector rejects the candidate with `ssim_regression` and `lpips_regression`, selecting `parent`.
 
 **Decision**: `SCE24_CERTIFIED_POLICY_REJECTS_BONSAI_RECOVERY`. This is not a bonsai improvement, but it is a reliability upgrade: the method now has a reproducible train-only acceptance rule that prevents unsafe recovery from being reported as progress. Current truthful claim is courtyard all-metric improvement plus bonsai safe no-op, not universal strict superiority.
+
+---
+
+## 2026-05-06 - SCE25-SCE28 structural appearance recovery and clean-best reset
+
+**Goal**: stop treating bonsai as a rollback-lambda problem and test stronger method changes: structural parent render certificates, clean-teacher train-view recovery, appearance-only repair, and a reset from the best clean checkpoint.
+
+**Implementation**: added opt-in local DSSIM/Sobel edge parent rollback in `train.py`, propagated the controls through strict and policy recovery wrappers, added structural smoke coverage, and added opt-in face-only large-checkpoint compaction plus large top-k selector optimizations.
+
+**Runs**:
+- SCE25 `gr8jx8ud`: structural `l1_dssim_edge` ATR + CTR-SCE, 26000->26200.
+- SCE26 `lqh3v4m7`: clean9000 train teacher + structural ATR + CTR-SCE + LPIPS, 26000->26200.
+- SCE27 `qyr6n1gs`: appearance-only clean9000 train teacher with geometry LR zero, 26000->26200.
+
+**Result vs F82 bonsai parent**:
+- SCE25: PSNR `+0.000994`, SSIM `-0.000914`, LPIPS `+0.000461`, AbsRel `-0.000197`, Depth MAE `-0.002802`, Normal `+0.002458`.
+- SCE26: PSNR `+0.000938`, SSIM `-0.000915`, LPIPS `+0.000094`, AbsRel `-0.000135`, Depth MAE `-0.001980`, Normal `+0.001421`.
+- SCE27: PSNR `+0.001031`, SSIM `-0.000828`, LPIPS `+0.000086`, AbsRel `-0.000008`, Depth MAE `-0.000025`, Normal `+0.020408`.
+
+**Decision**: `SCE27_BONSAI_STILL_MIXED`. The teacher and structural losses reduce LPIPS damage but do not solve SSIM/perceptual non-regression. None should supersede F82 on bonsai.
+
+**Clean-best finding**: clean bonsai 9000 is much stronger than clean 22000/F82 (`18.541/0.463/0.483` vs F82 `11.069/0.241/0.573` for PSNR/SSIM/LPIPS). Future fairness claims must compare against best clean, not only clean 22000. SCE28 started a clean-best reset from the 2.49M-triangle clean9000 checkpoint, but generic checkpoint scanning/compaction is currently a CPU bottleneck. Added face-only compaction hooks; next step is cached or streaming low-evidence selection followed by clean-best compact recovery.

@@ -182,6 +182,14 @@ def _train_args(args: argparse.Namespace) -> list[str]:
                 args.parent_render_rollback_patch_reduce,
                 "--parent_render_rollback_error_space",
                 args.parent_render_rollback_error_space,
+                "--parent_render_rollback_dssim_weight",
+                str(args.parent_render_rollback_dssim_weight),
+                "--parent_render_rollback_edge_weight",
+                str(args.parent_render_rollback_edge_weight),
+                "--parent_render_rollback_ssim_window",
+                str(args.parent_render_rollback_ssim_window),
+                "--parent_render_rollback_edge_guidance_weight",
+                str(args.parent_render_rollback_edge_guidance_weight),
             ]
         )
     if args.checkpoint_geometry_anchor_lambda > 0.0:
@@ -334,6 +342,10 @@ def run(args: argparse.Namespace) -> int:
         "parent_render_rollback_patch_radius": int(args.parent_render_rollback_patch_radius),
         "parent_render_rollback_patch_reduce": args.parent_render_rollback_patch_reduce,
         "parent_render_rollback_error_space": args.parent_render_rollback_error_space,
+        "parent_render_rollback_dssim_weight": float(args.parent_render_rollback_dssim_weight),
+        "parent_render_rollback_edge_weight": float(args.parent_render_rollback_edge_weight),
+        "parent_render_rollback_ssim_window": int(args.parent_render_rollback_ssim_window),
+        "parent_render_rollback_edge_guidance_weight": float(args.parent_render_rollback_edge_guidance_weight),
         "checkpoint_geometry_anchor_lambda": float(args.checkpoint_geometry_anchor_lambda),
         "checkpoint_geometry_anchor_huber_delta": float(args.checkpoint_geometry_anchor_huber_delta),
         "checkpoint_render_depth_anchor_lambda": float(args.checkpoint_render_depth_anchor_lambda),
@@ -438,7 +450,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--parent_render_rollback_cvar_min_pixels", type=int, default=1024)
     parser.add_argument("--parent_render_rollback_patch_radius", type=int, default=0)
     parser.add_argument("--parent_render_rollback_patch_reduce", choices=("center", "max_violation", "mean_violation"), default="center")
-    parser.add_argument("--parent_render_rollback_error_space", choices=("l1", "l2", "channel_max"), default="l1")
+    parser.add_argument(
+        "--parent_render_rollback_error_space",
+        choices=("l1", "l2", "channel_max", "l1_dssim", "l1_edge", "l1_dssim_edge"),
+        default="l1",
+    )
+    parser.add_argument("--parent_render_rollback_dssim_weight", type=float, default=0.0)
+    parser.add_argument("--parent_render_rollback_edge_weight", type=float, default=0.0)
+    parser.add_argument("--parent_render_rollback_ssim_window", type=int, default=11)
+    parser.add_argument("--parent_render_rollback_edge_guidance_weight", type=float, default=0.0)
     parser.add_argument("--checkpoint_geometry_anchor_lambda", type=float, default=0.0)
     parser.add_argument("--checkpoint_geometry_anchor_start_iter", type=int, default=0)
     parser.add_argument("--checkpoint_geometry_anchor_warmup_iters", type=int, default=300)

@@ -50,6 +50,26 @@ def main() -> int:
     assert int(cvar["tail_pixels"]) == 1, cvar
     assert float(cvar["loss_pure"]) > float(mean["loss_pure"]), (mean, cvar)
 
+    gt_struct = torch.zeros((3, 8, 8), dtype=torch.float32)
+    gt_struct[:, :, 4:] = 1.0
+    parent_struct = gt_struct.clone()
+    image_struct = gt_struct.clone()
+    image_struct[:, :, 3:5] = 0.5
+    structural = _compute_parent_render_rollback_loss(
+        viewpoint_cam=_Cam(),
+        image=image_struct,
+        gt_image=gt_struct,
+        parent_cache={"view": parent_struct},
+        lam=1.0,
+        error_space="l1_dssim_edge",
+        dssim_weight=1.0,
+        edge_weight=0.25,
+        ssim_window=5,
+        edge_guidance_weight=0.5,
+    )
+    assert structural is not None, structural
+    assert int(structural["active_pixels"]) > 0, structural
+
     gt = torch.zeros((3, 2, 2), dtype=torch.float32)
     parent = torch.zeros((3, 2, 2), dtype=torch.float32)
     image = torch.zeros((3, 2, 2), dtype=torch.float32)

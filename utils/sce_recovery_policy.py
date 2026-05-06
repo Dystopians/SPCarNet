@@ -38,6 +38,10 @@ class SCEPolicyConfig:
     parent_render_rollback_patch_radius: int = 0
     parent_render_rollback_patch_reduce: str = "center"
     parent_render_rollback_error_space: str = "l1"
+    parent_render_rollback_dssim_weight: float = 0.0
+    parent_render_rollback_edge_weight: float = 0.0
+    parent_render_rollback_ssim_window: int = 11
+    parent_render_rollback_edge_guidance_weight: float = 0.0
     lr_triangles_points_init: float = 0.015
     early_stop_patience: int = 1
     parent_tolerance: float = 0.0

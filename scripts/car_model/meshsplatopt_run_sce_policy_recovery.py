@@ -102,6 +102,14 @@ def _wrapper_command(args: argparse.Namespace, cfg: SCEPolicyConfig, *, activate
                 cfg.parent_render_rollback_patch_reduce,
                 "--parent_render_rollback_error_space",
                 cfg.parent_render_rollback_error_space,
+                "--parent_render_rollback_dssim_weight",
+                str(cfg.parent_render_rollback_dssim_weight),
+                "--parent_render_rollback_edge_weight",
+                str(cfg.parent_render_rollback_edge_weight),
+                "--parent_render_rollback_ssim_window",
+                str(cfg.parent_render_rollback_ssim_window),
+                "--parent_render_rollback_edge_guidance_weight",
+                str(cfg.parent_render_rollback_edge_guidance_weight),
             ]
         )
     if activate_rollback:
@@ -170,6 +178,10 @@ def run(args: argparse.Namespace) -> int:
         parent_render_rollback_patch_radius=int(args.parent_render_rollback_patch_radius),
         parent_render_rollback_patch_reduce=str(args.parent_render_rollback_patch_reduce),
         parent_render_rollback_error_space=str(args.parent_render_rollback_error_space),
+        parent_render_rollback_dssim_weight=float(args.parent_render_rollback_dssim_weight),
+        parent_render_rollback_edge_weight=float(args.parent_render_rollback_edge_weight),
+        parent_render_rollback_ssim_window=int(args.parent_render_rollback_ssim_window),
+        parent_render_rollback_edge_guidance_weight=float(args.parent_render_rollback_edge_guidance_weight),
         lr_triangles_points_init=float(args.lr_triangles_points_init),
         parent_tolerance=float(args.parent_tolerance),
         require_sentinel_gate_for_recovery=bool(args.require_sentinel_gate_for_recovery),
@@ -255,7 +267,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--parent_render_rollback_cvar_min_pixels", type=int, default=1024)
     parser.add_argument("--parent_render_rollback_patch_radius", type=int, default=0)
     parser.add_argument("--parent_render_rollback_patch_reduce", choices=("center", "max_violation", "mean_violation"), default="center")
-    parser.add_argument("--parent_render_rollback_error_space", choices=("l1", "l2", "channel_max"), default="l1")
+    parser.add_argument(
+        "--parent_render_rollback_error_space",
+        choices=("l1", "l2", "channel_max", "l1_dssim", "l1_edge", "l1_dssim_edge"),
+        default="l1",
+    )
+    parser.add_argument("--parent_render_rollback_dssim_weight", type=float, default=0.0)
+    parser.add_argument("--parent_render_rollback_edge_weight", type=float, default=0.0)
+    parser.add_argument("--parent_render_rollback_ssim_window", type=int, default=11)
+    parser.add_argument("--parent_render_rollback_edge_guidance_weight", type=float, default=0.0)
     parser.add_argument("--lr_triangles_points_init", type=float, default=0.015)
     parser.add_argument("--parent_tolerance", type=float, default=0.0)
     parser.add_argument("--require_sentinel_gate_for_recovery", action="store_true")
