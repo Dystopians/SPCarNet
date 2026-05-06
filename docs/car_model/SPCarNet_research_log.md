@@ -5260,3 +5260,25 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 - counter: PSNR `+2.413528`, SSIM `+0.060425`, LPIPS `-0.059244`; portfolio weight `0.0`.
 
 **Decision**: `ELA7_PARETO_PORTFOLIO_CLEAN9000_ALL_SCENE_WIN`.  ELA7 preserves ELA4 on scenes where broad evidence is unsafe and gives courtyard an additional all-metric improvement over ELA4 (`+0.011250` PSNR, `+0.001617` SSIM, `-0.005751` LPIPS).  This is the best current response to the original baseline failure: the method now directly beats the strongest pure Mesh Splatting clean9000 baseline on all selected scenes and all RGB metrics, with train-only selection.
+
+---
+
+## 2026-05-06 - ELA7 final audit and ELA8 distillation rejection
+
+**Goal**: close the remaining fairness and paper-readiness gaps after ELA7: verify against the strongest clean Mesh Splatting baseline per metric, generate qualitative assets, and test whether the renderer-side evidence portfolio can be distilled into a persistent checkpoint.
+
+**Implementation**: added `scripts/car_model/meshsplatopt_collect_ela7_final_audit.py`.  The collector selects the best clean baseline per metric from each scene's clean results, audits the ELA7 portfolio reports (`target_split=test`, `calib_split=train`, bounded train calibration views, selected Pareto row), writes a machine-readable audit and CSV, and builds a GT/clean/ELA7 qualitative HTML gallery.  It also records ELA8 distillation attempts so failed persistent-checkpoint routes are not accidentally promoted.
+
+**ELA8 distillation attempts on courtyard**:
+- `distill_pilot_9000to9600`, W&B `ryfxlfjy`: independent test `18.454872` PSNR / `0.600492` SSIM / `0.425413` LPIPS, rejected versus clean9000 and ELA7.
+- `distill_parentrollback_9000to9300`, W&B `6qp4ivzd`: low-weight teacher plus one-sided parent render rollback improved over the first pilot but still ended at `18.479055` / `0.601640` / `0.424635`, rejected versus clean9000 and ELA7.
+
+**Final audit artifacts**:
+- report: `docs/car_model/stageELA7_final_audit_and_ela8_distillation_report.md`
+- JSON: `outputs/carnet/meshsplatopt/stageELA7_final_audit/ela7_final_audit.json`
+- CSV: `outputs/carnet/meshsplatopt/stageELA7_final_audit/ela7_vs_best_clean.csv`
+- qualitative gallery: `outputs/carnet/meshsplatopt/stageELA7_final_audit/qualitative_gallery/gallery.html`
+
+**Per-view risk**: average scene metrics still pass all selected scenes, but the gallery audit finds one bonsai held-out view with negative PSNR delta (`-0.1971`).  The paper claim should therefore be average-render-metric improvement with explicit per-view risk disclosure, not universal per-view dominance.
+
+**Decision**: `ELA7_PROMOTED_DISTILLATION_NOT_PROMOTED`.  ELA7 is the promoted method for the selected-scene clean-baseline comparison.  ELA8 checkpoint distillation is currently a rejected path; the bottleneck is that training a persistent mesh-splat checkpoint from teacher renders loses the renderer-side evidence advantage on held-out views.
