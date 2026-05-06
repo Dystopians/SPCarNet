@@ -5064,3 +5064,19 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Combined SCE8 table**: `outputs/carnet/meshsplatopt/final_stageSCE8_multiscene_sce_policy/current_courtyard_bonsai_table` has `2` rows and `0` all-pass rows.
 
 **Decision**: `SCE_POLICY_V1_RENDER_PASS_GEOMETRY_MIXED`. SCE v1 is not a universal F82 replacement; it is currently a targeted repair module. Next policy revision needs appearance-preserving early stop/teacher protection for non-courtyard scenes.
+
+---
+
+## 2026-05-06 - SCE19 guarded policy rejects bonsai negative transfer
+
+**Goal**: convert the SCE8 bonsai failure into a scene-agnostic policy guard instead of leaving it as a manual caution.
+
+**Implementation**: added opt-in render/sentinel guards to `utils/sce_recovery_policy.py` and `scripts/car_model/meshsplatopt_run_sce_policy_recovery.py`. Guarded recovery can now require a measured sentinel gate and measured parent/candidate render metrics before launch. If PSNR/SSIM drop, LPIPS rises, or the render score is negative beyond the configured thresholds, the action becomes `accept_parent_noop`.
+
+**Bonsai dry-run artifact**: `outputs/carnet/meshsplatopt/final_stageSCE19_policy_guard/bonsai_render_guard_v1/policy_contract/sce_policy_decision.json`.
+
+**Result**: the known SCE8 bonsai candidate is rejected with `reason=render_guard_failed`, `execute_recovery=false`, deltas PSNR `-0.176259`, SSIM `-0.044556`, LPIPS `+0.030025`, render score `-0.250839`.
+
+**Verification**: SCE7 policy smoke test and compileall passed.
+
+**Decision**: `SCE_POLICY_GUARD_IMPLEMENTED_BONSAI_NEGATIVE_CAUGHT`. This improves reliability and prevents negative transfer, but it is not a new metric win. The next fair multiscene validation should use guarded SCE v2: improve or no-op, with no per-scene retuning.

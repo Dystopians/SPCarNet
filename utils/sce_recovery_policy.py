@@ -29,6 +29,12 @@ class SCEPolicyConfig:
     lr_triangles_points_init: float = 0.015
     early_stop_patience: int = 1
     parent_tolerance: float = 0.0
+    require_sentinel_gate_for_recovery: bool = False
+    require_measured_candidate_for_recovery: bool = False
+    max_psnr_drop: float = 0.0
+    max_ssim_drop: float = 0.0
+    max_lpips_increase: float = 0.0
+    min_render_score_delta: float = 0.0
 
 
 def _metric_delta(candidate: Mapping[str, float], parent: Mapping[str, float], key: str) -> float:
@@ -52,23 +58,79 @@ def sentinel_gate_degrades(gate: Mapping[str, Any], cfg: SCEPolicyConfig) -> boo
     )
 
 
+def render_guard_pass(
+    candidate: Mapping[str, float] | None,
+    parent: Mapping[str, float] | None,
+    cfg: SCEPolicyConfig,
+) -> tuple[bool, list[str], dict[str, float]]:
+    if not candidate or not parent:
+        if bool(cfg.require_measured_candidate_for_recovery):
+            return False, ["missing_measured_candidate_metrics"], {}
+        return True, [], {}
+    deltas: dict[str, float] = {}
+    for key in ("psnr", "ssim", "lpips"):
+        if key in candidate and key in parent:
+            deltas[f"delta_{key}"] = _metric_delta(candidate, parent, key)
+    reasons: list[str] = []
+    if deltas.get("delta_psnr", 0.0) < -float(cfg.max_psnr_drop):
+        reasons.append("psnr_drop_exceeds_guard")
+    if deltas.get("delta_ssim", 0.0) < -float(cfg.max_ssim_drop):
+        reasons.append("ssim_drop_exceeds_guard")
+    if deltas.get("delta_lpips", 0.0) > float(cfg.max_lpips_increase):
+        reasons.append("lpips_increase_exceeds_guard")
+    render_score = (
+        float(deltas.get("delta_psnr", 0.0))
+        + float(deltas.get("delta_ssim", 0.0))
+        - float(deltas.get("delta_lpips", 0.0))
+    )
+    deltas["render_score_delta"] = render_score
+    if render_score < float(cfg.min_render_score_delta):
+        reasons.append("render_score_below_guard")
+    return len(reasons) == 0, reasons, deltas
+
+
 def decide_sce_policy_action(
     *,
     sentinel_gate: Mapping[str, Any] | None,
     cfg: SCEPolicyConfig,
+    candidate_metrics: Mapping[str, float] | None = None,
+    parent_metrics: Mapping[str, float] | None = None,
 ) -> dict[str, Any]:
     if sentinel_gate is None:
+        if bool(cfg.require_sentinel_gate_for_recovery):
+            return {
+                "action": "accept_parent_noop",
+                "activate_rollback": False,
+                "execute_recovery": False,
+                "reason": "missing_sentinel_gate_policy_guard",
+                "policy": asdict(cfg),
+            }
         return {
             "action": "run_visual_probe_then_gate",
             "activate_rollback": False,
+            "execute_recovery": True,
             "reason": "missing_sentinel_gate",
             "policy": asdict(cfg),
         }
     degraded = sentinel_gate_degrades(sentinel_gate, cfg)
+    render_ok, render_reasons, render_deltas = render_guard_pass(candidate_metrics, parent_metrics, cfg)
+    if not render_ok:
+        return {
+            "action": "accept_parent_noop",
+            "activate_rollback": False,
+            "execute_recovery": False,
+            "reason": "render_guard_failed",
+            "render_guard_reasons": render_reasons,
+            "render_deltas": render_deltas,
+            "policy": asdict(cfg),
+        }
     return {
         "action": "run_targeted_rollback" if degraded else "continue_or_accept_visual_recovery",
         "activate_rollback": bool(degraded),
+        "execute_recovery": True,
         "reason": "sentinel_degraded" if degraded else "sentinel_non_degrading",
+        "render_guard_reasons": render_reasons,
+        "render_deltas": render_deltas,
         "policy": asdict(cfg),
     }
 
@@ -115,6 +177,7 @@ def select_early_stop_candidate(
             tolerance=float(cfg.parent_tolerance),
         )
         and bool(row.get("sentinel_pass", True))
+        and render_guard_pass(row.get("metrics", row), parent_metrics, cfg)[0]
     ]
     pool = passing if passing else rows
     selected = max(pool, key=lambda row: _score_candidate(row.get("metrics", row), parent_metrics))

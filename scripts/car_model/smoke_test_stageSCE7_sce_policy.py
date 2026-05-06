@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 from utils.sce_recovery_policy import (  # noqa: E402
     SCEPolicyConfig,
     decide_sce_policy_action,
+    render_guard_pass,
     select_early_stop_candidate,
 )
 
@@ -31,6 +32,32 @@ def main() -> int:
     }
     action = decide_sce_policy_action(sentinel_gate=passing_gate, cfg=cfg)
     assert action["activate_rollback"] is False
+
+    guarded = SCEPolicyConfig(
+        require_sentinel_gate_for_recovery=True,
+        require_measured_candidate_for_recovery=True,
+        max_psnr_drop=0.0,
+        max_ssim_drop=0.0,
+        max_lpips_increase=0.0,
+        min_render_score_delta=0.0,
+    )
+    action = decide_sce_policy_action(sentinel_gate=None, cfg=guarded)
+    assert action["action"] == "accept_parent_noop"
+    assert action["execute_recovery"] is False
+    parent_render = {"psnr": 11.0, "ssim": 0.24, "lpips": 0.57}
+    bad_render = {"psnr": 10.8, "ssim": 0.20, "lpips": 0.60}
+    ok, reasons, deltas = render_guard_pass(bad_render, parent_render, guarded)
+    assert ok is False
+    assert "psnr_drop_exceeds_guard" in reasons
+    assert deltas["delta_lpips"] > 0.0
+    action = decide_sce_policy_action(
+        sentinel_gate=passing_gate,
+        cfg=guarded,
+        candidate_metrics=bad_render,
+        parent_metrics=parent_render,
+    )
+    assert action["action"] == "accept_parent_noop"
+    assert action["reason"] == "render_guard_failed"
 
     parent = {
         "psnr": 10.0,
@@ -54,4 +81,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

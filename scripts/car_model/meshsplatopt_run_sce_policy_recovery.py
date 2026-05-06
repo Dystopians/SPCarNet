@@ -21,6 +21,12 @@ from utils.sce_recovery_policy import (  # noqa: E402
 )
 
 
+def _metrics_payload(payload: dict) -> dict:
+    if "metrics" in payload and isinstance(payload["metrics"], dict):
+        return dict(payload["metrics"])
+    return dict(payload)
+
+
 def _wrapper_command(args: argparse.Namespace, cfg: SCEPolicyConfig, *, activate_rollback: bool) -> list[str]:
     final_iteration = int(args.final_iteration)
     cmd = [
@@ -118,12 +124,25 @@ def run(args: argparse.Namespace) -> int:
         render_normal_anchor_lambda=float(args.render_normal_anchor_lambda),
         render_depth_anchor_lambda=float(args.render_depth_anchor_lambda),
         lr_triangles_points_init=float(args.lr_triangles_points_init),
+        parent_tolerance=float(args.parent_tolerance),
+        require_sentinel_gate_for_recovery=bool(args.require_sentinel_gate_for_recovery),
+        require_measured_candidate_for_recovery=bool(args.require_measured_candidate_for_recovery),
+        max_psnr_drop=float(args.max_psnr_drop),
+        max_ssim_drop=float(args.max_ssim_drop),
+        max_lpips_increase=float(args.max_lpips_increase),
+        min_render_score_delta=float(args.min_render_score_delta),
     )
     gate = load_json_mapping(args.sentinel_gate_json) if args.sentinel_gate_json else None
     if gate is not None and "gate" in gate:
         gate = gate["gate"]
-    decision = decide_sce_policy_action(sentinel_gate=gate, cfg=cfg)
-    parent_metrics = load_json_mapping(args.parent_metrics_json) if args.parent_metrics_json else {}
+    parent_metrics = _metrics_payload(load_json_mapping(args.parent_metrics_json)) if args.parent_metrics_json else {}
+    candidate_metrics = _metrics_payload(load_json_mapping(args.candidate_metrics_json)) if args.candidate_metrics_json else {}
+    decision = decide_sce_policy_action(
+        sentinel_gate=gate,
+        cfg=cfg,
+        candidate_metrics=candidate_metrics or None,
+        parent_metrics=parent_metrics or None,
+    )
     history = load_json_mapping(args.candidate_history_json) if args.candidate_history_json else []
     if isinstance(history, dict):
         history = history.get("history", [])
@@ -139,12 +158,13 @@ def run(args: argparse.Namespace) -> int:
         f"- policy: `{cfg.policy_name}`\n"
         f"- action: `{decision['action']}`\n"
         f"- activate_rollback: `{decision['activate_rollback']}`\n"
+        f"- execute_recovery: `{decision.get('execute_recovery', True)}`\n"
         f"- reason: `{decision['reason']}`\n"
         f"- command: `{shlex.join(cmd)}`\n",
         encoding="utf-8",
     )
     print(json.dumps({"decision": decision, "early_stop": early, "command": cmd}, indent=2, sort_keys=True))
-    if bool(args.execute):
+    if bool(args.execute) and bool(decision.get("execute_recovery", True)):
         subprocess.run(cmd, cwd=ROOT, check=True)
     return 0
 
@@ -162,6 +182,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resolution", type=int, default=8)
     parser.add_argument("--sentinel_gate_json", default="")
     parser.add_argument("--parent_metrics_json", default="")
+    parser.add_argument("--candidate_metrics_json", default="")
     parser.add_argument("--candidate_history_json", default="")
     parser.add_argument("--visual_probe_iters", type=int, default=500)
     parser.add_argument("--recovery_phase_iters", type=int, default=500)
@@ -175,6 +196,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--render_normal_anchor_lambda", type=float, default=0.01)
     parser.add_argument("--render_depth_anchor_lambda", type=float, default=0.0)
     parser.add_argument("--lr_triangles_points_init", type=float, default=0.015)
+    parser.add_argument("--parent_tolerance", type=float, default=0.0)
+    parser.add_argument("--require_sentinel_gate_for_recovery", action="store_true")
+    parser.add_argument("--require_measured_candidate_for_recovery", action="store_true")
+    parser.add_argument("--max_psnr_drop", type=float, default=0.0)
+    parser.add_argument("--max_ssim_drop", type=float, default=0.0)
+    parser.add_argument("--max_lpips_increase", type=float, default=0.0)
+    parser.add_argument("--min_render_score_delta", type=float, default=0.0)
     parser.add_argument("--wandb_project", default="spcarnet_meshprior")
     parser.add_argument("--wandb_group", default="finalSCE7_policy_recovery")
     parser.add_argument("--wandb_name", required=True)
