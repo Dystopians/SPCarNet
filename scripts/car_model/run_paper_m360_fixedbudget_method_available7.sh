@@ -76,13 +76,23 @@ for scene in ${SCENES}; do
 
   if [[ ! -f "${compact_model}/point_cloud/iteration_${COMPACT_ITERATION}/point_cloud_state_dict.pt" ]]; then
     echo "[M360 fixedbudget method] compact scene=${scene} iter=${COMPACT_ITERATION}"
+    compaction_args=(
+      --source_model "${clean_model}"
+      --iteration "${COMPACT_ITERATION}"
+      --output_model "${compact_model}"
+      --seed "${SELECTOR_SEED}"
+    )
+    selector_json="${out_dir}/selector/compaction_candidates.json"
+    if [[ -f "${selector_json}" ]]; then
+      compaction_args+=(--candidates_json "${selector_json}")
+    else
+      compaction_args+=(
+        --selector_mode csef_adaptive_policy
+        --selector_out_dir "${out_dir}/selector"
+      )
+    fi
     "${PYTHON_BIN}" scripts/car_model/meshsplatopt_apply_compaction_to_checkpoint.py \
-      --source_model "${clean_model}" \
-      --iteration "${COMPACT_ITERATION}" \
-      --output_model "${compact_model}" \
-      --selector_mode csef_adaptive_policy \
-      --selector_out_dir "${out_dir}/selector" \
-      --seed "${SELECTOR_SEED}" \
+      "${compaction_args[@]}" \
       2>&1 | tee "${out_dir}/logs/compaction.log"
   fi
 
