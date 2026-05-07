@@ -5589,3 +5589,20 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 - This completes the five outdoor Mip-NeRF360 clean30k checkpoints under the paper/full_eval training protocol.  The RGB/geometry table is still pending the official render/eval pass.
 
 **Active queue**: the clean queue advanced to `room`, W&B command name `clean30k_room_official_images_2`, with `--indoor` enabled.
+
+---
+
+## 2026-05-07 - Room same-protocol clean30k checkpoint completed
+
+**Milestone**: the official-protocol clean MeshSplatting baseline for Mip-NeRF360 `room` completed on GPU `4` with W&B run `i2zoa5hh`.
+
+**Artifacts**:
+- split checkpoint for fixed-budget method validation: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/room/point_cloud/iteration_26000/point_cloud_state_dict.pt` (`820M`, timestamp `2026-05-07 08:31 PDT`)
+- final clean checkpoint: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/room/point_cloud/iteration_30000/point_cloud_state_dict.pt` (`820M`, timestamp `2026-05-07 08:41 PDT`)
+
+**Run notes**:
+- `room` used the canonical indoor full_eval training path: `images_2` with `--indoor`.
+- The run had the expected long topology stage around iteration `11000`, then resumed and completed normally.
+- No RGB/geometry result is claimed yet from this checkpoint; final paper-protocol rendering and metric collection are still pending after the clean queue finishes.
+
+**Active queue**: the clean queue advanced to `counter`, W&B run `ttb8092l`.
