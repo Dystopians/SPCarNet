@@ -66,6 +66,14 @@ for scene in ${SCENES}; do
   contract_dir="${out_dir}/recovery_contract"
   mkdir -p "${out_dir}/logs"
 
+  method_final_ckpt="${recovery_model}/point_cloud/iteration_${FINAL_ITERATION}/point_cloud_state_dict.pt"
+  method_results="${recovery_model}/results.json"
+  method_geometry="${recovery_model}/geometry_eval_colmap/iter_${FINAL_ITERATION}_max500.json"
+  if [[ -f "${method_final_ckpt}" && -f "${method_results}" && -f "${method_geometry}" ]]; then
+    echo "[M360 fixedbudget method] skip completed recovery/eval for ${scene}: ${method_final_ckpt}"
+    continue
+  fi
+
   if [[ ! -f "${compact_model}/point_cloud/iteration_${COMPACT_ITERATION}/point_cloud_state_dict.pt" ]]; then
     echo "[M360 fixedbudget method] compact scene=${scene} iter=${COMPACT_ITERATION}"
     "${PYTHON_BIN}" scripts/car_model/meshsplatopt_apply_compaction_to_checkpoint.py \

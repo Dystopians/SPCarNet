@@ -74,6 +74,14 @@ for scene in ${SCENES}; do
   contract_dir="${out_dir}/recovery_contract"
   mkdir -p "${out_dir}/logs"
 
+  method_final_ckpt="${recovery_model}/point_cloud/iteration_${FINAL_ITERATION}/point_cloud_state_dict.pt"
+  method_results="${recovery_model}/results.json"
+  method_geometry="${recovery_model}/geometry_eval_colmap/iter_${FINAL_ITERATION}_max500.json"
+  if [[ -f "${method_final_ckpt}" && -f "${method_results}" && -f "${method_geometry}" ]]; then
+    echo "[M360 evidence-shaped fixedbudget] skip completed recovery/eval for ${scene}: ${method_final_ckpt}"
+    continue
+  fi
+
   base_split_ckpt="${base_model}/point_cloud/iteration_${COMPACT_ITERATION}/point_cloud_state_dict.pt"
   if [[ ! -f "${base_split_ckpt}" ]]; then
     echo "[M360 evidence-shaped fixedbudget] train sparse-evidence base scene=${scene} 0->${COMPACT_ITERATION}"
