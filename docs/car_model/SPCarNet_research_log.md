@@ -5389,3 +5389,34 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 - qualitative gallery: `outputs/carnet/meshsplatopt/stageELA11_final_selected_scene_package/qualitative_gallery/gallery.html`
 
 **Decision**: `STAGE_ELA11_FINAL_SELECTED_SCENE_PACKAGE_READY`.  The selected-scene evidence is now strong in averages and in per-view RGB robustness.  The remaining risk is external validity beyond the selected scene set, not failure against the clean Mesh Splatting baseline on these scenes.
+
+---
+
+## 2026-05-06 - ELA12 fair train-selected clean-baseline audit
+
+**Goal**: remove the remaining fairness ambiguity in the baseline comparison.  The clean Mesh Splatting baseline must not be picked from a weaker checkpoint after seeing test results; it must be selected from clean candidate checkpoints using training data only, then evaluated once on held-out test.
+
+**Implementation**: added `scripts/car_model/meshsplatopt_collect_stageela12_fair_baseline_audit.py`.  The audit scores clean candidates by train-render `PSNR + 20 * SSIM - 20 * LPIPS`, selects one clean baseline per scene, then compares the promoted method row on held-out RGB, sparse AbsRel, sparse Depth MAE, sparse normal angle, triangle count, and per-view RGB deltas.  It also writes a mechanical qualitative gallery with worst / middle / best per-scene dPSNR views.  W&B audit run: `5n9kgo8e`.
+
+**Selected clean baselines**:
+- `bonsai`, `courtyard`, `room`, `counter`: clean9000 is selected over clean7000 and the degraded clean22000 continuation.
+- `parking_phone_tiny`: clean30000 is selected over clean22000 by train score, even though its held-out RGB is slightly lower than clean22000; this is intentional because selection is train-only.
+
+**Strict result vs train-selected pure Mesh Splatting**: `5/5` strict full-pass on the current scene set with complete method artifacts:
+- bonsai: `+2.838371` PSNR, `+0.163376` SSIM, `-0.099541` LPIPS, `-0.105169` AbsRel, `-1.032433` Depth MAE, `-2.410058` normal, `10.25%` triangle reduction.
+- courtyard: `+0.969368` PSNR, `+0.028828` SSIM, `-0.056569` LPIPS, `-0.104763` AbsRel, `-1.288431` Depth MAE, `-2.711335` normal, `10.34%` triangle reduction.
+- room: `+3.304691` PSNR, `+0.050085` SSIM, `-0.062170` LPIPS, `-0.002331` AbsRel, `-0.019509` Depth MAE, `-1.824378` normal, `50.00%` triangle reduction.
+- counter: `+3.157017` PSNR, `+0.069925` SSIM, `-0.070661` LPIPS, `-0.000686` AbsRel, `-0.008253` Depth MAE, `-2.080537` normal, `50.00%` triangle reduction.
+- parking_phone_tiny: `+0.303503` PSNR, `+0.016227` SSIM, `-0.012707` LPIPS, `-0.002569` AbsRel, `-0.011796` Depth MAE, `-0.803210` normal, `70.00%` triangle reduction versus train-selected clean30000.
+
+**Per-view result**: 161 / 165 held-out views pass PSNR, SSIM, and LPIPS simultaneously.  The 4 non-full-pass views are all in `parking_phone_tiny`; average RGB, sparse geometry, and topology still pass for parking, so the paper claim should say strict average full-pass plus disclosed per-view RGB exceptions, not universal per-view dominance.
+
+**Artifacts**:
+- report: `docs/car_model/stageELA12_fair_baseline_audit_report.md`
+- summary JSON: `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/fair_baseline_audit.json`
+- baseline candidate CSV: `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/baseline_candidate_rows.csv`
+- comparison CSV: `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/fair_selected_baseline_comparison.csv`
+- per-view CSV: `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/per_view_rgb_deltas.csv`
+- qualitative gallery: `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/qualitative_gallery/gallery.html`
+
+**Decision**: `FAIR_TRAIN_SELECTED_BASELINE_AUDIT_READY`.  The method now beats the pure Mesh Splatting baseline under a fair train-selected checkpoint rule on the current validated scene set.  Remaining work is external validity: more raw scenes need complete method artifacts before they can be claimed.

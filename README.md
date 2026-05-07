@@ -9,6 +9,7 @@
   <a href="docs/NeurIPSRepairPrompts.md">NeurIPS roadmap</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageF12_multiscene_package_report.md">Multi-scene package (F12)</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageF82_policy_v5_robustness_report.md">Fixed adaptive policy v5 (F82)</a> &nbsp;|&nbsp;
+  <a href="docs/car_model/stageELA12_fair_baseline_audit_report.md">Fair baseline audit (ELA12)</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageSCE21_tail_risk_sentinel_report.md">CTR-SCE courtyard breakthrough (SCE21)</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageSCE23_SCE24_certified_recovery_report.md">Certified recovery (SCE23/24)</a>
 </div>
@@ -21,7 +22,7 @@
 
 > **In one sentence (intent).** Existing Mesh-Splatting / 3DGS pruning methods ask *which primitives can be removed*; MeshSplatOpt asks *which local surface edit best reduces scene-evidence debt while remaining counterfactually certified by held-out rendering and sparse geometry.* The same edit calculus is meant to handle deletion, collapse, snapping, splitting, hole filling, and appearance recovery — every committed edit must clear render, sparse-depth, normal, free-space, and topology certificates, otherwise it rolls back.
 
-> **In one sentence (current evidence).** As of 2026-05-06, the **validation-budget CSEF-family compact-recovery protocol** beats the strongest clean-long baseline on **5 / 5 selected scenes** (`parking_phone_tiny`, `bonsai`, `courtyard`, `room`, `counter`); the later **F82 fixed adaptive policy v5** beats the same clean-long baselines on **8 / 8 (4 scenes × 2 seeds)** without per-scene retuning, choosing prune budgets from checkpoint evidence at reductions of 15.25 – 72 %; and on top of F82 the **CTR-SCE certified-recovery line (SCE21 / SCE24)** is the first courtyard candidate to beat F82 on every tracked independent metric under unchanged topology, while a train-only Pareto guard correctly **no-ops on bonsai** when recovery evidence does not certify all-metric improvement — making "no-op-or-improve" rather than "always-update" the published method behaviour.
+> **In one sentence (current evidence).** As of 2026-05-06, the **ELA12 fair baseline audit** selects the clean Mesh Splatting baseline checkpoint using training renders only (`PSNR + 20 * SSIM - 20 * LPIPS`) and then reports held-out test metrics; under that contract MeshSplatOpt/SPCarNet is a strict full-pass on **5 / 5 current method-artifact scenes** (`parking_phone_tiny`, `bonsai`, `courtyard`, `room`, `counter`) across PSNR, SSIM, LPIPS, sparse AbsRel, sparse Depth MAE, sparse normal angle, and triangle count, with 10.25 – 70.00 % triangle reduction and 161 / 165 held-out views passing all RGB metrics. The earlier **F82 fixed adaptive policy v5** remains the no-per-scene-retuning robustness line, and **CTR-SCE certified recovery (SCE21 / SCE24)** remains the no-op-or-improve recovery layer on top.
 
 The method scaffold (CSEF + reversible edit calculus + counterfactual certificates) and the recovery recipe are kept honest by separating *what passed every gate* from *what actually improved the headline metrics*. The fixed-CSEF50 audit (F45) intentionally documents that one prune ratio does not work for every scene; the published claim is therefore a validation-selected CSEF-family protocol, not a single universal hyperparameter.
 
@@ -138,12 +139,23 @@ The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evide
 | SCE25 / SCE26 / SCE27 | structural ATR (DSSIM + Sobel edges); clean9000 train-teacher distillation; appearance-only LR-zero teacher | all rejected — appearance bottleneck is not a rollback-strength problem; bonsai SSIM still regresses |
 | SCE28 (in flight) | clean-best reset from clean 9000 → CSEF compaction → recovery (proper baseline reset for bonsai) | blocked on large-checkpoint streaming I/O; face-only `keep_unused_vertices` compaction hook landed |
 
+### Strict fair-baseline closure (ELA7–ELA12)
+
+| stage | scope | decision |
+|---|---|---|
+| ELA7 / ELA8 | RGB-only clean-best audit plus rejected distillation probes | `ELA7_PROMOTED_DISTILLATION_NOT_PROMOTED` — useful render evidence, but not a geometry/topology claim |
+| ELA9 | strict RGB + sparse-geometry + topology audit | `STRICT_MULTIAXIS_NOT_SOLVED` — exposed that RGB-only wins are insufficient |
+| ELA10 | room QEM50 parent-rollback + ELA repair | `ROOM_STRICT_MULTIAXIS_SOLVED_GLOBAL_SELECTED_SCENES_NOT_YET` |
+| ELA11 | routed sparse-occluder / QEM policy on selected scenes | `STRICT_MULTIAXIS_SELECTED_SCENES_FULL_PASS` |
+| **ELA12** | train-only clean checkpoint selection, held-out full audit, and qualitative gallery | **`FAIR_TRAIN_SELECTED_BASELINE_AUDIT_READY`** — 5 / 5 strict full-pass vs the train-selected clean Mesh Splatting baseline |
+
 ---
 
 ## Where the method actually stands today
 
 ### What is validated
 
+- **ELA12 is the current fair comparison contract against pure Mesh Splatting.** For each scene, the clean baseline checkpoint is selected from available clean Mesh Splatting candidates by training renders only, using `PSNR + 20 * SSIM - 20 * LPIPS`. The final table then evaluates held-out test RGB, sparse AbsRel, sparse Depth MAE, sparse normal angle, and topology. Selected baselines are clean9000 for `bonsai`, `courtyard`, `room`, and `counter`, and clean30000 for `parking_phone_tiny`; the method is a strict full-pass on 5 / 5 scenes.
 - **The validation-budget CSEF-family compact-recovery protocol now passes on 5 / 5 selected scenes.** Each scene has a long-run row that beats the strongest clean-long 22k baseline on PSNR, SSIM, LPIPS, AbsRel, and Depth MAE, with topology reductions of 40 – 70 %. Sparse-normal proxy improves on 4 / 5 (courtyard ties at +0.0085° — explicitly disclosed, not claimed as a win). Per-scene chosen rows: parking CSEF50 + sparse-depth (F46), bonsai CSEF50 + sparse-depth + LPIPS λ = 0.005 (F49), courtyard CSEF50 + sparse-depth (F30), room CSEF20 + sparse-depth (F46), counter CSEF20 + sparse-depth (F46) — the prune ratio is validation-selected per scene from the same CSEF selector family.
 - **Adaptive CSEF policy is validated in two forms.** F75 is the strongest single parking row: it reads checkpoint evidence to choose the prune fraction (parking → 70 %), ranks compaction candidates by area / local redundancy primarily, and uses render-only evidence as a risk / audit signal. F82 is the fixed multiscene version: one policy and one recovery recipe win on bonsai, courtyard, room, and counter across two seeds without per-scene retuning.
 - **CTR-SCE certified recovery improves over F82 on courtyard while no-opping safely elsewhere (SCE21 / SCE24).** A train-only sparse-depth cluster-CVaR rollback with a 1-px appearance envelope produces the first courtyard candidate that beats F82 on every tracked independent metric (PSNR +0.42 dB, SSIM +0.030, LPIPS −0.0068, AbsRel −0.0037, Depth MAE −0.0033, normal −0.88°) under unchanged topology. The dual-certificate policy (CTR-SCE geometry + ATR appearance rollback + train-only Pareto guard) **correctly returns `accept_parent_noop` on bonsai**, where the candidate would regress SSIM / LPIPS — making "no-op-or-improve" the published behaviour rather than "always update".
@@ -170,6 +182,26 @@ The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evide
 - **Alternative sparse-depth loss spaces (`relative`, `log`, `inverse`) are rejected** for parking full budget — the original metric-depth Smooth-L1 form remains the validated variant.
 
 A short summary of the "what does and does not work" carved out of R0–R56 + F1–F82 + SCE7–SCE28 lives in [`docs/car_model/SPCarNet_research_log.md`](docs/car_model/SPCarNet_research_log.md).
+
+---
+
+## Fair Train-Selected Baseline Audit (ELA12)
+
+ELA12 is the current paper-facing comparison against the pure Mesh Splatting baseline.  For every scene, clean checkpoints are selected using training renders only, scored as `PSNR + 20 * SSIM - 20 * LPIPS`; held-out test metrics are reported only after that selection.  The audit covers the current scene set with complete method artifacts (`parking_phone_tiny`, `bonsai`, `courtyard`, `room`, `counter`). Raw dataset folders without complete method outputs are not included in this headline claim.
+
+<div align="center">
+  <img src="assets/ela12_fair_baseline_gallery.png" width="950" alt="ELA12 fair train-selected clean baseline versus MeshSplatOpt qualitative montage">
+</div>
+
+| scene | train-selected clean baseline | method | ΔPSNR ↑ | ΔSSIM ↑ | ΔLPIPS ↓ | ΔAbsRel ↓ | ΔDepth MAE ↓ | ΔNormal ° ↓ | tri reduction | full |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| `bonsai` | clean9000 | SOR10 + ELA safe | +2.838 | +0.1634 | -0.0995 | -0.1052 | -1.0324 | -2.4101 | 10.25 % | yes |
+| `courtyard` | clean9000 | SOR10 + ELA safe | +0.969 | +0.0288 | -0.0566 | -0.1048 | -1.2884 | -2.7113 | 10.34 % | yes |
+| `room` | clean9000 | QEM50 parent-rollback + ELA safe | +3.305 | +0.0501 | -0.0622 | -0.0023 | -0.0195 | -1.8244 | 50.00 % | yes |
+| `counter` | clean9000 | QEM50 parent-rollback + ELA safe | +3.157 | +0.0699 | -0.0707 | -0.0007 | -0.0083 | -2.0805 | 50.00 % | yes |
+| `parking_phone_tiny` | clean30000 | CSEF70 sparse-depth compact recovery | +0.304 | +0.0162 | -0.0127 | -0.0026 | -0.0118 | -0.8032 | 70.00 % | yes |
+
+Per-view RGB stress test: 161 / 165 held-out views pass PSNR, SSIM, and LPIPS simultaneously; the four non-passing views are all in `parking_phone_tiny` and are explicitly retained in `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/per_view_rgb_deltas.csv`.  The qualitative gallery is `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/qualitative_gallery/gallery.html`; the full audit report is [`docs/car_model/stageELA12_fair_baseline_audit_report.md`](docs/car_model/stageELA12_fair_baseline_audit_report.md). W&B audit run: `5n9kgo8e`.
 
 ---
 
