@@ -78,6 +78,8 @@ def _train_args(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--feature_lr", str(args.feature_lr)])
     if args.weight_lr is not None:
         cmd.extend(["--weight_lr", str(args.weight_lr)])
+    if args.indoor:
+        cmd.append("--indoor")
     if args.preset in ("compact_sparse_low_lambda", "compact_sparse_decay"):
         cmd.extend(
             [
@@ -331,6 +333,7 @@ def run(args: argparse.Namespace) -> int:
         "wandb_group": args.wandb_group,
         "wandb_name": args.wandb_name,
         "train_seed": int(args.train_seed),
+        "indoor": bool(args.indoor),
         "teacher_render_lambda": float(args.teacher_render_lambda),
         "teacher_render_dir": args.teacher_render_dir,
         "teacher_render_mask_mode": args.teacher_render_mask_mode,
@@ -496,6 +499,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--wandb_group", default="finalF6_strict_recovery")
     parser.add_argument("--wandb_name", required=True)
     parser.add_argument("--train_seed", type=int, default=0)
+    parser.add_argument("--indoor", action="store_true")
     parser.add_argument("--contract_out_dir", required=True)
     parser.add_argument("--python", default="/home/peilincai/micromamba/envs/mesh_splatting/bin/python")
     parser.add_argument("--execute", action="store_true")

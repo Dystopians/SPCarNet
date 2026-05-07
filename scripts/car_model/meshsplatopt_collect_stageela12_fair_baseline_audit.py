@@ -179,7 +179,7 @@ def _topology(model: Path, iteration: int) -> dict[str, int]:
 
 
 def _score(metrics: dict[str, float]) -> float:
-    # Train-only checkpoint selection. PSNR carries the scale, SSIM/LPIPS break perceptual ties.
+    # Diagnostic only. Reviewer-facing comparison uses the held-out clean envelope below.
     return float(metrics["psnr"] + 20.0 * metrics["ssim"] - 20.0 * metrics["lpips"])
 
 
@@ -199,6 +199,7 @@ def _candidate_row(scene: str, candidate: BaselineCandidate) -> dict[str, Any]:
         "train_ssim": train["ssim"],
         "train_lpips": train["lpips"],
         "train_selection_score": _score(train),
+        "test_selection_score": _score(test),
         "test_psnr": test["psnr"],
         "test_ssim": test["ssim"],
         "test_lpips": test["lpips"],
@@ -210,11 +211,56 @@ def _candidate_row(scene: str, candidate: BaselineCandidate) -> dict[str, Any]:
     }
 
 
-def _select_baseline(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    finite_rows = [row for row in rows if math.isfinite(float(row["train_selection_score"]))]
+def _best_row(rows: list[dict[str, Any]], key: str, maximize: bool) -> dict[str, Any]:
+    finite_rows = [row for row in rows if math.isfinite(float(row[key]))]
     if not finite_rows:
-        raise RuntimeError("No finite train-selection rows")
-    return max(finite_rows, key=lambda row: (float(row["train_selection_score"]), float(row["train_psnr"])))
+        raise RuntimeError(f"No finite rows for {key}")
+    return (max if maximize else min)(finite_rows, key=lambda row: float(row[key]))
+
+
+def _clean_envelope(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    winners = {
+        "psnr": _best_row(rows, "test_psnr", True),
+        "ssim": _best_row(rows, "test_ssim", True),
+        "lpips": _best_row(rows, "test_lpips", False),
+        "abs_rel": _best_row(rows, "abs_rel", False),
+        "depth_mae": _best_row(rows, "depth_mae", False),
+        "normal": _best_row(rows, "normal", False),
+        "triangles": _best_row(rows, "triangles", False),
+        "vertices": _best_row(rows, "vertices", False),
+    }
+    labels = sorted({str(row["label"]) for row in rows})
+    return {
+        "label": "clean_test_envelope",
+        "model": ";".join(str(row["model"]) for row in rows),
+        "iteration": -1,
+        "method": "metricwise_clean_envelope",
+        "train_selection_score": math.nan,
+        "test_psnr": float(winners["psnr"]["test_psnr"]),
+        "test_ssim": float(winners["ssim"]["test_ssim"]),
+        "test_lpips": float(winners["lpips"]["test_lpips"]),
+        "abs_rel": float(winners["abs_rel"]["abs_rel"]),
+        "depth_mae": float(winners["depth_mae"]["depth_mae"]),
+        "normal": float(winners["normal"]["normal"]),
+        "triangles": int(winners["triangles"]["triangles"]),
+        "vertices": int(winners["vertices"]["vertices"]),
+        "candidate_labels": ",".join(labels),
+        "psnr_winner": str(winners["psnr"]["label"]),
+        "ssim_winner": str(winners["ssim"]["label"]),
+        "lpips_winner": str(winners["lpips"]["label"]),
+        "abs_rel_winner": str(winners["abs_rel"]["label"]),
+        "depth_mae_winner": str(winners["depth_mae"]["label"]),
+        "normal_winner": str(winners["normal"]["label"]),
+        "triangles_winner": str(winners["triangles"]["label"]),
+        "vertices_winner": str(winners["vertices"]["label"]),
+    }
+
+
+def _select_test_baseline(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    finite_rows = [row for row in rows if math.isfinite(float(row["test_selection_score"]))]
+    if not finite_rows:
+        raise RuntimeError("No finite held-out test-selection rows")
+    return max(finite_rows, key=lambda row: (float(row["test_selection_score"]), float(row["test_psnr"])))
 
 
 def _comparison_row(spec: SceneSpec, baseline: dict[str, Any]) -> dict[str, Any]:
@@ -230,6 +276,13 @@ def _comparison_row(spec: SceneSpec, baseline: dict[str, Any]) -> dict[str, Any]
         "baseline_model": baseline["model"],
         "baseline_iteration": baseline["iteration"],
         "baseline_train_selection_score": baseline["train_selection_score"],
+        "baseline_candidate_labels": baseline.get("candidate_labels", baseline["label"]),
+        "baseline_psnr_winner": baseline.get("psnr_winner", baseline["label"]),
+        "baseline_ssim_winner": baseline.get("ssim_winner", baseline["label"]),
+        "baseline_lpips_winner": baseline.get("lpips_winner", baseline["label"]),
+        "baseline_abs_rel_winner": baseline.get("abs_rel_winner", baseline["label"]),
+        "baseline_depth_mae_winner": baseline.get("depth_mae_winner", baseline["label"]),
+        "baseline_normal_winner": baseline.get("normal_winner", baseline["label"]),
         "baseline_test_psnr": baseline["test_psnr"],
         "baseline_test_ssim": baseline["test_ssim"],
         "baseline_test_lpips": baseline["test_lpips"],
@@ -285,7 +338,7 @@ def _common_images(model_a: Path, method_a: str, model_b: Path, method_b: str) -
     return sorted(names_a & names_b)
 
 
-def _collect_per_view(spec: SceneSpec, baseline: dict[str, Any]) -> list[dict[str, Any]]:
+def _collect_per_view_selected(spec: SceneSpec, baseline: dict[str, Any]) -> list[dict[str, Any]]:
     baseline_model = ROOT / str(baseline["model"])
     method_model = ROOT / (spec.method_rgb_model or spec.method_model)
     baseline_method = str(baseline["method"])
@@ -304,6 +357,7 @@ def _collect_per_view(spec: SceneSpec, baseline: dict[str, Any]) -> list[dict[st
             {
                 "scene": spec.scene,
                 "image": name,
+                "baseline_label": baseline["label"],
                 "baseline_psnr": b_psnr,
                 "method_psnr": m_psnr,
                 "d_psnr": m_psnr - b_psnr,
@@ -316,6 +370,69 @@ def _collect_per_view(spec: SceneSpec, baseline: dict[str, Any]) -> list[dict[st
                 "rgb_full_pass": m_psnr > b_psnr and m_ssim > b_ssim and m_lpips < b_lpips,
                 "gt": _rel(method_model / "test" / method_name / "gt" / name),
                 "baseline_render": _rel(baseline_model / "test" / baseline_method / "renders" / name),
+                "method_render": _rel(method_model / "test" / method_name / "renders" / name),
+            }
+        )
+    return rows
+
+
+def _collect_per_view_envelope(spec: SceneSpec, candidate_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    method_model = ROOT / (spec.method_rgb_model or spec.method_model)
+    method_name = spec.method_name
+    method_per = _per_view(method_model, method_name)
+    candidate_payloads = []
+    common: set[str] | None = None
+    for row in candidate_rows:
+        baseline_model = ROOT / str(row["model"])
+        baseline_method = str(row["method"])
+        names = set(_common_images(baseline_model, baseline_method, method_model, method_name))
+        common = names if common is None else common & names
+        candidate_payloads.append(
+            {
+                "label": str(row["label"]),
+                "model": baseline_model,
+                "method": baseline_method,
+                "per_view": _per_view(baseline_model, baseline_method),
+            }
+        )
+    rows = []
+    for name in sorted(common or set()):
+        psnr_values = []
+        ssim_values = []
+        lpips_values = []
+        for payload in candidate_payloads:
+            per = payload["per_view"]
+            psnr_values.append((payload, _finite(per.get("PSNR", {}).get(name))))
+            ssim_values.append((payload, _finite(per.get("SSIM", {}).get(name))))
+            lpips_values.append((payload, _finite(per.get("LPIPS", {}).get(name))))
+        psnr_winner, b_psnr = max(psnr_values, key=lambda item: float(item[1]))
+        ssim_winner, b_ssim = max(ssim_values, key=lambda item: float(item[1]))
+        lpips_winner, b_lpips = min(lpips_values, key=lambda item: float(item[1]))
+        m_psnr = _finite(method_per.get("PSNR", {}).get(name))
+        m_ssim = _finite(method_per.get("SSIM", {}).get(name))
+        m_lpips = _finite(method_per.get("LPIPS", {}).get(name))
+        rows.append(
+            {
+                "scene": spec.scene,
+                "image": name,
+                "baseline_label": "clean_test_envelope",
+                "baseline_psnr_winner": psnr_winner["label"],
+                "baseline_psnr": b_psnr,
+                "method_psnr": m_psnr,
+                "d_psnr": m_psnr - b_psnr,
+                "baseline_ssim_winner": ssim_winner["label"],
+                "baseline_ssim": b_ssim,
+                "method_ssim": m_ssim,
+                "d_ssim": m_ssim - b_ssim,
+                "baseline_lpips_winner": lpips_winner["label"],
+                "baseline_lpips": b_lpips,
+                "method_lpips": m_lpips,
+                "d_lpips": m_lpips - b_lpips,
+                "rgb_full_pass": m_psnr > b_psnr and m_ssim > b_ssim and m_lpips < b_lpips,
+                "gt": _rel(method_model / "test" / method_name / "gt" / name),
+                "baseline_render": _rel(psnr_winner["model"] / "test" / psnr_winner["method"] / "renders" / name),
+                "baseline_ssim_render": _rel(ssim_winner["model"] / "test" / ssim_winner["method"] / "renders" / name),
+                "baseline_lpips_render": _rel(lpips_winner["model"] / "test" / lpips_winner["method"] / "renders" / name),
                 "method_render": _rel(method_model / "test" / method_name / "renders" / name),
             }
         )
@@ -377,8 +494,8 @@ def _write_gallery(out_dir: Path, selected_rows: list[dict[str, Any]]) -> None:
     lines = [
         "# Stage ELA12 Fair Baseline Qualitative Manifest",
         "",
-        "Each selected held-out view aligns GT, train-selected clean Mesh Splatting baseline, and the current method.",
-        "Views are selected mechanically per scene from method-minus-baseline per-view PSNR: worst, middle, and best cases.",
+        "Each selected held-out view aligns GT, the held-out-test-selected clean Mesh Splatting baseline, and the current method.",
+        "Views are selected mechanically per scene from method-minus-selected-clean per-view PSNR: worst, middle, and best cases.",
         "",
         "| scene | view | baseline PSNR | method PSNR | dPSNR | baseline LPIPS | method LPIPS | dLPIPS |",
         "|---|---|---:|---:|---:|---:|---:|---:|",
@@ -399,7 +516,7 @@ def _write_gallery(out_dir: Path, selected_rows: list[dict[str, Any]]) -> None:
             f"<h2>{row['scene']} / {row['image']} / dPSNR {float(row['d_psnr']):+.4f} / dLPIPS {float(row['d_lpips']):+.4f}</h2>"
             "<div class='grid'>"
             f"<figure><img src='{gt}'><figcaption>GT</figcaption></figure>"
-            f"<figure><img src='{baseline}'><figcaption>Train-selected clean Mesh Splatting</figcaption></figure>"
+            f"<figure><img src='{baseline}'><figcaption>Held-out-test-selected clean Mesh Splatting</figcaption></figure>"
             f"<figure><img src='{method}'><figcaption>SPCarNet adaptive policy</figcaption></figure>"
             "</div>"
             "</section>"
@@ -423,12 +540,19 @@ figcaption { font-size: 13px; margin-top: 6px; color: #555; }
 </head>
 <body>
 <h1>Stage ELA12 fair baseline gallery</h1>
-<p>GT, train-selected clean Mesh Splatting baseline, and current method are shown for identical held-out views. Selection is mechanical: worst, middle, and best method-minus-baseline PSNR per scene.</p>
+<p>GT, held-out-test-selected clean Mesh Splatting baseline, and current method are shown for identical held-out views. Selection is mechanical: worst, middle, and best method-minus-selected-clean PSNR per scene.</p>
 """ + "\n".join(sections) + "\n</body>\n</html>\n"
     (gallery_dir / "gallery.html").write_text(html, encoding="utf-8")
 
 
-def _write_report(path: Path, candidate_rows: list[dict[str, Any]], comparison_rows: list[dict[str, Any]], per_view_rows: list[dict[str, Any]], out_dir: Path) -> None:
+def _write_report(
+    path: Path,
+    candidate_rows: list[dict[str, Any]],
+    comparison_rows: list[dict[str, Any]],
+    per_view_rows: list[dict[str, Any]],
+    per_view_envelope_rows: list[dict[str, Any]],
+    out_dir: Path,
+) -> None:
     pass_rows = [row for row in comparison_rows if row["strict_full_pass"]]
     view_summary = []
     for spec in SCENES:
@@ -444,15 +568,15 @@ def _write_report(path: Path, candidate_rows: list[dict[str, Any]], comparison_r
             }
         )
     lines = [
-        "# Stage ELA12 Fair Baseline Audit",
+        "# Stage ELA12 Corrected Clean Baseline Audit",
         "",
-        "Baseline checkpoint selection is now train-only: for each scene, all available clean Mesh Splatting candidate checkpoints are rendered on train and scored by `PSNR + 20 * SSIM - 20 * LPIPS`. Test metrics are used only after selecting the clean baseline checkpoint.",
+        "This report supersedes the earlier train-selected checkpoint audit. The reviewer-facing baseline is now the coherent clean Mesh Splatting checkpoint with the best held-out test score, where `score = PSNR + 20 * SSIM - 20 * LPIPS`. The train score table is retained only as a diagnostic because train metrics can favor longer overfit runs.",
         "",
-        f"Strict full-pass rows against train-selected clean baselines: `{len(pass_rows)}/{len(comparison_rows)}`.",
+        f"Strict full-pass rows against the held-out-test-selected clean baseline: `{len(pass_rows)}/{len(comparison_rows)}`.",
         "",
-        "## Train-Selected Baseline Comparison",
+        "## Held-Out-Test-Selected Baseline Comparison",
         "",
-        "| scene | selected baseline | method | dPSNR | dSSIM | dLPIPS | dAbsRel | dDepth MAE | dNormal | tri reduction | full |",
+        "| scene | selected clean baseline | method | dPSNR | dSSIM | dLPIPS | dAbsRel | dDepth MAE | dNormal | tri reduction | full |",
         "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for row in comparison_rows:
@@ -466,13 +590,13 @@ def _write_report(path: Path, candidate_rows: list[dict[str, Any]], comparison_r
             "",
             "## Clean Baseline Candidate Table",
             "",
-            "| scene | candidate | train score | train PSNR | train SSIM | train LPIPS | test PSNR | test SSIM | test LPIPS |",
-            "|---|---|---:|---:|---:|---:|---:|---:|---:|",
+            "| scene | candidate | train score | test score | train PSNR | train SSIM | train LPIPS | test PSNR | test SSIM | test LPIPS |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for row in candidate_rows:
         lines.append(
-            f"| {row['scene']} | {row['label']}@{row['iteration']} | {_fmt(row['train_selection_score'])} | {_fmt(row['train_psnr'])} | "
+            f"| {row['scene']} | {row['label']}@{row['iteration']} | {_fmt(row['train_selection_score'])} | {_fmt(row['test_selection_score'])} | {_fmt(row['train_psnr'])} | "
             f"{_fmt(row['train_ssim'])} | {_fmt(row['train_lpips'])} | {_fmt(row['test_psnr'])} | {_fmt(row['test_ssim'])} | {_fmt(row['test_lpips'])} |"
         )
     lines.extend(
@@ -488,12 +612,40 @@ def _write_report(path: Path, candidate_rows: list[dict[str, Any]], comparison_r
         lines.append(
             f"| {row['scene']} | {row['views']} | {row['rgb_full_pass_views']} | {_fmt(row['min_d_psnr'])} | {_fmt(row['mean_d_psnr'])} | {_fmt(row['max_d_lpips'])} |"
         )
+    envelope_summary = []
+    for spec in SCENES:
+        rows = [row for row in per_view_envelope_rows if row["scene"] == spec.scene]
+        envelope_summary.append(
+            {
+                "scene": spec.scene,
+                "views": len(rows),
+                "rgb_full_pass_views": sum(1 for row in rows if row["rgb_full_pass"]),
+                "min_d_psnr": min(float(row["d_psnr"]) for row in rows) if rows else math.nan,
+                "mean_d_psnr": sum(float(row["d_psnr"]) for row in rows) / max(len(rows), 1),
+                "max_d_lpips": max(float(row["d_lpips"]) for row in rows) if rows else math.nan,
+            }
+        )
+    lines.extend(
+        [
+            "",
+            "## Per-View RGB Envelope Stress Test",
+            "",
+            "This stricter stress test compares each held-out view to the best clean checkpoint separately for PSNR, SSIM, and LPIPS. It is not the main coherent-checkpoint baseline, but it exposes remaining visual tails.",
+            "",
+            "| scene | views | RGB envelope full-pass views | min dPSNR | mean dPSNR | worst dLPIPS |",
+            "|---|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for row in envelope_summary:
+        lines.append(
+            f"| {row['scene']} | {row['views']} | {row['rgb_full_pass_views']} | {_fmt(row['min_d_psnr'])} | {_fmt(row['mean_d_psnr'])} | {_fmt(row['max_d_lpips'])} |"
+        )
     lines.extend(
         [
             "",
             "## Scope Note",
             "",
-            "This audit covers the current validated scene set with complete method artifacts: `parking_phone_tiny`, `bonsai`, `courtyard`, `room`, and `counter`. Raw dataset folders that do not yet have complete method artifacts are intentionally not folded into the headline table.",
+            "This audit covers the current validated scene set with complete method artifacts: `parking_phone_tiny`, `bonsai`, `courtyard`, `room`, and `counter`. Raw dataset folders that do not yet have complete method artifacts are intentionally not folded into the headline table. For Mip-NeRF360 paper-level comparison, this is still only a scene subset and must not be presented as the full nine-scene Mip-NeRF360 benchmark mean.",
             "",
             "## Artifacts",
             "",
@@ -501,6 +653,7 @@ def _write_report(path: Path, candidate_rows: list[dict[str, Any]], comparison_r
             f"- baseline candidate CSV: `{_rel(out_dir / 'baseline_candidate_rows.csv')}`",
             f"- comparison CSV: `{_rel(out_dir / 'fair_selected_baseline_comparison.csv')}`",
             f"- per-view CSV: `{_rel(out_dir / 'per_view_rgb_deltas.csv')}`",
+            f"- per-view RGB envelope CSV: `{_rel(out_dir / 'per_view_rgb_envelope_deltas.csv')}`",
             f"- qualitative gallery: `{_rel(out_dir / 'qualitative_gallery' / 'gallery.html')}`",
             f"- qualitative manifest: `{_rel(out_dir / 'qualitative_gallery' / 'gallery_manifest.md')}`",
         ]
@@ -509,7 +662,13 @@ def _write_report(path: Path, candidate_rows: list[dict[str, Any]], comparison_r
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _maybe_log_wandb(args: argparse.Namespace, comparison_rows: list[dict[str, Any]], per_view_rows: list[dict[str, Any]], report_path: str) -> None:
+def _maybe_log_wandb(
+    args: argparse.Namespace,
+    comparison_rows: list[dict[str, Any]],
+    per_view_rows: list[dict[str, Any]],
+    per_view_envelope_rows: list[dict[str, Any]],
+    report_path: str,
+) -> None:
     if not args.wandb:
         return
     try:
@@ -523,7 +682,8 @@ def _maybe_log_wandb(args: argparse.Namespace, comparison_rows: list[dict[str, A
         name=args.wandb_name,
         mode=args.wandb_mode,
         config={
-            "selection_rule": "train_psnr_plus_20ssim_minus_20lpips",
+            "baseline_rule": "heldout_test_score_selected_clean_checkpoint",
+            "rgb_envelope_stress_rule": "per_view_metricwise_clean_envelope",
             "report": report_path,
         },
     )
@@ -534,6 +694,10 @@ def _maybe_log_wandb(args: argparse.Namespace, comparison_rows: list[dict[str, A
             "fair_baseline/scene_count": len(comparison_rows),
             "fair_baseline/per_view_rgb_pass_count": sum(1 for row in per_view_rows if row["rgb_full_pass"]),
             "fair_baseline/per_view_count": len(per_view_rows),
+            "fair_baseline/per_view_rgb_envelope_pass_count": sum(1 for row in per_view_envelope_rows if row["rgb_full_pass"]),
+            "fair_baseline/per_view_rgb_envelope_count": len(per_view_envelope_rows),
+            "fair_baseline/envelope_min_d_psnr": min(float(row["d_psnr"]) for row in per_view_envelope_rows),
+            "fair_baseline/envelope_max_d_lpips": max(float(row["d_lpips"]) for row in per_view_envelope_rows),
             "fair_baseline/min_d_psnr": min(float(row["d_psnr"]) for row in per_view_rows),
             "fair_baseline/max_d_lpips": max(float(row["d_lpips"]) for row in per_view_rows),
         }
@@ -542,13 +706,14 @@ def _maybe_log_wandb(args: argparse.Namespace, comparison_rows: list[dict[str, A
         {
             "strict_full_pass": f"{pass_count}/{len(comparison_rows)}",
             "per_view_rgb_pass": f"{sum(1 for row in per_view_rows if row['rgb_full_pass'])}/{len(per_view_rows)}",
+            "per_view_rgb_envelope_pass": f"{sum(1 for row in per_view_envelope_rows if row['rgb_full_pass'])}/{len(per_view_envelope_rows)}",
         }
     )
     run.finish()
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Collect fair train-selected baseline audit for current MeshSplatOpt scene set.")
+    parser = argparse.ArgumentParser(description="Collect corrected held-out clean-baseline audit for current MeshSplatOpt scene set.")
     parser.add_argument("--out-dir", default="outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit")
     parser.add_argument("--report", default="docs/car_model/stageELA12_fair_baseline_audit_report.md")
     parser.add_argument("--gallery-per-scene", default=3, type=int)
@@ -564,32 +729,38 @@ def main() -> int:
     candidate_rows: list[dict[str, Any]] = []
     comparison_rows: list[dict[str, Any]] = []
     per_view_rows: list[dict[str, Any]] = []
+    per_view_envelope_rows: list[dict[str, Any]] = []
     selected_by_scene: dict[str, dict[str, Any]] = {}
     for spec in SCENES:
         scene_candidates = [_candidate_row(spec.scene, candidate) for candidate in spec.baseline_candidates]
         candidate_rows.extend(scene_candidates)
-        selected = _select_baseline(scene_candidates)
+        selected = _select_test_baseline(scene_candidates)
         selected_by_scene[spec.scene] = selected
         comparison_rows.append(_comparison_row(spec, selected))
-        per_view_rows.extend(_collect_per_view(spec, selected))
+        per_view_rows.extend(_collect_per_view_selected(spec, selected))
+        per_view_envelope_rows.extend(_collect_per_view_envelope(spec, scene_candidates))
 
     _write_csv(out_dir / "baseline_candidate_rows.csv", candidate_rows)
     _write_csv(out_dir / "fair_selected_baseline_comparison.csv", comparison_rows)
     _write_csv(out_dir / "per_view_rgb_deltas.csv", per_view_rows)
+    _write_csv(out_dir / "per_view_rgb_envelope_deltas.csv", per_view_envelope_rows)
     selected_gallery_rows = _pick_gallery_rows(per_view_rows, args.gallery_per_scene)
     _write_gallery(out_dir, selected_gallery_rows)
     payload = {
-        "decision": "FAIR_TRAIN_SELECTED_BASELINE_AUDIT_READY",
-        "selection_rule": "train_psnr_plus_20ssim_minus_20lpips",
+        "decision": "CORRECTED_HELDOUT_TEST_SELECTED_CLEAN_BASELINE_AUDIT_READY",
+        "selection_rule": "heldout_test_psnr_plus_20ssim_minus_20lpips",
+        "train_score_diagnostic": "PSNR + 20 * SSIM - 20 * LPIPS, not used for reviewer-facing baseline selection",
+        "rgb_envelope_stress_rule": "per_view_metricwise_clean_envelope",
         "selected_by_scene": selected_by_scene,
         "baseline_candidates": candidate_rows,
         "comparison_rows": comparison_rows,
         "per_view_rgb_deltas": per_view_rows,
+        "per_view_rgb_envelope_deltas": per_view_envelope_rows,
         "selected_gallery_rows": selected_gallery_rows,
     }
     _write_json(out_dir / "fair_baseline_audit.json", payload)
-    _write_report(ROOT / args.report, candidate_rows, comparison_rows, per_view_rows, out_dir)
-    _maybe_log_wandb(args, comparison_rows, per_view_rows, args.report)
+    _write_report(ROOT / args.report, candidate_rows, comparison_rows, per_view_rows, per_view_envelope_rows, out_dir)
+    _maybe_log_wandb(args, comparison_rows, per_view_rows, per_view_envelope_rows, args.report)
     print(json.dumps({"decision": payload["decision"], "report": args.report, "out_dir": args.out_dir}, indent=2))
     return 0
 

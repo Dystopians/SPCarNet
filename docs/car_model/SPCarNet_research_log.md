@@ -5420,3 +5420,45 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 - qualitative gallery: `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/qualitative_gallery/gallery.html`
 
 **Decision**: `FAIR_TRAIN_SELECTED_BASELINE_AUDIT_READY`.  The method now beats the pure Mesh Splatting baseline under a fair train-selected checkpoint rule on the current validated scene set.  Remaining work is external validity: more raw scenes need complete method artifacts before they can be claimed.
+
+---
+
+## 2026-05-07 - ELA12 corrected held-out clean-baseline audit and MeshSplatting paper protocol reset
+
+**Correction**: the 2026-05-06 train-selected checkpoint rule is no longer accepted as reviewer-facing evidence.  It can prefer longer clean continuations that overfit training views while regressing held-out views.  The concrete failure was `parking_phone_tiny`: clean30000 had better train score than clean22000, but worse held-out PSNR / SSIM / LPIPS.
+
+**Implementation**: updated `scripts/car_model/meshsplatopt_collect_stageela12_fair_baseline_audit.py` so the main coherent clean baseline is selected by held-out test score `PSNR + 20 * SSIM - 20 * LPIPS`.  Train scores remain in the candidate table only as diagnostics.  The script also writes a stricter per-view RGB envelope CSV, where each held-out image is compared against the best clean checkpoint separately for PSNR, SSIM, and LPIPS.  W&B audit run: `bn55syns`.
+
+**Corrected result**:
+- Main aggregate comparison: `5/5` strict full-pass against held-out-test-selected clean checkpoints.
+- Selected clean baselines: clean9000 for `bonsai`, `courtyard`, `room`, and `counter`; clean22000 for `parking_phone_tiny`.
+- Per-view RGB against selected clean: `164/165`; the remaining failure is `parking_phone_tiny/00001.png` with dPSNR `-0.049734`, while SSIM and LPIPS improve.
+- Per-view RGB metricwise clean envelope: `163/165`; failures are `courtyard/00000.png` and `parking_phone_tiny/00001.png`.
+- Parking OUT2 vs clean22000: `+0.496731` PSNR, `+0.026720` SSIM, `-0.033581` LPIPS, `70.00%` triangle reduction.
+
+**Paper-protocol reset**: added `docs/car_model/meshsplatting_paper_metric_reconciliation.md`.  The MeshSplatting paper's Mip-NeRF360 `24.78` PSNR is the arithmetic mean over all nine Mip-NeRF360 scenes, not a single scene or the current ELA12 subset.  The local dataset currently contains 7 / 9 Mip-NeRF360 scenes (`bicycle`, `bonsai`, `counter`, `garden`, `kitchen`, `room`, `stump`) and is missing `flowers` and `treehill`.  A first same-protocol official clean baseline reproduction has been launched on `garden` with `images_4`, 30k, `--eval`, and W&B group `paper_m360_official_clean30k`.
+
+**Decision**: `CORRECTED_HELDOUT_TEST_SELECTED_CLEAN_BASELINE_AUDIT_READY`, with explicit caveat that same-protocol MeshSplatting paper superiority is not yet established.  Future claims must use the official Mip-NeRF360 full-eval protocol before comparing to the paper's 24.78 / 0.310 / 0.728 headline.
+
+---
+
+## 2026-05-07 - Same-budget Mip-NeRF360 protocol expansion
+
+**Fairness repair**: added the fixed-budget method path for paper-protocol validation.  The clean queue now saves `26000` and `30000`; the method queue compacts only the clean `26000` checkpoint and recovers to `30000`, so reviewer-facing comparisons are method30000 vs clean30000 under the same source images, split, and image scale.
+
+**Method upgrade**: the fixed-budget default is now `csef_atr_fixedbudget`, not plain CSEF.  It combines:
+- CSEF adaptive topology selection at clean `26000`;
+- sparse COLMAP depth and LPIPS recovery in the remaining `26000 -> 30000` budget;
+- train-only ATR parent-render rollback from clean `26000` train renders, using CVaR tail aggregation and `l1_dssim_edge` residual space to penalize only pixels where the recovered model becomes worse than the parent.
+
+This is still one fixed policy, not per-scene tuning.
+
+**Interfaces**:
+- `scripts/car_model/run_paper_m360_official_clean30k_available7.sh`: official clean training queue; now defaults to the full nine-scene order and saves the fixed-budget split checkpoint.
+- `scripts/car_model/run_paper_m360_fixedbudget_method_available7.sh`: CSEF+ATR adaptive fixed-budget method queue, `26000 -> 30000`, with W&B enabled.
+- `scripts/car_model/collect_paper_m360_fixedbudget_method_metrics.py`: same-final-iteration method-vs-clean collector.
+- `scripts/car_model/meshsplatopt_run_strict_compact_recovery.py`: now passes `--indoor` through to `train.py`, which is required for official indoor Mip-NeRF360 recovery.
+
+**Dataset expansion**: imported the missing official Mip-NeRF360 `flowers` and `treehill` scenes from `http://storage.googleapis.com/gresearch/refraw360/`.  The local benchmark root now has the full paper scene set: `bicycle`, `flowers`, `garden`, `stump`, `treehill`, `room`, `counter`, `kitchen`, and `bonsai`.
+
+**Active evidence**: the first same-protocol clean reproduction is still running on `garden` (`images_4`, `--eval`, 30k, W&B run `el3kj209`).  This first launch predates the `26000` save update, so it is valid for clean paper-protocol reproduction but not yet sufficient for fixed-budget method validation on Garden.
