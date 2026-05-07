@@ -5348,3 +5348,21 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 - JSON: `outputs/carnet/meshsplatopt/stageELA11_strict_multiaxis_audit/strict_multiaxis_audit.json`
 
 **Decision**: `STRICT_MULTIAXIS_COMPOSITE_POLICY_SOLVES_BONSAI_ROOM_COUNTER_COURTYARD_PENDING`.  The work has crossed a major bottleneck: bonsai, room, counter, and parking now each have strict full-pass evidence under a routed composite policy.  Courtyard remains the selected-scene blocker and must not be claimed as solved.
+
+---
+
+## 2026-05-06 - ELA11 courtyard blocker closed
+
+**Goal**: resolve the remaining selected-scene blocker under the strict multi-axis audit.  The required comparison is courtyard clean Mesh Splatting `ours_9000` against a method row at the same clean9000 origin, not a weaker or longer-trained mismatch.
+
+**Diagnosis**: courtyard has a high train sparse front-occluder fraction (`0.314915`), above the fixed SOR routing threshold (`0.25`).  This makes it structurally closer to bonsai than to room/counter: train-split COLMAP points repeatedly see rendered faces in front of sparse depth, suggesting removable occluding topology rather than a generic QEM recovery problem.
+
+**Implementation**: ran the fixed SOR policy from clean courtyard `ours_9000`: train-split sparse-occluder mining plus the `10%` low-evidence base, capped by the policy.  The compact checkpoint removes `42,415 / 410,254` triangles (`10.34%`) while keeping vertex tensors intact for checkpoint compatibility.  Raw SOR already passes all strict axes; train-only ELA then improves the appearance margin and logs to W&B.
+
+**Courtyard strict result vs clean9000 Mesh Splatting**:
+- Raw SOR10: `+0.233320` PSNR, `+0.011877` SSIM, `-0.025698` LPIPS, `-0.104763` AbsRel, `-1.288431` Depth MAE, `-2.711335` normal, `10.34%` triangle reduction.
+- SOR10 + ELA safe, W&B `xcoa2n7y`: `+0.969368` PSNR, `+0.028828` SSIM, `-0.056569` LPIPS, with the same improved geometry and topology reduction.
+
+**Updated audit**: `docs/car_model/stageELA11_strict_multiaxis_audit_report.md` now reports `STRICT_MULTIAXIS_SELECTED_SCENES_FULL_PASS`: bonsai, courtyard, room, and counter each have at least one strict full-pass row versus their own clean9000 Mesh Splatting baseline.  Parking remains a separate cross-dataset full-pass support row.
+
+**Decision**: `STRICT_MULTIAXIS_SELECTED_SCENES_FULL_PASS`.  The selected clean9000 scene set is now closed under the strict RGB + sparse geometry + triangle-count criterion.  Remaining paper work should shift from proving existence to robustness: more datasets, per-view failure analysis, overhead/complexity tables, and clearer ablations for the adaptive router.

@@ -28,6 +28,7 @@ Observed routing:
 | scene | train front-occluder fraction | selected branch | outcome |
 |---|---:|---|---|
 | bonsai | `0.460542` | SOR | strict full-pass |
+| courtyard | `0.314915` | SOR | strict full-pass |
 | counter | `0.055984` | QEM | SOR transfer fails, QEM passes |
 | room | `0.118611` | QEM | SOR transfer fails, QEM passes |
 
@@ -36,6 +37,7 @@ Observed routing:
 | scene | promoted method | dPSNR | dSSIM | dLPIPS | dAbsRel | dDepth MAE | dNormal | tri reduction |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | bonsai | SOR10 + ELA safe | `+2.838371` | `+0.163376` | `-0.099541` | `-0.105169` | `-1.032433` | `-2.410058` | `10.25%` |
+| courtyard | SOR10 + ELA safe | `+0.969368` | `+0.028828` | `-0.056569` | `-0.104763` | `-1.288431` | `-2.711335` | `10.34%` |
 | counter | QEM50 parent-rollback + ELA safe | `+3.157017` | `+0.069925` | `-0.070661` | `-0.000686` | `-0.008253` | `-2.080537` | `50.00%` |
 | room | QEM50 parent-rollback + ELA safe | `+3.304691` | `+0.050085` | `-0.062170` | `-0.002331` | `-0.019509` | `-1.824378` | `50.00%` |
 | parking_phone_tiny | CSEF70 sparse-depth compact recovery | `+0.232340` | `+0.013107` | `-0.008653` | `-0.003106` | `-0.014383` | `-1.072729` | `70.00%` |
@@ -51,9 +53,9 @@ These failures are useful: they justify the adaptive router instead of a hand-pi
 
 ## Current Decision
 
-`STRICT_MULTIAXIS_COMPOSITE_POLICY_SOLVES_BONSAI_ROOM_COUNTER_COURTYARD_PENDING`.
+`STRICT_MULTIAXIS_SELECTED_SCENES_FULL_PASS`.
 
-The selected clean9000 audit now has strict full-pass rows for bonsai, room, and counter. Courtyard remains unresolved in this strict audit and must not be claimed as solved yet. The updated table is in `docs/car_model/stageELA11_strict_multiaxis_audit_report.md`.
+The selected clean9000 audit now has strict full-pass rows for bonsai, courtyard, room, and counter. Courtyard is solved by the same high-sparse-occluder SOR branch as bonsai, and the routed composite policy now has at least one strict full-pass row for every selected scene. The updated table is in `docs/car_model/stageELA11_strict_multiaxis_audit_report.md`.
 
 ## Key Artifacts
 
@@ -61,5 +63,6 @@ The selected clean9000 audit now has strict full-pass rows for bonsai, room, and
 - Adaptive router: `scripts/car_model/meshsplatopt_select_adaptive_repair_action.py`
 - Strict audit: `docs/car_model/stageELA11_strict_multiaxis_audit_report.md`
 - Bonsai W&B ELA run: `vmai8bls`
+- Courtyard W&B ELA run: `xcoa2n7y`
 - Counter W&B ELA run: `zcc5inc0`
 - Room W&B ELA run: `9t01dwd8`

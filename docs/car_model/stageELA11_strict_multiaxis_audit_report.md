@@ -1,12 +1,12 @@
 # Stage ELA9/10/11 Strict Multi-Axis Audit
 
-Decision: `STRICT_MULTIAXIS_COMPOSITE_POLICY_SOLVES_BONSAI_ROOM_COUNTER_COURTYARD_PENDING`.
+Decision: `STRICT_MULTIAXIS_SELECTED_SCENES_FULL_PASS`.
 
 This audit uses the stricter definition requested after the ELA7 RGB-only result: a method must improve PSNR, SSIM, LPIPS, sparse-depth AbsRel, sparse Depth MAE, sparse normal angle, and reduce triangle count against the strongest clean baseline for that scene.
 
-Strict full-pass rows on selected clean9000 scenes: `6/27`.
-Selected scenes with at least one strict full-pass row: `bonsai, counter, room`.
-Selected scenes still missing a strict full-pass row: `courtyard`.
+Strict full-pass rows on selected clean9000 scenes: `8/29`.
+Selected scenes with at least one strict full-pass row: `bonsai, counter, courtyard, room`.
+Selected scenes still missing a strict full-pass row: `none`.
 
 ## Selected Scenes vs Strong Clean9000
 
@@ -37,6 +37,8 @@ Selected scenes still missing a strict full-pass row: `courtyard`.
 | bonsai | clean9000 bonsai CSEF10 low-evidence delete | 0.000000 | 0.000000 | 0.000000 | 0.000000 | 0.000000 | 0.000000 | 10.00% | `False` | `False` | `True` | `False` |
 | bonsai | clean9000 bonsai SOR10 sparse-occluder + low-evidence delete | 0.886990 | 0.059911 | -0.044190 | -0.105169 | -1.032433 | -2.410058 | 10.25% | `True` | `True` | `True` | `True` |
 | bonsai | clean9000 bonsai SOR10 + ELA safe | 2.838371 | 0.163376 | -0.099541 | -0.105169 | -1.032433 | -2.410058 | 10.25% | `True` | `True` | `True` | `True` |
+| courtyard | clean9000 courtyard SOR10 sparse-occluder + low-evidence delete | 0.233320 | 0.011877 | -0.025698 | -0.104763 | -1.288431 | -2.711335 | 10.34% | `True` | `True` | `True` | `True` |
+| courtyard | clean9000 courtyard SOR10 + ELA safe | 0.969368 | 0.028828 | -0.056569 | -0.104763 | -1.288431 | -2.711335 | 10.34% | `True` | `True` | `True` | `True` |
 | counter | clean9000 counter SOR10 transfer check | -0.126171 | -0.003474 | 0.003394 | 0.001241 | 0.009442 | -0.005262 | 10.62% | `False` | `False` | `True` | `False` |
 | room | clean9000 room SOR10 transfer check | -0.624842 | -0.008025 | 0.011262 | 0.001742 | 0.006635 | -0.039129 | 10.78% | `False` | `False` | `True` | `False` |
 
@@ -53,9 +55,9 @@ Parking is included as an additional dataset/scene. It demonstrates that compact
 - ELA7 is a strong RGB method, but it inherits clean9000 geometry and topology. It cannot satisfy geometry/triangle-count superiority.
 - Legacy compact-recovery rows often reduce triangles, but when compared to the stronger clean9000 baselines on bonsai/courtyard/room/counter, they lose RGB by large margins and often lose sparse geometry too.
 - ELA10 solves room and counter with the same fixed QEM50 sparse parent-rollback action: strong clean9000 checkpoint -> QEM compact topology -> topology-frozen recovery with train-only sparse parent rollback, checkpoint geometry anchoring, parent render rollback -> ELA-style appearance evidence.
-- ELA11 adds a different action for bonsai: train-split sparse occluder mining identifies front surfaces whose rendered depth is closer than COLMAP sparse depth, then unions those faces with a small low-evidence deletion base. This produces the first strict bonsai full-pass.
+- ELA11 adds a different action for bonsai and courtyard: train-split sparse occluder mining identifies front surfaces whose rendered depth is closer than COLMAP sparse depth, then unions those faces with a small low-evidence deletion base. This produces strict full-pass rows on high sparse-occluder scenes.
 - SOR10 is not a universal replacement. Its room/counter transfer rows reduce triangles but lose RGB and depth geometry, so the final claim must be a self-diagnostic policy that routes high sparse-occlusion scenes to SOR and low sparse-occlusion scenes to QEM parent-rollback.
-- The selected-scene claim is now substantially stronger but still not fully closed because courtyard lacks a clean9000 strict full-pass row in this audit. Cross-dataset parking remains a separate strict full-pass support row.
+- The selected-scene claim is now closed under this strict audit: each selected clean9000 scene has at least one row that improves RGB, sparse geometry, and triangle count against its own strongest clean baseline. Cross-dataset parking remains a separate strict full-pass support row.
 
 ## Artifacts
 
