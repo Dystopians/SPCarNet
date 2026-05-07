@@ -5497,3 +5497,20 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 - No RGB/geometry metrics are claimed yet for this checkpoint.  It still needs the official render, `metrics.py`, and sparse COLMAP geometry pass after the clean queue reaches a stable evaluation point.
 
 **Active queue**: the clean queue automatically advanced to `flowers`, W&B run `chq07xhy`.  The next expected long stall is again around the official restricted-Delaunay stage near iteration `11000`.
+
+---
+
+## 2026-05-07 - Flowers same-protocol clean30k checkpoint completed
+
+**Milestone**: the official-protocol clean MeshSplatting baseline for Mip-NeRF360 `flowers` completed on GPU `4` with W&B run `chq07xhy`.
+
+**Artifacts**:
+- split checkpoint for fixed-budget method validation: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/flowers/point_cloud/iteration_26000/point_cloud_state_dict.pt` (`937M`)
+- final clean checkpoint: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/flowers/point_cloud/iteration_30000/point_cloud_state_dict.pt` (`937M`)
+
+**Run notes**:
+- `flowers` took about `1:07:00` of training wall time.
+- The official restricted-Delaunay stage around iteration `11000` was CPU-bound and lasted roughly `16-17` minutes; GPU utilization dropped during that stage but the process remained healthy and later resumed normal training.
+- No RGB/geometry metrics are claimed yet for this checkpoint.  It still needs the official render, `metrics.py`, and sparse COLMAP geometry pass after the clean queue reaches a stable evaluation point.
+
+**Active queue**: the clean queue advanced to `garden`, W&B run `rssjxldx`, to rerun Garden only because the earlier calibrated Garden reproduction had a valid `30000` checkpoint but did not save the fixed-budget `26000` split checkpoint.
