@@ -5529,3 +5529,31 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 **Fixed global policy defaults**: `PRETRAIN_SPARSE_LAMBDA=0.0005`, `PRETRAIN_SPARSE_START=12000`, `PRETRAIN_SPARSE_FRACTION=0.5`, `RECOVERY_SPARSE_LAMBDA=0.001`, `LPIPS_LAMBDA=0.00025`, `PARENT_ROLLBACK_LAMBDA=0.5`.  These are not per-scene parameters.
 
 **Execution rule**: this method queue skips scenes whose official clean `30000` checkpoint is not present.  It should be run after the clean paper-protocol baseline is complete or at least scene-complete, then collected with the existing same-final-iteration method-vs-clean collector by overriding `--method_root` and `--policy_tag evidence_shaped_csef_atr`.
+
+---
+
+## 2026-05-07 - Garden clean30k rerun reached fixed-budget split
+
+**Milestone**: the full nine-scene official clean queue reached the `garden` fixed-budget split checkpoint in the rerun W&B run `rssjxldx`.
+
+**Artifact now present**:
+- split checkpoint for fixed-budget method validation: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/point_cloud/iteration_26000/point_cloud_state_dict.pt` (`942M`, timestamp `2026-05-07 05:29:37 PDT`)
+
+**Interpretation**: Garden now has the missing `26000` clean split needed for same-final-budget method tests.  This is still only baseline infrastructure.  No method-vs-baseline win is claimed from this checkpoint; the current Garden rerun is still continuing to `30000`, after which the clean queue should advance to `stump`.
+
+---
+
+## 2026-05-07 - Garden same-protocol clean30k rerun completed
+
+**Milestone**: the official-protocol clean MeshSplatting baseline rerun for Mip-NeRF360 `garden` completed with both fixed-budget split and final checkpoints.  W&B training run: `rssjxldx`.
+
+**Artifacts**:
+- split checkpoint: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/point_cloud/iteration_26000/point_cloud_state_dict.pt` (`942M`, timestamp `2026-05-07 05:29:37 PDT`)
+- final clean checkpoint: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/point_cloud/iteration_30000/point_cloud_state_dict.pt` (`942M`, timestamp `2026-05-07 05:37:55 PDT`)
+
+**Run notes**:
+- The rerun took about `1:00:41` of training progress time after launch.
+- W&B final training summary reported `11,568,056` triangles and `3,414,016` vertices.
+- This scene already had a calibrated clean30k metric match to the MeshSplatting paper from the earlier Garden run; however, this rerun is the one with the required `26000` split for fixed-budget method comparisons.
+
+**Active queue**: the clean queue advanced to `stump`, W&B run `nsdy9070`.
