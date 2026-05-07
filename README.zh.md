@@ -8,8 +8,9 @@
 <div align="center">
   <a href="docs/NeurIPSRepairPrompts.md">NeurIPS 路线图</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageF12_multiscene_package_report.md">多场景 package（F12）</a> &nbsp;|&nbsp;
-  <a href="docs/car_model/final_stageF47_F48_csef_family_all_metric_repair_report.md">CSEF 家族全指标（F47–F49）</a> &nbsp;|&nbsp;
-  <a href="docs/car_model/final_stageF82_policy_v5_robustness_report.md">固定自适应策略 v5（F82）</a>
+  <a href="docs/car_model/final_stageF82_policy_v5_robustness_report.md">固定自适应策略 v5（F82）</a> &nbsp;|&nbsp;
+  <a href="docs/car_model/final_stageSCE21_tail_risk_sentinel_report.md">CTR-SCE courtyard 突破（SCE21）</a> &nbsp;|&nbsp;
+  <a href="docs/car_model/final_stageSCE23_SCE24_certified_recovery_report.md">认证恢复（SCE23/24）</a>
 </div>
 
 <br>
@@ -20,7 +21,7 @@
 
 > **方法目标（一句话）**。现有 Mesh-Splatting / 3DGS 的剪枝方法问的是 *哪些图元可以被移除*；MeshSplatOpt 反过来问 *在保留视图渲染与稀疏几何反事实认证的前提下，哪个局部表面编辑能最大限度地降低场景证据债务*。同一套编辑微积分应同时支持删除（delete）、坍缩（collapse）、对齐（snap）、细分（split）、孔洞填充（fill）和外观恢复（appearance recovery）——每一次提交的编辑都必须通过渲染、稀疏深度、法向量、自由空间、拓扑等所有反事实证书；任一项不通过即自动回滚。
 
-> **当前证据（一句话）**。截至 2026-05-05，**validation-budget CSEF 家族 compact-recovery 协议**在 **5 / 5 个选定场景**上击败最强 clean-long baseline；后续 **F82 固定自适应策略 v5** 在剩余 4 个多场景验证场景上跨两个 seed 不经逐场景重调，全部击败同场景 clean-long baseline。F82 从 checkpoint 证据中自动选择压缩预算，达到 `8 / 8` 全指标胜出，压缩幅度覆盖 15.25 % 到 72.0 %。
+> **当前证据（一句话）**。截至 2026-05-06，**validation-budget CSEF 家族 compact-recovery 协议**在 **5 / 5 个选定场景**上击败最强 clean-long baseline；**F82 固定自适应策略 v5** 在 4 个多场景验证场景上跨两个 seed 不经逐场景重调，达到 `8 / 8` 全指标胜出，压缩幅度覆盖 15.25 % 到 72.0 %；在 F82 之上，**CTR-SCE 认证恢复线（SCE21 / SCE24）** 是首个在不变拓扑下、在每个独立指标上都超过 F82 的 courtyard 候选行；同一套 train-only Pareto 守门人在 bonsai 上正确执行 `accept_parent_noop`，把 "no-op-or-improve" 而不是 "always update" 作为论文的方法行为。
 
 方法骨架（CSEF + 可逆编辑微积分 + 反事实证书）和恢复 recipe 通过区分 *什么通过了所有 gate* 与 *什么真正改进了头条指标* 来保持诚实。F45 的 fixed-CSEF50 审计明确记录单一 prune 比例并不适用所有场景；公开的论文 claim 因此是 validation-selected CSEF 家族协议，而不是单一通用超参。
 
@@ -28,7 +29,7 @@
 
 ## 项目诚实状态
 
-R0 → R56（骨架 + parking 单场景线）以及 **F1 → F82（最终跨场景线）**。带有 `_FAIL` / `REJECTED` / `MIXED` 标记的阶段，是当前论文纪律的失败证据骨架。
+R0 → R56（骨架 + parking 单场景线）、**F1 → F82（最终跨场景线）**，以及 **SCE7 → SCE28（在 F82 之上的认证恢复线）**。带有 `_FAIL` / `REJECTED` / `MIXED` 标记的阶段，是当前论文纪律的失败证据骨架。
 
 ### 方法骨架（R0–R15）
 
@@ -125,6 +126,18 @@ R0 → R56（骨架 + parking 单场景线）以及 **F1 → F82（最终跨场�
 | F80 | 用 `train_seed=1` 复验 F79 | `SEED_MARGIN_FAIL` —— bonsai Depth MAE 仅差 +0.000481 |
 | **F81 / F82** | **固定全局自适应策略 v5，seed 1 与 seed 0** | **`FIXED_POLICY_V5_TWO_SEED_PASS`** —— 8 / 8 全指标击败 clean-long |
 
+### 在 F82 之上的认证恢复线（SCE7–SCE28）
+
+| 阶段 | 范围 | 决策 |
+|---|---|---|
+| SCE7 / SCE8 | 首个 SCE 策略 v1（稀疏深度 + 渲染-法向量 anchor）在 courtyard + bonsai 探针 | `SCE_POLICY_V1_RENDER_PASS_GEOMETRY_MIXED`（courtyard 部分通过；bonsai PSNR / SSIM / LPIPS 负迁移） |
+| SCE19 | train-only Pareto 策略守门人 | `POLICY_GUARD_PASS` —— bonsai 的 SCE8 候选现在正确返回 `accept_parent_noop` |
+| SCE20 | MAE-first 受控恢复 | `MAE_FIRST_GUARDED_PASS`（深度进一步收紧，渲染受保护） |
+| **SCE21** | **CTR-SCE：train-only 稀疏深度 cluster-CVaR 回滚 + 1 像素 envelope** | **`SCE21_COURTYARD_ALL_METRIC_PASS_VS_F82`** —— 不变拓扑下首个全指标超过 F82 的候选；bonsai 探针仍混合 |
+| SCE23 / SCE24 | 双证书恢复：CTR-SCE（几何）+ ATR（外观单边渲染回滚）+ train-only Pareto 守门 | `SCE24_CERTIFIED_POLICY_REJECTS_BONSAI_RECOVERY` —— 当 SSIM / LPIPS 会回退时，守门人对 bonsai 正确选择 parent |
+| SCE25 / SCE26 / SCE27 | 结构 ATR（DSSIM + Sobel 边缘）；clean9000 train teacher 蒸馏；LR 为零的纯外观 teacher | 全部拒绝 —— 外观瓶颈不是回滚强度问题；bonsai SSIM 仍回退 |
+| SCE28（运行中） | 从 clean 9000 重置 → CSEF 压缩 → 恢复（bonsai 公平 baseline 重置） | 受大 checkpoint 流式 I/O 限制；面级 `keep_unused_vertices` 压缩钩子已落地 |
+
 ---
 
 ## 当前真正的方法位置
@@ -133,6 +146,7 @@ R0 → R56（骨架 + parking 单场景线）以及 **F1 → F82（最终跨场�
 
 - **validation-budget CSEF 家族 compact-recovery 协议在 5 / 5 个选定场景上通过**。每个场景都有一行长程结果在独立 PSNR / SSIM / LPIPS / AbsRel / Depth MAE 上击败最强 clean-long 22k baseline，拓扑减少 40 – 70 %；稀疏法向量代理在 4 / 5 场景上改进（courtyard 持平于 +0.0085° —— 显式披露，未声称胜出）。各场景所选行：parking CSEF50 + 稀疏深度（F46）、bonsai CSEF50 + 稀疏深度 + LPIPS λ = 0.005（F49）、courtyard CSEF50 + 稀疏深度（F30）、room CSEF20 + 稀疏深度（F46）、counter CSEF20 + 稀疏深度（F46）—— prune 比例由同一 CSEF 选择器家族在每场景 validation-selected 决定。
 - **自适应 CSEF 策略已被两种形式验证**。F75 是 parking 最强单行结果：从 checkpoint 证据中读出 prune 比例（parking → 70 %），按 area / 局部冗余主导排序，把渲染证据仅作为风险 / 审计信号。F82 是固定多场景版本：同一个 policy、同一个恢复 recipe，在 bonsai、courtyard、room、counter 上跨两个 seed 不经逐场景重调全部胜出。
+- **CTR-SCE 认证恢复在 courtyard 上超过 F82，在其他场景上安全 no-op（SCE21 / SCE24）**。一套 train-only 稀疏深度 cluster-CVaR 回滚加 1 像素外观 envelope，产生了第一个在每个独立指标上都超过 F82 的 courtyard 候选行（PSNR +0.42 dB、SSIM +0.030、LPIPS −0.0068、AbsRel −0.0037、Depth MAE −0.0033、法向量 −0.88°）且不变拓扑。双证书策略（CTR-SCE 几何 + ATR 外观回滚 + train-only Pareto 守门人）**对 bonsai 正确返回 `accept_parent_noop`** —— 候选会回退 SSIM / LPIPS 时，论文的方法行为是 "no-op-or-improve" 而不是 "always update"。
 - **恢复阶段的稀疏 COLMAP 深度监督是主要贡献者**。已验证区间：λ ∈ [0.001, 0.005] 因场景而异；`mixed_low_error` 对应采样，每场景调整可信比例；几何稳住后启用 decay 窗口。
 - **严格拓扑冻结必须执行**。固定拓扑续训必须同时使用 `--freeze_topology_updates --skip_restricted_delaunay`；单独 `--skip_restricted_delaunay` 只跳过 Delaunay 刷新，标准 prune / densify 分支仍会继续运行。F27 / F35 / F36 / F18 / F24 在每个 final-package 场景上证明：去掉严格冻结即拓扑塌陷或漂移并丢失渲染。
 - **反事实 gate 按设计工作于不安全编辑拒绝**。F38（合成 no-gate / no-rollback）证明 gate 完美回滚所有不安全编辑；F39 / F41 / F42（parking 真实 gate-removed 在 500 / 2000 / 7000 步）证明 gate-on 回滚 gate-off 提交的同一 no-accept 候选，且在 7000 步上 gate-on 在渲染指标上胜出；F44 校准 gate 在 bonsai 上保留 gate、接受 3 个可恢复轮、拒绝 3 个后续轮，并以更小网格逼近 no-gate。
@@ -149,11 +163,13 @@ R0 → R56（骨架 + parking 单场景线）以及 **F1 → F82（最终跨场�
 - **编辑原语在 parking 全预算下并未改进头条指标**。R28 直接消融：在 7000 步 parking 上，匹配的 baseline + 稀疏深度（无编辑）持平甚至击败 grid-fill + 稀疏深度。Snap / fill 编辑 gate 安全且可训练，但单独并不带来质量提升。
 - **超低拓扑 R44 路径在渲染上失败**。clean 22k 给到 PSNR 18.48 / SSIM 0.635 / LPIPS 0.347；R44.01 只有 17.17 / 0.549 / 0.442。R44.01 仅作为极小拓扑 / 法向量代理 Pareto 点；R45 / R46 从 R44 出发的 teacher 蒸馏未能修复失败。
 - **较重的 LPIPS 恢复损失被拒绝**。R51（λ = 0.02）/ R52（λ = 0.05）叠加在 R48；F71 / F72 / F73 自适应行的较重 LPIPS 都让深度指标回退；只有极小 λ ∈ {0.0001, 0.00025} 区间（F74 / F75）保留深度胜出。
+- **bonsai 还无法仅通过外观侧调整在 F82 之上提升**。SCE25（结构 ATR：DSSIM + Sobel 边缘）、SCE26（clean9000 train teacher 蒸馏）、SCE27（LR 为零的纯外观 teacher）都得到混合 delta：通常微小 PSNR / 深度增益，代价是 SSIM 回退。诊断结论是 F82 bonsai parent 处在狭窄的 tradeoff 上，下一步必须是 clean-best baseline 重置（SCE28 从 clean 9000 起步），而不是更多恢复损失调参。
+- **从 clean 9000 的 baseline 重置（SCE28）暂未端到端可跑**。clean 9000 bonsai checkpoint（`2,487,474` 三角形，渲染远强于 clean 22000）暴露出现有 CSEF 压缩路径的大 checkpoint 流式 I/O 瓶颈。面级 `keep_unused_vertices` 压缩钩子已落地，但还需要缓存 / 流式低证据 selector 才能让 SCE28 跑出公平的 baseline-reset 对比。
 - **面积驱动 snap 选择器失败**（R17 area portfolio、R17.06 风险过滤）—— gate delta 均在数值噪声级别，并在等预算续训中输给未编辑对照。**残差 snap / patch snap 效应微小**（R18 / R19 / R20 / R21）。**边界 `FILL_PATCH` 中等恢复失败**（R22 扇形；R26 grid；R28 全预算）。
 - **编辑后不冻结致密化不是恢复策略** —— R25 把 parking 长到 5.89M 三角形仍只有 PSNR 12.03。
 - **替代稀疏深度损失空间（`relative` / `log` / `inverse`）被拒绝**：parking 全预算下，原始度量深度 Smooth-L1 仍是已验证的形式。
 
-R0–R56 + F1–F82 的 "什么有效 / 什么无效" 简版总结见 [`docs/car_model/SPCarNet_research_log.md`](docs/car_model/SPCarNet_research_log.md)。
+R0–R56 + F1–F82 + SCE7–SCE28 的 "什么有效 / 什么无效" 简版总结见 [`docs/car_model/SPCarNet_research_log.md`](docs/car_model/SPCarNet_research_log.md)。
 
 ---
 
@@ -391,6 +407,48 @@ python scripts/car_model/meshsplatopt_run_teacher_recovery.py \
 
 courtyard 已验证区间为 fraction `0.625`、λ `0.002`、`7k → 20k`、decay 从 7k 起；bonsai 已验证区间为 fraction `0.50`、λ `0.002`、`2k → 7k`（更长续训尚未验证）。
 
+### Recipe D —— 在 F82 之上的 CTR-SCE 认证恢复（SCE21 / SCE24，courtyard 突破 + 安全 no-op）
+
+把这一层叠加在 F82（或任何拓扑冻结）父 checkpoint 之上，目标是严格不回退升级。recipe 把稀疏深度尾部风险证书（CTR-SCE）与单边外观渲染回滚（ATR）耦合，再用 train-only Pareto 守门人 *仅当* 每个被保护的指标在 train 上都不回退时才提交，否则原样返回 parent。
+
+```bash
+# 预先渲染 parent 视图（作为单边外观回滚目标）。
+python scripts/car_model/evaluate_render_split_metrics.py \
+    --model_path <f82_parent>/recovery_model --iteration 26000 --eval
+
+# 跑 CTR-SCE + ATR 恢复（拓扑冻结）。所有旋钮都是 opt-in；
+# 下面的默认值是 SCE21 courtyard / SCE24 bonsai 的合约。
+python scripts/car_model/meshsplatopt_run_sce_policy_recovery.py \
+    --model_path <f82_parent>/recovery_model \
+    --output_dir outputs/carnet/meshsplatopt/<run_name> \
+    --load_iteration 26000 --iterations 200 \
+    --train_extra_args "--freeze_topology_updates --skip_restricted_delaunay \
+       --enable_sparse_colmap_depth_loss \
+       --lambda_sparse_colmap_depth 0.003 \
+       --sparse_colmap_depth_aggregation cluster_cvar \
+       --sparse_colmap_depth_cvar_fraction 0.2 \
+       --sparse_colmap_depth_pixel_radius 1 \
+       --sparse_colmap_depth_patch_reduce max_violation \
+       --enable_parent_render_rollback_loss \
+       --parent_render_rollback_dir <f82_parent>/recovery_model/train/ours_26000/renders \
+       --lambda_parent_render_rollback 1.0 \
+       --parent_render_rollback_aggregation cvar \
+       --parent_render_rollback_cvar_fraction 0.1 \
+       --parent_render_rollback_residual_space l1 \
+       --lambda_lpips_loss 0.0"
+
+# Train-only Pareto 守门人：仅当 PSNR / SSIM / LPIPS 在 train 上都不回退时
+# 才接受候选 checkpoint，否则交还 parent。
+python scripts/car_model/select_certified_recovery.py \
+    --parent_model  <f82_parent>/recovery_model \
+    --candidate_model outputs/carnet/meshsplatopt/<run_name>/recovery_model \
+    --split train \
+    --metrics PSNR,SSIM,LPIPS \
+    --output outputs/carnet/meshsplatopt/<run_name>/certified_selection_train_guard.json
+```
+
+已验证 SCE21 courtyard 合约：仅 regressed 的 train sentinel 缓存、`cvar_fraction=0.2`、`pixel_radius=1`、`patch_reduce=max_violation`、`28600 → 28780`，再用 all-sentinel 缓存与 `cvar_fraction=0.1` 续训 `28780 → 28880`。在不变拓扑下击败 F82：PSNR +0.417 dB / SSIM +0.030 / LPIPS −0.0068 / AbsRel −0.0037 / Depth MAE −0.0033 / 法向量 −0.88°。在 bonsai 上（SCE24）同一守门人正确选择 `parent`，因为候选会回退 SSIM / LPIPS。
+
 ### 已被拒绝的方向（无新证据请勿重试）
 
 - **fixed CSEF50 跨场景普适（F45）** —— bonsai / room 边界 / 混合，counter 失败；方法必须按场景 validation-budget。
@@ -405,6 +463,7 @@ courtyard 已验证区间为 fraction `0.625`、λ `0.002`、`7k → 20k`、deca
 - **编辑原语作为全预算赢家** —— R28 grid-fill 拒绝；R22 / R26 fan / grid `FILL_PATCH` 在全预算下输给匹配 baseline+稀疏。R17 area / R18 / R19 / R20 / R21 snap 变体效应均过小。
 - **替代稀疏深度损失空间**（R29 relative / log / inverse）—— 原始度量深度 Smooth-L1 胜出。
 - **编辑后不冻结致密化**（R25）—— parking 涨到 5.89M 三角形仍输渲染。
+- **在 bonsai 上强行 SCE 恢复** —— SCE8 v1、SCE25–SCE27 的结构 ATR / clean9000 train teacher / LR 为零的纯外观 teacher 都把 F82-bonsai 的 PSNR 推高 < 0.005 dB，代价是 SSIM / LPIPS 回退。认证守门人正确返回 `accept_parent_noop`，请勿绕过。修复方向是 clean-best 9000 重置（SCE28），不是更多恢复损失调参。
 
 ### 可复现的论文级表格
 

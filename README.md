@@ -8,8 +8,9 @@
 <div align="center">
   <a href="docs/NeurIPSRepairPrompts.md">NeurIPS roadmap</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageF12_multiscene_package_report.md">Multi-scene package (F12)</a> &nbsp;|&nbsp;
-  <a href="docs/car_model/final_stageF47_F48_csef_family_all_metric_repair_report.md">CSEF-family all-metric (F47–F49)</a> &nbsp;|&nbsp;
-  <a href="docs/car_model/final_stageF82_policy_v5_robustness_report.md">Fixed adaptive policy v5 (F82)</a>
+  <a href="docs/car_model/final_stageF82_policy_v5_robustness_report.md">Fixed adaptive policy v5 (F82)</a> &nbsp;|&nbsp;
+  <a href="docs/car_model/final_stageSCE21_tail_risk_sentinel_report.md">CTR-SCE courtyard breakthrough (SCE21)</a> &nbsp;|&nbsp;
+  <a href="docs/car_model/final_stageSCE23_SCE24_certified_recovery_report.md">Certified recovery (SCE23/24)</a>
 </div>
 
 <br>
@@ -20,7 +21,7 @@
 
 > **In one sentence (intent).** Existing Mesh-Splatting / 3DGS pruning methods ask *which primitives can be removed*; MeshSplatOpt asks *which local surface edit best reduces scene-evidence debt while remaining counterfactually certified by held-out rendering and sparse geometry.* The same edit calculus is meant to handle deletion, collapse, snapping, splitting, hole filling, and appearance recovery — every committed edit must clear render, sparse-depth, normal, free-space, and topology certificates, otherwise it rolls back.
 
-> **In one sentence (current evidence).** As of 2026-05-05, the **validation-budget CSEF-family compact-recovery protocol** beats the strongest clean-long baseline on **5 / 5 selected scenes** (`parking_phone_tiny`, `bonsai`, `courtyard`, `room`, `counter`), and the later **F82 fixed adaptive policy v5** beats the same clean-long baselines on **4 / 4 remaining multiscene validation scenes across two seeds** without per-scene retuning. F82 chooses prune budgets from checkpoint evidence and reaches `8 / 8` all-metric wins at reductions from 15.25 % to 72.0 %.
+> **In one sentence (current evidence).** As of 2026-05-06, the **validation-budget CSEF-family compact-recovery protocol** beats the strongest clean-long baseline on **5 / 5 selected scenes** (`parking_phone_tiny`, `bonsai`, `courtyard`, `room`, `counter`); the later **F82 fixed adaptive policy v5** beats the same clean-long baselines on **8 / 8 (4 scenes × 2 seeds)** without per-scene retuning, choosing prune budgets from checkpoint evidence at reductions of 15.25 – 72 %; and on top of F82 the **CTR-SCE certified-recovery line (SCE21 / SCE24)** is the first courtyard candidate to beat F82 on every tracked independent metric under unchanged topology, while a train-only Pareto guard correctly **no-ops on bonsai** when recovery evidence does not certify all-metric improvement — making "no-op-or-improve" rather than "always-update" the published method behaviour.
 
 The method scaffold (CSEF + reversible edit calculus + counterfactual certificates) and the recovery recipe are kept honest by separating *what passed every gate* from *what actually improved the headline metrics*. The fixed-CSEF50 audit (F45) intentionally documents that one prune ratio does not work for every scene; the published claim is therefore a validation-selected CSEF-family protocol, not a single universal hyperparameter.
 
@@ -28,7 +29,7 @@ The method scaffold (CSEF + reversible edit calculus + counterfactual certificat
 
 ## Honest project status
 
-R0 → R56 (scaffold + parking single-scene line) and **F1 → F82 (final cross-scene line)**. Stages with `_FAIL`, `REJECTED`, or `MIXED` decisions are the failure-evidence backbone of the current paper-discipline story.
+R0 → R56 (scaffold + parking single-scene line), **F1 → F82 (final cross-scene line)**, and **SCE7 → SCE28 (certified-recovery line on top of F82)**. Stages with `_FAIL`, `REJECTED`, or `MIXED` decisions are the failure-evidence backbone of the current paper-discipline story.
 
 ### Method scaffold (R0–R15)
 
@@ -125,6 +126,18 @@ The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evide
 | F80 | F79 repeated with `train_seed=1` | `SEED_MARGIN_FAIL` — bonsai Depth MAE missed by +0.000481 |
 | **F81 / F82** | **fixed global adaptive policy v5, seeds 1 and 0** | **`FIXED_POLICY_V5_TWO_SEED_PASS`** — 8 / 8 all-metric clean-long wins |
 
+### Certified-recovery line on top of F82 (SCE7–SCE28)
+
+| stage | scope | decision |
+|---|---|---|
+| SCE7 / SCE8 | first SCE policy v1 (sparse-depth + render-normal anchor) on courtyard + bonsai probe | `SCE_POLICY_V1_RENDER_PASS_GEOMETRY_MIXED` (courtyard partial pass; bonsai negative transfer on PSNR / SSIM / LPIPS) |
+| SCE19 | train-only Pareto policy guard | `POLICY_GUARD_PASS` — bonsai SCE8 candidate now correctly returns `accept_parent_noop` |
+| SCE20 | MAE-first guarded recovery | `MAE_FIRST_GUARDED_PASS` (further depth tightening, render-protected) |
+| **SCE21** | **CTR-SCE: train-only sparse-depth cluster-CVaR rollback + 1-px envelope** | **`SCE21_COURTYARD_ALL_METRIC_PASS_VS_F82`** — first all-metric improvement over F82 with unchanged topology; bonsai probe still mixed |
+| SCE23 / SCE24 | dual-certificate recovery: CTR-SCE (geometry) + ATR (appearance one-sided render rollback) + train-only Pareto guard | `SCE24_CERTIFIED_POLICY_REJECTS_BONSAI_RECOVERY` — guard correctly no-ops bonsai (parent kept) when SSIM / LPIPS would regress |
+| SCE25 / SCE26 / SCE27 | structural ATR (DSSIM + Sobel edges); clean9000 train-teacher distillation; appearance-only LR-zero teacher | all rejected — appearance bottleneck is not a rollback-strength problem; bonsai SSIM still regresses |
+| SCE28 (in flight) | clean-best reset from clean 9000 → CSEF compaction → recovery (proper baseline reset for bonsai) | blocked on large-checkpoint streaming I/O; face-only `keep_unused_vertices` compaction hook landed |
+
 ---
 
 ## Where the method actually stands today
@@ -133,6 +146,7 @@ The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evide
 
 - **The validation-budget CSEF-family compact-recovery protocol now passes on 5 / 5 selected scenes.** Each scene has a long-run row that beats the strongest clean-long 22k baseline on PSNR, SSIM, LPIPS, AbsRel, and Depth MAE, with topology reductions of 40 – 70 %. Sparse-normal proxy improves on 4 / 5 (courtyard ties at +0.0085° — explicitly disclosed, not claimed as a win). Per-scene chosen rows: parking CSEF50 + sparse-depth (F46), bonsai CSEF50 + sparse-depth + LPIPS λ = 0.005 (F49), courtyard CSEF50 + sparse-depth (F30), room CSEF20 + sparse-depth (F46), counter CSEF20 + sparse-depth (F46) — the prune ratio is validation-selected per scene from the same CSEF selector family.
 - **Adaptive CSEF policy is validated in two forms.** F75 is the strongest single parking row: it reads checkpoint evidence to choose the prune fraction (parking → 70 %), ranks compaction candidates by area / local redundancy primarily, and uses render-only evidence as a risk / audit signal. F82 is the fixed multiscene version: one policy and one recovery recipe win on bonsai, courtyard, room, and counter across two seeds without per-scene retuning.
+- **CTR-SCE certified recovery improves over F82 on courtyard while no-opping safely elsewhere (SCE21 / SCE24).** A train-only sparse-depth cluster-CVaR rollback with a 1-px appearance envelope produces the first courtyard candidate that beats F82 on every tracked independent metric (PSNR +0.42 dB, SSIM +0.030, LPIPS −0.0068, AbsRel −0.0037, Depth MAE −0.0033, normal −0.88°) under unchanged topology. The dual-certificate policy (CTR-SCE geometry + ATR appearance rollback + train-only Pareto guard) **correctly returns `accept_parent_noop` on bonsai**, where the candidate would regress SSIM / LPIPS — making "no-op-or-improve" the published behaviour rather than "always update".
 - **Sparse-COLMAP-depth supervision during recovery is the dominant contributor.** Validated regime: λ ∈ [0.001, 0.005] depending on scene, `mixed_low_error` correspondence sampling with a per-scene trusted fraction, decay window after the geometry has anchored.
 - **Strict topology-freeze is required.** Use `--freeze_topology_updates --skip_restricted_delaunay` together for fixed-topology continuation. `--skip_restricted_delaunay` alone skips only the Delaunay refresh; it does not disable the standard prune / densify branch. F27 / F35 / F36 / F18 / F24 confirm on every final-package scene that omitting strict freeze collapses or drifts topology and loses render.
 - **Counterfactual gating works as designed for unsafe-edit rejection.** F38 (synthetic no-gate / no-rollback) shows the gate exactly restores all unsafe edits; F39 / F41 / F42 (parking real gate-removed at 500 / 2000 / 7000 iter) confirm gate-on rolls back the same no-accept candidate that gate-off commits, and gate-on wins render at 7000 iter. F44 calibrated-gate bonsai repair preserves gating, accepts three recoverable rounds, rejects three later rounds, and lands close to no-gate with a smaller mesh.
@@ -149,11 +163,13 @@ The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evide
 - **Edit primitives do not improve headline metrics at full budget on parking.** R28 ablates this directly: matched baseline + sparse-depth (no edit) ties or beats grid-fill + sparse-depth at 7000 iter on parking PSNR. The fill / snap edits are gate-safe and trainable, not quality-improving on their own.
 - **The ultra-low-topology R44 path loses on render.** Clean 22k reaches PSNR 18.48 / SSIM 0.635 / LPIPS 0.347; R44.01 reaches 17.17 / 0.549 / 0.442. R44.01 remains useful only as a very-small-topology / normal-proxy point. Teacher distillation from R44 (R45 / R46) does not fix the failure.
 - **Heavy LPIPS recovery loss is rejected.** R51 (λ = 0.02) / R52 (λ = 0.05) on top of R48, and F71 / F72 / F73 LPIPS-heavy adaptive runs, all worsen depth metrics; only the tiny λ ∈ {0.0001, 0.00025} regime (F74 / F75) keeps the depth wins.
+- **Bonsai is not yet improvable over F82 by appearance-side tweaks alone.** SCE25 (structural ATR with DSSIM + Sobel edges), SCE26 (clean9000 train-teacher distillation), and SCE27 (LR-zero appearance-only teacher) all produce mixed deltas — typically a tiny PSNR / depth gain at the cost of SSIM regression. The diagnosis is that the F82 bonsai parent lies on a narrow tradeoff and any further improvement needs a clean-best baseline reset (SCE28 starts from clean 9000), not more recovery-loss tuning.
+- **Clean-best reset from clean 9000 is not yet runnable end-to-end (SCE28).** The clean 9000 bonsai checkpoint (`2,487,474` triangles, much stronger render than clean 22000) exposes a large-checkpoint streaming I/O bottleneck in the existing CSEF compaction path. A face-only `keep_unused_vertices` compaction hook landed, but a cached / streaming low-evidence selector is still needed before SCE28 can produce a fair baseline-reset comparison.
 - **Area-seeded snap selectors fail** (R17 area portfolio, R17.06 risk-filtered) — numerical-noise gate deltas and lose equal-budget continuation. **Residual snap / patch snap are tiny** (R18 / R19 / R20 / R21). **Boundary `FILL_PATCH` fails medium recovery** (R22 fan; R26 grid; R28 full).
 - **Unbounded post-edit densification is not a recovery strategy** — R25 grew parking to 5.89M tri and still ended at PSNR 12.03.
 - **Alternative sparse-depth loss spaces (`relative`, `log`, `inverse`) are rejected** for parking full budget — the original metric-depth Smooth-L1 form remains the validated variant.
 
-A short summary of the "what does and does not work" carved out of R0–R56 + F1–F82 lives in [`docs/car_model/SPCarNet_research_log.md`](docs/car_model/SPCarNet_research_log.md).
+A short summary of the "what does and does not work" carved out of R0–R56 + F1–F82 + SCE7–SCE28 lives in [`docs/car_model/SPCarNet_research_log.md`](docs/car_model/SPCarNet_research_log.md).
 
 ---
 
@@ -391,6 +407,48 @@ python scripts/car_model/meshsplatopt_run_teacher_recovery.py \
 
 For courtyard the validated regime is fraction `0.625`, λ `0.002`, `7k → 20k` with decay starting at 7k. For bonsai the validated regime is fraction `0.50`, λ `0.002`, `2k → 7k` (longer continuation has not yet been validated).
 
+### Recipe D — CTR-SCE certified recovery on top of F82 (SCE21 / SCE24, courtyard breakthrough + safe no-op)
+
+Layer this on top of an F82 (or any frozen-topology) parent when you want a strict no-regression upgrade. The recipe couples a sparse-depth tail-risk certificate (CTR-SCE) with an appearance one-sided render rollback (ATR), then uses a train-only Pareto guard to commit *only* if every protected metric is non-regressing on train; otherwise it returns the parent unchanged.
+
+```bash
+# Pre-compute parent renders (used as a one-sided appearance rollback target).
+python scripts/car_model/evaluate_render_split_metrics.py \
+    --model_path <f82_parent>/recovery_model --iteration 26000 --eval
+
+# Run CTR-SCE + ATR recovery (frozen topology). All knobs are opt-in;
+# the defaults below are the SCE21 courtyard / SCE24 bonsai contract.
+python scripts/car_model/meshsplatopt_run_sce_policy_recovery.py \
+    --model_path <f82_parent>/recovery_model \
+    --output_dir outputs/carnet/meshsplatopt/<run_name> \
+    --load_iteration 26000 --iterations 200 \
+    --train_extra_args "--freeze_topology_updates --skip_restricted_delaunay \
+       --enable_sparse_colmap_depth_loss \
+       --lambda_sparse_colmap_depth 0.003 \
+       --sparse_colmap_depth_aggregation cluster_cvar \
+       --sparse_colmap_depth_cvar_fraction 0.2 \
+       --sparse_colmap_depth_pixel_radius 1 \
+       --sparse_colmap_depth_patch_reduce max_violation \
+       --enable_parent_render_rollback_loss \
+       --parent_render_rollback_dir <f82_parent>/recovery_model/train/ours_26000/renders \
+       --lambda_parent_render_rollback 1.0 \
+       --parent_render_rollback_aggregation cvar \
+       --parent_render_rollback_cvar_fraction 0.1 \
+       --parent_render_rollback_residual_space l1 \
+       --lambda_lpips_loss 0.0"
+
+# Train-only Pareto guard: accept the recovered checkpoint only if PSNR / SSIM /
+# LPIPS do not regress on train; otherwise hand back the parent.
+python scripts/car_model/select_certified_recovery.py \
+    --parent_model  <f82_parent>/recovery_model \
+    --candidate_model outputs/carnet/meshsplatopt/<run_name>/recovery_model \
+    --split train \
+    --metrics PSNR,SSIM,LPIPS \
+    --output outputs/carnet/meshsplatopt/<run_name>/certified_selection_train_guard.json
+```
+
+Validated SCE21 courtyard contract: regressed-only train sentinel cache, `cvar_fraction=0.2`, `pixel_radius=1`, `patch_reduce=max_violation`, `28600 → 28780`, then a continuation `28780 → 28880` with the all-sentinel cache and `cvar_fraction=0.1`. Beats F82 by PSNR +0.417 dB / SSIM +0.030 / LPIPS −0.0068 / AbsRel −0.0037 / Depth MAE −0.0033 / normal −0.88° at unchanged topology. On bonsai (SCE24) the same guard correctly selects `parent` because the candidate would regress SSIM / LPIPS.
+
 ### Rejected directions (do not retry without new evidence)
 
 - **Fixed CSEF50 universally (F45)** — borderline / mixed on bonsai / room and a fail on counter; method must be validation-budget per scene.
@@ -405,6 +463,7 @@ For courtyard the validated regime is fraction `0.625`, λ `0.002`, `7k → 20k`
 - **Edit primitives as full-budget winners** — R28 grid-fill rejected; R22 / R26 fan / grid `FILL_PATCH` lose at full budget vs matched baseline+sparse. R17 area / R18 / R19 / R20 / R21 snap variants are too small.
 - **Alternative sparse-depth loss spaces** (R29 relative / log / inverse) — original metric-depth Smooth-L1 wins.
 - **Unfrozen post-edit densification** (R25) — grew parking to 5.89 M triangles and still lost render.
+- **Forcing SCE recovery on bonsai** — SCE8 v1, SCE25–SCE27 structural ATR / clean9000 train-teacher / LR-zero appearance teacher all push F82-bonsai PSNR up by < 0.005 dB at the cost of SSIM / LPIPS regression. The certified guard correctly returns `accept_parent_noop`; do not bypass it. The repair direction is a clean-best 9000 reset (SCE28), not more recovery-loss tuning.
 
 ### Reproducible paper-facing tables
 
