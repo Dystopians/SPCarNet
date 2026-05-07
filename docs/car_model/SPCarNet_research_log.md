@@ -5514,3 +5514,18 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 - No RGB/geometry metrics are claimed yet for this checkpoint.  It still needs the official render, `metrics.py`, and sparse COLMAP geometry pass after the clean queue reaches a stable evaluation point.
 
 **Active queue**: the clean queue advanced to `garden`, W&B run `rssjxldx`, to rerun Garden only because the earlier calibrated Garden reproduction had a valid `30000` checkpoint but did not save the fixed-budget `26000` split checkpoint.
+
+---
+
+## 2026-05-07 - Added evidence-shaped fixed-budget method path
+
+**Problem diagnosed**: compacting a vanilla clean `26000` checkpoint and recovering to `30000` is a conservative compression test, but it may not be a strong enough method to beat the official clean `30000` baseline on RGB quality.  It mostly asks whether we can preserve clean quality while reducing topology.
+
+**New fixed method path**: added `scripts/car_model/run_paper_m360_evidence_shaped_fixedbudget_available7.sh`.  This path keeps the reviewer-facing final comparison as method `30000` vs clean `30000`, but makes the method itself stronger:
+- train an evidence-shaped base model from scratch to `26000` with a fixed low-weight COLMAP sparse-depth loss starting at iteration `12000`;
+- compact the method's own `26000` checkpoint with the same CSEF adaptive policy;
+- recover from `26000 -> 30000` with sparse depth, tiny LPIPS, and ATR parent-render rollback from the method's own `26000` train renders.
+
+**Fixed global policy defaults**: `PRETRAIN_SPARSE_LAMBDA=0.0005`, `PRETRAIN_SPARSE_START=12000`, `PRETRAIN_SPARSE_FRACTION=0.5`, `RECOVERY_SPARSE_LAMBDA=0.001`, `LPIPS_LAMBDA=0.00025`, `PARENT_ROLLBACK_LAMBDA=0.5`.  These are not per-scene parameters.
+
+**Execution rule**: this method queue skips scenes whose official clean `30000` checkpoint is not present.  It should be run after the clean paper-protocol baseline is complete or at least scene-complete, then collected with the existing same-final-iteration method-vs-clean collector by overriding `--method_root` and `--policy_tag evidence_shaped_csef_atr`.
