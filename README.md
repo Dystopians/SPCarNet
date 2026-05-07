@@ -10,7 +10,7 @@
   <a href="docs/car_model/final_stageF12_multiscene_package_report.md">Multi-scene package (F12)</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageF82_policy_v5_robustness_report.md">Fixed adaptive policy v5 (F82)</a> &nbsp;|&nbsp;
   <a href="docs/car_model/stageELA12_fair_baseline_audit_report.md">Fair baseline audit (ELA12)</a> &nbsp;|&nbsp;
-  <a href="docs/car_model/stageOUT1_parking_outdoor_visual_repair_report.md">Parking outdoor repair (OUT1)</a> &nbsp;|&nbsp;
+  <a href="docs/car_model/stageOUT2_parking_local_parentgate_report.md">Parking outdoor repair (OUT2)</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageSCE21_tail_risk_sentinel_report.md">CTR-SCE courtyard breakthrough (SCE21)</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageSCE23_SCE24_certified_recovery_report.md">Certified recovery (SCE23/24)</a>
 </div>
@@ -23,7 +23,7 @@
 
 > **In one sentence (intent).** Existing Mesh-Splatting / 3DGS pruning methods ask *which primitives can be removed*; MeshSplatOpt asks *which local surface edit best reduces scene-evidence debt while remaining counterfactually certified by held-out rendering and sparse geometry.* The same edit calculus is meant to handle deletion, collapse, snapping, splitting, hole filling, and appearance recovery — every committed edit must clear render, sparse-depth, normal, free-space, and topology certificates, otherwise it rolls back.
 
-> **In one sentence (current evidence).** As of 2026-05-06, the **ELA12 fair baseline audit** selects the clean Mesh Splatting baseline checkpoint using training renders only (`PSNR + 20 * SSIM - 20 * LPIPS`) and then reports held-out test metrics; under that contract MeshSplatOpt/SPCarNet is a strict full-pass on **5 / 5 current method-artifact scenes** (`parking_phone_tiny`, `bonsai`, `courtyard`, `room`, `counter`) across PSNR, SSIM, LPIPS, sparse AbsRel, sparse Depth MAE, sparse normal angle, and triangle count, with 10.25 – 70.00 % triangle reduction and **165 / 165** held-out views passing all RGB metrics. The **OUT1 train-calibrated parent-gated ELA** now fixes the parking outdoor visual tail; the earlier **F82 fixed adaptive policy v5** remains the no-per-scene-retuning robustness line, and **CTR-SCE certified recovery (SCE21 / SCE24)** remains the no-op-or-improve recovery layer on top.
+> **In one sentence (current evidence).** As of 2026-05-06, the **ELA12 fair baseline audit** selects the clean Mesh Splatting baseline checkpoint using training renders only (`PSNR + 20 * SSIM - 20 * LPIPS`) and then reports held-out test metrics; under that contract MeshSplatOpt/SPCarNet is a strict full-pass on **5 / 5 current method-artifact scenes** (`parking_phone_tiny`, `bonsai`, `courtyard`, `room`, `counter`) across PSNR, SSIM, LPIPS, sparse AbsRel, sparse Depth MAE, sparse normal angle, and triangle count, with 10.25 – 70.00 % triangle reduction and **165 / 165** held-out views passing all RGB metrics. The **OUT2 train-p15 local parent-gated ELA** now fixes the parking outdoor visual tail; the earlier **F82 fixed adaptive policy v5** remains the no-per-scene-retuning robustness line, and **CTR-SCE certified recovery (SCE21 / SCE24)** remains the no-op-or-improve recovery layer on top.
 
 The method scaffold (CSEF + reversible edit calculus + counterfactual certificates) and the recovery recipe are kept honest by separating *what passed every gate* from *what actually improved the headline metrics*. The fixed-CSEF50 audit (F45) intentionally documents that one prune ratio does not work for every scene; the published claim is therefore a validation-selected CSEF-family protocol, not a single universal hyperparameter.
 
@@ -121,7 +121,7 @@ The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evide
 | F69 | adaptive + sparse-depth (no LPIPS) | beats R53; misses F7 LPIPS by 0.000063 |
 | F71 / F72 / F73 | adaptive + sparse + heavier LPIPS | `LPIPS_HEAVY_REJECTED` — depth regresses |
 | F74 | adaptive + sparse + LPIPS λ = 0.0001 | `CONSERVATIVE_ALL_METRIC_F7_WIN` |
-| **F75** | **adaptive + sparse + LPIPS λ = 0.00025 (parking compact base)** | **`ACCEPTED_FOR_PARKING_COMPACT_BASE`** — supersedes R53.01 / F7 on every tracked compact-checkpoint metric; OUT1 supersedes it for parking RGB render |
+| **F75** | **adaptive + sparse + LPIPS λ = 0.00025 (parking compact base)** | **`ACCEPTED_FOR_PARKING_COMPACT_BASE`** — supersedes R53.01 / F7 on every tracked compact-checkpoint metric; OUT2 supersedes it for parking RGB render |
 | F76 | fixed F75-style policy multi-scene replication | `FAILED_TRANSFER` — over-aggressive small-scene budgets exposed the weakness |
 | F77 / F78 | global adaptive policy repairs | `PARTIAL_PASS` — each repaired one weakness but left one mixed metric |
 | **F79** | **fixed global adaptive policy v4 on bonsai / courtyard / room / counter** | **`FIXED_POLICY_MULTISCENE_PASS`** — 4 / 4 all-metric clean-long wins without per-scene retuning |
@@ -140,7 +140,7 @@ The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evide
 | SCE25 / SCE26 / SCE27 | structural ATR (DSSIM + Sobel edges); clean9000 train-teacher distillation; appearance-only LR-zero teacher | all rejected — appearance bottleneck is not a rollback-strength problem; bonsai SSIM still regresses |
 | SCE28 (in flight) | clean-best reset from clean 9000 → CSEF compaction → recovery (proper baseline reset for bonsai) | blocked on large-checkpoint streaming I/O; face-only `keep_unused_vertices` compaction hook landed |
 
-### Strict fair-baseline closure (ELA7–ELA12 + OUT1)
+### Strict fair-baseline closure (ELA7–ELA12 + OUT2)
 
 | stage | scope | decision |
 |---|---|---|
@@ -150,6 +150,7 @@ The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evide
 | ELA11 | routed sparse-occluder / QEM policy on selected scenes | `STRICT_MULTIAXIS_SELECTED_SCENES_FULL_PASS` |
 | **ELA12** | train-only clean checkpoint selection, held-out full audit, and qualitative gallery | **`FAIR_TRAIN_SELECTED_BASELINE_AUDIT_READY`** — 5 / 5 strict full-pass vs the train-selected clean Mesh Splatting baseline |
 | **OUT1** | parking outdoor ELA with train-calibrated parent-consistency gate | **`PARKING_VISUAL_TAIL_REPAIRED`** — parking improves from 50 / 54 to 54 / 54 per-view RGB full-pass vs clean30000 |
+| **OUT2** | parking outdoor ELA with train-p15 local parent-consistency gate | **`PARKING_LOCAL_VISUAL_TAIL_REPAIRED`** — improves OUT1 while preserving 54 / 54 per-view RGB full-pass vs clean30000 |
 
 ---
 
@@ -159,7 +160,7 @@ The **R44.01 vs clean 22k** comparison is the load-bearing parking failure evide
 
 - **ELA12 is the current fair comparison contract against pure Mesh Splatting.** For each scene, the clean baseline checkpoint is selected from available clean Mesh Splatting candidates by training renders only, using `PSNR + 20 * SSIM - 20 * LPIPS`. The final table then evaluates held-out test RGB, sparse AbsRel, sparse Depth MAE, sparse normal angle, and topology. Selected baselines are clean9000 for `bonsai`, `courtyard`, `room`, and `counter`, and clean30000 for `parking_phone_tiny`; the method is a strict full-pass on 5 / 5 scenes.
 - **The validation-budget CSEF-family compact-recovery protocol now passes on 5 / 5 selected scenes.** Each scene has a long-run row that beats the strongest clean-long 22k baseline on PSNR, SSIM, LPIPS, AbsRel, and Depth MAE, with topology reductions of 40 – 70 %. Sparse-normal proxy improves on 4 / 5 (courtyard ties at +0.0085° — explicitly disclosed, not claimed as a win). Per-scene chosen rows: parking CSEF50 + sparse-depth (F46), bonsai CSEF50 + sparse-depth + LPIPS λ = 0.005 (F49), courtyard CSEF50 + sparse-depth (F30), room CSEF20 + sparse-depth (F46), counter CSEF20 + sparse-depth (F46) — the prune ratio is validation-selected per scene from the same CSEF selector family.
-- **Adaptive CSEF policy is validated in two forms, and the parking visual tail is now repaired by OUT1.** F75 is the strongest compact checkpoint before render-level ELA: it reads checkpoint evidence to choose the prune fraction (parking → 70 %), ranks compaction candidates by area / local redundancy primarily, and uses render-only evidence as a risk / audit signal. OUT1 adds a train-calibrated parent-consistency gate on top of F33/F75-style outdoor evidence repair and turns parking into a 54 / 54 per-view RGB full-pass against clean30000. F82 is the fixed multiscene version: one policy and one recovery recipe win on bonsai, courtyard, room, and counter across two seeds without per-scene retuning.
+- **Adaptive CSEF policy is validated in two forms, and the parking visual tail is now repaired by OUT2.** F75 is the strongest compact checkpoint before render-level ELA: it reads checkpoint evidence to choose the prune fraction (parking → 70 %), ranks compaction candidates by area / local redundancy primarily, and uses render-only evidence as a risk / audit signal. OUT2 adds a train-p15 frame floor and local parent-consistency mask on top of F33/F75-style outdoor evidence repair, giving parking 54 / 54 per-view RGB full-pass plus stronger mean RGB metrics than OUT1. F82 is the fixed multiscene version: one policy and one recovery recipe win on bonsai, courtyard, room, and counter across two seeds without per-scene retuning.
 - **CTR-SCE certified recovery improves over F82 on courtyard while no-opping safely elsewhere (SCE21 / SCE24).** A train-only sparse-depth cluster-CVaR rollback with a 1-px appearance envelope produces the first courtyard candidate that beats F82 on every tracked independent metric (PSNR +0.42 dB, SSIM +0.030, LPIPS −0.0068, AbsRel −0.0037, Depth MAE −0.0033, normal −0.88°) under unchanged topology. The dual-certificate policy (CTR-SCE geometry + ATR appearance rollback + train-only Pareto guard) **correctly returns `accept_parent_noop` on bonsai**, where the candidate would regress SSIM / LPIPS — making "no-op-or-improve" the published behaviour rather than "always update".
 - **Sparse-COLMAP-depth supervision during recovery is the dominant contributor.** Validated regime: λ ∈ [0.001, 0.005] depending on scene, `mixed_low_error` correspondence sampling with a per-scene trusted fraction, decay window after the geometry has anchored.
 - **Strict topology-freeze is required.** Use `--freeze_topology_updates --skip_restricted_delaunay` together for fixed-topology continuation. `--skip_restricted_delaunay` alone skips only the Delaunay refresh; it does not disable the standard prune / densify branch. F27 / F35 / F36 / F18 / F24 confirm on every final-package scene that omitting strict freeze collapses or drifts topology and loses render.
@@ -201,12 +202,12 @@ ELA12 is the current paper-facing comparison against the pure Mesh Splatting bas
 | `courtyard` | clean9000 | SOR10 + ELA safe | +0.969 | +0.0288 | -0.0566 | -0.1048 | -1.2884 | -2.7113 | 10.34 % | yes |
 | `room` | clean9000 | QEM50 parent-rollback + ELA safe | +3.305 | +0.0501 | -0.0622 | -0.0023 | -0.0195 | -1.8244 | 50.00 % | yes |
 | `counter` | clean9000 | QEM50 parent-rollback + ELA safe | +3.157 | +0.0699 | -0.0707 | -0.0007 | -0.0083 | -2.0805 | 50.00 % | yes |
-| `parking_phone_tiny` | clean30000 | CSEF70 sparse-depth + parent-gated ELA | +0.544 | +0.0278 | -0.0373 | -0.0026 | -0.0118 | -0.8032 | 70.00 % | yes |
+| `parking_phone_tiny` | clean30000 | CSEF70 sparse-depth + train-p15 local parent-gated ELA | +0.568 | +0.0298 | -0.0376 | -0.0026 | -0.0118 | -0.8032 | 70.00 % | yes |
 
-Per-view RGB stress test: **165 / 165** held-out views pass PSNR, SSIM, and LPIPS simultaneously; the minimum parking dPSNR is still positive (+0.0222 dB) and the worst parking dLPIPS is still negative (-0.00393).  The qualitative gallery is `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/qualitative_gallery/gallery.html`; the full audit report is [`docs/car_model/stageELA12_fair_baseline_audit_report.md`](docs/car_model/stageELA12_fair_baseline_audit_report.md). W&B audit run: `0tfcaeef`.
+Per-view RGB stress test: **165 / 165** held-out views pass PSNR, SSIM, and LPIPS simultaneously; the minimum parking dPSNR is still positive (+0.0773 dB) and the worst parking dLPIPS is still negative (-0.00393).  The qualitative gallery is `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/qualitative_gallery/gallery.html`; the full audit report is [`docs/car_model/stageELA12_fair_baseline_audit_report.md`](docs/car_model/stageELA12_fair_baseline_audit_report.md). W&B audit run: `k592q6a1`.
 
 <div align="center">
-  <img src="assets/parking_outdoor_parentgate_v7_crop_error_montage.png" width="950" alt="Parking outdoor parent-gated ELA local crops and error heatmaps">
+  <img src="assets/parking_outdoor_local_parentgate_v6_crop_error_montage.png" width="950" alt="Parking outdoor local parent-gated ELA local crops and error heatmaps">
 </div>
 
 ---
@@ -233,9 +234,9 @@ All deltas are `method − clean-long 22k` evaluated independently with `render.
 
 Five of five scenes improve PSNR, SSIM, LPIPS, AbsRel, and Depth MAE; sparse-normal angle improves on four of five (courtyard ties at +0.0085° — explicitly disclosed). All rows use strict `--freeze_topology_updates --skip_restricted_delaunay` topology freeze and online W&B; recovery is `22000 → 26000`.
 
-### Parking deep-dive (R44 → R53 → F75 → OUT1)
+### Parking deep-dive (R44 → R53 → F75 → OUT2)
 
-The parking scene also has a separate single-scene line carrying the failure-evidence backbone (R44 vs clean 22k), the strongest compact checkpoint before ELA (F75), and the current outdoor visual repair (OUT1-v7). Each row is one held-out test view; columns are GT, clean-long 22k / 30k, R48, and R53.
+The parking scene also has a separate single-scene line carrying the failure-evidence backbone (R44 vs clean 22k), the strongest compact checkpoint before ELA (F75), and the current outdoor visual repair (OUT2-v6). Each row is one held-out test view; columns are GT, clean-long 22k / 30k, R48, and R53.
 
 <div align="center">
   <img src="assets/meshsplatopt_clean_vs_r53_montage.png" width="900" alt="Clean long baseline vs R53, parking_phone_tiny">
@@ -251,12 +252,13 @@ The parking scene also has a separate single-scene line carrying the failure-evi
 | ours R53.01 26k (70 % area prune) | 26 000 | 18.706 | 0.648 | 0.338 | 0.080 | 1.85 | 44.26 | 2 564 473 |
 | ours F7 26k (CSEF70 recovery) | 26 000 | 18.706 | 0.648 | 0.338 | 0.079 | 1.85 | 44.20 | 2 564 473 |
 | **ours F75 26k (adaptive + sparse + LPIPS λ = 0.00025)** | **26 000** | **18.712** | **0.648** | **0.338** | **0.079** | **1.85** | **43.95** | **2 564 473** |
-| **ours OUT1-v7 26k (parent-gated outdoor ELA)** | **26 000** | **18.953** | **0.659** | **0.314** | **0.079** | **1.85** | **44.04** | **2 564 473** |
+| **ours OUT1-v7 26k (frame parent-gated outdoor ELA)** | **26 000** | **18.953** | **0.659** | **0.314** | **0.079** | **1.85** | **44.04** | **2 564 473** |
+| **ours OUT2-v6 26k (train-p15 local parent-gated ELA)** | **26 000** | **18.977** | **0.661** | **0.313** | **0.079** | **1.85** | **44.04** | **2 564 473** |
 | ours F74 26k (adaptive + sparse + LPIPS λ = 0.0001) | 26 000 | 18.711 | 0.648 | 0.338 | 0.079 | 1.85 | 44.07 | 2 564 473 |
 | ours R56 28k (R53 continuation, rejected) | 28 000 | 18.36 | 0.624 | 0.367 | n/a | n/a | n/a | 2 564 473 |
 | ours R43 30k (no decay, rejected) | 30 000 | 16.25 | 0.511 | 0.477 | 0.194 | 3.02 | 43.71 | 782 982 |
 
-OUT1-v7 is the accepted parking render headline for the outdoor visual tail: it keeps F33/F75 topology and sparse-geometry numbers, but uses train-only parent-consistency calibration to decide when ELA repair is applied at test time. Against clean30000 it reaches ΔPSNR +0.544, ΔSSIM +0.0278, ΔLPIPS −0.0373 and 54 / 54 per-view RGB full-pass; against F33 itself it adds +0.241 dB and reduces LPIPS by 0.0246. The later F82 fixed global policy v5 remains the accepted multiscene no-per-scene-retuning validation.
+OUT2-v6 is the accepted parking render headline for the outdoor visual tail: it keeps F33/F75 topology and sparse-geometry numbers, but uses a train-p15 low-risk frame floor plus a local parent-consistency mask to decide where ELA repair is applied. Against clean30000 it reaches ΔPSNR +0.568, ΔSSIM +0.0298, ΔLPIPS −0.0376 and 54 / 54 per-view RGB full-pass; against OUT1-v7 it adds +0.0239 dB, +0.0020 SSIM, and reduces LPIPS by 0.00035. The later F82 fixed global policy v5 remains the accepted multiscene no-per-scene-retuning validation.
 
 ### Fixed adaptive-policy validation (F82 v5)
 
@@ -319,7 +321,7 @@ Giant-hole policy distinguishes **observed**, **prior-supported**, and **unknown
 
 ## Validated recovery recipes
 
-Three recipes are validated. **Recipe A — CSEF-family validation-budget (F49)** is the cross-scene headline: 5 / 5 scenes beat clean-long on render and sparse-depth metrics. **Recipe B — adaptive policy with tiny LPIPS (F75)** is the strongest compact parking checkpoint before OUT1 and chooses the prune fraction from the checkpoint instead of from a hand-set table. **Recipe C — sparse-depth low-λ recovery (R44)** remains the cross-scene base recipe and the very-low-topology Pareto point but loses on render against clean 22k. **OUT1 parent-gated ELA** is the current parking render repair layer used by ELA12 for the outdoor qualitative tail.
+Three recipes are validated. **Recipe A — CSEF-family validation-budget (F49)** is the cross-scene headline: 5 / 5 scenes beat clean-long on render and sparse-depth metrics. **Recipe B — adaptive policy with tiny LPIPS (F75)** is the strongest compact parking checkpoint before OUT2 and chooses the prune fraction from the checkpoint instead of from a hand-set table. **Recipe C — sparse-depth low-λ recovery (R44)** remains the cross-scene base recipe and the very-low-topology Pareto point but loses on render against clean 22k. **OUT2 local parent-gated ELA** is the current parking render repair layer used by ELA12 for the outdoor qualitative tail.
 
 ### Recipe A — CSEF-family + sparse-depth validation-budget recovery (F49, multi-scene headline)
 

@@ -109,12 +109,12 @@ SCENES: tuple[SceneSpec, ...] = (
                 "ours_30000",
             ),
         ),
-        method_label="CSEF70 sparse-depth + train-calibrated parent-gated ELA",
+        method_label="CSEF70 sparse-depth + train-p15 local parent-gated ELA",
         method_model="outputs/carnet/meshsplatopt/final_stageF33_parking_csef_sparse_depth/prune70/recovery_model",
         method_iteration=26000,
-        method_name="ours_26000_outdoor_parentgate_traincalib_v7",
-        wandb="ts6721g0",
-        method_rgb_model="outputs/carnet/meshsplatopt/stageOUT1_parking_visual_tail_recovery/f33_outdoor_parentgate_traincalib_v7_eval",
+        method_name="ours_26000_outdoor_local_parentgate_v6",
+        wandb="6zhsc737",
+        method_rgb_model="outputs/carnet/meshsplatopt/stageOUT2_parking_local_parentgate/f33_local_parentgate_v6_eval",
     ),
 )
 
