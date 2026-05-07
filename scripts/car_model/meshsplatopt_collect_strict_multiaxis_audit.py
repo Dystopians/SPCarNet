@@ -191,6 +191,105 @@ PILOT_ROWS = {
         ),
         "note": "Best current room row: the strict geometry/topology recovery checkpoint plus train-only ELA appearance repair.",
     },
+    "counter.clean9000_qem50_sparse_parentrollback": {
+        "scene": "counter",
+        "clean": ("outputs/carnet/meshsplatopt/finalF10_counter_clean_long_9000to22000", 9000, "ours_9000"),
+        "method": (
+            "outputs/carnet/meshsplatopt/stageELA10_geometry_preserving_compact_recovery/counter/qem50_sparse_parentrollback_9000to12000/recovery_model",
+            12000,
+            "ours_12000",
+            "clean9000 counter QEM50 sparse parent-rollback recovery",
+        ),
+        "note": "Counter replication of the room ELA10 fixed QEM50 parent-rollback policy; strict full-pass before ELA.",
+    },
+    "counter.clean9000_qem50_sparse_parentrollback_ela_safe": {
+        "scene": "counter",
+        "clean": ("outputs/carnet/meshsplatopt/finalF10_counter_clean_long_9000to22000", 9000, "ours_9000"),
+        "method": (
+            "outputs/carnet/meshsplatopt/stageELA10_geometry_preserving_compact_recovery/counter/qem50_sparse_parentrollback_9000to12000/recovery_model",
+            12000,
+            "ours_12000_qem50_parentrollback_ela_safe",
+            "clean9000 counter QEM50 sparse parent-rollback + ELA safe",
+        ),
+        "note": "Best current counter row: QEM50 strict geometry/topology recovery plus train-only ELA appearance repair.",
+    },
+    "bonsai.clean9000_qem50_sparse_parentrollback": {
+        "scene": "bonsai",
+        "clean": ("outputs/carnet/meshsplatopt/finalF3_bonsai_clean_long_9000to22000", 9000, "ours_9000"),
+        "method": (
+            "outputs/carnet/meshsplatopt/stageELA10_geometry_preserving_compact_recovery/bonsai/qem50_sparse_parentrollback_9000to12000/recovery_model",
+            12000,
+            "ours_12000",
+            "clean9000 bonsai QEM50 sparse parent-rollback recovery",
+        ),
+        "note": "Negative transfer evidence: the QEM50 parent-rollback action that solves room/counter fails bonsai RGB and sparse geometry.",
+    },
+    "bonsai.clean9000_qem30_sparse_parentrollback": {
+        "scene": "bonsai",
+        "clean": ("outputs/carnet/meshsplatopt/finalF3_bonsai_clean_long_9000to22000", 9000, "ours_9000"),
+        "method": (
+            "outputs/carnet/meshsplatopt/stageELA10_geometry_preserving_compact_recovery/bonsai/qem30_adaptive_parentrollback_9000to12000/recovery_model",
+            12000,
+            "ours_12000",
+            "clean9000 bonsai QEM30 sparse parent-rollback recovery",
+        ),
+        "note": "Negative transfer evidence: milder QEM still fails bonsai RGB and sparse geometry.",
+    },
+    "bonsai.clean9000_csef10_low_evidence": {
+        "scene": "bonsai",
+        "clean": ("outputs/carnet/meshsplatopt/finalF3_bonsai_clean_long_9000to22000", 9000, "ours_9000"),
+        "method": (
+            "outputs/carnet/meshsplatopt/stageELA10_geometry_preserving_compact_recovery/bonsai/csef10_low_evidence_clean9000/compact_model",
+            9000,
+            "ours_9000",
+            "clean9000 bonsai CSEF10 low-evidence delete",
+        ),
+        "note": "Topology-only success: RGB and sparse geometry are unchanged while triangles are reduced, so it is not a strict geometry win.",
+    },
+    "bonsai.clean9000_sor10": {
+        "scene": "bonsai",
+        "clean": ("outputs/carnet/meshsplatopt/finalF3_bonsai_clean_long_9000to22000", 9000, "ours_9000"),
+        "method": (
+            "outputs/carnet/meshsplatopt/stageELA11_sparse_occluder_policy/bonsai/sor10_clean9000/compact_model",
+            9000,
+            "ours_9000",
+            "clean9000 bonsai SOR10 sparse-occluder + low-evidence delete",
+        ),
+        "note": "Stage ELA11 breakthrough: train-split sparse occluder mining plus low-evidence deletion; strict full-pass before ELA.",
+    },
+    "bonsai.clean9000_sor10_ela_safe": {
+        "scene": "bonsai",
+        "clean": ("outputs/carnet/meshsplatopt/finalF3_bonsai_clean_long_9000to22000", 9000, "ours_9000"),
+        "method": (
+            "outputs/carnet/meshsplatopt/stageELA11_sparse_occluder_policy/bonsai/sor10_clean9000/compact_model",
+            9000,
+            "ours_9000_sor10_ela_safe",
+            "clean9000 bonsai SOR10 + ELA safe",
+        ),
+        "note": "Best current bonsai row: SOR10 strict geometry/topology checkpoint plus train-only ELA appearance repair.",
+    },
+    "counter.clean9000_sor10_negative": {
+        "scene": "counter",
+        "clean": ("outputs/carnet/meshsplatopt/finalF10_counter_clean_long_9000to22000", 9000, "ours_9000"),
+        "method": (
+            "outputs/carnet/meshsplatopt/stageELA11_sparse_occluder_policy/counter/sor10_clean9000/compact_model",
+            9000,
+            "ours_9000",
+            "clean9000 counter SOR10 transfer check",
+        ),
+        "note": "Negative transfer evidence: SOR10 reduces triangles but loses RGB and depth geometry on counter, so the policy must route counter to QEM parent-rollback.",
+    },
+    "room.clean9000_sor10_negative": {
+        "scene": "room",
+        "clean": ("outputs/carnet/meshsplatopt/finalF9_room_clean_long_9000to22000", 9000, "ours_9000"),
+        "method": (
+            "outputs/carnet/meshsplatopt/stageELA11_sparse_occluder_policy/room/sor10_clean9000/compact_model",
+            9000,
+            "ours_9000",
+            "clean9000 room SOR10 transfer check",
+        ),
+        "note": "Negative transfer evidence: SOR10 reduces triangles but loses RGB and depth geometry on room, so the policy must route room to QEM parent-rollback.",
+    },
 }
 
 
@@ -277,18 +376,21 @@ def _fmt(value: Any, precision: int = 6) -> str:
     return f"{f:.{precision}f}"
 
 
-def _write_report(path: Path, selected_rows: list[dict[str, Any]], cross_rows: list[dict[str, Any]], out_dir: Path) -> None:
+def _write_report(path: Path, selected_rows: list[dict[str, Any]], cross_rows: list[dict[str, Any]], out_dir: Path, decision: str) -> None:
     full_pass = [row for row in selected_rows if row["strict_full_pass"]]
     full_pass_scenes = sorted({row["scene"] for row in full_pass})
+    selected_scene_names = sorted(SELECTED_SCENES.keys())
+    missing_scenes = [scene for scene in selected_scene_names if scene not in set(full_pass_scenes)]
     lines = [
-        "# Stage ELA9/10 Strict Multi-Axis Audit",
+        "# Stage ELA9/10/11 Strict Multi-Axis Audit",
         "",
-        "Decision: `STRICT_MULTIAXIS_PARTIAL_ROOM_SOLVED_NOT_FULLY_CROSS_SCENE`.",
+        f"Decision: `{decision}`.",
         "",
-        "This audit uses the stricter definition requested after the ELA7 RGB-only result: a method must improve PSNR, SSIM, LPIPS, sparse-depth AbsRel, sparse Depth MAE, sparse normal angle, and reduce triangle count against the strongest clean baseline for that scene. Under this definition, the selected-scene problem is only partially solved: room now has strict full-pass rows, but the same fixed policy still needs full replication on bonsai, courtyard, and counter.",
+        "This audit uses the stricter definition requested after the ELA7 RGB-only result: a method must improve PSNR, SSIM, LPIPS, sparse-depth AbsRel, sparse Depth MAE, sparse normal angle, and reduce triangle count against the strongest clean baseline for that scene.",
         "",
         f"Strict full-pass rows on selected clean9000 scenes: `{len(full_pass)}/{len(selected_rows)}`.",
         f"Selected scenes with at least one strict full-pass row: `{', '.join(full_pass_scenes) if full_pass_scenes else 'none'}`.",
+        f"Selected scenes still missing a strict full-pass row: `{', '.join(missing_scenes) if missing_scenes else 'none'}`.",
         "",
         "## Selected Scenes vs Strong Clean9000",
         "",
@@ -324,9 +426,10 @@ def _write_report(path: Path, selected_rows: list[dict[str, Any]], cross_rows: l
             "",
             "- ELA7 is a strong RGB method, but it inherits clean9000 geometry and topology. It cannot satisfy geometry/triangle-count superiority.",
             "- Legacy compact-recovery rows often reduce triangles, but when compared to the stronger clean9000 baselines on bonsai/courtyard/room/counter, they lose RGB by large margins and often lose sparse geometry too.",
-            "- ELA10 changes the branch from parameter scanning to a fixed recovery policy: strong clean9000 checkpoint -> QEM compact topology -> topology-frozen recovery with train-only sparse parent rollback, checkpoint geometry anchoring, parent render rollback -> ELA-style appearance evidence.",
-            "- On room, the QEM50 sparse parent-rollback checkpoint is the first strict full-pass against clean9000 across RGB, sparse geometry, and triangle count. The parent-rollback + ELA row is the strongest current room result.",
-            "- This is not yet a global selected-scene claim. The fixed ELA10 policy must now be replicated on bonsai, courtyard, and counter, and cross-dataset rows should remain separated from selected-scene claims.",
+            "- ELA10 solves room and counter with the same fixed QEM50 sparse parent-rollback action: strong clean9000 checkpoint -> QEM compact topology -> topology-frozen recovery with train-only sparse parent rollback, checkpoint geometry anchoring, parent render rollback -> ELA-style appearance evidence.",
+            "- ELA11 adds a different action for bonsai: train-split sparse occluder mining identifies front surfaces whose rendered depth is closer than COLMAP sparse depth, then unions those faces with a small low-evidence deletion base. This produces the first strict bonsai full-pass.",
+            "- SOR10 is not a universal replacement. Its room/counter transfer rows reduce triangles but lose RGB and depth geometry, so the final claim must be a self-diagnostic policy that routes high sparse-occlusion scenes to SOR and low sparse-occlusion scenes to QEM parent-rollback.",
+            "- The selected-scene claim is now substantially stronger but still not fully closed because courtyard lacks a clean9000 strict full-pass row in this audit. Cross-dataset parking remains a separate strict full-pass support row.",
             "",
             "## Artifacts",
             "",
@@ -421,15 +524,21 @@ def main() -> int:
 
     out_dir = ROOT / args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
+    full_pass_scenes = sorted({row["scene"] for row in selected_rows if row["strict_full_pass"]})
+    missing_scenes = [scene for scene in sorted(SELECTED_SCENES.keys()) if scene not in set(full_pass_scenes)]
+    if missing_scenes:
+        decision = "STRICT_MULTIAXIS_COMPOSITE_POLICY_SOLVES_BONSAI_ROOM_COUNTER_COURTYARD_PENDING"
+    else:
+        decision = "STRICT_MULTIAXIS_SELECTED_SCENES_FULL_PASS"
     payload = {
-        "decision": "STRICT_MULTIAXIS_PARTIAL_ROOM_SOLVED_NOT_FULLY_CROSS_SCENE",
+        "decision": decision,
         "selected_scene_rows": selected_rows,
         "cross_dataset_rows": cross_rows,
     }
     (out_dir / "strict_multiaxis_audit.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     _write_csv(out_dir / "selected_scene_strict_rows.csv", selected_rows)
     _write_csv(out_dir / "cross_dataset_rows.csv", cross_rows)
-    _write_report(ROOT / args.report, selected_rows, cross_rows, out_dir)
+    _write_report(ROOT / args.report, selected_rows, cross_rows, out_dir, decision)
     print(json.dumps({"decision": payload["decision"], "report": args.report, "out_dir": args.out_dir}, indent=2))
     return 0
 

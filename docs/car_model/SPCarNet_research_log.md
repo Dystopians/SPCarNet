@@ -5321,3 +5321,30 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Updated audit**: `docs/car_model/stageELA9_strict_multiaxis_audit_report.md` now records `2/18` selected-scene rows as strict full-pass, both on room.  Parking remains a cross-dataset full-pass row, but that evidence is kept separate from the selected clean9000 scenes.
 
 **Decision**: `ROOM_STRICT_MULTIAXIS_SOLVED_GLOBAL_SELECTED_SCENES_NOT_YET`.  This is the first real strict success against the pure Mesh Splatting baseline on RGB, geometry, and topology simultaneously.  The remaining requirement is fixed-policy replication on bonsai, courtyard, and counter, followed by a fair multi-scene table rather than a room-only claim.
+
+---
+
+## 2026-05-06 - ELA11 sparse-occluder adaptive policy
+
+**Goal**: repair the remaining strict multi-axis gap without treating scene parameters as the method.  The policy must decide from train-only evidence whether a scene needs sparse occluder deletion or geometry-preserving QEM recovery.
+
+**Implementation**: added `scripts/car_model/meshsplatopt_build_sparse_occluder_prune_candidates.py` and `scripts/car_model/meshsplatopt_select_adaptive_repair_action.py`.  SOR mines train-split COLMAP sparse-depth correspondences, samples rendered triangle IDs, and deletes faces that are repeatedly in front of the sparse depth target.  The adaptive router uses a fixed train front-occluder fraction threshold (`0.25`) to route high-occluder scenes to SOR and low/moderate-occluder indoor scenes to QEM50 sparse parent-rollback + ELA.
+
+**Routing evidence**:
+- bonsai front-occluder fraction `0.460542` -> SOR branch.
+- counter front-occluder fraction `0.055984` -> QEM branch.
+- room front-occluder fraction `0.118611` -> QEM branch.
+
+**Strict promoted rows**:
+- bonsai SOR10 + ELA safe, W&B `vmai8bls`: `+2.838371` PSNR, `+0.163376` SSIM, `-0.099541` LPIPS, `-0.105169` AbsRel, `-1.032433` Depth MAE, `-2.410058` normal, `10.25%` triangle reduction.
+- counter QEM50 parent-rollback + ELA safe, W&B `zcc5inc0`: `+3.157017` PSNR, `+0.069925` SSIM, `-0.070661` LPIPS, `-0.000686` AbsRel, `-0.008253` Depth MAE, `-2.080537` normal, `50.00%` triangle reduction.
+- room QEM50 parent-rollback + ELA safe, W&B `9t01dwd8`: `+3.304691` PSNR, `+0.050085` SSIM, `-0.062170` LPIPS, `-0.002331` AbsRel, `-0.019509` Depth MAE, `-1.824378` normal, `50.00%` triangle reduction.
+
+**Negative transfer checks**: SOR10 is explicitly rejected on counter and room despite triangle reduction, because it loses RGB and depth geometry.  This supports the adaptive-router claim rather than a universal SOR claim.
+
+**Artifacts**:
+- report: `docs/car_model/stageELA11_sparse_occluder_adaptive_policy_report.md`
+- strict audit: `docs/car_model/stageELA11_strict_multiaxis_audit_report.md`
+- JSON: `outputs/carnet/meshsplatopt/stageELA11_strict_multiaxis_audit/strict_multiaxis_audit.json`
+
+**Decision**: `STRICT_MULTIAXIS_COMPOSITE_POLICY_SOLVES_BONSAI_ROOM_COUNTER_COURTYARD_PENDING`.  The work has crossed a major bottleneck: bonsai, room, counter, and parking now each have strict full-pass evidence under a routed composite policy.  Courtyard remains the selected-scene blocker and must not be claimed as solved.
