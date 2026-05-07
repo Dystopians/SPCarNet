@@ -12,7 +12,7 @@ Strict full-pass rows against train-selected clean baselines: `5/5`.
 | courtyard | clean9000@9000 | SOR10 + ELA safe | 0.969368 | 0.028828 | -0.056569 | -0.104763 | -1.288431 | -2.711335 | 10.34% | `True` |
 | room | clean9000@9000 | QEM50 parent-rollback + ELA safe | 3.304691 | 0.050085 | -0.062170 | -0.002331 | -0.019509 | -1.824378 | 50.00% | `True` |
 | counter | clean9000@9000 | QEM50 parent-rollback + ELA safe | 3.157017 | 0.069925 | -0.070661 | -0.000686 | -0.008253 | -2.080537 | 50.00% | `True` |
-| parking_phone_tiny | clean30000@30000 | CSEF70 sparse-depth compact recovery | 0.303503 | 0.016227 | -0.012707 | -0.002569 | -0.011796 | -0.803210 | 70.00% | `True` |
+| parking_phone_tiny | clean30000@30000 | CSEF70 sparse-depth + train-calibrated parent-gated ELA | 0.544016 | 0.027814 | -0.037282 | -0.002569 | -0.011796 | -0.803210 | 70.00% | `True` |
 
 ## Clean Baseline Candidate Table
 
@@ -41,7 +41,7 @@ Strict full-pass rows against train-selected clean baselines: `5/5`.
 | courtyard | 5 | 5 | 0.210857 | 0.969366 | -0.031749 |
 | room | 39 | 39 | 0.453001 | 3.304691 | -0.013167 |
 | counter | 30 | 30 | 1.043489 | 3.157015 | -0.034378 |
-| parking_phone_tiny | 54 | 50 | 0.020615 | 0.303503 | 0.006463 |
+| parking_phone_tiny | 54 | 54 | 0.022186 | 0.544017 | -0.003930 |
 
 ## Scope Note
 

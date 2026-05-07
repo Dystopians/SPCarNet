@@ -32,6 +32,7 @@ class SceneSpec:
     method_iteration: int
     method_name: str
     wandb: str
+    method_rgb_model: str | None = None
 
 
 SCENES: tuple[SceneSpec, ...] = (
@@ -108,11 +109,12 @@ SCENES: tuple[SceneSpec, ...] = (
                 "ours_30000",
             ),
         ),
-        method_label="CSEF70 sparse-depth compact recovery",
+        method_label="CSEF70 sparse-depth + train-calibrated parent-gated ELA",
         method_model="outputs/carnet/meshsplatopt/final_stageF33_parking_csef_sparse_depth/prune70/recovery_model",
         method_iteration=26000,
-        method_name="ours_26000",
-        wandb="",
+        method_name="ours_26000_outdoor_parentgate_traincalib_v7",
+        wandb="ts6721g0",
+        method_rgb_model="outputs/carnet/meshsplatopt/stageOUT1_parking_visual_tail_recovery/f33_outdoor_parentgate_traincalib_v7_eval",
     ),
 )
 
@@ -217,7 +219,8 @@ def _select_baseline(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _comparison_row(spec: SceneSpec, baseline: dict[str, Any]) -> dict[str, Any]:
     method_model = ROOT / spec.method_model
-    method_rgb = _metrics_from_file(method_model, "test", spec.method_name)
+    method_rgb_model = ROOT / (spec.method_rgb_model or spec.method_model)
+    method_rgb = _metrics_from_file(method_rgb_model, "test", spec.method_name)
     method_geom = _geometry(method_model, spec.method_iteration)
     method_topo = _topology(method_model, spec.method_iteration)
     out: dict[str, Any] = {
@@ -237,6 +240,7 @@ def _comparison_row(spec: SceneSpec, baseline: dict[str, Any]) -> dict[str, Any]
         "baseline_vertices": baseline["vertices"],
         "method_label": spec.method_label,
         "method_model": spec.method_model,
+        "method_rgb_model": spec.method_rgb_model or spec.method_model,
         "method_iteration": spec.method_iteration,
         "method_name": spec.method_name,
         "wandb": spec.wandb,
@@ -283,7 +287,7 @@ def _common_images(model_a: Path, method_a: str, model_b: Path, method_b: str) -
 
 def _collect_per_view(spec: SceneSpec, baseline: dict[str, Any]) -> list[dict[str, Any]]:
     baseline_model = ROOT / str(baseline["model"])
-    method_model = ROOT / spec.method_model
+    method_model = ROOT / (spec.method_rgb_model or spec.method_model)
     baseline_method = str(baseline["method"])
     method_name = spec.method_name
     base_per = _per_view(baseline_model, baseline_method)

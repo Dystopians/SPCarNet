@@ -10,6 +10,7 @@
   <a href="docs/car_model/final_stageF12_multiscene_package_report.md">多场景 package（F12）</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageF82_policy_v5_robustness_report.md">固定自适应策略 v5（F82）</a> &nbsp;|&nbsp;
   <a href="docs/car_model/stageELA12_fair_baseline_audit_report.md">公平 baseline 审计（ELA12）</a> &nbsp;|&nbsp;
+  <a href="docs/car_model/stageOUT1_parking_outdoor_visual_repair_report.md">Parking 室外修复（OUT1）</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageSCE21_tail_risk_sentinel_report.md">CTR-SCE courtyard 突破（SCE21）</a> &nbsp;|&nbsp;
   <a href="docs/car_model/final_stageSCE23_SCE24_certified_recovery_report.md">认证恢复（SCE23/24）</a>
 </div>
@@ -22,7 +23,7 @@
 
 > **方法目标（一句话）**。现有 Mesh-Splatting / 3DGS 的剪枝方法问的是 *哪些图元可以被移除*；MeshSplatOpt 反过来问 *在保留视图渲染与稀疏几何反事实认证的前提下，哪个局部表面编辑能最大限度地降低场景证据债务*。同一套编辑微积分应同时支持删除（delete）、坍缩（collapse）、对齐（snap）、细分（split）、孔洞填充（fill）和外观恢复（appearance recovery）——每一次提交的编辑都必须通过渲染、稀疏深度、法向量、自由空间、拓扑等所有反事实证书；任一项不通过即自动回滚。
 
-> **当前证据（一句话）**。截至 2026-05-06，**ELA12 公平 baseline 审计**只用训练集渲染从 clean Mesh Splatting 候选 checkpoint 中选择 baseline（`PSNR + 20 * SSIM - 20 * LPIPS`），再汇报保留测试集指标；在这个合约下，MeshSplatOpt/SPCarNet 在 **5 / 5 个当前已有完整方法产物的场景**（`parking_phone_tiny`、`bonsai`、`courtyard`、`room`、`counter`）上同时通过 PSNR、SSIM、LPIPS、稀疏 AbsRel、稀疏 Depth MAE、稀疏法向量角度与三角形数，三角形削减 10.25 – 70.00%，并且 161 / 165 个保留视图同时通过全部 RGB 指标。此前的 **F82 固定自适应策略 v5** 仍作为无逐场景重调的鲁棒性线；**CTR-SCE 认证恢复（SCE21 / SCE24）** 仍作为其上的 no-op-or-improve 恢复层。
+> **当前证据（一句话）**。截至 2026-05-06，**ELA12 公平 baseline 审计**只用训练集渲染从 clean Mesh Splatting 候选 checkpoint 中选择 baseline（`PSNR + 20 * SSIM - 20 * LPIPS`），再汇报保留测试集指标；在这个合约下，MeshSplatOpt/SPCarNet 在 **5 / 5 个当前已有完整方法产物的场景**（`parking_phone_tiny`、`bonsai`、`courtyard`、`room`、`counter`）上同时通过 PSNR、SSIM、LPIPS、稀疏 AbsRel、稀疏 Depth MAE、稀疏法向量角度与三角形数，三角形削减 10.25 – 70.00%，并且 **165 / 165** 个保留视图同时通过全部 RGB 指标。**OUT1 train-calibrated parent-gated ELA** 现在修复了 parking 室外视觉长尾；此前的 **F82 固定自适应策略 v5** 仍作为无逐场景重调的鲁棒性线；**CTR-SCE 认证恢复（SCE21 / SCE24）** 仍作为其上的 no-op-or-improve 恢复层。
 
 方法骨架（CSEF + 可逆编辑微积分 + 反事实证书）和恢复 recipe 通过区分 *什么通过了所有 gate* 与 *什么真正改进了头条指标* 来保持诚实。F45 的 fixed-CSEF50 审计明确记录单一 prune 比例并不适用所有场景；公开的论文 claim 因此是 validation-selected CSEF 家族协议，而不是单一通用超参。
 
@@ -120,7 +121,7 @@ R0 → R56（骨架 + parking 单场景线）、**F1 → F82（最终跨场景�
 | F69 | 自适应 + 稀疏深度（无 LPIPS） | 击败 R53；LPIPS 落后 F7 仅 0.000063 |
 | F71 / F72 / F73 | 自适应 + 稀疏 + 较重 LPIPS | `LPIPS_HEAVY_REJECTED` —— 深度回退 |
 | F74 | 自适应 + 稀疏 + LPIPS λ = 0.0001 | `CONSERVATIVE_ALL_METRIC_F7_WIN` |
-| **F75** | **自适应 + 稀疏 + LPIPS λ = 0.00025（parking 头条）** | **`ACCEPTED_FOR_PARKING_HEADLINE`** —— 在所有跟踪指标上超过 R53.01 / F7 |
+| **F75** | **自适应 + 稀疏 + LPIPS λ = 0.00025（parking compact base）** | **`ACCEPTED_FOR_PARKING_COMPACT_BASE`** —— 在所有 compact-checkpoint 指标上超过 R53.01 / F7；parking RGB 渲染头条由 OUT1 接替 |
 | F76 | F75 风格固定策略多场景复刻 | `FAILED_TRANSFER` —— 暴露小场景压缩过强的问题 |
 | F77 / F78 | 全局自适应策略修复 | `PARTIAL_PASS` —— 各自修复一个短板，但仍留下一个混合指标 |
 | **F79** | **固定全局自适应策略 v4，验证 bonsai / courtyard / room / counter** | **`FIXED_POLICY_MULTISCENE_PASS`** —— 4 / 4 全指标击败 clean-long，且无逐场景重调 |
@@ -139,7 +140,7 @@ R0 → R56（骨架 + parking 单场景线）、**F1 → F82（最终跨场景�
 | SCE25 / SCE26 / SCE27 | 结构 ATR（DSSIM + Sobel 边缘）；clean9000 train teacher 蒸馏；LR 为零的纯外观 teacher | 全部拒绝 —— 外观瓶颈不是回滚强度问题；bonsai SSIM 仍回退 |
 | SCE28（运行中） | 从 clean 9000 重置 → CSEF 压缩 → 恢复（bonsai 公平 baseline 重置） | 受大 checkpoint 流式 I/O 限制；面级 `keep_unused_vertices` 压缩钩子已落地 |
 
-### 严格公平 baseline 收束（ELA7–ELA12）
+### 严格公平 baseline 收束（ELA7–ELA12 + OUT1）
 
 | 阶段 | 范围 | 决策 |
 |---|---|---|
@@ -148,6 +149,7 @@ R0 → R56（骨架 + parking 单场景线）、**F1 → F82（最终跨场景�
 | ELA10 | room QEM50 parent-rollback + ELA 修复 | `ROOM_STRICT_MULTIAXIS_SOLVED_GLOBAL_SELECTED_SCENES_NOT_YET` |
 | ELA11 | 在选定场景上的稀疏遮挡 / QEM 路由策略 | `STRICT_MULTIAXIS_SELECTED_SCENES_FULL_PASS` |
 | **ELA12** | train-only clean checkpoint 选择、保留测试集全量审计与定性 gallery | **`FAIR_TRAIN_SELECTED_BASELINE_AUDIT_READY`** —— 对 train-selected clean Mesh Splatting baseline 达到 5 / 5 严格 full-pass |
+| **OUT1** | parking 室外 ELA + train-calibrated parent-consistency gate | **`PARKING_VISUAL_TAIL_REPAIRED`** —— parking 相对 clean30000 从 50 / 54 提升到 54 / 54 个视图 RGB full-pass |
 
 ---
 
@@ -157,7 +159,7 @@ R0 → R56（骨架 + parking 单场景线）、**F1 → F82（最终跨场景�
 
 - **ELA12 是当前与纯 Mesh Splatting 对比的公平合约**。每个场景的 clean baseline checkpoint 只用训练集渲染选择，打分为 `PSNR + 20 * SSIM - 20 * LPIPS`。最终表格再评估保留测试集 RGB、稀疏 AbsRel、稀疏 Depth MAE、稀疏法向量角度与拓扑。被选中的 baseline 是 `bonsai`、`courtyard`、`room`、`counter` 的 clean9000，以及 `parking_phone_tiny` 的 clean30000；我们的方法在 5 / 5 个场景上严格 full-pass。
 - **validation-budget CSEF 家族 compact-recovery 协议在 5 / 5 个选定场景上通过**。每个场景都有一行长程结果在独立 PSNR / SSIM / LPIPS / AbsRel / Depth MAE 上击败最强 clean-long 22k baseline，拓扑减少 40 – 70 %；稀疏法向量代理在 4 / 5 场景上改进（courtyard 持平于 +0.0085° —— 显式披露，未声称胜出）。各场景所选行：parking CSEF50 + 稀疏深度（F46）、bonsai CSEF50 + 稀疏深度 + LPIPS λ = 0.005（F49）、courtyard CSEF50 + 稀疏深度（F30）、room CSEF20 + 稀疏深度（F46）、counter CSEF20 + 稀疏深度（F46）—— prune 比例由同一 CSEF 选择器家族在每场景 validation-selected 决定。
-- **自适应 CSEF 策略已被两种形式验证**。F75 是 parking 最强单行结果：从 checkpoint 证据中读出 prune 比例（parking → 70 %），按 area / 局部冗余主导排序，把渲染证据仅作为风险 / 审计信号。F82 是固定多场景版本：同一个 policy、同一个恢复 recipe，在 bonsai、courtyard、room、counter 上跨两个 seed 不经逐场景重调全部胜出。
+- **自适应 CSEF 策略已被两种形式验证，parking 视觉长尾已由 OUT1 修复**。F75 是 render-level ELA 之前最强的 compact checkpoint：从 checkpoint 证据中读出 prune 比例（parking → 70 %），按 area / 局部冗余主导排序，把渲染证据仅作为风险 / 审计信号。OUT1 在 F33/F75 风格室外证据修复之上加入 train-calibrated parent-consistency gate，使 parking 相对 clean30000 达到 54 / 54 个视图 RGB full-pass。F82 是固定多场景版本：同一个 policy、同一个恢复 recipe，在 bonsai、courtyard、room、counter 上跨两个 seed 不经逐场景重调全部胜出。
 - **CTR-SCE 认证恢复在 courtyard 上超过 F82，在其他场景上安全 no-op（SCE21 / SCE24）**。一套 train-only 稀疏深度 cluster-CVaR 回滚加 1 像素外观 envelope，产生了第一个在每个独立指标上都超过 F82 的 courtyard 候选行（PSNR +0.42 dB、SSIM +0.030、LPIPS −0.0068、AbsRel −0.0037、Depth MAE −0.0033、法向量 −0.88°）且不变拓扑。双证书策略（CTR-SCE 几何 + ATR 外观回滚 + train-only Pareto 守门人）**对 bonsai 正确返回 `accept_parent_noop`** —— 候选会回退 SSIM / LPIPS 时，论文的方法行为是 "no-op-or-improve" 而不是 "always update"。
 - **恢复阶段的稀疏 COLMAP 深度监督是主要贡献者**。已验证区间：λ ∈ [0.001, 0.005] 因场景而异；`mixed_low_error` 对应采样，每场景调整可信比例；几何稳住后启用 decay 窗口。
 - **严格拓扑冻结必须执行**。固定拓扑续训必须同时使用 `--freeze_topology_updates --skip_restricted_delaunay`；单独 `--skip_restricted_delaunay` 只跳过 Delaunay 刷新，标准 prune / densify 分支仍会继续运行。F27 / F35 / F36 / F18 / F24 在每个 final-package 场景上证明：去掉严格冻结即拓扑塌陷或漂移并丢失渲染。
@@ -199,9 +201,13 @@ ELA12 是当前面向论文的、与纯 Mesh Splatting baseline 的公平比较�
 | `courtyard` | clean9000 | SOR10 + ELA safe | +0.969 | +0.0288 | -0.0566 | -0.1048 | -1.2884 | -2.7113 | 10.34 % | 是 |
 | `room` | clean9000 | QEM50 parent-rollback + ELA safe | +3.305 | +0.0501 | -0.0622 | -0.0023 | -0.0195 | -1.8244 | 50.00 % | 是 |
 | `counter` | clean9000 | QEM50 parent-rollback + ELA safe | +3.157 | +0.0699 | -0.0707 | -0.0007 | -0.0083 | -2.0805 | 50.00 % | 是 |
-| `parking_phone_tiny` | clean30000 | CSEF70 sparse-depth compact recovery | +0.304 | +0.0162 | -0.0127 | -0.0026 | -0.0118 | -0.8032 | 70.00 % | 是 |
+| `parking_phone_tiny` | clean30000 | CSEF70 sparse-depth + parent-gated ELA | +0.544 | +0.0278 | -0.0373 | -0.0026 | -0.0118 | -0.8032 | 70.00 % | 是 |
 
-逐视图 RGB 压力测试：161 / 165 个保留视图同时通过 PSNR、SSIM、LPIPS；4 个未全通过的视图都来自 `parking_phone_tiny`，并完整保留在 `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/per_view_rgb_deltas.csv` 中。定性 gallery 位于 `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/qualitative_gallery/gallery.html`；完整审计报告见 [`docs/car_model/stageELA12_fair_baseline_audit_report.md`](docs/car_model/stageELA12_fair_baseline_audit_report.md)。W&B 审计 run：`5n9kgo8e`。
+逐视图 RGB 压力测试：**165 / 165** 个保留视图同时通过 PSNR、SSIM、LPIPS；parking 最小 dPSNR 仍为正（+0.0222 dB），最差 dLPIPS 仍为负（-0.00393）。定性 gallery 位于 `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/qualitative_gallery/gallery.html`；完整审计报告见 [`docs/car_model/stageELA12_fair_baseline_audit_report.md`](docs/car_model/stageELA12_fair_baseline_audit_report.md)。W&B 审计 run：`0tfcaeef`。
+
+<div align="center">
+  <img src="assets/parking_outdoor_parentgate_v7_crop_error_montage.png" width="950" alt="Parking outdoor parent-gated ELA 局部 crop 与误差热图">
+</div>
 
 ---
 
@@ -227,9 +233,9 @@ ELA12 是当前面向论文的、与纯 Mesh Splatting baseline 的公平比较�
 
 5 / 5 场景在 PSNR / SSIM / LPIPS / AbsRel / Depth MAE 上同时改进；稀疏法向量角度在 4 / 5 场景上改进（courtyard 持平于 +0.0085° —— 显式披露）。所有行都使用严格 `--freeze_topology_updates --skip_restricted_delaunay` 拓扑冻结与 W&B 在线模式；恢复区间为 `22000 → 26000`。
 
-### Parking 深度对比（R44 → R53 → F75）
+### Parking 深度对比（R44 → R53 → F75 → OUT1）
 
-parking 场景同时维护一条单场景线，承载失败证据骨架（R44 vs clean 22k）和最强单行（F75）。每行一个保留测试视图；列依次为 GT、clean-long 22k / 30k、R48、R53。
+parking 场景同时维护一条单场景线，承载失败证据骨架（R44 vs clean 22k）、ELA 之前最强 compact checkpoint（F75）和当前室外视觉修复（OUT1-v7）。每行一个保留测试视图；列依次为 GT、clean-long 22k / 30k、R48、R53。
 
 <div align="center">
   <img src="assets/meshsplatopt_clean_vs_r53_montage.png" width="900" alt="Clean long baseline 与 R53 对比，parking_phone_tiny">
@@ -245,11 +251,12 @@ parking 场景同时维护一条单场景线，承载失败证据骨架（R44 vs
 | ours R53.01 26k（70 % 面积剪枝） | 26 000 | 18.706 | 0.648 | 0.338 | 0.080 | 1.85 | 44.26 | 2 564 473 |
 | ours F7 26k（CSEF70 恢复） | 26 000 | 18.706 | 0.648 | 0.338 | 0.079 | 1.85 | 44.20 | 2 564 473 |
 | **ours F75 26k（自适应 + 稀疏 + LPIPS λ = 0.00025）** | **26 000** | **18.712** | **0.648** | **0.338** | **0.079** | **1.85** | **43.95** | **2 564 473** |
+| **ours OUT1-v7 26k（parent-gated outdoor ELA）** | **26 000** | **18.953** | **0.659** | **0.314** | **0.079** | **1.85** | **44.04** | **2 564 473** |
 | ours F74 26k（自适应 + 稀疏 + LPIPS λ = 0.0001） | 26 000 | 18.711 | 0.648 | 0.338 | 0.079 | 1.85 | 44.07 | 2 564 473 |
 | ours R56 28k（R53 续训，已拒绝） | 28 000 | 18.36 | 0.624 | 0.367 | n/a | n/a | n/a | 2 564 473 |
 | ours R43 30k（无 decay，已拒绝） | 30 000 | 16.25 | 0.511 | 0.477 | 0.194 | 3.02 | 43.71 | 782 982 |
 
-F75 是 parking 单场景的接受头条 —— 在同样拓扑下，比 F7 改进 ΔPSNR +0.0058、ΔLPIPS −0.000773、ΔAbsRel −0.000531、ΔDepth MAE −0.002774、ΔNormal 角度 −0.2495°。后续 F82 固定全局策略 v5 是当前接受的多场景公平验证。
+OUT1-v7 是当前接受的 parking 渲染头条，用来修复室外视觉长尾：它保持 F33/F75 的拓扑和稀疏几何数值，但用 train-only parent-consistency calibration 决定测试时哪些视图应用 ELA 修复。相对 clean30000，它达到 ΔPSNR +0.544、ΔSSIM +0.0278、ΔLPIPS −0.0373，并且 54 / 54 个视图 RGB full-pass；相对 F33 自身也有 +0.241 dB 和 LPIPS −0.0246。后续 F82 固定全局策略 v5 仍是当前接受的多场景无逐场景重调验证。
 
 ### 固定自适应策略验证（F82 v5）
 
@@ -312,7 +319,7 @@ maximize  evidence_debt_reduction(edit)
 
 ## 已验证的恢复 recipe
 
-三条 recipe 已验证。**Recipe A —— CSEF 家族 + validation-budget（F49）** 是跨场景头条：5 / 5 场景在渲染与稀疏深度指标上击败 clean-long。**Recipe B —— 自适应策略 + 极小 LPIPS（F75）** 是 parking 最强单行，并从 checkpoint 中选择 prune 比例而非依赖手动调参表。**Recipe C —— 稀疏深度低 λ 恢复（R44）** 仍是跨场景的基础 recipe 与极低拓扑 Pareto 点，但在 parking 渲染上输给 clean 22k。
+三条 recipe 已验证。**Recipe A —— CSEF 家族 + validation-budget（F49）** 是跨场景头条：5 / 5 场景在渲染与稀疏深度指标上击败 clean-long。**Recipe B —— 自适应策略 + 极小 LPIPS（F75）** 是 OUT1 之前最强的 parking compact checkpoint，并从 checkpoint 中选择 prune 比例而非依赖手动调参表。**Recipe C —— 稀疏深度低 λ 恢复（R44）** 仍是跨场景的基础 recipe 与极低拓扑 Pareto 点，但在 parking 渲染上输给 clean 22k。**OUT1 parent-gated ELA** 是当前 ELA12 使用的 parking 渲染修复层，用来处理室外定性长尾。
 
 ### Recipe A —— CSEF 家族 + 稀疏深度 validation-budget 恢复（F49，多场景头条）
 
@@ -377,7 +384,7 @@ python scripts/car_model/meshprior_apply_topology_control_ablation.py \
 
 `--prune_fraction` 旋钮（parking）：0.65 → R55 LPIPS 最优 / 0.70 → R53.01 全指标 / 0.80 → R48 最紧凑 / 0.90 → R47 prune90 拒绝（PSNR 跌 2 dB）。续训超过 26k 已拒绝（R56 28k 丢约 0.35 dB PSNR；R49 / R50 30k 同样输）。
 
-### Recipe B —— 自适应 CSEF 策略 + 极小 LPIPS 恢复（F75，parking 单场景最强）
+### Recipe B —— 自适应 CSEF 策略 + 极小 LPIPS 恢复（F75，parking compact base）
 
 外壳与 Recipe A 一样，但选择器从 checkpoint 证据中选 prune 比例与排序（无须手动 `--prune_fraction`），并在恢复中在稀疏深度之上叠一层极小 LPIPS。
 

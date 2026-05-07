@@ -89,6 +89,10 @@ def _choose_policy(
             "depth_abs_tol": float(args.depth_abs_tol),
             "depth_rel_tol": float(args.depth_rel_tol),
             "direction_weight": float(args.direction_weight),
+            "edge_gate": bool(args.edge_gate),
+            "edge_gate_quantile": float(args.edge_gate_quantile),
+            "edge_gate_min": float(args.edge_gate_min),
+            "edge_gate_dilate": int(args.edge_gate_dilate),
         }
         benefit_calibrator = _fit_optional_benefit(args, train_frames, policy, device)
         calibration = calibrate_alpha(
@@ -104,6 +108,10 @@ def _choose_policy(
             depth_rel_tol=float(policy["depth_rel_tol"]),
             direction_weight=float(policy.get("direction_weight", args.direction_weight)),
             benefit_calibrator=benefit_calibrator,
+            edge_gate=bool(policy.get("edge_gate", False)),
+            edge_gate_quantile=float(policy.get("edge_gate_quantile", -1.0)),
+            edge_gate_min=float(policy.get("edge_gate_min", 0.0)),
+            edge_gate_dilate=int(policy.get("edge_gate_dilate", 0)),
             policy_objective=args.policy_objective,
             ssim_weight=args.policy_ssim_weight,
             lpips_weight=args.policy_lpips_weight,
@@ -136,6 +144,10 @@ def _choose_policy(
                             "depth_abs_tol": float(args.depth_abs_tol),
                             "depth_rel_tol": float(depth_rel),
                             "direction_weight": float(direction_weight),
+                            "edge_gate": bool(args.edge_gate),
+                            "edge_gate_quantile": float(args.edge_gate_quantile),
+                            "edge_gate_min": float(args.edge_gate_min),
+                            "edge_gate_dilate": int(args.edge_gate_dilate),
                         }
                         benefit_calibrator = _fit_optional_benefit(args, train_frames, policy, device)
                         calibration = calibrate_alpha(
@@ -151,6 +163,10 @@ def _choose_policy(
                             depth_rel_tol=float(depth_rel),
                             direction_weight=float(direction_weight),
                             benefit_calibrator=benefit_calibrator,
+                            edge_gate=bool(policy.get("edge_gate", False)),
+                            edge_gate_quantile=float(policy.get("edge_gate_quantile", -1.0)),
+                            edge_gate_min=float(policy.get("edge_gate_min", 0.0)),
+                            edge_gate_dilate=int(policy.get("edge_gate_dilate", 0)),
                             policy_objective=args.policy_objective,
                             ssim_weight=args.policy_ssim_weight,
                             lpips_weight=args.policy_lpips_weight,
@@ -222,6 +238,10 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
             "policy_objective": args.policy_objective,
             "calib_lpips": args.calib_lpips,
             "benefit_policy": args.benefit_policy,
+            "edge_gate": args.edge_gate,
+            "edge_gate_quantile": args.edge_gate_quantile,
+            "edge_gate_min": args.edge_gate_min,
+            "edge_gate_dilate": args.edge_gate_dilate,
         },
     )
     flat = {
@@ -234,6 +254,7 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
         "ela/mean_covered_fraction": float(report.get("mean_covered_fraction", 0.0)),
         "ela/mean_confidence": float(report.get("mean_confidence", 0.0)),
         "ela/mean_benefit_accept_fraction": float(report.get("mean_benefit_accept_fraction", 0.0)),
+        "ela/mean_edge_accept_fraction": float(report.get("mean_edge_accept_fraction", 0.0)),
     }
     run.log(flat)
     run.summary.update(flat)
@@ -273,6 +294,10 @@ def run(args: argparse.Namespace) -> dict:
             depth_rel_tol=float(policy["depth_rel_tol"]),
             direction_weight=float(policy.get("direction_weight", args.direction_weight)),
             benefit_calibrator=benefit_calibrator,
+            edge_gate=bool(policy.get("edge_gate", False)),
+            edge_gate_quantile=float(policy.get("edge_gate_quantile", -1.0)),
+            edge_gate_min=float(policy.get("edge_gate_min", 0.0)),
+            edge_gate_dilate=int(policy.get("edge_gate_dilate", 0)),
             loader=loader,
             device=device,
         )
@@ -300,6 +325,10 @@ def run(args: argparse.Namespace) -> dict:
         "calib_lpips": bool(args.calib_lpips),
         "calib_sampler": str(args.calib_sampler),
         "benefit_policy": benefit_calibrator.to_json() if benefit_calibrator is not None else None,
+        "edge_gate": bool(policy.get("edge_gate", False)),
+        "edge_gate_quantile": float(policy.get("edge_gate_quantile", -1.0)),
+        "edge_gate_min": float(policy.get("edge_gate_min", 0.0)),
+        "edge_gate_dilate": int(policy.get("edge_gate_dilate", 0)),
         "mode": str(policy["mode"]),
         "k": int(policy["k"]),
         "residual_clip": float(policy["residual_clip"]),
@@ -310,6 +339,9 @@ def run(args: argparse.Namespace) -> dict:
         "mean_confidence": float(sum(float(x["mean_confidence"]) for x in infos) / max(len(infos), 1)),
         "mean_benefit_accept_fraction": float(
             sum(float(x.get("benefit_accept_fraction", 0.0)) for x in infos) / max(len(infos), 1)
+        ),
+        "mean_edge_accept_fraction": float(
+            sum(float(x.get("edge_accept_fraction", 0.0)) for x in infos) / max(len(infos), 1)
         ),
         "frames": infos,
     }
@@ -344,6 +376,10 @@ def main() -> int:
     parser.add_argument("--benefit_min_gain", default=0.0, type=float)
     parser.add_argument("--benefit_min_bin_count", default=64, type=int)
     parser.add_argument("--benefit_max_pixels_per_view", default=4096, type=int)
+    parser.add_argument("--edge_gate", action="store_true")
+    parser.add_argument("--edge_gate_quantile", default=-1.0, type=float)
+    parser.add_argument("--edge_gate_min", default=0.0, type=float)
+    parser.add_argument("--edge_gate_dilate", default=0, type=int)
     parser.add_argument("--alpha", default=-1.0, type=float, help="Override alpha. Default <0 uses train-only calibration.")
     parser.add_argument("--alpha_grid", default="0,0.125,0.25,0.5,0.75,1.0")
     parser.add_argument("--calib_stride", default=16, type=int)

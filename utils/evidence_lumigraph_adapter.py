@@ -305,6 +305,48 @@ class EvidenceSignal:
     support_names: list[str]
 
 
+def _image_edge_magnitude(image: torch.Tensor) -> torch.Tensor:
+    gray = torch.mean(image, dim=0, keepdim=True)
+    gx = torch.zeros_like(gray)
+    gy = torch.zeros_like(gray)
+    gx[:, :, 1:] = gray[:, :, 1:] - gray[:, :, :-1]
+    gy[:, 1:, :] = gray[:, 1:, :] - gray[:, :-1, :]
+    return torch.sqrt(gx * gx + gy * gy + 1e-12)
+
+
+def _edge_acceptance_mask(
+    image: torch.Tensor,
+    valid: torch.Tensor,
+    *,
+    quantile: float = -1.0,
+    min_edge: float = 0.0,
+    dilate: int = 0,
+) -> tuple[torch.Tensor, float]:
+    edge = _image_edge_magnitude(image)
+    q = float(quantile)
+    threshold = float(max(min_edge, 0.0))
+    if q >= 0.0:
+        q = min(max(q, 0.0), 0.999)
+        valid_flat = valid.squeeze(0).bool()
+        values = edge.squeeze(0)[valid_flat] if bool(valid_flat.any().item()) else edge.reshape(-1)
+        if values.numel() > 0:
+            threshold = max(threshold, float(torch.quantile(values.detach().float(), q).item()))
+    accept = edge >= float(threshold)
+    radius = max(int(dilate), 0)
+    if radius > 0:
+        kernel = 2 * radius + 1
+        accept = (
+            F.max_pool2d(
+                accept.to(dtype=torch.float32).unsqueeze(0),
+                kernel_size=kernel,
+                stride=1,
+                padding=radius,
+            ).squeeze(0)
+            > 0.0
+        )
+    return accept.to(device=image.device), float(threshold)
+
+
 @dataclass
 class BenefitCalibrator:
     confidence_edges: tuple[float, ...]
@@ -574,6 +616,10 @@ def adapt_frame(
     depth_rel_tol: float = 0.03,
     direction_weight: float = 0.35,
     benefit_calibrator: BenefitCalibrator | None = None,
+    edge_gate: bool = False,
+    edge_gate_quantile: float = -1.0,
+    edge_gate_min: float = 0.0,
+    edge_gate_dilate: int = 0,
     loader: FrameLoader | None = None,
     device: torch.device | str = "cuda",
 ) -> tuple[torch.Tensor, dict[str, float | int | list[str]]]:
@@ -600,6 +646,19 @@ def adapt_frame(
         benefit_accept = benefit_calibrator.acceptance_mask(evidence.confidence, signal, device=device)
         valid = valid & benefit_accept
         signal = torch.where(valid, signal, torch.zeros_like(signal))
+    edge_accept_fraction = None
+    edge_threshold = None
+    if bool(edge_gate):
+        edge_accept, edge_threshold = _edge_acceptance_mask(
+            base,
+            valid,
+            quantile=float(edge_gate_quantile),
+            min_edge=float(edge_gate_min),
+            dilate=int(edge_gate_dilate),
+        )
+        valid = valid & edge_accept
+        signal = torch.where(valid, signal, torch.zeros_like(signal))
+        edge_accept_fraction = float(edge_accept.to(torch.float32).mean().detach().cpu().item())
     if mode == "residual":
         adapted = torch.clamp(base + float(alpha) * signal, 0.0, 1.0)
     else:
@@ -613,6 +672,9 @@ def adapt_frame(
     }
     if benefit_accept is not None:
         info["benefit_accept_fraction"] = float(benefit_accept.to(torch.float32).mean().detach().cpu().item())
+    if edge_accept_fraction is not None:
+        info["edge_accept_fraction"] = edge_accept_fraction
+        info["edge_threshold"] = float(edge_threshold or 0.0)
     return adapted, info
 
 
@@ -633,6 +695,10 @@ def calibrate_alpha(
     depth_rel_tol: float,
     direction_weight: float,
     benefit_calibrator: BenefitCalibrator | None = None,
+    edge_gate: bool = False,
+    edge_gate_quantile: float = -1.0,
+    edge_gate_min: float = 0.0,
+    edge_gate_dilate: int = 0,
     policy_objective: str = "psnr",
     ssim_weight: float = 20.0,
     lpips_weight: float = 20.0,
@@ -690,6 +756,10 @@ def calibrate_alpha(
             depth_rel_tol=depth_rel_tol,
             direction_weight=direction_weight,
             benefit_calibrator=benefit_calibrator,
+            edge_gate=edge_gate,
+            edge_gate_quantile=edge_gate_quantile,
+            edge_gate_min=edge_gate_min,
+            edge_gate_dilate=edge_gate_dilate,
             loader=loader,
             device=device,
         )
