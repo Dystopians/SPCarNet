@@ -5606,3 +5606,20 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 - No RGB/geometry result is claimed yet from this checkpoint; final paper-protocol rendering and metric collection are still pending after the clean queue finishes.
 
 **Active queue**: the clean queue advanced to `counter`, W&B run `ttb8092l`.
+
+---
+
+## 2026-05-07 - Counter same-protocol clean30k checkpoint completed
+
+**Milestone**: the official-protocol clean MeshSplatting baseline for Mip-NeRF360 `counter` completed on GPU `4` with W&B run `ttb8092l`.
+
+**Artifacts**:
+- split checkpoint for fixed-budget method validation: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/counter/point_cloud/iteration_26000/point_cloud_state_dict.pt` (`729M`, timestamp `2026-05-07 09:33 PDT`)
+- final clean checkpoint: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/counter/point_cloud/iteration_30000/point_cloud_state_dict.pt` (`729M`, timestamp `2026-05-07 09:43 PDT`)
+
+**Run notes**:
+- `counter` used the canonical indoor full_eval training path: `images_2` with `--indoor`.
+- W&B final training summary reported `9,850,919` triangles and `2,537,250` vertices.
+- This is still baseline infrastructure only.  The official 30k test render/eval pass remains pending until the full clean queue finishes.
+
+**Active queue**: the clean queue advanced to `kitchen`, W&B run `gbb8a3zf`.
