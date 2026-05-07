@@ -541,12 +541,66 @@ def select_faces(
     return np.sort(selected.astype(np.int64)), table
 
 
+def select_faces_from_adaptive_decision(
+    signals: CompactionSignals,
+    decision: AdaptiveCompactionPolicyDecision,
+) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    face_count = int(np.asarray(signals.faces).shape[0])
+    if face_count > 1_000_000:
+        table = build_fast_large_csef_table(signals)
+    else:
+        table = build_score_table(signals, fast_large_mesh=True)
+    scores = table[f"score_{decision.score_mode}"]
+    finite = np.isfinite(scores)
+    candidate_ids = np.flatnonzero(finite)
+    target = min(int(decision.selected_count), int(candidate_ids.shape[0]))
+    if candidate_ids.shape[0] > 500_000 and target < candidate_ids.shape[0]:
+        candidate_scores = scores[candidate_ids]
+        part = np.argpartition(candidate_scores, candidate_scores.shape[0] - target)[-target:]
+        selected = candidate_ids[part]
+    else:
+        order = candidate_ids[np.argsort(scores[candidate_ids])[::-1]]
+        selected = order[:target]
+    return np.sort(selected.astype(np.int64)), table
+
+
+def _bounded_ids(ids: np.ndarray, max_count: int = 500_000) -> np.ndarray:
+    ids = np.asarray(ids, dtype=np.int64)
+    if ids.shape[0] <= max_count:
+        return ids
+    stride = int(np.ceil(ids.shape[0] / float(max_count)))
+    return ids[::stride]
+
+
+def _bounded_mean(values: np.ndarray, ids: np.ndarray | None = None, max_count: int = 500_000) -> float:
+    arr = np.asarray(values)
+    if ids is not None:
+        ids = _bounded_ids(ids, max_count=max_count)
+        arr = arr[ids]
+    elif arr.shape[0] > max_count:
+        stride = int(np.ceil(arr.shape[0] / float(max_count)))
+        arr = arr[::stride]
+    if arr.size == 0:
+        return 0.0
+    arr = np.asarray(arr, dtype=np.float64)
+    finite = np.isfinite(arr)
+    return float(arr[finite].mean()) if finite.any() else 0.0
+
+
+def _bounded_values(values: np.ndarray, max_count: int = 500_000) -> np.ndarray:
+    arr = np.asarray(values)
+    if arr.shape[0] > max_count:
+        stride = int(np.ceil(arr.shape[0] / float(max_count)))
+        arr = arr[::stride]
+    return arr
+
+
 def summarize_selection(selected: np.ndarray, table: dict[str, np.ndarray], labels: np.ndarray | None = None) -> dict[str, Any]:
     selected = np.asarray(selected, dtype=np.int64)
-    selected_mask = np.zeros_like(table["face_id"], dtype=bool)
-    selected_mask[selected] = True
     label_counts: dict[str, int] = {}
     if labels is not None:
+        selected_mask = np.zeros_like(table["face_id"], dtype=bool)
+        selected_mask[selected] = True
         labels = np.asarray(labels).reshape(-1)
         for label in sorted(set(str(x) for x in labels.tolist())):
             label_counts[label] = int(np.logical_and(selected_mask, labels == label).sum())
@@ -555,10 +609,10 @@ def summarize_selection(selected: np.ndarray, table: dict[str, np.ndarray], labe
         "face_count": int(face_count),
         "selected_count": int(selected.shape[0]),
         "selected_fraction": float(selected.shape[0] / max(table["face_id"].shape[0], 1)),
-        "selected_area_mean": float(table["area"][selected].mean()) if selected.shape[0] else 0.0,
-        "selected_boundary_risk_mean": float(table["boundary_risk"][selected].mean()) if selected.shape[0] else 0.0,
-        "selected_positive_evidence_mean": float(table["positive_surface_evidence"][selected].mean()) if selected.shape[0] else 0.0,
-        "selected_explanation_debt_mean": float(table["explanation_debt"][selected].mean()) if selected.shape[0] else 0.0,
+        "selected_area_mean": _bounded_mean(table["area"], selected) if selected.shape[0] else 0.0,
+        "selected_boundary_risk_mean": _bounded_mean(table["boundary_risk"], selected) if selected.shape[0] else 0.0,
+        "selected_positive_evidence_mean": _bounded_mean(table["positive_surface_evidence"], selected) if selected.shape[0] else 0.0,
+        "selected_explanation_debt_mean": _bounded_mean(table["explanation_debt"], selected) if selected.shape[0] else 0.0,
         "label_counts": label_counts,
     }
 
@@ -597,9 +651,9 @@ def write_selector_outputs(
     if large_payload:
         score_summary = {
             key: {
-                "mean": float(np.asarray(value, dtype=np.float64).mean()) if np.asarray(value).size else 0.0,
-                "min": float(np.asarray(value, dtype=np.float64).min()) if np.asarray(value).size else 0.0,
-                "max": float(np.asarray(value, dtype=np.float64).max()) if np.asarray(value).size else 0.0,
+                "mean": _bounded_mean(np.asarray(value)),
+                "min": float(_bounded_values(np.asarray(value)).min()) if np.asarray(value).size else 0.0,
+                "max": float(_bounded_values(np.asarray(value)).max()) if np.asarray(value).size else 0.0,
             }
             for key, value in table.items()
             if key != "face_id" and np.asarray(value).ndim == 1 and np.issubdtype(np.asarray(value).dtype, np.number)

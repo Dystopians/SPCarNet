@@ -18,6 +18,7 @@ from ss3dm_prior.meshsplatopt.compact_selector import (  # noqa: E402
     SELECTOR_MODES,
     decide_adaptive_compaction_policy,
     select_faces,
+    select_faces_from_adaptive_decision,
     write_selector_outputs,
 )
 
@@ -101,7 +102,7 @@ def main() -> int:
                 flush=True,
             )
             print("[compaction] selecting faces with fixed policy decision", file=sys.stderr, flush=True)
-            selected, table = select_faces(signals, args.selector_mode, target_prune_fraction, seed=args.seed)
+            selected, table = select_faces_from_adaptive_decision(signals, policy)
         else:
             print(
                 f"[compaction] selecting faces mode={args.selector_mode} fraction={target_prune_fraction}",
