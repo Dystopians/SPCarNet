@@ -35,13 +35,11 @@ def _finite(value: Any) -> float:
     return out if math.isfinite(out) else math.nan
 
 
-def _scene_method(results: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    if not results:
-        raise RuntimeError("empty results")
-    if "ours_30000" in results:
-        return "ours_30000", dict(results["ours_30000"])
-    key = sorted(results.keys())[-1]
-    return key, dict(results[key])
+def _scene_method(results: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    payload = results.get("ours_30000")
+    if not isinstance(payload, dict):
+        return None
+    return "ours_30000", dict(payload)
 
 
 def collect(root: Path, scenes: list[str]) -> list[dict[str, Any]]:
@@ -51,7 +49,11 @@ def collect(root: Path, scenes: list[str]) -> list[dict[str, Any]]:
         if not result_path.exists():
             rows.append({"scene": scene, "status": "missing_results"})
             continue
-        method, metrics = _scene_method(_read_json(result_path))
+        method_payload = _scene_method(_read_json(result_path))
+        if method_payload is None:
+            rows.append({"scene": scene, "status": "missing_ours_30000"})
+            continue
+        method, metrics = method_payload
         paper = PAPER.get(scene, {})
         row = {
             "scene": scene,
