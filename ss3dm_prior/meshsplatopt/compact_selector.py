@@ -238,7 +238,10 @@ def build_fast_large_csef_table(signals: CompactionSignals) -> dict[str, np.ndar
     )
     positive_norm = _normalize(positive)
     low_positive = 1.0 - positive_norm
-    if vertices.shape[0] > int(faces.max(initial=0)):
+    if count > 1_000_000:
+        areas = np.ones((count,), dtype=np.float32)
+        area_smallness = low_positive.copy()
+    elif vertices.shape[0] > int(faces.max(initial=0)):
         areas = triangle_areas(vertices, faces)
         area_smallness = 1.0 - _normalize(areas)
     else:
@@ -246,12 +249,12 @@ def build_fast_large_csef_table(signals: CompactionSignals) -> dict[str, np.ndar
         area_smallness = low_positive.copy()
     redundancy = area_smallness.copy()
     zeros = np.zeros((count,), dtype=np.float32)
-    # Large vehicle meshes have millions of triangles. Empirically the stable
-    # deletion order is geometric redundancy; render-only per-face probes are too
-    # coarse to be used as a hard local importance score at this scale. Keep the
-    # evidence channels in the table for adaptive fraction choice and auditing,
-    # but rank faces by redundancy unless explicit protection is provided.
-    csef_low_evidence = _normalize(area_smallness)
+    # Large paper-protocol Mip-NeRF360 meshes can have 9M+ faces. Full per-face
+    # geometric area scoring is slow and can delete visually supported
+    # microgeometry. The large-mesh path ranks by low positive evidence first;
+    # the sampled adaptive policy still audits geometric area before choosing
+    # the global fraction.
+    csef_low_evidence = _normalize(0.7 * low_positive + 0.3 * area_smallness)
     csef_low_evidence[protected] = -np.inf
     return {
         "face_id": np.arange(count, dtype=np.int64),

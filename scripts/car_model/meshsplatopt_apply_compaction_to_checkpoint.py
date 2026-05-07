@@ -25,9 +25,15 @@ from ss3dm_prior.meshsplatopt.compact_selector import (  # noqa: E402
 def _load_checkpoint_signals(source_model: Path, iteration: int) -> CompactionSignals:
     import torch
 
+    print(f"[compaction] loading checkpoint model={source_model} iter={iteration}", file=sys.stderr, flush=True)
     state = torch.load(checkpoint_path(source_model, iteration), map_location="cpu")
     faces = state["_triangle_indices"].detach().cpu().numpy()
     face_count = faces.shape[0]
+    print(
+        f"[compaction] loaded checkpoint faces={face_count} vertices={int(state['triangles_points'].shape[0])}",
+        file=sys.stderr,
+        flush=True,
+    )
 
     def face_signal(name: str) -> np.ndarray | None:
         value = state.get(name)
@@ -77,20 +83,37 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.candidates_json:
+        print(f"[compaction] loading candidates from {args.candidates_json}", file=sys.stderr, flush=True)
         selected, mode = _selected_from_json(Path(args.candidates_json))
     else:
         signals = _load_checkpoint_signals(Path(args.source_model), args.iteration)
         policy = None
         target_prune_fraction = float(args.target_prune_fraction)
         if args.selector_mode == "csef_adaptive_policy":
+            print("[compaction] deciding adaptive CSEF policy", file=sys.stderr, flush=True)
             policy, table = decide_adaptive_compaction_policy(signals, seed=args.seed)
             target_prune_fraction = float(policy.target_prune_fraction)
+            print(
+                "[compaction] adaptive policy "
+                f"fraction={target_prune_fraction:.6f} selected={policy.selected_count} "
+                f"score_mode={policy.score_mode} risk={policy.risk.get('policy_risk', 0.0):.6f}",
+                file=sys.stderr,
+                flush=True,
+            )
+            print("[compaction] selecting faces with fixed policy decision", file=sys.stderr, flush=True)
             selected, table = select_faces(signals, args.selector_mode, target_prune_fraction, seed=args.seed)
         else:
+            print(
+                f"[compaction] selecting faces mode={args.selector_mode} fraction={target_prune_fraction}",
+                file=sys.stderr,
+                flush=True,
+            )
             selected, table = select_faces(signals, args.selector_mode, target_prune_fraction, seed=args.seed)
         mode = args.selector_mode
         selector_out = Path(args.selector_out_dir) if args.selector_out_dir else Path(args.output_model) / "selector"
+        print(f"[compaction] writing selector outputs selected={int(selected.shape[0])}", file=sys.stderr, flush=True)
         write_selector_outputs(selector_out, selected, table, args.selector_mode, target_prune_fraction, policy_decision=policy)
+    print(f"[compaction] applying checkpoint compaction selected={int(selected.shape[0])}", file=sys.stderr, flush=True)
     audit = apply_compaction(
         args.source_model,
         args.output_model,
