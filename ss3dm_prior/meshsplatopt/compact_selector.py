@@ -312,6 +312,15 @@ def decide_adaptive_compaction_policy(
     """
     del seed
     face_count_hint = int(np.asarray(signals.faces).shape[0])
+    render_only_evidence = (
+        signals.sparse_support is None
+        and signals.normal_support is None
+        and signals.negative_free_space is None
+        and signals.explanation_debt is None
+        and signals.topology_cost is None
+        and signals.uncertainty is None
+        and signals.protected_faces is None
+    )
     if face_count_hint > 1_000_000:
         sample = _sample_indices(face_count_hint)
         render = _as_float_signal(signals.render_contribution, face_count_hint, 0.0)[sample]
@@ -355,6 +364,13 @@ def decide_adaptive_compaction_policy(
         eval_scale = float(candidate_ids.shape[0] / max(eval_candidate_ids.shape[0], 1))
     min_fraction = float(np.clip(min_fraction, 0.0, 0.95))
     max_fraction = float(np.clip(max_fraction, min_fraction, 0.95))
+    if render_only_evidence:
+        # A clean MeshSplatting checkpoint only exposes render-importance style
+        # evidence. Without independent sparse/normal/debt signals, high prune
+        # ratios are under-constrained and can remove test-view support. Use a
+        # fixed global conservative cap instead of scene hand tuning.
+        min_fraction = min(min_fraction, 0.08)
+        max_fraction = min(max_fraction, 0.24 if face_count >= 1_000_000 else 0.30)
     if face_count < 150_000:
         max_fraction = min(max_fraction, 0.38)
     elif face_count < 500_000:
@@ -399,8 +415,7 @@ def decide_adaptive_compaction_policy(
         positive_risk = positive / global_positive
         debt_risk = debt / global_debt
         boundary_risk_value = boundary / global_boundary
-        render_only_evidence = signals.sparse_support is None and signals.normal_support is None
-        positive_weight = 0.10 if render_only_evidence else 0.42
+        positive_weight = 0.82 if render_only_evidence else 0.42
         residual_weight = max(0.0, 1.0 - positive_weight)
         risk = (
             positive_weight * positive_risk
@@ -433,7 +448,10 @@ def decide_adaptive_compaction_policy(
 
     if best_row is None or best_ids is None:
         raise ValueError("adaptive CSEF policy could not evaluate any feasible compaction fraction")
-    risk_budget = 0.16 if face_count < 500_000 else 0.18
+    if render_only_evidence:
+        risk_budget = 0.17
+    else:
+        risk_budget = 0.16 if face_count < 500_000 else 0.18
     safe_rows = [row for row in rows if float(row["risk"]) <= risk_budget]
     if safe_rows:
         best_safe = max(safe_rows, key=lambda row: (float(row["objective"]), float(row["fraction"])))
@@ -446,7 +464,10 @@ def decide_adaptive_compaction_policy(
     else:
         min_risk = min(float(row["risk"]) for row in rows)
         fallback_rows = [row for row in rows if float(row["risk"]) <= min_risk + 0.035]
-        positive_risk_cap = 0.885 if face_count < 150_000 else 0.90
+        if render_only_evidence:
+            positive_risk_cap = 0.24
+        else:
+            positive_risk_cap = 0.885 if face_count < 150_000 else 0.90
         evidence_safe_rows = [row for row in fallback_rows if float(row["positive_risk"]) <= positive_risk_cap]
         if evidence_safe_rows:
             fallback_rows = evidence_safe_rows
@@ -457,7 +478,8 @@ def decide_adaptive_compaction_policy(
     reason = (
         "selected_fraction_by_csef_objective:"
         f"benefit={best_row['benefit']:.4f},risk={best_row['risk']:.4f},"
-        f"score_mode={score_mode}"
+        f"score_mode={score_mode},"
+        f"evidence={'render_only_conservative' if render_only_evidence else 'multi_signal'}"
     )
     decision = AdaptiveCompactionPolicyDecision(
         mode="csef_adaptive_policy",

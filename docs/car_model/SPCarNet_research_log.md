@@ -5623,3 +5623,36 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 - This is still baseline infrastructure only.  The official 30k test render/eval pass remains pending until the full clean queue finishes.
 
 **Active queue**: the clean queue advanced to `kitchen`, W&B run `gbb8a3zf`.
+
+---
+
+## 2026-05-07 - Kitchen same-protocol clean30k checkpoint completed
+
+**Milestone**: the official-protocol clean MeshSplatting baseline for Mip-NeRF360 `kitchen` completed on GPU `4` with W&B run `gbb8a3zf`.
+
+**Artifacts**:
+- split checkpoint for fixed-budget method validation: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/kitchen/point_cloud/iteration_26000/point_cloud_state_dict.pt` (`709M`, timestamp `2026-05-07 10:36 PDT`)
+- final clean checkpoint: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/kitchen/point_cloud/iteration_30000/point_cloud_state_dict.pt` (`709M`, timestamp `2026-05-07 10:46 PDT`)
+
+**Run notes**:
+- `kitchen` used the canonical indoor full_eval training path: `images_2` with `--indoor`.
+- The clean queue advanced to `bonsai`; this is the final remaining same-protocol clean30k checkpoint.
+- Official render/eval for completed clean scenes has started separately under W&B group `paper_m360_official_clean30k_eval_partial8`.
+
+---
+
+## 2026-05-07 - Render-only compaction risk correction
+
+**Finding**: the first fixed-budget CSEF-ATR paper-protocol branch was too aggressive on large outdoor meshes. On `bicycle`, the adaptive selector removed `6,077,790 / 9,422,930` triangles (`64.5%`) and the independent `ours_30000` test result was `PSNR 22.5419`, `SSIM 0.61035`, `LPIPS 0.37380`. This is below the paper-reference clean MeshSplatting `bicycle` PSNR (`23.04`), so this branch must not be promoted as a winning method.
+
+**Diagnosis**:
+- The checkpoint currently exposes only render-importance style per-face evidence.
+- In this render-only case, the policy treated missing sparse/normal/debt/boundary evidence as low risk instead of unknown risk.
+- That made the objective over-reward large triangle reductions and under-penalize removal of test-view support.
+
+**Correction**:
+- `decide_adaptive_compaction_policy` now detects render-only evidence globally.
+- In render-only mode it uses a conservative fixed cap (`<=24%` for million-face meshes), raises positive-evidence risk weight, and records the reason as `render_only_conservative`.
+- A synthetic large-mesh smoke selected `18%` prune with risk budget `0.17`, validating that the same policy no longer jumps to `64.5%` without independent evidence.
+
+**Active validation**: a new v2 fixed-budget branch is running on `bicycle` under `outputs/carnet/meshsplatopt/paper_m360_repro/fixedbudget_csef_atr_v2_renderaware_26kto30k` and W&B group `paper_m360_fixedbudget_csef_atr_v2_renderaware_26kto30k`. No superiority claim is made until its `ours_30000` independent test render/eval is compared against the clean `ours_30000` baseline.
