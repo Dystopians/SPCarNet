@@ -304,6 +304,8 @@ def _geometry_args(args: argparse.Namespace) -> list[str]:
         args.output_path,
         "--images",
         args.images,
+        "--resolution",
+        str(args.resolution),
         "--eval",
         "--iteration",
         str(args.final_iteration),
