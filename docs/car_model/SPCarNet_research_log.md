@@ -5480,3 +5480,20 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 **Interpretation**: the local code/data/render/metric stack is now calibrated against the MeshSplatting paper for at least one outdoor Mip-NeRF360 scene.  This removes the previous suspicion that a large paper-table gap was caused by a render or split mismatch.  It does **not** prove that our method beats the baseline; it only validates the baseline protocol.
 
 **Next active run**: launched the full nine-scene official clean queue on GPU `4`, W&B group `paper_m360_official_clean30k`, starting with `bicycle` run `c08zvifs`.  This queue saves both `26000` and `30000` checkpoints.  The prior Garden run must be rerun later to add its missing `26000` split checkpoint for fixed-budget method validation.
+
+---
+
+## 2026-05-07 - Bicycle same-protocol clean30k checkpoint completed
+
+**Milestone**: the official-protocol clean MeshSplatting baseline for Mip-NeRF360 `bicycle` completed on GPU `4` with W&B run `c08zvifs`.
+
+**Artifacts**:
+- split checkpoint for fixed-budget method validation: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/bicycle/point_cloud/iteration_26000/point_cloud_state_dict.pt` (`909M`)
+- final clean checkpoint: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/bicycle/point_cloud/iteration_30000/point_cloud_state_dict.pt` (`909M`)
+
+**Run notes**:
+- `bicycle` took about `1:09:00` of training wall time after the long official restricted-Delaunay phase around iteration `11000`.
+- Final W&B training summary reported `9,422,930` triangles and `3,490,855` vertices.
+- No RGB/geometry metrics are claimed yet for this checkpoint.  It still needs the official render, `metrics.py`, and sparse COLMAP geometry pass after the clean queue reaches a stable evaluation point.
+
+**Active queue**: the clean queue automatically advanced to `flowers`, W&B run `chq07xhy`.  The next expected long stall is again around the official restricted-Delaunay stage near iteration `11000`.
