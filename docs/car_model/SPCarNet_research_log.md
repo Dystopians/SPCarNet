@@ -5557,3 +5557,19 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 - This scene already had a calibrated clean30k metric match to the MeshSplatting paper from the earlier Garden run; however, this rerun is the one with the required `26000` split for fixed-budget method comparisons.
 
 **Active queue**: the clean queue advanced to `stump`, W&B run `nsdy9070`.
+
+---
+
+## 2026-05-07 - Stump same-protocol clean30k checkpoint completed
+
+**Milestone**: the official-protocol clean MeshSplatting baseline for Mip-NeRF360 `stump` completed on GPU `4` with W&B run `nsdy9070`.
+
+**Artifacts**:
+- split checkpoint for fixed-budget method validation: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/stump/point_cloud/iteration_26000/point_cloud_state_dict.pt` (`919M`, timestamp `2026-05-07 06:30 PDT`)
+- final clean checkpoint: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/stump/point_cloud/iteration_30000/point_cloud_state_dict.pt` (`919M`, timestamp `2026-05-07 06:37 PDT`)
+
+**Run notes**:
+- `stump` showed the same expected official restricted-Delaunay CPU-bound stage around iteration `11000`, then resumed normal training and completed cleanly.
+- No method-vs-baseline claim is made from this checkpoint.  It only extends the same-protocol clean baseline evidence needed for a fair final comparison.
+
+**Active queue**: the clean queue advanced to `treehill`, command name `clean30k_treehill_official_images_4`.
