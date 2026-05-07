@@ -35,23 +35,24 @@ def _finite(value: Any) -> float:
     return out if math.isfinite(out) else math.nan
 
 
-def _scene_method(results: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
-    payload = results.get("ours_30000")
+def _scene_method(results: dict[str, Any], iteration: int) -> tuple[str, dict[str, Any]] | None:
+    method = f"ours_{int(iteration)}"
+    payload = results.get(method)
     if not isinstance(payload, dict):
         return None
-    return "ours_30000", dict(payload)
+    return method, dict(payload)
 
 
-def collect(root: Path, scenes: list[str]) -> list[dict[str, Any]]:
+def collect(root: Path, scenes: list[str], iteration: int) -> list[dict[str, Any]]:
     rows = []
     for scene in scenes:
         result_path = root / scene / "results.json"
         if not result_path.exists():
             rows.append({"scene": scene, "status": "missing_results"})
             continue
-        method_payload = _scene_method(_read_json(result_path))
+        method_payload = _scene_method(_read_json(result_path), iteration)
         if method_payload is None:
-            rows.append({"scene": scene, "status": "missing_ours_30000"})
+            rows.append({"scene": scene, "status": f"missing_ours_{int(iteration)}"})
             continue
         method, metrics = method_payload
         paper = PAPER.get(scene, {})
@@ -104,7 +105,7 @@ def maybe_wandb(args: argparse.Namespace, rows: list[dict[str, Any]], summary: d
         group=args.wandb_group,
         name=args.wandb_name,
         mode=args.wandb_mode,
-        config={"root": args.root, "scenes": args.scenes},
+        config={"root": args.root, "scenes": args.scenes, "iteration": int(args.iteration)},
     )
     payload = {f"paper_m360/{key}": value for key, value in summary.items() if isinstance(value, (int, float))}
     for row in rows:
@@ -122,6 +123,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Collect same-protocol Mip-NeRF360 reproduction metrics.")
     parser.add_argument("--root", default="outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k")
     parser.add_argument("--scenes", default="bicycle,flowers,garden,stump,treehill,room,counter,kitchen,bonsai")
+    parser.add_argument("--iteration", type=int, default=30000)
     parser.add_argument("--out-csv", default="outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/repro_metrics_vs_paper.csv")
     parser.add_argument("--out-json", default="outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/repro_metrics_vs_paper.json")
     parser.add_argument("--wandb", action="store_true")
@@ -132,7 +134,7 @@ def main() -> int:
     args = parser.parse_args()
 
     scenes = [item.strip() for item in args.scenes.split(",") if item.strip()]
-    rows = collect(Path(args.root), scenes)
+    rows = collect(Path(args.root), scenes, args.iteration)
     ok_rows = [row for row in rows if row.get("status") == "ok"]
     summary = {
         "completed_scenes": len(ok_rows),

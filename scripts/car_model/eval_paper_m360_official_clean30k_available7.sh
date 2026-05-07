@@ -70,6 +70,9 @@ echo "[M360 clean30k eval] collect and log metrics"
 "${PYTHON_BIN}" scripts/car_model/collect_paper_m360_repro_metrics.py \
   --root "${OUT_ROOT}" \
   --scenes "$(echo "${SCENES}" | tr ' ' ',')" \
+  --iteration "${FINAL_ITERATION}" \
+  --out-csv "${OUT_ROOT}/repro_metrics_vs_paper_iter${FINAL_ITERATION}.csv" \
+  --out-json "${OUT_ROOT}/repro_metrics_vs_paper_iter${FINAL_ITERATION}.json" \
   --wandb \
   --wandb_project "${WANDB_PROJECT:-spcarnet_meshprior}" \
   --wandb_group "${WANDB_GROUP:-paper_m360_official_clean30k}" \

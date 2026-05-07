@@ -5656,3 +5656,44 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 - A synthetic large-mesh smoke selected `18%` prune with risk budget `0.17`, validating that the same policy no longer jumps to `64.5%` without independent evidence.
 
 **Active validation**: a new v2 fixed-budget branch is running on `bicycle` under `outputs/carnet/meshsplatopt/paper_m360_repro/fixedbudget_csef_atr_v2_renderaware_26kto30k` and W&B group `paper_m360_fixedbudget_csef_atr_v2_renderaware_26kto30k`. No superiority claim is made until its `ours_30000` independent test render/eval is compared against the clean `ours_30000` baseline.
+
+---
+
+## 2026-05-07 - Same-protocol baseline correction and compact-ELA breakthrough
+
+**Fairness correction**: the clean MeshSplatting reproduction now keeps iteration-specific metric exports instead of letting a clean26k eval overwrite clean30k CSV/JSON files. The official eval wrapper passes `--iteration`, `--out-csv`, and `--out-json`, so future tables can distinguish:
+- `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/repro_metrics_vs_paper_iter26000.csv`
+- `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/repro_metrics_vs_paper_iter30000.csv`
+
+**Clean baseline status**:
+- clean26k available rows: `8/9` scenes; `bonsai` is still training.
+- clean26k 8-scene mean: `PSNR 24.6837`, `SSIM 0.7306`, `LPIPS 0.2911`.
+- clean30k 8-scene mean: `PSNR 24.3529`, `SSIM 0.7125`, `LPIPS 0.3093`.
+- This proves again that the fair comparison must use the best held-out clean checkpoint per scene, not blindly prefer the longest training run.
+
+**Recovery diagnosis**:
+- V1 aggressive fixed-budget recovery on `bicycle` pruned `64.5%` triangles but fell to `PSNR 22.5419`, `SSIM 0.61035`, `LPIPS 0.37380`.
+- V2 conservative render-aware recovery pruned `18%` triangles but still fell to `PSNR 22.5344`, `SSIM 0.60826`, `LPIPS 0.37146`.
+- V3 photometric-only recovery improved over V2 but remained below clean/compact-only: `PSNR 22.7292`, `SSIM 0.62236`, `LPIPS 0.36325`.
+- Compact-only at 26k preserved bicycle RGB exactly within metric noise while removing `18%` triangles, so the damaging part is the forced recovery optimization, not the conservative compaction.
+
+**New method branch**: `CSEF-ATR compact + train-only Evidence Lumigraph Adapter (ELA)`.
+- Script: `scripts/car_model/run_paper_m360_compact_ela_policy_available7.sh`.
+- Collector: `scripts/car_model/collect_paper_m360_compact_ela_policy_metrics.py`.
+- Policy: compact the clean checkpoint with the global adaptive CSEF-ATR selector, render train/test RGB-depth evidence, calibrate an ELA policy only on train views, then apply it to held-out test views. No train metric or test metric is used for checkpoint selection.
+
+**First result, bicycle 26k compact-ELA**:
+- Clean best RGB baseline selected from held-out test score: clean26k (`PSNR 23.3016`, `SSIM 0.65987`, `LPIPS 0.33208`).
+- Method: `PSNR 23.9129`, `SSIM 0.69270`, `LPIPS 0.28128`.
+- Delta vs selected clean baseline: `+0.6113 PSNR`, `+0.03283 SSIM`, `-0.05079 LPIPS`.
+- Topology: `9,422,930 -> 7,726,803` triangles (`18.0%` reduction), vertices `3,490,855 -> 3,285,957`.
+- Geometry: depth/normal are geometry-safe relative to clean26k within numerical tolerance, but this is not yet a strict all-geometry win.
+- W&B: ELA run `5dpsbzpy`; compact-vs-clean collector smoke `ypci5xcw`.
+
+**Current active validations**:
+- Outdoor compact-ELA 26k queue is continuing on `flowers garden stump treehill`.
+- A 30k compact-ELA bicycle probe is running to test whether using the final clean checkpoint can combine stronger geometry with ELA-repaired RGB.
+- A train-split sparse-occluder (SOR) bicycle branch is running to target the remaining geometry gap without test leakage.
+- Clean official `bonsai` is still training toward the final same-protocol 30k checkpoint.
+
+**Claim status**: this is the first genuinely strong same-protocol RGB+compact win against the strongest clean baseline on a Mip-NeRF360 scene. It is not yet a full paper claim because multi-scene compact-ELA and strict geometry wins are still pending.
