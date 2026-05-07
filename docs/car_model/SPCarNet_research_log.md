@@ -5462,3 +5462,21 @@ This is still one fixed policy, not per-scene tuning.
 **Dataset expansion**: imported the missing official Mip-NeRF360 `flowers` and `treehill` scenes from `http://storage.googleapis.com/gresearch/refraw360/`.  The local benchmark root now has the full paper scene set: `bicycle`, `flowers`, `garden`, `stump`, `treehill`, `room`, `counter`, `kitchen`, and `bonsai`.
 
 **Active evidence**: the first same-protocol clean reproduction is still running on `garden` (`images_4`, `--eval`, 30k, W&B run `el3kj209`).  This first launch predates the `26000` save update, so it is valid for clean paper-protocol reproduction but not yet sufficient for fixed-budget method validation on Garden.
+
+---
+
+## 2026-05-07 - Garden same-protocol MeshSplatting reproduction passed
+
+**Result**: the official-protocol clean MeshSplatting reproduction on Mip-NeRF360 `garden` matches the paper almost exactly:
+
+| scene | local PSNR | paper PSNR | local SSIM | paper SSIM | local LPIPS | paper LPIPS |
+|---|---:|---:|---:|---:|---:|---:|
+| garden | 24.697647 | 24.70 | 0.761070 | 0.762 | 0.216561 | 0.217 |
+
+The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  W&B metric-collection run: `2vlfanty`; training run: `el3kj209`.
+
+**Geometry side record**: the same clean30k checkpoint has COLMAP sparse geometry metrics AbsRel `0.007413`, Depth MAE `0.112305`, and mean normal angle `30.568113` degrees with `11998` valid sparse samples.
+
+**Interpretation**: the local code/data/render/metric stack is now calibrated against the MeshSplatting paper for at least one outdoor Mip-NeRF360 scene.  This removes the previous suspicion that a large paper-table gap was caused by a render or split mismatch.  It does **not** prove that our method beats the baseline; it only validates the baseline protocol.
+
+**Next active run**: launched the full nine-scene official clean queue on GPU `4`, W&B group `paper_m360_official_clean30k`, starting with `bicycle` run `c08zvifs`.  This queue saves both `26000` and `30000` checkpoints.  The prior Garden run must be rerun later to add its missing `26000` split checkpoint for fixed-budget method validation.

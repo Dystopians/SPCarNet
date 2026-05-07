@@ -81,21 +81,39 @@ The queue defaults now follow the paper's nine-scene order: `bicycle`, `flowers`
 
 Any `30000 -> 34000` method recovery is only a diagnostic longer-budget experiment unless a clean `34000` continuation is also evaluated.
 
+## Garden Calibration Result
+
+The first official-protocol reproduction run is complete:
+
+| scene | local PSNR | paper PSNR | local SSIM | paper SSIM | local LPIPS | paper LPIPS |
+|---|---:|---:|---:|---:|---:|---:|
+| garden | 24.697647 | 24.70 | 0.761070 | 0.762 | 0.216561 | 0.217 |
+
+The deltas are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  This is close enough to treat the local official clean protocol as calibrated for Garden.  It is still only one scene; the paper headline is the nine-scene mean, so no method claim should use this as a full benchmark result.
+
+The same checkpoint's sparse COLMAP geometry record is:
+
+- AbsRel: `0.007413`
+- Depth MAE: `0.112305`
+- normal mean angle: `30.568113` degrees
+- valid sparse samples: `11998`
+
+W&B runs:
+
+- training: `el3kj209`
+- metric collection: `2vlfanty`
+
 ## Active Run
 
-The first official-protocol reproduction run has been launched:
+The full official clean queue has now been launched:
 
-- Scene: `garden`
-- Source: `/data/peilincai/mesh_datasets/mipnerf360/garden`
-- Image scale: `images_4`
-- Iterations: `30000`
-- Output: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden`
+- Scene order: `bicycle`, `flowers`, `garden`, `stump`, `treehill`, `room`, `counter`, `kitchen`, `bonsai`
+- Clean checkpoints saved: `26000` and `30000`
+- Output root: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k`
 - W&B group: `paper_m360_official_clean30k`
-- W&B run name: `clean30k_garden_official_images4`
+- Current first scene: `bicycle`, W&B run `c08zvifs`
 
-This run is the first sanity check for whether our local code/data protocol can approach the paper's Garden PSNR `24.70`. If it does not, the mismatch must be diagnosed before claiming same-protocol comparisons.
-
-Note: this first Garden process was launched before the clean queue was updated to save the `26000` split checkpoint. It is still valid for clean paper-protocol reproduction, but fixed-budget method validation on Garden requires a rerun or continuation that provides the `26000` clean checkpoint.
+Note: the completed Garden calibration run was launched before the clean queue was updated to save the `26000` split checkpoint. It is valid for clean paper-protocol reproduction, but fixed-budget method validation on Garden requires the queue rerun to provide the `26000` clean checkpoint.
 
 ## Claim Discipline
 
@@ -109,3 +127,4 @@ Not allowed today:
 - "We beat the MeshSplatting paper Mip-NeRF360 result."
 - "We are above PSNR 24.78 on Mip-NeRF360."
 - "We have a full 9-scene Mip-NeRF360 same-protocol comparison."
+- "Our method beats the calibrated Garden baseline." Garden currently calibrates only the clean baseline; the fixed-budget method row has not been run under this protocol yet.
