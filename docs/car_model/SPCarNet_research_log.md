@@ -5573,3 +5573,19 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 - No method-vs-baseline claim is made from this checkpoint.  It only extends the same-protocol clean baseline evidence needed for a fair final comparison.
 
 **Active queue**: the clean queue advanced to `treehill`, command name `clean30k_treehill_official_images_4`.
+
+---
+
+## 2026-05-07 - Treehill same-protocol clean30k checkpoint completed
+
+**Milestone**: the official-protocol clean MeshSplatting baseline for Mip-NeRF360 `treehill` completed on GPU `4` with W&B run `13h7uyhb`.
+
+**Artifacts**:
+- split checkpoint for fixed-budget method validation: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/treehill/point_cloud/iteration_26000/point_cloud_state_dict.pt` (`934M`, timestamp `2026-05-07 07:33 PDT`)
+- final clean checkpoint: `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/treehill/point_cloud/iteration_30000/point_cloud_state_dict.pt` (`934M`, timestamp `2026-05-07 07:43 PDT`)
+
+**Run notes**:
+- `treehill` had the longest outdoor restricted-Delaunay stage so far: it paused around iteration `11000` with high CPU/RSS activity, then resumed and completed normally.
+- This completes the five outdoor Mip-NeRF360 clean30k checkpoints under the paper/full_eval training protocol.  The RGB/geometry table is still pending the official render/eval pass.
+
+**Active queue**: the clean queue advanced to `room`, W&B command name `clean30k_room_official_images_2`, with `--indoor` enabled.
