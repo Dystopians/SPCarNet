@@ -5366,3 +5366,26 @@ F5 checkpoint compaction smoke PASS: area_triangles=2564473 csef_triangles=25644
 **Updated audit**: `docs/car_model/stageELA11_strict_multiaxis_audit_report.md` now reports `STRICT_MULTIAXIS_SELECTED_SCENES_FULL_PASS`: bonsai, courtyard, room, and counter each have at least one strict full-pass row versus their own clean9000 Mesh Splatting baseline.  Parking remains a separate cross-dataset full-pass support row.
 
 **Decision**: `STRICT_MULTIAXIS_SELECTED_SCENES_FULL_PASS`.  The selected clean9000 scene set is now closed under the strict RGB + sparse geometry + triangle-count criterion.  Remaining paper work should shift from proving existence to robustness: more datasets, per-view failure analysis, overhead/complexity tables, and clearer ablations for the adaptive router.
+
+---
+
+## 2026-05-06 - ELA11 final selected-scene package
+
+**Goal**: turn the strict full-pass result into a paper-facing evidence package rather than a single average table.  The package freezes one promoted method row per selected scene and audits average RGB, sparse geometry, topology, per-view RGB deltas, and qualitative examples.
+
+**Implementation**: added `scripts/car_model/meshsplatopt_collect_stageela11_final_package.py`.  It fixes the promoted rows as bonsai/courtyard SOR10 + ELA safe and room/counter QEM50 parent-rollback + ELA safe, then generates CSV/JSON outputs plus a mechanical worst/middle/best qualitative gallery per scene.
+
+**Per-view stress test**: all selected held-out views pass RGB metrics against clean Mesh Splatting:
+- bonsai: `37/37` RGB full-pass views, minimum dPSNR `+0.837978`.
+- courtyard: `5/5` RGB full-pass views, minimum dPSNR `+0.210857`.
+- room: `39/39` RGB full-pass views, minimum dPSNR `+0.453001`.
+- counter: `30/30` RGB full-pass views, minimum dPSNR `+1.043489`.
+
+**Artifacts**:
+- report: `docs/car_model/stageELA11_final_selected_scene_package_report.md`
+- summary JSON: `outputs/carnet/meshsplatopt/stageELA11_final_selected_scene_package/final_selected_scene_summary.json`
+- average CSV: `outputs/carnet/meshsplatopt/stageELA11_final_selected_scene_package/promoted_average_rows.csv`
+- per-view CSV: `outputs/carnet/meshsplatopt/stageELA11_final_selected_scene_package/per_view_rgb_deltas.csv`
+- qualitative gallery: `outputs/carnet/meshsplatopt/stageELA11_final_selected_scene_package/qualitative_gallery/gallery.html`
+
+**Decision**: `STAGE_ELA11_FINAL_SELECTED_SCENE_PACKAGE_READY`.  The selected-scene evidence is now strong in averages and in per-view RGB robustness.  The remaining risk is external validity beyond the selected scene set, not failure against the clean Mesh Splatting baseline on these scenes.
