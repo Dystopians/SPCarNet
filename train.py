@@ -864,6 +864,23 @@ def _compute_checkpoint_render_geometry_anchor_loss(render_pkg, viewpoint_cam, c
     return {"loss_weighted": total, "depth_pure": depth_pure, "normal_pure": normal_pure}
 
 
+def _render_cache_candidates(render_dir: str, cam, idx: int) -> list[str]:
+    stem = str(getattr(cam, "image_name", "") or "").strip()
+    candidates: list[str] = []
+    if stem:
+        base, ext = os.path.splitext(stem)
+        if ext:
+            candidates.append(os.path.join(render_dir, stem))
+        else:
+            for suffix in (".png", ".jpg", ".jpeg"):
+                candidates.append(os.path.join(render_dir, stem + suffix))
+            candidates.append(os.path.join(render_dir, stem))
+        if base and base != stem:
+            candidates.append(os.path.join(render_dir, base + ".png"))
+    candidates.append(os.path.join(render_dir, f"{idx:05d}.png"))
+    return list(dict.fromkeys(candidates))
+
+
 def _load_teacher_render_cache(render_dir: str, train_cameras, label: str = "TeacherRender") -> dict:
     render_dir = str(render_dir or "").strip()
     if not render_dir:
@@ -873,7 +890,7 @@ def _load_teacher_render_cache(render_dir: str, train_cameras, label: str = "Tea
         return {}
     cache = {}
     for idx, cam in enumerate(list(train_cameras)):
-        path = os.path.join(render_dir, f"{idx:05d}.png")
+        path = next((p for p in _render_cache_candidates(render_dir, cam, idx) if os.path.exists(p)), "")
         if not os.path.exists(path):
             continue
         try:

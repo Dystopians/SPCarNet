@@ -351,22 +351,36 @@ def _edge_acceptance_mask(
 class BenefitCalibrator:
     confidence_edges: tuple[float, ...]
     magnitude_edges: tuple[float, ...]
-    gain_table: tuple[tuple[float, ...], ...]
-    count_table: tuple[tuple[int, ...], ...]
-    accept_table: tuple[tuple[bool, ...], ...]
+    gain_table: object
+    count_table: object
+    accept_table: object
     min_gain: float = 0.0
     min_bin_count: int = 64
+    edge_edges: tuple[float, ...] | None = None
+    feature_mode: str = "confidence_magnitude"
 
     def to_json(self) -> dict[str, object]:
+        def _nested_list(value: object) -> object:
+            if isinstance(value, tuple):
+                return [_nested_list(v) for v in value]
+            return value
+
+        def _count_true(value: object) -> int:
+            if isinstance(value, tuple):
+                return sum(_count_true(v) for v in value)
+            return int(bool(value))
+
         return {
+            "feature_mode": str(self.feature_mode),
             "confidence_edges": list(self.confidence_edges),
             "magnitude_edges": list(self.magnitude_edges),
-            "gain_table": [list(row) for row in self.gain_table],
-            "count_table": [list(row) for row in self.count_table],
-            "accept_table": [list(row) for row in self.accept_table],
+            "edge_edges": list(self.edge_edges) if self.edge_edges is not None else None,
+            "gain_table": _nested_list(self.gain_table),
+            "count_table": _nested_list(self.count_table),
+            "accept_table": _nested_list(self.accept_table),
             "min_gain": float(self.min_gain),
             "min_bin_count": int(self.min_bin_count),
-            "accepted_bins": int(sum(int(v) for row in self.accept_table for v in row)),
+            "accepted_bins": int(_count_true(self.accept_table)),
         }
 
     def acceptance_mask(
@@ -374,6 +388,7 @@ class BenefitCalibrator:
         confidence: torch.Tensor,
         signal: torch.Tensor,
         *,
+        base: torch.Tensor | None = None,
         device: torch.device | str | None = None,
     ) -> torch.Tensor:
         device = torch.device(device or confidence.device)
@@ -386,7 +401,16 @@ class BenefitCalibrator:
         accept = torch.tensor(self.accept_table, device=device, dtype=torch.bool)
         conf_idx = torch.bucketize(conf_feature.reshape(-1), conf_edges[1:-1], right=False)
         mag_idx = torch.bucketize(mag_feature.reshape(-1), mag_edges[1:-1], right=False)
-        mask = accept[conf_idx, mag_idx].reshape(conf_feature.shape)
+        if self.edge_edges is not None:
+            if base is None:
+                edge_feature = torch.zeros_like(conf_feature)
+            else:
+                edge_feature = _image_edge_magnitude(base.to(device=device, dtype=torch.float32)).squeeze(0)
+            edge_edges = torch.tensor(self.edge_edges, device=device, dtype=torch.float32)
+            edge_idx = torch.bucketize(edge_feature.reshape(-1), edge_edges[1:-1], right=False)
+            mask = accept[conf_idx, mag_idx, edge_idx].reshape(conf_feature.shape)
+        else:
+            mask = accept[conf_idx, mag_idx].reshape(conf_feature.shape)
         return mask.unsqueeze(0)
 
 
@@ -501,6 +525,7 @@ def _strictly_increasing_edges(edges: torch.Tensor) -> torch.Tensor:
 def fit_benefit_calibrator(
     train_frames: Sequence[FrameRecord],
     *,
+    calibration_target_frames: Sequence[FrameRecord] | None = None,
     k: int,
     mode: str,
     calib_stride: int,
@@ -514,8 +539,11 @@ def fit_benefit_calibrator(
     min_gain: float = 0.0,
     min_bin_count: int = 64,
     max_pixels_per_view: int = 4096,
+    feature_mode: str = "confidence_magnitude",
     device: torch.device | str = "cuda",
 ) -> BenefitCalibrator:
+    if feature_mode not in {"confidence_magnitude", "confidence_magnitude_edge"}:
+        raise ValueError(f"Unsupported benefit feature mode: {feature_mode}")
     if mode != "residual" or not train_frames:
         return BenefitCalibrator(
             confidence_edges=(0.0, 1.0),
@@ -525,15 +553,20 @@ def fit_benefit_calibrator(
             accept_table=((False,),),
             min_gain=min_gain,
             min_bin_count=min_bin_count,
+            feature_mode=feature_mode,
         )
     device = torch.device(device)
     loader = FrameLoader(device=device)
-    candidates = _calibration_candidates(train_frames, calib_stride, calib_max_views, calib_sampler)
+    target_pool = calibration_target_frames if calibration_target_frames is not None else train_frames
+    candidates = _calibration_candidates(target_pool, calib_stride, calib_max_views, calib_sampler)
     conf_values: list[torch.Tensor] = []
     mag_values: list[torch.Tensor] = []
+    edge_values: list[torch.Tensor] = []
     gain_values: list[torch.Tensor] = []
     for target in candidates:
         support = [frame for frame in train_frames if frame.name != target.name]
+        if not support:
+            continue
         gt = loader.gt(str(target.gt_path)).to(device)
         ev = compute_evidence_signal(
             target,
@@ -555,10 +588,13 @@ def fit_benefit_calibrator(
             continue
         conf = torch.log1p(torch.clamp(ev.confidence.squeeze(0), min=0.0))[valid]
         mag = torch.linalg.vector_norm(ev.signal, dim=0)[valid]
+        edge = _image_edge_magnitude(ev.base).squeeze(0)[valid]
         gain = benefit[valid]
         max_samples = max(int(max_pixels_per_view), 1)
         conf_values.append(_sample_1d(conf.detach(), max_samples).cpu())
         mag_values.append(_sample_1d(mag.detach(), max_samples).cpu())
+        if feature_mode == "confidence_magnitude_edge":
+            edge_values.append(_sample_1d(edge.detach(), max_samples).cpu())
         gain_values.append(_sample_1d(gain.detach(), max_samples).cpu())
     if not conf_values:
         return BenefitCalibrator(
@@ -569,6 +605,7 @@ def fit_benefit_calibrator(
             accept_table=((False,),),
             min_gain=min_gain,
             min_bin_count=min_bin_count,
+            feature_mode=feature_mode,
         )
     conf_all = torch.cat(conf_values).float()
     mag_all = torch.cat(mag_values).float()
@@ -585,21 +622,47 @@ def fit_benefit_calibrator(
     mag_edges = _strictly_increasing_edges(mag_edges)
     conf_idx = torch.bucketize(conf_all, conf_edges[1:-1], right=False)
     mag_idx = torch.bucketize(mag_all, mag_edges[1:-1], right=False)
-    gain_sum = torch.zeros((bin_count, bin_count), dtype=torch.float64)
-    counts = torch.zeros((bin_count, bin_count), dtype=torch.int64)
-    for c, m, g in zip(conf_idx.tolist(), mag_idx.tolist(), gain_all.tolist()):
-        gain_sum[c, m] += float(g)
-        counts[c, m] += 1
+    edge_edges_tuple: tuple[float, ...] | None = None
+    if feature_mode == "confidence_magnitude_edge":
+        edge_all = torch.cat(edge_values).float()
+        edge_edges = torch.quantile(edge_all, quantiles).float()
+        edge_edges[0] = min(edge_edges[0], edge_all.min()) - 1e-6
+        edge_edges[-1] = max(edge_edges[-1], edge_all.max()) + 1e-6
+        edge_edges = _strictly_increasing_edges(edge_edges)
+        edge_idx = torch.bucketize(edge_all, edge_edges[1:-1], right=False)
+        gain_sum = torch.zeros((bin_count, bin_count, bin_count), dtype=torch.float64)
+        counts = torch.zeros((bin_count, bin_count, bin_count), dtype=torch.int64)
+        for c, m, e, g in zip(conf_idx.tolist(), mag_idx.tolist(), edge_idx.tolist(), gain_all.tolist()):
+            gain_sum[c, m, e] += float(g)
+            counts[c, m, e] += 1
+        edge_edges_tuple = tuple(float(x) for x in edge_edges.tolist())
+    else:
+        gain_sum = torch.zeros((bin_count, bin_count), dtype=torch.float64)
+        counts = torch.zeros((bin_count, bin_count), dtype=torch.int64)
+        for c, m, g in zip(conf_idx.tolist(), mag_idx.tolist(), gain_all.tolist()):
+            gain_sum[c, m] += float(g)
+            counts[c, m] += 1
     mean_gain = torch.where(counts > 0, gain_sum / torch.clamp(counts, min=1), torch.zeros_like(gain_sum))
     accept = (mean_gain > float(min_gain)) & (counts >= int(min_bin_count))
     return BenefitCalibrator(
         confidence_edges=tuple(float(x) for x in conf_edges.tolist()),
         magnitude_edges=tuple(float(x) for x in mag_edges.tolist()),
-        gain_table=tuple(tuple(float(v) for v in row) for row in mean_gain.tolist()),
-        count_table=tuple(tuple(int(v) for v in row) for row in counts.tolist()),
-        accept_table=tuple(tuple(bool(v) for v in row) for row in accept.tolist()),
+        edge_edges=edge_edges_tuple,
+        gain_table=tuple(
+            tuple(tuple(float(v) for v in col) for col in row) if feature_mode == "confidence_magnitude_edge" else tuple(float(v) for v in row)
+            for row in mean_gain.tolist()
+        ),
+        count_table=tuple(
+            tuple(tuple(int(v) for v in col) for col in row) if feature_mode == "confidence_magnitude_edge" else tuple(int(v) for v in row)
+            for row in counts.tolist()
+        ),
+        accept_table=tuple(
+            tuple(tuple(bool(v) for v in col) for col in row) if feature_mode == "confidence_magnitude_edge" else tuple(bool(v) for v in row)
+            for row in accept.tolist()
+        ),
         min_gain=float(min_gain),
         min_bin_count=int(min_bin_count),
+        feature_mode=feature_mode,
     )
 
 
@@ -643,7 +706,7 @@ def adapt_frame(
     valid = evidence.valid
     benefit_accept = None
     if benefit_calibrator is not None and mode == "residual":
-        benefit_accept = benefit_calibrator.acceptance_mask(evidence.confidence, signal, device=device)
+        benefit_accept = benefit_calibrator.acceptance_mask(evidence.confidence, signal, base=evidence.base, device=device)
         valid = valid & benefit_accept
         signal = torch.where(valid, signal, torch.zeros_like(signal))
     edge_accept_fraction = None
@@ -685,6 +748,7 @@ def mse_to_psnr(mse: float) -> float:
 def calibrate_alpha(
     train_frames: Sequence[FrameRecord],
     *,
+    calibration_target_frames: Sequence[FrameRecord] | None = None,
     alpha_grid: Sequence[float],
     k: int,
     mode: str,
@@ -709,7 +773,8 @@ def calibrate_alpha(
     if not train_frames:
         return {"alpha": 0.0, "reason": "no_train_frames", "rows": []}
     device = torch.device(device)
-    candidates = _calibration_candidates(train_frames, calib_stride, calib_max_views, calib_sampler)
+    target_pool = calibration_target_frames if calibration_target_frames is not None else train_frames
+    candidates = _calibration_candidates(target_pool, calib_stride, calib_max_views, calib_sampler)
     loader = FrameLoader(device=device)
     use_ssim = policy_objective != "psnr"
     lpips_model = None
@@ -733,6 +798,8 @@ def calibrate_alpha(
     }
     for target in candidates:
         support = [frame for frame in train_frames if frame.name != target.name]
+        if not support:
+            continue
         gt = loader.gt(str(target.gt_path))
         base = loader.render(str(target.render_path))
         base_mse = float(torch.mean((base - gt) ** 2).detach().cpu().item())

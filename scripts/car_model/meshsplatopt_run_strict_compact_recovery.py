@@ -18,6 +18,23 @@ from ss3dm_prior.meshsplatopt.checkpoint_compaction import checkpoint_path  # no
 PRESETS = ("compact_render_only", "compact_sparse_low_lambda", "compact_sparse_decay")
 
 
+def _iteration_schedule(args: argparse.Namespace) -> list[int]:
+    values = {int(args.final_iteration)}
+    for item in str(args.milestone_iterations or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        value = int(item)
+        if int(args.load_iteration) < value <= int(args.final_iteration):
+            values.add(value)
+    return sorted(values)
+
+
+def _extend_iteration_arg(cmd: list[str], flag: str, values: list[int]) -> None:
+    cmd.append(flag)
+    cmd.extend(str(v) for v in values)
+
+
 def _topology(model_path: Path, iteration: int) -> dict[str, int | str]:
     import torch
 
@@ -32,6 +49,7 @@ def _topology(model_path: Path, iteration: int) -> dict[str, int | str]:
 
 
 def _train_args(args: argparse.Namespace) -> list[str]:
+    eval_iterations = _iteration_schedule(args)
     cmd = [
         args.python,
         "train.py",
@@ -44,17 +62,15 @@ def _train_args(args: argparse.Namespace) -> list[str]:
         "--resolution",
         str(args.resolution),
         "--eval",
+        "--split_strategy",
+        args.split_strategy,
+        "--split_file",
+        args.split_file,
         "--load_iteration",
         str(args.load_iteration),
         "--seed",
         str(args.train_seed),
         "--iterations",
-        str(args.final_iteration),
-        "--test_iterations",
-        str(args.final_iteration),
-        "--save_iterations",
-        str(args.final_iteration),
-        "--checkpoint_iterations",
         str(args.final_iteration),
         "--densify_until_iter",
         str(args.load_iteration),
@@ -72,6 +88,9 @@ def _train_args(args: argparse.Namespace) -> list[str]:
         "--wandb_scalar_log_interval",
         "50",
     ]
+    _extend_iteration_arg(cmd, "--test_iterations", eval_iterations)
+    _extend_iteration_arg(cmd, "--save_iterations", eval_iterations)
+    _extend_iteration_arg(cmd, "--checkpoint_iterations", eval_iterations)
     if args.lr_triangles_points_init is not None:
         cmd.extend(["--lr_triangles_points_init", str(args.lr_triangles_points_init)])
     if args.feature_lr is not None:
@@ -288,6 +307,10 @@ def _render_args(args: argparse.Namespace) -> list[str]:
         "--resolution",
         str(args.resolution),
         "--eval",
+        "--split_strategy",
+        args.split_strategy,
+        "--split_file",
+        args.split_file,
         "--iteration",
         str(args.final_iteration),
         "--skip_train",
@@ -307,6 +330,10 @@ def _geometry_args(args: argparse.Namespace) -> list[str]:
         "--resolution",
         str(args.resolution),
         "--eval",
+        "--split_strategy",
+        args.split_strategy,
+        "--split_file",
+        args.split_file,
         "--iteration",
         str(args.final_iteration),
         "--max_points_per_view",
@@ -335,6 +362,9 @@ def run(args: argparse.Namespace) -> int:
         "wandb_group": args.wandb_group,
         "wandb_name": args.wandb_name,
         "train_seed": int(args.train_seed),
+        "milestone_iterations": _iteration_schedule(args),
+        "split_strategy": args.split_strategy,
+        "split_file": args.split_file,
         "indoor": bool(args.indoor),
         "teacher_render_lambda": float(args.teacher_render_lambda),
         "teacher_render_dir": args.teacher_render_dir,
@@ -414,8 +444,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output_path", required=True)
     parser.add_argument("--load_iteration", type=int, required=True)
     parser.add_argument("--final_iteration", type=int, required=True)
+    parser.add_argument(
+        "--milestone_iterations",
+        default="",
+        help="Comma-separated extra iterations to test/save/checkpoint before final_iteration.",
+    )
     parser.add_argument("--images", default="images")
     parser.add_argument("--resolution", type=int, default=4)
+    parser.add_argument("--split_strategy", default="llff")
+    parser.add_argument("--split_file", default="")
     parser.add_argument("--preset", choices=PRESETS, default="compact_render_only")
     parser.add_argument("--sparse_lambda", type=float, default=0.001)
     parser.add_argument("--sparse_start_iter", type=int, default=22000)

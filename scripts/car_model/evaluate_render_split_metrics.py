@@ -83,6 +83,11 @@ def main() -> int:
     parser.add_argument("--methods", nargs="*", default=None)
     parser.add_argument("--output", default="")
     parser.add_argument("--per_view_output", default="")
+    parser.add_argument(
+        "--merge_model_results",
+        action="store_true",
+        help="Merge selected-method test metrics back into model_path/results.json and per_view.json.",
+    )
     args = parser.parse_args()
     torch.cuda.set_device(torch.device("cuda:0"))
     methods = set(args.methods) if args.methods else None
@@ -93,6 +98,16 @@ def main() -> int:
     )
     output.write_text(json.dumps(full, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     per_view_output.write_text(json.dumps(per_view, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if args.merge_model_results and args.split == "test":
+        model_path = Path(args.model_path)
+        result_path = model_path / "results.json"
+        existing = json.loads(result_path.read_text(encoding="utf-8")) if result_path.is_file() else {}
+        existing.update(full)
+        result_path.write_text(json.dumps(existing, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        per_view_path = model_path / "per_view.json"
+        existing_per_view = json.loads(per_view_path.read_text(encoding="utf-8")) if per_view_path.is_file() else {}
+        existing_per_view.update(per_view)
+        per_view_path.write_text(json.dumps(existing_per_view, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return 0
 
 

@@ -33,6 +33,9 @@ a reproducible artifact.
 | Phase-D attribute-only recovery smoke | `scripts/car_model/ecsr_collect_phase_d_attronly_smoke.py` | complete negative smoke |
 | Phase-D surface residual delta MVP | `scripts/car_model/ecsr_apply_surface_residual_delta.py` | complete negative smoke |
 | Phase-D residual delta collector | `scripts/car_model/ecsr_collect_phase_d_surface_residual_delta.py` | complete |
+| Phase-D constrained attribute collector | `scripts/car_model/ecsr_collect_phase_d_constrained_attr_recovery.py` | complete negative validation |
+| Policy-val COLMAP split exporter | `scripts/car_model/ecsr_export_policy_val_colmap_splits.py` | complete |
+| Phase-E policy-validated ELA probes | `docs/car_model/5-8-ECSR-PhaseE-PolicyValidatedELAProbes.md` | complete negative validation |
 
 ## Current-State Audit Result
 
@@ -129,6 +132,45 @@ This is a useful negative result rather than a final method: the checkpoint
 interface for representation-attached recovery is now real, but the accepted
 ECSR method must use local-mask policy metrics and a least-squares or learned
 residual solve instead of direct top-support DC offsets.
+
+Extended Phase-D validation added three stricter topology-frozen recovery
+experiments:
+
+- Constrained attribute recovery V1 on `bicycle`, `flowers`, `treehill`, and
+  `garden`: `0 / 4` accepted; all four regress RGB metrics vs compact-only.
+- Cache-fixed constrained attribute recovery V2 on the same four scenes:
+  teacher/parent render caches load correctly, but still `0 / 4` accepted.
+- Policy-val teacher distillation V1/V2/V3 on `flowers` and `garden`: all
+  variants keep topology unchanged but regress policy-val RGB metrics. V3 micro
+  reduces the regression to near no-op but still fails strict acceptance.
+
+This closes a concrete failure mode: direct topology-frozen feature/SH
+continuation from ELA-style teacher renders does not become a reliable
+representation-level recovery method under the current objective.
+
+## Phase-E Policy Probe Result
+
+Phase-E tested whether the visual bottleneck could be solved by a stronger
+train-only ELA decision policy instead of representation-side recovery.
+
+- Texture-aware benefit gate (`confidence_magnitude_edge`) on four outdoor
+  scenes regressed against current Compact-ELA/SOR on every scene.
+- Train-fit / train-policy-val policy selection is now implemented, but the
+  first `flowers`/`garden` probe is mixed or negative and is not promoted.
+- Expanding the ELA alpha grid to `1.5` did not help; calibration still selects
+  `alpha=1.0` and reproduces the current method.
+
+Artifacts:
+
+- `docs/car_model/5-8-ECSR-PhaseE-PolicyValidatedELAProbes.md`
+- W&B groups: `ecsr_tebg_edge_outdoor_v1`,
+  `ecsr_ela_holdout_auto_v1`, `ecsr_ela_alpha150_probe_v1`
+
+Interpretation: the current residual adapter is already close to the available
+image-space repair ceiling under the fixed train-only protocol. The next
+credible progress path is not another ELA policy tweak; it is cached
+certificate-carrying contraction plus a better representation-attached recovery
+objective.
 
 ## Design Decision Locked By This Pass
 
