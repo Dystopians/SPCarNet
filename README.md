@@ -2,7 +2,7 @@
 
 **Train-only evidence-guided compact Mesh Splatting with geometry-safe reconstruction repair.**
 
-[中文](README.zh.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [May 7 update](docs/car_model/5-7-Update.md) | [Upgrade plan](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
+[中文](README.zh.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [May 7 update](docs/car_model/5-7-Update.md) | [Upgrade plan](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR audit](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [Phase-A evidence](docs/car_model/5-8-ECSR-PhaseA-SurfaceEvidence.md) | [Phase-B graph](docs/car_model/5-8-ECSR-PhaseB-ViewSupportGraph.md) | [Policy split](docs/car_model/5-8-ECSR-PolicySplit.md) | [Execution log](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
 
 SPCarNet is a research branch built on Mesh Splatting. The current version does not try to win by a hand-tuned prune ratio. It uses train-split evidence to decide how much geometry can be safely compacted, then repairs the held-out render with a train-calibrated Evidence Lumigraph Adapter (ELA). The current checkpoint is archived as:
 
@@ -44,6 +44,23 @@ Train metrics are not used to pick the baseline or the final method result.
 | counter | 27.2404 | 0.8641 | 0.2497 | +0.4886 | +0.0021 | -0.0023 | 0.10% | geometry-safe |
 | kitchen | 27.9996 | 0.8769 | 0.1989 | +0.1810 | +0.0005 | -0.0002 | 0.10% | geometry-safe |
 | bonsai | 29.7844 | 0.8982 | 0.2574 | +0.8892 | +0.0018 | -0.0021 | 10.00% | strict pass |
+
+## ECSR Upgrade Status
+
+The next method track is **ECSR: Evidence-Certified Surface Relocation**. Its goal is to move SPCarNet from image-space residual repair toward representation-level surface compression and appearance recovery.
+
+Current execution artifacts:
+
+- Current-state audit: [`docs/car_model/5-8-ECSR-CurrentStateAudit.md`](docs/car_model/5-8-ECSR-CurrentStateAudit.md)
+- Phase-A train-only surface evidence: [`docs/car_model/5-8-ECSR-PhaseA-SurfaceEvidence.md`](docs/car_model/5-8-ECSR-PhaseA-SurfaceEvidence.md)
+- Phase-B view-support graph: [`docs/car_model/5-8-ECSR-PhaseB-ViewSupportGraph.md`](docs/car_model/5-8-ECSR-PhaseB-ViewSupportGraph.md)
+- Phase-A/B cached-view policy split: [`docs/car_model/5-8-ECSR-PolicySplit.md`](docs/car_model/5-8-ECSR-PolicySplit.md)
+- Execution log: [`docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md`](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md)
+- Combined Phase-A contact sheet: `outputs/carnet/meshsplatopt/ecsr_phase_a/surface_evidence/phase_a_surface_evidence_contact_sheet.png`
+
+Phase-A result: `9 / 9` scenes pass surface addressability, but only `4 / 9` pass the current top-support multiview consistency check. This means the residual signal is real and surface-addressable, but a naive single-face residual delta is not yet a safe final method.
+
+Phase-B result: the fixed graph policy finds `123` train-only local support clusters across full9, including `23` certificate-contraction candidates and `99` surface-attribute recovery candidates. The direct triangle-reduction upper bound of residual-hot clusters is tiny, so the next method step must separate compression candidates from appearance-recovery candidates instead of treating residual hotspots as the compression target.
 
 ## Additional Evaluation Views
 
