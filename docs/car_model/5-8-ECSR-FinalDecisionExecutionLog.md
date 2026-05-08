@@ -23,6 +23,8 @@ a reproducible artifact.
 | Phase-B report | `docs/car_model/5-8-ECSR-PhaseB-ViewSupportGraph.md` | complete |
 | Phase-A/B cached-view policy split | `scripts/car_model/ecsr_make_phase_ab_policy_splits.py` | complete smoke split |
 | Phase-A/B policy split doc | `docs/car_model/5-8-ECSR-PolicySplit.md` | complete |
+| Phase-C candidate preflight | `scripts/car_model/ecsr_phase_c_candidate_preflight.py` | complete pre-contraction filter |
+| Phase-C preflight doc | `docs/car_model/5-8-ECSR-PhaseC-CandidatePreflight.md` | complete |
 
 ## Current-State Audit Result
 
@@ -91,7 +93,7 @@ required compactness improvement.
 | Diagnostic A: residual surface addressability | complete | `9 / 9` pass |
 | Diagnostic B: relocation necessity | complete MVP | `5 / 9` appearance-relocation promising |
 | View-Support Redundancy Graph | complete candidate generator | 123 clusters, 23 contraction candidates |
-| Certificate-Carrying Surface Contraction | not complete | candidates exist, certificates not run |
+| Certificate-Carrying Surface Contraction | partial | 21/123 candidates pass preflight; no checkpoint edit or before/after render certificate yet |
 | Surface-Attached Appearance Recovery | not complete | target type identified, no representation delta yet |
 | Train/policy-val split file | partial | cached-view split complete; full-train split still required before long Phase C/D |
 | Full9 same-protocol ECSR validation | not complete | no final ECSR checkpoint yet |
@@ -126,4 +128,5 @@ separation:
 The next concrete milestone is Phase C/D MVP: train/policy split, static
 certificate schema, attribute-only recovery after graph-defined local support
 groups, and full9 validation against the archived Compact-ELA/SOR and selected
-clean MeshSplatting baselines.
+clean MeshSplatting baselines. The Phase-C preflight has already narrowed the
+first expensive candidate set to `21 / 123` eligible clusters.
