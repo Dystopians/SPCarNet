@@ -536,7 +536,15 @@ def select_faces(
             selected = order[:target]
         selected = np.sort(selected.astype(np.int64))
         return selected, table
-    table = build_score_table(signals)
+    face_count = int(np.asarray(signals.faces).shape[0])
+    if face_count > 1_000_000 and mode in {
+        "csef_low_evidence",
+        "csef_low_evidence_boundary_protected",
+        "pareto_area_csef",
+    }:
+        table = build_fast_large_csef_table(signals)
+    else:
+        table = build_score_table(signals)
     count = table["face_id"].shape[0]
     target = _target_count(count, target_prune_fraction)
     if mode == "random_same_count":

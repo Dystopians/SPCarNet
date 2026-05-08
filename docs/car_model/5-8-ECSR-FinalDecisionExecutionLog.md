@@ -203,3 +203,90 @@ certificate schema, attribute-only recovery after graph-defined local support
 groups, and full9 validation against the archived Compact-ELA/SOR and selected
 clean MeshSplatting baselines. The Phase-C preflight has already narrowed the
 first expensive candidate set to `21 / 123` eligible clusters.
+
+## Phase-F Fixed Policy-Val Compaction Ladder
+
+Phase-F was added to address the compression bottleneck without returning to a
+per-scene parameter game. The policy is fixed before held-out evaluation:
+
+- source: archived Compact-ELA/SOR checkpoint at iteration `26000`;
+- split: full-train COLMAP split with train-derived `policy_val`;
+- selector: `csef_low_evidence_boundary_protected`;
+- ratio grid: `0.005, 0.010, 0.020`;
+- acceptance: policy-val RGB non-regression guardrails plus zero invalid /
+  degenerate topology audit.
+
+Implementation:
+
+- `scripts/car_model/ecsr_run_policy_val_compaction_ladder.py`
+- `scripts/car_model/ecsr_collect_policy_val_ladder_summary.py`
+- large-scene selector acceleration in
+  `ss3dm_prior/meshsplatopt/compact_selector.py`
+- held-out fixed-policy evaluator:
+  `scripts/car_model/ecsr_run_phasef_heldout_eval.py`
+
+Full9 policy-val result:
+
+- complete scenes: `9 / 9`;
+- accepted scenes: `9 / 9`;
+- selected extra ratio: `0.0200` for every scene;
+- mean source triangle removal: `5.763%`;
+- mean total triangle removal after Phase-F: `7.648%`;
+- all policy-val RGB deltas are near numerical noise.
+
+Interpretation: this is a real compactness advance, not a visual breakthrough.
+It shows that the archived Compact-ELA/SOR surfaces still contain a fixed,
+train-policy-certified low-evidence tail that can be removed safely under
+internal validation. It does not by itself solve the FinalDecision requirement
+for stronger representation-attached appearance recovery.
+
+Held-out validation is now running on the fixed selected models. The held-out
+test split is final-report-only: it is not used to choose the ratio, selector,
+crop, threshold, or fallback.
+
+Held-out result after the fixed policy was frozen:
+
+- compact + RGB-safe vs selected clean MeshSplatting: `8 / 9`;
+- compact + RGB-safe vs archived Compact-ELA/SOR: `0 / 9`;
+- mean dPSNR / dSSIM / dLPIPS vs clean:
+  `-0.0113 / -0.00021 / +0.000064`;
+- mean dPSNR / dSSIM / dLPIPS vs Compact-ELA/SOR:
+  `-0.5092 / -0.01596 / +0.02344`;
+- mean total triangle reduction: `7.648%`;
+- W&B full9 collect: `ptf5x9o8`.
+
+Conclusion: Phase-F is a useful compactness certificate, not a final visual
+method. It should be kept as the representation-compression branch, but the
+FinalDecision endpoint still requires a stronger appearance recovery mechanism
+on top of the extra compact checkpoint.
+
+## Phase-F + Alpha-0.875 Recovery Update
+
+The next pass connected the fixed Phase-F selected checkpoint to the train-only
+ELA recovery family and exposed one missing interface: the previous recovery
+runner did not include enough alpha resolution. The initial Phase-F+ELA full9
+run was strong on average but missed `bicycle` against archived Compact-ELA/SOR
+by `-0.0193` PSNR and `+0.00193` LPIPS. Ratio probes at `0.5%`, `1%`, and `2%`
+extra compaction showed that this was not caused by over-compression.
+
+After adding `alpha=0.875` to the globally fixed auto-policy grid, the same
+policy cleared all nine scenes:
+
+- beats selected clean MeshSplatting on PSNR/SSIM/LPIPS: `9 / 9`;
+- beats archived Compact-ELA/SOR on PSNR/SSIM/LPIPS: `9 / 9`;
+- mean dPSNR / dSSIM / dLPIPS vs clean:
+  `+0.9340 / +0.02640 / -0.04404`;
+- mean dPSNR / dSSIM / dLPIPS vs Compact-ELA/SOR:
+  `+0.4360 / +0.01064 / -0.02067`;
+- mean total triangle reduction: `7.648%`.
+
+Artifact:
+
+- `outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/phasef_ela_eval_summary_alpha0875_full9.md`
+
+This materially changes the current status. The selected Mip-NeRF360 protocol
+now has a reproducible full9 result that is better than the clean baseline and
+the archived Compact-ELA/SOR baseline on RGB metrics while also carrying extra
+triangle reduction. The caveat remains that the appearance gain is still
+render-time ELA recovery; the representation-level surface-attached recovery
+goal is not closed by this update.
