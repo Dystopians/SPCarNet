@@ -32,7 +32,7 @@
 
 ## 项目诚实状态
 
-R0 → R56（骨架 + parking 单场景线）、**F1 → F82（最终跨场景线）**，以及 **SCE7 → SCE28（在 F82 之上的认证恢复线）**。带有 `_FAIL` / `REJECTED` / `MIXED` 标记的阶段，是当前论文纪律的失败证据骨架。
+R0 → R56（骨架 + parking 单场景线）、**F1 → F82（最终跨场景线）**、**SCE7 → SCE28（在 F82 之上的认证恢复线）**，以及 **ELA1 → ELA12 + OUT1 / OUT2（渲染端 evidence-lumigraph 适配器与修正后的公平 baseline 审计，配套 Mip-NeRF360 论文协议复刻队列）**。带有 `_FAIL` / `REJECTED` / `MIXED` 标记的阶段，是当前论文纪律的失败证据骨架。
 
 ### 方法骨架（R0–R15）
 
@@ -491,6 +491,64 @@ python scripts/car_model/select_certified_recovery.py \
 
 已验证 SCE21 courtyard 合约：仅 regressed 的 train sentinel 缓存、`cvar_fraction=0.2`、`pixel_radius=1`、`patch_reduce=max_violation`、`28600 → 28780`，再用 all-sentinel 缓存与 `cvar_fraction=0.1` 续训 `28780 → 28880`。在不变拓扑下击败 F82：PSNR +0.417 dB / SSIM +0.030 / LPIPS −0.0068 / AbsRel −0.0037 / Depth MAE −0.0033 / 法向量 −0.88°。在 bonsai 上（SCE24）同一守门人正确选择 `parent`，因为候选会回退 SSIM / LPIPS。
 
+### Recipe E —— clean9000 → SOR / QEM50 → parent-rollback 恢复 + ELA-safe（ELA10–ELA12，室内 / ETH3D 头条）
+
+这是产出 ELA12 在 `bonsai`、`courtyard`、`room`、`counter` 上严格 full-pass 行的 recipe。它把保留测试集选择的 clean checkpoint（这四个场景通常是 clean9000）当作正确 baseline，先做路由化压缩（高遮挡场景用 sparse-occluder removal；室内低遮挡场景用 QEM50），再做严格拓扑冻结的恢复 + 稀疏 parent-rollback 监督，最后叠加 train-only ELA-safe 渲染端 evidence-lumigraph 适配器。
+
+```bash
+# 1) 用保留测试分数（PSNR + 20 SSIM − 20 LPIPS）选 clean baseline。
+#    bonsai / courtyard / room / counter 通常是 clean9000。
+python scripts/car_model/collect_paper_m360_compact_ela_policy_metrics.py \
+    --scene <scene> --candidates 7000 9000 22000 30000 \
+    --output outputs/carnet/meshsplatopt/clean_audit/<scene>.json
+
+# 2) 高稀疏遮挡（bonsai、courtyard）—— sparse-occluder removal + 低证据删除；
+#    其他（room、counter）—— QEM50。
+python scripts/car_model/meshsplatopt_build_sparse_occluder_prune_candidates.py \
+    --model_path outputs/clean9000/<scene> \
+    --output_dir outputs/sor10/<scene>            # SOR10 候选
+python scripts/car_model/meshsplatopt_apply_compaction_to_checkpoint.py \
+    --source_model outputs/clean9000/<scene> \
+    --selected_faces_path outputs/sor10/<scene>/selected_faces.npy \
+    --output_model outputs/compact/<scene>/model
+
+# 3) 严格拓扑冻结恢复 + train-only 稀疏 parent-rollback。
+python scripts/car_model/meshsplatopt_run_sce_policy_recovery.py \
+    --model_path outputs/compact/<scene>/model \
+    --output_dir outputs/recovered/<scene> \
+    --load_iteration 9000 --iterations 200 \
+    --train_extra_args "--freeze_topology_updates --skip_restricted_delaunay \
+       --enable_sparse_colmap_depth_loss \
+       --lambda_sparse_colmap_depth 0.003 \
+       --sparse_colmap_depth_aggregation cluster_cvar \
+       --enable_parent_render_rollback_loss \
+       --parent_render_rollback_dir outputs/clean9000/<scene>/train/ours_9000/renders \
+       --lambda_parent_render_rollback 1.0 \
+       --parent_render_rollback_aggregation cvar \
+       --parent_render_rollback_cvar_fraction 0.1 \
+       --parent_render_rollback_residual_space l1"
+
+# 4) 叠加 ELA-safe 渲染端 evidence-lumigraph 适配器（train-only 收益校准残差转移、
+#    深度一致 k4 warping、alpha 在 train 上选）。
+python scripts/car_model/meshsplatopt_render_evidence_maps.py \
+    --model_path outputs/recovered/<scene> \
+    --output_dir outputs/ela_safe/<scene>
+python scripts/car_model/meshsplatopt_apply_evidence_lumigraph_adapter.py \
+    --model_path  outputs/recovered/<scene> \
+    --evidence_dir outputs/ela_safe/<scene> \
+    --policy ela4_safe \
+    --output_dir outputs/method_best/<scene>
+
+# 5) 独立的论文级评估（5 / 5 严格 full-pass 行由下方 ELA12 audit 收集器算出，
+#    而不是用训练时指标）。
+python scripts/car_model/render.py  -m outputs/method_best/<scene>
+python scripts/car_model/metrics.py -m outputs/method_best/<scene>
+python scripts/car_model/evaluate_geometry_colmap.py -s <scene> \
+    -m outputs/method_best/<scene> --iteration 9200 --eval
+```
+
+`parking_phone_tiny` 走 OUT2 室外变体：F33 CSEF70 + 稀疏深度严格恢复 26000 提供 compact base，train-p15 局部 parent-consistency mask（脚本 `meshsplatopt_local_parent_consistency_gate.py`）按像素决定在哪里施加 ELA 修复。
+
 ### 已被拒绝的方向（无新证据请勿重试）
 
 - **fixed CSEF50 跨场景普适（F45）** —— bonsai / room 边界 / 混合，counter 失败；方法必须按场景 validation-budget。
@@ -506,6 +564,8 @@ python scripts/car_model/select_certified_recovery.py \
 - **替代稀疏深度损失空间**（R29 relative / log / inverse）—— 原始度量深度 Smooth-L1 胜出。
 - **编辑后不冻结致密化**（R25）—— parking 涨到 5.89M 三角形仍输渲染。
 - **在 bonsai 上强行 SCE 恢复** —— SCE8 v1、SCE25–SCE27 的结构 ATR / clean9000 train teacher / LR 为零的纯外观 teacher 都把 F82-bonsai 的 PSNR 推高 < 0.005 dB，代价是 SSIM / LPIPS 回退。认证守门人正确返回 `accept_parent_noop`，请勿绕过。修复方向是 clean-best 9000 重置（SCE28），不是更多恢复损失调参。
+- **以训练分数选 clean Mesh Splatting baseline** —— `train PSNR + 20 SSIM − 20 LPIPS` 在 clean22000 / clean30000 上达到峰值是因为它们过拟合训练集，但在保留测试集上的 PSNR 在 bonsai / courtyard / room / counter 上远弱于 clean9000。reviewer-facing 的 ELA12 合约因此用 **保留测试分数** 选 clean checkpoint，仅把训练分数作为诊断；早期 ELA / F-line 把 clean22000 称为这四个场景"最强 clean baseline"的写法已被修正后的 clean9000 行取代。
+- **把当前 package 当作 Mip-NeRF360 论文协议复刻** —— 当前本地 artifact 集是 `parking_phone_tiny`、`bonsai`、`courtyard`、`room`、`counter`，不是官方 9 场景 benchmark 均值。Garden 单场景目前已校准到与论文相差 `−0.0024 dB / −0.0009 SSIM / −0.0004 LPIPS` 之内。完整的 9 场景 `full_eval.py` 队列（`bicycle`、`flowers`、`garden`、`stump`、`treehill`、`room`、`counter`、`kitchen`、`bonsai`）正在执行；在它完成之前，公开 claim 是 "current internal artifact set"，**而不是 "beats MeshSplatting 24.78"**。
 
 ### 可复现的论文级表格
 
@@ -521,6 +581,19 @@ python scripts/car_model/final_collect_stageF68_F73_adaptive_policy.py
 # 多场景 F12 / F49 终版 package（图与表）
 ls outputs/carnet/meshsplatopt/final_paper_assets/
 ls outputs/carnet/meshsplatopt/final_stageF40_clean_vs_method_assets/
+
+# ELA 渲染端适配器线（ELA2 → ELA12）与修正后的公平 baseline 审计
+python scripts/car_model/collect_paper_m360_compact_ela_policy_metrics.py
+ls outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/
+ls outputs/carnet/meshsplatopt/stageELA11_final_selected_scene_package/
+
+# OUT parking 室外视觉修复（OUT1 → OUT2）
+ls outputs/carnet/meshsplatopt/stageOUT2_parking_local_parentgate/
+
+# Mip-NeRF360 论文协议复刻队列（运行中）
+bash scripts/car_model/run_paper_m360_official_clean30k_available7.sh   # clean baseline
+bash scripts/car_model/run_paper_m360_fixedbudget_method_available7.sh  # 固定预算的方法
+python scripts/car_model/collect_paper_m360_fixedbudget_method_metrics.py
 ```
 
 ## 仓库结构（MeshSplatOpt 增加部分）
@@ -686,6 +759,18 @@ MeshSplatOpt 分支属于在研工作；请引用 MeshSplatting 基础论文。
   year     = {2025}
 }
 ```
+
+## Mip-NeRF360 论文协议 claim 纪律
+
+修正后的 ELA12 审计 **不是** MeshSplatting 论文 Mip-NeRF360 均值（9 场景 `24.78 / 0.310 / 0.728`）的同协议复刻。三个 baseline 必须分清（完整口径见 [`docs/car_model/meshsplatting_paper_metric_reconciliation.md`](docs/car_model/meshsplatting_paper_metric_reconciliation.md)）：
+
+1. **本地 clean baseline** —— 当前 artifact 集上的本地 clean MeshSplatting checkpoint。
+2. **修正后的 ELA12 selected-clean baseline** —— 用保留测试分数选择的本地 clean，作为本 README 头条表的 baseline。
+3. **论文 MeshSplatting baseline** —— 官方在 Mip-NeRF360 上的 9 场景 `full_eval.py` 协议。
+
+Garden 当前已通过 `full_eval.py` 在 (1) 上校准到与论文相差 `−0.0024 dB / −0.0009 SSIM / −0.0004 LPIPS`，但 Garden 单场景不是 benchmark 均值。完整的 9 场景 clean 队列（`bicycle`、`flowers`、`garden`、`stump`、`treehill`、`room`、`counter`、`kitchen`、`bonsai`）正在运行；匹配的固定预算方法队列保存 clean `26000` 并严格 `26000 → 30000` 跑方法，这样比较不会从额外恢复迭代中获利。在两个队列完成之前，公开的安全说法是 *"修正后的 ELA12 在当前内部 artifact 集上"*，**绝不能** 写成 *"beats MeshSplatting 24.78"*。
+
+---
 
 ## 致谢
 

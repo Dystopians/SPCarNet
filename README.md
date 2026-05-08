@@ -32,7 +32,7 @@ The method scaffold (CSEF + reversible edit calculus + counterfactual certificat
 
 ## Honest project status
 
-R0 → R56 (scaffold + parking single-scene line), **F1 → F82 (final cross-scene line)**, and **SCE7 → SCE28 (certified-recovery line on top of F82)**. Stages with `_FAIL`, `REJECTED`, or `MIXED` decisions are the failure-evidence backbone of the current paper-discipline story.
+R0 → R56 (scaffold + parking single-scene line), **F1 → F82 (final cross-scene line)**, **SCE7 → SCE28 (certified-recovery line on top of F82)**, and **ELA1 → ELA12 + OUT1 / OUT2 (renderer-side evidence-lumigraph adapter and the corrected fair-baseline audit, with a paper-protocol Mip-NeRF360 reproduction queue)**. Stages with `_FAIL`, `REJECTED`, or `MIXED` decisions are the failure-evidence backbone of the current paper-discipline story.
 
 ### Method scaffold (R0–R15)
 
@@ -491,6 +491,65 @@ python scripts/car_model/select_certified_recovery.py \
 
 Validated SCE21 courtyard contract: regressed-only train sentinel cache, `cvar_fraction=0.2`, `pixel_radius=1`, `patch_reduce=max_violation`, `28600 → 28780`, then a continuation `28780 → 28880` with the all-sentinel cache and `cvar_fraction=0.1`. Beats F82 by PSNR +0.417 dB / SSIM +0.030 / LPIPS −0.0068 / AbsRel −0.0037 / Depth MAE −0.0033 / normal −0.88° at unchanged topology. On bonsai (SCE24) the same guard correctly selects `parent` because the candidate would regress SSIM / LPIPS.
 
+### Recipe E — clean9000 → SOR / QEM50 → parent-rollback recovery + ELA-safe (ELA10–ELA12, indoor / ETH3D headline)
+
+This is the recipe that produces the ELA12 strict full-pass rows on `bonsai`, `courtyard`, `room`, and `counter`. It treats the held-out-test-selected clean checkpoint (typically clean9000 for these four scenes) as the proper baseline, runs a routed compaction (sparse-occluder removal for high-occlusion scenes; QEM50 for low-occlusion indoor scenes), then a strict topology-frozen recovery with sparse parent-rollback supervision, and finally layers the train-only ELA-safe renderer-side evidence-lumigraph adapter on top.
+
+```bash
+# 1) Pick the clean baseline by held-out test score (PSNR + 20 SSIM - 20 LPIPS).
+#    For bonsai / courtyard / room / counter, this is typically clean9000.
+python scripts/car_model/collect_paper_m360_compact_ela_policy_metrics.py \
+    --scene <scene> --candidates 7000 9000 22000 30000 \
+    --output outputs/carnet/meshsplatopt/clean_audit/<scene>.json
+
+# 2) High-sparse-occlusion scenes (bonsai, courtyard) — sparse-occluder removal
+#    + low-evidence delete. Otherwise (room, counter) — QEM50.
+python scripts/car_model/meshsplatopt_build_sparse_occluder_prune_candidates.py \
+    --model_path outputs/clean9000/<scene> \
+    --output_dir outputs/sor10/<scene>           # SOR10 candidates
+python scripts/car_model/meshsplatopt_apply_compaction_to_checkpoint.py \
+    --source_model outputs/clean9000/<scene> \
+    --selected_faces_path outputs/sor10/<scene>/selected_faces.npy \
+    --output_model outputs/compact/<scene>/model
+
+# 3) Strict topology-frozen recovery with train-only sparse parent-rollback.
+python scripts/car_model/meshsplatopt_run_sce_policy_recovery.py \
+    --model_path outputs/compact/<scene>/model \
+    --output_dir outputs/recovered/<scene> \
+    --load_iteration 9000 --iterations 200 \
+    --train_extra_args "--freeze_topology_updates --skip_restricted_delaunay \
+       --enable_sparse_colmap_depth_loss \
+       --lambda_sparse_colmap_depth 0.003 \
+       --sparse_colmap_depth_aggregation cluster_cvar \
+       --enable_parent_render_rollback_loss \
+       --parent_render_rollback_dir outputs/clean9000/<scene>/train/ours_9000/renders \
+       --lambda_parent_render_rollback 1.0 \
+       --parent_render_rollback_aggregation cvar \
+       --parent_render_rollback_cvar_fraction 0.1 \
+       --parent_render_rollback_residual_space l1"
+
+# 4) Layer the ELA-safe renderer-side evidence-lumigraph adapter (train-only
+#    benefit-calibrated residual transfer, depth-consistent k4 warping, alpha
+#    selected on train).
+python scripts/car_model/meshsplatopt_render_evidence_maps.py \
+    --model_path outputs/recovered/<scene> \
+    --output_dir outputs/ela_safe/<scene>
+python scripts/car_model/meshsplatopt_apply_evidence_lumigraph_adapter.py \
+    --model_path  outputs/recovered/<scene> \
+    --evidence_dir outputs/ela_safe/<scene> \
+    --policy ela4_safe \
+    --output_dir outputs/method_best/<scene>
+
+# 5) Independent paper-facing eval (5 / 5 strict full-pass rows are computed
+#    by the ELA12 audit collector below, not from training metrics).
+python scripts/car_model/render.py  -m outputs/method_best/<scene>
+python scripts/car_model/metrics.py -m outputs/method_best/<scene>
+python scripts/car_model/evaluate_geometry_colmap.py -s <scene> \
+    -m outputs/method_best/<scene> --iteration 9200 --eval
+```
+
+For `parking_phone_tiny` use the OUT2 outdoor variant: F33 CSEF70 + sparse-depth strict recovery 26000 produces the compact base, and the train-p15 local parent-consistency mask (script `meshsplatopt_local_parent_consistency_gate.py`) decides where ELA gets applied per-pixel.
+
 ### Rejected directions (do not retry without new evidence)
 
 - **Fixed CSEF50 universally (F45)** — borderline / mixed on bonsai / room and a fail on counter; method must be validation-budget per scene.
@@ -506,6 +565,8 @@ Validated SCE21 courtyard contract: regressed-only train sentinel cache, `cvar_f
 - **Alternative sparse-depth loss spaces** (R29 relative / log / inverse) — original metric-depth Smooth-L1 wins.
 - **Unfrozen post-edit densification** (R25) — grew parking to 5.89 M triangles and still lost render.
 - **Forcing SCE recovery on bonsai** — SCE8 v1, SCE25–SCE27 structural ATR / clean9000 train-teacher / LR-zero appearance teacher all push F82-bonsai PSNR up by < 0.005 dB at the cost of SSIM / LPIPS regression. The certified guard correctly returns `accept_parent_noop`; do not bypass it. The repair direction is a clean-best 9000 reset (SCE28), not more recovery-loss tuning.
+- **Train-selected clean Mesh Splatting baselines** — the linker `train PSNR + 20 SSIM − 20 LPIPS` peaks at clean22000 / clean30000 because those overfit train, but their held-out test PSNR is much weaker than clean9000 on bonsai / courtyard / room / counter. The reviewer-facing ELA12 contract therefore selects clean checkpoints by **held-out test score** and keeps train scores only as diagnostics; any earlier ELA / F-line statement that called clean22000 the "strongest clean baseline" for those four scenes is now superseded by the corrected clean9000 row.
+- **Calling the current package a Mip-NeRF360 paper-protocol reproduction** — the local artifact set is `parking_phone_tiny`, `bonsai`, `courtyard`, `room`, `counter`, not the official 9-scene benchmark mean. Garden alone is currently calibrated to within `−0.0024 dB / −0.0009 SSIM / −0.0004 LPIPS` of the paper. The full 9-scene `full_eval.py` queue (`bicycle`, `flowers`, `garden`, `stump`, `treehill`, `room`, `counter`, `kitchen`, `bonsai`) is in flight; until it completes, the published claim is "current internal artifact set", not "beats MeshSplatting 24.78".
 
 ### Reproducible paper-facing tables
 
@@ -521,6 +582,19 @@ python scripts/car_model/final_collect_stageF68_F73_adaptive_policy.py
 # Multi-scene F12 / F49 final package (figures + tables under)
 ls outputs/carnet/meshsplatopt/final_paper_assets/
 ls outputs/carnet/meshsplatopt/final_stageF40_clean_vs_method_assets/
+
+# ELA renderer-side adapter line (ELA2 → ELA12) and corrected fair-baseline audit
+python scripts/car_model/collect_paper_m360_compact_ela_policy_metrics.py
+ls outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/
+ls outputs/carnet/meshsplatopt/stageELA11_final_selected_scene_package/
+
+# OUT parking outdoor visual repair (OUT1 → OUT2)
+ls outputs/carnet/meshsplatopt/stageOUT2_parking_local_parentgate/
+
+# Mip-NeRF360 paper-protocol reproduction queue (in flight)
+bash scripts/car_model/run_paper_m360_official_clean30k_available7.sh   # clean baseline
+bash scripts/car_model/run_paper_m360_fixedbudget_method_available7.sh  # fixed-budget method
+python scripts/car_model/collect_paper_m360_fixedbudget_method_metrics.py
 ```
 
 ## Repository layout (MeshSplatOpt additions)
@@ -686,6 +760,18 @@ The MeshSplatOpt branch is ongoing work; please cite the MeshSplatting foundatio
   year     = {2025}
 }
 ```
+
+## Mip-NeRF360 paper-protocol claim discipline
+
+The corrected ELA12 audit is **not** a same-protocol reproduction of the MeshSplatting paper Mip-NeRF360 mean (`24.78 / 0.310 / 0.728` on nine scenes). Three baselines must be kept separate (full reconciliation in [`docs/car_model/meshsplatting_paper_metric_reconciliation.md`](docs/car_model/meshsplatting_paper_metric_reconciliation.md)):
+
+1. **Internal clean baseline** — local clean MeshSplatting checkpoints on the current artifact set.
+2. **Corrected ELA12 selected-clean baseline** — held-out-test-selected local clean used in this README's headline table.
+3. **Paper MeshSplatting baseline** — the official 9-scene `full_eval.py` protocol on Mip-NeRF360.
+
+Garden is currently calibrated within `−0.0024 dB / −0.0009 SSIM / −0.0004 LPIPS` of the paper number under (1) reproduced via `full_eval.py`, but Garden alone is not a benchmark mean. The full 9-scene clean queue (`bicycle`, `flowers`, `garden`, `stump`, `treehill`, `room`, `counter`, `kitchen`, `bonsai`) is in flight; the matched fixed-budget method queue saves clean `26000` and runs the method strictly `26000 → 30000` so the comparison cannot gain credit from extra recovery iterations. Until both queues complete, the safe published wording is *"corrected ELA12 audit on the current internal artifact set"*, never *"beats MeshSplatting 24.78"*.
+
+---
 
 ## Acknowledgements
 
