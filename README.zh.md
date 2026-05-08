@@ -47,19 +47,25 @@ score = PSNR + 20 * SSIM - 20 * LPIPS
 
 ## 定性对比
 
-下面的图片全部来自真实 held-out renders。所选视角是按同一个综合分数自动选出的、跨场景多样且提升最明显的样例。
+第一组图是公平的全图 held-out render 对比。它的作用是证明比较来自同一 test view 和同一套 selected clean MeshSplatting baseline；但 SPCarNet 当前很多收益属于 residual-level 改善，放在全图尺度上确实不容易被肉眼直接看出来。
 
 <p align="center">
   <img src="assets/spcarnet_m360_full9_qualitative_gallery.png" width="980" alt="SPCarNet 与 clean MeshSplatting 的全图定性对比">
 </p>
 
-局部 crop 会自动定位 clean MeshSplatting 误差较高且 SPCarNet 改善明显的区域，比全图更容易用肉眼观察差异。
+更有说服力的定性展示是下面这组局部 held-out error-reduction 图。它由 [`scripts/car_model/generate_spcarnet_advantage_showcase.py`](scripts/car_model/generate_spcarnet_advantage_showcase.py) 自动生成：每个场景先要求该 view 在同一 full9 口径下满足全图 `dPSNR > 0`、`dSSIM > 0`、`dLPIPS < 0`，再在该 view 内寻找纹理区域中 SPCarNet 相对 GT 的局部 RGB 误差下降最大的位置。绿色表示 SPCarNet 比 clean MeshSplatting 更接近 GT，紫红色表示变差。
 
 <p align="center">
-  <img src="assets/spcarnet_m360_full9_crop_gallery.png" width="980" alt="SPCarNet 与 clean MeshSplatting 的局部 crop 对比">
+  <img src="assets/spcarnet_m360_outdoor_detail_showcase.png" width="980" alt="SPCarNet 与 clean MeshSplatting 的室外局部 held-out 误差下降对比">
 </p>
 
-选图清单：`assets/spcarnet_m360_full9_gallery_selection.json`。
+这组室外 crop 更能体现实际视觉收益：clean MeshSplatting 在花叶、地面纹理、长椅条纹、树皮等位置容易出现局部三角块状平滑或细节丢失；SPCarNet 的 residual repair 会把这些区域拉回到更接近 GT 的状态。另有一组混合室内/室外版本：
+
+<p align="center">
+  <img src="assets/spcarnet_m360_where_it_helps_showcase.png" width="980" alt="SPCarNet 与 clean MeshSplatting 的混合局部 held-out 误差下降对比">
+</p>
+
+选图清单：`assets/spcarnet_m360_outdoor_detail_selection.json`、`assets/spcarnet_m360_where_it_helps_selection.json`，以及早期全图清单 `assets/spcarnet_m360_full9_gallery_selection.json`。
 
 ## 方法概述
 

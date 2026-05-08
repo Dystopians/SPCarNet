@@ -85,6 +85,10 @@ Generated from real held-out renders:
 - full-frame gallery: `assets/spcarnet_m360_full9_qualitative_gallery.png`
 - crop gallery: `assets/spcarnet_m360_full9_crop_gallery.png`
 - selection manifest: `assets/spcarnet_m360_full9_gallery_selection.json`
+- outdoor local-error showcase: `assets/spcarnet_m360_outdoor_detail_showcase.png`
+- outdoor local-error manifest: `assets/spcarnet_m360_outdoor_detail_selection.json`
+- mixed local-error showcase: `assets/spcarnet_m360_where_it_helps_showcase.png`
+- mixed local-error manifest: `assets/spcarnet_m360_where_it_helps_selection.json`
 
 Selected diverse views:
 
@@ -93,6 +97,8 @@ Selected diverse views:
 - treehill / `00010.png`: dPSNR `+0.59`, dSSIM `+0.0491`, dLPIPS `-0.0881`
 - bicycle / `00019.png`: dPSNR `+1.01`, dSSIM `+0.0453`, dLPIPS `-0.0657`
 - bonsai / `00001.png`: dPSNR `+2.79`, dSSIM `+0.0063`, dLPIPS `-0.0007`
+
+The first crop gallery was useful but visually too subtle for README-level communication. The newer local-error showcase is the cleaner qualitative protocol: it keeps the same held-out full9 result, requires full-view improvement before selecting a view, and then visualizes where the RGB error is locally reduced. Outdoor crops show `12.8%` to `32.0%` local MAE drop, while the mixed panel reaches `43.6%` on the bonsai cloth crop.
 
 ## Current Limitations
 

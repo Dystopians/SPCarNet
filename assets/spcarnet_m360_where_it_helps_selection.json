@@ -1,0 +1,175 @@
+{
+  "description": "Automatically selected local held-out crops where SPCarNet reduces RGB error relative to the selected clean MeshSplatting baseline.",
+  "selection_rule": "Per scene, require full-view dPSNR>0, dSSIM>0, dLPIPS<0 under the full9 baseline selection, then rank crops by local positive error reduction weighted by GT texture and penalized by negative error.",
+  "showcase": "assets/spcarnet_m360_where_it_helps_showcase.png",
+  "examples": [
+    {
+      "scene": "bonsai",
+      "view": "00001.png",
+      "baseline_iteration": 26000,
+      "dPSNR": 2.7857666015625,
+      "dSSIM": 0.006315171718597412,
+      "dLPIPS": -0.0007033199071884155,
+      "ranking_score": 2.0031803885647586,
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/bonsai/test/ours_26000/gt/00001.png",
+        "clean": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/bonsai/test/ours_26000/renders/00001.png",
+        "ours": "outputs/carnet/meshsplatopt/paper_m360_repro/compact_ela_sor_adaptive_geo_26k/bonsai/sor_adaptive_geo/compact_model/test/ours_26000_sor_adaptive_geo_compact_ela/renders/00001.png"
+      },
+      "crop": {
+        "x": 506,
+        "y": 657,
+        "w": 360,
+        "h": 250,
+        "local_clean_psnr": 18.885664777166575,
+        "local_ours_psnr": 22.706962099205267,
+        "local_dpsnr": 3.821297322038692,
+        "local_clean_mae": 0.09058884531259537,
+        "local_ours_mae": 0.05105956643819809,
+        "local_mae_drop_pct": 43.63592309626357,
+        "local_positive_pixel_ratio": 0.6685444444444445,
+        "local_score": 0.027513010427355766
+      }
+    },
+    {
+      "scene": "flowers",
+      "view": "00014.png",
+      "baseline_iteration": 26000,
+      "dPSNR": 0.9897747039794922,
+      "dSSIM": 0.061619579792022705,
+      "dLPIPS": -0.06822502613067627,
+      "ranking_score": 0.5985710593291473,
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/flowers/test/ours_26000/gt/00014.png",
+        "clean": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/flowers/test/ours_26000/renders/00014.png",
+        "ours": "outputs/carnet/meshsplatopt/paper_m360_repro/compact_ela_sor_adaptive_geo_26k/flowers/sor_adaptive_geo/compact_model/test/ours_26000_sor_adaptive_geo_compact_ela/renders/00014.png"
+      },
+      "crop": {
+        "x": 445,
+        "y": 389,
+        "w": 360,
+        "h": 250,
+        "local_clean_psnr": 18.17370903754554,
+        "local_ours_psnr": 20.226797017189035,
+        "local_dpsnr": 2.0530879796434967,
+        "local_clean_mae": 0.08891995996236801,
+        "local_ours_mae": 0.06743799895048141,
+        "local_mae_drop_pct": 24.15876145353419,
+        "local_positive_pixel_ratio": 0.5614444444444444,
+        "local_score": 0.015867719426751137
+      }
+    },
+    {
+      "scene": "garden",
+      "view": "00008.png",
+      "baseline_iteration": 26000,
+      "dPSNR": 1.2731552124023438,
+      "dSSIM": 0.04321169853210449,
+      "dLPIPS": -0.05514037609100342,
+      "ranking_score": 0.4284370382142574,
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/test/ours_26000/gt/00008.png",
+        "clean": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/test/ours_26000/renders/00008.png",
+        "ours": "outputs/carnet/meshsplatopt/paper_m360_repro/compact_ela_sor_adaptive_geo_26k/garden/sor_adaptive_geo/compact_model/test/ours_26000_sor_adaptive_geo_compact_ela/renders/00008.png"
+      },
+      "crop": {
+        "x": 887,
+        "y": 48,
+        "w": 360,
+        "h": 250,
+        "local_clean_psnr": 22.811725571673776,
+        "local_ours_psnr": 25.51074879814213,
+        "local_dpsnr": 2.6990232264683556,
+        "local_clean_mae": 0.04935459420084953,
+        "local_ours_mae": 0.03571288287639618,
+        "local_mae_drop_pct": 27.640205628959546,
+        "local_positive_pixel_ratio": 0.6201666666666666,
+        "local_score": 0.00956722628325224
+      }
+    },
+    {
+      "scene": "treehill",
+      "view": "00010.png",
+      "baseline_iteration": 26000,
+      "dPSNR": 0.5933666229248047,
+      "dSSIM": 0.049067020416259766,
+      "dLPIPS": -0.08814901113510132,
+      "ranking_score": 0.42730719130023487,
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/treehill/test/ours_26000/gt/00010.png",
+        "clean": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/treehill/test/ours_26000/renders/00010.png",
+        "ours": "outputs/carnet/meshsplatopt/paper_m360_repro/compact_ela_sor_adaptive_geo_26k/treehill/sor_adaptive_geo/compact_model/test/ours_26000_sor_adaptive_geo_compact_ela/renders/00010.png"
+      },
+      "crop": {
+        "x": 804,
+        "y": 552,
+        "w": 360,
+        "h": 250,
+        "local_clean_psnr": 26.030738507110467,
+        "local_ours_psnr": 29.057575105134596,
+        "local_dpsnr": 3.026836598024129,
+        "local_clean_mae": 0.037050846964120865,
+        "local_ours_mae": 0.025199607014656067,
+        "local_mae_drop_pct": 31.986421149673717,
+        "local_positive_pixel_ratio": 0.5634444444444444,
+        "local_score": 0.00854460708796978
+      }
+    },
+    {
+      "scene": "counter",
+      "view": "00018.png",
+      "baseline_iteration": 26000,
+      "dPSNR": 0.9718761444091797,
+      "dSSIM": 0.004837453365325928,
+      "dLPIPS": -0.002303898334503174,
+      "ranking_score": 0.28189219967106943,
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/counter/test/ours_26000/gt/00018.png",
+        "clean": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/counter/test/ours_26000/renders/00018.png",
+        "ours": "outputs/carnet/meshsplatopt/paper_m360_repro/compact_ela_sor_adaptive_geo_26k/counter/sor_adaptive_geo/compact_model/test/ours_26000_sor_adaptive_geo_compact_ela/renders/00018.png"
+      },
+      "crop": {
+        "x": 120,
+        "y": 441,
+        "w": 360,
+        "h": 250,
+        "local_clean_psnr": 19.80840712672848,
+        "local_ours_psnr": 21.642207789646676,
+        "local_dpsnr": 1.8338006629181969,
+        "local_clean_mae": 0.054360534995794296,
+        "local_ours_mae": 0.04290042445063591,
+        "local_mae_drop_pct": 21.081673581845763,
+        "local_positive_pixel_ratio": 0.5752,
+        "local_score": 0.008488721214234829
+      }
+    },
+    {
+      "scene": "bicycle",
+      "view": "00021.png",
+      "baseline_iteration": 26000,
+      "dPSNR": 1.1277351379394531,
+      "dSSIM": 0.03853541612625122,
+      "dLPIPS": -0.06151092052459717,
+      "ranking_score": 0.21131452619870647,
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/bicycle/test/ours_26000/gt/00021.png",
+        "clean": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/bicycle/test/ours_26000/renders/00021.png",
+        "ours": "outputs/carnet/meshsplatopt/paper_m360_repro/compact_ela_sor_adaptive_geo_26k/bicycle/sor_adaptive_geo/compact_model/test/ours_26000_sor_adaptive_geo_compact_ela/renders/00021.png"
+      },
+      "crop": {
+        "x": 519,
+        "y": 319,
+        "w": 360,
+        "h": 250,
+        "local_clean_psnr": 20.06302441188312,
+        "local_ours_psnr": 21.9419012509684,
+        "local_dpsnr": 1.8788768390852795,
+        "local_clean_mae": 0.06454011797904968,
+        "local_ours_mae": 0.05321956425905228,
+        "local_mae_drop_pct": 17.540336265998402,
+        "local_positive_pixel_ratio": 0.48994444444444446,
+        "local_score": 0.008085769601166248
+      }
+    }
+  ]
+}

@@ -82,15 +82,21 @@ ELA 是当前 RGB 提升的主要来源。它只使用 train split 的 render/de
 
 ## 定性结果
 
-全图对比：
+全图公平对比：
 
 ![SPCarNet full9 qualitative gallery](../../assets/spcarnet_m360_full9_qualitative_gallery.png)
 
-自动 crop 对比：
+这组图用于证明比较口径一致，但全图尺度会稀释 residual-level 的视觉差异。因此当前 README 另外加入了自动局部误差下降展示。选图逻辑不是手工挑图：先要求该 view 在同一 full9 口径下全图 `dPSNR > 0`、`dSSIM > 0`、`dLPIPS < 0`，再在 view 内搜索 GT 纹理区域中 clean MeshSplatting 误差较高且 SPCarNet 误差下降最大的 crop。
 
-![SPCarNet full9 crop gallery](../../assets/spcarnet_m360_full9_crop_gallery.png)
+室外局部展示：
 
-最明显的定性改进集中在 outdoor texture 和复杂细节区域：garden 草地/木板边缘、flowers 花叶纹理、treehill 路面/杆边缘、bicycle 座椅栏杆、bonsai 布料区域。clean MeshSplatting 往往更平滑或局部偏色；SPCarNet 的 ELA residual 能降低这些局部误差。
+![SPCarNet outdoor detail showcase](../../assets/spcarnet_m360_outdoor_detail_showcase.png)
+
+混合室内/室外局部展示：
+
+![SPCarNet where it helps showcase](../../assets/spcarnet_m360_where_it_helps_showcase.png)
+
+新展示更清楚地暴露了 SPCarNet 的当前真实优势：它不是在所有像素上制造肉眼巨大的变化，而是在 flowers、garden、treehill、bicycle、stump 等纹理区域降低 clean MeshSplatting 的局部三角块状平滑、颜色残差和细节丢失。自动 crop 的局部 MAE 下降约 `12.8%` 到 `43.6%`，局部 dPSNR 约 `+0.81` 到 `+3.82`。这比旧 crop 图更适合作为定性证据，但也说明方法优势目前主要集中在 residual repair，而不是已经形成全图范围的强感知重建飞跃。
 
 ## 消融与经验
 

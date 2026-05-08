@@ -5752,3 +5752,20 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 - `assets/spcarnet_m360_full9_gallery_selection.json`
 
 **Planning lock**: current version is a strong expected-positive checkpoint, but it remains far from the final goal of truly comprehensive MeshSplatting dominance. The main shortfall is low mean triangle reduction (`5.7632%`) and only `5/9` strict all-axis pass. The next phase must upgrade the method itself, especially indoor/garden geometry-preserving compaction, rather than continue parameter scanning. The planned direction is certificate-carrying triangle contraction, view-support redundancy graphs, geometry-preserving residual relocation, and train-only Pareto certification, followed by a new full9 same-protocol validation.
+
+---
+
+## 2026-05-07 - Qualitative evidence protocol refined
+
+**Problem**: the first README qualitative crop gallery was technically fair but visually weak. Full-frame comparisons are necessary for protocol trust, yet they dilute SPCarNet's current residual-level gains; many improvements are local texture/detail corrections rather than a dramatic whole-frame change.
+
+**Update**:
+- added `scripts/car_model/generate_spcarnet_advantage_showcase.py`;
+- generated outdoor detail showcase: `assets/spcarnet_m360_outdoor_detail_showcase.png`;
+- generated mixed indoor/outdoor showcase: `assets/spcarnet_m360_where_it_helps_showcase.png`;
+- generated manifests: `assets/spcarnet_m360_outdoor_detail_selection.json`, `assets/spcarnet_m360_where_it_helps_selection.json`;
+- refreshed English/Chinese README and the 5-7 update document.
+
+**Selection rule**: use the same selected clean MeshSplatting baseline from the full9 CSV, require full-view held-out `dPSNR > 0`, `dSSIM > 0`, and `dLPIPS < 0`, then search within that held-out render for textured crops where SPCarNet reduces local RGB error against GT. Green/magenta heat maps mark where SPCarNet is closer/worse than clean MeshSplatting.
+
+**Takeaway**: the new outdoor crops make the current advantage much easier to inspect: flowers/garden/treehill/bicycle/stump show local MAE drops from `12.8%` to `32.0%`, and the mixed panel includes a bonsai crop with `43.6%` local MAE drop. This improves presentation confidence, but it also sharpens the scientific boundary: current SPCarNet's visible edge is strongest in localized residual repair, while the next true method upgrade still needs stronger geometry-preserving compaction and broader full-frame perceptual gains.
