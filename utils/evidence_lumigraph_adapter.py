@@ -414,6 +414,82 @@ class BenefitCalibrator:
         return mask.unsqueeze(0)
 
 
+@dataclass
+class AlphaCalibrator:
+    confidence_edges: tuple[float, ...]
+    magnitude_edges: tuple[float, ...]
+    alpha_table: object
+    gain_table: object
+    count_table: object
+    accept_table: object
+    default_alpha: float = 0.0
+    min_gain: float = 0.0
+    min_bin_count: int = 64
+    edge_edges: tuple[float, ...] | None = None
+    feature_mode: str = "confidence_magnitude"
+
+    def to_json(self) -> dict[str, object]:
+        def _nested_list(value: object) -> object:
+            if isinstance(value, tuple):
+                return [_nested_list(v) for v in value]
+            return value
+
+        def _count_true(value: object) -> int:
+            if isinstance(value, tuple):
+                return sum(_count_true(v) for v in value)
+            return int(bool(value))
+
+        return {
+            "feature_mode": str(self.feature_mode),
+            "confidence_edges": list(self.confidence_edges),
+            "magnitude_edges": list(self.magnitude_edges),
+            "edge_edges": list(self.edge_edges) if self.edge_edges is not None else None,
+            "alpha_table": _nested_list(self.alpha_table),
+            "gain_table": _nested_list(self.gain_table),
+            "count_table": _nested_list(self.count_table),
+            "accept_table": _nested_list(self.accept_table),
+            "default_alpha": float(self.default_alpha),
+            "min_gain": float(self.min_gain),
+            "min_bin_count": int(self.min_bin_count),
+            "accepted_bins": int(_count_true(self.accept_table)),
+        }
+
+    def alpha_map(
+        self,
+        confidence: torch.Tensor,
+        signal: torch.Tensor,
+        *,
+        base: torch.Tensor | None = None,
+        device: torch.device | str | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        device = torch.device(device or confidence.device)
+        confidence = confidence.to(device=device, dtype=torch.float32)
+        signal = signal.to(device=device, dtype=torch.float32)
+        conf_feature = torch.log1p(torch.clamp(confidence.squeeze(0), min=0.0))
+        mag_feature = torch.linalg.vector_norm(signal, dim=0)
+        conf_edges = torch.tensor(self.confidence_edges, device=device, dtype=torch.float32)
+        mag_edges = torch.tensor(self.magnitude_edges, device=device, dtype=torch.float32)
+        alpha_table = torch.tensor(self.alpha_table, device=device, dtype=torch.float32)
+        accept = torch.tensor(self.accept_table, device=device, dtype=torch.bool)
+        conf_idx = torch.bucketize(conf_feature.reshape(-1), conf_edges[1:-1], right=False)
+        mag_idx = torch.bucketize(mag_feature.reshape(-1), mag_edges[1:-1], right=False)
+        if self.edge_edges is not None:
+            if base is None:
+                edge_feature = torch.zeros_like(conf_feature)
+            else:
+                edge_feature = _image_edge_magnitude(base.to(device=device, dtype=torch.float32)).squeeze(0)
+            edge_edges = torch.tensor(self.edge_edges, device=device, dtype=torch.float32)
+            edge_idx = torch.bucketize(edge_feature.reshape(-1), edge_edges[1:-1], right=False)
+            alpha = alpha_table[conf_idx, mag_idx, edge_idx].reshape(conf_feature.shape)
+            active = accept[conf_idx, mag_idx, edge_idx].reshape(conf_feature.shape)
+        else:
+            alpha = alpha_table[conf_idx, mag_idx].reshape(conf_feature.shape)
+            active = accept[conf_idx, mag_idx].reshape(conf_feature.shape)
+        default = torch.full_like(alpha, float(self.default_alpha))
+        alpha = torch.where(active, alpha, default)
+        return alpha.unsqueeze(0), active.unsqueeze(0)
+
+
 def _calibration_candidates(
     train_frames: Sequence[FrameRecord],
     calib_stride: int,
@@ -666,6 +742,182 @@ def fit_benefit_calibrator(
     )
 
 
+def fit_alpha_calibrator(
+    train_frames: Sequence[FrameRecord],
+    *,
+    calibration_target_frames: Sequence[FrameRecord] | None = None,
+    k: int,
+    mode: str,
+    alpha_grid: Sequence[float],
+    calib_stride: int,
+    calib_max_views: int,
+    residual_clip: float,
+    depth_abs_tol: float,
+    depth_rel_tol: float,
+    direction_weight: float,
+    calib_sampler: str = "stride_first",
+    bins: int = 5,
+    min_gain: float = 0.0,
+    min_bin_count: int = 64,
+    max_pixels_per_view: int = 4096,
+    feature_mode: str = "confidence_magnitude_edge",
+    default_alpha: float = 0.0,
+    device: torch.device | str = "cuda",
+) -> AlphaCalibrator:
+    if feature_mode not in {"confidence_magnitude", "confidence_magnitude_edge"}:
+        raise ValueError(f"Unsupported alpha feature mode: {feature_mode}")
+    if mode != "residual" or not train_frames:
+        return AlphaCalibrator(
+            confidence_edges=(0.0, 1.0),
+            magnitude_edges=(0.0, 1.0),
+            alpha_table=((float(default_alpha),),),
+            gain_table=((0.0,),),
+            count_table=((0,),),
+            accept_table=((False,),),
+            default_alpha=float(default_alpha),
+            min_gain=float(min_gain),
+            min_bin_count=int(min_bin_count),
+            feature_mode=feature_mode,
+        )
+    device = torch.device(device)
+    loader = FrameLoader(device=device)
+    target_pool = calibration_target_frames if calibration_target_frames is not None else train_frames
+    candidates = _calibration_candidates(target_pool, calib_stride, calib_max_views, calib_sampler)
+    conf_values: list[torch.Tensor] = []
+    mag_values: list[torch.Tensor] = []
+    edge_values: list[torch.Tensor] = []
+    base_values: list[torch.Tensor] = []
+    gt_values: list[torch.Tensor] = []
+    signal_values: list[torch.Tensor] = []
+    for target in candidates:
+        support = [frame for frame in train_frames if frame.name != target.name]
+        if not support:
+            continue
+        gt = loader.gt(str(target.gt_path)).to(device)
+        ev = compute_evidence_signal(
+            target,
+            support,
+            k=k,
+            mode=mode,
+            residual_clip=residual_clip,
+            min_confidence=1e-8,
+            depth_abs_tol=depth_abs_tol,
+            depth_rel_tol=depth_rel_tol,
+            direction_weight=direction_weight,
+            loader=loader,
+            device=device,
+        )
+        valid = ev.valid.squeeze(0)
+        if not bool(valid.any().item()):
+            continue
+        conf = torch.log1p(torch.clamp(ev.confidence.squeeze(0), min=0.0))[valid]
+        mag = torch.linalg.vector_norm(ev.signal, dim=0)[valid]
+        edge = _image_edge_magnitude(ev.base).squeeze(0)[valid]
+        base_px = ev.base.permute(1, 2, 0)[valid]
+        gt_px = gt.permute(1, 2, 0)[valid]
+        sig_px = ev.signal.permute(1, 2, 0)[valid]
+        max_samples = max(int(max_pixels_per_view), 1)
+        if conf.numel() > max_samples:
+            idx = torch.linspace(0, conf.numel() - 1, steps=max_samples, device=device).long()
+            conf = conf[idx]
+            mag = mag[idx]
+            edge = edge[idx]
+            base_px = base_px[idx]
+            gt_px = gt_px[idx]
+            sig_px = sig_px[idx]
+        conf_values.append(conf.detach().cpu())
+        mag_values.append(mag.detach().cpu())
+        if feature_mode == "confidence_magnitude_edge":
+            edge_values.append(edge.detach().cpu())
+        base_values.append(base_px.detach().cpu())
+        gt_values.append(gt_px.detach().cpu())
+        signal_values.append(sig_px.detach().cpu())
+    if not conf_values:
+        return AlphaCalibrator(
+            confidence_edges=(0.0, 1.0),
+            magnitude_edges=(0.0, 1.0),
+            alpha_table=((float(default_alpha),),),
+            gain_table=((0.0,),),
+            count_table=((0,),),
+            accept_table=((False,),),
+            default_alpha=float(default_alpha),
+            min_gain=float(min_gain),
+            min_bin_count=int(min_bin_count),
+            feature_mode=feature_mode,
+        )
+    conf_all = torch.cat(conf_values).float()
+    mag_all = torch.cat(mag_values).float()
+    base_all = torch.cat(base_values).float()
+    gt_all = torch.cat(gt_values).float()
+    sig_all = torch.cat(signal_values).float()
+    bin_count = max(int(bins), 1)
+    quantiles = torch.linspace(0.0, 1.0, steps=bin_count + 1)
+    conf_edges = _strictly_increasing_edges(torch.quantile(conf_all, quantiles).float())
+    mag_edges = _strictly_increasing_edges(torch.quantile(mag_all, quantiles).float())
+    conf_edges[0] = min(conf_edges[0], conf_all.min()) - 1e-6
+    conf_edges[-1] = max(conf_edges[-1], conf_all.max()) + 1e-6
+    mag_edges[0] = min(mag_edges[0], mag_all.min()) - 1e-6
+    mag_edges[-1] = max(mag_edges[-1], mag_all.max()) + 1e-6
+    conf_edges = _strictly_increasing_edges(conf_edges)
+    mag_edges = _strictly_increasing_edges(mag_edges)
+    conf_idx = torch.bucketize(conf_all, conf_edges[1:-1], right=False)
+    mag_idx = torch.bucketize(mag_all, mag_edges[1:-1], right=False)
+    edge_edges_tuple: tuple[float, ...] | None = None
+    if feature_mode == "confidence_magnitude_edge":
+        edge_all = torch.cat(edge_values).float()
+        edge_edges = _strictly_increasing_edges(torch.quantile(edge_all, quantiles).float())
+        edge_edges[0] = min(edge_edges[0], edge_all.min()) - 1e-6
+        edge_edges[-1] = max(edge_edges[-1], edge_all.max()) + 1e-6
+        edge_edges = _strictly_increasing_edges(edge_edges)
+        edge_idx = torch.bucketize(edge_all, edge_edges[1:-1], right=False)
+        flat_idx = conf_idx * bin_count * bin_count + mag_idx * bin_count + edge_idx
+        table_shape = (bin_count, bin_count, bin_count)
+        edge_edges_tuple = tuple(float(x) for x in edge_edges.tolist())
+    else:
+        flat_idx = conf_idx * bin_count + mag_idx
+        table_shape = (bin_count, bin_count)
+    flat_bins = int(np.prod(table_shape))
+    counts = torch.bincount(flat_idx, minlength=flat_bins).to(torch.int64)
+    base_err = torch.mean((base_all - gt_all) ** 2, dim=1)
+    alpha_values = [float(a) for a in alpha_grid]
+    if not alpha_values:
+        alpha_values = [0.0, 0.5, 0.875, 1.0]
+    gain_by_alpha = []
+    for alpha in alpha_values:
+        pred = torch.clamp(base_all + float(alpha) * sig_all, 0.0, 1.0)
+        gain = base_err - torch.mean((pred - gt_all) ** 2, dim=1)
+        gain_sum = torch.zeros(flat_bins, dtype=torch.float64)
+        gain_sum.scatter_add_(0, flat_idx, gain.to(torch.float64))
+        mean_gain = torch.where(counts > 0, gain_sum / torch.clamp(counts, min=1), torch.zeros_like(gain_sum))
+        gain_by_alpha.append(mean_gain)
+    gain_stack = torch.stack(gain_by_alpha, dim=0)
+    best_gain, best_idx = torch.max(gain_stack, dim=0)
+    alpha_tensor = torch.tensor(alpha_values, dtype=torch.float32)[best_idx]
+    accept = (best_gain > float(min_gain)) & (counts >= int(min_bin_count)) & (alpha_tensor > 0.0)
+    alpha_tensor = torch.where(accept, alpha_tensor, torch.full_like(alpha_tensor, float(default_alpha)))
+    return AlphaCalibrator(
+        confidence_edges=tuple(float(x) for x in conf_edges.tolist()),
+        magnitude_edges=tuple(float(x) for x in mag_edges.tolist()),
+        edge_edges=edge_edges_tuple,
+        alpha_table=tuple(tuple(tuple(float(v) for v in col) for col in row) for row in alpha_tensor.reshape(table_shape).tolist())
+        if feature_mode == "confidence_magnitude_edge"
+        else tuple(tuple(float(v) for v in row) for row in alpha_tensor.reshape(table_shape).tolist()),
+        gain_table=tuple(tuple(tuple(float(v) for v in col) for col in row) for row in best_gain.reshape(table_shape).tolist())
+        if feature_mode == "confidence_magnitude_edge"
+        else tuple(tuple(float(v) for v in row) for row in best_gain.reshape(table_shape).tolist()),
+        count_table=tuple(tuple(tuple(int(v) for v in col) for col in row) for row in counts.reshape(table_shape).tolist())
+        if feature_mode == "confidence_magnitude_edge"
+        else tuple(tuple(int(v) for v in row) for row in counts.reshape(table_shape).tolist()),
+        accept_table=tuple(tuple(tuple(bool(v) for v in col) for col in row) for row in accept.reshape(table_shape).tolist())
+        if feature_mode == "confidence_magnitude_edge"
+        else tuple(tuple(bool(v) for v in row) for row in accept.reshape(table_shape).tolist()),
+        default_alpha=float(default_alpha),
+        min_gain=float(min_gain),
+        min_bin_count=int(min_bin_count),
+        feature_mode=feature_mode,
+    )
+
+
 def adapt_frame(
     target: FrameRecord,
     support_frames: Sequence[FrameRecord],
@@ -679,6 +931,7 @@ def adapt_frame(
     depth_rel_tol: float = 0.03,
     direction_weight: float = 0.35,
     benefit_calibrator: BenefitCalibrator | None = None,
+    alpha_calibrator: AlphaCalibrator | None = None,
     edge_gate: bool = False,
     edge_gate_quantile: float = -1.0,
     edge_gate_min: float = 0.0,
@@ -722,8 +975,22 @@ def adapt_frame(
         valid = valid & edge_accept
         signal = torch.where(valid, signal, torch.zeros_like(signal))
         edge_accept_fraction = float(edge_accept.to(torch.float32).mean().detach().cpu().item())
+    alpha_mean = None
+    alpha_active_fraction = None
     if mode == "residual":
-        adapted = torch.clamp(base + float(alpha) * signal, 0.0, 1.0)
+        if alpha_calibrator is not None:
+            alpha_map, alpha_active = alpha_calibrator.alpha_map(
+                evidence.confidence,
+                signal,
+                base=evidence.base,
+                device=device,
+            )
+            alpha_map = torch.where(valid, alpha_map, torch.zeros_like(alpha_map))
+            alpha_mean = float(alpha_map[valid].mean().detach().cpu().item()) if bool(valid.any().item()) else 0.0
+            alpha_active_fraction = float((alpha_active & valid).to(torch.float32).mean().detach().cpu().item())
+            adapted = torch.clamp(base + alpha_map * signal, 0.0, 1.0)
+        else:
+            adapted = torch.clamp(base + float(alpha) * signal, 0.0, 1.0)
     else:
         blend = torch.clamp(signal, 0.0, 1.0)
         adapted = torch.where(valid, torch.clamp(base * (1.0 - float(alpha)) + blend * float(alpha), 0.0, 1.0), base)
@@ -738,6 +1005,9 @@ def adapt_frame(
     if edge_accept_fraction is not None:
         info["edge_accept_fraction"] = edge_accept_fraction
         info["edge_threshold"] = float(edge_threshold or 0.0)
+    if alpha_mean is not None:
+        info["alpha_mean"] = alpha_mean
+        info["alpha_active_fraction"] = float(alpha_active_fraction or 0.0)
     return adapted, info
 
 

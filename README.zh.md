@@ -2,16 +2,16 @@
 
 **基于训练证据的几何安全 Mesh Splatting 压缩与渲染修复。**
 
-[English](README.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [5 月 7 日更新](docs/car_model/5-7-Update.md) | [升级路线](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR 审计](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [Phase-A 证据](docs/car_model/5-8-ECSR-PhaseA-SurfaceEvidence.md) | [Phase-B graph](docs/car_model/5-8-ECSR-PhaseB-ViewSupportGraph.md) | [Full-train split](docs/car_model/5-8-ECSR-FullTrainPolicySplit.md) | [Phase-C certificates](docs/car_model/5-8-ECSR-PhaseC-StaticTopologyCertificate.md) | [Phase-D V2 smoke](docs/car_model/5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
+[English](README.md) | [Phase-J 结果](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [5 月 7 日更新](docs/car_model/5-7-Update.md) | [升级路线](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR 审计](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
 
-SPCarNet 是建立在 Mesh Splatting 之上的研究分支。当前版本不再依赖手工扫描 prune ratio 来赢指标，而是先用 train split 的证据判断哪些三角形可以安全压缩，再用 train-calibrated Evidence Lumigraph Adapter（ELA）修复 held-out test view 的渲染残差。当前版本已留档：
+SPCarNet 是建立在 Mesh Splatting 之上的研究分支。当前 ECSR 版本保留固定的 Phase-F compact checkpoint，再用 train-evidence guarded portfolio 做外观修复：稳定场景走 adaptive-alpha ELA，不稳定场景走 train-selected structural edge fallback。branch、edge gate、alpha、压缩比例都不使用 held-out test 指标选择。
 
 ```text
-archive/full9-compact-ela-ssim-peak-20260507
-commit fae7942
+current method: ours_26000_phasej_guarded_adaptedge_ela
+report: outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/phasef_ela_eval_summary_phasej_guarded_adaptedge_full9.md
 ```
 
-这是一个预期很好的版本，但不是终点：它已经在当前 9 个 Mip-NeRF360 场景上做到 RGB 指标全面优于同口径 clean MeshSplatting，并在当前几何安全准则下保持几何不退化；但平均三角形压缩率仍然偏保守。
+5 月 7 日 Compact-ELA/SOR 版本仍以 `archive/full9-compact-ela-ssim-peak-20260507`、commit `fae7942` 留档。Phase-J 在当前 full9 RGB 口径上更强，但它仍然是 render-time ELA portfolio，不是完全 baked 到表示里的终局模型。
 
 ## 当前结果
 
@@ -23,27 +23,27 @@ score = PSNR + 20 * SSIM - 20 * LPIPS
 
 训练集指标不用于选择 baseline，也不用于选择最终 test 结果。
 
-**最终报告。**
+**Phase-J 最终报告。**
 
-- 报告：`outputs/carnet/meshsplatopt/paper_m360_repro/compact_ela_sor_adaptive_geo_26k/compact_ela_vs_clean_report.md`
-- W&B collector：`rp0d5gr3`
+- 报告：`outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/phasef_ela_eval_summary_phasej_guarded_adaptedge_full9.md`
 - 场景：`9 / 9`
-- RGB + compact + geometry-safe pass：`9 / 9`
-- strict all-axis pass：`5 / 9`
-- 相对 selected clean MeshSplatting baseline 的均值提升：`+0.4979 PSNR`，`+0.0158 SSIM`，`-0.0234 LPIPS`
-- 平均三角形减少：`5.7632%`
+- 相对 selected clean MeshSplatting：`9 / 9` 三指标严格胜出
+- 相对 Phase-F alpha-grid：`9 / 9` 三指标严格胜出
+- 相对 selected clean MeshSplatting baseline 的均值提升：`+1.3311 PSNR`，`+0.0347 SSIM`，`-0.0634 LPIPS`
+- 相对 Phase-F alpha-grid 的均值提升：`+0.3971 PSNR`，`+0.0083 SSIM`，`-0.0193 LPIPS`
+- 平均三角形减少：`7.6479%`
 
-| 场景 | PSNR | SSIM | LPIPS | dPSNR | dSSIM | dLPIPS | 三角形减少 | 状态 |
-|---|---:|---:|---:|---:|---:|---:|---:|---|
-| bicycle | 23.9127 | 0.6937 | 0.2803 | +0.6111 | +0.0338 | -0.0518 | 10.01% | strict pass |
-| flowers | 20.1828 | 0.5473 | 0.3510 | +0.5005 | +0.0355 | -0.0436 | 10.02% | strict pass |
-| garden | 26.0348 | 0.8171 | 0.1523 | +1.0056 | +0.0371 | -0.0490 | 1.50% | geometry-safe |
-| stump | 25.3625 | 0.7125 | 0.2817 | +0.1575 | +0.0074 | -0.0123 | 10.02% | strict pass |
-| treehill | 21.1984 | 0.5882 | 0.3581 | +0.2642 | +0.0237 | -0.0479 | 10.01% | strict pass |
-| room | 29.1310 | 0.8849 | 0.2487 | +0.3837 | +0.0000 | -0.0012 | 0.10% | geometry-safe |
-| counter | 27.2404 | 0.8641 | 0.2497 | +0.4886 | +0.0021 | -0.0023 | 0.10% | geometry-safe |
-| kitchen | 27.9996 | 0.8769 | 0.1989 | +0.1810 | +0.0005 | -0.0002 | 0.10% | geometry-safe |
-| bonsai | 29.7844 | 0.8982 | 0.2574 | +0.8892 | +0.0018 | -0.0021 | 10.00% | strict pass |
+| 场景 | 分支 | PSNR | SSIM | LPIPS | dPSNR clean | dSSIM clean | dLPIPS clean | 三角形减少 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| bicycle | adaptive alpha | 24.0215 | 0.7024 | 0.2661 | +0.7199 | +0.0425 | -0.0660 | 11.81% |
+| flowers | adaptive alpha | 20.3044 | 0.5578 | 0.3292 | +0.6221 | +0.0459 | -0.0653 | 11.82% |
+| garden | adaptive alpha | 26.3111 | 0.8278 | 0.1358 | +1.2819 | +0.0478 | -0.0655 | 3.47% |
+| stump | adaptive alpha | 25.5951 | 0.7241 | 0.2639 | +0.3901 | +0.0189 | -0.0301 | 11.82% |
+| treehill | auto edge fallback | 21.2962 | 0.5956 | 0.3363 | +0.3620 | +0.0311 | -0.0697 | 11.81% |
+| room | adaptive alpha | 30.3056 | 0.9057 | 0.1960 | +1.5584 | +0.0209 | -0.0539 | 2.10% |
+| counter | adaptive alpha | 28.4492 | 0.8937 | 0.1865 | +1.6974 | +0.0317 | -0.0655 | 2.10% |
+| kitchen | adaptive alpha | 30.1997 | 0.9161 | 0.1320 | +2.3812 | +0.0396 | -0.0672 | 2.10% |
+| bonsai | adaptive alpha | 31.8620 | 0.9303 | 0.1726 | +2.9668 | +0.0339 | -0.0869 | 11.80% |
 
 ## ECSR 升级状态
 
@@ -61,6 +61,8 @@ score = PSNR + 20 * SSIM - 20 * LPIPS
 - Phase-C materialized checkpoint smoke：[`docs/car_model/5-8-ECSR-PhaseC-MaterializedStaticPass.md`](docs/car_model/5-8-ECSR-PhaseC-MaterializedStaticPass.md)，[`docs/car_model/5-8-ECSR-PhaseC-RendererSmoke.md`](docs/car_model/5-8-ECSR-PhaseC-RendererSmoke.md)
 - Phase-D attribute-only recovery smoke：[`docs/car_model/5-8-ECSR-PhaseD-AttributeOnlySmoke.md`](docs/car_model/5-8-ECSR-PhaseD-AttributeOnlySmoke.md)
 - Phase-D surface residual delta smoke：[`docs/car_model/5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md`](docs/car_model/5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md)
+- Phase-G teacher-bake recovery：[`docs/car_model/5-8-ECSR-PhaseG-TeacherBakeRecovery.md`](docs/car_model/5-8-ECSR-PhaseG-TeacherBakeRecovery.md)
+- Phase-J guarded adaptive edge policy：[`docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md`](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md)
 - 执行日志：[`docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md`](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md)
 - Phase-A 汇总 contact sheet：`outputs/carnet/meshsplatopt/ecsr_phase_a/surface_evidence/phase_a_surface_evidence_contact_sheet.png`
 
@@ -70,11 +72,22 @@ Phase-B 结果：固定 graph policy 在 full9 上找到 `123` 个 train-only lo
 
 Phase-C preflight 结果：`21 / 123` 个 Phase-B cluster 通过 train-only fitting/policy-val support-mask preflight，其中 `13` 个是 contraction 类型，`8` 个是 attribute-recovery 类型。它们还不是被接受的 ECSR 修改，只是进入 topology smoke test 与 before/after local rendering certificate 的第一批候选。
 
-Phase-C/D 执行更新：full-train split 已覆盖全部 9 个场景。Static topology certification 在 `21` 个 preflight candidate 中通过 `7` 个；其中 `3` 个 contraction candidate 已被 materialize 成真实 checkpoint copy，并且 `3 / 3` 通过 renderer smoke。两个 representation-level recovery MVP 已实现但还不能作为最终方法：attribute-only recovery 的 `2 / 2` 个 smoke run 回退，bounded surface residual DC delta 虽然在 train policy-val mean-L1 上接受 `3 / 4`，但 held-out diagnostic `4 / 4` 回退。这说明 checkpoint 接口已经打通，但下一版 ECSR 必须加入 local-mask policy metrics 和 least-squares / learned residual solve。
+Phase-C/D 执行更新：full-train split 已覆盖全部 9 个场景。Static topology certification 在 `21` 个 preflight candidate 中通过 `7` 个；其中 `3` 个 contraction candidate 已被 materialize 成真实 checkpoint copy，并且 `3 / 3` 通过 renderer smoke。两个 representation-level recovery MVP 已实现但还不能作为最终方法：attribute-only recovery 的 `2 / 2` 个 smoke run 回退，bounded surface residual DC delta 虽然在 train policy-val mean-L1 上接受 `3 / 4`，但 held-out diagnostic `4 / 4` 回退。这说明 checkpoint 接口已经打通。
+
+Phase-G 尝试把 ELA teacher bake 回 topology-frozen checkpoint，但 official `bicycle` 与 `flowers` pilot 都略低于 clean MeshSplatting，且明显低于 render-time ELA，因此被拒绝为当前主线。Phase-J 是当前接受的方法：一个 no-test-GT guarded portfolio，稳定时用 adaptive alpha，不稳定时用 train-selected structural edge fallback。
 
 ## 其他评估口径
 
-下面所有表都来自同一份 full9 报告。LPIPS、AbsRel、DepthMAE、Normal 越低越好。
+当前 Phase-J 摘要：
+
+| 评估口径 | 结果 |
+|---|---|
+| selected clean MeshSplatting baseline | `9 / 9` 三指标严格胜出，均值 `+1.3311` PSNR，`+0.0347` SSIM，`-0.0634` LPIPS |
+| Phase-F alpha-grid 前序方法 | `9 / 9` 三指标严格胜出，均值 `+0.3971` PSNR，`+0.0083` SSIM，`-0.0193` LPIPS |
+| guarded branch decision | `8 / 9` adaptive-alpha branch，`1 / 9` train-selected edge fallback |
+| 几何 / 拓扑 | 平均三角形减少 `7.6479%`；compact checkpoint 继承自 Phase-F policy-validation ladder |
+
+下面的详细表格保留自 5 月 7 日 Compact-ELA/SOR 留档报告，用于 provenance。LPIPS、AbsRel、DepthMAE、Normal 越低越好。
 
 | 评估口径 | 结果 |
 |---|---|

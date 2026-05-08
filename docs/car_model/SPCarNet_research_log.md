@@ -5769,3 +5769,45 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 **Selection rule**: use the same selected clean MeshSplatting baseline from the full9 CSV, require full-view held-out `dPSNR > 0`, `dSSIM > 0`, and `dLPIPS < 0`, then search within that held-out render for textured crops where SPCarNet reduces local RGB error against GT. Green/magenta heat maps mark where SPCarNet is closer/worse than clean MeshSplatting.
 
 **Takeaway**: the new outdoor crops make the current advantage much easier to inspect: flowers/garden/treehill/bicycle/stump show local MAE drops from `12.8%` to `32.0%`, and the mixed panel includes a bonsai crop with `43.6%` local MAE drop. This improves presentation confidence, but it also sharpens the scientific boundary: current SPCarNet's visible edge is strongest in localized residual repair, while the next true method upgrade still needs stronger geometry-preserving compaction and broader full-frame perceptual gains.
+
+---
+
+## 2026-05-08 - ECSR Phase-J guarded adaptive edge policy closes the Phase-F RGB gap
+
+**Milestone**: Phase-J upgrades the Phase-H guarded adaptive-alpha result by
+replacing the unstable-scene fallback with a train-selected structural edge
+policy. The final materialized method is
+`ours_26000_phasej_guarded_adaptedge_ela`.
+
+**Why it matters**: Phase-H already improved `8 / 9` scenes over Phase-F but
+could only tie Phase-F on `treehill`. Diagnostics showed that adaptive alpha
+improved PSNR there but damaged SSIM/LPIPS. The new fallback searches edge-gate
+quantiles `{0.5, 0.6, 0.7, 0.8, 0.9}` on train calibration only. For `treehill`,
+the train balanced objective selected q=`0.5`, alpha=`0.75`, which then strictly
+improved held-out PSNR/SSIM/LPIPS.
+
+**Full9 result**:
+
+- report: `outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/phasef_ela_eval_summary_phasej_guarded_adaptedge_full9.md`
+- strict RGB wins vs selected clean MeshSplatting: `9 / 9`;
+- strict RGB wins vs Phase-F alpha-grid: `9 / 9`;
+- mean delta vs clean: `+1.331084 PSNR`, `+0.034702 SSIM`, `-0.063359 LPIPS`;
+- mean delta vs Phase-F: `+0.397095 PSNR`, `+0.008305 SSIM`, `-0.019321 LPIPS`;
+- mean total triangle reduction: `7.6479%`.
+
+**Treehill fix**:
+
+- Phase-F alpha-grid: `21.249701 / 0.591590 / 0.350894`;
+- Phase-H adaptive alpha: `21.294319 / 0.582889 / 0.369435`;
+- Phase-J auto edge fallback: `21.296227 / 0.595606 / 0.336319`.
+
+**W&B evidence**:
+
+- treehill auto edge policy: `7ln9cddr`;
+- Phase-H adaptive runs remain the source for the other eight selected scenes.
+
+**Claim boundary**: this is now the strongest RGB result in the current ECSR
+line and it removes the previous non-strict Phase-F gap. It still should not be
+described as a complete representation-level endpoint: Phase-G teacher-bake
+failed to beat clean MeshSplatting, and the strongest gains remain render-time
+ELA recovery.

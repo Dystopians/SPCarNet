@@ -290,3 +290,38 @@ the archived Compact-ELA/SOR baseline on RGB metrics while also carrying extra
 triangle reduction. The caveat remains that the appearance gain is still
 render-time ELA recovery; the representation-level surface-attached recovery
 goal is not closed by this update.
+
+## Phase-G / Phase-H / Phase-J Follow-Up
+
+Phase-G tested whether the Phase-F ELA teacher could be baked back into a
+topology-frozen MeshSplatting checkpoint. Official-split pilots on `bicycle` and
+`flowers` were negative:
+
+- bicycle: `23.290770 / 0.659508 / 0.332462`, below clean by
+  `-0.010843 / -0.000359 / +0.000385`;
+- flowers: `19.666090 / 0.511543 / 0.394951`, below clean by
+  `-0.016167 / -0.000279 / +0.000388`.
+
+This rejected teacher-bake as the immediate final path. The method focus moved
+back to a guarded render-time policy while preserving the fixed Phase-F compact
+checkpoint.
+
+Phase-H added adaptive per-bin alpha and improved `8 / 9` scenes over Phase-F,
+but `treehill` was unstable and had to fall back to Phase-F. Phase-J fixed that
+remaining non-strict scene by adding a train-selected structural edge fallback.
+The fallback searches edge-gate quantiles on train calibration only; for
+`treehill`, it selected q=`0.5`, alpha=`0.75`.
+
+Final Phase-J full9:
+
+- method: `ours_26000_phasej_guarded_adaptedge_ela`;
+- report:
+  `outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/phasef_ela_eval_summary_phasej_guarded_adaptedge_full9.md`;
+- strict wins vs selected clean MeshSplatting: `9 / 9`;
+- strict wins vs Phase-F alpha-grid: `9 / 9`;
+- mean delta vs clean: `+1.331084 / +0.034702 / -0.063359`;
+- mean delta vs Phase-F: `+0.397095 / +0.008305 / -0.019321`;
+- mean total triangle reduction: `7.6479%`.
+
+This is the strongest accepted ECSR RGB result so far. It still remains a
+render-time ELA portfolio rather than a fully baked representation-level model.

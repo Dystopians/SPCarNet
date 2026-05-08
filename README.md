@@ -2,16 +2,16 @@
 
 **Train-only evidence-guided compact Mesh Splatting with geometry-safe reconstruction repair.**
 
-[中文](README.zh.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [May 7 update](docs/car_model/5-7-Update.md) | [Upgrade plan](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR audit](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [Phase-A evidence](docs/car_model/5-8-ECSR-PhaseA-SurfaceEvidence.md) | [Phase-B graph](docs/car_model/5-8-ECSR-PhaseB-ViewSupportGraph.md) | [Full-train split](docs/car_model/5-8-ECSR-FullTrainPolicySplit.md) | [Phase-C certificates](docs/car_model/5-8-ECSR-PhaseC-StaticTopologyCertificate.md) | [Phase-D V2 smoke](docs/car_model/5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md) | [Execution log](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
+[中文](README.zh.md) | [Phase-J result](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [May 7 update](docs/car_model/5-7-Update.md) | [Upgrade plan](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR audit](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [Execution log](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
 
-SPCarNet is a research branch built on Mesh Splatting. The current version does not try to win by a hand-tuned prune ratio. It uses train-split evidence to decide how much geometry can be safely compacted, then repairs the held-out render with a train-calibrated Evidence Lumigraph Adapter (ELA). The current checkpoint is archived as:
+SPCarNet is a research branch built on Mesh Splatting. The current ECSR version keeps the fixed Phase-F compact checkpoints, then uses a train-evidence guarded portfolio for appearance recovery: stable scenes use adaptive-alpha ELA, and unstable scenes use a train-selected structural edge fallback. No held-out test metric is used to select the branch, edge gate, alpha, or compaction ratio.
 
 ```text
-archive/full9-compact-ela-ssim-peak-20260507
-commit fae7942
+current method: ours_26000_phasej_guarded_adaptedge_ela
+report: outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/phasef_ela_eval_summary_phasej_guarded_adaptedge_full9.md
 ```
 
-This is a strong and clean version, but not the final paper-ready endpoint: it wins RGB quality on all selected Mip-NeRF360 scenes while preserving geometry under the current geometry-safe criterion, yet its average triangle reduction is still conservative.
+The May 7 Compact-ELA/SOR checkpoint remains archived as `archive/full9-compact-ela-ssim-peak-20260507` at commit `fae7942`. Phase-J is stronger on the current selected full9 RGB protocol, but it is still a render-time ELA portfolio rather than a fully baked representation-level endpoint.
 
 ## Current Result
 
@@ -23,27 +23,27 @@ score = PSNR + 20 * SSIM - 20 * LPIPS
 
 Train metrics are not used to pick the baseline or the final method result.
 
-**Final report.**
+**Final Phase-J report.**
 
-- Report: `outputs/carnet/meshsplatopt/paper_m360_repro/compact_ela_sor_adaptive_geo_26k/compact_ela_vs_clean_report.md`
-- W&B collector: `rp0d5gr3`
+- Report: `outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/phasef_ela_eval_summary_phasej_guarded_adaptedge_full9.md`
 - Scenes: `9 / 9`
-- RGB + compact + geometry-safe pass: `9 / 9`
-- Strict all-axis pass: `5 / 9`
-- Mean delta vs selected clean MeshSplatting baseline: `+0.4979 PSNR`, `+0.0158 SSIM`, `-0.0234 LPIPS`
-- Mean triangle reduction: `5.7632%`
+- Strict RGB wins vs selected clean MeshSplatting: `9 / 9`
+- Strict RGB wins vs Phase-F alpha-grid: `9 / 9`
+- Mean delta vs selected clean MeshSplatting: `+1.3311 PSNR`, `+0.0347 SSIM`, `-0.0634 LPIPS`
+- Mean delta vs Phase-F alpha-grid: `+0.3971 PSNR`, `+0.0083 SSIM`, `-0.0193 LPIPS`
+- Mean triangle reduction: `7.6479%`
 
-| scene | PSNR | SSIM | LPIPS | dPSNR | dSSIM | dLPIPS | triangle reduction | status |
-|---|---:|---:|---:|---:|---:|---:|---:|---|
-| bicycle | 23.9127 | 0.6937 | 0.2803 | +0.6111 | +0.0338 | -0.0518 | 10.01% | strict pass |
-| flowers | 20.1828 | 0.5473 | 0.3510 | +0.5005 | +0.0355 | -0.0436 | 10.02% | strict pass |
-| garden | 26.0348 | 0.8171 | 0.1523 | +1.0056 | +0.0371 | -0.0490 | 1.50% | geometry-safe |
-| stump | 25.3625 | 0.7125 | 0.2817 | +0.1575 | +0.0074 | -0.0123 | 10.02% | strict pass |
-| treehill | 21.1984 | 0.5882 | 0.3581 | +0.2642 | +0.0237 | -0.0479 | 10.01% | strict pass |
-| room | 29.1310 | 0.8849 | 0.2487 | +0.3837 | +0.0000 | -0.0012 | 0.10% | geometry-safe |
-| counter | 27.2404 | 0.8641 | 0.2497 | +0.4886 | +0.0021 | -0.0023 | 0.10% | geometry-safe |
-| kitchen | 27.9996 | 0.8769 | 0.1989 | +0.1810 | +0.0005 | -0.0002 | 0.10% | geometry-safe |
-| bonsai | 29.7844 | 0.8982 | 0.2574 | +0.8892 | +0.0018 | -0.0021 | 10.00% | strict pass |
+| scene | selected branch | PSNR | SSIM | LPIPS | dPSNR clean | dSSIM clean | dLPIPS clean | triangle reduction |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| bicycle | adaptive alpha | 24.0215 | 0.7024 | 0.2661 | +0.7199 | +0.0425 | -0.0660 | 11.81% |
+| flowers | adaptive alpha | 20.3044 | 0.5578 | 0.3292 | +0.6221 | +0.0459 | -0.0653 | 11.82% |
+| garden | adaptive alpha | 26.3111 | 0.8278 | 0.1358 | +1.2819 | +0.0478 | -0.0655 | 3.47% |
+| stump | adaptive alpha | 25.5951 | 0.7241 | 0.2639 | +0.3901 | +0.0189 | -0.0301 | 11.82% |
+| treehill | auto edge fallback | 21.2962 | 0.5956 | 0.3363 | +0.3620 | +0.0311 | -0.0697 | 11.81% |
+| room | adaptive alpha | 30.3056 | 0.9057 | 0.1960 | +1.5584 | +0.0209 | -0.0539 | 2.10% |
+| counter | adaptive alpha | 28.4492 | 0.8937 | 0.1865 | +1.6974 | +0.0317 | -0.0655 | 2.10% |
+| kitchen | adaptive alpha | 30.1997 | 0.9161 | 0.1320 | +2.3812 | +0.0396 | -0.0672 | 2.10% |
+| bonsai | adaptive alpha | 31.8620 | 0.9303 | 0.1726 | +2.9668 | +0.0339 | -0.0869 | 11.80% |
 
 ## ECSR Upgrade Status
 
@@ -61,6 +61,8 @@ Current execution artifacts:
 - Phase-C materialized checkpoint smoke: [`docs/car_model/5-8-ECSR-PhaseC-MaterializedStaticPass.md`](docs/car_model/5-8-ECSR-PhaseC-MaterializedStaticPass.md), [`docs/car_model/5-8-ECSR-PhaseC-RendererSmoke.md`](docs/car_model/5-8-ECSR-PhaseC-RendererSmoke.md)
 - Phase-D attribute-only recovery smoke: [`docs/car_model/5-8-ECSR-PhaseD-AttributeOnlySmoke.md`](docs/car_model/5-8-ECSR-PhaseD-AttributeOnlySmoke.md)
 - Phase-D surface residual delta smoke: [`docs/car_model/5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md`](docs/car_model/5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md)
+- Phase-G teacher-bake recovery: [`docs/car_model/5-8-ECSR-PhaseG-TeacherBakeRecovery.md`](docs/car_model/5-8-ECSR-PhaseG-TeacherBakeRecovery.md)
+- Phase-J guarded adaptive edge policy: [`docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md`](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md)
 - Execution log: [`docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md`](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md)
 - Combined Phase-A contact sheet: `outputs/carnet/meshsplatopt/ecsr_phase_a/surface_evidence/phase_a_surface_evidence_contact_sheet.png`
 
@@ -70,11 +72,22 @@ Phase-B result: the fixed graph policy finds `123` train-only local support clus
 
 Phase-C preflight result: `21 / 123` Phase-B clusters pass the train-only fitting/policy-val support-mask preflight (`13` contraction-type, `8` attribute-recovery-type). These are not accepted ECSR edits yet; they are the first eligible set for topology smoke tests and before/after local rendering certificates.
 
-Phase-C/D execution update: the full-train split is complete for all 9 scenes. Static topology certification passes `7 / 21` preflight candidates; `3` contraction candidates were materialized as real checkpoint copies and all `3 / 3` pass renderer smoke. Two representation-level recovery MVPs are implemented but rejected as final methods: attribute-only recovery regresses `2 / 2` smoke runs, and bounded surface residual DC delta regresses `4 / 4` held-out diagnostics despite `3 / 4` train policy-val mean-L1 accepts. This establishes the checkpoint interface, but the next accepted ECSR method needs local-mask policy metrics and a least-squares or learned residual solve.
+Phase-C/D execution update: the full-train split is complete for all 9 scenes. Static topology certification passes `7 / 21` preflight candidates; `3` contraction candidates were materialized as real checkpoint copies and all `3 / 3` pass renderer smoke. Two representation-level recovery MVPs are implemented but rejected as final methods: attribute-only recovery regresses `2 / 2` smoke runs, and bounded surface residual DC delta regresses `4 / 4` held-out diagnostics despite `3 / 4` train policy-val mean-L1 accepts. This established the checkpoint interface.
+
+Phase-G tested teacher-baking ELA back into a topology-frozen checkpoint and was rejected: official `bicycle` and `flowers` pilots both remained slightly below clean MeshSplatting and far below render-time ELA. Phase-J is therefore the accepted current method: a no-test-GT guarded portfolio that uses adaptive alpha where stable and a train-selected structural edge fallback where adaptive alpha is unstable.
 
 ## Additional Evaluation Views
 
-All tables below are derived from the same full9 report. Lower is better for LPIPS, AbsRel, DepthMAE, and Normal.
+Current Phase-J summary:
+
+| evaluation view | result |
+|---|---|
+| selected clean MeshSplatting baseline | `9 / 9` strict RGB wins, mean `+1.3311` PSNR, `+0.0347` SSIM, `-0.0634` LPIPS |
+| Phase-F alpha-grid predecessor | `9 / 9` strict RGB wins, mean `+0.3971` PSNR, `+0.0083` SSIM, `-0.0193` LPIPS |
+| guarded branch decision | `8 / 9` adaptive-alpha branch, `1 / 9` train-selected edge fallback |
+| geometry / topology | mean triangle reduction `7.6479%`; compact checkpoint inherited from Phase-F policy-validation ladder |
+
+The detailed tables below are retained from the May 7 archived Compact-ELA/SOR report for provenance. Lower is better for LPIPS, AbsRel, DepthMAE, and Normal.
 
 | evaluation view | result |
 |---|---|

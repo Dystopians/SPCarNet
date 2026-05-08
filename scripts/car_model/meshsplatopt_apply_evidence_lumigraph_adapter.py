@@ -20,6 +20,7 @@ from utils.evidence_lumigraph_adapter import (
     FrameLoader,
     adapt_frame,
     calibrate_alpha,
+    fit_alpha_calibrator,
     fit_benefit_calibrator,
     load_split_frames,
     save_image_tensor,
@@ -102,6 +103,32 @@ def _fit_optional_benefit(
     )
 
 
+def _fit_optional_alpha(args: argparse.Namespace, train_frames, policy: dict, device: torch.device, calibration_target_frames=None):
+    if args.alpha_policy != "adaptive_bins" or str(policy["mode"]) != "residual":
+        return None
+    return fit_alpha_calibrator(
+        train_frames,
+        calibration_target_frames=calibration_target_frames,
+        k=int(policy["k"]),
+        mode=str(policy["mode"]),
+        alpha_grid=_parse_alpha_grid(args.alpha_grid),
+        calib_stride=args.calib_stride,
+        calib_max_views=args.calib_max_views,
+        calib_sampler=args.calib_sampler,
+        residual_clip=float(policy["residual_clip"]),
+        depth_abs_tol=float(policy["depth_abs_tol"]),
+        depth_rel_tol=float(policy["depth_rel_tol"]),
+        direction_weight=float(policy.get("direction_weight", args.direction_weight)),
+        bins=args.alpha_bins,
+        min_gain=args.alpha_min_gain,
+        min_bin_count=args.alpha_min_bin_count,
+        max_pixels_per_view=args.alpha_max_pixels_per_view,
+        feature_mode=args.alpha_feature_mode,
+        default_alpha=args.alpha_default,
+        device=device,
+    )
+
+
 def _choose_policy(
     args: argparse.Namespace,
     train_frames,
@@ -123,6 +150,21 @@ def _choose_policy(
             "edge_gate_min": float(args.edge_gate_min),
             "edge_gate_dilate": int(args.edge_gate_dilate),
         }
+        if args.alpha >= 0.0 and args.skip_fixed_alpha_calibration and not args.benefit_policy:
+            calibration = {
+                "alpha": float(args.alpha),
+                "reason": "fixed_alpha_calibration_skipped",
+                "rows": [
+                    {
+                        "alpha": float(args.alpha),
+                        "selection_score": 0.0,
+                        "psnr_gain": None,
+                        "ssim_gain": None,
+                        "lpips_gain": None,
+                    }
+                ],
+            }
+            return policy, calibration, [], None
         support_frames = benefit_fit_frames if args.policy_holdout_fraction > 0.0 else train_frames
         target_frames = policy_val_frames if args.policy_holdout_fraction > 0.0 else None
         benefit_calibrator = _fit_optional_benefit(args, benefit_fit_frames, policy, device)
@@ -164,76 +206,90 @@ def _choose_policy(
         if args.policy_direction_weight_values.strip()
         else [float(args.direction_weight)]
     )
+    edge_quantile_values = (
+        _parse_float_grid(args.policy_edge_gate_quantiles)
+        if bool(args.edge_gate) and args.policy_edge_gate_quantiles.strip()
+        else [float(args.edge_gate_quantile)]
+    )
+    edge_dilate_values = (
+        _parse_int_grid(args.policy_edge_gate_dilates)
+        if bool(args.edge_gate) and args.policy_edge_gate_dilates.strip()
+        else [int(args.edge_gate_dilate)]
+    )
     order = 0
     for mode in modes:
         for k in k_values:
             for depth_rel in depth_rel_values:
                 for residual_clip in clip_values:
                     for direction_weight in direction_weight_values:
-                        feature_modes = benefit_feature_modes if mode == "residual" else ["none"]
-                        for benefit_feature_mode in feature_modes:
-                            policy = {
-                                "mode": mode,
-                                "k": int(k),
-                                "residual_clip": float(residual_clip),
-                                "depth_abs_tol": float(args.depth_abs_tol),
-                                "depth_rel_tol": float(depth_rel),
-                                "direction_weight": float(direction_weight),
-                                "benefit_feature_mode": str(benefit_feature_mode),
-                                "edge_gate": bool(args.edge_gate),
-                                "edge_gate_quantile": float(args.edge_gate_quantile),
-                                "edge_gate_min": float(args.edge_gate_min),
-                                "edge_gate_dilate": int(args.edge_gate_dilate),
-                            }
-                            support_frames = benefit_fit_frames if args.policy_holdout_fraction > 0.0 else train_frames
-                            target_frames = policy_val_frames if args.policy_holdout_fraction > 0.0 else None
-                            benefit_calibrator = _fit_optional_benefit(args, benefit_fit_frames, policy, device)
-                            calibration = calibrate_alpha(
-                                support_frames,
-                                calibration_target_frames=target_frames,
-                                alpha_grid=alpha_grid,
-                                k=int(k),
-                                mode=mode,
-                                calib_stride=args.calib_stride,
-                                calib_max_views=args.calib_max_views,
-                                calib_sampler=args.calib_sampler,
-                                residual_clip=float(residual_clip),
-                                depth_abs_tol=args.depth_abs_tol,
-                                depth_rel_tol=float(depth_rel),
-                                direction_weight=float(direction_weight),
-                                benefit_calibrator=benefit_calibrator,
-                                edge_gate=bool(policy.get("edge_gate", False)),
-                                edge_gate_quantile=float(policy.get("edge_gate_quantile", -1.0)),
-                                edge_gate_min=float(policy.get("edge_gate_min", 0.0)),
-                                edge_gate_dilate=int(policy.get("edge_gate_dilate", 0)),
-                                policy_objective=args.policy_objective,
-                                ssim_weight=args.policy_ssim_weight,
-                                lpips_weight=args.policy_lpips_weight,
-                                compute_lpips=args.calib_lpips,
-                                device=device,
-                            )
-                            alpha = float(calibration["alpha"])
-                            row = _selected_calibration_row(calibration, alpha)
-                            score = float(row.get("selection_score", row.get("psnr_gain", 0.0)))
-                            candidate_rows.append(
-                                {
-                                    **policy,
-                                    "alpha": alpha,
-                                    "calib_selection_score": score,
-                                    "calib_psnr_gain": row.get("psnr_gain"),
-                                    "calib_ssim_gain": row.get("ssim_gain"),
-                                    "calib_lpips_gain": row.get("lpips_gain"),
-                                    "calib_psnr": row.get("psnr"),
-                                    "calib_base_psnr": row.get("base_psnr"),
-                                    "benefit_accepted_bins": (
-                                        benefit_calibrator.to_json().get("accepted_bins") if benefit_calibrator is not None else None
-                                    ),
-                                }
-                            )
-                            rank = (score, -order)
-                            if best is None or rank > (best[0], best[1]):
-                                best = (score, -order, policy, calibration, benefit_calibrator)
-                            order += 1
+                        for edge_quantile in edge_quantile_values:
+                            for edge_dilate in edge_dilate_values:
+                                feature_modes = benefit_feature_modes if mode == "residual" else ["none"]
+                                for benefit_feature_mode in feature_modes:
+                                    policy = {
+                                        "mode": mode,
+                                        "k": int(k),
+                                        "residual_clip": float(residual_clip),
+                                        "depth_abs_tol": float(args.depth_abs_tol),
+                                        "depth_rel_tol": float(depth_rel),
+                                        "direction_weight": float(direction_weight),
+                                        "benefit_feature_mode": str(benefit_feature_mode),
+                                        "edge_gate": bool(args.edge_gate),
+                                        "edge_gate_quantile": float(edge_quantile),
+                                        "edge_gate_min": float(args.edge_gate_min),
+                                        "edge_gate_dilate": int(edge_dilate),
+                                    }
+                                    support_frames = benefit_fit_frames if args.policy_holdout_fraction > 0.0 else train_frames
+                                    target_frames = policy_val_frames if args.policy_holdout_fraction > 0.0 else None
+                                    benefit_calibrator = _fit_optional_benefit(args, benefit_fit_frames, policy, device)
+                                    calibration = calibrate_alpha(
+                                        support_frames,
+                                        calibration_target_frames=target_frames,
+                                        alpha_grid=alpha_grid,
+                                        k=int(k),
+                                        mode=mode,
+                                        calib_stride=args.calib_stride,
+                                        calib_max_views=args.calib_max_views,
+                                        calib_sampler=args.calib_sampler,
+                                        residual_clip=float(residual_clip),
+                                        depth_abs_tol=args.depth_abs_tol,
+                                        depth_rel_tol=float(depth_rel),
+                                        direction_weight=float(direction_weight),
+                                        benefit_calibrator=benefit_calibrator,
+                                        edge_gate=bool(policy.get("edge_gate", False)),
+                                        edge_gate_quantile=float(policy.get("edge_gate_quantile", -1.0)),
+                                        edge_gate_min=float(policy.get("edge_gate_min", 0.0)),
+                                        edge_gate_dilate=int(policy.get("edge_gate_dilate", 0)),
+                                        policy_objective=args.policy_objective,
+                                        ssim_weight=args.policy_ssim_weight,
+                                        lpips_weight=args.policy_lpips_weight,
+                                        compute_lpips=args.calib_lpips,
+                                        device=device,
+                                    )
+                                    alpha = float(calibration["alpha"])
+                                    row = _selected_calibration_row(calibration, alpha)
+                                    score = float(row.get("selection_score", row.get("psnr_gain", 0.0)))
+                                    candidate_rows.append(
+                                        {
+                                            **policy,
+                                            "alpha": alpha,
+                                            "calib_selection_score": score,
+                                            "calib_psnr_gain": row.get("psnr_gain"),
+                                            "calib_ssim_gain": row.get("ssim_gain"),
+                                            "calib_lpips_gain": row.get("lpips_gain"),
+                                            "calib_psnr": row.get("psnr"),
+                                            "calib_base_psnr": row.get("base_psnr"),
+                                            "benefit_accepted_bins": (
+                                                benefit_calibrator.to_json().get("accepted_bins")
+                                                if benefit_calibrator is not None
+                                                else None
+                                            ),
+                                        }
+                                    )
+                                    rank = (score, -order)
+                                    if best is None or rank > (best[0], best[1]):
+                                        best = (score, -order, policy, calibration, benefit_calibrator)
+                                    order += 1
     assert best is not None
     return best[2], best[3], candidate_rows, best[4]
 
@@ -274,6 +330,8 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
             "method_name": args.method_name,
             "calib_sampler": args.calib_sampler,
             "policy_direction_weight_values": args.policy_direction_weight_values,
+            "policy_edge_gate_quantiles": args.policy_edge_gate_quantiles,
+            "policy_edge_gate_dilates": args.policy_edge_gate_dilates,
             "policy_objective": args.policy_objective,
             "policy_holdout_fraction": args.policy_holdout_fraction,
             "calib_lpips": args.calib_lpips,
@@ -296,6 +354,8 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
         "ela/mean_confidence": float(report.get("mean_confidence", 0.0)),
         "ela/mean_benefit_accept_fraction": float(report.get("mean_benefit_accept_fraction", 0.0)),
         "ela/mean_edge_accept_fraction": float(report.get("mean_edge_accept_fraction", 0.0)),
+        "ela/mean_alpha": float(report.get("mean_alpha", 0.0)),
+        "ela/mean_alpha_active_fraction": float(report.get("mean_alpha_active_fraction", 0.0)),
     }
     run.log(flat)
     run.summary.update(flat)
@@ -314,6 +374,9 @@ def run(args: argparse.Namespace) -> dict:
     benefit_fit_frames, policy_val_frames = _split_policy_frames(train_frames, args.policy_holdout_fraction)
     alpha_grid = _parse_alpha_grid(args.alpha_grid)
     policy, calibration, policy_candidates, benefit_calibrator = _choose_policy(args, train_frames, alpha_grid, device)
+    alpha_fit_frames = benefit_fit_frames if args.policy_holdout_fraction > 0.0 else train_frames
+    alpha_target_frames = policy_val_frames if args.policy_holdout_fraction > 0.0 else None
+    alpha_calibrator = _fit_optional_alpha(args, alpha_fit_frames, policy, device, alpha_target_frames)
     alpha = float(args.alpha) if args.alpha >= 0.0 else float(calibration["alpha"])
     out_method = output_model / args.target_split / method_name
     out_render = out_method / "renders"
@@ -336,6 +399,7 @@ def run(args: argparse.Namespace) -> dict:
             depth_rel_tol=float(policy["depth_rel_tol"]),
             direction_weight=float(policy.get("direction_weight", args.direction_weight)),
             benefit_calibrator=benefit_calibrator,
+            alpha_calibrator=alpha_calibrator,
             edge_gate=bool(policy.get("edge_gate", False)),
             edge_gate_quantile=float(policy.get("edge_gate_quantile", -1.0)),
             edge_gate_min=float(policy.get("edge_gate_min", 0.0)),
@@ -367,6 +431,8 @@ def run(args: argparse.Namespace) -> dict:
         "calib_lpips": bool(args.calib_lpips),
         "calib_sampler": str(args.calib_sampler),
         "benefit_policy": benefit_calibrator.to_json() if benefit_calibrator is not None else None,
+        "alpha_policy": str(args.alpha_policy),
+        "alpha_calibrator": alpha_calibrator.to_json() if alpha_calibrator is not None else None,
         "benefit_feature_mode": str(policy.get("benefit_feature_mode", args.benefit_feature_mode)),
         "requested_benefit_feature_mode": str(args.benefit_feature_mode),
         "policy_holdout_fraction": float(args.policy_holdout_fraction),
@@ -389,6 +455,10 @@ def run(args: argparse.Namespace) -> dict:
         ),
         "mean_edge_accept_fraction": float(
             sum(float(x.get("edge_accept_fraction", 0.0)) for x in infos) / max(len(infos), 1)
+        ),
+        "mean_alpha": float(sum(float(x.get("alpha_mean", 0.0)) for x in infos) / max(len(infos), 1)),
+        "mean_alpha_active_fraction": float(
+            sum(float(x.get("alpha_active_fraction", 0.0)) for x in infos) / max(len(infos), 1)
         ),
         "frames": infos,
     }
@@ -415,6 +485,16 @@ def main() -> int:
     parser.add_argument("--policy_depth_rel_values", default="0.06,0.12")
     parser.add_argument("--policy_residual_clip_values", default="0.25")
     parser.add_argument("--policy_direction_weight_values", default="")
+    parser.add_argument(
+        "--policy_edge_gate_quantiles",
+        default="",
+        help="Optional comma-separated edge-gate quantiles for train-only auto-policy search.",
+    )
+    parser.add_argument(
+        "--policy_edge_gate_dilates",
+        default="",
+        help="Optional comma-separated edge-gate dilation values for train-only auto-policy search.",
+    )
     parser.add_argument("--policy_objective", choices=("psnr", "balanced"), default="psnr")
     parser.add_argument("--policy_ssim_weight", default=20.0, type=float)
     parser.add_argument("--policy_lpips_weight", default=20.0, type=float)
@@ -436,11 +516,27 @@ def main() -> int:
         default="confidence_magnitude",
         help="Train-only benefit-gate feature set. auto compares basic and edge modes on the policy holdout split.",
     )
+    parser.add_argument("--alpha_policy", choices=("global", "adaptive_bins"), default="global")
+    parser.add_argument("--alpha_bins", default=5, type=int)
+    parser.add_argument("--alpha_min_gain", default=0.0, type=float)
+    parser.add_argument("--alpha_min_bin_count", default=64, type=int)
+    parser.add_argument("--alpha_max_pixels_per_view", default=4096, type=int)
+    parser.add_argument(
+        "--alpha_feature_mode",
+        choices=("confidence_magnitude", "confidence_magnitude_edge"),
+        default="confidence_magnitude_edge",
+    )
+    parser.add_argument("--alpha_default", default=0.0, type=float)
     parser.add_argument("--edge_gate", action="store_true")
     parser.add_argument("--edge_gate_quantile", default=-1.0, type=float)
     parser.add_argument("--edge_gate_min", default=0.0, type=float)
     parser.add_argument("--edge_gate_dilate", default=0, type=int)
     parser.add_argument("--alpha", default=-1.0, type=float, help="Override alpha. Default <0 uses train-only calibration.")
+    parser.add_argument(
+        "--skip_fixed_alpha_calibration",
+        action="store_true",
+        help="When --alpha is fixed and --auto_policy is disabled, skip redundant alpha calibration.",
+    )
     parser.add_argument("--alpha_grid", default="0,0.125,0.25,0.5,0.75,1.0")
     parser.add_argument("--calib_stride", default=16, type=int)
     parser.add_argument("--calib_max_views", default=16, type=int)

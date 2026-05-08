@@ -147,11 +147,6 @@ def _apply_ela(args: argparse.Namespace, scene: str, model: Path, log_path: Path
         args.base_method_name,
         "--method_name",
         args.method_name,
-        "--edge_gate",
-        "--edge_gate_quantile",
-        str(args.edge_gate_quantile),
-        "--edge_gate_dilate",
-        str(args.edge_gate_dilate),
         "--wandb",
         "--wandb_project",
         args.wandb_project,
@@ -160,7 +155,41 @@ def _apply_ela(args: argparse.Namespace, scene: str, model: Path, log_path: Path
         "--wandb_name",
         f"{args.wandb_name}_{scene}",
     ]
-    if args.fixed_policy:
+    if not args.no_edge_gate:
+        cmd.extend(
+            [
+                "--edge_gate",
+                "--edge_gate_quantile",
+                str(args.edge_gate_quantile),
+                "--edge_gate_dilate",
+                str(args.edge_gate_dilate),
+            ]
+        )
+    if args.fixed_policy_from_report:
+        report_method = args.fixed_policy_report_method or "ours_26000_phasef_alpha0875grid_ela"
+        policy_report = _read_json(model / "test" / report_method / "ela_report.json")
+        policy = policy_report.get("policy", {})
+        alpha = 0.0 if args.alpha_policy == "adaptive_bins" else _num(policy_report.get("alpha", args.fixed_alpha))
+        cmd.extend(
+            [
+                "--mode",
+                str(policy.get("mode", args.fixed_mode)),
+                "--k",
+                str(int(policy.get("k", args.fixed_k))),
+                "--residual_clip",
+                str(float(policy.get("residual_clip", args.fixed_residual_clip))),
+                "--depth_abs_tol",
+                str(float(policy.get("depth_abs_tol", args.fixed_depth_abs_tol))),
+                "--depth_rel_tol",
+                str(float(policy.get("depth_rel_tol", args.fixed_depth_rel_tol))),
+                "--direction_weight",
+                str(float(policy.get("direction_weight", args.fixed_direction_weight))),
+                "--alpha",
+                str(alpha),
+                "--skip_fixed_alpha_calibration",
+            ]
+        )
+    elif args.fixed_policy:
         cmd.extend(
             [
                 "--mode",
@@ -169,6 +198,8 @@ def _apply_ela(args: argparse.Namespace, scene: str, model: Path, log_path: Path
                 str(args.fixed_k),
                 "--residual_clip",
                 str(args.fixed_residual_clip),
+                "--depth_abs_tol",
+                str(args.fixed_depth_abs_tol),
                 "--depth_rel_tol",
                 str(args.fixed_depth_rel_tol),
                 "--direction_weight",
@@ -191,6 +222,10 @@ def _apply_ela(args: argparse.Namespace, scene: str, model: Path, log_path: Path
                 args.policy_residual_clip_values,
                 "--policy_direction_weight_values",
                 args.policy_direction_weight_values,
+                "--policy_edge_gate_quantiles",
+                args.policy_edge_gate_quantiles,
+                "--policy_edge_gate_dilates",
+                args.policy_edge_gate_dilates,
                 "--policy_objective",
                 args.policy_objective,
                 "--policy_holdout_fraction",
@@ -204,6 +239,27 @@ def _apply_ela(args: argparse.Namespace, scene: str, model: Path, log_path: Path
     if args.benefit_policy:
         cmd.append("--benefit_policy")
         cmd.extend(["--benefit_feature_mode", args.benefit_feature_mode])
+    if float(args.policy_holdout_fraction) > 0.0:
+        cmd.extend(["--policy_holdout_fraction", str(args.policy_holdout_fraction)])
+    if args.alpha_policy != "global":
+        cmd.extend(
+            [
+                "--alpha_policy",
+                args.alpha_policy,
+                "--alpha_bins",
+                str(args.alpha_bins),
+                "--alpha_min_gain",
+                str(args.alpha_min_gain),
+                "--alpha_min_bin_count",
+                str(args.alpha_min_bin_count),
+                "--alpha_max_pixels_per_view",
+                str(args.alpha_max_pixels_per_view),
+                "--alpha_feature_mode",
+                args.alpha_feature_mode,
+                "--alpha_default",
+                str(args.alpha_default),
+            ]
+        )
     if args.calib_lpips:
         cmd.append("--calib_lpips")
     _run(cmd, gpu=args.gpu, log_path=log_path)
@@ -322,22 +378,35 @@ def main() -> int:
     parser.add_argument("--policy_depth_rel_values", default="0.06,0.12")
     parser.add_argument("--policy_residual_clip_values", default="0.2,0.25")
     parser.add_argument("--policy_direction_weight_values", default="0.2,0.35")
+    parser.add_argument("--policy_edge_gate_quantiles", default="")
+    parser.add_argument("--policy_edge_gate_dilates", default="")
     parser.add_argument("--policy_objective", choices=("psnr", "balanced"), default="balanced")
     parser.add_argument("--policy_holdout_fraction", type=float, default=0.0)
     parser.add_argument("--alpha_grid", default="0,0.125,0.25,0.5,0.75,1.0")
     parser.add_argument("--calib_sampler", choices=("stride_first", "uniform"), default="stride_first")
     parser.add_argument("--calib_lpips", action="store_true")
     parser.add_argument("--fixed_policy", action="store_true")
+    parser.add_argument("--fixed_policy_from_report", action="store_true")
+    parser.add_argument("--fixed_policy_report_method", default="ours_26000_phasef_alpha0875grid_ela")
     parser.add_argument("--fixed_mode", choices=("residual", "color"), default="residual")
     parser.add_argument("--fixed_k", type=int, default=8)
     parser.add_argument("--fixed_residual_clip", type=float, default=0.2)
+    parser.add_argument("--fixed_depth_abs_tol", type=float, default=0.02)
     parser.add_argument("--fixed_depth_rel_tol", type=float, default=0.12)
     parser.add_argument("--fixed_direction_weight", type=float, default=0.2)
     parser.add_argument("--fixed_alpha", type=float, default=1.0)
     parser.add_argument("--edge_gate_quantile", type=float, default=0.7)
     parser.add_argument("--edge_gate_dilate", type=int, default=1)
+    parser.add_argument("--no_edge_gate", action="store_true")
     parser.add_argument("--benefit_policy", action="store_true")
     parser.add_argument("--benefit_feature_mode", choices=("confidence_magnitude", "confidence_magnitude_edge", "auto"), default="confidence_magnitude")
+    parser.add_argument("--alpha_policy", choices=("global", "adaptive_bins"), default="global")
+    parser.add_argument("--alpha_bins", type=int, default=5)
+    parser.add_argument("--alpha_min_gain", type=float, default=0.0)
+    parser.add_argument("--alpha_min_bin_count", type=int, default=64)
+    parser.add_argument("--alpha_max_pixels_per_view", type=int, default=4096)
+    parser.add_argument("--alpha_feature_mode", choices=("confidence_magnitude", "confidence_magnitude_edge"), default="confidence_magnitude_edge")
+    parser.add_argument("--alpha_default", type=float, default=0.0)
     parser.add_argument("--wandb_project", default="mesh-splatting-ecsr")
     parser.add_argument("--wandb_group", default="phase_f_plus_ela")
     parser.add_argument("--wandb_name", default="phase_f_plus_ela")
