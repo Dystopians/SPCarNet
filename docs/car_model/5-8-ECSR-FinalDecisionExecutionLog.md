@@ -23,8 +23,16 @@ a reproducible artifact.
 | Phase-B report | `docs/car_model/5-8-ECSR-PhaseB-ViewSupportGraph.md` | complete |
 | Phase-A/B cached-view policy split | `scripts/car_model/ecsr_make_phase_ab_policy_splits.py` | complete smoke split |
 | Phase-A/B policy split doc | `docs/car_model/5-8-ECSR-PolicySplit.md` | complete |
+| Full-train fitting/policy-val split | `scripts/car_model/ecsr_make_full_train_policy_splits.py` | complete full9 split |
+| Full-train split report | `docs/car_model/5-8-ECSR-FullTrainPolicySplit.md` | complete |
 | Phase-C candidate preflight | `scripts/car_model/ecsr_phase_c_candidate_preflight.py` | complete pre-contraction filter |
 | Phase-C preflight doc | `docs/car_model/5-8-ECSR-PhaseC-CandidatePreflight.md` | complete |
+| Phase-C static topology certificate | `scripts/car_model/ecsr_phase_c_static_topology_certificate.py` | complete static filter |
+| Phase-C materialization | `scripts/car_model/ecsr_phase_c_materialize_static_pass.py` | complete checkpoint rewrite smoke |
+| Phase-C renderer smoke collector | `scripts/car_model/ecsr_collect_phase_c_renderer_smoke.py` | complete |
+| Phase-D attribute-only recovery smoke | `scripts/car_model/ecsr_collect_phase_d_attronly_smoke.py` | complete negative smoke |
+| Phase-D surface residual delta MVP | `scripts/car_model/ecsr_apply_surface_residual_delta.py` | complete negative smoke |
+| Phase-D residual delta collector | `scripts/car_model/ecsr_collect_phase_d_surface_residual_delta.py` | complete |
 
 ## Current-State Audit Result
 
@@ -93,11 +101,34 @@ required compactness improvement.
 | Diagnostic A: residual surface addressability | complete | `9 / 9` pass |
 | Diagnostic B: relocation necessity | complete MVP | `5 / 9` appearance-relocation promising |
 | View-Support Redundancy Graph | complete candidate generator | 123 clusters, 23 contraction candidates |
-| Certificate-Carrying Surface Contraction | partial | 21/123 candidates pass preflight; no checkpoint edit or before/after render certificate yet |
-| Surface-Attached Appearance Recovery | not complete | target type identified, no representation delta yet |
-| Train/policy-val split file | partial | cached-view split complete; full-train split still required before long Phase C/D |
+| Certificate-Carrying Surface Contraction | partial MVP | 7/21 static pass; 3 contraction candidates materialized; 3/3 renderer smoke pass |
+| Surface-Attached Appearance Recovery | partial negative MVP | V1 attribute-only and V2 DC residual delta are executable but rejected by smoke evidence |
+| Train/policy-val split file | complete | full-train deterministic split for all 9 scenes |
 | Full9 same-protocol ECSR validation | not complete | no final ECSR checkpoint yet |
 | Reviewer Objection Audit | partial | leakage/post-processing risks documented; final rebuttal needs Phase C/D |
+
+## Phase-C/D Execution Result
+
+Full-train split is now available for all 9 scenes with seed `20260508`.
+Phase-C static topology certification checked `21` preflight candidates and
+passed `7`; among them `3` contraction candidates were materialized as real
+checkpoint copies (`bicycle_C0001`, `bicycle_C0074`, `kitchen_C0019`). All
+three materialized candidates pass one-train-view renderer smoke.
+
+Phase-D produced two executable but currently rejected recovery routes:
+
+- Version 1 attribute-only recovery: topology/vertices frozen, W&B enabled,
+  200-step smoke on `bicycle_C0001` and `kitchen_C0019`; `0 / 2` accepted
+  because RGB metrics regress vs compact-only.
+- Version 2 bounded surface residual DC delta: residual is attached to
+  checkpoint `features_dc` and rendered normally; policy-val L1 accepts
+  `3 / 4`, but held-out diagnostics regress `4 / 4`, proving that mean
+  policy-val L1 is too weak as the sole gate.
+
+This is a useful negative result rather than a final method: the checkpoint
+interface for representation-attached recovery is now real, but the accepted
+ECSR method must use local-mask policy metrics and a least-squares or learned
+residual solve instead of direct top-support DC offsets.
 
 ## Design Decision Locked By This Pass
 

@@ -191,6 +191,16 @@ def _diagnostic_b(record: dict[str, Any], compact_result: dict[str, Any], method
     }
 
 
+def _parse_view_indices(spec: str) -> list[int]:
+    indices: list[int] = []
+    for token in str(spec or "").split(","):
+        token = token.strip()
+        if not token:
+            continue
+        indices.append(int(token))
+    return indices
+
+
 def build_cache(args, dataset, pipeline) -> dict[str, Any]:
     scene_name = args.scene_name or Path(dataset.model_path).parts[-3 if Path(dataset.model_path).name == "compact_model" else -1]
     out_dir = Path(args.out_dir) / scene_name
@@ -210,7 +220,15 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
             shuffle=False,
         )
         views = scene.getTrainCameras() if args.split == "train" else scene.getTestCameras()
-        indexed_views = list(enumerate(views))[int(args.view_offset) :: int(args.view_stride)]
+        requested_indices = _parse_view_indices(getattr(args, "view_indices", ""))
+        if requested_indices:
+            indexed_views = []
+            for idx in requested_indices:
+                if idx < 0 or idx >= len(views):
+                    raise ValueError(f"view index {idx} out of range for split={args.split} with {len(views)} views")
+                indexed_views.append((idx, views[idx]))
+        else:
+            indexed_views = list(enumerate(views))[int(args.view_offset) :: int(args.view_stride)]
         indexed_views = indexed_views[: int(args.max_views)]
         if not indexed_views:
             raise RuntimeError(f"no views selected for split={args.split}")
@@ -485,6 +503,7 @@ def main() -> int:
     parser.add_argument("--max_views", default=8, type=int)
     parser.add_argument("--view_stride", default=6, type=int)
     parser.add_argument("--view_offset", default=0, type=int)
+    parser.add_argument("--view_indices", default="", help="Comma-separated split-local view indices; overrides stride/offset.")
     parser.add_argument("--internal_upsample", default=4, type=int)
     parser.add_argument("--high_error_quantile", default=0.90, type=float)
     parser.add_argument("--top_k_faces", default=256, type=int)

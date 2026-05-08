@@ -2,7 +2,7 @@
 
 **基于训练证据的几何安全 Mesh Splatting 压缩与渲染修复。**
 
-[English](README.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [5 月 7 日更新](docs/car_model/5-7-Update.md) | [升级路线](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR 审计](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [Phase-A 证据](docs/car_model/5-8-ECSR-PhaseA-SurfaceEvidence.md) | [Phase-B graph](docs/car_model/5-8-ECSR-PhaseB-ViewSupportGraph.md) | [Policy split](docs/car_model/5-8-ECSR-PolicySplit.md) | [Phase-C preflight](docs/car_model/5-8-ECSR-PhaseC-CandidatePreflight.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
+[English](README.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [5 月 7 日更新](docs/car_model/5-7-Update.md) | [升级路线](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR 审计](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [Phase-A 证据](docs/car_model/5-8-ECSR-PhaseA-SurfaceEvidence.md) | [Phase-B graph](docs/car_model/5-8-ECSR-PhaseB-ViewSupportGraph.md) | [Full-train split](docs/car_model/5-8-ECSR-FullTrainPolicySplit.md) | [Phase-C certificates](docs/car_model/5-8-ECSR-PhaseC-StaticTopologyCertificate.md) | [Phase-D V2 smoke](docs/car_model/5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
 
 SPCarNet 是建立在 Mesh Splatting 之上的研究分支。当前版本不再依赖手工扫描 prune ratio 来赢指标，而是先用 train split 的证据判断哪些三角形可以安全压缩，再用 train-calibrated Evidence Lumigraph Adapter（ELA）修复 held-out test view 的渲染残差。当前版本已留档：
 
@@ -55,7 +55,12 @@ score = PSNR + 20 * SSIM - 20 * LPIPS
 - Phase-A train-only surface evidence：[`docs/car_model/5-8-ECSR-PhaseA-SurfaceEvidence.md`](docs/car_model/5-8-ECSR-PhaseA-SurfaceEvidence.md)
 - Phase-B view-support graph：[`docs/car_model/5-8-ECSR-PhaseB-ViewSupportGraph.md`](docs/car_model/5-8-ECSR-PhaseB-ViewSupportGraph.md)
 - Phase-A/B cached-view policy split：[`docs/car_model/5-8-ECSR-PolicySplit.md`](docs/car_model/5-8-ECSR-PolicySplit.md)
+- Full-train fitting/policy-val split：[`docs/car_model/5-8-ECSR-FullTrainPolicySplit.md`](docs/car_model/5-8-ECSR-FullTrainPolicySplit.md)
 - Phase-C candidate preflight：[`docs/car_model/5-8-ECSR-PhaseC-CandidatePreflight.md`](docs/car_model/5-8-ECSR-PhaseC-CandidatePreflight.md)
+- Phase-C static topology certificate：[`docs/car_model/5-8-ECSR-PhaseC-StaticTopologyCertificate.md`](docs/car_model/5-8-ECSR-PhaseC-StaticTopologyCertificate.md)
+- Phase-C materialized checkpoint smoke：[`docs/car_model/5-8-ECSR-PhaseC-MaterializedStaticPass.md`](docs/car_model/5-8-ECSR-PhaseC-MaterializedStaticPass.md)，[`docs/car_model/5-8-ECSR-PhaseC-RendererSmoke.md`](docs/car_model/5-8-ECSR-PhaseC-RendererSmoke.md)
+- Phase-D attribute-only recovery smoke：[`docs/car_model/5-8-ECSR-PhaseD-AttributeOnlySmoke.md`](docs/car_model/5-8-ECSR-PhaseD-AttributeOnlySmoke.md)
+- Phase-D surface residual delta smoke：[`docs/car_model/5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md`](docs/car_model/5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md)
 - 执行日志：[`docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md`](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md)
 - Phase-A 汇总 contact sheet：`outputs/carnet/meshsplatopt/ecsr_phase_a/surface_evidence/phase_a_surface_evidence_contact_sheet.png`
 
@@ -64,6 +69,8 @@ Phase-A 结果：`9 / 9` 场景通过 surface addressability，但只有 `4 / 9`
 Phase-B 结果：固定 graph policy 在 full9 上找到 `123` 个 train-only local support cluster，其中 `23` 个是 certificate-contraction candidates，`99` 个是 surface-attribute recovery candidates。但 residual-hot cluster 的直接三角形压缩上限很小，因此下一步必须把 compression candidate 和 appearance-recovery candidate 分开，而不能把 residual hotspot 当成压缩目标。
 
 Phase-C preflight 结果：`21 / 123` 个 Phase-B cluster 通过 train-only fitting/policy-val support-mask preflight，其中 `13` 个是 contraction 类型，`8` 个是 attribute-recovery 类型。它们还不是被接受的 ECSR 修改，只是进入 topology smoke test 与 before/after local rendering certificate 的第一批候选。
+
+Phase-C/D 执行更新：full-train split 已覆盖全部 9 个场景。Static topology certification 在 `21` 个 preflight candidate 中通过 `7` 个；其中 `3` 个 contraction candidate 已被 materialize 成真实 checkpoint copy，并且 `3 / 3` 通过 renderer smoke。两个 representation-level recovery MVP 已实现但还不能作为最终方法：attribute-only recovery 的 `2 / 2` 个 smoke run 回退，bounded surface residual DC delta 虽然在 train policy-val mean-L1 上接受 `3 / 4`，但 held-out diagnostic `4 / 4` 回退。这说明 checkpoint 接口已经打通，但下一版 ECSR 必须加入 local-mask policy metrics 和 least-squares / learned residual solve。
 
 ## 其他评估口径
 
