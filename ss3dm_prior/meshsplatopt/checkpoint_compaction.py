@@ -92,8 +92,12 @@ def _compact_state(
             "post_vertices": int(vertices.shape[0]),
         }
 
+    vertex_count_before = int(vertices.shape[0])
+    if kept_faces.numel():
+        if int(kept_faces.min().item()) < 0 or int(kept_faces.max().item()) >= vertex_count_before:
+            raise ValueError("checkpoint face indices are out of vertex range")
     used_vertices = torch.unique(kept_faces.reshape(-1), sorted=True)
-    remap = torch.full((int(faces.max().item()) + 1,), -1, dtype=torch.long)
+    remap = torch.full((vertex_count_before,), -1, dtype=torch.long)
     remap[used_vertices] = torch.arange(len(used_vertices), dtype=torch.long)
     new_faces = remap[kept_faces].to(dtype=state["_triangle_indices"].dtype)
 
@@ -102,7 +106,7 @@ def _compact_state(
         if torch.is_tensor(value):
             if key == "_triangle_indices":
                 out[key] = new_faces.clone()
-            elif key in VERTEX_KEYS and value.shape[0] == remap.shape[0]:
+            elif key in VERTEX_KEYS and value.shape[0] == vertex_count_before:
                 out[key] = value.detach().cpu()[used_vertices].clone()
             elif key in FACE_KEYS and value.shape[0] == face_count_before:
                 out[key] = value.detach().cpu()[keep_mask].clone()

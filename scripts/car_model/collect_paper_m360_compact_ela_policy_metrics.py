@@ -19,6 +19,17 @@ from ss3dm_prior.meshsplatopt.evaluation_contracts import load_geometry_metrics,
 
 DEFAULT_SCENES = ("bicycle", "flowers", "garden", "stump", "treehill", "room", "counter", "kitchen", "bonsai")
 GEOMETRY_TOL = 1e-5
+PAPER = {
+    "bicycle": {"PSNR": 23.04, "LPIPS": 0.348, "SSIM": 0.641},
+    "flowers": {"PSNR": 19.34, "LPIPS": 0.417, "SSIM": 0.480},
+    "garden": {"PSNR": 24.70, "LPIPS": 0.217, "SSIM": 0.762},
+    "stump": {"PSNR": 24.78, "LPIPS": 0.316, "SSIM": 0.678},
+    "treehill": {"PSNR": 20.53, "LPIPS": 0.428, "SSIM": 0.540},
+    "room": {"PSNR": 28.52, "LPIPS": 0.271, "SSIM": 0.873},
+    "counter": {"PSNR": 26.51, "LPIPS": 0.279, "SSIM": 0.846},
+    "kitchen": {"PSNR": 27.42, "LPIPS": 0.227, "SSIM": 0.858},
+    "bonsai": {"PSNR": 28.19, "LPIPS": 0.294, "SSIM": 0.876},
+}
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -58,10 +69,12 @@ def _selector_summary(model: Path) -> dict[str, Any]:
     payload = _read_json(model.parent / "selector" / "compaction_candidates.json")
     summary = payload.get("summary") or {}
     policy = payload.get("adaptive_policy_decision") or {}
+    selected_fraction = summary.get("selected_fraction", payload.get("selected_fraction"))
+    selected_count = summary.get("selected_count", payload.get("selected_count", 0))
     return {
-        "selected_fraction": _num(summary.get("selected_fraction")),
-        "selected_count": int(summary.get("selected_count", 0) or 0),
-        "policy_fraction": _num(policy.get("target_prune_fraction")),
+        "selected_fraction": _num(selected_fraction),
+        "selected_count": int(selected_count or 0),
+        "policy_fraction": _num(policy.get("target_prune_fraction", selected_fraction)),
         "policy_risk": _num((policy.get("risk") or {}).get("policy_risk")),
         "policy_reason": str(policy.get("reason", "")),
     }
@@ -180,6 +193,7 @@ def _row(scene: str, args: argparse.Namespace) -> tuple[dict[str, Any] | None, l
     selector = _selector_summary(compact_model)
     ela = _ela_summary(compact_model, args.method_name)
     envelope = _metric_envelope(baseline_rows)
+    paper = PAPER.get(scene, {})
 
     triangle_reduction = 1.0 - float(method_tri) / float(baseline["triangles"]) if method_tri and baseline["triangles"] else math.nan
     vertex_reduction = 1.0 - float(method_vertices) / float(baseline["vertices"]) if method_vertices and baseline["vertices"] else math.nan
@@ -204,6 +218,9 @@ def _row(scene: str, args: argparse.Namespace) -> tuple[dict[str, Any] | None, l
         "method_abs_rel": method_geom["abs_rel"],
         "method_depth_mae": method_geom["depth_mae"],
         "method_normal": method_geom["normal_mean_ang_deg"],
+        "paper_psnr": _num(paper.get("PSNR")),
+        "paper_ssim": _num(paper.get("SSIM")),
+        "paper_lpips": _num(paper.get("LPIPS")),
         "method_triangles": method_tri,
         "method_vertices": method_vertices,
         "triangle_reduction": triangle_reduction,
@@ -223,6 +240,12 @@ def _row(scene: str, args: argparse.Namespace) -> tuple[dict[str, Any] | None, l
             "d_psnr_vs_env": row["method_psnr"] - row.get("env_psnr", math.nan),
             "d_ssim_vs_env": row["method_ssim"] - row.get("env_ssim", math.nan),
             "d_lpips_vs_env": row["method_lpips"] - row.get("env_lpips", math.nan),
+            "d_psnr_vs_paper": row["method_psnr"] - row["paper_psnr"],
+            "d_ssim_vs_paper": row["method_ssim"] - row["paper_ssim"],
+            "d_lpips_vs_paper": row["method_lpips"] - row["paper_lpips"],
+            "baseline_d_psnr_vs_paper": row["baseline_psnr"] - row["paper_psnr"],
+            "baseline_d_ssim_vs_paper": row["baseline_ssim"] - row["paper_ssim"],
+            "baseline_d_lpips_vs_paper": row["baseline_lpips"] - row["paper_lpips"],
         }
     )
     row["status"] = _status(row)
@@ -266,14 +289,15 @@ def _write_report(path: Path, rows: list[dict[str, Any]], baseline_rows: list[di
         f"Method: `{args.method_name}` on compact checkpoints at iteration `{args.method_iteration}`.",
         f"Clean baseline candidates: `{','.join(str(x) for x in args.baseline_iterations)}`.",
         "",
-        "| scene | clean iter | prune | PSNR | SSIM | LPIPS | AbsRel | DepthMAE | Normal | dPSNR | dSSIM | dLPIPS | dAbsRel | dDepth | dNormal | tri red. | status |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| scene | clean iter | prune | PSNR | SSIM | LPIPS | paper PSNR | clean dPSNR paper | method dPSNR paper | method dSSIM paper | method dLPIPS paper | method dPSNR clean | method dSSIM clean | method dLPIPS clean | dAbsRel | dDepth | dNormal | tri red. | status |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for row in rows:
         lines.append(
             f"| {row['scene']} | {row['baseline_iteration']} | {_fmt(row['policy_fraction'])} | "
             f"{_fmt(row['method_psnr'])} | {_fmt(row['method_ssim'])} | {_fmt(row['method_lpips'])} | "
-            f"{_fmt(row['method_abs_rel'])} | {_fmt(row['method_depth_mae'])} | {_fmt(row['method_normal'])} | "
+            f"{_fmt(row['paper_psnr'])} | {float(row['baseline_d_psnr_vs_paper']):+.6f} | "
+            f"{float(row['d_psnr_vs_paper']):+.6f} | {float(row['d_ssim_vs_paper']):+.6f} | {float(row['d_lpips_vs_paper']):+.6f} | "
             f"{float(row['d_psnr']):+.6f} | {float(row['d_ssim']):+.6f} | {float(row['d_lpips']):+.6f} | "
             f"{float(row['d_abs_rel']):+.6f} | {float(row['d_depth_mae']):+.6f} | {float(row['d_normal']):+.6f} | "
             f"{100.0 * float(row['triangle_reduction']):.2f}% | `{row['status']}` |"
@@ -290,6 +314,9 @@ def _write_report(path: Path, rows: list[dict[str, Any]], baseline_rows: list[di
             f"- mean dPSNR: `{_fmt(sum(row['d_psnr'] for row in rows) / len(rows) if rows else math.nan)}`",
             f"- mean dSSIM: `{_fmt(sum(row['d_ssim'] for row in rows) / len(rows) if rows else math.nan)}`",
             f"- mean dLPIPS: `{_fmt(sum(row['d_lpips'] for row in rows) / len(rows) if rows else math.nan)}`",
+            f"- mean dPSNR vs MeshSplatting paper table: `{_fmt(sum(row['d_psnr_vs_paper'] for row in rows) / len(rows) if rows else math.nan)}`",
+            f"- mean dSSIM vs MeshSplatting paper table: `{_fmt(sum(row['d_ssim_vs_paper'] for row in rows) / len(rows) if rows else math.nan)}`",
+            f"- mean dLPIPS vs MeshSplatting paper table: `{_fmt(sum(row['d_lpips_vs_paper'] for row in rows) / len(rows) if rows else math.nan)}`",
             f"- mean triangle reduction: `{_fmt(sum(row['triangle_reduction'] for row in rows) / len(rows) if rows else math.nan)}`",
             "",
             "## Clean Baseline Candidate Diagnostics",

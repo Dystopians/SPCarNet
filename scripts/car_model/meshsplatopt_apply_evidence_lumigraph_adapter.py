@@ -265,7 +265,7 @@ def run(args: argparse.Namespace) -> dict:
     device = torch.device(args.device if torch.cuda.is_available() or args.device == "cpu" else "cpu")
     base_model = Path(args.base_model_path)
     output_model = Path(args.output_model_path) if args.output_model_path else base_model
-    base_method = f"ours_{args.iteration}"
+    base_method = args.base_method_name or f"ours_{args.iteration}"
     method_name = args.method_name or f"ours_{args.iteration}_ela_k{args.k}"
 
     train_frames = load_split_frames(base_model, "train", base_method)
@@ -357,6 +357,7 @@ def main() -> int:
     parser.add_argument("--base_model_path", required=True)
     parser.add_argument("--output_model_path", default="")
     parser.add_argument("--iteration", required=True, type=int)
+    parser.add_argument("--base_method_name", default="")
     parser.add_argument("--target_split", choices=("train", "test"), default="test")
     parser.add_argument("--method_name", default="")
     parser.add_argument("--k", default=4, type=int)

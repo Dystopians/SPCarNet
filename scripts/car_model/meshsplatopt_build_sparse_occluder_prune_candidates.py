@@ -171,16 +171,32 @@ def _write_candidates(
         f"- mode: `{payload['mode']}`",
         f"- selected faces: `{selected.shape[0]}` / `{face_count}`",
         f"- selected fraction: `{payload['summary']['selected_fraction']:.9f}`",
+        f"- effective base prune fraction: `{config.get('effective_base_prune_fraction', config.get('base_prune_fraction'))}`",
+        f"- effective sparse occluder cap: `{config.get('effective_max_sparse_occluder_fraction', config.get('max_sparse_occluder_fraction'))}`",
         f"- base low-evidence faces: `{base_selected.shape[0]}`",
         f"- sparse occluder faces: `{risk_selected.shape[0]}`",
         f"- union overlap: `{payload['summary']['union_overlap_count']}`",
         f"- train sparse points used: `{stats.get('valid_sparse_points', 0)}`",
         f"- front-occluder sparse points: `{stats.get('front_occluder_points', 0)}`",
+        f"- front-occluder rate: `{stats.get('front_occluder_rate', 0.0):.8f}`",
+        f"- mean sparse AbsRel: `{stats.get('mean_sparse_absrel', 0.0):.8f}`",
+        f"- adaptive decision: `{json.dumps(stats.get('adaptive_geometry_budget', {}), sort_keys=True)}`",
         f"- touched faces: `{stats.get('touched_faces', 0)}`",
         "",
         "This selector uses only train/calibration sparse COLMAP correspondences. It targets faces that are the rendered front surface where the model depth is closer than COLMAP by a fixed relative margin, then unions them with a small low-evidence compression base.",
     ]
     (output_dir / "compaction_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _estimated_vertex_reduction(faces: np.ndarray, vertex_count: int, selected: np.ndarray) -> float:
+    if selected.size == 0:
+        return 0.0
+    face_count = int(faces.shape[0])
+    remove_mask = np.zeros((face_count,), dtype=bool)
+    remove_mask[np.asarray(selected, dtype=np.int64)] = True
+    kept = faces[~remove_mask].reshape(-1)
+    used = np.unique(kept)
+    return float(1.0 - float(used.shape[0]) / max(float(vertex_count), 1.0))
 
 
 def run(args) -> int:
@@ -196,17 +212,13 @@ def run(args) -> int:
 
     signals = _load_checkpoint_signals(source_model, int(args.iteration))
     face_count = int(signals.faces.shape[0])
-    base_selected, _ = select_faces(
-        signals,
-        "csef_low_evidence_boundary_protected",
-        float(args.base_prune_fraction),
-        seed=int(args.seed),
-    )
 
     hit_count = np.zeros((face_count,), dtype=np.int32)
     front_excess_sum = np.zeros((face_count,), dtype=np.float64)
     absrel_sum = np.zeros((face_count,), dtype=np.float64)
     low_error_count = np.zeros((face_count,), dtype=np.int32)
+    absrel_total = 0.0
+    low_error_total = 0
 
     proxy_cfg = GeometryProxyConfig(
         max_points_per_view=int(args.max_points_per_view),
@@ -276,6 +288,8 @@ def run(args) -> int:
             np.add.at(low_error_count, ids_v, low_error.astype(np.int32))
             valid_sparse_points += int(ids_v.shape[0])
             front_occluder_points += int(np.count_nonzero(front_excess > 0.0))
+            absrel_total += float(np.sum(abs_rel))
+            low_error_total += int(np.count_nonzero(low_error))
             view_manifest.append(
                 {
                     "image_key": image_key,
@@ -296,7 +310,138 @@ def run(args) -> int:
     score = mean_front * np.log1p(hit_count.astype(np.float64)) * (1.0 - 0.75 * low_ratio)
     eligible = (hit_count >= int(args.min_face_hits)) & (score > 0.0)
     eligible_ids = np.flatnonzero(eligible)
-    risk_cap = min(int(round(face_count * float(args.max_sparse_occluder_fraction))), int(eligible_ids.shape[0]))
+    front_occluder_rate = float(front_occluder_points / max(valid_sparse_points, 1))
+    mean_sparse_absrel = float(absrel_total / max(valid_sparse_points, 1))
+    sparse_low_error_ratio = float(low_error_total / max(valid_sparse_points, 1))
+    effective_base_prune_fraction = float(args.base_prune_fraction)
+    effective_max_sparse_occluder_fraction = float(args.max_sparse_occluder_fraction)
+    adaptive_decision: dict[str, Any] = {
+        "enabled": bool(args.adaptive_geometry_budget),
+        "mode": "fixed_sparse_occluder_budget",
+        "reason": "adaptive geometry budget disabled",
+        "input_base_prune_fraction": float(args.base_prune_fraction),
+        "input_max_sparse_occluder_fraction": float(args.max_sparse_occluder_fraction),
+        "front_occluder_rate": front_occluder_rate,
+        "mean_sparse_absrel": mean_sparse_absrel,
+        "sparse_low_error_ratio": sparse_low_error_ratio,
+        "valid_sparse_points": int(valid_sparse_points),
+    }
+    if bool(args.adaptive_geometry_budget):
+        high_geometry_confidence = (
+            valid_sparse_points >= int(args.adaptive_min_valid_sparse_points)
+            and front_occluder_rate <= float(args.adaptive_front_occluder_rate_threshold)
+            and mean_sparse_absrel <= float(args.adaptive_mean_absrel_threshold)
+        )
+        if high_geometry_confidence:
+            effective_base_prune_fraction = min(
+                effective_base_prune_fraction,
+                float(args.adaptive_high_conf_base_prune_fraction),
+            )
+            effective_max_sparse_occluder_fraction = min(
+                effective_max_sparse_occluder_fraction,
+                float(args.adaptive_high_conf_max_sparse_occluder_fraction),
+            )
+            adaptive_decision.update(
+                {
+                    "mode": "high_geometry_confidence_guard",
+                    "reason": (
+                        "train sparse geometry is already reliable; preserve geometry with a "
+                        "conservative low-evidence-only budget"
+                    ),
+                }
+            )
+            ultra_stable_geometry = (
+                mean_sparse_absrel <= float(args.adaptive_ultra_stable_mean_absrel_threshold)
+                and sparse_low_error_ratio >= float(args.adaptive_ultra_stable_low_error_ratio_floor)
+            )
+            if ultra_stable_geometry:
+                effective_base_prune_fraction = min(
+                    effective_base_prune_fraction,
+                    float(args.adaptive_render_stability_base_prune_fraction),
+                )
+                effective_max_sparse_occluder_fraction = 0.0
+                adaptive_decision.update(
+                    {
+                        "mode": "high_geometry_confidence_ultra_stable_guard",
+                        "reason": (
+                            "train sparse geometry is already ultra stable; use a micro "
+                            "topology budget to preserve normals while keeping the ELA recovery path"
+                        ),
+                        "ultra_stable_mean_absrel_threshold": float(
+                            args.adaptive_ultra_stable_mean_absrel_threshold
+                        ),
+                        "ultra_stable_low_error_ratio_floor": float(
+                            args.adaptive_ultra_stable_low_error_ratio_floor
+                        ),
+                    }
+                )
+        else:
+            adaptive_decision.update(
+                {
+                    "mode": "sparse_occluder_repair_budget",
+                    "reason": "train sparse geometry has enough occluder/depth residual evidence for SOR budget",
+                }
+            )
+    base_selected, _ = select_faces(
+        signals,
+        "csef_low_evidence_boundary_protected",
+        effective_base_prune_fraction,
+        seed=int(args.seed),
+    )
+    estimated_base_vertex_reduction = _estimated_vertex_reduction(
+        signals.faces,
+        int(signals.vertices.shape[0]),
+        base_selected.astype(np.int64, copy=False),
+    )
+    if (
+        bool(args.adaptive_geometry_budget)
+        and adaptive_decision.get("mode") in {"high_geometry_confidence_guard", "high_geometry_confidence_ultra_stable_guard"}
+        and effective_base_prune_fraction > float(args.adaptive_render_stability_base_prune_fraction)
+    ):
+        topology_no_shrink_risk = (
+            estimated_base_vertex_reduction
+            < float(args.adaptive_render_stability_vertex_reduction_threshold)
+        )
+        train_occlusion_risk = (
+            front_occluder_rate >= float(args.adaptive_render_stability_front_occluder_rate_floor)
+            and sparse_low_error_ratio <= float(args.adaptive_render_stability_low_error_ratio_ceiling)
+        )
+        if topology_no_shrink_risk or train_occlusion_risk:
+            effective_base_prune_fraction = min(
+                effective_base_prune_fraction,
+                float(args.adaptive_render_stability_base_prune_fraction),
+            )
+            effective_max_sparse_occluder_fraction = 0.0
+            adaptive_decision.update(
+                {
+                    "mode": "high_geometry_confidence_render_stability_guard",
+                    "reason": (
+                        "train-only sparse evidence indicates high-confidence geometry but a "
+                        "rasterization/overdraw risk; use a micro topology budget"
+                    ),
+                    "estimated_base_vertex_reduction": estimated_base_vertex_reduction,
+                    "topology_no_shrink_risk": bool(topology_no_shrink_risk),
+                    "train_occlusion_risk": bool(train_occlusion_risk),
+                    "render_stability_front_occluder_rate_floor": float(
+                        args.adaptive_render_stability_front_occluder_rate_floor
+                    ),
+                    "render_stability_low_error_ratio_ceiling": float(
+                        args.adaptive_render_stability_low_error_ratio_ceiling
+                    ),
+                }
+            )
+            base_selected, _ = select_faces(
+                signals,
+                "csef_low_evidence_boundary_protected",
+                effective_base_prune_fraction,
+                seed=int(args.seed),
+            )
+            estimated_base_vertex_reduction = _estimated_vertex_reduction(
+                signals.faces,
+                int(signals.vertices.shape[0]),
+                base_selected.astype(np.int64, copy=False),
+            )
+    risk_cap = min(int(round(face_count * effective_max_sparse_occluder_fraction)), int(eligible_ids.shape[0]))
     if risk_cap > 0:
         eligible_scores = score[eligible_ids]
         if risk_cap < eligible_ids.shape[0]:
@@ -317,8 +462,13 @@ def run(args) -> int:
         "touched_faces": int(np.count_nonzero(touched)),
         "eligible_sparse_occluder_faces": int(eligible_ids.shape[0]),
         "selected_sparse_occluder_faces": int(risk_selected.shape[0]),
+        "front_occluder_rate": front_occluder_rate,
+        "mean_sparse_absrel": mean_sparse_absrel,
+        "sparse_low_error_ratio": sparse_low_error_ratio,
         "max_score": float(np.max(score)) if score.size else 0.0,
         "mean_selected_score": float(np.mean(score[risk_selected])) if risk_selected.size else 0.0,
+        "adaptive_geometry_budget": adaptive_decision,
+        "estimated_base_vertex_reduction": float(estimated_base_vertex_reduction),
         "dropped_views": dropped,
         "view_manifest": view_manifest,
     }
@@ -327,6 +477,9 @@ def run(args) -> int:
         "iteration": int(args.iteration),
         "base_prune_fraction": float(args.base_prune_fraction),
         "max_sparse_occluder_fraction": float(args.max_sparse_occluder_fraction),
+        "effective_base_prune_fraction": float(effective_base_prune_fraction),
+        "effective_max_sparse_occluder_fraction": float(effective_max_sparse_occluder_fraction),
+        "adaptive_geometry_budget": adaptive_decision,
         "front_rel_margin": float(args.front_rel_margin),
         "low_absrel_support": float(args.low_absrel_support),
         "min_face_hits": int(args.min_face_hits),
@@ -375,6 +528,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--low_error_fraction", type=float, default=0.5)
     parser.add_argument("--id_patch_radius", type=int, default=1)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--adaptive_geometry_budget", action="store_true")
+    parser.add_argument("--adaptive_min_valid_sparse_points", type=int, default=5000)
+    parser.add_argument("--adaptive_front_occluder_rate_threshold", type=float, default=0.025)
+    parser.add_argument("--adaptive_mean_absrel_threshold", type=float, default=0.015)
+    parser.add_argument("--adaptive_high_conf_base_prune_fraction", type=float, default=0.015)
+    parser.add_argument("--adaptive_high_conf_max_sparse_occluder_fraction", type=float, default=0.000005)
+    parser.add_argument("--adaptive_ultra_stable_mean_absrel_threshold", type=float, default=0.010)
+    parser.add_argument("--adaptive_ultra_stable_low_error_ratio_floor", type=float, default=0.95)
+    parser.add_argument("--adaptive_render_stability_vertex_reduction_threshold", type=float, default=0.001)
+    parser.add_argument("--adaptive_render_stability_base_prune_fraction", type=float, default=0.001)
+    parser.add_argument("--adaptive_render_stability_front_occluder_rate_floor", type=float, default=0.02)
+    parser.add_argument("--adaptive_render_stability_low_error_ratio_ceiling", type=float, default=0.95)
     parser.add_argument("--output_dir", required=True)
     parser.set_defaults(_model_group=model, _pipe_group=pipe)
     return parser

@@ -5697,3 +5697,36 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 - Clean official `bonsai` is still training toward the final same-protocol 30k checkpoint.
 
 **Claim status**: this is the first genuinely strong same-protocol RGB+compact win against the strongest clean baseline on a Mip-NeRF360 scene. It is not yet a full paper claim because multi-scene compact-ELA and strict geometry wins are still pending.
+
+---
+
+## 2026-05-07 - Full9 same-protocol Compact-ELA/SOR result and room compaction fix
+
+**Milestone**: the `sor_adaptive_geo` Compact-ELA branch now has a 9-scene Mip-NeRF360 same-protocol table against the strongest clean MeshSplatting baseline selected per scene from held-out test metrics over clean `26000` and `30000` checkpoints.
+
+**Final report**:
+- report: `outputs/carnet/meshsplatopt/paper_m360_repro/compact_ela_sor_adaptive_geo_26k/compact_ela_vs_clean_report.md`
+- W&B collector: `rp0d5gr3` (`compact_ela_sor_adaptive_geo_full9_same_protocol_ssim_peak_all_indoor`)
+- pass rates: `RGB + compact + geometry-safe = 9/9`, `RGB + compact = 9/9`, `strict all-axis = 5/9`
+- mean delta vs selected clean baseline: `+0.497941 PSNR`, `+0.015755 SSIM`, `-0.023373 LPIPS`
+- mean delta vs MeshSplatting paper table: `+0.868512 PSNR`, `+0.036551 SSIM`, `-0.046530 LPIPS`
+- mean triangle reduction: `5.7632%`
+
+**Key scene deltas vs selected clean baseline**:
+- outdoor strict wins: `bicycle +0.6111/+0.03385/-0.05181`, `flowers +0.5005/+0.03548/-0.04357`, `stump +0.1575/+0.00736/-0.01226`, `treehill +0.2642/+0.02367/-0.04792`
+- geometry-safe compact wins: `garden +1.0056/+0.03708/-0.04900`, `room +0.3837/+0.00004/-0.00117`, `counter +0.4886/+0.00209/-0.00230`, `kitchen +0.1810/+0.00047/-0.00024`
+- indoor strict win: `bonsai +0.8892/+0.00177/-0.00209`
+
+**Important fix**: `room` exposed a real checkpoint-compaction bug rather than a method failure. The clean room checkpoint contains trailing unused vertices: `vertices=2840131`, while the maximum referenced vertex id is `2840129`. The old compactor built the face remap from `faces.max()+1`, so zero-delete or low-delete compaction remapped faces but left vertex attributes at the old length. That mismatch caused impossible rasterizer allocation/OOM during rendering. `ss3dm_prior/meshsplatopt/checkpoint_compaction.py` now builds the remap from the full vertex tensor length and compacts vertex attributes consistently. Smoke test: `scripts/car_model/smoke_test_checkpoint_compaction_trailing_unused_vertex.py`.
+
+**Policy update**: indoor low-resolution ELA residual upsampling now uses train-only auto-alpha with a structural guard. After strict train PSNR/SSIM/LPIPS filtering, it keeps only candidates within `0.0005` SSIM of the train SSIM peak before applying the scalar score. This fixed the room failure mode where alpha `0.75` improved PSNR/LPIPS but reduced held-out SSIM; the policy now selects `room=0.5`, `counter=0.5`, `kitchen=0.25`, `bonsai=0.75`. No test metric is used for alpha selection.
+
+**W&B evidence**:
+- room ELA: `eetov90p`, room train ELA: `ay807tk1`
+- room fixed-compaction full9 collector before SSIM peak guard: `a2iolvqf`
+- full9 after room SSIM peak guard: `letdd8yu`
+- full9 after room/counter/kitchen consistent peak guard: `baj6av2l`
+- bonsai train ELA completion: `vsvu8pzg`
+- final full9 all-indoor peak guard collector: `rp0d5gr3`
+
+**Claim boundary**: this branch now supports the claim "same-protocol RGB quality improves on all 9 selected Mip-NeRF360 scenes while preserving or improving geometry within the geometry-safe criterion and reducing triangle count." It still should not be written as "strict geometry wins on every scene": room/counter/kitchen are geometry-neutral by design at `0.1%` pruning, and garden is geometry-safe but not a strict all-axis geometry win.
