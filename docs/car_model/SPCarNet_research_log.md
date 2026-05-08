@@ -5730,3 +5730,25 @@ The differences are `-0.002353` PSNR, `-0.000930` SSIM, and `-0.000439` LPIPS.  
 - final full9 all-indoor peak guard collector: `rp0d5gr3`
 
 **Claim boundary**: this branch now supports the claim "same-protocol RGB quality improves on all 9 selected Mip-NeRF360 scenes while preserving or improving geometry within the geometry-safe criterion and reducing triangle count." It still should not be written as "strict geometry wins on every scene": room/counter/kitchen are geometry-neutral by design at `0.1%` pruning, and garden is geometry-safe but not a strict all-axis geometry win.
+
+---
+
+## 2026-05-07 - Full9 version archived and next research plan locked
+
+**Archive**: current full9 Compact-ELA/SOR version is tagged and pushed as `archive/full9-compact-ela-ssim-peak-20260507` at commit `fae7942`.
+
+**Documentation refresh**:
+- English README now focuses only on the current method, current full9 results, qualitative panels, limitations, and reproduction commands.
+- Chinese README is maintained in parallel.
+- Historical README content was moved to:
+  - `docs/car_model/archive/README_legacy_before_full9_2026-05-07.md`
+  - `docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md`
+- Current archive and future plan: `docs/car_model/5-7-Archive-Full9-CompactELA.md`
+- Paper-story update: `docs/car_model/5-7-Update.md`
+
+**New qualitative assets**:
+- `assets/spcarnet_m360_full9_qualitative_gallery.png`
+- `assets/spcarnet_m360_full9_crop_gallery.png`
+- `assets/spcarnet_m360_full9_gallery_selection.json`
+
+**Planning lock**: current version is a strong expected-positive checkpoint, but it remains far from the final goal of truly comprehensive MeshSplatting dominance. The main shortfall is low mean triangle reduction (`5.7632%`) and only `5/9` strict all-axis pass. The next phase must upgrade the method itself, especially indoor/garden geometry-preserving compaction, rather than continue parameter scanning. The planned direction is certificate-carrying triangle contraction, view-support redundancy graphs, geometry-preserving residual relocation, and train-only Pareto certification, followed by a new full9 same-protocol validation.
