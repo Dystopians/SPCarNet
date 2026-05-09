@@ -5834,7 +5834,7 @@ Key audit results:
 `scripts/car_model/ecsr_collect_phasej_external_validation.py` and generated
 `docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md`.
 
-Positive external row:
+Positive external rows:
 
 - dataset/protocol: ETH3D courtyard clean9000;
 - method: `ours_9000_phasej_external_clean9000_micro_autoedge_ela`;
@@ -5842,6 +5842,13 @@ Positive external row:
 - train-only policy selected alpha `0.5`, edge q `0.7`;
 - held-out delta vs clean9000: `+0.244770` PSNR, `+0.013113` SSIM,
   `-0.015389` LPIPS.
+- method: `ours_9000_phasej_external_clean9000_autoedge_lpips_ela`;
+- W&B: `yvskkcod`;
+- train-only policy selected alpha `0.5`, edge q `0.3`;
+- held-out delta vs clean9000: `+0.263348` PSNR, `+0.009438` SSIM,
+  `-0.022823` LPIPS.
+- LPIPS-aware rows improve PSNR and LPIPS over older ELA7 but still trail its
+  SSIM by about `0.0023`, so they are not promoted as a strict ELA7 replacement.
 
 Diagnostic limitation:
 

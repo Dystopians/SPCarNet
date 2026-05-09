@@ -33,7 +33,7 @@ score = PSNR + 20 * SSIM - 20 * LPIPS
 - 相对 Phase-F alpha-grid 的均值提升：`+0.3971 PSNR`，`+0.0083 SSIM`，`-0.0193 LPIPS`
 - 平均三角形减少：`7.6479%`
 - 闭环审计：`244 / 246` 个 held-out view 三指标严格胜出；max500 sparse COLMAP 口径下 `9 / 9` 场景 geometry-safe，`6 / 9` 场景严格几何更好。
-- 外部 courtyard 验证：ETH3D courtyard clean9000 上 Phase-J micro auto-edge 相对 clean MeshSplatting 提升 `+0.2448 PSNR`，`+0.0131 SSIM`，`-0.0154 LPIPS`；退化 F82 checkpoint 仅有极小提升，因此作为局限诊断保留。
+- 外部 courtyard 验证：ETH3D courtyard clean9000 上 Phase-J 相对 clean MeshSplatting 最高提升 `+0.2642 PSNR`，`+0.0094 SSIM`，`-0.0225 LPIPS`；退化 F82 checkpoint 仅有极小提升，因此作为局限诊断保留。
 
 | 场景 | 分支 | PSNR | SSIM | LPIPS | dPSNR clean | dSSIM clean | dLPIPS clean | 三角形减少 |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
@@ -91,7 +91,7 @@ Phase-G 尝试把 ELA teacher bake 回 topology-frozen checkpoint，但 official
 | guarded branch decision | `8 / 9` adaptive-alpha branch，`1 / 9` train-selected edge fallback |
 | 几何 / 拓扑 | 平均三角形减少 `7.6479%`；Phase-J closure audit 下 `6 / 9` sparse geometry 严格更好，`9 / 9` geometry-safe |
 | per-view audit | `244 / 246` 个 held-out view 相对 selected clean baseline 同时提升 PSNR、SSIM、LPIPS |
-| 外部验证 | ETH3D courtyard clean9000 三指标严格胜出：`+0.2448` PSNR，`+0.0131` SSIM，`-0.0154` LPIPS |
+| 外部验证 | ETH3D courtyard clean9000 三指标严格胜出：最高 `+0.2642` PSNR，`+0.0094` SSIM，`-0.0225` LPIPS；相对旧 ELA7 为 mixed |
 
 下面的详细表格保留自 5 月 7 日 Compact-ELA/SOR 留档报告，用于 provenance。LPIPS、AbsRel、DepthMAE、Normal 越低越好。
 

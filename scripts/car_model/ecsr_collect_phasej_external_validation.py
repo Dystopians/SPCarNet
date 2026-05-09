@@ -56,58 +56,79 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
 
     clean_results = load_json(clean_root / "results.json")
     clean_base = metric(clean_results, "ours_9000")
-    clean_method = metric(clean_results, "ours_9000_phasej_external_clean9000_micro_autoedge_ela")
-    clean_report = read_ela_report(clean_root, "test", "ours_9000_phasej_external_clean9000_micro_autoedge_ela")
     ela7_metric = metric(load_json(ela7_root / "results.json"), "ours_9000_ela7_pareto_portfolio")
-    rows.append(
-        {
-            "scene": "courtyard",
-            "protocol": "ETH3D courtyard clean9000",
-            "base_method": "ours_9000",
-            "method": "ours_9000_phasej_external_clean9000_micro_autoedge_ela",
-            "comparison": "vs clean9000",
-            "wandb_run": "vne962ci",
-            "alpha": clean_report.get("alpha"),
-            "edge_q": (clean_report.get("policy") or {}).get("edge_gate_quantile"),
-            "k": (clean_report.get("policy") or {}).get("k"),
-            "depth_rel_tol": (clean_report.get("policy") or {}).get("depth_rel_tol"),
-            "covered_fraction": clean_report.get("mean_covered_fraction"),
-            "method_PSNR": None if clean_method is None else clean_method["PSNR"],
-            "method_SSIM": None if clean_method is None else clean_method["SSIM"],
-            "method_LPIPS": None if clean_method is None else clean_method["LPIPS"],
-            "base_PSNR": None if clean_base is None else clean_base["PSNR"],
-            "base_SSIM": None if clean_base is None else clean_base["SSIM"],
-            "base_LPIPS": None if clean_base is None else clean_base["LPIPS"],
-            **delta(clean_method, clean_base),
-            "strict_rgb_win": strict_rgb_win(delta(clean_method, clean_base)),
-            "note": "positive external clean-checkpoint validation; test metrics used only after train-only policy materialization",
-        }
-    )
-    d_ela7 = delta(clean_method, ela7_metric)
-    rows.append(
-        {
-            "scene": "courtyard",
-            "protocol": "ETH3D courtyard clean9000",
-            "base_method": "ours_9000_ela7_pareto_portfolio",
-            "method": "ours_9000_phasej_external_clean9000_micro_autoedge_ela",
-            "comparison": "vs older ELA7 portfolio",
-            "wandb_run": "vne962ci",
-            "alpha": clean_report.get("alpha"),
-            "edge_q": (clean_report.get("policy") or {}).get("edge_gate_quantile"),
-            "k": (clean_report.get("policy") or {}).get("k"),
-            "depth_rel_tol": (clean_report.get("policy") or {}).get("depth_rel_tol"),
-            "covered_fraction": clean_report.get("mean_covered_fraction"),
-            "method_PSNR": None if clean_method is None else clean_method["PSNR"],
-            "method_SSIM": None if clean_method is None else clean_method["SSIM"],
-            "method_LPIPS": None if clean_method is None else clean_method["LPIPS"],
-            "base_PSNR": None if ela7_metric is None else ela7_metric["PSNR"],
-            "base_SSIM": None if ela7_metric is None else ela7_metric["SSIM"],
-            "base_LPIPS": None if ela7_metric is None else ela7_metric["LPIPS"],
-            **d_ela7,
-            "strict_rgb_win": strict_rgb_win(d_ela7),
-            "note": "improves PSNR/SSIM over ELA7 but has slightly worse LPIPS, so this is not a strict dominance claim",
-        }
-    )
+    clean_variants = [
+        (
+            "ours_9000_phasej_external_clean9000_micro_autoedge_ela",
+            "vne962ci",
+            "micro auto-edge without LPIPS calibration",
+        ),
+        (
+            "ours_9000_phasej_external_clean9000_micro_autoedge_lpips_ela",
+            "k6i8bg64",
+            "micro auto-edge with LPIPS calibration",
+        ),
+        (
+            "ours_9000_phasej_external_clean9000_autoedge_lpips_ela",
+            "yvskkcod",
+            "full auto-edge with LPIPS calibration",
+        ),
+    ]
+    for method_name, wandb_run, note in clean_variants:
+        clean_method = metric(clean_results, method_name)
+        if clean_method is None:
+            continue
+        clean_report = read_ela_report(clean_root, "test", method_name)
+        d_clean = delta(clean_method, clean_base)
+        rows.append(
+            {
+                "scene": "courtyard",
+                "protocol": "ETH3D courtyard clean9000",
+                "base_method": "ours_9000",
+                "method": method_name,
+                "comparison": "vs clean9000",
+                "wandb_run": wandb_run,
+                "alpha": clean_report.get("alpha"),
+                "edge_q": (clean_report.get("policy") or {}).get("edge_gate_quantile"),
+                "k": (clean_report.get("policy") or {}).get("k"),
+                "depth_rel_tol": (clean_report.get("policy") or {}).get("depth_rel_tol"),
+                "covered_fraction": clean_report.get("mean_covered_fraction"),
+                "method_PSNR": clean_method["PSNR"],
+                "method_SSIM": clean_method["SSIM"],
+                "method_LPIPS": clean_method["LPIPS"],
+                "base_PSNR": None if clean_base is None else clean_base["PSNR"],
+                "base_SSIM": None if clean_base is None else clean_base["SSIM"],
+                "base_LPIPS": None if clean_base is None else clean_base["LPIPS"],
+                **d_clean,
+                "strict_rgb_win": strict_rgb_win(d_clean),
+                "note": f"positive external clean-checkpoint validation; {note}",
+            }
+        )
+        d_ela7 = delta(clean_method, ela7_metric)
+        rows.append(
+            {
+                "scene": "courtyard",
+                "protocol": "ETH3D courtyard clean9000",
+                "base_method": "ours_9000_ela7_pareto_portfolio",
+                "method": method_name,
+                "comparison": "vs older ELA7 portfolio",
+                "wandb_run": wandb_run,
+                "alpha": clean_report.get("alpha"),
+                "edge_q": (clean_report.get("policy") or {}).get("edge_gate_quantile"),
+                "k": (clean_report.get("policy") or {}).get("k"),
+                "depth_rel_tol": (clean_report.get("policy") or {}).get("depth_rel_tol"),
+                "covered_fraction": clean_report.get("mean_covered_fraction"),
+                "method_PSNR": clean_method["PSNR"],
+                "method_SSIM": clean_method["SSIM"],
+                "method_LPIPS": clean_method["LPIPS"],
+                "base_PSNR": None if ela7_metric is None else ela7_metric["PSNR"],
+                "base_SSIM": None if ela7_metric is None else ela7_metric["SSIM"],
+                "base_LPIPS": None if ela7_metric is None else ela7_metric["LPIPS"],
+                **d_ela7,
+                "strict_rgb_win": strict_rgb_win(d_ela7),
+                "note": "ELA7 comparison is a mixed ablation, not a strict dominance claim unless all three deltas pass",
+            }
+        )
 
     f82_results = load_json(f82_root / "results.json")
     f82_base = metric(f82_results, "ours_26000")
@@ -193,8 +214,8 @@ def write_md(report: dict[str, Any], path: Path) -> None:
             "",
             "## Reading",
             "",
-            "- On the fair clean9000 courtyard checkpoint, Phase-J micro auto-edge improves all three RGB metrics over the clean baseline: `+0.244770` PSNR, `+0.013113` SSIM, `-0.015389` LPIPS.",
-            "- Against the older ELA7 courtyard portfolio, the same method improves PSNR and SSIM but not LPIPS, so it should be reported as a mixed replacement rather than a strict dominance result.",
+            "- On the fair clean9000 courtyard checkpoint, all completed Phase-J variants improve all three RGB metrics over the clean baseline. The best LPIPS-aware row reaches `+0.263348` PSNR, `+0.009438` SSIM, `-0.022823` LPIPS vs clean9000.",
+            "- Against the older ELA7 courtyard portfolio, the LPIPS-aware rows improve PSNR and LPIPS but not SSIM, while the no-LPIPS micro row improves PSNR and SSIM but not LPIPS. This is a useful external validation, not a strict ELA7 replacement.",
             "- On the F82 degraded checkpoint, full auto-edge produces only a very small strict RGB improvement. Fixed and micro policies correctly no-op. This is useful negative evidence: the policy is conservative, but severe checkpoint degradation is not solved by render-time residual transfer alone.",
             "",
         ]

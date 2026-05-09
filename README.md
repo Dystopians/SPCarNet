@@ -33,7 +33,7 @@ Train metrics are not used to pick the baseline or the final method result.
 - Mean delta vs Phase-F alpha-grid: `+0.3971 PSNR`, `+0.0083 SSIM`, `-0.0193 LPIPS`
 - Mean triangle reduction: `7.6479%`
 - Closure audit: `244 / 246` held-out views are strict RGB wins; sparse COLMAP geometry is safe on `9 / 9` scenes and strictly better on `6 / 9` under the max500 audit.
-- External courtyard validation: on ETH3D courtyard clean9000, Phase-J micro auto-edge improves clean MeshSplatting by `+0.2448 PSNR`, `+0.0131 SSIM`, `-0.0154 LPIPS`; the degraded F82 checkpoint only shows tiny improvements, so it is kept as a limitation diagnostic.
+- External courtyard validation: on ETH3D courtyard clean9000, Phase-J improves clean MeshSplatting by up to `+0.2642 PSNR`, `+0.0094 SSIM`, `-0.0225 LPIPS`; the degraded F82 checkpoint only shows tiny improvements, so it is kept as a limitation diagnostic.
 
 | scene | selected branch | PSNR | SSIM | LPIPS | dPSNR clean | dSSIM clean | dLPIPS clean | triangle reduction |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
@@ -91,7 +91,7 @@ Current Phase-J summary:
 | guarded branch decision | `8 / 9` adaptive-alpha branch, `1 / 9` train-selected edge fallback |
 | geometry / topology | mean triangle reduction `7.6479%`; `6 / 9` strict sparse-geometry wins, `9 / 9` geometry-safe scenes under the Phase-J closure audit |
 | per-view audit | `244 / 246` held-out views strictly improve PSNR, SSIM, and LPIPS over the selected clean baseline |
-| external validation | ETH3D courtyard clean9000 strict RGB win: `+0.2448` PSNR, `+0.0131` SSIM, `-0.0154` LPIPS |
+| external validation | ETH3D courtyard clean9000 strict RGB win: up to `+0.2642` PSNR, `+0.0094` SSIM, `-0.0225` LPIPS; mixed vs older ELA7 |
 
 The detailed tables below are retained from the May 7 archived Compact-ELA/SOR report for provenance. Lower is better for LPIPS, AbsRel, DepthMAE, and Normal.
 
