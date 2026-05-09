@@ -5860,3 +5860,39 @@ Diagnostic limitation:
   useful on a valid clean checkpoint, but it does not repair severe checkpoint
   collapse. The remaining research gap is still representation-level recovery,
   not more image-space tuning.
+
+---
+
+## 2026-05-08 - Phase-D V2 representation recovery interfaces and rejection
+
+Added two checkpoint-level recovery operators:
+
+- `scripts/car_model/ecsr_apply_surface_residual_ridge_delta.py`;
+- `scripts/car_model/ecsr_apply_surface_residual_microfacets.py`.
+
+Both operators use train-only surface evidence and write persistent
+MeshSplatting checkpoint state rather than editing rendered images. The ridge
+operator solves a bounded smooth SH-DC residual over selected surface vertices.
+The microfacet operator attaches a tiny number of residual carrier triangles to
+multi-view stable high-error faces.
+
+Main validation:
+
+- report: `docs/car_model/5-8-ECSR-PhaseD-RepresentationRecoveryV2.md`;
+- ridge V1 bare checkpoint on four outdoor scenes changed compact-only metrics
+  only at numerical-noise scale;
+- source+ridge+ELA helped `bicycle` beyond Phase-J by `+0.007858` PSNR,
+  `+0.001040` SSIM, `-0.001458` LPIPS, but hurt `flowers` by `-0.105659`
+  PSNR, `-0.009450` SSIM, `+0.013393` LPIPS;
+- Phase-J-aligned ridge on the actual `ratio_0200` checkpoints was neutral on
+  `bicycle` and harmful on `flowers`;
+- microfacets added only `41` and `29` triangles on `bicycle` and `flowers`
+  respectively, passed topology audits, but had negligible held-out impact.
+
+Decision: `REJECT_AS_FINAL_METHOD`.
+
+The important lesson is now concrete: direct aggregated residual relocation is
+too weak because the current Surface Evidence Cache stores per-face averages,
+not per-pixel residuals with barycentric support. The next Phase-D attempt must
+store per-pixel residual RGB and fit per-cluster residual basis functions with a
+train/policy-val certificate before materialization.
