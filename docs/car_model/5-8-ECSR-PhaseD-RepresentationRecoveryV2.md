@@ -97,13 +97,43 @@ The repeated failure pattern is now specific:
 - Phase-J's current gains remain dominated by train-only ELA, not by persistent
   representation state.
 
+## Rich Evidence Interface Update
+
+After the V2 rejection, the Surface Evidence Cache was extended so the next
+representation-level method no longer has to infer residual structure from
+per-face averages alone.
+
+Implemented fields in `scripts/car_model/ecsr_build_surface_evidence_cache.py`:
+
+- always stored with `--save_view_npz`: `face_id`, `residual_l1`, `texture`,
+  `alpha`, `depth`, `normal`;
+- optional with `--save_residual_rgb`: per-pixel `residual_rgb`;
+- optional with `--save_rgb`: per-pixel `rgb_render` and `rgb_gt`;
+- summary metadata: `per_view_npz_fields` and `barycentric_available`.
+
+Smoke validation:
+
+- command: rich cache smoke on `bicycle` Phase-J `ratio_0200` checkpoint;
+- output:
+  `outputs/carnet/meshsplatopt/ecsr_phase_d/surface_evidence_rich_smoke/bicycle/`;
+- verified NPZ fields:
+  `face_id`, `residual_l1`, `texture`, `alpha`, `depth`, `normal`,
+  `residual_rgb`;
+- current `barycentric_available`: `False`.
+
+This does not by itself improve metrics. It closes the missing data-interface
+piece needed for a stronger Phase-D method: residual fitting can now inspect
+per-pixel residual vectors, normals, depth, alpha, and face IDs jointly instead
+of relying only on aggregated face statistics.
+
 ## Next Required Upgrade
 
 The next representation-level attempt should not keep increasing these local
-DC edits. It needs a stronger evidence structure:
+DC edits. It should use the rich evidence interface above and add a real
+fitting/validation mechanism:
 
-1. Store per-pixel residual RGB with face ID and barycentric coordinates in the
-   Surface Evidence Cache.
+1. Add barycentric coordinates or an equivalent stable local surface coordinate
+   to the per-view cache when the renderer exposes it.
 2. Fit per-face or per-cluster residual basis functions from fitting-train
    views and validate them on policy-val train views before materialization.
 3. Apply residual relocation on Phase-B clusters rather than isolated top-error

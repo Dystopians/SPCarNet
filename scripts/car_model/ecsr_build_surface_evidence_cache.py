@@ -274,13 +274,22 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
 
             key = f"{original_idx:05d}"
             if args.save_view_npz:
+                view_payload = {
+                    "face_id": face_ids_low.astype(np.int32),
+                    "residual_l1": abs_error.astype(np.float16),
+                    "texture": texture.astype(np.float16),
+                    "alpha": pkg["rend_alpha"].detach().float().squeeze().cpu().numpy().astype(np.float16),
+                    "depth": pkg["surf_depth"].detach().float().squeeze().cpu().numpy().astype(np.float32),
+                    "normal": pkg["surf_normal"].detach().float().cpu().numpy().astype(np.float16),
+                }
+                if bool(args.save_residual_rgb):
+                    view_payload["residual_rgb"] = residual.astype(np.float16)
+                if bool(args.save_rgb):
+                    view_payload["rgb_render"] = render_np.astype(np.float16)
+                    view_payload["rgb_gt"] = gt_np.astype(np.float16)
                 np.savez_compressed(
                     per_view_dir / f"{key}.npz",
-                    face_id=face_ids_low.astype(np.int32),
-                    residual_l1=abs_error.astype(np.float16),
-                    texture=texture.astype(np.float16),
-                    alpha=pkg["rend_alpha"].detach().float().squeeze().cpu().numpy().astype(np.float16),
-                    depth=pkg["surf_depth"].detach().float().squeeze().cpu().numpy().astype(np.float32),
+                    **view_payload,
                 )
             Image.fromarray((np.clip(abs_error / (np.percentile(abs_error, 99.5) + 1e-8), 0, 1) * 255).astype(np.uint8)).save(
                 per_view_dir / f"{key}_error.png"
@@ -461,6 +470,17 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
             "contact_sheet": str(out_dir / "surface_residual_contact_sheet.png"),
             "per_view_dir": str(per_view_dir),
         },
+        "per_view_npz_fields": [
+            "face_id",
+            "residual_l1",
+            "texture",
+            "alpha",
+            "depth",
+            "normal",
+        ]
+        + (["residual_rgb"] if bool(args.save_residual_rgb) else [])
+        + (["rgb_render", "rgb_gt"] if bool(args.save_rgb) else []),
+        "barycentric_available": False,
     }
     (out_dir / "surface_evidence_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     md = [
@@ -511,6 +531,16 @@ def main() -> int:
     parser.add_argument("--min_consistency", default=0.25, type=float)
     parser.add_argument("--min_multiview_top_fraction", default=0.25, type=float)
     parser.add_argument("--save_view_npz", action="store_true")
+    parser.add_argument(
+        "--save_residual_rgb",
+        action="store_true",
+        help="Store per-pixel RGB residuals in each view NPZ for representation-level relocation fitting.",
+    )
+    parser.add_argument(
+        "--save_rgb",
+        action="store_true",
+        help="Store render and GT RGB tensors in each view NPZ. This is larger and intended for fitting diagnostics.",
+    )
     parser.add_argument("--quiet", action="store_true")
     args = get_combined_args(parser)
     if args.split != "train":

@@ -5896,3 +5896,25 @@ too weak because the current Surface Evidence Cache stores per-face averages,
 not per-pixel residuals with barycentric support. The next Phase-D attempt must
 store per-pixel residual RGB and fit per-cluster residual basis functions with a
 train/policy-val certificate before materialization.
+
+Follow-up interface fix:
+
+- extended `scripts/car_model/ecsr_build_surface_evidence_cache.py` so
+  `--save_view_npz` stores `normal` in addition to face IDs, residual L1,
+  texture, alpha, and depth;
+- added `--save_residual_rgb` for per-pixel RGB residuals;
+- added `--save_rgb` for render/GT RGB diagnostics;
+- added summary metadata `per_view_npz_fields` and
+  `barycentric_available`.
+
+Smoke result:
+
+- scene/checkpoint: `bicycle` Phase-J selected `ratio_0200` compact model;
+- output:
+  `outputs/carnet/meshsplatopt/ecsr_phase_d/surface_evidence_rich_smoke/bicycle/`;
+- verified NPZ fields:
+  `face_id`, `residual_l1`, `texture`, `alpha`, `depth`, `normal`,
+  `residual_rgb`;
+- `barycentric_available` is still `False`, so the next method must either add
+  true barycentric support from the renderer or use a conservative local
+  surface-coordinate surrogate.
