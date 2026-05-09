@@ -2,7 +2,7 @@
 
 **基于训练证据的几何安全 Mesh Splatting 压缩与渲染修复。**
 
-[English](README.md) | [Phase-J 结果](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Phase-J 外部验证](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [5 月 7 日更新](docs/car_model/5-7-Update.md) | [升级路线](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR 审计](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
+[English](README.md) | [Phase-J 结果](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-J 外部验证](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [5 月 7 日更新](docs/car_model/5-7-Update.md) | [升级路线](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR 审计](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
 
 SPCarNet 是建立在 Mesh Splatting 之上的研究分支。当前 ECSR 版本保留固定的 Phase-F compact checkpoint，再用 train-evidence guarded portfolio 做外观修复：稳定场景走 adaptive-alpha ELA，不稳定场景走 train-selected structural edge fallback。branch、edge gate、alpha、压缩比例都不使用 held-out test 指标选择。
 
@@ -67,6 +67,7 @@ score = PSNR + 20 * SSIM - 20 * LPIPS
 - Phase-G teacher-bake recovery：[`docs/car_model/5-8-ECSR-PhaseG-TeacherBakeRecovery.md`](docs/car_model/5-8-ECSR-PhaseG-TeacherBakeRecovery.md)
 - Phase-J guarded adaptive edge policy：[`docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md`](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md)
 - Phase-J external courtyard validation：[`docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md`](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md)
+- Surface-attached residual lumigraph V8：[`docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md`](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md)
 - 执行日志：[`docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md`](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md)
 - Phase-A 汇总 contact sheet：`outputs/carnet/meshsplatopt/ecsr_phase_a/surface_evidence/phase_a_surface_evidence_contact_sheet.png`
 
@@ -79,6 +80,8 @@ Phase-C preflight 结果：`21 / 123` 个 Phase-B cluster 通过 train-only fitt
 Phase-C/D 执行更新：full-train split 已覆盖全部 9 个场景。Static topology certification 在 `21` 个 preflight candidate 中通过 `7` 个；其中 `3` 个 contraction candidate 已被 materialize 成真实 checkpoint copy，并且 `3 / 3` 通过 renderer smoke。两个 representation-level recovery MVP 已实现但还不能作为最终方法：attribute-only recovery 的 `2 / 2` 个 smoke run 回退，bounded surface residual DC delta 虽然在 train policy-val mean-L1 上接受 `3 / 4`，但 held-out diagnostic `4 / 4` 回退。这说明 checkpoint 接口已经打通。
 
 Phase-G 尝试把 ELA teacher bake 回 topology-frozen checkpoint，但 official `bicycle` 与 `flowers` pilot 都略低于 clean MeshSplatting，且明显低于 render-time ELA，因此被拒绝为当前主线。Phase-J 是当前接受的方法：一个 no-test-GT guarded portfolio，稳定时用 adaptive alpha，不稳定时用 train-selected structural edge fallback。
+
+Phase-M / V8 目前是最干净的 representation-attached recovery baseline：train residual 存在 surface `face_id` 上，held-out view 只通过 target surface map 查表应用。固定 two-split consensus policy 接受 `flowers` 与 `garden`，其余 `7 / 9` 场景自动 no-op；相对 Phase-F compact base 的 full9 均值为小幅正向变化：`+0.000250` PSNR、`+0.000000868` SSIM、`-0.00000638` LPIPS。这个结果不是当前论文主 RGB endpoint，但它给下一步更高容量的 surface-attached 表示恢复提供了安全基线。
 
 ## 其他评估口径
 

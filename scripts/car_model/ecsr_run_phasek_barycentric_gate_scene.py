@@ -122,7 +122,14 @@ def _render_maps(
 
 def _build_evidence(args: argparse.Namespace, *, scene: str, phasej_model: Path, evidence_dir: Path, log_path: Path) -> None:
     summary = evidence_dir / "surface_evidence_summary.json"
-    if not bool(args.force) and summary.is_file() and _read_json(summary).get("barycentric_available") is True:
+    existing_summary = _read_json(summary)
+    has_camera_center = "camera_center" in existing_summary.get("per_view_npz_fields", [])
+    if (
+        not bool(args.force)
+        and summary.is_file()
+        and existing_summary.get("barycentric_available") is True
+        and (str(args.delta_operator) != "sh1" or has_camera_center)
+    ):
         return
     cmd = [
         sys.executable,
@@ -165,13 +172,18 @@ def _build_evidence(args: argparse.Namespace, *, scene: str, phasej_model: Path,
 
 
 def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: Path, candidate_model: Path, log_path: Path) -> None:
-    audit = candidate_model / "surface_residual_barycentric_delta_audit.json"
+    apply_script = (
+        "scripts/car_model/ecsr_apply_surface_residual_barycentric_sh1_delta.py"
+        if str(args.delta_operator) == "sh1"
+        else "scripts/car_model/ecsr_apply_surface_residual_barycentric_delta.py"
+    )
+    audit = _candidate_audit_path(args, candidate_model)
     checkpoint = candidate_model / "point_cloud" / f"iteration_{int(args.iteration)}" / "point_cloud_state_dict.pt"
     if not bool(args.force) and audit.is_file() and checkpoint.is_file():
         return
     cmd = [
         sys.executable,
-        "scripts/car_model/ecsr_apply_surface_residual_barycentric_delta.py",
+        apply_script,
         "--source_model",
         str(phasej_model),
         "--evidence_dir",
@@ -211,7 +223,22 @@ def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: 
         "--min_policy_val_unique_faces",
         str(args.delta_min_policy_val_unique_faces),
     ]
+    if str(args.delta_operator) == "sh1":
+        cmd.extend(
+            [
+                "--max_abs_sh_coeff",
+                str(args.delta_max_abs_sh_coeff),
+                "--lambda_sh1_mag",
+                str(args.delta_lambda_sh1_mag),
+            ]
+        )
     _run(cmd, gpu=int(args.gpu), log_path=log_path)
+
+
+def _candidate_audit_path(args: argparse.Namespace, candidate_model: Path) -> Path:
+    if str(args.delta_operator) == "sh1":
+        return candidate_model / "surface_residual_barycentric_sh1_delta_audit.json"
+    return candidate_model / "surface_residual_barycentric_delta_audit.json"
 
 
 def _policy_args(report: dict[str, Any], *, trainval: bool, args: argparse.Namespace) -> list[str]:
@@ -385,7 +412,7 @@ def _decide(
         "--scene",
         scene,
         "--candidate_label",
-        "bary_delta_v2wide_s08",
+        args.candidate_label,
         "--fallback_label",
         "phasej_guarded_adaptedge",
         "--base_trainval_results",
@@ -396,6 +423,8 @@ def _decide(
         str(candidate_model / "trainval_gate_results.json"),
         "--candidate_trainval_method",
         args.candidate_trainval_method,
+        "--candidate_audit_json",
+        str(_candidate_audit_path(args, candidate_model)),
         "--base_test_results",
         str(phasej_model / "results.json"),
         "--base_test_method",
@@ -410,6 +439,8 @@ def _decide(
         str(args.gate_max_ssim_regression),
         "--max_lpips_regression",
         str(args.gate_max_lpips_regression),
+        "--min_balanced_delta",
+        str(args.gate_min_balanced_delta),
         "--output_json",
         str(decision_json),
         "--output_md",
@@ -436,6 +467,8 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
     _build_evidence(args, scene=scene, phasej_model=phasej_model, evidence_dir=evidence_dir, log_path=log_path)
     _apply_delta(args, phasej_model=phasej_model, evidence_dir=evidence_dir, candidate_model=candidate_model, log_path=log_path)
     _render_maps(args, scene=scene, model=candidate_model, method_name=args.candidate_base_method, log_path=log_path)
+    _evaluate_test(args, model=phasej_model, method=BASE_METHOD, log_path=log_path)
+    _evaluate_test(args, model=candidate_model, method=args.candidate_base_method, log_path=log_path)
 
     _apply_ela(
         args,
@@ -524,15 +557,25 @@ def _write_aggregate(args: argparse.Namespace, rows: list[dict[str, Any]]) -> No
         f"- scenes: `{len(rows)}`",
         f"- accepted: `{len(accepted)}`",
         "",
-        "| scene | selected | accepted | train-val dPSNR | train-val dSSIM | train-val dLPIPS | test dPSNR | test dSSIM | test dLPIPS |",
-        "|---|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| scene | selected | accepted | raw dPSNR | raw dSSIM | raw dLPIPS | train-val dPSNR | train-val dSSIM | train-val dLPIPS | test dPSNR | test dSSIM | test dLPIPS |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         decision = row["decision"]
         td = decision.get("trainval_delta", {})
         hd = decision.get("test_delta_report_only", {})
+        raw_delta = {"PSNR": math.nan, "SSIM": math.nan, "LPIPS": math.nan}
+        try:
+            phasej_model = ROOT / row["phasej_model"]
+            candidate_model = ROOT / row["candidate_model"]
+            base_raw = _metric(phasej_model / "results.json", BASE_METHOD)
+            candidate_raw = _metric(candidate_model / "results.json", args.candidate_base_method)
+            raw_delta = {key: candidate_raw[key] - base_raw[key] for key in ("PSNR", "SSIM", "LPIPS")}
+        except Exception:
+            pass
         lines.append(
             f"| {row['scene']} | {decision.get('selected_label')} | {str(decision.get('accepted')).lower()} | "
+            f"{float(raw_delta.get('PSNR', math.nan)):+.6f} | {float(raw_delta.get('SSIM', math.nan)):+.6f} | {float(raw_delta.get('LPIPS', math.nan)):+.6f} | "
             f"{float(td.get('PSNR', math.nan)):+.6f} | {float(td.get('SSIM', math.nan)):+.6f} | {float(td.get('LPIPS', math.nan)):+.6f} | "
             f"{float(hd.get('PSNR', math.nan)):+.6f} | {float(hd.get('SSIM', math.nan)):+.6f} | {float(hd.get('LPIPS', math.nan)):+.6f} |"
         )
@@ -565,7 +608,11 @@ def main() -> int:
     parser.add_argument("--delta_high_error_quantile", type=float, default=0.70)
     parser.add_argument("--delta_strength", type=float, default=0.08)
     parser.add_argument("--delta_max_abs_rgb", type=float, default=0.008)
+    parser.add_argument("--delta_operator", choices=("dc", "sh1"), default="dc")
+    parser.add_argument("--candidate_label", default="bary_delta_v2wide_s08")
+    parser.add_argument("--delta_max_abs_sh_coeff", type=float, default=0.0)
     parser.add_argument("--delta_lambda_mag", type=float, default=0.03)
+    parser.add_argument("--delta_lambda_sh1_mag", type=float, default=0.06)
     parser.add_argument("--delta_lambda_smooth", type=float, default=0.10)
     parser.add_argument("--delta_steps", type=int, default=800)
     parser.add_argument("--delta_min_policy_val_relative_gain", type=float, default=0.02)
@@ -584,6 +631,7 @@ def main() -> int:
     parser.add_argument("--gate_min_psnr_gain", type=float, default=0.0)
     parser.add_argument("--gate_max_ssim_regression", type=float, default=5e-5)
     parser.add_argument("--gate_max_lpips_regression", type=float, default=1.5e-4)
+    parser.add_argument("--gate_min_balanced_delta", type=float, default=-1.0e9)
     parser.add_argument("--wandb_project", default="mesh-splatting-ecsr")
     parser.add_argument("--wandb_group", default="phasek_barycentric_multiscene")
     parser.add_argument("--wandb_name", default="phasek_barycentric")

@@ -325,3 +325,35 @@ Final Phase-J full9:
 
 This is the strongest accepted ECSR RGB result so far. It still remains a
 render-time ELA portfolio rather than a fully baked representation-level model.
+
+## Phase-M Surface Residual Lumigraph V8
+
+The next pass implemented a surface-attached residual lumigraph rather than an
+image-space ELA variant:
+
+- train residuals are aggregated on persistent rendered `face_id`;
+- held-out renders use only target view surface maps and the train-fitted field;
+- alpha is selected on train-policy views only;
+- V8 requires both `policy_val_stride=4` and consensus
+  `policy_val_stride=2` to pass before a nonzero residual is accepted.
+
+Full9 execution is complete. Additional 12-view train evidence caches and
+held-out surface maps were generated for `room`, `counter`, `kitchen`, and
+`bonsai`, completing the surface-lumigraph interface beyond the outdoor pilot.
+
+Result against the Phase-F compact base:
+
+- accepted scenes: `2 / 9` (`flowers`, `garden`);
+- no-op scenes: `7 / 9`;
+- mean dPSNR / dSSIM / dLPIPS:
+  `+0.000250498 / +0.000000868 / -0.000006378`;
+- V8 rejects the earlier false-positive `treehill` and the weak `stump`
+  accept from V7;
+- W&B group: `phase_m_surface_lumigraph_v8_consensus_gate128_full9`;
+- report: `docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md`.
+
+Interpretation: this is the cleanest representation-attached recovery baseline
+so far, but the gain is far too small to replace Phase-J. The main bottleneck is
+surface support coverage and residual capacity, not the train/test protocol.
+V8 should be retained as a safe baseline and as the acceptance discipline for
+future higher-capacity surface-attached appearance codes.

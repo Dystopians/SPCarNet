@@ -2,7 +2,7 @@
 
 **Train-only evidence-guided compact Mesh Splatting with geometry-safe reconstruction repair.**
 
-[中文](README.zh.md) | [Phase-J result](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Phase-J external validation](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [May 7 update](docs/car_model/5-7-Update.md) | [Upgrade plan](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR audit](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [Execution log](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
+[中文](README.zh.md) | [Phase-J result](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-J external validation](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [May 7 update](docs/car_model/5-7-Update.md) | [Upgrade plan](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR audit](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [Execution log](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
 
 SPCarNet is a research branch built on Mesh Splatting. The current ECSR version keeps the fixed Phase-F compact checkpoints, then uses a train-evidence guarded portfolio for appearance recovery: stable scenes use adaptive-alpha ELA, and unstable scenes use a train-selected structural edge fallback. No held-out test metric is used to select the branch, edge gate, alpha, or compaction ratio.
 
@@ -67,6 +67,7 @@ Current execution artifacts:
 - Phase-G teacher-bake recovery: [`docs/car_model/5-8-ECSR-PhaseG-TeacherBakeRecovery.md`](docs/car_model/5-8-ECSR-PhaseG-TeacherBakeRecovery.md)
 - Phase-J guarded adaptive edge policy: [`docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md`](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md)
 - Phase-J external courtyard validation: [`docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md`](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md)
+- Surface-attached residual lumigraph V8: [`docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md`](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md)
 - Execution log: [`docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md`](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md)
 - Combined Phase-A contact sheet: `outputs/carnet/meshsplatopt/ecsr_phase_a/surface_evidence/phase_a_surface_evidence_contact_sheet.png`
 
@@ -79,6 +80,8 @@ Phase-C preflight result: `21 / 123` Phase-B clusters pass the train-only fittin
 Phase-C/D execution update: the full-train split is complete for all 9 scenes. Static topology certification passes `7 / 21` preflight candidates; `3` contraction candidates were materialized as real checkpoint copies and all `3 / 3` pass renderer smoke. Two representation-level recovery MVPs are implemented but rejected as final methods: attribute-only recovery regresses `2 / 2` smoke runs, and bounded surface residual DC delta regresses `4 / 4` held-out diagnostics despite `3 / 4` train policy-val mean-L1 accepts. This established the checkpoint interface.
 
 Phase-G tested teacher-baking ELA back into a topology-frozen checkpoint and was rejected: official `bicycle` and `flowers` pilots both remained slightly below clean MeshSplatting and far below render-time ELA. Phase-J is therefore the accepted current method: a no-test-GT guarded portfolio that uses adaptive alpha where stable and a train-selected structural edge fallback where adaptive alpha is unstable.
+
+Phase-M / V8 adds the cleanest representation-attached recovery baseline so far: train residuals are stored on surface `face_id`s and applied to held-out views through target surface maps only. A fixed two-split consensus policy accepts `flowers` and `garden`, rejects the other `7 / 9` scenes as no-op, and gives a tiny positive full9 mean delta of `+0.000250` PSNR, `+0.000000868` SSIM, and `-0.00000638` LPIPS versus the Phase-F compact base. This is not the paper-facing RGB endpoint; it is the safe surface-attached baseline for the next higher-capacity representation work.
 
 ## Additional Evaluation Views
 

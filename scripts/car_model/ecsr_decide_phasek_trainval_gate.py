@@ -24,6 +24,12 @@ def _load_metric(path: Path, method: str) -> dict[str, float]:
     return {key: float(row[key]) for key in METRICS}
 
 
+def _load_optional_json(path: Path) -> dict[str, Any]:
+    if not path or str(path) in ("", ".") or not path.is_file():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def _delta(candidate: dict[str, float], base: dict[str, float]) -> dict[str, float]:
     return {key: float(candidate[key] - base[key]) for key in METRICS}
 
@@ -32,7 +38,7 @@ def _balanced(delta: dict[str, float], *, ssim_weight: float, lpips_weight: floa
     return float(delta["PSNR"] + float(ssim_weight) * delta["SSIM"] - float(lpips_weight) * delta["LPIPS"])
 
 
-def _decision(delta: dict[str, float], args: argparse.Namespace) -> tuple[bool, list[str]]:
+def _decision(delta: dict[str, float], balanced_delta: float, args: argparse.Namespace) -> tuple[bool, list[str]]:
     reasons: list[str] = []
     if delta["PSNR"] < float(args.min_psnr_gain):
         reasons.append(f"psnr_gain_below_{args.min_psnr_gain:g}")
@@ -40,6 +46,8 @@ def _decision(delta: dict[str, float], args: argparse.Namespace) -> tuple[bool, 
         reasons.append(f"ssim_regression_exceeds_{args.max_ssim_regression:g}")
     if delta["LPIPS"] > float(args.max_lpips_regression):
         reasons.append(f"lpips_regression_exceeds_{args.max_lpips_regression:g}")
+    if balanced_delta < float(args.min_balanced_delta):
+        reasons.append(f"balanced_delta_below_{args.min_balanced_delta:g}")
     return not reasons, reasons
 
 
@@ -82,6 +90,7 @@ def main() -> int:
     parser.add_argument("--base_trainval_method", required=True)
     parser.add_argument("--candidate_trainval_results", type=Path, required=True)
     parser.add_argument("--candidate_trainval_method", required=True)
+    parser.add_argument("--candidate_audit_json", type=Path, default=Path(""))
     parser.add_argument("--base_test_results", type=Path, default=Path(""))
     parser.add_argument("--base_test_method", default="")
     parser.add_argument("--candidate_test_results", type=Path, default=Path(""))
@@ -89,6 +98,7 @@ def main() -> int:
     parser.add_argument("--min_psnr_gain", type=float, default=0.0)
     parser.add_argument("--max_ssim_regression", type=float, default=5e-5)
     parser.add_argument("--max_lpips_regression", type=float, default=1.5e-4)
+    parser.add_argument("--min_balanced_delta", type=float, default=-1.0e9)
     parser.add_argument("--ssim_weight", type=float, default=20.0)
     parser.add_argument("--lpips_weight", type=float, default=20.0)
     parser.add_argument("--output_json", type=Path, required=True)
@@ -98,7 +108,19 @@ def main() -> int:
     base_train = _load_metric(args.base_trainval_results, args.base_trainval_method)
     cand_train = _load_metric(args.candidate_trainval_results, args.candidate_trainval_method)
     train_delta = _delta(cand_train, base_train)
-    accepted, reasons = _decision(train_delta, args)
+    train_balanced_delta = _balanced(
+        train_delta,
+        ssim_weight=float(args.ssim_weight),
+        lpips_weight=float(args.lpips_weight),
+    )
+    accepted, reasons = _decision(train_delta, train_balanced_delta, args)
+    candidate_audit = _load_optional_json(args.candidate_audit_json)
+    if candidate_audit:
+        audit_accepted = bool(candidate_audit.get("accepted", False))
+        audit_no_op = bool(candidate_audit.get("no_op_copy", False))
+        if audit_no_op or not audit_accepted:
+            accepted = False
+            reasons.append("candidate_checkpoint_operator_rejected_or_noop")
 
     audit: dict[str, Any] = {
         "scene": args.scene,
@@ -113,17 +135,21 @@ def main() -> int:
         "base_trainval_metrics": base_train,
         "candidate_trainval_metrics": cand_train,
         "trainval_delta": train_delta,
-        "trainval_balanced_delta": _balanced(
-            train_delta,
-            ssim_weight=float(args.ssim_weight),
-            lpips_weight=float(args.lpips_weight),
-        ),
+        "trainval_balanced_delta": train_balanced_delta,
         "thresholds": {
             "min_psnr_gain": float(args.min_psnr_gain),
             "max_ssim_regression": float(args.max_ssim_regression),
             "max_lpips_regression": float(args.max_lpips_regression),
+            "min_balanced_delta": float(args.min_balanced_delta),
             "ssim_weight": float(args.ssim_weight),
             "lpips_weight": float(args.lpips_weight),
+        },
+        "candidate_operator_audit": {
+            "path": str(args.candidate_audit_json) if args.candidate_audit_json else "",
+            "available": bool(candidate_audit),
+            "accepted": bool(candidate_audit.get("accepted", False)) if candidate_audit else None,
+            "no_op_copy": bool(candidate_audit.get("no_op_copy", False)) if candidate_audit else None,
+            "policy_pass": bool(candidate_audit.get("policy_pass", False)) if candidate_audit else None,
         },
     }
 

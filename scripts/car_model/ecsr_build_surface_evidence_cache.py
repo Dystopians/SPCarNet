@@ -337,6 +337,7 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
                     "alpha": pkg["rend_alpha"].detach().float().squeeze().cpu().numpy().astype(np.float16),
                     "depth": pkg["surf_depth"].detach().float().squeeze().cpu().numpy().astype(np.float32),
                     "normal": pkg["surf_normal"].detach().float().cpu().numpy().astype(np.float16),
+                    "camera_center": view.camera_center.detach().float().cpu().numpy().astype(np.float32),
                 }
                 if bool(args.save_residual_rgb):
                     view_payload["residual_rgb"] = residual.astype(np.float16)
@@ -529,6 +530,7 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
         "alpha",
         "depth",
         "normal",
+        "camera_center",
     ]
     if bool(args.save_residual_rgb):
         per_view_npz_fields.append("residual_rgb")

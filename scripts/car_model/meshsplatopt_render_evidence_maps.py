@@ -88,15 +88,19 @@ def render_set(
     skip_failed_views: bool = False,
     frustum_cull: bool = False,
     frustum_margin: float = 0.5,
+    save_surface_maps: bool = False,
 ):
     method_dir = Path(model_path) / name / (method_name or f"ours_{iteration}")
     render_path = method_dir / "renders"
     gts_path = method_dir / "gt"
     depth_path = method_dir / "depths"
+    surface_map_path = method_dir / "surface_maps"
     render_path.mkdir(parents=True, exist_ok=True)
     gts_path.mkdir(parents=True, exist_ok=True)
     if save_depth:
         depth_path.mkdir(parents=True, exist_ok=True)
+    if save_surface_maps:
+        surface_map_path.mkdir(parents=True, exist_ok=True)
 
     camera_records: list[CameraRecord] = []
     failures: list[dict[str, str | int]] = []
@@ -135,6 +139,30 @@ def render_set(
                 raise RuntimeError("render package did not include surf_depth")
             depth_np = depth[0].detach().float().cpu().numpy().astype(np.float32)
             np.save(depth_path / f"{key}.npy", depth_np)
+        if save_surface_maps:
+            face_ids = pkg.get("rend_ids", None)
+            alpha = pkg.get("rend_alpha", None)
+            surf_depth = pkg.get("surf_depth", None)
+            if face_ids is None or alpha is None or surf_depth is None:
+                raise RuntimeError("render package did not include rend_ids/rend_alpha/surf_depth")
+            face_ids_t = face_ids.detach().float()
+            if face_ids_t.ndim == 3:
+                face_ids_t = face_ids_t.unsqueeze(0)
+            face_ids_hw = torch.nn.functional.interpolate(
+                face_ids_t,
+                size=(int(view.image_height), int(view.image_width)),
+                mode="nearest",
+            ).squeeze().detach().cpu().numpy().astype(np.int32)
+            alpha_hw = alpha.detach().float().squeeze().cpu().numpy().astype(np.float16)
+            depth_hw = surf_depth.detach().float().squeeze().cpu().numpy().astype(np.float32)
+            np.savez_compressed(
+                surface_map_path / f"{key}.npz",
+                face_id=face_ids_hw,
+                alpha=alpha_hw,
+                depth=depth_hw,
+                camera_center=view.camera_center.detach().float().cpu().numpy().astype(np.float32),
+                image_name=str(getattr(view, "image_name", key)),
+            )
         camera_records.append(_camera_record(idx, view))
         del pkg, rendering, gt
         if save_depth:
@@ -157,6 +185,7 @@ def render_sets(
         skip_failed_views: bool = False,
         frustum_cull: bool = False,
         frustum_margin: float = 0.5,
+        save_surface_maps: bool = False,
 ):
     with torch.no_grad():
         triangles = TriangleModel(dataset.sh_degree)
@@ -187,6 +216,7 @@ def render_sets(
                 skip_failed_views=skip_failed_views,
                 frustum_cull=frustum_cull,
                 frustum_margin=frustum_margin,
+                save_surface_maps=save_surface_maps,
             )
 
         if not skip_test:
@@ -203,6 +233,7 @@ def render_sets(
                 skip_failed_views=skip_failed_views,
                 frustum_cull=frustum_cull,
                 frustum_margin=frustum_margin,
+                save_surface_maps=save_surface_maps,
             )
 
 
@@ -218,6 +249,11 @@ def main() -> int:
     parser.add_argument("--skip_failed_views", action="store_true")
     parser.add_argument("--frustum_cull", action="store_true")
     parser.add_argument("--frustum_margin", default=0.5, type=float)
+    parser.add_argument(
+        "--save_surface_maps",
+        action="store_true",
+        help="Also save face-id/alpha/depth surface maps for surface-attached residual adapters.",
+    )
     parser.add_argument("--quiet", action="store_true")
     args = get_combined_args(parser)
     print("Rendering evidence maps " + args.model_path)
@@ -233,6 +269,7 @@ def main() -> int:
         skip_failed_views=bool(args.skip_failed_views),
         frustum_cull=bool(args.frustum_cull),
         frustum_margin=float(args.frustum_margin),
+        save_surface_maps=bool(args.save_surface_maps),
     )
     return 0
 
