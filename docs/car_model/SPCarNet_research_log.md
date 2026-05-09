@@ -5811,3 +5811,45 @@ line and it removes the previous non-strict Phase-F gap. It still should not be
 described as a complete representation-level endpoint: Phase-G teacher-bake
 failed to beat clean MeshSplatting, and the strongest gains remain render-time
 ELA recovery.
+
+---
+
+## 2026-05-08 - Phase-J closure audit and external courtyard validation
+
+**Closure audit**: added `scripts/car_model/ecsr_collect_phasej_closure_audit.py`
+and generated `outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/`.
+The audit mechanically combines Phase-J rows, clean MeshSplatting per-view
+metrics, topology audits, and max500 sparse COLMAP geometry files.
+
+Key audit results:
+
+- strict RGB scene wins vs selected clean MeshSplatting: `9 / 9`;
+- strict RGB scene wins vs source Compact-ELA/SOR row: `9 / 9`;
+- per-view strict RGB wins: `244 / 246`;
+- mean total triangle reduction: `7.6479%`;
+- sparse geometry strict wins: `6 / 9`;
+- sparse geometry-safe scenes: `9 / 9`.
+
+**External courtyard validation**: added
+`scripts/car_model/ecsr_collect_phasej_external_validation.py` and generated
+`docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md`.
+
+Positive external row:
+
+- dataset/protocol: ETH3D courtyard clean9000;
+- method: `ours_9000_phasej_external_clean9000_micro_autoedge_ela`;
+- W&B: `vne962ci`;
+- train-only policy selected alpha `0.5`, edge q `0.7`;
+- held-out delta vs clean9000: `+0.244770` PSNR, `+0.013113` SSIM,
+  `-0.015389` LPIPS.
+
+Diagnostic limitation:
+
+- on the degraded F82 courtyard checkpoint, fixed and micro policies correctly
+  no-op, while full auto-edge gives only a tiny strict RGB improvement
+  (`+0.005758` PSNR, `+0.000741` SSIM, `-0.000664` LPIPS for the fast
+  no-LPIPS calibration row; W&B `d7gckkmu`);
+- this confirms the current render-time residual transfer is conservative and
+  useful on a valid clean checkpoint, but it does not repair severe checkpoint
+  collapse. The remaining research gap is still representation-level recovery,
+  not more image-space tuning.

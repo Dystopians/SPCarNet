@@ -2,7 +2,7 @@
 
 **Train-only evidence-guided compact Mesh Splatting with geometry-safe reconstruction repair.**
 
-[中文](README.zh.md) | [Phase-J result](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [May 7 update](docs/car_model/5-7-Update.md) | [Upgrade plan](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR audit](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [Execution log](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
+[中文](README.zh.md) | [Phase-J result](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Phase-J external validation](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [May 7 update](docs/car_model/5-7-Update.md) | [Upgrade plan](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR audit](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [Execution log](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
 
 SPCarNet is a research branch built on Mesh Splatting. The current ECSR version keeps the fixed Phase-F compact checkpoints, then uses a train-evidence guarded portfolio for appearance recovery: stable scenes use adaptive-alpha ELA, and unstable scenes use a train-selected structural edge fallback. No held-out test metric is used to select the branch, edge gate, alpha, or compaction ratio.
 
@@ -32,6 +32,8 @@ Train metrics are not used to pick the baseline or the final method result.
 - Mean delta vs selected clean MeshSplatting: `+1.3311 PSNR`, `+0.0347 SSIM`, `-0.0634 LPIPS`
 - Mean delta vs Phase-F alpha-grid: `+0.3971 PSNR`, `+0.0083 SSIM`, `-0.0193 LPIPS`
 - Mean triangle reduction: `7.6479%`
+- Closure audit: `244 / 246` held-out views are strict RGB wins; sparse COLMAP geometry is safe on `9 / 9` scenes and strictly better on `6 / 9` under the max500 audit.
+- External courtyard validation: on ETH3D courtyard clean9000, Phase-J micro auto-edge improves clean MeshSplatting by `+0.2448 PSNR`, `+0.0131 SSIM`, `-0.0154 LPIPS`; the degraded F82 checkpoint only shows tiny improvements, so it is kept as a limitation diagnostic.
 
 | scene | selected branch | PSNR | SSIM | LPIPS | dPSNR clean | dSSIM clean | dLPIPS clean | triangle reduction |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
@@ -60,9 +62,11 @@ Current execution artifacts:
 - Phase-C static topology certificate: [`docs/car_model/5-8-ECSR-PhaseC-StaticTopologyCertificate.md`](docs/car_model/5-8-ECSR-PhaseC-StaticTopologyCertificate.md)
 - Phase-C materialized checkpoint smoke: [`docs/car_model/5-8-ECSR-PhaseC-MaterializedStaticPass.md`](docs/car_model/5-8-ECSR-PhaseC-MaterializedStaticPass.md), [`docs/car_model/5-8-ECSR-PhaseC-RendererSmoke.md`](docs/car_model/5-8-ECSR-PhaseC-RendererSmoke.md)
 - Phase-D attribute-only recovery smoke: [`docs/car_model/5-8-ECSR-PhaseD-AttributeOnlySmoke.md`](docs/car_model/5-8-ECSR-PhaseD-AttributeOnlySmoke.md)
+- Phase-D constrained attribute recovery: [`docs/car_model/5-8-ECSR-PhaseD-ConstrainedAttributeRecovery.md`](docs/car_model/5-8-ECSR-PhaseD-ConstrainedAttributeRecovery.md)
 - Phase-D surface residual delta smoke: [`docs/car_model/5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md`](docs/car_model/5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md)
 - Phase-G teacher-bake recovery: [`docs/car_model/5-8-ECSR-PhaseG-TeacherBakeRecovery.md`](docs/car_model/5-8-ECSR-PhaseG-TeacherBakeRecovery.md)
 - Phase-J guarded adaptive edge policy: [`docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md`](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md)
+- Phase-J external courtyard validation: [`docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md`](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md)
 - Execution log: [`docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md`](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md)
 - Combined Phase-A contact sheet: `outputs/carnet/meshsplatopt/ecsr_phase_a/surface_evidence/phase_a_surface_evidence_contact_sheet.png`
 
@@ -85,7 +89,9 @@ Current Phase-J summary:
 | selected clean MeshSplatting baseline | `9 / 9` strict RGB wins, mean `+1.3311` PSNR, `+0.0347` SSIM, `-0.0634` LPIPS |
 | Phase-F alpha-grid predecessor | `9 / 9` strict RGB wins, mean `+0.3971` PSNR, `+0.0083` SSIM, `-0.0193` LPIPS |
 | guarded branch decision | `8 / 9` adaptive-alpha branch, `1 / 9` train-selected edge fallback |
-| geometry / topology | mean triangle reduction `7.6479%`; compact checkpoint inherited from Phase-F policy-validation ladder |
+| geometry / topology | mean triangle reduction `7.6479%`; `6 / 9` strict sparse-geometry wins, `9 / 9` geometry-safe scenes under the Phase-J closure audit |
+| per-view audit | `244 / 246` held-out views strictly improve PSNR, SSIM, and LPIPS over the selected clean baseline |
+| external validation | ETH3D courtyard clean9000 strict RGB win: `+0.2448` PSNR, `+0.0131` SSIM, `-0.0154` LPIPS |
 
 The detailed tables below are retained from the May 7 archived Compact-ELA/SOR report for provenance. Lower is better for LPIPS, AbsRel, DepthMAE, and Normal.
 
