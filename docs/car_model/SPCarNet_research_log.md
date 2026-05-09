@@ -5973,3 +5973,30 @@ ELA already handles most residual transfer. The next credible upgrade should be
 a richer persistent residual basis, such as per-cluster residual texture charts
 or learned view-dependent residual carriers, validated through the same
 train-val gate.
+
+Follow-up outdoor-5 extension:
+
+- added `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py` to run
+  the full fixed Phase-K chain per scene;
+- added `scripts/car_model/ecsr_collect_phasek_barycentric_gate_summary.py` to
+  collect gate decisions into one aggregate report;
+- ran the same fixed policy on `garden`, `stump`, and `treehill` in addition
+  to the earlier `bicycle` and `flowers` rows.
+
+Outdoor-5 result:
+
+| scene | selected | accepted | train-val dPSNR | train-val dSSIM | train-val dLPIPS | report-only test dPSNR | dSSIM | dLPIPS |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| bicycle | bary-delta v2wide s08 | yes | +0.000349 | -0.000044 | +0.000020 | +0.000872 | +0.000151 | -0.000389 |
+| flowers | Phase-J fallback | no | +0.000505 | -0.000076 | -0.000053 | -0.003515 | -0.000307 | +0.000180 |
+| garden | bary-delta v2wide s08 | yes | +0.000044 | -0.000035 | +0.000134 | +0.000669 | +0.000024 | -0.000033 |
+| stump | Phase-J fallback | no | +0.000597 | -0.000066 | -0.000207 | -0.000162 | +0.000001 | -0.000054 |
+| treehill | Phase-J fallback | no | -0.000019 | -0.000007 | +0.000012 | -0.000704 | -0.000005 | -0.000000 |
+
+Mean effective outdoor-5 delta vs Phase-J after fallback:
+`+0.000308` PSNR, `+0.000035` SSIM, `-0.000084` LPIPS.
+
+Decision: the Phase-K gate is validated as a safety mechanism across outdoor
+scenes, but not as a large-gain final method. It should remain in the system as
+an auditable representation-level safeguard while the next research effort
+targets a stronger persistent basis.

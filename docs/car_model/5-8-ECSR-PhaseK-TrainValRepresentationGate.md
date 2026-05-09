@@ -71,6 +71,57 @@ This is a real safety improvement over unconditional bary-delta, because it
 keeps the positive `bicycle` edit and blocks the negative `flowers` edit. It is
 not yet a large paper-level representation breakthrough.
 
+## Outdoor-5 Extension
+
+On 2026-05-09, the same fixed Phase-K policy was run on the remaining outdoor
+Mip-NeRF 360 scenes already present in the selected validation set:
+`garden`, `stump`, and `treehill`. The runner is
+`scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`; it performs the
+full chain for each scene:
+
+1. build barycentric rich surface evidence on the Phase-J selected compact
+   checkpoint;
+2. fit the fixed `bary_delta_v2wide_s08` checkpoint delta;
+3. render candidate train/test evidence maps;
+4. run W&B-logged ELA for train-policy-val and held-out test;
+5. decide with `ecsr_decide_phasek_trainval_gate.py`.
+
+The aggregate collector is
+`scripts/car_model/ecsr_collect_phasek_barycentric_gate_summary.py`.
+
+Outdoor-5 result:
+
+| scene | selected | accepted | train-val dPSNR | train-val dSSIM | train-val dLPIPS | report test dPSNR | report test dSSIM | report test dLPIPS | effective dPSNR | effective dSSIM | effective dLPIPS |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| bicycle | bary-delta v2wide s08 | yes | +0.000349 | -0.000044 | +0.000020 | +0.000872 | +0.000151 | -0.000389 | +0.000872 | +0.000151 | -0.000389 |
+| flowers | Phase-J fallback | no | +0.000505 | -0.000076 | -0.000053 | -0.003515 | -0.000307 | +0.000180 | +0.000000 | +0.000000 | +0.000000 |
+| garden | bary-delta v2wide s08 | yes | +0.000044 | -0.000035 | +0.000134 | +0.000669 | +0.000024 | -0.000033 | +0.000669 | +0.000024 | -0.000033 |
+| stump | Phase-J fallback | no | +0.000597 | -0.000066 | -0.000207 | -0.000162 | +0.000001 | -0.000054 | +0.000000 | +0.000000 | +0.000000 |
+| treehill | Phase-J fallback | no | -0.000019 | -0.000007 | +0.000012 | -0.000704 | -0.000005 | -0.000000 | +0.000000 | +0.000000 | +0.000000 |
+
+Mean effective outdoor-5 delta vs Phase-J:
+
+| metric | mean delta |
+|---|---:|
+| PSNR | +0.000308 |
+| SSIM | +0.000035 |
+| LPIPS | -0.000084 |
+
+Artifacts:
+
+- aggregate:
+  `outputs/carnet/meshsplatopt/ecsr_phase_k/bary_delta_v2wide_s08_guarded/phasek_barycentric_gate_summary_outdoor5.md`;
+- decisions:
+  `outputs/carnet/meshsplatopt/ecsr_phase_k/bary_delta_v2wide_s08_guarded/decisions/`;
+- scene logs:
+  `outputs/carnet/meshsplatopt/ecsr_phase_k/bary_delta_v2wide_s08_guarded/*/phasek_barycentric_gate.log`.
+
+This stronger validation confirms the gate is doing the right safety job: it
+keeps `bicycle` and `garden`, where report-only test metrics are positive, and
+rejects `flowers`, `stump`, and `treehill`, where the candidate is not a stable
+improvement. It also confirms that the current representation update is still a
+small effect-size method rather than a final top-conference-level breakthrough.
+
 ## Current Bottleneck
 
 The new barycentric operator is principled, persistent, and auditable, but its
