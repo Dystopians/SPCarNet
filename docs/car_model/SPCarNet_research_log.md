@@ -5918,3 +5918,58 @@ Smoke result:
 - `barycentric_available` is still `False`, so the next method must either add
   true barycentric support from the renderer or use a conservative local
   surface-coordinate surrogate.
+
+---
+
+## 2026-05-08 - Phase-K train-val gated barycentric representation recovery
+
+Implemented the barycentric successor to the rejected Phase-D V2 operators and
+added a train-heldout gate so representation edits are no longer promoted from
+residual fitting loss alone.
+
+Code interfaces:
+
+- `scripts/car_model/ecsr_build_surface_evidence_cache.py` now supports
+  `--save_barycentric`, writing top-residual-support barycentric coordinates
+  and validity masks into the per-view NPZ cache;
+- `scripts/car_model/ecsr_apply_surface_residual_barycentric_delta.py` fits a
+  persistent vertex SH-DC residual delta from per-pixel residual RGB and
+  barycentric coordinates;
+- `scripts/car_model/meshsplatopt_apply_evidence_lumigraph_adapter.py` gained
+  `--support_policy_fit_only`, preventing train-policy-val target views from
+  serving as support evidence during gate validation;
+- `scripts/car_model/evaluate_render_split_metrics.py` gained
+  `--view_names_file` so only policy-val train views are evaluated;
+- `scripts/car_model/ecsr_decide_phasek_trainval_gate.py` records a train-val
+  near-Pareto accept/reject decision with held-out test metrics marked
+  report-only.
+
+Validation summary:
+
+| scene | candidate | train-val dPSNR | train-val dSSIM | train-val dLPIPS | gate | report-only test dPSNR | dSSIM | dLPIPS |
+|---|---|---:|---:|---:|---|---:|---:|---:|
+| bicycle | bary-delta v2wide s08 | +0.000349 | -0.000044 | +0.000020 | accept | +0.000872 | +0.000151 | -0.000389 |
+| flowers | bary-delta v2wide s08 | +0.000505 | -0.000076 | -0.000053 | reject | -0.003515 | -0.000307 | +0.000180 |
+
+The gate uses only train-policy-val metrics. The test column is an audit and
+confirms the gate's main purpose: keep the small positive `bicycle`
+representation edit while preventing the harmful `flowers` edit.
+
+Artifacts:
+
+- report: `docs/car_model/5-8-ECSR-PhaseK-TrainValRepresentationGate.md`;
+- decisions:
+  `outputs/carnet/meshsplatopt/ecsr_phase_d/phasek_trainval_representation_gate/`;
+- W&B: `xs71gih3`, `hxqibzce`, `yeeiz3gd`, `upji5c6b`, `3ybdsm1p`,
+  `rha65tc3`.
+
+Status: `PARTIAL_PROMOTION_WITH_GATE`.
+
+This is safer and more research-clean than unconditional representation delta,
+but the effect size is still small. The remaining bottleneck is not logging,
+GPU budget, or command coverage. The bottleneck is representational power:
+bounded vertex SH-DC deltas cannot create a large qualitative gap once Phase-J
+ELA already handles most residual transfer. The next credible upgrade should be
+a richer persistent residual basis, such as per-cluster residual texture charts
+or learned view-dependent residual carriers, validated through the same
+train-val gate.

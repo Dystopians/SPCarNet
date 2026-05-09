@@ -201,6 +201,60 @@ def _parse_view_indices(spec: str) -> list[int]:
     return indices
 
 
+def _compute_top_face_barycentric(
+    face_ids: np.ndarray,
+    projected_vertices_xy: np.ndarray,
+    faces_np: np.ndarray,
+    selected_faces: set[int],
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Compute image-plane barycentric coordinates for selected visible faces.
+
+    The CUDA renderer currently exposes the winning face id per pixel but not
+    barycentric coordinates. For the residual-fitting cache we only need stable
+    local coordinates on the top residual supports, so this routine reconstructs
+    a conservative 2D barycentric map from projected triangle vertices.
+    """
+
+    h, w = face_ids.shape
+    bary = np.zeros((3, h, w), dtype=np.float32)
+    valid = np.zeros((h, w), dtype=bool)
+    if not selected_faces:
+        return bary, valid, 0
+
+    yy, xx = np.indices((h, w), dtype=np.float32)
+    used_faces = 0
+    max_face = int(faces_np.shape[0])
+    visible = set(int(x) for x in np.unique(face_ids[face_ids >= 0]))
+    for face_id in sorted(selected_faces & visible):
+        if face_id < 0 or face_id >= max_face:
+            continue
+        vertex_ids = faces_np[face_id].astype(np.int64)
+        if np.any(vertex_ids < 0) or np.any(vertex_ids >= projected_vertices_xy.shape[0]):
+            continue
+        mask = face_ids == face_id
+        if not np.any(mask):
+            continue
+        p0, p1, p2 = projected_vertices_xy[vertex_ids]
+        x0, y0 = float(p0[0]), float(p0[1])
+        x1, y1 = float(p1[0]), float(p1[1])
+        x2, y2 = float(p2[0]), float(p2[1])
+        denom = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+        if abs(denom) < 1e-8 or not np.isfinite(denom):
+            local = np.full((3, int(mask.sum())), 1.0 / 3.0, dtype=np.float32)
+        else:
+            mx = xx[mask]
+            my = yy[mask]
+            b0 = ((y1 - y2) * (mx - x2) + (x2 - x1) * (my - y2)) / denom
+            b1 = ((y2 - y0) * (mx - x2) + (x0 - x2) * (my - y2)) / denom
+            b2 = 1.0 - b0 - b1
+            local = np.stack([b0, b1, b2], axis=0).astype(np.float32)
+            local = np.nan_to_num(local, nan=1.0 / 3.0, posinf=1.0 / 3.0, neginf=1.0 / 3.0)
+        bary[:, mask] = local
+        valid[mask] = True
+        used_faces += 1
+    return bary, valid, used_faces
+
+
 def build_cache(args, dataset, pipeline) -> dict[str, Any]:
     scene_name = args.scene_name or Path(dataset.model_path).parts[-3 if Path(dataset.model_path).name == "compact_model" else -1]
     out_dir = Path(args.out_dir) / scene_name
@@ -220,6 +274,7 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
             shuffle=False,
         )
         views = scene.getTrainCameras() if args.split == "train" else scene.getTestCameras()
+        faces_np = triangles.get_triangle_indices.detach().cpu().long().numpy()
         requested_indices = _parse_view_indices(getattr(args, "view_indices", ""))
         if requested_indices:
             indexed_views = []
@@ -247,6 +302,7 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
         view_hit_chunks: list[np.ndarray] = []
         view_panels: list[dict[str, Any]] = []
         view_summaries: list[dict[str, Any]] = []
+        bary_view_cache: list[dict[str, Any]] = []
 
         for original_idx, view in tqdm(indexed_views, desc=f"ECSR evidence {scene_name}/{args.split}"):
             pkg = render(view, triangles, pipeline, background)
@@ -290,6 +346,14 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
                 np.savez_compressed(
                     per_view_dir / f"{key}.npz",
                     **view_payload,
+                )
+            if bool(args.save_barycentric):
+                bary_view_cache.append(
+                    {
+                        "key": key,
+                        "face_ids": face_ids_low.astype(np.int32),
+                        "projected_vertices_xy": pkg["image_2D"].detach().float().cpu().numpy().astype(np.float32),
+                    }
                 )
             Image.fromarray((np.clip(abs_error / (np.percentile(abs_error, 99.5) + 1e-8), 0, 1) * 255).astype(np.uint8)).save(
                 per_view_dir / f"{key}_error.png"
@@ -384,6 +448,27 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
     top_idx = order[:top_k]
     top_faces = set(int(x) for x in reduced["face_id"][top_idx])
 
+    barycentric_written_views = 0
+    barycentric_used_faces_total = 0
+    if bool(args.save_barycentric):
+        if not bool(args.save_view_npz):
+            raise RuntimeError("--save_barycentric requires --save_view_npz")
+        for item in bary_view_cache:
+            bary, bary_valid, used_faces = _compute_top_face_barycentric(
+                item["face_ids"],
+                item["projected_vertices_xy"],
+                faces_np,
+                top_faces,
+            )
+            npz_path = per_view_dir / f"{item['key']}.npz"
+            with np.load(npz_path) as old:
+                payload = {name: old[name] for name in old.files}
+            payload["barycentric"] = bary.astype(np.float16)
+            payload["barycentric_valid"] = bary_valid.astype(np.bool_)
+            np.savez_compressed(npz_path, **payload)
+            barycentric_written_views += 1
+            barycentric_used_faces_total += int(used_faces)
+
     top_csv = out_dir / "top_residual_supports.csv"
     with top_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -437,6 +522,21 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
         compact_results.get(args.base_method_name, {}),
         compact_results.get(args.final_method_name, {}),
     )
+    per_view_npz_fields = [
+        "face_id",
+        "residual_l1",
+        "texture",
+        "alpha",
+        "depth",
+        "normal",
+    ]
+    if bool(args.save_residual_rgb):
+        per_view_npz_fields.append("residual_rgb")
+    if bool(args.save_rgb):
+        per_view_npz_fields.extend(["rgb_render", "rgb_gt"])
+    if bool(args.save_barycentric):
+        per_view_npz_fields.extend(["barycentric", "barycentric_valid"])
+
     summary = {
         "scene": scene_name,
         "model_path": str(dataset.model_path),
@@ -470,17 +570,11 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
             "contact_sheet": str(out_dir / "surface_residual_contact_sheet.png"),
             "per_view_dir": str(per_view_dir),
         },
-        "per_view_npz_fields": [
-            "face_id",
-            "residual_l1",
-            "texture",
-            "alpha",
-            "depth",
-            "normal",
-        ]
-        + (["residual_rgb"] if bool(args.save_residual_rgb) else [])
-        + (["rgb_render", "rgb_gt"] if bool(args.save_rgb) else []),
-        "barycentric_available": False,
+        "per_view_npz_fields": per_view_npz_fields,
+        "barycentric_available": bool(args.save_barycentric),
+        "barycentric_scope": "top_residual_supports" if bool(args.save_barycentric) else "none",
+        "barycentric_written_views": int(barycentric_written_views),
+        "barycentric_used_faces_total": int(barycentric_used_faces_total),
     }
     (out_dir / "surface_evidence_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     md = [
@@ -540,6 +634,11 @@ def main() -> int:
         "--save_rgb",
         action="store_true",
         help="Store render and GT RGB tensors in each view NPZ. This is larger and intended for fitting diagnostics.",
+    )
+    parser.add_argument(
+        "--save_barycentric",
+        action="store_true",
+        help="Store reconstructed 2D barycentric coordinates for top residual supports in each view NPZ.",
     )
     parser.add_argument("--quiet", action="store_true")
     args = get_combined_args(parser)

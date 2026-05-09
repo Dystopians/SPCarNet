@@ -21,11 +21,13 @@ from utils.image_utils import psnr
 from utils.loss_utils import ssim
 
 
-def _read_images(renders_dir: Path, gt_dir: Path):
+def _read_images(renders_dir: Path, gt_dir: Path, view_names: set[str] | None = None):
     renders = []
     gts = []
     image_names = []
     for fname in sorted(os.listdir(renders_dir)):
+        if view_names is not None and fname not in view_names and Path(fname).stem not in view_names:
+            continue
         render_path = renders_dir / fname
         gt_path = gt_dir / fname
         if not render_path.is_file() or not gt_path.is_file():
@@ -38,7 +40,12 @@ def _read_images(renders_dir: Path, gt_dir: Path):
     return renders, gts, image_names
 
 
-def evaluate_split(model_path: Path, split: str, methods: set[str] | None = None) -> tuple[dict, dict]:
+def evaluate_split(
+    model_path: Path,
+    split: str,
+    methods: set[str] | None = None,
+    view_names: set[str] | None = None,
+) -> tuple[dict, dict]:
     split_dir = model_path / split
     if not split_dir.is_dir():
         raise FileNotFoundError(f"Missing split directory: {split_dir}")
@@ -52,7 +59,7 @@ def evaluate_split(model_path: Path, split: str, methods: set[str] | None = None
         gt_dir = method_dir / "gt"
         if not renders_dir.is_dir() or not gt_dir.is_dir():
             continue
-        renders, gts, image_names = _read_images(renders_dir, gt_dir)
+        renders, gts, image_names = _read_images(renders_dir, gt_dir, view_names=view_names)
         if not renders:
             continue
         ssims = []
@@ -76,11 +83,47 @@ def evaluate_split(model_path: Path, split: str, methods: set[str] | None = None
     return full, per_view
 
 
+def _load_view_names(args: argparse.Namespace) -> set[str] | None:
+    names: set[str] = set()
+    for item in args.view_names or []:
+        for token in str(item).replace(",", " ").split():
+            token = token.strip()
+            if token:
+                names.add(token)
+                names.add(Path(token).stem)
+    if args.view_names_file:
+        payload = json.loads(Path(args.view_names_file).read_text(encoding="utf-8"))
+        value = payload
+        if args.view_names_key:
+            for key in args.view_names_key.split("."):
+                if key:
+                    value = value[key]
+        if not isinstance(value, list):
+            raise TypeError(f"view names in {args.view_names_file} must be a list, got {type(value).__name__}")
+        for item in value:
+            token = str(item).strip()
+            if token:
+                names.add(token)
+                names.add(Path(token).stem)
+    return names or None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluate render metrics on a selected split directory.")
     parser.add_argument("-m", "--model_path", required=True)
     parser.add_argument("--split", choices=("train", "test"), default="test")
     parser.add_argument("--methods", nargs="*", default=None)
+    parser.add_argument("--view_names", nargs="*", default=None)
+    parser.add_argument(
+        "--view_names_file",
+        default="",
+        help="Optional JSON file containing a list of split-local view stems to evaluate.",
+    )
+    parser.add_argument(
+        "--view_names_key",
+        default="policy_val_views",
+        help="Dot-separated key inside --view_names_file. Use an empty string if the file itself is a list.",
+    )
     parser.add_argument("--output", default="")
     parser.add_argument("--per_view_output", default="")
     parser.add_argument(
@@ -91,7 +134,10 @@ def main() -> int:
     args = parser.parse_args()
     torch.cuda.set_device(torch.device("cuda:0"))
     methods = set(args.methods) if args.methods else None
-    full, per_view = evaluate_split(Path(args.model_path), args.split, methods)
+    view_names = _load_view_names(args)
+    if view_names is not None:
+        print(f"[eval] restricting {args.split} evaluation to requested view names/stems: {len(view_names)} tokens")
+    full, per_view = evaluate_split(Path(args.model_path), args.split, methods, view_names=view_names)
     output = Path(args.output) if args.output else Path(args.model_path) / f"{args.split}_results.json"
     per_view_output = (
         Path(args.per_view_output) if args.per_view_output else Path(args.model_path) / f"{args.split}_per_view.json"

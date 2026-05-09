@@ -144,3 +144,22 @@ fitting/validation mechanism:
 Until that upgrade exists, the honest paper position is that Phase-J closes the
 current selected-scene RGB-plus-compactness claim, while Phase-D
 representation-level recovery remains the main unresolved research bottleneck.
+
+## Phase-K Follow-Up
+
+The barycentric/per-pixel part of this required upgrade has now been
+implemented in Phase-K:
+
+- `--save_barycentric` reconstructs top-support barycentric coordinates in the
+  rich surface evidence cache;
+- `ecsr_apply_surface_residual_barycentric_delta.py` fits persistent vertex
+  SH-DC residual deltas from per-pixel residual RGB;
+- `ecsr_decide_phasek_trainval_gate.py` promotes the edit only when
+  train-policy-val render metrics pass a near-Pareto gate.
+
+See `docs/car_model/5-8-ECSR-PhaseK-TrainValRepresentationGate.md`.
+
+Current status after Phase-K is `PARTIAL_PROMOTION_WITH_GATE`: the gate keeps a
+small positive `bicycle` edit and blocks a harmful `flowers` edit, but the
+effect size remains too small to claim a terminal representation-level paper
+breakthrough.

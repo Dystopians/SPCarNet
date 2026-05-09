@@ -334,6 +334,7 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
             "policy_edge_gate_dilates": args.policy_edge_gate_dilates,
             "policy_objective": args.policy_objective,
             "policy_holdout_fraction": args.policy_holdout_fraction,
+            "support_policy_fit_only": args.support_policy_fit_only,
             "calib_lpips": args.calib_lpips,
             "benefit_policy": args.benefit_policy,
             "benefit_feature_mode": args.benefit_feature_mode,
@@ -372,6 +373,11 @@ def run(args: argparse.Namespace) -> dict:
     train_frames = load_split_frames(base_model, "train", base_method)
     target_frames = load_split_frames(base_model, args.target_split, base_method)
     benefit_fit_frames, policy_val_frames = _split_policy_frames(train_frames, args.policy_holdout_fraction)
+    adapt_support_frames = (
+        benefit_fit_frames
+        if bool(args.support_policy_fit_only) and float(args.policy_holdout_fraction) > 0.0
+        else train_frames
+    )
     alpha_grid = _parse_alpha_grid(args.alpha_grid)
     policy, calibration, policy_candidates, benefit_calibrator = _choose_policy(args, train_frames, alpha_grid, device)
     alpha_fit_frames = benefit_fit_frames if args.policy_holdout_fraction > 0.0 else train_frames
@@ -389,7 +395,7 @@ def run(args: argparse.Namespace) -> dict:
     for target in tqdm(target_frames, desc=f"ELA {args.target_split}"):
         adapted, info = adapt_frame(
             target,
-            train_frames,
+            adapt_support_frames,
             k=int(policy["k"]),
             alpha=alpha,
             mode=str(policy["mode"]),
@@ -419,6 +425,13 @@ def run(args: argparse.Namespace) -> dict:
         "target_split": args.target_split,
         "target_frames": len(target_frames),
         "train_support_frames": len(train_frames),
+        "adapt_support_scope": (
+            "policy_fit_train_only"
+            if bool(args.support_policy_fit_only) and float(args.policy_holdout_fraction) > 0.0
+            else "full_train"
+        ),
+        "adapt_support_frames": len(adapt_support_frames),
+        "adapt_support_view_names": [frame.name for frame in adapt_support_frames],
         "alpha": alpha,
         "alpha_source": "cli" if args.alpha >= 0.0 else "train_calibration",
         "calibration": calibration,
@@ -503,6 +516,14 @@ def main() -> int:
         default=0.0,
         type=float,
         help="Deterministic train-view holdout fraction for policy selection. 0 keeps the legacy train-only calibration.",
+    )
+    parser.add_argument(
+        "--support_policy_fit_only",
+        action="store_true",
+        help=(
+            "For train-policy validation runs, adapt target frames using only the fitting-train subset as support. "
+            "This prevents held-out train views from contributing residuals to other held-out train targets."
+        ),
     )
     parser.add_argument("--calib_lpips", action="store_true")
     parser.add_argument("--benefit_policy", action="store_true")
