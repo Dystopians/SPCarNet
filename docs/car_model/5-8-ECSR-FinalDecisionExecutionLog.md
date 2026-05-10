@@ -387,3 +387,55 @@ support, but final accepted coverage remains below `0.2%`, and flowers still
 loses a small amount of SSIM. This confirms that the next bottleneck is residual
 field capacity, not just policy plumbing. Detailed log:
 `docs/car_model/5-10-ECSR-TopologyPropagatedSurfaceResidualV10.md`.
+
+## Phase-P Surface FaceAlpha V11-V13
+
+The next iteration implemented a higher-capacity surface residual adapter:
+`scripts/car_model/ecsr_apply_surface_residual_facealpha_adapter.py`.
+
+V11 replaces global alpha with a train-fitted per-face ridge alpha, intersects
+primary and consensus policy splits, and keeps topology propagation restricted
+to actually visible checkpoint faces. V12 adds a train-only edge/texture
+surrogate to the alpha fit and fixes the CPU bottleneck with dense `bincount`
+aggregation plus deterministic edge subsampling.
+
+Held-out summary against `ours_26000_phasef_extra_compact_base`:
+
+- garden V11:
+  `+0.001804 PSNR / +0.000006 SSIM / -0.000017 LPIPS`, accepted faces `493`,
+  target coverage `0.2020%`;
+- flowers V11:
+  `+0.000898 PSNR / -0.000006 SSIM / -0.000021 LPIPS`, accepted faces `350`,
+  target coverage `0.2059%`;
+- flowers V12 edge-aware:
+  `+0.000904 PSNR / -0.000006 SSIM / -0.000021 LPIPS`.
+
+V13 diagnostics tested luminance-limited and low-gradient guarded residuals.
+They showed that the flowers SSIM gap can be reduced to near numerical noise,
+but not converted into a robust strict win without giving up most of the
+residual benefit. Existing Phase-J guarded ELA remains the real strong RGB row
+on flowers:
+
+- Phase-J guarded ELA:
+  `20.304358 / 0.557770 / 0.329222`;
+- base:
+  `19.668695 / 0.511678 / 0.394788`;
+- Phase-J ELA + V11 surface:
+  `20.305147 / 0.557764 / 0.329209`, which improves PSNR/LPIPS over ELA but
+  drops SSIM by `0.000006`.
+
+Conclusion: V11/V12 is the cleanest representation-attached residual baseline
+so far, but it is not the final paper method. Its main limitation is not the
+policy guard anymore; it is coverage and local appearance expressivity. Phase-J
+should remain the strong ELA teacher/fallback, and the next real research step
+should distill ELA into a persistent surface representation or replace the
+per-face constant residual with a higher-capacity local surface code. Detailed
+log: `docs/car_model/5-10-ECSR-SurfaceFaceAlphaV11-V13.md`.
+
+Large-scene scalability remains open. A treehill V11 stress test was attempted
+after dense accumulation was added. The scene has `8,402,362` checkpoint faces;
+the dense run passed primary and consensus surface-signal preparation but was
+still CPU-bound before target output after about 49 minutes, so it was
+terminated and not counted as a metric row. This is a real engineering
+bottleneck for full9 surface-facealpha validation and should be fixed with
+candidate sparsification or GPU/batched aggregation before more long runs.
