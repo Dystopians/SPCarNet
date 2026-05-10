@@ -357,3 +357,33 @@ so far, but the gain is far too small to replace Phase-J. The main bottleneck is
 surface support coverage and residual capacity, not the train/test protocol.
 V8 should be retained as a safe baseline and as the acceptance discipline for
 future higher-capacity surface-attached appearance codes.
+
+## Phase-N / Phase-O Topology-Propagated Surface Residual V10
+
+The follow-up implemented topology propagation and guard-aware policy selection
+inside `ecsr_apply_surface_residual_lumigraph_adapter.py`:
+
+- residual source faces can propose neighboring target faces through checkpoint
+  `_triangle_indices`;
+- propagation is limited to train/test actually visible face ids;
+- primary and consensus face gates can be intersected;
+- policy selection now chooses the best alpha among guard-passing candidates;
+- a provisional face-gate recalibration path can rescue cases where raw
+  propagation improves PSNR but violates SSIM before gating.
+
+Important engineering fixes were also made: cached NPZ memmap loading,
+checkpoint-range face-id filtering, grouped surface-signal assignment, grouped
+face-gate statistics, source residual caching, and cached LPIPS modules.
+
+Held-out diagnostics against `ours_26000_phasef_extra_compact_base`:
+
+- `garden`, V9 gate32 tol:
+  `+0.001562 / +0.000001 / -0.000014`, accepted faces `449`;
+- `flowers`, V10 guard-aware gate32:
+  `+0.000769 / -0.000010 / -0.000010`, accepted faces `320`.
+
+The result is useful but not sufficient: topology propagation expands candidate
+support, but final accepted coverage remains below `0.2%`, and flowers still
+loses a small amount of SSIM. This confirms that the next bottleneck is residual
+field capacity, not just policy plumbing. Detailed log:
+`docs/car_model/5-10-ECSR-TopologyPropagatedSurfaceResidualV10.md`.
