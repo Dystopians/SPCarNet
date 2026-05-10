@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +71,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--neighbor_rings", type=int, default=1)
     parser.add_argument("--neighbor_max_targets_per_source", type=int, default=64)
     parser.add_argument("--neighbor_chunk_size", type=int, default=524288)
+    parser.add_argument(
+        "--alias_candidate_scope",
+        choices=("policy", "train", "train_target"),
+        default="policy",
+        help=(
+            "Visible face set used for topology alias candidates. `policy` is "
+            "the default because final per-face alphas can only be certified on "
+            "train-policy views; it is faster and avoids using held-out target "
+            "visibility during policy construction."
+        ),
+    )
     parser.add_argument("--face_alpha_max", type=float, default=0.25)
     parser.add_argument("--face_alpha_min_pixels", type=int, default=32)
     parser.add_argument("--face_alpha_min_gain", type=float, default=0.0)
@@ -201,6 +213,23 @@ def _accumulate_dense(
     return num, den, count, int(fids.size)
 
 
+def _alias_candidate_faces(
+    args: argparse.Namespace,
+    *,
+    paths: list[Path],
+    train_paths: list[Path],
+    target_paths: list[Path],
+    max_face_id: int,
+) -> set[int]:
+    if args.alias_candidate_scope == "policy":
+        source_paths = paths
+    elif args.alias_candidate_scope == "train":
+        source_paths = train_paths
+    else:
+        source_paths = [*train_paths, *target_paths]
+    return collect_visible_faces(source_paths, max_face_id=max_face_id)
+
+
 def _edge_objective_samples(
     view: PreparedPolicyView,
     target: np.ndarray,
@@ -253,10 +282,68 @@ def fit_face_alphas(
     edge_weight: float,
     edge_stride: int,
 ) -> tuple[dict[int, float], dict[str, Any]]:
-    num_arr = np.zeros(0, dtype=np.float64)
-    den_arr = np.zeros(0, dtype=np.float64)
-    count_arr = np.zeros(0, dtype=np.int64)
+    active_face_chunks: list[np.ndarray] = []
+    for view in prepared:
+        active = view.confidence > 0.0
+        if np.any(active):
+            active_face_chunks.append(np.unique(np.asarray(view.face_id)[active].astype(np.int64, copy=False)))
+    if active_face_chunks:
+        face_index = np.unique(np.concatenate(active_face_chunks))
+        face_index = face_index[face_index >= 0]
+    else:
+        face_index = np.zeros(0, dtype=np.int64)
+    num_arr = np.zeros(face_index.size, dtype=np.float64)
+    den_arr = np.zeros(face_index.size, dtype=np.float64)
+    count_arr = np.zeros(face_index.size, dtype=np.int64)
     edge_samples = 0
+    if face_index.size == 0:
+        return {}, {
+            "candidate_faces": 0,
+            "accepted_faces": 0,
+            "min_pixels": int(min_pixels),
+            "alpha_max": float(alpha_max),
+            "ridge": float(ridge),
+            "shrink_pixels": float(shrink_pixels),
+            "edge_weight": float(edge_weight),
+            "edge_stride": int(max(edge_stride, 1)),
+            "edge_samples": 0,
+            "mean_alpha": 0.0,
+            "mean_raw_alpha": 0.0,
+            "mean_gain": 0.0,
+        }
+
+    def accumulate_compact(
+        fids: np.ndarray,
+        dots: np.ndarray,
+        norms: np.ndarray,
+        *,
+        count_samples: bool,
+    ) -> int:
+        if fids.size == 0:
+            return 0
+        fids = fids.astype(np.int64, copy=False).reshape(-1)
+        pos = np.searchsorted(face_index, fids)
+        in_range = pos < face_index.size
+        valid = np.zeros(fids.shape, dtype=bool)
+        if np.any(in_range):
+            valid[in_range] = face_index[pos[in_range]] == fids[in_range]
+        if not np.any(valid):
+            return 0
+        pos = pos[valid]
+        num_arr[:] += np.bincount(
+            pos,
+            weights=dots[valid].astype(np.float64, copy=False),
+            minlength=face_index.size,
+        )
+        den_arr[:] += np.bincount(
+            pos,
+            weights=norms[valid].astype(np.float64, copy=False),
+            minlength=face_index.size,
+        )
+        if count_samples:
+            count_arr[:] += np.bincount(pos, minlength=face_index.size).astype(np.int64, copy=False)
+        return int(pos.size)
+
     for view in prepared:
         active = view.confidence > 0.0
         if not np.any(active):
@@ -269,10 +356,7 @@ def fit_face_alphas(
         flat_dot = dot.reshape(-1)
         flat_norm = norm.reshape(-1)
         fids = flat_face[flat_active].astype(np.int64, copy=False)
-        num_arr, den_arr, count_arr, _ = _accumulate_dense(
-            num_arr,
-            den_arr,
-            count_arr,
+        accumulate_compact(
             fids,
             flat_dot[flat_active],
             flat_norm[flat_active],
@@ -280,10 +364,7 @@ def fit_face_alphas(
         )
         if float(edge_weight) > 0.0:
             for edge_fids, edge_dot, edge_norm in _edge_objective_samples(view, target, active, stride=edge_stride):
-                num_arr, den_arr, count_arr, samples = _accumulate_dense(
-                    num_arr,
-                    den_arr,
-                    count_arr,
+                samples = accumulate_compact(
                     edge_fids,
                     float(edge_weight) * edge_dot,
                     float(edge_weight) * edge_norm,
@@ -294,11 +375,11 @@ def fit_face_alphas(
     alphas: dict[int, float] = {}
     gains: list[float] = []
     raw_alphas: list[float] = []
-    candidate = np.nonzero(count_arr > 0)[0]
-    if candidate.size:
-        n = count_arr[candidate].astype(np.float64, copy=False)
-        numerator = num_arr[candidate]
-        denominator = den_arr[candidate]
+    candidate_pos = np.nonzero(count_arr > 0)[0]
+    if candidate_pos.size:
+        n = count_arr[candidate_pos].astype(np.float64, copy=False)
+        numerator = num_arr[candidate_pos]
+        denominator = den_arr[candidate_pos]
         denom = denominator + float(ridge)
         raw = np.clip(numerator / np.maximum(denom, 1e-12), 0.0, float(alpha_max))
         shrink = n / (n + max(float(shrink_pixels), 0.0))
@@ -306,7 +387,7 @@ def fit_face_alphas(
         gain_sum = 2.0 * alpha * numerator - (alpha * alpha) * denominator
         mean_gain = gain_sum / np.maximum(n, 1.0)
         keep = (n >= int(min_pixels)) & (denom > 0.0) & (raw > 0.0) & (mean_gain > float(min_gain))
-        kept_faces = candidate[keep]
+        kept_faces = face_index[candidate_pos[keep]]
         kept_alpha = alpha[keep]
         kept_gain = mean_gain[keep]
         kept_raw = raw[keep]
@@ -315,7 +396,7 @@ def fit_face_alphas(
         raw_alphas = [float(x) for x in kept_raw.tolist()]
 
     return alphas, {
-        "candidate_faces": int(candidate.size),
+        "candidate_faces": int(candidate_pos.size),
         "accepted_faces": int(len(alphas)),
         "min_pixels": int(min_pixels),
         "alpha_max": float(alpha_max),
@@ -339,30 +420,39 @@ def intersect_face_alphas(alpha_sets: list[dict[int, float]]) -> dict[int, float
     return {fid: min(float(item[fid]) for item in alpha_sets) for fid in common}
 
 
-def scale_signal_by_face_alpha(face_id: np.ndarray, signal: np.ndarray, face_alphas: dict[int, float]) -> np.ndarray:
+def make_face_alpha_table(face_alphas: dict[int, float]) -> np.ndarray:
     if not face_alphas:
+        return np.zeros(0, dtype=np.float32)
+    max_fid = max(int(fid) for fid in face_alphas)
+    table = np.zeros(max_fid + 1, dtype=np.float32)
+    fids = np.fromiter((int(fid) for fid in face_alphas), dtype=np.int64, count=len(face_alphas))
+    vals = np.fromiter((float(val) for val in face_alphas.values()), dtype=np.float32, count=len(face_alphas))
+    valid = (fids >= 0) & (fids < table.size)
+    table[fids[valid]] = vals[valid]
+    return table
+
+
+def scale_signal_by_face_alpha(
+    face_id: np.ndarray,
+    signal: np.ndarray,
+    face_alphas: dict[int, float],
+    *,
+    alpha_table: np.ndarray | None = None,
+) -> np.ndarray:
+    if not face_alphas and (alpha_table is None or alpha_table.size == 0):
         return np.zeros_like(signal, dtype=np.float32)
-    out = np.zeros_like(signal, dtype=np.float32)
-    valid = (face_id >= 0) & _fast_isin_int(face_id, set(face_alphas))
+    table = alpha_table if alpha_table is not None else make_face_alpha_table(face_alphas)
+    if table.size == 0:
+        return np.zeros_like(signal, dtype=np.float32)
+    face = np.array(face_id, copy=True) if isinstance(face_id, np.memmap) else np.asarray(face_id)
+    valid = (face >= 0) & (face < table.size)
     if not np.any(valid):
-        return out
-    flat_face = np.asarray(face_id).reshape(-1)
-    flat_idx = np.flatnonzero(valid.reshape(-1))
-    fids = flat_face[flat_idx].astype(np.int64, copy=False)
-    order = np.argsort(fids)
-    fids = fids[order]
-    flat_idx = flat_idx[order]
-    unique, starts = np.unique(fids, return_index=True)
-    ends = np.r_[starts[1:], len(fids)]
-    out_flat = out.reshape(3, -1)
-    signal_flat = signal.reshape(3, -1)
-    for fid, start, end in zip(unique.tolist(), starts.tolist(), ends.tolist()):
-        alpha = float(face_alphas.get(int(fid), 0.0))
-        if alpha <= 0.0:
-            continue
-        pixels = flat_idx[start:end]
-        out_flat[:, pixels] = alpha * signal_flat[:, pixels]
-    return out
+        return np.zeros_like(signal, dtype=np.float32)
+    alpha_map = np.zeros(face.shape, dtype=np.float32)
+    alpha_map[valid] = table[face[valid].astype(np.int64, copy=False)]
+    if not np.any(alpha_map > 0.0):
+        return np.zeros_like(signal, dtype=np.float32)
+    return (signal * alpha_map[None, :, :]).astype(np.float32, copy=False)
 
 
 def evaluate_policy(
@@ -374,9 +464,10 @@ def evaluate_policy(
 ) -> dict[str, Any]:
     base_rows = []
     adapted_rows = []
+    alpha_table = make_face_alpha_table(face_alphas)
     for view in prepared:
         base_rows.append(_metrics(view.base, view.gt, device=device, compute_lpips=compute_lpips))
-        delta = scale_signal_by_face_alpha(view.face_id, view.signal, face_alphas)
+        delta = scale_signal_by_face_alpha(view.face_id, view.signal, face_alphas, alpha_table=alpha_table)
         adapted = np.clip(view.base + delta, 0.0, 1.0)
         adapted_rows.append(_metrics(adapted, view.gt, device=device, compute_lpips=compute_lpips))
     keys = ("PSNR", "SSIM", *(() if not compute_lpips else ("LPIPS",)))
@@ -424,6 +515,7 @@ def apply_target(args: argparse.Namespace, field: Any, face_alphas: dict[int, fl
         for path in (base_method_dir / "renders").iterdir()
         if path.suffix.lower() in {".png", ".jpg", ".jpeg"}
     }
+    alpha_table = make_face_alpha_table(face_alphas)
     infos = []
     for map_path in tqdm(sorted(Path(args.target_surface_map_dir).glob("*.npz")), desc=f"Surface face-alpha {args.target_split}"):
         payload = _load_npz(map_path)
@@ -442,7 +534,7 @@ def apply_target(args: argparse.Namespace, field: Any, face_alphas: dict[int, fl
             allowed_faces=set(face_alphas),
             alias_source=alias_source,
         )
-        delta = scale_signal_by_face_alpha(face_id, signal, face_alphas)
+        delta = scale_signal_by_face_alpha(face_id, signal, face_alphas, alpha_table=alpha_table)
         adapted = np.clip(base + delta, 0.0, 1.0)
         _save_np_image(adapted, out_render_dir / render_path.name)
         infos.append({"frame": render_path.stem, **info})
@@ -486,19 +578,26 @@ def maybe_wandb(args: argparse.Namespace, report: dict[str, Any]) -> None:
 def main() -> int:
     args = parse_args()
     device = torch.device(args.device if torch.cuda.is_available() or args.device == "cpu" else "cpu")
+    print("[SurfaceFaceAlpha] loading checkpoint topology", flush=True)
     topology_faces = load_checkpoint_faces(args.base_model_path, int(args.iteration))
+    max_face_id = int(topology_faces.shape[0])
+    print(f"[SurfaceFaceAlpha] checkpoint faces: {max_face_id}", flush=True)
     selected_faces = read_selected_faces(
         args.evidence_dir,
         top_k=args.top_k,
         min_view_hits=args.min_view_hits,
         min_consistency=args.min_consistency,
         min_pixel_count=args.min_pixel_count,
-        max_face_id=int(topology_faces.shape[0]),
+        max_face_id=max_face_id,
     )
     all_views = _view_paths(args.evidence_dir)
     target_maps = sorted(Path(args.target_surface_map_dir).glob("*.npz"))
-    visible_faces = collect_visible_faces([*all_views, *target_maps], max_face_id=int(topology_faces.shape[0]))
     fit_views, policy_views = split_policy_views(all_views, args.policy_val_stride)
+    print(
+        f"[SurfaceFaceAlpha] evidence views={len(all_views)} fit={len(fit_views)} "
+        f"policy={len(policy_views)} target_maps={len(target_maps)} selected_faces={len(selected_faces)}",
+        flush=True,
+    )
     field = build_field(
         fit_views,
         selected_faces,
@@ -506,6 +605,18 @@ def main() -> int:
         high_error_quantile=args.high_error_quantile,
         max_abs_residual=args.max_abs_residual,
         distance_scale=args.distance_scale,
+    )
+    visible_faces = _alias_candidate_faces(
+        args,
+        paths=policy_views,
+        train_paths=all_views,
+        target_paths=target_maps,
+        max_face_id=max_face_id,
+    )
+    print(
+        f"[SurfaceFaceAlpha] primary field_faces={len(field.residuals)} "
+        f"alias_candidate_faces={len(visible_faces)} scope={args.alias_candidate_scope}",
+        flush=True,
     )
     alias_source, alias_report = build_topology_neighbor_alias(
         field,
@@ -515,6 +626,11 @@ def main() -> int:
         chunk_size=args.neighbor_chunk_size,
         candidate_faces=visible_faces,
     )
+    print(
+        f"[SurfaceFaceAlpha] primary alias_faces={alias_report.get('alias_faces', 0)} "
+        f"propagated={alias_report.get('propagated_faces', 0)}",
+        flush=True,
+    )
     prepared = prepare_policy_views(
         field,
         policy_views,
@@ -522,8 +638,9 @@ def main() -> int:
         max_abs_residual=args.max_abs_residual,
         alias_source=alias_source,
         fallback_render_dir=args.base_model_path / "train" / args.base_method_name / "renders",
-        fallback_gt_dir=args.base_model_path / "train" / args.base_method_name / "gt",
+            fallback_gt_dir=args.base_model_path / "train" / args.base_method_name / "gt",
     )
+    t0 = time.perf_counter()
     primary_alphas, primary_alpha_report = fit_face_alphas(
         prepared,
         alpha_max=args.face_alpha_max,
@@ -534,7 +651,15 @@ def main() -> int:
         edge_weight=args.face_alpha_edge_weight,
         edge_stride=args.face_alpha_edge_stride,
     )
+    print(f"[SurfaceFaceAlpha] primary fit_alpha_sec={time.perf_counter() - t0:.2f}", flush=True)
+    print(
+        f"[SurfaceFaceAlpha] primary alphas={len(primary_alphas)} "
+        f"candidates={primary_alpha_report.get('candidate_faces', 0)}",
+        flush=True,
+    )
+    t0 = time.perf_counter()
     policy_report = evaluate_policy(prepared, primary_alphas, device=device, compute_lpips=bool(args.calib_lpips))
+    print(f"[SurfaceFaceAlpha] primary eval_policy_sec={time.perf_counter() - t0:.2f}", flush=True)
     alpha_sets = [primary_alphas]
     consensus_reports: list[dict[str, Any]] = []
     accepted = passes_policy(policy_report, args)
@@ -550,13 +675,30 @@ def main() -> int:
             max_abs_residual=args.max_abs_residual,
             distance_scale=args.distance_scale,
         )
+        c_visible_faces = _alias_candidate_faces(
+            args,
+            paths=c_policy,
+            train_paths=all_views,
+            target_paths=target_maps,
+            max_face_id=max_face_id,
+        )
+        print(
+            f"[SurfaceFaceAlpha] consensus stride={stride} field_faces={len(c_field.residuals)} "
+            f"alias_candidate_faces={len(c_visible_faces)} scope={args.alias_candidate_scope}",
+            flush=True,
+        )
         c_alias, c_alias_report = build_topology_neighbor_alias(
             c_field,
             topology_faces,
             neighbor_rings=args.neighbor_rings,
             max_targets_per_source=args.neighbor_max_targets_per_source,
             chunk_size=args.neighbor_chunk_size,
-            candidate_faces=visible_faces,
+            candidate_faces=c_visible_faces,
+        )
+        print(
+            f"[SurfaceFaceAlpha] consensus stride={stride} alias_faces={c_alias_report.get('alias_faces', 0)} "
+            f"propagated={c_alias_report.get('propagated_faces', 0)}",
+            flush=True,
         )
         c_prepared = prepare_policy_views(
             c_field,
@@ -567,6 +709,7 @@ def main() -> int:
             fallback_render_dir=args.base_model_path / "train" / args.base_method_name / "renders",
             fallback_gt_dir=args.base_model_path / "train" / args.base_method_name / "gt",
         )
+        t0 = time.perf_counter()
         c_alphas, c_alpha_report = fit_face_alphas(
             c_prepared,
             alpha_max=args.face_alpha_max,
@@ -577,7 +720,21 @@ def main() -> int:
             edge_weight=args.face_alpha_edge_weight,
             edge_stride=args.face_alpha_edge_stride,
         )
+        print(
+            f"[SurfaceFaceAlpha] consensus stride={stride} fit_alpha_sec={time.perf_counter() - t0:.2f}",
+            flush=True,
+        )
+        print(
+            f"[SurfaceFaceAlpha] consensus stride={stride} alphas={len(c_alphas)} "
+            f"candidates={c_alpha_report.get('candidate_faces', 0)}",
+            flush=True,
+        )
+        t0 = time.perf_counter()
         c_policy_report = evaluate_policy(c_prepared, c_alphas, device=device, compute_lpips=bool(args.calib_lpips))
+        print(
+            f"[SurfaceFaceAlpha] consensus stride={stride} eval_policy_sec={time.perf_counter() - t0:.2f}",
+            flush=True,
+        )
         c_accepted = passes_policy(c_policy_report, args)
         accepted = bool(accepted and c_accepted)
         if c_accepted:

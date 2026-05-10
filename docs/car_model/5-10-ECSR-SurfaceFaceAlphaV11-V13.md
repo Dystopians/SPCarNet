@@ -150,3 +150,50 @@ increase surface support and expressivity, for example:
 - an ELA-to-surface distillation stage with train-policy Pareto guards;
 - a portfolio policy where ELA is the teacher/fallback and surface code is
   accepted only when it gives strict train-policy gains over the teacher.
+
+## V14: Policy-Scoped Alias And Compact Alpha Fit
+
+V14 fixes the large-scene scalability problem exposed by treehill without
+changing the residual semantics.
+
+Two changes were made:
+
+1. topology alias candidates default to train-policy visible faces
+   (`--alias_candidate_scope policy`) instead of train+held-out target visible
+   faces. This is stricter and faster: a face can receive an alpha only if it is
+   certified on train-policy views, so target-only visibility should not enlarge
+   the policy alias set;
+2. `fit_face_alphas` now remaps active policy faces to a compact index space
+   before accumulation. On treehill, primary alpha fitting dropped from about
+   `285s` to `0.06s`.
+
+The policy-eval path was also changed to dense alpha lookup rather than
+per-face Python assignment. This made primary evaluation on treehill about
+`1.5s`; consensus evaluation still has expensive large-view surface-signal
+costs, but the run is now complete instead of stalled.
+
+Held-out V14 results:
+
+| scene | V14 behavior | PSNR | SSIM | LPIPS | verdict |
+|---|---|---:|---:|---:|---|
+| garden | accepted, same output as V11 | 25.029341 | 0.780037 | 0.201304 | strict positive vs base |
+| flowers | accepted, same output as V11 | 19.669594 | 0.511672 | 0.394767 | PSNR/LPIPS positive, SSIM still slightly negative |
+| treehill | rejected by consensus, no-op output | 20.923227 | 0.564224 | 0.406108 | no negative transfer |
+
+Raw metrics:
+
+- `outputs/carnet/meshsplatopt/ecsr_phase_l/v14_policyalias_garden_eval.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_l/v14_policyalias_flowers_eval.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_l/v14_policyalias_treehill_eval.json`
+
+W&B runs:
+
+- treehill: `2aiaift2`
+- garden: `1gy499q8`
+- flowers: `tanumx5u`
+
+V14 changes the status from "not scalable enough for treehill" to "scalable
+enough to complete and reject risky scenes." It still does not solve the core
+paper weakness: coverage remains around `0.2%` on accepted outdoor scenes, and
+flowers still lacks strict SSIM improvement. The next method step should be
+capacity/coverage, not more alpha plumbing.

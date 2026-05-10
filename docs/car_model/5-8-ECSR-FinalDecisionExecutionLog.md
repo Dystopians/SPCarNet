@@ -439,3 +439,35 @@ still CPU-bound before target output after about 49 minutes, so it was
 terminated and not counted as a metric row. This is a real engineering
 bottleneck for full9 surface-facealpha validation and should be fixed with
 candidate sparsification or GPU/batched aggregation before more long runs.
+
+## Phase-P V14 Policy-Scoped Alias Fix
+
+V14 fixed the large-scene scalability issue enough to complete treehill. The
+change is methodological as well as engineering: topology alias candidates now
+default to train-policy visible faces (`--alias_candidate_scope policy`) rather
+than train+held-out target visible faces. Because final per-face alphas can only
+be certified on train-policy views, target-only visibility should not enlarge
+the alias candidate set. Alpha fitting also moved to compact active-face
+remapping; treehill primary alpha fitting dropped from about `285s` to `0.06s`.
+
+Three-scene V14 validation:
+
+- garden: same output as V11,
+  `25.029341 / 0.780037 / 0.201304`, strict positive vs base;
+- flowers: same output as V11,
+  `19.669594 / 0.511672 / 0.394767`, PSNR/LPIPS positive but SSIM still
+  slightly negative;
+- treehill: consensus rejected the residual because consensus dSSIM was
+  `-3.7e-6`; final output is no-op and exactly matches base,
+  `20.923227 / 0.564224 / 0.406108`.
+
+Raw metrics:
+
+- `outputs/carnet/meshsplatopt/ecsr_phase_l/v14_policyalias_garden_eval.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_l/v14_policyalias_flowers_eval.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_l/v14_policyalias_treehill_eval.json`
+
+This is a real progress point for reliability and full-scene feasibility, but
+it still does not close the paper objective. V14 prevents negative transfer and
+keeps garden's strict win, yet it does not solve flowers SSIM or the low
+coverage problem.
