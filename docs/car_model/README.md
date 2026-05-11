@@ -15,3 +15,4 @@ Current key docs:
 - `v4_focus.md` — scope note for the v4 cache-rebuild phase (superseded by CarNet_v0)
 - `5-8-ECSR-FinalDecisionExecutionLog.md` — current ECSR implementation log for the FinalDecision plan
 - `5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md` — current representation-attached residual smoke result
+- `5-10-ECSR-FaceAlphaV15-V20-CertifiedPolicy.md` — full9 certified surface face-alpha policy log

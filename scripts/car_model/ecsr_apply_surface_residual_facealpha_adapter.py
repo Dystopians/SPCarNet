@@ -88,6 +88,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--face_alpha_ridge", type=float, default=1e-4)
     parser.add_argument("--face_alpha_shrink_pixels", type=float, default=64.0)
     parser.add_argument(
+        "--face_alpha_fit_source",
+        choices=("policy", "fit"),
+        default="policy",
+        help=(
+            "`policy` preserves the V14 behavior by fitting and validating "
+            "per-face alpha on the same train-policy views. `fit` fits alpha "
+            "on the fitting-train split and reserves train-policy views only "
+            "for acceptance, giving a stricter no-test-leakage certificate."
+        ),
+    )
+    parser.add_argument(
         "--face_alpha_edge_weight",
         type=float,
         default=0.0,
@@ -107,6 +118,49 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_policy_dssim", type=float, default=0.0)
     parser.add_argument("--calib_lpips", action="store_true")
     parser.add_argument("--max_policy_dlpips", type=float, default=0.0)
+    parser.add_argument(
+        "--policy_lcb_z",
+        type=float,
+        default=0.0,
+        help=(
+            "Train-policy generalization guard. Positive values require the "
+            "one-sided mean +/- z*standard-error bound to pass instead of only "
+            "the mean metric delta."
+        ),
+    )
+    parser.add_argument(
+        "--policy_min_view_win_fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "Optional train-policy view-consensus guard. A nonzero value "
+            "requires at least this fraction of policy views to improve PSNR "
+            "and SSIM, and when --calib_lpips is set, not regress LPIPS."
+        ),
+    )
+    parser.add_argument(
+        "--final_scale_grid",
+        default="",
+        help=(
+            "Optional comma-separated train-policy residual scale grid. When "
+            "set, per-face alphas are fitted on the chosen alpha-fit split, "
+            "then only a scalar residual strength is selected on policy-val "
+            "views. Held-out test metrics are not used for this choice."
+        ),
+    )
+    parser.add_argument("--scale_policy_objective", choices=("psnr", "balanced"), default="balanced")
+    parser.add_argument("--scale_policy_ssim_weight", type=float, default=20.0)
+    parser.add_argument("--scale_policy_lpips_weight", type=float, default=20.0)
+    parser.add_argument(
+        "--require_consensus_max_scale",
+        action="store_true",
+        help=(
+            "Conservative train-only stability certificate. When enabled with "
+            "consensus splits and a scale grid, the final residual is accepted "
+            "only if the primary and all accepted consensus policies select "
+            "the maximum residual scale."
+        ),
+    )
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb_project", default=os.environ.get("WANDB_PROJECT", "mesh-splatting-ecsr"))
@@ -464,30 +518,176 @@ def evaluate_policy(
 ) -> dict[str, Any]:
     base_rows = []
     adapted_rows = []
+    per_view: list[dict[str, Any]] = []
     alpha_table = make_face_alpha_table(face_alphas)
     for view in prepared:
-        base_rows.append(_metrics(view.base, view.gt, device=device, compute_lpips=compute_lpips))
+        base_metrics = _metrics(view.base, view.gt, device=device, compute_lpips=compute_lpips)
+        base_rows.append(base_metrics)
         delta = scale_signal_by_face_alpha(view.face_id, view.signal, face_alphas, alpha_table=alpha_table)
         adapted = np.clip(view.base + delta, 0.0, 1.0)
-        adapted_rows.append(_metrics(adapted, view.gt, device=device, compute_lpips=compute_lpips))
+        adapted_metrics = _metrics(adapted, view.gt, device=device, compute_lpips=compute_lpips)
+        adapted_rows.append(adapted_metrics)
+        view_row: dict[str, Any] = {
+            "view": view.name,
+            "base": base_metrics,
+            "adapted": adapted_metrics,
+            "dPSNR": float(adapted_metrics["PSNR"] - base_metrics["PSNR"]),
+            "dSSIM": float(adapted_metrics["SSIM"] - base_metrics["SSIM"]),
+        }
+        if compute_lpips:
+            view_row["dLPIPS"] = float(adapted_metrics["LPIPS"] - base_metrics["LPIPS"])
+        per_view.append(view_row)
     keys = ("PSNR", "SSIM", *(() if not compute_lpips else ("LPIPS",)))
     base = {key: float(np.mean([row[key] for row in base_rows])) for key in keys}
     adapted = {key: float(np.mean([row[key] for row in adapted_rows])) for key in keys}
+
+    def mean_std_stderr(key: str) -> tuple[float, float, float]:
+        vals = np.asarray([float(row[key]) for row in per_view], dtype=np.float64)
+        if vals.size == 0:
+            return 0.0, 0.0, 0.0
+        mean = float(np.mean(vals))
+        std = float(np.std(vals, ddof=1)) if vals.size > 1 else 0.0
+        return mean, std, float(std / np.sqrt(max(vals.size, 1)))
+
+    dpsnr_mean, dpsnr_std, dpsnr_stderr = mean_std_stderr("dPSNR")
+    dssim_mean, dssim_std, dssim_stderr = mean_std_stderr("dSSIM")
+    if compute_lpips:
+        dlpips_mean, dlpips_std, dlpips_stderr = mean_std_stderr("dLPIPS")
+    else:
+        dlpips_mean, dlpips_std, dlpips_stderr = 0.0, 0.0, 0.0
     return {
         "base": base,
         "adapted": adapted,
-        "dPSNR": adapted["PSNR"] - base["PSNR"],
-        "dSSIM": adapted["SSIM"] - base["SSIM"],
-        "dLPIPS": (adapted.get("LPIPS", 0.0) - base.get("LPIPS", 0.0)) if compute_lpips else None,
+        "dPSNR": dpsnr_mean,
+        "dSSIM": dssim_mean,
+        "dLPIPS": dlpips_mean if compute_lpips else None,
+        "view_count": int(len(per_view)),
+        "per_view": per_view,
+        "delta_stats": {
+            "dPSNR_std": dpsnr_std,
+            "dPSNR_stderr": dpsnr_stderr,
+            "dSSIM_std": dssim_std,
+            "dSSIM_stderr": dssim_stderr,
+            "dLPIPS_std": dlpips_std if compute_lpips else None,
+            "dLPIPS_stderr": dlpips_stderr if compute_lpips else None,
+            "psnr_win_fraction": float(np.mean([float(row["dPSNR"]) >= 0.0 for row in per_view])) if per_view else 0.0,
+            "ssim_win_fraction": float(np.mean([float(row["dSSIM"]) >= 0.0 for row in per_view])) if per_view else 0.0,
+            "lpips_win_fraction": (
+                float(np.mean([float(row["dLPIPS"]) <= 0.0 for row in per_view])) if compute_lpips and per_view else None
+            ),
+        },
     }
 
 
 def passes_policy(report: dict[str, Any], args: argparse.Namespace) -> bool:
+    dpsnr = float(report["dPSNR"])
+    dssim = float(report["dSSIM"])
+    dlpips = report.get("dLPIPS")
+    stats = report.get("delta_stats", {}) or {}
+    z = max(float(getattr(args, "policy_lcb_z", 0.0)), 0.0)
+    if z > 0.0:
+        dpsnr -= z * float(stats.get("dPSNR_stderr", 0.0) or 0.0)
+        dssim -= z * float(stats.get("dSSIM_stderr", 0.0) or 0.0)
+        if dlpips is not None:
+            dlpips = float(dlpips) + z * float(stats.get("dLPIPS_stderr", 0.0) or 0.0)
+    view_win = max(float(getattr(args, "policy_min_view_win_fraction", 0.0)), 0.0)
+    if view_win > 0.0:
+        if float(stats.get("psnr_win_fraction", 0.0) or 0.0) < view_win:
+            return False
+        if float(stats.get("ssim_win_fraction", 0.0) or 0.0) < view_win:
+            return False
+        if bool(args.calib_lpips) and float(stats.get("lpips_win_fraction", 0.0) or 0.0) < view_win:
+            return False
     return (
-        report["dPSNR"] >= float(args.min_policy_dpsnr)
-        and report["dSSIM"] >= float(args.min_policy_dssim)
-        and (not bool(args.calib_lpips) or report["dLPIPS"] <= float(args.max_policy_dlpips))
+        dpsnr >= float(args.min_policy_dpsnr)
+        and dssim >= float(args.min_policy_dssim)
+        and (not bool(args.calib_lpips) or (dlpips is not None and float(dlpips) <= float(args.max_policy_dlpips)))
     )
+
+
+def _parse_scale_grid(text: str) -> list[float]:
+    values: list[float] = []
+    for token in str(text or "").split(","):
+        token = token.strip()
+        if not token:
+            continue
+        values.append(max(float(token), 0.0))
+    if not values:
+        return []
+    if 0.0 not in values:
+        values.insert(0, 0.0)
+    return sorted(set(values))
+
+
+def _scale_face_alphas(face_alphas: dict[int, float], scale: float) -> dict[int, float]:
+    scale = float(scale)
+    if not face_alphas or scale <= 0.0:
+        return {}
+    return {int(fid): float(alpha) * scale for fid, alpha in face_alphas.items()}
+
+
+def select_policy_scale(
+    prepared: list[PreparedPolicyView],
+    face_alphas: dict[int, float],
+    args: argparse.Namespace,
+    *,
+    device: torch.device,
+    compute_lpips: bool,
+) -> tuple[dict[int, float], dict[str, Any], bool]:
+    scale_grid = _parse_scale_grid(args.final_scale_grid)
+    if not scale_grid:
+        policy_report = evaluate_policy(prepared, face_alphas, device=device, compute_lpips=compute_lpips)
+        return face_alphas, policy_report, passes_policy(policy_report, args)
+
+    rows: list[dict[str, Any]] = []
+    best_raw: tuple[float, float, dict[str, Any], dict[int, float]] | None = None
+    best_pass: tuple[float, float, dict[str, Any], dict[int, float]] | None = None
+    for scale in scale_grid:
+        scaled = _scale_face_alphas(face_alphas, scale)
+        report = evaluate_policy(prepared, scaled, device=device, compute_lpips=compute_lpips)
+        dlpips = report.get("dLPIPS")
+        score = float(report["dPSNR"])
+        if args.scale_policy_objective == "balanced":
+            score += float(args.scale_policy_ssim_weight) * float(report["dSSIM"])
+            if compute_lpips and dlpips is not None:
+                score -= float(args.scale_policy_lpips_weight) * float(dlpips)
+        row = {
+            "scale": float(scale),
+            "dPSNR": float(report["dPSNR"]),
+            "dSSIM": float(report["dSSIM"]),
+            "dLPIPS": None if dlpips is None else float(dlpips),
+            "delta_stats": report.get("delta_stats", {}),
+            "base": report["base"],
+            "adapted": report["adapted"],
+            "selection_score": float(score),
+            "passes": bool(float(scale) > 0.0 and passes_policy(report, args)),
+        }
+        rows.append(row)
+        rank = (float(score), float(scale))
+        if best_raw is None or rank > (best_raw[0], best_raw[1]):
+            best_raw = (float(score), float(scale), row, scaled)
+        if row["passes"] and (best_pass is None or rank > (best_pass[0], best_pass[1])):
+            best_pass = (float(score), float(scale), row, scaled)
+
+    assert best_raw is not None
+    accepted = best_pass is not None
+    chosen = best_pass if accepted else best_raw
+    chosen_row = dict(chosen[2])
+    scaled_alphas = chosen[3] if accepted else {}
+    policy_report = {
+        "base": chosen_row["base"],
+        "adapted": chosen_row["adapted"],
+        "dPSNR": float(chosen_row["dPSNR"]),
+        "dSSIM": float(chosen_row["dSSIM"]),
+        "dLPIPS": chosen_row["dLPIPS"],
+        "scale": float(chosen_row["scale"]) if accepted else 0.0,
+        "raw_chosen_scale": float(best_raw[1]),
+        "accepted": bool(accepted),
+        "reason": "scale_policy_val_pass" if accepted else "scale_policy_val_guard_rejected",
+        "scale_grid": scale_grid,
+        "scale_rows": rows,
+    }
+    return scaled_alphas, policy_report, bool(accepted)
 
 
 def _copy_gt(base_method_dir: Path, out_method_dir: Path) -> None:
@@ -565,9 +765,12 @@ def maybe_wandb(args: argparse.Namespace, report: dict[str, Any]) -> None:
     )
     flat = {
         "surface_facealpha/faces": int(report.get("accepted_faces", 0)),
-        "surface_facealpha/mean_alpha": float(report.get("face_alpha_report", {}).get("mean_alpha", 0.0)),
+        "surface_facealpha/mean_alpha": float(
+            report.get("mean_final_alpha", report.get("face_alpha_report", {}).get("mean_alpha", 0.0))
+        ),
         "surface_facealpha/policy_dpsnr": float(report.get("policy", {}).get("dPSNR", 0.0)),
         "surface_facealpha/policy_dssim": float(report.get("policy", {}).get("dSSIM", 0.0)),
+        "surface_facealpha/policy_scale": float(report.get("policy", {}).get("scale", 1.0)),
         "surface_facealpha/target_coverage": float(report.get("target", {}).get("mean_covered_fraction", 0.0)),
     }
     run.log(flat)
@@ -640,9 +843,22 @@ def main() -> int:
         fallback_render_dir=args.base_model_path / "train" / args.base_method_name / "renders",
             fallback_gt_dir=args.base_model_path / "train" / args.base_method_name / "gt",
     )
+    alpha_fit_paths = fit_views if args.face_alpha_fit_source == "fit" else policy_views
+    if args.face_alpha_fit_source == "fit":
+        alpha_prepared = prepare_policy_views(
+            field,
+            alpha_fit_paths,
+            k=args.k,
+            max_abs_residual=args.max_abs_residual,
+            alias_source=alias_source,
+            fallback_render_dir=args.base_model_path / "train" / args.base_method_name / "renders",
+            fallback_gt_dir=args.base_model_path / "train" / args.base_method_name / "gt",
+        )
+    else:
+        alpha_prepared = prepared
     t0 = time.perf_counter()
     primary_alphas, primary_alpha_report = fit_face_alphas(
-        prepared,
+        alpha_prepared,
         alpha_max=args.face_alpha_max,
         min_pixels=args.face_alpha_min_pixels,
         min_gain=args.face_alpha_min_gain,
@@ -658,11 +874,16 @@ def main() -> int:
         flush=True,
     )
     t0 = time.perf_counter()
-    policy_report = evaluate_policy(prepared, primary_alphas, device=device, compute_lpips=bool(args.calib_lpips))
+    primary_policy_alphas, policy_report, accepted = select_policy_scale(
+        prepared,
+        primary_alphas,
+        args,
+        device=device,
+        compute_lpips=bool(args.calib_lpips),
+    )
     print(f"[SurfaceFaceAlpha] primary eval_policy_sec={time.perf_counter() - t0:.2f}", flush=True)
-    alpha_sets = [primary_alphas]
+    alpha_sets = [primary_policy_alphas] if accepted else []
     consensus_reports: list[dict[str, Any]] = []
-    accepted = passes_policy(policy_report, args)
     for stride in _parse_stride_list(args.consensus_policy_strides):
         if int(stride) == int(args.policy_val_stride):
             continue
@@ -707,11 +928,24 @@ def main() -> int:
             max_abs_residual=args.max_abs_residual,
             alias_source=c_alias,
             fallback_render_dir=args.base_model_path / "train" / args.base_method_name / "renders",
-            fallback_gt_dir=args.base_model_path / "train" / args.base_method_name / "gt",
+                fallback_gt_dir=args.base_model_path / "train" / args.base_method_name / "gt",
         )
+        c_alpha_fit_paths = c_fit if args.face_alpha_fit_source == "fit" else c_policy
+        if args.face_alpha_fit_source == "fit":
+            c_alpha_prepared = prepare_policy_views(
+                c_field,
+                c_alpha_fit_paths,
+                k=args.k,
+                max_abs_residual=args.max_abs_residual,
+                alias_source=c_alias,
+                fallback_render_dir=args.base_model_path / "train" / args.base_method_name / "renders",
+                fallback_gt_dir=args.base_model_path / "train" / args.base_method_name / "gt",
+            )
+        else:
+            c_alpha_prepared = c_prepared
         t0 = time.perf_counter()
         c_alphas, c_alpha_report = fit_face_alphas(
-            c_prepared,
+            c_alpha_prepared,
             alpha_max=args.face_alpha_max,
             min_pixels=args.face_alpha_min_pixels,
             min_gain=args.face_alpha_min_gain,
@@ -730,15 +964,20 @@ def main() -> int:
             flush=True,
         )
         t0 = time.perf_counter()
-        c_policy_report = evaluate_policy(c_prepared, c_alphas, device=device, compute_lpips=bool(args.calib_lpips))
+        c_policy_alphas, c_policy_report, c_accepted = select_policy_scale(
+            c_prepared,
+            c_alphas,
+            args,
+            device=device,
+            compute_lpips=bool(args.calib_lpips),
+        )
         print(
             f"[SurfaceFaceAlpha] consensus stride={stride} eval_policy_sec={time.perf_counter() - t0:.2f}",
             flush=True,
         )
-        c_accepted = passes_policy(c_policy_report, args)
         accepted = bool(accepted and c_accepted)
         if c_accepted:
-            alpha_sets.append(c_alphas)
+            alpha_sets.append(c_policy_alphas)
         consensus_reports.append(
             {
                 "stride": int(stride),
@@ -748,6 +987,27 @@ def main() -> int:
                 "topology_alias": c_alias_report,
             }
         )
+    final_gate: dict[str, Any] = {
+        "require_consensus_max_scale": bool(args.require_consensus_max_scale),
+        "passed": bool(accepted),
+        "reason": "policy_and_consensus_passed" if accepted else "policy_or_consensus_rejected",
+    }
+    if accepted and bool(args.require_consensus_max_scale):
+        scale_grid = _parse_scale_grid(args.final_scale_grid)
+        max_scale = float(max(scale_grid)) if scale_grid else 1.0
+        selected_scales = [float(policy_report.get("scale", 0.0))]
+        selected_scales.extend(float(item.get("policy", {}).get("scale", 0.0)) for item in consensus_reports)
+        scale_pass = all(abs(scale - max_scale) <= 1e-12 for scale in selected_scales)
+        final_gate.update(
+            {
+                "max_scale": max_scale,
+                "selected_scales": selected_scales,
+                "passed": bool(scale_pass),
+                "reason": "consensus_max_scale_passed" if scale_pass else "consensus_scale_instability_rejected",
+            }
+        )
+        if not scale_pass:
+            accepted = False
     final_alphas = intersect_face_alphas(alpha_sets) if accepted else {}
     target_report = apply_target(args, field, final_alphas, alias_source)
     report = {
@@ -758,10 +1018,18 @@ def main() -> int:
         "target_split": args.target_split,
         "base_method": args.base_method_name,
         "method_name": args.method_name,
+        "face_alpha_fit_source": args.face_alpha_fit_source,
+        "final_scale_grid": _parse_scale_grid(args.final_scale_grid),
+        "policy_lcb_z": float(args.policy_lcb_z),
+        "policy_min_view_win_fraction": float(args.policy_min_view_win_fraction),
+        "require_consensus_max_scale": bool(args.require_consensus_max_scale),
+        "primary_alpha_fit_view_count": int(len(alpha_fit_paths)),
+        "primary_policy_view_count": int(len(policy_views)),
         "selected_faces": int(len(selected_faces)),
         "field_faces": int(len(field.residuals)),
         "topology_alias": alias_report,
         "policy": policy_report,
+        "final_gate": final_gate,
         "policy_accepted": bool(accepted),
         "face_alpha_report": primary_alpha_report,
         "consensus_policy": consensus_reports,

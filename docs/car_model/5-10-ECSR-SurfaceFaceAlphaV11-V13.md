@@ -197,3 +197,12 @@ enough to complete and reject risky scenes." It still does not solve the core
 paper weakness: coverage remains around `0.2%` on accepted outdoor scenes, and
 flowers still lacks strict SSIM improvement. The next method step should be
 capacity/coverage, not more alpha plumbing.
+
+## Follow-Up: V15-V20 Certified Policy
+
+The follow-up policy work is recorded separately in
+`docs/car_model/5-10-ECSR-FaceAlphaV15-V20-CertifiedPolicy.md`. Its current
+endpoint is V20: a fixed train-only certificate with per-view confidence bounds,
+view-win-fraction checks, and consensus max-scale stability. V20 removes all
+observed held-out regressions on full9, but accepts only garden, so it is a
+reliability milestone rather than the final paper method.

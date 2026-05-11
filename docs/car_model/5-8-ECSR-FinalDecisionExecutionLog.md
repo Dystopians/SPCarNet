@@ -471,3 +471,45 @@ This is a real progress point for reliability and full-scene feasibility, but
 it still does not close the paper objective. V14 prevents negative transfer and
 keeps garden's strict win, yet it does not solve flowers SSIM or the low
 coverage problem.
+
+## Phase-Q Surface FaceAlpha V15-V20 Certified Policy
+
+V15-V20 converted surface face-alpha from a mean-metric policy into a
+certificate-carrying policy. The main implementation changes are in
+`scripts/car_model/ecsr_apply_surface_residual_facealpha_adapter.py`:
+
+- per-view train-policy deltas are now recorded for PSNR, SSIM, and LPIPS;
+- `--policy_lcb_z` requires one-sided lower-confidence-bound PSNR/SSIM gains
+  and upper-confidence-bound LPIPS non-regression;
+- `--policy_min_view_win_fraction` rejects residuals whose train-policy gains
+  are not consistent across views;
+- `--require_consensus_max_scale` accepts only residuals whose primary and
+  consensus train-only splits all select the maximum residual scale.
+
+The important diagnostic sequence:
+
+- V17 full9 reduced some false positives but still mixed on bonsai, kitchen,
+  room, stump, and treehill.
+- V18 added split `3`; garden stayed positive but bonsai still false-accepted.
+- V19 rejected bonsai by detecting unstable LPIPS view-win behavior, but room
+  and stump still had tiny held-out mixed rows.
+- V20 rejected the remaining room/stump mixed cases through consensus scale
+  instability, while preserving garden.
+
+V20 full9 held-out result against `ours_26000_phasef_extra_compact_base`:
+
+- strict positive: `1 / 9` (`garden`);
+- no-op: `8 / 9`;
+- mixed/regression: `0 / 9`;
+- mean dPSNR: `+0.000103`;
+- mean dSSIM: `+0.000000298`;
+- mean dLPIPS: `-0.00000120`.
+
+This is a meaningful reliability milestone: the surface-attached residual path
+now has a fixed train-only policy that avoids all observed held-out regressions
+on full9. It is still not a paper-final breakthrough because accepted target
+coverage is only `0.1321%` on garden and zero elsewhere. The next credible
+research step remains representation capacity: persistent vertex/barycentric/SH
+residual codes distilled from the strong ELA teacher, with the V20 certificate
+as the safety layer. Detailed log:
+`docs/car_model/5-10-ECSR-FaceAlphaV15-V20-CertifiedPolicy.md`.
