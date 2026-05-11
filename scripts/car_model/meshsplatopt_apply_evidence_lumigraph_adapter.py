@@ -129,11 +129,31 @@ def _fit_optional_alpha(args: argparse.Namespace, train_frames, policy: dict, de
     )
 
 
+def _build_fd_judge(args: argparse.Namespace, device: torch.device):
+    if float(args.fd_weight) <= 0.0 and not bool(args.fd_strict):
+        return None
+    from utils.fd_loss import FrozenReprConfig, FrozenReprModel
+
+    cfg = FrozenReprConfig(model_name=args.fd_backbone, pool_type=args.fd_pool)
+    return FrozenReprModel(cfg, device=device)
+
+
+def _fd_kwargs(args: argparse.Namespace, fd_judge):
+    return {
+        "fd_judge": fd_judge,
+        "fd_weight": float(args.fd_weight),
+        "fd_strict": bool(args.fd_strict),
+        "fd_strict_tol": float(args.fd_strict_tol),
+        "fd_max_views": int(args.fd_max_views),
+    }
+
+
 def _choose_policy(
     args: argparse.Namespace,
     train_frames,
     alpha_grid: list[float],
     device: torch.device,
+    fd_judge=None,
 ) -> tuple[dict, dict, list[dict], BenefitCalibrator | None]:
     benefit_fit_frames, policy_val_frames = _split_policy_frames(train_frames, args.policy_holdout_fraction)
     if not args.auto_policy:
@@ -191,6 +211,7 @@ def _choose_policy(
             lpips_weight=args.policy_lpips_weight,
             compute_lpips=args.calib_lpips,
             device=device,
+            **_fd_kwargs(args, fd_judge),
         )
         return policy, calibration, [], benefit_calibrator
 
@@ -265,6 +286,7 @@ def _choose_policy(
                                         lpips_weight=args.policy_lpips_weight,
                                         compute_lpips=args.calib_lpips,
                                         device=device,
+                                        **_fd_kwargs(args, fd_judge),
                                     )
                                     alpha = float(calibration["alpha"])
                                     row = _selected_calibration_row(calibration, alpha)
@@ -277,6 +299,10 @@ def _choose_policy(
                                             "calib_psnr_gain": row.get("psnr_gain"),
                                             "calib_ssim_gain": row.get("ssim_gain"),
                                             "calib_lpips_gain": row.get("lpips_gain"),
+                                            "calib_fd_gain": row.get("fd_gain"),
+                                            "calib_fd": row.get("fd"),
+                                            "calib_base_fd": row.get("base_fd"),
+                                            "calib_fd_rejected": row.get("fd_rejected"),
                                             "calib_psnr": row.get("psnr"),
                                             "calib_base_psnr": row.get("base_psnr"),
                                             "benefit_accepted_bins": (
@@ -342,6 +368,12 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
             "edge_gate_quantile": args.edge_gate_quantile,
             "edge_gate_min": args.edge_gate_min,
             "edge_gate_dilate": args.edge_gate_dilate,
+            "fd_weight": args.fd_weight,
+            "fd_backbone": args.fd_backbone,
+            "fd_pool": args.fd_pool,
+            "fd_max_views": args.fd_max_views,
+            "fd_strict": args.fd_strict,
+            "fd_strict_tol": args.fd_strict_tol,
         },
     )
     flat = {
@@ -379,7 +411,10 @@ def run(args: argparse.Namespace) -> dict:
         else train_frames
     )
     alpha_grid = _parse_alpha_grid(args.alpha_grid)
-    policy, calibration, policy_candidates, benefit_calibrator = _choose_policy(args, train_frames, alpha_grid, device)
+    fd_judge = _build_fd_judge(args, device)
+    policy, calibration, policy_candidates, benefit_calibrator = _choose_policy(
+        args, train_frames, alpha_grid, device, fd_judge=fd_judge
+    )
     alpha_fit_frames = benefit_fit_frames if args.policy_holdout_fraction > 0.0 else train_frames
     alpha_target_frames = policy_val_frames if args.policy_holdout_fraction > 0.0 else None
     alpha_calibrator = _fit_optional_alpha(args, alpha_fit_frames, policy, device, alpha_target_frames)
@@ -568,6 +603,40 @@ def main() -> int:
     parser.add_argument("--depth_rel_tol", default=0.03, type=float)
     parser.add_argument("--direction_weight", default=0.35, type=float)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument(
+        "--fd_weight",
+        default=0.0,
+        type=float,
+        help="Weight of Frechet-distance gain in the alpha selection score. Default 0 keeps legacy behavior.",
+    )
+    parser.add_argument(
+        "--fd_backbone",
+        default="vit_base_patch14_dinov2.lvd142m",
+        help="timm model name for the frozen FD judge (DINOv2 ViT-B/14 by default).",
+    )
+    parser.add_argument(
+        "--fd_pool",
+        choices=("cls", "mean"),
+        default="cls",
+        help="Token pooling for ViT FD features.",
+    )
+    parser.add_argument(
+        "--fd_max_views",
+        default=32,
+        type=int,
+        help="Max calibration views used to estimate the FD per-alpha empirical Gaussian.",
+    )
+    parser.add_argument(
+        "--fd_strict",
+        action="store_true",
+        help="Reject any alpha>0 whose FD gain falls below -fd_strict_tol (alpha=0 fallback preserved).",
+    )
+    parser.add_argument(
+        "--fd_strict_tol",
+        default=0.0,
+        type=float,
+        help="Tolerance for fd_strict (in raw FD units, not normalized).",
+    )
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb_project", default=os.environ.get("WANDB_PROJECT", "spcarnet_meshprior"))
     parser.add_argument("--wandb_group", default="")

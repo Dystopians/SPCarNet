@@ -2,7 +2,7 @@
 
 **基于训练证据的几何安全 Mesh Splatting 压缩与渲染修复。**
 
-[English](README.md) | [Phase-J 结果](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-J 外部验证](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [5 月 7 日更新](docs/car_model/5-7-Update.md) | [升级路线](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR 审计](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
+[English](README.md) | [Phase-J 结果](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R 固定策略](docs/car_model/5-10-ECSR-PhaseR-FixedCandidateLadder.md) | [Phase-J 外部验证](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [5 月 7 日更新](docs/car_model/5-7-Update.md) | [升级路线](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR 审计](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
 
 SPCarNet 是建立在 Mesh Splatting 之上的研究分支。当前 ECSR 版本保留固定的 Phase-F compact checkpoint，再用 train-evidence guarded portfolio 做外观修复：稳定场景走 adaptive-alpha ELA，不稳定场景走 train-selected structural edge fallback。branch、edge gate、alpha、压缩比例都不使用 held-out test 指标选择。
 
@@ -68,6 +68,7 @@ score = PSNR + 20 * SSIM - 20 * LPIPS
 - Phase-J guarded adaptive edge policy：[`docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md`](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md)
 - Phase-J external courtyard validation：[`docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md`](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md)
 - Surface-attached residual lumigraph V8：[`docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md`](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md)
+- Phase-R fixed surface-SH1 ladder：[`docs/car_model/5-10-ECSR-PhaseR-FixedCandidateLadder.md`](docs/car_model/5-10-ECSR-PhaseR-FixedCandidateLadder.md)
 - 执行日志：[`docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md`](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md)
 - Phase-A 汇总 contact sheet：`outputs/carnet/meshsplatopt/ecsr_phase_a/surface_evidence/phase_a_surface_evidence_contact_sheet.png`
 
@@ -82,6 +83,8 @@ Phase-C/D 执行更新：full-train split 已覆盖全部 9 个场景。Static t
 Phase-G 尝试把 ELA teacher bake 回 topology-frozen checkpoint，但 official `bicycle` 与 `flowers` pilot 都略低于 clean MeshSplatting，且明显低于 render-time ELA，因此被拒绝为当前主线。Phase-J 是当前接受的方法：一个 no-test-GT guarded portfolio，稳定时用 adaptive alpha，不稳定时用 train-selected structural edge fallback。
 
 Phase-M / V8 目前是最干净的 representation-attached recovery baseline：train residual 存在 surface `face_id` 上，held-out view 只通过 target surface map 查表应用。固定 two-split consensus policy 接受 `flowers` 与 `garden`，其余 `7 / 9` 场景自动 no-op；相对 Phase-F compact base 的 full9 均值为小幅正向变化：`+0.000250` PSNR、`+0.000000868` SSIM、`-0.00000638` LPIPS。这个结果不是当前论文主 RGB endpoint，但它给下一步更高容量的 surface-attached 表示恢复提供了安全基线。
+
+Phase-R 进一步把 residual 写回 checkpoint 中的 surface SH1 属性，并使用固定 dense/sparse candidate ladder。Outdoor-5 上，该策略选择 `4` 个 train-val 认证的 representation edit，并对 Phase-J edge-fallback 场景预注册 no-op；相对 Phase-J base 的 report-only 均值为 `+0.000837` PSNR、`+0.000101` SSIM、`-0.000177` LPIPS。它比 V8 更接近 representation-level 方法，但 full-frame 收益仍小，treehill 也说明 edge-fallback 场景需要专门的 edge-aware operator。
 
 ## 其他评估口径
 
@@ -191,6 +194,10 @@ Phase-M / V8 目前是最干净的 representation-attached recovery baseline：t
 
 它不是简单的工程补丁，而是一个受约束的决策策略：只有几何证据允许时才压缩，只有训练证据认证 residual 时才修复；否则宁愿 no-op 或 micro-edit，也不提交不安全的“看起来变好”的结果。
 
+### 可选：alpha 选择上的 Frechet-distance 门
+
+alpha selector 现在新增一个可选的 Frechet 距离信号，作为又一个 train-only non-regression 门，思路移植自 Yang et al., "Representation Frechet Loss for Visual Generation"（[FD-Loss](https://github.com/Jiawei-Yang/FD-Loss)）。对每个 alpha 候选，selector 在 train 校准视角上累计 DINOv2 ViT-B/14 cls 特征，估计经验高斯，并计算与 GT batch 的闭式 Frechet 距离；`fd_gain = FD(base, gt) − FD(alpha, gt)` 以 `--fd_weight` 加权进 PSNR / SSIM / LPIPS 选择分数，`--fd_strict` 在 `fd_gain < -fd_strict_tol` 时拒绝该 `alpha > 0` 候选，从而保证 regression 必然回落到 alpha=0。默认关闭（`fd_weight=0`）；FD 在这里是 calibration 信号，不是训练损失，也从不接触 test GT。代码见 `utils/fd_loss.py` 与 `scripts/car_model/smoke_test_fd_loss.py`。
+
 ## 为什么比 MeshSplatting 更好
 
 MeshSplatting 本身已经很强，但 clean checkpoint 仍有视角相关模糊、局部颜色残差、训练迭代过拟合等问题。SPCarNet 在 baseline 外围加了两层控制：
@@ -209,6 +216,7 @@ MeshSplatting 本身已经很强，但 clean checkpoint 仍有视角相关模糊
 | Compact + ELA，无 SSIM-peak alpha guard | 单一 scalar score 是否足够 | room 的 PSNR/LPIPS 提升但 held-out SSIM 回退 |
 | Compact + ELA，有 SSIM-peak guard | 当前策略 | 修复 room，并在所有室内场景保持同一个 train-only policy |
 | 激进剪枝分支 | 是否可以硬推高压缩率 | 被拒绝；敏感场景出现渲染或几何回退 |
+| 可选 FD gate（`--fd_weight > 0` 或 `--fd_strict`） | DINOv2 Frechet 距离是否在 LPIPS 之外提供一个额外的 train-only non-regression 门 | 默认关闭；作为 `calibrate_alpha` 的 calibration 信号开放，不作为主损失、也不接触 test GT |
 
 更多消融、失败分支和经验教训见文末历史材料链接。
 

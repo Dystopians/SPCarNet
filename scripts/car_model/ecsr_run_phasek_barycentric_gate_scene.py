@@ -124,11 +124,12 @@ def _build_evidence(args: argparse.Namespace, *, scene: str, phasej_model: Path,
     summary = evidence_dir / "surface_evidence_summary.json"
     existing_summary = _read_json(summary)
     has_camera_center = "camera_center" in existing_summary.get("per_view_npz_fields", [])
+    rich_surface_ok = existing_summary.get("barycentric_available") is True or bool(args.delta_uniform_barycentric)
     if (
         not bool(args.force)
         and summary.is_file()
-        and existing_summary.get("barycentric_available") is True
-        and (str(args.delta_operator) != "sh1" or has_camera_center)
+        and rich_surface_ok
+        and (str(args.delta_operator) not in {"sh1", "facelocal_sh1"} or has_camera_center)
     ):
         return
     cmd = [
@@ -165,18 +166,20 @@ def _build_evidence(args: argparse.Namespace, *, scene: str, phasej_model: Path,
         str(args.delta_top_k),
         "--save_view_npz",
         "--save_residual_rgb",
-        "--save_barycentric",
         "--quiet",
     ]
+    if not bool(args.delta_uniform_barycentric):
+        cmd.append("--save_barycentric")
     _run(cmd, gpu=int(args.gpu), log_path=log_path)
 
 
 def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: Path, candidate_model: Path, log_path: Path) -> None:
-    apply_script = (
-        "scripts/car_model/ecsr_apply_surface_residual_barycentric_sh1_delta.py"
-        if str(args.delta_operator) == "sh1"
-        else "scripts/car_model/ecsr_apply_surface_residual_barycentric_delta.py"
-    )
+    if str(args.delta_operator) == "facelocal_sh1":
+        apply_script = "scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py"
+    elif str(args.delta_operator) == "sh1":
+        apply_script = "scripts/car_model/ecsr_apply_surface_residual_barycentric_sh1_delta.py"
+    else:
+        apply_script = "scripts/car_model/ecsr_apply_surface_residual_barycentric_delta.py"
     audit = _candidate_audit_path(args, candidate_model)
     checkpoint = candidate_model / "point_cloud" / f"iteration_{int(args.iteration)}" / "point_cloud_state_dict.pt"
     if not bool(args.force) and audit.is_file() and checkpoint.is_file():
@@ -223,7 +226,7 @@ def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: 
         "--min_policy_val_unique_faces",
         str(args.delta_min_policy_val_unique_faces),
     ]
-    if str(args.delta_operator) == "sh1":
+    if str(args.delta_operator) in {"sh1", "facelocal_sh1"}:
         cmd.extend(
             [
                 "--max_abs_sh_coeff",
@@ -232,10 +235,27 @@ def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: 
                 str(args.delta_lambda_sh1_mag),
             ]
         )
+        if bool(args.delta_uniform_barycentric):
+            cmd.append("--uniform_barycentric")
+    if str(args.delta_operator) == "facelocal_sh1" or (
+        str(args.delta_operator) == "sh1" and bool(args.delta_sh1_face_policy)
+    ):
+        cmd.extend(
+            [
+                "--max_faces_to_apply",
+                str(args.delta_max_faces_to_apply),
+                "--min_face_policy_val_relative_gain",
+                str(args.delta_min_face_policy_val_relative_gain),
+                "--min_face_policy_val_samples",
+                str(args.delta_min_face_policy_val_samples),
+            ]
+        )
     _run(cmd, gpu=int(args.gpu), log_path=log_path)
 
 
 def _candidate_audit_path(args: argparse.Namespace, candidate_model: Path) -> Path:
+    if str(args.delta_operator) == "facelocal_sh1":
+        return candidate_model / "surface_residual_facelocal_sh1_delta_audit.json"
     if str(args.delta_operator) == "sh1":
         return candidate_model / "surface_residual_barycentric_sh1_delta_audit.json"
     return candidate_model / "surface_residual_barycentric_delta_audit.json"
@@ -608,9 +628,14 @@ def main() -> int:
     parser.add_argument("--delta_high_error_quantile", type=float, default=0.70)
     parser.add_argument("--delta_strength", type=float, default=0.08)
     parser.add_argument("--delta_max_abs_rgb", type=float, default=0.008)
-    parser.add_argument("--delta_operator", choices=("dc", "sh1"), default="dc")
+    parser.add_argument("--delta_operator", choices=("dc", "sh1", "facelocal_sh1"), default="dc")
     parser.add_argument("--candidate_label", default="bary_delta_v2wide_s08")
     parser.add_argument("--delta_max_abs_sh_coeff", type=float, default=0.0)
+    parser.add_argument(
+        "--delta_uniform_barycentric",
+        action="store_true",
+        help="For SH1 deltas, use equal face-vertex weights so a broader train-evidence support list can be used without barycentric rerendering.",
+    )
     parser.add_argument("--delta_lambda_mag", type=float, default=0.03)
     parser.add_argument("--delta_lambda_sh1_mag", type=float, default=0.06)
     parser.add_argument("--delta_lambda_smooth", type=float, default=0.10)
@@ -618,6 +643,14 @@ def main() -> int:
     parser.add_argument("--delta_min_policy_val_relative_gain", type=float, default=0.02)
     parser.add_argument("--delta_min_policy_val_samples", type=int, default=512)
     parser.add_argument("--delta_min_policy_val_unique_faces", type=int, default=16)
+    parser.add_argument("--delta_max_faces_to_apply", type=int, default=2048)
+    parser.add_argument("--delta_min_face_policy_val_relative_gain", type=float, default=0.0)
+    parser.add_argument("--delta_min_face_policy_val_samples", type=int, default=8)
+    parser.add_argument(
+        "--delta_sh1_face_policy",
+        action="store_true",
+        help="For shared-vertex SH1 deltas, only write faces that pass fixed policy-val per-face certificates.",
+    )
     parser.add_argument("--phasej_trainval_method", default="ours_26000_phasej_trainval_gate")
     parser.add_argument("--candidate_base_method", default="ours_26000_bary_delta_v2wide_s08_base")
     parser.add_argument("--candidate_test_method", default="ours_26000_bary_delta_v2wide_s08_phasej_ela")

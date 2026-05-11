@@ -125,9 +125,38 @@ def _save_contact_sheet(
 
 
 def _unique_reduce(face_ids: np.ndarray, values: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    face_ids = np.asarray(face_ids, dtype=np.int64)
+    if face_ids.size == 0:
+        return {"face_id": np.empty((0,), dtype=np.int64)}
+    if int(face_ids.min()) >= 0 and int(face_ids.max()) <= 50_000_000:
+        max_face = int(face_ids.max())
+        # MeshSplatting face ids are dense enough for bincount and this avoids
+        # the pathological np.unique/add.at path on high-resolution outdoor scenes.
+        hit_count = np.bincount(face_ids, minlength=max_face + 1)
+        used = hit_count > 0
+        unique = np.nonzero(used)[0].astype(np.int64)
+        reduced: dict[str, np.ndarray] = {"face_id": unique}
+        for key, value in values.items():
+            value = np.asarray(value)
+            if value.ndim == 1:
+                out_full = np.bincount(face_ids, weights=value.astype(np.float64), minlength=max_face + 1)
+                reduced[key] = out_full[used]
+            else:
+                out = np.empty((len(unique), value.shape[1]), dtype=np.float64)
+                for channel in range(value.shape[1]):
+                    out_full = np.bincount(
+                        face_ids,
+                        weights=value[:, channel].astype(np.float64),
+                        minlength=max_face + 1,
+                    )
+                    out[:, channel] = out_full[used]
+                reduced[key] = out
+        return reduced
+
     unique, inv = np.unique(face_ids, return_inverse=True)
-    reduced: dict[str, np.ndarray] = {"face_id": unique.astype(np.int64)}
+    reduced = {"face_id": unique.astype(np.int64)}
     for key, value in values.items():
+        value = np.asarray(value)
         if value.ndim == 1:
             out = np.zeros((len(unique),), dtype=np.float64)
             np.add.at(out, inv, value.astype(np.float64))
@@ -137,6 +166,15 @@ def _unique_reduce(face_ids: np.ndarray, values: dict[str, np.ndarray]) -> dict[
                 np.add.at(out[:, channel], inv, value[:, channel].astype(np.float64))
         reduced[key] = out
     return reduced
+
+
+def _top_k_indices(score: np.ndarray, top_k: int) -> np.ndarray:
+    if top_k <= 0:
+        return np.empty((0,), dtype=np.int64)
+    if top_k >= len(score):
+        return np.argsort(score)[::-1]
+    idx = np.argpartition(score, -top_k)[-top_k:]
+    return idx[np.argsort(score[idx])[::-1]]
 
 
 def _read_audit_scene(audit_json: Path | None, scene_name: str) -> dict[str, Any]:
@@ -315,13 +353,15 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
             if face_ids_t.ndim == 3:
                 face_ids_t = face_ids_t.unsqueeze(0)
             face_ids_low = F.interpolate(face_ids_t, size=(h, w), mode="nearest").squeeze().detach().cpu().numpy().astype(np.int64)
+            alpha_np = pkg["rend_alpha"].detach().float().squeeze().cpu().numpy().astype(np.float32)
 
             residual = (gt_t - rendering_t).numpy().astype(np.float32)
             abs_error = np.mean(np.abs(residual), axis=0).astype(np.float32)
             gt_np = gt_t.numpy().astype(np.float32)
             render_np = rendering_t.numpy().astype(np.float32)
             texture = _texture_strength(gt_np)
-            valid = face_ids_low >= 0
+            valid = (face_ids_low >= 0) & (face_ids_low < int(faces_np.shape[0]))
+            face_ids_clean = np.where(valid, face_ids_low, -1)
             valid_fraction = float(np.mean(valid))
             threshold = float(np.quantile(abs_error.reshape(-1), float(args.high_error_quantile)))
             high_error = abs_error >= threshold
@@ -331,10 +371,10 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
             key = f"{original_idx:05d}"
             if args.save_view_npz:
                 view_payload = {
-                    "face_id": face_ids_low.astype(np.int32),
+                    "face_id": face_ids_clean.astype(np.int32),
                     "residual_l1": abs_error.astype(np.float16),
                     "texture": texture.astype(np.float16),
-                    "alpha": pkg["rend_alpha"].detach().float().squeeze().cpu().numpy().astype(np.float16),
+                    "alpha": alpha_np.astype(np.float16),
                     "depth": pkg["surf_depth"].detach().float().squeeze().cpu().numpy().astype(np.float32),
                     "normal": pkg["surf_normal"].detach().float().cpu().numpy().astype(np.float16),
                     "camera_center": view.camera_center.detach().float().cpu().numpy().astype(np.float32),
@@ -352,7 +392,7 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
                 bary_view_cache.append(
                     {
                         "key": key,
-                        "face_ids": face_ids_low.astype(np.int32),
+                        "face_ids": face_ids_clean.astype(np.int32),
                         "projected_vertices_xy": pkg["image_2D"].detach().float().cpu().numpy().astype(np.float32),
                     }
                 )
@@ -362,7 +402,7 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
 
             if np.any(valid):
                 flat_valid = valid.reshape(-1)
-                fids = face_ids_low.reshape(-1)[flat_valid]
+                fids = face_ids_clean.reshape(-1)[flat_valid]
                 err = abs_error.reshape(-1)[flat_valid]
                 tex = texture.reshape(-1)[flat_valid]
                 high = high_error.reshape(-1)[flat_valid].astype(np.float32)
@@ -394,7 +434,7 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
                     "gt": gt_np,
                     "render": render_np,
                     "abs_error": abs_error,
-                    "face_ids": face_ids_low,
+                    "face_ids": face_ids_clean,
                     "valid_fraction": valid_fraction,
                     "top_addressable_fraction": top_addressable_fraction,
                 }
@@ -444,9 +484,8 @@ def build_cache(args, dataset, pipeline) -> dict[str, Any]:
     residual_mean = residual_pixel_sum / np.maximum(counts[:, None], 1.0)
     consistency = np.linalg.norm(residual_view_sum, axis=1) / np.maximum(residual_view_norm_sum, 1e-8)
     score = mean_error * np.log1p(counts) * (0.35 + 0.65 * mean_texture) * (0.5 + 0.5 * np.clip(consistency, 0, 1))
-    order = np.argsort(score)[::-1]
-    top_k = min(int(args.top_k_faces), len(order))
-    top_idx = order[:top_k]
+    top_k = min(int(args.top_k_faces), len(score))
+    top_idx = _top_k_indices(score, top_k)
     top_faces = set(int(x) for x in reduced["face_id"][top_idx])
 
     barycentric_written_views = 0

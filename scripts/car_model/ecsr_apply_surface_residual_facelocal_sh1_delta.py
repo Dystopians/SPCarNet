@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Fit a train-val certified barycentric residual SH1 appearance delta.
+"""Fit train-certified face-local SH1 residual appearance deltas.
 
-This is the view-dependent successor to the Phase-K DC-only operator.  It uses
-the same rich Surface Evidence Cache, but fits residual RGB onto persistent
-vertex SH coefficients:
+This operator is a representation-level successor to the shared-vertex SH1
+delta.  Instead of changing the SH coefficients of vertices shared by many
+faces, it duplicates the three vertices of train-certified high-residual faces
+and redirects only those faces to the local copies.  Geometry and triangle count
+are preserved; the added local vertices carry a bounded SH1 residual state.
 
-    residual_rgb(pixel) ~= sum_j bary_j(pixel) * SH1_delta(vertex_j, camera_dir_j)
-
-Only train-cache views are used.  A deterministic subset of train views is held
-out as policy validation; by default the checkpoint is copied unchanged if the
-held-out residual proxy does not improve.
+No held-out test residuals are read.  Fitting uses train-cache views and a
+deterministic train policy-validation split decides which face-local deltas are
+materialized.
 """
 
 from __future__ import annotations
@@ -55,54 +55,38 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--iteration", type=int, default=26000)
     parser.add_argument("--top_k", type=int, default=2048)
     parser.add_argument("--min_view_hits", type=int, default=2)
-    parser.add_argument("--min_consistency", type=float, default=0.85)
-    parser.add_argument("--min_pixel_count", type=float, default=8.0)
-    parser.add_argument("--max_samples_per_face_view", type=int, default=96)
-    parser.add_argument("--max_total_samples", type=int, default=260000)
-    parser.add_argument("--high_error_quantile", type=float, default=0.75)
+    parser.add_argument("--min_consistency", type=float, default=0.80)
+    parser.add_argument("--min_pixel_count", type=float, default=6.0)
+    parser.add_argument("--max_samples_per_face_view", type=int, default=64)
+    parser.add_argument("--max_total_samples", type=int, default=320000)
+    parser.add_argument("--high_error_quantile", type=float, default=0.65)
     parser.add_argument("--min_alpha", type=float, default=0.05)
     parser.add_argument("--barycentric_tolerance", type=float, default=0.35)
     parser.add_argument(
         "--uniform_barycentric",
         action="store_true",
-        help="Use equal 1/3 face-vertex weights instead of reconstructed barycentric coordinates. "
-        "This enables broader train-evidence support lists without rerendering barycentric maps.",
+        help="Use equal 1/3 weights when the evidence cache does not contain barycentric maps.",
     )
     parser.add_argument("--policy_val_stride", type=int, default=4)
-    parser.add_argument("--strength", type=float, default=0.10)
-    parser.add_argument("--max_abs_delta_rgb", type=float, default=0.010)
+    parser.add_argument("--strength", type=float, default=0.18)
+    parser.add_argument("--max_abs_delta_rgb", type=float, default=0.014)
     parser.add_argument(
         "--max_abs_sh_coeff",
         type=float,
         default=0.0,
         help="Bound for each SH1 coefficient delta. 0 derives it from max_abs_delta_rgb / C1.",
     )
-    parser.add_argument("--lambda_mag", type=float, default=3e-2)
-    parser.add_argument("--lambda_sh1_mag", type=float, default=6e-2)
-    parser.add_argument("--lambda_smooth", type=float, default=1.2e-1)
-    parser.add_argument("--steps", type=int, default=900)
+    parser.add_argument("--lambda_mag", type=float, default=2e-2)
+    parser.add_argument("--lambda_sh1_mag", type=float, default=5e-2)
+    parser.add_argument("--lambda_smooth", type=float, default=8e-2)
+    parser.add_argument("--steps", type=int, default=800)
     parser.add_argument("--lr", type=float, default=0.025)
+    parser.add_argument("--max_faces_to_apply", type=int, default=2048)
     parser.add_argument("--min_policy_val_relative_gain", type=float, default=0.02)
     parser.add_argument("--min_policy_val_samples", type=int, default=512)
     parser.add_argument("--min_policy_val_unique_faces", type=int, default=16)
-    parser.add_argument(
-        "--max_faces_to_apply",
-        type=int,
-        default=0,
-        help="If >0, keep only the best policy-val-certified faces before writing SH1 deltas.",
-    )
-    parser.add_argument(
-        "--min_face_policy_val_relative_gain",
-        type=float,
-        default=-1.0e9,
-        help="Per-face policy-val gain required when face-level filtering is enabled.",
-    )
-    parser.add_argument(
-        "--min_face_policy_val_samples",
-        type=int,
-        default=0,
-        help="Minimum policy-val samples for a face-level certificate.",
-    )
+    parser.add_argument("--min_face_policy_val_relative_gain", type=float, default=0.0)
+    parser.add_argument("--min_face_policy_val_samples", type=int, default=8)
     parser.add_argument("--no_op_on_fail", action="store_true", default=True)
     parser.add_argument("--force_apply", action="store_true")
     parser.add_argument("--device", default="cuda")
@@ -190,6 +174,7 @@ def collect_samples(
     max_total_samples: int,
     uniform_barycentric: bool,
 ) -> PixelSamples:
+    selected = set(int(fid) for fid in selected_faces)
     face_chunks: list[np.ndarray] = []
     bary_chunks: list[np.ndarray] = []
     residual_chunks: list[np.ndarray] = []
@@ -209,8 +194,8 @@ def collect_samples(
             missing = sorted(required - set(z.files))
             if missing:
                 raise RuntimeError(
-                    f"{view_path} missing required SH1 evidence fields: {missing}. "
-                    "Rebuild the cache with the current ecsr_build_surface_evidence_cache.py."
+                    f"{view_path} missing required face-local SH1 evidence fields: {missing}. "
+                    "Rebuild the cache with barycentric maps or use --uniform_barycentric."
                 )
             face_id = z["face_id"].astype(np.int64)
             residual_l1 = z["residual_l1"].astype(np.float32)
@@ -230,8 +215,10 @@ def collect_samples(
         base_valid = bary_valid & (residual_l1 >= threshold) & (alpha >= float(min_alpha))
         if not np.any(base_valid):
             continue
-
-        for fid in selected_faces:
+        present = sorted(set(int(x) for x in np.unique(face_id[base_valid])) & selected)
+        if not present:
+            continue
+        for fid in present:
             if remaining <= 0:
                 break
             mask = base_valid & (face_id == int(fid))
@@ -283,7 +270,6 @@ def collect_samples(
             camera_centers=np.empty((0, 3), dtype=np.float32),
             view_names=[],
         )
-
     return PixelSamples(
         face_ids=np.concatenate(face_chunks),
         barycentric=np.concatenate(bary_chunks),
@@ -317,14 +303,12 @@ def localize_samples(
     selected_faces: list[int],
     samples: PixelSamples,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    face_ids_tensor = torch.as_tensor(selected_faces, dtype=torch.long)
-    selected_faces_global = faces[face_ids_tensor].long()
-    unique_vertices, inverse = torch.unique(selected_faces_global.reshape(-1), sorted=True, return_inverse=True)
-    selected_faces_local = inverse.reshape(-1, 3).long()
+    source_vertex_ids = faces[torch.as_tensor(selected_faces, dtype=torch.long)].long().reshape(-1)
+    selected_faces_local = torch.arange(len(selected_faces) * 3, dtype=torch.long).reshape(-1, 3)
     face_to_local = {int(fid): idx for idx, fid in enumerate(selected_faces)}
     sample_faces_local = torch.as_tensor([face_to_local[int(fid)] for fid in samples.face_ids], dtype=torch.long)
     sample_vertex_ids = selected_faces_local[sample_faces_local]
-    return unique_vertices, selected_faces_local, sample_vertex_ids
+    return source_vertex_ids, selected_faces_local, sample_vertex_ids
 
 
 def _sh1_basis(
@@ -407,105 +391,43 @@ def evaluate_proxy(
     }
 
 
-def _filter_coeff_by_face_policy(
-    *,
+def evaluate_proxy_by_face(
     coeff: torch.Tensor,
-    selected_faces: list[int],
-    face_stats: dict[int, dict[str, float]],
-    selected_faces_local: torch.Tensor,
-    val_samples: PixelSamples,
-    val_ids: torch.Tensor,
-    val_basis: torch.Tensor,
-    val_target: torch.Tensor,
-    val_weights: torch.Tensor,
-    min_face_gain: float,
-    min_face_samples: int,
-    max_faces_to_apply: int,
-    device: torch.device,
-) -> tuple[torch.Tensor, dict[str, Any]]:
-    if coeff.numel() == 0 or val_samples.count == 0 or not selected_faces:
-        return coeff.clone(), {
-            "enabled": True,
-            "candidates": 0,
-            "accepted_faces": 0,
-            "accepted_vertices": 0,
-            "min_face_policy_val_relative_gain": float(min_face_gain),
-            "min_face_policy_val_samples": int(min_face_samples),
-            "max_faces_to_apply": int(max_faces_to_apply),
-            "accepted_face_ids": [],
-            "top_faces": [],
-        }
-
-    coeff_device = coeff.to(device=device)
-    rows: list[dict[str, float]] = []
-    face_ids_np = val_samples.face_ids.astype(np.int64, copy=False)
-    for selected_idx, fid in enumerate(selected_faces):
-        mask_np = face_ids_np == int(fid)
-        samples = int(mask_np.sum())
-        if samples < int(min_face_samples):
+    sample_vertex_ids: torch.Tensor,
+    weighted_basis: torch.Tensor,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    sample_face_ids: np.ndarray,
+) -> dict[int, dict[str, float]]:
+    if sample_vertex_ids.numel() == 0:
+        return {}
+    with torch.no_grad():
+        pred = _predict(coeff, sample_vertex_ids, weighted_basis).detach().cpu().numpy()
+    target_np = target.detach().cpu().numpy()
+    weight_np = weights.detach().cpu().numpy().reshape(-1)
+    face_np = sample_face_ids.astype(np.int64, copy=False).reshape(-1)
+    out: dict[int, dict[str, float]] = {}
+    for fid in np.unique(face_np).tolist():
+        mask = face_np == int(fid)
+        if not np.any(mask):
             continue
-        mask = torch.as_tensor(mask_np, dtype=torch.bool, device=device)
-        metrics = evaluate_proxy(
-            coeff_device,
-            val_ids[mask],
-            val_basis[mask],
-            val_target[mask],
-            val_weights[mask],
-        )
-        gain = float(metrics["relative_gain"])
-        if gain < float(min_face_gain):
-            continue
-        stat = face_stats.get(int(fid), {})
-        rows.append(
-            {
-                "face_id": float(fid),
-                "selected_index": float(selected_idx),
-                "samples": float(samples),
-                "relative_gain": gain,
-                "mse_before": float(metrics["mse_before"]),
-                "mse_after": float(metrics["mse_after"]),
-                "score": float(stat.get("score", 0.0)),
-                "pixel_count": float(stat.get("pixel_count", 0.0)),
-                "view_hits": float(stat.get("view_hits", 0.0)),
-                "consistency": float(stat.get("consistency", 0.0)),
-            }
-        )
-    rows.sort(key=lambda r: (float(r["relative_gain"]), float(r["samples"]), float(r["score"])), reverse=True)
-    if int(max_faces_to_apply) > 0:
-        rows = rows[: int(max_faces_to_apply)]
-
-    coeff_apply = torch.zeros_like(coeff)
-    accepted_face_ids = [int(row["face_id"]) for row in rows]
-    accepted_vertices = torch.empty((0,), dtype=torch.long)
-    if accepted_face_ids:
-        accepted_indices = torch.as_tensor([int(row["selected_index"]) for row in rows], dtype=torch.long)
-        accepted_vertices = torch.unique(selected_faces_local[accepted_indices].reshape(-1), sorted=True)
-        coeff_apply[accepted_vertices] = coeff[accepted_vertices]
-
-    top_rows = [
-        {
-            "face_id": int(row["face_id"]),
-            "samples": int(row["samples"]),
-            "relative_gain": float(row["relative_gain"]),
-            "score": float(row["score"]),
-            "pixel_count": float(row["pixel_count"]),
-            "view_hits": float(row["view_hits"]),
-            "consistency": float(row["consistency"]),
+        w = weight_np[mask].reshape(-1, 1)
+        y = target_np[mask]
+        p = pred[mask]
+        denom = float(max(float(w.sum()) * 3.0, 1e-8))
+        mse_before = float(((y**2) * w).sum() / denom)
+        mse_after = float((((p - y) ** 2) * w).sum() / denom)
+        mae_before = float((np.abs(y) * w).sum() / denom)
+        mae_after = float((np.abs(p - y) * w).sum() / denom)
+        out[int(fid)] = {
+            "samples": int(mask.sum()),
+            "mse_before": mse_before,
+            "mse_after": mse_after,
+            "relative_gain": float((mse_before - mse_after) / max(mse_before, 1e-12)),
+            "mae_before": mae_before,
+            "mae_after": mae_after,
         }
-        for row in rows[:64]
-    ]
-    report = {
-        "enabled": True,
-        "candidates": int(len(rows)),
-        "accepted_faces": int(len(accepted_face_ids)),
-        "accepted_vertices": int(accepted_vertices.numel()),
-        "min_face_policy_val_relative_gain": float(min_face_gain),
-        "min_face_policy_val_samples": int(min_face_samples),
-        "max_faces_to_apply": int(max_faces_to_apply),
-        "accepted_face_ids": accepted_face_ids[:256],
-        "top_faces": top_rows,
-    }
-    return coeff_apply, report
+    return out
 
 
 def solve_coeff_delta(
@@ -609,40 +531,85 @@ def samples_to_tensors(
     return ids, weighted_basis, target, weights
 
 
+def materialize_facelocal(
+    state: dict[str, Any],
+    faces: torch.Tensor,
+    selected_faces: list[int],
+    source_vertex_ids: torch.Tensor,
+    coeff: torch.Tensor,
+    accepted_faces: list[int],
+) -> dict[str, Any]:
+    out = clone_state(state)
+    if not accepted_faces:
+        return out
+    vertex_count = int(state["triangles_points"].shape[0])
+    face_count = int(faces.shape[0])
+    face_to_selected = {int(fid): idx for idx, fid in enumerate(selected_faces)}
+    accepted_local_rows = [face_to_selected[int(fid)] for fid in accepted_faces]
+    local_vertex_indices: list[int] = []
+    for row in accepted_local_rows:
+        local_vertex_indices.extend([row * 3, row * 3 + 1, row * 3 + 2])
+    local_idx = torch.as_tensor(local_vertex_indices, dtype=torch.long)
+    source_idx = source_vertex_ids[local_idx].long()
+    coeff_add = coeff[local_idx]
+
+    new_faces = faces.clone()
+    start = vertex_count
+    for out_row, fid in enumerate(accepted_faces):
+        new_faces[int(fid)] = torch.tensor([start + out_row * 3, start + out_row * 3 + 1, start + out_row * 3 + 2])
+
+    for key, value in state.items():
+        if not torch.is_tensor(value):
+            out[key] = value
+            continue
+        cpu = value.detach().cpu()
+        if key == "_triangle_indices":
+            out[key] = new_faces.to(dtype=value.dtype)
+        elif cpu.ndim > 0 and int(cpu.shape[0]) == vertex_count:
+            append = cpu[source_idx].clone()
+            if key == "features_dc":
+                append = append + coeff_add[:, 0:1, :].to(dtype=append.dtype)
+            elif key == "features_rest":
+                append = append.clone()
+                if append.ndim == 3 and append.shape[1] >= 3:
+                    append[:, 0:3, :] = append[:, 0:3, :] + coeff_add[:, 1:4, :].to(dtype=append.dtype)
+            out[key] = torch.cat([cpu, append], dim=0).to(dtype=value.dtype)
+        elif cpu.ndim > 0 and int(cpu.shape[0]) == face_count:
+            out[key] = cpu.clone().to(dtype=value.dtype)
+        else:
+            out[key] = cpu.clone()
+    return out
+
+
 def write_audit(output_model: Path, audit: dict[str, Any]) -> None:
-    (output_model / "surface_residual_barycentric_sh1_delta_audit.json").write_text(
+    (output_model / "surface_residual_facelocal_sh1_delta_audit.json").write_text(
         json.dumps(audit, indent=2) + "\n",
         encoding="utf-8",
     )
     md = [
-        "# ECSR Surface Residual Barycentric SH1 Delta Audit",
+        "# ECSR Face-Local Surface Residual SH1 Delta Audit",
         "",
         f"- operator: `{audit['operator']}`",
         f"- source model: `{audit['source_model']}`",
         f"- output model: `{audit['output_model']}`",
         f"- evidence dir: `{audit['evidence_dir']}`",
         f"- selected faces: `{audit['selected_faces']}`",
-        f"- modified vertices: `{audit['vertices_modified']}`",
+        f"- accepted faces: `{audit['accepted_faces']}`",
+        f"- vertices added: `{audit['vertices_added']}`",
         f"- fit samples: `{audit['fit_proxy']['samples']}`",
-        f"- fit unique faces: `{audit['fit_unique_faces']}`",
         f"- policy-val samples: `{audit['policy_val_proxy']['samples']}`",
-        f"- policy-val unique faces: `{audit['policy_val_unique_faces']}`",
         f"- policy-val relative gain: `{audit['policy_val_proxy']['relative_gain']:.6f}`",
-        f"- applied policy-val relative gain: `{audit['policy_val_proxy_applied']['relative_gain']:.6f}`",
-        f"- face policy enabled: `{audit['face_policy']['enabled']}`",
-        f"- face policy accepted faces: `{audit['face_policy']['accepted_faces']}`",
         f"- accepted: `{audit['accepted']}`",
         f"- no-op copy: `{audit['no_op_copy']}`",
         f"- coeff abs mean: `{audit['coeff_abs_mean']:.8f}`",
         f"- coeff abs max: `{audit['coeff_abs_max']:.8f}`",
-        f"- SH1 coeff abs mean: `{audit['sh1_coeff_abs_mean']:.8f}`",
-        f"- topology unchanged: `{audit['topology_unchanged']}`",
+        f"- topology triangles unchanged: `{audit['topology_triangles_unchanged']}`",
         f"- degenerate faces: `{audit['topology_after']['degenerate_face_count']}`",
         f"- invalid indices: `{audit['topology_after']['invalid_index_count']}`",
         "",
-        "This is a persistent checkpoint-level SH appearance update. It does not read held-out test residuals.",
+        "This is a persistent checkpoint-level face-local appearance update. It does not read held-out test residuals.",
     ]
-    (output_model / "surface_residual_barycentric_sh1_delta_audit.md").write_text(
+    (output_model / "surface_residual_facelocal_sh1_delta_audit.md").write_text(
         "\n".join(md) + "\n",
         encoding="utf-8",
     )
@@ -658,12 +625,6 @@ def main() -> int:
     state = torch.load(source_checkpoint, map_location="cpu")
     faces = state["_triangle_indices"].detach().cpu().long()
     vertices = state["triangles_points"].detach().cpu().float()
-    features_dc = state["features_dc"].detach().cpu().float()
-    features_rest = state["features_rest"].detach().cpu().float()
-    if features_dc.ndim != 3 or features_dc.shape[1:] != (1, 3):
-        raise ValueError(f"expected features_dc shape [V,1,3], got {tuple(features_dc.shape)}")
-    if features_rest.ndim != 3 or features_rest.shape[1] < 3 or features_rest.shape[2] != 3:
-        raise ValueError(f"expected features_rest shape [V,>=3,3], got {tuple(features_rest.shape)}")
 
     selected_faces, face_stats = read_selected_faces(
         args.evidence_dir / "top_residual_supports.csv",
@@ -675,6 +636,8 @@ def main() -> int:
     selected_faces = [fid for fid in selected_faces if 0 <= int(fid) < int(faces.shape[0])]
 
     view_paths = sorted((args.evidence_dir / "views").glob("*.npz"))
+    if not view_paths:
+        view_paths = sorted((args.evidence_dir / "per_view_npz").glob("*.npz"))
     fit_paths, val_paths = split_view_paths(view_paths, int(args.policy_val_stride))
     fit_samples = collect_samples(
         fit_paths,
@@ -700,20 +663,20 @@ def main() -> int:
     )
 
     if selected_faces and fit_samples.count:
-        unique_vertices, selected_faces_local, fit_sample_vertex_ids = localize_samples(faces, selected_faces, fit_samples)
+        source_vertex_ids, selected_faces_local, fit_sample_vertex_ids = localize_samples(faces, selected_faces, fit_samples)
         _, _, val_sample_vertex_ids = localize_samples(faces, selected_faces, val_samples) if val_samples.count else (
-            unique_vertices,
+            source_vertex_ids,
             selected_faces_local,
             torch.empty((0, 3), dtype=torch.long),
         )
     else:
-        unique_vertices = torch.empty((0,), dtype=torch.long)
+        source_vertex_ids = torch.empty((0,), dtype=torch.long)
         selected_faces_local = torch.empty((0, 3), dtype=torch.long)
         fit_sample_vertex_ids = torch.empty((0, 3), dtype=torch.long)
         val_sample_vertex_ids = torch.empty((0, 3), dtype=torch.long)
 
     device = torch.device(args.device if torch.cuda.is_available() or args.device == "cpu" else "cpu")
-    vertices_local = vertices[unique_vertices].float() if unique_vertices.numel() else torch.empty((0, 3), dtype=torch.float32)
+    vertices_local = vertices[source_vertex_ids].float() if source_vertex_ids.numel() else torch.empty((0, 3), dtype=torch.float32)
     fit_ids, fit_basis, fit_target, fit_weights = samples_to_tensors(
         fit_samples,
         fit_sample_vertex_ids,
@@ -739,7 +702,7 @@ def main() -> int:
         fit_basis,
         fit_target,
         fit_weights,
-        vertex_count=int(unique_vertices.shape[0]),
+        vertex_count=int(source_vertex_ids.shape[0]),
         max_abs_dc_coeff=max_abs_dc_coeff,
         max_abs_sh_coeff=max_abs_sh_coeff,
         lambda_mag=float(args.lambda_mag),
@@ -752,76 +715,58 @@ def main() -> int:
     coeff_device = coeff.to(device=device)
     fit_proxy = evaluate_proxy(coeff_device, fit_ids, fit_basis, fit_target, fit_weights)
     val_proxy = evaluate_proxy(coeff_device, val_ids, val_basis, val_target, val_weights)
+    face_policy = evaluate_proxy_by_face(coeff_device, val_ids, val_basis, val_target, val_weights, val_samples.face_ids)
     fit_unique_faces = int(np.unique(fit_samples.face_ids).size) if fit_samples.count else 0
     val_unique_faces = int(np.unique(val_samples.face_ids).size) if val_samples.count else 0
-    base_policy_pass = (
+
+    global_policy_pass = (
         fit_samples.count > 0
         and val_samples.count >= int(args.min_policy_val_samples)
         and val_unique_faces >= int(args.min_policy_val_unique_faces)
         and float(val_proxy["relative_gain"]) >= float(args.min_policy_val_relative_gain)
     )
-    face_policy_enabled = (
-        int(args.max_faces_to_apply) > 0
-        or int(args.min_face_policy_val_samples) > 0
-        or float(args.min_face_policy_val_relative_gain) > -1.0e8
+    face_candidates: list[int] = []
+    for fid in selected_faces:
+        stats = face_policy.get(int(fid), {})
+        if int(stats.get("samples", 0)) < int(args.min_face_policy_val_samples):
+            continue
+        if float(stats.get("relative_gain", -1.0)) < float(args.min_face_policy_val_relative_gain):
+            continue
+        face_candidates.append(int(fid))
+    face_candidates.sort(
+        key=lambda fid: (
+            float(face_policy.get(fid, {}).get("relative_gain", 0.0)),
+            float(face_stats.get(fid, {}).get("score", 0.0)),
+            float(face_stats.get(fid, {}).get("pixel_count", 0.0)),
+        ),
+        reverse=True,
     )
-    face_policy: dict[str, Any] = {
-        "enabled": False,
-        "candidates": int(len(selected_faces)),
-        "accepted_faces": int(len(selected_faces)),
-        "accepted_vertices": int(unique_vertices.shape[0]),
-        "min_face_policy_val_relative_gain": float(args.min_face_policy_val_relative_gain),
-        "min_face_policy_val_samples": int(args.min_face_policy_val_samples),
-        "max_faces_to_apply": int(args.max_faces_to_apply),
-        "accepted_face_ids": selected_faces[:256],
-        "top_faces": [],
-    }
-    coeff_apply = coeff
-    if face_policy_enabled:
-        coeff_apply, face_policy = _filter_coeff_by_face_policy(
-            coeff=coeff,
-            selected_faces=selected_faces,
-            face_stats=face_stats,
-            selected_faces_local=selected_faces_local,
-            val_samples=val_samples,
-            val_ids=val_ids,
-            val_basis=val_basis,
-            val_target=val_target,
-            val_weights=val_weights,
-            min_face_gain=float(args.min_face_policy_val_relative_gain),
-            min_face_samples=int(args.min_face_policy_val_samples),
-            max_faces_to_apply=int(args.max_faces_to_apply),
-            device=device,
-        )
-    coeff_apply_device = coeff_apply.to(device=device)
-    fit_proxy_applied = evaluate_proxy(coeff_apply_device, fit_ids, fit_basis, fit_target, fit_weights)
-    val_proxy_applied = evaluate_proxy(coeff_apply_device, val_ids, val_basis, val_target, val_weights)
-    policy_pass = bool(
-        base_policy_pass
-        and (not face_policy_enabled or int(face_policy.get("accepted_faces", 0)) > 0)
-        and float(val_proxy_applied["relative_gain"]) >= float(args.min_policy_val_relative_gain)
-    )
-    accepted = bool(policy_pass or args.force_apply)
+    accepted_faces = face_candidates[: max(int(args.max_faces_to_apply), 0)]
+    accepted = bool((global_policy_pass and accepted_faces) or args.force_apply)
+    if bool(args.force_apply) and not accepted_faces:
+        accepted_faces = selected_faces[: max(int(args.max_faces_to_apply), 0)]
+        accepted = bool(accepted_faces)
     no_op_copy = bool((not accepted) and args.no_op_on_fail)
 
-    out = clone_state(state)
     if accepted or not args.no_op_on_fail:
-        out_features_dc = features_dc.clone()
-        out_features_rest = features_rest.clone()
-        if coeff_apply.numel():
-            out_features_dc[unique_vertices, 0, :] = out_features_dc[unique_vertices, 0, :] + coeff_apply[:, 0, :]
-            out_features_rest[unique_vertices, 0:3, :] = out_features_rest[unique_vertices, 0:3, :] + coeff_apply[:, 1:4, :]
-        out["features_dc"] = out_features_dc.to(dtype=state["features_dc"].dtype)
-        out["features_rest"] = out_features_rest.to(dtype=state["features_rest"].dtype)
+        out = materialize_facelocal(state, faces, selected_faces, source_vertex_ids, coeff, accepted_faces)
+    else:
+        out = clone_state(state)
     torch.save(out, output_checkpoint)
 
     degenerate, invalid = validate_faces(out["triangles_points"], out["_triangle_indices"])
-    topology_unchanged = (
-        int(out["_triangle_indices"].shape[0]) == int(faces.shape[0])
-        and int(out["triangles_points"].shape[0]) == int(vertices.shape[0])
-    )
+    topology_triangles_unchanged = int(out["_triangle_indices"].shape[0]) == int(faces.shape[0])
+    vertices_added = int(out["triangles_points"].shape[0]) - int(vertices.shape[0])
+    accepted_coeff_abs = torch.empty((0,), dtype=torch.float32)
+    if accepted_faces and coeff.numel():
+        face_to_selected = {int(fid): idx for idx, fid in enumerate(selected_faces)}
+        local_ids: list[int] = []
+        for fid in accepted_faces:
+            row = face_to_selected[int(fid)]
+            local_ids.extend([row * 3, row * 3 + 1, row * 3 + 2])
+        accepted_coeff_abs = coeff[torch.as_tensor(local_ids, dtype=torch.long)].abs()
     audit = {
-        "operator": "surface_residual_barycentric_sh1_delta",
+        "operator": "surface_residual_facelocal_sh1_delta",
         "test_usage": "none",
         "source_model": str(args.source_model),
         "source_checkpoint": str(source_checkpoint),
@@ -830,21 +775,16 @@ def main() -> int:
         "iteration": int(args.iteration),
         "evidence_dir": str(args.evidence_dir),
         "selected_faces": int(len(selected_faces)),
-        "vertices_modified": (
-            int(face_policy.get("accepted_vertices", int(unique_vertices.shape[0])))
-            if (accepted or not args.no_op_on_fail)
-            else 0
-        ),
+        "face_policy_candidates": int(len(face_candidates)),
+        "accepted_faces": int(len(accepted_faces)) if accepted else 0,
+        "vertices_added": int(vertices_added if accepted else 0),
         "fit_views": [p.stem for p in fit_paths],
         "policy_val_views": [p.stem for p in val_paths],
         "fit_proxy": fit_proxy,
         "policy_val_proxy": val_proxy,
-        "fit_proxy_applied": fit_proxy_applied,
-        "policy_val_proxy_applied": val_proxy_applied,
         "fit_unique_faces": int(fit_unique_faces),
         "policy_val_unique_faces": int(val_unique_faces),
         "solver": solver,
-        "face_policy": face_policy,
         "filters": {
             "top_k": int(args.top_k),
             "min_view_hits": int(args.min_view_hits),
@@ -862,18 +802,18 @@ def main() -> int:
         "lambda_mag": float(args.lambda_mag),
         "lambda_sh1_mag": float(args.lambda_sh1_mag),
         "lambda_smooth": float(args.lambda_smooth),
+        "max_faces_to_apply": int(args.max_faces_to_apply),
         "min_policy_val_relative_gain": float(args.min_policy_val_relative_gain),
         "min_policy_val_samples": int(args.min_policy_val_samples),
         "min_policy_val_unique_faces": int(args.min_policy_val_unique_faces),
-        "base_policy_pass": bool(base_policy_pass),
-        "policy_pass": bool(policy_pass),
-        "accepted": accepted,
+        "min_face_policy_val_relative_gain": float(args.min_face_policy_val_relative_gain),
+        "min_face_policy_val_samples": int(args.min_face_policy_val_samples),
+        "global_policy_pass": bool(global_policy_pass),
+        "accepted": bool(accepted),
         "force_apply": bool(args.force_apply),
         "no_op_copy": no_op_copy,
-        "coeff_abs_mean": float(coeff_apply.abs().mean().item()) if coeff_apply.numel() and accepted else 0.0,
-        "coeff_abs_max": float(coeff_apply.abs().max().item()) if coeff_apply.numel() and accepted else 0.0,
-        "dc_coeff_abs_mean": float(coeff_apply[:, 0, :].abs().mean().item()) if coeff_apply.numel() and accepted else 0.0,
-        "sh1_coeff_abs_mean": float(coeff_apply[:, 1:4, :].abs().mean().item()) if coeff_apply.numel() and accepted else 0.0,
+        "coeff_abs_mean": float(accepted_coeff_abs.mean().item()) if accepted_coeff_abs.numel() and accepted else 0.0,
+        "coeff_abs_max": float(accepted_coeff_abs.max().item()) if accepted_coeff_abs.numel() and accepted else 0.0,
         "topology_before": {
             "triangles": int(faces.shape[0]),
             "vertices": int(vertices.shape[0]),
@@ -884,7 +824,15 @@ def main() -> int:
             "degenerate_face_count": int(degenerate),
             "invalid_index_count": int(invalid),
         },
-        "topology_unchanged": bool(topology_unchanged),
+        "topology_triangles_unchanged": bool(topology_triangles_unchanged),
+        "accepted_preview": [
+            {
+                "face_id": int(fid),
+                "face_stats": face_stats.get(int(fid), {}),
+                "policy_val_proxy": face_policy.get(int(fid), {}),
+            }
+            for fid in (accepted_faces[:20] if accepted else [])
+        ],
     }
     write_audit(args.output_model, audit)
     print(json.dumps(audit, indent=2))
