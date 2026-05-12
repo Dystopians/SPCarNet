@@ -91,9 +91,128 @@ def test_backbone_forward(model_name: str = "vit_base_patch14_dinov2.lvd142m") -
     print(f"[backbone fd] random-vs-random fd={fd['fd']:.4f} mean={fd['mean_term']:.4f} trace={fd['trace_term']:.4f}")
 
 
+class StubJudge:
+    """Deterministic FD judge for integration tests: maps each [3,H,W] image to a
+    8-d feature derived from its per-channel mean and crude texture stats."""
+
+    image_size = 4
+
+    def prepare(self, image):
+        if image.ndim == 3:
+            x = image.unsqueeze(0)
+        else:
+            x = image
+        x = torch.nn.functional.interpolate(
+            x.float(), size=(self.image_size, self.image_size), mode="bilinear", align_corners=False
+        )
+        return x.squeeze(0)
+
+    def encode(self, images):
+        if images.ndim == 3:
+            images = images.unsqueeze(0)
+        flat = images.float().reshape(images.shape[0], 3, -1)
+        means = flat.mean(dim=2)
+        stds = flat.std(dim=2)
+        maxes = flat.amax(dim=2)
+        minus = flat.amin(dim=2)
+        feats = torch.cat([means, stds, maxes, minus], dim=1)
+        return feats[:, :8].contiguous()
+
+
+def _make_synthetic_frame(tmp, split, idx, base_value, residual_strength):
+    from pathlib import Path
+
+    import numpy as np
+    from PIL import Image
+
+    from utils.evidence_lumigraph_adapter import CameraRecord, FrameRecord
+
+    root = Path(tmp)
+    method = root / split / "ours_1"
+    h = w = 8
+    base = np.full((h, w, 3), base_value, dtype=np.float32)
+    residual = np.zeros((h, w, 3), dtype=np.float32)
+    residual[:, 2:6, 0] = residual_strength
+    gt = base + residual
+    depth = np.ones((h, w), dtype=np.float32)
+    render = method / "renders" / f"{idx:05d}.png"
+    target = method / "gt" / f"{idx:05d}.png"
+    depth_path = method / "depths" / f"{idx:05d}.npy"
+    for p in (render, target, depth_path):
+        p.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.clip(base * 255, 0, 255).astype(np.uint8)).save(render)
+    Image.fromarray(np.clip(gt * 255, 0, 255).astype(np.uint8)).save(target)
+    np.save(depth_path, depth)
+    cam = CameraRecord(
+        idx=idx,
+        image_name=f"cam{idx}",
+        width=w,
+        height=h,
+        fx=float(w),
+        fy=float(h),
+        camera_center=(0.0, 0.0, 0.0),
+        world_view_transform=tuple(tuple(float(v) for v in row) for row in __import__("numpy").eye(4, dtype="float32")),
+    )
+    return FrameRecord(
+        idx=idx, name=f"{idx:05d}", render_path=render, gt_path=target, depth_path=depth_path, camera=cam
+    )
+
+
+def test_calibrate_alpha_fd_integration() -> None:
+    """End-to-end: FD path runs, alpha=0 is exempt from strict rejection, fd_min_views guard works."""
+    import tempfile
+
+    from utils.evidence_lumigraph_adapter import calibrate_alpha
+
+    judge = StubJudge()
+    with tempfile.TemporaryDirectory() as tmp:
+        frames = [
+            _make_synthetic_frame(tmp, "train", i, base_value=0.25, residual_strength=0.20)
+            for i in range(4)
+        ]
+        # FD enabled but fd_views_taken (2) is below default fd_min_views (8) -> should skip cleanly
+        calib_skip = calibrate_alpha(
+            frames,
+            alpha_grid=[0.0, 0.5, 1.0],
+            k=1, mode="residual",
+            calib_stride=1, calib_max_views=2, calib_sampler="uniform",
+            residual_clip=1.0,
+            depth_abs_tol=0.001, depth_rel_tol=0.001, direction_weight=0.0,
+            device="cpu",
+            fd_judge=judge, fd_weight=1.0, fd_strict=True, fd_max_views=4, fd_min_views=8,
+        )
+        assert calib_skip["fd_requested"] is True
+        assert calib_skip["fd_enabled"] is False, calib_skip
+        assert "insufficient" in (calib_skip["fd_skipped_reason"] or ""), calib_skip
+        # Lower fd_min_views to allow FD to run on the available 2 views
+        calib_on = calibrate_alpha(
+            frames,
+            alpha_grid=[0.0, 0.5, 1.0],
+            k=1, mode="residual",
+            calib_stride=1, calib_max_views=2, calib_sampler="uniform",
+            residual_clip=1.0,
+            depth_abs_tol=0.001, depth_rel_tol=0.001, direction_weight=0.0,
+            device="cpu",
+            fd_judge=judge, fd_weight=1.0, fd_strict=True, fd_max_views=4, fd_min_views=2,
+        )
+        assert calib_on["fd_enabled"] is True, calib_on
+        rows = {float(r["alpha"]): r for r in calib_on["rows"]}
+        # R3: alpha=0 fd_gain must be exactly zero because we reuse base feats.
+        assert rows[0.0]["fd_gain"] == 0.0, rows[0.0]
+        # R3: alpha=0 must never be marked fd_rejected.
+        assert rows[0.0]["fd_rejected"] is False
+        # FD fields exist for all alphas.
+        for a in (0.0, 0.5, 1.0):
+            assert rows[a]["fd"] is not None, rows[a]
+            assert rows[a]["base_fd"] is not None, rows[a]
+            assert rows[a]["fd_views"] == 2
+    print("[fd integration] passed")
+
+
 if __name__ == "__main__":
     test_fd_matches_numpy()
     test_fd_zero_for_equal_batches()
     test_fd_loss_matches_two_batch()
     test_backbone_forward()
+    test_calibrate_alpha_fd_integration()
     print("OK")

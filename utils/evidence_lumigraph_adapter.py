@@ -1044,6 +1044,7 @@ def calibrate_alpha(
     fd_strict: bool = False,
     fd_strict_tol: float = 0.0,
     fd_max_views: int = 32,
+    fd_min_views: int = 8,
 ) -> dict[str, object]:
     if not train_frames:
         return {"alpha": 0.0, "reason": "no_train_frames", "rows": []}
@@ -1133,34 +1134,51 @@ def calibrate_alpha(
             rows[float(alpha)]["count"] += 1
         if fd_take:
             alpha_order = list(alpha_grid)
-            stack = torch.stack(
-                [base, gt] + [fd_preds_this_target[float(a)] for a in alpha_order], dim=0
-            )
+            nonzero_idx = [
+                (i, float(a)) for i, a in enumerate(alpha_order) if abs(float(a)) > 1e-9
+            ]
+            prep_base = fd_judge.prepare(base)
+            prep_gt = fd_judge.prepare(gt)
+            prep_preds = [
+                fd_judge.prepare(fd_preds_this_target[a]) for _, a in nonzero_idx
+            ]
+            stack = torch.stack([prep_base, prep_gt] + prep_preds, dim=0)
             feats = fd_judge.encode(stack)
-            fd_feats_base.append(feats[0:1].detach().cpu())
+            base_feat = feats[0:1].detach().cpu()
+            fd_feats_base.append(base_feat)
             fd_feats_gt.append(feats[1:2].detach().cpu())
-            for i, a in enumerate(alpha_order):
-                fd_feats_alpha[float(a)].append(feats[2 + i : 3 + i].detach().cpu())
+            for slot, (i, a) in enumerate(nonzero_idx):
+                fd_feats_alpha[a].append(feats[2 + slot : 3 + slot].detach().cpu())
+            for a_zero in (float(a) for a in alpha_order if abs(float(a)) <= 1e-9):
+                fd_feats_alpha[a_zero].append(base_feat)
             fd_views_taken += 1
     fd_summary: dict[float, dict] = {}
-    if fd_use and fd_views_taken > 0 and fd_feats_gt:
-        from utils.fd_loss import frechet_distance
+    fd_skipped_reason: str | None = None
+    if fd_use:
+        if fd_views_taken < max(int(fd_min_views), 2):
+            fd_skipped_reason = (
+                f"insufficient_calibration_views: got {fd_views_taken}, need >= {max(int(fd_min_views), 2)}"
+            )
+        elif not fd_feats_gt:
+            fd_skipped_reason = "empty_gt_features"
+        else:
+            from utils.fd_loss import frechet_distance
 
-        base_feats = torch.cat(fd_feats_base, dim=0)
-        gt_feats = torch.cat(fd_feats_gt, dim=0)
-        fd_base_info = frechet_distance(base_feats, gt_feats)
-        for alpha in alpha_grid:
-            alpha_feats_list = fd_feats_alpha.get(float(alpha), [])
-            if not alpha_feats_list:
-                continue
-            alpha_feats = torch.cat(alpha_feats_list, dim=0)
-            fd_alpha_info = frechet_distance(alpha_feats, gt_feats)
-            fd_summary[float(alpha)] = {
-                "fd": float(fd_alpha_info["fd"]),
-                "base_fd": float(fd_base_info["fd"]),
-                "fd_gain": float(fd_base_info["fd"] - fd_alpha_info["fd"]),
-                "fd_views": int(fd_views_taken),
-            }
+            base_feats = torch.cat(fd_feats_base, dim=0)
+            gt_feats = torch.cat(fd_feats_gt, dim=0)
+            fd_base_info = frechet_distance(base_feats, gt_feats)
+            for alpha in alpha_grid:
+                alpha_feats_list = fd_feats_alpha.get(float(alpha), [])
+                if not alpha_feats_list:
+                    continue
+                alpha_feats = torch.cat(alpha_feats_list, dim=0)
+                fd_alpha_info = frechet_distance(alpha_feats, gt_feats)
+                fd_summary[float(alpha)] = {
+                    "fd": float(fd_alpha_info["fd"]),
+                    "base_fd": float(fd_base_info["fd"]),
+                    "fd_gain": float(fd_base_info["fd"] - fd_alpha_info["fd"]),
+                    "fd_views": int(fd_views_taken),
+                }
     row_list = []
     best_alpha = 0.0
     best_score = -float("inf")
@@ -1180,7 +1198,7 @@ def calibrate_alpha(
             selection_score += float(ssim_weight) * ssim_gain
         if lpips_model is not None:
             selection_score += float(lpips_weight) * lpips_gain
-        fd_info = fd_summary.get(float(alpha)) if fd_use else None
+        fd_info = fd_summary.get(float(alpha)) if (fd_use and fd_summary) else None
         fd_value = float(fd_info["fd"]) if fd_info is not None else None
         fd_base_value = float(fd_info["base_fd"]) if fd_info is not None else None
         fd_gain_value = float(fd_info["fd_gain"]) if fd_info is not None else 0.0
@@ -1234,9 +1252,12 @@ def calibrate_alpha(
         "ssim_weight": float(ssim_weight),
         "lpips_weight": float(lpips_weight),
         "compute_lpips": bool(compute_lpips),
-        "fd_enabled": bool(fd_use),
+        "fd_enabled": bool(fd_use and not fd_skipped_reason),
+        "fd_requested": bool(fd_use),
         "fd_weight": float(fd_weight),
         "fd_strict": bool(fd_strict),
         "fd_strict_tol": float(fd_strict_tol),
+        "fd_min_views": int(fd_min_views),
         "fd_views": int(fd_views_taken),
+        "fd_skipped_reason": fd_skipped_reason,
     }

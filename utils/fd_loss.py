@@ -38,20 +38,37 @@ class FrozenReprConfig:
     image_size: int = 224
 
 
+class FDBackboneUnavailable(RuntimeError):
+    """Raised when the FD frozen backbone cannot be constructed (e.g. timm weights cannot be downloaded)."""
+
+
 class FrozenReprModel:
     def __init__(
         self,
         config: FrozenReprConfig | None = None,
         device: torch.device | str = "cuda",
     ) -> None:
-        import timm
-        from timm.data import resolve_data_config
+        try:
+            import timm
+            from timm.data import resolve_data_config
+        except Exception as exc:
+            raise FDBackboneUnavailable(
+                f"FD backbone requires `timm` but the import failed: {exc}. "
+                f"Install `timm` or run without --fd_weight/--fd_strict."
+            ) from exc
 
         cfg = config or FrozenReprConfig()
         self.cfg = cfg
         self.device = torch.device(device)
 
-        model = timm.create_model(cfg.model_name, pretrained=True, num_classes=0)
+        try:
+            model = timm.create_model(cfg.model_name, pretrained=True, num_classes=0)
+        except Exception as exc:
+            raise FDBackboneUnavailable(
+                f"Failed to load timm model '{cfg.model_name}' (likely a download / cache issue: {exc}). "
+                f"Either pre-cache the weights under $HF_HOME or $TORCH_HOME, "
+                f"or rerun without --fd_weight/--fd_strict."
+            ) from exc
         model = model.to(self.device).eval()
         for p in model.parameters():
             p.requires_grad_(False)
@@ -85,8 +102,38 @@ class FrozenReprModel:
         return self.cfg.pool_type
 
     @torch.no_grad()
+    def prepare(self, image: torch.Tensor) -> torch.Tensor:
+        """Pre-resize a single image to the backbone's input size.
+
+        Use this when stacking many large frames before encode to keep the
+        peak stack memory bounded by backbone resolution, not original size.
+        Returns a CPU/GPU tensor of shape [3, image_size, image_size].
+        """
+        if image.ndim == 3:
+            x = image.unsqueeze(0)
+        elif image.ndim == 4 and image.shape[0] == 1:
+            x = image
+        else:
+            raise ValueError(
+                f"prepare expects [3,H,W] or [1,3,H,W], got {tuple(image.shape)}"
+            )
+        x = F.interpolate(
+            x.float(),
+            size=(self._image_size, self._image_size),
+            mode="bilinear",
+            align_corners=False,
+            antialias=True,
+        )
+        return x.squeeze(0)
+
+    @torch.no_grad()
     def encode(self, images: torch.Tensor) -> torch.Tensor:
-        """images: float in [0,1], shape [N,3,H,W] or [3,H,W]. Returns [N,D]."""
+        """images: float in [0,1], shape [N,3,H,W] or [3,H,W]. Returns [N,D].
+
+        If `images` are already at the backbone's input size the internal
+        F.interpolate is a no-op; combine with `prepare` upstream to bound
+        peak memory on large frames.
+        """
         if images.ndim == 3:
             images = images.unsqueeze(0)
         if images.ndim != 4 or images.shape[1] != 3:
@@ -94,13 +141,14 @@ class FrozenReprModel:
                 f"encode expects [N,3,H,W] float[0,1] tensor, got {tuple(images.shape)}"
             )
         x = images.to(self.device, non_blocking=True).float()
-        x = F.interpolate(
-            x,
-            size=(self._image_size, self._image_size),
-            mode="bilinear",
-            align_corners=False,
-            antialias=True,
-        )
+        if x.shape[-2] != self._image_size or x.shape[-1] != self._image_size:
+            x = F.interpolate(
+                x,
+                size=(self._image_size, self._image_size),
+                mode="bilinear",
+                align_corners=False,
+                antialias=True,
+            )
         x = (x.clamp(0.0, 1.0) - self._mean) / self._std
         feats = self.model.forward_features(x)
 
@@ -186,7 +234,13 @@ def frechet_distance_loss(
     sigma_ref_sqrt: torch.Tensor | None = None,
     eps: float = 1e-6,
 ) -> torch.Tensor:
-    """Differentiable single-direction Frechet loss vs. a precomputed reference."""
+    """Single-direction Frechet loss vs. a precomputed reference Gaussian.
+
+    The math is differentiable (torch.linalg.eigh supports autograd), but
+    `FrozenReprModel.encode` runs under @torch.no_grad and will block
+    gradients from reaching `feats`. To use this as a training loss, run
+    the backbone forward yourself without the no-grad wrapper.
+    """
     if feats.ndim != 2:
         raise ValueError(f"frechet_distance_loss expects [N,D], got {tuple(feats.shape)}")
     feats = feats.double()

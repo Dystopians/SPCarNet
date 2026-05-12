@@ -311,6 +311,8 @@ def _policy_args(report: dict[str, Any], *, trainval: bool, args: argparse.Names
             [
                 "--policy_holdout_fraction",
                 str(args.policy_holdout_fraction),
+                "--policy_holdout_offset",
+                str(args.policy_holdout_offset),
                 "--support_policy_fit_only",
                 "--calib_sampler",
                 args.calib_sampler,
@@ -656,6 +658,7 @@ def main() -> int:
     parser.add_argument("--candidate_test_method", default="ours_26000_bary_delta_v2wide_s08_phasej_ela")
     parser.add_argument("--candidate_trainval_method", default="ours_26000_bary_delta_v2wide_s08_phasej_trainval_gate")
     parser.add_argument("--policy_holdout_fraction", type=float, default=0.25)
+    parser.add_argument("--policy_holdout_offset", type=int, default=0)
     parser.add_argument("--calib_sampler", choices=("stride_first", "uniform"), default="uniform")
     parser.add_argument("--calib_max_views", type=int, default=32)
     parser.add_argument("--calib_stride", type=int, default=1)

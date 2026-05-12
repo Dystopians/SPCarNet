@@ -2,7 +2,7 @@
 
 **Train-only evidence-guided compact Mesh Splatting with geometry-safe reconstruction repair.**
 
-[中文](README.zh.md) | [Phase-J result](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R fixed ladder](docs/car_model/5-10-ECSR-PhaseR-FixedCandidateLadder.md) | [Phase-J external validation](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [May 7 update](docs/car_model/5-7-Update.md) | [Upgrade plan](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR audit](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [Execution log](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
+[中文](README.zh.md) | [Phase-J result](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R fixed ladder](docs/car_model/5-10-ECSR-PhaseR-FixedCandidateLadder.md) | [Phase-R indoor audit](docs/car_model/5-11-PhaseR-Indoor-Multifold-Gate-Audit.md) | [Phase-J external validation](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [May 7 update](docs/car_model/5-7-Update.md) | [Upgrade plan](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR audit](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [Execution log](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
 
 SPCarNet is a research branch built on Mesh Splatting. The current ECSR version keeps the fixed Phase-F compact checkpoints, then uses a train-evidence guarded portfolio for appearance recovery: stable scenes use adaptive-alpha ELA, and unstable scenes use a train-selected structural edge fallback. No held-out test metric is used to select the branch, edge gate, alpha, or compaction ratio.
 
@@ -69,6 +69,7 @@ Current execution artifacts:
 - Phase-J external courtyard validation: [`docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md`](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md)
 - Surface-attached residual lumigraph V8: [`docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md`](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md)
 - Phase-R fixed surface-SH1 ladder: [`docs/car_model/5-10-ECSR-PhaseR-FixedCandidateLadder.md`](docs/car_model/5-10-ECSR-PhaseR-FixedCandidateLadder.md)
+- Phase-R indoor multi-fold and gamma trust audit: [`docs/car_model/5-11-PhaseR-Indoor-Multifold-Gate-Audit.md`](docs/car_model/5-11-PhaseR-Indoor-Multifold-Gate-Audit.md)
 - Execution log: [`docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md`](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md)
 - Combined Phase-A contact sheet: `outputs/carnet/meshsplatopt/ecsr_phase_a/surface_evidence/phase_a_surface_evidence_contact_sheet.png`
 
@@ -84,7 +85,7 @@ Phase-G tested teacher-baking ELA back into a topology-frozen checkpoint and was
 
 Phase-M / V8 adds the cleanest representation-attached recovery baseline so far: train residuals are stored on surface `face_id`s and applied to held-out views through target surface maps only. A fixed two-split consensus policy accepts `flowers` and `garden`, rejects the other `7 / 9` scenes as no-op, and gives a tiny positive full9 mean delta of `+0.000250` PSNR, `+0.000000868` SSIM, and `-0.00000638` LPIPS versus the Phase-F compact base. This is not the paper-facing RGB endpoint; it is the safe surface-attached baseline for the next higher-capacity representation work.
 
-Phase-R upgrades this to checkpoint-baked surface SH1 residuals with a fixed dense/sparse candidate ladder.  On outdoor-5 it selects four train-val-certified representation edits and one predeclared no-op for the Phase-J edge-fallback scene, giving report-only mean deltas of `+0.000837` PSNR, `+0.000101` SSIM, and `-0.000177` LPIPS versus the Phase-J base.  This is a cleaner representation-level result than V8, but the full-frame gains remain small and treehill shows that edge-fallback scenes need a dedicated edge-aware operator.
+Phase-R upgrades this to checkpoint-baked surface SH1 residuals with a fixed candidate ladder plus a train-only gamma trust-region residual gate. The latest full9 v10 snapshot accepts `6 / 9` representation edits under strict train-heldout gates, gives `6 / 9` report-only strict RGB wins, and has mean report-only deltas of `+0.002993` PSNR, `+0.000136` SSIM, and `-0.000217` LPIPS versus Phase-J. The new gamma trust-region step converts `room` from a multi-fold rejection into an accepted representation edit without using held-out test metrics for selection. The remaining bottlenecks are `counter`, `bonsai`, and edge-fallback scenes such as `treehill`; the gains are robust but still small-margin rather than a final visual breakthrough.
 
 ## Additional Evaluation Views
 
@@ -98,6 +99,7 @@ Current Phase-J summary:
 | geometry / topology | mean triangle reduction `7.6479%`; `6 / 9` strict sparse-geometry wins, `9 / 9` geometry-safe scenes under the Phase-J closure audit |
 | per-view audit | `244 / 246` held-out views strictly improve PSNR, SSIM, and LPIPS over the selected clean baseline |
 | external validation | ETH3D courtyard clean9000 strict RGB win: up to `+0.2642` PSNR, `+0.0094` SSIM, `-0.0225` LPIPS; mixed vs older ELA7 |
+| Phase-R v10 representation ladder | `6 / 9` strict train-heldout accepted selections, `6 / 9` report-only strict RGB wins, mean `+0.002993` PSNR, `+0.000136` SSIM, `-0.000217` LPIPS vs Phase-J; `room` is newly accepted by gamma trust-region residual blending |
 
 The detailed tables below are retained from the May 7 archived Compact-ELA/SOR report for provenance. Lower is better for LPIPS, AbsRel, DepthMAE, and Normal.
 
@@ -196,7 +198,21 @@ This is a research method rather than a post-hoc engineering patch because the m
 
 ### Optional: Frechet-distance gate on alpha selection
 
-The alpha selector now exposes an optional Frechet-distance signal as one more train-only non-regression gate, ported in spirit from Yang et al., "Representation Frechet Loss for Visual Generation" ([FD-Loss](https://github.com/Jiawei-Yang/FD-Loss)). For each candidate alpha the selector accumulates DINOv2 ViT-B/14 cls features over the train calibration views, estimates an empirical Gaussian, and computes the closed-form Frechet distance against the GT batch. `fd_gain = FD(base, gt) - FD(alpha, gt)` is added to the existing PSNR / SSIM / LPIPS selection score with weight `--fd_weight`, and `--fd_strict` rejects any `alpha > 0` whose `fd_gain` drops below `-fd_strict_tol` so the alpha=0 fallback always wins on regressions. The default is off (`fd_weight=0`); the gate is a calibration signal, not a training loss, and is never used to look at test GT. See `utils/fd_loss.py` and `scripts/car_model/smoke_test_fd_loss.py`.
+The alpha selector exposes an optional Frechet-distance signal as one more train-only non-regression gate, ported in spirit from Yang et al., "Representation Frechet Loss for Visual Generation" ([FD-Loss](https://github.com/Jiawei-Yang/FD-Loss)). For each candidate alpha the selector accumulates DINOv2 ViT-B/14 cls features over the train calibration views (batched at the backbone's 518x518 input size), estimates an empirical Gaussian, and computes the closed-form Frechet distance against the GT batch. The gate is a calibration signal, not a training loss, and never sees test GT.
+
+Two modes:
+
+- **`--fd_strict` (recommended first)**: any `alpha > 0` whose expected `fd_gain = FD(base, gt) - FD(alpha, gt)` drops below `-fd_strict_tol` is removed from the candidate set; `alpha = 0` is exempt and acts as a clean fallback. This is a pure non-regression filter and does not perturb the existing PSNR / SSIM / LPIPS ranking among the survivors.
+- **`--fd_weight w` (advanced)**: adds `w * fd_gain` to the existing selection score. Raw DINOv2 FD on ~32 train views is typically O(5-30) while the other terms are O(1), so values much above `~0.05` will dominate the score. Treat this as a tunable knob, not a recommended default; for portfolio use, prefer `--fd_strict` alone.
+
+Defaults and safety rails:
+
+- Default is off (`fd_weight=0`, `fd_strict=False`); FD has zero overhead and the legacy behavior is bitwise identical.
+- `alpha=0` reuses the base features so its `fd_gain` is exactly `0` (no numerical drift in the alpha=0 fallback row).
+- If fewer than `--fd_min_views` (default 8) calibration views are available, FD is skipped and reported with `fd_skipped_reason` in the calibration record. This guards against the high-variance regime where the 768-d empirical covariance is rank-deficient and FD differences are dominated by noise rather than signal.
+- The backbone runs single-GPU only; no distributed all-gather, no streaming queue. If the timm weights cannot be downloaded the gate raises a `FDBackboneUnavailable` error with cache hints rather than silently failing.
+
+See `utils/fd_loss.py` and `scripts/car_model/smoke_test_fd_loss.py` (math + backbone forward + an end-to-end `calibrate_alpha` integration test that confirms the alpha=0 carve-out and the `fd_min_views` skip). The 2026-05-11 audit in `docs/car_model/5-11-FD-Loss-Integration-Audit.md` keeps FD optional: `--fd_weight 0.005` improved outdoor mean LPIPS but reduced PSNR/SSIM, so it is not promoted to the current all-axis main method.
 
 ## Why It Improves MeshSplatting
 
@@ -216,7 +232,7 @@ The result is not simply "train longer" or "pick a nicer checkpoint": clean `300
 | Compact + ELA without SSIM-peak alpha guard | whether scalar score alone is enough | room improves PSNR/LPIPS but loses held-out SSIM |
 | Compact + ELA with SSIM-peak guard | current policy | restores room and keeps all indoor scenes fair under one train-only policy |
 | Aggressive pruning branches | whether high compression can be forced | rejected; caused render/geometry regressions on sensitive scenes |
-| Optional FD gate (`--fd_weight > 0` or `--fd_strict`) | whether DINOv2 Frechet distance adds a train-only non-regression gate beyond LPIPS | off by default; available as a calibration signal in `calibrate_alpha`, never as a main loss and never against test GT |
+| Optional FD gate (`--fd_weight > 0` or `--fd_strict`) | whether DINOv2 Frechet distance adds a train-only non-regression gate beyond LPIPS | off by default; 2026-05-11 audit found LPIPS-oriented gains but PSNR/SSIM tradeoffs, so this remains an optional portfolio signal rather than the main method |
 
 More detailed ablations and failed branches are archived in the research log and historical reports linked below.
 

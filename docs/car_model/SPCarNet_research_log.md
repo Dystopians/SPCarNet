@@ -6000,3 +6000,139 @@ Decision: the Phase-K gate is validated as a safety mechanism across outdoor
 scenes, but not as a large-gain final method. It should remain in the system as
 an auditable representation-level safeguard while the next research effort
 targets a stronger persistent basis.
+
+## 2026-05-11 FD Loss / Frechet Judge Integration Audit
+
+Prompted by the newly introduced FD loss path, I audited whether the signal can
+improve the current Phase-J/ECSR method rather than becoming another parameter
+game.
+
+Implementation status:
+
+- `utils/fd_loss.py` smoke test passes, including numerical FD consistency,
+  DINOv2 forward, and `calibrate_alpha` integration.
+- `ecsr_run_phasef_ela_adapter_eval.py` now forwards FD arguments into the ELA
+  applicator, so batch/full-scene evaluation can actually enable the new path.
+- W&B logging now records FD selected gain/value/base, FD views, FD enabled
+  state, and max/min FD gain.
+
+Main empirical result:
+
+| scene | fdw alpha | dPSNR vs Phase-J | dSSIM | dLPIPS |
+|---|---:|---:|---:|---:|
+| bicycle | 0.75 | -0.206444 | -0.002864 | -0.006266 |
+| flowers | 0.875 | -0.070229 | -0.002217 | -0.002495 |
+| garden | 1.0 | -0.140196 | -0.003833 | +0.002657 |
+| stump | 0.5 | -0.011190 | +0.000848 | -0.001009 |
+| treehill | 1.0 | -0.032656 | -0.000441 | -0.014890 |
+
+Outdoor-5 mean with `--fd_weight 0.005`:
+`-0.092143` PSNR, `-0.001702` SSIM, `-0.004401` LPIPS.
+
+Decision: FD is useful as a perceptual/LPIPS-oriented portfolio signal, but it
+is not an all-axis mainline improvement. `--fd_strict` is safe but inert on the
+tested treehill branch; positive `--fd_weight` often trades PSNR/SSIM for LPIPS
+and even worsens garden LPIPS. Keep FD optional and documented. Do not use it
+as the paper main method unless a future representation-level training version
+beats Phase-J on PSNR, SSIM, LPIPS, compactness, and geometry simultaneously.
+
+Detailed audit: `docs/car_model/5-11-FD-Loss-Integration-Audit.md`.
+
+## 2026-05-11 Phase-R Indoor Multi-Fold Gate Audit
+
+Added a stricter train-only validation layer for Phase-R representation edits.
+The new `--policy_holdout_offset` interface lets the ELA train-policy-val split
+cycle across deterministic offsets, and
+`ecsr_run_phasek_multifold_trainval_gate.py` accepts a candidate only if every
+offset passes the PSNR/SSIM/LPIPS gate. The fixed policy selector now reads
+these multi-fold decisions directly.
+
+Key indoor findings:
+
+| scene | candidate | multi-fold decision | mean train-val dPSNR | mean dSSIM | mean dLPIPS | report-only test dPSNR | dSSIM | dLPIPS |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| room | dense16 SH1 | reject | -0.002081 | -0.000053 | +0.000034 | +0.002779 | +0.000239 | -0.000290 |
+| kitchen | sparse4096 SH1 | accept | +0.000537 | +0.000014 | -0.000011 | +0.022673 | +0.000719 | -0.001068 |
+| bonsai | dense16 SH1 | reject | +0.000216 | +0.000015 | +0.000073 | +0.000814 | +0.000017 | -0.000046 |
+
+This is an important correction to the policy: test-positive `room` and
+`bonsai` candidates are not promoted because their train-heldout behavior is
+not robust enough. The full9 fixed snapshot now selects 5/9 scenes with 5/9
+strict report-only RGB wins:
+
+`outputs/carnet/meshsplatopt/ecsr_phase_r/fixed_candidate_ladder_v7_multifold_indoor_full9/phase_r_fixed_candidate_ladder.md`
+
+Follow-up counter micro result: a more conservative 1024-face, low-strength
+SH1 edit passed the single train-val gate
+(`+0.001822` PSNR, `+0.000024` SSIM, `-0.000058` LPIPS) but hurt held-out test
+metrics (`-0.005699` PSNR, `-0.000253` SSIM, `+0.000318` LPIPS). It is not
+promoted. The multi-fold gate catches this false positive: offsets 1 and 2
+fail PSNR, so counter remains fallback in the v8 fixed snapshot.
+
+Follow-up room micro result: the same conservative edit had tiny positive
+single-gate and report-only test deltas, but multi-fold offset 2 failed PSNR
+(`-0.000084`), so room also remains fallback. The v9 fixed snapshot keeps the
+same selected set as v8, but now records both counter and room micro negatives.
+
+Status: `MULTIFOLD_POLICY_ADDED_KITCHEN_ACCEPTED_COUNTER_AND_ROOM_MICRO_REJECTED`.
+
+Detailed audit:
+`docs/car_model/5-11-PhaseR-Indoor-Multifold-Gate-Audit.md`.
+
+## 2026-05-11 Gamma Trust-Region Residual Policy
+
+Added `scripts/car_model/ecsr_blend_checkpoint_delta.py` to turn the persistent
+SH residual into a train-only trust-region decision. The tool writes a
+same-topology checkpoint blend
+`source + gamma * (candidate - source)` over appearance SH tensors while
+leaving geometry fixed. It is policy-compatible through
+`checkpoint_delta_blend_audit.json` and does not read held-out test residuals.
+
+Key result on `room`:
+
+| candidate | decision | mean train-val dPSNR | mean dSSIM | mean dLPIPS | report-only test dPSNR | dSSIM | dLPIPS |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| micro1024 SH1 gamma 0.50 | reject | +0.000046 | -0.000002 | +0.000000 | not promoted | not promoted | not promoted |
+| micro1024 SH1 gamma 0.75 | accept | +0.000089 | -0.000002 | +0.000000 | +0.000084 | +0.000001 | -0.000000 |
+
+The accepted gamma 0.75 candidate passes all four train-heldout offsets:
+
+| offset | dPSNR | dSSIM | dLPIPS | pass |
+|---:|---:|---:|---:|---:|
+| 0 | +0.000168 | +0.000001 | +0.000000 | yes |
+| 1 | +0.000095 | -0.000009 | -0.000000 | yes |
+| 2 | +0.000092 | -0.000000 | +0.000000 | yes |
+| 3 | +0.000000 | -0.000000 | +0.000002 | yes |
+
+This is a real robustness improvement over the previous room micro residual:
+the old candidate failed offset 2, while the trust-region variant is accepted
+under the same hard gate. The full9 fixed ladder improves from 5/9 to 6/9
+train-val accepted selections and from 5/9 to 6/9 strict report-only RGB wins:
+
+`outputs/carnet/meshsplatopt/ecsr_phase_r/fixed_candidate_ladder_v10_gamma_trust_full9/phase_r_fixed_candidate_ladder.md`
+
+Remaining limitation: the gain is strict but very small. It improves policy
+reliability and adds an indoor accepted scene, but it is not yet the large
+visual-margin result needed for a final top-conference story.
+
+Follow-up `bonsai` gamma trust negative:
+
+| candidate | decision | mean train-val dPSNR | mean dSSIM | mean dLPIPS | report-only test dPSNR | dSSIM | dLPIPS |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| dense16 SH1 gamma 0.75 | reject | +0.000219 | +0.000019 | +0.000071 | -0.006533 | +0.000678 | +0.000721 |
+
+Per-fold `bonsai` deltas:
+
+| offset | dPSNR | dSSIM | dLPIPS | pass |
+|---:|---:|---:|---:|---:|
+| 0 | +0.000416 | -0.000015 | +0.000010 | yes |
+| 1 | +0.000359 | +0.000016 | +0.000106 | yes |
+| 2 | +0.000031 | -0.000004 | +0.000005 | yes |
+| 3 | +0.000072 | +0.000080 | +0.000162 | no |
+
+This was deliberately run with the same fixed gamma `0.75` as `room`, not a
+scene-specific search. It confirms that gamma trust-region blending is useful
+for `room` but not sufficient for `bonsai`: the same offset-3 LPIPS failure
+remains, and the report-only test split loses PSNR and LPIPS even though SSIM
+increases. `bonsai` should stay fallback until a different operator can reduce
+perceptual residuals without this LPIPS/test tradeoff.

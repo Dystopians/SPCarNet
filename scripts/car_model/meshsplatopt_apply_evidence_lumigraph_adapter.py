@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import sys
@@ -54,14 +55,15 @@ def _selected_calibration_row(calibration: dict, alpha: float) -> dict:
     return {}
 
 
-def _split_policy_frames(train_frames, holdout_fraction: float) -> tuple[list, list]:
+def _split_policy_frames(train_frames, holdout_fraction: float, holdout_offset: int = 0) -> tuple[list, list]:
     frames = list(train_frames)
     fraction = float(holdout_fraction)
     if fraction <= 0.0 or len(frames) < 3:
         return frames, frames
     step = max(int(round(1.0 / min(max(fraction, 1e-6), 0.5))), 2)
-    policy_val = [frame for idx, frame in enumerate(frames) if idx % step == 0]
-    fit = [frame for idx, frame in enumerate(frames) if idx % step != 0]
+    offset = int(holdout_offset) % step
+    policy_val = [frame for idx, frame in enumerate(frames) if idx % step == offset]
+    fit = [frame for idx, frame in enumerate(frames) if idx % step != offset]
     if not policy_val or not fit:
         return frames, frames
     return fit, policy_val
@@ -138,13 +140,22 @@ def _build_fd_judge(args: argparse.Namespace, device: torch.device):
     return FrozenReprModel(cfg, device=device)
 
 
-def _fd_kwargs(args: argparse.Namespace, fd_judge):
+def _fd_kwargs(args: argparse.Namespace, fd_judge_cache: list, device: torch.device):
+    """Lazy-build the FD judge on first use; reuse across calibrate_alpha calls."""
+    if float(args.fd_weight) <= 0.0 and not bool(args.fd_strict):
+        judge = None
+    elif fd_judge_cache:
+        judge = fd_judge_cache[0]
+    else:
+        judge = _build_fd_judge(args, device)
+        fd_judge_cache.append(judge)
     return {
-        "fd_judge": fd_judge,
+        "fd_judge": judge,
         "fd_weight": float(args.fd_weight),
         "fd_strict": bool(args.fd_strict),
         "fd_strict_tol": float(args.fd_strict_tol),
         "fd_max_views": int(args.fd_max_views),
+        "fd_min_views": int(args.fd_min_views),
     }
 
 
@@ -153,9 +164,13 @@ def _choose_policy(
     train_frames,
     alpha_grid: list[float],
     device: torch.device,
-    fd_judge=None,
 ) -> tuple[dict, dict, list[dict], BenefitCalibrator | None]:
-    benefit_fit_frames, policy_val_frames = _split_policy_frames(train_frames, args.policy_holdout_fraction)
+    fd_judge_cache: list = []
+    benefit_fit_frames, policy_val_frames = _split_policy_frames(
+        train_frames,
+        args.policy_holdout_fraction,
+        args.policy_holdout_offset,
+    )
     if not args.auto_policy:
         policy = {
             "mode": args.mode,
@@ -211,7 +226,7 @@ def _choose_policy(
             lpips_weight=args.policy_lpips_weight,
             compute_lpips=args.calib_lpips,
             device=device,
-            **_fd_kwargs(args, fd_judge),
+            **_fd_kwargs(args, fd_judge_cache, device),
         )
         return policy, calibration, [], benefit_calibrator
 
@@ -286,7 +301,7 @@ def _choose_policy(
                                         lpips_weight=args.policy_lpips_weight,
                                         compute_lpips=args.calib_lpips,
                                         device=device,
-                                        **_fd_kwargs(args, fd_judge),
+                                        **_fd_kwargs(args, fd_judge_cache, device),
                                     )
                                     alpha = float(calibration["alpha"])
                                     row = _selected_calibration_row(calibration, alpha)
@@ -360,6 +375,7 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
             "policy_edge_gate_dilates": args.policy_edge_gate_dilates,
             "policy_objective": args.policy_objective,
             "policy_holdout_fraction": args.policy_holdout_fraction,
+            "policy_holdout_offset": args.policy_holdout_offset,
             "support_policy_fit_only": args.support_policy_fit_only,
             "calib_lpips": args.calib_lpips,
             "benefit_policy": args.benefit_policy,
@@ -372,6 +388,7 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
             "fd_backbone": args.fd_backbone,
             "fd_pool": args.fd_pool,
             "fd_max_views": args.fd_max_views,
+            "fd_min_views": args.fd_min_views,
             "fd_strict": args.fd_strict,
             "fd_strict_tol": args.fd_strict_tol,
         },
@@ -390,6 +407,47 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
         "ela/mean_alpha": float(report.get("mean_alpha", 0.0)),
         "ela/mean_alpha_active_fraction": float(report.get("mean_alpha_active_fraction", 0.0)),
     }
+    calibration = report.get("calibration") or {}
+    calibration_rows = calibration.get("rows") or []
+    chosen_alpha = float(report.get("alpha", 0.0))
+    chosen_row = next(
+        (
+            row
+            for row in calibration_rows
+            if abs(float(row.get("alpha", -999.0)) - chosen_alpha) < 1e-9
+        ),
+        {},
+    )
+
+    def _wandb_float(value) -> float:
+        try:
+            out = float(value)
+        except Exception:
+            return math.nan
+        return out if math.isfinite(out) else math.nan
+
+    fd_gains = []
+    for row in calibration_rows:
+        if row.get("fd_gain") is None:
+            continue
+        gain = _wandb_float(row.get("fd_gain"))
+        if math.isfinite(gain):
+            fd_gains.append(gain)
+    flat.update(
+        {
+            "ela/fd_requested": int(bool(calibration.get("fd_requested", False))),
+            "ela/fd_enabled": int(bool(calibration.get("fd_enabled", False))),
+            "ela/fd_views": int(calibration.get("fd_views", 0) or 0),
+            "ela/fd_weight": float(calibration.get("fd_weight", 0.0) or 0.0),
+            "ela/fd_strict": int(bool(calibration.get("fd_strict", False))),
+            "ela/fd_selected_gain": _wandb_float(chosen_row.get("fd_gain")),
+            "ela/fd_selected_value": _wandb_float(chosen_row.get("fd")),
+            "ela/fd_selected_base": _wandb_float(chosen_row.get("base_fd")),
+            "ela/fd_selected_rejected": int(bool(chosen_row.get("fd_rejected", False))),
+            "ela/fd_max_gain": max(fd_gains) if fd_gains else math.nan,
+            "ela/fd_min_gain": min(fd_gains) if fd_gains else math.nan,
+        }
+    )
     run.log(flat)
     run.summary.update(flat)
     run.finish()
@@ -404,16 +462,19 @@ def run(args: argparse.Namespace) -> dict:
 
     train_frames = load_split_frames(base_model, "train", base_method)
     target_frames = load_split_frames(base_model, args.target_split, base_method)
-    benefit_fit_frames, policy_val_frames = _split_policy_frames(train_frames, args.policy_holdout_fraction)
+    benefit_fit_frames, policy_val_frames = _split_policy_frames(
+        train_frames,
+        args.policy_holdout_fraction,
+        args.policy_holdout_offset,
+    )
     adapt_support_frames = (
         benefit_fit_frames
         if bool(args.support_policy_fit_only) and float(args.policy_holdout_fraction) > 0.0
         else train_frames
     )
     alpha_grid = _parse_alpha_grid(args.alpha_grid)
-    fd_judge = _build_fd_judge(args, device)
     policy, calibration, policy_candidates, benefit_calibrator = _choose_policy(
-        args, train_frames, alpha_grid, device, fd_judge=fd_judge
+        args, train_frames, alpha_grid, device
     )
     alpha_fit_frames = benefit_fit_frames if args.policy_holdout_fraction > 0.0 else train_frames
     alpha_target_frames = policy_val_frames if args.policy_holdout_fraction > 0.0 else None
@@ -484,6 +545,7 @@ def run(args: argparse.Namespace) -> dict:
         "benefit_feature_mode": str(policy.get("benefit_feature_mode", args.benefit_feature_mode)),
         "requested_benefit_feature_mode": str(args.benefit_feature_mode),
         "policy_holdout_fraction": float(args.policy_holdout_fraction),
+        "policy_holdout_offset": int(args.policy_holdout_offset),
         "policy_fit_views": [frame.name for frame in benefit_fit_frames],
         "policy_val_views": [frame.name for frame in policy_val_frames],
         "edge_gate": bool(policy.get("edge_gate", False)),
@@ -553,6 +615,15 @@ def main() -> int:
         help="Deterministic train-view holdout fraction for policy selection. 0 keeps the legacy train-only calibration.",
     )
     parser.add_argument(
+        "--policy_holdout_offset",
+        default=0,
+        type=int,
+        help=(
+            "Offset for deterministic train-view holdout selection. With fraction 0.25, offsets 0..3 "
+            "evaluate complementary interleaved trajectory slices."
+        ),
+    )
+    parser.add_argument(
         "--support_policy_fit_only",
         action="store_true",
         help=(
@@ -607,7 +678,11 @@ def main() -> int:
         "--fd_weight",
         default=0.0,
         type=float,
-        help="Weight of Frechet-distance gain in the alpha selection score. Default 0 keeps legacy behavior.",
+        help=(
+            "Weight of FD gain in the alpha selection score. Default 0 keeps legacy behavior. "
+            "Raw DINOv2 FD on ~32 train views is typically O(5-30) while PSNR/SSIM/LPIPS terms "
+            "are O(1), so values above ~0.05 will dominate the score; prefer --fd_strict first."
+        ),
     )
     parser.add_argument(
         "--fd_backbone",
@@ -627,6 +702,12 @@ def main() -> int:
         help="Max calibration views used to estimate the FD per-alpha empirical Gaussian.",
     )
     parser.add_argument(
+        "--fd_min_views",
+        default=8,
+        type=int,
+        help="Below this many calibration views FD is skipped and treated as inert (no gate, no score change).",
+    )
+    parser.add_argument(
         "--fd_strict",
         action="store_true",
         help="Reject any alpha>0 whose FD gain falls below -fd_strict_tol (alpha=0 fallback preserved).",
@@ -635,7 +716,7 @@ def main() -> int:
         "--fd_strict_tol",
         default=0.0,
         type=float,
-        help="Tolerance for fd_strict (in raw FD units, not normalized).",
+        help="Tolerance for fd_strict (raw FD units). 0 means any expected-FD regression is rejected.",
     )
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb_project", default=os.environ.get("WANDB_PROJECT", "spcarnet_meshprior"))

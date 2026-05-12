@@ -262,6 +262,24 @@ def _apply_ela(args: argparse.Namespace, scene: str, model: Path, log_path: Path
         )
     if args.calib_lpips:
         cmd.append("--calib_lpips")
+    if float(args.fd_weight) > 0.0:
+        cmd.extend(["--fd_weight", str(args.fd_weight)])
+    if args.fd_strict:
+        cmd.append("--fd_strict")
+    if float(args.fd_strict_tol) != 0.0:
+        cmd.extend(["--fd_strict_tol", str(args.fd_strict_tol)])
+    cmd.extend(
+        [
+            "--fd_backbone",
+            args.fd_backbone,
+            "--fd_pool",
+            args.fd_pool,
+            "--fd_max_views",
+            str(args.fd_max_views),
+            "--fd_min_views",
+            str(args.fd_min_views),
+        ]
+    )
     _run(cmd, gpu=args.gpu, log_path=log_path)
 
 
@@ -410,6 +428,18 @@ def main() -> int:
     parser.add_argument("--wandb_project", default="mesh-splatting-ecsr")
     parser.add_argument("--wandb_group", default="phase_f_plus_ela")
     parser.add_argument("--wandb_name", default="phase_f_plus_ela")
+    parser.add_argument(
+        "--fd_weight",
+        default=0.0,
+        type=float,
+        help="Forwarded to ELA alpha calibration. Default 0 keeps FD inert.",
+    )
+    parser.add_argument("--fd_strict", action="store_true", help="Forwarded FD non-regression gate.")
+    parser.add_argument("--fd_strict_tol", default=0.0, type=float)
+    parser.add_argument("--fd_backbone", default="vit_base_patch14_dinov2.lvd142m")
+    parser.add_argument("--fd_pool", choices=("cls", "mean"), default="cls")
+    parser.add_argument("--fd_max_views", default=32, type=int)
+    parser.add_argument("--fd_min_views", default=8, type=int)
     parser.add_argument("--force_ratio", type=float, default=None, help="diagnostic override: use policy_root/<scene>/ratio_xxxx/compact_model instead of the selected policy model")
     parser.add_argument("--summary_suffix", default="", help="suffix for per-scene and aggregate summary files, so diagnostics do not overwrite the fixed-policy report")
     args = parser.parse_args()

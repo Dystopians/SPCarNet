@@ -41,8 +41,18 @@ def _parse_override(spec: str) -> tuple[tuple[str, str], str]:
     return (scene, name), path
 
 
+def _decision_paths(scene: str, root: Path) -> list[Path]:
+    return [
+        root / "decisions" / f"{scene}_decision.json",
+        root / scene / "multifold_trainval_gate.json",
+    ]
+
+
 def _decision_path(scene: str, root: Path) -> Path:
-    return root / "decisions" / f"{scene}_decision.json"
+    for path in _decision_paths(scene, root):
+        if path.exists():
+            return path
+    return _decision_paths(scene, root)[0]
 
 
 def _metric_delta(delta: dict[str, float] | None, metric: str) -> float:
@@ -64,6 +74,21 @@ def _strict_rgb_win(delta: dict[str, float] | None) -> bool:
 def _fmt_delta(delta: dict[str, float] | None, metric: str) -> str:
     value = _metric_delta(delta, metric)
     return f"{value:+.6f}"
+
+
+def _normalized_trainval_delta(decision: dict[str, Any]) -> dict[str, float]:
+    if isinstance(decision.get("trainval_delta"), dict):
+        return {metric: _metric_delta(decision.get("trainval_delta"), metric) for metric in METRICS}
+    summary = decision.get("trainval_delta_summary")
+    if isinstance(summary, dict):
+        return {metric: _metric_delta(summary.get(metric), "mean") for metric in METRICS}
+    return {}
+
+
+def _decision_kind(path: Path) -> str:
+    if path.name == "multifold_trainval_gate.json":
+        return "multifold_trainval_gate"
+    return "single_trainval_gate"
 
 
 def _select_scene(
@@ -107,16 +132,18 @@ def _select_scene(
             )
             continue
         decision = _load_json(decision_path)
+        trainval_delta = _normalized_trainval_delta(decision)
         row = {
             "candidate": name,
             "root": str(root),
             "decision_path": str(decision_path),
+            "decision_kind": _decision_kind(decision_path),
             "exists": True,
             "accepted": bool(decision.get("accepted")),
             "selected_label": decision.get("selected_label"),
             "candidate_label": decision.get("candidate_label"),
             "reasons": decision.get("decision_reasons", []),
-            "trainval_delta": decision.get("trainval_delta", {}),
+            "trainval_delta": trainval_delta,
             "test_delta_report_only": decision.get("test_delta_report_only", {}),
             "selection_uses_test": bool(decision.get("selection_uses_test")),
         }
@@ -162,6 +189,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "test_dSSIM_report_only",
         "test_dLPIPS_report_only",
         "strict_test_rgb_win_report_only",
+        "decision_kind",
         "reasons",
         "decision_path",
     ]
@@ -182,6 +210,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
                     "test_dSSIM_report_only": _metric_delta(row.get("test_delta_report_only"), "SSIM"),
                     "test_dLPIPS_report_only": _metric_delta(row.get("test_delta_report_only"), "LPIPS"),
                     "strict_test_rgb_win_report_only": _strict_rgb_win(row.get("test_delta_report_only")),
+                    "decision_kind": row.get("decision_kind", ""),
                     "reasons": ";".join(row.get("reasons", [])),
                     "decision_path": row.get("decision_path", ""),
                 }
@@ -196,7 +225,7 @@ def _write_md(path: Path, rows: list[dict[str, Any]], candidates: list[tuple[str
     lines = [
         "# Phase-R Fixed Candidate Ladder Summary",
         "",
-        "Selection rule: candidates are evaluated in the fixed order below, and the first candidate accepted by its train-val gate is selected. Held-out test deltas are report-only and are not used for selection.",
+        "Selection rule: candidates are evaluated in the fixed order below, and the first candidate accepted by its train-val gate is selected. If a candidate root contains `SCENE/multifold_trainval_gate.json`, that stricter multi-offset decision is used; otherwise the legacy `decisions/SCENE_decision.json` single-split gate is used. Held-out test deltas are report-only and are not used for selection.",
         "",
         "Candidate order:",
     ]
@@ -209,15 +238,16 @@ def _write_md(path: Path, rows: list[dict[str, Any]], candidates: list[tuple[str
         f"- report-only strict RGB wins: `{strict_wins} / {len(rows)}`",
         f"- mean report-only delta: PSNR `{means['PSNR']:+.6f}`, SSIM `{means['SSIM']:+.6f}`, LPIPS `{means['LPIPS']:+.6f}`",
         "",
-        "| scene | selected | accepted | train-val dPSNR | train-val dSSIM | train-val dLPIPS | test dPSNR | test dSSIM | test dLPIPS | strict test win | notes |",
-        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| scene | selected | gate | accepted | train-val dPSNR | train-val dSSIM | train-val dLPIPS | test dPSNR | test dSSIM | test dLPIPS | strict test win | notes |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for row in rows:
         notes = "; ".join(row.get("reasons", []))
         lines.append(
-            "| {scene} | {selected} | {accepted} | {tr_psnr} | {tr_ssim} | {tr_lpips} | {te_psnr} | {te_ssim} | {te_lpips} | {win} | {notes} |".format(
+            "| {scene} | {selected} | {gate} | {accepted} | {tr_psnr} | {tr_ssim} | {tr_lpips} | {te_psnr} | {te_ssim} | {te_lpips} | {win} | {notes} |".format(
                 scene=row["scene"],
                 selected=row["selected"],
+                gate=row.get("decision_kind", ""),
                 accepted=str(row.get("accepted")).lower(),
                 tr_psnr=_fmt_delta(row.get("trainval_delta"), "PSNR"),
                 tr_ssim=_fmt_delta(row.get("trainval_delta"), "SSIM"),
