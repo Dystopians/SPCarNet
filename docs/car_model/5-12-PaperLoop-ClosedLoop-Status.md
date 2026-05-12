@@ -2,7 +2,7 @@
 
 Date: 2026-05-12
 
-Gaincert v1 update: the latest Phase-S policy now adds a train-only per-face gain certificate on top of face/view consensus. This is a real method change and it fixes one concrete outdoor strict-gate failure: `flowers` now passes the fixed four-offset train-val gate. The closed loop is still not complete because `bicycle` remains rejected, full-scene validation is unfinished, and the visual/metric gains are still low amplitude.
+Gaincert v1 update: the latest Phase-S policy now adds a train-only per-face gain certificate on top of face/view consensus. This is a real method change and it fixes one concrete outdoor strict-gate failure: `flowers` now passes the fixed four-offset train-val gate. The loop is still not complete because `bicycle`, `counter`, and `treehill` reject under frozen policies, `bonsai` is only threshold-accepted with tiny SSIM/LPIPS train-val regressions, and the visual/metric gains are still low amplitude.
 
 ## What Changed
 
@@ -43,6 +43,7 @@ On top of that, the reranker now includes inference-safe variants that use:
 - latent-bank retrieval distance (`rag_only`);
 - mesh self-symmetry residual (`sym_only`);
 - rank fusion between retrieval and symmetry (`rag_sym`);
+- observed partial-to-mesh visible preservation (`visible_only`);
 - guarded variants that fall back to the first candidate unless observation
   evidence is no worse.
 
@@ -65,15 +66,49 @@ strict four-offset train-only gate:
 Fresh-cache and cached-evidence runs agree, reducing the risk that the result
 comes from stale evidence reuse.
 
-The gain-certified v1 policy was then run under the same strict four-offset train-val protocol:
+The gain-certified v1 policy was then run under the same strict four-offset train-val protocol where available:
 
 | scene | policy | gate | accepted | mean dPSNR | mean dSSIM | mean dLPIPS | report-only test |
 |---|---|---|---:|---:|---:|---:|---|
 | garden | gaincert v1 | 4-offset | true | +0.000519753 | +0.000017226 | -0.000081759 | +0.000063 / +0.000001 / -0.000001 |
 | flowers | gaincert v1 | 4-offset | true | +0.000030041 | +0.000000477 | +0.000000164 | +0.001677 / +0.000158 / -0.000305 |
 | bicycle | gaincert v1 | 4-offset | false | +0.000142574 | +0.000001207 | +0.000023305 | +0.000374 / +0.000035 / -0.000115 |
+| bonsai | gaincert v1 | 4-offset | true | +0.000156403 | -0.000000522 | +0.000019606 | +0.000715 / +0.000016 / -0.000047 |
+| kitchen | gaincert v1 | 4-offset | true | +0.000072479 | +0.000000224 | -0.000000775 | +0.000084 / +0.000000 / -0.000001 |
+| room | gaincert v1 | 4-offset | true | +0.000050545 | +0.000000015 | -0.000000205 | +0.000046 / +0.000000 / +0.000000 |
+| stump | gaincert v1 | 4-offset | true | +0.000001431 | -0.000000015 | -0.000000022 | +0.000000 / -0.000000 / +0.000000 |
 
-The important change is `flowers`: consensus-only min2 and min3 variants failed strict four-offset gates, while gaincert v1 passes all four train-val offsets. The hard blocker is `bicycle`, which still fails on offset0 and offset2 PSNR.
+The important change is `flowers`: consensus-only min2 and min3 variants failed strict four-offset gates, while gaincert v1 passes all four train-val offsets. The hard blocker is `bicycle`, which still fails under gaincert v1 and also fails under the stronger centroid patch-certified follow-up.
+
+Single-gate expansion on the remaining Mip-NeRF360 scenes is broader but less
+conclusive than strict four-offset validation:
+
+| scene | v1 single gate | train-val dPSNR | dSSIM | dLPIPS | report-only test dPSNR | dSSIM | dLPIPS | status |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| bonsai | accept | +0.000210 | -0.000005 | +0.000004 | +0.000715 | +0.000016 | -0.000047 | strict four-offset accepted by tolerance; not all-axis clean |
+| counter | reject | -0.000172 | -0.000038 | +0.000088 | +0.000340 | +0.000008 | -0.000178 | v3 low-strength follow-up rejected |
+| kitchen | accept | +0.000105 | +0.000000 | -0.000001 | +0.000084 | +0.000000 | -0.000001 | strict four-offset accepted |
+| room | accept | +0.000069 | +0.000000 | -0.000000 | +0.000046 | +0.000000 | +0.000000 | strict four-offset accepted; near no-op |
+| stump | accept | +0.000000 | +0.000000 | -0.000000 | +0.000000 | -0.000000 | +0.000000 | strict four-offset accepted; effect is near no-op |
+| treehill | reject | -0.000338 | +0.000001 | -0.000006 | -0.000261 | +0.000001 | -0.000004 | v3 low-strength follow-up rejected |
+
+Updated statuses after the continuation batch:
+
+- `bonsai`, `kitchen`, `room`, and `stump` all have completed strict four-offset
+  files under `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_gaincert_v1_cached_dense16_20260512/`.
+- `counter` and `treehill` remain blocked at single-gate rejection; running a
+  strict gate would promote a candidate that the frozen policy already rejected.
+- The v3 low-strength face-shrink diagnostic rejects `bicycle`, `counter`, and
+  `treehill`.
+- The `bicycle` centroid patch-certified attempt accepts single-gate train-val
+  but rejects strict four-offset: mean `-0.000041` PSNR, `-0.000016` SSIM, and
+  `+0.000023` LPIPS, with offset2/offset3 PSNR failures. Its strict JSON is
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_patchcert_v4_centroid_v2_cached_dense16_20260512/bicycle/multifold_trainval_gate.json`.
+
+The qualitative held-out gallery for accepted v1 single-gate scenes is:
+
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/qualitative_gallery/gallery.html`
+- manifest: `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/qualitative_gallery/selected_views.json`
 
 The shared-vertex SH1 consensus ablation failed the same four-offset gate:
 
@@ -94,11 +129,16 @@ Nested-seed full-val results on 206 validation objects:
 | K=1 nested baseline | 0.06782 | 0.10011 | 0.03643 | 0.06243 |
 | K=8 default | 0.06816 | 0.10061 | 0.03629 | 0.06326 |
 | K=8 `rag_sym` | 0.06700 | 0.09971 | 0.03546 | 0.06294 |
+| K=8 `visible_only` | 0.06259 | 0.09425 | 0.03217 | 0.05592 |
+| K=8 `visible_rag_sym` | 0.06426 | 0.09630 | 0.03353 | 0.05950 |
 | K=8 oracle | 0.06132 | 0.09357 | 0.03114 | 0.05670 |
 
 `rag_sym` fairly beats the contained K=1 candidate on reconstruction Chamfer,
-hidden Chamfer, and free-space violation.  It still slightly worsens visible
-preservation and remains far from oracle.
+hidden Chamfer, and free-space violation, but slightly worsens visible
+preservation.  The newer `visible_only` selector is stronger on this evidence:
+it improves all four reported inference-time metrics versus the contained first
+candidate while staying close to oracle.  It is still not an oracle selector:
+oracle remains better on recon, hidden, and free-space metrics.
 
 ## Paper Story
 
@@ -124,109 +164,51 @@ The latest Phase-S story is stronger than the earlier consensus-only story becau
 
 - Phase-S effects are still low amplitude.  The numerical wins are robust but
   often too subtle for obvious visual figures.
-- `garden` and `flowers` now have completed accepted four-offset Phase-S certificates, but `bicycle` still rejects under the same fixed policy.
+- `garden`, `flowers`, `kitchen`, and `room` have completed accepted four-offset
+  Phase-S certificates, `stump` is accepted but near no-op, and `bonsai` is
+  threshold-accepted but not all-axis clean because mean SSIM/LPIPS regress
+  slightly within tolerance.
+- `bicycle` still rejects under gaincert v1 and under the centroid
+  patch-certified follow-up. `counter` and `treehill` reject before strict
+  four-offset validation.
 - Face-local SH1 increases vertex count on accepted faces.  Rate-distortion
   reporting must include vertices/attributes, not only triangle count.
-- SP-CarNet `rag_sym` improves the nested K=8 selector, but visible
-  preservation worsens slightly and oracle remains much stronger.
-- Full nine-scene fixed-policy closure is missing.
+- SP-CarNet `visible_only` fixes the visible-preservation weakness in the
+  nested K=8 package, but it needs a stronger theory section explaining why
+  observed-visible scoring is inference-safe and not a hidden GT oracle.
+- Full nine-scene fixed-policy closure is missing, and a clean-best/protocol
+  reconciliation remains necessary before any paper-facing "dominates
+  MeshSplatting" claim is scientifically safe.
 - This is not yet a full paper closure.  It is a meaningful method upgrade with honest evidence and clear remaining blockers.
 
 ## Next Required Commands
 
-If interrupted, do not resume the old running-probe commands. They have finished. First parse and summarize the gaincert v1 gate JSONs:
+Do not rerun the completed continuation probes unless auditing reproducibility.
+The next defensible action is a clean-best/protocol reconciliation and a new
+operator design, not another local strength scan.
 
 ```bash
 PY=/home/peilincai/micromamba/envs/mesh_splatting/bin/python
 $PY - <<'PY'
 import json
 from pathlib import Path
-root=Path('outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_gaincert_v1_cached_dense16_20260512')
-for scene in ['garden','flowers','bicycle']:
-    p=root/scene/'multifold_trainval_gate.json'
-    d=json.loads(p.read_text())
-    print(scene)
-    print(json.dumps({
-        'accepted': d.get('accepted'),
-        'selection_uses_test': d.get('selection_uses_test'),
-        'aggregate': d.get('aggregate'),
-        'reasons': d.get('reasons') or d.get('decision_reasons'),
-    }, indent=2))
+roots = {
+    "gaincert_v1": Path("outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_gaincert_v1_cached_dense16_20260512"),
+    "bicycle_patchcert_v2": Path("outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_patchcert_v4_centroid_v2_cached_dense16_20260512"),
+}
+for name, root in roots.items():
+    print("##", name)
+    for p in sorted(root.glob("*/multifold_trainval_gate.json")):
+        d = json.loads(p.read_text())
+        print(p.parent.name, d.get("accepted"), d.get("decision_reasons") or d.get("reasons"))
+        print(json.dumps(d.get("trainval_delta_summary"), sort_keys=True))
 PY
 ```
 
-Then run remaining scenes with the frozen gaincert v1 policy, or explicitly mark a scene blocked if the required Phase-J policy root/checkpoint is missing:
+For the clean-best reconciliation, start by collecting all existing clean rows
+before launching new GPU jobs:
 
 ```bash
 PY=/home/peilincai/micromamba/envs/mesh_splatting/bin/python
-scene=bonsai
-gpu=0
-
-$PY scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py \
-  --policy_root outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix \
-  --dataset_root /data/peilincai/mesh_datasets/mipnerf360 \
-  --scenes "$scene" \
-  --output_root outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512 \
-  --evidence_root outputs/carnet/meshsplatopt/ecsr_phase_r/surface_evidence_uniform_sh1_v6_dense16 \
-  --iteration 26000 \
-  --gpu "$gpu" \
-  --delta_operator facelocal_sh1 \
-  --delta_uniform_barycentric \
-  --evidence_max_views 16 \
-  --evidence_view_stride 3 \
-  --evidence_high_error_quantile 0.70 \
-  --delta_top_k 16384 \
-  --delta_min_view_hits 2 \
-  --delta_min_consistency 0.65 \
-  --delta_min_pixel_count 32 \
-  --delta_strength 0.08 \
-  --delta_max_abs_rgb 0.12 \
-  --delta_max_faces_to_apply 4096 \
-  --delta_min_policy_val_relative_gain 0.02 \
-  --delta_min_policy_val_samples 512 \
-  --delta_min_policy_val_unique_faces 16 \
-  --delta_min_face_policy_val_relative_gain 0.0 \
-  --delta_min_face_policy_val_samples 8 \
-  --delta_min_face_view_consensus 0.67 \
-  --delta_min_face_consensus_views 2 \
-  --delta_min_face_consensus_view_samples 4 \
-  --delta_face_consensus_min_cosine 0.0 \
-  --delta_min_face_gain_certificate_views 2 \
-  --delta_min_face_gain_certificate_relative_gain 0.0 \
-  --delta_min_face_gain_certificate_view_samples 4 \
-  --delta_min_face_gain_certificate_fraction 0.67 \
-  --candidate_label facelocal_gaincert_v1_cached_dense16_20260512 \
-  --candidate_base_method ours_26000_facelocal_gaincert_v1_cached_dense16_20260512_base \
-  --candidate_test_method ours_26000_facelocal_gaincert_v1_cached_dense16_20260512_phasej_ela \
-  --candidate_trainval_method ours_26000_facelocal_gaincert_v1_cached_dense16_20260512_trainval_gate \
-  --wandb_project mesh-splatting-ecsr \
-  --wandb_group phase_s_facelocal_gaincert_v1_cached_dense16_20260512 \
-  --wandb_name "phase_s_gaincert_v1_${scene}"
-
-$PY scripts/car_model/ecsr_run_phasek_multifold_trainval_gate.py \
-    --scene "$scene" \
-    --phasej_model "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/${scene}/ratio_0200/compact_model" \
-    --candidate_model "outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/${scene}/model" \
-    --candidate_audit_json "outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/${scene}/model/surface_residual_facelocal_sh1_delta_audit.json" \
-    --output_root outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_gaincert_v1_cached_dense16_20260512 \
-    --candidate_label facelocal_gaincert_v1_cached_dense16_20260512 \
-    --candidate_base_method ours_26000_facelocal_gaincert_v1_cached_dense16_20260512_base \
-    --candidate_test_method ours_26000_facelocal_gaincert_v1_cached_dense16_20260512_phasej_ela \
-    --phasej_trainval_method_prefix ours_26000_phasej_gaincert_v1_20260512 \
-    --candidate_trainval_method_prefix ours_26000_facelocal_gaincert_v1_20260512_multifold \
-    --offsets 0,1,2,3 \
-    --iteration 26000 \
-    --gpu "$gpu" \
-    --policy_holdout_fraction 0.25 \
-    --calib_sampler uniform \
-    --calib_max_views 32 \
-    --calib_stride 1 \
-    --alpha_feature_mode confidence_magnitude_edge \
-    --alpha_default 0.0 \
-    --gate_min_psnr_gain 0.0 \
-    --gate_max_ssim_regression 0.00005 \
-    --gate_max_lpips_regression 0.00015 \
-    --wandb_project mesh-splatting-ecsr \
-    --wandb_group phase_s_facelocal_gaincert_v1_cached_dense16_20260512_multifold \
-    --wandb_name "${scene}_facelocal_gaincert_v1_cached_dense16_20260512_multifold"
+$PY scripts/car_model/meshsplatopt_collect_stageela12_fair_baseline_audit.py --help
 ```

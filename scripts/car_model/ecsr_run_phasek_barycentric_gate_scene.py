@@ -237,6 +237,45 @@ def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: 
         )
         if bool(args.delta_uniform_barycentric):
             cmd.append("--uniform_barycentric")
+    if str(args.delta_operator) == "facelocal_sh1":
+        cmd.extend(
+            [
+                "--validation_shrink_mode",
+                str(args.delta_validation_shrink_mode),
+                "--validation_shrink_min_samples",
+                str(args.delta_validation_shrink_min_samples),
+                "--crossfold_gain_certificate_folds",
+                str(args.delta_crossfold_gain_certificate_folds),
+                "--crossfold_min_passing_folds",
+                str(args.delta_crossfold_min_passing_folds),
+                "--crossfold_min_fold_relative_gain",
+                str(args.delta_crossfold_min_fold_relative_gain),
+                "--crossfold_min_fold_samples",
+                str(args.delta_crossfold_min_fold_samples),
+                "--patch_cert_rings",
+                str(args.delta_patch_cert_rings),
+                "--patch_cert_max_faces_per_seed",
+                str(args.delta_patch_cert_max_faces_per_seed),
+                "--patch_cert_min_direction_cosine",
+                str(args.delta_patch_cert_min_direction_cosine),
+                "--patch_cert_min_neighbor_policy_val_samples",
+                str(args.delta_patch_cert_min_neighbor_policy_val_samples),
+                "--patch_cert_min_neighbor_policy_val_relative_gain",
+                str(args.delta_patch_cert_min_neighbor_policy_val_relative_gain),
+                "--patch_cert_min_policy_val_samples",
+                str(args.delta_patch_cert_min_policy_val_samples),
+                "--patch_cert_min_relative_gain",
+                str(args.delta_patch_cert_min_relative_gain),
+                "--patch_cert_neighbor_mode",
+                str(args.delta_patch_cert_neighbor_mode),
+                "--patch_cert_centroid_candidates_per_seed",
+                str(args.delta_patch_cert_centroid_candidates_per_seed),
+            ]
+        )
+        if bool(args.delta_patch_cert_shrink):
+            cmd.append("--patch_cert_shrink")
+        else:
+            cmd.append("--no-patch_cert_shrink")
     sh1_view_consensus = (
         str(args.delta_operator) in {"sh1", "facelocal_sh1"}
         and float(args.delta_min_face_view_consensus) > 0.0
@@ -679,6 +718,27 @@ def main() -> int:
     parser.add_argument("--delta_min_policy_val_relative_gain", type=float, default=0.02)
     parser.add_argument("--delta_min_policy_val_samples", type=int, default=512)
     parser.add_argument("--delta_min_policy_val_unique_faces", type=int, default=16)
+    parser.add_argument(
+        "--delta_validation_shrink_mode",
+        choices=("none", "global", "face"),
+        default="none",
+        help="For face-local SH1 deltas, calibrate residual amplitude on train-only policy-val samples.",
+    )
+    parser.add_argument("--delta_validation_shrink_min_samples", type=int, default=8)
+    parser.add_argument("--delta_crossfold_gain_certificate_folds", type=int, default=0)
+    parser.add_argument("--delta_crossfold_min_passing_folds", type=int, default=0)
+    parser.add_argument("--delta_crossfold_min_fold_relative_gain", type=float, default=0.0)
+    parser.add_argument("--delta_crossfold_min_fold_samples", type=int, default=4)
+    parser.add_argument("--delta_patch_cert_rings", type=int, default=0)
+    parser.add_argument("--delta_patch_cert_max_faces_per_seed", type=int, default=8)
+    parser.add_argument("--delta_patch_cert_min_direction_cosine", type=float, default=0.90)
+    parser.add_argument("--delta_patch_cert_min_neighbor_policy_val_samples", type=int, default=4)
+    parser.add_argument("--delta_patch_cert_min_neighbor_policy_val_relative_gain", type=float, default=-0.02)
+    parser.add_argument("--delta_patch_cert_min_policy_val_samples", type=int, default=16)
+    parser.add_argument("--delta_patch_cert_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--delta_patch_cert_neighbor_mode", choices=("topology", "centroid", "both"), default="topology")
+    parser.add_argument("--delta_patch_cert_centroid_candidates_per_seed", type=int, default=64)
+    parser.add_argument("--delta_patch_cert_shrink", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--delta_max_faces_to_apply", type=int, default=2048)
     parser.add_argument("--delta_min_face_policy_val_relative_gain", type=float, default=0.0)
     parser.add_argument("--delta_min_face_policy_val_samples", type=int, default=8)

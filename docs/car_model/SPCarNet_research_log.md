@@ -6181,3 +6181,120 @@ Artifacts:
   `docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md`
 - fixed ladder:
   `outputs/carnet/meshsplatopt/ecsr_phase_r/fixed_candidate_ladder_v11_fullrobust_alloffset/phase_r_fixed_candidate_ladder.md`
+
+## 2026-05-12 Phase-S Gain-Certified Continuation And SPCarNet Visible Selector
+
+Phase-S gaincert v1 was expanded beyond the first `garden/flowers/bicycle`
+batch.  The frozen v1 single-gate policy now has accepted rows for `garden`,
+`flowers`, `bonsai`, `kitchen`, and `stump`, and rejected rows for `bicycle`,
+`counter`, and `treehill`; `room` was also accepted in the same continuation
+batch.  The important caveat is that single-gate acceptance
+is not the paper-facing standard. A later closeout in this same log completed
+the pending strict gates: `garden`, `flowers`, `bonsai`, `kitchen`, `room`, and
+near-no-op `stump` are accepted by the configured four-offset gate, while
+`bicycle` rejects and `counter/treehill` are blocked by single-gate rejection.
+
+Single-gate status:
+
+| scene | decision | train-val dPSNR | dSSIM | dLPIPS | report-only test dPSNR | dSSIM | dLPIPS |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| garden | accept | +0.000175 | +0.000001 | -0.000002 | +0.000063 | +0.000001 | -0.000001 |
+| flowers | accept | +0.000044 | +0.000001 | -0.000001 | +0.001677 | +0.000158 | -0.000305 |
+| bonsai | accept | +0.000210 | -0.000005 | +0.000004 | +0.000715 | +0.000016 | -0.000047 |
+| kitchen | accept | +0.000105 | +0.000000 | -0.000001 | +0.000084 | +0.000000 | -0.000001 |
+| room | accept | +0.000069 | +0.000000 | -0.000000 | +0.000046 | +0.000000 | +0.000000 |
+| stump | accept | +0.000000 | +0.000000 | -0.000000 | +0.000000 | -0.000000 | +0.000000 |
+| bicycle | reject | -0.000006 | +0.000000 | +0.000001 | +0.000374 | +0.000035 | -0.000115 |
+| counter | reject | -0.000172 | -0.000038 | +0.000088 | +0.000340 | +0.000008 | -0.000178 |
+| treehill | reject | -0.000338 | +0.000001 | -0.000006 | -0.000261 | +0.000001 | -0.000004 |
+
+An additional v3 low-strength face-shrink follow-up was launched on the weak
+scenes `bicycle,counter,treehill` with the same shared settings
+(`strength=0.04`, `max_abs_rgb=0.06`, face validation shrink).  This is a
+fixed-policy diagnostic, not a per-scene parameter choice.  It should be counted
+only if it closes the train-val gate and then passes strict four-offset
+validation; the later closeout records that all three v3 rows reject.
+
+The SPCarNet K-best branch also received a cleaner selector fix.  `rag_sym`
+remains a geometry-oriented deployable selector, but it slightly worsens visible
+preservation.  The new `visible_only` selector uses observed partial-to-mesh
+visible preservation and improves all four reported nested full-val metrics
+versus the contained K=1/first candidate:
+
+| variant | recon | hidden | free | visible |
+|---|---:|---:|---:|---:|
+| first | 0.06786 | 0.10013 | 0.03643 | 0.06246 |
+| rag_sym | 0.06700 | 0.09971 | 0.03546 | 0.06294 |
+| visible_only | 0.06259 | 0.09425 | 0.03217 | 0.05592 |
+| visible_rag_sym | 0.06426 | 0.09630 | 0.03353 | 0.05950 |
+| oracle | 0.06132 | 0.09357 | 0.03114 | 0.05670 |
+
+Code hardening in this continuation:
+
+- visible selector rescoring now fails nonzero when a requested rank-fusion
+  variant has no eligible candidate fields, instead of silently writing NaNs;
+- face-local audit Markdown now records validation shrink and train-fold
+  consistency details;
+- the previous `crossfold` wording is explicitly documented as all-train fold
+  consistency, not an independent cross-fit certificate.
+
+Artifacts:
+
+- Phase-S audit:
+  `docs/car_model/5-12-PhaseS-GainCertV1-Audit.md`
+- closed-loop status:
+  `docs/car_model/5-12-PaperLoop-ClosedLoop-Status.md`
+- SPCarNet selector audit:
+  `docs/car_model/5-12-SPCarNet-RagSym-Rerank-Audit.md`
+- held-out qualitative gallery:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/qualitative_gallery/gallery.html`
+
+Current decision: progress is real, especially the `visible_only` selector and
+the `flowers` strict-gate closure, but this is still not a 100% paper-loop
+closure.  The later closeout resolves the pending strict validations and moves
+the remaining proof obligation to a method-level fix for rejected scenes plus
+clean-best/protocol reconciliation.
+
+## 2026-05-12 Subagent Paper-Loop Continuation Closeout
+
+**Outcome**: Completed the remaining W&B-logged Phase-S continuation probes that
+were running after the subagent-coordinated implementation pass. `room` gaincert
+v1 now has a completed strict four-offset gate and is accepted with mean
+train-val deltas `+0.0000505` PSNR, `+0.000000015` SSIM, and `-0.000000205`
+LPIPS. The centroid-neighbor patch-certified `bicycle` follow-up expanded
+accepted faces from `7` to `48` and passed the single train-val gate, but the
+strict four-offset gate rejected it with mean deltas `-0.0000405` PSNR,
+`-0.0000160` SSIM, and `+0.0000226` LPIPS; offset2 and offset3 fail PSNR, and
+offset3 also regresses SSIM/LPIPS.
+
+Updated Phase-S status:
+
+| scene | v1 strict status | note |
+|---|---|---|
+| garden | accept | real but low-amplitude |
+| flowers | accept | fixes prior consensus-only strict failure |
+| bicycle | reject | gaincert v1 rejects; centroid patch-cert v2 also rejects |
+| bonsai | accept by tolerance | not all-axis clean because mean SSIM/LPIPS regress slightly |
+| counter | blocked | single-gate rejects; v3 low-strength also rejects |
+| kitchen | accept | real but low-amplitude |
+| room | accept | near no-op scale |
+| stump | accept | effectively no-op scale |
+| treehill | blocked | single-gate rejects; v3 low-strength also rejects |
+
+Additional artifacts:
+
+- continuation report:
+  `docs/car_model/5-12-Subagent-PaperLoop-Continuation-Report.md`
+- updated Phase-S audit:
+  `docs/car_model/5-12-PhaseS-GainCertV1-Audit.md`
+- updated closed-loop status:
+  `docs/car_model/5-12-PaperLoop-ClosedLoop-Status.md`
+- `room` strict JSON:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_gaincert_v1_cached_dense16_20260512/room/multifold_trainval_gate.json`
+- `bicycle` patch-cert strict JSON:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_patchcert_v4_centroid_v2_cached_dense16_20260512/bicycle/multifold_trainval_gate.json`
+
+**Decision**: This is an implementation and evidence milestone, not final paper
+closure. The correct next step is clean-best/protocol reconciliation plus a new
+representation operator; more local strength or patch-neighbor scans are not
+justified by the current evidence.

@@ -139,18 +139,35 @@ Single-scene gates:
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/garden/decisions/garden_decision.json`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/flowers/decisions/flowers_decision.json`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/bicycle/decisions/bicycle_decision.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/bonsai/decisions/bonsai_decision.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/counter/decisions/counter_decision.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/kitchen/decisions/kitchen_decision.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/room/decisions/room_decision.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/stump/decisions/stump_decision.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/treehill/decisions/treehill_decision.json`
 
 Strict four-offset gates:
 
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_gaincert_v1_cached_dense16_20260512/garden/multifold_trainval_gate.json`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_gaincert_v1_cached_dense16_20260512/flowers/multifold_trainval_gate.json`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_gaincert_v1_cached_dense16_20260512/bicycle/multifold_trainval_gate.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_gaincert_v1_cached_dense16_20260512/bonsai/multifold_trainval_gate.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_gaincert_v1_cached_dense16_20260512/kitchen/multifold_trainval_gate.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_gaincert_v1_cached_dense16_20260512/room/multifold_trainval_gate.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_gaincert_v1_cached_dense16_20260512/stump/multifold_trainval_gate.json`
+
+Patch-certified `bicycle` follow-up:
+
+- single gate: `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_patchcert_v4_centroid_v2_cached_dense16_20260512/decisions/bicycle_decision.json`
+- strict gate: `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_patchcert_v4_centroid_v2_cached_dense16_20260512/bicycle/multifold_trainval_gate.json`
 
 Qualitative render outputs:
 
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/garden/model/test/ours_26000_facelocal_gaincert_v1_cached_dense16_20260512_phasej_ela/renders`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/flowers/model/test/ours_26000_facelocal_gaincert_v1_cached_dense16_20260512_phasej_ela/renders`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/bicycle/model/test/ours_26000_facelocal_gaincert_v1_cached_dense16_20260512_phasej_ela/renders`
+- held-out comparison gallery: `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/qualitative_gallery/gallery.html`
+- gallery manifest: `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/qualitative_gallery/selected_views.json`
 
 ## Single-Gate Results
 
@@ -161,6 +178,18 @@ All values below are candidate minus baseline. Selection uses train-val only; te
 | garden | accept | +0.000175 | +0.000001 | -0.000002 | +0.000063 | +0.000001 | -0.000001 |
 | flowers | accept | +0.000044 | +0.000001 | -0.000001 | +0.001677 | +0.000158 | -0.000305 |
 | bicycle | reject | -0.000006 | +0.000000 | +0.000001 | +0.000374 | +0.000035 | -0.000115 |
+| bonsai | accept | +0.000210 | -0.000005 | +0.000004 | +0.000715 | +0.000016 | -0.000047 |
+| counter | reject | -0.000172 | -0.000038 | +0.000088 | +0.000340 | +0.000008 | -0.000178 |
+| kitchen | accept | +0.000105 | +0.000000 | -0.000001 | +0.000084 | +0.000000 | -0.000001 |
+| room | accept | +0.000069 | +0.000000 | -0.000000 | +0.000046 | +0.000000 | +0.000000 |
+| stump | accept | +0.000000 | +0.000000 | -0.000000 | +0.000000 | -0.000000 | +0.000000 |
+| treehill | reject | -0.000338 | +0.000001 | -0.000006 | -0.000261 | +0.000001 | -0.000004 |
+
+The expansion gives six single-gate acceptances, but this is not equivalent to
+full-scene closure.  `stump` is effectively a one-face near no-op, `room` is
+also very close to no-op scale, and `bonsai` is gate-accepted while still
+showing tiny mean SSIM/LPIPS train-val regressions inside the allowed
+thresholds.
 
 ## Strict Four-Offset Gate Results
 
@@ -169,6 +198,10 @@ All values below are candidate minus baseline. Selection uses train-val only; te
 | garden | accept | +0.000520 | +0.000017 | -0.000082 | all offsets pass |
 | flowers | accept | +0.000030 | +0.000000 | +0.000000 | all offsets pass under v1 thresholds |
 | bicycle | reject | +0.000143 | +0.000001 | +0.000023 | offset0 and offset2 PSNR below zero |
+| bonsai | accept | +0.000156 | -0.000001 | +0.000020 | accepted by thresholded gate; not an all-axis strict win |
+| kitchen | accept | +0.000072 | +0.000000 | -0.000001 | all offsets pass |
+| room | accept | +0.000051 | +0.000000 | -0.000000 | all offsets pass; effect is near no-op |
+| stump | accept | +0.000001 | -0.000000 | -0.000000 | all offsets pass, but effect is effectively no-op |
 
 Offset-level details:
 
@@ -186,6 +219,10 @@ Offset-level details:
 | bicycle | 1 | +0.000006 | -0.000001 | -0.000000 | weak |
 | bicycle | 2 | -0.000004 | -0.000000 | -0.000000 | no |
 | bicycle | 3 | +0.000574 | +0.000006 | +0.000093 | no, LPIPS regression |
+| room | 0 | +0.000069 | +0.000000 | -0.000000 | yes |
+| room | 1 | +0.000053 | +0.000000 | +0.000000 | yes, within LPIPS cap |
+| room | 2 | +0.000042 | +0.000000 | -0.000000 | yes |
+| room | 3 | +0.000038 | -0.000000 | -0.000000 | yes |
 
 ## Audit Counts
 
@@ -194,6 +231,12 @@ Offset-level details:
 | garden | 2578 | 156 | 156 | 468 | 290 / 1828 | 157 / 1828 |
 | flowers | 2849 | 52 | 52 | 156 | 88 / 1425 | 53 / 1425 |
 | bicycle | 3397 | 7 | 7 | 21 | 17 / 1256 | 7 / 1256 |
+| bonsai | 3293 | 1198 | 1198 | 3594 | 1455 / 3189 | 1205 / 3189 |
+| counter | 2750 | 182 | 182 | 546 | 373 / 2366 | 189 / 2366 |
+| kitchen | 2048 | 156 | 156 | 468 | 334 / 1821 | 157 / 1821 |
+| room | 2323 | 105 | 105 | 315 | 219 / 1910 | 109 / 1910 |
+| stump | 1374 | 1 | 1 | 3 | 4 / 419 | 2 / 419 |
+| treehill | 3123 | 120 | 120 | 360 | 196 / 1344 | 125 / 1344 |
 
 Topology integrity was clean in all three runs: no invalid faces, no degenerate faces, and no duplicate faces were reported in the audit files.
 
@@ -208,6 +251,21 @@ The earlier face-local consensus v1 accepted garden but did not close the outdoo
 
 The gain certificate is therefore a real method improvement over the prior consensus-only policy for `flowers`, because it passes a fixed strict train-val four-offset gate that consensus-only did not pass. It is not yet a complete solution because `bicycle` remains rejected and the absolute improvements are still very small.
 
+Additional follow-ups on weak scenes did not solve the bottleneck:
+
+- v3 low-strength face-shrink rejects `bicycle`, `counter`, and `treehill` at
+  the single train-val gate.
+- topology-neighbor patch certification rejects `bicycle` at the single
+  train-val gate.
+- centroid-neighbor patch certification expands `bicycle` from `7` accepted
+  seed faces to `48` faces and passes the single train-val gate, but strict
+  four-offset validation rejects it: mean dPSNR `-0.000041`, mean dSSIM
+  `-0.000016`, mean dLPIPS `+0.000023`; offset2 has negative PSNR and offset3
+  has negative PSNR plus SSIM/LPIPS regressions.  Its report-only test split is
+  also slightly worse on PSNR and SSIM. This is a useful negative result: patch
+  growth can increase local evidence support, but it does not yet make the
+  persistent representation edit robust.
+
 ## W&B Runs
 
 Single-gate:
@@ -215,6 +273,7 @@ Single-gate:
 - `garden`: test `h7qj5t00`, trainval `5ooytg02`
 - `flowers`: test `xxni3lov`, trainval `6xl7jct7`
 - `bicycle`: test `z8f3jiiq`, trainval `hbyjv1aa`
+- `bicycle` centroid patch-cert v2: test `5qlhn430`
 
 Strict fourfold:
 
@@ -229,12 +288,22 @@ No runtime error blocked the gaincert v1 experiments.
 Scientific blockers remain:
 
 - `bicycle` fails strict four-offset train-val acceptance.
+- `counter` and `treehill` fail the single train-val gate under the frozen v1
+  policy; `treehill` also has negative report-only test PSNR.
+- `bicycle` centroid patch-cert v2 is a real method attempt but also fails
+  strict four-offset validation, so it cannot be promoted.
+- `bonsai` is accepted by the configured strict gate but not by an all-axis
+  non-regression interpretation, because mean train-val SSIM and LPIPS move in
+  the wrong direction within the allowed tolerance.
 - The successful scenes show low-amplitude image-metric gains; this is not yet a visually obvious paper-level result.
-- The fixed policy has only been strict-gated on three scenes in this round, not on the complete scene set.
-- The SP-CarNet multi-hypothesis branch still has a visible-surface regression versus K1, even though `rag_sym` improves reconstruction, hidden, and free-space metrics.
+- The fixed policy has strict evidence for seven scenes, not all nine:
+  `counter` and `treehill` are blocked earlier by single-gate rejection.
+- The SP-CarNet `rag_sym` branch still has a visible-surface regression versus
+  K1; the newer `visible_only` selector fixes that specific metric on the
+  nested full-val package and is documented separately.
 
 ## Current Verdict
 
 This is a milestone, not a closed loop.
 
-Compared with the previous Phase-S face-local consensus policy, gaincert v1 fixes a concrete outdoor strict-gate failure on `flowers`. It does not yet deliver full baseline domination, full-scene validation, or visually obvious improvements. The next valid step is to turn this into a frozen policy ladder and run the remaining scenes, while separately attacking `bicycle` with a representation-level change rather than another parameter scan.
+Compared with the previous Phase-S face-local consensus policy, gaincert v1 fixes a concrete outdoor strict-gate failure on `flowers` and now has thresholded strict accepts on `garden`, `flowers`, `bonsai`, `kitchen`, `room`, and near-no-op `stump`. It does not yet deliver full baseline domination, full-scene validation, or visually obvious improvements. The next valid step is no longer another small strength/patch scan; the rejected `bicycle`, `counter`, and `treehill` rows point to a representation-capacity bottleneck that needs a new operator or a cleaner fair-baseline pivot.

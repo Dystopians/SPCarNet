@@ -17,3 +17,8 @@ Current key docs:
 - `5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md` — current representation-attached residual smoke result
 - `5-10-ECSR-FaceAlphaV15-V20-CertifiedPolicy.md` — full9 certified surface face-alpha policy log
 - `5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md` — corrected Phase-R full-robust multi-offset gate audit
+- `5-12-PhaseS-GainCertV1-Audit.md` — current gain-certified face-local SH1 audit; supersedes consensus-only Phase-S as the active representation-level branch
+- `5-12-PhaseS-FaceLocalConsensus-Audit.md` — consensus-only Phase-S ablation and failure analysis
+- `5-12-SPCarNet-RagSym-Rerank-Audit.md` — nested K-best SPCarNet selector audit, including the `visible_only` follow-up selector
+- `5-12-PaperLoop-ClosedLoop-Status.md` — current cross-branch status, evidence matrix, blockers, and next commands
+- `5-12-Subagent-PaperLoop-Continuation-Report.md` — this continuation's implementation, experiment, ablation, qualitative-output, and blocker summary

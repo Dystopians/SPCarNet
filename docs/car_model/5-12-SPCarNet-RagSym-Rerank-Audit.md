@@ -279,6 +279,49 @@ Nested full-val result:
 | K=8 `obs_rag_sym` | 0.06746 | 0.10009 | 0.03539 | 0.06319 |
 | K=8 oracle | 0.06132 | 0.09357 | 0.03114 | 0.05670 |
 
+Visible-preserving follow-up:
+
+After the nested full-val run, I added deployable visible-surface selector
+variants to the rescore script.  These variants use
+`visible_preservation_error`, which is computed from the observed partial input
+points and candidate mesh, not from clean/test target geometry.
+
+Command:
+
+```bash
+WANDB_MODE=online /home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+scripts/car_model/rescore_spcarnet_multihypothesis.py \
+  --input outputs/carnet/spcarnet/multihypothesis/val_full_K8_rag_sym_nestedseed_20260512/K8.json \
+  --output outputs/carnet/spcarnet/multihypothesis/val_full_K8_rag_sym_nestedseed_20260512/K8_visible_rescored.json \
+  --variants first rag_sym visible_only visible_rag_sym oracle \
+  --wandb_project mesh-splatting-ecsr \
+  --wandb_group spcarnet_fullval_nested_visible_selector_20260512 \
+  --wandb_name spcarnet_val_full_K8_visible_selector_rescore_20260512 \
+  --wandb_tags spcarnet fullval K8 visible_selector 20260512
+```
+
+Result:
+
+| variant | recon Chamfer | hidden Chamfer | free violation | visible preservation | z norm |
+|---|---:|---:|---:|---:|---:|
+| K=8 `first` | 0.06786 | 0.10013 | 0.03643 | 0.06246 | 3.8385 |
+| K=8 `rag_sym` | 0.06700 | 0.09971 | 0.03546 | 0.06294 | 3.7067 |
+| K=8 `visible_only` | 0.06259 | 0.09425 | 0.03217 | 0.05592 | 3.8744 |
+| K=8 `visible_rag_sym` | 0.06426 | 0.09630 | 0.03353 | 0.05950 | 3.7379 |
+| K=8 oracle | 0.06132 | 0.09357 | 0.03114 | 0.05670 | 3.8634 |
+
+Artifacts:
+
+- `outputs/carnet/spcarnet/multihypothesis/val_full_K8_rag_sym_nestedseed_20260512/K8_visible_rescored.json`
+- W&B run: `dxgqvwn0`
+
+This changes the selector conclusion.  `rag_sym` remains the geometry-prior
+selector, but `visible_only` is the stronger deployable selector on this
+full-val evidence package: it improves recon, hidden, free-space, and visible
+preservation versus the contained K=1/first candidate.  The oracle gap remains
+nonzero, so this is a meaningful selector upgrade rather than a finished shape
+completion story.
+
 Artifacts:
 
 - nested K=1:
@@ -296,21 +339,22 @@ Artifacts:
 
 Nested conclusion:
 
-- `rag_sym` is the best deployable nested selector.  It beats the contained K=1
-  candidate on recon Chamfer by about `0.00086`, hidden Chamfer by about
-  `0.00042`, and free-space violation by about `0.00097`.
-- It slightly worsens visible preservation versus K=1 by about `0.00051`, so it
-  is a geometry-oriented selector, not a uniform win on every inference-only
-  proxy.
+- `visible_only` is the best deployable nested selector in the current evidence
+  package.  It beats the contained K=1/first candidate on recon, hidden,
+  free-space, and visible-preservation metrics.
+- `rag_sym` remains a useful geometry-prior ablation: it improves recon, hidden,
+  and free-space metrics versus the contained first candidate, but it worsens
+  visible preservation.
 - Oracle is still much better, which keeps selector design as an open research
   gap rather than a closed headline breakthrough.
 
 ## Review
 
 This is an honest improvement to the failed Stage-5 reranker, but not a
-paper-level closure by itself.  The strongest version is the nested-seed
-`rag_sym` selector: it fairly beats the contained first/K=1 candidate on recon,
-hidden geometry, and free-space violation.  The weakness is also clear:
-visible preservation slightly worsens, and oracle remains far better than both.
-A paper-facing SPCarNet selector still needs a stronger observation-grounded
-certificate rather than only latent-bank proximity and self-symmetry.
+paper-level closure by itself.  The strongest current version is the
+nested-seed `visible_only` selector because it is inference-safe and improves all
+four reported validation metrics versus the contained first/K=1 candidate.  The
+weakness is also clear: oracle remains better on recon, hidden geometry, and
+free-space metrics.  A paper-facing SPCarNet selector still needs a stronger
+observation-grounded certificate and a deployment argument explaining when the
+visible-surface score can be trusted.

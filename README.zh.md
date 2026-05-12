@@ -2,7 +2,7 @@
 
 **基于训练证据的几何安全 Mesh Splatting 压缩与渲染修复。**
 
-[English](README.md) | [Phase-J 结果](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R 固定策略](docs/car_model/5-10-ECSR-PhaseR-FixedCandidateLadder.md) | [Phase-R 室内审计](docs/car_model/5-11-PhaseR-Indoor-Multifold-Gate-Audit.md) | [Phase-R 全折审计](docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md) | [Phase-J 外部验证](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [5 月 7 日更新](docs/car_model/5-7-Update.md) | [升级路线](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR 审计](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
+[English](README.md) | [Phase-J 结果](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R 全折审计](docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md) | [Phase-S gaincert 审计](docs/car_model/5-12-PhaseS-GainCertV1-Audit.md) | [SPCarNet selector 审计](docs/car_model/5-12-SPCarNet-RagSym-Rerank-Audit.md) | [闭环状态](docs/car_model/5-12-PaperLoop-ClosedLoop-Status.md) | [续跑报告](docs/car_model/5-12-Subagent-PaperLoop-Continuation-Report.md) | [Phase-J 外部验证](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
 
 SPCarNet 是建立在 Mesh Splatting 之上的研究分支。当前 ECSR 版本保留固定的 Phase-F compact checkpoint，再用 train-evidence guarded portfolio 做外观修复：稳定场景走 adaptive-alpha ELA，不稳定场景走 train-selected structural edge fallback。branch、edge gate、alpha、压缩比例都不使用 held-out test 指标选择。
 
@@ -88,6 +88,23 @@ Phase-M / V8 目前是最干净的 representation-attached recovery baseline：t
 
 Phase-R 进一步把 residual 写回 checkpoint 中的 surface SH1 属性，并加入 train-only gamma trust-region residual gate。新的 v11 审计把户外候选也纳入与室内一致的四折 train-only gate，修正了 v10 对完成度的乐观估计：v11 只接受 `3 / 9` 个 representation edit（`stump`、`room`、`kitchen`），report-only 三指标严格胜出 `3 / 9`，相对 Phase-J no-op fallback 的均值为 `+0.002531` PSNR、`+0.000080` SSIM、`-0.000120` LPIPS。它更可靠，但完成度更低：`bicycle`、`flowers`、`garden`、`counter`、`bonsai`、`treehill` 都仍是 fallback，因此 Phase-R 目前是严格的 representation-level baseline，而不是最终视觉 endpoint。
 
+Phase-S 是当前 representation-level repair 主线。它使用 face-local SH1
+residual carrier、train-only face/view consensus，并且在真正 materialize
+checkpoint edit 前加入 per-face gain certificate。Gaincert v1 现在在四折
+train-val gate 下通过 `garden`、`flowers`、`bonsai`、`kitchen`、`room` 与近似
+no-op 的 `stump`；`bicycle` 在 gaincert v1 和新的 centroid patch-certified
+follow-up 下都被拒绝，`counter/treehill` 则在 single train-val gate 就被拒绝。
+注意 `bonsai` 是阈值意义上的接受，不是严格 all-axis clean win，因为 mean
+SSIM/LPIPS 在容忍范围内有极小回退。held-out 定性 gallery 已保存到
+`outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/qualitative_gallery/gallery.html`。
+
+在 object-prior 侧，nested K=8 SPCarNet selector 新增了基于 observed-visible
+preservation 的 `visible_only` 策略。在 206 个验证物体上，它相对 contained
+K=1/first candidate 同时改善四个 inference-time 指标：recon
+`0.06786 -> 0.06259`，hidden `0.10013 -> 0.09425`，free-space
+`0.03643 -> 0.03217`，visible preservation `0.06246 -> 0.05592`。这是明确的
+selector 升级，但 oracle 行仍然更强，因此 shape completion 故事还没有闭环。
+
 ## 其他评估口径
 
 当前 Phase-J 摘要：
@@ -101,6 +118,8 @@ Phase-R 进一步把 residual 写回 checkpoint 中的 surface SH1 属性，并�
 | per-view audit | `244 / 246` 个 held-out view 相对 selected clean baseline 同时提升 PSNR、SSIM、LPIPS |
 | 外部验证 | ETH3D courtyard clean9000 三指标严格胜出：最高 `+0.2642` PSNR，`+0.0094` SSIM，`-0.0225` LPIPS；相对旧 ELA7 为 mixed |
 | Phase-R v11 full-robust representation ladder | 多折 train-only 接受 `3 / 9`，report-only 三指标严格胜出 `3 / 9`，相对 Phase-J no-op fallback 均值 `+0.002531` PSNR，`+0.000080` SSIM，`-0.000120` LPIPS；该结果取代更乐观的 v10 单折/多折混合快照 |
+| Phase-S gaincert v1 | 四折 gate 接受 `garden`、`flowers`、`bonsai`、`kitchen`、`room` 与近似 no-op 的 `stump`；拒绝 `bicycle`；`counter/treehill` 在 single-gate 阶段被阻断 |
+| SPCarNet visible selector | `visible_only` 相对 contained K=1/first 改善 nested K=8 recon/hidden/free/visible 指标；oracle gap 仍存在 |
 
 下面的详细表格保留自 5 月 7 日 Compact-ELA/SOR 留档报告，用于 provenance。LPIPS、AbsRel、DepthMAE、Normal 越低越好。
 

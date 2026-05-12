@@ -15,6 +15,8 @@ Variants
 - ``sym_only``    : lowest mesh self-symmetry residual
 - ``rag_sym``     : equal-rank fusion of RAG and symmetry
 - ``obs_rag_sym`` : equal-rank fusion of observation loss, RAG, and symmetry
+- ``visible_only``: lowest observed-visible preservation error
+- ``visible_rag_sym``: equal-rank fusion of visible preservation, RAG, and symmetry
 - ``first``       : candidate with the smallest sample index, for nested K=1/K=K audits
 - ``sym_if_loss_le_first`` : symmetry pick only if observation loss is no worse than ``first``
 - ``sym_if_score_ge_first``: symmetry pick only if original score is no worse than ``first``
@@ -70,6 +72,8 @@ RANK_FUSION_VARIANTS: dict[str, tuple[str, ...]] = {
     "sym_only": ("sym_residual_norm",),
     "rag_sym": ("rag_dist_mean", "sym_residual_norm"),
     "obs_rag_sym": ("loss_total", "rag_dist_mean", "sym_residual_norm"),
+    "visible_only": ("visible_preservation_error",),
+    "visible_rag_sym": ("visible_preservation_error", "rag_dist_mean", "sym_residual_norm"),
 }
 
 
@@ -208,6 +212,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--input", required=True, help="K-best JSON from eval_spcarnet_multihypothesis.py")
     parser.add_argument("--output", default=None)
     parser.add_argument("--variants", nargs="+", default=list(VARIANTS))
+    parser.add_argument("--wandb_project", default=None)
+    parser.add_argument("--wandb_group", default=None)
+    parser.add_argument("--wandb_name", default=None)
+    parser.add_argument("--wandb_tags", nargs="*", default=[])
+    parser.add_argument(
+        "--allow_missing_variant_scores",
+        action="store_true",
+        help=(
+            "Allow a requested variant to produce no eligible selections. "
+            "Without this flag the command fails instead of writing/logging all-NaN rows."
+        ),
+    )
     args = parser.parse_args(argv)
 
     src = Path(args.input)
@@ -224,8 +240,50 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError(f"unknown variant: {v} (choices: {list(VARIANTS)})")
         out["variants"][v] = rescore(per_object, v)
 
+    fully_missing = [
+        v
+        for v, metrics in out["variants"].items()
+        if int(metrics.get("n_objects", 0)) > 0
+        and int(metrics.get("n_missing_variant_score", 0)) >= int(metrics.get("n_objects", 0))
+    ]
+    if fully_missing and not bool(args.allow_missing_variant_scores):
+        missing = ", ".join(fully_missing)
+        raise SystemExit(
+            f"variants have no eligible candidates, likely because required score fields are missing: {missing}. "
+            "Re-run with --allow_missing_variant_scores to write an explicit all-missing diagnostic table."
+        )
+
     out_path = Path(args.output) if args.output else src.with_suffix(".rescored.json")
     out_path.write_text(json.dumps(out, indent=2))
+
+    if args.wandb_project:
+        try:
+            import wandb
+
+            run = wandb.init(
+                project=args.wandb_project,
+                group=args.wandb_group,
+                name=args.wandb_name,
+                tags=list(args.wandb_tags or []),
+                config={
+                    "input": str(src),
+                    "output": str(out_path),
+                    "variants": list(args.variants),
+                    "K": out["K"],
+                },
+            )
+            flat: dict[str, float] = {}
+            for variant, metrics in out["variants"].items():
+                for key, value in metrics.items():
+                    if isinstance(value, (int, float)) and math.isfinite(float(value)):
+                        flat[f"rescore/{variant}/{key}"] = float(value)
+            wandb.log(flat)
+            artifact = wandb.Artifact(out_path.stem, type="spcarnet-rescore")
+            artifact.add_file(str(out_path))
+            run.log_artifact(artifact)
+            wandb.finish()
+        except Exception as exc:
+            print(f"[wandb] skipped logging due to error: {exc}")
 
     # Print compact comparison table.
     print(f"# Rescore — source: {src}  K={out['K']}")

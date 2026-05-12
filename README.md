@@ -2,7 +2,7 @@
 
 **Train-only evidence-guided compact Mesh Splatting with geometry-safe reconstruction repair.**
 
-[中文](README.zh.md) | [Phase-J result](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R fixed ladder](docs/car_model/5-10-ECSR-PhaseR-FixedCandidateLadder.md) | [Phase-R indoor audit](docs/car_model/5-11-PhaseR-Indoor-Multifold-Gate-Audit.md) | [Phase-R full-robust audit](docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md) | [Phase-J external validation](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [May 7 update](docs/car_model/5-7-Update.md) | [Upgrade plan](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR audit](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [Execution log](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
+[中文](README.zh.md) | [Phase-J result](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R full-robust audit](docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md) | [Phase-S gaincert audit](docs/car_model/5-12-PhaseS-GainCertV1-Audit.md) | [SPCarNet selector audit](docs/car_model/5-12-SPCarNet-RagSym-Rerank-Audit.md) | [Closed-loop status](docs/car_model/5-12-PaperLoop-ClosedLoop-Status.md) | [Continuation report](docs/car_model/5-12-Subagent-PaperLoop-Continuation-Report.md) | [Phase-J external validation](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [Execution log](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
 
 SPCarNet is a research branch built on Mesh Splatting. The current ECSR version keeps the fixed Phase-F compact checkpoints, then uses a train-evidence guarded portfolio for appearance recovery: stable scenes use adaptive-alpha ELA, and unstable scenes use a train-selected structural edge fallback. No held-out test metric is used to select the branch, edge gate, alpha, or compaction ratio.
 
@@ -88,6 +88,25 @@ Phase-M / V8 adds the cleanest representation-attached recovery baseline so far:
 
 Phase-R upgrades this to checkpoint-baked surface SH1 residuals with a fixed candidate ladder plus a train-only gamma trust-region residual gate. A stricter v11 audit now runs the outdoor candidates through the same four-offset train-only gate used indoors. This corrected an optimistic v10 snapshot: v11 accepts only `3 / 9` representation edits (`stump`, `room`, `kitchen`), gives `3 / 9` report-only strict RGB wins, and has mean report-only deltas of `+0.002531` PSNR, `+0.000080` SSIM, and `-0.000120` LPIPS versus Phase-J with no-op fallback. The result is more reliable but less complete: `bicycle`, `flowers`, `garden`, `counter`, `bonsai`, and `treehill` remain fallback under the full-robust gate, so Phase-R is a rigorous representation-level baseline rather than the final visual endpoint.
 
+Phase-S is the current representation-level repair branch.  It uses face-local
+SH1 residual carriers, train-only face/view consensus, and a per-face gain
+certificate before a checkpoint edit is materialized.  Gaincert v1 now has
+four-offset train-val gate accepts on `garden`, `flowers`, `bonsai`, `kitchen`,
+`room`, and near-no-op `stump`; `bicycle` rejects under both gaincert v1 and
+the newer centroid patch-certified follow-up, while `counter` and `treehill`
+reject at the single train-val gate.  `bonsai` is a thresholded accept rather
+than a clean all-axis win because mean SSIM/LPIPS move slightly in the wrong
+direction inside tolerance. A held-out visual gallery is saved at
+`outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/qualitative_gallery/gallery.html`.
+
+On the object-prior side, the nested K=8 SPCarNet selector now includes a
+`visible_only` observed-visible preservation policy.  On 206 validation objects
+it improves all four reported inference-time metrics versus the contained
+K=1/first candidate: recon `0.06786 -> 0.06259`, hidden `0.10013 -> 0.09425`,
+free-space `0.03643 -> 0.03217`, and visible preservation `0.06246 -> 0.05592`.
+This is a real selector upgrade, while the oracle row remains better and keeps
+the completion story open.
+
 ## Additional Evaluation Views
 
 Current Phase-J summary:
@@ -101,6 +120,8 @@ Current Phase-J summary:
 | per-view audit | `244 / 246` held-out views strictly improve PSNR, SSIM, and LPIPS over the selected clean baseline |
 | external validation | ETH3D courtyard clean9000 strict RGB win: up to `+0.2642` PSNR, `+0.0094` SSIM, `-0.0225` LPIPS; mixed vs older ELA7 |
 | Phase-R v11 full-robust representation ladder | `3 / 9` multi-offset train-only accepted selections, `3 / 9` report-only strict RGB wins, mean `+0.002531` PSNR, `+0.000080` SSIM, `-0.000120` LPIPS vs Phase-J with no-op fallback; this supersedes the more optimistic v10 mixed single/multi-fold snapshot |
+| Phase-S gaincert v1 | strict four-offset gate accepts `garden`, `flowers`, `bonsai`, `kitchen`, `room`, and near-no-op `stump`; rejects `bicycle`; `counter/treehill` are blocked by single-gate rejection |
+| SPCarNet visible selector | `visible_only` improves nested K=8 recon/hidden/free/visible metrics versus contained K=1/first; oracle gap remains |
 
 The detailed tables below are retained from the May 7 archived Compact-ELA/SOR report for provenance. Lower is better for LPIPS, AbsRel, DepthMAE, and Normal.
 

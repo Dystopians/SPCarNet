@@ -85,6 +85,34 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_policy_val_relative_gain", type=float, default=0.02)
     parser.add_argument("--min_policy_val_samples", type=int, default=512)
     parser.add_argument("--min_policy_val_unique_faces", type=int, default=16)
+    parser.add_argument(
+        "--validation_shrink_mode",
+        choices=("none", "global", "face"),
+        default="none",
+        help=(
+            "Train-only residual amplitude calibration. 'global' fits one shrink "
+            "scale on policy-val samples; 'face' fits one shrink scale per selected face."
+        ),
+    )
+    parser.add_argument(
+        "--validation_shrink_min_samples",
+        type=int,
+        default=8,
+        help="Minimum policy-val samples required before a face gets a nonzero face shrink scale.",
+    )
+    parser.add_argument(
+        "--crossfold_gain_certificate_folds",
+        type=int,
+        default=0,
+        help=(
+            "If >1, split train evidence views into this many interleaved folds "
+            "and require each accepted face to have nonnegative proxy gain across enough folds. "
+            "This is an all-train fold-consistency check, not an independent cross-fit certificate."
+        ),
+    )
+    parser.add_argument("--crossfold_min_passing_folds", type=int, default=0)
+    parser.add_argument("--crossfold_min_fold_relative_gain", type=float, default=0.0)
+    parser.add_argument("--crossfold_min_fold_samples", type=int, default=4)
     parser.add_argument("--min_face_policy_val_relative_gain", type=float, default=0.0)
     parser.add_argument("--min_face_policy_val_samples", type=int, default=8)
     parser.add_argument(
@@ -141,6 +169,29 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="Minimum cosine against the per-face residual direction for one view to count as agreeing.",
     )
+    parser.add_argument(
+        "--patch_cert_rings",
+        type=int,
+        default=0,
+        help=(
+            "If >0, grow accepted face seeds into connected train-evidence patches "
+            "using selected-face adjacency and require a patch-level train policy-val gain."
+        ),
+    )
+    parser.add_argument("--patch_cert_max_faces_per_seed", type=int, default=8)
+    parser.add_argument("--patch_cert_min_direction_cosine", type=float, default=0.90)
+    parser.add_argument("--patch_cert_min_neighbor_policy_val_samples", type=int, default=4)
+    parser.add_argument("--patch_cert_min_neighbor_policy_val_relative_gain", type=float, default=-0.02)
+    parser.add_argument("--patch_cert_min_policy_val_samples", type=int, default=16)
+    parser.add_argument("--patch_cert_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--patch_cert_neighbor_mode", choices=("topology", "centroid", "both"), default="topology")
+    parser.add_argument("--patch_cert_centroid_candidates_per_seed", type=int, default=64)
+    parser.add_argument(
+        "--patch_cert_shrink",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="When patch certification is enabled, fit one train-only shrink scale per accepted patch.",
+    )
     parser.add_argument("--no_op_on_fail", action="store_true", default=True)
     parser.add_argument("--force_apply", action="store_true")
     parser.add_argument("--device", default="cuda")
@@ -183,6 +234,9 @@ def read_selected_faces(
                     "view_hits": view_hits,
                     "consistency": consistency,
                     "mean_l1_error": _float(row, "mean_l1_error"),
+                    "mean_residual_r": _float(row, "mean_residual_r"),
+                    "mean_residual_g": _float(row, "mean_residual_g"),
+                    "mean_residual_b": _float(row, "mean_residual_b"),
                 }
             )
     rows.sort(key=lambda r: (float(r["score"]), float(r["pixel_count"])), reverse=True)
@@ -194,6 +248,9 @@ def read_selected_faces(
             "view_hits": float(row["view_hits"]),
             "consistency": float(row["consistency"]),
             "mean_l1_error": float(row["mean_l1_error"]),
+            "mean_residual_r": float(row["mean_residual_r"]),
+            "mean_residual_g": float(row["mean_residual_g"]),
+            "mean_residual_b": float(row["mean_residual_b"]),
         }
         for row in rows
     }
@@ -672,6 +729,567 @@ def face_view_gain_certificate_report(
     return out, summary
 
 
+def calibrate_coeff_by_policy_val(
+    coeff: torch.Tensor,
+    sample_vertex_ids: torch.Tensor,
+    weighted_basis: torch.Tensor,
+    samples: PixelSamples,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    selected_faces: list[int],
+    *,
+    mode: str,
+    min_samples: int,
+) -> tuple[torch.Tensor, dict[str, Any], dict[int, dict[str, Any]]]:
+    mode = str(mode)
+    summary: dict[str, Any] = {
+        "mode": mode,
+        "enabled": mode != "none",
+        "min_samples": int(min_samples),
+        "global_scale": 1.0,
+        "faces_evaluated": 0,
+        "faces_scaled": 0,
+        "zero_scale_faces": 0,
+        "mean_scale": 1.0,
+        "min_scale": 1.0,
+        "max_scale": 1.0,
+    }
+    if mode == "none":
+        return coeff, summary, {}
+    if samples.count == 0 or sample_vertex_ids.numel() == 0 or coeff.numel() == 0:
+        if mode == "global":
+            return coeff * 0.0, {**summary, "global_scale": 0.0, "mean_scale": 0.0, "min_scale": 0.0, "max_scale": 0.0}, {}
+        return coeff * 0.0, {**summary, "mean_scale": 0.0, "min_scale": 0.0, "max_scale": 0.0}, {}
+
+    with torch.no_grad():
+        pred_np = _predict(coeff, sample_vertex_ids, weighted_basis).detach().cpu().numpy().astype(np.float32, copy=False)
+    target_np = target.detach().cpu().numpy().astype(np.float32, copy=False)
+    weight_np = weights.detach().cpu().numpy().astype(np.float32, copy=False).reshape(-1, 1)
+    face_np = samples.face_ids.astype(np.int64, copy=False).reshape(-1)
+    if pred_np.shape[0] != target_np.shape[0] or face_np.shape[0] != target_np.shape[0]:
+        raise ValueError("sample prediction/target/face arrays do not match for validation shrink")
+
+    def fit_scale(mask: np.ndarray) -> tuple[float, int, float]:
+        sample_count = int(mask.sum())
+        if sample_count < max(int(min_samples), 1):
+            return 0.0, sample_count, 0.0
+        p = pred_np[mask]
+        y = target_np[mask]
+        w = weight_np[mask]
+        numerator = float((w * p * y).sum())
+        denominator = float((w * p * p).sum())
+        if denominator <= 1e-12:
+            return 0.0, sample_count, 0.0
+        raw_scale = numerator / denominator
+        scale = float(min(max(raw_scale, 0.0), 1.0))
+        return scale, sample_count, float(raw_scale)
+
+    if mode == "global":
+        scale, sample_count, raw_scale = fit_scale(np.ones((target_np.shape[0],), dtype=bool))
+        out = coeff * float(scale)
+        summary.update(
+            {
+                "global_scale": scale,
+                "samples": sample_count,
+                "raw_global_scale": raw_scale,
+                "mean_scale": scale,
+                "min_scale": scale,
+                "max_scale": scale,
+                "faces_evaluated": int(len(np.unique(face_np))) if face_np.size else 0,
+                "faces_scaled": int(len(np.unique(face_np))) if scale < 0.999999 and face_np.size else 0,
+                "zero_scale_faces": int(len(np.unique(face_np))) if scale <= 1e-8 and face_np.size else 0,
+            }
+        )
+        return out, summary, {}
+
+    if mode != "face":
+        raise ValueError(f"unsupported validation shrink mode: {mode}")
+
+    out = coeff.clone()
+    face_to_selected = {int(fid): idx for idx, fid in enumerate(selected_faces)}
+    per_face: dict[int, dict[str, Any]] = {}
+    scales: list[float] = []
+    for fid in selected_faces:
+        face_id = int(fid)
+        scale, sample_count, raw_scale = fit_scale(face_np == face_id)
+        scales.append(scale)
+        row = face_to_selected[face_id]
+        out[row * 3 : row * 3 + 3] = out[row * 3 : row * 3 + 3] * float(scale)
+        per_face[face_id] = {
+            "scale": float(scale),
+            "raw_scale": float(raw_scale),
+            "samples": int(sample_count),
+            "passed_min_samples": bool(sample_count >= max(int(min_samples), 1)),
+        }
+
+    if scales:
+        scale_np = np.asarray(scales, dtype=np.float32)
+        summary.update(
+            {
+                "faces_evaluated": int(len(scales)),
+                "faces_scaled": int(np.sum(scale_np < 0.999999)),
+                "zero_scale_faces": int(np.sum(scale_np <= 1e-8)),
+                "mean_scale": float(scale_np.mean()),
+                "min_scale": float(scale_np.min()),
+                "max_scale": float(scale_np.max()),
+            }
+        )
+    return out, summary, per_face
+
+
+def summarize_crossfold_face_gain(
+    *,
+    coeff: torch.Tensor,
+    faces: torch.Tensor,
+    selected_faces: list[int],
+    source_vertex_ids: torch.Tensor,
+    vertices: torch.Tensor,
+    view_paths: list[Path],
+    face_stats: dict[int, dict[str, float]],
+    args: argparse.Namespace,
+    device: torch.device,
+) -> tuple[dict[int, dict[str, Any]], dict[str, Any]]:
+    folds = int(args.crossfold_gain_certificate_folds)
+    summary: dict[str, Any] = {
+        "enabled": bool(folds > 1),
+        "certificate_type": "all_train_fold_consistency_not_crossfit",
+        "folds": max(folds, 0),
+        "min_passing_folds": int(args.crossfold_min_passing_folds),
+        "min_fold_relative_gain": float(args.crossfold_min_fold_relative_gain),
+        "min_fold_samples": int(args.crossfold_min_fold_samples),
+        "faces_evaluated": 0,
+        "faces_passing": 0,
+        "fold_summaries": [],
+    }
+    if folds <= 1:
+        return {}, summary
+    required_passing = int(args.crossfold_min_passing_folds)
+    if required_passing <= 0:
+        required_passing = folds
+    summary["min_passing_folds"] = int(required_passing)
+    if not selected_faces or not view_paths or coeff.numel() == 0:
+        return {}, summary
+
+    per_face_rows: dict[int, dict[str, Any]] = {
+        int(fid): {
+            "passing_folds": 0,
+            "eligible_folds": 0,
+            "folds": [],
+        }
+        for fid in selected_faces
+    }
+    vertices_local = vertices[source_vertex_ids].float() if source_vertex_ids.numel() else torch.empty((0, 3), dtype=torch.float32)
+    for fold_idx in range(folds):
+        fold_paths = [path for idx, path in enumerate(view_paths) if idx % folds == fold_idx]
+        fold_samples = collect_samples(
+            fold_paths,
+            selected_faces,
+            face_stats,
+            high_error_quantile=float(args.high_error_quantile),
+            min_alpha=float(args.min_alpha),
+            barycentric_tolerance=float(args.barycentric_tolerance),
+            max_samples_per_face_view=int(args.max_samples_per_face_view),
+            max_total_samples=max(int(args.max_total_samples // max(folds, 1)), 1),
+            uniform_barycentric=bool(args.uniform_barycentric),
+        )
+        if fold_samples.count:
+            _, _, fold_sample_vertex_ids = localize_samples(faces, selected_faces, fold_samples)
+        else:
+            fold_sample_vertex_ids = torch.empty((0, 3), dtype=torch.long)
+        fold_ids, fold_basis, fold_target, fold_weights = samples_to_tensors(
+            fold_samples,
+            fold_sample_vertex_ids,
+            vertices_local,
+            strength=float(args.strength),
+            max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+            device=device,
+        )
+        fold_proxy = evaluate_proxy(coeff, fold_ids, fold_basis, fold_target, fold_weights)
+        fold_face = evaluate_proxy_by_face(coeff, fold_ids, fold_basis, fold_target, fold_weights, fold_samples.face_ids)
+        fold_passing_faces = 0
+        for fid in selected_faces:
+            stats = fold_face.get(int(fid), {})
+            samples = int(stats.get("samples", 0))
+            relative_gain = float(stats.get("relative_gain", -1.0))
+            eligible = samples >= int(args.crossfold_min_fold_samples)
+            passed = bool(eligible and relative_gain >= float(args.crossfold_min_fold_relative_gain))
+            row = per_face_rows[int(fid)]
+            if eligible:
+                row["eligible_folds"] += 1
+            if passed:
+                row["passing_folds"] += 1
+                fold_passing_faces += 1
+            row["folds"].append(
+                {
+                    "fold": int(fold_idx),
+                    "samples": samples,
+                    "relative_gain": relative_gain,
+                    "eligible": bool(eligible),
+                    "passed": bool(passed),
+                }
+            )
+        summary["fold_summaries"].append(
+            {
+                "fold": int(fold_idx),
+                "view_names": [p.stem for p in fold_paths],
+                "samples": int(fold_samples.count),
+                "proxy": fold_proxy,
+                "passing_faces": int(fold_passing_faces),
+            }
+        )
+
+    for fid, row in per_face_rows.items():
+        gains = [float(fold["relative_gain"]) for fold in row["folds"] if bool(fold["eligible"])]
+        row["passed"] = bool(int(row["passing_folds"]) >= required_passing)
+        row["min_relative_gain"] = float(min(gains)) if gains else 0.0
+        row["mean_relative_gain"] = float(np.mean(gains)) if gains else 0.0
+    summary["faces_evaluated"] = int(len(per_face_rows))
+    summary["faces_passing"] = int(sum(1 for row in per_face_rows.values() if bool(row.get("passed", False))))
+    return per_face_rows, summary
+
+
+def face_residual_direction(face_stats: dict[int, dict[str, float]], face_id: int) -> np.ndarray:
+    stats = face_stats.get(int(face_id), {})
+    vec = np.asarray(
+        [
+            float(stats.get("mean_residual_r", 0.0)),
+            float(stats.get("mean_residual_g", 0.0)),
+            float(stats.get("mean_residual_b", 0.0)),
+        ],
+        dtype=np.float32,
+    )
+    norm = float(np.linalg.norm(vec))
+    if norm <= 1e-8:
+        return np.zeros((3,), dtype=np.float32)
+    return vec / norm
+
+
+def residual_direction_cosine(face_stats: dict[int, dict[str, float]], a: int, b: int) -> float:
+    da = face_residual_direction(face_stats, int(a))
+    db = face_residual_direction(face_stats, int(b))
+    if float(np.linalg.norm(da)) <= 1e-8 or float(np.linalg.norm(db)) <= 1e-8:
+        return 0.0
+    return float(np.clip(float(np.dot(da, db)), -1.0, 1.0))
+
+
+def selected_face_adjacency(faces: torch.Tensor, selected_faces: list[int]) -> dict[int, set[int]]:
+    adjacency: dict[int, set[int]] = {int(fid): set() for fid in selected_faces}
+    vertex_to_faces: dict[int, list[int]] = {}
+    for fid in selected_faces:
+        face_id = int(fid)
+        if face_id < 0 or face_id >= int(faces.shape[0]):
+            continue
+        for vertex_id in faces[face_id].detach().cpu().long().tolist():
+            vertex_to_faces.setdefault(int(vertex_id), []).append(face_id)
+    for incident in vertex_to_faces.values():
+        if len(incident) < 2:
+            continue
+        for fid in incident:
+            row = adjacency.setdefault(int(fid), set())
+            for other in incident:
+                if int(other) != int(fid):
+                    row.add(int(other))
+    return adjacency
+
+
+def selected_face_centers(
+    faces: torch.Tensor,
+    vertices: torch.Tensor,
+    selected_faces: list[int],
+) -> tuple[np.ndarray, np.ndarray, dict[int, int]]:
+    if not selected_faces:
+        return np.empty((0,), dtype=np.int64), np.empty((0, 3), dtype=np.float32), {}
+    face_ids = np.asarray([int(fid) for fid in selected_faces], dtype=np.int64)
+    valid = (face_ids >= 0) & (face_ids < int(faces.shape[0]))
+    face_ids = face_ids[valid]
+    if face_ids.size == 0:
+        return np.empty((0,), dtype=np.int64), np.empty((0, 3), dtype=np.float32), {}
+    face_tensor = faces[torch.as_tensor(face_ids, dtype=torch.long)].detach().cpu().long()
+    centers = vertices[face_tensor].detach().cpu().float().mean(dim=1).numpy().astype(np.float32, copy=False)
+    return face_ids, centers, {int(fid): idx for idx, fid in enumerate(face_ids.tolist())}
+
+
+def centroid_neighbor_candidates(
+    seed: int,
+    face_ids: np.ndarray,
+    centers: np.ndarray,
+    center_index: dict[int, int],
+    max_candidates: int,
+) -> list[int]:
+    idx = center_index.get(int(seed))
+    if idx is None or centers.shape[0] <= 1:
+        return []
+    delta = centers - centers[idx : idx + 1]
+    dist2 = np.sum(delta * delta, axis=1)
+    out: list[int] = []
+    for j in np.argsort(dist2):
+        fid = int(face_ids[int(j)])
+        if fid == int(seed):
+            continue
+        out.append(fid)
+        if len(out) >= int(max_candidates):
+            break
+    return out
+
+
+def evaluate_proxy_for_faces(
+    coeff: torch.Tensor,
+    sample_vertex_ids: torch.Tensor,
+    weighted_basis: torch.Tensor,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    sample_face_ids: np.ndarray,
+    face_ids: list[int],
+) -> dict[str, float]:
+    if not face_ids or sample_vertex_ids.numel() == 0:
+        return evaluate_proxy(
+            coeff,
+            sample_vertex_ids[:0],
+            weighted_basis[:0],
+            target[:0],
+            weights[:0],
+        )
+    mask = np.isin(sample_face_ids.astype(np.int64, copy=False), np.asarray(face_ids, dtype=np.int64))
+    if not np.any(mask):
+        return evaluate_proxy(
+            coeff,
+            sample_vertex_ids[:0],
+            weighted_basis[:0],
+            target[:0],
+            weights[:0],
+        )
+    idx = torch.as_tensor(np.nonzero(mask)[0], dtype=torch.long, device=sample_vertex_ids.device)
+    return evaluate_proxy(coeff, sample_vertex_ids[idx], weighted_basis[idx], target[idx], weights[idx])
+
+
+def fit_patch_scale(
+    coeff: torch.Tensor,
+    sample_vertex_ids: torch.Tensor,
+    weighted_basis: torch.Tensor,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    sample_face_ids: np.ndarray,
+    face_ids: list[int],
+    min_samples: int,
+) -> tuple[float, int, float]:
+    if not face_ids or sample_vertex_ids.numel() == 0:
+        return 0.0, 0, 0.0
+    mask = np.isin(sample_face_ids.astype(np.int64, copy=False), np.asarray(face_ids, dtype=np.int64))
+    sample_count = int(mask.sum())
+    if sample_count < max(int(min_samples), 1):
+        return 0.0, sample_count, 0.0
+    idx = torch.as_tensor(np.nonzero(mask)[0], dtype=torch.long, device=sample_vertex_ids.device)
+    with torch.no_grad():
+        pred = _predict(coeff, sample_vertex_ids[idx], weighted_basis[idx])
+        y = target[idx]
+        w = weights[idx].clamp_min(1e-8).view(-1, 1)
+        numerator = float((w * pred * y).sum().detach().cpu().item())
+        denominator = float((w * pred * pred).sum().detach().cpu().item())
+    if denominator <= 1e-12:
+        return 0.0, sample_count, 0.0
+    raw_scale = numerator / denominator
+    return float(min(max(raw_scale, 0.0), 1.0)), sample_count, float(raw_scale)
+
+
+def scale_face_coeffs(
+    coeff: torch.Tensor,
+    selected_faces: list[int],
+    face_ids: list[int],
+    scale: float,
+) -> None:
+    if not face_ids or coeff.numel() == 0:
+        return
+    face_to_selected = {int(fid): idx for idx, fid in enumerate(selected_faces)}
+    for fid in face_ids:
+        row = face_to_selected.get(int(fid))
+        if row is None:
+            continue
+        coeff[row * 3 : row * 3 + 3] = coeff[row * 3 : row * 3 + 3] * float(scale)
+
+
+def grow_patch_certified_faces(
+    *,
+    coeff: torch.Tensor,
+    faces: torch.Tensor,
+    vertices: torch.Tensor,
+    selected_faces: list[int],
+    seed_faces: list[int],
+    face_stats: dict[int, dict[str, float]],
+    face_policy: dict[int, dict[str, float]],
+    val_ids: torch.Tensor,
+    val_basis: torch.Tensor,
+    val_target: torch.Tensor,
+    val_weights: torch.Tensor,
+    val_samples: PixelSamples,
+    args: argparse.Namespace,
+) -> tuple[list[int], dict[str, Any], dict[int, dict[str, Any]]]:
+    rings = int(args.patch_cert_rings)
+    summary: dict[str, Any] = {
+        "enabled": bool(rings > 0),
+        "rings": max(rings, 0),
+        "max_faces_per_seed": int(args.patch_cert_max_faces_per_seed),
+        "min_direction_cosine": float(args.patch_cert_min_direction_cosine),
+        "min_neighbor_policy_val_samples": int(args.patch_cert_min_neighbor_policy_val_samples),
+        "min_neighbor_policy_val_relative_gain": float(args.patch_cert_min_neighbor_policy_val_relative_gain),
+        "min_policy_val_samples": int(args.patch_cert_min_policy_val_samples),
+        "min_relative_gain": float(args.patch_cert_min_relative_gain),
+        "neighbor_mode": str(args.patch_cert_neighbor_mode),
+        "centroid_candidates_per_seed": int(args.patch_cert_centroid_candidates_per_seed),
+        "patch_shrink": bool(args.patch_cert_shrink),
+        "seed_faces": int(len(seed_faces)),
+        "accepted_faces_before": int(len(seed_faces)),
+        "accepted_faces_after": int(len(seed_faces)),
+        "accepted_patches": 0,
+        "rejected_patches": 0,
+        "mean_patch_size": 1.0 if seed_faces else 0.0,
+        "preview": [],
+    }
+    if rings <= 0 or not seed_faces:
+        return list(seed_faces), summary, {}
+
+    adjacency = selected_face_adjacency(faces, selected_faces)
+    centroid_face_ids, centroid_centers, centroid_index = selected_face_centers(faces, vertices, selected_faces)
+    selected_set = set(int(fid) for fid in selected_faces)
+    assigned: set[int] = set()
+    accepted: list[int] = []
+    patch_by_face: dict[int, dict[str, Any]] = {}
+    patch_sizes: list[int] = []
+
+    for seed in seed_faces:
+        seed_id = int(seed)
+        if seed_id in assigned:
+            continue
+        patch: list[int] = [seed_id]
+        seen = {seed_id}
+        frontier = [seed_id]
+        for _ in range(rings):
+            next_frontier: list[int] = []
+            for fid in frontier:
+                neighbors: list[int] = []
+                if str(args.patch_cert_neighbor_mode) in {"topology", "both"}:
+                    neighbors.extend(sorted(adjacency.get(int(fid), set())))
+                if int(fid) == seed_id and str(args.patch_cert_neighbor_mode) in {"centroid", "both"}:
+                    neighbors.extend(
+                        centroid_neighbor_candidates(
+                            seed_id,
+                            centroid_face_ids,
+                            centroid_centers,
+                            centroid_index,
+                            int(args.patch_cert_centroid_candidates_per_seed),
+                        )
+                    )
+                deduped_neighbors = []
+                seen_neighbors: set[int] = set()
+                for nb in neighbors:
+                    if int(nb) in seen_neighbors:
+                        continue
+                    seen_neighbors.add(int(nb))
+                    deduped_neighbors.append(int(nb))
+                for nb in deduped_neighbors:
+                    nb = int(nb)
+                    if nb in seen or nb in assigned or nb not in selected_set:
+                        continue
+                    stats = face_stats.get(nb, {})
+                    if int(stats.get("view_hits", 0)) < int(args.min_view_hits):
+                        continue
+                    if float(stats.get("pixel_count", 0.0)) < float(args.min_pixel_count):
+                        continue
+                    if residual_direction_cosine(face_stats, seed_id, nb) < float(args.patch_cert_min_direction_cosine):
+                        continue
+                    proxy = face_policy.get(nb, {})
+                    if int(proxy.get("samples", 0)) < int(args.patch_cert_min_neighbor_policy_val_samples):
+                        continue
+                    if float(proxy.get("relative_gain", -1.0)) < float(args.patch_cert_min_neighbor_policy_val_relative_gain):
+                        continue
+                    patch.append(nb)
+                    seen.add(nb)
+                    next_frontier.append(nb)
+                    if len(patch) >= max(int(args.patch_cert_max_faces_per_seed), 1):
+                        break
+                if len(patch) >= max(int(args.patch_cert_max_faces_per_seed), 1):
+                    break
+            frontier = next_frontier
+            if not frontier or len(patch) >= max(int(args.patch_cert_max_faces_per_seed), 1):
+                break
+
+        proxy_before_shrink = evaluate_proxy_for_faces(
+            coeff,
+            val_ids,
+            val_basis,
+            val_target,
+            val_weights,
+            val_samples.face_ids,
+            patch,
+        )
+        passed = (
+            int(proxy_before_shrink.get("samples", 0)) >= int(args.patch_cert_min_policy_val_samples)
+            and float(proxy_before_shrink.get("relative_gain", -1.0)) >= float(args.patch_cert_min_relative_gain)
+        )
+        if not passed:
+            summary["rejected_patches"] = int(summary["rejected_patches"]) + 1
+            patch = [seed_id]
+            proxy_before_shrink = evaluate_proxy_for_faces(
+                coeff,
+                val_ids,
+                val_basis,
+                val_target,
+                val_weights,
+                val_samples.face_ids,
+                patch,
+            )
+
+        scale = 1.0
+        raw_scale = 1.0
+        scale_samples = int(proxy_before_shrink.get("samples", 0))
+        if bool(args.patch_cert_shrink) and len(patch) > 1:
+            scale, scale_samples, raw_scale = fit_patch_scale(
+                coeff,
+                val_ids,
+                val_basis,
+                val_target,
+                val_weights,
+                val_samples.face_ids,
+                patch,
+                int(args.patch_cert_min_policy_val_samples),
+            )
+            scale_face_coeffs(coeff, selected_faces, patch, scale)
+        proxy_after_shrink = evaluate_proxy_for_faces(
+            coeff,
+            val_ids,
+            val_basis,
+            val_target,
+            val_weights,
+            val_samples.face_ids,
+            patch,
+        )
+
+        assigned.update(int(fid) for fid in patch)
+        accepted.extend(int(fid) for fid in patch)
+        patch_sizes.append(len(patch))
+        if len(patch) > 1:
+            summary["accepted_patches"] = int(summary["accepted_patches"]) + 1
+        patch_record = {
+            "seed_face": seed_id,
+            "faces": [int(fid) for fid in patch],
+            "patch_size": int(len(patch)),
+            "proxy": proxy_after_shrink,
+            "proxy_before_shrink": proxy_before_shrink,
+            "passed_patch_gain": bool(passed),
+            "scale": float(scale),
+            "raw_scale": float(raw_scale),
+            "scale_samples": int(scale_samples),
+        }
+        for fid in patch:
+            patch_by_face[int(fid)] = patch_record
+        if len(summary["preview"]) < 20:
+            summary["preview"].append(patch_record)
+
+    if patch_sizes:
+        summary["mean_patch_size"] = float(np.mean(np.asarray(patch_sizes, dtype=np.float32)))
+    summary["accepted_faces_after"] = int(len(accepted))
+    return accepted, summary, patch_by_face
+
+
 def solve_coeff_delta(
     selected_faces_local: torch.Tensor,
     fit_sample_vertex_ids: torch.Tensor,
@@ -841,10 +1459,21 @@ def write_audit(output_model: Path, audit: dict[str, Any]) -> None:
         f"- fit samples: `{audit['fit_proxy']['samples']}`",
         f"- policy-val samples: `{audit['policy_val_proxy']['samples']}`",
         f"- policy-val relative gain: `{audit['policy_val_proxy']['relative_gain']:.6f}`",
+        f"- validation shrink enabled: `{audit['validation_shrink']['enabled']}`",
+        f"- validation shrink mode: `{audit['validation_shrink']['mode']}`",
+        f"- validation shrink mean scale: `{audit['validation_shrink']['mean_scale']:.6f}`",
+        f"- validation shrink zero-scale faces: `{audit['validation_shrink']['zero_scale_faces']}`",
         f"- face/view gain certificate enabled: `{audit['face_view_gain_certificate']['enabled']}`",
         f"- face/view gain certificate passing faces: `{audit['face_view_gain_certificate']['faces_passing']}`",
+        f"- train-fold consistency enabled: `{audit['crossfold_face_gain_certificate']['enabled']}`",
+        f"- train-fold consistency type: `{audit['crossfold_face_gain_certificate']['certificate_type']}`",
+        f"- train-fold consistency passing faces: `{audit['crossfold_face_gain_certificate']['faces_passing']}`",
+        f"- train-fold consistency min passing folds: `{audit['crossfold_face_gain_certificate']['min_passing_folds']}`",
         f"- face/view consensus enabled: `{audit['face_view_consensus']['enabled']}`",
         f"- face/view consensus passing faces: `{audit['face_view_consensus']['faces_passing']}`",
+        f"- patch certificate enabled: `{audit['patch_certificate']['enabled']}`",
+        f"- patch certificate accepted patches: `{audit['patch_certificate']['accepted_patches']}`",
+        f"- patch certificate accepted faces after growth: `{audit['patch_certificate']['accepted_faces_after']}`",
         f"- accepted: `{audit['accepted']}`",
         f"- no-op copy: `{audit['no_op_copy']}`",
         f"- coeff abs mean: `{audit['coeff_abs_mean']:.8f}`",
@@ -959,6 +1588,18 @@ def main() -> int:
         device=device,
     )
     coeff_device = coeff.to(device=device)
+    coeff_device, validation_shrink_summary, validation_shrink_by_face = calibrate_coeff_by_policy_val(
+        coeff_device,
+        val_ids,
+        val_basis,
+        val_samples,
+        val_target,
+        val_weights,
+        selected_faces,
+        mode=str(args.validation_shrink_mode),
+        min_samples=int(args.validation_shrink_min_samples),
+    )
+    coeff = coeff_device.detach().cpu()
     fit_proxy = evaluate_proxy(coeff_device, fit_ids, fit_basis, fit_target, fit_weights)
     val_proxy = evaluate_proxy(coeff_device, val_ids, val_basis, val_target, val_weights)
     face_policy = evaluate_proxy_by_face(coeff_device, val_ids, val_basis, val_target, val_weights, val_samples.face_ids)
@@ -973,6 +1614,17 @@ def main() -> int:
         min_relative_gain=float(args.min_face_gain_certificate_relative_gain),
         min_view_samples=int(args.min_face_gain_certificate_view_samples),
         min_fraction=float(args.min_face_gain_certificate_fraction),
+    )
+    crossfold_face_gain, crossfold_face_gain_summary = summarize_crossfold_face_gain(
+        coeff=coeff_device,
+        faces=faces,
+        selected_faces=selected_faces,
+        source_vertex_ids=source_vertex_ids,
+        vertices=vertices,
+        view_paths=view_paths,
+        face_stats=face_stats,
+        args=args,
+        device=device,
     )
     face_view_consensus, face_view_consensus_summary = face_view_consensus_report(
         val_samples,
@@ -1002,6 +1654,9 @@ def main() -> int:
         gain_certificate = face_view_gain_certificate.get(int(fid), {})
         if bool(face_view_gain_certificate_summary.get("enabled", False)) and not bool(gain_certificate.get("passed", False)):
             continue
+        crossfold_certificate = crossfold_face_gain.get(int(fid), {})
+        if bool(crossfold_face_gain_summary.get("enabled", False)) and not bool(crossfold_certificate.get("passed", False)):
+            continue
         consensus = face_view_consensus.get(int(fid), {})
         if bool(face_view_consensus_summary.get("enabled", False)) and not bool(consensus.get("passed", False)):
             continue
@@ -1015,6 +1670,24 @@ def main() -> int:
         reverse=True,
     )
     accepted_faces = face_candidates[: max(int(args.max_faces_to_apply), 0)]
+    accepted_faces, patch_cert_summary, patch_cert_by_face = grow_patch_certified_faces(
+        coeff=coeff_device,
+        faces=faces,
+        vertices=vertices,
+        selected_faces=selected_faces,
+        seed_faces=accepted_faces,
+        face_stats=face_stats,
+        face_policy=face_policy,
+        val_ids=val_ids,
+        val_basis=val_basis,
+        val_target=val_target,
+        val_weights=val_weights,
+        val_samples=val_samples,
+        args=args,
+    )
+    if int(args.max_faces_to_apply) >= 0:
+        accepted_faces = accepted_faces[: max(int(args.max_faces_to_apply), 0)]
+    coeff = coeff_device.detach().cpu()
     accepted = bool((global_policy_pass and accepted_faces) or args.force_apply)
     if bool(args.force_apply) and not accepted_faces:
         accepted_faces = selected_faces[: max(int(args.max_faces_to_apply), 0)]
@@ -1058,8 +1731,11 @@ def main() -> int:
         "fit_unique_faces": int(fit_unique_faces),
         "policy_val_unique_faces": int(val_unique_faces),
         "solver": solver,
+        "validation_shrink": validation_shrink_summary,
         "face_view_gain_certificate": face_view_gain_certificate_summary,
+        "crossfold_face_gain_certificate": crossfold_face_gain_summary,
         "face_view_consensus": face_view_consensus_summary,
+        "patch_certificate": patch_cert_summary,
         "filters": {
             "top_k": int(args.top_k),
             "min_view_hits": int(args.min_view_hits),
@@ -1081,6 +1757,12 @@ def main() -> int:
         "min_policy_val_relative_gain": float(args.min_policy_val_relative_gain),
         "min_policy_val_samples": int(args.min_policy_val_samples),
         "min_policy_val_unique_faces": int(args.min_policy_val_unique_faces),
+        "validation_shrink_mode": str(args.validation_shrink_mode),
+        "validation_shrink_min_samples": int(args.validation_shrink_min_samples),
+        "crossfold_gain_certificate_folds": int(args.crossfold_gain_certificate_folds),
+        "crossfold_min_passing_folds": int(args.crossfold_min_passing_folds),
+        "crossfold_min_fold_relative_gain": float(args.crossfold_min_fold_relative_gain),
+        "crossfold_min_fold_samples": int(args.crossfold_min_fold_samples),
         "min_face_policy_val_relative_gain": float(args.min_face_policy_val_relative_gain),
         "min_face_policy_val_samples": int(args.min_face_policy_val_samples),
         "min_face_gain_certificate_views": int(args.min_face_gain_certificate_views),
@@ -1091,6 +1773,16 @@ def main() -> int:
         "min_face_consensus_views": int(args.min_face_consensus_views),
         "min_face_consensus_view_samples": int(args.min_face_consensus_view_samples),
         "face_consensus_min_cosine": float(args.face_consensus_min_cosine),
+        "patch_cert_rings": int(args.patch_cert_rings),
+        "patch_cert_max_faces_per_seed": int(args.patch_cert_max_faces_per_seed),
+        "patch_cert_min_direction_cosine": float(args.patch_cert_min_direction_cosine),
+        "patch_cert_min_neighbor_policy_val_samples": int(args.patch_cert_min_neighbor_policy_val_samples),
+        "patch_cert_min_neighbor_policy_val_relative_gain": float(args.patch_cert_min_neighbor_policy_val_relative_gain),
+        "patch_cert_min_policy_val_samples": int(args.patch_cert_min_policy_val_samples),
+        "patch_cert_min_relative_gain": float(args.patch_cert_min_relative_gain),
+        "patch_cert_neighbor_mode": str(args.patch_cert_neighbor_mode),
+        "patch_cert_centroid_candidates_per_seed": int(args.patch_cert_centroid_candidates_per_seed),
+        "patch_cert_shrink": bool(args.patch_cert_shrink),
         "global_policy_pass": bool(global_policy_pass),
         "policy_pass": bool(global_policy_pass),
         "accepted": bool(accepted),
@@ -1114,8 +1806,11 @@ def main() -> int:
                 "face_id": int(fid),
                 "face_stats": face_stats.get(int(fid), {}),
                 "policy_val_proxy": face_policy.get(int(fid), {}),
+                "validation_shrink": validation_shrink_by_face.get(int(fid), {}),
                 "face_view_gain_certificate": face_view_gain_certificate.get(int(fid), {}),
+                "crossfold_face_gain_certificate": crossfold_face_gain.get(int(fid), {}),
                 "face_view_consensus": face_view_consensus.get(int(fid), {}),
+                "patch_certificate": patch_cert_by_face.get(int(fid), {}),
             }
             for fid in (accepted_faces[:20] if accepted else [])
         ],
