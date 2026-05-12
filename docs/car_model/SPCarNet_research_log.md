@@ -6329,6 +6329,61 @@ Collector result:
 **Decision**: This resolves the selected-clean concern only for the existing
 five-scene Stage ELA12 artifact set. It does not close the full nine-scene
 Mip-NeRF360 paper protocol, and it does not repair the Phase-S representation
-bottleneck. The next GPU work should target missing full9 same-protocol clean
-rows or a genuinely stronger representation operator, not another Phase-S local
-threshold sweep.
+bottleneck. This note is superseded for clean-best table accounting by the
+full9 collector below; the remaining real GPU work is a genuinely stronger
+representation operator, not another Phase-S local threshold sweep.
+
+## 2026-05-12 Full9 Paper-Loop Status Collector
+
+**Outcome**: Implemented a mechanical full9 status collector for the paper-loop
+evidence package. The collector joins existing clean MeshSplatting clean-best
+rows, Phase-J full9 rows, and Phase-S single/strict gate rows, then writes a
+single status table with missing evidence treated as a first-class failure
+state.
+
+Command:
+
+```bash
+WANDB_MODE=online /home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/meshsplatopt_collect_full9_paper_loop_status.py \
+  --doc-out docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md \
+  --wandb \
+  --wandb_project mesh-splatting-ecsr \
+  --wandb_group full9_paper_loop_status_20260512 \
+  --wandb_name collect_full9_paper_loop_status_20260512_final
+```
+
+W&B run: `6g09l2ul`.
+
+Artifacts:
+
+- report:
+  `docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md`
+- summary JSON:
+  `outputs/carnet/meshsplatopt/full9_paper_loop_status/full9_paper_loop_status.json`
+- scene CSV:
+  `outputs/carnet/meshsplatopt/full9_paper_loop_status/full9_paper_loop_status.csv`
+- clean candidate CSV:
+  `outputs/carnet/meshsplatopt/full9_paper_loop_status/full9_clean_candidate_rows.csv`
+- missing rows CSV:
+  `outputs/carnet/meshsplatopt/full9_paper_loop_status/full9_missing_rows.csv`
+
+Summary:
+
+| evidence | status |
+|---|---:|
+| clean-best rows | `9 / 9` |
+| Phase-J full9 rows | `9 / 9` |
+| Phase-J strict RGB wins vs clean-best | `9 / 9` |
+| Phase-S single-gate decisions | `9 / 9`, accepted `6 / 9` |
+| Phase-S strict four-offset gates | `7 / 9`, accepted `6 / 9`, rejected `1 / 9` |
+| Phase-S strict all-axis train-val wins | `3 / 7` |
+| missing strict evidence | `counter`, `treehill` |
+| full9 clean/Phase-J/Phase-S closure | `False` |
+
+**Decision**: This resolves the clean-best/Phase-J table-accounting ambiguity,
+but it also makes the scientific blocker explicit. The current strongest RGB
+endpoint is Phase-J; the active representation-level Phase-S branch is not a
+closed paper method because `bicycle` rejects and `counter/treehill` never reach
+strict four-offset acceptance under the frozen policy. The next real progress
+must be a new representation operator, not another local parameter sweep.

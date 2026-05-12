@@ -2,7 +2,7 @@
 
 **基于训练证据的几何安全 Mesh Splatting 压缩与渲染修复。**
 
-[English](README.md) | [Phase-J 结果](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R 全折审计](docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md) | [Phase-S gaincert 审计](docs/car_model/5-12-PhaseS-GainCertV1-Audit.md) | [SPCarNet selector 审计](docs/car_model/5-12-SPCarNet-RagSym-Rerank-Audit.md) | [闭环状态](docs/car_model/5-12-PaperLoop-ClosedLoop-Status.md) | [续跑报告](docs/car_model/5-12-Subagent-PaperLoop-Continuation-Report.md) | [Phase-J 外部验证](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
+[English](README.md) | [Phase-J 结果](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R 全折审计](docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md) | [Phase-S gaincert 审计](docs/car_model/5-12-PhaseS-GainCertV1-Audit.md) | [SPCarNet selector 审计](docs/car_model/5-12-SPCarNet-RagSym-Rerank-Audit.md) | [Full9 状态](docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md) | [闭环状态](docs/car_model/5-12-PaperLoop-ClosedLoop-Status.md) | [续跑报告](docs/car_model/5-12-Subagent-PaperLoop-Continuation-Report.md) | [Phase-J 外部验证](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
 
 SPCarNet 是建立在 Mesh Splatting 之上的研究分支。当前 ECSR 版本保留固定的 Phase-F compact checkpoint，再用 train-evidence guarded portfolio 做外观修复：稳定场景走 adaptive-alpha ELA，不稳定场景走 train-selected structural edge fallback。branch、edge gate、alpha、压缩比例都不使用 held-out test 指标选择。
 
@@ -12,6 +12,8 @@ report: outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2
 ```
 
 5 月 7 日 Compact-ELA/SOR 版本仍以 `archive/full9-compact-ela-ssim-peak-20260507`、commit `fae7942` 留档。Phase-J 在当前 full9 RGB 口径上更强，但它仍然是 render-time ELA portfolio，不是完全 baked 到表示里的终局模型。
+
+**Paper-loop 状态，2026-05-12：** `NOT COMPLETE`。机械化 full9 collector 现在确认 clean-best 与 Phase-J RGB 行在 `9 / 9` 场景完整，且 Phase-J 相对 selected clean MeshSplatting 在 `9 / 9` 场景三指标严格胜出。但同一个 collector 也明确标出 representation-level Phase-S 尚未闭环：严格四折 gate 只有 `7 / 9`，接受 `6 / 9`，`bicycle` 被拒绝，`counter/treehill` 因 frozen single-gate 已拒绝而缺严格四折行。W&B 状态 run：`6g09l2ul`；报告：[`docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md`](docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md)。
 
 ## 当前结果
 
@@ -23,7 +25,7 @@ score = PSNR + 20 * SSIM - 20 * LPIPS
 
 训练集指标不用于选择 baseline，也不用于选择最终 test 结果。
 
-**Phase-J 最终报告。**
+**当前 Phase-J RGB endpoint。**
 
 - 报告：`outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/phasef_ela_eval_summary_phasej_guarded_adaptedge_full9.md`
 - 场景：`9 / 9`
@@ -119,6 +121,8 @@ selector 升级，但 oracle 行仍然更强，因此 shape completion 故事还
 | 外部验证 | ETH3D courtyard clean9000 三指标严格胜出：最高 `+0.2642` PSNR，`+0.0094` SSIM，`-0.0225` LPIPS；相对旧 ELA7 为 mixed |
 | Phase-R v11 full-robust representation ladder | 多折 train-only 接受 `3 / 9`，report-only 三指标严格胜出 `3 / 9`，相对 Phase-J no-op fallback 均值 `+0.002531` PSNR，`+0.000080` SSIM，`-0.000120` LPIPS；该结果取代更乐观的 v10 单折/多折混合快照 |
 | Phase-S gaincert v1 | 四折 gate 接受 `garden`、`flowers`、`bonsai`、`kitchen`、`room` 与近似 no-op 的 `stump`；拒绝 `bicycle`；`counter/treehill` 在 single-gate 阶段被阻断 |
+| full9 paper-loop collector | clean-best `9 / 9`，Phase-J `9 / 9`，Phase-J 相对 clean-best 三指标严格胜出 `9 / 9`；Phase-S closure 为 `False`，因为严格 gate 只有 `7 / 9`，接受 `6 / 9`，且只有 `3 / 7` 是 train-val all-axis 胜出 |
+| Stage ELA12 clean-best audit | selected-clean 子集仍是 `5 / 5` strict full-pass，per-view RGB pass 为 `164 / 165`，envelope pass 为 `163 / 165`；这不是 Mip-NeRF360 全 9 场景 benchmark |
 | SPCarNet visible selector | `visible_only` 相对 contained K=1/first 改善 nested K=8 recon/hidden/free/visible 指标；oracle gap 仍存在 |
 
 下面的详细表格保留自 5 月 7 日 Compact-ELA/SOR 留档报告，用于 provenance。LPIPS、AbsRel、DepthMAE、Normal 越低越好。
@@ -295,7 +299,9 @@ bash scripts/car_model/run_paper_m360_compact_ela_policy_available7.sh
 
 - 平均三角形减少只有 `5.76%`，因为 room、counter、kitchen 被有意限制在 `0.1%` micro-prune。
 - strict all-axis pass 是 `5 / 9`，不是 `9 / 9`；剩余场景是 geometry-safe 或 geometry-neutral，而不是严格几何全胜。
-- 下一阶段的研究目标是更强的 geometry-preserving compaction，把 indoor/garden 的压缩率拉上去，同时不破坏 RGB、稀疏深度和法向指标。
+- 当前最强 RGB endpoint 仍是 Phase-J，也就是 render-time guarded ELA portfolio；representation-level Phase-S 尚未闭环：`bicycle` 拒绝，`counter/treehill` 因 frozen single-gate 拒绝而没有严格四折行，`bonsai` 是容忍阈值下接受而不是 all-axis clean win，并且已接受场景的 Phase-S 增益非常小。
+- rate-distortion 报告必须包含顶点数与属性数，不能只报三角形数，因为 face-local SH1 在接受 face 上可能复制顶点。
+- 下一阶段的研究目标是更强的 geometry-preserving compaction 与 representation repair operator，把 indoor/garden 压缩率拉上去，并解决被拒绝的室外场景，同时不破坏 RGB、稀疏深度和法向指标。
 
 具体改进规划记录在 [`docs/car_model/5-7-Archive-Full9-CompactELA.md`](docs/car_model/5-7-Archive-Full9-CompactELA.md) 和 representation-level 升级路线 [`docs/car_model/5-7-Representation-Level-Upgrade-Plan.md`](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md)。
 

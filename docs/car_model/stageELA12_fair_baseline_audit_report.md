@@ -57,7 +57,9 @@ This stricter stress test compares each held-out view to the best clean checkpoi
 
 ## Scope Note
 
-This audit covers the current validated scene set with complete method artifacts: `parking_phone_tiny`, `bonsai`, `courtyard`, `room`, and `counter`. Raw dataset folders that do not yet have complete method artifacts are intentionally not folded into the headline table. For Mip-NeRF360 paper-level comparison, this is still only a scene subset and must not be presented as the full nine-scene Mip-NeRF360 benchmark mean.
+This audit covers the current validated scene set with complete method artifacts: `parking_phone_tiny`, `bonsai`, `courtyard`, `room`, and `counter`. Raw dataset folders that do not yet have complete method artifacts are intentionally not folded into the headline table.
+
+Important: this is a selected-clean subset audit, not the full nine-scene Mip-NeRF360 benchmark. It must not be used as evidence that the current paper loop fully dominates MeshSplatting on Mip-NeRF360. Use `docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md` for the current full9 clean-best / Phase-J / Phase-S closure verdict.
 
 ## Artifacts
 

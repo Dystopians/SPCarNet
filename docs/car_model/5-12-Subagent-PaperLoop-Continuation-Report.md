@@ -13,6 +13,8 @@ This continuation did complete a real implementation/evidence milestone:
   scenes and the new `bicycle` patch-certified follow-up;
 - the existing Stage ELA12 clean-best collector was rerun with W&B to verify the
   selected-clean audit status;
+- a new W&B-logged full9 paper-loop status collector was implemented to join
+  clean-best, Phase-J, and Phase-S rows without hand-merging tables;
 - metrics, qualitative output paths, commands, and known weaknesses are
   documented.
 
@@ -29,6 +31,7 @@ Changed files:
 - `scripts/car_model/rescore_spcarnet_multihypothesis.py`
 - `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py`
 - `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`
+- `scripts/car_model/meshsplatopt_collect_full9_paper_loop_status.py`
 
 Main method changes:
 
@@ -40,6 +43,10 @@ Main method changes:
   that this is not independent cross-fit.
 - Phase-S adds patch-certified growth around accepted seed faces, including a
   centroid-neighbor mode for disconnected but spatially adjacent evidence.
+- The new full9 status collector mechanically selects clean-best rows from the
+  configured clean checkpoint envelope, checks Phase-J against both recorded
+  and clean-best baselines, and treats missing Phase-S strict rows as explicit
+  evidence gaps.
 
 ## Completed Experiments
 
@@ -152,6 +159,47 @@ the currently complete artifact set (`bonsai`, `courtyard`, `room`, `counter`,
 and `parking_phone_tiny`). The report also states the limitation explicitly:
 this is not the full nine-scene Mip-NeRF360 benchmark mean.
 
+### Full9 paper-loop status collector
+
+Command:
+
+```bash
+WANDB_MODE=online /home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/meshsplatopt_collect_full9_paper_loop_status.py \
+  --doc-out docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md \
+  --wandb \
+  --wandb_project mesh-splatting-ecsr \
+  --wandb_group full9_paper_loop_status_20260512 \
+  --wandb_name collect_full9_paper_loop_status_20260512_final
+```
+
+W&B run: `6g09l2ul`.
+
+Outputs:
+
+- `docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md`
+- `outputs/carnet/meshsplatopt/full9_paper_loop_status/full9_paper_loop_status.json`
+- `outputs/carnet/meshsplatopt/full9_paper_loop_status/full9_paper_loop_status.csv`
+- `outputs/carnet/meshsplatopt/full9_paper_loop_status/full9_clean_candidate_rows.csv`
+- `outputs/carnet/meshsplatopt/full9_paper_loop_status/full9_missing_rows.csv`
+
+Result:
+
+| item | value |
+|---|---:|
+| clean-best rows | `9 / 9` |
+| Phase-J full9 rows | `9 / 9` |
+| Phase-J strict RGB wins vs clean-best | `9 / 9` |
+| Phase-S strict four-offset gates | `7 / 9` |
+| Phase-S strict accepts | `6 / 9` |
+| Phase-S strict all-axis train-val wins | `3 / 7` |
+| missing rows | `counter`, `treehill` |
+| full9 clean/Phase-J/Phase-S closure | `False` |
+
+Conclusion: this closes the table-accounting ambiguity. It does not close the
+paper loop, because the active representation-level branch is still incomplete
+and low-amplitude.
+
 ## Representative Commands
 
 SPCarNet visible rescoring:
@@ -210,25 +258,29 @@ Weaknesses:
 - `bonsai` should not be presented as an all-axis strict win.
 - Face-local SH1 increases vertices/attributes, so rate-distortion reporting
   must include more than triangle count.
-- The clean-best baseline envelope is positive on the existing five-scene
-  Stage ELA12 audit, but full nine-scene Mip-NeRF360 clean-best closure is still
-  not available.
+- The Stage ELA12 selected-clean audit is still only a five-scene artifact set,
+  not the full nine-scene Mip-NeRF360 benchmark.
+- Full9 clean-best and Phase-J table accounting is now available, but Phase-S
+  full9 closure is explicitly false under the collector.
 
 ## Exact Next Step
 
-Do not continue with local gain/patch scans first. The next command should
-collect or render the missing full9 same-protocol clean-best rows, then compare
-the current method under exactly the same scene/iteration/eval policy:
+Do not continue with local gain/patch scans first. The clean-best/Phase-J table
+accounting issue is now resolved by the full9 status collector. The next method
+work should be a new representation operator targeted at the rejected scenes
+(`bicycle`, `counter`, `treehill`), and the gate after any candidate method is:
 
 ```bash
-/home/peilincai/micromamba/envs/mesh_splatting/bin/python \
-  scripts/car_model/meshsplatopt_collect_stageela12_fair_baseline_audit.py \
-  --out-dir outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit \
-  --report docs/car_model/stageELA12_fair_baseline_audit_report.md \
+WANDB_MODE=online /home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/meshsplatopt_collect_full9_paper_loop_status.py \
+  --doc-out docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md \
+  --fail-on-missing \
   --wandb \
   --wandb_project mesh-splatting-ecsr \
-  --wandb_group cleanbest_protocol_reconcile_20260512
+  --wandb_group full9_paper_loop_status_20260512
 ```
 
-If the collector still reports only five scenes, the next GPU work is to
-generate the missing clean-best/method rows rather than tuning Phase-S.
+This command is expected to fail today because the Phase-S strict rows for
+`counter/treehill` are missing and `bicycle` is rejected. It should only pass
+after the next representation method produces accepted strict rows for all
+full9 scenes.

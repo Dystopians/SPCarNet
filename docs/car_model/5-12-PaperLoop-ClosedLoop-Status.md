@@ -4,6 +4,8 @@ Date: 2026-05-12
 
 Gaincert v1 update: the latest Phase-S policy now adds a train-only per-face gain certificate on top of face/view consensus. This is a real method change and it fixes one concrete outdoor strict-gate failure: `flowers` now passes the fixed four-offset train-val gate. The loop is still not complete because `bicycle`, `counter`, and `treehill` reject under frozen policies, `bonsai` is only threshold-accepted with tiny SSIM/LPIPS train-val regressions, and the visual/metric gains are still low amplitude.
 
+Full9 status collector update: `scripts/car_model/meshsplatopt_collect_full9_paper_loop_status.py` now mechanically joins the existing clean MeshSplatting clean-best rows, Phase-J full9 rows, and Phase-S decision/gate rows. It writes `docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md` plus JSON/CSV artifacts under `outputs/carnet/meshsplatopt/full9_paper_loop_status/`, and logs W&B run `6g09l2ul`. The collector confirms clean-best `9 / 9`, Phase-J `9 / 9`, and Phase-J strict RGB wins vs clean-best `9 / 9`, but marks full9 clean/Phase-J/Phase-S closure as `False`: Phase-S strict four-offset gates exist for `7 / 9`, accept `6 / 9`, reject `1 / 9`, and have only `3 / 7` all-axis train-val wins.
+
 ## What Changed
 
 This update contains real method changes rather than only parameter scanning.
@@ -53,6 +55,30 @@ This is implemented in:
 - `scripts/car_model/rescore_spcarnet_multihypothesis.py`
 
 ## Current Evidence
+
+### Full9 Paper-Loop Collector
+
+Generated report:
+
+- `docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md`
+- `outputs/carnet/meshsplatopt/full9_paper_loop_status/full9_paper_loop_status.json`
+- `outputs/carnet/meshsplatopt/full9_paper_loop_status/full9_paper_loop_status.csv`
+- W&B run: `6g09l2ul` (`full9_paper_loop_status_20260512`)
+
+Summary:
+
+| evidence | status |
+|---|---:|
+| clean-best rows | `9 / 9` |
+| Phase-J full9 rows | `9 / 9` |
+| Phase-J strict RGB wins vs clean-best | `9 / 9` |
+| Phase-S single-gate decisions | `9 / 9`, accepted `6 / 9` |
+| Phase-S strict four-offset gates | `7 / 9`, accepted `6 / 9`, rejected `1 / 9` |
+| Phase-S strict all-axis train-val wins | `3 / 7` |
+| missing strict evidence | `counter`, `treehill` |
+| full9 clean/Phase-J/Phase-S closure | `False` |
+
+This collector is deliberately stricter than a success-only summary. Missing rows count as missing evidence, and report-only held-out Phase-S test deltas are not used for acceptance.
 
 ### Phase-S
 
@@ -176,9 +202,9 @@ The latest Phase-S story is stronger than the earlier consensus-only story becau
 - SP-CarNet `visible_only` fixes the visible-preservation weakness in the
   nested K=8 package, but it needs a stronger theory section explaining why
   observed-visible scoring is inference-safe and not a hidden GT oracle.
-- Full nine-scene fixed-policy closure is missing, and a clean-best/protocol
-  reconciliation remains necessary before any paper-facing "dominates
-  MeshSplatting" claim is scientifically safe. The Stage ELA12 collector was
+- Full nine-scene fixed-policy closure is missing. The clean-best/Phase-J
+  table accounting is now mechanically reconciled by the full9 collector, but
+  the same collector proves Phase-S is not closed. The Stage ELA12 collector was
   rerun with W&B and remains positive on its existing five-scene selected-clean
   artifact set, but that report explicitly does not cover the full nine-scene
   Mip-NeRF360 benchmark.
@@ -189,32 +215,21 @@ The latest Phase-S story is stronger than the earlier consensus-only story becau
 Do not rerun the completed continuation probes unless auditing reproducibility.
 The Stage ELA12 selected-clean collector has already been rerun in this
 continuation and wrote W&B run `rmpikjz2`; it confirms the existing five-scene
-selected-clean audit, not a full9 benchmark. The next defensible action is to
-fill missing full9 same-protocol clean-best rows and design a new operator, not
-another local strength scan.
+selected-clean audit, not a full9 benchmark. The full9 status collector wrote
+W&B run `6g09l2ul` and resolves the clean-best/Phase-J table-accounting issue.
+The next defensible action is to design a new representation operator for
+`bicycle`, `counter`, and `treehill`, then rerun this collector as the gate:
 
 ```bash
-PY=/home/peilincai/micromamba/envs/mesh_splatting/bin/python
-$PY - <<'PY'
-import json
-from pathlib import Path
-roots = {
-    "gaincert_v1": Path("outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_gaincert_v1_cached_dense16_20260512"),
-    "bicycle_patchcert_v2": Path("outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/facelocal_patchcert_v4_centroid_v2_cached_dense16_20260512"),
-}
-for name, root in roots.items():
-    print("##", name)
-    for p in sorted(root.glob("*/multifold_trainval_gate.json")):
-        d = json.loads(p.read_text())
-        print(p.parent.name, d.get("accepted"), d.get("decision_reasons") or d.get("reasons"))
-        print(json.dumps(d.get("trainval_delta_summary"), sort_keys=True))
-PY
+WANDB_MODE=online /home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/meshsplatopt_collect_full9_paper_loop_status.py \
+  --doc-out docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md \
+  --fail-on-missing \
+  --wandb \
+  --wandb_project mesh-splatting-ecsr \
+  --wandb_group full9_paper_loop_status_20260512
 ```
 
-For the clean-best reconciliation, start by collecting all existing clean rows
-before launching new GPU jobs:
-
-```bash
-PY=/home/peilincai/micromamba/envs/mesh_splatting/bin/python
-$PY scripts/car_model/meshsplatopt_collect_stageela12_fair_baseline_audit.py --help
-```
+This gate currently fails by design because `counter/treehill` lack strict
+Phase-S rows and `bicycle` rejects. It should only pass after a stronger method
+creates accepted strict rows for all full9 scenes.

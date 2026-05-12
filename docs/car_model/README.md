@@ -20,5 +20,6 @@ Current key docs:
 - `5-12-PhaseS-GainCertV1-Audit.md` — current gain-certified face-local SH1 audit; supersedes consensus-only Phase-S as the active representation-level branch
 - `5-12-PhaseS-FaceLocalConsensus-Audit.md` — consensus-only Phase-S ablation and failure analysis
 - `5-12-SPCarNet-RagSym-Rerank-Audit.md` — nested K-best SPCarNet selector audit, including the `visible_only` follow-up selector
+- `5-12-Full9-PaperLoop-Evidence-Status.md` — mechanical full9 clean-best / Phase-J / Phase-S status collector, including missing rows and closure verdict
 - `5-12-PaperLoop-ClosedLoop-Status.md` — current cross-branch status, evidence matrix, blockers, and next commands
 - `5-12-Subagent-PaperLoop-Continuation-Report.md` — this continuation's implementation, experiment, ablation, qualitative-output, and blocker summary
