@@ -6298,3 +6298,37 @@ Additional artifacts:
 closure. The correct next step is clean-best/protocol reconciliation plus a new
 representation operator; more local strength or patch-neighbor scans are not
 justified by the current evidence.
+
+## 2026-05-12 Stage ELA12 Clean-Best Collector Rerun
+
+**Outcome**: Reran the existing Stage ELA12 fair-baseline collector with online
+W&B to check whether the clean-best audit artifact was current.
+
+Command:
+
+```bash
+WANDB_MODE=online PYTHONUNBUFFERED=1 /home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/meshsplatopt_collect_stageela12_fair_baseline_audit.py \
+  --wandb \
+  --wandb_project mesh-splatting-ecsr \
+  --wandb_group cleanbest_protocol_reconcile_20260512 \
+  --wandb_name collect_stageela12_fair_baseline_audit_20260512
+```
+
+W&B run: `rmpikjz2`.
+
+Collector result:
+
+- decision: `CORRECTED_HELDOUT_TEST_SELECTED_CLEAN_BASELINE_AUDIT_READY`
+- report: `docs/car_model/stageELA12_fair_baseline_audit_report.md`
+- output root: `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit`
+- strict full-pass count: `5 / 5`
+- per-view RGB pass count: `164 / 165`
+- envelope per-view RGB pass count: `163 / 165`
+
+**Decision**: This resolves the selected-clean concern only for the existing
+five-scene Stage ELA12 artifact set. It does not close the full nine-scene
+Mip-NeRF360 paper protocol, and it does not repair the Phase-S representation
+bottleneck. The next GPU work should target missing full9 same-protocol clean
+rows or a genuinely stronger representation operator, not another Phase-S local
+threshold sweep.

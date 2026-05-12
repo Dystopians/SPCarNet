@@ -178,14 +178,20 @@ The latest Phase-S story is stronger than the earlier consensus-only story becau
   observed-visible scoring is inference-safe and not a hidden GT oracle.
 - Full nine-scene fixed-policy closure is missing, and a clean-best/protocol
   reconciliation remains necessary before any paper-facing "dominates
-  MeshSplatting" claim is scientifically safe.
+  MeshSplatting" claim is scientifically safe. The Stage ELA12 collector was
+  rerun with W&B and remains positive on its existing five-scene selected-clean
+  artifact set, but that report explicitly does not cover the full nine-scene
+  Mip-NeRF360 benchmark.
 - This is not yet a full paper closure.  It is a meaningful method upgrade with honest evidence and clear remaining blockers.
 
 ## Next Required Commands
 
 Do not rerun the completed continuation probes unless auditing reproducibility.
-The next defensible action is a clean-best/protocol reconciliation and a new
-operator design, not another local strength scan.
+The Stage ELA12 selected-clean collector has already been rerun in this
+continuation and wrote W&B run `rmpikjz2`; it confirms the existing five-scene
+selected-clean audit, not a full9 benchmark. The next defensible action is to
+fill missing full9 same-protocol clean-best rows and design a new operator, not
+another local strength scan.
 
 ```bash
 PY=/home/peilincai/micromamba/envs/mesh_splatting/bin/python

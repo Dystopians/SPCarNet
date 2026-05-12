@@ -11,14 +11,16 @@ This continuation did complete a real implementation/evidence milestone:
   consistency logging, and patch-certified local growth;
 - W&B-logged medium/long validations were run for the remaining Phase-S v1
   scenes and the new `bicycle` patch-certified follow-up;
+- the existing Stage ELA12 clean-best collector was rerun with W&B to verify the
+  selected-clean audit status;
 - metrics, qualitative output paths, commands, and known weaknesses are
   documented.
 
 It did not complete the paper-level goal. The remaining blocker is scientific,
 not only engineering: the representation-level edits are too low-amplitude and
 do not robustly fix `bicycle`, `counter`, or `treehill`; the clean-best
-MeshSplatting protocol also still needs a final reconciliation before any
-"fully dominates baseline" claim is safe.
+MeshSplatting reconciliation is positive on the existing five-scene selected
+audit but still does not cover the full nine-scene Mip-NeRF360 setting.
 
 ## Code Changes
 
@@ -124,6 +126,32 @@ patch-certified faces, but strict four-offset rejects:
 Conclusion: patch growth is a real representation attempt, but not a successful
 paper method yet.
 
+### Stage ELA12 clean-best audit rerun
+
+Command:
+
+```bash
+WANDB_MODE=online PYTHONUNBUFFERED=1 /home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/meshsplatopt_collect_stageela12_fair_baseline_audit.py \
+  --wandb \
+  --wandb_project mesh-splatting-ecsr \
+  --wandb_group cleanbest_protocol_reconcile_20260512 \
+  --wandb_name collect_stageela12_fair_baseline_audit_20260512
+```
+
+W&B run: `rmpikjz2`.
+
+Report:
+
+- `docs/car_model/stageELA12_fair_baseline_audit_report.md`
+- `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/fair_baseline_audit.json`
+- `outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit/qualitative_gallery/gallery.html`
+
+Result: the selected-clean audit is ready and remains `5/5` strict full-pass on
+the currently complete artifact set (`bonsai`, `courtyard`, `room`, `counter`,
+and `parking_phone_tiny`). The report also states the limitation explicitly:
+this is not the full nine-scene Mip-NeRF360 benchmark mean.
+
 ## Representative Commands
 
 SPCarNet visible rescoring:
@@ -182,18 +210,25 @@ Weaknesses:
 - `bonsai` should not be presented as an all-axis strict win.
 - Face-local SH1 increases vertices/attributes, so rate-distortion reporting
   must include more than triangle count.
-- The clean-best baseline envelope still needs a final protocol-consistent
-  audit before any top-conference claim.
+- The clean-best baseline envelope is positive on the existing five-scene
+  Stage ELA12 audit, but full nine-scene Mip-NeRF360 clean-best closure is still
+  not available.
 
 ## Exact Next Step
 
 Do not continue with local gain/patch scans first. The next command should
-reconcile the clean-best baseline tooling and existing clean rows:
+collect or render the missing full9 same-protocol clean-best rows, then compare
+the current method under exactly the same scene/iteration/eval policy:
 
 ```bash
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python \
-  scripts/car_model/meshsplatopt_collect_stageela12_fair_baseline_audit.py --help
+  scripts/car_model/meshsplatopt_collect_stageela12_fair_baseline_audit.py \
+  --out-dir outputs/carnet/meshsplatopt/stageELA12_fair_baseline_audit \
+  --report docs/car_model/stageELA12_fair_baseline_audit_report.md \
+  --wandb \
+  --wandb_project mesh-splatting-ecsr \
+  --wandb_group cleanbest_protocol_reconcile_20260512
 ```
 
-Then run the collector or its closest current equivalent on all existing clean
-and Phase-J rows before launching any new GPU experiments.
+If the collector still reports only five scenes, the next GPU work is to
+generate the missing clean-best/method rows rather than tuning Phase-S.
