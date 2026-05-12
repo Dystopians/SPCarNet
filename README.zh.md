@@ -2,7 +2,7 @@
 
 **基于训练证据的几何安全 Mesh Splatting 压缩与渲染修复。**
 
-[English](README.md) | [Phase-J 结果](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R 固定策略](docs/car_model/5-10-ECSR-PhaseR-FixedCandidateLadder.md) | [Phase-R 室内审计](docs/car_model/5-11-PhaseR-Indoor-Multifold-Gate-Audit.md) | [Phase-J 外部验证](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [5 月 7 日更新](docs/car_model/5-7-Update.md) | [升级路线](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR 审计](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
+[English](README.md) | [Phase-J 结果](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R 固定策略](docs/car_model/5-10-ECSR-PhaseR-FixedCandidateLadder.md) | [Phase-R 室内审计](docs/car_model/5-11-PhaseR-Indoor-Multifold-Gate-Audit.md) | [Phase-R 全折审计](docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md) | [Phase-J 外部验证](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [5 月 7 日更新](docs/car_model/5-7-Update.md) | [升级路线](docs/car_model/5-7-Representation-Level-Upgrade-Plan.md) | [ECSR 审计](docs/car_model/5-8-ECSR-CurrentStateAudit.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
 
 SPCarNet 是建立在 Mesh Splatting 之上的研究分支。当前 ECSR 版本保留固定的 Phase-F compact checkpoint，再用 train-evidence guarded portfolio 做外观修复：稳定场景走 adaptive-alpha ELA，不稳定场景走 train-selected structural edge fallback。branch、edge gate、alpha、压缩比例都不使用 held-out test 指标选择。
 
@@ -70,6 +70,7 @@ score = PSNR + 20 * SSIM - 20 * LPIPS
 - Surface-attached residual lumigraph V8：[`docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md`](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md)
 - Phase-R fixed surface-SH1 ladder：[`docs/car_model/5-10-ECSR-PhaseR-FixedCandidateLadder.md`](docs/car_model/5-10-ECSR-PhaseR-FixedCandidateLadder.md)
 - Phase-R 室内多折与 gamma trust 审计：[`docs/car_model/5-11-PhaseR-Indoor-Multifold-Gate-Audit.md`](docs/car_model/5-11-PhaseR-Indoor-Multifold-Gate-Audit.md)
+- Phase-R 户外全折稳健审计：[`docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md`](docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md)
 - 执行日志：[`docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md`](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md)
 - Phase-A 汇总 contact sheet：`outputs/carnet/meshsplatopt/ecsr_phase_a/surface_evidence/phase_a_surface_evidence_contact_sheet.png`
 
@@ -85,7 +86,7 @@ Phase-G 尝试把 ELA teacher bake 回 topology-frozen checkpoint，但 official
 
 Phase-M / V8 目前是最干净的 representation-attached recovery baseline：train residual 存在 surface `face_id` 上，held-out view 只通过 target surface map 查表应用。固定 two-split consensus policy 接受 `flowers` 与 `garden`，其余 `7 / 9` 场景自动 no-op；相对 Phase-F compact base 的 full9 均值为小幅正向变化：`+0.000250` PSNR、`+0.000000868` SSIM、`-0.00000638` LPIPS。这个结果不是当前论文主 RGB endpoint，但它给下一步更高容量的 surface-attached 表示恢复提供了安全基线。
 
-Phase-R 进一步把 residual 写回 checkpoint 中的 surface SH1 属性，并加入 train-only gamma trust-region residual gate。最新 full9 v10 snapshot 在严格 train-heldout gate 下接受 `6 / 9` 个 representation edit，report-only 三指标严格胜出 `6 / 9`，相对 Phase-J 的 report-only 均值为 `+0.002993` PSNR、`+0.000136` SSIM、`-0.000217` LPIPS。新增的 gamma trust-region 把 `room` 从多折拒绝推进到 representation edit 接受，而且没有使用 held-out test 指标做选择。当前剩余瓶颈是 `counter`、`bonsai` 与 `treehill` 这类 edge-fallback 场景；收益已经更稳，但仍属于小幅稳定提升，还不是最终视觉突破。
+Phase-R 进一步把 residual 写回 checkpoint 中的 surface SH1 属性，并加入 train-only gamma trust-region residual gate。新的 v11 审计把户外候选也纳入与室内一致的四折 train-only gate，修正了 v10 对完成度的乐观估计：v11 只接受 `3 / 9` 个 representation edit（`stump`、`room`、`kitchen`），report-only 三指标严格胜出 `3 / 9`，相对 Phase-J no-op fallback 的均值为 `+0.002531` PSNR、`+0.000080` SSIM、`-0.000120` LPIPS。它更可靠，但完成度更低：`bicycle`、`flowers`、`garden`、`counter`、`bonsai`、`treehill` 都仍是 fallback，因此 Phase-R 目前是严格的 representation-level baseline，而不是最终视觉 endpoint。
 
 ## 其他评估口径
 
@@ -99,7 +100,7 @@ Phase-R 进一步把 residual 写回 checkpoint 中的 surface SH1 属性，并�
 | 几何 / 拓扑 | 平均三角形减少 `7.6479%`；Phase-J closure audit 下 `6 / 9` sparse geometry 严格更好，`9 / 9` geometry-safe |
 | per-view audit | `244 / 246` 个 held-out view 相对 selected clean baseline 同时提升 PSNR、SSIM、LPIPS |
 | 外部验证 | ETH3D courtyard clean9000 三指标严格胜出：最高 `+0.2642` PSNR，`+0.0094` SSIM，`-0.0225` LPIPS；相对旧 ELA7 为 mixed |
-| Phase-R v10 representation ladder | 严格 train-heldout 接受 `6 / 9`，report-only 三指标严格胜出 `6 / 9`，相对 Phase-J 均值 `+0.002993` PSNR，`+0.000136` SSIM，`-0.000217` LPIPS；`room` 由 gamma trust-region residual blending 新增通过 |
+| Phase-R v11 full-robust representation ladder | 多折 train-only 接受 `3 / 9`，report-only 三指标严格胜出 `3 / 9`，相对 Phase-J no-op fallback 均值 `+0.002531` PSNR，`+0.000080` SSIM，`-0.000120` LPIPS；该结果取代更乐观的 v10 单折/多折混合快照 |
 
 下面的详细表格保留自 5 月 7 日 Compact-ELA/SOR 留档报告，用于 provenance。LPIPS、AbsRel、DepthMAE、Normal 越低越好。
 

@@ -6136,3 +6136,48 @@ for `room` but not sufficient for `bonsai`: the same offset-3 LPIPS failure
 remains, and the report-only test split loses PSNR and LPIPS even though SSIM
 increases. `bonsai` should stay fallback until a different operator can reduce
 perceptual residuals without this LPIPS/test tradeoff.
+
+## 2026-05-12 Phase-R Full-Robust Outdoor Multi-Fold Closure
+
+The outdoor Phase-R candidates were rerun with the same four-offset train-only
+gate used indoors. This corrected a fairness gap in v10, which still included
+legacy single-split outdoor decisions.
+
+Full-strength outdoor SH1 result:
+
+| scene | decision | mean train-val dPSNR | mean dSSIM | mean dLPIPS | report-only test dPSNR | dSSIM | dLPIPS | main rejection |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| bicycle | reject | +0.000081 | -0.000062 | -0.000027 | +0.001156 | +0.000135 | -0.000432 | offset1 PSNR/SSIM, offset3 SSIM |
+| flowers | reject | +0.000218 | -0.000015 | +0.000084 | +0.002346 | +0.000344 | -0.000405 | offset1 LPIPS, offset3 SSIM |
+| garden | reject | +0.000183 | -0.000016 | +0.000054 | +0.000662 | +0.000024 | -0.000036 | offset1 PSNR/SSIM |
+| stump | accept | +0.000102 | -0.000003 | +0.000005 | +0.000021 | +0.000000 | -0.000011 | pass |
+
+Fixed gamma `0.25` was then tested as a non scene-tuned trust-region control.
+It did not rescue the failed outdoor scenes:
+
+| scene | gamma 0.25 decision | mean train-val dPSNR | mean dSSIM | mean dLPIPS | main rejection |
+|---|---:|---:|---:|---:|---|
+| bicycle | reject | +0.000141 | +0.000018 | +0.000063 | offset3 LPIPS |
+| flowers | reject | +0.000066 | -0.000009 | +0.000100 | offset1 LPIPS |
+| garden | reject | -0.000003 | -0.000009 | +0.000037 | offset0/1 PSNR |
+| stump | accept | +0.000016 | -0.000000 | +0.000000 | pass |
+
+The new v11 fixed ladder selects only multi-fold accepted representation edits:
+`stump`, `room`, and `kitchen`. It has `3 / 9` accepted selections and `3 / 9`
+report-only strict RGB wins, with mean report-only deltas versus Phase-J no-op
+fallback of `+0.002531` PSNR, `+0.000080` SSIM, and `-0.000120` LPIPS.
+
+This is a reliability correction, not a headline-quality breakthrough. The
+scientific conclusion is that surface-attached SH1 residuals are checkpoint-baked
+and valid on a subset, but the current operator is not strong enough for
+`bicycle`, `flowers`, `garden`, `counter`, or `bonsai`. Future work should
+replace strength scans with a new representation operator, likely local
+surface codes or contraction-aware appearance relocation, while keeping the v11
+multi-offset gate as the minimum acceptance standard.
+
+Artifacts:
+
+- audit report:
+  `docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md`
+- fixed ladder:
+  `outputs/carnet/meshsplatopt/ecsr_phase_r/fixed_candidate_ladder_v11_fullrobust_alloffset/phase_r_fixed_candidate_ladder.md`

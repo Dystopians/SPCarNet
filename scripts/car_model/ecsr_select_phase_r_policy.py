@@ -133,19 +133,21 @@ def _select_scene(
             continue
         decision = _load_json(decision_path)
         trainval_delta = _normalized_trainval_delta(decision)
+        selection_uses_test = bool(decision.get("selection_uses_test"))
         row = {
             "candidate": name,
             "root": str(root),
             "decision_path": str(decision_path),
             "decision_kind": _decision_kind(decision_path),
             "exists": True,
-            "accepted": bool(decision.get("accepted")),
+            "accepted": bool(decision.get("accepted")) and not selection_uses_test,
             "selected_label": decision.get("selected_label"),
             "candidate_label": decision.get("candidate_label"),
-            "reasons": decision.get("decision_reasons", []),
+            "reasons": list(decision.get("decision_reasons", []))
+            + (["selection_uses_test_rejected_by_ladder"] if selection_uses_test else []),
             "trainval_delta": trainval_delta,
             "test_delta_report_only": decision.get("test_delta_report_only", {}),
-            "selection_uses_test": bool(decision.get("selection_uses_test")),
+            "selection_uses_test": selection_uses_test,
         }
         checked.append(row)
         if row["accepted"]:

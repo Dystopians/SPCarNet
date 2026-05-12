@@ -16,3 +16,4 @@ Current key docs:
 - `5-8-ECSR-FinalDecisionExecutionLog.md` — current ECSR implementation log for the FinalDecision plan
 - `5-8-ECSR-PhaseD-SurfaceResidualDeltaSmoke.md` — current representation-attached residual smoke result
 - `5-10-ECSR-FaceAlphaV15-V20-CertifiedPolicy.md` — full9 certified surface face-alpha policy log
+- `5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md` — corrected Phase-R full-robust multi-offset gate audit
