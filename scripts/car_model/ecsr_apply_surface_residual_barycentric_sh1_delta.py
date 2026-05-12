@@ -103,6 +103,33 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="Minimum policy-val samples for a face-level certificate.",
     )
+    parser.add_argument(
+        "--min_face_view_consensus",
+        type=float,
+        default=0.0,
+        help=(
+            "If >0, require this fraction of policy-val train views for a face "
+            "to agree with the face residual direction before applying its SH1 delta."
+        ),
+    )
+    parser.add_argument(
+        "--min_face_consensus_views",
+        type=int,
+        default=2,
+        help="Minimum policy-val train views needed for the face/view consensus certificate.",
+    )
+    parser.add_argument(
+        "--min_face_consensus_view_samples",
+        type=int,
+        default=4,
+        help="Minimum samples from one policy-val train view before it votes in face/view consensus.",
+    )
+    parser.add_argument(
+        "--face_consensus_min_cosine",
+        type=float,
+        default=0.0,
+        help="Minimum cosine against the per-face residual direction for one view to count as agreeing.",
+    )
     parser.add_argument("--no_op_on_fail", action="store_true", default=True)
     parser.add_argument("--force_apply", action="store_true")
     parser.add_argument("--device", default="cuda")
@@ -407,6 +434,94 @@ def evaluate_proxy(
     }
 
 
+def face_view_consensus_report(
+    samples: PixelSamples,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    *,
+    min_consensus: float,
+    min_views: int,
+    min_view_samples: int,
+    min_cosine: float,
+) -> tuple[dict[int, dict[str, Any]], dict[str, Any]]:
+    enabled = float(min_consensus) > 0.0
+    summary: dict[str, Any] = {
+        "enabled": bool(enabled),
+        "min_face_view_consensus": float(min_consensus),
+        "min_face_consensus_views": int(min_views),
+        "min_face_consensus_view_samples": int(min_view_samples),
+        "face_consensus_min_cosine": float(min_cosine),
+        "faces_evaluated": 0,
+        "faces_passing": 0,
+    }
+    if not enabled:
+        return {}, summary
+    if samples.count == 0:
+        return {}, summary
+
+    target_np = target.detach().cpu().numpy().astype(np.float32, copy=False)
+    weight_np = weights.detach().cpu().numpy().astype(np.float32, copy=False).reshape(-1)
+    face_np = samples.face_ids.astype(np.int64, copy=False).reshape(-1)
+    view_np = np.asarray(samples.view_names, dtype=object)
+    if target_np.shape[0] != face_np.shape[0] or view_np.shape[0] != face_np.shape[0]:
+        raise ValueError("sample face/view arrays do not match target shape")
+
+    required_views = max(int(min_views), 1)
+    required_view_samples = max(int(min_view_samples), 1)
+    out: dict[int, dict[str, Any]] = {}
+    for fid in np.unique(face_np).tolist():
+        face_mask = face_np == int(fid)
+        view_vectors: list[np.ndarray] = []
+        view_names: list[str] = []
+        view_sample_counts: list[int] = []
+        for view_name in sorted(set(str(v) for v in view_np[face_mask].tolist())):
+            view_mask = face_mask & (view_np == view_name)
+            sample_count = int(view_mask.sum())
+            if sample_count < required_view_samples:
+                continue
+            w = weight_np[view_mask].reshape(-1, 1)
+            denom = max(float(w.sum()), 1e-8)
+            vector = (target_np[view_mask] * w).sum(axis=0) / denom
+            if float(np.linalg.norm(vector)) <= 1e-10:
+                continue
+            view_vectors.append(vector.astype(np.float32, copy=False))
+            view_names.append(view_name)
+            view_sample_counts.append(sample_count)
+        if view_vectors:
+            vectors = np.stack(view_vectors, axis=0)
+            direction = vectors.mean(axis=0)
+            direction_norm = float(np.linalg.norm(direction))
+            if direction_norm > 1e-10:
+                norms = np.maximum(np.linalg.norm(vectors, axis=1), 1e-10)
+                cosines = (vectors @ direction) / (norms * direction_norm)
+                agreeing = int(np.sum(cosines >= float(min_cosine)))
+            else:
+                cosines = np.zeros((len(view_vectors),), dtype=np.float32)
+                agreeing = 0
+        else:
+            direction_norm = 0.0
+            cosines = np.empty((0,), dtype=np.float32)
+            agreeing = 0
+        view_count = int(len(view_vectors))
+        consensus = float(agreeing / max(view_count, 1))
+        passed = bool(view_count >= required_views and consensus >= float(min_consensus))
+        out[int(fid)] = {
+            "view_count": view_count,
+            "agreeing_views": agreeing,
+            "consensus": consensus,
+            "residual_norm": float(direction_norm),
+            "mean_cosine": float(np.mean(cosines)) if cosines.size else 0.0,
+            "min_cosine": float(np.min(cosines)) if cosines.size else 0.0,
+            "passed": passed,
+            "view_names": view_names[:16],
+            "view_sample_counts": view_sample_counts[:16],
+        }
+
+    summary["faces_evaluated"] = int(len(out))
+    summary["faces_passing"] = int(sum(1 for row in out.values() if bool(row.get("passed", False))))
+    return out, summary
+
+
 def _filter_coeff_by_face_policy(
     *,
     coeff: torch.Tensor,
@@ -421,6 +536,8 @@ def _filter_coeff_by_face_policy(
     min_face_gain: float,
     min_face_samples: int,
     max_faces_to_apply: int,
+    face_view_consensus: dict[int, dict[str, Any]] | None,
+    require_face_view_consensus: bool,
     device: torch.device,
 ) -> tuple[torch.Tensor, dict[str, Any]]:
     if coeff.numel() == 0 or val_samples.count == 0 or not selected_faces:
@@ -432,17 +549,23 @@ def _filter_coeff_by_face_policy(
             "min_face_policy_val_relative_gain": float(min_face_gain),
             "min_face_policy_val_samples": int(min_face_samples),
             "max_faces_to_apply": int(max_faces_to_apply),
+            "view_consensus_enabled": bool(require_face_view_consensus),
+            "view_consensus_faces_passing": 0,
             "accepted_face_ids": [],
             "top_faces": [],
         }
 
     coeff_device = coeff.to(device=device)
-    rows: list[dict[str, float]] = []
+    rows: list[dict[str, Any]] = []
     face_ids_np = val_samples.face_ids.astype(np.int64, copy=False)
+    face_view_consensus = face_view_consensus or {}
     for selected_idx, fid in enumerate(selected_faces):
         mask_np = face_ids_np == int(fid)
         samples = int(mask_np.sum())
         if samples < int(min_face_samples):
+            continue
+        consensus = face_view_consensus.get(int(fid), {})
+        if bool(require_face_view_consensus) and not bool(consensus.get("passed", False)):
             continue
         mask = torch.as_tensor(mask_np, dtype=torch.bool, device=device)
         metrics = evaluate_proxy(
@@ -468,6 +591,9 @@ def _filter_coeff_by_face_policy(
                 "pixel_count": float(stat.get("pixel_count", 0.0)),
                 "view_hits": float(stat.get("view_hits", 0.0)),
                 "consistency": float(stat.get("consistency", 0.0)),
+                "view_consensus": float(consensus.get("consensus", 0.0)),
+                "view_count": float(consensus.get("view_count", 0.0)),
+                "agreeing_views": float(consensus.get("agreeing_views", 0.0)),
             }
         )
     rows.sort(key=lambda r: (float(r["relative_gain"]), float(r["samples"]), float(r["score"])), reverse=True)
@@ -491,6 +617,9 @@ def _filter_coeff_by_face_policy(
             "pixel_count": float(row["pixel_count"]),
             "view_hits": float(row["view_hits"]),
             "consistency": float(row["consistency"]),
+            "view_consensus": float(row.get("view_consensus", 0.0)),
+            "view_count": int(row.get("view_count", 0.0)),
+            "agreeing_views": int(row.get("agreeing_views", 0.0)),
         }
         for row in rows[:64]
     ]
@@ -502,6 +631,10 @@ def _filter_coeff_by_face_policy(
         "min_face_policy_val_relative_gain": float(min_face_gain),
         "min_face_policy_val_samples": int(min_face_samples),
         "max_faces_to_apply": int(max_faces_to_apply),
+        "view_consensus_enabled": bool(require_face_view_consensus),
+        "view_consensus_faces_passing": int(
+            sum(1 for row in face_view_consensus.values() if bool(row.get("passed", False)))
+        ),
         "accepted_face_ids": accepted_face_ids[:256],
         "top_faces": top_rows,
     }
@@ -631,6 +764,8 @@ def write_audit(output_model: Path, audit: dict[str, Any]) -> None:
         f"- applied policy-val relative gain: `{audit['policy_val_proxy_applied']['relative_gain']:.6f}`",
         f"- face policy enabled: `{audit['face_policy']['enabled']}`",
         f"- face policy accepted faces: `{audit['face_policy']['accepted_faces']}`",
+        f"- face/view consensus enabled: `{audit['face_view_consensus']['enabled']}`",
+        f"- face/view consensus passing faces: `{audit['face_view_consensus']['faces_passing']}`",
         f"- accepted: `{audit['accepted']}`",
         f"- no-op copy: `{audit['no_op_copy']}`",
         f"- coeff abs mean: `{audit['coeff_abs_mean']:.8f}`",
@@ -760,10 +895,20 @@ def main() -> int:
         and val_unique_faces >= int(args.min_policy_val_unique_faces)
         and float(val_proxy["relative_gain"]) >= float(args.min_policy_val_relative_gain)
     )
+    face_view_consensus, face_view_consensus_summary = face_view_consensus_report(
+        val_samples,
+        val_target,
+        val_weights,
+        min_consensus=float(args.min_face_view_consensus),
+        min_views=int(args.min_face_consensus_views),
+        min_view_samples=int(args.min_face_consensus_view_samples),
+        min_cosine=float(args.face_consensus_min_cosine),
+    )
     face_policy_enabled = (
         int(args.max_faces_to_apply) > 0
         or int(args.min_face_policy_val_samples) > 0
         or float(args.min_face_policy_val_relative_gain) > -1.0e8
+        or bool(face_view_consensus_summary.get("enabled", False))
     )
     face_policy: dict[str, Any] = {
         "enabled": False,
@@ -773,6 +918,8 @@ def main() -> int:
         "min_face_policy_val_relative_gain": float(args.min_face_policy_val_relative_gain),
         "min_face_policy_val_samples": int(args.min_face_policy_val_samples),
         "max_faces_to_apply": int(args.max_faces_to_apply),
+        "view_consensus_enabled": bool(face_view_consensus_summary.get("enabled", False)),
+        "view_consensus_faces_passing": int(face_view_consensus_summary.get("faces_passing", 0)),
         "accepted_face_ids": selected_faces[:256],
         "top_faces": [],
     }
@@ -791,6 +938,8 @@ def main() -> int:
             min_face_gain=float(args.min_face_policy_val_relative_gain),
             min_face_samples=int(args.min_face_policy_val_samples),
             max_faces_to_apply=int(args.max_faces_to_apply),
+            face_view_consensus=face_view_consensus,
+            require_face_view_consensus=bool(face_view_consensus_summary.get("enabled", False)),
             device=device,
         )
     coeff_apply_device = coeff_apply.to(device=device)
@@ -845,6 +994,7 @@ def main() -> int:
         "policy_val_unique_faces": int(val_unique_faces),
         "solver": solver,
         "face_policy": face_policy,
+        "face_view_consensus": face_view_consensus_summary,
         "filters": {
             "top_k": int(args.top_k),
             "min_view_hits": int(args.min_view_hits),

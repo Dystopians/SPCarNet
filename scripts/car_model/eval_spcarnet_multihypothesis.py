@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 import time
 from pathlib import Path
@@ -461,6 +462,46 @@ def _aggregate(per_object: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _flatten_metrics(prefix: str, obj: dict[str, Any]) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for key, value in obj.items():
+        if isinstance(value, dict):
+            out.update(_flatten_metrics(f"{prefix}{key}/", value))
+        elif isinstance(value, (int, float)) and math.isfinite(float(value)):
+            out[f"{prefix}{key}"] = float(value)
+    return out
+
+
+def _log_wandb(args: argparse.Namespace, summary: dict[str, Any], target: Path) -> None:
+    if not args.wandb_project:
+        return
+    try:
+        import wandb  # type: ignore
+    except Exception as exc:  # pragma: no cover - environment-dependent
+        raise RuntimeError("--wandb_project was set but wandb could not be imported") from exc
+
+    tags = list(args.wandb_tags or [])
+    mode = os.environ.get("WANDB_MODE")
+    run = wandb.init(
+        project=args.wandb_project,
+        group=args.wandb_group or None,
+        name=args.wandb_name or None,
+        tags=tags or None,
+        config={k: v for k, v in vars(args).items() if not callable(v)},
+        mode=mode,
+    )
+    try:
+        wandb.log(_flatten_metrics("spcarnet_eval/", summary))
+        artifact = wandb.Artifact(
+            name=f"spcarnet_eval_K{args.K}_{target.parent.name}",
+            type="eval-json",
+        )
+        artifact.add_file(str(target))
+        run.log_artifact(artifact)
+    finally:
+        run.finish()
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -484,6 +525,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--w_mixed", type=float, default=0.5)
     parser.add_argument("--alpha_hard", type=float, default=2.0)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--seed_object_stride",
+        type=int,
+        default=1024,
+        help=(
+            "K-invariant per-object seed stride. With the default schedule, K=8 "
+            "candidate k=0 uses the same seed as the corresponding K=1 run."
+        ),
+    )
+    parser.add_argument(
+        "--legacy_k_dependent_seed",
+        action="store_true",
+        help="Use the original seed_base = seed * 1024 + object_index * K schedule.",
+    )
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--enable_symmetry_score", action="store_true",
@@ -494,6 +549,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--latent_bank_checkpoint", default=None,
                         help="Stage-2 autodecoder checkpoint with `latent_table` "
                              "(used only when --enable_rag_score). Falls back to --shape_field_checkpoint.")
+    parser.add_argument("--wandb_project", default=None)
+    parser.add_argument("--wandb_group", default=None)
+    parser.add_argument("--wandb_name", default=None)
+    parser.add_argument("--wandb_tags", nargs="*", default=None)
     args = parser.parse_args(argv)
 
     device = torch.device(
@@ -535,6 +594,11 @@ def main(argv: list[str] | None = None) -> int:
     per_object: list[dict[str, Any]] = []
     for i in range(n_total):
         item = dataset[i]
+        if args.legacy_k_dependent_seed:
+            seed_base = args.seed * 1024 + i * args.K
+        else:
+            seed_base = args.seed * max(int(args.seed_object_stride), 1) * max(n_total, 1)
+            seed_base += i * max(int(args.seed_object_stride), args.K + 1)
         try:
             entry = _evaluate_one(
                 completion=completion, decoder=decoder, item=item,
@@ -542,7 +606,7 @@ def main(argv: list[str] | None = None) -> int:
                 mc_resolution=args.mc_resolution, sample_count=args.sample_count,
                 iso_level=args.iso_level, weights=weights,
                 free_violation_threshold=args.free_violation_threshold,
-                seed_base=args.seed * 1024 + i * args.K,
+                seed_base=seed_base,
                 latent_bank=latent_bank,
                 enable_symmetry=args.enable_symmetry_score,
                 enable_rag=args.enable_rag_score,
@@ -568,6 +632,7 @@ def main(argv: list[str] | None = None) -> int:
     target = output_dir / f"K{args.K}.json"
     with target.open("w") as f:
         json.dump(out_doc, f, indent=2)
+    _log_wandb(args, summary, target)
     print(json.dumps(summary, indent=2))
     return 0
 

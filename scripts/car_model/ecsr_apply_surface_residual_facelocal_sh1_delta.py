@@ -87,6 +87,60 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_policy_val_unique_faces", type=int, default=16)
     parser.add_argument("--min_face_policy_val_relative_gain", type=float, default=0.0)
     parser.add_argument("--min_face_policy_val_samples", type=int, default=8)
+    parser.add_argument(
+        "--min_face_gain_certificate_views",
+        type=int,
+        default=0,
+        help=(
+            "If >0, require each accepted face to have predicted residual MSE gain "
+            "on at least this many policy-val train views."
+        ),
+    )
+    parser.add_argument(
+        "--min_face_gain_certificate_relative_gain",
+        type=float,
+        default=0.0,
+        help="Minimum per-view relative MSE gain for one policy-val train view to certify a face.",
+    )
+    parser.add_argument(
+        "--min_face_gain_certificate_view_samples",
+        type=int,
+        default=4,
+        help="Minimum samples from one policy-val train view before it can certify a face.",
+    )
+    parser.add_argument(
+        "--min_face_gain_certificate_fraction",
+        type=float,
+        default=0.0,
+        help="Optional minimum fraction of eligible policy-val train views that must certify a face.",
+    )
+    parser.add_argument(
+        "--min_face_view_consensus",
+        type=float,
+        default=0.0,
+        help=(
+            "If >0, require this fraction of policy-val train views for a face "
+            "to agree with the face residual direction before materializing its local vertices."
+        ),
+    )
+    parser.add_argument(
+        "--min_face_consensus_views",
+        type=int,
+        default=2,
+        help="Minimum policy-val train views needed for the face/view consensus certificate.",
+    )
+    parser.add_argument(
+        "--min_face_consensus_view_samples",
+        type=int,
+        default=4,
+        help="Minimum samples from one policy-val train view before it votes in face/view consensus.",
+    )
+    parser.add_argument(
+        "--face_consensus_min_cosine",
+        type=float,
+        default=0.0,
+        help="Minimum cosine against the per-face residual direction for one view to count as agreeing.",
+    )
     parser.add_argument("--no_op_on_fail", action="store_true", default=True)
     parser.add_argument("--force_apply", action="store_true")
     parser.add_argument("--device", default="cuda")
@@ -430,6 +484,194 @@ def evaluate_proxy_by_face(
     return out
 
 
+def face_view_consensus_report(
+    samples: PixelSamples,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    *,
+    min_consensus: float,
+    min_views: int,
+    min_view_samples: int,
+    min_cosine: float,
+) -> tuple[dict[int, dict[str, Any]], dict[str, Any]]:
+    enabled = float(min_consensus) > 0.0
+    summary: dict[str, Any] = {
+        "enabled": bool(enabled),
+        "min_face_view_consensus": float(min_consensus),
+        "min_face_consensus_views": int(min_views),
+        "min_face_consensus_view_samples": int(min_view_samples),
+        "face_consensus_min_cosine": float(min_cosine),
+        "faces_evaluated": 0,
+        "faces_passing": 0,
+    }
+    if not enabled:
+        return {}, summary
+    if samples.count == 0:
+        return {}, summary
+
+    target_np = target.detach().cpu().numpy().astype(np.float32, copy=False)
+    weight_np = weights.detach().cpu().numpy().astype(np.float32, copy=False).reshape(-1)
+    face_np = samples.face_ids.astype(np.int64, copy=False).reshape(-1)
+    view_np = np.asarray(samples.view_names, dtype=object)
+    if target_np.shape[0] != face_np.shape[0] or view_np.shape[0] != face_np.shape[0]:
+        raise ValueError("sample face/view arrays do not match target shape")
+
+    required_views = max(int(min_views), 1)
+    required_view_samples = max(int(min_view_samples), 1)
+    out: dict[int, dict[str, Any]] = {}
+    for fid in np.unique(face_np).tolist():
+        face_mask = face_np == int(fid)
+        view_vectors: list[np.ndarray] = []
+        view_names: list[str] = []
+        view_sample_counts: list[int] = []
+        for view_name in sorted(set(str(v) for v in view_np[face_mask].tolist())):
+            view_mask = face_mask & (view_np == view_name)
+            sample_count = int(view_mask.sum())
+            if sample_count < required_view_samples:
+                continue
+            w = weight_np[view_mask].reshape(-1, 1)
+            denom = max(float(w.sum()), 1e-8)
+            vector = (target_np[view_mask] * w).sum(axis=0) / denom
+            if float(np.linalg.norm(vector)) <= 1e-10:
+                continue
+            view_vectors.append(vector.astype(np.float32, copy=False))
+            view_names.append(view_name)
+            view_sample_counts.append(sample_count)
+        if view_vectors:
+            vectors = np.stack(view_vectors, axis=0)
+            direction = vectors.mean(axis=0)
+            direction_norm = float(np.linalg.norm(direction))
+            if direction_norm > 1e-10:
+                norms = np.maximum(np.linalg.norm(vectors, axis=1), 1e-10)
+                cosines = (vectors @ direction) / (norms * direction_norm)
+                agreeing = int(np.sum(cosines >= float(min_cosine)))
+            else:
+                cosines = np.zeros((len(view_vectors),), dtype=np.float32)
+                agreeing = 0
+        else:
+            direction_norm = 0.0
+            cosines = np.empty((0,), dtype=np.float32)
+            agreeing = 0
+        view_count = int(len(view_vectors))
+        consensus = float(agreeing / max(view_count, 1))
+        passed = bool(view_count >= required_views and consensus >= float(min_consensus))
+        out[int(fid)] = {
+            "view_count": view_count,
+            "agreeing_views": agreeing,
+            "consensus": consensus,
+            "residual_norm": float(direction_norm),
+            "mean_cosine": float(np.mean(cosines)) if cosines.size else 0.0,
+            "min_cosine": float(np.min(cosines)) if cosines.size else 0.0,
+            "passed": passed,
+            "view_names": view_names[:16],
+            "view_sample_counts": view_sample_counts[:16],
+        }
+
+    summary["faces_evaluated"] = int(len(out))
+    summary["faces_passing"] = int(sum(1 for row in out.values() if bool(row.get("passed", False))))
+    return out, summary
+
+
+def face_view_gain_certificate_report(
+    coeff: torch.Tensor,
+    sample_vertex_ids: torch.Tensor,
+    weighted_basis: torch.Tensor,
+    samples: PixelSamples,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    *,
+    min_views: int,
+    min_relative_gain: float,
+    min_view_samples: int,
+    min_fraction: float,
+) -> tuple[dict[int, dict[str, Any]], dict[str, Any]]:
+    enabled = int(min_views) > 0
+    summary: dict[str, Any] = {
+        "enabled": bool(enabled),
+        "min_face_gain_certificate_views": int(min_views),
+        "min_face_gain_certificate_relative_gain": float(min_relative_gain),
+        "min_face_gain_certificate_view_samples": int(min_view_samples),
+        "min_face_gain_certificate_fraction": float(min_fraction),
+        "faces_evaluated": 0,
+        "faces_passing": 0,
+        "eligible_views": 0,
+        "beneficial_views": 0,
+        "mean_beneficial_fraction": 0.0,
+    }
+    if not enabled:
+        return {}, summary
+    if samples.count == 0 or sample_vertex_ids.numel() == 0:
+        return {}, summary
+
+    with torch.no_grad():
+        pred_np = _predict(coeff, sample_vertex_ids, weighted_basis).detach().cpu().numpy().astype(np.float32, copy=False)
+    target_np = target.detach().cpu().numpy().astype(np.float32, copy=False)
+    weight_np = weights.detach().cpu().numpy().astype(np.float32, copy=False).reshape(-1)
+    face_np = samples.face_ids.astype(np.int64, copy=False).reshape(-1)
+    view_np = np.asarray(samples.view_names, dtype=object)
+    if (
+        pred_np.shape[0] != target_np.shape[0]
+        or target_np.shape[0] != face_np.shape[0]
+        or view_np.shape[0] != face_np.shape[0]
+    ):
+        raise ValueError("sample prediction/target/face/view arrays do not match")
+
+    required_views = max(int(min_views), 1)
+    required_view_samples = max(int(min_view_samples), 1)
+    required_fraction = max(float(min_fraction), 0.0)
+    out: dict[int, dict[str, Any]] = {}
+    beneficial_fractions: list[float] = []
+    for fid in np.unique(face_np).tolist():
+        face_mask = face_np == int(fid)
+        view_rows: list[dict[str, Any]] = []
+        for view_name in sorted(set(str(v) for v in view_np[face_mask].tolist())):
+            view_mask = face_mask & (view_np == view_name)
+            sample_count = int(view_mask.sum())
+            if sample_count < required_view_samples:
+                continue
+            w = weight_np[view_mask].reshape(-1, 1)
+            y = target_np[view_mask]
+            p = pred_np[view_mask]
+            denom = max(float(w.sum()) * 3.0, 1e-8)
+            mse_before = float(((y**2) * w).sum() / denom)
+            mse_after = float((((p - y) ** 2) * w).sum() / denom)
+            relative_gain = float((mse_before - mse_after) / max(mse_before, 1e-12))
+            view_rows.append(
+                {
+                    "view_name": view_name,
+                    "samples": sample_count,
+                    "mse_before": mse_before,
+                    "mse_after": mse_after,
+                    "relative_gain": relative_gain,
+                    "passed": bool(relative_gain >= float(min_relative_gain)),
+                }
+            )
+
+        eligible = int(len(view_rows))
+        beneficial = int(sum(1 for row in view_rows if bool(row["passed"])))
+        fraction = float(beneficial / max(eligible, 1))
+        passed = bool(eligible >= required_views and beneficial >= required_views and fraction >= required_fraction)
+        gains = [float(row["relative_gain"]) for row in view_rows]
+        beneficial_fractions.append(fraction)
+        out[int(fid)] = {
+            "eligible_view_count": eligible,
+            "beneficial_view_count": beneficial,
+            "beneficial_fraction": fraction,
+            "min_relative_gain": float(min(gains)) if gains else 0.0,
+            "mean_relative_gain": float(np.mean(gains)) if gains else 0.0,
+            "max_relative_gain": float(max(gains)) if gains else 0.0,
+            "passed": passed,
+            "views": view_rows[:16],
+        }
+
+    summary["faces_evaluated"] = int(len(out))
+    summary["faces_passing"] = int(sum(1 for row in out.values() if bool(row.get("passed", False))))
+    summary["eligible_views"] = int(sum(int(row.get("eligible_view_count", 0)) for row in out.values()))
+    summary["beneficial_views"] = int(sum(int(row.get("beneficial_view_count", 0)) for row in out.values()))
+    summary["mean_beneficial_fraction"] = float(np.mean(beneficial_fractions)) if beneficial_fractions else 0.0
+    return out, summary
+
+
 def solve_coeff_delta(
     selected_faces_local: torch.Tensor,
     fit_sample_vertex_ids: torch.Tensor,
@@ -599,6 +841,10 @@ def write_audit(output_model: Path, audit: dict[str, Any]) -> None:
         f"- fit samples: `{audit['fit_proxy']['samples']}`",
         f"- policy-val samples: `{audit['policy_val_proxy']['samples']}`",
         f"- policy-val relative gain: `{audit['policy_val_proxy']['relative_gain']:.6f}`",
+        f"- face/view gain certificate enabled: `{audit['face_view_gain_certificate']['enabled']}`",
+        f"- face/view gain certificate passing faces: `{audit['face_view_gain_certificate']['faces_passing']}`",
+        f"- face/view consensus enabled: `{audit['face_view_consensus']['enabled']}`",
+        f"- face/view consensus passing faces: `{audit['face_view_consensus']['faces_passing']}`",
         f"- accepted: `{audit['accepted']}`",
         f"- no-op copy: `{audit['no_op_copy']}`",
         f"- coeff abs mean: `{audit['coeff_abs_mean']:.8f}`",
@@ -716,6 +962,27 @@ def main() -> int:
     fit_proxy = evaluate_proxy(coeff_device, fit_ids, fit_basis, fit_target, fit_weights)
     val_proxy = evaluate_proxy(coeff_device, val_ids, val_basis, val_target, val_weights)
     face_policy = evaluate_proxy_by_face(coeff_device, val_ids, val_basis, val_target, val_weights, val_samples.face_ids)
+    face_view_gain_certificate, face_view_gain_certificate_summary = face_view_gain_certificate_report(
+        coeff_device,
+        val_ids,
+        val_basis,
+        val_samples,
+        val_target,
+        val_weights,
+        min_views=int(args.min_face_gain_certificate_views),
+        min_relative_gain=float(args.min_face_gain_certificate_relative_gain),
+        min_view_samples=int(args.min_face_gain_certificate_view_samples),
+        min_fraction=float(args.min_face_gain_certificate_fraction),
+    )
+    face_view_consensus, face_view_consensus_summary = face_view_consensus_report(
+        val_samples,
+        val_target,
+        val_weights,
+        min_consensus=float(args.min_face_view_consensus),
+        min_views=int(args.min_face_consensus_views),
+        min_view_samples=int(args.min_face_consensus_view_samples),
+        min_cosine=float(args.face_consensus_min_cosine),
+    )
     fit_unique_faces = int(np.unique(fit_samples.face_ids).size) if fit_samples.count else 0
     val_unique_faces = int(np.unique(val_samples.face_ids).size) if val_samples.count else 0
 
@@ -731,6 +998,12 @@ def main() -> int:
         if int(stats.get("samples", 0)) < int(args.min_face_policy_val_samples):
             continue
         if float(stats.get("relative_gain", -1.0)) < float(args.min_face_policy_val_relative_gain):
+            continue
+        gain_certificate = face_view_gain_certificate.get(int(fid), {})
+        if bool(face_view_gain_certificate_summary.get("enabled", False)) and not bool(gain_certificate.get("passed", False)):
+            continue
+        consensus = face_view_consensus.get(int(fid), {})
+        if bool(face_view_consensus_summary.get("enabled", False)) and not bool(consensus.get("passed", False)):
             continue
         face_candidates.append(int(fid))
     face_candidates.sort(
@@ -785,6 +1058,8 @@ def main() -> int:
         "fit_unique_faces": int(fit_unique_faces),
         "policy_val_unique_faces": int(val_unique_faces),
         "solver": solver,
+        "face_view_gain_certificate": face_view_gain_certificate_summary,
+        "face_view_consensus": face_view_consensus_summary,
         "filters": {
             "top_k": int(args.top_k),
             "min_view_hits": int(args.min_view_hits),
@@ -808,7 +1083,16 @@ def main() -> int:
         "min_policy_val_unique_faces": int(args.min_policy_val_unique_faces),
         "min_face_policy_val_relative_gain": float(args.min_face_policy_val_relative_gain),
         "min_face_policy_val_samples": int(args.min_face_policy_val_samples),
+        "min_face_gain_certificate_views": int(args.min_face_gain_certificate_views),
+        "min_face_gain_certificate_relative_gain": float(args.min_face_gain_certificate_relative_gain),
+        "min_face_gain_certificate_view_samples": int(args.min_face_gain_certificate_view_samples),
+        "min_face_gain_certificate_fraction": float(args.min_face_gain_certificate_fraction),
+        "min_face_view_consensus": float(args.min_face_view_consensus),
+        "min_face_consensus_views": int(args.min_face_consensus_views),
+        "min_face_consensus_view_samples": int(args.min_face_consensus_view_samples),
+        "face_consensus_min_cosine": float(args.face_consensus_min_cosine),
         "global_policy_pass": bool(global_policy_pass),
+        "policy_pass": bool(global_policy_pass),
         "accepted": bool(accepted),
         "force_apply": bool(args.force_apply),
         "no_op_copy": no_op_copy,
@@ -830,6 +1114,8 @@ def main() -> int:
                 "face_id": int(fid),
                 "face_stats": face_stats.get(int(fid), {}),
                 "policy_val_proxy": face_policy.get(int(fid), {}),
+                "face_view_gain_certificate": face_view_gain_certificate.get(int(fid), {}),
+                "face_view_consensus": face_view_consensus.get(int(fid), {}),
             }
             for fid in (accepted_faces[:20] if accepted else [])
         ],

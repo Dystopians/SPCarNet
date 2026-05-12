@@ -237,8 +237,16 @@ def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: 
         )
         if bool(args.delta_uniform_barycentric):
             cmd.append("--uniform_barycentric")
+    sh1_view_consensus = (
+        str(args.delta_operator) in {"sh1", "facelocal_sh1"}
+        and float(args.delta_min_face_view_consensus) > 0.0
+    )
+    facelocal_view_gain_certificate = (
+        str(args.delta_operator) == "facelocal_sh1"
+        and int(args.delta_min_face_gain_certificate_views) > 0
+    )
     if str(args.delta_operator) == "facelocal_sh1" or (
-        str(args.delta_operator) == "sh1" and bool(args.delta_sh1_face_policy)
+        str(args.delta_operator) == "sh1" and (bool(args.delta_sh1_face_policy) or sh1_view_consensus)
     ):
         cmd.extend(
             [
@@ -248,6 +256,32 @@ def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: 
                 str(args.delta_min_face_policy_val_relative_gain),
                 "--min_face_policy_val_samples",
                 str(args.delta_min_face_policy_val_samples),
+            ]
+        )
+    if sh1_view_consensus:
+        cmd.extend(
+            [
+                "--min_face_view_consensus",
+                str(args.delta_min_face_view_consensus),
+                "--min_face_consensus_views",
+                str(args.delta_min_face_consensus_views),
+                "--min_face_consensus_view_samples",
+                str(args.delta_min_face_consensus_view_samples),
+                "--face_consensus_min_cosine",
+                str(args.delta_face_consensus_min_cosine),
+            ]
+        )
+    if facelocal_view_gain_certificate:
+        cmd.extend(
+            [
+                "--min_face_gain_certificate_views",
+                str(args.delta_min_face_gain_certificate_views),
+                "--min_face_gain_certificate_relative_gain",
+                str(args.delta_min_face_gain_certificate_relative_gain),
+                "--min_face_gain_certificate_view_samples",
+                str(args.delta_min_face_gain_certificate_view_samples),
+                "--min_face_gain_certificate_fraction",
+                str(args.delta_min_face_gain_certificate_fraction),
             ]
         )
     _run(cmd, gpu=int(args.gpu), log_path=log_path)
@@ -653,6 +687,30 @@ def main() -> int:
         action="store_true",
         help="For shared-vertex SH1 deltas, only write faces that pass fixed policy-val per-face certificates.",
     )
+    parser.add_argument(
+        "--delta_min_face_view_consensus",
+        type=float,
+        default=0.0,
+        help=(
+            "For SH1-family deltas, require this fraction of policy-val train views "
+            "to agree with a face residual direction before applying the face update."
+        ),
+    )
+    parser.add_argument("--delta_min_face_consensus_views", type=int, default=2)
+    parser.add_argument("--delta_min_face_consensus_view_samples", type=int, default=4)
+    parser.add_argument("--delta_face_consensus_min_cosine", type=float, default=0.0)
+    parser.add_argument(
+        "--delta_min_face_gain_certificate_views",
+        type=int,
+        default=0,
+        help=(
+            "For face-local SH1 deltas, require each accepted face to have predicted "
+            "residual MSE gain on at least this many policy-val train views. 0 disables it."
+        ),
+    )
+    parser.add_argument("--delta_min_face_gain_certificate_relative_gain", type=float, default=0.0)
+    parser.add_argument("--delta_min_face_gain_certificate_view_samples", type=int, default=4)
+    parser.add_argument("--delta_min_face_gain_certificate_fraction", type=float, default=0.0)
     parser.add_argument("--phasej_trainval_method", default="ours_26000_phasej_trainval_gate")
     parser.add_argument("--candidate_base_method", default="ours_26000_bary_delta_v2wide_s08_base")
     parser.add_argument("--candidate_test_method", default="ours_26000_bary_delta_v2wide_s08_phasej_ela")
