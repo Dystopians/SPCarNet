@@ -199,6 +199,13 @@ def _evaluate_trainval(
 
 def _passes(delta: dict[str, float], balanced_delta: float, args: argparse.Namespace) -> list[str]:
     reasons: list[str] = []
+    for key in METRICS:
+        if not math.isfinite(float(delta.get(key, math.nan))):
+            reasons.append(f"{key.lower()}_delta_not_finite")
+    if not math.isfinite(float(balanced_delta)):
+        reasons.append("balanced_delta_not_finite")
+    if reasons:
+        return reasons
     if delta["PSNR"] < float(args.gate_min_psnr_gain):
         reasons.append(f"psnr_gain_below_{args.gate_min_psnr_gain:g}")
     if delta["SSIM"] < -float(args.gate_max_ssim_regression):
@@ -291,6 +298,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "decision_reasons": reasons,
             }
         )
+        if bool(getattr(args, "early_stop_on_failure", False)) and reasons:
+            break
 
     audit_ok, candidate_audit = _candidate_audit_ok(ROOT / args.candidate_audit_json)
     per_metric = {
@@ -327,6 +336,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "decision_reasons": reasons,
         "offsets": offsets,
         "rows": rows,
+        "early_stopped": bool(bool(getattr(args, "early_stop_on_failure", False)) and len(rows) < len(offsets)),
         "trainval_delta_summary": per_metric,
         "trainval_balanced_delta_summary": {
             "mean": float(sum(balanced_values) / len(balanced_values)),
@@ -404,6 +414,11 @@ def main() -> int:
     parser.add_argument("--iteration", type=int, default=26000)
     parser.add_argument("--gpu", type=int, default=-1)
     parser.add_argument("--force", action="store_true")
+    parser.add_argument(
+        "--early_stop_on_failure",
+        action="store_true",
+        help="For search trials, stop after the first failing offset because all offsets are required.",
+    )
     parser.add_argument("--policy_holdout_fraction", type=float, default=0.25)
     parser.add_argument("--calib_sampler", choices=("stride_first", "uniform"), default="uniform")
     parser.add_argument("--calib_max_views", type=int, default=32)

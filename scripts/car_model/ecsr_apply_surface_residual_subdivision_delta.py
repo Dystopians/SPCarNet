@@ -51,6 +51,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_abs_delta_rgb", type=float, default=0.050)
     parser.add_argument("--feature_mode", choices=("dc", "sh1"), default="dc")
     parser.add_argument(
+        "--materialize_mode",
+        choices=("subdivision", "vertex_delta"),
+        default="subdivision",
+        help="subdivision adds midpoint vertices; vertex_delta keeps topology fixed and edits existing vertex attributes.",
+    )
+    parser.add_argument(
         "--max_abs_sh_coeff",
         type=float,
         default=0.0,
@@ -89,6 +95,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_mean_luma_shift", type=float, default=0.0)
     parser.add_argument("--luma_shrink_grid", default="0,0.25,0.5,0.75,1.0")
     parser.add_argument("--luma_shrink_selection", choices=("min", "max"), default="min")
+    parser.add_argument("--structure_preserve", action="store_true")
+    parser.add_argument("--structure_weight_strength", type=float, default=2.0)
+    parser.add_argument("--min_structure_relative_gain", type=float, default=0.0)
+    parser.add_argument("--max_structure_mean_luma_shift", type=float, default=0.0)
+    parser.add_argument("--structure_shrink_grid", default="0,0.25,0.5,0.75,1.0")
+    parser.add_argument("--structure_shrink_selection", choices=("min", "max"), default="max")
     parser.add_argument("--anchor_support", action="store_true")
     parser.add_argument("--anchor_max_error_quantile", type=float, default=0.35)
     parser.add_argument("--anchor_samples_per_face_view", type=int, default=0)
@@ -226,15 +238,89 @@ def _subdivision_basis(
     bary: np.ndarray,
     *,
     feature_mode: str,
+    materialize_mode: str = "subdivision",
     directions: np.ndarray | None = None,
 ) -> np.ndarray:
-    midpoint_basis = _basis_midpoint(bary)
+    if str(materialize_mode) == "vertex_delta":
+        spatial_basis = np.clip(bary, 0.0, 1.0).astype(np.float32)
+    else:
+        spatial_basis = _basis_midpoint(bary)
     if str(feature_mode) == "dc":
-        return midpoint_basis
+        return spatial_basis
     if directions is None:
         raise RuntimeError("SH subdivision basis requires camera directions")
     sh_terms = _sh1_terms(directions)
-    return (midpoint_basis[:, :, None] * sh_terms[:, None, :]).reshape(bary.shape[0], -1).astype(np.float32)
+    return (spatial_basis[:, :, None] * sh_terms[:, None, :]).reshape(bary.shape[0], -1).astype(np.float32)
+
+
+def _as_hw(value: np.ndarray) -> np.ndarray:
+    arr = np.asarray(value, dtype=np.float32)
+    if arr.ndim == 3:
+        if arr.shape[0] in (1, 3, 4):
+            arr = np.mean(arr, axis=0)
+        elif arr.shape[-1] in (1, 3, 4):
+            arr = np.mean(arr, axis=-1)
+        else:
+            arr = np.squeeze(arr)
+    if arr.ndim != 2:
+        return np.zeros((1, 1), dtype=np.float32)
+    return arr.astype(np.float32)
+
+
+def _normalize01(value: np.ndarray) -> np.ndarray:
+    arr = np.asarray(value, dtype=np.float32)
+    finite = np.isfinite(arr)
+    if not np.any(finite):
+        return np.zeros_like(arr, dtype=np.float32)
+    vals = arr[finite]
+    lo = float(np.percentile(vals, 5.0))
+    hi = float(np.percentile(vals, 95.0))
+    if hi <= lo:
+        return np.zeros_like(arr, dtype=np.float32)
+    out = np.clip((arr - lo) / max(hi - lo, 1e-8), 0.0, 1.0)
+    out[~finite] = 0.0
+    return out.astype(np.float32)
+
+
+def _gradient_magnitude_hw(value: np.ndarray) -> np.ndarray:
+    arr = _as_hw(value)
+    if min(arr.shape) < 2:
+        return np.zeros_like(arr, dtype=np.float32)
+    gy, gx = np.gradient(arr.astype(np.float32))
+    return np.sqrt(gx * gx + gy * gy).astype(np.float32)
+
+
+def _structure_risk_from_npz(z: Any, residual_l1: np.ndarray) -> np.ndarray:
+    risk = np.zeros_like(residual_l1, dtype=np.float32)
+    parts = 0
+    if "texture" in z.files:
+        tex = _as_hw(z["texture"])
+        if tex.shape == risk.shape:
+            risk += _normalize01(tex)
+            parts += 1
+    if "depth" in z.files:
+        depth_grad = _gradient_magnitude_hw(z["depth"])
+        if depth_grad.shape == risk.shape:
+            risk += _normalize01(depth_grad)
+            parts += 1
+    if "normal" in z.files:
+        normal = np.asarray(z["normal"], dtype=np.float32)
+        if normal.ndim == 3:
+            if normal.shape[0] in (3, 4):
+                channels = [normal[i] for i in range(min(3, normal.shape[0]))]
+            elif normal.shape[-1] in (3, 4):
+                channels = [normal[..., i] for i in range(min(3, normal.shape[-1]))]
+            else:
+                channels = []
+            if channels and channels[0].shape == risk.shape:
+                normal_grad = np.zeros_like(risk, dtype=np.float32)
+                for channel in channels:
+                    normal_grad += _gradient_magnitude_hw(channel)
+                risk += _normalize01(normal_grad)
+                parts += 1
+    if parts <= 0:
+        return np.ones_like(residual_l1, dtype=np.float32)
+    return np.clip(risk / float(parts), 0.0, 1.0).astype(np.float32)
 
 
 def collect_samples(
@@ -245,6 +331,7 @@ def collect_samples(
     vertices: np.ndarray,
     faces: np.ndarray,
     feature_mode: str,
+    materialize_mode: str,
     high_error_quantile: float,
     min_alpha: float,
     max_samples_per_face_view: int,
@@ -252,10 +339,12 @@ def collect_samples(
     anchor_max_error_quantile: float,
     anchor_samples_per_face_view: int,
     anchor_weight: float,
+    structure_preserve: bool,
+    structure_weight_strength: float,
 ) -> dict[int, dict[str, list[np.ndarray]]]:
     selected = set(int(x) for x in selected_faces)
     samples: dict[int, dict[str, list[np.ndarray]]] = {
-        int(fid): {"basis": [], "target": [], "weight": []}
+        int(fid): {"basis": [], "target": [], "weight": [], "structure_weight": []}
         for fid in selected_faces
     }
     for view_path in view_paths:
@@ -275,6 +364,7 @@ def collect_samples(
             barycentric = z["barycentric"].astype(np.float32)
             bary_valid = z["barycentric_valid"].astype(bool)
             camera_center = z["camera_center"].astype(np.float32).reshape(-1)[:3] if "camera_center" in z.files else None
+            structure_risk = _structure_risk_from_npz(z, residual_l1) if bool(structure_preserve) else np.zeros_like(residual_l1, dtype=np.float32)
 
         threshold = float(np.quantile(residual_l1.reshape(-1), float(high_error_quantile)))
 
@@ -312,7 +402,12 @@ def collect_samples(
                     tri = vertices[face_vertex_ids]
                     positions = bary @ tri
                     directions = positions - camera_center[None, :]
-                basis = _subdivision_basis(bary, feature_mode=str(feature_mode), directions=directions)
+                basis = _subdivision_basis(
+                    bary,
+                    feature_mode=str(feature_mode),
+                    materialize_mode=str(materialize_mode),
+                    directions=directions,
+                )
                 target = residual_rgb[:, ys, xs].T.astype(np.float32)
                 l1 = residual_l1[ys, xs].astype(np.float32)
                 consistency = float(face_stats.get(int(fid), {}).get("consistency", 1.0))
@@ -320,9 +415,12 @@ def collect_samples(
                 if float(weight_scale) > 0.0:
                     base_weight = np.maximum(base_weight, float(weight_scale)).astype(np.float32)
                 weight = base_weight * max(consistency, 1e-3)
+                risk = structure_risk[ys, xs].astype(np.float32)
+                structure_weight = weight * (1.0 + max(float(structure_weight_strength), 0.0) * np.clip(risk, 0.0, 1.0))
                 samples[int(fid)]["basis"].append(basis)
                 samples[int(fid)]["target"].append(target)
                 samples[int(fid)]["weight"].append(weight)
+                samples[int(fid)]["structure_weight"].append(structure_weight.astype(np.float32))
 
         high_mask = bary_valid & (residual_l1 >= threshold) & (alpha >= float(min_alpha))
         append_from_mask(high_mask, cap_per_face=int(max_samples_per_face_view), weight_scale=0.0)
@@ -341,17 +439,22 @@ def collect_samples(
     return samples
 
 
-def _pack_face_samples(face_samples: dict[str, list[np.ndarray]]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _pack_face_samples(
+    face_samples: dict[str, list[np.ndarray]],
+    *,
+    weight_key: str = "weight",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     if not face_samples["basis"]:
         return (
             np.empty((0, 3), dtype=np.float32),
             np.empty((0, 3), dtype=np.float32),
             np.empty((0,), dtype=np.float32),
         )
+    weights = face_samples.get(weight_key) or face_samples.get("weight", [])
     return (
         np.concatenate(face_samples["basis"], axis=0),
         np.concatenate(face_samples["target"], axis=0),
-        np.concatenate(face_samples["weight"], axis=0),
+        np.concatenate(weights, axis=0),
     )
 
 
@@ -471,6 +574,113 @@ def shrink_sh1_dc_luma(delta: np.ndarray, beta: float) -> np.ndarray:
         projection = float(np.dot(coeff, LUMA_WEIGHTS) / max(denom, 1e-8)) * LUMA_WEIGHTS
         out[row_idx] = coeff - float(beta) * projection
     return out
+
+
+def shrink_sh1_all_luma(delta: np.ndarray, beta: float) -> np.ndarray:
+    out = delta.astype(np.float32, copy=True)
+    denom = float(np.dot(LUMA_WEIGHTS, LUMA_WEIGHTS))
+    for row_idx in range(int(out.shape[0])):
+        coeff = out[row_idx]
+        projection = float(np.dot(coeff, LUMA_WEIGHTS) / max(denom, 1e-8)) * LUMA_WEIGHTS
+        out[row_idx] = coeff - float(beta) * projection
+    return out
+
+
+def choose_structure_preserved_delta(
+    delta: np.ndarray,
+    offset_sets: list[dict[str, Any]],
+    *,
+    fid: int,
+    args: argparse.Namespace,
+    required_offsets: int,
+    required_fraction: float,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    betas = [min(max(float(x), 0.0), 1.0) for x in parse_float_grid(args.structure_shrink_grid)]
+    best: tuple[tuple[int, float, float], np.ndarray, dict[str, Any]] | None = None
+    accepted_choice: tuple[np.ndarray, dict[str, Any]] | None = None
+    for beta in betas:
+        candidate = shrink_sh1_all_luma(delta, beta)
+        rows: list[dict[str, Any]] = []
+        gains: list[float] = []
+        for offset_set in offset_sets:
+            offset = int(offset_set["offset"])
+            fit_samples = offset_set["fit_samples"]
+            val_samples = offset_set["val_samples"]
+            xf, _, _ = _pack_face_samples(fit_samples[int(fid)], weight_key="structure_weight")
+            xv, yv, wv = _pack_face_samples(val_samples[int(fid)], weight_key="structure_weight")
+            fit_count = int(xf.shape[0])
+            if fit_count < int(args.min_fit_samples) or xv.shape[0] < int(args.min_val_samples):
+                rows.append(
+                    {
+                        "offset": offset,
+                        "accepted": False,
+                        "decision_reasons": ["insufficient_structure_samples"],
+                        "fit_samples": fit_count,
+                        "val_samples": int(xv.shape[0]),
+                    }
+                )
+                continue
+            rgb_proxy = evaluate_delta(
+                candidate,
+                xv,
+                yv,
+                wv,
+                fit_samples=fit_count,
+                strength=float(args.strength),
+                max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+            )
+            luma_proxy = evaluate_luma_delta(
+                candidate,
+                xv,
+                yv,
+                wv,
+                strength=float(args.strength),
+                max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+            )
+            reasons: list[str] = []
+            if float(rgb_proxy["relative_gain"]) < float(args.min_structure_relative_gain):
+                reasons.append("structure_relative_gain_below_threshold")
+            if float(args.max_structure_mean_luma_shift) > 0.0 and abs(float(luma_proxy["mean_pred_luma"])) > float(args.max_structure_mean_luma_shift):
+                reasons.append("structure_luma_shift_exceeds_threshold")
+            if not reasons:
+                gains.append(float(rgb_proxy["relative_gain"]))
+            rows.append(
+                {
+                    "offset": offset,
+                    "accepted": not reasons,
+                    "decision_reasons": reasons,
+                    "structure_rgb_proxy": rgb_proxy,
+                    "structure_luma_proxy": luma_proxy,
+                }
+            )
+        passing_count = sum(1 for row in rows if bool(row.get("accepted", False)))
+        passing_fraction = float(passing_count / max(len(offset_sets), 1))
+        summary = {
+            "enabled": True,
+            "mode": "sh1_all_luma_structure_shrink",
+            "beta": float(beta),
+            "accepted": bool(passing_count >= int(required_offsets) and passing_fraction >= float(required_fraction)),
+            "passing_count": int(passing_count),
+            "offset_count": int(len(offset_sets)),
+            "passing_fraction": passing_fraction,
+            "min_structure_relative_gain": float(args.min_structure_relative_gain),
+            "max_structure_mean_luma_shift": float(args.max_structure_mean_luma_shift),
+            "weight_strength": float(args.structure_weight_strength),
+            "rows": rows,
+        }
+        if bool(summary["accepted"]):
+            accepted_choice = (candidate, summary)
+            if str(args.structure_shrink_selection) == "min":
+                return candidate, summary
+            continue
+        score = (int(passing_count), float(np.mean(gains)) if gains else -1.0e9, -float(beta))
+        if best is None or score > best[0]:
+            best = (score, candidate, summary)
+    if accepted_choice is not None:
+        return accepted_choice
+    if best is None:
+        return delta, {"enabled": True, "mode": "sh1_all_luma_structure_shrink", "accepted": False, "rows": []}
+    return best[1], best[2]
 
 
 def choose_luma_preserved_delta(
@@ -656,7 +866,7 @@ def read_candidate_plan(path: Path, *, limit: int) -> tuple[list[dict[str, Any]]
     return rows, meta
 
 
-def materialize(
+def materialize_subdivision(
     state: dict[str, Any],
     accepted: list[dict[str, Any]],
     *,
@@ -752,6 +962,65 @@ def materialize(
     return out
 
 
+def materialize_vertex_delta(
+    state: dict[str, Any],
+    accepted: list[dict[str, Any]],
+    *,
+    feature_mode: str,
+) -> dict[str, Any]:
+    out = clone_state(state)
+    faces = state["_triangle_indices"].detach().cpu().long()
+    features_dc = state["features_dc"].detach().cpu().float()
+    features_rest = state["features_rest"].detach().cpu().float()
+    dc_delta = torch.zeros_like(features_dc)
+    rest_delta = torch.zeros_like(features_rest)
+    counts = torch.zeros((features_dc.shape[0],), dtype=torch.float32)
+
+    for row in accepted:
+        face_id = int(row["face_id"])
+        if face_id < 0 or face_id >= int(faces.shape[0]):
+            continue
+        ids = faces[face_id].long()
+        if int(ids.min().item()) < 0 or int(ids.max().item()) >= int(features_dc.shape[0]):
+            continue
+        delta = torch.as_tensor(row.get("delta_coeff", row.get("delta_rgb")), dtype=torch.float32)
+        if str(feature_mode) == "sh1":
+            delta = delta.view(3, 4, 3)
+        else:
+            delta = delta.view(3, 3)
+        for local_idx, vertex_id in enumerate(int(x) for x in ids.tolist()):
+            if str(feature_mode) == "sh1":
+                dc_delta[vertex_id] += delta[local_idx, 0].view(1, 3)
+                rest_count = min(int(features_rest.shape[1]), 3)
+                if rest_count > 0:
+                    rest_delta[vertex_id, :rest_count, :] += delta[local_idx, 1 : 1 + rest_count, :]
+            else:
+                dc_delta[vertex_id] += delta[local_idx].view(1, 3) / float(C0)
+            counts[vertex_id] += 1.0
+
+    touched = counts > 0
+    if bool(touched.any()):
+        scale = counts.clamp_min(1.0).view(-1, 1, 1)
+        features_dc = features_dc + dc_delta / scale
+        if features_rest.numel() > 0:
+            features_rest = features_rest + rest_delta / scale.view(-1, 1, 1)
+    out["features_dc"] = features_dc.to(dtype=state["features_dc"].dtype)
+    out["features_rest"] = features_rest.to(dtype=state["features_rest"].dtype)
+    return out
+
+
+def materialize(
+    state: dict[str, Any],
+    accepted: list[dict[str, Any]],
+    *,
+    feature_mode: str,
+    materialize_mode: str,
+) -> dict[str, Any]:
+    if str(materialize_mode) == "vertex_delta":
+        return materialize_vertex_delta(state, accepted, feature_mode=str(feature_mode))
+    return materialize_subdivision(state, accepted, feature_mode=str(feature_mode))
+
+
 def main() -> int:
     args = parse_args()
     source_checkpoint = checkpoint_path(args.source_model, args.iteration)
@@ -762,7 +1031,13 @@ def main() -> int:
 
     if args.materialize_plan_in is not None:
         accepted, plan_meta = read_candidate_plan(args.materialize_plan_in, limit=int(args.materialize_plan_limit))
-        out = materialize(state, accepted, feature_mode=str(args.feature_mode))
+        materialize_mode = str(plan_meta.get("materialize_mode", args.materialize_mode)) if isinstance(plan_meta, dict) else str(args.materialize_mode)
+        out = materialize(
+            state,
+            accepted,
+            feature_mode=str(args.feature_mode),
+            materialize_mode=str(materialize_mode),
+        )
         torch.save(out, output_checkpoint)
         degenerate, invalid = validate_faces(out["triangles_points"], out["_triangle_indices"])
         before_faces = int(state["_triangle_indices"].shape[0])
@@ -783,6 +1058,7 @@ def main() -> int:
             "accepted": bool(accepted),
             "policy_pass": bool(accepted) and all(bool(row.get("policy_pass", True)) for row in accepted),
             "feature_mode": str(args.feature_mode),
+            "materialize_mode": str(materialize_mode),
             "basis_dim": int(12 if str(args.feature_mode) == "sh1" else 3),
             "delta_storage": "sh_coeff" if str(args.feature_mode) == "sh1" else "rgb_dc",
             "plan_source_operator": plan_meta.get("operator") if isinstance(plan_meta, dict) else None,
@@ -846,6 +1122,7 @@ def main() -> int:
             vertices=vertices_np,
             faces=faces_np,
             feature_mode=str(args.feature_mode),
+            materialize_mode=str(args.materialize_mode),
             high_error_quantile=float(args.high_error_quantile),
             min_alpha=float(args.min_alpha),
             max_samples_per_face_view=int(args.max_samples_per_face_view),
@@ -853,6 +1130,8 @@ def main() -> int:
             anchor_max_error_quantile=float(args.anchor_max_error_quantile),
             anchor_samples_per_face_view=int(args.anchor_samples_per_face_view),
             anchor_weight=float(args.anchor_weight),
+            structure_preserve=bool(args.structure_preserve),
+            structure_weight_strength=float(args.structure_weight_strength),
         )
         val_samples = collect_samples(
             val_views,
@@ -861,6 +1140,7 @@ def main() -> int:
             vertices=vertices_np,
             faces=faces_np,
             feature_mode=str(args.feature_mode),
+            materialize_mode=str(args.materialize_mode),
             high_error_quantile=float(args.high_error_quantile),
             min_alpha=float(args.min_alpha),
             max_samples_per_face_view=int(args.max_samples_per_face_view),
@@ -868,6 +1148,8 @@ def main() -> int:
             anchor_max_error_quantile=float(args.anchor_max_error_quantile),
             anchor_samples_per_face_view=int(args.anchor_samples_per_face_view),
             anchor_weight=float(args.anchor_weight),
+            structure_preserve=bool(args.structure_preserve),
+            structure_weight_strength=float(args.structure_weight_strength),
         )
         offset_sets.append(
             {
@@ -973,6 +1255,16 @@ def main() -> int:
                 required_offsets=int(required_offsets),
                 required_fraction=float(required_fraction),
             )
+        structure_projection: dict[str, Any] = {"enabled": False}
+        if bool(args.structure_preserve) and str(args.feature_mode) == "sh1" and int(delta.shape[0]) == 12:
+            delta, structure_projection = choose_structure_preserved_delta(
+                delta,
+                offset_sets,
+                fid=int(fid),
+                args=args,
+                required_offsets=int(required_offsets),
+                required_fraction=float(required_fraction),
+            )
 
         final_fold_rows: list[dict[str, Any]] = []
         for offset_set in offset_sets:
@@ -1031,6 +1323,31 @@ def main() -> int:
                     reasons.append("luma_gain_below_threshold")
                 if float(args.max_mean_luma_shift) > 0.0 and abs(float(luma_stats["mean_pred_luma"])) > float(args.max_mean_luma_shift):
                     reasons.append("mean_luma_shift_exceeds_threshold")
+            structure_stats: dict[str, Any] | None = None
+            if bool(args.structure_preserve) and str(args.feature_mode) == "sh1":
+                _, _, swv = _pack_face_samples(val_samples[int(fid)], weight_key="structure_weight")
+                structure_rgb = evaluate_delta(
+                    delta,
+                    xv,
+                    yv,
+                    swv,
+                    fit_samples=fit_count,
+                    strength=float(args.strength),
+                    max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+                )
+                structure_luma = evaluate_luma_delta(
+                    delta,
+                    xv,
+                    yv,
+                    swv,
+                    strength=float(args.strength),
+                    max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+                )
+                structure_stats = {"rgb_proxy": structure_rgb, "luma_proxy": structure_luma}
+                if float(structure_rgb["relative_gain"]) < float(args.min_structure_relative_gain):
+                    reasons.append("structure_relative_gain_below_threshold")
+                if float(args.max_structure_mean_luma_shift) > 0.0 and abs(float(structure_luma["mean_pred_luma"])) > float(args.max_structure_mean_luma_shift):
+                    reasons.append("structure_luma_shift_exceeds_threshold")
             final_fold_rows.append(
                 {
                     "offset": offset,
@@ -1039,6 +1356,7 @@ def main() -> int:
                     "fit_proxy": next((row.get("proxy", {}) for row in fold_rows if int(row.get("offset", -1)) == offset), {}),
                     "final_proxy": final_stats,
                     "luma_proxy": luma_stats or {},
+                    "structure_proxy": structure_stats or {},
                     "view_gain_certificate": final_certificate,
                 }
             )
@@ -1069,6 +1387,7 @@ def main() -> int:
             "fit_folds": fold_rows,
             "final_folds": final_fold_rows,
             "luma_preservation": luma_projection,
+            "structure_preservation": structure_projection,
         }
         if bool(args.force_apply) or policy_pass:
             candidates.append(
@@ -1080,6 +1399,7 @@ def main() -> int:
                     "proxy": proxy,
                     "view_gain_certificate": certificate,
                     "luma_preservation": luma_projection,
+                    "structure_preservation": structure_projection,
                     "policy_pass": bool(policy_pass),
                 }
             )
@@ -1100,9 +1420,23 @@ def main() -> int:
                     "source_model": str(args.source_model),
                     "iteration": int(args.iteration),
                     "feature_mode": str(args.feature_mode),
+                    "materialize_mode": str(args.materialize_mode),
                     "policy_val_offsets": [int(x) for x in offsets],
                     "min_policy_val_offsets": int(required_offsets),
                     "min_policy_val_offset_fraction": float(required_fraction),
+                    "luma_preservation": {
+                        "enabled": bool(args.luma_preserve),
+                        "shrink_grid": [float(x) for x in parse_float_grid(args.luma_shrink_grid)],
+                        "shrink_selection": str(args.luma_shrink_selection),
+                    },
+                    "structure_preservation": {
+                        "enabled": bool(args.structure_preserve),
+                        "weight_strength": float(args.structure_weight_strength),
+                        "min_structure_relative_gain": float(args.min_structure_relative_gain),
+                        "max_structure_mean_luma_shift": float(args.max_structure_mean_luma_shift),
+                        "shrink_grid": [float(x) for x in parse_float_grid(args.structure_shrink_grid)],
+                        "shrink_selection": str(args.structure_shrink_selection),
+                    },
                     "candidate_count": int(len(candidates)),
                     "candidates": candidates,
                 },
@@ -1119,7 +1453,12 @@ def main() -> int:
         accepted_flag = False
         no_op_copy = True
     else:
-        out = materialize(state, accepted, feature_mode=str(args.feature_mode))
+        out = materialize(
+            state,
+            accepted,
+            feature_mode=str(args.feature_mode),
+            materialize_mode=str(args.materialize_mode),
+        )
         accepted_flag = bool(accepted)
         no_op_copy = False
     torch.save(out, output_checkpoint)
@@ -1133,6 +1472,11 @@ def main() -> int:
         float(row.get("luma_preservation", {}).get("beta"))
         for row in accepted
         if isinstance(row.get("luma_preservation"), dict) and row.get("luma_preservation", {}).get("beta") is not None
+    ]
+    accepted_structure_betas = [
+        float(row.get("structure_preservation", {}).get("beta"))
+        for row in accepted
+        if isinstance(row.get("structure_preservation"), dict) and row.get("structure_preservation", {}).get("beta") is not None
     ]
     audit = {
         "operator": "surface_residual_subdivision_delta",
@@ -1172,6 +1516,7 @@ def main() -> int:
         "strength": float(args.strength),
         "max_abs_delta_rgb": float(args.max_abs_delta_rgb),
         "feature_mode": str(args.feature_mode),
+        "materialize_mode": str(args.materialize_mode),
         "basis_dim": int(12 if str(args.feature_mode) == "sh1" else 3),
         "delta_storage": "sh_coeff" if str(args.feature_mode) == "sh1" else "rgb_dc",
         "features_rest_channels_written": int(3 if str(args.feature_mode) == "sh1" else 0),
@@ -1186,6 +1531,19 @@ def main() -> int:
             "shrink_selection": str(args.luma_shrink_selection),
             "accepted_beta_mean": float(np.mean(accepted_luma_betas)) if accepted_luma_betas else 0.0,
             "accepted_beta_max": float(np.max(accepted_luma_betas)) if accepted_luma_betas else 0.0,
+        },
+        "structure_preservation": {
+            "enabled": bool(args.structure_preserve),
+            "active": bool(args.structure_preserve and str(args.feature_mode) == "sh1"),
+            "mode": "texture_depth_normal_weighted_sh1_all_luma_shrink",
+            "weight_strength": float(args.structure_weight_strength),
+            "min_structure_relative_gain": float(args.min_structure_relative_gain),
+            "max_structure_mean_luma_shift": float(args.max_structure_mean_luma_shift),
+            "shrink_grid": [float(x) for x in parse_float_grid(args.structure_shrink_grid)],
+            "shrink_selection": str(args.structure_shrink_selection),
+            "accepted_beta_mean": float(np.mean(accepted_structure_betas)) if accepted_structure_betas else 0.0,
+            "accepted_beta_max": float(np.max(accepted_structure_betas)) if accepted_structure_betas else 0.0,
+            "fields_used": ["texture", "depth", "normal"],
         },
         "anchor_support": {
             "enabled": bool(args.anchor_support),
@@ -1234,6 +1592,7 @@ def main() -> int:
         f"- feature mode: `{audit['feature_mode']}`",
         f"- basis dim: `{audit['basis_dim']}`",
         f"- luma preservation: `{str(audit['luma_preservation']['active']).lower()}`",
+        f"- structure preservation: `{str(audit['structure_preservation']['active']).lower()}`",
         f"- anchor support: `{str(audit['anchor_support']['enabled']).lower()}`",
         f"- no-op copy: `{str(audit['no_op_copy']).lower()}`",
         f"- mean proxy relative gain: `{audit['mean_proxy_relative_gain']:.6f}`",

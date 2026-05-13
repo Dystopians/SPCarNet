@@ -373,3 +373,72 @@ offsets.  The next credible step is a true render-calibrated combinatorial or
 greedy acceptance policy that uses real train-val render feedback to accept or
 reject candidate groups, or a stronger structure-preserving representation loss
 that directly targets SSIM instead of relying on local RGB/luma proxies.
+
+## 2026-05-13 Render-Calibrated Search and Topology Diagnosis
+
+This round replaced top-prefix replay with true train-only render-calibrated
+candidate selection.  Each trial materializes a candidate subset, renders
+train/test evidence maps, and accepts it only through the strict multi-offset
+train-val gate.  Held-out test metrics remain report-only.
+
+New code interfaces:
+
+- `scripts/car_model/ecsr_run_render_calibrated_candidate_search.py` runs
+  strict-render-calibrated singleton, batch, sliding-window, and all-pairs
+  candidate search.
+- `scripts/car_model/ecsr_run_phasek_multifold_trainval_gate.py` now supports
+  search-time `--early_stop_on_failure` and explicitly rejects non-finite metric
+  deltas.
+- `scripts/car_model/ecsr_apply_surface_residual_subdivision_delta.py` now has
+  train-only structure preservation over texture/depth/normal evidence and a
+  topology-preserving `--materialize_mode vertex_delta` path.
+
+Key evidence paths:
+
+- singleton render search:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_greedy_v18_v12params_gpu1_20260512/treehill/render_calibrated_search.json`
+- all-pairs render search:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_pairs_v19_v12params_gpu7_20260513/treehill/render_calibrated_search.json`
+- structure-ordered pair search:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_structured_pairs_v20_gpu6_20260513/treehill/render_calibrated_search.json`
+- structure-preserving subdivision:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v21_structure_preserve_20260513_treehill/treehill/multifold_trainval_gate.json`
+- zero-delta topology diagnostic:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v22_zero_delta_topology_20260513_treehill/treehill/multifold_trainval_gate.json`
+- topology-preserving vertex delta:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/vertexdelta_v23_structure_preserve_20260513_treehill/treehill/multifold_trainval_gate.json`
+
+Strict train-val summary:
+
+| variant | accepted | faces | topology change | mean dPSNR | mean dSSIM | mean dLPIPS | decision |
+|---|---:|---:|---:|---:|---:|---:|---|
+| v18 singleton render-greedy | true | 1 | +3 triangles | +0.000004 | +0.000000 | -0.000000 | strict pass but near no-op |
+| v20 structure-ordered pair search | true | 2 | +6 triangles | +0.000004 | +0.000000 | -0.000001 | strict pass but near no-op |
+| v21 structure-preserving subdivision | false | 3 | +9 triangles | -0.000092 | +0.000064 | +0.000163 | rejects; LPIPS and split regressions |
+| v22 zero-delta topology diagnostic | false | 3 | +9 triangles | -0.000110 | +0.000064 | +0.000164 | rejects even with zero residual delta |
+| v23 topology-preserving vertex delta | true | 1 | none | +0.000020 | +0.000027 | +0.000007 | strict pass; topology fixed, non-no-op attribute edit |
+
+The most important diagnosis is v22.  It uses the same three faces as v21 but
+sets all residual deltas to zero before materialization.  Its offset behavior
+almost exactly reproduces v21: offset 0 fails PSNR/SSIM, offsets 1/2 fail LPIPS,
+and offset 3 fails PSNR/SSIM.  This means the major failure mode is not the SH1
+residual color itself; the four-way subdivision changes renderer coverage or
+interpolation enough to destabilize strict metrics.
+
+The method pivot is therefore `vertex_delta`: keep topology fixed and write the
+train-only SH1 residual update into existing vertices.  The v23 audit confirms
+no topology change, no degenerate faces, no invalid indices, and a non-no-op
+attribute update on one face.  The strict four-offset gate passes:
+
+| offset | dPSNR | dSSIM | dLPIPS | decision |
+|---:|---:|---:|---:|---|
+| 0 | +0.000055 | +0.000107 | +0.000031 | pass |
+| 1 | +0.000002 | -0.000000 | +0.000000 | pass |
+| 2 | +0.000008 | +0.000000 | -0.000001 | pass |
+| 3 | +0.000015 | +0.000000 | -0.000001 | pass |
+
+Current decision: `NOT COMPLETE`, but v23 is the first credible hard-scene
+closure candidate in this loop.  It is still a very small effect and must be
+cross-checked on `counter`/`bicycle` and against held-out report-only renders,
+but it directly addresses the diagnosed topology-induced regression rather than
+continuing to tune subdivision parameters.

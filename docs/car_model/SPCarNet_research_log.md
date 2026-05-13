@@ -6612,3 +6612,53 @@ guarantee strict split-stable PSNR/SSIM.  The next method should either perform
 true greedy/combinatorial render-calibrated acceptance using real train-val
 render feedback, or introduce a structure-preserving representation objective
 that directly penalizes SSIM-risk rather than only RGB/luma proxy drift.
+
+## 2026-05-13 Render-Calibrated Search, Topology Failure, and Vertex-Delta Pivot
+
+Implemented another real method iteration rather than a parameter-only scan:
+
+- added `ecsr_run_render_calibrated_candidate_search.py` for train-only strict
+  render-feedback candidate search;
+- added all-pairs and standalone batch search modes;
+- made the multifold gate safer with `--early_stop_on_failure` and non-finite
+  metric rejection;
+- added structure-preserving evidence weights from train-cache texture/depth/
+  normal fields;
+- added `--materialize_mode vertex_delta`, which keeps topology fixed and writes
+  SH1 residuals into existing vertices.
+
+Evidence:
+
+- v18 singleton render-greedy:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_greedy_v18_v12params_gpu1_20260512/treehill/render_calibrated_search.json`
+- v20 structure-ordered pairs:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_structured_pairs_v20_gpu6_20260513/treehill/render_calibrated_search.json`
+- v21 structure subdivision strict gate:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v21_structure_preserve_20260513_treehill/treehill/multifold_trainval_gate.json`
+- v22 zero-delta topology strict gate:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v22_zero_delta_topology_20260513_treehill/treehill/multifold_trainval_gate.json`
+- v23 topology-preserving vertex-delta strict gate:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/vertexdelta_v23_structure_preserve_20260513_treehill/treehill/multifold_trainval_gate.json`
+
+Interim results:
+
+- v18 and v20 found strict-passing candidates, but only near-noop scale:
+  v18 accepted one face with mean dPSNR `+0.000004`, dSSIM `+0.000000`,
+  dLPIPS about `-0.000000`; v20 accepted two faces with similarly tiny deltas.
+- v21 accepted three structure-preserving subdivision candidates locally but
+  failed strict rendering: mean dPSNR `-0.000092`, dSSIM `+0.000064`,
+  dLPIPS `+0.000163`.
+- v22 zero-delta topology reproduced v21 almost exactly and also failed:
+  mean dPSNR `-0.000110`, dSSIM `+0.000064`, dLPIPS `+0.000164`.
+- v23 keeps topology unchanged and is currently the strongest scientific
+  direction.  It passes the strict four-offset `treehill` gate with mean dPSNR
+  `+0.000020`, mean dSSIM `+0.000027`, mean dLPIPS `+0.000007`; offset 0 gives
+  dPSNR `+0.000055`, dSSIM `+0.000107`, dLPIPS `+0.000031`, while offsets 1/2/3
+  are near-zero but inside the strict gate.
+
+Decision: `NOT COMPLETE`.  The important progress is diagnostic and methodological:
+we now know treehill failures are driven primarily by non-render-neutral topology
+subdivision, not by residual SH color alone.  The next credible method is
+identity-topology vertex residual editing, with v23 as the active candidate.
+Its current effect size is still small, so it needs cross-scene validation and
+report-only held-out render checks before any paper-level claim.
