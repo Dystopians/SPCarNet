@@ -442,3 +442,102 @@ closure candidate in this loop.  It is still a very small effect and must be
 cross-checked on `counter`/`bicycle` and against held-out report-only renders,
 but it directly addresses the diagnosed topology-induced regression rather than
 continuing to tune subdivision parameters.
+
+## 2026-05-13 Vertex-Delta v24-v27 Closed-Loop Audit
+
+The v23 pivot was extended into stricter effect/no-op guards, cross-scene
+checks, and stronger visual-reach ablations.  The current result is a useful
+negative closure: topology-preserving vertex deltas are safe when tiny, but the
+current SH1 vertex-delta carrier is not strong enough to deliver a visible
+paper-level improvement.
+
+Implemented/updated interfaces:
+
+- `ecsr_apply_surface_residual_subdivision_delta.py` now records
+  materialization-effect summaries, rejects no-effect materializations unless
+  explicitly allowed, and can enforce vertex-delta incident-support/valence
+  guards.
+- `ecsr_run_phasek_barycentric_gate_scene.py` forwards vertex-delta,
+  effective-proxy, no-op, and structure-preservation flags.
+- `ecsr_run_render_calibrated_candidate_search.py` preserves
+  `materialize_mode`, forwards effective/no-op and vertex incident guards, and
+  now separates strict-gate rejection from objective-threshold rejection.
+- `ecsr_collect_vertexdelta_loop_status.py` collects the Phase-S v24-v27 gate
+  and render-calibrated search evidence into a fixed report:
+  `docs/car_model/5-13-VertexDelta-ClosedLoop-Audit.md`.
+- `meshsplatopt_audit_v24_v27_outputs.py` writes a wider audit including
+  Stage R24-R27 artifacts:
+  `docs/car_model/meshsplatopt_v24_v27_audit_report.md`.
+
+Key evidence:
+
+| variant | scene | accepted | faces | topology change | mean dPSNR | mean dSSIM | mean dLPIPS | interpretation |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| v24 effective/structure | bicycle | true | 3 | none | +0.000012 | +0.000004 | -0.000007 | strict safe, near invisible |
+| v24 effective/structure | treehill | true | 2 | none | +0.000016 | +0.000000 | +0.000001 | strict safe, near invisible |
+| v24 rendercalib | counter | false | 0 | none | best strict trial +0.000005 PSNR | ~0 | ~0 | below objective threshold |
+| v25 visualreach | bicycle | false | 64 | none | +0.000102 | +0.000002 | +0.000094 | LPIPS fails offsets 0/3 |
+| v25 visualreach | treehill | false | 35 | none | +0.000097 | +0.000005 | +0.000059 | offset 2 fails all RGB metrics |
+| v27 shrink08 | bicycle | false | 64 | none | +0.000753 | +0.000037 | +0.000199 | larger PSNR but LPIPS fails offsets 0/3 |
+| v27 shrink08 | treehill | false | 37 | none | +0.000113 | +0.000005 | +0.000116 | offset 1 fails SSIM/LPIPS |
+
+The qualitative audit confirms the limitation:
+`outputs/carnet/meshsplatopt/ecsr_phase_s/vertexdelta_v24_qualitative_20260513/qualitative_manifest.md`
+shows mean absolute image deltas around zero to `1e-6`.  This is not a visual
+result; it is only evidence that the safety machinery can keep a tiny
+representation edit from hurting strict metrics.
+
+Two long render-calibrated searches were stopped after the audit because they
+were still exploring the same weak candidate family:
+
+- `counter` v24 all-pairs search stopped after four completed events; strict
+  passes had objectives below `1e-4` and no accepted subset.
+- `treehill` v26 search stopped after six completed events; strict passes had
+  objectives below `5e-5`, and the stronger candidate failed offset 2 on
+  PSNR/SSIM/LPIPS.
+
+Current decision: `NOT COMPLETE`.  This is a methodological improvement and a
+clean failure analysis, not a terminal paper result.  The next real method
+change should be a fixed-policy surface-patch residual carrier or cluster-level
+residual basis: enough representation capacity for visible local improvement,
+but still accepted by the same train-only four-offset render gate.  More
+single-face vertex-delta scans should not be promoted unless they clear a
+non-noop gate such as mean dPSNR `>= +0.02` or mean dLPIPS `<= -0.001` without
+any offset-level RGB/LPIPS failure.
+
+## 2026-05-13 Patch-Cluster Face-Filter Carrier
+
+The fixed-policy surface-patch carrier was implemented and audited in
+`docs/car_model/5-13-PhaseS-PatchCluster-FaceFilter-Audit.md`.
+
+New interfaces:
+
+- `ecsr_apply_surface_residual_barycentric_delta.py` now supports
+  `--policy_val_filter_faces`, a train-holdout face-level gain filter that
+  removes locally harmful faces before the final residual solve.
+- `ecsr_run_phasek_barycentric_gate_scene.py` forwards the face filter and now
+  expands `{scene}` in cluster JSON/CSV paths for true multi-scene fixed-policy
+  commands.
+- `ecsr_decide_phasek_trainval_gate.py` now defaults `min_balanced_delta` to
+  `0.0`, preventing a candidate from passing when PSNR is slightly positive
+  but the balanced PSNR/SSIM/LPIPS objective is negative.
+
+Key evidence:
+
+| variant | scene | accepted | face policy | train-val dPSNR | train-val dSSIM | train-val dLPIPS | test dPSNR | test dSSIM | test dLPIPS |
+|---|---|---:|---|---:|---:|---:|---:|---:|---:|
+| v2 broad cluster | bicycle | false | 256 faces | +0.000422 | +0.000029 | +0.000246 | -0.000870 | -0.000120 | +0.000283 |
+| v2 broad cluster | flowers | old-gate true | 256 faces | +0.000517 | -0.000003 | +0.000056 | -0.003870 | -0.000363 | +0.000385 |
+| v3 face filter | bicycle | false | 114 -> 67 faces | +0.000198 | +0.000004 | +0.000033 | +0.000551 | +0.000035 | -0.000058 |
+| v3 face filter | flowers | false | 48 -> 29 faces | +0.000027 | -0.000000 | +0.000001 | -0.003756 | -0.000312 | +0.000281 |
+| v4 high confidence | bicycle | false | 114 -> 24 faces | +0.000101 | +0.000003 | +0.000033 | +0.000597 | +0.000038 | -0.000038 |
+| v4 high confidence | flowers | false | 48 -> 8 faces | +0.000011 | -0.000000 | +0.000002 | -0.003752 | -0.000312 | +0.000282 |
+
+Qualitative evidence is saved at:
+`outputs/carnet/meshsplatopt/ecsr_phase_s/phasepatch_cluster_dc_v4_highconf_qualitative_20260513/gallery.html`.
+
+Decision: `NOT COMPLETE`.  Face-level filtering is the first patch-carrier
+change that flips bicycle held-out test deltas positive in all three metrics,
+but strict train-val still rejects it, and flowers remains negative.  This
+should be treated as a useful mechanism and a bottleneck diagnosis, not as a
+paper-ready endpoint.

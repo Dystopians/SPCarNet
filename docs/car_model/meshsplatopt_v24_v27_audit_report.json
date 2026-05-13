@@ -1,0 +1,1057 @@
+{
+  "active_processes": [],
+  "phase_s_gates": [
+    {
+      "accepted": true,
+      "candidate_label": "vertexdelta_v24_effective_structure_20260513",
+      "decision_reasons": [],
+      "effect": {
+        "accepted": true,
+        "accepted_faces": 3,
+        "attribute_changed": true,
+        "audit_path": "outputs/carnet/meshsplatopt/ecsr_phase_s/vertexdelta_v24_effective_structure_20260513_bicycle/bicycle/model/surface_residual_subdivision_delta_audit.json",
+        "candidate_faces": 3,
+        "dtriangles": 0,
+        "dvertices": 0,
+        "feature_mode": "sh1",
+        "materialize_mode": "vertex_delta",
+        "materialized": true,
+        "max_attribute_delta": 0.019969675689935684,
+        "mean_delta_abs": 0.005872315261512995,
+        "mean_proxy_relative_gain": 0.16787297899983233,
+        "no_op_copy": false,
+        "operator": "surface_residual_subdivision_delta",
+        "policy_pass": true,
+        "strength": 0.1,
+        "topology_changed": false
+      },
+      "family": "phase_s_multifold_gate",
+      "mean_dLPIPS": -6.705522537231445e-06,
+      "mean_dPSNR": 1.1920928955078125e-05,
+      "mean_dSSIM": 3.606081008911133e-06,
+      "offset_count": 4,
+      "offsets": [
+        {
+          "accepted": true,
+          "dLPIPS": -2.5928020477294922e-05,
+          "dPSNR": 1.71661376953125e-05,
+          "dSSIM": 1.3828277587890625e-05,
+          "decision_reasons": [],
+          "offset": 0
+        },
+        {
+          "accepted": true,
+          "dLPIPS": -3.2782554626464844e-07,
+          "dPSNR": 1.1444091796875e-05,
+          "dSSIM": 1.1920928955078125e-07,
+          "decision_reasons": [],
+          "offset": 1
+        },
+        {
+          "accepted": true,
+          "dLPIPS": -8.940696716308594e-08,
+          "dPSNR": 9.5367431640625e-06,
+          "dSSIM": -5.960464477539063e-08,
+          "decision_reasons": [],
+          "offset": 2
+        },
+        {
+          "accepted": true,
+          "dLPIPS": -4.76837158203125e-07,
+          "dPSNR": 9.5367431640625e-06,
+          "dSSIM": 5.364418029785156e-07,
+          "decision_reasons": [],
+          "offset": 3
+        }
+      ],
+      "path": "outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/vertexdelta_v24_effective_structure_20260513_bicycle/bicycle/multifold_trainval_gate.json",
+      "running_commands": [],
+      "scene": "bicycle",
+      "status": "complete",
+      "version": "v24"
+    },
+    {
+      "accepted": true,
+      "candidate_label": "vertexdelta_v24_effective_structure_20260513",
+      "decision_reasons": [],
+      "effect": {
+        "accepted": true,
+        "accepted_faces": 2,
+        "attribute_changed": true,
+        "audit_path": "outputs/carnet/meshsplatopt/ecsr_phase_s/vertexdelta_v24_effective_structure_20260513_treehill/treehill/model/surface_residual_subdivision_delta_audit.json",
+        "candidate_faces": 2,
+        "dtriangles": 0,
+        "dvertices": 0,
+        "feature_mode": "sh1",
+        "materialize_mode": "vertex_delta",
+        "materialized": true,
+        "max_attribute_delta": 0.023242734372615814,
+        "mean_delta_abs": 0.006390968104824424,
+        "mean_proxy_relative_gain": 0.27958049811601876,
+        "no_op_copy": false,
+        "operator": "surface_residual_subdivision_delta",
+        "policy_pass": true,
+        "strength": 0.1,
+        "topology_changed": false
+      },
+      "family": "phase_s_multifold_gate",
+      "mean_dLPIPS": 6.183981895446777e-07,
+      "mean_dPSNR": 1.621246337890625e-05,
+      "mean_dSSIM": 0.0,
+      "offset_count": 4,
+      "offsets": [
+        {
+          "accepted": true,
+          "dLPIPS": 1.6391277313232422e-06,
+          "dPSNR": 7.62939453125e-06,
+          "dSSIM": -5.960464477539063e-08,
+          "decision_reasons": [],
+          "offset": 0
+        },
+        {
+          "accepted": true,
+          "dLPIPS": 1.1920928955078125e-07,
+          "dPSNR": 2.47955322265625e-05,
+          "dSSIM": 0.0,
+          "decision_reasons": [],
+          "offset": 1
+        },
+        {
+          "accepted": true,
+          "dLPIPS": 2.980232238769531e-07,
+          "dPSNR": 2.86102294921875e-05,
+          "dSSIM": 5.960464477539063e-08,
+          "decision_reasons": [],
+          "offset": 2
+        },
+        {
+          "accepted": true,
+          "dLPIPS": 4.172325134277344e-07,
+          "dPSNR": 3.814697265625e-06,
+          "dSSIM": 0.0,
+          "decision_reasons": [],
+          "offset": 3
+        }
+      ],
+      "path": "outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/vertexdelta_v24_effective_structure_20260513_treehill/treehill/multifold_trainval_gate.json",
+      "running_commands": [],
+      "scene": "treehill",
+      "status": "complete",
+      "version": "v24"
+    },
+    {
+      "accepted": false,
+      "candidate_label": "vertexdelta_v25_visualreach_20260513",
+      "decision_reasons": [
+        "offset0:lpips_regression_exceeds_0.00015",
+        "offset3:lpips_regression_exceeds_0.00015"
+      ],
+      "effect": {
+        "accepted": true,
+        "accepted_faces": 64,
+        "attribute_changed": true,
+        "audit_path": "outputs/carnet/meshsplatopt/ecsr_phase_s/vertexdelta_v25_visualreach_20260513_bicycle/bicycle/model/surface_residual_subdivision_delta_audit.json",
+        "candidate_faces": 80,
+        "dtriangles": 0,
+        "dvertices": 0,
+        "feature_mode": "sh1",
+        "materialize_mode": "vertex_delta",
+        "materialized": true,
+        "max_attribute_delta": 0.032294176518917084,
+        "mean_delta_abs": 0.006921145824890118,
+        "mean_proxy_relative_gain": 0.29618741258812376,
+        "no_op_copy": false,
+        "operator": "surface_residual_subdivision_delta",
+        "policy_pass": true,
+        "strength": 0.12,
+        "topology_changed": false
+      },
+      "family": "phase_s_multifold_gate",
+      "mean_dLPIPS": 9.39294695854187e-05,
+      "mean_dPSNR": 0.00010156631469726562,
+      "mean_dSSIM": 1.9669532775878906e-06,
+      "offset_count": 4,
+      "offsets": [
+        {
+          "accepted": false,
+          "dLPIPS": 0.00021606683731079102,
+          "dPSNR": 0.0001773834228515625,
+          "dSSIM": 4.6133995056152344e-05,
+          "decision_reasons": [
+            "lpips_regression_exceeds_0.00015"
+          ],
+          "offset": 0
+        },
+        {
+          "accepted": true,
+          "dLPIPS": 6.556510925292969e-07,
+          "dPSNR": 6.29425048828125e-05,
+          "dSSIM": -1.0132789611816406e-06,
+          "decision_reasons": [],
+          "offset": 1
+        },
+        {
+          "accepted": true,
+          "dLPIPS": -2.4884939193725586e-05,
+          "dPSNR": 0.0001239776611328125,
+          "dSSIM": 9.715557098388672e-06,
+          "decision_reasons": [],
+          "offset": 2
+        },
+        {
+          "accepted": false,
+          "dLPIPS": 0.00018388032913208008,
+          "dPSNR": 4.1961669921875e-05,
+          "dSSIM": -4.696846008300781e-05,
+          "decision_reasons": [
+            "lpips_regression_exceeds_0.00015"
+          ],
+          "offset": 3
+        }
+      ],
+      "path": "outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/vertexdelta_v25_visualreach_20260513_bicycle/bicycle/multifold_trainval_gate.json",
+      "running_commands": [],
+      "scene": "bicycle",
+      "status": "complete",
+      "version": "v25"
+    },
+    {
+      "accepted": false,
+      "candidate_label": "vertexdelta_v25_visualreach_20260513",
+      "decision_reasons": [
+        "offset2:psnr_gain_below_0",
+        "offset2:ssim_regression_exceeds_5e-05",
+        "offset2:lpips_regression_exceeds_0.00015"
+      ],
+      "effect": {
+        "accepted": true,
+        "accepted_faces": 35,
+        "attribute_changed": true,
+        "audit_path": "outputs/carnet/meshsplatopt/ecsr_phase_s/vertexdelta_v25_visualreach_20260513_treehill/treehill/model/surface_residual_subdivision_delta_audit.json",
+        "candidate_faces": 35,
+        "dtriangles": 0,
+        "dvertices": 0,
+        "feature_mode": "sh1",
+        "materialize_mode": "vertex_delta",
+        "materialized": true,
+        "max_attribute_delta": 0.03210631012916565,
+        "mean_delta_abs": 0.006404790867652212,
+        "mean_proxy_relative_gain": 0.17775337326136215,
+        "no_op_copy": false,
+        "operator": "surface_residual_subdivision_delta",
+        "policy_pass": true,
+        "strength": 0.12,
+        "topology_changed": false
+      },
+      "family": "phase_s_multifold_gate",
+      "mean_dLPIPS": 5.91278076171875e-05,
+      "mean_dPSNR": 9.72747802734375e-05,
+      "mean_dSSIM": 5.349516868591309e-06,
+      "offset_count": 4,
+      "offsets": [
+        {
+          "accepted": true,
+          "dLPIPS": 1.7702579498291016e-05,
+          "dPSNR": 0.00016021728515625,
+          "dSSIM": 0.00010496377944946289,
+          "decision_reasons": [],
+          "offset": 0
+        },
+        {
+          "accepted": true,
+          "dLPIPS": -0.00016003847122192383,
+          "dPSNR": 0.000240325927734375,
+          "dSSIM": 4.32133674621582e-05,
+          "decision_reasons": [],
+          "offset": 1
+        },
+        {
+          "accepted": false,
+          "dLPIPS": 0.00032404065132141113,
+          "dPSNR": -0.000152587890625,
+          "dSSIM": -0.00011301040649414062,
+          "decision_reasons": [
+            "psnr_gain_below_0",
+            "ssim_regression_exceeds_5e-05",
+            "lpips_regression_exceeds_0.00015"
+          ],
+          "offset": 2
+        },
+        {
+          "accepted": true,
+          "dLPIPS": 5.480647087097168e-05,
+          "dPSNR": 0.000141143798828125,
+          "dSSIM": -1.3768672943115234e-05,
+          "decision_reasons": [],
+          "offset": 3
+        }
+      ],
+      "path": "outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/vertexdelta_v25_visualreach_20260513_treehill/treehill/multifold_trainval_gate.json",
+      "running_commands": [],
+      "scene": "treehill",
+      "status": "complete",
+      "version": "v25"
+    },
+    {
+      "accepted": false,
+      "candidate_label": "vertexdelta_v27_shrink08_20260513",
+      "decision_reasons": [
+        "offset0:lpips_regression_exceeds_0.00015",
+        "offset3:lpips_regression_exceeds_0.00015"
+      ],
+      "effect": {
+        "accepted": true,
+        "accepted_faces": 64,
+        "attribute_changed": true,
+        "audit_path": "outputs/carnet/meshsplatopt/ecsr_phase_s/vertexdelta_v27_shrink08_20260513_bicycle/bicycle/model/surface_residual_subdivision_delta_audit.json",
+        "candidate_faces": 95,
+        "dtriangles": 0,
+        "dvertices": 0,
+        "feature_mode": "sh1",
+        "materialize_mode": "vertex_delta",
+        "materialized": true,
+        "max_attribute_delta": 0.01807667873799801,
+        "mean_delta_abs": 0.004837634685827652,
+        "mean_proxy_relative_gain": 0.3324524080122861,
+        "no_op_copy": false,
+        "operator": "surface_residual_subdivision_delta",
+        "policy_pass": true,
+        "strength": 0.08,
+        "topology_changed": false
+      },
+      "family": "phase_s_multifold_gate",
+      "mean_dLPIPS": 0.00019903481006622314,
+      "mean_dPSNR": 0.0007529258728027344,
+      "mean_dSSIM": 3.680586814880371e-05,
+      "offset_count": 4,
+      "offsets": [
+        {
+          "accepted": false,
+          "dLPIPS": 0.00017854571342468262,
+          "dPSNR": 0.00018310546875,
+          "dSSIM": 3.9696693420410156e-05,
+          "decision_reasons": [
+            "lpips_regression_exceeds_0.00015"
+          ],
+          "offset": 0
+        },
+        {
+          "accepted": true,
+          "dLPIPS": -8.642673492431641e-07,
+          "dPSNR": 6.866455078125e-05,
+          "dSSIM": -2.980232238769531e-07,
+          "decision_reasons": [],
+          "offset": 1
+        },
+        {
+          "accepted": true,
+          "dLPIPS": 4.89354133605957e-05,
+          "dPSNR": 9.1552734375e-05,
+          "dSSIM": -2.2649765014648438e-05,
+          "decision_reasons": [],
+          "offset": 2
+        },
+        {
+          "accepted": false,
+          "dLPIPS": 0.0005695223808288574,
+          "dPSNR": 0.0026683807373046875,
+          "dSSIM": 0.00013047456741333008,
+          "decision_reasons": [
+            "lpips_regression_exceeds_0.00015"
+          ],
+          "offset": 3
+        }
+      ],
+      "path": "outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/vertexdelta_v27_shrink08_20260513_bicycle/bicycle/multifold_trainval_gate.json",
+      "running_commands": [],
+      "scene": "bicycle",
+      "status": "complete",
+      "version": "v27"
+    },
+    {
+      "accepted": false,
+      "candidate_label": "vertexdelta_v27_shrink08_20260513",
+      "decision_reasons": [
+        "offset1:ssim_regression_exceeds_5e-05",
+        "offset1:lpips_regression_exceeds_0.00015"
+      ],
+      "effect": {
+        "accepted": true,
+        "accepted_faces": 37,
+        "attribute_changed": true,
+        "audit_path": "outputs/carnet/meshsplatopt/ecsr_phase_s/vertexdelta_v27_shrink08_20260513_treehill/treehill/model/surface_residual_subdivision_delta_audit.json",
+        "candidate_faces": 37,
+        "dtriangles": 0,
+        "dvertices": 0,
+        "feature_mode": "sh1",
+        "materialize_mode": "vertex_delta",
+        "materialized": true,
+        "max_attribute_delta": 0.021404210478067398,
+        "mean_delta_abs": 0.0042783490545745635,
+        "mean_proxy_relative_gain": 0.18012422512411624,
+        "no_op_copy": false,
+        "operator": "surface_residual_subdivision_delta",
+        "policy_pass": true,
+        "strength": 0.08,
+        "topology_changed": false
+      },
+      "family": "phase_s_multifold_gate",
+      "mean_dLPIPS": 0.00011563301086425781,
+      "mean_dPSNR": 0.00011348724365234375,
+      "mean_dSSIM": 5.185604095458984e-06,
+      "offset_count": 4,
+      "offsets": [
+        {
+          "accepted": true,
+          "dLPIPS": 2.0563602447509766e-05,
+          "dPSNR": 0.000164031982421875,
+          "dSSIM": 0.00010579824447631836,
+          "decision_reasons": [],
+          "offset": 0
+        },
+        {
+          "accepted": false,
+          "dLPIPS": 0.00039207935333251953,
+          "dPSNR": 1.9073486328125e-05,
+          "dSSIM": -7.194280624389648e-05,
+          "decision_reasons": [
+            "ssim_regression_exceeds_5e-05",
+            "lpips_regression_exceeds_0.00015"
+          ],
+          "offset": 1
+        },
+        {
+          "accepted": true,
+          "dLPIPS": -5.424022674560547e-06,
+          "dPSNR": 0.000152587890625,
+          "dSSIM": 7.152557373046875e-07,
+          "decision_reasons": [],
+          "offset": 2
+        },
+        {
+          "accepted": true,
+          "dLPIPS": 5.53131103515625e-05,
+          "dPSNR": 0.000118255615234375,
+          "dSSIM": -1.3828277587890625e-05,
+          "decision_reasons": [],
+          "offset": 3
+        }
+      ],
+      "path": "outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/vertexdelta_v27_shrink08_20260513_treehill/treehill/multifold_trainval_gate.json",
+      "running_commands": [],
+      "scene": "treehill",
+      "status": "complete",
+      "version": "v27"
+    }
+  ],
+  "qualitative_manifests": [
+    {
+      "markdown_path": "outputs/carnet/meshsplatopt/ecsr_phase_s/vertexdelta_v24_qualitative_20260513/qualitative_manifest.md",
+      "path": "outputs/carnet/meshsplatopt/ecsr_phase_s/vertexdelta_v24_qualitative_20260513/selected_views.json",
+      "scenes": [
+        "bicycle",
+        "counter",
+        "treehill"
+      ],
+      "version": "v24",
+      "view_count": 9
+    }
+  ],
+  "render_calibrated_searches": [
+    {
+      "accepted": false,
+      "best_objective": 0.0,
+      "candidate_label": "vertexdelta_v24_rendercalib_counter_20260513",
+      "commands": [
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_apply_surface_residual_subdivision_delta.py --source_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/counter/ratio_0200/compact_model --evidence_dir /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/surface_evidence_subdivision_v1_20260512/counter --output_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/trials/s003_add0-4_1961193-4567059/model --iteration 26000 --feature_mode sh1 --materialize_mode vertex_delta --materialize_plan_in /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/trials/s003_add0-4_1961193-4567059/candidate_subset_plan.json",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/meshsplatopt_render_evidence_maps.py -s /data/peilincai/mesh_datasets/mipnerf360/counter -m /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/trials/s003_add0-4_1961193-4567059/model -i images_2 --resolution -1 --eval --iteration 26000 --method_name ours_26000_vertexdelta_v24_rendercalib_s003_add0-4_1961193-4567059_base --quiet --skip_failed_views",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_run_phasek_multifold_trainval_gate.py --scene counter --phasej_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/counter/ratio_0200/compact_model --candidate_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/trials/s003_add0-4_1961193-4567059/model --candidate_audit_json /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/trials/s003_add0-4_1961193-4567059/model/surface_residual_subdivision_delta_audit.json --output_root /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/gates/_shared_work --candidate_label vertexdelta_v24_rendercalib_counter_20260513_s003_add0-4_1961193-4567059 --fallback_label phasej_guarded_adaptedge --candidate_base_method ours_26000_vertexdelta_v24_rendercalib_s003_add0-4_1961193-4567059_base --phasej_trainval_method_prefix ours_26000_phasej_vertexdelta_v24_rendercalib_multifold --candidate_trainval_method_prefix ours_26000_vertexdelta_v24_rendercalib_multifold_s003_add0-4_1961193-4567059 --offsets 0,1,2,3 --iteration 26000 --gpu 7 --policy_holdout_fraction 0.25 --calib_sampler uniform --calib_max_views 32 --calib_stride 1 --alpha_feature_mode confidence_magnitude_edge --alpha_default 0.0 --gate_min_psnr_gain 0.0 --gate_max_ssim_regression 5e-05 --gate_max_lpips_regression 0.00015 --gate_min_balanced_delta -1000000000.0 --ssim_weight 20.0 --lpips_weight 20.0 --wandb_project mesh-splatting-ecsr --wandb_group phase_s_vertexdelta_v24_rendercalib_counter_20260513 --wandb_name counter_vertexdelta_v24_rendercalib_counter_s003_add0-4_1961193-4567059 --early_stop_on_failure",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_apply_surface_residual_subdivision_delta.py --source_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/counter/ratio_0200/compact_model --evidence_dir /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/surface_evidence_subdivision_v1_20260512/counter --output_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/trials/s004_add0-5_1961193-6078203/model --iteration 26000 --feature_mode sh1 --materialize_mode vertex_delta --materialize_plan_in /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/trials/s004_add0-5_1961193-6078203/candidate_subset_plan.json",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/meshsplatopt_render_evidence_maps.py -s /data/peilincai/mesh_datasets/mipnerf360/counter -m /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/trials/s004_add0-5_1961193-6078203/model -i images_2 --resolution -1 --eval --iteration 26000 --method_name ours_26000_vertexdelta_v24_rendercalib_s004_add0-5_1961193-6078203_base --quiet --skip_failed_views",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_run_phasek_multifold_trainval_gate.py --scene counter --phasej_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/counter/ratio_0200/compact_model --candidate_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/trials/s004_add0-5_1961193-6078203/model --candidate_audit_json /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/trials/s004_add0-5_1961193-6078203/model/surface_residual_subdivision_delta_audit.json --output_root /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/gates/_shared_work --candidate_label vertexdelta_v24_rendercalib_counter_20260513_s004_add0-5_1961193-6078203 --fallback_label phasej_guarded_adaptedge --candidate_base_method ours_26000_vertexdelta_v24_rendercalib_s004_add0-5_1961193-6078203_base --phasej_trainval_method_prefix ours_26000_phasej_vertexdelta_v24_rendercalib_multifold --candidate_trainval_method_prefix ours_26000_vertexdelta_v24_rendercalib_multifold_s004_add0-5_1961193-6078203 --offsets 0,1,2,3 --iteration 26000 --gpu 7 --policy_holdout_fraction 0.25 --calib_sampler uniform --calib_max_views 32 --calib_stride 1 --alpha_feature_mode confidence_magnitude_edge --alpha_default 0.0 --gate_min_psnr_gain 0.0 --gate_max_ssim_regression 5e-05 --gate_max_lpips_regression 0.00015 --gate_min_balanced_delta -1000000000.0 --ssim_weight 20.0 --lpips_weight 20.0 --wandb_project mesh-splatting-ecsr --wandb_group phase_s_vertexdelta_v24_rendercalib_counter_20260513 --wandb_name counter_vertexdelta_v24_rendercalib_counter_s004_add0-5_1961193-6078203 --early_stop_on_failure"
+      ],
+      "event_count": 4,
+      "family": "phase_s_render_calibrated_search",
+      "latest_event": {
+        "accepted_by_strict_gate": true,
+        "action": "reject",
+        "decision_reasons": [],
+        "mean_dLPIPS": -5.21540641784668e-08,
+        "mean_dPSNR": 1.9073486328125e-06,
+        "mean_dSSIM": -2.9802322387695312e-08,
+        "trial_id": "s003_add0-4_1961193-4567059"
+      },
+      "log_path": "outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/render_calibrated_search.log",
+      "path": "outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v24_counter_top8pairs_gpu7_20260513/counter/render_calibrated_search.json",
+      "running_commands": [],
+      "scene": "counter",
+      "status": "complete",
+      "strict_gate_pass_events": 3,
+      "version": "v24"
+    },
+    {
+      "accepted": false,
+      "best_objective": 0.0,
+      "candidate_label": "vertexdelta_v26_rendercalib_treehill_20260513",
+      "commands": [
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_apply_surface_residual_subdivision_delta.py --source_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model --evidence_dir /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/surface_evidence_subdivision_v1_20260512/treehill --output_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/trials/s005_add0-6_488244-305705/model --iteration 26000 --feature_mode sh1 --materialize_mode vertex_delta --materialize_plan_in /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/trials/s005_add0-6_488244-305705/candidate_subset_plan.json --min_effective_mean_relative_gain 0.02 --min_effective_min_relative_gain -0.05 --min_effective_delta_abs_mean 0.0015 --min_materialized_attribute_delta 1e-09",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/meshsplatopt_render_evidence_maps.py -s /data/peilincai/mesh_datasets/mipnerf360/treehill -m /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/trials/s005_add0-6_488244-305705/model -i images_4 --resolution -1 --eval --iteration 26000 --method_name ours_26000_vertexdelta_v26_treehill_rendercalib_s005_add0-6_488244-305705_base --quiet --skip_failed_views",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_run_phasek_multifold_trainval_gate.py --scene treehill --phasej_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model --candidate_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/trials/s005_add0-6_488244-305705/model --candidate_audit_json /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/trials/s005_add0-6_488244-305705/model/surface_residual_subdivision_delta_audit.json --output_root /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/gates/_shared_work --candidate_label vertexdelta_v26_rendercalib_treehill_20260513_s005_add0-6_488244-305705 --fallback_label phasej_guarded_adaptedge --candidate_base_method ours_26000_vertexdelta_v26_treehill_rendercalib_s005_add0-6_488244-305705_base --phasej_trainval_method_prefix ours_26000_phasej_vertexdelta_v26_treehill_rendercalib_multifold --candidate_trainval_method_prefix ours_26000_vertexdelta_v26_treehill_rendercalib_multifold_s005_add0-6_488244-305705 --offsets 0,1,2,3 --iteration 26000 --gpu 1 --policy_holdout_fraction 0.25 --calib_sampler uniform --calib_max_views 32 --calib_stride 1 --alpha_feature_mode confidence_magnitude_edge --alpha_default 0.0 --gate_min_psnr_gain 0.0 --gate_max_ssim_regression 5e-05 --gate_max_lpips_regression 0.00015 --gate_min_balanced_delta -1000000000.0 --ssim_weight 20.0 --lpips_weight 20.0 --wandb_project mesh-splatting-ecsr --wandb_group phase_s_vertexdelta_v26_rendercalib_treehill_20260513 --wandb_name treehill_vertexdelta_v26_rendercalib_treehill_s005_add0-6_488244-305705 --early_stop_on_failure",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_apply_surface_residual_subdivision_delta.py --source_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model --evidence_dir /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/surface_evidence_subdivision_v1_20260512/treehill --output_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/trials/s006_add0-7_488244-2296987/model --iteration 26000 --feature_mode sh1 --materialize_mode vertex_delta --materialize_plan_in /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/trials/s006_add0-7_488244-2296987/candidate_subset_plan.json --min_effective_mean_relative_gain 0.02 --min_effective_min_relative_gain -0.05 --min_effective_delta_abs_mean 0.0015 --min_materialized_attribute_delta 1e-09",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/meshsplatopt_render_evidence_maps.py -s /data/peilincai/mesh_datasets/mipnerf360/treehill -m /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/trials/s006_add0-7_488244-2296987/model -i images_4 --resolution -1 --eval --iteration 26000 --method_name ours_26000_vertexdelta_v26_treehill_rendercalib_s006_add0-7_488244-2296987_base --quiet --skip_failed_views",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_run_phasek_multifold_trainval_gate.py --scene treehill --phasej_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model --candidate_model /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/trials/s006_add0-7_488244-2296987/model --candidate_audit_json /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/trials/s006_add0-7_488244-2296987/model/surface_residual_subdivision_delta_audit.json --output_root /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/gates/_shared_work --candidate_label vertexdelta_v26_rendercalib_treehill_20260513_s006_add0-7_488244-2296987 --fallback_label phasej_guarded_adaptedge --candidate_base_method ours_26000_vertexdelta_v26_treehill_rendercalib_s006_add0-7_488244-2296987_base --phasej_trainval_method_prefix ours_26000_phasej_vertexdelta_v26_treehill_rendercalib_multifold --candidate_trainval_method_prefix ours_26000_vertexdelta_v26_treehill_rendercalib_multifold_s006_add0-7_488244-2296987 --offsets 0,1,2,3 --iteration 26000 --gpu 1 --policy_holdout_fraction 0.25 --calib_sampler uniform --calib_max_views 32 --calib_stride 1 --alpha_feature_mode confidence_magnitude_edge --alpha_default 0.0 --gate_min_psnr_gain 0.0 --gate_max_ssim_regression 5e-05 --gate_max_lpips_regression 0.00015 --gate_min_balanced_delta -1000000000.0 --ssim_weight 20.0 --lpips_weight 20.0 --wandb_project mesh-splatting-ecsr --wandb_group phase_s_vertexdelta_v26_rendercalib_treehill_20260513 --wandb_name treehill_vertexdelta_v26_rendercalib_treehill_s006_add0-7_488244-2296987 --early_stop_on_failure"
+      ],
+      "event_count": 6,
+      "family": "phase_s_render_calibrated_search",
+      "latest_event": {
+        "accepted_by_strict_gate": false,
+        "action": "reject",
+        "decision_reasons": [
+          "offset2:psnr_gain_below_0",
+          "offset2:ssim_regression_exceeds_5e-05",
+          "offset2:lpips_regression_exceeds_0.00015"
+        ],
+        "mean_dLPIPS": 5.245208740234375e-05,
+        "mean_dPSNR": -3.3696492513020836e-05,
+        "mean_dSSIM": -2.300739288330078e-05,
+        "trial_id": "s005_add0-6_488244-305705"
+      },
+      "log_path": "outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/render_calibrated_search.log",
+      "path": "outputs/carnet/meshsplatopt/ecsr_phase_s/rendercalib_vertexdelta_v26_treehill_v25top12_gpu1_20260513/treehill/render_calibrated_search.json",
+      "running_commands": [],
+      "scene": "treehill",
+      "status": "complete",
+      "strict_gate_pass_events": 5,
+      "version": "v26"
+    }
+  ],
+  "stageR_outputs": [
+    {
+      "accepted": true,
+      "attribute_effect": "fill_patch_initialized_from_nearest_vertex_radiance_and_nearest_face_stats",
+      "commands": [],
+      "family": "stageR_checkpoint_adapter_smoke",
+      "metrics": {},
+      "path": "outputs/carnet/meshsplatopt/stageR24_00_checkpoint_adapter_nearest_face_stats_smoke/checkpoint_adapter_smoke_report.json",
+      "run": "stageR24_00_checkpoint_adapter_nearest_face_stats_smoke",
+      "running_commands": [],
+      "scene": "parking",
+      "stage": "R24",
+      "status": "pass",
+      "topology": {
+        "dtriangles": 1,
+        "dvertices": 3
+      }
+    },
+    {
+      "accepted": true,
+      "attribute_effect": "render_backed_checkpoint_gate",
+      "commands": [
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python evaluate_geometry_colmap.py --model_path outputs/carnet/meshsplatopt/stageR24_01_parking_boundary_fill_nearest_face_init_gate/candidate_model --iteration 2000 --max_points_per_view 500 --output outputs/carnet/meshsplatopt/stageR24_01_parking_boundary_fill_nearest_face_init_gate/candidate_model/geometry_eval_colmap/iter_2000_max500.json",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python metrics.py -m outputs/carnet/meshsplatopt/stageR24_01_parking_boundary_fill_nearest_face_init_gate/candidate_model",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python render.py -m outputs/carnet/meshsplatopt/stageR24_01_parking_boundary_fill_nearest_face_init_gate/candidate_model --iteration 2000 --skip_train",
+        "nvidia-smi"
+      ],
+      "family": "stageR_render_backed_gate",
+      "metrics": {
+        "AbsRel": 0.0,
+        "DepthMAE": 0.0,
+        "LPIPS": 3.635883331298828e-06,
+        "NormalMeanDeg": 1.0950229949457935e-06,
+        "PSNR": 9.72747802734375e-05,
+        "SSIM": -3.8743019104003906e-07,
+        "triangles": 6,
+        "vertices": 1
+      },
+      "path": "outputs/carnet/meshsplatopt/stageR24_01_parking_boundary_fill_nearest_face_init_gate/render_backed_checkpoint_gate_report.json",
+      "reasons": [],
+      "run": "stageR24_01_parking_boundary_fill_nearest_face_init_gate",
+      "running_commands": [],
+      "scene": "parking",
+      "stage": "R24",
+      "status": "pass",
+      "topology": {
+        "dtriangles": 6,
+        "dvertices": 1
+      }
+    },
+    {
+      "accepted": false,
+      "attribute_effect": "teacher_recovery",
+      "commands": [
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python metrics.py -m outputs/carnet/meshsplatopt/stageR24_02_parking_boundary_fill_nearest_face_init_freeze_skip_delaunay_2000to2200/recovery_model",
+        "nvidia-smi",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python render.py -m outputs/carnet/meshsplatopt/stageR24_02_parking_boundary_fill_nearest_face_init_freeze_skip_delaunay_2000to2200/recovery_model --iteration 2200 --skip_train --quiet",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python train.py -s /data/peilincai/mesh-splatting/outputs/carnet/meshprior/parking_phone_tiny/dataset_view -m outputs/carnet/meshsplatopt/stageR24_02_parking_boundary_fill_nearest_face_init_freeze_skip_delaunay_2000to2200/recovery_model -i images -r 4 --load_iteration 2000 --iterations 2200 --test_iterations 2200 --save_iterations 2200 --enable_wandb --wandb_project spcarnet_meshprior --wandb_group meshsplatopt_r24_boundary_fill_init --wandb_name meshsplatopt_r24_02_parking_boundary_fill_nearest_face_init_2000to2200_gpu4 --wandb_scalar_log_interval 10 --wandb_disable_fixed_views --quiet --eval --densify_until_iter 2000 --skip_restricted_delaunay"
+      ],
+      "control": "short_2200",
+      "decision": "rejected",
+      "delta_vs_control": {
+        "AbsRel": 0.00013526372655503494,
+        "DepthMAE": 0.0022835086458545817,
+        "LPIPS": -0.00033909082412719727,
+        "NormalMeanDeg": -0.027398635270202476,
+        "PSNR": 0.016333580017089844,
+        "SSIM": -0.00022736191749572754
+      },
+      "failed_targets": [
+        "SSIM",
+        "AbsRel",
+        "DepthMAE"
+      ],
+      "failures": [],
+      "family": "stageR_recovery",
+      "load_iteration": 2000,
+      "metrics": {
+        "AbsRel": 0.40939853425964706,
+        "DepthMAE": 4.30255646023858,
+        "LPIPS": 0.6219840049743652,
+        "NormalMeanDeg": 52.56824045392135,
+        "PSNR": 12.347798347473145,
+        "SSIM": 0.2979941964149475
+      },
+      "path": "outputs/carnet/meshsplatopt/stageR24_02_parking_boundary_fill_nearest_face_init_freeze_skip_delaunay_2000to2200/real_tiny_recovery_report.json",
+      "run": "stageR24_02_parking_boundary_fill_nearest_face_init_freeze_skip_delaunay_2000to2200",
+      "running_commands": [],
+      "scene": "parking",
+      "stage": "R24",
+      "status": "complete",
+      "topology": {
+        "triangles": 782988,
+        "vertices": 820108
+      },
+      "train_overrides": {
+        "densification_interval": null,
+        "densify_from_iter": null,
+        "densify_until_iter": 2000,
+        "skip_restricted_delaunay": true
+      },
+      "train_until_iteration": 2200
+    },
+    {
+      "accepted": false,
+      "attribute_effect": "teacher_recovery",
+      "commands": [
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python metrics.py -m outputs/carnet/meshsplatopt/stageR25_01_parking_boundary_fill_nearest_face_init_densify_on_2000to4000/recovery_model",
+        "nvidia-smi",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python render.py -m outputs/carnet/meshsplatopt/stageR25_01_parking_boundary_fill_nearest_face_init_densify_on_2000to4000/recovery_model --iteration 4000 --skip_train --quiet",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python train.py -s /data/peilincai/mesh-splatting/outputs/carnet/meshprior/parking_phone_tiny/dataset_view -m outputs/carnet/meshsplatopt/stageR25_01_parking_boundary_fill_nearest_face_init_densify_on_2000to4000/recovery_model -i images -r 4 --load_iteration 2000 --iterations 4000 --test_iterations 4000 --save_iterations 4000 --enable_wandb --wandb_project spcarnet_meshprior --wandb_group meshsplatopt_r25_repair_densify_diagnostic --wandb_name meshsplatopt_r25_01_parking_boundary_fill_nearest_face_init_densify_on_2000to4000_gpu4 --wandb_scalar_log_interval 10 --wandb_disable_fixed_views --quiet --eval"
+      ],
+      "control": "medium_4000",
+      "decision": "rejected",
+      "delta_vs_control": {
+        "AbsRel": null,
+        "DepthMAE": null,
+        "LPIPS": 0.07176977396011353,
+        "NormalMeanDeg": null,
+        "PSNR": -2.2199459075927734,
+        "SSIM": -0.07319670915603638
+      },
+      "failed_targets": [
+        "PSNR",
+        "SSIM",
+        "LPIPS",
+        "AbsRel",
+        "DepthMAE",
+        "NormalMeanDeg"
+      ],
+      "failures": [],
+      "family": "stageR_recovery",
+      "load_iteration": 2000,
+      "metrics": {
+        "AbsRel": null,
+        "DepthMAE": null,
+        "LPIPS": 0.6415190696716309,
+        "NormalMeanDeg": null,
+        "PSNR": 12.03114128112793,
+        "SSIM": 0.31060317158699036
+      },
+      "path": "outputs/carnet/meshsplatopt/stageR25_01_parking_boundary_fill_nearest_face_init_densify_on_2000to4000/real_tiny_recovery_report.json",
+      "run": "stageR25_01_parking_boundary_fill_nearest_face_init_densify_on_2000to4000",
+      "running_commands": [],
+      "scene": "parking",
+      "stage": "R25",
+      "status": "complete",
+      "topology": {
+        "triangles": 5889468,
+        "vertices": 4964968
+      },
+      "train_overrides": {
+        "densification_interval": null,
+        "densify_from_iter": null,
+        "densify_until_iter": null,
+        "skip_restricted_delaunay": false
+      },
+      "train_until_iteration": 4000
+    },
+    {
+      "accepted": true,
+      "attribute_effect": "grid_fill_geometry",
+      "commands": [],
+      "family": "stageR_grid_fill_selection",
+      "metrics": {},
+      "path": "outputs/carnet/meshsplatopt/stageR26_01_parking_boundary_grid_fill_selection/boundary_grid_fill_expansion_report.json",
+      "run": "stageR26_01_parking_boundary_grid_fill_selection",
+      "running_commands": [],
+      "scene": "parking",
+      "stage": "R26",
+      "status": "pass",
+      "topology": {
+        "area_2d": 37.09756897808197,
+        "dtriangles": 106,
+        "dvertices": 51,
+        "loop_vertices": 6,
+        "spacing": 0.8791279886209447
+      }
+    },
+    {
+      "accepted": true,
+      "attribute_effect": "render_backed_checkpoint_gate",
+      "commands": [
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python evaluate_geometry_colmap.py --model_path outputs/carnet/meshsplatopt/stageR26_02_parking_boundary_grid_fill_gate/candidate_model --iteration 2000 --max_points_per_view 500 --output outputs/carnet/meshsplatopt/stageR26_02_parking_boundary_grid_fill_gate/candidate_model/geometry_eval_colmap/iter_2000_max500.json",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python metrics.py -m outputs/carnet/meshsplatopt/stageR26_02_parking_boundary_grid_fill_gate/candidate_model",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python render.py -m outputs/carnet/meshsplatopt/stageR26_02_parking_boundary_grid_fill_gate/candidate_model --iteration 2000 --skip_train",
+        "nvidia-smi"
+      ],
+      "family": "stageR_render_backed_gate",
+      "metrics": {
+        "AbsRel": 0.0,
+        "DepthMAE": 0.0,
+        "LPIPS": 2.6226043701171875e-06,
+        "NormalMeanDeg": 1.0269942762874962e-06,
+        "PSNR": 9.250640869140625e-05,
+        "SSIM": -2.9802322387695312e-08,
+        "triangles": 106,
+        "vertices": 51
+      },
+      "path": "outputs/carnet/meshsplatopt/stageR26_02_parking_boundary_grid_fill_gate/render_backed_checkpoint_gate_report.json",
+      "reasons": [],
+      "run": "stageR26_02_parking_boundary_grid_fill_gate",
+      "running_commands": [],
+      "scene": "parking",
+      "stage": "R26",
+      "status": "pass",
+      "topology": {
+        "dtriangles": 106,
+        "dvertices": 51
+      }
+    },
+    {
+      "accepted": false,
+      "attribute_effect": "teacher_recovery",
+      "commands": [
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python metrics.py -m outputs/carnet/meshsplatopt/stageR26_03_parking_boundary_grid_fill_freeze_skip_delaunay_2000to2200/recovery_model",
+        "nvidia-smi",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python render.py -m outputs/carnet/meshsplatopt/stageR26_03_parking_boundary_grid_fill_freeze_skip_delaunay_2000to2200/recovery_model --iteration 2200 --skip_train --quiet",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python train.py -s /data/peilincai/mesh-splatting/outputs/carnet/meshprior/parking_phone_tiny/dataset_view -m outputs/carnet/meshsplatopt/stageR26_03_parking_boundary_grid_fill_freeze_skip_delaunay_2000to2200/recovery_model -i images -r 4 --load_iteration 2000 --iterations 2200 --test_iterations 2200 --save_iterations 2200 --enable_wandb --wandb_project spcarnet_meshprior --wandb_group meshsplatopt_r26_boundary_grid_fill --wandb_name meshsplatopt_r26_03_parking_boundary_grid_fill_freeze_skip_delaunay_2000to2200_gpu4 --wandb_scalar_log_interval 10 --wandb_disable_fixed_views --quiet --eval --densify_until_iter 2000 --skip_restricted_delaunay"
+      ],
+      "control": "short_2200",
+      "decision": "rejected",
+      "delta_vs_control": {
+        "AbsRel": -0.00032320370999544545,
+        "DepthMAE": 0.0028110277309796317,
+        "LPIPS": -0.0001811385154724121,
+        "NormalMeanDeg": -0.04486256907352271,
+        "PSNR": 0.015931129455566406,
+        "SSIM": 0.00011649727821350098
+      },
+      "failed_targets": [
+        "DepthMAE"
+      ],
+      "failures": [],
+      "family": "stageR_recovery",
+      "load_iteration": 2000,
+      "metrics": {
+        "AbsRel": 0.4089400668230966,
+        "DepthMAE": 4.303083979323705,
+        "LPIPS": 0.62214195728302,
+        "NormalMeanDeg": 52.55077652011803,
+        "PSNR": 12.347395896911621,
+        "SSIM": 0.29833805561065674
+      },
+      "path": "outputs/carnet/meshsplatopt/stageR26_03_parking_boundary_grid_fill_freeze_skip_delaunay_2000to2200/real_tiny_recovery_report.json",
+      "run": "stageR26_03_parking_boundary_grid_fill_freeze_skip_delaunay_2000to2200",
+      "running_commands": [],
+      "scene": "parking",
+      "stage": "R26",
+      "status": "complete",
+      "topology": {
+        "triangles": 783088,
+        "vertices": 820158
+      },
+      "train_overrides": {
+        "densification_interval": null,
+        "densify_from_iter": null,
+        "densify_until_iter": 2000,
+        "skip_restricted_delaunay": true
+      },
+      "train_until_iteration": 2200
+    },
+    {
+      "accepted": false,
+      "attribute_effect": "teacher_recovery",
+      "commands": [
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python metrics.py -m outputs/carnet/meshsplatopt/stageR26_04_parking_boundary_grid_fill_freeze_skip_delaunay_2000to4000/recovery_model",
+        "nvidia-smi",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python render.py -m outputs/carnet/meshsplatopt/stageR26_04_parking_boundary_grid_fill_freeze_skip_delaunay_2000to4000/recovery_model --iteration 4000 --skip_train --quiet",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python train.py -s /data/peilincai/mesh-splatting/outputs/carnet/meshprior/parking_phone_tiny/dataset_view -m outputs/carnet/meshsplatopt/stageR26_04_parking_boundary_grid_fill_freeze_skip_delaunay_2000to4000/recovery_model -i images -r 4 --load_iteration 2000 --iterations 4000 --test_iterations 4000 --save_iterations 4000 --enable_wandb --wandb_project spcarnet_meshprior --wandb_group meshsplatopt_r26_boundary_grid_fill --wandb_name meshsplatopt_r26_04_parking_boundary_grid_fill_freeze_skip_delaunay_2000to4000_gpu4 --wandb_scalar_log_interval 10 --wandb_disable_fixed_views --quiet --eval --densify_until_iter 2000 --skip_restricted_delaunay"
+      ],
+      "control": "medium_4000",
+      "decision": "rejected",
+      "delta_vs_control": {
+        "AbsRel": 0.004347183647150088,
+        "DepthMAE": 0.030686610905356293,
+        "LPIPS": 0.000979781150817871,
+        "NormalMeanDeg": 0.5507526519639043,
+        "PSNR": -0.03859138488769531,
+        "SSIM": -0.0006355345249176025
+      },
+      "failed_targets": [
+        "PSNR",
+        "SSIM",
+        "LPIPS",
+        "AbsRel",
+        "DepthMAE",
+        "NormalMeanDeg"
+      ],
+      "failures": [],
+      "family": "stageR_recovery",
+      "load_iteration": 2000,
+      "metrics": {
+        "AbsRel": 0.32914148929031234,
+        "DepthMAE": 3.6675776719264697,
+        "LPIPS": 0.5707290768623352,
+        "NormalMeanDeg": 51.59420355389547,
+        "PSNR": 14.212495803833008,
+        "SSIM": 0.38316434621810913
+      },
+      "path": "outputs/carnet/meshsplatopt/stageR26_04_parking_boundary_grid_fill_freeze_skip_delaunay_2000to4000/real_tiny_recovery_report.json",
+      "run": "stageR26_04_parking_boundary_grid_fill_freeze_skip_delaunay_2000to4000",
+      "running_commands": [],
+      "scene": "parking",
+      "stage": "R26",
+      "status": "complete",
+      "topology": {
+        "triangles": 783088,
+        "vertices": 820158
+      },
+      "train_overrides": {
+        "densification_interval": null,
+        "densify_from_iter": null,
+        "densify_until_iter": 2000,
+        "skip_restricted_delaunay": true
+      },
+      "train_until_iteration": 4000
+    },
+    {
+      "accepted": false,
+      "attribute_effect": "teacher_recovery + sparse_depth",
+      "commands": [
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python metrics.py -m outputs/carnet/meshsplatopt/stageR27_01_parking_boundary_grid_fill_sparse_depth_2000to2200/recovery_model",
+        "nvidia-smi",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python render.py -m outputs/carnet/meshsplatopt/stageR27_01_parking_boundary_grid_fill_sparse_depth_2000to2200/recovery_model --iteration 2200 --skip_train --quiet",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python train.py -s /data/peilincai/mesh-splatting/outputs/carnet/meshprior/parking_phone_tiny/dataset_view -m outputs/carnet/meshsplatopt/stageR27_01_parking_boundary_grid_fill_sparse_depth_2000to2200/recovery_model -i images -r 4 --load_iteration 2000 --iterations 2200 --test_iterations 2200 --save_iterations 2200 --enable_wandb --wandb_project spcarnet_meshprior --wandb_group meshsplatopt_r27_sparse_depth_recovery --wandb_name meshsplatopt_r27_01_parking_boundary_grid_fill_sparse_depth_2000to2200_gpu4 --wandb_scalar_log_interval 10 --wandb_disable_fixed_views --quiet --eval --densify_until_iter 2000 --skip_restricted_delaunay --enable_sparse_colmap_depth_loss --sparse_colmap_depth_start_iter 2000 --sparse_colmap_depth_warmup_iters 50 --lambda_sparse_colmap_depth 0.05 --sparse_colmap_depth_min_matches 16 --sparse_colmap_depth_enable_in_final_finetune"
+      ],
+      "control": "short_2200",
+      "decision": "rejected",
+      "delta_vs_control": {
+        "AbsRel": 0.0018425661480195865,
+        "DepthMAE": 0.04254573728687561,
+        "LPIPS": -0.00021398067474365234,
+        "NormalMeanDeg": 0.2048668873348518,
+        "PSNR": -0.015821456909179688,
+        "SSIM": -0.0009769797325134277
+      },
+      "failed_targets": [
+        "PSNR",
+        "SSIM",
+        "AbsRel",
+        "DepthMAE",
+        "NormalMeanDeg"
+      ],
+      "failures": [],
+      "family": "stageR_recovery",
+      "load_iteration": 2000,
+      "metrics": {
+        "AbsRel": 0.4111058366811116,
+        "DepthMAE": 4.342818688879601,
+        "LPIPS": 0.6221091151237488,
+        "NormalMeanDeg": 52.8005059765264,
+        "PSNR": 12.315643310546875,
+        "SSIM": 0.2972445785999298
+      },
+      "path": "outputs/carnet/meshsplatopt/stageR27_01_parking_boundary_grid_fill_sparse_depth_2000to2200/real_tiny_recovery_report.json",
+      "run": "stageR27_01_parking_boundary_grid_fill_sparse_depth_2000to2200",
+      "running_commands": [],
+      "scene": "parking",
+      "stage": "R27",
+      "status": "complete",
+      "topology": {
+        "triangles": 783088,
+        "vertices": 820158
+      },
+      "train_overrides": {
+        "densification_interval": null,
+        "densify_from_iter": null,
+        "densify_until_iter": 2000,
+        "extra_args": "--enable_sparse_colmap_depth_loss --sparse_colmap_depth_start_iter 2000 --sparse_colmap_depth_warmup_iters 50 --lambda_sparse_colmap_depth 0.05 --sparse_colmap_depth_min_matches 16 --sparse_colmap_depth_enable_in_final_finetune",
+        "skip_restricted_delaunay": true
+      },
+      "train_until_iteration": 2200
+    },
+    {
+      "accepted": false,
+      "attribute_effect": "teacher_recovery + sparse_depth",
+      "commands": [
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python metrics.py -m outputs/carnet/meshsplatopt/stageR27_02_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to2200/recovery_model",
+        "nvidia-smi",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python render.py -m outputs/carnet/meshsplatopt/stageR27_02_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to2200/recovery_model --iteration 2200 --skip_train --quiet",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python train.py -s /data/peilincai/mesh-splatting/outputs/carnet/meshprior/parking_phone_tiny/dataset_view -m outputs/carnet/meshsplatopt/stageR27_02_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to2200/recovery_model -i images -r 4 --load_iteration 2000 --iterations 2200 --test_iterations 2200 --save_iterations 2200 --enable_wandb --wandb_project spcarnet_meshprior --wandb_group meshsplatopt_r27_sparse_depth_recovery --wandb_name meshsplatopt_r27_02_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to2200_gpu4 --wandb_scalar_log_interval 10 --wandb_disable_fixed_views --quiet --eval --densify_until_iter 2000 --skip_restricted_delaunay --enable_sparse_colmap_depth_loss --sparse_colmap_depth_start_iter 2000 --sparse_colmap_depth_warmup_iters 50 --lambda_sparse_colmap_depth 0.005 --sparse_colmap_depth_min_matches 16 --sparse_colmap_depth_enable_in_final_finetune"
+      ],
+      "control": "short_2200",
+      "decision": "rejected",
+      "delta_vs_control": {
+        "AbsRel": -0.0016502229079654596,
+        "DepthMAE": 0.007593428384797818,
+        "LPIPS": -0.0004506111145019531,
+        "NormalMeanDeg": -0.00016096947777555215,
+        "PSNR": 0.03071308135986328,
+        "SSIM": 0.0011356174945831299
+      },
+      "failed_targets": [
+        "DepthMAE"
+      ],
+      "failures": [],
+      "family": "stageR_recovery",
+      "load_iteration": 2000,
+      "metrics": {
+        "AbsRel": 0.40761304762512657,
+        "DepthMAE": 4.307866379977523,
+        "LPIPS": 0.6218724846839905,
+        "NormalMeanDeg": 52.595478119713775,
+        "PSNR": 12.362177848815918,
+        "SSIM": 0.29935717582702637
+      },
+      "path": "outputs/carnet/meshsplatopt/stageR27_02_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to2200/real_tiny_recovery_report.json",
+      "run": "stageR27_02_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to2200",
+      "running_commands": [],
+      "scene": "parking",
+      "stage": "R27",
+      "status": "complete",
+      "topology": {
+        "triangles": 783088,
+        "vertices": 820158
+      },
+      "train_overrides": {
+        "densification_interval": null,
+        "densify_from_iter": null,
+        "densify_until_iter": 2000,
+        "extra_args": "--enable_sparse_colmap_depth_loss --sparse_colmap_depth_start_iter 2000 --sparse_colmap_depth_warmup_iters 50 --lambda_sparse_colmap_depth 0.005 --sparse_colmap_depth_min_matches 16 --sparse_colmap_depth_enable_in_final_finetune",
+        "skip_restricted_delaunay": true
+      },
+      "train_until_iteration": 2200
+    },
+    {
+      "accepted": true,
+      "attribute_effect": "teacher_recovery + sparse_depth",
+      "commands": [
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python metrics.py -m outputs/carnet/meshsplatopt/stageR27_03_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to4000/recovery_model",
+        "nvidia-smi",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python render.py -m outputs/carnet/meshsplatopt/stageR27_03_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to4000/recovery_model --iteration 4000 --skip_train --quiet",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python train.py -s /data/peilincai/mesh-splatting/outputs/carnet/meshprior/parking_phone_tiny/dataset_view -m outputs/carnet/meshsplatopt/stageR27_03_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to4000/recovery_model -i images -r 4 --load_iteration 2000 --iterations 4000 --test_iterations 4000 --save_iterations 4000 --enable_wandb --wandb_project spcarnet_meshprior --wandb_group meshsplatopt_r27_sparse_depth_recovery --wandb_name meshsplatopt_r27_03_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to4000_gpu4 --wandb_scalar_log_interval 10 --wandb_disable_fixed_views --quiet --eval --densify_until_iter 2000 --skip_restricted_delaunay --enable_sparse_colmap_depth_loss --sparse_colmap_depth_start_iter 2000 --sparse_colmap_depth_warmup_iters 50 --lambda_sparse_colmap_depth 0.005 --sparse_colmap_depth_min_matches 16 --sparse_colmap_depth_enable_in_final_finetune"
+      ],
+      "control": "sparse_medium_4000",
+      "decision": "accepted",
+      "delta_vs_control": {
+        "AbsRel": -0.003513117868819693,
+        "DepthMAE": -0.060363296523336274,
+        "LPIPS": -9.66787338256836e-05,
+        "NormalMeanDeg": -0.10681963129878369,
+        "PSNR": 0.024641036987304688,
+        "SSIM": 0.0006782412528991699
+      },
+      "failed_targets": [],
+      "failures": [],
+      "family": "stageR_recovery",
+      "load_iteration": 2000,
+      "metrics": {
+        "AbsRel": 0.3063805414745857,
+        "DepthMAE": 3.6056965651801227,
+        "LPIPS": 0.5677491426467896,
+        "NormalMeanDeg": 49.906128866252146,
+        "PSNR": 14.32589054107666,
+        "SSIM": 0.38544976711273193
+      },
+      "path": "outputs/carnet/meshsplatopt/stageR27_03_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to4000/real_tiny_recovery_report.json",
+      "run": "stageR27_03_parking_boundary_grid_fill_sparse_depth_lam0p005_2000to4000",
+      "running_commands": [],
+      "scene": "parking",
+      "stage": "R27",
+      "status": "complete",
+      "topology": {
+        "triangles": 783088,
+        "vertices": 820158
+      },
+      "train_overrides": {
+        "densification_interval": null,
+        "densify_from_iter": null,
+        "densify_until_iter": 2000,
+        "extra_args": "--enable_sparse_colmap_depth_loss --sparse_colmap_depth_start_iter 2000 --sparse_colmap_depth_warmup_iters 50 --lambda_sparse_colmap_depth 0.005 --sparse_colmap_depth_min_matches 16 --sparse_colmap_depth_enable_in_final_finetune",
+        "skip_restricted_delaunay": true
+      },
+      "train_until_iteration": 4000
+    },
+    {
+      "accepted": null,
+      "attribute_effect": "teacher_recovery + sparse_depth",
+      "commands": [
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python metrics.py -m outputs/carnet/meshsplatopt/stageR27_04_parking_baseline_sparse_depth_lam0p005_2000to4000/recovery_model",
+        "nvidia-smi",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python render.py -m outputs/carnet/meshsplatopt/stageR27_04_parking_baseline_sparse_depth_lam0p005_2000to4000/recovery_model --iteration 4000 --skip_train --quiet",
+        "/home/peilincai/micromamba/envs/mesh_splatting/bin/python train.py -s /data/peilincai/mesh-splatting/outputs/carnet/meshprior/parking_phone_tiny/dataset_view -m outputs/carnet/meshsplatopt/stageR27_04_parking_baseline_sparse_depth_lam0p005_2000to4000/recovery_model -i images -r 4 --load_iteration 2000 --iterations 4000 --test_iterations 4000 --save_iterations 4000 --enable_wandb --wandb_project spcarnet_meshprior --wandb_group meshsplatopt_r27_sparse_depth_recovery --wandb_name meshsplatopt_r27_04_parking_baseline_sparse_depth_lam0p005_2000to4000_gpu4 --wandb_scalar_log_interval 10 --wandb_disable_fixed_views --quiet --eval --densify_until_iter 2000 --skip_restricted_delaunay --enable_sparse_colmap_depth_loss --sparse_colmap_depth_start_iter 2000 --sparse_colmap_depth_warmup_iters 50 --lambda_sparse_colmap_depth 0.005 --sparse_colmap_depth_min_matches 16 --sparse_colmap_depth_enable_in_final_finetune"
+      ],
+      "control": "medium_4000",
+      "decision": "control",
+      "delta_vs_control": {
+        "AbsRel": -0.014900646299756848,
+        "DepthMAE": 0.02916880068234562,
+        "LPIPS": -0.0019034743309020996,
+        "NormalMeanDeg": -1.0305024043806341,
+        "PSNR": 0.050162315368652344,
+        "SSIM": 0.0009716451168060303
+      },
+      "failed_targets": [
+        "DepthMAE"
+      ],
+      "failures": [],
+      "family": "stageR_recovery",
+      "load_iteration": 2000,
+      "metrics": {
+        "AbsRel": 0.3098936593434054,
+        "DepthMAE": 3.666059861703459,
+        "LPIPS": 0.5678458213806152,
+        "NormalMeanDeg": 50.01294849755093,
+        "PSNR": 14.301249504089355,
+        "SSIM": 0.38477152585983276
+      },
+      "path": "outputs/carnet/meshsplatopt/stageR27_04_parking_baseline_sparse_depth_lam0p005_2000to4000/real_tiny_recovery_report.json",
+      "run": "stageR27_04_parking_baseline_sparse_depth_lam0p005_2000to4000",
+      "running_commands": [],
+      "scene": "parking",
+      "stage": "R27",
+      "status": "complete",
+      "topology": {
+        "triangles": 782982,
+        "vertices": 820107
+      },
+      "train_overrides": {
+        "densification_interval": null,
+        "densify_from_iter": null,
+        "densify_until_iter": 2000,
+        "extra_args": "--enable_sparse_colmap_depth_loss --sparse_colmap_depth_start_iter 2000 --sparse_colmap_depth_warmup_iters 50 --lambda_sparse_colmap_depth 0.005 --sparse_colmap_depth_min_matches 16 --sparse_colmap_depth_enable_in_final_finetune",
+        "skip_restricted_delaunay": true
+      },
+      "train_until_iteration": 4000
+    }
+  ]
+}

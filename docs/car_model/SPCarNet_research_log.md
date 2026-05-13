@@ -6662,3 +6662,102 @@ subdivision, not by residual SH color alone.  The next credible method is
 identity-topology vertex residual editing, with v23 as the active candidate.
 Its current effect size is still small, so it needs cross-scene validation and
 report-only held-out render checks before any paper-level claim.
+
+## 2026-05-13 06:24 PDT - Vertex-Delta v24-v27 Audit and Stop Decision
+
+Continued the Phase-S identity-topology vertex-delta line with a stricter
+closed-loop audit.  Two long render-calibrated searches were intentionally
+stopped after enough negative evidence accumulated; they were still exploring
+the same candidate family and had not accepted any nontrivial subset.
+
+Code/interface changes:
+
+- `ecsr_apply_surface_residual_subdivision_delta.py`
+  - no-effect materialization guard;
+  - materialization-effect audit for topology and feature tensors;
+  - vertex-delta incident-support/valence generalization certificate;
+  - replay-time filtering for effective proxy and incident-support guards.
+- `ecsr_run_phasek_barycentric_gate_scene.py`
+  - forwards vertex-delta materialization mode and guard arguments through the
+    higher-level scene runner.
+- `ecsr_run_render_calibrated_candidate_search.py`
+  - preserves `materialize_mode` through subset plans and trials;
+  - forwards no-op/effective/incident guards;
+  - separates strict gate failure from objective-threshold rejection in the
+    search report.
+- `ecsr_collect_vertexdelta_loop_status.py`
+  - new read-only Phase-S collector:
+    `docs/car_model/5-13-VertexDelta-ClosedLoop-Audit.md`.
+- `meshsplatopt_audit_v24_v27_outputs.py`
+  - wider audit including Stage R24-R27:
+    `docs/car_model/meshsplatopt_v24_v27_audit_report.md`.
+
+Evidence summary:
+
+- v24 is strict-safe but nearly invisible:
+  - `bicycle`: accepted 3 faces, mean dPSNR `+0.0000119`,
+    dSSIM `+0.0000036`, dLPIPS `-0.0000067`;
+  - `treehill`: accepted 2 faces, mean dPSNR `+0.0000162`,
+    dSSIM `+0.0000000`, dLPIPS `+0.0000006`;
+  - qualitative manifest reports image deltas at zero to `1e-6` scale.
+- `counter` v24 render-calibrated search stopped with no accepted subset;
+  strict-passing trials were below the fixed objective threshold.
+- v25/v27 produce larger PSNR movement but fail strict LPIPS/offset stability:
+  - v27 `bicycle` mean dPSNR `+0.0007529`, but mean dLPIPS `+0.0001990`
+    and offsets 0/3 fail LPIPS;
+  - v27 `treehill` mean dPSNR `+0.0001135`, but offset 1 fails SSIM/LPIPS.
+
+Conclusion: `NOT COMPLETE`.  The current vertex-SH carrier is useful as a
+safety/diagnostic infrastructure, not as a paper-level visual method.  The next
+credible research step is not another strength scan.  It should be a fixed
+surface-patch residual carrier or cluster-level residual basis with enough
+capacity to create visible local improvement while preserving the same
+train-only four-offset gate.  If that also collapses to no-op, Phase-S visual
+quality search should stop and Phase-J should remain the honest RGB endpoint.
+
+## 2026-05-13 07:14 PDT - Patch-Cluster Face-Filter Carrier
+
+Implemented and evaluated the next Phase-S carrier family requested by the
+vertex-delta audit: a train-evidence Phase-B cluster front-end plus a
+topology-preserving DC barycentric residual writer.
+
+Code changes:
+
+- `ecsr_apply_surface_residual_barycentric_delta.py`
+  - added `--policy_val_filter_faces`;
+  - runs a face-level policy-val gain report;
+  - keeps only faces with sufficient local holdout gain and refits the final
+    residual carrier on that kept subset.
+- `ecsr_run_phasek_barycentric_gate_scene.py`
+  - forwards the face-level filter arguments;
+  - supports quoted `{scene}` expansion for cluster JSON/CSV paths in
+    multi-scene runs.
+- `ecsr_decide_phasek_trainval_gate.py`
+  - changed the default balanced gate from effectively disabled to
+    `min_balanced_delta=0.0`.
+
+Experiments:
+
+- v2 broad cluster, `bicycle`/`flowers`:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phasepatch_cluster_dc_v2_expand256_20260513_*`.
+- v3 face-filter, `bicycle`/`flowers`:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phasepatch_cluster_dc_v3_facefilter_20260513_*`.
+- v4 high-confidence face-filter, `bicycle`/`flowers`:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phasepatch_cluster_dc_v4_highconf_20260513_*`.
+- qualitative HTML:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phasepatch_cluster_dc_v4_highconf_qualitative_20260513/gallery.html`.
+- full audit:
+  `docs/car_model/5-13-PhaseS-PatchCluster-FaceFilter-Audit.md`.
+
+Result:
+
+- v2 broad writes were harmful relative to Phase-J on held-out test.
+- v3/v4 face filtering made `bicycle` test positive in all three metrics, with
+  v4 at dPSNR `+0.000597`, dSSIM `+0.000038`, dLPIPS `-0.000038`.
+- strict train-val still rejected `bicycle` because policy-val LPIPS regressed
+  slightly, and `flowers` stayed negative on held-out test.
+
+Decision: `NOT COMPLETE`.  This is real method progress and a useful diagnostic
+of the carrier capacity/support-alignment problem, but it is not a closed
+paper-level result and does not justify claiming comprehensive superiority over
+Phase-J or MeshSplatting.

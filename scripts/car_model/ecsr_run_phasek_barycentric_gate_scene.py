@@ -75,6 +75,13 @@ def _selected_model(policy_root: Path, scene: str) -> Path:
     return model
 
 
+def _scene_format_path(value: str | Path, scene: str) -> str:
+    text = str(value)
+    if "{scene}" in text:
+        return text.format(scene=scene)
+    return text
+
+
 def _image_set(scene: str, args: argparse.Namespace) -> str:
     return args.outdoor_images if scene in OUTDOOR_SCENES else args.indoor_images
 
@@ -175,7 +182,15 @@ def _build_evidence(args: argparse.Namespace, *, scene: str, phasej_model: Path,
     _run(cmd, gpu=int(args.gpu), log_path=log_path)
 
 
-def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: Path, candidate_model: Path, log_path: Path) -> None:
+def _apply_delta(
+    args: argparse.Namespace,
+    *,
+    scene: str,
+    phasej_model: Path,
+    evidence_dir: Path,
+    candidate_model: Path,
+    log_path: Path,
+) -> None:
     if str(args.delta_operator) == "subdivision":
         audit = _candidate_audit_path(args, candidate_model)
         checkpoint = candidate_model / "point_cloud" / f"iteration_{int(args.iteration)}" / "point_cloud_state_dict.pt"
@@ -213,6 +228,8 @@ def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: 
             str(args.delta_max_abs_rgb),
             "--feature_mode",
             str(args.delta_subdivision_feature_mode),
+            "--materialize_mode",
+            str(args.delta_subdivision_materialize_mode),
             "--max_abs_sh_coeff",
             str(args.delta_subdivision_max_abs_sh_coeff),
             "--lambda_ridge",
@@ -229,7 +246,21 @@ def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: 
             str(args.delta_min_policy_val_offset_fraction),
             "--max_faces_to_apply",
             str(args.delta_max_faces_to_apply),
+            "--min_effective_mean_relative_gain",
+            str(args.delta_subdivision_min_effective_mean_relative_gain),
+            "--min_effective_min_relative_gain",
+            str(args.delta_subdivision_min_effective_min_relative_gain),
+            "--min_effective_delta_abs_mean",
+            str(args.delta_subdivision_min_effective_delta_abs_mean),
+            "--min_materialized_attribute_delta",
+            str(args.delta_subdivision_min_materialized_attribute_delta),
+            "--vertex_delta_min_incident_support_fraction",
+            str(args.delta_subdivision_vertex_delta_min_incident_support_fraction),
+            "--vertex_delta_max_incident_faces",
+            str(args.delta_subdivision_vertex_delta_max_incident_faces),
         ]
+        if bool(args.delta_subdivision_allow_no_effect_accept):
+            cmd.append("--allow_no_effect_accept")
         if bool(args.delta_subdivision_luma_preserve):
             cmd.extend(
                 [
@@ -242,6 +273,22 @@ def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: 
                     str(args.delta_subdivision_luma_shrink_grid),
                     "--luma_shrink_selection",
                     str(args.delta_subdivision_luma_shrink_selection),
+                ]
+            )
+        if bool(args.delta_subdivision_structure_preserve):
+            cmd.extend(
+                [
+                    "--structure_preserve",
+                    "--structure_weight_strength",
+                    str(args.delta_subdivision_structure_weight_strength),
+                    "--min_structure_relative_gain",
+                    str(args.delta_subdivision_min_structure_relative_gain),
+                    "--max_structure_mean_luma_shift",
+                    str(args.delta_subdivision_max_structure_mean_luma_shift),
+                    "--structure_shrink_grid",
+                    str(args.delta_subdivision_structure_shrink_grid),
+                    "--structure_shrink_selection",
+                    str(args.delta_subdivision_structure_shrink_selection),
                 ]
             )
         if bool(args.delta_subdivision_anchor_support):
@@ -436,6 +483,37 @@ def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: 
                 str(args.delta_min_face_gain_certificate_fraction),
             ]
         )
+    if str(args.delta_operator) == "dc":
+        if bool(args.delta_policy_val_filter_faces):
+            cmd.extend(
+                [
+                    "--policy_val_filter_faces",
+                    "--policy_val_face_min_samples",
+                    str(args.delta_policy_val_face_min_samples),
+                    "--policy_val_face_min_relative_gain",
+                    str(args.delta_policy_val_face_min_relative_gain),
+                    "--policy_val_face_max_keep",
+                    str(args.delta_policy_val_face_max_keep),
+                ]
+            )
+        if str(args.delta_candidate_cluster_json).strip():
+            cmd.extend(["--candidate_cluster_json", _scene_format_path(args.delta_candidate_cluster_json, scene)])
+        if str(args.delta_candidate_cluster_csv).strip():
+            cmd.extend(["--candidate_cluster_csv", _scene_format_path(args.delta_candidate_cluster_csv, scene)])
+        cmd.extend(
+            [
+                "--cluster_operator_types",
+                str(args.delta_cluster_operator_types),
+                "--max_clusters",
+                str(args.delta_max_clusters),
+                "--cluster_min_redundancy_score",
+                str(args.delta_cluster_min_redundancy_score),
+                "--cluster_expand_target_faces",
+                str(args.delta_cluster_expand_target_faces),
+            ]
+        )
+        if bool(args.delta_cluster_expand_with_top_residual_faces):
+            cmd.append("--cluster_expand_with_top_residual_faces")
     _run(cmd, gpu=int(args.gpu), log_path=log_path)
 
 
@@ -675,7 +753,14 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
     log_path = output_root / scene / "phasek_barycentric_gate.log"
     _render_maps(args, scene=scene, model=phasej_model, method_name=BASE_METHOD, log_path=log_path)
     _build_evidence(args, scene=scene, phasej_model=phasej_model, evidence_dir=evidence_dir, log_path=log_path)
-    _apply_delta(args, phasej_model=phasej_model, evidence_dir=evidence_dir, candidate_model=candidate_model, log_path=log_path)
+    _apply_delta(
+        args,
+        scene=scene,
+        phasej_model=phasej_model,
+        evidence_dir=evidence_dir,
+        candidate_model=candidate_model,
+        log_path=log_path,
+    )
     _render_maps(args, scene=scene, model=candidate_model, method_name=args.candidate_base_method, log_path=log_path)
     _evaluate_test(args, model=phasej_model, method=BASE_METHOD, log_path=log_path)
     _evaluate_test(args, model=candidate_model, method=args.candidate_base_method, log_path=log_path)
@@ -840,6 +925,20 @@ def main() -> int:
     parser.add_argument("--delta_min_policy_val_relative_gain", type=float, default=0.02)
     parser.add_argument("--delta_min_policy_val_samples", type=int, default=512)
     parser.add_argument("--delta_min_policy_val_unique_faces", type=int, default=16)
+    parser.add_argument("--delta_policy_val_filter_faces", action="store_true")
+    parser.add_argument("--delta_policy_val_face_min_samples", type=int, default=8)
+    parser.add_argument("--delta_policy_val_face_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--delta_policy_val_face_max_keep", type=int, default=0)
+    parser.add_argument("--delta_candidate_cluster_json", default="")
+    parser.add_argument("--delta_candidate_cluster_csv", default="")
+    parser.add_argument(
+        "--delta_cluster_operator_types",
+        default="certificate_cluster_contraction_candidate,surface_attached_attribute_recovery_candidate",
+    )
+    parser.add_argument("--delta_max_clusters", type=int, default=0)
+    parser.add_argument("--delta_cluster_min_redundancy_score", type=float, default=-1.0e30)
+    parser.add_argument("--delta_cluster_expand_with_top_residual_faces", action="store_true")
+    parser.add_argument("--delta_cluster_expand_target_faces", type=int, default=0)
     parser.add_argument(
         "--delta_validation_shrink_mode",
         choices=("none", "global", "face"),
@@ -897,6 +996,12 @@ def main() -> int:
         help="Subdivision midpoint residual feature basis. Default dc preserves historical behavior.",
     )
     parser.add_argument(
+        "--delta_subdivision_materialize_mode",
+        choices=("subdivision", "vertex_delta"),
+        default="subdivision",
+        help="How the subdivision residual operator writes accepted candidates into the checkpoint.",
+    )
+    parser.add_argument(
         "--delta_subdivision_max_abs_sh_coeff",
         type=float,
         default=0.0,
@@ -914,6 +1019,19 @@ def main() -> int:
     parser.add_argument("--delta_subdivision_candidate_plan_out", default="")
     parser.add_argument("--delta_subdivision_materialize_plan_in", default="")
     parser.add_argument("--delta_subdivision_materialize_plan_limit", type=int, default=0)
+    parser.add_argument("--delta_subdivision_vertex_delta_min_incident_support_fraction", type=float, default=0.0)
+    parser.add_argument("--delta_subdivision_vertex_delta_max_incident_faces", type=int, default=0)
+    parser.add_argument("--delta_subdivision_min_effective_mean_relative_gain", type=float, default=-1.0e30)
+    parser.add_argument("--delta_subdivision_min_effective_min_relative_gain", type=float, default=-1.0e30)
+    parser.add_argument("--delta_subdivision_min_effective_delta_abs_mean", type=float, default=0.0)
+    parser.add_argument("--delta_subdivision_min_materialized_attribute_delta", type=float, default=1.0e-9)
+    parser.add_argument("--delta_subdivision_allow_no_effect_accept", action="store_true")
+    parser.add_argument("--delta_subdivision_structure_preserve", action="store_true")
+    parser.add_argument("--delta_subdivision_structure_weight_strength", type=float, default=2.0)
+    parser.add_argument("--delta_subdivision_min_structure_relative_gain", type=float, default=0.0)
+    parser.add_argument("--delta_subdivision_max_structure_mean_luma_shift", type=float, default=0.0)
+    parser.add_argument("--delta_subdivision_structure_shrink_grid", default="0,0.25,0.5,0.75,1.0")
+    parser.add_argument("--delta_subdivision_structure_shrink_selection", choices=("min", "max"), default="max")
     parser.add_argument("--delta_subdivision_min_fit_samples", type=int, default=24)
     parser.add_argument("--delta_subdivision_min_val_samples", type=int, default=12)
     parser.add_argument(
@@ -968,7 +1086,7 @@ def main() -> int:
     parser.add_argument("--gate_min_psnr_gain", type=float, default=0.0)
     parser.add_argument("--gate_max_ssim_regression", type=float, default=5e-5)
     parser.add_argument("--gate_max_lpips_regression", type=float, default=1.5e-4)
-    parser.add_argument("--gate_min_balanced_delta", type=float, default=-1.0e9)
+    parser.add_argument("--gate_min_balanced_delta", type=float, default=0.0)
     parser.add_argument("--wandb_project", default="mesh-splatting-ecsr")
     parser.add_argument("--wandb_group", default="phasek_barycentric_multiscene")
     parser.add_argument("--wandb_name", default="phasek_barycentric")

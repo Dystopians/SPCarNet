@@ -46,6 +46,17 @@ class PixelSamples:
         return int(self.face_ids.shape[0])
 
 
+def empty_pixel_samples() -> PixelSamples:
+    empty = np.empty((0,), dtype=np.int64)
+    return PixelSamples(
+        face_ids=empty,
+        barycentric=np.empty((0, 3), dtype=np.float32),
+        residual_rgb=np.empty((0, 3), dtype=np.float32),
+        weights=np.empty((0,), dtype=np.float32),
+        view_names=[],
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source_model", type=Path, required=True)
@@ -71,6 +82,61 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_policy_val_relative_gain", type=float, default=0.02)
     parser.add_argument("--min_policy_val_samples", type=int, default=512)
     parser.add_argument("--min_policy_val_unique_faces", type=int, default=16)
+    parser.add_argument(
+        "--policy_val_filter_faces",
+        action="store_true",
+        help=(
+            "Run a train-holdout face-level gain pass, then refit using only "
+            "faces whose individual policy-val proxy improves. This prevents "
+            "a good aggregate proxy from materializing locally harmful patches."
+        ),
+    )
+    parser.add_argument("--policy_val_face_min_samples", type=int, default=8)
+    parser.add_argument("--policy_val_face_min_relative_gain", type=float, default=0.0)
+    parser.add_argument(
+        "--policy_val_face_max_keep",
+        type=int,
+        default=0,
+        help="Optional cap after face-level filtering; 0 keeps every passing face.",
+    )
+    parser.add_argument(
+        "--candidate_cluster_json",
+        type=Path,
+        default=Path(""),
+        help=(
+            "Optional Phase-B view-support graph JSON. When set, selected faces "
+            "come from fixed train-evidence support clusters instead of isolated "
+            "top residual faces."
+        ),
+    )
+    parser.add_argument(
+        "--candidate_cluster_csv",
+        type=Path,
+        default=Path(""),
+        help="Optional Phase-B candidate_clusters.csv fallback for cluster-guided support selection.",
+    )
+    parser.add_argument(
+        "--cluster_operator_types",
+        default="certificate_cluster_contraction_candidate,surface_attached_attribute_recovery_candidate",
+        help="Comma-separated operator_type allowlist for candidate cluster rows.",
+    )
+    parser.add_argument("--max_clusters", type=int, default=0)
+    parser.add_argument("--cluster_min_redundancy_score", type=float, default=-1.0e30)
+    parser.add_argument(
+        "--cluster_expand_with_top_residual_faces",
+        action="store_true",
+        help=(
+            "Use Phase-B clusters as anchors, then append deterministic top "
+            "residual faces until --cluster_expand_target_faces is reached. "
+            "This keeps the policy fixed while avoiding under-supported sparse clusters."
+        ),
+    )
+    parser.add_argument(
+        "--cluster_expand_target_faces",
+        type=int,
+        default=0,
+        help="Target selected face count for cluster expansion. 0 falls back to --top_k.",
+    )
     parser.add_argument("--no_op_on_fail", action="store_true", default=True)
     parser.add_argument("--force_apply", action="store_true")
     parser.add_argument("--device", default="cuda")
@@ -128,6 +194,85 @@ def read_selected_faces(
         for row in rows
     }
     return [int(row["face_id"]) for row in rows], stats
+
+
+def _parse_operator_types(text: str) -> set[str]:
+    return {token.strip() for token in str(text or "").split(",") if token.strip()}
+
+
+def _cluster_faces_from_row(row: dict[str, Any]) -> list[int]:
+    faces = row.get("faces", [])
+    if isinstance(faces, str):
+        return [int(token) for token in faces.replace(",", " ").split() if token.strip()]
+    if isinstance(faces, list):
+        return [int(face) for face in faces]
+    return []
+
+
+def read_candidate_cluster_faces(
+    *,
+    json_path: Path,
+    csv_path: Path,
+    operator_types: set[str],
+    max_clusters: int,
+    min_redundancy_score: float,
+) -> tuple[list[int], list[dict[str, Any]], str]:
+    rows: list[dict[str, Any]] = []
+    source = ""
+    if str(json_path) and json_path.is_file():
+        payload = json.loads(json_path.read_text(encoding="utf-8"))
+        rows = [row for row in payload.get("candidate_clusters", []) if isinstance(row, dict)]
+        source = str(json_path)
+    elif str(csv_path) and csv_path.is_file():
+        source = str(csv_path)
+        with csv_path.open("r", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                rows.append(
+                    {
+                        "candidate_id": row.get("candidate_id", ""),
+                        "operator_type": row.get("operator_type", ""),
+                        "faces": row.get("faces", ""),
+                        "num_faces": int(float(row.get("num_faces", 0) or 0)),
+                        "mean_redundancy_score": float(row.get("mean_redundancy_score", 0.0) or 0.0),
+                        "risk_flags": row.get("risk_flags", ""),
+                    }
+                )
+    if not rows:
+        return [], [], source
+
+    filtered: list[dict[str, Any]] = []
+    for row in rows:
+        operator = str(row.get("operator_type", ""))
+        if operator_types and operator not in operator_types:
+            continue
+        score = float(row.get("mean_redundancy_score", 0.0) or 0.0)
+        if score < float(min_redundancy_score):
+            continue
+        faces = _cluster_faces_from_row(row)
+        if not faces:
+            continue
+        record = dict(row)
+        record["faces"] = faces
+        record["mean_redundancy_score"] = score
+        filtered.append(record)
+    filtered.sort(
+        key=lambda row: (
+            float(row.get("mean_redundancy_score", 0.0) or 0.0),
+            int(row.get("num_faces", len(row.get("faces", []))) or len(row.get("faces", []))),
+        ),
+        reverse=True,
+    )
+    if int(max_clusters) > 0:
+        filtered = filtered[: int(max_clusters)]
+    ordered_faces: list[int] = []
+    seen: set[int] = set()
+    for row in filtered:
+        for face_id in _cluster_faces_from_row(row):
+            if face_id in seen:
+                continue
+            seen.add(face_id)
+            ordered_faces.append(int(face_id))
+    return ordered_faces, filtered, source
 
 
 def split_view_paths(view_paths: list[Path], stride: int) -> tuple[list[Path], list[Path]]:
@@ -227,14 +372,7 @@ def collect_samples(
             remaining -= n
 
     if not face_chunks:
-        empty = np.empty((0,), dtype=np.int64)
-        return PixelSamples(
-            face_ids=empty,
-            barycentric=np.empty((0, 3), dtype=np.float32),
-            residual_rgb=np.empty((0, 3), dtype=np.float32),
-            weights=np.empty((0,), dtype=np.float32),
-            view_names=[],
-        )
+        return empty_pixel_samples()
 
     return PixelSamples(
         face_ids=np.concatenate(face_chunks),
@@ -323,6 +461,81 @@ def evaluate_proxy(
         "mae_before": float(mae_before.detach().cpu().item()),
         "mae_after": float(mae_after.detach().cpu().item()),
     }
+
+
+def face_gain_report(
+    delta: torch.Tensor,
+    samples: PixelSamples,
+    sample_vertex_ids: torch.Tensor,
+    bary: torch.Tensor,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    *,
+    min_samples: int,
+    min_relative_gain: float,
+    max_keep: int,
+) -> tuple[list[int], dict[str, Any]]:
+    if sample_vertex_ids.numel() == 0 or samples.count == 0:
+        return [], {
+            "enabled": True,
+            "input_faces": 0,
+            "kept_faces": 0,
+            "rejected_faces": 0,
+            "min_samples": int(min_samples),
+            "min_relative_gain": float(min_relative_gain),
+            "max_keep": int(max_keep),
+            "face_preview": [],
+        }
+
+    face_ids = samples.face_ids.astype(np.int64)
+    unique_faces = np.unique(face_ids)
+    rows: list[dict[str, Any]] = []
+    with torch.no_grad():
+        for face_id in unique_faces:
+            idx_np = np.nonzero(face_ids == int(face_id))[0]
+            if idx_np.size <= 0:
+                continue
+            idx = torch.as_tensor(idx_np, dtype=torch.long, device=delta.device)
+            proxy = evaluate_proxy(
+                delta,
+                sample_vertex_ids.index_select(0, idx),
+                bary.index_select(0, idx),
+                target.index_select(0, idx),
+                weights.index_select(0, idx),
+            )
+            keep = (
+                int(proxy["samples"]) >= int(min_samples)
+                and float(proxy["relative_gain"]) >= float(min_relative_gain)
+            )
+            rows.append(
+                {
+                    "face_id": int(face_id),
+                    "samples": int(proxy["samples"]),
+                    "relative_gain": float(proxy["relative_gain"]),
+                    "mse_before": float(proxy["mse_before"]),
+                    "mse_after": float(proxy["mse_after"]),
+                    "keep": bool(keep),
+                }
+            )
+
+    rows.sort(key=lambda row: (bool(row["keep"]), float(row["relative_gain"]), int(row["samples"])), reverse=True)
+    kept = [int(row["face_id"]) for row in rows if bool(row["keep"])]
+    if int(max_keep) > 0:
+        kept = kept[: int(max_keep)]
+        kept_set = set(kept)
+        for row in rows:
+            row["keep"] = int(row["face_id"]) in kept_set
+    report = {
+        "enabled": True,
+        "input_faces": int(unique_faces.size),
+        "kept_faces": int(len(kept)),
+        "rejected_faces": int(unique_faces.size - len(kept)),
+        "min_samples": int(min_samples),
+        "min_relative_gain": float(min_relative_gain),
+        "max_keep": int(max_keep),
+        "face_preview": rows[:100],
+    }
+    return kept, report
 
 
 def solve_delta(
@@ -423,6 +636,10 @@ def write_audit(output_model: Path, audit: dict[str, Any]) -> None:
         f"- policy-val samples: `{audit['policy_val_proxy']['samples']}`",
         f"- policy-val unique faces: `{audit['policy_val_unique_faces']}`",
         f"- policy-val relative gain: `{audit['policy_val_proxy']['relative_gain']:.6f}`",
+        f"- policy-val face filter: `{audit['policy_val_face_filter']['enabled']}`",
+        f"- policy-val kept faces: `{audit['policy_val_face_filter']['kept_faces']}`",
+        f"- cluster policy: `{audit['cluster_policy']['enabled']}`",
+        f"- clusters used: `{audit['cluster_policy']['clusters_used']}`",
         f"- min policy-val samples: `{audit['min_policy_val_samples']}`",
         f"- min policy-val unique faces: `{audit['min_policy_val_unique_faces']}`",
         f"- accepted: `{audit['accepted']}`",
@@ -459,6 +676,31 @@ def main() -> int:
         min_consistency=float(args.min_consistency),
         min_pixel_count=float(args.min_pixel_count),
     )
+    top_residual_faces = list(selected_faces)
+    cluster_faces, cluster_records, cluster_source = read_candidate_cluster_faces(
+        json_path=args.candidate_cluster_json,
+        csv_path=args.candidate_cluster_csv,
+        operator_types=_parse_operator_types(args.cluster_operator_types),
+        max_clusters=int(args.max_clusters),
+        min_redundancy_score=float(args.cluster_min_redundancy_score),
+    )
+    if cluster_faces:
+        if bool(args.cluster_expand_with_top_residual_faces):
+            target_faces = int(args.cluster_expand_target_faces)
+            if target_faces <= 0:
+                target_faces = int(args.top_k)
+            expanded: list[int] = []
+            seen: set[int] = set()
+            for face_id in list(cluster_faces) + top_residual_faces:
+                if face_id in seen:
+                    continue
+                seen.add(face_id)
+                expanded.append(int(face_id))
+                if len(expanded) >= target_faces:
+                    break
+            selected_faces = expanded
+        else:
+            selected_faces = cluster_faces
     selected_faces = [fid for fid in selected_faces if 0 <= int(fid) < int(faces.shape[0])]
 
     view_paths = sorted((args.evidence_dir / "views").glob("*.npz"))
@@ -527,6 +769,106 @@ def main() -> int:
         lr=float(args.lr),
         device=device,
     )
+    face_filter_report: dict[str, Any] = {
+        "enabled": bool(args.policy_val_filter_faces),
+        "input_faces": int(len(selected_faces)),
+        "kept_faces": int(len(selected_faces)),
+        "rejected_faces": 0,
+        "min_samples": int(args.policy_val_face_min_samples),
+        "min_relative_gain": float(args.policy_val_face_min_relative_gain),
+        "max_keep": int(args.policy_val_face_max_keep),
+        "face_preview": [],
+    }
+    if bool(args.policy_val_filter_faces):
+        delta_device_initial = delta_rgb.to(device=device)
+        kept_faces, face_filter_report = face_gain_report(
+            delta_device_initial,
+            val_samples,
+            val_ids,
+            val_bary,
+            val_target,
+            val_weights,
+            min_samples=int(args.policy_val_face_min_samples),
+            min_relative_gain=float(args.policy_val_face_min_relative_gain),
+            max_keep=int(args.policy_val_face_max_keep),
+        )
+        kept = set(int(face_id) for face_id in kept_faces)
+        selected_faces = [fid for fid in selected_faces if int(fid) in kept]
+        if selected_faces:
+            fit_samples = collect_samples(
+                fit_paths,
+                selected_faces,
+                face_stats,
+                high_error_quantile=float(args.high_error_quantile),
+                min_alpha=float(args.min_alpha),
+                barycentric_tolerance=float(args.barycentric_tolerance),
+                max_samples_per_face_view=int(args.max_samples_per_face_view),
+                max_total_samples=int(args.max_total_samples),
+            )
+            val_samples = collect_samples(
+                val_paths,
+                selected_faces,
+                face_stats,
+                high_error_quantile=float(args.high_error_quantile),
+                min_alpha=float(args.min_alpha),
+                barycentric_tolerance=float(args.barycentric_tolerance),
+                max_samples_per_face_view=int(args.max_samples_per_face_view),
+                max_total_samples=max(int(args.max_total_samples // 2), 1),
+            )
+            if fit_samples.count:
+                unique_vertices, selected_faces_local, fit_sample_vertex_ids = localize_samples(
+                    faces,
+                    selected_faces,
+                    fit_samples,
+                )
+                _, _, val_sample_vertex_ids = (
+                    localize_samples(faces, selected_faces, val_samples)
+                    if val_samples.count
+                    else (
+                        unique_vertices,
+                        selected_faces_local,
+                        torch.empty((0, 3), dtype=torch.long),
+                    )
+                )
+            else:
+                selected_faces = []
+
+        if not selected_faces:
+            fit_samples = empty_pixel_samples()
+            val_samples = empty_pixel_samples()
+            unique_vertices = torch.empty((0,), dtype=torch.long)
+            selected_faces_local = torch.empty((0, 3), dtype=torch.long)
+            fit_sample_vertex_ids = torch.empty((0, 3), dtype=torch.long)
+            val_sample_vertex_ids = torch.empty((0, 3), dtype=torch.long)
+
+        fit_ids, fit_bary, fit_target, fit_weights = samples_to_tensors(
+            fit_samples,
+            fit_sample_vertex_ids,
+            strength=float(args.strength),
+            max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+            device=device,
+        )
+        val_ids, val_bary, val_target, val_weights = samples_to_tensors(
+            val_samples,
+            val_sample_vertex_ids,
+            strength=float(args.strength),
+            max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+            device=device,
+        )
+        delta_rgb, solver = solve_delta(
+            selected_faces_local,
+            fit_ids,
+            fit_bary,
+            fit_target,
+            fit_weights,
+            vertex_count=int(unique_vertices.shape[0]),
+            max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+            lambda_mag=float(args.lambda_mag),
+            lambda_smooth=float(args.lambda_smooth),
+            steps=int(args.steps),
+            lr=float(args.lr),
+            device=device,
+        )
     delta_device = delta_rgb.to(device=device)
     fit_proxy = evaluate_proxy(delta_device, fit_ids, fit_bary, fit_target, fit_weights)
     val_proxy = evaluate_proxy(delta_device, val_ids, val_bary, val_target, val_weights)
@@ -571,6 +913,7 @@ def main() -> int:
         "policy_val_proxy": val_proxy,
         "fit_unique_faces": int(fit_unique_faces),
         "policy_val_unique_faces": int(val_unique_faces),
+        "policy_val_face_filter": face_filter_report,
         "solver": solver,
         "filters": {
             "top_k": int(args.top_k),
@@ -580,6 +923,19 @@ def main() -> int:
             "high_error_quantile": float(args.high_error_quantile),
             "min_alpha": float(args.min_alpha),
             "barycentric_tolerance": float(args.barycentric_tolerance),
+        },
+        "cluster_policy": {
+            "enabled": bool(cluster_faces),
+            "source": cluster_source,
+            "operator_types": sorted(_parse_operator_types(args.cluster_operator_types)),
+            "max_clusters": int(args.max_clusters),
+            "cluster_min_redundancy_score": float(args.cluster_min_redundancy_score),
+            "expand_with_top_residual_faces": bool(args.cluster_expand_with_top_residual_faces),
+            "cluster_expand_target_faces": int(args.cluster_expand_target_faces),
+            "clusters_used": int(len(cluster_records)),
+            "faces_from_clusters": int(len(cluster_faces)),
+            "selected_faces_after_expansion": int(len(selected_faces)),
+            "cluster_preview": cluster_records[:20],
         },
         "strength": float(args.strength),
         "max_abs_delta_rgb": float(args.max_abs_delta_rgb),

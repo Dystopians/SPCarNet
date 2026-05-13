@@ -30,6 +30,8 @@ from utils.sh_utils import C0, C1
 
 
 FACE_KEYS = ("importance_score", "image_size", "pixel_count")
+TOPOLOGY_TENSOR_KEYS = ("triangles_points", "_triangle_indices")
+ATTRIBUTE_TENSOR_KEYS = ("features_dc", "features_rest")
 LUMA_WEIGHTS = np.asarray([0.2126, 0.7152, 0.0722], dtype=np.float32)
 
 
@@ -111,6 +113,62 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_faces_to_apply", type=int, default=512)
     parser.add_argument("--force_apply", action="store_true")
     parser.add_argument("--no_op_on_fail", action="store_true", default=True)
+    parser.add_argument(
+        "--min_effective_mean_relative_gain",
+        type=float,
+        default=-1.0e30,
+        help=(
+            "Reject candidates whose final train-only proxy mean relative gain across "
+            "policy offsets is below this value. The default disables the gate."
+        ),
+    )
+    parser.add_argument(
+        "--min_effective_min_relative_gain",
+        type=float,
+        default=-1.0e30,
+        help=(
+            "Reject candidates whose worst final train-only proxy relative gain across "
+            "policy offsets is below this value. The default disables the gate."
+        ),
+    )
+    parser.add_argument(
+        "--min_effective_delta_abs_mean",
+        type=float,
+        default=0.0,
+        help=(
+            "Reject candidates whose mean absolute attribute delta is below this value. "
+            "Use this with render gates to avoid accepting near no-op edits."
+        ),
+    )
+    parser.add_argument(
+        "--allow_no_effect_accept",
+        action="store_true",
+        help="Allow an audit to remain accepted even when materialization changes no tracked checkpoint tensors.",
+    )
+    parser.add_argument(
+        "--min_materialized_attribute_delta",
+        type=float,
+        default=1e-9,
+        help="Minimum max absolute feature change counted as a real vertex_delta materialization effect.",
+    )
+    parser.add_argument(
+        "--vertex_delta_min_incident_support_fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "For materialize_mode=vertex_delta, require this fraction of faces incident "
+            "to the edited vertices to be in the train-evidence support set. 0 disables."
+        ),
+    )
+    parser.add_argument(
+        "--vertex_delta_max_incident_faces",
+        type=int,
+        default=0,
+        help=(
+            "For materialize_mode=vertex_delta, reject candidate faces touching a vertex "
+            "with more than this many incident faces. 0 disables."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -843,6 +901,167 @@ def clone_state(state: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _tensor_change_summary(
+    before: torch.Tensor,
+    after: torch.Tensor,
+    *,
+    min_abs_delta: float,
+) -> dict[str, Any]:
+    before_cpu = before.detach().cpu()
+    after_cpu = after.detach().cpu()
+    row: dict[str, Any] = {
+        "before_shape": [int(x) for x in before_cpu.shape],
+        "after_shape": [int(x) for x in after_cpu.shape],
+        "shape_changed": tuple(before_cpu.shape) != tuple(after_cpu.shape),
+        "num_changed": 0,
+        "max_abs_delta": 0.0,
+        "changed": False,
+    }
+    if bool(row["shape_changed"]):
+        row["changed"] = True
+        row["num_changed"] = None
+        row["max_abs_delta"] = None
+        return row
+    if before_cpu.numel() == 0:
+        return row
+    if torch.is_floating_point(before_cpu) or torch.is_floating_point(after_cpu):
+        delta = (after_cpu.float() - before_cpu.float()).abs()
+        max_abs = float(delta.max().item()) if delta.numel() else 0.0
+        row["max_abs_delta"] = max_abs
+        row["num_changed"] = int((delta > float(min_abs_delta)).sum().item())
+        row["changed"] = bool(max_abs > float(min_abs_delta))
+    else:
+        changed = after_cpu != before_cpu
+        row["num_changed"] = int(changed.sum().item())
+        row["max_abs_delta"] = float((after_cpu.long() - before_cpu.long()).abs().max().item()) if changed.any() else 0.0
+        row["changed"] = bool(row["num_changed"])
+    return row
+
+
+def materialization_effect_summary(
+    before: dict[str, Any],
+    after: dict[str, Any],
+    *,
+    min_abs_attribute_delta: float,
+) -> dict[str, Any]:
+    topology: dict[str, Any] = {}
+    attributes: dict[str, Any] = {}
+    for key in TOPOLOGY_TENSOR_KEYS:
+        if torch.is_tensor(before.get(key)) and torch.is_tensor(after.get(key)):
+            topology[key] = _tensor_change_summary(before[key], after[key], min_abs_delta=0.0)
+    for key in ATTRIBUTE_TENSOR_KEYS:
+        if torch.is_tensor(before.get(key)) and torch.is_tensor(after.get(key)):
+            attributes[key] = _tensor_change_summary(
+                before[key],
+                after[key],
+                min_abs_delta=float(min_abs_attribute_delta),
+            )
+    topology_changed = any(bool(row.get("changed", False)) for row in topology.values())
+    attribute_changed = any(bool(row.get("changed", False)) for row in attributes.values())
+    max_attribute_delta = 0.0
+    for row in attributes.values():
+        value = row.get("max_abs_delta")
+        if value is not None:
+            max_attribute_delta = max(max_attribute_delta, float(value))
+    return {
+        "has_effect": bool(topology_changed or attribute_changed),
+        "topology_changed": bool(topology_changed),
+        "attribute_changed": bool(attribute_changed),
+        "max_attribute_delta": float(max_attribute_delta),
+        "min_abs_attribute_delta": float(min_abs_attribute_delta),
+        "topology": topology,
+        "attributes": attributes,
+    }
+
+
+def build_vertex_face_adjacency(faces: np.ndarray) -> list[set[int]]:
+    if faces.size == 0:
+        return []
+    vertex_count = int(np.max(faces)) + 1
+    vertex_faces: list[set[int]] = [set() for _ in range(max(vertex_count, 0))]
+    for face_id, ids in enumerate(faces.astype(np.int64)):
+        for vertex_id in ids.tolist():
+            if vertex_id < 0:
+                continue
+            if vertex_id >= len(vertex_faces):
+                vertex_faces.extend(set() for _ in range(vertex_id + 1 - len(vertex_faces)))
+            vertex_faces[int(vertex_id)].add(int(face_id))
+    return vertex_faces
+
+
+def vertex_delta_spillover_certificate(
+    *,
+    face_id: int,
+    faces: np.ndarray,
+    vertex_faces: list[set[int]],
+    support_faces: set[int],
+    min_support_fraction: float,
+    max_incident_faces: int,
+) -> dict[str, Any]:
+    enabled = float(min_support_fraction) > 0.0 or int(max_incident_faces) > 0
+    if face_id < 0 or face_id >= int(faces.shape[0]):
+        return {
+            "enabled": bool(enabled),
+            "passed": False,
+            "decision_reasons": ["face_id_out_of_range"],
+        }
+    incident: set[int] = set()
+    max_vertex_incident = 0
+    for vertex_id in faces[int(face_id)].astype(np.int64).tolist():
+        local = vertex_faces[int(vertex_id)] if 0 <= int(vertex_id) < len(vertex_faces) else set()
+        max_vertex_incident = max(max_vertex_incident, len(local))
+        incident.update(local)
+    supported = incident & support_faces
+    incident_count = int(len(incident))
+    support_fraction = float(len(supported) / max(incident_count, 1))
+    reasons: list[str] = []
+    if float(min_support_fraction) > 0.0 and support_fraction < float(min_support_fraction):
+        reasons.append("incident_support_fraction_below_threshold")
+    if int(max_incident_faces) > 0 and max_vertex_incident > int(max_incident_faces):
+        reasons.append("vertex_incident_faces_exceeds_threshold")
+    return {
+        "enabled": bool(enabled),
+        "passed": not reasons,
+        "decision_reasons": reasons,
+        "incident_face_count": incident_count,
+        "supported_incident_face_count": int(len(supported)),
+        "support_fraction": support_fraction,
+        "max_vertex_incident_faces": int(max_vertex_incident),
+        "min_support_fraction": float(min_support_fraction),
+        "max_incident_faces": int(max_incident_faces),
+    }
+
+
+def effective_proxy_certificate(proxy: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    min_mean = float(args.min_effective_mean_relative_gain)
+    min_min = float(args.min_effective_min_relative_gain)
+    min_delta = float(args.min_effective_delta_abs_mean)
+    enabled = bool(min_mean > -1.0e29 or min_min > -1.0e29 or min_delta > 0.0)
+    reasons: list[str] = []
+    mean_gain = float(proxy.get("mean_relative_gain", 0.0))
+    min_gain = float(proxy.get("relative_gain", 0.0))
+    delta_abs_mean = float(proxy.get("delta_abs_mean", 0.0))
+    if min_mean > -1.0e29 and mean_gain < min_mean:
+        reasons.append("effective_mean_relative_gain_below_threshold")
+    if min_min > -1.0e29 and min_gain < min_min:
+        reasons.append("effective_min_relative_gain_below_threshold")
+    if min_delta > 0.0 and delta_abs_mean < min_delta:
+        reasons.append("effective_delta_abs_mean_below_threshold")
+    return {
+        "enabled": enabled,
+        "passed": not reasons,
+        "decision_reasons": reasons,
+        "mean_relative_gain": mean_gain,
+        "min_relative_gain": min_gain,
+        "delta_abs_mean": delta_abs_mean,
+        "thresholds": {
+            "min_effective_mean_relative_gain": min_mean,
+            "min_effective_min_relative_gain": min_min,
+            "min_effective_delta_abs_mean": min_delta,
+        },
+    }
+
+
 def read_candidate_plan(path: Path, *, limit: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     plan = json.loads(path.read_text(encoding="utf-8"))
     meta: dict[str, Any] = {}
@@ -1021,6 +1240,79 @@ def materialize(
     return materialize_subdivision(state, accepted, feature_mode=str(feature_mode))
 
 
+def filter_plan_candidates(
+    rows: list[dict[str, Any]],
+    args: argparse.Namespace,
+    *,
+    materialize_mode: str | None = None,
+    faces_np: np.ndarray | None = None,
+    support_face_ids: set[int] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    kept: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
+    vertex_faces: list[set[int]] = []
+    mode = str(materialize_mode if materialize_mode is not None else getattr(args, "materialize_mode", ""))
+    spillover_enabled = bool(
+        mode == "vertex_delta"
+        and faces_np is not None
+        and (
+            float(args.vertex_delta_min_incident_support_fraction) > 0.0
+            or int(args.vertex_delta_max_incident_faces) > 0
+        )
+    )
+    if spillover_enabled:
+        vertex_faces = build_vertex_face_adjacency(faces_np)
+    support = support_face_ids or set()
+    for row in rows:
+        candidate = dict(row)
+        effective = effective_proxy_certificate(candidate.get("proxy", {}), args)
+        candidate["effective_proxy"] = effective
+        spillover = candidate.get("vertex_delta_spillover")
+        if spillover_enabled:
+            spillover = vertex_delta_spillover_certificate(
+                face_id=int(candidate.get("face_id", -1)),
+                faces=faces_np,
+                vertex_faces=vertex_faces,
+                support_faces=support,
+                min_support_fraction=float(args.vertex_delta_min_incident_support_fraction),
+                max_incident_faces=int(args.vertex_delta_max_incident_faces),
+            )
+            candidate["vertex_delta_spillover"] = spillover
+        reasons: list[str] = []
+        if not bool(candidate.get("policy_pass", True)) and not bool(args.force_apply):
+            reasons.append("policy_pass_false")
+        reasons.extend(str(item) for item in effective.get("decision_reasons", []))
+        if isinstance(spillover, dict) and not bool(spillover.get("passed", True)):
+            reasons.extend(str(item) for item in spillover.get("decision_reasons", []))
+        if reasons:
+            candidate["plan_filter_decision_reasons"] = reasons
+            rejected.append(candidate)
+        else:
+            kept.append(candidate)
+    return kept, {
+        "requested_faces": int(len(rows)),
+        "kept_faces": int(len(kept)),
+        "rejected_faces": int(len(rejected)),
+        "effective_proxy_gate": {
+            "enabled": bool(
+                float(args.min_effective_mean_relative_gain) > -1.0e29
+                or float(args.min_effective_min_relative_gain) > -1.0e29
+                or float(args.min_effective_delta_abs_mean) > 0.0
+            ),
+            "min_effective_mean_relative_gain": float(args.min_effective_mean_relative_gain),
+            "min_effective_min_relative_gain": float(args.min_effective_min_relative_gain),
+            "min_effective_delta_abs_mean": float(args.min_effective_delta_abs_mean),
+        },
+        "vertex_delta_generalization": {
+            "enabled": bool(spillover_enabled),
+            "min_incident_support_fraction": float(args.vertex_delta_min_incident_support_fraction),
+            "max_incident_faces": int(args.vertex_delta_max_incident_faces),
+            "support_source": "plan_rows_or_train_evidence_selected_faces",
+        },
+        "rejected_preview": rejected[:20],
+    }
+
+
 def main() -> int:
     args = parse_args()
     source_checkpoint = checkpoint_path(args.source_model, args.iteration)
@@ -1032,18 +1324,54 @@ def main() -> int:
     if args.materialize_plan_in is not None:
         accepted, plan_meta = read_candidate_plan(args.materialize_plan_in, limit=int(args.materialize_plan_limit))
         materialize_mode = str(plan_meta.get("materialize_mode", args.materialize_mode)) if isinstance(plan_meta, dict) else str(args.materialize_mode)
+        plan_support: set[int] = set()
+        for row in accepted:
+            if not isinstance(row, dict):
+                continue
+            try:
+                face_id = int(row.get("face_id", -1))
+            except Exception:
+                continue
+            if face_id >= 0:
+                plan_support.add(face_id)
+        faces_np = state["_triangle_indices"].detach().cpu().long().numpy()
+        accepted, plan_filter = filter_plan_candidates(
+            accepted,
+            args,
+            materialize_mode=materialize_mode,
+            faces_np=faces_np if str(materialize_mode) == "vertex_delta" else None,
+            support_face_ids=plan_support,
+        )
         out = materialize(
             state,
             accepted,
             feature_mode=str(args.feature_mode),
             materialize_mode=str(materialize_mode),
         )
+        materialization_effect = materialization_effect_summary(
+            state,
+            out,
+            min_abs_attribute_delta=float(args.min_materialized_attribute_delta),
+        )
+        requested_accepted_faces = int(len(accepted))
+        materialization_reasons: list[str] = []
+        if accepted and not bool(materialization_effect["has_effect"]) and not bool(args.allow_no_effect_accept):
+            materialization_reasons.append("materialization_has_no_effect")
+            out = clone_state(state)
+            accepted = []
+            materialization_effect = materialization_effect_summary(
+                state,
+                out,
+                min_abs_attribute_delta=float(args.min_materialized_attribute_delta),
+            )
         torch.save(out, output_checkpoint)
         degenerate, invalid = validate_faces(out["triangles_points"], out["_triangle_indices"])
         before_faces = int(state["_triangle_indices"].shape[0])
         before_vertices = int(state["triangles_points"].shape[0])
         after_faces = int(out["_triangle_indices"].shape[0])
         after_vertices = int(out["triangles_points"].shape[0])
+        no_op_copy = bool(not accepted)
+        policy_pass = bool(accepted) and all(bool(row.get("policy_pass", True)) for row in accepted)
         audit = {
             "operator": "surface_residual_subdivision_delta_plan_materialize",
             "test_usage": "none",
@@ -1054,9 +1382,15 @@ def main() -> int:
             "iteration": int(args.iteration),
             "materialize_plan_in": str(args.materialize_plan_in),
             "materialize_plan_limit": int(args.materialize_plan_limit),
+            "plan_filter": plan_filter,
+            "requested_accepted_faces": int(requested_accepted_faces),
             "accepted_faces": int(len(accepted)),
             "accepted": bool(accepted),
-            "policy_pass": bool(accepted) and all(bool(row.get("policy_pass", True)) for row in accepted),
+            "policy_pass": bool(policy_pass),
+            "materialized": bool(accepted),
+            "no_op_copy": bool(no_op_copy),
+            "materialization_decision_reasons": materialization_reasons,
+            "materialization_effect": materialization_effect,
             "feature_mode": str(args.feature_mode),
             "materialize_mode": str(materialize_mode),
             "basis_dim": int(12 if str(args.feature_mode) == "sh1" else 3),
@@ -1081,8 +1415,11 @@ def main() -> int:
             "",
             f"- operator: `{audit['operator']}`",
             f"- plan: `{audit['materialize_plan_in']}`",
+            f"- plan filter kept faces: `{audit['plan_filter']['kept_faces']}` / `{audit['plan_filter']['requested_faces']}`",
+            f"- requested accepted faces: `{audit['requested_accepted_faces']}`",
             f"- accepted faces: `{audit['accepted_faces']}`",
             f"- feature mode: `{audit['feature_mode']}`",
+            f"- no-op copy: `{str(audit['no_op_copy']).lower()}`",
             f"- triangles: `{before_faces}` -> `{after_faces}`",
             f"- vertices: `{before_vertices}` -> `{after_vertices}`",
             f"- degenerate faces: `{degenerate}`",
@@ -1111,6 +1448,8 @@ def main() -> int:
         min_consistency=float(args.min_consistency),
         min_pixel_count=float(args.min_pixel_count),
     )
+    vertex_faces = build_vertex_face_adjacency(faces_np)
+    support_face_ids = set(int(face_id) for face_id in selected_faces)
     offsets = parse_policy_offsets(args.policy_val_offsets, stride=int(args.policy_val_stride))
     offset_sets: list[dict[str, Any]] = []
     for offset in offsets:
@@ -1364,6 +1703,18 @@ def main() -> int:
         passing_count = sum(1 for row in final_fold_rows if bool(row.get("accepted", False)))
         passing_fraction = float(passing_count / max(len(offset_sets), 1))
         policy_pass = passing_count >= required_offsets and passing_fraction >= required_fraction
+        vertex_delta_spillover: dict[str, Any] = {"enabled": False, "passed": True, "decision_reasons": []}
+        if str(args.materialize_mode) == "vertex_delta":
+            vertex_delta_spillover = vertex_delta_spillover_certificate(
+                face_id=int(fid),
+                faces=faces_np,
+                vertex_faces=vertex_faces,
+                support_faces=support_face_ids,
+                min_support_fraction=float(args.vertex_delta_min_incident_support_fraction),
+                max_incident_faces=int(args.vertex_delta_max_incident_faces),
+            )
+            if not bool(vertex_delta_spillover.get("passed", True)):
+                policy_pass = False
         finite_stats = [row["final_proxy"] for row in final_fold_rows if isinstance(row.get("final_proxy"), dict)]
         relative_gains = [float(row["relative_gain"]) for row in finite_stats]
         proxy = {
@@ -1377,6 +1728,9 @@ def main() -> int:
             "delta_abs_mean": float(np.abs(delta).mean()) if delta.size else 0.0,
             "delta_abs_max": float(np.abs(delta).max()) if delta.size else 0.0,
         }
+        effective_proxy = effective_proxy_certificate(proxy, args)
+        if not bool(effective_proxy.get("passed", True)):
+            policy_pass = False
         certificate = {
             "passed": bool(policy_pass),
             "required_offsets": int(required_offsets),
@@ -1388,6 +1742,8 @@ def main() -> int:
             "final_folds": final_fold_rows,
             "luma_preservation": luma_projection,
             "structure_preservation": structure_projection,
+            "vertex_delta_spillover": vertex_delta_spillover,
+            "effective_proxy": effective_proxy,
         }
         if bool(args.force_apply) or policy_pass:
             candidates.append(
@@ -1400,6 +1756,8 @@ def main() -> int:
                     "view_gain_certificate": certificate,
                     "luma_preservation": luma_projection,
                     "structure_preservation": structure_projection,
+                    "vertex_delta_spillover": vertex_delta_spillover,
+                    "effective_proxy": effective_proxy,
                     "policy_pass": bool(policy_pass),
                 }
             )
@@ -1437,6 +1795,28 @@ def main() -> int:
                         "shrink_grid": [float(x) for x in parse_float_grid(args.structure_shrink_grid)],
                         "shrink_selection": str(args.structure_shrink_selection),
                     },
+                    "vertex_delta_generalization": {
+                        "enabled": bool(
+                            str(args.materialize_mode) == "vertex_delta"
+                            and (
+                                float(args.vertex_delta_min_incident_support_fraction) > 0.0
+                                or int(args.vertex_delta_max_incident_faces) > 0
+                            )
+                        ),
+                        "min_incident_support_fraction": float(args.vertex_delta_min_incident_support_fraction),
+                        "max_incident_faces": int(args.vertex_delta_max_incident_faces),
+                        "support_source": "train_evidence_selected_faces",
+                    },
+                    "effective_proxy_gate": {
+                        "enabled": bool(
+                            float(args.min_effective_mean_relative_gain) > -1.0e29
+                            or float(args.min_effective_min_relative_gain) > -1.0e29
+                            or float(args.min_effective_delta_abs_mean) > 0.0
+                        ),
+                        "min_effective_mean_relative_gain": float(args.min_effective_mean_relative_gain),
+                        "min_effective_min_relative_gain": float(args.min_effective_min_relative_gain),
+                        "min_effective_delta_abs_mean": float(args.min_effective_delta_abs_mean),
+                    },
                     "candidate_count": int(len(candidates)),
                     "candidates": candidates,
                 },
@@ -1447,11 +1827,19 @@ def main() -> int:
         )
     accepted = candidates[: int(args.max_faces_to_apply)]
 
+    requested_accepted_faces = int(len(accepted))
+    materialization_reasons: list[str] = []
+    materialization_effect: dict[str, Any]
     accepted_policy_pass = bool(accepted) and all(bool(row.get("policy_pass", False)) for row in accepted)
     if not accepted and bool(args.no_op_on_fail):
         out = clone_state(state)
         accepted_flag = False
         no_op_copy = True
+        materialization_effect = materialization_effect_summary(
+            state,
+            out,
+            min_abs_attribute_delta=float(args.min_materialized_attribute_delta),
+        )
     else:
         out = materialize(
             state,
@@ -1459,8 +1847,26 @@ def main() -> int:
             feature_mode=str(args.feature_mode),
             materialize_mode=str(args.materialize_mode),
         )
-        accepted_flag = bool(accepted)
-        no_op_copy = False
+        materialization_effect = materialization_effect_summary(
+            state,
+            out,
+            min_abs_attribute_delta=float(args.min_materialized_attribute_delta),
+        )
+        if accepted and not bool(materialization_effect["has_effect"]) and not bool(args.allow_no_effect_accept):
+            materialization_reasons.append("materialization_has_no_effect")
+            out = clone_state(state)
+            accepted = []
+            accepted_policy_pass = False
+            accepted_flag = False
+            no_op_copy = True
+            materialization_effect = materialization_effect_summary(
+                state,
+                out,
+                min_abs_attribute_delta=float(args.min_materialized_attribute_delta),
+            )
+        else:
+            accepted_flag = bool(accepted)
+            no_op_copy = False
     torch.save(out, output_checkpoint)
     degenerate, invalid = validate_faces(out["triangles_points"], out["_triangle_indices"])
 
@@ -1499,11 +1905,14 @@ def main() -> int:
         },
         "selected_faces": int(len(selected_faces)),
         "candidate_faces": int(len(candidates)),
+        "requested_accepted_faces": int(requested_accepted_faces),
         "accepted_faces": int(len(accepted)),
         "accepted": accepted_flag,
         "policy_pass": bool(accepted_policy_pass),
         "materialized": accepted_flag,
         "no_op_copy": no_op_copy,
+        "materialization_decision_reasons": materialization_reasons,
+        "materialization_effect": materialization_effect,
         "force_apply": bool(args.force_apply),
         "filters": {
             "top_k": int(args.top_k),
@@ -1544,6 +1953,28 @@ def main() -> int:
             "accepted_beta_mean": float(np.mean(accepted_structure_betas)) if accepted_structure_betas else 0.0,
             "accepted_beta_max": float(np.max(accepted_structure_betas)) if accepted_structure_betas else 0.0,
             "fields_used": ["texture", "depth", "normal"],
+        },
+        "vertex_delta_generalization": {
+            "enabled": bool(
+                str(args.materialize_mode) == "vertex_delta"
+                and (
+                    float(args.vertex_delta_min_incident_support_fraction) > 0.0
+                    or int(args.vertex_delta_max_incident_faces) > 0
+                )
+            ),
+            "min_incident_support_fraction": float(args.vertex_delta_min_incident_support_fraction),
+            "max_incident_faces": int(args.vertex_delta_max_incident_faces),
+            "support_source": "train_evidence_selected_faces",
+        },
+        "effective_proxy_gate": {
+            "enabled": bool(
+                float(args.min_effective_mean_relative_gain) > -1.0e29
+                or float(args.min_effective_min_relative_gain) > -1.0e29
+                or float(args.min_effective_delta_abs_mean) > 0.0
+            ),
+            "min_effective_mean_relative_gain": float(args.min_effective_mean_relative_gain),
+            "min_effective_min_relative_gain": float(args.min_effective_min_relative_gain),
+            "min_effective_delta_abs_mean": float(args.min_effective_delta_abs_mean),
         },
         "anchor_support": {
             "enabled": bool(args.anchor_support),
@@ -1586,6 +2017,7 @@ def main() -> int:
         f"- operator: `{audit['operator']}`",
         f"- selected faces: `{audit['selected_faces']}`",
         f"- candidate faces: `{audit['candidate_faces']}`",
+        f"- requested accepted faces: `{audit['requested_accepted_faces']}`",
         f"- accepted faces: `{audit['accepted_faces']}`",
         f"- policy offsets: `{','.join(str(x) for x in audit['policy_val_offsets'])}`",
         f"- min passing offsets: `{audit['min_policy_val_offsets']}`",
@@ -1593,6 +2025,8 @@ def main() -> int:
         f"- basis dim: `{audit['basis_dim']}`",
         f"- luma preservation: `{str(audit['luma_preservation']['active']).lower()}`",
         f"- structure preservation: `{str(audit['structure_preservation']['active']).lower()}`",
+        f"- vertex-delta generalization: `{str(audit['vertex_delta_generalization']['enabled']).lower()}`",
+        f"- effective proxy gate: `{str(audit['effective_proxy_gate']['enabled']).lower()}`",
         f"- anchor support: `{str(audit['anchor_support']['enabled']).lower()}`",
         f"- no-op copy: `{str(audit['no_op_copy']).lower()}`",
         f"- mean proxy relative gain: `{audit['mean_proxy_relative_gain']:.6f}`",

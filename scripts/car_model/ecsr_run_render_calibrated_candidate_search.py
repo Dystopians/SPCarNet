@@ -95,6 +95,7 @@ def _write_subset_plan(
     plan: dict[str, Any],
     rows: list[dict[str, Any]],
     indices: list[int],
+    materialize_mode: str,
     output: Path,
 ) -> None:
     selected = [rows[index] for index in indices]
@@ -105,6 +106,7 @@ def _write_subset_plan(
         "source_model": plan.get("source_model"),
         "iteration": plan.get("iteration"),
         "feature_mode": plan.get("feature_mode", "dc"),
+        "materialize_mode": materialize_mode,
         "selected_indices": [int(index) for index in indices],
         "selected_face_ids": [int(row.get("face_id", -1)) for row in selected],
         "candidate_count": int(len(selected)),
@@ -165,6 +167,7 @@ def _materialize_trial(
     subset_plan: Path,
     trial_model: Path,
     feature_mode: str,
+    materialize_mode: str,
     log_path: Path,
 ) -> Path:
     audit = trial_model / "surface_residual_subdivision_delta_audit.json"
@@ -186,9 +189,30 @@ def _materialize_trial(
         str(args.iteration),
         "--feature_mode",
         feature_mode,
+        "--materialize_mode",
+        materialize_mode,
         "--materialize_plan_in",
         str(subset_plan),
+        "--min_effective_mean_relative_gain",
+        str(args.min_effective_mean_relative_gain),
+        "--min_effective_min_relative_gain",
+        str(args.min_effective_min_relative_gain),
+        "--min_effective_delta_abs_mean",
+        str(args.min_effective_delta_abs_mean),
+        "--min_materialized_attribute_delta",
+        str(args.min_materialized_attribute_delta),
     ]
+    if str(materialize_mode) == "vertex_delta":
+        cmd.extend(
+            [
+                "--vertex_delta_min_incident_support_fraction",
+                str(args.vertex_delta_min_incident_support_fraction),
+                "--vertex_delta_max_incident_faces",
+                str(args.vertex_delta_max_incident_faces),
+            ]
+        )
+    if bool(args.allow_no_effect_accept):
+        cmd.append("--allow_no_effect_accept")
     _run(cmd, gpu=-1, log_path=log_path)
     return audit
 
@@ -335,16 +359,25 @@ def _trial(
 ) -> dict[str, Any]:
     scene = str(args.scene)
     feature_mode = str(plan.get("feature_mode", args.feature_mode))
+    materialize_mode = str(plan.get("materialize_mode", args.materialize_mode))
     trial_root = _as_path(args.output_root) / scene / "trials" / trial_id
     trial_model = trial_root / "model"
     subset_plan = trial_root / "candidate_subset_plan.json"
     candidate_base_method = f"{args.candidate_base_method_prefix}_{trial_id}_base"
-    _write_subset_plan(source_plan=plan_path, plan=plan, rows=rows, indices=indices, output=subset_plan)
+    _write_subset_plan(
+        source_plan=plan_path,
+        plan=plan,
+        rows=rows,
+        indices=indices,
+        materialize_mode=materialize_mode,
+        output=subset_plan,
+    )
     audit = _materialize_trial(
         args,
         subset_plan=subset_plan,
         trial_model=trial_model,
         feature_mode=feature_mode,
+        materialize_mode=materialize_mode,
         log_path=log_path,
     )
     _render_maps(args, scene=scene, model=trial_model, method_name=candidate_base_method, log_path=log_path)
@@ -366,6 +399,7 @@ def _trial(
         "subset_plan": _rel(subset_plan),
         "audit_json": _rel(audit),
         "gate_json": _rel(_as_path(args.output_root) / scene / "gates" / trial_id / scene / "multifold_trainval_gate.json"),
+        "materialize_mode": materialize_mode,
         "accepted_by_strict_gate": bool(gate.get("accepted", False)),
         "decision_reasons": gate.get("decision_reasons", []),
         "objective": float(_objective(gate, args)),
@@ -415,14 +449,15 @@ def _write_report(args: argparse.Namespace, payload: dict[str, Any]) -> None:
         "",
         f"- scene: `{payload['scene']}`",
         f"- candidate label: `{payload['candidate_label']}`",
+        f"- materialize mode: `{payload.get('materialize_mode', 'subdivision')}`",
         f"- strict accepted final subset: `{payload['accepted']}`",
         f"- selected faces: `{len(payload['accepted_indices'])}`",
         f"- best objective: `{payload['best_objective']:.9f}`",
         f"- candidate plan: `{payload['candidate_plan']}`",
         f"- selection uses test: `false`",
         "",
-        "| step | trial | action | strict pass | objective | dPSNR | dSSIM | dLPIPS | faces | reasons |",
-        "|---:|---|---|---:|---:|---:|---:|---:|---:|---|",
+        "| step | trial | action | strict pass | objective | dPSNR | dSSIM | dLPIPS | faces | gate reasons | action reasons |",
+        "|---:|---|---|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in payload["events"]:
         delta = row.get("trainval_delta_mean", {})
@@ -431,7 +466,8 @@ def _write_report(args: argparse.Namespace, payload: dict[str, Any]) -> None:
             f"{str(row['accepted_by_strict_gate']).lower()} | {float(row['objective']):+.9f} | "
             f"{float(delta.get('PSNR', math.nan)):+.9f} | {float(delta.get('SSIM', math.nan)):+.9f} | "
             f"{float(delta.get('LPIPS', math.nan)):+.9f} | {len(row.get('indices', []))} | "
-            f"{', '.join(str(x) for x in row.get('decision_reasons', [])) or 'pass'} |"
+            f"{', '.join(str(x) for x in row.get('decision_reasons', [])) or 'pass'} | "
+            f"{', '.join(str(x) for x in row.get('action_reasons', [])) or 'n/a'} |"
         )
     (out_root / "render_calibrated_search.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -456,6 +492,14 @@ def main() -> int:
         help="Reuse copied per-trial gate JSON if it already exists. Defaults off to avoid stale threshold/offset caches.",
     )
     parser.add_argument("--feature_mode", choices=("dc", "sh1"), default="sh1")
+    parser.add_argument("--materialize_mode", choices=("subdivision", "vertex_delta"), default="subdivision")
+    parser.add_argument("--min_effective_mean_relative_gain", type=float, default=-1.0e30)
+    parser.add_argument("--min_effective_min_relative_gain", type=float, default=-1.0e30)
+    parser.add_argument("--min_effective_delta_abs_mean", type=float, default=0.0)
+    parser.add_argument("--min_materialized_attribute_delta", type=float, default=1.0e-9)
+    parser.add_argument("--vertex_delta_min_incident_support_fraction", type=float, default=0.0)
+    parser.add_argument("--vertex_delta_max_incident_faces", type=int, default=0)
+    parser.add_argument("--allow_no_effect_accept", action="store_true")
     parser.add_argument("--candidate_label", default="rendercalib_greedy")
     parser.add_argument("--max_candidates", type=int, default=16)
     parser.add_argument("--batch_size", type=int, default=1)
@@ -536,8 +580,17 @@ def main() -> int:
             accepted_indices = trial_indices
             best_objective = float(row["objective"])
             row["action"] = "accept"
+            row["action_reasons"] = ["strict_gate_passed", "objective_improved"]
         else:
             row["action"] = "reject"
+            action_reasons: list[str] = []
+            if not bool(row["accepted_by_strict_gate"]):
+                action_reasons.append("strict_gate_rejected")
+            if bool(row["accepted_by_strict_gate"]) and not improves:
+                action_reasons.append(
+                    f"objective_gain_below_{float(args.min_objective_gain):g}"
+                )
+            row["action_reasons"] = action_reasons
         row["accepted_indices_after"] = [int(index) for index in accepted_indices]
         events.append(row)
         _write_report(
@@ -546,6 +599,7 @@ def main() -> int:
                 "scene": str(args.scene),
                 "candidate_label": str(args.candidate_label),
                 "candidate_plan": _rel(plan_path),
+                "materialize_mode": str(plan.get("materialize_mode", args.materialize_mode)),
                 "accepted": bool(accepted_indices),
                 "accepted_indices": [int(index) for index in accepted_indices],
                 "accepted_face_ids": [int(rows[index].get("face_id", -1)) for index in accepted_indices],
@@ -558,12 +612,20 @@ def main() -> int:
 
     final_plan = _as_path(args.output_root) / str(args.scene) / "accepted_candidate_plan.json"
     if accepted_indices:
-        _write_subset_plan(source_plan=plan_path, plan=plan, rows=rows, indices=accepted_indices, output=final_plan)
+        _write_subset_plan(
+            source_plan=plan_path,
+            plan=plan,
+            rows=rows,
+            indices=accepted_indices,
+            materialize_mode=str(plan.get("materialize_mode", args.materialize_mode)),
+            output=final_plan,
+        )
 
     payload = {
         "scene": str(args.scene),
         "candidate_label": str(args.candidate_label),
         "candidate_plan": _rel(plan_path),
+        "materialize_mode": str(plan.get("materialize_mode", args.materialize_mode)),
         "accepted": bool(accepted_indices),
         "accepted_indices": [int(index) for index in accepted_indices],
         "accepted_face_ids": [int(rows[index].get("face_id", -1)) for index in accepted_indices],

@@ -67,6 +67,7 @@ def _write_md(path: Path, audit: dict[str, Any]) -> None:
         f"- min PSNR gain: `{audit['thresholds']['min_psnr_gain']}`",
         f"- max SSIM regression: `{audit['thresholds']['max_ssim_regression']}`",
         f"- max LPIPS regression: `{audit['thresholds']['max_lpips_regression']}`",
+        f"- min balanced delta: `{audit['thresholds']['min_balanced_delta']}`",
         f"- decision reasons: `{', '.join(audit['decision_reasons']) or 'pass'}`",
     ]
     if test is not None:
@@ -98,7 +99,7 @@ def main() -> int:
     parser.add_argument("--min_psnr_gain", type=float, default=0.0)
     parser.add_argument("--max_ssim_regression", type=float, default=5e-5)
     parser.add_argument("--max_lpips_regression", type=float, default=1.5e-4)
-    parser.add_argument("--min_balanced_delta", type=float, default=-1.0e9)
+    parser.add_argument("--min_balanced_delta", type=float, default=0.0)
     parser.add_argument("--ssim_weight", type=float, default=20.0)
     parser.add_argument("--lpips_weight", type=float, default=20.0)
     parser.add_argument("--output_json", type=Path, required=True)
