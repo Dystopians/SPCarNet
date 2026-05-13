@@ -118,3 +118,25 @@ parameter sweep:
 ```
 
 The runner now expands the quoted `{scene}` placeholder per scene.
+
+## 2026-05-13 Fresh-Replay Follow-Up
+
+The v5/v6 continuation exposed an evaluation issue in the rows above: the
+default Phase-J test method can reuse stale renders/results from older runs.
+The runner now supports `--phasej_test_method`, and the fixed audit reran the
+high-confidence DC patch-cluster policy with a fresh same-run Phase-J replay:
+
+`outputs/carnet/meshsplatopt/ecsr_phase_s/phasepatch_cluster_dc_v6_fairreplay_highconf_20260513_combined/phasek_barycentric_gate_summary_collected.md`
+
+| scene | accepted | train-val dPSNR | train-val dSSIM | train-val dLPIPS | report test dPSNR | report test dSSIM | report test dLPIPS |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| bicycle | false | +0.000101 | +0.000003 | +0.000033 | +0.000597 | +0.000038 | -0.000038 |
+| flowers | false | +0.000011 | -0.000000 | +0.000002 | -0.000002 | +0.000000 | -0.000002 |
+
+This changes the interpretation of `flowers`: the earlier large negative
+report-only test delta was a stale-reference artifact, not a real large DC
+carrier regression.  It does not make the DC carrier successful, because both
+scenes still reject under the train-only gate.  The stronger follow-up branch
+therefore moved back to face-local GainCert with fresh Phase-J replay; see:
+
+`docs/car_model/5-13-FreshReplay-LocalGate-Audit.md`

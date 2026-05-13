@@ -541,3 +541,39 @@ change that flips bicycle held-out test deltas positive in all three metrics,
 but strict train-val still rejects it, and flowers remains negative.  This
 should be treated as a useful mechanism and a bottleneck diagnosis, not as a
 paper-ready endpoint.
+
+## 2026-05-13 Fresh Replay and Local Gate Repair
+
+The next continuation found an evaluation hygiene issue that matters for all
+parallel Phase-S experiments.  Candidate rows were sometimes compared against
+the default Phase-J test method name
+`ours_26000_phasej_guarded_adaptedge_ela`, which can reuse stale renders from
+earlier experiments.  In addition, parallel runs for the same scene wrote
+Phase-J train-val metrics into a shared compact-model file, so one run could
+overwrite another run's gate input.
+
+The runner now supports `--phasej_test_method`, forces a fresh same-run
+Phase-J replay when a unique method name is supplied, and writes Phase-J
+train-val/test metric files into the experiment output root.  The collector now
+supports per-scene decision templates and marks operator/no-op and fresh-vs-
+default Phase-J reference status.  The detailed audit is:
+
+`docs/car_model/5-13-FreshReplay-LocalGate-Audit.md`
+
+Key fresh-replay evidence:
+
+| variant | scene | accepted | train-val dPSNR | train-val dSSIM | train-val dLPIPS | report test dPSNR | report test dSSIM | report test dLPIPS |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| DC patch-cluster v6 | bicycle | false | +0.000101 | +0.000003 | +0.000033 | +0.000597 | +0.000038 | -0.000038 |
+| DC patch-cluster v6 | flowers | false | +0.000011 | -0.000000 | +0.000002 | -0.000002 | +0.000000 | -0.000002 |
+| face-local GainCert v1 | bicycle | false | -0.000006 | +0.000000 | +0.000001 | +0.000374 | +0.000035 | -0.000115 |
+| face-local GainCert v1 | flowers | true | +0.000044 | +0.000001 | -0.000001 | +0.005426 | +0.000471 | -0.000588 |
+| face-local GainCert v2 face-shrink | bicycle | false | -0.000006 | -0.000000 | +0.000000 | +0.000376 | +0.000035 | -0.000115 |
+| face-local GainCert v2 face-shrink | flowers | true | +0.000044 | +0.000001 | -0.000002 | +0.005426 | +0.000471 | -0.000587 |
+
+Decision: still `NOT COMPLETE`.  The fresh replay repair converts the earlier
+`flowers` patch-cluster negative into a near-zero result and validates a
+meaningful face-local GainCert win on `flowers`, but `bicycle` remains a
+train-val rejection despite positive report-only test deltas.  The bottleneck
+is now support alignment and train-heldout tail risk, not stale reference
+reuse or global amplitude alone.

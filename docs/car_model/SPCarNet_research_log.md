@@ -6761,3 +6761,60 @@ Decision: `NOT COMPLETE`.  This is real method progress and a useful diagnostic
 of the carrier capacity/support-alignment problem, but it is not a closed
 paper-level result and does not justify claiming comprehensive superiority over
 Phase-J or MeshSplatting.
+
+## 2026-05-13 12:55 PDT - Fresh Replay, Local Gate, and Face-Local Recheck
+
+Ran the subagent-coordinated continuation around Phase-S fair replay and
+representation-level gating.
+
+Code changes:
+
+- `ecsr_run_phasek_barycentric_gate_scene.py`
+  - added `--phasej_test_method` so report-only Phase-J test comparison can be
+    forced under a fresh same-run method name;
+  - writes Phase-J train-val metrics to
+    `{output_root}/{scene}/phasej_trainval_gate_results.json`;
+  - writes Phase-J test metrics to
+    `{output_root}/{scene}/phasej_test_results.json`;
+  - passes those local files to the decision gate, avoiding shared-file races
+    when running multiple experiments for one scene in parallel.
+- `ecsr_collect_phasek_barycentric_gate_summary.py`
+  - added `--decision_path_template`;
+  - reports operator/no-op audit status and whether test deltas used a fresh
+    Phase-J replay or the default potentially stale method.
+
+Bug found and fixed:
+
+- Parallel v1/v2 face-local runs initially failed or became race-risk because
+  both wrote Phase-J train-val metrics into the same compact-model
+  `trainval_gate_results.json`.  v1 rows were rerun with the fixed local gate.
+  v2 shared-file decisions were preserved as `*.sharedrace.*` and regenerated
+  with the fixed local gate.
+
+Evidence:
+
+- DC patch-cluster v6 fresh replay:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phasepatch_cluster_dc_v6_fairreplay_highconf_20260513_combined/phasek_barycentric_gate_summary_collected.md`.
+  It rejects both `bicycle` and `flowers`; `flowers` becomes near-zero rather
+  than a large negative, proving the stale-reference diagnosis but not solving
+  the method.
+- face-local GainCert v1 fresh replay:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_fairreplay_20260513_combined/phasek_barycentric_gate_summary_collected.md`.
+  `flowers` accepts with report-only dPSNR `+0.005426`, dSSIM `+0.000471`,
+  dLPIPS `-0.000588`; `bicycle` rejects with train-val dPSNR `-0.000006`
+  despite positive report-only test deltas.
+- face-local GainCert v2 face-shrink fresh replay:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v2_faceshrink_fairreplay_20260513_combined/phasek_barycentric_gate_summary_collected.md`.
+  It also accepts `flowers` and rejects `bicycle`; face-shrink improves the
+  local proxy and flowers balanced score slightly, but does not fix the hard
+  scene.
+
+Detailed audit:
+
+- `docs/car_model/5-13-FreshReplay-LocalGate-Audit.md`
+
+Decision: `NOT COMPLETE`.  The pipeline is now fairer and safer for parallel
+long experiments, and `flowers` has a real fresh-replay face-local GainCert
+win.  The remaining blocker is `bicycle`: support alignment or train-heldout
+tail risk still prevents strict acceptance, so this is not yet full
+paper-level closure.

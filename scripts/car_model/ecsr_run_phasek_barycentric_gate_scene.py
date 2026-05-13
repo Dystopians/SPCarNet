@@ -664,8 +664,18 @@ def _evaluate_trainval(
     _run(cmd, gpu=int(args.gpu), log_path=log_path)
 
 
-def _evaluate_test(args: argparse.Namespace, *, model: Path, method: str, log_path: Path) -> None:
-    if not bool(args.force) and _has_metric(model / "results.json", method):
+def _evaluate_test(
+    args: argparse.Namespace,
+    *,
+    model: Path,
+    method: str,
+    log_path: Path,
+    output: Path | None = None,
+    per_view_output: Path | None = None,
+    merge_model_results: bool = True,
+) -> None:
+    metric_path = output if output is not None else model / "results.json"
+    if not bool(args.force) and _has_metric(metric_path, method):
         return
     cmd = [
         sys.executable,
@@ -676,8 +686,13 @@ def _evaluate_test(args: argparse.Namespace, *, model: Path, method: str, log_pa
         "test",
         "--methods",
         method,
-        "--merge_model_results",
     ]
+    if output is not None:
+        cmd.extend(["--output", str(output)])
+    if per_view_output is not None:
+        cmd.extend(["--per_view_output", str(per_view_output)])
+    if bool(merge_model_results):
+        cmd.append("--merge_model_results")
     _run(cmd, gpu=int(args.gpu), log_path=log_path)
 
 
@@ -688,6 +703,8 @@ def _decide(
     phasej_model: Path,
     candidate_model: Path,
     output_root: Path,
+    phasej_trainval_results: Path,
+    phasej_test_results: Path,
     log_path: Path,
 ) -> dict[str, Any]:
     decision_json = output_root / "decisions" / f"{scene}_decision.json"
@@ -704,7 +721,7 @@ def _decide(
         "--fallback_label",
         "phasej_guarded_adaptedge",
         "--base_trainval_results",
-        str(phasej_model / "trainval_gate_results.json"),
+        str(phasej_trainval_results),
         "--base_trainval_method",
         args.phasej_trainval_method,
         "--candidate_trainval_results",
@@ -714,9 +731,9 @@ def _decide(
         "--candidate_audit_json",
         str(_candidate_audit_path(args, candidate_model)),
         "--base_test_results",
-        str(phasej_model / "results.json"),
+        str(phasej_test_results),
         "--base_test_method",
-        PHASEJ_METHOD,
+        args.phasej_test_method,
         "--candidate_test_results",
         str(candidate_model / "results.json"),
         "--candidate_test_method",
@@ -751,6 +768,10 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
     evidence_dir = evidence_root / scene
     candidate_model = output_root / scene / "model"
     log_path = output_root / scene / "phasek_barycentric_gate.log"
+    phasej_test_results = output_root / scene / "phasej_test_results.json"
+    phasej_test_per_view = output_root / scene / "phasej_test_per_view.json"
+    phasej_trainval_results = output_root / scene / "phasej_trainval_gate_results.json"
+    phasej_trainval_per_view = output_root / scene / "phasej_trainval_gate_per_view.json"
     _render_maps(args, scene=scene, model=phasej_model, method_name=BASE_METHOD, log_path=log_path)
     _build_evidence(args, scene=scene, phasej_model=phasej_model, evidence_dir=evidence_dir, log_path=log_path)
     _apply_delta(
@@ -764,6 +785,25 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
     _render_maps(args, scene=scene, model=candidate_model, method_name=args.candidate_base_method, log_path=log_path)
     _evaluate_test(args, model=phasej_model, method=BASE_METHOD, log_path=log_path)
     _evaluate_test(args, model=candidate_model, method=args.candidate_base_method, log_path=log_path)
+    _apply_ela(
+        args,
+        scene=scene,
+        model=phasej_model,
+        base_method=BASE_METHOD,
+        method_name=args.phasej_test_method,
+        phasej_report=phasej_report,
+        target_split="test",
+        log_path=log_path,
+    )
+    _evaluate_test(
+        args,
+        model=phasej_model,
+        method=args.phasej_test_method,
+        output=phasej_test_results,
+        per_view_output=phasej_test_per_view,
+        merge_model_results=False,
+        log_path=log_path,
+    )
 
     _apply_ela(
         args,
@@ -780,8 +820,8 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         model=phasej_model,
         method=args.phasej_trainval_method,
         view_names_file=phasej_model / "train" / args.phasej_trainval_method / "ela_report.json",
-        output=phasej_model / "trainval_gate_results.json",
-        per_view_output=phasej_model / "trainval_gate_per_view.json",
+        output=phasej_trainval_results,
+        per_view_output=phasej_trainval_per_view,
         log_path=log_path,
     )
     _apply_ela(
@@ -820,6 +860,8 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         phasej_model=phasej_model,
         candidate_model=candidate_model,
         output_root=output_root,
+        phasej_trainval_results=phasej_trainval_results,
+        phasej_test_results=phasej_test_results,
         log_path=log_path,
     )
     scene_summary = {
@@ -1072,6 +1114,15 @@ def main() -> int:
     parser.add_argument("--delta_min_face_gain_certificate_relative_gain", type=float, default=0.0)
     parser.add_argument("--delta_min_face_gain_certificate_view_samples", type=int, default=4)
     parser.add_argument("--delta_min_face_gain_certificate_fraction", type=float, default=0.0)
+    parser.add_argument(
+        "--phasej_test_method",
+        default=PHASEJ_METHOD,
+        help=(
+            "Reference Phase-J test method used for report-only comparison. "
+            "Use a unique name to force a fresh same-run replay instead of "
+            "reusing stale results from earlier experiments."
+        ),
+    )
     parser.add_argument("--phasej_trainval_method", default="ours_26000_phasej_trainval_gate")
     parser.add_argument("--candidate_base_method", default="ours_26000_bary_delta_v2wide_s08_base")
     parser.add_argument("--candidate_test_method", default="ours_26000_bary_delta_v2wide_s08_phasej_ela")
