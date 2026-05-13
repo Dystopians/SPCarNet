@@ -6561,3 +6561,54 @@ the engineering reliability claim, but it also confirms the research blocker:
 the current DC-only subdivision residual either becomes near no-op under robust
 selection (`counter`) or remains split-unstable when it has visible effect size
 (`treehill`).  This is still not a paper-level closed loop.
+
+## 2026-05-12 SH1/Luma/Anchor and Render-Calibrated Prefix Diagnostics
+
+Implemented and tested another real Phase-S representation upgrade:
+
+- subdivision-local SH1 midpoint residuals with bounded SH coefficients;
+- SH1 DC-luma projection selected on train-only local folds;
+- low-error anchor support to constrain edits on already-stable pixels;
+- candidate-plan replay/materialization for render-calibrated prefix tests.
+
+Validation passed:
+
+```bash
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python -m py_compile \
+  scripts/car_model/ecsr_apply_surface_residual_subdivision_delta.py \
+  scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py
+
+git diff --check
+```
+
+Evidence summary:
+
+- `counter` v11b SH1 strict passed, but only as a one-face near-noop:
+  mean dPSNR `+0.000003`, mean dSSIM `+0.000000`, mean dLPIPS `-0.000001`.
+- `treehill` v12 luma-max remained strict-fail despite 64 accepted faces:
+  mean dPSNR `+0.000672`, mean dSSIM `-0.000004`, mean dLPIPS `-0.000443`;
+  offset 0/1 failed PSNR and offset 1/2 failed SSIM.
+- `treehill` v13 anchor strict failed with strong LPIPS but broad SSIM
+  regressions: mean dLPIPS `-0.001203`, mean dSSIM `-0.000546`.
+- render-calibrated prefix replay from the v12 candidate set did not close the
+  gate:
+  - top-8 failed offsets 2/3;
+  - top-4 failed offsets 0/3;
+  - top-1 still failed offset 3 despite passing offsets 0/1/2.
+
+Key result paths:
+
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v11b_sh1_boundsfix_finaldelta_20260512_counter/counter/multifold_trainval_gate.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v12_sh1_lumamax_finaldelta3of4_20260512_treehill/treehill/multifold_trainval_gate.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v13_sh1_anchor_lumamax_finaldelta3of4_20260512_treehill/treehill/multifold_trainval_gate.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v14_rendercalib_v12top8_20260512_treehill/treehill/multifold_trainval_gate.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v15_rendercalib_v12top4_20260512_treehill/treehill/multifold_trainval_gate.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v16_rendercalib_v12top1_20260512_treehill/treehill/multifold_trainval_gate.json`
+
+Decision: `NOT COMPLETE`.  The new evidence is useful because it narrows the
+blocker.  SH1 and anchors can create perceptual improvements, but local
+proxy-based face selection and simple top-prefix replay are not enough to
+guarantee strict split-stable PSNR/SSIM.  The next method should either perform
+true greedy/combinatorial render-calibrated acceptance using real train-val
+render feedback, or introduce a structure-preserving representation objective
+that directly penalizes SSIM-risk rather than only RGB/luma proxy drift.

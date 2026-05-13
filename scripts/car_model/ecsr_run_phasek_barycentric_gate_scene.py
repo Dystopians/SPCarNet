@@ -211,6 +211,10 @@ def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: 
             str(args.delta_strength),
             "--max_abs_delta_rgb",
             str(args.delta_max_abs_rgb),
+            "--feature_mode",
+            str(args.delta_subdivision_feature_mode),
+            "--max_abs_sh_coeff",
+            str(args.delta_subdivision_max_abs_sh_coeff),
             "--lambda_ridge",
             str(args.delta_subdivision_lambda_ridge),
             "--min_fit_samples",
@@ -226,6 +230,43 @@ def _apply_delta(args: argparse.Namespace, *, phasej_model: Path, evidence_dir: 
             "--max_faces_to_apply",
             str(args.delta_max_faces_to_apply),
         ]
+        if bool(args.delta_subdivision_luma_preserve):
+            cmd.extend(
+                [
+                    "--luma_preserve",
+                    "--min_luma_relative_gain",
+                    str(args.delta_subdivision_min_luma_relative_gain),
+                    "--max_mean_luma_shift",
+                    str(args.delta_subdivision_max_mean_luma_shift),
+                    "--luma_shrink_grid",
+                    str(args.delta_subdivision_luma_shrink_grid),
+                    "--luma_shrink_selection",
+                    str(args.delta_subdivision_luma_shrink_selection),
+                ]
+            )
+        if bool(args.delta_subdivision_anchor_support):
+            cmd.extend(
+                [
+                    "--anchor_support",
+                    "--anchor_max_error_quantile",
+                    str(args.delta_subdivision_anchor_max_error_quantile),
+                    "--anchor_samples_per_face_view",
+                    str(args.delta_subdivision_anchor_samples_per_face_view),
+                    "--anchor_weight",
+                    str(args.delta_subdivision_anchor_weight),
+                ]
+            )
+        if str(args.delta_subdivision_candidate_plan_out).strip():
+            cmd.extend(["--candidate_plan_out", str(Path(args.delta_subdivision_candidate_plan_out))])
+        if str(args.delta_subdivision_materialize_plan_in).strip():
+            cmd.extend(
+                [
+                    "--materialize_plan_in",
+                    str(Path(args.delta_subdivision_materialize_plan_in)),
+                    "--materialize_plan_limit",
+                    str(args.delta_subdivision_materialize_plan_limit),
+                ]
+            )
         if str(args.delta_policy_val_offsets).strip():
             cmd.extend(["--policy_val_offsets", str(args.delta_policy_val_offsets)])
         if int(args.delta_min_face_gain_certificate_views) > 0:
@@ -849,6 +890,30 @@ def main() -> int:
         default=2e-2,
         help="Ridge penalty for the train-only local subdivision residual solve.",
     )
+    parser.add_argument(
+        "--delta_subdivision_feature_mode",
+        choices=("dc", "sh1"),
+        default="dc",
+        help="Subdivision midpoint residual feature basis. Default dc preserves historical behavior.",
+    )
+    parser.add_argument(
+        "--delta_subdivision_max_abs_sh_coeff",
+        type=float,
+        default=0.0,
+        help="SH1 coefficient bound for subdivision feature_mode=sh1; 0 derives from delta_max_abs_rgb.",
+    )
+    parser.add_argument("--delta_subdivision_luma_preserve", action="store_true")
+    parser.add_argument("--delta_subdivision_min_luma_relative_gain", type=float, default=0.0)
+    parser.add_argument("--delta_subdivision_max_mean_luma_shift", type=float, default=0.0)
+    parser.add_argument("--delta_subdivision_luma_shrink_grid", default="0,0.25,0.5,0.75,1.0")
+    parser.add_argument("--delta_subdivision_luma_shrink_selection", choices=("min", "max"), default="min")
+    parser.add_argument("--delta_subdivision_anchor_support", action="store_true")
+    parser.add_argument("--delta_subdivision_anchor_max_error_quantile", type=float, default=0.35)
+    parser.add_argument("--delta_subdivision_anchor_samples_per_face_view", type=int, default=0)
+    parser.add_argument("--delta_subdivision_anchor_weight", type=float, default=0.25)
+    parser.add_argument("--delta_subdivision_candidate_plan_out", default="")
+    parser.add_argument("--delta_subdivision_materialize_plan_in", default="")
+    parser.add_argument("--delta_subdivision_materialize_plan_limit", type=int, default=0)
     parser.add_argument("--delta_subdivision_min_fit_samples", type=int, default=24)
     parser.add_argument("--delta_subdivision_min_val_samples", type=int, default=12)
     parser.add_argument(

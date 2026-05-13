@@ -26,10 +26,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ss3dm_prior.meshsplatopt.checkpoint_compaction import copy_model_metadata, checkpoint_path, validate_faces
-from utils.sh_utils import C0
+from utils.sh_utils import C0, C1
 
 
 FACE_KEYS = ("importance_score", "image_size", "pixel_count")
+LUMA_WEIGHTS = np.asarray([0.2126, 0.7152, 0.0722], dtype=np.float32)
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,6 +49,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--policy_val_stride", type=int, default=4)
     parser.add_argument("--strength", type=float, default=0.35)
     parser.add_argument("--max_abs_delta_rgb", type=float, default=0.050)
+    parser.add_argument("--feature_mode", choices=("dc", "sh1"), default="dc")
+    parser.add_argument(
+        "--max_abs_sh_coeff",
+        type=float,
+        default=0.0,
+        help="Bound for SH1 coefficient deltas. 0 derives it from max_abs_delta_rgb / C1.",
+    )
     parser.add_argument("--lambda_ridge", type=float, default=2e-2)
     parser.add_argument("--min_fit_samples", type=int, default=24)
     parser.add_argument("--min_val_samples", type=int, default=12)
@@ -76,6 +84,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_view_gain_relative_gain", type=float, default=0.0)
     parser.add_argument("--min_view_gain_samples", type=int, default=4)
     parser.add_argument("--min_view_gain_fraction", type=float, default=0.0)
+    parser.add_argument("--luma_preserve", action="store_true")
+    parser.add_argument("--min_luma_relative_gain", type=float, default=0.0)
+    parser.add_argument("--max_mean_luma_shift", type=float, default=0.0)
+    parser.add_argument("--luma_shrink_grid", default="0,0.25,0.5,0.75,1.0")
+    parser.add_argument("--luma_shrink_selection", choices=("min", "max"), default="min")
+    parser.add_argument("--anchor_support", action="store_true")
+    parser.add_argument("--anchor_max_error_quantile", type=float, default=0.35)
+    parser.add_argument("--anchor_samples_per_face_view", type=int, default=0)
+    parser.add_argument("--anchor_weight", type=float, default=0.25)
+    parser.add_argument("--candidate_plan_out", type=Path, default=None)
+    parser.add_argument("--materialize_plan_in", type=Path, default=None)
+    parser.add_argument("--materialize_plan_limit", type=int, default=0)
     parser.add_argument("--max_faces_to_apply", type=int, default=512)
     parser.add_argument("--force_apply", action="store_true")
     parser.add_argument("--no_op_on_fail", action="store_true", default=True)
@@ -149,6 +169,17 @@ def parse_policy_offsets(raw: str, *, stride: int) -> list[int]:
     return offsets or [0]
 
 
+def parse_float_grid(raw: str) -> list[float]:
+    values: list[float] = []
+    for item in str(raw).replace(" ", ",").split(","):
+        if not item:
+            continue
+        value = float(item)
+        if value not in values:
+            values.append(value)
+    return sorted(values) or [0.0]
+
+
 def split_view_paths(view_paths: list[Path], stride: int, offset: int = 0) -> tuple[list[Path], list[Path]]:
     if len(view_paths) < 3:
         return view_paths, view_paths
@@ -174,14 +205,53 @@ def _basis_midpoint(bary: np.ndarray) -> np.ndarray:
     return np.clip(basis, 0.0, 1.0).astype(np.float32)
 
 
+def _sh1_terms(directions: np.ndarray) -> np.ndarray:
+    dirs = directions.astype(np.float32)
+    dirs = dirs / np.maximum(np.linalg.norm(dirs, axis=1, keepdims=True), 1e-8)
+    x = dirs[:, 0]
+    y = dirs[:, 1]
+    z = dirs[:, 2]
+    return np.stack(
+        [
+            np.full_like(x, float(C0), dtype=np.float32),
+            -float(C1) * y,
+            float(C1) * z,
+            -float(C1) * x,
+        ],
+        axis=1,
+    ).astype(np.float32)
+
+
+def _subdivision_basis(
+    bary: np.ndarray,
+    *,
+    feature_mode: str,
+    directions: np.ndarray | None = None,
+) -> np.ndarray:
+    midpoint_basis = _basis_midpoint(bary)
+    if str(feature_mode) == "dc":
+        return midpoint_basis
+    if directions is None:
+        raise RuntimeError("SH subdivision basis requires camera directions")
+    sh_terms = _sh1_terms(directions)
+    return (midpoint_basis[:, :, None] * sh_terms[:, None, :]).reshape(bary.shape[0], -1).astype(np.float32)
+
+
 def collect_samples(
     view_paths: list[Path],
     selected_faces: list[int],
     face_stats: dict[int, dict[str, float]],
     *,
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    feature_mode: str,
     high_error_quantile: float,
     min_alpha: float,
     max_samples_per_face_view: int,
+    anchor_support: bool,
+    anchor_max_error_quantile: float,
+    anchor_samples_per_face_view: int,
+    anchor_weight: float,
 ) -> dict[int, dict[str, list[np.ndarray]]]:
     selected = set(int(x) for x in selected_faces)
     samples: dict[int, dict[str, list[np.ndarray]]] = {
@@ -191,6 +261,8 @@ def collect_samples(
     for view_path in view_paths:
         with np.load(view_path) as z:
             required = {"face_id", "residual_l1", "alpha", "residual_rgb", "barycentric", "barycentric_valid"}
+            if str(feature_mode) == "sh1":
+                required.add("camera_center")
             missing = sorted(required - set(z.files))
             if missing:
                 raise RuntimeError(f"{view_path} missing required subdivision evidence fields: {missing}")
@@ -202,44 +274,70 @@ def collect_samples(
             residual_rgb = z["residual_rgb"].astype(np.float32)
             barycentric = z["barycentric"].astype(np.float32)
             bary_valid = z["barycentric_valid"].astype(bool)
+            camera_center = z["camera_center"].astype(np.float32).reshape(-1)[:3] if "camera_center" in z.files else None
 
         threshold = float(np.quantile(residual_l1.reshape(-1), float(high_error_quantile)))
-        valid = bary_valid & (residual_l1 >= threshold) & (alpha >= float(min_alpha))
-        if not np.any(valid):
-            continue
-        flat_faces = face_id[valid].reshape(-1)
-        if flat_faces.size == 0:
-            continue
-        present = sorted(set(int(x) for x in np.unique(flat_faces)) & selected)
-        if not present:
-            continue
-        ys_all, xs_all = np.nonzero(valid)
-        for fid in present:
-            local = flat_faces == int(fid)
-            idx = np.nonzero(local)[0]
-            if idx.size == 0:
-                continue
-            cap = min(int(max_samples_per_face_view), int(idx.size))
-            if idx.size > cap:
-                idx = idx[np.linspace(0, idx.size - 1, cap, dtype=np.int64)]
-            ys = ys_all[idx]
-            xs = xs_all[idx]
-            bary = barycentric[:, ys, xs].T.astype(np.float32)
-            inside = np.all((bary >= -0.25) & (bary <= 1.25), axis=1)
-            if not np.any(inside):
-                continue
-            ys = ys[inside]
-            xs = xs[inside]
-            bary = np.clip(bary[inside], 0.0, 1.0)
-            bary = bary / np.maximum(bary.sum(axis=1, keepdims=True), 1e-8)
-            basis = _basis_midpoint(bary)
-            target = residual_rgb[:, ys, xs].T.astype(np.float32)
-            l1 = residual_l1[ys, xs].astype(np.float32)
-            consistency = float(face_stats.get(int(fid), {}).get("consistency", 1.0))
-            weight = np.maximum(l1, 1e-4).astype(np.float32) * max(consistency, 1e-3)
-            samples[int(fid)]["basis"].append(basis)
-            samples[int(fid)]["target"].append(target)
-            samples[int(fid)]["weight"].append(weight)
+
+        def append_from_mask(mask: np.ndarray, *, cap_per_face: int, weight_scale: float) -> None:
+            if cap_per_face <= 0 or not np.any(mask):
+                return
+            flat_faces = face_id[mask].reshape(-1)
+            if flat_faces.size == 0:
+                return
+            present = sorted(set(int(x) for x in np.unique(flat_faces)) & selected)
+            if not present:
+                return
+            ys_all, xs_all = np.nonzero(mask)
+            for fid in present:
+                local = flat_faces == int(fid)
+                idx = np.nonzero(local)[0]
+                if idx.size == 0:
+                    continue
+                cap = min(int(cap_per_face), int(idx.size))
+                if idx.size > cap:
+                    idx = idx[np.linspace(0, idx.size - 1, cap, dtype=np.int64)]
+                ys = ys_all[idx]
+                xs = xs_all[idx]
+                bary = barycentric[:, ys, xs].T.astype(np.float32)
+                inside = np.all((bary >= -0.25) & (bary <= 1.25), axis=1)
+                if not np.any(inside):
+                    continue
+                ys = ys[inside]
+                xs = xs[inside]
+                bary = np.clip(bary[inside], 0.0, 1.0)
+                bary = bary / np.maximum(bary.sum(axis=1, keepdims=True), 1e-8)
+                directions = None
+                if str(feature_mode) == "sh1":
+                    face_vertex_ids = faces[int(fid)]
+                    tri = vertices[face_vertex_ids]
+                    positions = bary @ tri
+                    directions = positions - camera_center[None, :]
+                basis = _subdivision_basis(bary, feature_mode=str(feature_mode), directions=directions)
+                target = residual_rgb[:, ys, xs].T.astype(np.float32)
+                l1 = residual_l1[ys, xs].astype(np.float32)
+                consistency = float(face_stats.get(int(fid), {}).get("consistency", 1.0))
+                base_weight = np.maximum(l1, 1e-4).astype(np.float32)
+                if float(weight_scale) > 0.0:
+                    base_weight = np.maximum(base_weight, float(weight_scale)).astype(np.float32)
+                weight = base_weight * max(consistency, 1e-3)
+                samples[int(fid)]["basis"].append(basis)
+                samples[int(fid)]["target"].append(target)
+                samples[int(fid)]["weight"].append(weight)
+
+        high_mask = bary_valid & (residual_l1 >= threshold) & (alpha >= float(min_alpha))
+        append_from_mask(high_mask, cap_per_face=int(max_samples_per_face_view), weight_scale=0.0)
+
+        if bool(anchor_support):
+            anchor_threshold = float(np.quantile(residual_l1.reshape(-1), float(anchor_max_error_quantile)))
+            anchor_mask = bary_valid & (residual_l1 <= anchor_threshold) & (alpha >= float(min_alpha))
+            # Anchors represent already-good pixels. Without a minimum weight,
+            # their tiny residuals would not constrain the least-squares solve.
+            anchor_scale = max(float(threshold), 1e-4) * max(float(anchor_weight), 0.0)
+            append_from_mask(
+                anchor_mask,
+                cap_per_face=int(anchor_samples_per_face_view),
+                weight_scale=float(anchor_scale),
+            )
     return samples
 
 
@@ -267,6 +365,7 @@ def fit_delta(
     *,
     strength: float,
     max_abs_delta_rgb: float,
+    coeff_bounds: np.ndarray | None,
     lambda_ridge: float,
 ) -> tuple[np.ndarray, dict[str, float]]:
     y_fit = np.clip(target_fit * float(strength), -float(max_abs_delta_rgb), float(max_abs_delta_rgb))
@@ -274,12 +373,17 @@ def fit_delta(
     wf = weight_fit.reshape(-1, 1).astype(np.float32)
     xtw = basis_fit.T @ (basis_fit * wf)
     rhs = basis_fit.T @ (y_fit * wf)
-    xtw = xtw + np.eye(3, dtype=np.float32) * float(lambda_ridge)
+    basis_dim = int(basis_fit.shape[1])
+    xtw = xtw + np.eye(basis_dim, dtype=np.float32) * float(lambda_ridge)
     try:
         delta = np.linalg.solve(xtw, rhs).astype(np.float32)
     except np.linalg.LinAlgError:
-        delta = np.zeros((3, 3), dtype=np.float32)
-    delta = np.clip(delta, -float(max_abs_delta_rgb), float(max_abs_delta_rgb))
+        delta = np.zeros((basis_dim, 3), dtype=np.float32)
+    if coeff_bounds is None:
+        delta = np.clip(delta, -float(max_abs_delta_rgb), float(max_abs_delta_rgb))
+    else:
+        bounds = np.asarray(coeff_bounds, dtype=np.float32).reshape(-1, 1)
+        delta = np.clip(delta, -bounds, bounds)
 
     wv = weight_val.reshape(-1, 1).astype(np.float32)
     pred0 = np.zeros_like(y_val)
@@ -327,6 +431,142 @@ def evaluate_delta(
         "delta_abs_mean": float(np.abs(delta).mean()) if delta.size else 0.0,
         "delta_abs_max": float(np.abs(delta).max()) if delta.size else 0.0,
     }
+
+
+def evaluate_luma_delta(
+    delta: np.ndarray,
+    basis_val: np.ndarray,
+    target_val: np.ndarray,
+    weight_val: np.ndarray,
+    *,
+    strength: float,
+    max_abs_delta_rgb: float,
+) -> dict[str, float]:
+    y_val = np.clip(target_val * float(strength), -float(max_abs_delta_rgb), float(max_abs_delta_rgb))
+    pred = basis_val @ delta
+    target_luma = y_val @ LUMA_WEIGHTS
+    pred_luma = pred @ LUMA_WEIGHTS
+    w = weight_val.astype(np.float32).reshape(-1)
+    denom = float(np.maximum(w.sum(), 1e-8))
+    initial = float(((target_luma**2) * w).sum() / denom)
+    final = float((((pred_luma - target_luma) ** 2) * w).sum() / denom)
+    gain = float((initial - final) / max(initial, 1e-8))
+    mean_pred = float((pred_luma * w).sum() / denom)
+    mean_abs_pred = float((np.abs(pred_luma) * w).sum() / denom)
+    return {
+        "initial_luma_mse": initial,
+        "final_luma_mse": final,
+        "luma_relative_gain": gain,
+        "mean_pred_luma": mean_pred,
+        "mean_abs_pred_luma": mean_abs_pred,
+        "max_abs_pred_luma": float(np.abs(pred_luma).max()) if pred_luma.size else 0.0,
+    }
+
+
+def shrink_sh1_dc_luma(delta: np.ndarray, beta: float) -> np.ndarray:
+    out = delta.astype(np.float32, copy=True)
+    denom = float(np.dot(LUMA_WEIGHTS, LUMA_WEIGHTS))
+    for row_idx in (0, 4, 8):
+        coeff = out[row_idx]
+        projection = float(np.dot(coeff, LUMA_WEIGHTS) / max(denom, 1e-8)) * LUMA_WEIGHTS
+        out[row_idx] = coeff - float(beta) * projection
+    return out
+
+
+def choose_luma_preserved_delta(
+    delta: np.ndarray,
+    offset_sets: list[dict[str, Any]],
+    *,
+    fid: int,
+    args: argparse.Namespace,
+    required_offsets: int,
+    required_fraction: float,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    betas = [min(max(float(x), 0.0), 1.0) for x in parse_float_grid(args.luma_shrink_grid)]
+    best: tuple[tuple[int, float, float], np.ndarray, dict[str, Any]] | None = None
+    accepted_choice: tuple[np.ndarray, dict[str, Any]] | None = None
+    for beta in betas:
+        candidate = shrink_sh1_dc_luma(delta, beta)
+        rows: list[dict[str, Any]] = []
+        gains: list[float] = []
+        for offset_set in offset_sets:
+            offset = int(offset_set["offset"])
+            fit_samples = offset_set["fit_samples"]
+            val_samples = offset_set["val_samples"]
+            xf, _, _ = _pack_face_samples(fit_samples[int(fid)])
+            xv, yv, wv = _pack_face_samples(val_samples[int(fid)])
+            fit_count = int(xf.shape[0])
+            if fit_count < int(args.min_fit_samples) or xv.shape[0] < int(args.min_val_samples):
+                rows.append(
+                    {
+                        "offset": offset,
+                        "accepted": False,
+                        "decision_reasons": ["insufficient_samples"],
+                        "fit_samples": fit_count,
+                        "val_samples": int(xv.shape[0]),
+                    }
+                )
+                continue
+            rgb_proxy = evaluate_delta(
+                candidate,
+                xv,
+                yv,
+                wv,
+                fit_samples=fit_count,
+                strength=float(args.strength),
+                max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+            )
+            luma_proxy = evaluate_luma_delta(
+                candidate,
+                xv,
+                yv,
+                wv,
+                strength=float(args.strength),
+                max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+            )
+            reasons: list[str] = []
+            if float(rgb_proxy["relative_gain"]) < float(args.min_policy_val_relative_gain):
+                reasons.append("relative_gain_below_threshold")
+            if float(luma_proxy["luma_relative_gain"]) < float(args.min_luma_relative_gain):
+                reasons.append("luma_gain_below_threshold")
+            if float(args.max_mean_luma_shift) > 0.0 and abs(float(luma_proxy["mean_pred_luma"])) > float(args.max_mean_luma_shift):
+                reasons.append("mean_luma_shift_exceeds_threshold")
+            if not reasons:
+                gains.append(float(luma_proxy["luma_relative_gain"]))
+            rows.append(
+                {
+                    "offset": offset,
+                    "accepted": not reasons,
+                    "decision_reasons": reasons,
+                    "rgb_proxy": rgb_proxy,
+                    "luma_proxy": luma_proxy,
+                }
+            )
+        passing_count = sum(1 for row in rows if bool(row.get("accepted", False)))
+        passing_fraction = float(passing_count / max(len(offset_sets), 1))
+        summary = {
+            "enabled": True,
+            "mode": "sh1_dc_luma_shrink",
+            "beta": float(beta),
+            "accepted": bool(passing_count >= int(required_offsets) and passing_fraction >= float(required_fraction)),
+            "passing_count": int(passing_count),
+            "offset_count": int(len(offset_sets)),
+            "passing_fraction": passing_fraction,
+            "rows": rows,
+        }
+        if bool(summary["accepted"]):
+            accepted_choice = (candidate, summary)
+            if str(args.luma_shrink_selection) == "min":
+                return candidate, summary
+            continue
+        score = (int(passing_count), float(np.mean(gains)) if gains else -1.0e9, -float(beta))
+        if best is None or score > best[0]:
+            best = (score, candidate, summary)
+    if accepted_choice is not None:
+        return accepted_choice
+    if best is None:
+        return delta, {"enabled": True, "mode": "sh1_dc_luma_shrink", "accepted": False, "rows": []}
+    return best[1], best[2]
 
 
 def view_gain_certificate(
@@ -393,9 +633,34 @@ def clone_state(state: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def read_candidate_plan(path: Path, *, limit: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    plan = json.loads(path.read_text(encoding="utf-8"))
+    meta: dict[str, Any] = {}
+    if isinstance(plan, list):
+        rows = plan
+    elif isinstance(plan, dict):
+        meta = plan
+        if isinstance(plan.get("candidates"), list):
+            rows = plan["candidates"]
+        elif isinstance(plan.get("accepted"), list):
+            rows = plan["accepted"]
+        elif isinstance(plan.get("accepted_preview"), list):
+            rows = plan["accepted_preview"]
+        else:
+            rows = []
+    else:
+        rows = []
+    rows = [row for row in rows if isinstance(row, dict)]
+    if int(limit) > 0:
+        rows = rows[: int(limit)]
+    return rows, meta
+
+
 def materialize(
     state: dict[str, Any],
     accepted: list[dict[str, Any]],
+    *,
+    feature_mode: str,
 ) -> dict[str, Any]:
     out = clone_state(state)
     vertices = state["triangles_points"].detach().cpu().float()
@@ -423,14 +688,25 @@ def materialize(
         remove_mask[face_id] = True
         a, b, c = [int(x) for x in ids.tolist()]
         edge_pairs = [(a, b), (b, c), (c, a)]
-        delta = torch.as_tensor(row["delta_rgb"], dtype=torch.float32)
+        delta = torch.as_tensor(row.get("delta_coeff", row.get("delta_rgb")), dtype=torch.float32)
+        if str(feature_mode) == "sh1":
+            delta = delta.view(3, 4, 3)
         mids: list[int] = []
         for edge_idx, (u, v) in enumerate(edge_pairs):
             mids.append(next_vertex)
             next_vertex += 1
             new_vertices.append((vertices[u] + vertices[v]) * 0.5)
-            new_fdc.append((features_dc[u] + features_dc[v]) * 0.5 + delta[edge_idx].view(1, 3) / float(C0))
-            new_frest.append((features_rest[u] + features_rest[v]) * 0.5)
+            if str(feature_mode) == "sh1":
+                new_fdc.append((features_dc[u] + features_dc[v]) * 0.5 + delta[edge_idx, 0].view(1, 3))
+                rest = (features_rest[u] + features_rest[v]) * 0.5
+                rest_count = min(int(rest.shape[0]), 3)
+                if rest_count > 0:
+                    rest = rest.clone()
+                    rest[:rest_count, :] = rest[:rest_count, :] + delta[edge_idx, 1 : 1 + rest_count, :]
+                new_frest.append(rest)
+            else:
+                new_fdc.append((features_dc[u] + features_dc[v]) * 0.5 + delta[edge_idx].view(1, 3) / float(C0))
+                new_frest.append((features_rest[u] + features_rest[v]) * 0.5)
             new_weight.append((vertex_weight[u] + vertex_weight[v]) * 0.5)
         mab, mbc, mca = mids
         new_faces.extend(
@@ -482,6 +758,69 @@ def main() -> int:
     output_checkpoint = args.output_model / "point_cloud" / f"iteration_{args.iteration}" / "point_cloud_state_dict.pt"
     output_checkpoint.parent.mkdir(parents=True, exist_ok=True)
     copy_model_metadata(args.source_model, args.output_model)
+    state = torch.load(source_checkpoint, map_location="cpu")
+
+    if args.materialize_plan_in is not None:
+        accepted, plan_meta = read_candidate_plan(args.materialize_plan_in, limit=int(args.materialize_plan_limit))
+        out = materialize(state, accepted, feature_mode=str(args.feature_mode))
+        torch.save(out, output_checkpoint)
+        degenerate, invalid = validate_faces(out["triangles_points"], out["_triangle_indices"])
+        before_faces = int(state["_triangle_indices"].shape[0])
+        before_vertices = int(state["triangles_points"].shape[0])
+        after_faces = int(out["_triangle_indices"].shape[0])
+        after_vertices = int(out["triangles_points"].shape[0])
+        audit = {
+            "operator": "surface_residual_subdivision_delta_plan_materialize",
+            "test_usage": "none",
+            "source_model": str(args.source_model),
+            "source_checkpoint": str(source_checkpoint),
+            "output_model": str(args.output_model),
+            "output_checkpoint": str(output_checkpoint),
+            "iteration": int(args.iteration),
+            "materialize_plan_in": str(args.materialize_plan_in),
+            "materialize_plan_limit": int(args.materialize_plan_limit),
+            "accepted_faces": int(len(accepted)),
+            "accepted": bool(accepted),
+            "policy_pass": bool(accepted) and all(bool(row.get("policy_pass", True)) for row in accepted),
+            "feature_mode": str(args.feature_mode),
+            "basis_dim": int(12 if str(args.feature_mode) == "sh1" else 3),
+            "delta_storage": "sh_coeff" if str(args.feature_mode) == "sh1" else "rgb_dc",
+            "plan_source_operator": plan_meta.get("operator") if isinstance(plan_meta, dict) else None,
+            "plan_source_output_model": plan_meta.get("output_model") if isinstance(plan_meta, dict) else None,
+            "topology_before": {"triangles": before_faces, "vertices": before_vertices},
+            "topology_after": {
+                "triangles": after_faces,
+                "vertices": after_vertices,
+                "degenerate_face_count": int(degenerate),
+                "invalid_index_count": int(invalid),
+            },
+            "accepted_preview": accepted[:20],
+        }
+        (args.output_model / "surface_residual_subdivision_delta_audit.json").write_text(
+            json.dumps(audit, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        lines = [
+            "# ECSR Surface Residual Subdivision Delta Plan Materialization Audit",
+            "",
+            f"- operator: `{audit['operator']}`",
+            f"- plan: `{audit['materialize_plan_in']}`",
+            f"- accepted faces: `{audit['accepted_faces']}`",
+            f"- feature mode: `{audit['feature_mode']}`",
+            f"- triangles: `{before_faces}` -> `{after_faces}`",
+            f"- vertices: `{before_vertices}` -> `{after_vertices}`",
+            f"- degenerate faces: `{degenerate}`",
+            f"- invalid indices: `{invalid}`",
+        ]
+        (args.output_model / "surface_residual_subdivision_delta_audit.md").write_text(
+            "\n".join(lines) + "\n",
+            encoding="utf-8",
+        )
+        print(json.dumps(audit, indent=2))
+        return 0 if int(degenerate) == 0 and int(invalid) == 0 else 1
+
+    vertices_np = state["triangles_points"].detach().cpu().float().numpy()
+    faces_np = state["_triangle_indices"].detach().cpu().long().numpy()
 
     top_csv = args.evidence_dir / "top_residual_supports.csv"
     view_paths = sorted((args.evidence_dir / "per_view_npz").glob("*.npz"))
@@ -504,17 +843,31 @@ def main() -> int:
             fit_views,
             selected_faces,
             face_stats,
+            vertices=vertices_np,
+            faces=faces_np,
+            feature_mode=str(args.feature_mode),
             high_error_quantile=float(args.high_error_quantile),
             min_alpha=float(args.min_alpha),
             max_samples_per_face_view=int(args.max_samples_per_face_view),
+            anchor_support=bool(args.anchor_support),
+            anchor_max_error_quantile=float(args.anchor_max_error_quantile),
+            anchor_samples_per_face_view=int(args.anchor_samples_per_face_view),
+            anchor_weight=float(args.anchor_weight),
         )
         val_samples = collect_samples(
             val_views,
             selected_faces,
             face_stats,
+            vertices=vertices_np,
+            faces=faces_np,
+            feature_mode=str(args.feature_mode),
             high_error_quantile=float(args.high_error_quantile),
             min_alpha=float(args.min_alpha),
             max_samples_per_face_view=int(args.max_samples_per_face_view),
+            anchor_support=bool(args.anchor_support),
+            anchor_max_error_quantile=float(args.anchor_max_error_quantile),
+            anchor_samples_per_face_view=int(args.anchor_samples_per_face_view),
+            anchor_weight=float(args.anchor_weight),
         )
         offset_sets.append(
             {
@@ -532,6 +885,18 @@ def main() -> int:
         required_offsets = len(offset_sets)
     required_offsets = min(max(required_offsets, 1), max(len(offset_sets), 1))
     required_fraction = float(args.min_policy_val_offset_fraction)
+    if str(args.feature_mode) == "sh1":
+        max_abs_sh_coeff = float(args.max_abs_sh_coeff)
+        if max_abs_sh_coeff <= 0.0:
+            max_abs_sh_coeff = float(args.max_abs_delta_rgb) / max(float(C1), 1e-8)
+        per_midpoint_bounds = np.asarray(
+            [float(args.max_abs_delta_rgb) / float(C0), max_abs_sh_coeff, max_abs_sh_coeff, max_abs_sh_coeff],
+            dtype=np.float32,
+        )
+        coeff_bounds = np.tile(per_midpoint_bounds, 3)
+    else:
+        max_abs_sh_coeff = 0.0
+        coeff_bounds = None
     for fid in selected_faces:
         fold_rows: list[dict[str, Any]] = []
         passing_deltas: list[np.ndarray] = []
@@ -562,6 +927,7 @@ def main() -> int:
                 wv,
                 strength=float(args.strength),
                 max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+                coeff_bounds=coeff_bounds,
                 lambda_ridge=float(args.lambda_ridge),
             )
             certificate = view_gain_certificate(
@@ -597,6 +963,16 @@ def main() -> int:
         if not delta_pool:
             continue
         delta = np.mean(np.stack(delta_pool, axis=0), axis=0).astype(np.float32)
+        luma_projection: dict[str, Any] = {"enabled": False}
+        if bool(args.luma_preserve) and str(args.feature_mode) == "sh1" and int(delta.shape[0]) == 12:
+            delta, luma_projection = choose_luma_preserved_delta(
+                delta,
+                offset_sets,
+                fid=int(fid),
+                args=args,
+                required_offsets=int(required_offsets),
+                required_fraction=float(required_fraction),
+            )
 
         final_fold_rows: list[dict[str, Any]] = []
         for offset_set in offset_sets:
@@ -641,6 +1017,20 @@ def main() -> int:
                 reasons.append("relative_gain_below_threshold")
             if not bool(final_certificate["passed"]):
                 reasons.append("view_gain_certificate_failed")
+            luma_stats: dict[str, float] | None = None
+            if bool(args.luma_preserve) and str(args.feature_mode) == "sh1":
+                luma_stats = evaluate_luma_delta(
+                    delta,
+                    xv,
+                    yv,
+                    wv,
+                    strength=float(args.strength),
+                    max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+                )
+                if float(luma_stats["luma_relative_gain"]) < float(args.min_luma_relative_gain):
+                    reasons.append("luma_gain_below_threshold")
+                if float(args.max_mean_luma_shift) > 0.0 and abs(float(luma_stats["mean_pred_luma"])) > float(args.max_mean_luma_shift):
+                    reasons.append("mean_luma_shift_exceeds_threshold")
             final_fold_rows.append(
                 {
                     "offset": offset,
@@ -648,6 +1038,7 @@ def main() -> int:
                     "decision_reasons": reasons,
                     "fit_proxy": next((row.get("proxy", {}) for row in fold_rows if int(row.get("offset", -1)) == offset), {}),
                     "final_proxy": final_stats,
+                    "luma_proxy": luma_stats or {},
                     "view_gain_certificate": final_certificate,
                 }
             )
@@ -677,15 +1068,18 @@ def main() -> int:
             "passing_fraction": passing_fraction,
             "fit_folds": fold_rows,
             "final_folds": final_fold_rows,
+            "luma_preservation": luma_projection,
         }
         if bool(args.force_apply) or policy_pass:
             candidates.append(
                 {
                     "face_id": int(fid),
                     "face_stats": face_stats.get(int(fid), {}),
-                    "delta_rgb": delta.tolist(),
+                    "delta_rgb": delta.tolist() if str(args.feature_mode) == "dc" else [],
+                    "delta_coeff": delta.tolist(),
                     "proxy": proxy,
                     "view_gain_certificate": certificate,
+                    "luma_preservation": luma_projection,
                     "policy_pass": bool(policy_pass),
                 }
             )
@@ -697,16 +1091,35 @@ def main() -> int:
         ),
         reverse=True,
     )
+    if args.candidate_plan_out is not None:
+        args.candidate_plan_out.parent.mkdir(parents=True, exist_ok=True)
+        args.candidate_plan_out.write_text(
+            json.dumps(
+                {
+                    "operator": "surface_residual_subdivision_delta_candidate_plan",
+                    "source_model": str(args.source_model),
+                    "iteration": int(args.iteration),
+                    "feature_mode": str(args.feature_mode),
+                    "policy_val_offsets": [int(x) for x in offsets],
+                    "min_policy_val_offsets": int(required_offsets),
+                    "min_policy_val_offset_fraction": float(required_fraction),
+                    "candidate_count": int(len(candidates)),
+                    "candidates": candidates,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
     accepted = candidates[: int(args.max_faces_to_apply)]
 
-    state = torch.load(source_checkpoint, map_location="cpu")
     accepted_policy_pass = bool(accepted) and all(bool(row.get("policy_pass", False)) for row in accepted)
     if not accepted and bool(args.no_op_on_fail):
         out = clone_state(state)
         accepted_flag = False
         no_op_copy = True
     else:
-        out = materialize(state, accepted)
+        out = materialize(state, accepted, feature_mode=str(args.feature_mode))
         accepted_flag = bool(accepted)
         no_op_copy = False
     torch.save(out, output_checkpoint)
@@ -716,6 +1129,11 @@ def main() -> int:
     before_vertices = int(state["triangles_points"].shape[0])
     after_faces = int(out["_triangle_indices"].shape[0])
     after_vertices = int(out["triangles_points"].shape[0])
+    accepted_luma_betas = [
+        float(row.get("luma_preservation", {}).get("beta"))
+        for row in accepted
+        if isinstance(row.get("luma_preservation"), dict) and row.get("luma_preservation", {}).get("beta") is not None
+    ]
     audit = {
         "operator": "surface_residual_subdivision_delta",
         "test_usage": "none",
@@ -753,6 +1171,28 @@ def main() -> int:
         },
         "strength": float(args.strength),
         "max_abs_delta_rgb": float(args.max_abs_delta_rgb),
+        "feature_mode": str(args.feature_mode),
+        "basis_dim": int(12 if str(args.feature_mode) == "sh1" else 3),
+        "delta_storage": "sh_coeff" if str(args.feature_mode) == "sh1" else "rgb_dc",
+        "features_rest_channels_written": int(3 if str(args.feature_mode) == "sh1" else 0),
+        "max_abs_sh_coeff": float(max_abs_sh_coeff),
+        "luma_preservation": {
+            "enabled": bool(args.luma_preserve),
+            "active": bool(args.luma_preserve and str(args.feature_mode) == "sh1"),
+            "mode": "sh1_dc_luma_shrink",
+            "min_luma_relative_gain": float(args.min_luma_relative_gain),
+            "max_mean_luma_shift": float(args.max_mean_luma_shift),
+            "shrink_grid": [float(x) for x in parse_float_grid(args.luma_shrink_grid)],
+            "shrink_selection": str(args.luma_shrink_selection),
+            "accepted_beta_mean": float(np.mean(accepted_luma_betas)) if accepted_luma_betas else 0.0,
+            "accepted_beta_max": float(np.max(accepted_luma_betas)) if accepted_luma_betas else 0.0,
+        },
+        "anchor_support": {
+            "enabled": bool(args.anchor_support),
+            "anchor_max_error_quantile": float(args.anchor_max_error_quantile),
+            "anchor_samples_per_face_view": int(args.anchor_samples_per_face_view),
+            "anchor_weight": float(args.anchor_weight),
+        },
         "lambda_ridge": float(args.lambda_ridge),
         "min_policy_val_relative_gain": float(args.min_policy_val_relative_gain),
         "policy_val_offsets": [int(x) for x in offsets],
@@ -791,6 +1231,10 @@ def main() -> int:
         f"- accepted faces: `{audit['accepted_faces']}`",
         f"- policy offsets: `{','.join(str(x) for x in audit['policy_val_offsets'])}`",
         f"- min passing offsets: `{audit['min_policy_val_offsets']}`",
+        f"- feature mode: `{audit['feature_mode']}`",
+        f"- basis dim: `{audit['basis_dim']}`",
+        f"- luma preservation: `{str(audit['luma_preservation']['active']).lower()}`",
+        f"- anchor support: `{str(audit['anchor_support']['enabled']).lower()}`",
         f"- no-op copy: `{str(audit['no_op_copy']).lower()}`",
         f"- mean proxy relative gain: `{audit['mean_proxy_relative_gain']:.6f}`",
         f"- mean delta abs: `{audit['mean_delta_abs']:.6f}`",

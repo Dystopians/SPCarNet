@@ -290,3 +290,86 @@ from DC-only midpoint materialization to a more expressive but still
 train-certified representation, such as subdivision-local SH residuals or
 view-support clustered surface residual codes trained against multiple
 train-only support partitions.
+
+## SH1/Luma/Anchor and Render-Calibrated Prefix Attempts
+
+This follow-up round upgraded the subdivision branch from DC-only midpoint
+residuals to subdivision-local SH1 residuals, added explicit luma-preserving
+projection, and added a candidate-plan replay interface for render-calibrated
+prefix tests.  These are real pipeline changes, but they still do not close the
+paper-level Phase-S claim.
+
+New code interfaces:
+
+- `--feature_mode sh1` and `--max_abs_sh_coeff` in
+  `scripts/car_model/ecsr_apply_surface_residual_subdivision_delta.py`;
+- runner mirrors `--delta_subdivision_feature_mode` and
+  `--delta_subdivision_max_abs_sh_coeff`;
+- SH1 midpoint deltas write DC to `features_dc` and the first three SH channels
+  to `features_rest`;
+- `--luma_preserve`, `--luma_shrink_grid`, and
+  `--luma_shrink_selection` add train-only SH1 DC-luma projection;
+- `--anchor_support` adds low-error in-face anchors to constrain updates on
+  already-stable pixels;
+- `--candidate_plan_out` and `--materialize_plan_in` allow replaying a selected
+  candidate subset into a checkpoint before running the real render gate.
+
+Static validation:
+
+```bash
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python -m py_compile \
+  scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py \
+  scripts/car_model/ecsr_apply_surface_residual_subdivision_delta.py \
+  scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py
+
+git diff --check
+```
+
+Key evidence paths:
+
+- `counter` v11b strict SH1:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v11b_sh1_boundsfix_finaldelta_20260512_counter/counter/multifold_trainval_gate.json`
+- `treehill` v11b strict SH1:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v11b_sh1_boundsfix_finaldelta3of4_20260512_treehill/treehill/multifold_trainval_gate.json`
+- `treehill` v12 SH1 luma-max:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v12_sh1_lumamax_finaldelta3of4_20260512_treehill/treehill/multifold_trainval_gate.json`
+- `treehill` v13 SH1 luma + anchor:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v13_sh1_anchor_lumamax_finaldelta3of4_20260512_treehill/treehill/multifold_trainval_gate.json`
+- `treehill` v14/v15/v16 render-calibrated prefix replays:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v14_rendercalib_v12top8_20260512_treehill/treehill/multifold_trainval_gate.json`,
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v15_rendercalib_v12top4_20260512_treehill/treehill/multifold_trainval_gate.json`,
+  and
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v16_rendercalib_v12top1_20260512_treehill/treehill/multifold_trainval_gate.json`.
+
+Strict four-offset results:
+
+| variant | accepted | faces | mean dPSNR | mean dSSIM | mean dLPIPS | main failure |
+|---|---:|---:|---:|---:|---:|---|
+| counter v11b SH1 | true | 1 | +0.000003 | +0.000000 | -0.000001 | passes but near no-op |
+| treehill v11b SH1 | false | 64 | +0.000660 | +0.000014 | -0.000519 | offset PSNR/SSIM failures |
+| treehill v12 luma-max | false | 64 | +0.000672 | -0.000004 | -0.000443 | offset 0/1 PSNR and offset 1/2 SSIM |
+| treehill v13 anchor | false | 11 | -0.000038 | -0.000546 | -0.001203 | SSIM fails on all offsets |
+| treehill v14 v12-top8 replay | false | 8 | -0.000247 | -0.000090 | -0.000585 | offsets 2/3 fail PSNR/SSIM |
+| treehill v15 v12-top4 replay | false | 4 | -0.000023 | +0.000026 | -0.000155 | offsets 0/3 fail |
+| treehill v16 v12-top1 replay | false | 1 | -0.000354 | -0.000018 | -0.000013 | offset 3 fails PSNR/SSIM |
+
+Important observations:
+
+- SH1 residuals produce real LPIPS improvements on `treehill`, often much
+  larger than the DC-only branch, so the added representation capacity is not a
+  no-op.
+- Luma projection improves some report-only/single-gate behavior but does not
+  fix strict split instability.
+- Low-error anchors make the update more conservative in single-gate testing,
+  but under strict four-offset rendering they still introduce SSIM regressions.
+- Render-calibrated prefix replay is useful diagnostically: top-8 passes offsets
+  0/1 but fails 2/3; top-4 passes 1/2 but fails 0/3; top-1 passes 0/1/2 but
+  still fails offset 3.  This proves a simple top-prefix policy is insufficient.
+
+Updated decision: the current method remains `NOT COMPLETE`.  We now have a
+clearer blocker, not merely missing experiments: local face-prefix selection
+cannot provide a nontrivial treehill update that passes all strict train-only
+offsets.  The next credible step is a true render-calibrated combinatorial or
+greedy acceptance policy that uses real train-val render feedback to accept or
+reject candidate groups, or a stronger structure-preserving representation loss
+that directly targets SSIM instead of relying on local RGB/luma proxies.
