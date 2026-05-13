@@ -199,6 +199,38 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="When patch certification is enabled, fit one train-only shrink scale per accepted patch.",
     )
+    parser.add_argument(
+        "--candidate_plan_out",
+        type=Path,
+        default=None,
+        help=(
+            "Write all train-certified face-local residual candidates and their fitted coefficients "
+            "to a JSON plan for later render-calibrated subset materialization."
+        ),
+    )
+    parser.add_argument(
+        "--materialize_plan_in",
+        type=Path,
+        default=None,
+        help="Materialize face-local residuals from a previously written candidate plan instead of refitting.",
+    )
+    parser.add_argument(
+        "--materialize_plan_limit",
+        type=int,
+        default=0,
+        help="Keep only the first N rows from --materialize_plan_in after optional face-id filtering. 0 keeps all.",
+    )
+    parser.add_argument(
+        "--materialize_plan_face_ids",
+        default="",
+        help="Optional comma-separated face ids to materialize from --materialize_plan_in.",
+    )
+    parser.add_argument(
+        "--materialize_plan_scale",
+        type=float,
+        default=1.0,
+        help="Uniform scale applied to plan coefficients during materialization. Used only with --materialize_plan_in.",
+    )
     parser.add_argument("--no_op_on_fail", action="store_true", default=True)
     parser.add_argument("--force_apply", action="store_true")
     parser.add_argument("--device", default="cuda")
@@ -1484,6 +1516,205 @@ def materialize_facelocal(
     return out
 
 
+def _parse_face_id_filter(raw: str) -> set[int]:
+    out: set[int] = set()
+    for item in str(raw or "").replace(" ", ",").split(","):
+        if not item:
+            continue
+        out.add(int(item))
+    return out
+
+
+def read_candidate_plan(
+    path: Path,
+    *,
+    limit: int = 0,
+    face_ids: set[int] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    meta: dict[str, Any] = {}
+    if isinstance(payload, list):
+        rows = payload
+    elif isinstance(payload, dict):
+        meta = payload
+        if isinstance(payload.get("candidates"), list):
+            rows = payload["candidates"]
+        elif isinstance(payload.get("accepted"), list):
+            rows = payload["accepted"]
+        elif isinstance(payload.get("accepted_preview"), list):
+            rows = payload["accepted_preview"]
+        else:
+            rows = []
+    else:
+        rows = []
+    filtered: list[dict[str, Any]] = []
+    keep_ids = face_ids or set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            face_id = int(row.get("face_id", -1))
+        except Exception:
+            continue
+        if keep_ids and face_id not in keep_ids:
+            continue
+        filtered.append(dict(row))
+    if int(limit) > 0:
+        filtered = filtered[: int(limit)]
+    return filtered, meta
+
+
+def plan_rows_to_facelocal_coeff(
+    rows: list[dict[str, Any]],
+    faces: torch.Tensor,
+    *,
+    fallback_basis_count: int,
+) -> tuple[list[int], torch.Tensor, list[dict[str, Any]]]:
+    selected_faces: list[int] = []
+    coeff_rows: list[torch.Tensor] = []
+    rejected: list[dict[str, Any]] = []
+    face_count = int(faces.shape[0])
+    for row in rows:
+        face_id = int(row.get("face_id", -1))
+        coeff_raw = row.get("delta_coeff", row.get("coeff"))
+        reasons: list[str] = []
+        if face_id < 0 or face_id >= face_count:
+            reasons.append("invalid_face_id")
+        if coeff_raw is None:
+            reasons.append("missing_delta_coeff")
+        if reasons:
+            rejected.append({"face_id": face_id, "decision_reasons": reasons})
+            continue
+        coeff = torch.as_tensor(coeff_raw, dtype=torch.float32)
+        if coeff.ndim == 2 and coeff.shape == (3, 3):
+            coeff = coeff[:, None, :]
+        if coeff.ndim != 3 or int(coeff.shape[0]) != 3 or int(coeff.shape[2]) != 3:
+            rejected.append(
+                {
+                    "face_id": face_id,
+                    "decision_reasons": ["invalid_delta_coeff_shape"],
+                    "shape": list(coeff.shape),
+                }
+            )
+            continue
+        basis_count = int(coeff.shape[1])
+        if basis_count <= 0:
+            basis_count = int(fallback_basis_count)
+        selected_faces.append(face_id)
+        coeff_rows.append(coeff[:, :basis_count, :])
+    if not coeff_rows:
+        basis_count = max(int(fallback_basis_count), 1)
+        return selected_faces, torch.empty((0, basis_count, 3), dtype=torch.float32), rejected
+    basis_count = max(int(row.shape[1]) for row in coeff_rows)
+    padded: list[torch.Tensor] = []
+    for coeff in coeff_rows:
+        if int(coeff.shape[1]) == basis_count:
+            padded.append(coeff)
+            continue
+        pad = torch.zeros((3, basis_count - int(coeff.shape[1]), 3), dtype=torch.float32)
+        padded.append(torch.cat([coeff, pad], dim=1))
+    return selected_faces, torch.cat(padded, dim=0), rejected
+
+
+def write_candidate_plan(
+    path: Path,
+    *,
+    args: argparse.Namespace,
+    selected_faces: list[int],
+    face_candidates: list[int],
+    coeff: torch.Tensor,
+    face_stats: dict[int, dict[str, float]],
+    face_policy: dict[int, dict[str, float]],
+    validation_shrink_by_face: dict[int, dict[str, Any]],
+    face_view_gain_certificate: dict[int, dict[str, Any]],
+    crossfold_face_gain: dict[int, dict[str, Any]],
+    face_view_consensus: dict[int, dict[str, Any]],
+    patch_cert_by_face: dict[int, dict[str, Any]],
+    fit_proxy: dict[str, float],
+    val_proxy: dict[str, float],
+) -> None:
+    face_to_selected = {int(fid): idx for idx, fid in enumerate(selected_faces)}
+    candidates: list[dict[str, Any]] = []
+    for fid in face_candidates:
+        row = face_to_selected.get(int(fid))
+        if row is None:
+            continue
+        local = coeff[row * 3 : row * 3 + 3].detach().cpu().float()
+        candidates.append(
+            {
+                "face_id": int(fid),
+                "rank": int(len(candidates)),
+                "delta_coeff": local.tolist(),
+                "face_stats": face_stats.get(int(fid), {}),
+                "policy_val_proxy": face_policy.get(int(fid), {}),
+                "validation_shrink": validation_shrink_by_face.get(int(fid), {}),
+                "face_view_gain_certificate": face_view_gain_certificate.get(int(fid), {}),
+                "crossfold_face_gain_certificate": crossfold_face_gain.get(int(fid), {}),
+                "face_view_consensus": face_view_consensus.get(int(fid), {}),
+                "patch_certificate": patch_cert_by_face.get(int(fid), {}),
+                "policy_pass": True,
+            }
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "operator": "surface_residual_facelocal_sh_delta_candidate_plan",
+                "test_usage": "none",
+                "source_model": str(args.source_model),
+                "iteration": int(args.iteration),
+                "evidence_dir": str(args.evidence_dir),
+                "sh_degree": int(args.sh_degree),
+                "basis_count": int((int(args.sh_degree) + 1) ** 2),
+                "strength": float(args.strength),
+                "max_abs_delta_rgb": float(args.max_abs_delta_rgb),
+                "candidate_count": int(len(candidates)),
+                "fit_proxy": fit_proxy,
+                "policy_val_proxy": val_proxy,
+                "filters": {
+                    "top_k": int(args.top_k),
+                    "min_view_hits": int(args.min_view_hits),
+                    "min_consistency": float(args.min_consistency),
+                    "min_pixel_count": float(args.min_pixel_count),
+                    "high_error_quantile": float(args.high_error_quantile),
+                    "min_alpha": float(args.min_alpha),
+                    "uniform_barycentric": bool(args.uniform_barycentric),
+                },
+                "candidates": candidates,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def write_plan_materialize_audit(output_model: Path, audit: dict[str, Any]) -> None:
+    (output_model / "surface_residual_facelocal_sh1_delta_audit.json").write_text(
+        json.dumps(audit, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    lines = [
+        "# ECSR Face-Local Surface Residual SH Delta Plan Materialization Audit",
+        "",
+        f"- operator: `{audit['operator']}`",
+        f"- plan: `{audit['materialize_plan_in']}`",
+        f"- requested plan rows: `{audit['requested_plan_rows']}`",
+        f"- accepted faces: `{audit['accepted_faces']}`",
+        f"- vertices added: `{audit['vertices_added']}`",
+        f"- accepted: `{audit['accepted']}`",
+        f"- no-op copy: `{audit['no_op_copy']}`",
+        f"- rejected plan rows: `{len(audit['rejected_plan_rows'])}`",
+        f"- triangles unchanged: `{audit['topology_triangles_unchanged']}`",
+        f"- degenerate faces: `{audit['topology_after']['degenerate_face_count']}`",
+        f"- invalid indices: `{audit['topology_after']['invalid_index_count']}`",
+    ]
+    (output_model / "surface_residual_facelocal_sh1_delta_audit.md").write_text(
+        "\n".join(lines) + "\n",
+        encoding="utf-8",
+    )
+
+
 def write_audit(output_model: Path, audit: dict[str, Any]) -> None:
     (output_model / "surface_residual_facelocal_sh1_delta_audit.json").write_text(
         json.dumps(audit, indent=2) + "\n",
@@ -1545,6 +1776,94 @@ def main() -> int:
     state = torch.load(source_checkpoint, map_location="cpu")
     faces = state["_triangle_indices"].detach().cpu().long()
     vertices = state["triangles_points"].detach().cpu().float()
+
+    if args.materialize_plan_in is not None:
+        plan_rows, plan_meta = read_candidate_plan(
+            args.materialize_plan_in,
+            limit=int(args.materialize_plan_limit),
+            face_ids=_parse_face_id_filter(args.materialize_plan_face_ids),
+        )
+        plan_basis_count = int(plan_meta.get("basis_count", (int(args.sh_degree) + 1) ** 2)) if isinstance(plan_meta, dict) else int((int(args.sh_degree) + 1) ** 2)
+        accepted_faces, coeff, rejected_plan_rows = plan_rows_to_facelocal_coeff(
+            plan_rows,
+            faces,
+            fallback_basis_count=plan_basis_count,
+        )
+        coeff = coeff * float(args.materialize_plan_scale)
+        if accepted_faces or not bool(args.no_op_on_fail):
+            source_vertex_ids = faces[torch.as_tensor(accepted_faces, dtype=torch.long)].long().reshape(-1) if accepted_faces else torch.empty((0,), dtype=torch.long)
+            out = materialize_facelocal(
+                state,
+                faces,
+                accepted_faces,
+                source_vertex_ids,
+                coeff,
+                accepted_faces,
+            )
+        else:
+            out = clone_state(state)
+        torch.save(out, output_checkpoint)
+        degenerate, invalid = validate_faces(out["triangles_points"], out["_triangle_indices"])
+        topology_triangles_unchanged = int(out["_triangle_indices"].shape[0]) == int(faces.shape[0])
+        vertices_added = int(out["triangles_points"].shape[0]) - int(vertices.shape[0])
+        coeff_abs = coeff.abs() if coeff.numel() and accepted_faces else torch.empty((0,), dtype=torch.float32)
+        no_op_copy = bool(not accepted_faces)
+        accepted_set = set(int(fid) for fid in accepted_faces)
+        accepted_plan_rows = [row for row in plan_rows if int(row.get("face_id", -1)) in accepted_set]
+        policy_pass = bool(accepted_faces) and all(bool(row.get("policy_pass", True)) for row in accepted_plan_rows)
+        audit = {
+            "operator": "surface_residual_facelocal_sh_delta_plan_materialize",
+            "test_usage": "none",
+            "source_model": str(args.source_model),
+            "source_checkpoint": str(source_checkpoint),
+            "output_model": str(args.output_model),
+            "output_checkpoint": str(output_checkpoint),
+            "iteration": int(args.iteration),
+            "materialize_plan_in": str(args.materialize_plan_in),
+            "materialize_plan_limit": int(args.materialize_plan_limit),
+            "materialize_plan_face_ids": str(args.materialize_plan_face_ids),
+            "materialize_plan_scale": float(args.materialize_plan_scale),
+            "plan_source_operator": plan_meta.get("operator") if isinstance(plan_meta, dict) else None,
+            "plan_source_model": plan_meta.get("source_model") if isinstance(plan_meta, dict) else None,
+            "requested_plan_rows": int(len(plan_rows)),
+            "rejected_plan_rows": rejected_plan_rows[:20],
+            "selected_faces": int(len(accepted_faces)),
+            "candidate_faces": int(len(plan_rows)),
+            "accepted_faces": int(len(accepted_faces)),
+            "vertices_added": int(vertices_added),
+            "sh_degree": int(round((plan_basis_count**0.5) - 1)) if plan_basis_count > 0 else int(args.sh_degree),
+            "basis_count": int(plan_basis_count),
+            "accepted": bool(accepted_faces),
+            "policy_pass": bool(policy_pass),
+            "force_apply": bool(args.force_apply),
+            "no_op_copy": no_op_copy,
+            "coeff_abs_mean": float(coeff_abs.mean().item()) if coeff_abs.numel() else 0.0,
+            "coeff_abs_max": float(coeff_abs.max().item()) if coeff_abs.numel() else 0.0,
+            "topology_before": {
+                "triangles": int(faces.shape[0]),
+                "vertices": int(vertices.shape[0]),
+            },
+            "topology_after": {
+                "triangles": int(out["_triangle_indices"].shape[0]),
+                "vertices": int(out["triangles_points"].shape[0]),
+                "degenerate_face_count": int(degenerate),
+                "invalid_index_count": int(invalid),
+            },
+            "topology_triangles_unchanged": bool(topology_triangles_unchanged),
+            "accepted_preview": [
+                {
+                    "face_id": int(row.get("face_id", -1)),
+                    "rank": int(row.get("rank", idx)),
+                    "policy_val_proxy": row.get("policy_val_proxy", {}),
+                    "face_stats": row.get("face_stats", {}),
+                }
+                for idx, row in enumerate(plan_rows[:20])
+                if int(row.get("face_id", -1)) in accepted_set
+            ],
+        }
+        write_plan_materialize_audit(args.output_model, audit)
+        print(json.dumps(audit, indent=2))
+        return 0 if degenerate == 0 and invalid == 0 else 1
 
     selected_faces, face_stats = read_selected_faces(
         args.evidence_dir / "top_residual_supports.csv",
@@ -1735,6 +2054,23 @@ def main() -> int:
     if int(args.max_faces_to_apply) >= 0:
         accepted_faces = accepted_faces[: max(int(args.max_faces_to_apply), 0)]
     coeff = coeff_device.detach().cpu()
+    if args.candidate_plan_out is not None:
+        write_candidate_plan(
+            args.candidate_plan_out,
+            args=args,
+            selected_faces=selected_faces,
+            face_candidates=face_candidates,
+            coeff=coeff,
+            face_stats=face_stats,
+            face_policy=face_policy,
+            validation_shrink_by_face=validation_shrink_by_face,
+            face_view_gain_certificate=face_view_gain_certificate,
+            crossfold_face_gain=crossfold_face_gain,
+            face_view_consensus=face_view_consensus,
+            patch_cert_by_face=patch_cert_by_face,
+            fit_proxy=fit_proxy,
+            val_proxy=val_proxy,
+        )
     accepted = bool((global_policy_pass and accepted_faces) or args.force_apply)
     if bool(args.force_apply) and not accepted_faces:
         accepted_faces = selected_faces[: max(int(args.max_faces_to_apply), 0)]

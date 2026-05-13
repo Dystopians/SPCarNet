@@ -395,6 +395,26 @@ def _apply_delta(
         )
         if str(args.delta_operator) == "facelocal_sh1":
             cmd.extend(["--sh_degree", str(args.delta_sh_degree)])
+            if str(args.delta_facelocal_candidate_plan_out).strip():
+                cmd.extend(["--candidate_plan_out", _scene_format_path(args.delta_facelocal_candidate_plan_out, scene)])
+            if str(args.delta_facelocal_materialize_plan_in).strip():
+                cmd.extend(
+                    [
+                        "--materialize_plan_in",
+                        _scene_format_path(args.delta_facelocal_materialize_plan_in, scene),
+                        "--materialize_plan_limit",
+                        str(args.delta_facelocal_materialize_plan_limit),
+                        "--materialize_plan_scale",
+                        str(args.delta_facelocal_materialize_plan_scale),
+                    ]
+                )
+                if str(args.delta_facelocal_materialize_plan_face_ids).strip():
+                    cmd.extend(
+                        [
+                            "--materialize_plan_face_ids",
+                            str(args.delta_facelocal_materialize_plan_face_ids),
+                        ]
+                    )
         if bool(args.delta_uniform_barycentric):
             cmd.append("--uniform_barycentric")
     if str(args.delta_operator) == "facelocal_sh1":
@@ -1002,6 +1022,23 @@ def main() -> int:
     parser.add_argument("--delta_patch_cert_neighbor_mode", choices=("topology", "centroid", "both"), default="topology")
     parser.add_argument("--delta_patch_cert_centroid_candidates_per_seed", type=int, default=64)
     parser.add_argument("--delta_patch_cert_shrink", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--delta_facelocal_candidate_plan_out",
+        default="",
+        help="Facelocal-only candidate plan output path template. Use {scene} for scene-specific paths.",
+    )
+    parser.add_argument(
+        "--delta_facelocal_materialize_plan_in",
+        default="",
+        help="Facelocal-only candidate plan input path template for render-calibrated subset materialization.",
+    )
+    parser.add_argument("--delta_facelocal_materialize_plan_limit", type=int, default=0)
+    parser.add_argument("--delta_facelocal_materialize_plan_scale", type=float, default=1.0)
+    parser.add_argument(
+        "--delta_facelocal_materialize_plan_face_ids",
+        default="",
+        help="Optional comma-separated face ids to materialize from the facelocal candidate plan.",
+    )
     parser.add_argument("--delta_max_faces_to_apply", type=int, default=2048)
     parser.add_argument("--delta_min_face_policy_val_relative_gain", type=float, default=0.0)
     parser.add_argument("--delta_min_face_policy_val_samples", type=int, default=8)
