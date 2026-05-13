@@ -6387,3 +6387,177 @@ endpoint is Phase-J; the active representation-level Phase-S branch is not a
 closed paper method because `bicycle` rejects and `counter/treehill` never reach
 strict four-offset acceptance under the frozen policy. The next real progress
 must be a new representation operator, not another local parameter sweep.
+
+## 2026-05-12 Representation Upgrade Loop: SH3 and Subdivision
+
+Implemented and validated a real Phase-S representation extension:
+face-local residuals can now use `--sh_degree 3`, writing the full stored SH
+residual basis instead of only DC plus degree-1 terms.  Static checks passed:
+
+```bash
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python -m py_compile \
+  scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py \
+  scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py \
+  scripts/car_model/ecsr_apply_surface_residual_subdivision_delta.py
+
+git diff --check
+```
+
+Completed SH3 hard-scene single-gate evidence:
+
+- `bicycle`: accepted but numerically negligible, train-val PSNR `+0.000002`
+  and test PSNR `+0.000000`.
+- `counter`: rejected by train-val PSNR `-0.000004`; report-only test PSNR
+  `-0.000299`, LPIPS regressed by `+0.000050`.
+- `treehill`: rejected by train-val PSNR `-0.000687`; report-only test PSNR
+  `-0.000481`.
+
+Report:
+
+- `docs/car_model/5-12-Representation-Upgrade-Loop.md`
+
+Decision: SH3 is a correct implementation milestone, but it does not close the
+paper-loop method gap.  The active next attempt was local subdivision residuals
+with barycentric train evidence:
+
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/subdivision_v1_20260512_counter`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/subdivision_v1_20260512_treehill`
+- evidence root:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/surface_evidence_subdivision_v1_20260512`
+
+Completed subdivision/residual and recovery evidence:
+
+- `treehill` subdivision v2/v3/v4 passed the single train-val gate, but all
+  strict four-offset checks failed because offsets 2/3 regressed PSNR/SSIM.
+- `counter` subdivision v1-v7 all failed the fair train-val gate.  The strongest
+  report-only test row was v4 viewcert with test PSNR `+0.012033` and LPIPS
+  `-0.000869`, but train-val PSNR/SSIM regressed.
+- a 500-iteration topology-frozen recovery on `counter` v4 amplified the
+  report-only test win to PSNR `+0.024517`, SSIM `+0.001750`, LPIPS `-0.002235`,
+  but failed the train-only policy gate with PSNR `-0.025640`, SSIM `-0.000190`,
+  LPIPS `+0.002709`.
+
+Key paths:
+
+- full report:
+  `docs/car_model/5-12-Representation-Upgrade-Loop.md`
+- subdivision v4 counter:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/subdivision_v4_viewcert_20260512_counter`
+- recovery counter:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/recovery_subdivision_v4_viewcert_counter_500iters_20260512`
+- treehill strict v4:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v4_viewcert_20260512_treehill/treehill/multifold_trainval_gate.md`
+
+Updated decision: the current local residual/subdivision family is a real
+representation-level method change, but it is still not a valid paper-claim
+closure.  It can find localized test improvements, yet those improvements are
+not robust under train-only held-out selection.  The next credible change must
+explicitly optimize or select corrections for multi-offset train-only
+robustness, not continue single-offset parameter sweeps.
+
+## 2026-05-12 Multi-Offset Subdivision Robust Policy
+
+Implemented a train-only multi-offset policy inside the subdivision residual
+operator and exposed it through the Phase-K barycentric gate runner.  This is a
+method-side reliability change, not a scene parameter scan: before a selected
+face can be materialized, the operator now fits/evaluates that face across
+multiple train-only support/validation offsets and averages only passing fold
+deltas into the final midpoint residual.
+
+Code paths:
+
+- `scripts/car_model/ecsr_apply_surface_residual_subdivision_delta.py`
+- `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`
+
+New interface:
+
+- `--delta_policy_val_offsets`
+- `--delta_min_policy_val_offsets`
+- `--delta_min_policy_val_offset_fraction`
+- operator-side mirrors:
+  `--policy_val_offsets`, `--min_policy_val_offsets`,
+  `--min_policy_val_offset_fraction`
+
+Hard-scene evidence:
+
+- `counter` v8 strict 4/4 policy:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/subdivision_v8_multioffset_20260512_counter`
+- `counter` v8 strict four-offset gate:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v8_multioffset_20260512_counter/counter/multifold_trainval_gate.json`
+- `treehill` v8 strict 4/4 no-op:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/subdivision_v8_multioffset_20260512_treehill`
+- `treehill` v9 relaxed 3/4 diagnostic:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/subdivision_v9_multioffset3of4_gain0_20260512_treehill`
+- `treehill` v9 strict four-offset gate:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v9_multioffset3of4_gain0_20260512_treehill/treehill/multifold_trainval_gate.json`
+
+Results:
+
+- `counter` v8 passed the strict four-offset gate, but accepted only one face.
+  Single-gate train-val deltas were PSNR `+0.000006`, SSIM `+0.000000`,
+  LPIPS `-0.000001`; report-only test deltas were PSNR `+0.000006`,
+  SSIM `-0.000000`, LPIPS `-0.000000`.  Strict offsets all passed with
+  similarly tiny 1e-6 scale gains.
+- `treehill` v8 strict 4/4 policy rejected all faces and copied the Phase-J
+  model as a no-op.
+- `treehill` v9 relaxed 3/4 policy accepted 45 faces and passed the single
+  train-val gate with PSNR `+0.000731`, SSIM `-0.000027`, LPIPS `-0.000010`,
+  but failed strict four-offset validation: offset 1 regressed LPIPS, offset 2
+  regressed SSIM, and offset 3 regressed PSNR/SSIM.
+
+Updated decision: the robust policy fixed the selection-protocol weakness but
+not the scientific effect-size weakness.  A candidate can now be made robust
+only by becoming nearly no-op; when the update is strong enough to be visible,
+it is still not split-stable.  This is a useful negative result and a cleaner
+operator, but not a paper-level closed loop.  The next method attempt should
+replace DC-only midpoint residuals with subdivision-local SH or view-support
+clustered residual codes, still selected by the same multi-offset train-only
+policy.
+
+## 2026-05-12 Multi-Offset V10 Final-Delta Certification Fix
+
+Follow-up code review found a correctness gap in the first multi-offset
+subdivision policy: v8/v9 certified each offset-specific fitted delta, then
+averaged passing deltas into the checkpoint.  The averaged final delta itself
+was not re-evaluated on every train-only validation offset before
+materialization.  The operator was fixed so v10 re-evaluates the final averaged
+delta across all requested offsets, and `policy_pass` is now distinct from
+forced/materialized output.  The runner was also fixed to require barycentric
+evidence for subdivision even if legacy `--delta_uniform_barycentric` is set.
+
+Static validation passed:
+
+```bash
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python -m py_compile \
+  scripts/car_model/ecsr_apply_surface_residual_subdivision_delta.py \
+  scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py
+```
+
+Corrected v10 evidence:
+
+- `counter` v10 single gate:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/subdivision_v10_finaldelta_20260512_counter`
+- `counter` v10 strict gate:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v10_finaldelta_20260512_counter/counter/multifold_trainval_gate.json`
+- `treehill` v10 single gate:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/subdivision_v10_finaldelta3of4_gain0_20260512_treehill`
+- `treehill` v10 strict gate:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/subdivision_v10_finaldelta3of4_gain0_20260512_treehill/treehill/multifold_trainval_gate.json`
+
+Results:
+
+- `counter` v10 passed strict four-offset validation, but only accepted one
+  face.  Single-gate train-val deltas were PSNR `+0.000006`, SSIM `+0.000000`,
+  LPIPS `-0.000001`; report-only test deltas were PSNR `+0.000006`,
+  SSIM `-0.000000`, LPIPS `-0.000000`.  Strict four-offset mean deltas were
+  PSNR `+0.000003`, SSIM `+0.000000`, LPIPS `-0.000001`.
+- `treehill` v10 accepted 59 faces and passed the relaxed single gate with
+  train-val PSNR `+0.000639`, SSIM `-0.000032`, LPIPS `-0.000015`, but failed
+  strict four-offset validation.  Offset 0 failed PSNR, offset 1 failed SSIM,
+  offset 2 failed PSNR/SSIM, and only offset 3 passed.
+
+Updated decision: v10 is the corrected authoritative evidence.  It strengthens
+the engineering reliability claim, but it also confirms the research blocker:
+the current DC-only subdivision residual either becomes near no-op under robust
+selection (`counter`) or remains split-unstable when it has visible effect size
+(`treehill`).  This is still not a paper-level closed loop.

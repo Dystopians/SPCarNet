@@ -52,6 +52,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_fit_samples", type=int, default=24)
     parser.add_argument("--min_val_samples", type=int, default=12)
     parser.add_argument("--min_policy_val_relative_gain", type=float, default=0.05)
+    parser.add_argument(
+        "--policy_val_offsets",
+        default="",
+        help=(
+            "Comma-separated train-only validation offsets for robust per-face "
+            "cross-validation. Empty preserves the historical single offset 0."
+        ),
+    )
+    parser.add_argument(
+        "--min_policy_val_offsets",
+        type=int,
+        default=0,
+        help="Minimum passing offsets required. 0 requires every requested offset.",
+    )
+    parser.add_argument(
+        "--min_policy_val_offset_fraction",
+        type=float,
+        default=1.0,
+        help="Minimum fraction of requested offsets that must pass for a face.",
+    )
+    parser.add_argument("--min_view_gain_views", type=int, default=0)
+    parser.add_argument("--min_view_gain_relative_gain", type=float, default=0.0)
+    parser.add_argument("--min_view_gain_samples", type=int, default=4)
+    parser.add_argument("--min_view_gain_fraction", type=float, default=0.0)
     parser.add_argument("--max_faces_to_apply", type=int, default=512)
     parser.add_argument("--force_apply", action="store_true")
     parser.add_argument("--no_op_on_fail", action="store_true", default=True)
@@ -111,14 +135,29 @@ def read_selected_faces(
     return [int(row["face_id"]) for row in rows], stats
 
 
-def split_view_paths(view_paths: list[Path], stride: int) -> tuple[list[Path], list[Path]]:
+def parse_policy_offsets(raw: str, *, stride: int) -> list[int]:
+    stride = max(int(stride), 2)
+    if not str(raw).strip():
+        return [0]
+    offsets: list[int] = []
+    for item in str(raw).replace(" ", ",").split(","):
+        if not item:
+            continue
+        offset = int(item) % stride
+        if offset not in offsets:
+            offsets.append(offset)
+    return offsets or [0]
+
+
+def split_view_paths(view_paths: list[Path], stride: int, offset: int = 0) -> tuple[list[Path], list[Path]]:
     if len(view_paths) < 3:
         return view_paths, view_paths
     stride = max(int(stride), 2)
+    offset = int(offset) % stride
     fit: list[Path] = []
     val: list[Path] = []
     for idx, path in enumerate(view_paths):
-        if idx % stride == 0:
+        if idx % stride == offset:
             val.append(path)
         else:
             fit.append(path)
@@ -261,6 +300,89 @@ def fit_delta(
     return delta, stats
 
 
+def evaluate_delta(
+    delta: np.ndarray,
+    basis_val: np.ndarray,
+    target_val: np.ndarray,
+    weight_val: np.ndarray,
+    *,
+    fit_samples: int,
+    strength: float,
+    max_abs_delta_rgb: float,
+) -> dict[str, float]:
+    y_val = np.clip(target_val * float(strength), -float(max_abs_delta_rgb), float(max_abs_delta_rgb))
+    wv = weight_val.reshape(-1, 1).astype(np.float32)
+    pred0 = np.zeros_like(y_val)
+    pred = basis_val @ delta
+    denom = float(np.maximum(wv.sum(), 1e-8))
+    initial = float((((pred0 - y_val) ** 2) * wv).sum() / denom)
+    final = float((((pred - y_val) ** 2) * wv).sum() / denom)
+    gain = float((initial - final) / max(initial, 1e-8))
+    return {
+        "fit_samples": int(fit_samples),
+        "val_samples": int(basis_val.shape[0]),
+        "initial_val_mse": initial,
+        "final_val_mse": final,
+        "relative_gain": gain,
+        "delta_abs_mean": float(np.abs(delta).mean()) if delta.size else 0.0,
+        "delta_abs_max": float(np.abs(delta).max()) if delta.size else 0.0,
+    }
+
+
+def view_gain_certificate(
+    delta: np.ndarray,
+    face_samples: dict[str, list[np.ndarray]],
+    *,
+    strength: float,
+    max_abs_delta_rgb: float,
+    min_samples: int,
+    min_relative_gain: float,
+    min_views: int,
+    min_fraction: float,
+) -> dict[str, Any]:
+    view_rows: list[dict[str, float]] = []
+    basis_views = face_samples.get("basis", [])
+    target_views = face_samples.get("target", [])
+    weight_views = face_samples.get("weight", [])
+    for basis, target, weight in zip(basis_views, target_views, weight_views):
+        if int(basis.shape[0]) < int(min_samples):
+            continue
+        y = np.clip(target * float(strength), -float(max_abs_delta_rgb), float(max_abs_delta_rgb))
+        w = weight.reshape(-1, 1).astype(np.float32)
+        denom = float(np.maximum(w.sum(), 1e-8))
+        pred = basis @ delta
+        initial = float(((y**2) * w).sum() / denom)
+        final = float((((pred - y) ** 2) * w).sum() / denom)
+        gain = float((initial - final) / max(initial, 1e-8))
+        view_rows.append(
+            {
+                "samples": int(basis.shape[0]),
+                "initial_mse": initial,
+                "final_mse": final,
+                "relative_gain": gain,
+            }
+        )
+    passing = [row for row in view_rows if float(row["relative_gain"]) >= float(min_relative_gain)]
+    view_count = int(len(view_rows))
+    passing_count = int(len(passing))
+    fraction = float(passing_count / max(view_count, 1))
+    if int(min_views) <= 0:
+        passed = True
+    else:
+        passed = passing_count >= int(min_views) and fraction >= float(min_fraction)
+    return {
+        "passed": bool(passed),
+        "view_count": view_count,
+        "passing_count": passing_count,
+        "passing_fraction": fraction,
+        "min_views": int(min_views),
+        "min_fraction": float(min_fraction),
+        "min_relative_gain": float(min_relative_gain),
+        "min_samples": int(min_samples),
+        "views": view_rows,
+    }
+
+
 def clone_state(state: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key, value in state.items():
@@ -374,48 +496,197 @@ def main() -> int:
         min_consistency=float(args.min_consistency),
         min_pixel_count=float(args.min_pixel_count),
     )
-    fit_views, val_views = split_view_paths(view_paths, int(args.policy_val_stride))
-    fit_samples = collect_samples(
-        fit_views,
-        selected_faces,
-        face_stats,
-        high_error_quantile=float(args.high_error_quantile),
-        min_alpha=float(args.min_alpha),
-        max_samples_per_face_view=int(args.max_samples_per_face_view),
-    )
-    val_samples = collect_samples(
-        val_views,
-        selected_faces,
-        face_stats,
-        high_error_quantile=float(args.high_error_quantile),
-        min_alpha=float(args.min_alpha),
-        max_samples_per_face_view=int(args.max_samples_per_face_view),
-    )
+    offsets = parse_policy_offsets(args.policy_val_offsets, stride=int(args.policy_val_stride))
+    offset_sets: list[dict[str, Any]] = []
+    for offset in offsets:
+        fit_views, val_views = split_view_paths(view_paths, int(args.policy_val_stride), offset=offset)
+        fit_samples = collect_samples(
+            fit_views,
+            selected_faces,
+            face_stats,
+            high_error_quantile=float(args.high_error_quantile),
+            min_alpha=float(args.min_alpha),
+            max_samples_per_face_view=int(args.max_samples_per_face_view),
+        )
+        val_samples = collect_samples(
+            val_views,
+            selected_faces,
+            face_stats,
+            high_error_quantile=float(args.high_error_quantile),
+            min_alpha=float(args.min_alpha),
+            max_samples_per_face_view=int(args.max_samples_per_face_view),
+        )
+        offset_sets.append(
+            {
+                "offset": int(offset),
+                "fit_views": fit_views,
+                "val_views": val_views,
+                "fit_samples": fit_samples,
+                "val_samples": val_samples,
+            }
+        )
 
     candidates: list[dict[str, Any]] = []
+    required_offsets = int(args.min_policy_val_offsets)
+    if required_offsets <= 0:
+        required_offsets = len(offset_sets)
+    required_offsets = min(max(required_offsets, 1), max(len(offset_sets), 1))
+    required_fraction = float(args.min_policy_val_offset_fraction)
     for fid in selected_faces:
-        xf, yf, wf = _pack_face_samples(fit_samples[int(fid)])
-        xv, yv, wv = _pack_face_samples(val_samples[int(fid)])
-        if xf.shape[0] < int(args.min_fit_samples) or xv.shape[0] < int(args.min_val_samples):
+        fold_rows: list[dict[str, Any]] = []
+        passing_deltas: list[np.ndarray] = []
+        candidate_deltas: list[np.ndarray] = []
+        for offset_set in offset_sets:
+            offset = int(offset_set["offset"])
+            fit_samples = offset_set["fit_samples"]
+            val_samples = offset_set["val_samples"]
+            xf, yf, wf = _pack_face_samples(fit_samples[int(fid)])
+            xv, yv, wv = _pack_face_samples(val_samples[int(fid)])
+            if xf.shape[0] < int(args.min_fit_samples) or xv.shape[0] < int(args.min_val_samples):
+                fold_rows.append(
+                    {
+                        "offset": offset,
+                        "accepted": False,
+                        "decision_reasons": ["insufficient_samples"],
+                        "fit_samples": int(xf.shape[0]),
+                        "val_samples": int(xv.shape[0]),
+                    }
+                )
+                continue
+            delta, stats = fit_delta(
+                xf,
+                yf,
+                wf,
+                xv,
+                yv,
+                wv,
+                strength=float(args.strength),
+                max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+                lambda_ridge=float(args.lambda_ridge),
+            )
+            certificate = view_gain_certificate(
+                delta,
+                val_samples[int(fid)],
+                strength=float(args.strength),
+                max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+                min_samples=int(args.min_view_gain_samples),
+                min_relative_gain=float(args.min_view_gain_relative_gain),
+                min_views=int(args.min_view_gain_views),
+                min_fraction=float(args.min_view_gain_fraction),
+            )
+            reasons: list[str] = []
+            if float(stats["relative_gain"]) < float(args.min_policy_val_relative_gain):
+                reasons.append("relative_gain_below_threshold")
+            if not bool(certificate["passed"]):
+                reasons.append("view_gain_certificate_failed")
+            accepted_fold = not reasons
+            candidate_deltas.append(delta)
+            if accepted_fold:
+                passing_deltas.append(delta)
+            fold_rows.append(
+                {
+                    "offset": offset,
+                    "accepted": bool(accepted_fold),
+                    "decision_reasons": reasons,
+                    "proxy": stats,
+                    "view_gain_certificate": certificate,
+                }
+            )
+
+        delta_pool = passing_deltas if passing_deltas else candidate_deltas
+        if not delta_pool:
             continue
-        delta, stats = fit_delta(
-            xf,
-            yf,
-            wf,
-            xv,
-            yv,
-            wv,
-            strength=float(args.strength),
-            max_abs_delta_rgb=float(args.max_abs_delta_rgb),
-            lambda_ridge=float(args.lambda_ridge),
-        )
-        if bool(args.force_apply) or float(stats["relative_gain"]) >= float(args.min_policy_val_relative_gain):
+        delta = np.mean(np.stack(delta_pool, axis=0), axis=0).astype(np.float32)
+
+        final_fold_rows: list[dict[str, Any]] = []
+        for offset_set in offset_sets:
+            offset = int(offset_set["offset"])
+            fit_samples = offset_set["fit_samples"]
+            val_samples = offset_set["val_samples"]
+            xf, _, _ = _pack_face_samples(fit_samples[int(fid)])
+            xv, yv, wv = _pack_face_samples(val_samples[int(fid)])
+            fit_count = int(xf.shape[0])
+            if fit_count < int(args.min_fit_samples) or xv.shape[0] < int(args.min_val_samples):
+                final_fold_rows.append(
+                    {
+                        "offset": offset,
+                        "accepted": False,
+                        "decision_reasons": ["insufficient_samples"],
+                        "fit_samples": fit_count,
+                        "val_samples": int(xv.shape[0]),
+                    }
+                )
+                continue
+            final_stats = evaluate_delta(
+                delta,
+                xv,
+                yv,
+                wv,
+                fit_samples=fit_count,
+                strength=float(args.strength),
+                max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+            )
+            final_certificate = view_gain_certificate(
+                delta,
+                val_samples[int(fid)],
+                strength=float(args.strength),
+                max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+                min_samples=int(args.min_view_gain_samples),
+                min_relative_gain=float(args.min_view_gain_relative_gain),
+                min_views=int(args.min_view_gain_views),
+                min_fraction=float(args.min_view_gain_fraction),
+            )
+            reasons: list[str] = []
+            if float(final_stats["relative_gain"]) < float(args.min_policy_val_relative_gain):
+                reasons.append("relative_gain_below_threshold")
+            if not bool(final_certificate["passed"]):
+                reasons.append("view_gain_certificate_failed")
+            final_fold_rows.append(
+                {
+                    "offset": offset,
+                    "accepted": not reasons,
+                    "decision_reasons": reasons,
+                    "fit_proxy": next((row.get("proxy", {}) for row in fold_rows if int(row.get("offset", -1)) == offset), {}),
+                    "final_proxy": final_stats,
+                    "view_gain_certificate": final_certificate,
+                }
+            )
+
+        passing_count = sum(1 for row in final_fold_rows if bool(row.get("accepted", False)))
+        passing_fraction = float(passing_count / max(len(offset_sets), 1))
+        policy_pass = passing_count >= required_offsets and passing_fraction >= required_fraction
+        finite_stats = [row["final_proxy"] for row in final_fold_rows if isinstance(row.get("final_proxy"), dict)]
+        relative_gains = [float(row["relative_gain"]) for row in finite_stats]
+        proxy = {
+            "fit_samples": int(sum(float(row.get("fit_samples", row.get("final_proxy", {}).get("fit_samples", 0))) for row in final_fold_rows)),
+            "val_samples": int(sum(float(row.get("val_samples", row.get("final_proxy", {}).get("val_samples", 0))) for row in final_fold_rows)),
+            "relative_gain": float(min(relative_gains)) if relative_gains else 0.0,
+            "mean_relative_gain": float(np.mean(relative_gains)) if relative_gains else 0.0,
+            "passing_offsets": int(passing_count),
+            "offset_count": int(len(offset_sets)),
+            "passing_fraction": passing_fraction,
+            "delta_abs_mean": float(np.abs(delta).mean()) if delta.size else 0.0,
+            "delta_abs_max": float(np.abs(delta).max()) if delta.size else 0.0,
+        }
+        certificate = {
+            "passed": bool(policy_pass),
+            "required_offsets": int(required_offsets),
+            "required_fraction": required_fraction,
+            "passing_count": int(passing_count),
+            "offset_count": int(len(offset_sets)),
+            "passing_fraction": passing_fraction,
+            "fit_folds": fold_rows,
+            "final_folds": final_fold_rows,
+        }
+        if bool(args.force_apply) or policy_pass:
             candidates.append(
                 {
                     "face_id": int(fid),
                     "face_stats": face_stats.get(int(fid), {}),
                     "delta_rgb": delta.tolist(),
-                    "proxy": stats,
+                    "proxy": proxy,
+                    "view_gain_certificate": certificate,
+                    "policy_pass": bool(policy_pass),
                 }
             )
     candidates.sort(
@@ -429,6 +700,7 @@ def main() -> int:
     accepted = candidates[: int(args.max_faces_to_apply)]
 
     state = torch.load(source_checkpoint, map_location="cpu")
+    accepted_policy_pass = bool(accepted) and all(bool(row.get("policy_pass", False)) for row in accepted)
     if not accepted and bool(args.no_op_on_fail):
         out = clone_state(state)
         accepted_flag = False
@@ -453,11 +725,22 @@ def main() -> int:
         "output_checkpoint": str(output_checkpoint),
         "iteration": int(args.iteration),
         "evidence_dir": str(args.evidence_dir),
-        "view_counts": {"fit": len(fit_views), "policy_val": len(val_views)},
+        "view_counts": {
+            "offsets": [
+                {
+                    "offset": int(row["offset"]),
+                    "fit": int(len(row["fit_views"])),
+                    "policy_val": int(len(row["val_views"])),
+                }
+                for row in offset_sets
+            ]
+        },
         "selected_faces": int(len(selected_faces)),
         "candidate_faces": int(len(candidates)),
         "accepted_faces": int(len(accepted)),
         "accepted": accepted_flag,
+        "policy_pass": bool(accepted_policy_pass),
+        "materialized": accepted_flag,
         "no_op_copy": no_op_copy,
         "force_apply": bool(args.force_apply),
         "filters": {
@@ -472,6 +755,16 @@ def main() -> int:
         "max_abs_delta_rgb": float(args.max_abs_delta_rgb),
         "lambda_ridge": float(args.lambda_ridge),
         "min_policy_val_relative_gain": float(args.min_policy_val_relative_gain),
+        "policy_val_offsets": [int(x) for x in offsets],
+        "min_policy_val_offsets": int(required_offsets),
+        "min_policy_val_offset_fraction": float(required_fraction),
+        "max_faces_to_apply": int(args.max_faces_to_apply),
+        "view_gain_certificate": {
+            "min_view_gain_views": int(args.min_view_gain_views),
+            "min_view_gain_relative_gain": float(args.min_view_gain_relative_gain),
+            "min_view_gain_samples": int(args.min_view_gain_samples),
+            "min_view_gain_fraction": float(args.min_view_gain_fraction),
+        },
         "topology_before": {"triangles": before_faces, "vertices": before_vertices},
         "topology_after": {
             "triangles": after_faces,
@@ -496,6 +789,8 @@ def main() -> int:
         f"- selected faces: `{audit['selected_faces']}`",
         f"- candidate faces: `{audit['candidate_faces']}`",
         f"- accepted faces: `{audit['accepted_faces']}`",
+        f"- policy offsets: `{','.join(str(x) for x in audit['policy_val_offsets'])}`",
+        f"- min passing offsets: `{audit['min_policy_val_offsets']}`",
         f"- no-op copy: `{str(audit['no_op_copy']).lower()}`",
         f"- mean proxy relative gain: `{audit['mean_proxy_relative_gain']:.6f}`",
         f"- mean delta abs: `{audit['mean_delta_abs']:.6f}`",

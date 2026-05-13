@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Fit train-certified face-local SH1 residual appearance deltas.
+"""Fit train-certified face-local residual appearance deltas.
 
-This operator is a representation-level successor to the shared-vertex SH1
+This operator is a representation-level successor to the shared-vertex SH
 delta.  Instead of changing the SH coefficients of vertices shared by many
 faces, it duplicates the three vertices of train-certified high-residual faces
 and redirects only those faces to the local copies.  Geometry and triangle count
-are preserved; the added local vertices carry a bounded SH1 residual state.
+are preserved; the added local vertices carry a bounded SH residual state.
 
 No held-out test residuals are read.  Fitting uses train-cache views and a
 deterministic train policy-validation split decides which face-local deltas are
@@ -30,7 +30,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ss3dm_prior.meshsplatopt.checkpoint_compaction import copy_model_metadata, checkpoint_path, validate_faces
-from utils.sh_utils import C0, C1
+from utils.sh_utils import C0, C1, C2, C3
 
 
 @dataclass
@@ -74,7 +74,14 @@ def parse_args() -> argparse.Namespace:
         "--max_abs_sh_coeff",
         type=float,
         default=0.0,
-        help="Bound for each SH1 coefficient delta. 0 derives it from max_abs_delta_rgb / C1.",
+        help="Bound for each non-DC SH coefficient delta. 0 derives it from max_abs_delta_rgb / C1.",
+    )
+    parser.add_argument(
+        "--sh_degree",
+        type=int,
+        choices=(1, 2, 3),
+        default=1,
+        help="Face-local residual SH degree. 1 preserves historical behavior; 3 uses the full stored SH basis.",
     )
     parser.add_argument("--lambda_mag", type=float, default=2e-2)
     parser.add_argument("--lambda_sh1_mag", type=float, default=5e-2)
@@ -422,29 +429,59 @@ def localize_samples(
     return source_vertex_ids, selected_faces_local, sample_vertex_ids
 
 
-def _sh1_basis(
+def _sh_basis(
     vertices_local: torch.Tensor,
     sample_vertex_ids: torch.Tensor,
     bary: torch.Tensor,
     camera_centers: torch.Tensor,
+    *,
+    degree: int,
 ) -> torch.Tensor:
+    degree = int(degree)
+    basis_count = (degree + 1) ** 2
     if sample_vertex_ids.numel() == 0:
-        return torch.empty((0, 3, 4), dtype=torch.float32, device=vertices_local.device)
+        return torch.empty((0, 3, basis_count), dtype=torch.float32, device=vertices_local.device)
     vpos = vertices_local[sample_vertex_ids]
     dirs = vpos - camera_centers[:, None, :]
     dirs = dirs / dirs.norm(dim=-1, keepdim=True).clamp_min(1e-8)
     x = dirs[..., 0]
     y = dirs[..., 1]
     z = dirs[..., 2]
-    basis = torch.stack(
-        [
-            torch.full_like(x, float(C0)),
-            -float(C1) * y,
-            float(C1) * z,
-            -float(C1) * x,
-        ],
-        dim=-1,
-    )
+    terms = [
+        torch.full_like(x, float(C0)),
+        -float(C1) * y,
+        float(C1) * z,
+        -float(C1) * x,
+    ]
+    if degree >= 2:
+        xx = x * x
+        yy = y * y
+        zz = z * z
+        xy = x * y
+        yz = y * z
+        xz = x * z
+        terms.extend(
+            [
+                float(C2[0]) * xy,
+                float(C2[1]) * yz,
+                float(C2[2]) * (2.0 * zz - xx - yy),
+                float(C2[3]) * xz,
+                float(C2[4]) * (xx - yy),
+            ]
+        )
+    if degree >= 3:
+        terms.extend(
+            [
+                float(C3[0]) * y * (3.0 * xx - yy),
+                float(C3[1]) * xy * z,
+                float(C3[2]) * y * (4.0 * zz - xx - yy),
+                float(C3[3]) * z * (2.0 * zz - 3.0 * xx - 3.0 * yy),
+                float(C3[4]) * x * (4.0 * zz - xx - yy),
+                float(C3[5]) * z * (xx - yy),
+                float(C3[6]) * x * (xx - 3.0 * yy),
+            ]
+        )
+    basis = torch.stack(terms, dim=-1)
     return basis * bary[:, :, None]
 
 
@@ -902,6 +939,7 @@ def summarize_crossfold_face_gain(
             vertices_local,
             strength=float(args.strength),
             max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+            sh_degree=int(args.sh_degree),
             device=device,
         )
         fold_proxy = evaluate_proxy(coeff, fold_ids, fold_basis, fold_target, fold_weights)
@@ -1307,13 +1345,15 @@ def solve_coeff_delta(
     lr: float,
     device: torch.device,
 ) -> tuple[torch.Tensor, dict[str, float]]:
+    basis_count = int(fit_weighted_basis.shape[2]) if fit_weighted_basis.ndim == 3 else 4
     if vertex_count <= 0 or fit_sample_vertex_ids.numel() == 0:
-        return torch.empty((0, 4, 3), dtype=torch.float32), {
+        return torch.empty((0, basis_count, 3), dtype=torch.float32), {
             "initial_fit_mse": 0.0,
             "final_fit_mse": 0.0,
             "final_mag_loss": 0.0,
-            "final_sh1_mag_loss": 0.0,
+            "final_sh_mag_loss": 0.0,
             "final_smooth_loss": 0.0,
+            "basis_count": int(basis_count),
         }
     fit_sample_vertex_ids = fit_sample_vertex_ids.to(device=device)
     fit_weighted_basis = fit_weighted_basis.to(device=device)
@@ -1321,12 +1361,10 @@ def solve_coeff_delta(
     fit_weights = fit_weights.to(device=device).clamp_min(1e-8)
     selected_faces_local = selected_faces_local.to(device=device)
     edges = surface_edges(selected_faces_local.detach().cpu()).to(device=device)
-    bounds = torch.tensor(
-        [float(max_abs_dc_coeff), float(max_abs_sh_coeff), float(max_abs_sh_coeff), float(max_abs_sh_coeff)],
-        dtype=torch.float32,
-        device=device,
-    ).view(1, 4, 1)
-    param = torch.zeros((int(vertex_count), 4, 3), dtype=torch.float32, device=device, requires_grad=True)
+    bounds = torch.full((basis_count,), float(max_abs_sh_coeff), dtype=torch.float32, device=device)
+    bounds[0] = float(max_abs_dc_coeff)
+    bounds = bounds.view(1, basis_count, 1)
+    param = torch.zeros((int(vertex_count), basis_count, 3), dtype=torch.float32, device=device, requires_grad=True)
     optimizer = torch.optim.Adam([param], lr=float(lr))
 
     with torch.no_grad():
@@ -1335,13 +1373,13 @@ def solve_coeff_delta(
 
     final_fit_mse = initial_fit_mse
     final_mag_loss = torch.zeros((), dtype=torch.float32, device=device)
-    final_sh1_mag_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_sh_mag_loss = torch.zeros((), dtype=torch.float32, device=device)
     final_smooth_loss = torch.zeros((), dtype=torch.float32, device=device)
     for _ in range(int(steps)):
         coeff = bounds * torch.tanh(param)
         data_loss = _weighted_mse(coeff, fit_sample_vertex_ids, fit_weighted_basis, fit_target, fit_weights)
         mag_loss = (coeff[:, 0, :] ** 2).mean()
-        sh1_mag_loss = (coeff[:, 1:4, :] ** 2).mean()
+        sh_mag_loss = (coeff[:, 1:, :] ** 2).mean() if basis_count > 1 else torch.zeros((), dtype=torch.float32, device=device)
         if edges.numel():
             smooth_loss = ((coeff[edges[:, 0]] - coeff[edges[:, 1]]) ** 2).mean()
         else:
@@ -1349,7 +1387,7 @@ def solve_coeff_delta(
         loss = (
             data_loss
             + float(lambda_mag) * mag_loss
-            + float(lambda_sh1_mag) * sh1_mag_loss
+            + float(lambda_sh1_mag) * sh_mag_loss
             + float(lambda_smooth) * smooth_loss
         )
         optimizer.zero_grad(set_to_none=True)
@@ -1357,7 +1395,7 @@ def solve_coeff_delta(
         optimizer.step()
         final_fit_mse = data_loss.detach()
         final_mag_loss = mag_loss.detach()
-        final_sh1_mag_loss = sh1_mag_loss.detach()
+        final_sh_mag_loss = sh_mag_loss.detach()
         final_smooth_loss = smooth_loss.detach()
 
     with torch.no_grad():
@@ -1366,7 +1404,8 @@ def solve_coeff_delta(
         "initial_fit_mse": float(initial_fit_mse.detach().cpu().item()),
         "final_fit_mse": float(final_fit_mse.detach().cpu().item()),
         "final_mag_loss": float(final_mag_loss.detach().cpu().item()),
-        "final_sh1_mag_loss": float(final_sh1_mag_loss.detach().cpu().item()),
+        "final_sh_mag_loss": float(final_sh_mag_loss.detach().cpu().item()),
+        "basis_count": int(basis_count),
         "final_smooth_loss": float(final_smooth_loss.detach().cpu().item()),
     }
 
@@ -1378,13 +1417,14 @@ def samples_to_tensors(
     *,
     strength: float,
     max_abs_delta_rgb: float,
+    sh_degree: int,
     device: torch.device,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     ids = sample_vertex_ids.to(device=device)
     bary = torch.as_tensor(samples.barycentric, dtype=torch.float32, device=device)
     centers = torch.as_tensor(samples.camera_centers, dtype=torch.float32, device=device)
     vertices_local = vertices_local.to(device=device)
-    weighted_basis = _sh1_basis(vertices_local, ids, bary, centers)
+    weighted_basis = _sh_basis(vertices_local, ids, bary, centers, degree=int(sh_degree))
     target = torch.as_tensor(samples.residual_rgb, dtype=torch.float32, device=device)
     target = (target * float(strength)).clamp(-float(max_abs_delta_rgb), float(max_abs_delta_rgb))
     weights = torch.as_tensor(samples.weights, dtype=torch.float32, device=device)
@@ -1431,8 +1471,11 @@ def materialize_facelocal(
                 append = append + coeff_add[:, 0:1, :].to(dtype=append.dtype)
             elif key == "features_rest":
                 append = append.clone()
-                if append.ndim == 3 and append.shape[1] >= 3:
-                    append[:, 0:3, :] = append[:, 0:3, :] + coeff_add[:, 1:4, :].to(dtype=append.dtype)
+                if append.ndim == 3 and append.shape[1] > 0 and coeff_add.shape[1] > 1:
+                    rest_count = min(int(append.shape[1]), int(coeff_add.shape[1]) - 1)
+                    append[:, :rest_count, :] = append[:, :rest_count, :] + coeff_add[:, 1 : 1 + rest_count, :].to(
+                        dtype=append.dtype
+                    )
             out[key] = torch.cat([cpu, append], dim=0).to(dtype=value.dtype)
         elif cpu.ndim > 0 and int(cpu.shape[0]) == face_count:
             out[key] = cpu.clone().to(dtype=value.dtype)
@@ -1447,9 +1490,11 @@ def write_audit(output_model: Path, audit: dict[str, Any]) -> None:
         encoding="utf-8",
     )
     md = [
-        "# ECSR Face-Local Surface Residual SH1 Delta Audit",
+        "# ECSR Face-Local Surface Residual SH Delta Audit",
         "",
         f"- operator: `{audit['operator']}`",
+        f"- sh degree: `{audit['sh_degree']}`",
+        f"- basis count: `{audit['basis_count']}`",
         f"- source model: `{audit['source_model']}`",
         f"- output model: `{audit['output_model']}`",
         f"- evidence dir: `{audit['evidence_dir']}`",
@@ -1559,6 +1604,7 @@ def main() -> int:
         strength=float(args.strength),
         max_abs_delta_rgb=float(args.max_abs_delta_rgb),
         device=device,
+        sh_degree=int(args.sh_degree),
     )
     val_ids, val_basis, val_target, val_weights = samples_to_tensors(
         val_samples,
@@ -1567,6 +1613,7 @@ def main() -> int:
         strength=float(args.strength),
         max_abs_delta_rgb=float(args.max_abs_delta_rgb),
         device=device,
+        sh_degree=int(args.sh_degree),
     )
 
     max_abs_dc_coeff = float(args.max_abs_delta_rgb) / float(C0)
@@ -1712,13 +1759,15 @@ def main() -> int:
             local_ids.extend([row * 3, row * 3 + 1, row * 3 + 2])
         accepted_coeff_abs = coeff[torch.as_tensor(local_ids, dtype=torch.long)].abs()
     audit = {
-        "operator": "surface_residual_facelocal_sh1_delta",
+        "operator": "surface_residual_facelocal_sh_delta",
         "test_usage": "none",
         "source_model": str(args.source_model),
         "source_checkpoint": str(source_checkpoint),
         "output_model": str(args.output_model),
         "output_checkpoint": str(output_checkpoint),
         "iteration": int(args.iteration),
+        "sh_degree": int(args.sh_degree),
+        "basis_count": int((int(args.sh_degree) + 1) ** 2),
         "evidence_dir": str(args.evidence_dir),
         "selected_faces": int(len(selected_faces)),
         "face_policy_candidates": int(len(face_candidates)),
