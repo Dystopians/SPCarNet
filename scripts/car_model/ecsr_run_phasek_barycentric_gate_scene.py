@@ -415,6 +415,13 @@ def _apply_delta(
                             str(args.delta_facelocal_materialize_plan_face_ids),
                         ]
                     )
+                if str(args.delta_facelocal_materialize_plan_alpha_json).strip():
+                    cmd.extend(
+                        [
+                            "--materialize_plan_alpha_json",
+                            _scene_format_path(args.delta_facelocal_materialize_plan_alpha_json, scene),
+                        ]
+                    )
         if bool(args.delta_uniform_barycentric):
             cmd.append("--uniform_barycentric")
     if str(args.delta_operator) == "facelocal_sh1":
@@ -1038,6 +1045,11 @@ def main() -> int:
         "--delta_facelocal_materialize_plan_face_ids",
         default="",
         help="Optional comma-separated face ids to materialize from the facelocal candidate plan.",
+    )
+    parser.add_argument(
+        "--delta_facelocal_materialize_plan_alpha_json",
+        default="",
+        help="Optional per-scene JSON template with face_id -> alpha multipliers for facelocal plan materialization.",
     )
     parser.add_argument("--delta_max_faces_to_apply", type=int, default=2048)
     parser.add_argument("--delta_min_face_policy_val_relative_gain", type=float, default=0.0)

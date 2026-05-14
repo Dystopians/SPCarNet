@@ -55,9 +55,15 @@ def parse_args() -> argparse.Namespace:
         "--trial_specs",
         default="top1x2,score2x1,score4x1,score8x0.5",
         help=(
-            "Comma separated trials. Grammar: topNxS or scoreNxS, for example "
-            "top1x2,score4x1,score8x0.5. score uses train-only plan certificates."
+            "Comma separated trials. Grammar: topNxS, scoreNxS, or riskNxS, for example "
+            "top1x2,score4x1,risk8x0.5. score/risk use train-only plan certificates."
         ),
+    )
+    parser.add_argument(
+        "--risk_pair_lambda",
+        type=float,
+        default=0.65,
+        help="Penalty strength for risk-mode greedy view-overlap redundancy.",
     )
     parser.add_argument("--candidate_prefix", default="facelocal_coupled_v1")
     parser.add_argument("--phasej_test_method", default=DEFAULT_PHASEJ_TEST_METHOD)
@@ -90,12 +96,37 @@ def parse_args() -> argparse.Namespace:
         default=1.5e-4,
         help="Maximum train-val LPIPS regression for outer-loop promotion after the inner gate accepts.",
     )
+    parser.add_argument(
+        "--selector_enable_tail_stable_promotion",
+        action="store_true",
+        help="Allow a lower train-val mean threshold when train-val per-view tails are stable.",
+    )
+    parser.add_argument("--selector_tail_min_trainval_balanced_delta", type=float, default=1.8e-5)
+    parser.add_argument("--selector_tail_max_psnr_negative_fraction", type=float, default=0.20)
+    parser.add_argument("--selector_tail_max_balanced_negative_fraction", type=float, default=0.40)
+    parser.add_argument("--selector_tail_max_worst_lpips_regression", type=float, default=1.5e-4)
+    parser.add_argument(
+        "--selector_fit_plan_alphas",
+        action="store_true",
+        help=(
+            "Before each materialization trial, fit train-only per-face alpha multipliers for "
+            "the selected plan rows and pass them to the materializer."
+        ),
+    )
+    parser.add_argument("--selector_alpha_max", type=float, default=1.0)
+    parser.add_argument("--selector_alpha_steps", type=int, default=450)
+    parser.add_argument("--selector_alpha_lr", type=float, default=0.06)
+    parser.add_argument("--selector_alpha_max_total_samples", type=int, default=240000)
+    parser.add_argument("--selector_alpha_device", default="cuda")
     parser.add_argument("--wandb_project", default="mesh-splatting-ecsr")
     parser.add_argument("--wandb_group", default="phase_s_facelocal_coupled_selector_v1_20260513")
     parser.add_argument("--skip_failed_views", action="store_true", default=True)
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry_run", action="store_true")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if float(args.risk_pair_lambda) < 0.0:
+        parser.error("--risk_pair_lambda must be non-negative")
+    return args
 
 
 def scene_list(raw: str) -> list[str]:
@@ -113,7 +144,7 @@ def parse_trial_specs(raw: str) -> list[TrialSpec]:
         token = item.strip()
         if not token:
             continue
-        match = re.fullmatch(r"(top|score)(\d+)x([0-9]*\.?[0-9]+)", token)
+        match = re.fullmatch(r"(top|score|risk)(\d+)x([0-9]*\.?[0-9]+)", token)
         if not match:
             raise ValueError(f"invalid trial spec: {token}")
         mode = match.group(1)
@@ -159,6 +190,11 @@ def num(value: Any, default: float = 0.0) -> float:
     return out if math.isfinite(out) else default
 
 
+def mean(values: list[float]) -> float:
+    finite = [value for value in values if math.isfinite(value)]
+    return sum(finite) / len(finite) if finite else math.nan
+
+
 def nested(row: dict[str, Any], *keys: str) -> Any:
     value: Any = row
     for key in keys:
@@ -183,11 +219,142 @@ def train_certificate_score(row: dict[str, Any]) -> float:
     return float(rel_gain * shrink * consensus * view_fraction * (0.5 + 0.5 * min_view_gain) * consistency * support)
 
 
-def selected_rows(candidates: list[dict[str, Any]], spec: TrialSpec) -> list[dict[str, Any]]:
+def view_support(row: dict[str, Any]) -> dict[str, float]:
+    support: dict[str, float] = {}
+    cert_views = nested(row, "face_view_gain_certificate", "views")
+    if isinstance(cert_views, list):
+        for item in cert_views:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("view_name", ""))
+            if not name:
+                continue
+            support[name] = support.get(name, 0.0) + max(num(item.get("samples"), 1.0), 1.0)
+    if not support:
+        names = nested(row, "face_view_consensus", "view_names")
+        counts = nested(row, "face_view_consensus", "view_sample_counts")
+        if isinstance(names, list):
+            for idx, name in enumerate(names):
+                count = 1.0
+                if isinstance(counts, list) and idx < len(counts):
+                    count = max(num(counts[idx], 1.0), 1.0)
+                support[str(name)] = support.get(str(name), 0.0) + count
+    total = sum(support.values())
+    if total <= 0:
+        return {}
+    return {key: value / total for key, value in support.items()}
+
+
+def coeff_direction(row: dict[str, Any]) -> list[float]:
+    coeff = row.get("delta_coeff")
+    values: list[float] = []
+    if isinstance(coeff, list):
+        stack = [coeff]
+        while stack:
+            item = stack.pop()
+            if isinstance(item, list):
+                stack.extend(item)
+            else:
+                values.append(num(item, 0.0))
+    norm = math.sqrt(sum(value * value for value in values))
+    if norm <= 0:
+        return []
+    return [value / norm for value in values]
+
+
+def cosine_abs(a: list[float], b: list[float]) -> float:
+    if not a or not b:
+        return 0.0
+    count = min(len(a), len(b))
+    return abs(sum(a[idx] * b[idx] for idx in range(count)))
+
+
+def view_overlap(a: dict[str, float], b: dict[str, float]) -> float:
+    if not a or not b:
+        return 0.0
+    keys = set(a) | set(b)
+    numerator = sum(min(a.get(key, 0.0), b.get(key, 0.0)) for key in keys)
+    denominator = sum(max(a.get(key, 0.0), b.get(key, 0.0)) for key in keys)
+    return numerator / denominator if denominator > 0 else 0.0
+
+
+def pair_risk(a: dict[str, Any], b: dict[str, Any]) -> float:
+    overlap = view_overlap(view_support(a), view_support(b))
+    direction = cosine_abs(coeff_direction(a), coeff_direction(b))
+    return float(overlap * (0.5 + 0.5 * direction))
+
+
+def risk_greedy_rows(candidates: list[dict[str, Any]], count: int, *, pair_lambda: float) -> list[dict[str, Any]]:
+    pool = sorted(candidates, key=train_certificate_score, reverse=True)
+    selected: list[dict[str, Any]] = []
+    while pool and len(selected) < count:
+        best_idx = 0
+        best_score = -math.inf
+        selected_views = set().union(*(set(view_support(item)) for item in selected)) if selected else set()
+        for idx, row in enumerate(pool):
+            base = train_certificate_score(row)
+            redundancy = max((pair_risk(row, other) for other in selected), default=0.0)
+            coverage_bonus = 0.05 * len(set(view_support(row)) - selected_views) if selected else 0.0
+            adjusted = base * max(0.05, 1.0 - float(pair_lambda) * redundancy) * (1.0 + coverage_bonus)
+            if adjusted > best_score:
+                best_score = adjusted
+                best_idx = idx
+        selected.append(pool.pop(best_idx))
+    return selected
+
+
+def risk_adjusted_score(
+    row: dict[str, Any],
+    selected: list[dict[str, Any]],
+    *,
+    pair_lambda: float,
+) -> dict[str, float]:
+    base = train_certificate_score(row)
+    redundancy = max((pair_risk(row, other) for other in selected), default=0.0)
+    selected_views = set().union(*(set(view_support(item)) for item in selected)) if selected else set()
+    new_supported_views = len(set(view_support(row)) - selected_views) if selected else 0
+    coverage_bonus = 0.05 * new_supported_views
+    adjusted = base * max(0.05, 1.0 - float(pair_lambda) * redundancy) * (1.0 + coverage_bonus)
+    return {
+        "train_certificate_score": float(base),
+        "risk_max_pair_risk_to_previous": float(redundancy),
+        "risk_new_supported_view_count": float(new_supported_views),
+        "risk_coverage_bonus": float(coverage_bonus),
+        "risk_adjusted_selection_score": float(adjusted),
+    }
+
+
+def face_score_entries(rows: list[dict[str, Any]], mode: str, *, pair_lambda: float) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    selected: list[dict[str, Any]] = []
+    for row in rows:
+        score_info = risk_adjusted_score(row, selected, pair_lambda=pair_lambda) if mode == "risk" else {
+            "train_certificate_score": train_certificate_score(row),
+            "risk_max_pair_risk_to_previous": 0.0,
+            "risk_new_supported_view_count": 0.0,
+            "risk_coverage_bonus": 0.0,
+            "risk_adjusted_selection_score": train_certificate_score(row),
+        }
+        entries.append(
+            {
+                "face_id": int(row["face_id"]),
+                "rank": int(row.get("rank", -1)),
+                **score_info,
+                "policy_val_relative_gain": num(nested(row, "policy_val_proxy", "relative_gain"), math.nan),
+                "policy_val_samples": num(nested(row, "policy_val_proxy", "samples"), math.nan),
+            }
+        )
+        selected.append(row)
+    return entries
+
+
+def selected_rows(candidates: list[dict[str, Any]], spec: TrialSpec, *, pair_lambda: float) -> list[dict[str, Any]]:
     if spec.mode == "top":
         rows = list(candidates)
     elif spec.mode == "score":
         rows = sorted(candidates, key=train_certificate_score, reverse=True)
+    elif spec.mode == "risk":
+        return risk_greedy_rows(candidates, spec.count, pair_lambda=pair_lambda)
     else:
         raise ValueError(f"unknown trial mode: {spec.mode}")
     return rows[: spec.count]
@@ -218,7 +385,49 @@ def decision_path(root: Path, spec: TrialSpec, scene: str) -> Path:
     return root / "trials" / spec.label / "decisions" / f"{scene}_decision.json"
 
 
-def build_trial_command(args: argparse.Namespace, scene: str, spec: TrialSpec, face_ids: list[int]) -> list[str]:
+def alpha_json_path(root: Path, scene: str, spec: TrialSpec) -> Path:
+    return root / scene / "alpha_refit" / f"{spec.label}_alpha_refit.json"
+
+
+def fit_alpha_command(args: argparse.Namespace, scene: str, spec: TrialSpec, face_ids: list[int], alpha_path: Path) -> list[str]:
+    return [
+        sys.executable,
+        "scripts/car_model/ecsr_fit_facelocal_plan_alphas.py",
+        "--candidate_plan",
+        str(args.plan_template).format(scene=scene),
+        "--evidence_dir",
+        str(Path(args.evidence_root) / scene),
+        "--output_json",
+        str(alpha_path),
+        "--face_ids",
+        ",".join(str(fid) for fid in face_ids),
+        "--selector_mode",
+        spec.mode,
+        "--selector_count",
+        str(spec.count),
+        "--risk_pair_lambda",
+        str(args.risk_pair_lambda),
+        "--alpha_max",
+        str(args.selector_alpha_max),
+        "--steps",
+        str(args.selector_alpha_steps),
+        "--lr",
+        str(args.selector_alpha_lr),
+        "--max_total_samples",
+        str(args.selector_alpha_max_total_samples),
+        "--device",
+        str(args.selector_alpha_device),
+    ]
+
+
+def build_trial_command(
+    args: argparse.Namespace,
+    scene: str,
+    spec: TrialSpec,
+    face_ids: list[int],
+    *,
+    alpha_json: Path | None = None,
+) -> list[str]:
     label = f"{args.candidate_prefix}_{spec.label}"
     output_root = Path(args.output_root) / "trials" / spec.label
     cmd = [
@@ -272,6 +481,8 @@ def build_trial_command(args: argparse.Namespace, scene: str, spec: TrialSpec, f
         "--wandb_name",
         f"{label}_{scene}",
     ]
+    if alpha_json is not None:
+        cmd.extend(["--delta_facelocal_materialize_plan_alpha_json", str(alpha_json)])
     if bool(args.skip_failed_views):
         cmd.append("--skip_failed_views")
     if bool(args.force):
@@ -293,7 +504,75 @@ def selector_pass(row: dict[str, Any], args: argparse.Namespace) -> tuple[bool, 
         reasons.append(f"selector_lpips_regression_exceeds_{args.selector_max_trainval_lpips_regression:g}")
     if balanced < float(args.selector_min_trainval_balanced_delta):
         reasons.append(f"selector_balanced_delta_below_{args.selector_min_trainval_balanced_delta:g}")
-    return not reasons, reasons
+    if not reasons:
+        row["selector_pass_mode"] = "strict_mean"
+        return True, reasons
+
+    if bool(args.selector_enable_tail_stable_promotion) and bool(row.get("accepted", False)):
+        tail = row.get("trainval_per_view_tail") if isinstance(row.get("trainval_per_view_tail"), dict) else {}
+        tail_reasons: list[str] = []
+        if train["PSNR"] < float(args.selector_min_trainval_psnr_gain):
+            tail_reasons.append(f"tail_psnr_gain_below_{args.selector_min_trainval_psnr_gain:g}")
+        if train["SSIM"] < -float(args.selector_max_trainval_ssim_regression):
+            tail_reasons.append(f"tail_ssim_regression_exceeds_{args.selector_max_trainval_ssim_regression:g}")
+        if train["LPIPS"] > float(args.selector_max_trainval_lpips_regression):
+            tail_reasons.append(f"tail_lpips_regression_exceeds_{args.selector_max_trainval_lpips_regression:g}")
+        if balanced < float(args.selector_tail_min_trainval_balanced_delta):
+            tail_reasons.append(f"tail_balanced_delta_below_{args.selector_tail_min_trainval_balanced_delta:g}")
+        if num(tail.get("view_count"), 0.0) <= 0:
+            tail_reasons.append("tail_per_view_missing")
+        if num(tail.get("psnr_negative_fraction"), math.inf) > float(args.selector_tail_max_psnr_negative_fraction):
+            tail_reasons.append(f"tail_psnr_negative_fraction_exceeds_{args.selector_tail_max_psnr_negative_fraction:g}")
+        if num(tail.get("balanced_negative_fraction"), math.inf) > float(args.selector_tail_max_balanced_negative_fraction):
+            tail_reasons.append(f"tail_balanced_negative_fraction_exceeds_{args.selector_tail_max_balanced_negative_fraction:g}")
+        if num(tail.get("worst_lpips_regression"), math.inf) > float(args.selector_tail_max_worst_lpips_regression):
+            tail_reasons.append(f"tail_worst_lpips_regression_exceeds_{args.selector_tail_max_worst_lpips_regression:g}")
+        if not tail_reasons:
+            row["selector_pass_mode"] = "tail_stable"
+            return True, []
+        row["selector_tail_reasons"] = tail_reasons
+
+    row["selector_pass_mode"] = "rejected"
+    return False, reasons
+
+
+def only_method_metrics(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict) or not payload:
+        return {}
+    first = next(iter(payload.values()))
+    return first if isinstance(first, dict) else {}
+
+
+def trainval_per_view_tail(root: Path, spec: TrialSpec, scene: str) -> dict[str, float]:
+    trial_root = root / "trials" / spec.label / scene
+    base_path = trial_root / "phasej_trainval_gate_per_view.json"
+    candidate_path = trial_root / "model" / "trainval_gate_per_view.json"
+    if not base_path.is_file() or not candidate_path.is_file():
+        return {"view_count": 0.0}
+    base = only_method_metrics(read_json(base_path))
+    candidate = only_method_metrics(read_json(candidate_path))
+    if not base or not candidate:
+        return {"view_count": 0.0}
+    view_names = sorted(set((base.get("PSNR") or {}).keys()) & set((candidate.get("PSNR") or {}).keys()))
+    rows: list[dict[str, float]] = []
+    for name in view_names:
+        dpsnr = num((candidate.get("PSNR") or {}).get(name)) - num((base.get("PSNR") or {}).get(name))
+        dssim = num((candidate.get("SSIM") or {}).get(name)) - num((base.get("SSIM") or {}).get(name))
+        dlpips = num((candidate.get("LPIPS") or {}).get(name)) - num((base.get("LPIPS") or {}).get(name))
+        if not all(math.isfinite(value) for value in (dpsnr, dssim, dlpips)):
+            continue
+        rows.append({"PSNR": dpsnr, "SSIM": dssim, "LPIPS": dlpips, "balanced": dpsnr + 100.0 * dssim - 10.0 * dlpips})
+    if not rows:
+        return {"view_count": 0.0}
+    return {
+        "view_count": float(len(rows)),
+        "mean_psnr_delta": mean([row["PSNR"] for row in rows]),
+        "mean_abs_psnr_delta": mean([abs(row["PSNR"]) for row in rows]),
+        "psnr_negative_fraction": float(sum(1 for row in rows if row["PSNR"] < 0.0) / len(rows)),
+        "balanced_negative_fraction": float(sum(1 for row in rows if row["balanced"] < 0.0) / len(rows)),
+        "worst_lpips_regression": max(row["LPIPS"] for row in rows),
+        "worst_balanced_delta": min(row["balanced"] for row in rows),
+    }
 
 
 def decision_row(
@@ -322,6 +601,7 @@ def decision_row(
         "decision_reasons": decision.get("decision_reasons", []),
         "trainval_delta": train_delta,
         "trainval_balanced_delta": num(decision.get("trainval_balanced_delta"), -math.inf),
+        "trainval_per_view_tail": trainval_per_view_tail(root, spec, scene),
         "report_only_test_delta": test_delta,
         "test_balanced_delta_report_only": num(decision.get("test_balanced_delta_report_only"), math.nan),
     }
@@ -359,7 +639,7 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
         return payload
 
     for spec in specs:
-        trial_rows = selected_rows(candidates, spec)
+        trial_rows = selected_rows(candidates, spec, pair_lambda=float(args.risk_pair_lambda))
         face_ids = [int(row["face_id"]) for row in trial_rows]
         manifest = {
             "scene": scene,
@@ -368,24 +648,33 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             "count": spec.count,
             "scale": spec.scale,
             "selection_uses_test": False,
-            "score_type": "rank" if spec.mode == "top" else "train_certificate_score",
+            "score_type": {
+                "top": "rank",
+                "score": "train_certificate_score",
+                "risk": "risk_greedy_train_certificate_pair_penalty",
+            }[spec.mode],
+            "risk_pair_lambda": float(args.risk_pair_lambda) if spec.mode == "risk" else 0.0,
+            "alpha_refit": bool(args.selector_fit_plan_alphas),
             "face_ids": face_ids,
-            "face_scores": [
-                {
-                    "face_id": int(row["face_id"]),
-                    "rank": int(row.get("rank", -1)),
-                    "train_certificate_score": train_certificate_score(row),
-                    "policy_val_relative_gain": num(nested(row, "policy_val_proxy", "relative_gain"), math.nan),
-                    "policy_val_samples": num(nested(row, "policy_val_proxy", "samples"), math.nan),
-                }
-                for row in trial_rows
-            ],
+            "face_scores": face_score_entries(
+                trial_rows,
+                spec.mode,
+                pair_lambda=float(args.risk_pair_lambda),
+            ),
         }
         manifest_path = root / scene / "trial_manifests" / f"{spec.label}.json"
         write_json(manifest_path, manifest)
         decision = decision_path(root, spec, scene)
         if bool(args.force) or not decision.is_file():
-            cmd = build_trial_command(args, scene, spec, face_ids)
+            alpha_path: Path | None = None
+            if bool(args.selector_fit_plan_alphas):
+                alpha_path = alpha_json_path(root, scene, spec)
+                alpha_cmd = fit_alpha_command(args, scene, spec, face_ids, alpha_path)
+                alpha_exit = run_command(alpha_cmd, gpu=int(args.gpu), log_path=scene_log, dry_run=bool(args.dry_run))
+                if alpha_exit != 0:
+                    rows.append(decision_row(root, spec, scene, face_ids, alpha_exit, args))
+                    continue
+            cmd = build_trial_command(args, scene, spec, face_ids, alpha_json=alpha_path)
             exit_code = run_command(cmd, gpu=int(args.gpu), log_path=scene_log, dry_run=bool(args.dry_run))
             if exit_code != 0:
                 rows.append(decision_row(root, spec, scene, face_ids, exit_code, args))

@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 import sys
@@ -230,6 +231,16 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=1.0,
         help="Uniform scale applied to plan coefficients during materialization. Used only with --materialize_plan_in.",
+    )
+    parser.add_argument(
+        "--materialize_plan_alpha_json",
+        type=Path,
+        default=None,
+        help=(
+            "Optional JSON containing per-face alpha multipliers for materialized plan rows. "
+            "Supported forms: {'face_alphas': {'123': 0.5}} or "
+            "{'face_alphas': [{'face_id': 123, 'alpha': 0.5}]}."
+        ),
     )
     parser.add_argument("--no_op_on_fail", action="store_true", default=True)
     parser.add_argument("--force_apply", action="store_true")
@@ -1564,11 +1575,41 @@ def read_candidate_plan(
     return filtered, meta
 
 
+def read_plan_alphas(path: Path | None) -> dict[int, float]:
+    if path is None:
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    raw = payload.get("face_alphas", payload.get("alphas", payload)) if isinstance(payload, dict) else payload
+    alphas: dict[int, float] = {}
+    if isinstance(raw, dict):
+        for key, value in raw.items():
+            try:
+                face_id = int(key)
+                alpha = float(value)
+            except Exception:
+                continue
+            if math.isfinite(alpha):
+                alphas[face_id] = alpha
+    elif isinstance(raw, list):
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            try:
+                face_id = int(item.get("face_id"))
+                alpha = float(item.get("alpha", item.get("scale", 1.0)))
+            except Exception:
+                continue
+            if math.isfinite(alpha):
+                alphas[face_id] = alpha
+    return alphas
+
+
 def plan_rows_to_facelocal_coeff(
     rows: list[dict[str, Any]],
     faces: torch.Tensor,
     *,
     fallback_basis_count: int,
+    alpha_by_face: dict[int, float] | None = None,
 ) -> tuple[list[int], torch.Tensor, list[dict[str, Any]]]:
     selected_faces: list[int] = []
     coeff_rows: list[torch.Tensor] = []
@@ -1597,6 +1638,17 @@ def plan_rows_to_facelocal_coeff(
                 }
             )
             continue
+        alpha = float((alpha_by_face or {}).get(face_id, 1.0))
+        if not math.isfinite(alpha) or alpha < 0.0:
+            rejected.append(
+                {
+                    "face_id": face_id,
+                    "decision_reasons": ["invalid_materialize_plan_alpha"],
+                    "alpha": alpha,
+                }
+            )
+            continue
+        coeff = coeff * alpha
         basis_count = int(coeff.shape[1])
         if basis_count <= 0:
             basis_count = int(fallback_basis_count)
@@ -1700,6 +1752,8 @@ def write_plan_materialize_audit(output_model: Path, audit: dict[str, Any]) -> N
         f"- operator: `{audit['operator']}`",
         f"- plan: `{audit['materialize_plan_in']}`",
         f"- requested plan rows: `{audit['requested_plan_rows']}`",
+        f"- alpha json: `{audit.get('materialize_plan_alpha_json', '')}`",
+        f"- alpha faces: `{audit.get('materialize_plan_alpha_faces', 0)}`",
         f"- accepted faces: `{audit['accepted_faces']}`",
         f"- vertices added: `{audit['vertices_added']}`",
         f"- accepted: `{audit['accepted']}`",
@@ -1784,10 +1838,12 @@ def main() -> int:
             face_ids=_parse_face_id_filter(args.materialize_plan_face_ids),
         )
         plan_basis_count = int(plan_meta.get("basis_count", (int(args.sh_degree) + 1) ** 2)) if isinstance(plan_meta, dict) else int((int(args.sh_degree) + 1) ** 2)
+        alpha_by_face = read_plan_alphas(args.materialize_plan_alpha_json)
         accepted_faces, coeff, rejected_plan_rows = plan_rows_to_facelocal_coeff(
             plan_rows,
             faces,
             fallback_basis_count=plan_basis_count,
+            alpha_by_face=alpha_by_face,
         )
         coeff = coeff * float(args.materialize_plan_scale)
         if accepted_faces or not bool(args.no_op_on_fail):
@@ -1823,6 +1879,8 @@ def main() -> int:
             "materialize_plan_limit": int(args.materialize_plan_limit),
             "materialize_plan_face_ids": str(args.materialize_plan_face_ids),
             "materialize_plan_scale": float(args.materialize_plan_scale),
+            "materialize_plan_alpha_json": str(args.materialize_plan_alpha_json) if args.materialize_plan_alpha_json else "",
+            "materialize_plan_alpha_faces": int(len(alpha_by_face)),
             "plan_source_operator": plan_meta.get("operator") if isinstance(plan_meta, dict) else None,
             "plan_source_model": plan_meta.get("source_model") if isinstance(plan_meta, dict) else None,
             "requested_plan_rows": int(len(plan_rows)),

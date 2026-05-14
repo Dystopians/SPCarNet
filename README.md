@@ -2,7 +2,7 @@
 
 **Train-only evidence-guided compact Mesh Splatting with geometry-safe reconstruction repair.**
 
-[中文](README.zh.md) | [Phase-J result](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R full-robust audit](docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md) | [Phase-S gaincert audit](docs/car_model/5-12-PhaseS-GainCertV1-Audit.md) | [SPCarNet selector audit](docs/car_model/5-12-SPCarNet-RagSym-Rerank-Audit.md) | [Full9 status](docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md) | [Closed-loop status](docs/car_model/5-12-PaperLoop-ClosedLoop-Status.md) | [Continuation report](docs/car_model/5-12-Subagent-PaperLoop-Continuation-Report.md) | [Phase-J external validation](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [Execution log](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
+[中文](README.zh.md) | [Current method/evidence log](docs/car_model/5-14-SPCarNet-Method-Modules-And-Evidence-Log.md) | [Phase-S risk-tail/alpha log](docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md) | [Phase-S coupled selector](docs/car_model/5-13-Coupled-Selector-Pilot.md) | [Phase-J result](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R full-robust audit](docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md) | [Phase-S gaincert audit](docs/car_model/5-12-PhaseS-GainCertV1-Audit.md) | [SPCarNet selector audit](docs/car_model/5-12-SPCarNet-RagSym-Rerank-Audit.md) | [Full9 status](docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md) | [Closed-loop status](docs/car_model/5-12-PaperLoop-ClosedLoop-Status.md) | [Continuation report](docs/car_model/5-12-Subagent-PaperLoop-Continuation-Report.md) | [Phase-J external validation](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [Current archive](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [Execution log](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [Research log](docs/car_model/SPCarNet_research_log.md) | [Legacy README](docs/car_model/archive/README_legacy_before_full9_2026-05-07.md)
 
 SPCarNet is a research branch built on Mesh Splatting. The current ECSR version keeps the fixed Phase-F compact checkpoints, then uses a train-evidence guarded portfolio for appearance recovery: stable scenes use adaptive-alpha ELA, and unstable scenes use a train-selected structural edge fallback. No held-out test metric is used to select the branch, edge gate, alpha, or compaction ratio.
 
@@ -13,7 +13,7 @@ report: outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2
 
 The May 7 Compact-ELA/SOR checkpoint remains archived as `archive/full9-compact-ela-ssim-peak-20260507` at commit `fae7942`. Phase-J is stronger on the current selected full9 RGB protocol, but it is still a render-time ELA portfolio rather than a fully baked representation-level endpoint.
 
-**Paper-loop status, 2026-05-12:** `NOT COMPLETE`. A mechanical full9 collector now verifies that clean-best rows and Phase-J RGB rows are complete on `9 / 9` scenes, and that Phase-J strictly beats the selected clean MeshSplatting row on `9 / 9`. The same collector marks the representation-level Phase-S loop open: strict four-offset gates exist for `7 / 9`, accept `6 / 9`, reject `bicycle`, and are missing for `counter/treehill` because the frozen single-gate policy already rejected them. W&B status run: `6g09l2ul`; report: [`docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md`](docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md).
+**Paper-loop status, 2026-05-14:** `NOT COMPLETE`. Phase-J is the current strong endpoint: clean-best rows and Phase-J RGB rows are complete on `9 / 9` scenes, and Phase-J strictly beats the selected clean MeshSplatting row on `9 / 9`. Phase-S is now a real representation-level face-local repair branch with risk-tail selection: the full eight candidate-scene replay accepts `3 / 8` scenes and gives mean effective report-only deltas of `+0.000684500` PSNR, `+0.000058956` SSIM, and `-0.000073545` LPIPS over Phase-J fallback. This is promising but still sparse and dominated by `flowers`, so it is not yet a final paper endpoint. Latest module/evidence log: [`docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md`](docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md).
 
 ## Current Result
 
@@ -90,16 +90,16 @@ Phase-M / V8 adds the cleanest representation-attached recovery baseline so far:
 
 Phase-R upgrades this to checkpoint-baked surface SH1 residuals with a fixed candidate ladder plus a train-only gamma trust-region residual gate. A stricter v11 audit now runs the outdoor candidates through the same four-offset train-only gate used indoors. This corrected an optimistic v10 snapshot: v11 accepts only `3 / 9` representation edits (`stump`, `room`, `kitchen`), gives `3 / 9` report-only strict RGB wins, and has mean report-only deltas of `+0.002531` PSNR, `+0.000080` SSIM, and `-0.000120` LPIPS versus Phase-J with no-op fallback. The result is more reliable but less complete: `bicycle`, `flowers`, `garden`, `counter`, `bonsai`, and `treehill` remain fallback under the full-robust gate, so Phase-R is a rigorous representation-level baseline rather than the final visual endpoint.
 
-Phase-S is the current representation-level repair branch.  It uses face-local
-SH1 residual carriers, train-only face/view consensus, and a per-face gain
-certificate before a checkpoint edit is materialized.  Gaincert v1 now has
-four-offset train-val gate accepts on `garden`, `flowers`, `bonsai`, `kitchen`,
-`room`, and near-no-op `stump`; `bicycle` rejects under both gaincert v1 and
-the newer centroid patch-certified follow-up, while `counter` and `treehill`
-reject at the single train-val gate.  `bonsai` is a thresholded accept rather
-than a clean all-axis win because mean SSIM/LPIPS move slightly in the wrong
-direction inside tolerance. A held-out visual gallery is saved at
-`outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_gaincert_v1_cached_dense16_20260512/qualitative_gallery/gallery.html`.
+Phase-S is the current representation-level repair branch. It uses face-local
+SH1 residual carriers, train-only face/view consensus, and per-face gain
+certificates before a checkpoint edit is materialized. The latest risk-tail
+selector tests `top1x2,risk4x1,risk8x0.5` on all 8 candidate-bearing scenes
+with W&B-logged render gates. It accepts `flowers`, `counter`, and `treehill`,
+rejects `garden/bicycle/room/kitchen/bonsai`, and falls back to Phase-J on
+rejection. The full8 mean effective report-only delta is `+0.000684500` PSNR,
+`+0.000058956` SSIM, and `-0.000073545` LPIPS. Per-face alpha refit is wired
+through the materializer, but the first `counter/garden/bicycle` pilot does not
+improve over uniform risk-tail and is kept as a measured negative result.
 
 On the object-prior side, the nested K=8 SPCarNet selector now includes a
 `visible_only` observed-visible preservation policy.  On 206 validation objects
@@ -122,6 +122,7 @@ Current Phase-J summary:
 | per-view audit | `244 / 246` held-out views strictly improve PSNR, SSIM, and LPIPS over the selected clean baseline |
 | external validation | ETH3D courtyard clean9000 strict RGB win: up to `+0.2642` PSNR, `+0.0094` SSIM, `-0.0225` LPIPS; mixed vs older ELA7 |
 | Phase-R v11 full-robust representation ladder | `3 / 9` multi-offset train-only accepted selections, `3 / 9` report-only strict RGB wins, mean `+0.002531` PSNR, `+0.000080` SSIM, `-0.000120` LPIPS vs Phase-J with no-op fallback; this supersedes the more optimistic v10 mixed single/multi-fold snapshot |
+| Phase-S risk-tail full8 | `3 / 8` candidate-bearing scenes accepted, mean effective report-only delta `+0.000684500` PSNR, `+0.000058956` SSIM, `-0.000073545` LPIPS vs Phase-J fallback; qualitative panels in `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_coupled_selector_v1_riskpilot_20260513_qualitative` |
 | Phase-S gaincert v1 | strict four-offset gate accepts `garden`, `flowers`, `bonsai`, `kitchen`, `room`, and near-no-op `stump`; rejects `bicycle`; `counter/treehill` are blocked by single-gate rejection |
 | full9 paper-loop collector | clean-best `9 / 9`, Phase-J `9 / 9`, Phase-J strict RGB wins vs clean-best `9 / 9`; Phase-S closure is `False` because strict gates are `7 / 9` with `6 / 9` accepts and only `3 / 7` all-axis train-val wins |
 | Stage ELA12 clean-best audit | selected-clean subset remains `5 / 5` strict full-pass with `164 / 165` per-view RGB pass and `163 / 165` envelope pass; this is not the full nine-scene Mip-NeRF360 benchmark |
@@ -299,9 +300,9 @@ Collect the final table:
 
 This version is promising, but it is not yet a complete "fully dominates MeshSplatting" endpoint.
 
-- Average triangle reduction is only `5.76%` because room, counter, and kitchen are intentionally micro-pruned at `0.1%`.
+- Average triangle reduction for the current Phase-J endpoint is `7.6479%`; indoor micro-pruned scenes still limit the rate-distortion story.
 - Strict all-axis pass is `5 / 9`, not `9 / 9`; the remaining scenes are geometry-safe or geometry-neutral rather than strict geometry wins.
-- The strongest RGB endpoint is still Phase-J, a render-time guarded ELA portfolio. The representation-level Phase-S loop is not closed: `bicycle` rejects, `counter/treehill` lack strict rows because the frozen single-gate rejects, `bonsai` is tolerance-accepted rather than an all-axis clean win, and the accepted Phase-S deltas are very small.
+- The strongest broad RGB endpoint is still Phase-J, a render-time guarded ELA portfolio. Phase-S risk-tail is a real representation-level module, but it promotes only `3 / 8` candidate-bearing scenes and its mean is dominated by `flowers`.
 - Rate-distortion reporting must include vertices and attributes, not only triangle count, because face-local SH1 can duplicate vertices on accepted faces.
 - The next research target is a stronger geometry-preserving compaction and representation repair operator that can raise indoor/garden compression and solve the rejected outdoor scenes without breaking RGB, sparse depth, or normal metrics.
 

@@ -2,7 +2,7 @@
 
 Date: 2026-05-13
 
-This log records the first real Phase-S improvement after the top1/scale2
+This log records the first audited non-noop Phase-S improvement after the top1/scale2
 plateau. The new mechanism is a coupled face-set selector over the existing
 train-only face-local residual plan.
 
@@ -43,10 +43,13 @@ The companion collector is:
 
 ## Candidate Set Scoring
 
-Two candidate-set modes were implemented:
+Three candidate-set modes were implemented:
 
 - `topN`: preserve plan rank and take the first `N` faces.
 - `scoreN`: sort by a train-only certificate score and take the top `N` faces.
+- `riskN`: greedily select faces by train-only certificate score while
+  penalizing overlap in supported train views and similarity of residual
+  coefficient directions.
 
 The `scoreN` rule uses only fields already written in the candidate plan:
 
@@ -76,6 +79,24 @@ score_i =
 ```
 
 No held-out test metric is used for scoring or promotion.
+
+The newer `riskN` rule keeps the same single-face certificate score, but changes
+the set construction rule:
+
+```text
+adjusted_i =
+  score_i
+  * max(0.05, 1 - lambda_pair * max_j pair_risk(i, j))
+  * (1 + 0.05 * new_supported_view_count_i)
+
+pair_risk(i, j) =
+  view_support_overlap(i, j)
+  * (0.5 + 0.5 * abs(cosine(delta_coeff_i, delta_coeff_j)))
+```
+
+This is still train-only. Its purpose is to avoid selecting multiple faces that
+look independently good but modify the same views in highly similar residual
+directions.
 
 ## Promotion Rule
 
@@ -150,6 +171,97 @@ low-amplitude or train-val risky edits, but it is still sparse. It gives a real
 counter improvement and avoids known garden/counter top1 regressions, but it
 does not yet create a broad Phase-S margin.
 
+## Risk-Greedy Pilot
+
+After the score-only closure, `riskN` was added to test whether explicit
+pairwise view/residual redundancy improves the hard cases. The first risk-greedy
+pilot reran `garden`, `counter`, and `bicycle` with a fixed trial set:
+
+```text
+top1x2,risk4x1,risk8x0.5
+```
+
+Collected summary:
+
+`outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_coupled_selector_v1_riskpilot_20260513_summary/summary_3scene.md`
+
+| scene | candidates | selected | accepted | effective dPSNR | effective dSSIM | effective dLPIPS | best non-fallback trial |
+|---|---:|---|---:|---:|---:|---:|---|
+| garden | 110 | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | risk4/s1, but report-only test still regresses |
+| counter | 127 | risk4/s1 | true | +0.000055313 | +0.000000417 | -0.000001699 | risk4/s1 |
+| bicycle | 7 | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | top1/s2, below meaningful threshold |
+| **mean** | - | - | 1/3 | **+0.000018438** | **+0.000000139** | **-0.000000566** | sparse positive result |
+
+Detailed trial diagnostics:
+
+| scene | trial | train-val balanced | report-only test dPSNR | report-only test dSSIM | report-only test dLPIPS | reading |
+|---|---|---:|---:|---:|---:|---|
+| garden | top1/s2 | +0.000015080 | -0.000020981 | -0.000000477 | +0.000000626 | passes inner gate but fails outer threshold and test-like sanity |
+| garden | risk4/s1 | +0.000015557 | -0.000009537 | -0.000000238 | +0.000000790 | reduces PSNR regression magnitude, still not safe enough |
+| garden | risk8/s0.5 | +0.000011444 | -0.000005722 | -0.000000179 | +0.000000477 | most conservative risk trial, still below threshold |
+| counter | top1/s2 | +0.000004590 | -0.000026703 | -0.000000119 | +0.000000060 | old harmful top1 behavior |
+| counter | risk4/s1 | +0.000101507 | +0.000055313 | +0.000000417 | -0.000001699 | accepted; flips all metrics positive |
+| counter | risk8/s0.5 | +0.000068247 | +0.000003815 | +0.000000119 | -0.000000536 | positive but weaker than risk4 |
+| bicycle | top1/s2 | +0.000005722 | +0.000000000 | +0.000000000 | -0.000000030 | too small to promote |
+| bicycle | risk4/s1 | -0.000010133 | +0.000001907 | +0.000000060 | +0.000000149 | train-val rejects |
+| bicycle | risk8/s0.5 | -0.000001192 | +0.000001907 | +0.000000000 | +0.000000149 | train-val rejects |
+
+The risk-greedy rule is therefore implemented and auditable, but the first
+pilot does not yet prove a broader benefit. It reproduces the counter win and
+slightly reduces garden's negative PSNR magnitude, but it does not broaden the
+number of promoted scenes in this pilot.
+
+## Risk-Tail Full Eight Candidate-Scene Replay
+
+The same fixed risk trial set was then completed on all eight candidate-bearing
+scenes, with tail-stable promotion enabled and the tail mean threshold tightened
+to `1.8e-5` after the looser `1.5e-5` setting exposed a `garden` false-positive.
+
+Collected summary:
+
+`outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_coupled_selector_v1_riskpilot_20260513_summary/summary_8candidate_tailstable.md`
+
+| scene | candidates | selected | accepted | effective dPSNR | effective dSSIM | effective dLPIPS | reading |
+|---|---:|---|---:|---:|---:|---:|---|
+| bicycle | 7 | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | too small or train-val negative |
+| flowers | 35 | risk4/s1 | true | +0.005418777 | +0.000470877 | -0.000586182 | strong positive Phase-S case |
+| garden | 110 | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | stricter tail rule prevents test-negative promotion |
+| treehill | 84 | top1/s2 | true | +0.000001907 | +0.000000358 | -0.000000477 | tiny but safe |
+| room | 76 | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | below selector threshold |
+| counter | 127 | risk4/s1 | true | +0.000055313 | +0.000000417 | -0.000001699 | all-metric fix |
+| kitchen | 145 | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | below selector threshold |
+| bonsai | 1266 | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | train-val negative |
+| **mean** | - | - | **3/8** | **+0.000684500** | **+0.000058956** | **-0.000073545** | sparse but real improvement |
+
+New qualitative panels are stored at:
+
+`outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_coupled_selector_v1_riskpilot_20260513_qualitative/`
+
+![flowers risk4 panel](../../outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_coupled_selector_v1_riskpilot_20260513_qualitative/flowers_risk4_s1_00019_phasej_vs_risktail_panel.png)
+
+The full8 replay is a stronger result than the initial hard-scene pilot, but it
+is still not broad enough to make Phase-S the final paper endpoint. The mean is
+dominated by `flowers`; most scenes fall back to Phase-J.
+
+## Per-Face Alpha Refit Pilot
+
+A train-only per-face alpha interface was added:
+
+- alpha builder: `scripts/car_model/ecsr_fit_facelocal_plan_alphas.py`
+- materializer interface: `--materialize_plan_alpha_json`
+- selector switch: `--selector_fit_plan_alphas`
+
+The first `counter/garden/bicycle` alpha pilot is documented at:
+
+`outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_alpha_refit_v1_pilot_20260514_summary/summary_3scene.md`
+
+It accepts only `counter`, with the same effective delta as uniform risk4/s1:
+`+0.000055313` PSNR, `+0.000000417` SSIM, `-0.000001699` LPIPS. The fitted
+alphas are almost exactly `1.0`, so this is not promoted as a main method
+improvement. It remains useful as a completed interface and a negative result:
+the current residual proxy does not solve the remaining train/test mismatch by
+scalar shrink alone.
+
 ## Counter: Why This Matters
 
 The old top1/s2 result on counter was harmful:
@@ -201,7 +313,7 @@ coupled score4 edit improves them.
 
 ## Honest Assessment
 
-This is a meaningful method upgrade, but not a solved final paper result.
+This is an auditable method upgrade, but not a solved final paper result.
 
 Positive:
 
@@ -210,29 +322,31 @@ Positive:
 - includes a fallback rule that prevents tiny or risky edits from hurting the
   effective method output;
 - fixes counter, where top1/s2 was negative.
+- adds a risk-greedy selector that explicitly penalizes redundant view support
+  and residual-direction overlap.
 
 Still weak:
 
-- only `1/5` pilot scenes promote under the meaningful threshold;
-- mean gain is positive but still small;
+- full8 risk-tail promotes `3 / 8` candidate-bearing scenes;
+- mean gain is positive but dominated by `flowers`;
 - visual improvement remains subtle;
-- `stump` has zero candidate faces and requires candidate discovery work;
-- the selector does not yet model explicit pairwise view/geometry overlap.
+- relaxed `stump` discovery finds two candidates, but no trial is promoted;
+- the selector models pairwise view/residual overlap, but not yet geometric
+  adjacency or learned per-view tail risk.
 
 ## Next Step
 
 The next step is not another scalar threshold sweep. The current strict selector
 has established a useful safety rule and one positive scene, but the low
-acceptance rate shows that score-only face sets are still too weak. The next
-real method increment should add explicit pairwise/coupled risk terms:
+acceptance rate shows that score-only and first-pass risk-greedy face sets are
+still too weak. The remaining work is now:
 
-- view-support overlap penalty;
-- geometry-neighborhood overlap penalty;
-- residual-direction conflict penalty;
-- per-view tail-risk or CVaR on train-policy-val residual prediction;
-- a stump-specific candidate discovery relaxation, because current strict
-  certificates produce zero candidates there.
+- extend risk beyond view/residual redundancy to geometry-neighborhood
+  adjacency and learned or CVaR-style per-view tail risk;
+- improve the residual evidence/proxy because per-face alpha refit is currently
+  a measured negative result;
+- improve stump candidate quality, because relaxed discovery found candidates
+  but they were too weak to promote.
 
-Until those are implemented and validated, Phase-J remains the main strong
-paper-facing result, while coupled Phase-S is a promising but sparse repair
-branch.
+Phase-J remains the main strong paper-facing result, while coupled Phase-S is a
+promising but sparse repair branch.

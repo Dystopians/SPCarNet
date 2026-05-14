@@ -33,12 +33,12 @@ This means the honest paper story is currently:
 | Phase-F compact candidate ladder | Produces compact checkpoints at fixed ratios and evaluates them. | Phase-F outputs under `outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix`. | Gives the compact model family that Phase-J and Phase-S build on. |
 | Phase-J guarded adaptive-edge + ELA | Main current endpoint. Applies guarded compaction and evidence-lumigraph adaptation, then replays render-calibrated selected models. | Evidence summary: `outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/phasef_ela_eval_summary_phasej_guarded_adaptedge_full9.md`. | Strongly beats clean MeshSplatting on the selected full9 set and reduces triangles. |
 | Surface evidence cache | Converts train-view render residuals into per-face evidence. It records which faces are hit, how many pixels support each face, and whether the residual direction is consistent across views. | Built by the Phase-K/S runner from evidence roots such as `outputs/carnet/meshsplatopt/ecsr_phase_r/surface_evidence_uniform_sh1_v6_dense16/{scene}`. | Supplies train-only evidence; no held-out test image is used for selection. |
-| Phase-S face-local SH residual planner | Fits a bounded local SH residual for candidate faces, then writes a candidate plan without applying it. | `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py` with `--candidate_plan_out` and `--max_faces_to_apply 0`. | Produces a ranked face plan with train-only certificates. Stump currently has zero candidates under the fixed policy. |
+| Phase-S face-local SH residual planner | Fits a bounded local SH residual for candidate faces, then writes a candidate plan without applying it. | `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py` with `--candidate_plan_out` and `--max_faces_to_apply 0`. | Produces a ranked face plan with train-only certificates. Strict stump has zero candidates; relaxed stump discovery finds 2 but no accepted repair. |
 | Candidate certificates | Filters faces by policy-val relative gain, per-face relative gain, view consensus, view-gain certificate, and validation shrink. | Implemented inside `ecsr_apply_surface_residual_facelocal_sh1_delta.py`. Key flags include `--min_face_policy_val_relative_gain`, `--min_face_view_consensus`, `--min_face_gain_certificate_fraction`, and `--validation_shrink_mode face`. | Prevents large unstable residual patches, but also makes the final edit very conservative. |
 | Plan materialization | Reads the candidate plan and materializes only a bounded subset. The current fixed policy uses top1 face and scale 2.0. | `ecsr_apply_surface_residual_facelocal_sh1_delta.py` with `--materialize_plan_in`, `--materialize_plan_limit 1`, and `--materialize_plan_scale 2.0`. | Adds one local face residual carrier: triangle count is preserved, while three local vertices are added for the selected face. |
 | Train-val render gate | Renders held-out train-val views and accepts the candidate only when the balanced PSNR/SSIM/LPIPS gate passes. | `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py` and `scripts/car_model/ecsr_decide_phasek_trainval_gate.py`. | Selection is train-val only. Test metrics are report-only. Rejected scenes fall back to Phase-J. |
 | Phase-S summary collector | Aggregates decision JSON files into a scene table with effective report-only test deltas. | `scripts/car_model/ecsr_collect_facelocal_rendercalib_phase_s_summary.py`. | Current snapshot: 8 present scenes, 6 accepted, 2 rejected, and stump blocked by zero candidates. |
-| Coupled render-risk selector | Tests multiple train-only face sets through the real train-val render gate and promotes only meaningful improvements. | `scripts/car_model/ecsr_run_facelocal_coupled_selector.py` and `scripts/car_model/ecsr_collect_facelocal_coupled_selector_summary.py`. | New pilot: 8 candidate scenes, 1 accepted (`counter`), mean effective report-only `+0.000006914 PSNR`, `+0.000000052 SSIM`, `-0.000000212 LPIPS`. |
+| Coupled render-risk selector | Tests multiple train-only face sets through the real train-val render gate and promotes only meaningful improvements. | `scripts/car_model/ecsr_run_facelocal_coupled_selector.py` and `scripts/car_model/ecsr_collect_facelocal_coupled_selector_summary.py`. | Score-only closure: 8 candidate scenes, 1 accepted (`counter`). Latest risk-tail full8: 3 accepted (`flowers`, `counter`, `treehill`), mean effective report-only `+0.000684500 PSNR`, `+0.000058956 SSIM`, `-0.000073545 LPIPS`. |
 
 ## Implementation Details
 
@@ -140,12 +140,13 @@ A new coupled render-risk selector was added after the top1/scale2 round:
 `docs/car_model/5-13-Coupled-Selector-Pilot.md`
 
 The selector reads the same train-only candidate plan, builds fixed face sets
-(`topN` and train-certificate `scoreN`), runs the existing train-val render gate
-for each trial, and promotes only trials whose train-val balanced delta reaches
-`0.00005`. This prevents numerically tiny edits from becoming a method claim.
+(`topN`, train-certificate `scoreN`, and risk-greedy `riskN`), runs the existing
+train-val render gate for each trial, and promotes only trials whose train-val
+balanced delta reaches `0.00005`. This prevents numerically tiny edits from
+becoming a method claim.
 
-Eight candidate-bearing scenes were evaluated. `stump` remains a zero-candidate
-fallback.
+Eight candidate-bearing scenes were evaluated in the score-only closure.
+`stump` remains a strict zero-candidate fallback in this table.
 
 | scene | selected | accepted | effective dPSNR | effective dSSIM | effective dLPIPS |
 |---|---|---:|---:|---:|---:|
@@ -162,6 +163,34 @@ fallback.
 This is a genuine method improvement over top1/s2 on `counter`: top1/s2 had
 negative report-only test deltas there, while the coupled score4/s1 set improves
 all three metrics. It is still too sparse to be the final paper result.
+
+The newer risk-greedy pilot adds a pairwise penalty for redundant view support
+and residual-direction overlap. It was first tested on `garden`, `counter`, and
+`bicycle`:
+
+`outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_coupled_selector_v1_riskpilot_20260513_summary/summary_3scene.md`
+
+| scene | selected | accepted | effective dPSNR | effective dSSIM | effective dLPIPS | reading |
+|---|---|---:|---:|---:|---:|---|
+| garden | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | risk reduces negative PSNR magnitude but not enough to promote |
+| counter | risk4/s1 | true | +0.000055313 | +0.000000417 | -0.000001699 | accepted; same all-metric counter fix as score4/s1 |
+| bicycle | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | multi-face risk trials fail train-val or remain too small |
+| **mean** | - | 1/3 | **+0.000018438** | **+0.000000139** | **-0.000000566** | sparse positive result |
+
+The full risk-tail replay later completed all eight candidate-bearing scenes:
+
+`outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_coupled_selector_v1_riskpilot_20260513_summary/summary_8candidate_tailstable.md`
+
+| protocol | candidate scenes | accepted | mean effective dPSNR | mean effective dSSIM | mean effective dLPIPS | reading |
+|---|---:|---:|---:|---:|---:|---|
+| risk-tail full8 | 8 | 3 | +0.000684500 | +0.000058956 | -0.000073545 | accepts `flowers`, `counter`, and `treehill`; still sparse and flowers-dominated |
+
+Per-face alpha refit is implemented through
+`scripts/car_model/ecsr_fit_facelocal_plan_alphas.py` and
+`--materialize_plan_alpha_json`, but the first `counter/garden/bicycle` pilot
+does not improve over uniform risk-tail. Risk-tail is therefore a real selector
+upgrade and a useful negative-control diagnostic, but not yet the broad Phase-S
+breakthrough.
 
 ## Candidate Plan Coverage
 
@@ -341,7 +370,8 @@ Generated artifacts:
 - The fixed policy passes train-val gates by making very small edits.
 - Garden shows a train-val pass but a report-only test regression, which means
   the current selector is not yet a reliable quality booster.
-- Stump has zero candidate faces under the current certificates.
+- Stump strict policy has zero candidate faces; relaxed discovery finds 2
+  candidates but no accepted repair.
 - Multi-face materialization remains the central unresolved problem: more faces
   are needed for visible improvement, but naive top-N materialization has already
   shown LPIPS-balanced regressions.
