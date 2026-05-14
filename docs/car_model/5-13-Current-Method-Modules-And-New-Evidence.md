@@ -38,6 +38,7 @@ This means the honest paper story is currently:
 | Plan materialization | Reads the candidate plan and materializes only a bounded subset. The current fixed policy uses top1 face and scale 2.0. | `ecsr_apply_surface_residual_facelocal_sh1_delta.py` with `--materialize_plan_in`, `--materialize_plan_limit 1`, and `--materialize_plan_scale 2.0`. | Adds one local face residual carrier: triangle count is preserved, while three local vertices are added for the selected face. |
 | Train-val render gate | Renders held-out train-val views and accepts the candidate only when the balanced PSNR/SSIM/LPIPS gate passes. | `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py` and `scripts/car_model/ecsr_decide_phasek_trainval_gate.py`. | Selection is train-val only. Test metrics are report-only. Rejected scenes fall back to Phase-J. |
 | Phase-S summary collector | Aggregates decision JSON files into a scene table with effective report-only test deltas. | `scripts/car_model/ecsr_collect_facelocal_rendercalib_phase_s_summary.py`. | Current snapshot: 8 present scenes, 6 accepted, 2 rejected, and stump blocked by zero candidates. |
+| Coupled render-risk selector | Tests multiple train-only face sets through the real train-val render gate and promotes only meaningful improvements. | `scripts/car_model/ecsr_run_facelocal_coupled_selector.py` and `scripts/car_model/ecsr_collect_facelocal_coupled_selector_summary.py`. | New pilot: 8 candidate scenes, 1 accepted (`counter`), mean effective report-only `+0.000006914 PSNR`, `+0.000000052 SSIM`, `-0.000000212 LPIPS`. |
 
 ## Implementation Details
 
@@ -131,6 +132,36 @@ Snapshot status:
 Conclusion: the fixed Phase-S policy is stable enough to pass several train-val
 gates, but the effect size is currently near numerical noise. It should not be
 presented as the main performance gain.
+
+## Phase-S Coupled Selector Update
+
+A new coupled render-risk selector was added after the top1/scale2 round:
+
+`docs/car_model/5-13-Coupled-Selector-Pilot.md`
+
+The selector reads the same train-only candidate plan, builds fixed face sets
+(`topN` and train-certificate `scoreN`), runs the existing train-val render gate
+for each trial, and promotes only trials whose train-val balanced delta reaches
+`0.00005`. This prevents numerically tiny edits from becoming a method claim.
+
+Eight candidate-bearing scenes were evaluated. `stump` remains a zero-candidate
+fallback.
+
+| scene | selected | accepted | effective dPSNR | effective dSSIM | effective dLPIPS |
+|---|---|---:|---:|---:|---:|
+| bicycle | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| flowers | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| garden | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| treehill | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| room | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| counter | score4/s1 | true | +0.000055313 | +0.000000417 | -0.000001699 |
+| kitchen | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| bonsai | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| **mean** | - | 1/8 | **+0.000006914** | **+0.000000052** | **-0.000000212** |
+
+This is a genuine method improvement over top1/s2 on `counter`: top1/s2 had
+negative report-only test deltas there, while the coupled score4/s1 set improves
+all three metrics. It is still too sparse to be the final paper result.
 
 ## Candidate Plan Coverage
 
