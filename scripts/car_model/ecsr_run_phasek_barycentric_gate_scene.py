@@ -428,6 +428,10 @@ def _apply_delta(
                             _scene_format_path(args.delta_facelocal_materialize_plan_alpha_json, scene),
                         ]
                     )
+                if bool(args.delta_facelocal_materialize_allow_uncertified_plan):
+                    cmd.append("--materialize_allow_uncertified_plan")
+                else:
+                    cmd.append("--no-materialize_allow_uncertified_plan")
         if bool(args.delta_uniform_barycentric):
             cmd.append("--uniform_barycentric")
     if str(args.delta_operator) == "facelocal_sh1":
@@ -442,7 +446,7 @@ def _apply_delta(
                 "--crossfold_min_passing_folds",
                 str(args.delta_crossfold_min_passing_folds),
                 "--crossfold_min_fold_relative_gain",
-                str(args.delta_crossfold_min_fold_relative_gain),
+                _fmt_arg(args.delta_crossfold_min_fold_relative_gain),
                 "--crossfold_min_fold_samples",
                 str(args.delta_crossfold_min_fold_samples),
                 "--patch_cert_rings",
@@ -450,25 +454,39 @@ def _apply_delta(
                 "--patch_cert_max_faces_per_seed",
                 str(args.delta_patch_cert_max_faces_per_seed),
                 "--patch_cert_min_direction_cosine",
-                str(args.delta_patch_cert_min_direction_cosine),
+                _fmt_arg(args.delta_patch_cert_min_direction_cosine),
                 "--patch_cert_min_neighbor_policy_val_samples",
                 str(args.delta_patch_cert_min_neighbor_policy_val_samples),
                 "--patch_cert_min_neighbor_policy_val_relative_gain",
-                str(args.delta_patch_cert_min_neighbor_policy_val_relative_gain),
+                _fmt_arg(args.delta_patch_cert_min_neighbor_policy_val_relative_gain),
                 "--patch_cert_min_policy_val_samples",
                 str(args.delta_patch_cert_min_policy_val_samples),
                 "--patch_cert_min_relative_gain",
-                str(args.delta_patch_cert_min_relative_gain),
+                _fmt_arg(args.delta_patch_cert_min_relative_gain),
                 "--patch_cert_neighbor_mode",
                 str(args.delta_patch_cert_neighbor_mode),
                 "--patch_cert_centroid_candidates_per_seed",
                 str(args.delta_patch_cert_centroid_candidates_per_seed),
+                "--patch_cert_crossfold_folds",
+                str(args.delta_patch_cert_crossfold_folds),
+                "--patch_cert_crossfold_min_passing_folds",
+                str(args.delta_patch_cert_crossfold_min_passing_folds),
+                "--patch_cert_crossfold_min_fold_relative_gain",
+                _fmt_arg(args.delta_patch_cert_crossfold_min_fold_relative_gain),
+                "--patch_cert_crossfold_min_fold_samples",
+                str(args.delta_patch_cert_crossfold_min_fold_samples),
             ]
         )
+        if bool(args.delta_patch_cert_neighbor_crossfold):
+            cmd.append("--patch_cert_neighbor_crossfold")
+        else:
+            cmd.append("--no-patch_cert_neighbor_crossfold")
         if bool(args.delta_patch_cert_shrink):
             cmd.append("--patch_cert_shrink")
         else:
             cmd.append("--no-patch_cert_shrink")
+        if bool(args.delta_strict_patchcert_carrier):
+            cmd.append("--strict_patchcert_carrier")
     sh1_view_consensus = (
         str(args.delta_operator) in {"sh1", "facelocal_sh1"}
         and float(args.delta_min_face_view_consensus) > 0.0
@@ -776,23 +794,23 @@ def _decide(
         "--candidate_test_method",
         args.candidate_test_method,
         "--min_psnr_gain",
-        str(args.gate_min_psnr_gain),
+        _fmt_arg(args.gate_min_psnr_gain),
         "--max_ssim_regression",
-        str(args.gate_max_ssim_regression),
+        _fmt_arg(args.gate_max_ssim_regression),
         "--max_lpips_regression",
-        str(args.gate_max_lpips_regression),
+        _fmt_arg(args.gate_max_lpips_regression),
         "--min_balanced_delta",
-        str(args.gate_min_balanced_delta),
+        _fmt_arg(args.gate_min_balanced_delta),
         "--tail_cvar_fraction",
-        str(args.gate_tail_cvar_fraction),
+        _fmt_arg(args.gate_tail_cvar_fraction),
         "--tail_max_balanced_negative_fraction",
-        str(args.gate_tail_max_balanced_negative_fraction),
+        _fmt_arg(args.gate_tail_max_balanced_negative_fraction),
         "--tail_min_balanced_cvar_delta",
-        str(args.gate_tail_min_balanced_cvar_delta),
+        _fmt_arg(args.gate_tail_min_balanced_cvar_delta),
         "--tail_max_lpips_positive_fraction",
-        str(args.gate_tail_max_lpips_positive_fraction),
+        _fmt_arg(args.gate_tail_max_lpips_positive_fraction),
         "--tail_max_worst_lpips_regression",
-        str(args.gate_tail_max_worst_lpips_regression),
+        _fmt_arg(args.gate_tail_max_worst_lpips_regression),
         "--stratified_group_count",
         str(args.gate_stratified_group_count),
         "--compact_gate_max_faces",
@@ -800,27 +818,27 @@ def _decide(
         "--compact_gate_max_vertices",
         str(args.gate_compact_max_vertices),
         "--compact_gate_max_face_ratio",
-        str(args.gate_compact_max_face_ratio),
+        _fmt_arg(args.gate_compact_max_face_ratio),
         "--compact_gate_min_psnr_gain",
-        str(args.gate_compact_min_psnr_gain),
+        _fmt_arg(args.gate_compact_min_psnr_gain),
         "--compact_gate_max_ssim_regression",
-        str(args.gate_compact_max_ssim_regression),
+        _fmt_arg(args.gate_compact_max_ssim_regression),
         "--compact_gate_max_lpips_regression",
-        str(args.gate_compact_max_lpips_regression),
+        _fmt_arg(args.gate_compact_max_lpips_regression),
         "--compact_gate_max_balanced_negative_fraction",
-        str(args.gate_compact_max_balanced_negative_fraction),
+        _fmt_arg(args.gate_compact_max_balanced_negative_fraction),
         "--compact_gate_min_balanced_cvar_delta",
-        str(args.gate_compact_min_balanced_cvar_delta),
+        _fmt_arg(args.gate_compact_min_balanced_cvar_delta),
         "--compact_gate_max_lpips_positive_fraction",
-        str(args.gate_compact_max_lpips_positive_fraction),
+        _fmt_arg(args.gate_compact_max_lpips_positive_fraction),
         "--compact_gate_max_worst_lpips_regression",
-        str(args.gate_compact_max_worst_lpips_regression),
+        _fmt_arg(args.gate_compact_max_worst_lpips_regression),
         "--compact_gate_min_stratified_psnr_delta",
         _fmt_arg(args.gate_compact_min_stratified_psnr_delta),
         "--compact_gate_max_stratified_ssim_regression",
-        str(args.gate_compact_max_stratified_ssim_regression),
+        _fmt_arg(args.gate_compact_max_stratified_ssim_regression),
         "--compact_gate_max_stratified_lpips_regression",
-        str(args.gate_compact_max_stratified_lpips_regression),
+        _fmt_arg(args.gate_compact_max_stratified_lpips_regression),
         "--output_json",
         str(decision_json),
         "--output_md",
@@ -1080,7 +1098,13 @@ def main() -> int:
     parser.add_argument("--delta_patch_cert_min_relative_gain", type=float, default=0.0)
     parser.add_argument("--delta_patch_cert_neighbor_mode", choices=("topology", "centroid", "both"), default="topology")
     parser.add_argument("--delta_patch_cert_centroid_candidates_per_seed", type=int, default=64)
+    parser.add_argument("--delta_patch_cert_crossfold_folds", type=int, default=0)
+    parser.add_argument("--delta_patch_cert_crossfold_min_passing_folds", type=int, default=0)
+    parser.add_argument("--delta_patch_cert_crossfold_min_fold_relative_gain", type=float, default=0.0)
+    parser.add_argument("--delta_patch_cert_crossfold_min_fold_samples", type=int, default=4)
+    parser.add_argument("--delta_patch_cert_neighbor_crossfold", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--delta_patch_cert_shrink", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--delta_strict_patchcert_carrier", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument(
         "--delta_facelocal_candidate_plan_out",
         default="",
@@ -1102,6 +1126,12 @@ def main() -> int:
         "--delta_facelocal_materialize_plan_alpha_json",
         default="",
         help="Optional per-scene JSON template with face_id -> alpha multipliers for facelocal plan materialization.",
+    )
+    parser.add_argument(
+        "--delta_facelocal_materialize_allow_uncertified_plan",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Allow legacy facelocal plan replay that lacks strict PatchCert carrier metadata.",
     )
     parser.add_argument("--delta_max_faces_to_apply", type=int, default=2048)
     parser.add_argument("--delta_min_face_policy_val_relative_gain", type=float, default=0.0)

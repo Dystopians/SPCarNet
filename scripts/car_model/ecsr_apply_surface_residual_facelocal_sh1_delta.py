@@ -195,18 +195,49 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--patch_cert_neighbor_mode", choices=("topology", "centroid", "both"), default="topology")
     parser.add_argument("--patch_cert_centroid_candidates_per_seed", type=int, default=64)
     parser.add_argument(
+        "--patch_cert_crossfold_folds",
+        type=int,
+        default=0,
+        help=(
+            "If >1, require each accepted patch carrier to pass a train-only fold proxy-gain "
+            "certificate. This gates the patch itself, not only the seed face."
+        ),
+    )
+    parser.add_argument("--patch_cert_crossfold_min_passing_folds", type=int, default=0)
+    parser.add_argument("--patch_cert_crossfold_min_fold_relative_gain", type=float, default=0.0)
+    parser.add_argument("--patch_cert_crossfold_min_fold_samples", type=int, default=4)
+    parser.add_argument(
+        "--patch_cert_neighbor_crossfold",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "When patch-fold certification is enabled, require each neighbor to pass "
+            "the same train-only fold certificate before it can enter a patch."
+        ),
+    )
+    parser.add_argument(
         "--patch_cert_shrink",
         action=argparse.BooleanOptionalAction,
         default=True,
         help="When patch certification is enabled, fit one train-only shrink scale per accepted patch.",
     )
     parser.add_argument(
+        "--strict_patchcert_carrier",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Require the paper-facing strict PatchCert carrier policy: patch growth, "
+            "patch-fold certification, neighbor fold admission, post-shrink checks, "
+            "and certified whole-carrier plan replay."
+        ),
+    )
+    parser.add_argument(
         "--candidate_plan_out",
         type=Path,
         default=None,
         help=(
-            "Write all train-certified face-local residual candidates and their fitted coefficients "
-            "to a JSON plan for later render-calibrated subset materialization."
+            "Write the final train-certified accepted face-local residual carrier and fitted "
+            "coefficients to a JSON plan for later materialization."
         ),
     )
     parser.add_argument(
@@ -240,6 +271,16 @@ def parse_args() -> argparse.Namespace:
             "Optional JSON containing per-face alpha multipliers for materialized plan rows. "
             "Supported forms: {'face_alphas': {'123': 0.5}} or "
             "{'face_alphas': [{'face_id': 123, 'alpha': 0.5}]}."
+        ),
+    )
+    parser.add_argument(
+        "--materialize_allow_uncertified_plan",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Allow materializing legacy plan rows that do not carry explicit "
+            "policy/PatchCert certification. Default is strict: uncertified "
+            "rows are rejected so plan replay cannot bypass the train-only gate."
         ),
     )
     parser.add_argument("--no_op_on_fail", action="store_true", default=True)
@@ -1143,6 +1184,169 @@ def evaluate_proxy_for_faces(
     return evaluate_proxy(coeff, sample_vertex_ids[idx], weighted_basis[idx], target[idx], weights[idx])
 
 
+def build_patch_crossfold_cache(
+    *,
+    coeff: torch.Tensor,
+    faces: torch.Tensor,
+    selected_faces: list[int],
+    source_vertex_ids: torch.Tensor,
+    vertices: torch.Tensor,
+    view_paths: list[Path],
+    face_stats: dict[int, dict[str, float]],
+    args: argparse.Namespace,
+    device: torch.device,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    folds = int(args.patch_cert_crossfold_folds)
+    summary: dict[str, Any] = {
+        "enabled": bool(folds > 1),
+        "certificate_type": "all_train_patch_fold_consistency_not_crossfit",
+        "folds": max(folds, 0),
+        "min_passing_folds": int(args.patch_cert_crossfold_min_passing_folds),
+        "min_fold_relative_gain": float(args.patch_cert_crossfold_min_fold_relative_gain),
+        "min_fold_samples": int(args.patch_cert_crossfold_min_fold_samples),
+        "fold_summaries": [],
+    }
+    if folds <= 1 or not selected_faces or not view_paths or coeff.numel() == 0:
+        return [], summary
+    required_passing = int(args.patch_cert_crossfold_min_passing_folds)
+    if required_passing <= 0:
+        required_passing = folds
+    summary["min_passing_folds"] = int(required_passing)
+    vertices_local = vertices[source_vertex_ids].float() if source_vertex_ids.numel() else torch.empty((0, 3), dtype=torch.float32)
+    cache: list[dict[str, Any]] = []
+    for fold_idx in range(folds):
+        fold_paths = [path for idx, path in enumerate(view_paths) if idx % folds == fold_idx]
+        fold_samples = collect_samples(
+            fold_paths,
+            selected_faces,
+            face_stats,
+            high_error_quantile=float(args.high_error_quantile),
+            min_alpha=float(args.min_alpha),
+            barycentric_tolerance=float(args.barycentric_tolerance),
+            max_samples_per_face_view=int(args.max_samples_per_face_view),
+            max_total_samples=max(int(args.max_total_samples // max(folds, 1)), 1),
+            uniform_barycentric=bool(args.uniform_barycentric),
+        )
+        if fold_samples.count:
+            _, _, fold_sample_vertex_ids = localize_samples(faces, selected_faces, fold_samples)
+        else:
+            fold_sample_vertex_ids = torch.empty((0, 3), dtype=torch.long)
+        fold_ids, fold_basis, fold_target, fold_weights = samples_to_tensors(
+            fold_samples,
+            fold_sample_vertex_ids,
+            vertices_local,
+            strength=float(args.strength),
+            max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+            sh_degree=int(args.sh_degree),
+            device=device,
+        )
+        fold_proxy = evaluate_proxy(coeff, fold_ids, fold_basis, fold_target, fold_weights)
+        row = {
+            "fold": int(fold_idx),
+            "view_names": [p.stem for p in fold_paths],
+            "samples": int(fold_samples.count),
+            "proxy": fold_proxy,
+            "ids": fold_ids,
+            "basis": fold_basis,
+            "target": fold_target,
+            "weights": fold_weights,
+            "face_ids": fold_samples.face_ids,
+        }
+        summary["fold_summaries"].append(
+            {
+                "fold": int(fold_idx),
+                "view_names": row["view_names"],
+                "samples": int(fold_samples.count),
+                "proxy": fold_proxy,
+            }
+        )
+        cache.append(row)
+    return cache, summary
+
+
+def patch_crossfold_certificate_for_faces(
+    coeff: torch.Tensor,
+    fold_cache: list[dict[str, Any]],
+    face_ids: list[int],
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    folds = int(args.patch_cert_crossfold_folds)
+    enabled = bool(folds > 1)
+    required_passing = int(args.patch_cert_crossfold_min_passing_folds)
+    if required_passing <= 0:
+        required_passing = max(folds, 0)
+    result: dict[str, Any] = {
+        "enabled": enabled,
+        "folds": max(folds, 0),
+        "min_passing_folds": int(required_passing),
+        "min_fold_relative_gain": float(args.patch_cert_crossfold_min_fold_relative_gain),
+        "min_fold_samples": int(args.patch_cert_crossfold_min_fold_samples),
+        "passing_folds": 0,
+        "eligible_folds": 0,
+        "passed": not enabled,
+        "fold_rows": [],
+    }
+    if not enabled:
+        return result
+    gains: list[float] = []
+    for fold in fold_cache:
+        proxy = evaluate_proxy_for_faces(
+            coeff,
+            fold["ids"],
+            fold["basis"],
+            fold["target"],
+            fold["weights"],
+            fold["face_ids"],
+            face_ids,
+        )
+        samples = int(proxy.get("samples", 0))
+        relative_gain = float(proxy.get("relative_gain", -1.0))
+        eligible = samples >= int(args.patch_cert_crossfold_min_fold_samples)
+        passed = bool(eligible and relative_gain >= float(args.patch_cert_crossfold_min_fold_relative_gain))
+        if eligible:
+            result["eligible_folds"] = int(result["eligible_folds"]) + 1
+            gains.append(relative_gain)
+        if passed:
+            result["passing_folds"] = int(result["passing_folds"]) + 1
+        result["fold_rows"].append(
+            {
+                "fold": int(fold.get("fold", len(result["fold_rows"]))),
+                "samples": samples,
+                "relative_gain": relative_gain,
+                "eligible": bool(eligible),
+                "passed": bool(passed),
+            }
+        )
+    result["passed"] = bool(int(result["passing_folds"]) >= required_passing)
+    result["min_relative_gain"] = float(min(gains)) if gains else 0.0
+    result["mean_relative_gain"] = float(np.mean(np.asarray(gains, dtype=np.float32))) if gains else 0.0
+    return result
+
+
+def clone_face_coeffs(coeff: torch.Tensor, selected_faces: list[int], face_ids: list[int]) -> dict[int, torch.Tensor]:
+    if not face_ids or coeff.numel() == 0:
+        return {}
+    face_to_selected = {int(fid): idx for idx, fid in enumerate(selected_faces)}
+    out: dict[int, torch.Tensor] = {}
+    for fid in face_ids:
+        row = face_to_selected.get(int(fid))
+        if row is None:
+            continue
+        out[int(fid)] = coeff[row * 3 : row * 3 + 3].clone()
+    return out
+
+
+def restore_face_coeffs(coeff: torch.Tensor, selected_faces: list[int], snapshot: dict[int, torch.Tensor]) -> None:
+    if not snapshot or coeff.numel() == 0:
+        return
+    face_to_selected = {int(fid): idx for idx, fid in enumerate(selected_faces)}
+    for fid, value in snapshot.items():
+        row = face_to_selected.get(int(fid))
+        if row is None:
+            continue
+        coeff[row * 3 : row * 3 + 3] = value.to(device=coeff.device, dtype=coeff.dtype)
+
+
 def fit_patch_scale(
     coeff: torch.Tensor,
     sample_vertex_ids: torch.Tensor,
@@ -1202,9 +1406,12 @@ def grow_patch_certified_faces(
     val_target: torch.Tensor,
     val_weights: torch.Tensor,
     val_samples: PixelSamples,
+    patch_crossfold_cache: list[dict[str, Any]],
     args: argparse.Namespace,
 ) -> tuple[list[int], dict[str, Any], dict[int, dict[str, Any]]]:
     rings = int(args.patch_cert_rings)
+    patch_crossfold_enabled = bool(int(args.patch_cert_crossfold_folds) > 1)
+    patch_neighbor_crossfold = bool(args.patch_cert_neighbor_crossfold) and patch_crossfold_enabled
     summary: dict[str, Any] = {
         "enabled": bool(rings > 0),
         "rings": max(rings, 0),
@@ -1217,11 +1424,24 @@ def grow_patch_certified_faces(
         "neighbor_mode": str(args.patch_cert_neighbor_mode),
         "centroid_candidates_per_seed": int(args.patch_cert_centroid_candidates_per_seed),
         "patch_shrink": bool(args.patch_cert_shrink),
+        "patch_crossfold_enabled": patch_crossfold_enabled,
+        "patch_crossfold_folds": int(args.patch_cert_crossfold_folds),
+        "patch_crossfold_min_passing_folds": int(args.patch_cert_crossfold_min_passing_folds),
+        "patch_crossfold_min_fold_relative_gain": float(args.patch_cert_crossfold_min_fold_relative_gain),
+        "patch_crossfold_min_fold_samples": int(args.patch_cert_crossfold_min_fold_samples),
+        "patch_neighbor_crossfold": patch_neighbor_crossfold,
         "seed_faces": int(len(seed_faces)),
         "accepted_faces_before": int(len(seed_faces)),
         "accepted_faces_after": int(len(seed_faces)),
         "accepted_patches": 0,
         "rejected_patches": 0,
+        "rejected_patch_crossfold": 0,
+        "rejected_neighbor_crossfold": 0,
+        "rejected_patch_budget": 0,
+        "rejected_post_shrink_policy_val": 0,
+        "accepted_patch_crossfold": 0,
+        "accepted_post_shrink_policy_val": 0,
+        "accepted_post_shrink_patch_crossfold": 0,
         "mean_patch_size": 1.0 if seed_faces else 0.0,
         "preview": [],
     }
@@ -1282,6 +1502,11 @@ def grow_patch_certified_faces(
                         continue
                     if float(proxy.get("relative_gain", -1.0)) < float(args.patch_cert_min_neighbor_policy_val_relative_gain):
                         continue
+                    if patch_neighbor_crossfold:
+                        neighbor_crossfold = patch_crossfold_certificate_for_faces(coeff, patch_crossfold_cache, [nb], args)
+                        if not bool(neighbor_crossfold.get("passed", False)):
+                            summary["rejected_neighbor_crossfold"] = int(summary["rejected_neighbor_crossfold"]) + 1
+                            continue
                     patch.append(nb)
                     seen.add(nb)
                     next_frontier.append(nb)
@@ -1306,8 +1531,13 @@ def grow_patch_certified_faces(
             int(proxy_before_shrink.get("samples", 0)) >= int(args.patch_cert_min_policy_val_samples)
             and float(proxy_before_shrink.get("relative_gain", -1.0)) >= float(args.patch_cert_min_relative_gain)
         )
+        patch_crossfold = patch_crossfold_certificate_for_faces(coeff, patch_crossfold_cache, patch, args)
+        if patch_crossfold_enabled and not bool(patch_crossfold.get("passed", False)):
+            passed = False
         if not passed:
             summary["rejected_patches"] = int(summary["rejected_patches"]) + 1
+            if patch_crossfold_enabled and not bool(patch_crossfold.get("passed", False)):
+                summary["rejected_patch_crossfold"] = int(summary["rejected_patch_crossfold"]) + 1
             patch = [seed_id]
             proxy_before_shrink = evaluate_proxy_for_faces(
                 coeff,
@@ -1318,10 +1548,42 @@ def grow_patch_certified_faces(
                 val_samples.face_ids,
                 patch,
             )
+            patch_crossfold = patch_crossfold_certificate_for_faces(coeff, patch_crossfold_cache, patch, args)
+            if patch_crossfold_enabled:
+                passed = (
+                    int(proxy_before_shrink.get("samples", 0)) >= int(args.patch_cert_min_policy_val_samples)
+                    and float(proxy_before_shrink.get("relative_gain", -1.0)) >= float(args.patch_cert_min_relative_gain)
+                    and bool(patch_crossfold.get("passed", False))
+                )
+            else:
+                # Preserve historical PatchCert behavior when the new patch-fold
+                # certificate is disabled: a rejected grown patch falls back to
+                # its already face-certified seed instead of rejecting the seed.
+                passed = False
+            if patch_crossfold_enabled and not passed:
+                if patch_crossfold_enabled and not bool(patch_crossfold.get("passed", False)):
+                    summary["rejected_patch_crossfold"] = int(summary["rejected_patch_crossfold"]) + 1
+                patch_record = {
+                    "seed_face": seed_id,
+                    "faces": [seed_id],
+                    "patch_size": 1,
+                    "proxy": proxy_before_shrink,
+                    "proxy_before_shrink": proxy_before_shrink,
+                    "passed_patch_gain": False,
+                    "patch_crossfold_certificate": patch_crossfold,
+                    "scale": 0.0,
+                    "raw_scale": 0.0,
+                    "scale_samples": int(proxy_before_shrink.get("samples", 0)),
+                    "rejected": True,
+                }
+                if len(summary["preview"]) < 20:
+                    summary["preview"].append(patch_record)
+                continue
 
         scale = 1.0
         raw_scale = 1.0
         scale_samples = int(proxy_before_shrink.get("samples", 0))
+        coeff_snapshot = clone_face_coeffs(coeff, selected_faces, patch)
         if bool(args.patch_cert_shrink) and len(patch) > 1:
             scale, scale_samples, raw_scale = fit_patch_scale(
                 coeff,
@@ -1334,6 +1596,29 @@ def grow_patch_certified_faces(
                 int(args.patch_cert_min_policy_val_samples),
             )
             scale_face_coeffs(coeff, selected_faces, patch, scale)
+        post_shrink_patch_crossfold = patch_crossfold_certificate_for_faces(coeff, patch_crossfold_cache, patch, args)
+        if patch_crossfold_enabled and not bool(post_shrink_patch_crossfold.get("passed", False)):
+            restore_face_coeffs(coeff, selected_faces, coeff_snapshot)
+            summary["rejected_patches"] = int(summary["rejected_patches"]) + 1
+            summary["rejected_patch_crossfold"] = int(summary["rejected_patch_crossfold"]) + 1
+            patch_record = {
+                "seed_face": seed_id,
+                "faces": [int(fid) for fid in patch],
+                "patch_size": int(len(patch)),
+                "proxy": proxy_before_shrink,
+                "proxy_before_shrink": proxy_before_shrink,
+                "passed_patch_gain": False,
+                "patch_crossfold_certificate": patch_crossfold,
+                "post_shrink_patch_crossfold_certificate": post_shrink_patch_crossfold,
+                "scale": float(scale),
+                "raw_scale": float(raw_scale),
+                "scale_samples": int(scale_samples),
+                "rejected": True,
+                "rejected_reason": "post_shrink_patch_crossfold_failed",
+            }
+            if len(summary["preview"]) < 20:
+                summary["preview"].append(patch_record)
+            continue
         proxy_after_shrink = evaluate_proxy_for_faces(
             coeff,
             val_ids,
@@ -1343,12 +1628,67 @@ def grow_patch_certified_faces(
             val_samples.face_ids,
             patch,
         )
+        post_shrink_policy_pass = (
+            int(proxy_after_shrink.get("samples", 0)) >= int(args.patch_cert_min_policy_val_samples)
+            and float(proxy_after_shrink.get("relative_gain", -1.0)) >= float(args.patch_cert_min_relative_gain)
+        )
+        if not post_shrink_policy_pass:
+            restore_face_coeffs(coeff, selected_faces, coeff_snapshot)
+            summary["rejected_patches"] = int(summary["rejected_patches"]) + 1
+            summary["rejected_post_shrink_policy_val"] = int(summary["rejected_post_shrink_policy_val"]) + 1
+            patch_record = {
+                "seed_face": seed_id,
+                "faces": [int(fid) for fid in patch],
+                "patch_size": int(len(patch)),
+                "proxy": proxy_after_shrink,
+                "proxy_before_shrink": proxy_before_shrink,
+                "passed_patch_gain": False,
+                "patch_crossfold_certificate": patch_crossfold,
+                "post_shrink_patch_crossfold_certificate": post_shrink_patch_crossfold,
+                "scale": float(scale),
+                "raw_scale": float(raw_scale),
+                "scale_samples": int(scale_samples),
+                "rejected": True,
+                "rejected_reason": "post_shrink_policy_val_failed",
+            }
+            if len(summary["preview"]) < 20:
+                summary["preview"].append(patch_record)
+            continue
+        budget = int(args.max_faces_to_apply)
+        if budget >= 0 and len(accepted) + len(patch) > budget:
+            restore_face_coeffs(coeff, selected_faces, coeff_snapshot)
+            summary["rejected_patches"] = int(summary["rejected_patches"]) + 1
+            summary["rejected_patch_budget"] = int(summary["rejected_patch_budget"]) + 1
+            patch_record = {
+                "seed_face": seed_id,
+                "faces": [int(fid) for fid in patch],
+                "patch_size": int(len(patch)),
+                "proxy": proxy_after_shrink,
+                "proxy_before_shrink": proxy_before_shrink,
+                "passed_patch_gain": False,
+                "patch_crossfold_certificate": patch_crossfold,
+                "post_shrink_patch_crossfold_certificate": post_shrink_patch_crossfold,
+                "scale": float(scale),
+                "raw_scale": float(raw_scale),
+                "scale_samples": int(scale_samples),
+                "rejected": True,
+                "rejected_reason": "patch_budget_would_split_carrier",
+            }
+            if len(summary["preview"]) < 20:
+                summary["preview"].append(patch_record)
+            continue
 
         assigned.update(int(fid) for fid in patch)
         accepted.extend(int(fid) for fid in patch)
         patch_sizes.append(len(patch))
         if len(patch) > 1:
             summary["accepted_patches"] = int(summary["accepted_patches"]) + 1
+        if patch_crossfold_enabled and bool(patch_crossfold.get("passed", False)):
+            summary["accepted_patch_crossfold"] = int(summary["accepted_patch_crossfold"]) + 1
+        if post_shrink_policy_pass:
+            summary["accepted_post_shrink_policy_val"] = int(summary["accepted_post_shrink_policy_val"]) + 1
+        if patch_crossfold_enabled and bool(post_shrink_patch_crossfold.get("passed", False)):
+            summary["accepted_post_shrink_patch_crossfold"] = int(summary["accepted_post_shrink_patch_crossfold"]) + 1
         patch_record = {
             "seed_face": seed_id,
             "faces": [int(fid) for fid in patch],
@@ -1356,6 +1696,8 @@ def grow_patch_certified_faces(
             "proxy": proxy_after_shrink,
             "proxy_before_shrink": proxy_before_shrink,
             "passed_patch_gain": bool(passed),
+            "patch_crossfold_certificate": patch_crossfold,
+            "post_shrink_patch_crossfold_certificate": post_shrink_patch_crossfold,
             "scale": float(scale),
             "raw_scale": float(raw_scale),
             "scale_samples": int(scale_samples),
@@ -1604,12 +1946,121 @@ def read_plan_alphas(path: Path | None) -> dict[int, float]:
     return alphas
 
 
+def validate_strict_materialize_request(args: argparse.Namespace) -> None:
+    errors: list[str] = []
+    scale = float(args.materialize_plan_scale)
+    if int(args.materialize_plan_limit) > 0:
+        errors.append("materialize_plan_limit would row-slice a certified carrier")
+    if str(args.materialize_plan_face_ids or "").strip():
+        errors.append("materialize_plan_face_ids would subset a certified carrier")
+    if not math.isfinite(scale) or abs(scale - 1.0) > 1e-12:
+        errors.append("materialize_plan_scale would alter certified coefficients")
+    if args.materialize_plan_alpha_json is not None:
+        errors.append("materialize_plan_alpha_json would alter certified coefficients")
+    if errors:
+        raise ValueError(
+            "Strict certified plan materialization rejected unsafe replay controls: "
+            + "; ".join(errors)
+            + ". Use --materialize_allow_uncertified_plan only for explicitly labeled legacy ablations."
+        )
+
+
+def validate_strict_plan_carrier_integrity(
+    rows: list[dict[str, Any]],
+    meta: dict[str, Any],
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    export_policy = str(meta.get("plan_export_policy", "")) if isinstance(meta, dict) else ""
+    if export_policy != "final_certified_accepted_faces_only":
+        issues.append(
+            {
+                "scope": "plan_meta",
+                "decision_reason": "plan_export_policy_not_final_certified_accepted_faces_only",
+                "plan_export_policy": export_policy,
+            }
+        )
+    if isinstance(meta, dict) and not bool(meta.get("strict_patchcert_carrier", False)):
+        issues.append(
+            {
+                "scope": "plan_meta",
+                "decision_reason": "plan_source_not_strict_patchcert_carrier",
+                "strict_patchcert_carrier": bool(meta.get("strict_patchcert_carrier", False)),
+            }
+        )
+    row_face_ids: set[int] = set()
+    face_counts: dict[int, int] = {}
+    for row in rows:
+        try:
+            face_id = int(row.get("face_id", -1))
+        except Exception:
+            continue
+        row_face_ids.add(face_id)
+        face_counts[face_id] = int(face_counts.get(face_id, 0)) + 1
+    for face_id, count in sorted(face_counts.items()):
+        if count > 1:
+            issues.append(
+                {
+                    "face_id": int(face_id),
+                    "decision_reason": "duplicate_face_rows",
+                    "row_count": int(count),
+                }
+            )
+    patch_faces_by_face: dict[int, set[int]] = {}
+    for row in rows:
+        try:
+            face_id = int(row.get("face_id", -1))
+        except Exception:
+            face_id = -1
+        patch_cert = row.get("patch_certificate")
+        if not isinstance(patch_cert, dict):
+            issues.append({"face_id": face_id, "decision_reason": "missing_patch_certificate"})
+            continue
+        faces_raw = patch_cert.get("faces")
+        if not isinstance(faces_raw, list) or not faces_raw:
+            issues.append({"face_id": face_id, "decision_reason": "missing_patch_faces"})
+            continue
+        patch_faces: set[int] = set()
+        for value in faces_raw:
+            try:
+                patch_faces.add(int(value))
+            except Exception:
+                continue
+        if face_id not in patch_faces:
+            issues.append({"face_id": face_id, "decision_reason": "patch_certificate_face_mismatch"})
+        patch_faces_by_face[face_id] = patch_faces
+        missing = sorted(int(fid) for fid in patch_faces if int(fid) not in row_face_ids)
+        if missing:
+            issues.append(
+                {
+                    "face_id": face_id,
+                    "decision_reason": "patch_carrier_split_by_plan_rows",
+                    "missing_patch_faces": missing[:20],
+                    "missing_patch_face_count": int(len(missing)),
+                }
+            )
+    for face_id, patch_faces in sorted(patch_faces_by_face.items()):
+        for member in sorted(patch_faces):
+            member_patch = patch_faces_by_face.get(int(member))
+            if member_patch is None:
+                continue
+            if member_patch != patch_faces:
+                issues.append(
+                    {
+                        "face_id": int(face_id),
+                        "decision_reason": "inconsistent_patch_certificate_faces",
+                        "other_face_id": int(member),
+                    }
+                )
+    return issues
+
+
 def plan_rows_to_facelocal_coeff(
     rows: list[dict[str, Any]],
     faces: torch.Tensor,
     *,
     fallback_basis_count: int,
     alpha_by_face: dict[int, float] | None = None,
+    require_certified: bool = True,
 ) -> tuple[list[int], torch.Tensor, list[dict[str, Any]]]:
     selected_faces: list[int] = []
     coeff_rows: list[torch.Tensor] = []
@@ -1623,6 +2074,27 @@ def plan_rows_to_facelocal_coeff(
             reasons.append("invalid_face_id")
         if coeff_raw is None:
             reasons.append("missing_delta_coeff")
+        if require_certified:
+            if not bool(row.get("policy_pass", False)):
+                reasons.append("policy_pass_not_true")
+            if not bool(row.get("final_certified_face", False)):
+                reasons.append("final_certified_face_not_true")
+            patch_cert = row.get("patch_certificate")
+            if not isinstance(patch_cert, dict):
+                reasons.append("missing_patch_certificate")
+            else:
+                if bool(patch_cert.get("rejected", False)):
+                    reasons.append("patch_certificate_rejected")
+                if not bool(patch_cert.get("passed_patch_gain", False)):
+                    reasons.append("patch_gain_not_passed")
+                for key in ("patch_crossfold_certificate", "post_shrink_patch_crossfold_certificate"):
+                    cert = patch_cert.get(key)
+                    if not isinstance(cert, dict):
+                        reasons.append(f"{key}_missing")
+                    elif not bool(cert.get("enabled", False)):
+                        reasons.append(f"{key}_not_enabled")
+                    elif not bool(cert.get("passed", False)):
+                        reasons.append(f"{key}_not_passed")
         if reasons:
             rejected.append({"face_id": face_id, "decision_reasons": reasons})
             continue
@@ -1673,7 +2145,7 @@ def write_candidate_plan(
     *,
     args: argparse.Namespace,
     selected_faces: list[int],
-    face_candidates: list[int],
+    plan_faces: list[int],
     coeff: torch.Tensor,
     face_stats: dict[int, dict[str, float]],
     face_policy: dict[int, dict[str, float]],
@@ -1687,7 +2159,7 @@ def write_candidate_plan(
 ) -> None:
     face_to_selected = {int(fid): idx for idx, fid in enumerate(selected_faces)}
     candidates: list[dict[str, Any]] = []
-    for fid in face_candidates:
+    for fid in plan_faces:
         row = face_to_selected.get(int(fid))
         if row is None:
             continue
@@ -1705,6 +2177,7 @@ def write_candidate_plan(
                 "face_view_consensus": face_view_consensus.get(int(fid), {}),
                 "patch_certificate": patch_cert_by_face.get(int(fid), {}),
                 "policy_pass": True,
+                "final_certified_face": True,
             }
         )
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1718,6 +2191,8 @@ def write_candidate_plan(
                 "evidence_dir": str(args.evidence_dir),
                 "sh_degree": int(args.sh_degree),
                 "basis_count": int((int(args.sh_degree) + 1) ** 2),
+                "plan_export_policy": "final_certified_accepted_faces_only",
+                "strict_patchcert_carrier": bool(args.strict_patchcert_carrier),
                 "strength": float(args.strength),
                 "max_abs_delta_rgb": float(args.max_abs_delta_rgb),
                 "candidate_count": int(len(candidates)),
@@ -1822,6 +2297,39 @@ def write_audit(output_model: Path, audit: dict[str, Any]) -> None:
 
 def main() -> int:
     args = parse_args()
+    if bool(args.force_apply) and args.candidate_plan_out is not None:
+        raise ValueError(
+            "--force_apply cannot be combined with --candidate_plan_out because forced rows "
+            "do not carry the strict train-only certification required for replay."
+        )
+    if bool(args.patch_cert_neighbor_crossfold) and int(args.patch_cert_crossfold_folds) <= 1:
+        raise ValueError(
+            "--patch_cert_neighbor_crossfold requires --patch_cert_crossfold_folds > 1; "
+            "otherwise neighbor admission would silently skip the fold certificate."
+        )
+    if bool(args.strict_patchcert_carrier):
+        strict_errors: list[str] = []
+        if int(args.patch_cert_rings) <= 0:
+            strict_errors.append("--patch_cert_rings must be > 0")
+        if int(args.patch_cert_crossfold_folds) <= 1:
+            strict_errors.append("--patch_cert_crossfold_folds must be > 1")
+        if int(args.patch_cert_crossfold_min_passing_folds) <= 0:
+            strict_errors.append("--patch_cert_crossfold_min_passing_folds must be > 0")
+        if not bool(args.patch_cert_neighbor_crossfold):
+            strict_errors.append("--patch_cert_neighbor_crossfold must be enabled")
+        if not bool(args.patch_cert_shrink):
+            strict_errors.append("--patch_cert_shrink must be enabled")
+        if bool(args.force_apply):
+            strict_errors.append("--force_apply is incompatible with strict PatchCert carrier mode")
+        if bool(args.materialize_allow_uncertified_plan):
+            strict_errors.append("--materialize_allow_uncertified_plan is incompatible with strict PatchCert carrier mode")
+        if args.materialize_plan_in is not None:
+            try:
+                validate_strict_materialize_request(args)
+            except ValueError as exc:
+                strict_errors.append(str(exc))
+        if strict_errors:
+            raise ValueError("Strict PatchCert carrier configuration failed: " + "; ".join(strict_errors))
     source_checkpoint = checkpoint_path(args.source_model, args.iteration)
     output_checkpoint = args.output_model / "point_cloud" / f"iteration_{args.iteration}" / "point_cloud_state_dict.pt"
     output_checkpoint.parent.mkdir(parents=True, exist_ok=True)
@@ -1832,6 +2340,9 @@ def main() -> int:
     vertices = state["triangles_points"].detach().cpu().float()
 
     if args.materialize_plan_in is not None:
+        strict_materialize = not bool(args.materialize_allow_uncertified_plan)
+        if strict_materialize:
+            validate_strict_materialize_request(args)
         plan_rows, plan_meta = read_candidate_plan(
             args.materialize_plan_in,
             limit=int(args.materialize_plan_limit),
@@ -1839,12 +2350,28 @@ def main() -> int:
         )
         plan_basis_count = int(plan_meta.get("basis_count", (int(args.sh_degree) + 1) ** 2)) if isinstance(plan_meta, dict) else int((int(args.sh_degree) + 1) ** 2)
         alpha_by_face = read_plan_alphas(args.materialize_plan_alpha_json)
+        strict_plan_carrier_issues: list[dict[str, Any]] = []
+        if strict_materialize:
+            strict_plan_carrier_issues = validate_strict_plan_carrier_integrity(plan_rows, plan_meta)
+            if strict_plan_carrier_issues:
+                preview = json.dumps(strict_plan_carrier_issues[:20], indent=2)
+                raise ValueError(
+                    "Strict certified plan materialization rejected carrier integrity issues: "
+                    + preview
+                )
         accepted_faces, coeff, rejected_plan_rows = plan_rows_to_facelocal_coeff(
             plan_rows,
             faces,
             fallback_basis_count=plan_basis_count,
             alpha_by_face=alpha_by_face,
+            require_certified=strict_materialize,
         )
+        if strict_materialize and rejected_plan_rows:
+            preview = json.dumps(rejected_plan_rows[:20], indent=2)
+            raise ValueError(
+                "Strict certified plan materialization rejected row-level certification failures: "
+                + preview
+            )
         coeff = coeff * float(args.materialize_plan_scale)
         if accepted_faces or not bool(args.no_op_on_fail):
             source_vertex_ids = faces[torch.as_tensor(accepted_faces, dtype=torch.long)].long().reshape(-1) if accepted_faces else torch.empty((0,), dtype=torch.long)
@@ -1879,9 +2406,14 @@ def main() -> int:
             "materialize_plan_limit": int(args.materialize_plan_limit),
             "materialize_plan_face_ids": str(args.materialize_plan_face_ids),
             "materialize_plan_scale": float(args.materialize_plan_scale),
+            "materialize_allow_uncertified_plan": bool(args.materialize_allow_uncertified_plan),
+            "strict_patchcert_carrier": bool(args.strict_patchcert_carrier),
+            "strict_materialize": bool(strict_materialize),
+            "strict_plan_carrier_issues": strict_plan_carrier_issues[:20],
             "materialize_plan_alpha_json": str(args.materialize_plan_alpha_json) if args.materialize_plan_alpha_json else "",
             "materialize_plan_alpha_faces": int(len(alpha_by_face)),
             "plan_source_operator": plan_meta.get("operator") if isinstance(plan_meta, dict) else None,
+            "plan_export_policy": plan_meta.get("plan_export_policy") if isinstance(plan_meta, dict) else None,
             "plan_source_model": plan_meta.get("source_model") if isinstance(plan_meta, dict) else None,
             "requested_plan_rows": int(len(plan_rows)),
             "rejected_plan_rows": rejected_plan_rows[:20],
@@ -2050,6 +2582,17 @@ def main() -> int:
         args=args,
         device=device,
     )
+    patch_crossfold_cache, patch_crossfold_cache_summary = build_patch_crossfold_cache(
+        coeff=coeff_device,
+        faces=faces,
+        selected_faces=selected_faces,
+        source_vertex_ids=source_vertex_ids,
+        vertices=vertices,
+        view_paths=view_paths,
+        face_stats=face_stats,
+        args=args,
+        device=device,
+    )
     face_view_consensus, face_view_consensus_summary = face_view_consensus_report(
         val_samples,
         val_target,
@@ -2107,17 +2650,22 @@ def main() -> int:
         val_target=val_target,
         val_weights=val_weights,
         val_samples=val_samples,
+        patch_crossfold_cache=patch_crossfold_cache,
         args=args,
     )
-    if int(args.max_faces_to_apply) >= 0:
-        accepted_faces = accepted_faces[: max(int(args.max_faces_to_apply), 0)]
     coeff = coeff_device.detach().cpu()
+    accepted = bool((global_policy_pass and accepted_faces) or args.force_apply)
+    if bool(args.force_apply) and not accepted_faces:
+        accepted_faces = selected_faces[: max(int(args.max_faces_to_apply), 0)]
+        accepted = bool(accepted_faces)
+    no_op_copy = bool((not accepted) and args.no_op_on_fail)
+
     if args.candidate_plan_out is not None:
         write_candidate_plan(
             args.candidate_plan_out,
             args=args,
             selected_faces=selected_faces,
-            face_candidates=face_candidates,
+            plan_faces=accepted_faces if accepted else [],
             coeff=coeff,
             face_stats=face_stats,
             face_policy=face_policy,
@@ -2129,11 +2677,6 @@ def main() -> int:
             fit_proxy=fit_proxy,
             val_proxy=val_proxy,
         )
-    accepted = bool((global_policy_pass and accepted_faces) or args.force_apply)
-    if bool(args.force_apply) and not accepted_faces:
-        accepted_faces = selected_faces[: max(int(args.max_faces_to_apply), 0)]
-        accepted = bool(accepted_faces)
-    no_op_copy = bool((not accepted) and args.no_op_on_fail)
 
     if accepted or not args.no_op_on_fail:
         out = materialize_facelocal(state, faces, selected_faces, source_vertex_ids, coeff, accepted_faces)
@@ -2178,6 +2721,7 @@ def main() -> int:
         "face_view_gain_certificate": face_view_gain_certificate_summary,
         "crossfold_face_gain_certificate": crossfold_face_gain_summary,
         "face_view_consensus": face_view_consensus_summary,
+        "patch_crossfold_cache": patch_crossfold_cache_summary,
         "patch_certificate": patch_cert_summary,
         "filters": {
             "top_k": int(args.top_k),
@@ -2225,7 +2769,13 @@ def main() -> int:
         "patch_cert_min_relative_gain": float(args.patch_cert_min_relative_gain),
         "patch_cert_neighbor_mode": str(args.patch_cert_neighbor_mode),
         "patch_cert_centroid_candidates_per_seed": int(args.patch_cert_centroid_candidates_per_seed),
+        "patch_cert_crossfold_folds": int(args.patch_cert_crossfold_folds),
+        "patch_cert_crossfold_min_passing_folds": int(args.patch_cert_crossfold_min_passing_folds),
+        "patch_cert_crossfold_min_fold_relative_gain": float(args.patch_cert_crossfold_min_fold_relative_gain),
+        "patch_cert_crossfold_min_fold_samples": int(args.patch_cert_crossfold_min_fold_samples),
+        "patch_cert_neighbor_crossfold": bool(args.patch_cert_neighbor_crossfold),
         "patch_cert_shrink": bool(args.patch_cert_shrink),
+        "strict_patchcert_carrier": bool(args.strict_patchcert_carrier),
         "global_policy_pass": bool(global_policy_pass),
         "policy_pass": bool(global_policy_pass),
         "accepted": bool(accepted),

@@ -37,9 +37,20 @@ The fixed multi-scene replay used the existing Phase-K runner with online W&B
 logging:
 
 ```bash
-python scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py \
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py \
   --scenes <scene> \
+  --gpu <gpu> \
+  --skip_failed_views \
   --output_root outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v6_compactstrat_gate_20260514_<scene> \
+  --evidence_root outputs/carnet/meshsplatopt/ecsr_phase_r/surface_evidence_uniform_sh1_v6_dense16 \
+  --candidate_label phase_s_patchcert_v6_compactstrat_gate_20260514 \
+  --candidate_base_method ours_26000_phase_s_patchcert_v6_compactstrat_gate_20260514_base \
+  --candidate_test_method ours_26000_phase_s_patchcert_v6_compactstrat_gate_20260514_phasej_ela \
+  --candidate_trainval_method ours_26000_phase_s_patchcert_v6_compactstrat_gate_20260514_trainval_gate \
+  --phasej_test_method ours_26000_phasej_guarded_adaptedge_ela_replay_rendercalib_v1_top1_s2_fair \
+  --phasej_trainval_method ours_26000_phasej_trainval_gate_rendercalib_v1_top1_s2_fair \
+  --evidence_max_views 16 \
+  --evidence_view_stride 3 \
   --delta_operator facelocal_sh1 \
   --delta_uniform_barycentric \
   --delta_sh_degree 3 \
@@ -83,15 +94,17 @@ python scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py \
   --gate_tail_max_lpips_positive_fraction 0.35 \
   --gate_compact_enable \
   --wandb_project mesh-splatting-ecsr \
-  --wandb_group phase_s_patchcert_v6_compactstrat_gate_20260514
+  --wandb_group phase_s_patchcert_v6_compactstrat_gate_20260514 \
+  --wandb_name phase_s_patchcert_v6_compactstrat_gate_20260514_<scene>
 ```
 
 Scenes were run on available GPUs including `0`, `1`, `4`, `5`, and `6`.
 The expensive render/eval steps completed with W&B logging. The first launched
 runner processes failed only at the final decision subprocess because argparse
 misread a negative scientific-notation threshold (`-1e-05`). The runner now
-formats that argument in decimal form; the completed render/eval outputs were
-kept and the decisions were regenerated with the fixed decision script.
+formats decision float arguments in decimal form; the completed render/eval
+outputs were kept and the decisions were regenerated with the fixed decision
+script.
 
 ## Quantitative Evidence
 
@@ -118,6 +131,16 @@ Compared with direct PatchCert v5, this is a real policy improvement:
 |---|---:|---:|---|---:|---:|---:|
 | direct PatchCert v5 tail gate | 5 | 1/5 | bicycle | +0.000077 | +0.000007 | -0.000023 |
 | direct PatchCert v6 compact-stratified gate | 5 | 2/5 | bicycle, flowers | +0.001163 | +0.000101 | -0.000141 |
+
+Important caveat: `flowers` is accepted by the compact-carrier override even
+though the older balanced/tail gate rejects it (`trainval_balanced_delta =
+-0.000276`, high balanced-negative fraction). The v6 claim is therefore not
+"all train-val diagnostics are positive"; it is "a small patch carrier is
+tolerated by bounded component-wise, tail, and stratified train-val risk."
+The follow-up validation is a strict four-offset train-only gate for
+`bicycle` and `flowers`. The active continuation also adds a fold-aware
+PatchCert carrier audit; see
+`docs/car_model/5-14-PhaseS-V6Multifold-V7V8-FoldAware-PatchCert-Log.md`.
 
 ## Qualitative Evidence
 

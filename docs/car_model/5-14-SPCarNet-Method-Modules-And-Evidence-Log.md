@@ -29,12 +29,21 @@ newest compact-stratified direct PatchCert gate accepts `2 / 5` (`bicycle`,
 `flowers`) and raises the fixed 5-scene effective mean to `+0.001163` PSNR,
 `+0.000101` SSIM, and `-0.000141` LPIPS over Phase-J fallback. This is a real
 policy improvement over the earlier `1 / 5` direct PatchCert v5 replay, but the
-broad Phase-S closure remains incomplete. Logs:
+broad Phase-S closure remains incomplete. A follow-up fold-aware PatchCert
+branch now tightens the representation edit itself rather than only the outer
+gate: v8.1 certifies neighbor admission and post-shrink carriers, and v8.2
+closes direct-path whole-patch-budget loopholes. A v8.3 strict preset now also
+closes the generic plan-replay loopholes by rejecting row slicing, coefficient
+rescaling, missing PatchCert metadata, row-level certification failures, and
+split patch carriers. v8.4 is the hardened strict-validator rerun intended to
+be the next claimable row if it passes. Those rows are still running/pending
+and are not yet claimable evidence. Logs:
 `docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md` and
 `docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md`,
 `docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md`, and
 `docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md`,
-`docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md`.
+`docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md`, and
+`docs/car_model/5-14-PhaseS-V6Multifold-V7V8-FoldAware-PatchCert-Log.md`.
 
 ## Module Map
 
@@ -51,6 +60,7 @@ broad Phase-S closure remains incomplete. Logs:
 | GeoRisk/CVaR selector | Adds geometry-neighborhood redundancy, per-face train-certificate tail risk, local residual concentration, and train-val render CVaR diagnostics. | `scripts/car_model/ecsr_run_facelocal_coupled_selector.py`, `georiskN` mode. | Requested 7-scene replay accepts `flowers` and `counter`; useful audit upgrade but no coverage gain over risk-tail. |
 | PatchRisk carrier replay | Expands selected train-only seed faces into local topology/centroid patches before materialization. | `scripts/car_model/ecsr_run_facelocal_coupled_selector.py`, `patchriskN` mode. | Strict 5-scene replay accepts only `counter`; useful negative ablation for post-hoc patch expansion. |
 | Direct patch-cert carrier | Builds the patch carrier inside the train-only certificate and materializes it directly through the Phase-K runner. | `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py` patch-cert flags and `scripts/car_model/ecsr_build_phase_s_patchcert_qualitative.py`. | v5 tail-gated replay accepts `bicycle`; v6 compact-stratified gate accepts `bicycle` and `flowers`; still sparse, but no longer only a one-scene hard edit. |
+| Fold-aware PatchCert carrier | Requires the seed face, patch-neighbor admission, and post-shrink materialized patch carrier to pass all-train fold proxy-gain certificates before materialization. v8.4 uses the hardened strict validator and certified whole-carrier plan replay. | `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py` crossfold, `patch_cert_crossfold_*`, `patch_cert_neighbor_crossfold`, `strict_patchcert_carrier`, strict plan materialization, and post-shrink gain checks, forwarded by `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`. | v7/v8 final gates accept 0 scenes; this is negative ablation evidence. v8.1/v8.2/v8.3/v8.4 are still running/pending; v8.4 is the intended next result row but still needs fixed-protocol decisions and qualitative outputs. |
 | Per-face alpha refit | Fits train-only scalar multipliers for selected face-local residuals and passes them to materialization. | `scripts/car_model/ecsr_fit_facelocal_plan_alphas.py`; materializer arg `--materialize_plan_alpha_json`. | Interface complete, but first 3-scene pilot does not improve over uniform risk-tail. |
 | Train-val gate and fallback | Accepts repairs only with train-val metrics; test remains report-only. Rejected scenes fall back to Phase-J. | `scripts/car_model/ecsr_decide_phasek_trainval_gate.py` and coupled selector decision JSONs. | Now includes per-view tail checks plus compact-stratified promotion for small patch carriers; keeps the effective method from being harmed by risky Phase-S edits. |
 
@@ -256,7 +266,10 @@ Comparison against the previous direct PatchCert tail gate:
 This fixes the immediate `flowers` policy miss without promoting the two risky
 examples: `counter` remains rejected because report-only SSIM is negative, and
 `bonsai` remains rejected because the carrier is too large and held-out
-PSNR/LPIPS fail.
+PSNR/LPIPS fail. The caveat is important: `flowers` is promoted by the compact
+override while the older balanced/tail gate still rejects it, so the claim is
+bounded compact-carrier tolerance rather than a clean all-diagnostic train-val
+win. A strict four-offset train-only validation is the next audit for this row.
 
 ### Alpha Refit and Stump Relaxed Checks
 

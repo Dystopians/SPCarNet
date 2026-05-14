@@ -6855,3 +6855,130 @@ Result:
 Decision: `NOT COMPLETE`. This is a real Phase-S policy improvement and fixes
 the immediate `flowers` fair-promotion problem, but it is still sparse and
 does not close the full paper-level representation endpoint.
+
+## 2026-05-14 14:57 PDT - Phase-S Fold-Aware PatchCert v8.2 Strict Carrier Launch
+
+Implemented and launched the stricter follow-up to the compact-stratified
+PatchCert gate.
+
+Method changes:
+
+- PatchCert can now require a four-fold train-view certificate for every
+  admitted neighbor patch face, not only for the initial seed face.
+- After patch shrink, the remaining carrier must still satisfy the policy-val
+  sample and relative-gain thresholds.
+- `max_faces_to_apply` is enforced at whole-patch granularity, so a certified
+  patch cannot be sliced into a partially uncertified carrier.
+- candidate-plan export now writes only final certified accepted faces, with
+  `final_certified_face=true`.
+- plan materialization rejects rows without explicit certification metadata by
+  default; `--materialize_allow_uncertified_plan` exists only as an explicit
+  escape hatch.
+- `--patch_cert_neighbor_crossfold` raises when the cross-fold count is inert,
+  avoiding a silent no-op policy.
+
+Validation:
+
+- `py_compile` passed for the operator and Phase-K runner.
+- `git diff --check` passed for the modified scripts and current docs.
+
+Active evidence runs:
+
+- `flowers`:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v82_strictcarrier_20260514_flowers`
+- `bicycle`:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v82_strictcarrier_20260514_bicycle`
+- W&B group:
+  `phase_s_patchcert_v82_strictcarrier_20260514`
+
+Decision: `NOT COMPLETE`.  This is a real method-integrity upgrade, but it is
+not a paper-facing result row until the scene decision files, independent
+held-out metrics, train-val gate outputs, and qualitative comparisons finish.
+
+## 2026-05-14 15:08 PDT - Phase-S v8.3 Strict PatchCert Carrier Preset
+
+A review of v8.2 found that direct fitting had the intended fold-aware PatchCert
+checks, but the plan materialization interface was still too permissive for a
+paper claim.  In particular, replay could subset a certified carrier, rescale
+coefficients after certification, or accept metadata that did not prove a full
+patch certificate.
+
+Implemented fixes:
+
+- added `--strict_patchcert_carrier` to the face-local operator;
+- added `--delta_strict_patchcert_carrier` to the Phase-K runner;
+- strict mode now requires patch growth, fold certification, neighbor fold
+  admission, patch shrink, and non-inert fold thresholds;
+- strict plan replay rejects row slicing, face-id subsetting, coefficient scale,
+  per-face alpha, non-final export policy, missing PatchCert metadata, missing
+  crossfold/post-shrink certs, and split patch carriers;
+- legacy replay now needs the explicitly named
+  `--materialize_allow_uncertified_plan` /
+  `--delta_facelocal_materialize_allow_uncertified_plan` escape hatch;
+- `--force_apply` can no longer export a candidate plan.
+
+Validation:
+
+- `py_compile` passed for both modified scripts.
+- strict negative replay check passed: a scaled strict materialization request
+  is rejected before checkpoint loading.
+
+Decision: `NOT COMPLETE`.  The current v8.2 flowers/bicycle runs were launched
+before this named strict preset existed, so they are useful direct-path evidence
+but should not be the final paper row.  A v8.3 strict-preset rerun is required
+for any final claim about strict carrier integrity.
+
+Follow-up launched at `2026-05-14 15:12 PDT`:
+
+- `flowers`:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v83_strictpreset_20260514_flowers`
+- `bicycle`:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v83_strictpreset_20260514_bicycle`
+- W&B group:
+  `phase_s_patchcert_v83_strictpreset_20260514`
+
+Both runs include `--delta_strict_patchcert_carrier`; their decision files are
+still pending.
+
+Follow-up hardening in the same stage:
+
+- strict replay now raises if any row-level certification rejection would occur
+  after the carrier-completeness pass;
+- strict replay rejects NaN or non-unit materialization scale;
+- strict replay requires the source plan to carry
+  `strict_patchcert_carrier=true`;
+- duplicate face rows and inconsistent `patch_certificate.faces` sets are
+  rejected.
+
+Validation: `py_compile` passed, and a strict materialization request with
+`--materialize_plan_scale nan` is rejected before checkpoint loading.
+
+Because v8.3 started before the final row-level replay hardening landed, a
+same-protocol v8.4 rerun was launched from the hardened code:
+
+- `flowers`:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v84_strictvalidator_20260514_flowers`
+- `bicycle`:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v84_strictvalidator_20260514_bicycle`
+- W&B group:
+  `phase_s_patchcert_v84_strictvalidator_20260514`
+
+Decision: `NOT COMPLETE`.  v8.4 is now the intended final strict-validator row,
+but its decision files and qualitative outputs are still pending.
+
+Completed ablation evidence:
+
+- v7 seed-fold PatchCert summary:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v7_crossfold_compactstrat_20260514_summary/summary_2scene.md`
+- v8 aggregate patch-fold PatchCert summary:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v8_patchfold_compactstrat_20260514_summary/summary_flowers.md`
+
+Both rows accept `0` scenes.  `bicycle` is a no-op under v7; `flowers` is
+rejected by balanced/tail/LPIPS gate despite tiny report-only held-out changes.
+This is negative ablation evidence: stronger certification improves integrity
+but does not automatically preserve the v6 compact-gate promotion.
+
+Qualitative panels were generated for the completed v7/v8 negative ablations:
+
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v7_crossfold_compactstrat_20260514_qualitative/patchcert_qualitative_contact_sheet.png`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v8_patchfold_compactstrat_20260514_qualitative/patchcert_qualitative_contact_sheet.png`
