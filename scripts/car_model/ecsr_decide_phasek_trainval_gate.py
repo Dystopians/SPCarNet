@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +39,86 @@ def _balanced(delta: dict[str, float], *, ssim_weight: float, lpips_weight: floa
     return float(delta["PSNR"] + float(ssim_weight) * delta["SSIM"] - float(lpips_weight) * delta["LPIPS"])
 
 
+def _load_per_view(path: Path, method: str) -> dict[str, dict[str, float]]:
+    if not path or str(path) in ("", ".") or not path.is_file():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    row = payload.get(method) if isinstance(payload, dict) else None
+    if not isinstance(row, dict):
+        return {}
+    out: dict[str, dict[str, float]] = {}
+    for metric in METRICS:
+        values = row.get(metric)
+        if not isinstance(values, dict):
+            continue
+        for view_name, value in values.items():
+            try:
+                out.setdefault(str(view_name), {})[metric] = float(value)
+            except Exception:
+                continue
+    return {key: value for key, value in out.items() if all(metric in value for metric in METRICS)}
+
+
+def _cvar(values: list[float], fraction: float) -> float:
+    finite = sorted(value for value in values if math.isfinite(value))
+    if not finite:
+        return math.nan
+    count = max(1, int(math.ceil(len(finite) * max(min(float(fraction), 1.0), 1e-6))))
+    return float(sum(finite[:count]) / count)
+
+
+def _per_view_tail(args: argparse.Namespace) -> dict[str, Any]:
+    base = _load_per_view(args.base_trainval_per_view, args.base_trainval_method)
+    cand = _load_per_view(args.candidate_trainval_per_view, args.candidate_trainval_method)
+    keys = sorted(set(base) & set(cand))
+    rows: list[dict[str, Any]] = []
+    for key in keys:
+        delta = _delta(cand[key], base[key])
+        rows.append(
+            {
+                "view_name": key,
+                "delta": delta,
+                "balanced_delta": _balanced(
+                    delta,
+                    ssim_weight=float(args.ssim_weight),
+                    lpips_weight=float(args.lpips_weight),
+                ),
+            }
+        )
+    if not rows:
+        return {"available": False, "view_count": 0}
+    balanced = [float(row["balanced_delta"]) for row in rows]
+    psnr = [float(row["delta"]["PSNR"]) for row in rows]
+    ssim = [float(row["delta"]["SSIM"]) for row in rows]
+    lpips = [float(row["delta"]["LPIPS"]) for row in rows]
+    view_count = len(rows)
+    balanced_mean_delta = float(sum(balanced) / view_count)
+    balanced_cvar_delta = _cvar(balanced, float(args.tail_cvar_fraction))
+    balanced_cvar_loss = max(0.0, -balanced_cvar_delta) if math.isfinite(balanced_cvar_delta) else math.inf
+    if balanced_cvar_loss <= 1e-12:
+        mean_to_cvar_ratio = math.inf if balanced_mean_delta > 0.0 else 0.0
+    else:
+        mean_to_cvar_ratio = max(0.0, balanced_mean_delta) / balanced_cvar_loss
+    worst_lpips_regression = float(max(lpips))
+    return {
+        "available": True,
+        "view_count": int(view_count),
+        "cvar_fraction": float(args.tail_cvar_fraction),
+        "balanced_mean_delta": balanced_mean_delta,
+        "mean_balanced_delta": balanced_mean_delta,
+        "balanced_negative_fraction": float(sum(1 for value in balanced if value < 0.0) / view_count),
+        "balanced_cvar_delta": balanced_cvar_delta,
+        "balanced_cvar_loss": float(balanced_cvar_loss),
+        "mean_to_cvar_ratio": float(mean_to_cvar_ratio),
+        "psnr_negative_fraction": float(sum(1 for value in psnr if value < 0.0) / view_count),
+        "ssim_negative_fraction": float(sum(1 for value in ssim if value < 0.0) / view_count),
+        "lpips_positive_fraction": float(sum(1 for value in lpips if value > 0.0) / view_count),
+        "lpips_worst_regression": worst_lpips_regression,
+        "worst_lpips_regression": worst_lpips_regression,
+        "worst_balanced_rows": sorted(rows, key=lambda row: float(row["balanced_delta"]))[:10],
+    }
+
+
 def _decision(delta: dict[str, float], balanced_delta: float, args: argparse.Namespace) -> tuple[bool, list[str]]:
     reasons: list[str] = []
     if delta["PSNR"] < float(args.min_psnr_gain):
@@ -49,6 +130,23 @@ def _decision(delta: dict[str, float], balanced_delta: float, args: argparse.Nam
     if balanced_delta < float(args.min_balanced_delta):
         reasons.append(f"balanced_delta_below_{args.min_balanced_delta:g}")
     return not reasons, reasons
+
+
+def _tail_decision(tail: dict[str, Any], args: argparse.Namespace) -> list[str]:
+    if not bool(tail.get("available", False)):
+        if bool(args.tail_require_available):
+            return ["trainval_tail_unavailable"]
+        return []
+    reasons: list[str] = []
+    if float(tail.get("balanced_negative_fraction", 0.0)) > float(args.tail_max_balanced_negative_fraction):
+        reasons.append(f"tail_balanced_negative_fraction_exceeds_{args.tail_max_balanced_negative_fraction:g}")
+    if float(tail.get("balanced_cvar_delta", 0.0)) < float(args.tail_min_balanced_cvar_delta):
+        reasons.append(f"tail_balanced_cvar_below_{args.tail_min_balanced_cvar_delta:g}")
+    if float(tail.get("lpips_positive_fraction", 0.0)) > float(args.tail_max_lpips_positive_fraction):
+        reasons.append(f"tail_lpips_positive_fraction_exceeds_{args.tail_max_lpips_positive_fraction:g}")
+    if float(tail.get("lpips_worst_regression", 0.0)) > float(args.tail_max_worst_lpips_regression):
+        reasons.append(f"tail_worst_lpips_regression_exceeds_{args.tail_max_worst_lpips_regression:g}")
+    return reasons
 
 
 def _write_md(path: Path, audit: dict[str, Any]) -> None:
@@ -70,6 +168,18 @@ def _write_md(path: Path, audit: dict[str, Any]) -> None:
         f"- min balanced delta: `{audit['thresholds']['min_balanced_delta']}`",
         f"- decision reasons: `{', '.join(audit['decision_reasons']) or 'pass'}`",
     ]
+    tail = audit.get("trainval_per_view_tail", {})
+    if tail:
+        lines.extend(
+            [
+                "",
+                "Train-val per-view tail gate:",
+                f"- available / views: `{tail.get('available', False)}` / `{tail.get('view_count', 0)}`",
+                f"- balanced mean / CVaR delta: `{float(tail.get('balanced_mean_delta', 0.0)):.9f}` / `{float(tail.get('balanced_cvar_delta', 0.0)):.9f}`",
+                f"- balanced negative fraction: `{float(tail.get('balanced_negative_fraction', 0.0)):.6f}`",
+                f"- LPIPS positive fraction / worst regression: `{float(tail.get('lpips_positive_fraction', 0.0)):.6f}` / `{float(tail.get('lpips_worst_regression', 0.0)):.9f}`",
+            ]
+        )
     if test is not None:
         lines.extend(
             [
@@ -91,6 +201,8 @@ def main() -> int:
     parser.add_argument("--base_trainval_method", required=True)
     parser.add_argument("--candidate_trainval_results", type=Path, required=True)
     parser.add_argument("--candidate_trainval_method", required=True)
+    parser.add_argument("--base_trainval_per_view", type=Path, default=Path(""))
+    parser.add_argument("--candidate_trainval_per_view", type=Path, default=Path(""))
     parser.add_argument("--candidate_audit_json", type=Path, default=Path(""))
     parser.add_argument("--base_test_results", type=Path, default=Path(""))
     parser.add_argument("--base_test_method", default="")
@@ -102,6 +214,12 @@ def main() -> int:
     parser.add_argument("--min_balanced_delta", type=float, default=0.0)
     parser.add_argument("--ssim_weight", type=float, default=20.0)
     parser.add_argument("--lpips_weight", type=float, default=20.0)
+    parser.add_argument("--tail_require_available", action="store_true")
+    parser.add_argument("--tail_cvar_fraction", type=float, default=0.20)
+    parser.add_argument("--tail_max_balanced_negative_fraction", type=float, default=1.0)
+    parser.add_argument("--tail_min_balanced_cvar_delta", type=float, default=-1.0e30)
+    parser.add_argument("--tail_max_lpips_positive_fraction", type=float, default=1.0)
+    parser.add_argument("--tail_max_worst_lpips_regression", type=float, default=1.0e30)
     parser.add_argument("--output_json", type=Path, required=True)
     parser.add_argument("--output_md", type=Path, required=True)
     args = parser.parse_args()
@@ -115,6 +233,11 @@ def main() -> int:
         lpips_weight=float(args.lpips_weight),
     )
     accepted, reasons = _decision(train_delta, train_balanced_delta, args)
+    trainval_per_view_tail = _per_view_tail(args)
+    tail_reasons = _tail_decision(trainval_per_view_tail, args)
+    if tail_reasons:
+        accepted = False
+        reasons.extend(tail_reasons)
     candidate_audit = _load_optional_json(args.candidate_audit_json)
     if candidate_audit:
         audit_accepted = bool(candidate_audit.get("accepted", False))
@@ -137,6 +260,7 @@ def main() -> int:
         "candidate_trainval_metrics": cand_train,
         "trainval_delta": train_delta,
         "trainval_balanced_delta": train_balanced_delta,
+        "trainval_per_view_tail": trainval_per_view_tail,
         "thresholds": {
             "min_psnr_gain": float(args.min_psnr_gain),
             "max_ssim_regression": float(args.max_ssim_regression),
@@ -144,6 +268,12 @@ def main() -> int:
             "min_balanced_delta": float(args.min_balanced_delta),
             "ssim_weight": float(args.ssim_weight),
             "lpips_weight": float(args.lpips_weight),
+            "tail_require_available": bool(args.tail_require_available),
+            "tail_cvar_fraction": float(args.tail_cvar_fraction),
+            "tail_max_balanced_negative_fraction": float(args.tail_max_balanced_negative_fraction),
+            "tail_min_balanced_cvar_delta": float(args.tail_min_balanced_cvar_delta),
+            "tail_max_lpips_positive_fraction": float(args.tail_max_lpips_positive_fraction),
+            "tail_max_worst_lpips_regression": float(args.tail_max_worst_lpips_regression),
         },
         "candidate_operator_audit": {
             "path": str(args.candidate_audit_json) if args.candidate_audit_json else "",

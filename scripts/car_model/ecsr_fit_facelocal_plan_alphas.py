@@ -59,7 +59,7 @@ def parse_args() -> argparse.Namespace:
         default="selected",
         help="Trial to read from --selector_decision_json. Use 'selected' for the scene-level selected_trial.",
     )
-    parser.add_argument("--selector_mode", choices=("top", "score", "risk", "georisk"), default="risk")
+    parser.add_argument("--selector_mode", choices=("top", "score", "risk", "georisk", "patchrisk"), default="risk")
     parser.add_argument("--selector_count", type=int, default=4)
     parser.add_argument("--risk_pair_lambda", type=float, default=0.65)
     parser.add_argument("--policy_val_stride", type=int, default=4)
@@ -155,8 +155,8 @@ def select_rows(
         return sorted(rows, key=train_certificate_score, reverse=True)[:count]
     if mode == "risk":
         return risk_greedy_rows(rows, count, pair_lambda=pair_lambda)
-    if mode == "georisk":
-        raise ValueError("georisk selector mode requires explicit --face_ids for alpha fitting")
+    if mode in {"georisk", "patchrisk"}:
+        raise ValueError(f"{mode} selector mode requires explicit --face_ids for alpha fitting")
     raise ValueError(f"unsupported selector mode: {mode}")
 
 

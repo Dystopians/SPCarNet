@@ -668,7 +668,7 @@ def _evaluate_trainval(
     per_view_output: Path,
     log_path: Path,
 ) -> None:
-    if not bool(args.force) and _has_metric(output, method):
+    if not bool(args.force) and _has_metric(output, method) and per_view_output.is_file():
         return
     cmd = [
         sys.executable,
@@ -755,6 +755,10 @@ def _decide(
         str(candidate_model / "trainval_gate_results.json"),
         "--candidate_trainval_method",
         args.candidate_trainval_method,
+        "--base_trainval_per_view",
+        str(output_root / scene / "phasej_trainval_gate_per_view.json"),
+        "--candidate_trainval_per_view",
+        str(candidate_model / "trainval_gate_per_view.json"),
         "--candidate_audit_json",
         str(_candidate_audit_path(args, candidate_model)),
         "--base_test_results",
@@ -773,11 +777,23 @@ def _decide(
         str(args.gate_max_lpips_regression),
         "--min_balanced_delta",
         str(args.gate_min_balanced_delta),
+        "--tail_cvar_fraction",
+        str(args.gate_tail_cvar_fraction),
+        "--tail_max_balanced_negative_fraction",
+        str(args.gate_tail_max_balanced_negative_fraction),
+        "--tail_min_balanced_cvar_delta",
+        str(args.gate_tail_min_balanced_cvar_delta),
+        "--tail_max_lpips_positive_fraction",
+        str(args.gate_tail_max_lpips_positive_fraction),
+        "--tail_max_worst_lpips_regression",
+        str(args.gate_tail_max_worst_lpips_regression),
         "--output_json",
         str(decision_json),
         "--output_md",
         str(decision_md),
     ]
+    if bool(args.gate_tail_require_available):
+        cmd.append("--tail_require_available")
     _run(cmd, gpu=-1, log_path=log_path)
     return _read_json(decision_json)
 
@@ -1187,6 +1203,12 @@ def main() -> int:
     parser.add_argument("--gate_max_ssim_regression", type=float, default=5e-5)
     parser.add_argument("--gate_max_lpips_regression", type=float, default=1.5e-4)
     parser.add_argument("--gate_min_balanced_delta", type=float, default=0.0)
+    parser.add_argument("--gate_tail_require_available", action="store_true")
+    parser.add_argument("--gate_tail_cvar_fraction", type=float, default=0.20)
+    parser.add_argument("--gate_tail_max_balanced_negative_fraction", type=float, default=1.0)
+    parser.add_argument("--gate_tail_min_balanced_cvar_delta", type=float, default=-1.0e30)
+    parser.add_argument("--gate_tail_max_lpips_positive_fraction", type=float, default=1.0)
+    parser.add_argument("--gate_tail_max_worst_lpips_regression", type=float, default=1.0e30)
     parser.add_argument("--wandb_project", default="mesh-splatting-ecsr")
     parser.add_argument("--wandb_group", default="phasek_barycentric_multiscene")
     parser.add_argument("--wandb_name", default="phasek_barycentric")

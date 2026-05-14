@@ -57,9 +57,10 @@ def parse_args() -> argparse.Namespace:
         "--trial_specs",
         default="top1x2,score2x1,score4x1,score8x0.5",
         help=(
-            "Comma separated trials. Grammar: topNxS, scoreNxS, riskNxS, or georiskNxS, "
-            "for example top1x2,score4x1,risk8x0.5,georisk4x1. "
-            "score/risk/georisk use train-only plan certificates."
+            "Comma separated trials. Grammar: topNxS, scoreNxS, riskNxS, georiskNxS, "
+            "or patchriskNxS, for example top1x2,score4x1,risk8x0.5,georisk4x1,"
+            "patchrisk2x0.75. score/risk/georisk/patchrisk use train-only plan "
+            "certificates."
         ),
     )
     parser.add_argument(
@@ -109,6 +110,60 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Load source checkpoint triangle indices to build candidate face adjacency for georisk mode.",
+    )
+    parser.add_argument(
+        "--patchrisk_rings",
+        type=int,
+        default=1,
+        help="Neighborhood rings grown from georisk seed faces for patchrisk mode.",
+    )
+    parser.add_argument(
+        "--patchrisk_max_patch_faces",
+        type=int,
+        default=6,
+        help="Maximum materialized candidate-plan faces per patchrisk seed.",
+    )
+    parser.add_argument(
+        "--patchrisk_max_total_faces",
+        type=int,
+        default=24,
+        help="Maximum total materialized candidate-plan faces per patchrisk trial.",
+    )
+    parser.add_argument(
+        "--patchrisk_neighbor_mode",
+        choices=("topology", "centroid", "both"),
+        default="both",
+        help="Candidate-neighborhood source used by patchrisk growth.",
+    )
+    parser.add_argument(
+        "--patchrisk_centroid_candidates_per_seed",
+        type=int,
+        default=32,
+        help="Nearest candidate faces considered when patchrisk uses centroid neighbors.",
+    )
+    parser.add_argument(
+        "--patchrisk_min_direction_cosine",
+        type=float,
+        default=0.35,
+        help="Minimum signed residual coefficient cosine for adding a patchrisk neighbor.",
+    )
+    parser.add_argument(
+        "--patchrisk_min_policy_gain",
+        type=float,
+        default=0.0,
+        help="Minimum train-only policy-val relative gain for patchrisk neighbors.",
+    )
+    parser.add_argument(
+        "--patchrisk_min_policy_samples",
+        type=int,
+        default=8,
+        help="Minimum train-only policy-val samples for patchrisk neighbors.",
+    )
+    parser.add_argument(
+        "--patchrisk_max_tail_risk",
+        type=float,
+        default=0.85,
+        help="Maximum per-face georisk tail risk for patchrisk neighbors.",
     )
     parser.add_argument("--candidate_prefix", default="facelocal_coupled_v1")
     parser.add_argument("--phasej_test_method", default=DEFAULT_PHASEJ_TEST_METHOD)
@@ -184,6 +239,20 @@ def parse_args() -> argparse.Namespace:
             parser.error(f"--{name} must be non-negative")
     if not 0.0 < float(args.georisk_tail_fraction) <= 1.0:
         parser.error("--georisk_tail_fraction must be in (0, 1]")
+    if int(args.patchrisk_rings) < 0:
+        parser.error("--patchrisk_rings must be non-negative")
+    if int(args.patchrisk_max_patch_faces) <= 0:
+        parser.error("--patchrisk_max_patch_faces must be positive")
+    if int(args.patchrisk_max_total_faces) <= 0:
+        parser.error("--patchrisk_max_total_faces must be positive")
+    if int(args.patchrisk_centroid_candidates_per_seed) < 0:
+        parser.error("--patchrisk_centroid_candidates_per_seed must be non-negative")
+    if not -1.0 <= float(args.patchrisk_min_direction_cosine) <= 1.0:
+        parser.error("--patchrisk_min_direction_cosine must be in [-1, 1]")
+    if int(args.patchrisk_min_policy_samples) < 0:
+        parser.error("--patchrisk_min_policy_samples must be non-negative")
+    if not 0.0 <= float(args.patchrisk_max_tail_risk) <= 1.0:
+        parser.error("--patchrisk_max_tail_risk must be in [0, 1]")
     if not 0.0 < float(args.selector_tail_cvar_fraction) <= 1.0:
         parser.error("--selector_tail_cvar_fraction must be in (0, 1]")
     if float(args.selector_tail_max_balanced_cvar_loss) < 0.0:
@@ -210,7 +279,7 @@ def parse_trial_specs(raw: str) -> list[TrialSpec]:
         token = item.strip()
         if not token:
             continue
-        match = re.fullmatch(r"(top|score|risk|georisk)(\d+)x([0-9]*\.?[0-9]+)", token)
+        match = re.fullmatch(r"(top|score|risk|georisk|patchrisk)(\d+)x([0-9]*\.?[0-9]+)", token)
         if not match:
             raise ValueError(f"invalid trial spec: {token}")
         mode = match.group(1)
@@ -335,6 +404,13 @@ def cosine_abs(a: list[float], b: list[float]) -> float:
     return abs(sum(a[idx] * b[idx] for idx in range(count)))
 
 
+def cosine_signed(a: list[float], b: list[float]) -> float:
+    if not a or not b:
+        return 0.0
+    count = min(len(a), len(b))
+    return float(max(min(sum(a[idx] * b[idx] for idx in range(count)), 1.0), -1.0))
+
+
 def view_overlap(a: dict[str, float], b: dict[str, float]) -> float:
     if not a or not b:
         return 0.0
@@ -414,7 +490,7 @@ def face_adjacency_geometry(
     candidates: list[dict[str, Any]],
     *,
     enabled: bool,
-) -> tuple[dict[int, set[int]], dict[str, Any]]:
+) -> tuple[dict[int, set[int]], dict[int, tuple[float, float, float]], dict[str, Any]]:
     face_ids = sorted({int(row.get("face_id", -1)) for row in candidates if int(row.get("face_id", -1)) >= 0})
     meta: dict[str, Any] = {
         "enabled": bool(enabled),
@@ -425,12 +501,13 @@ def face_adjacency_geometry(
         "iteration": int(plan.get("iteration", 0) or 0),
     }
     adjacency: dict[int, set[int]] = {face_id: set() for face_id in face_ids}
+    centers: dict[int, tuple[float, float, float]] = {}
     if not enabled or not face_ids:
-        return adjacency, meta
+        return adjacency, centers, meta
     source_model = str(plan.get("source_model", "")).strip()
     if not source_model:
         meta["error"] = "missing_source_model"
-        return adjacency, meta
+        return adjacency, centers, meta
     try:
         import torch
         from ss3dm_prior.meshsplatopt.checkpoint_compaction import checkpoint_path
@@ -438,9 +515,12 @@ def face_adjacency_geometry(
         iteration = int(plan.get("iteration", 26000) or 26000)
         state = torch.load(checkpoint_path(Path(source_model), iteration), map_location="cpu")
         faces = state["_triangle_indices"].detach().cpu().long()
+        vertices = state.get("triangles_points")
+        if vertices is not None:
+            vertices = vertices.detach().cpu().float()
     except Exception as exc:
         meta["error"] = f"{type(exc).__name__}: {exc}"
-        return adjacency, meta
+        return adjacency, centers, meta
 
     vertex_to_faces: dict[int, list[int]] = {}
     valid_count = 0
@@ -448,6 +528,9 @@ def face_adjacency_geometry(
         if face_id < 0 or face_id >= int(faces.shape[0]):
             continue
         valid_count += 1
+        if vertices is not None:
+            center = vertices[faces[face_id]].mean(dim=0).tolist()
+            centers[int(face_id)] = (float(center[0]), float(center[1]), float(center[2]))
         for vertex_id in faces[face_id].tolist():
             vertex_to_faces.setdefault(int(vertex_id), []).append(face_id)
     for incident in vertex_to_faces.values():
@@ -466,9 +549,10 @@ def face_adjacency_geometry(
             "valid_candidate_faces": int(valid_count),
             "edge_count": int(edge_count),
             "mean_degree": float(sum(len(value) for value in adjacency.values()) / max(len(adjacency), 1)),
+            "center_count": int(len(centers)),
         }
     )
-    return adjacency, meta
+    return adjacency, centers, meta
 
 
 def risk_greedy_rows(candidates: list[dict[str, Any]], count: int, *, pair_lambda: float) -> list[dict[str, Any]]:
@@ -565,6 +649,154 @@ def georisk_greedy_rows(
     return selected
 
 
+def centroid_neighbors(
+    face_id: int,
+    *,
+    face_centers: dict[int, tuple[float, float, float]],
+    candidate_ids: set[int],
+    max_candidates: int,
+) -> list[int]:
+    if int(max_candidates) <= 0 or int(face_id) not in face_centers:
+        return []
+    center = face_centers[int(face_id)]
+    scored: list[tuple[float, int]] = []
+    for other in candidate_ids:
+        other_id = int(other)
+        if other_id == int(face_id) or other_id not in face_centers:
+            continue
+        other_center = face_centers[other_id]
+        dist2 = sum((float(center[idx]) - float(other_center[idx])) ** 2 for idx in range(3))
+        scored.append((float(dist2), other_id))
+    scored.sort()
+    return [face for _, face in scored[: int(max_candidates)]]
+
+
+def patchrisk_neighbor_ok(
+    *,
+    seed: dict[str, Any],
+    row: dict[str, Any],
+    args: argparse.Namespace,
+) -> tuple[bool, list[str], dict[str, float]]:
+    reasons: list[str] = []
+    policy_gain = num(nested(row, "policy_val_proxy", "relative_gain"), math.nan)
+    policy_samples = num(nested(row, "policy_val_proxy", "samples"), 0.0)
+    signed_cosine = cosine_signed(coeff_direction(seed), coeff_direction(row))
+    tail = georisk_tail_info(row, args)
+    tail_risk = num(tail.get("georisk_tail_risk"), 1.0)
+    if policy_samples < int(args.patchrisk_min_policy_samples):
+        reasons.append("low_policy_samples")
+    if not math.isfinite(policy_gain) or policy_gain < float(args.patchrisk_min_policy_gain):
+        reasons.append("low_policy_gain")
+    if signed_cosine < float(args.patchrisk_min_direction_cosine):
+        reasons.append("low_direction_cosine")
+    if tail_risk > float(args.patchrisk_max_tail_risk):
+        reasons.append("high_tail_risk")
+    return not reasons, reasons, {
+        "policy_val_relative_gain": float(policy_gain) if math.isfinite(policy_gain) else math.nan,
+        "policy_val_samples": float(policy_samples),
+        "direction_cosine_to_seed": float(signed_cosine),
+        "georisk_tail_risk": float(tail_risk),
+    }
+
+
+def patchrisk_expand_rows(
+    candidates: list[dict[str, Any]],
+    seed_rows: list[dict[str, Any]],
+    *,
+    face_adjacency: dict[int, set[int]],
+    face_centers: dict[int, tuple[float, float, float]],
+    args: argparse.Namespace,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    row_by_face = {int(row.get("face_id", -1)): row for row in candidates if int(row.get("face_id", -1)) >= 0}
+    candidate_ids = set(row_by_face)
+    assigned: set[int] = set()
+    expanded: list[dict[str, Any]] = []
+    patches: list[dict[str, Any]] = []
+    total_limit = max(int(args.patchrisk_max_total_faces), 1)
+    max_patch = max(int(args.patchrisk_max_patch_faces), 1)
+    rings = max(int(args.patchrisk_rings), 0)
+
+    for seed in seed_rows:
+        seed_id = int(seed.get("face_id", -1))
+        if seed_id < 0 or seed_id not in row_by_face or seed_id in assigned:
+            continue
+        patch_ids: list[int] = [seed_id]
+        assigned.add(seed_id)
+        frontier = [seed_id]
+        rejected_neighbors: list[dict[str, Any]] = []
+        for _ in range(rings):
+            next_frontier: list[int] = []
+            for face_id in frontier:
+                if len(patch_ids) >= max_patch or len(expanded) + len(patch_ids) >= total_limit:
+                    break
+                neighbor_ids: list[int] = []
+                if str(args.patchrisk_neighbor_mode) in {"topology", "both"}:
+                    neighbor_ids.extend(sorted(face_adjacency.get(int(face_id), set())))
+                if str(args.patchrisk_neighbor_mode) in {"centroid", "both"}:
+                    neighbor_ids.extend(
+                        centroid_neighbors(
+                            int(face_id),
+                            face_centers=face_centers,
+                            candidate_ids=candidate_ids,
+                            max_candidates=int(args.patchrisk_centroid_candidates_per_seed),
+                        )
+                    )
+                seen_neighbors: set[int] = set()
+                for neighbor_id in neighbor_ids:
+                    neighbor_id = int(neighbor_id)
+                    if neighbor_id in seen_neighbors:
+                        continue
+                    seen_neighbors.add(neighbor_id)
+                    if neighbor_id in assigned or neighbor_id in patch_ids or neighbor_id not in row_by_face:
+                        continue
+                    ok, reasons, audit = patchrisk_neighbor_ok(seed=seed, row=row_by_face[neighbor_id], args=args)
+                    if not ok:
+                        if len(rejected_neighbors) < 12:
+                            rejected_neighbors.append({"face_id": neighbor_id, "reasons": reasons, **audit})
+                        continue
+                    patch_ids.append(neighbor_id)
+                    assigned.add(neighbor_id)
+                    next_frontier.append(neighbor_id)
+                    if len(patch_ids) >= max_patch or len(expanded) + len(patch_ids) >= total_limit:
+                        break
+            frontier = next_frontier
+            if not frontier or len(patch_ids) >= max_patch or len(expanded) + len(patch_ids) >= total_limit:
+                break
+        expanded.extend(row_by_face[face_id] for face_id in patch_ids)
+        patches.append(
+            {
+                "seed_face": seed_id,
+                "faces": patch_ids,
+                "patch_size": int(len(patch_ids)),
+                "rejected_neighbor_preview": rejected_neighbors,
+            }
+        )
+        if len(expanded) >= total_limit:
+            break
+
+    meta = {
+        "enabled": True,
+        "seed_count": int(len(seed_rows)),
+        "rings": int(rings),
+        "max_patch_faces": int(max_patch),
+        "max_total_faces": int(total_limit),
+        "neighbor_mode": str(args.patchrisk_neighbor_mode),
+        "centroid_candidates_per_seed": int(args.patchrisk_centroid_candidates_per_seed),
+        "min_direction_cosine": float(args.patchrisk_min_direction_cosine),
+        "min_policy_gain": float(args.patchrisk_min_policy_gain),
+        "min_policy_samples": int(args.patchrisk_min_policy_samples),
+        "max_tail_risk": float(args.patchrisk_max_tail_risk),
+        "seed_face_ids": [int(row.get("face_id", -1)) for row in seed_rows],
+        "expanded_face_ids": [int(row.get("face_id", -1)) for row in expanded],
+        "expanded_face_count": int(len(expanded)),
+        "patch_count": int(len(patches)),
+        "mean_patch_size": float(mean([float(item["patch_size"]) for item in patches])) if patches else 0.0,
+        "patches": patches,
+        "uses_test": False,
+    }
+    return expanded, meta
+
+
 def risk_adjusted_score(
     row: dict[str, Any],
     selected: list[dict[str, Any]],
@@ -625,6 +857,9 @@ def face_score_entries(
             {
                 "face_id": int(row["face_id"]),
                 "rank": int(row.get("rank", -1)),
+                "patchrisk_role": str(row.get("_patchrisk_role", "")),
+                "patchrisk_seed_face": int(row.get("_patchrisk_seed_face", -1)),
+                "patchrisk_patch_size": int(row.get("_patchrisk_patch_size", 0)),
                 **score_info,
                 "policy_val_relative_gain": num(nested(row, "policy_val_proxy", "relative_gain"), math.nan),
                 "policy_val_samples": num(nested(row, "policy_val_proxy", "samples"), math.nan),
@@ -651,6 +886,15 @@ def selected_rows(
     elif spec.mode == "georisk":
         if args is None:
             raise ValueError("georisk mode requires selector args")
+        return georisk_greedy_rows(
+            candidates,
+            spec.count,
+            face_adjacency=face_adjacency or {},
+            args=args,
+        )
+    elif spec.mode == "patchrisk":
+        if args is None:
+            raise ValueError("patchrisk mode requires selector args")
         return georisk_greedy_rows(
             candidates,
             spec.count,
@@ -971,8 +1215,8 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
         write_json(root / scene / "coupled_selector_decision.json", payload)
         return payload
 
-    uses_georisk = any(spec.mode == "georisk" for spec in specs)
-    face_adjacency, geometry_meta = face_adjacency_geometry(
+    uses_georisk = any(spec.mode in {"georisk", "patchrisk"} for spec in specs)
+    face_adjacency, face_centers, geometry_meta = face_adjacency_geometry(
         plan,
         candidates,
         enabled=bool(uses_georisk and args.georisk_load_adjacency),
@@ -982,6 +1226,7 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
         "score": "train_certificate_score",
         "risk": "risk_greedy_train_certificate_pair_penalty",
         "georisk": "geometry_neighborhood_cvar_train_certificate",
+        "patchrisk": "patch_level_georisk_neighborhood_residual_carrier",
     }
     max_concentration = max((local_error_concentration(row) for row in candidates), default=1.0)
     for spec in specs:
@@ -992,6 +1237,39 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             face_adjacency=face_adjacency,
             args=args,
         )
+        patchrisk_meta: dict[str, Any] = {}
+        score_rows = trial_rows
+        if spec.mode == "patchrisk":
+            seed_rows = trial_rows
+            expanded_rows, patchrisk_meta = patchrisk_expand_rows(
+                candidates,
+                seed_rows,
+                face_adjacency=face_adjacency,
+                face_centers=face_centers,
+                args=args,
+            )
+            patch_by_face: dict[int, dict[str, Any]] = {}
+            for patch in patchrisk_meta.get("patches", []):
+                if not isinstance(patch, dict):
+                    continue
+                seed_id = int(patch.get("seed_face", -1))
+                faces_in_patch = patch.get("faces", [])
+                for face_id in faces_in_patch if isinstance(faces_in_patch, list) else []:
+                    patch_by_face[int(face_id)] = {
+                        "seed_face": seed_id,
+                        "patch_size": int(patch.get("patch_size", 0)),
+                    }
+            seed_ids = {int(row.get("face_id", -1)) for row in seed_rows}
+            trial_rows = []
+            for row in expanded_rows:
+                face_id = int(row.get("face_id", -1))
+                annotated = dict(row)
+                patch_info = patch_by_face.get(face_id, {})
+                annotated["_patchrisk_role"] = "seed" if face_id in seed_ids else "neighbor"
+                annotated["_patchrisk_seed_face"] = int(patch_info.get("seed_face", face_id))
+                annotated["_patchrisk_patch_size"] = int(patch_info.get("patch_size", 1))
+                trial_rows.append(annotated)
+            score_rows = trial_rows
         face_ids = [int(row["face_id"]) for row in trial_rows]
         manifest = {
             "scene": scene,
@@ -1002,13 +1280,14 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             "selection_uses_test": False,
             "score_type": score_types[spec.mode],
             "risk_pair_lambda": float(args.risk_pair_lambda) if spec.mode == "risk" else 0.0,
-            "georisk_pair_lambda": float(args.georisk_pair_lambda) if spec.mode == "georisk" else 0.0,
-            "georisk_geometry_lambda": float(args.georisk_geometry_lambda) if spec.mode == "georisk" else 0.0,
-            "georisk_tail_lambda": float(args.georisk_tail_lambda) if spec.mode == "georisk" else 0.0,
-            "georisk_error_lambda": float(args.georisk_error_lambda) if spec.mode == "georisk" else 0.0,
-            "georisk_tail_fraction": float(args.georisk_tail_fraction) if spec.mode == "georisk" else 0.0,
-            "georisk_min_view_gain": float(args.georisk_min_view_gain) if spec.mode == "georisk" else 0.0,
-            "georisk_geometry": geometry_meta if spec.mode == "georisk" else {},
+            "georisk_pair_lambda": float(args.georisk_pair_lambda) if spec.mode in {"georisk", "patchrisk"} else 0.0,
+            "georisk_geometry_lambda": float(args.georisk_geometry_lambda) if spec.mode in {"georisk", "patchrisk"} else 0.0,
+            "georisk_tail_lambda": float(args.georisk_tail_lambda) if spec.mode in {"georisk", "patchrisk"} else 0.0,
+            "georisk_error_lambda": float(args.georisk_error_lambda) if spec.mode in {"georisk", "patchrisk"} else 0.0,
+            "georisk_tail_fraction": float(args.georisk_tail_fraction) if spec.mode in {"georisk", "patchrisk"} else 0.0,
+            "georisk_min_view_gain": float(args.georisk_min_view_gain) if spec.mode in {"georisk", "patchrisk"} else 0.0,
+            "georisk_geometry": geometry_meta if spec.mode in {"georisk", "patchrisk"} else {},
+            "patchrisk": patchrisk_meta if spec.mode == "patchrisk" else {},
             "selector_tail_cvar_fraction": float(args.selector_tail_cvar_fraction),
             "selector_tail_max_balanced_cvar_loss": float(args.selector_tail_max_balanced_cvar_loss),
             "selector_tail_min_mean_to_cvar_ratio": float(args.selector_tail_min_mean_to_cvar_ratio),
@@ -1016,8 +1295,8 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             "alpha_refit": bool(args.selector_fit_plan_alphas),
             "face_ids": face_ids,
             "face_scores": face_score_entries(
-                trial_rows,
-                spec.mode,
+                score_rows,
+                "georisk" if spec.mode == "patchrisk" else spec.mode,
                 pair_lambda=float(args.risk_pair_lambda),
                 face_adjacency=face_adjacency,
                 args=args,
