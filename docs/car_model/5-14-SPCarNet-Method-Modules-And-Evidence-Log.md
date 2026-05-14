@@ -20,9 +20,12 @@ Clean MeshSplatting
 The strong result is still Phase-J versus clean MeshSplatting. Phase-S is now a
 real train/eval pipeline module with a fixed candidate policy, a coupled
 face-set selector, a risk-greedy selector, and a tail-stable promotion rule. The
-latest full8 risk-tail replay accepts `3 / 8` candidate-bearing scenes and is
-documented in
-`docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md`.
+latest full8 risk-tail replay accepts `3 / 8` candidate-bearing scenes. The
+follow-up GeoRisk/CVaR replay adds geometry-neighborhood ranking and train-val
+CVaR diagnostics, but accepts only `2 / 7` requested hard/control scenes and
+does not improve coverage over risk-tail. Logs:
+`docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md` and
+`docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md`.
 
 ## Module Map
 
@@ -36,6 +39,7 @@ documented in
 | Phase-S top1/s2 replay | Fixed minimal repair policy: take rank-0 face and scale residual by 2.0. | `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py` with `--delta_facelocal_materialize_plan_limit 1` and `--delta_facelocal_materialize_plan_scale 2.0`. | Safe but nearly inert; mean effective report-only deltas are around numerical noise. |
 | Coupled score selector | Tests train-only multi-face sets through the real train-val render gate. | `scripts/car_model/ecsr_run_facelocal_coupled_selector.py`, `scoreN` mode. | Fixes `counter`, but accepts only 1/8 candidate-bearing scenes. |
 | Risk-greedy selector | Greedily selects multi-face sets while penalizing redundant view support and similar residual directions. | `scripts/car_model/ecsr_run_facelocal_coupled_selector.py`, `riskN` mode. | Full8 risk-tail replay accepts `flowers`, `counter`, and `treehill`; rejected scenes fall back to Phase-J. |
+| GeoRisk/CVaR selector | Adds geometry-neighborhood redundancy, per-face train-certificate tail risk, local residual concentration, and train-val render CVaR diagnostics. | `scripts/car_model/ecsr_run_facelocal_coupled_selector.py`, `georiskN` mode. | Requested 7-scene replay accepts `flowers` and `counter`; useful audit upgrade but no coverage gain over risk-tail. |
 | Per-face alpha refit | Fits train-only scalar multipliers for selected face-local residuals and passes them to materialization. | `scripts/car_model/ecsr_fit_facelocal_plan_alphas.py`; materializer arg `--materialize_plan_alpha_json`. | Interface complete, but first 3-scene pilot does not improve over uniform risk-tail. |
 | Train-val gate and fallback | Accepts repairs only with train-val metrics; test remains report-only. Rejected scenes fall back to Phase-J. | `scripts/car_model/ecsr_decide_phasek_trainval_gate.py` and coupled selector decision JSONs. | Keeps the effective method from being harmed by risky Phase-S edits. |
 
@@ -67,6 +71,15 @@ relative_gain
 pair_risk(i, j) =
   view_support_overlap(i, j)
   * (0.5 + 0.5 * abs(cosine(delta_coeff_i, delta_coeff_j)))
+```
+
+`georiskN` keeps the same no-test selection boundary and adds:
+
+```text
+geometry adjacency penalty from source checkpoint triangle indices
+per-face lower-tail/CVaR risk from train certificates
+local residual concentration bonus from train evidence
+trial-level train-val render CVaR diagnostics for outer promotion auditing
 ```
 
 The selector then materializes each fixed face set, runs the existing render
@@ -145,6 +158,26 @@ This improves the earlier 1/3 pilot, but it is still not a complete Phase-S
 paper endpoint because most scenes fall back and the mean is dominated by one
 strong outdoor scene.
 
+### GeoRisk/CVaR Selector Replay
+
+Evidence:
+
+`outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_georisk_cvar_v1_20260514_summary/summary_7scene.md`
+
+| scene | selected | accepted | effective dPSNR | effective dSSIM | effective dLPIPS | reading |
+|---|---|---:|---:|---:|---:|---|
+| garden | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | false-positive trials rejected |
+| bicycle | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | georisk trials fail gate |
+| room | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | best trial too small |
+| kitchen | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | PSNR positive but not robust enough |
+| bonsai | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 | train-val negative |
+| flowers | georisk4/s1 | true | +0.005418777 | +0.000470877 | -0.000586182 | same strong positive as risk-tail |
+| counter | georisk4/s1 | true | +0.000055313 | +0.000000417 | -0.000001699 | same all-metric positive as risk-tail |
+| **mean** | - | 2/7 | **+0.000782013** | **+0.000067328** | **-0.000083983** | positive but still dominated by flowers |
+
+This is an audit/policy improvement rather than a new performance milestone.
+It confirms that geometry-aware ranking alone does not solve the hard scenes.
+
 ### Alpha Refit and Stump Relaxed Checks
 
 Evidence:
@@ -168,6 +201,14 @@ selected panels are stored at:
 ![flowers risk4 panel](../../outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_coupled_selector_v1_riskpilot_20260513_qualitative/flowers_risk4_s1_00019_phasej_vs_risktail_panel.png)
 
 ![counter risk4 panel](../../outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_coupled_selector_v1_riskpilot_20260513_qualitative/counter_risk4_s1_00002_phasej_vs_risktail_panel.png)
+
+GeoRisk/CVaR panels with local crops and error-change maps:
+
+`outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_georisk_cvar_v1_20260514_qualitative/qualitative_summary.md`
+
+![flowers georisk panel](../../outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_georisk_cvar_v1_20260514_qualitative/flowers_georisk4_s1_00019_georisk_cvar_panel.png)
+
+![garden rejected panel](../../outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_georisk_cvar_v1_20260514_qualitative/garden_georisk8_s0p5_00006_georisk_cvar_panel.png)
 
 Counter coupled qualitative summary:
 
@@ -198,8 +239,9 @@ not yet a strong final-paper visual claim.
   regression magnitude but does not remove the underlying train/test mismatch.
 - `bicycle` has only seven current strict candidates; multi-face repairs fail train-val
   or remain too small.
-- The risk-greedy selector models view/residual redundancy, but not geometric
-  adjacency, learned render-risk, or true per-view tail-risk prediction yet.
+- GeoRisk/CVaR adds geometry adjacency and train-val CVaR diagnostics, but the
+  result shows the remaining bottleneck is carrier capacity/evidence quality
+  rather than only selector scoring.
 
 ## Next Required Evidence
 

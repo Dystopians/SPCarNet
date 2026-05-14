@@ -23,6 +23,8 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 METRICS = ("PSNR", "SSIM", "LPIPS")
 DEFAULT_PLAN_TEMPLATE = (
     "outputs/carnet/meshsplatopt/ecsr_phase_s/"
@@ -55,8 +57,9 @@ def parse_args() -> argparse.Namespace:
         "--trial_specs",
         default="top1x2,score2x1,score4x1,score8x0.5",
         help=(
-            "Comma separated trials. Grammar: topNxS, scoreNxS, or riskNxS, for example "
-            "top1x2,score4x1,risk8x0.5. score/risk use train-only plan certificates."
+            "Comma separated trials. Grammar: topNxS, scoreNxS, riskNxS, or georiskNxS, "
+            "for example top1x2,score4x1,risk8x0.5,georisk4x1. "
+            "score/risk/georisk use train-only plan certificates."
         ),
     )
     parser.add_argument(
@@ -64,6 +67,48 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.65,
         help="Penalty strength for risk-mode greedy view-overlap redundancy.",
+    )
+    parser.add_argument(
+        "--georisk_pair_lambda",
+        type=float,
+        default=-1.0,
+        help="Pair-risk penalty for georisk mode. Negative means reuse --risk_pair_lambda.",
+    )
+    parser.add_argument(
+        "--georisk_geometry_lambda",
+        type=float,
+        default=0.35,
+        help="Penalty for selecting geometrically adjacent residual faces in georisk mode.",
+    )
+    parser.add_argument(
+        "--georisk_tail_lambda",
+        type=float,
+        default=0.55,
+        help="Penalty for low-CVaR/negative per-view train certificate tails in georisk mode.",
+    )
+    parser.add_argument(
+        "--georisk_error_lambda",
+        type=float,
+        default=0.12,
+        help="Small bonus for train-only local residual-error concentration in georisk mode.",
+    )
+    parser.add_argument(
+        "--georisk_tail_fraction",
+        type=float,
+        default=0.30,
+        help="Worst-view fraction used for per-face CVaR certificate in georisk mode.",
+    )
+    parser.add_argument(
+        "--georisk_min_view_gain",
+        type=float,
+        default=0.02,
+        help="Soft minimum per-view relative gain used by georisk tail risk.",
+    )
+    parser.add_argument(
+        "--georisk_load_adjacency",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Load source checkpoint triangle indices to build candidate face adjacency for georisk mode.",
     )
     parser.add_argument("--candidate_prefix", default="facelocal_coupled_v1")
     parser.add_argument("--phasej_test_method", default=DEFAULT_PHASEJ_TEST_METHOD)
@@ -105,6 +150,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--selector_tail_max_psnr_negative_fraction", type=float, default=0.20)
     parser.add_argument("--selector_tail_max_balanced_negative_fraction", type=float, default=0.40)
     parser.add_argument("--selector_tail_max_worst_lpips_regression", type=float, default=1.5e-4)
+    parser.add_argument("--selector_tail_cvar_fraction", type=float, default=0.20)
+    parser.add_argument("--selector_tail_max_balanced_cvar_loss", type=float, default=math.inf)
+    parser.add_argument("--selector_tail_min_mean_to_cvar_ratio", type=float, default=0.0)
+    parser.add_argument("--selector_tail_max_lpips_positive_fraction", type=float, default=1.0)
     parser.add_argument(
         "--selector_fit_plan_alphas",
         action="store_true",
@@ -126,6 +175,23 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if float(args.risk_pair_lambda) < 0.0:
         parser.error("--risk_pair_lambda must be non-negative")
+    if float(args.georisk_pair_lambda) < 0.0:
+        args.georisk_pair_lambda = float(args.risk_pair_lambda)
+    if float(args.georisk_pair_lambda) < 0.0:
+        parser.error("--georisk_pair_lambda must be non-negative")
+    for name in ("georisk_geometry_lambda", "georisk_tail_lambda", "georisk_error_lambda"):
+        if float(getattr(args, name)) < 0.0:
+            parser.error(f"--{name} must be non-negative")
+    if not 0.0 < float(args.georisk_tail_fraction) <= 1.0:
+        parser.error("--georisk_tail_fraction must be in (0, 1]")
+    if not 0.0 < float(args.selector_tail_cvar_fraction) <= 1.0:
+        parser.error("--selector_tail_cvar_fraction must be in (0, 1]")
+    if float(args.selector_tail_max_balanced_cvar_loss) < 0.0:
+        parser.error("--selector_tail_max_balanced_cvar_loss must be non-negative")
+    if float(args.selector_tail_min_mean_to_cvar_ratio) < 0.0:
+        parser.error("--selector_tail_min_mean_to_cvar_ratio must be non-negative")
+    if not 0.0 <= float(args.selector_tail_max_lpips_positive_fraction) <= 1.0:
+        parser.error("--selector_tail_max_lpips_positive_fraction must be in [0, 1]")
     return args
 
 
@@ -144,7 +210,7 @@ def parse_trial_specs(raw: str) -> list[TrialSpec]:
         token = item.strip()
         if not token:
             continue
-        match = re.fullmatch(r"(top|score|risk)(\d+)x([0-9]*\.?[0-9]+)", token)
+        match = re.fullmatch(r"(top|score|risk|georisk)(\d+)x([0-9]*\.?[0-9]+)", token)
         if not match:
             raise ValueError(f"invalid trial spec: {token}")
         mode = match.group(1)
@@ -284,6 +350,127 @@ def pair_risk(a: dict[str, Any], b: dict[str, Any]) -> float:
     return float(overlap * (0.5 + 0.5 * direction))
 
 
+def view_relative_gains(row: dict[str, Any]) -> list[float]:
+    out: list[float] = []
+    cert_views = nested(row, "face_view_gain_certificate", "views")
+    if not isinstance(cert_views, list):
+        return out
+    for item in cert_views:
+        if not isinstance(item, dict):
+            continue
+        value = num(item.get("relative_gain"), math.nan)
+        if math.isfinite(value):
+            out.append(float(value))
+    return out
+
+
+def cvar_tail(values: list[float], fraction: float) -> float:
+    finite = sorted(value for value in values if math.isfinite(value))
+    if not finite:
+        return math.nan
+    count = max(1, int(math.ceil(len(finite) * max(min(float(fraction), 1.0), 1e-6))))
+    return float(sum(finite[:count]) / count)
+
+
+def georisk_tail_info(row: dict[str, Any], args: argparse.Namespace) -> dict[str, float]:
+    gains = view_relative_gains(row)
+    if not gains:
+        return {
+            "georisk_view_count": 0.0,
+            "georisk_tail_cvar_relative_gain": math.nan,
+            "georisk_tail_min_relative_gain": math.nan,
+            "georisk_tail_negative_fraction": 1.0,
+            "georisk_tail_low_gain_fraction": 1.0,
+            "georisk_tail_risk": 1.0,
+        }
+    cvar = cvar_tail(gains, float(args.georisk_tail_fraction))
+    min_gain = min(gains)
+    negative_fraction = sum(1 for value in gains if value < 0.0) / len(gains)
+    low_fraction = sum(1 for value in gains if value < float(args.georisk_min_view_gain)) / len(gains)
+    min_gain_deficit = max(0.0, float(args.georisk_min_view_gain) - min_gain) / max(float(args.georisk_min_view_gain), 1e-8)
+    cvar_deficit = max(0.0, float(args.georisk_min_view_gain) - cvar) / max(float(args.georisk_min_view_gain), 1e-8)
+    support_penalty = 1.0 / max(float(len(gains)), 1.0)
+    risk = min(1.0, 0.35 * cvar_deficit + 0.35 * negative_fraction + 0.20 * low_fraction + 0.10 * support_penalty + 0.15 * min_gain_deficit)
+    return {
+        "georisk_view_count": float(len(gains)),
+        "georisk_tail_cvar_relative_gain": float(cvar),
+        "georisk_tail_min_relative_gain": float(min_gain),
+        "georisk_tail_negative_fraction": float(negative_fraction),
+        "georisk_tail_low_gain_fraction": float(low_fraction),
+        "georisk_tail_risk": float(risk),
+    }
+
+
+def local_error_concentration(row: dict[str, Any]) -> float:
+    mean_l1 = max(num(nested(row, "face_stats", "mean_l1_error"), 0.0), 0.0)
+    pixels = max(num(nested(row, "face_stats", "pixel_count"), 1.0), 1.0)
+    view_hits = max(num(nested(row, "face_stats", "view_hits"), 1.0), 1.0)
+    consistency = max(num(nested(row, "face_stats", "consistency"), 0.0), 0.0)
+    return float(mean_l1 * math.log1p(pixels) * math.sqrt(view_hits) * (0.25 + 0.75 * consistency))
+
+
+def face_adjacency_geometry(
+    plan: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    *,
+    enabled: bool,
+) -> tuple[dict[int, set[int]], dict[str, Any]]:
+    face_ids = sorted({int(row.get("face_id", -1)) for row in candidates if int(row.get("face_id", -1)) >= 0})
+    meta: dict[str, Any] = {
+        "enabled": bool(enabled),
+        "available": False,
+        "candidate_faces": int(len(face_ids)),
+        "edge_count": 0,
+        "source_model": str(plan.get("source_model", "")),
+        "iteration": int(plan.get("iteration", 0) or 0),
+    }
+    adjacency: dict[int, set[int]] = {face_id: set() for face_id in face_ids}
+    if not enabled or not face_ids:
+        return adjacency, meta
+    source_model = str(plan.get("source_model", "")).strip()
+    if not source_model:
+        meta["error"] = "missing_source_model"
+        return adjacency, meta
+    try:
+        import torch
+        from ss3dm_prior.meshsplatopt.checkpoint_compaction import checkpoint_path
+
+        iteration = int(plan.get("iteration", 26000) or 26000)
+        state = torch.load(checkpoint_path(Path(source_model), iteration), map_location="cpu")
+        faces = state["_triangle_indices"].detach().cpu().long()
+    except Exception as exc:
+        meta["error"] = f"{type(exc).__name__}: {exc}"
+        return adjacency, meta
+
+    vertex_to_faces: dict[int, list[int]] = {}
+    valid_count = 0
+    for face_id in face_ids:
+        if face_id < 0 or face_id >= int(faces.shape[0]):
+            continue
+        valid_count += 1
+        for vertex_id in faces[face_id].tolist():
+            vertex_to_faces.setdefault(int(vertex_id), []).append(face_id)
+    for incident in vertex_to_faces.values():
+        if len(incident) < 2:
+            continue
+        for idx, left in enumerate(incident):
+            for right in incident[idx + 1 :]:
+                if left == right:
+                    continue
+                adjacency[int(left)].add(int(right))
+                adjacency[int(right)].add(int(left))
+    edge_count = sum(len(value) for value in adjacency.values()) // 2
+    meta.update(
+        {
+            "available": True,
+            "valid_candidate_faces": int(valid_count),
+            "edge_count": int(edge_count),
+            "mean_degree": float(sum(len(value) for value in adjacency.values()) / max(len(adjacency), 1)),
+        }
+    )
+    return adjacency, meta
+
+
 def risk_greedy_rows(candidates: list[dict[str, Any]], count: int, *, pair_lambda: float) -> list[dict[str, Any]]:
     pool = sorted(candidates, key=train_certificate_score, reverse=True)
     selected: list[dict[str, Any]] = []
@@ -298,6 +485,81 @@ def risk_greedy_rows(candidates: list[dict[str, Any]], count: int, *, pair_lambd
             adjusted = base * max(0.05, 1.0 - float(pair_lambda) * redundancy) * (1.0 + coverage_bonus)
             if adjusted > best_score:
                 best_score = adjusted
+                best_idx = idx
+        selected.append(pool.pop(best_idx))
+    return selected
+
+
+def georisk_adjusted_score(
+    row: dict[str, Any],
+    selected: list[dict[str, Any]],
+    *,
+    face_adjacency: dict[int, set[int]],
+    args: argparse.Namespace,
+    max_concentration: float,
+) -> dict[str, float]:
+    base = train_certificate_score(row)
+    fid = int(row.get("face_id", -1))
+    selected_ids = {int(item.get("face_id", -1)) for item in selected}
+    selected_views = set().union(*(set(view_support(item)) for item in selected)) if selected else set()
+    new_supported_views = len(set(view_support(row)) - selected_views) if selected else 0
+    pair_redundancy = max((pair_risk(row, other) for other in selected), default=0.0)
+    adjacent_selected = sorted(face_adjacency.get(fid, set()) & selected_ids)
+    adjacent_rows = [item for item in selected if int(item.get("face_id", -1)) in set(adjacent_selected)]
+    adjacent_pair = max((pair_risk(row, other) for other in adjacent_rows), default=0.0)
+    adjacent_fraction = float(len(adjacent_selected) / max(len(selected), 1)) if selected else 0.0
+    geometry_redundancy = max(adjacent_pair, min(1.0, adjacent_fraction))
+    tail = georisk_tail_info(row, args)
+    concentration = local_error_concentration(row)
+    concentration_norm = concentration / max(float(max_concentration), 1e-8)
+    pair_factor = max(0.05, 1.0 - float(args.georisk_pair_lambda) * pair_redundancy)
+    geometry_factor = max(0.05, 1.0 - float(args.georisk_geometry_lambda) * geometry_redundancy)
+    tail_factor = max(0.05, 1.0 - float(args.georisk_tail_lambda) * float(tail["georisk_tail_risk"]))
+    coverage_bonus = 0.04 * float(new_supported_views)
+    local_bonus = float(args.georisk_error_lambda) * min(1.0, concentration_norm)
+    adjusted = base * pair_factor * geometry_factor * tail_factor * (1.0 + coverage_bonus + local_bonus)
+    return {
+        "train_certificate_score": float(base),
+        "risk_max_pair_risk_to_previous": float(pair_redundancy),
+        "risk_new_supported_view_count": float(new_supported_views),
+        "risk_coverage_bonus": float(coverage_bonus),
+        "risk_adjusted_selection_score": float(adjusted),
+        "georisk_pair_factor": float(pair_factor),
+        "georisk_geometry_adjacent_previous_count": float(len(adjacent_selected)),
+        "georisk_geometry_redundancy": float(geometry_redundancy),
+        "georisk_geometry_factor": float(geometry_factor),
+        "georisk_tail_factor": float(tail_factor),
+        "georisk_local_error_concentration": float(concentration),
+        "georisk_local_error_concentration_norm": float(concentration_norm),
+        "georisk_local_error_bonus": float(local_bonus),
+        "georisk_adjusted_selection_score": float(adjusted),
+        **tail,
+    }
+
+
+def georisk_greedy_rows(
+    candidates: list[dict[str, Any]],
+    count: int,
+    *,
+    face_adjacency: dict[int, set[int]],
+    args: argparse.Namespace,
+) -> list[dict[str, Any]]:
+    pool = sorted(candidates, key=train_certificate_score, reverse=True)
+    selected: list[dict[str, Any]] = []
+    max_concentration = max((local_error_concentration(row) for row in candidates), default=1.0)
+    while pool and len(selected) < count:
+        best_idx = 0
+        best_score = -math.inf
+        for idx, row in enumerate(pool):
+            score = georisk_adjusted_score(
+                row,
+                selected,
+                face_adjacency=face_adjacency,
+                args=args,
+                max_concentration=max_concentration,
+            )["georisk_adjusted_selection_score"]
+            if score > best_score:
+                best_score = score
                 best_idx = idx
         selected.append(pool.pop(best_idx))
     return selected
@@ -324,17 +586,41 @@ def risk_adjusted_score(
     }
 
 
-def face_score_entries(rows: list[dict[str, Any]], mode: str, *, pair_lambda: float) -> list[dict[str, Any]]:
+def face_score_entries(
+    rows: list[dict[str, Any]],
+    mode: str,
+    *,
+    pair_lambda: float,
+    face_adjacency: dict[int, set[int]] | None = None,
+    args: argparse.Namespace | None = None,
+    max_concentration: float | None = None,
+) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     selected: list[dict[str, Any]] = []
+    concentration_norm_base = (
+        float(max_concentration)
+        if max_concentration is not None and math.isfinite(float(max_concentration))
+        else max((local_error_concentration(row) for row in rows), default=1.0)
+    )
     for row in rows:
-        score_info = risk_adjusted_score(row, selected, pair_lambda=pair_lambda) if mode == "risk" else {
-            "train_certificate_score": train_certificate_score(row),
-            "risk_max_pair_risk_to_previous": 0.0,
-            "risk_new_supported_view_count": 0.0,
-            "risk_coverage_bonus": 0.0,
-            "risk_adjusted_selection_score": train_certificate_score(row),
-        }
+        if mode == "risk":
+            score_info = risk_adjusted_score(row, selected, pair_lambda=pair_lambda)
+        elif mode == "georisk" and args is not None:
+            score_info = georisk_adjusted_score(
+                row,
+                selected,
+                face_adjacency=face_adjacency or {},
+                args=args,
+                max_concentration=concentration_norm_base,
+            )
+        else:
+            score_info = {
+                "train_certificate_score": train_certificate_score(row),
+                "risk_max_pair_risk_to_previous": 0.0,
+                "risk_new_supported_view_count": 0.0,
+                "risk_coverage_bonus": 0.0,
+                "risk_adjusted_selection_score": train_certificate_score(row),
+            }
         entries.append(
             {
                 "face_id": int(row["face_id"]),
@@ -348,13 +634,29 @@ def face_score_entries(rows: list[dict[str, Any]], mode: str, *, pair_lambda: fl
     return entries
 
 
-def selected_rows(candidates: list[dict[str, Any]], spec: TrialSpec, *, pair_lambda: float) -> list[dict[str, Any]]:
+def selected_rows(
+    candidates: list[dict[str, Any]],
+    spec: TrialSpec,
+    *,
+    pair_lambda: float,
+    face_adjacency: dict[int, set[int]] | None = None,
+    args: argparse.Namespace | None = None,
+) -> list[dict[str, Any]]:
     if spec.mode == "top":
         rows = list(candidates)
     elif spec.mode == "score":
         rows = sorted(candidates, key=train_certificate_score, reverse=True)
     elif spec.mode == "risk":
         return risk_greedy_rows(candidates, spec.count, pair_lambda=pair_lambda)
+    elif spec.mode == "georisk":
+        if args is None:
+            raise ValueError("georisk mode requires selector args")
+        return georisk_greedy_rows(
+            candidates,
+            spec.count,
+            face_adjacency=face_adjacency or {},
+            args=args,
+        )
     else:
         raise ValueError(f"unknown trial mode: {spec.mode}")
     return rows[: spec.count]
@@ -527,6 +829,12 @@ def selector_pass(row: dict[str, Any], args: argparse.Namespace) -> tuple[bool, 
             tail_reasons.append(f"tail_balanced_negative_fraction_exceeds_{args.selector_tail_max_balanced_negative_fraction:g}")
         if num(tail.get("worst_lpips_regression"), math.inf) > float(args.selector_tail_max_worst_lpips_regression):
             tail_reasons.append(f"tail_worst_lpips_regression_exceeds_{args.selector_tail_max_worst_lpips_regression:g}")
+        if num(tail.get("lpips_positive_fraction"), math.inf) > float(args.selector_tail_max_lpips_positive_fraction):
+            tail_reasons.append(f"tail_lpips_positive_fraction_exceeds_{args.selector_tail_max_lpips_positive_fraction:g}")
+        if num(tail.get("balanced_cvar_loss"), math.inf) > float(args.selector_tail_max_balanced_cvar_loss):
+            tail_reasons.append(f"tail_balanced_cvar_loss_exceeds_{args.selector_tail_max_balanced_cvar_loss:g}")
+        if num(tail.get("mean_to_cvar_ratio"), math.inf) < float(args.selector_tail_min_mean_to_cvar_ratio):
+            tail_reasons.append(f"tail_mean_to_cvar_ratio_below_{args.selector_tail_min_mean_to_cvar_ratio:g}")
         if not tail_reasons:
             row["selector_pass_mode"] = "tail_stable"
             return True, []
@@ -543,7 +851,7 @@ def only_method_metrics(payload: dict[str, Any]) -> dict[str, Any]:
     return first if isinstance(first, dict) else {}
 
 
-def trainval_per_view_tail(root: Path, spec: TrialSpec, scene: str) -> dict[str, float]:
+def trainval_per_view_tail(root: Path, spec: TrialSpec, scene: str, *, cvar_fraction: float = 0.20) -> dict[str, float]:
     trial_root = root / "trials" / spec.label / scene
     base_path = trial_root / "phasej_trainval_gate_per_view.json"
     candidate_path = trial_root / "model" / "trainval_gate_per_view.json"
@@ -564,14 +872,34 @@ def trainval_per_view_tail(root: Path, spec: TrialSpec, scene: str) -> dict[str,
         rows.append({"PSNR": dpsnr, "SSIM": dssim, "LPIPS": dlpips, "balanced": dpsnr + 100.0 * dssim - 10.0 * dlpips})
     if not rows:
         return {"view_count": 0.0}
+    balanced_values = sorted(row["balanced"] for row in rows)
+    psnr_values = sorted(row["PSNR"] for row in rows)
+    lpips_values = sorted((row["LPIPS"] for row in rows), reverse=True)
+    cvar_count = max(1, int(math.ceil(len(rows) * max(min(float(cvar_fraction), 1.0), 1e-6))))
+    balanced_cvar_delta = mean(balanced_values[:cvar_count])
+    balanced_cvar_loss = max(0.0, -balanced_cvar_delta) if math.isfinite(balanced_cvar_delta) else math.inf
+    mean_balanced_delta = mean([row["balanced"] for row in rows])
+    if balanced_cvar_loss <= 1e-12:
+        mean_to_cvar_ratio = math.inf if mean_balanced_delta > 0.0 else 0.0
+    else:
+        mean_to_cvar_ratio = max(0.0, mean_balanced_delta) / balanced_cvar_loss
     return {
         "view_count": float(len(rows)),
         "mean_psnr_delta": mean([row["PSNR"] for row in rows]),
         "mean_abs_psnr_delta": mean([abs(row["PSNR"]) for row in rows]),
+        "mean_balanced_delta": float(mean_balanced_delta),
         "psnr_negative_fraction": float(sum(1 for row in rows if row["PSNR"] < 0.0) / len(rows)),
         "balanced_negative_fraction": float(sum(1 for row in rows if row["balanced"] < 0.0) / len(rows)),
+        "lpips_positive_fraction": float(sum(1 for row in rows if row["LPIPS"] > 0.0) / len(rows)),
         "worst_lpips_regression": max(row["LPIPS"] for row in rows),
         "worst_balanced_delta": min(row["balanced"] for row in rows),
+        "cvar_fraction": float(cvar_fraction),
+        "cvar_view_count": float(cvar_count),
+        "psnr_cvar_delta": mean(psnr_values[:cvar_count]),
+        "lpips_worst_cvar_regression": mean(lpips_values[:cvar_count]),
+        "balanced_cvar_delta": float(balanced_cvar_delta),
+        "balanced_cvar_loss": float(balanced_cvar_loss),
+        "mean_to_cvar_ratio": float(mean_to_cvar_ratio),
     }
 
 
@@ -601,7 +929,12 @@ def decision_row(
         "decision_reasons": decision.get("decision_reasons", []),
         "trainval_delta": train_delta,
         "trainval_balanced_delta": num(decision.get("trainval_balanced_delta"), -math.inf),
-        "trainval_per_view_tail": trainval_per_view_tail(root, spec, scene),
+        "trainval_per_view_tail": trainval_per_view_tail(
+            root,
+            spec,
+            scene,
+            cvar_fraction=float(args.selector_tail_cvar_fraction),
+        ),
         "report_only_test_delta": test_delta,
         "test_balanced_delta_report_only": num(decision.get("test_balanced_delta_report_only"), math.nan),
     }
@@ -638,8 +971,27 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
         write_json(root / scene / "coupled_selector_decision.json", payload)
         return payload
 
+    uses_georisk = any(spec.mode == "georisk" for spec in specs)
+    face_adjacency, geometry_meta = face_adjacency_geometry(
+        plan,
+        candidates,
+        enabled=bool(uses_georisk and args.georisk_load_adjacency),
+    )
+    score_types = {
+        "top": "rank",
+        "score": "train_certificate_score",
+        "risk": "risk_greedy_train_certificate_pair_penalty",
+        "georisk": "geometry_neighborhood_cvar_train_certificate",
+    }
+    max_concentration = max((local_error_concentration(row) for row in candidates), default=1.0)
     for spec in specs:
-        trial_rows = selected_rows(candidates, spec, pair_lambda=float(args.risk_pair_lambda))
+        trial_rows = selected_rows(
+            candidates,
+            spec,
+            pair_lambda=float(args.risk_pair_lambda),
+            face_adjacency=face_adjacency,
+            args=args,
+        )
         face_ids = [int(row["face_id"]) for row in trial_rows]
         manifest = {
             "scene": scene,
@@ -648,18 +1000,28 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             "count": spec.count,
             "scale": spec.scale,
             "selection_uses_test": False,
-            "score_type": {
-                "top": "rank",
-                "score": "train_certificate_score",
-                "risk": "risk_greedy_train_certificate_pair_penalty",
-            }[spec.mode],
+            "score_type": score_types[spec.mode],
             "risk_pair_lambda": float(args.risk_pair_lambda) if spec.mode == "risk" else 0.0,
+            "georisk_pair_lambda": float(args.georisk_pair_lambda) if spec.mode == "georisk" else 0.0,
+            "georisk_geometry_lambda": float(args.georisk_geometry_lambda) if spec.mode == "georisk" else 0.0,
+            "georisk_tail_lambda": float(args.georisk_tail_lambda) if spec.mode == "georisk" else 0.0,
+            "georisk_error_lambda": float(args.georisk_error_lambda) if spec.mode == "georisk" else 0.0,
+            "georisk_tail_fraction": float(args.georisk_tail_fraction) if spec.mode == "georisk" else 0.0,
+            "georisk_min_view_gain": float(args.georisk_min_view_gain) if spec.mode == "georisk" else 0.0,
+            "georisk_geometry": geometry_meta if spec.mode == "georisk" else {},
+            "selector_tail_cvar_fraction": float(args.selector_tail_cvar_fraction),
+            "selector_tail_max_balanced_cvar_loss": float(args.selector_tail_max_balanced_cvar_loss),
+            "selector_tail_min_mean_to_cvar_ratio": float(args.selector_tail_min_mean_to_cvar_ratio),
+            "selector_tail_max_lpips_positive_fraction": float(args.selector_tail_max_lpips_positive_fraction),
             "alpha_refit": bool(args.selector_fit_plan_alphas),
             "face_ids": face_ids,
             "face_scores": face_score_entries(
                 trial_rows,
                 spec.mode,
                 pair_lambda=float(args.risk_pair_lambda),
+                face_adjacency=face_adjacency,
+                args=args,
+                max_concentration=max_concentration,
             ),
         }
         manifest_path = root / scene / "trial_manifests" / f"{spec.label}.json"
@@ -693,6 +1055,7 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
         "candidate_count": int(len(candidates)),
         "trial_specs": [spec.label for spec in specs],
         "selection_uses_test": False,
+        "georisk_geometry": geometry_meta if uses_georisk else {},
         "accepted": bool(selected),
         "selected_trial": selected["trial"] if selected else "phasej_fallback",
         "selected_trainval_balanced_delta": float(selected["trainval_balanced_delta"]) if selected else 0.0,
