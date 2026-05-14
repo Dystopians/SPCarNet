@@ -64,6 +64,12 @@ def _run(cmd: list[str], *, gpu: int, log_path: Path, wandb_online: bool = False
         raise RuntimeError(f"command failed ({proc.returncode}); see {log_path}")
 
 
+def _fmt_arg(value: Any) -> str:
+    if isinstance(value, float):
+        return f"{value:.12f}".rstrip("0").rstrip(".")
+    return str(value)
+
+
 def _selected_model(policy_root: Path, scene: str) -> Path:
     selected = _read_json(policy_root / scene / "summary.json").get("selected", {})
     model_path = selected.get("model_path")
@@ -787,6 +793,34 @@ def _decide(
         str(args.gate_tail_max_lpips_positive_fraction),
         "--tail_max_worst_lpips_regression",
         str(args.gate_tail_max_worst_lpips_regression),
+        "--stratified_group_count",
+        str(args.gate_stratified_group_count),
+        "--compact_gate_max_faces",
+        str(args.gate_compact_max_faces),
+        "--compact_gate_max_vertices",
+        str(args.gate_compact_max_vertices),
+        "--compact_gate_max_face_ratio",
+        str(args.gate_compact_max_face_ratio),
+        "--compact_gate_min_psnr_gain",
+        str(args.gate_compact_min_psnr_gain),
+        "--compact_gate_max_ssim_regression",
+        str(args.gate_compact_max_ssim_regression),
+        "--compact_gate_max_lpips_regression",
+        str(args.gate_compact_max_lpips_regression),
+        "--compact_gate_max_balanced_negative_fraction",
+        str(args.gate_compact_max_balanced_negative_fraction),
+        "--compact_gate_min_balanced_cvar_delta",
+        str(args.gate_compact_min_balanced_cvar_delta),
+        "--compact_gate_max_lpips_positive_fraction",
+        str(args.gate_compact_max_lpips_positive_fraction),
+        "--compact_gate_max_worst_lpips_regression",
+        str(args.gate_compact_max_worst_lpips_regression),
+        "--compact_gate_min_stratified_psnr_delta",
+        _fmt_arg(args.gate_compact_min_stratified_psnr_delta),
+        "--compact_gate_max_stratified_ssim_regression",
+        str(args.gate_compact_max_stratified_ssim_regression),
+        "--compact_gate_max_stratified_lpips_regression",
+        str(args.gate_compact_max_stratified_lpips_regression),
         "--output_json",
         str(decision_json),
         "--output_md",
@@ -794,6 +828,8 @@ def _decide(
     ]
     if bool(args.gate_tail_require_available):
         cmd.append("--tail_require_available")
+    if bool(args.gate_compact_enable):
+        cmd.append("--compact_gate_enable")
     _run(cmd, gpu=-1, log_path=log_path)
     return _read_json(decision_json)
 
@@ -1209,6 +1245,21 @@ def main() -> int:
     parser.add_argument("--gate_tail_min_balanced_cvar_delta", type=float, default=-1.0e30)
     parser.add_argument("--gate_tail_max_lpips_positive_fraction", type=float, default=1.0)
     parser.add_argument("--gate_tail_max_worst_lpips_regression", type=float, default=1.0e30)
+    parser.add_argument("--gate_stratified_group_count", type=int, default=4)
+    parser.add_argument("--gate_compact_enable", action="store_true")
+    parser.add_argument("--gate_compact_max_faces", type=int, default=160)
+    parser.add_argument("--gate_compact_max_vertices", type=int, default=512)
+    parser.add_argument("--gate_compact_max_face_ratio", type=float, default=1.5e-5)
+    parser.add_argument("--gate_compact_min_psnr_gain", type=float, default=2.0e-5)
+    parser.add_argument("--gate_compact_max_ssim_regression", type=float, default=1.5e-5)
+    parser.add_argument("--gate_compact_max_lpips_regression", type=float, default=5.0e-6)
+    parser.add_argument("--gate_compact_max_balanced_negative_fraction", type=float, default=0.70)
+    parser.add_argument("--gate_compact_min_balanced_cvar_delta", type=float, default=-0.0012)
+    parser.add_argument("--gate_compact_max_lpips_positive_fraction", type=float, default=0.60)
+    parser.add_argument("--gate_compact_max_worst_lpips_regression", type=float, default=5.0e-5)
+    parser.add_argument("--gate_compact_min_stratified_psnr_delta", type=float, default=-1.0e-5)
+    parser.add_argument("--gate_compact_max_stratified_ssim_regression", type=float, default=2.0e-5)
+    parser.add_argument("--gate_compact_max_stratified_lpips_regression", type=float, default=1.5e-5)
     parser.add_argument("--wandb_project", default="mesh-splatting-ecsr")
     parser.add_argument("--wandb_group", default="phasek_barycentric_multiscene")
     parser.add_argument("--wandb_name", default="phasek_barycentric")

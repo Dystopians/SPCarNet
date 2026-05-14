@@ -23,15 +23,18 @@ face-set selector, a risk-greedy selector, and a tail-stable promotion rule. The
 latest full8 risk-tail replay accepts `3 / 8` candidate-bearing scenes. The
 follow-up GeoRisk/CVaR replay adds geometry-neighborhood ranking and train-val
 CVaR diagnostics, but accepts only `2 / 7` requested hard/control scenes and
-does not improve coverage over risk-tail. The newest PatchRisk/direct
-patch-cert carrier pass adds explicit patch carriers and per-view tail-gated
-promotion. Direct patch-cert accepts `1 / 5` (`bicycle`) and creates the first
-accepted hard-scene patch-certified representation edit, but the broad Phase-S
-closure remains incomplete. Logs:
+does not improve coverage over risk-tail. PatchRisk/direct patch-cert carrier
+passes add explicit patch carriers and per-view tail-gated promotion. The
+newest compact-stratified direct PatchCert gate accepts `2 / 5` (`bicycle`,
+`flowers`) and raises the fixed 5-scene effective mean to `+0.001163` PSNR,
+`+0.000101` SSIM, and `-0.000141` LPIPS over Phase-J fallback. This is a real
+policy improvement over the earlier `1 / 5` direct PatchCert v5 replay, but the
+broad Phase-S closure remains incomplete. Logs:
 `docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md` and
 `docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md`,
 `docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md`, and
-`docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md`.
+`docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md`,
+`docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md`.
 
 ## Module Map
 
@@ -47,9 +50,9 @@ closure remains incomplete. Logs:
 | Risk-greedy selector | Greedily selects multi-face sets while penalizing redundant view support and similar residual directions. | `scripts/car_model/ecsr_run_facelocal_coupled_selector.py`, `riskN` mode. | Full8 risk-tail replay accepts `flowers`, `counter`, and `treehill`; rejected scenes fall back to Phase-J. |
 | GeoRisk/CVaR selector | Adds geometry-neighborhood redundancy, per-face train-certificate tail risk, local residual concentration, and train-val render CVaR diagnostics. | `scripts/car_model/ecsr_run_facelocal_coupled_selector.py`, `georiskN` mode. | Requested 7-scene replay accepts `flowers` and `counter`; useful audit upgrade but no coverage gain over risk-tail. |
 | PatchRisk carrier replay | Expands selected train-only seed faces into local topology/centroid patches before materialization. | `scripts/car_model/ecsr_run_facelocal_coupled_selector.py`, `patchriskN` mode. | Strict 5-scene replay accepts only `counter`; useful negative ablation for post-hoc patch expansion. |
-| Direct patch-cert carrier | Builds the patch carrier inside the train-only certificate and materializes it directly through the Phase-K runner. | `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py` patch-cert flags and `scripts/car_model/ecsr_build_phase_s_patchcert_qualitative.py`. | 5-scene tail-gated replay accepts `bicycle` only; first hard-scene all-axis accepted Phase-S patch edit, but not broad closure. |
+| Direct patch-cert carrier | Builds the patch carrier inside the train-only certificate and materializes it directly through the Phase-K runner. | `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py` patch-cert flags and `scripts/car_model/ecsr_build_phase_s_patchcert_qualitative.py`. | v5 tail-gated replay accepts `bicycle`; v6 compact-stratified gate accepts `bicycle` and `flowers`; still sparse, but no longer only a one-scene hard edit. |
 | Per-face alpha refit | Fits train-only scalar multipliers for selected face-local residuals and passes them to materialization. | `scripts/car_model/ecsr_fit_facelocal_plan_alphas.py`; materializer arg `--materialize_plan_alpha_json`. | Interface complete, but first 3-scene pilot does not improve over uniform risk-tail. |
-| Train-val gate and fallback | Accepts repairs only with train-val metrics; test remains report-only. Rejected scenes fall back to Phase-J. | `scripts/car_model/ecsr_decide_phasek_trainval_gate.py` and coupled selector decision JSONs. | Now includes per-view tail checks; keeps the effective method from being harmed by risky Phase-S edits. |
+| Train-val gate and fallback | Accepts repairs only with train-val metrics; test remains report-only. Rejected scenes fall back to Phase-J. | `scripts/car_model/ecsr_decide_phasek_trainval_gate.py` and coupled selector decision JSONs. | Now includes per-view tail checks plus compact-stratified promotion for small patch carriers; keeps the effective method from being harmed by risky Phase-S edits. |
 
 ## How the New Phase-S Selectors Work
 
@@ -200,7 +203,7 @@ PatchRisk is useful because it separates carrier expansion from direct
 certificate construction. Its weak result showed that merely expanding a
 previously selected plan does not create a strong hard-scene repair policy.
 
-### Direct Patch-Cert Carrier
+### Direct Patch-Cert Carrier v5 Tail Gate
 
 Evidence:
 
@@ -220,6 +223,40 @@ materialized directly by train evidence, not by manual scene tuning. It is not
 a final paper endpoint: only `bicycle` is accepted, and `flowers` exposes a
 serious train-val policy miss because the held-out test row is strongly
 positive while train-val mean/tail reject promotion.
+
+### Direct Patch-Cert v6 Compact-Stratified Gate
+
+Evidence:
+
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v6_compactstrat_gate_20260514_summary/summary_5scene.md`
+- `docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md`
+
+The v6 gate adds view-stratified train-val diagnostics and a compact-carrier
+override. A direct patch-cert edit can override the older balanced/tail
+rejection only when the operator accepted a real checkpoint edit, the carrier
+is small, train-val aggregate deltas are bounded, per-view tails are bounded,
+and four interleaved view groups do not show a hidden camera-band collapse.
+
+| scene | selected | accepted | train-val dPSNR | train-val dSSIM | train-val dLPIPS | report-only test dPSNR | report-only test dSSIM | report-only test dLPIPS | effective dPSNR | effective dSSIM | effective dLPIPS | reading |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| garden | Phase-J fallback | false | +0.000118 | +0.000001 | -0.000001 | +0.000053 | +0.000000 | +0.000001 | +0.000000 | +0.000000 | +0.000000 | compact capacity and LPIPS tail reject |
+| bicycle | direct PatchCert v6 | true | +0.000021 | +0.000014 | -0.000026 | +0.000387 | +0.000036 | -0.000115 | +0.000387 | +0.000036 | -0.000115 | accepted by standard and compact gates |
+| counter | Phase-J fallback | false | +0.000174 | +0.000000 | -0.000001 | +0.000525 | -0.000015 | -0.000336 | +0.000000 | +0.000000 | +0.000000 | capacity reject; held-out SSIM is negative |
+| flowers | direct PatchCert v6 | true | +0.000065 | -0.000013 | +0.000004 | +0.005426 | +0.000471 | -0.000588 | +0.005426 | +0.000471 | -0.000588 | recovered from v5 rejection by compact stratified gate |
+| bonsai | Phase-J fallback | false | +0.000565 | -0.000003 | +0.000003 | -0.007896 | +0.000632 | +0.000819 | +0.000000 | +0.000000 | +0.000000 | large carrier and report-only PSNR/LPIPS failure |
+| **mean** | - | **2/5** | - | - | - | - | - | - | **+0.001163** | **+0.000101** | **-0.000141** | positive effective mean, still sparse |
+
+Comparison against the previous direct PatchCert tail gate:
+
+| version | scenes | accepted | accepted scenes | mean effective dPSNR | mean effective dSSIM | mean effective dLPIPS |
+|---|---:|---:|---|---:|---:|---:|
+| v5 tail gate | 5 | 1/5 | bicycle | +0.000077 | +0.000007 | -0.000023 |
+| v6 compact-stratified gate | 5 | 2/5 | bicycle, flowers | +0.001163 | +0.000101 | -0.000141 |
+
+This fixes the immediate `flowers` policy miss without promoting the two risky
+examples: `counter` remains rejected because report-only SSIM is negative, and
+`bonsai` remains rejected because the carrier is too large and held-out
+PSNR/LPIPS fail.
 
 ### Alpha Refit and Stump Relaxed Checks
 
@@ -253,16 +290,16 @@ GeoRisk/CVaR panels with local crops and error-change maps:
 
 ![garden rejected panel](../../outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_georisk_cvar_v1_20260514_qualitative/garden_georisk8_s0p5_00006_georisk_cvar_panel.png)
 
-Direct patch-cert panels:
+Direct patch-cert v6 compact-stratified panels:
 
-`outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v5_patchcarrier_pilot_20260514_qualitative/qualitative_summary.md`
+`outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v6_compactstrat_gate_20260514_qualitative/qualitative_summary.md`
 
-![direct patch-cert contact sheet](../../outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v5_patchcarrier_pilot_20260514_qualitative/patchcert_qualitative_contact_sheet.png)
+![direct patch-cert v6 contact sheet](../../assets/spcarnet_phase_s_patchcert_v6_compactstrat_contact_sheet.png)
 
 | scene | view | accepted | view dPSNR | view dSSIM | view dLPIPS | reading |
 |---|---|---:|---:|---:|---:|---|
 | bicycle | `00003.png` | true | +0.000122 | +0.000105 | -0.000312 | accepted hard-scene edit; visually inspectable only through amplified difference |
-| flowers | `00019.png` | false | +0.016310 | +0.001676 | -0.001602 | strong report-only visualization, but rejected by train-val and not claimable as selected method |
+| flowers | `00019.png` | true | +0.016310 | +0.001676 | -0.001602 | now accepted by compact-stratified train-val gate; strongest current Phase-S visual |
 | bonsai | `00000.png` | false | +0.005825 | +0.001276 | -0.000869 | useful diagnostic view, not an accepted result |
 
 Counter coupled qualitative summary:
@@ -292,22 +329,22 @@ not yet a strong final-paper visual claim.
 - `stump` now has two relaxed candidates, but none are accepted.
 - `garden` remains a warning case: risk selection reduces the report-only PSNR
   regression magnitude but does not remove the underlying train/test mismatch.
-- `bicycle` has only seven current strict candidates; multi-face repairs fail train-val
-  or remain too small. Direct patch-cert finally accepts it, but the gain is
-  still local and small.
-- `flowers` is now the clearest policy bottleneck: direct patch-cert is strongly
-  positive on report-only test, but train-val mean and tail reject it. Promoting
-  it without redesigning the train-only policy would be leakage.
+- `bicycle` is accepted by direct patch-cert, but the gain is still local and
+  small.
+- `flowers` is no longer only a report-only positive: v6 compact-stratified
+  gate promotes it fairly. The remaining weakness is that this does not
+  generalize to most hard scenes yet.
 - `bonsai` shows that bigger carriers can be dangerous: the direct patch-cert
-  audit adds `7683` vertices before a correct fallback decision.
+  audit creates a large carrier before a correct fallback decision.
 - GeoRisk/CVaR adds geometry adjacency and train-val CVaR diagnostics, but the
   result shows the remaining bottleneck is carrier capacity/evidence quality
   rather than only selector scoring.
 
 ## Next Required Evidence
 
-The full8 closure is now complete for the fixed risk-tail trial set. The next
-work is not more reporting; it is a stronger representation operator or a
-better train-only risk predictor that can broaden acceptance beyond
-`flowers/counter/treehill/bicycle` without reopening the `garden` false-positive
-or the `bonsai` high-capacity failure.
+The full8 closure is now complete for the fixed risk-tail trial set, and the
+v6 compact-stratified replay improves the direct PatchCert carrier from `1 / 5`
+to `2 / 5`. The next work is not more reporting; it is a stronger
+representation operator or a better train-only risk predictor that can broaden
+acceptance beyond `flowers/counter/treehill/bicycle` without reopening the
+`garden` false-positive or the `bonsai` high-capacity failure.

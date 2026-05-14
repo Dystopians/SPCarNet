@@ -67,6 +67,57 @@ def _cvar(values: list[float], fraction: float) -> float:
     return float(sum(finite[:count]) / count)
 
 
+def _view_sort_key(view_name: str) -> tuple[int, str]:
+    stem = Path(str(view_name)).stem
+    try:
+        return int(stem), str(view_name)
+    except Exception:
+        return 0, str(view_name)
+
+
+def _stratified_tail(rows: list[dict[str, Any]], group_count: int) -> dict[str, Any]:
+    group_count = int(group_count)
+    if group_count <= 1 or not rows:
+        return {"available": False, "group_count": 0}
+    sorted_rows = sorted(rows, key=lambda row: _view_sort_key(str(row.get("view_name", ""))))
+    groups: list[list[dict[str, Any]]] = [[] for _ in range(group_count)]
+    for idx, row in enumerate(sorted_rows):
+        groups[idx % group_count].append(row)
+
+    group_rows: list[dict[str, Any]] = []
+    for idx, group in enumerate(groups):
+        if not group:
+            continue
+        deltas = [row["delta"] for row in group]
+        balanced = [float(row["balanced_delta"]) for row in group]
+        group_rows.append(
+            {
+                "group_id": int(idx),
+                "view_count": int(len(group)),
+                "balanced_mean_delta": float(sum(balanced) / len(balanced)),
+                "psnr_mean_delta": float(sum(float(delta["PSNR"]) for delta in deltas) / len(deltas)),
+                "ssim_mean_delta": float(sum(float(delta["SSIM"]) for delta in deltas) / len(deltas)),
+                "lpips_mean_delta": float(sum(float(delta["LPIPS"]) for delta in deltas) / len(deltas)),
+                "view_names": [str(row.get("view_name", "")) for row in group],
+            }
+        )
+    if not group_rows:
+        return {"available": False, "group_count": 0}
+    return {
+        "available": True,
+        "group_count": int(len(group_rows)),
+        "requested_group_count": int(group_count),
+        "min_balanced_mean_delta": float(min(row["balanced_mean_delta"] for row in group_rows)),
+        "positive_balanced_group_fraction": float(
+            sum(1 for row in group_rows if float(row["balanced_mean_delta"]) > 0.0) / len(group_rows)
+        ),
+        "min_psnr_mean_delta": float(min(row["psnr_mean_delta"] for row in group_rows)),
+        "min_ssim_mean_delta": float(min(row["ssim_mean_delta"] for row in group_rows)),
+        "max_lpips_mean_delta": float(max(row["lpips_mean_delta"] for row in group_rows)),
+        "groups": group_rows,
+    }
+
+
 def _per_view_tail(args: argparse.Namespace) -> dict[str, Any]:
     base = _load_per_view(args.base_trainval_per_view, args.base_trainval_method)
     cand = _load_per_view(args.candidate_trainval_per_view, args.candidate_trainval_method)
@@ -100,7 +151,7 @@ def _per_view_tail(args: argparse.Namespace) -> dict[str, Any]:
     else:
         mean_to_cvar_ratio = max(0.0, balanced_mean_delta) / balanced_cvar_loss
     worst_lpips_regression = float(max(lpips))
-    return {
+    out = {
         "available": True,
         "view_count": int(view_count),
         "cvar_fraction": float(args.tail_cvar_fraction),
@@ -117,6 +168,8 @@ def _per_view_tail(args: argparse.Namespace) -> dict[str, Any]:
         "worst_lpips_regression": worst_lpips_regression,
         "worst_balanced_rows": sorted(rows, key=lambda row: float(row["balanced_delta"]))[:10],
     }
+    out["stratified"] = _stratified_tail(rows, int(args.stratified_group_count))
+    return out
 
 
 def _decision(delta: dict[str, float], balanced_delta: float, args: argparse.Namespace) -> tuple[bool, list[str]]:
@@ -149,6 +202,79 @@ def _tail_decision(tail: dict[str, Any], args: argparse.Namespace) -> list[str]:
     return reasons
 
 
+def _compact_stratified_gate(
+    delta: dict[str, float],
+    tail: dict[str, Any],
+    candidate_audit: dict[str, Any],
+    args: argparse.Namespace,
+) -> tuple[bool, list[str], dict[str, Any]]:
+    accepted_faces = int(candidate_audit.get("accepted_faces", 0) or 0)
+    vertices_added = int(candidate_audit.get("vertices_added", 0) or 0)
+    triangles = int(((candidate_audit.get("topology_before") or {}).get("triangles", 0)) or 0)
+    face_ratio = float(accepted_faces / triangles) if triangles > 0 else math.inf
+    stratified = tail.get("stratified") if isinstance(tail, dict) else {}
+    if not isinstance(stratified, dict):
+        stratified = {}
+    reasons: list[str] = []
+    if not bool(tail.get("available", False)):
+        reasons.append("compact_gate_tail_unavailable")
+    if not bool(stratified.get("available", False)):
+        reasons.append("compact_gate_stratified_unavailable")
+    if accepted_faces <= 0:
+        reasons.append("compact_gate_no_faces")
+    if accepted_faces > int(args.compact_gate_max_faces):
+        reasons.append(f"compact_gate_faces_exceed_{args.compact_gate_max_faces:g}")
+    if vertices_added > int(args.compact_gate_max_vertices):
+        reasons.append(f"compact_gate_vertices_exceed_{args.compact_gate_max_vertices:g}")
+    if face_ratio > float(args.compact_gate_max_face_ratio):
+        reasons.append(f"compact_gate_face_ratio_exceed_{args.compact_gate_max_face_ratio:g}")
+    if delta["PSNR"] < float(args.compact_gate_min_psnr_gain):
+        reasons.append(f"compact_gate_psnr_below_{args.compact_gate_min_psnr_gain:g}")
+    if delta["SSIM"] < -float(args.compact_gate_max_ssim_regression):
+        reasons.append(f"compact_gate_ssim_regression_exceeds_{args.compact_gate_max_ssim_regression:g}")
+    if delta["LPIPS"] > float(args.compact_gate_max_lpips_regression):
+        reasons.append(f"compact_gate_lpips_regression_exceeds_{args.compact_gate_max_lpips_regression:g}")
+    if float(tail.get("balanced_negative_fraction", 1.0)) > float(args.compact_gate_max_balanced_negative_fraction):
+        reasons.append(f"compact_gate_negative_fraction_exceeds_{args.compact_gate_max_balanced_negative_fraction:g}")
+    if float(tail.get("balanced_cvar_delta", -math.inf)) < float(args.compact_gate_min_balanced_cvar_delta):
+        reasons.append(f"compact_gate_cvar_below_{args.compact_gate_min_balanced_cvar_delta:g}")
+    if float(tail.get("lpips_positive_fraction", 1.0)) > float(args.compact_gate_max_lpips_positive_fraction):
+        reasons.append(f"compact_gate_lpips_positive_fraction_exceeds_{args.compact_gate_max_lpips_positive_fraction:g}")
+    if float(tail.get("lpips_worst_regression", math.inf)) > float(args.compact_gate_max_worst_lpips_regression):
+        reasons.append(f"compact_gate_worst_lpips_exceeds_{args.compact_gate_max_worst_lpips_regression:g}")
+    if float(stratified.get("min_psnr_mean_delta", -math.inf)) < float(args.compact_gate_min_stratified_psnr_delta):
+        reasons.append(f"compact_gate_stratified_psnr_below_{args.compact_gate_min_stratified_psnr_delta:g}")
+    if float(stratified.get("min_ssim_mean_delta", -math.inf)) < -float(args.compact_gate_max_stratified_ssim_regression):
+        reasons.append(f"compact_gate_stratified_ssim_regression_exceeds_{args.compact_gate_max_stratified_ssim_regression:g}")
+    if float(stratified.get("max_lpips_mean_delta", math.inf)) > float(args.compact_gate_max_stratified_lpips_regression):
+        reasons.append(f"compact_gate_stratified_lpips_regression_exceeds_{args.compact_gate_max_stratified_lpips_regression:g}")
+    audit = {
+        "enabled": bool(args.compact_gate_enable),
+        "accepted": not reasons,
+        "decision_reasons": reasons,
+        "accepted_faces": int(accepted_faces),
+        "vertices_added": int(vertices_added),
+        "topology_triangles": int(triangles),
+        "face_ratio": float(face_ratio),
+        "thresholds": {
+            "max_faces": int(args.compact_gate_max_faces),
+            "max_vertices": int(args.compact_gate_max_vertices),
+            "max_face_ratio": float(args.compact_gate_max_face_ratio),
+            "min_psnr_gain": float(args.compact_gate_min_psnr_gain),
+            "max_ssim_regression": float(args.compact_gate_max_ssim_regression),
+            "max_lpips_regression": float(args.compact_gate_max_lpips_regression),
+            "max_balanced_negative_fraction": float(args.compact_gate_max_balanced_negative_fraction),
+            "min_balanced_cvar_delta": float(args.compact_gate_min_balanced_cvar_delta),
+            "max_lpips_positive_fraction": float(args.compact_gate_max_lpips_positive_fraction),
+            "max_worst_lpips_regression": float(args.compact_gate_max_worst_lpips_regression),
+            "min_stratified_psnr_delta": float(args.compact_gate_min_stratified_psnr_delta),
+            "max_stratified_ssim_regression": float(args.compact_gate_max_stratified_ssim_regression),
+            "max_stratified_lpips_regression": float(args.compact_gate_max_stratified_lpips_regression),
+        },
+    }
+    return not reasons, reasons, audit
+
+
 def _write_md(path: Path, audit: dict[str, Any]) -> None:
     train = audit["trainval_delta"]
     test = audit.get("test_delta_report_only")
@@ -178,6 +304,25 @@ def _write_md(path: Path, audit: dict[str, Any]) -> None:
                 f"- balanced mean / CVaR delta: `{float(tail.get('balanced_mean_delta', 0.0)):.9f}` / `{float(tail.get('balanced_cvar_delta', 0.0)):.9f}`",
                 f"- balanced negative fraction: `{float(tail.get('balanced_negative_fraction', 0.0)):.6f}`",
                 f"- LPIPS positive fraction / worst regression: `{float(tail.get('lpips_positive_fraction', 0.0)):.6f}` / `{float(tail.get('lpips_worst_regression', 0.0)):.9f}`",
+            ]
+        )
+        stratified = tail.get("stratified") or {}
+        if stratified:
+            lines.extend(
+                [
+                    f"- stratified groups: `{stratified.get('group_count', 0)}`",
+                    f"- stratified min PSNR/SSIM and max LPIPS mean deltas: `{float(stratified.get('min_psnr_mean_delta', 0.0)):.9f}` / `{float(stratified.get('min_ssim_mean_delta', 0.0)):.9f}` / `{float(stratified.get('max_lpips_mean_delta', 0.0)):.9f}`",
+                ]
+            )
+    compact_gate = audit.get("compact_stratified_gate", {})
+    if compact_gate:
+        lines.extend(
+            [
+                "",
+                "Compact stratified gate:",
+                f"- enabled / accepted: `{compact_gate.get('enabled', False)}` / `{compact_gate.get('accepted', False)}`",
+                f"- faces / vertices / face ratio: `{compact_gate.get('accepted_faces', 0)}` / `{compact_gate.get('vertices_added', 0)}` / `{float(compact_gate.get('face_ratio', 0.0)):.9g}`",
+                f"- compact gate reasons: `{', '.join(compact_gate.get('decision_reasons', [])) or 'pass'}`",
             ]
         )
     if test is not None:
@@ -220,6 +365,21 @@ def main() -> int:
     parser.add_argument("--tail_min_balanced_cvar_delta", type=float, default=-1.0e30)
     parser.add_argument("--tail_max_lpips_positive_fraction", type=float, default=1.0)
     parser.add_argument("--tail_max_worst_lpips_regression", type=float, default=1.0e30)
+    parser.add_argument("--stratified_group_count", type=int, default=4)
+    parser.add_argument("--compact_gate_enable", action="store_true")
+    parser.add_argument("--compact_gate_max_faces", type=int, default=160)
+    parser.add_argument("--compact_gate_max_vertices", type=int, default=512)
+    parser.add_argument("--compact_gate_max_face_ratio", type=float, default=1.5e-5)
+    parser.add_argument("--compact_gate_min_psnr_gain", type=float, default=2.0e-5)
+    parser.add_argument("--compact_gate_max_ssim_regression", type=float, default=1.5e-5)
+    parser.add_argument("--compact_gate_max_lpips_regression", type=float, default=5.0e-6)
+    parser.add_argument("--compact_gate_max_balanced_negative_fraction", type=float, default=0.70)
+    parser.add_argument("--compact_gate_min_balanced_cvar_delta", type=float, default=-0.0012)
+    parser.add_argument("--compact_gate_max_lpips_positive_fraction", type=float, default=0.60)
+    parser.add_argument("--compact_gate_max_worst_lpips_regression", type=float, default=5.0e-5)
+    parser.add_argument("--compact_gate_min_stratified_psnr_delta", type=float, default=-1.0e-5)
+    parser.add_argument("--compact_gate_max_stratified_ssim_regression", type=float, default=2.0e-5)
+    parser.add_argument("--compact_gate_max_stratified_lpips_regression", type=float, default=1.5e-5)
     parser.add_argument("--output_json", type=Path, required=True)
     parser.add_argument("--output_md", type=Path, required=True)
     args = parser.parse_args()
@@ -239,12 +399,31 @@ def main() -> int:
         accepted = False
         reasons.extend(tail_reasons)
     candidate_audit = _load_optional_json(args.candidate_audit_json)
+    operator_reasons: list[str] = []
     if candidate_audit:
         audit_accepted = bool(candidate_audit.get("accepted", False))
         audit_no_op = bool(candidate_audit.get("no_op_copy", False))
         if audit_no_op or not audit_accepted:
             accepted = False
-            reasons.append("candidate_checkpoint_operator_rejected_or_noop")
+            operator_reasons.append("candidate_checkpoint_operator_rejected_or_noop")
+            reasons.extend(operator_reasons)
+    ordinary_decision_reasons = list(reasons)
+    compact_gate: dict[str, Any] = {"enabled": bool(args.compact_gate_enable)}
+    if bool(args.compact_gate_enable):
+        compact_ok, _, compact_gate = _compact_stratified_gate(
+            train_delta,
+            trainval_per_view_tail,
+            candidate_audit,
+            args,
+        )
+        if compact_ok and not operator_reasons:
+            accepted = True
+            reasons = []
+            compact_gate["overrode_standard_gate"] = bool(ordinary_decision_reasons)
+            compact_gate["standard_gate_reasons"] = ordinary_decision_reasons
+        else:
+            compact_gate["overrode_standard_gate"] = False
+            compact_gate["standard_gate_reasons"] = ordinary_decision_reasons
 
     audit: dict[str, Any] = {
         "scene": args.scene,
@@ -253,6 +432,7 @@ def main() -> int:
         "selected_label": args.candidate_label if accepted else args.fallback_label,
         "accepted": bool(accepted),
         "decision_reasons": reasons,
+        "standard_gate_reasons": ordinary_decision_reasons,
         "selection_uses_test": False,
         "base_trainval_method": args.base_trainval_method,
         "candidate_trainval_method": args.candidate_trainval_method,
@@ -274,7 +454,10 @@ def main() -> int:
             "tail_min_balanced_cvar_delta": float(args.tail_min_balanced_cvar_delta),
             "tail_max_lpips_positive_fraction": float(args.tail_max_lpips_positive_fraction),
             "tail_max_worst_lpips_regression": float(args.tail_max_worst_lpips_regression),
+            "stratified_group_count": int(args.stratified_group_count),
+            "compact_gate_enable": bool(args.compact_gate_enable),
         },
+        "compact_stratified_gate": compact_gate,
         "candidate_operator_audit": {
             "path": str(args.candidate_audit_json) if args.candidate_audit_json else "",
             "available": bool(candidate_audit),

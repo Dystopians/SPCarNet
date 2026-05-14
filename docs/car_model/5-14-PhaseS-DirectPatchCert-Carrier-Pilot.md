@@ -6,6 +6,12 @@ This log records the completed 5-scene direct patch-certified carrier pilot.
 It is paper-facing in structure, but the conclusion is intentionally strict:
 the method change is real and auditable, yet it is not a broad Phase-S closure.
 
+Follow-up note: the successor compact-stratified gate is documented in
+`docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md`. It keeps the same
+direct PatchCert operator but adds a fixed small-carrier stratified train-val
+promotion rule, improving accepted coverage from `1 / 5` to `2 / 5` by fairly
+promoting `flowers`.
+
 ## Status
 
 Artifacts:

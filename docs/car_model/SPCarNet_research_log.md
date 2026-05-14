@@ -6818,3 +6818,40 @@ long experiments, and `flowers` has a real fresh-replay face-local GainCert
 win.  The remaining blocker is `bicycle`: support alignment or train-heldout
 tail risk still prevents strict acceptance, so this is not yet full
 paper-level closure.
+
+## 2026-05-14 13:55 PDT - Phase-S Compact-Stratified PatchCert Gate
+
+Implemented a fixed train-only promotion upgrade for direct PatchCert:
+
+- `ecsr_decide_phasek_trainval_gate.py` now records four-way view-stratified
+  train-val tails and exposes a compact-carrier gate.
+- `ecsr_run_phasek_barycentric_gate_scene.py` passes the compact/stratified
+  gate options through the full Phase-K train/eval runner.
+- The compact gate can override the older balanced/tail rejection only when the
+  checkpoint operator accepted a real edit, the carrier is small, aggregate
+  train-val risk is bounded, per-view tail risk is bounded, and interleaved
+  view groups do not show a hidden camera-band collapse.
+
+Evidence:
+
+- W&B group: `phase_s_patchcert_v6_compactstrat_gate_20260514`.
+- 5-scene summary:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v6_compactstrat_gate_20260514_summary/summary_5scene.md`.
+- qualitative panels:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v6_compactstrat_gate_20260514_qualitative/qualitative_summary.md`.
+- method log:
+  `docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md`.
+
+Result:
+
+- Direct PatchCert v6 accepts `2 / 5` scenes (`bicycle`, `flowers`) versus v5
+  `1 / 5`.
+- Mean effective deltas over Phase-J fallback: `+0.001163` PSNR,
+  `+0.000101` SSIM, `-0.000141` LPIPS.
+- `garden`, `counter`, and `bonsai` are still rejected and fall back to
+  Phase-J. `counter` has attractive LPIPS but negative held-out SSIM; `bonsai`
+  has a large carrier and bad held-out PSNR/LPIPS.
+
+Decision: `NOT COMPLETE`. This is a real Phase-S policy improvement and fixes
+the immediate `flowers` fair-promotion problem, but it is still sparse and
+does not close the full paper-level representation endpoint.
