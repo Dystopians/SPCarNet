@@ -369,6 +369,27 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--patch_cert_carrier_holdout_auto_prefix_min_faces",
+        type=int,
+        default=0,
+        help=(
+            "Optional train-only coverage floor for auto-prefix selection. When >0, "
+            "a cumulative carrier prefix must materialize at least this many unique "
+            "faces before it can be selected; otherwise the operator falls back to "
+            "no-op instead of reporting a numerically tiny accepted repair."
+        ),
+    )
+    parser.add_argument(
+        "--patch_cert_carrier_holdout_auto_prefix_face_bonus",
+        type=float,
+        default=0.0,
+        help=(
+            "Optional coverage bonus added to the auto-prefix ranking key as "
+            "bonus * log1p(prefix_faces). Defaults to 0 for backward-compatible "
+            "score-only prefix selection."
+        ),
+    )
+    parser.add_argument(
         "--candidate_plan_out",
         type=Path,
         default=None,
@@ -420,7 +441,7 @@ def parse_args() -> argparse.Namespace:
             "rows are rejected so plan replay cannot bypass the train-only gate."
         ),
     )
-    parser.add_argument("--no_op_on_fail", action="store_true", default=True)
+    parser.add_argument("--no_op_on_fail", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--force_apply", action="store_true")
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
@@ -468,6 +489,12 @@ def parse_args() -> argparse.Namespace:
         parser.error("--patch_cert_carrier_holdout_cvar_weight must be finite and >= 0")
     if int(args.patch_cert_carrier_holdout_max_carriers) < 0:
         parser.error("--patch_cert_carrier_holdout_max_carriers must be >= 0")
+    if int(args.patch_cert_carrier_holdout_auto_prefix_min_faces) < 0:
+        parser.error("--patch_cert_carrier_holdout_auto_prefix_min_faces must be >= 0")
+    if not math.isfinite(float(args.patch_cert_carrier_holdout_auto_prefix_face_bonus)) or float(
+        args.patch_cert_carrier_holdout_auto_prefix_face_bonus
+    ) < 0.0:
+        parser.error("--patch_cert_carrier_holdout_auto_prefix_face_bonus must be finite and >= 0")
     if bool(args.patch_cert_carrier_holdout_disjoint) and str(args.patch_cert_carrier_holdout_grouping) != "sample_balanced":
         parser.error(
             "--patch_cert_carrier_holdout_disjoint currently requires "
@@ -1808,6 +1835,8 @@ def select_holdout_stable_carriers(
         "cvar_weight": float(args.patch_cert_carrier_holdout_cvar_weight),
         "max_carriers": int(args.patch_cert_carrier_holdout_max_carriers),
         "auto_prefix": bool(args.patch_cert_carrier_holdout_auto_prefix),
+        "auto_prefix_min_faces": int(args.patch_cert_carrier_holdout_auto_prefix_min_faces),
+        "auto_prefix_face_bonus": float(args.patch_cert_carrier_holdout_auto_prefix_face_bonus),
         "auto_prefix_certificate": {},
         "auto_prefix_candidates": [],
         "input_faces": int(len(accepted_faces)),
@@ -1909,6 +1938,9 @@ def select_holdout_stable_carriers(
         best_faces: list[int] = []
         best_cert: dict[str, Any] = {}
         best_key: tuple[float, float, int, int] | None = None
+        min_prefix_faces = int(args.patch_cert_carrier_holdout_auto_prefix_min_faces)
+        face_bonus_weight = float(args.patch_cert_carrier_holdout_auto_prefix_face_bonus)
+        coverage_aware = bool(min_prefix_faces > 0 or face_bonus_weight > 0.0)
         for row in rows:
             if not bool(row.get("passed", False)):
                 continue
@@ -1922,23 +1954,45 @@ def select_holdout_stable_carriers(
             prefix_faces.extend(new_faces)
             prefix_face_set.update(new_faces)
             cumulative_cert = carrier_holdout_certificate_for_faces(coeff, holdout_cache, prefix_faces, args)
+            prefix_face_count = int(len(prefix_faces))
+            prefix_row_count = int(len(prefix_rows))
+            holdout_score = float(cumulative_cert.get("score", 0.0))
+            mean_relative_gain = float(cumulative_cert.get("mean_relative_gain", 0.0))
+            face_bonus = float(face_bonus_weight * math.log1p(max(prefix_face_count, 0)))
+            coverage_score = float(holdout_score + face_bonus)
+            coverage_floor_passed = bool(prefix_face_count >= min_prefix_faces)
             candidate = {
-                "prefix_carriers": int(len(prefix_rows)),
-                "prefix_faces": int(len(prefix_faces)),
+                "prefix_carriers": prefix_row_count,
+                "prefix_faces": prefix_face_count,
                 "last_carrier_id": str(row.get("carrier_id", "")),
                 "passed": bool(cumulative_cert.get("passed", False)),
-                "score": float(cumulative_cert.get("score", 0.0)),
-                "mean_relative_gain": float(cumulative_cert.get("mean_relative_gain", 0.0)),
+                "score": holdout_score,
+                "mean_relative_gain": mean_relative_gain,
                 "cvar_loss": float(cumulative_cert.get("cvar_loss", 0.0)),
+                "coverage_floor_passed": coverage_floor_passed,
+                "coverage_bonus": face_bonus,
+                "coverage_score": coverage_score,
             }
             summary["auto_prefix_candidates"].append(candidate)
-            key = (
-                float(cumulative_cert.get("score", 0.0)),
-                float(cumulative_cert.get("mean_relative_gain", 0.0)),
-                -int(len(prefix_faces)),
-                -int(len(prefix_rows)),
-            )
-            if bool(cumulative_cert.get("passed", False)) and float(cumulative_cert.get("score", 0.0)) >= 0.0:
+            if coverage_aware:
+                key = (
+                    coverage_score,
+                    mean_relative_gain,
+                    prefix_face_count,
+                    -prefix_row_count,
+                )
+            else:
+                key = (
+                    holdout_score,
+                    mean_relative_gain,
+                    -prefix_face_count,
+                    -prefix_row_count,
+                )
+            if (
+                bool(cumulative_cert.get("passed", False))
+                and holdout_score >= 0.0
+                and coverage_floor_passed
+            ):
                 if best_key is None or key > best_key:
                     best_key = key
                     best_rows = list(prefix_rows)
@@ -1948,7 +2002,10 @@ def select_holdout_stable_carriers(
         selected_faces = best_faces
         summary["auto_prefix_certificate"] = best_cert
         if not selected_rows:
-            summary["blocked_reason"] = "auto_prefix_no_nonnegative_cumulative_holdout_score"
+            if min_prefix_faces > 0 and any(bool(row.get("passed", False)) for row in rows):
+                summary["blocked_reason"] = "auto_prefix_no_prefix_met_coverage_floor"
+            else:
+                summary["blocked_reason"] = "auto_prefix_no_nonnegative_cumulative_holdout_score"
     else:
         for row in rows:
             if not bool(row.get("passed", False)):
@@ -3655,6 +3712,12 @@ def write_candidate_plan(
                 "patch_cert_carrier_holdout_cvar_weight": float(args.patch_cert_carrier_holdout_cvar_weight),
                 "patch_cert_carrier_holdout_max_carriers": int(args.patch_cert_carrier_holdout_max_carriers),
                 "patch_cert_carrier_holdout_auto_prefix": bool(args.patch_cert_carrier_holdout_auto_prefix),
+                "patch_cert_carrier_holdout_auto_prefix_min_faces": int(
+                    args.patch_cert_carrier_holdout_auto_prefix_min_faces
+                ),
+                "patch_cert_carrier_holdout_auto_prefix_face_bonus": float(
+                    args.patch_cert_carrier_holdout_auto_prefix_face_bonus
+                ),
                 "strength": float(args.strength),
                 "max_abs_delta_rgb": float(args.max_abs_delta_rgb),
                 "max_abs_dc_coeff": float(args.max_abs_delta_rgb) / float(C0),
@@ -4387,6 +4450,8 @@ def main() -> int:
         "patch_cert_carrier_holdout_cvar_weight": float(args.patch_cert_carrier_holdout_cvar_weight),
         "patch_cert_carrier_holdout_max_carriers": int(args.patch_cert_carrier_holdout_max_carriers),
         "patch_cert_carrier_holdout_auto_prefix": bool(args.patch_cert_carrier_holdout_auto_prefix),
+        "patch_cert_carrier_holdout_auto_prefix_min_faces": int(args.patch_cert_carrier_holdout_auto_prefix_min_faces),
+        "patch_cert_carrier_holdout_auto_prefix_face_bonus": float(args.patch_cert_carrier_holdout_auto_prefix_face_bonus),
         "strict_patchcert_carrier": bool(args.strict_patchcert_carrier),
         "global_policy_pass": bool(global_policy_pass),
         "policy_pass": bool(global_policy_pass),

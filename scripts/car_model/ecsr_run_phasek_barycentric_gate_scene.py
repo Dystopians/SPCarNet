@@ -516,6 +516,10 @@ def _apply_delta(
                 _fmt_arg(args.delta_patch_cert_carrier_holdout_cvar_weight),
                 "--patch_cert_carrier_holdout_max_carriers",
                 str(args.delta_patch_cert_carrier_holdout_max_carriers),
+                "--patch_cert_carrier_holdout_auto_prefix_min_faces",
+                str(args.delta_patch_cert_carrier_holdout_auto_prefix_min_faces),
+                "--patch_cert_carrier_holdout_auto_prefix_face_bonus",
+                _fmt_arg(args.delta_patch_cert_carrier_holdout_auto_prefix_face_bonus),
             ]
         )
         if bool(args.delta_patch_cert_cluster_basis):
@@ -1195,6 +1199,8 @@ def main() -> int:
     parser.add_argument("--delta_patch_cert_carrier_holdout_cvar_weight", type=float, default=1.0)
     parser.add_argument("--delta_patch_cert_carrier_holdout_max_carriers", type=int, default=0)
     parser.add_argument("--delta_patch_cert_carrier_holdout_auto_prefix", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--delta_patch_cert_carrier_holdout_auto_prefix_min_faces", type=int, default=0)
+    parser.add_argument("--delta_patch_cert_carrier_holdout_auto_prefix_face_bonus", type=float, default=0.0)
     parser.add_argument("--delta_patch_cert_neighbor_crossfold", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--delta_patch_cert_shrink", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--delta_strict_patchcert_carrier", action=argparse.BooleanOptionalAction, default=False)
@@ -1406,6 +1412,13 @@ def main() -> int:
         or float(args.delta_patch_cert_cluster_basis_max_fit_mse_regression) < 0.0
     ):
         parser.error("--delta_patch_cert_cluster_basis_max_fit_mse_regression must be finite and >= 0")
+    if int(args.delta_patch_cert_carrier_holdout_auto_prefix_min_faces) < 0:
+        parser.error("--delta_patch_cert_carrier_holdout_auto_prefix_min_faces must be >= 0")
+    if (
+        not math.isfinite(float(args.delta_patch_cert_carrier_holdout_auto_prefix_face_bonus))
+        or float(args.delta_patch_cert_carrier_holdout_auto_prefix_face_bonus) < 0.0
+    ):
+        parser.error("--delta_patch_cert_carrier_holdout_auto_prefix_face_bonus must be finite and >= 0")
     if bool(args.delta_patch_cert_carrier_holdout_disjoint) and str(args.delta_patch_cert_carrier_holdout_grouping) != "sample_balanced":
         parser.error(
             "--delta_patch_cert_carrier_holdout_disjoint currently requires "

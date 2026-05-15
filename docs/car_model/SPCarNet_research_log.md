@@ -4,6 +4,35 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-15 — Phase-S effect-aware portfolio, rank2 carrier, coverage-aware PatchCert — NOT_COMPLETE_METHOD_GAP_CONFIRMED
+
+**Outcome**: Added strict effect-aware Phase-S portfolio gates, a scene-agnostic
+auto-visual face-local coordinator, rank2 PatchCert carrier forwarding, and a
+coverage-aware auto-prefix rule. Ran W&B-logged v21/v22 continuations and saved
+new quantitative and qualitative outputs.
+
+**Verification**:
+- effect-aware portfolio v1 selects `3 / 9` scenes (`bicycle`, `flowers`,
+  `counter`) and rejects v20 near-noop rows; mean effective report-only deltas:
+  PSNR `+0.000652101`, SSIM `+0.000056287`, LPIPS `-0.000078238`
+- v21 rank2 retry does not improve the strict portfolio: `counter` is rejected,
+  and accepted `kitchen` is below the effect-size threshold
+- v22 coverage-aware PatchCert produces real non-noop edits on `garden`,
+  `bonsai`, and `room`, but strict v22 pilot portfolio accepts `0 / 3`
+- qualitative v22 panels and contact sheet were saved, but full-frame visual
+  changes remain weak
+
+**Decision**: `NOT_COMPLETE_METHOD_GAP_CONFIRMED`. The engineering loop is
+closed, but the scientific loop is not. The next method should change the
+learned representation update itself rather than only expanding certified patch
+carriers.
+
+**Linked artefacts**:
+- `docs/car_model/5-15-PhaseS-EffectAware-Portfolio-Rank2-AutoVisual.md`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_effectaware_portfolio_v1_20260515/portfolio_summary.md`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_effectaware_portfolio_v22_covaware_pilot_strictaudit_20260515/portfolio_summary.md`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v22_coverageaware_retry_garden_bonsai_room_20260515_qualitative/qualitative_summary.md`
+
 ## 2026-05-04 — MeshSplatOpt F39 real gate-removed ablation — PASS_LOAD_BEARING_MEDIUM_ABLATION
 
 **Outcome**: Ran a same-schedule real-scene parking PRISM ablation at ratio `0.04`,

@@ -43,7 +43,16 @@ completed full9 decisions and a fixed portfolio v2: v20 accepts `2 / 9`
 report-only deltas of `+0.000608232` PSNR, `+0.000052366` SSIM, and
 `-0.000065320` LPIPS over Phase-J fallback. This improves coverage and audit
 cleanliness, but does not change the core conclusion because the new v20
-accepted rows are near no-op. Logs:
+accepted rows are near no-op.
+The newest effect-aware portfolio fixes that reporting weakness by rejecting
+near-noop/operator-failed rows; it selects `3 / 9` (`bicycle`, `flowers`,
+`counter`) with mean effective report-only deltas of `+0.000652101` PSNR,
+`+0.000056287` SSIM, and `-0.000078238` LPIPS. This is a cleaner current
+portfolio row, but still not a broad Phase-S closure. The v21 rank2 and v22
+coverage-aware PatchCert continuation produced real non-noop edits on
+`garden`, `bonsai`, and `room`, but strict effect-aware promotion rejects all
+three because the render-space gains remain too small or tail-unsafe.
+Logs:
 `docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md` and
 `docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md`,
 `docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md`, and
@@ -68,6 +77,9 @@ accepted rows are near no-op. Logs:
 | Direct patch-cert carrier | Builds the patch carrier inside the train-only certificate and materializes it directly through the Phase-K runner. | `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py` patch-cert flags and `scripts/car_model/ecsr_build_phase_s_patchcert_qualitative.py`. | v5 tail-gated replay accepts `bicycle`; v6 compact-stratified gate accepts `bicycle` and `flowers`; still sparse, but no longer only a one-scene hard edit. |
 | Fold-aware PatchCert carrier | Requires the seed face, patch-neighbor admission, and post-shrink materialized patch carrier to pass all-train fold proxy-gain certificates before materialization. v8.4 uses the hardened strict validator and certified whole-carrier plan replay. | `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py` crossfold, `patch_cert_crossfold_*`, `patch_cert_neighbor_crossfold`, `strict_patchcert_carrier`, strict plan materialization, and post-shrink gain checks, forwarded by `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`. | v7/v8 final gates accept 0 scenes; this is negative ablation evidence. v8.1/v8.2/v8.3/v8.4 are still running/pending; v8.4 is the intended next result row but still needs fixed-protocol decisions and qualitative outputs. |
 | v20 auto-prefix PatchCert + portfolio | Removes manual carrier-count selection by sorting train-only carrier rows and selecting a deterministic certified prefix; then picks a scene policy using only train-val decisions across candidate families. | `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py`, `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`, and `scripts/car_model/ecsr_select_phase_s_policy_portfolio.py`. | Full9 v20 accepts `garden` and `room`; portfolio v2 accepts `4 / 9`, but the added v20 effect is near metric noise. |
+| Effect-aware portfolio selector | Adds fixed train-val effect-size gates and operator audit checks so accepted near-noop rows cannot be counted as method progress. | `scripts/car_model/ecsr_select_phase_s_policy_portfolio.py`; log `docs/car_model/5-15-PhaseS-EffectAware-Portfolio-Rank2-AutoVisual.md`. | Selects `3 / 9` (`bicycle`, `flowers`, `counter`) with slightly stronger mean than v2 and clearer fallback coverage; strict v22 pilot accepts 0/3. |
+| Rank2 / coverage-aware PatchCert | Tests higher-capacity rank2 carriers and a train-only coverage-aware auto-prefix so certified edits cannot shrink to metric-noise prefixes. | `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py`, `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`, and `scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py`. | v21 rank2 does not improve the strict portfolio. v22 makes real edits on `garden`, `bonsai`, and `room`, but strict effect-aware promotion rejects them because gains are too small or tail-unsafe. |
+| Auto-visual face-local pipeline | Reproducible scene-agnostic coordinator for strict plan generation, alpha refit, selector trials, W&B logging, and report-only held-out summaries. | `scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py`. | Smoke dry-run passes and now exposes coverage-aware auto-prefix controls; intended as execution infrastructure for future non-manual face-local repair runs. |
 | Per-face alpha refit | Fits train-only scalar multipliers for selected face-local residuals and passes them to materialization. | `scripts/car_model/ecsr_fit_facelocal_plan_alphas.py`; materializer arg `--materialize_plan_alpha_json`. | Interface complete, but first 3-scene pilot does not improve over uniform risk-tail. |
 | Train-val gate and fallback | Accepts repairs only with train-val metrics; test remains report-only. Rejected scenes fall back to Phase-J. | `scripts/car_model/ecsr_decide_phasek_trainval_gate.py` and coupled selector decision JSONs. | Now includes per-view tail checks plus compact-stratified promotion for small patch carriers; keeps the effective method from being harmed by risky Phase-S edits. |
 
@@ -297,10 +309,45 @@ or too small to create visible held-out gains.
 |---|---:|---:|---:|---:|---:|---|
 | v20 auto-prefix direct decisions | 9 | 2/9 | n/a | n/a | n/a | accepts `garden` and `room`; both are near no-op report-only changes |
 | fixed portfolio v2 | 9 | 4/9 | +0.000608232 | +0.000052366 | -0.000065320 | adds v20 `garden/room` to GeoRisk `flowers/counter`; still dominated by `flowers` |
+| effect-aware portfolio v1 | 9 | 3/9 | +0.000652101 | +0.000056287 | -0.000078238 | rejects v20 near-noop rows; selects `bicycle=patchcert_v6`, `flowers=gaincert_v2`, `counter=riskpilot` |
 
 The portfolio is selected only from train-val decisions and rejects candidates
 without explicit `selection_uses_test=false` provenance. Its scientific value is
 fairness and coverage, not effect size.
+
+### Effect-Aware Portfolio And Rank2 Carrier Continuation
+
+Evidence:
+
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_effectaware_portfolio_v1_20260515/portfolio_summary.md`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/autovisual_facelocal_v1_smoke_20260515/pipeline_summary.md`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_effectaware_portfolio_v22_covaware_pilot_strictaudit_20260515/portfolio_summary.md`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v22_coverageaware_retry_garden_bonsai_room_20260515_qualitative/qualitative_summary.md`
+- `docs/car_model/5-15-PhaseS-EffectAware-Portfolio-Rank2-AutoVisual.md`
+
+The effect-aware selector is a fixed no-test portfolio rule. It does not tune on
+held-out test metrics. It requires train-val effect-size evidence and can reject
+operator no-ops. Under the current thresholds it removes v20 `garden/room`
+from the promoted row and keeps the best nontrivial accepted scenes.
+
+The rank2 PatchCert carrier ablation changes only
+`--delta_patch_cert_cluster_basis_mode rank2` under the v20 strict/disjoint
+auto-prefix protocol. The retry rows do not improve the strict portfolio:
+`counter` is rejected by the train-val gate, and `kitchen` is an accepted
+near-noop that fails the effect-size threshold.
+
+v22 adds coverage-aware auto-prefix selection. It produces real non-noop
+operators on `garden`, `bonsai`, and `room`, but the strict portfolio still
+accepts `0 / 3`:
+
+| scene | gate accepted | operator edit | train-val dPSNR | report-only dPSNR | strict reading |
+|---|---:|---:|---:|---:|---|
+| garden | true | 28 faces / 84 vertices | +0.000026703 | +0.000001907 | non-noop, below effect-size threshold |
+| bonsai | true | 50 faces / 150 vertices | +0.000061035 | +0.000019073 | PSNR positive, LPIPS regresses |
+| room | false | 16 faces / 48 vertices | +0.000011444 | +0.000009537 | rejected by tail negative fraction |
+
+The qualitative contact sheet exists, but it should be used as diagnostics:
+full-frame differences remain hard to see, matching the low-amplitude metrics.
 
 ### Alpha Refit and Stump Relaxed Checks
 

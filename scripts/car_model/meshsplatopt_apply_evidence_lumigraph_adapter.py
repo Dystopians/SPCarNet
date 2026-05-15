@@ -341,7 +341,10 @@ def _copy_gt(target_frames, out_gt: Path) -> None:
         dst = out_gt / frame.render_path.name
         if dst.exists():
             continue
-        shutil.copy2(frame.gt_path, dst)
+        try:
+            os.link(frame.gt_path, dst)
+        except OSError:
+            shutil.copy2(frame.gt_path, dst)
 
 
 def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
