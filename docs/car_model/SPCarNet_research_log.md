@@ -6966,6 +6966,36 @@ same-protocol v8.4 rerun was launched from the hardened code:
 Decision: `NOT COMPLETE`.  v8.4 is now the intended final strict-validator row,
 but its decision files and qualitative outputs are still pending.
 
+Interim v8.4 operator audits have landed:
+
+- `flowers`: `accepted=true`, `accepted_faces=18`, `vertices_added=54`,
+  `strict_patchcert_carrier=true`.
+- `bicycle`: `accepted=false`, `accepted_faces=0`, `vertices_added=0`,
+  `strict_patchcert_carrier=true`.
+
+This confirms the hardened strict-validator direct path works, but the final
+train-val gate can still reject flowers and bicycle contributes only a safe
+fallback.
+
+Live metric evidence while the v8.4 runner is still active:
+
+- `flowers` strict surface-attached base, held-out report-only:
+  `LPIPS=0.3947871029`, `PSNR=19.6687068939`, `SSIM=0.5116778612`.
+- `flowers` Phase-J reference, held-out report-only:
+  `LPIPS=0.3295054734`, `PSNR=20.3006076813`, `SSIM=0.5574578047`.
+- `flowers` Phase-J train-val reference:
+  `LPIPS=0.2972038686`, `PSNR=20.8552265167`, `SSIM=0.6471784711`.
+- `bicycle` strict surface-attached base, held-out report-only:
+  `LPIPS=0.3322745562`, `PSNR=23.2934818268`, `SSIM=0.6596511602`.
+- `bicycle` Phase-J reference, held-out report-only:
+  `LPIPS=0.2660875022`, `PSNR=24.0215435028`, `SSIM=0.7023565769`.
+
+Interpretation: this is not yet a promotion table.  It shows that the strict
+surface-attached checkpoint itself is not competitive with the Phase-J
+appearance-adapted reference on RGB; the remaining required evidence is the
+candidate appearance-adapted row plus fixed train-val decision.  Therefore v8.4
+must still be described as `NOT COMPLETE`, not as a solved endpoint.
+
 Completed ablation evidence:
 
 - v7 seed-fold PatchCert summary:
@@ -6982,3 +7012,303 @@ Qualitative panels were generated for the completed v7/v8 negative ablations:
 
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v7_crossfold_compactstrat_20260514_qualitative/patchcert_qualitative_contact_sheet.png`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v8_patchfold_compactstrat_20260514_qualitative/patchcert_qualitative_contact_sheet.png`
+
+## 2026-05-14 15:48 PDT - Phase-S v9 Shared-Basis Carrier Launch
+
+The v7/v8/v8.4 line has mostly improved evidence integrity, not effect size.
+To make a real method move, I added a shared carrier-basis option to the
+face-local residual-SH operator:
+
+- new materializer flag: `--patch_cert_cluster_basis`;
+- new runner flag family: `--delta_patch_cert_cluster_basis*`;
+- for each accepted multi-face PatchCert carrier, the operator fits one shared
+  three-corner residual-SH basis from train-only residual samples;
+- the shared basis is compared against the independent face-local fit on the
+  same samples, and the carrier is restored/rejected if the regression exceeds
+  the fixed bound;
+- policy-val, shrink, and patch crossfold certificates are evaluated after the
+  shared basis is materialized.
+
+This is deliberately described as a shared corner-slot SH carrier basis, not a
+continuous geometric patch basis. The intended research claim is a stronger
+representation prior over certified carrier support.
+
+Validation before scene pilots:
+
+- `py_compile` passed for
+  `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py` and
+  `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`;
+- `--help` exposed the new materializer and runner flags;
+- `git diff --check` passed for the modified scripts;
+- a synthetic CPU smoke test showed the fitter can apply a non-zero shared
+  basis and improve a two-face synthetic carrier;
+- subagent static review found no backward-compatibility bug and confirmed the
+  wrapper forwards the new flags.
+
+Active W&B group:
+
+```text
+phase_s_patchcert_v9_clusterbasis_20260514
+```
+
+Active scene roots:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v9_clusterbasis_20260514_flowers
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v9_clusterbasis_20260514_bicycle
+```
+
+Decision: `NOT COMPLETE`. These are real train/eval pipeline runs, but they
+must still finish decision JSONs, train-val/held-out metrics, and qualitative
+panels before any claim can be made.
+
+Final v8.4 strict-validator evidence landed:
+
+- summary:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v84_strictvalidator_20260514_summary/summary_2scene.md`;
+- qualitative sheet:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v84_strictvalidator_20260514_qualitative/patchcert_qualitative_contact_sheet.png`;
+- accepted scenes: `0 / 2`;
+- `bicycle`: operator rejected/no-op, exact Phase-J fallback;
+- `flowers`: operator materialized 18 strict faces, but train-val gate rejected
+  it with `dPSNR=+0.000041962`, `dSSIM=-0.000013351`,
+  `dLPIPS=+0.000004202`; report-only held-out delta is numerical zero.
+
+Interpretation: v8.4 is closed as a strict replay/integrity ablation, not as an
+improvement row.
+
+Early v9 audit on `flowers`:
+
+- `accepted=true`, `accepted_faces=5`, `vertices_added=15`;
+- `patch_cert_cluster_basis=true`;
+- `accepted_cluster_basis=0`, `rejected_cluster_basis=6`;
+- `accepted_patches=0`, `mean_patch_size=1.0`.
+
+This means the first shared-basis carrier attempt did not actually accept a
+multi-face shared carrier; it fell back to single-face certificates after the
+shared fit regressed too much.  The correct next method is not another gate
+scan.  I therefore added v10 support:
+
+- `--patch_cert_cluster_basis_mode shared|scaled`;
+- `scaled` mode learns one shared three-corner SH carrier basis plus one
+  bounded positive scale per face;
+- `--patch_cert_cluster_basis_max_scale` controls that amplitude freedom;
+- all existing train-only fit-regression, policy-val, shrink, and fold
+  certificates still run after materialization.
+
+Decision: `NOT COMPLETE`. v10 needs scene pilots and fixed decision summaries
+before it can replace v9 or be claimed as a real improvement.
+
+Final v9 evidence:
+
+- summary:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v9_clusterbasis_20260514_summary/summary_2scene.md`;
+- qualitative:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v9_clusterbasis_20260514_qualitative/patchcert_qualitative_contact_sheet.png`;
+- accepted scenes: `0 / 2`;
+- `bicycle`: operator no-op;
+- `flowers`: shared-basis multi-face carriers all rejected, then final
+  train-val gate rejected the single-face fallback row.
+
+Interpretation: v9 is closed as a negative ablation. It proves the strict
+shared-basis prior is too rigid for the current carrier support.
+
+v6 multifold train-val follow-up completed:
+
+- summary:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/phase_s_patchcert_v6_compactstrat_gate_20260514/summary/summary_2scene.md`;
+- accepted scenes: `1 / 2`;
+- `flowers` passes all four offsets and has report-only held-out
+  `dPSNR=+0.001676559`, `dSSIM=+0.000158310`,
+  `dLPIPS=-0.000304669`;
+- `bicycle` fails because offset 2 has PSNR gain below zero, despite
+  report-only held-out `dPSNR=+0.000387192`,
+  `dSSIM=+0.000035524`, `dLPIPS=-0.000115275`;
+- mean effective held-out delta after fallback on rejected scenes:
+  `dPSNR=+0.000838280`, `dSSIM=+0.000079155`,
+  `dLPIPS=-0.000152335`.
+
+Interpretation: v6 remains the latest completed positive Phase-S row under a
+stricter multifold check, but the gain is small and only one of two tested
+scenes survives the offset gate.
+
+Follow-up review found that v10b was numerically plausible but not sufficiently
+auditable.  I added v10c audit hardening:
+
+- reject non-positive `patch_cert_cluster_basis_max_scale`;
+- log per-face scaled-carrier `face_scales`;
+- log effective max scale and coefficient clamp counts/fraction/excess;
+- save cluster mode, fit hyperparameters, max scale, regression threshold, and
+  DC/SH coefficient bounds in candidate-plan metadata;
+- reject non-finite or out-of-bound strict replay coefficients;
+- split row payload wording into pre-cluster and post-cluster certificate
+  fields while keeping legacy field names.
+
+Validation:
+
+- `py_compile` passed for the materializer and runner;
+- materializer/runner `--help` shows the v10 scaled-carrier flags;
+- `git diff --check` passed for the modified scripts and logs;
+- a direct unit check confirmed strict plan replay rejects an out-of-bound
+  coefficient row.
+
+v10c pilots launched:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v10c_scaledcluster_audit_20260514_flowers
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v10c_scaledcluster_audit_20260514_bicycle
+```
+
+W&B group:
+
+```text
+phase_s_patchcert_v10c_scaledcluster_audit_20260514
+```
+
+Decision: `NOT COMPLETE`. The first success criterion is
+`accepted_cluster_basis > 0`; a final claim additionally needs fixed train-val
+acceptance, held-out report-only metrics, and qualitative panels.
+
+v10c `flowers` failed during the first scaled-carrier materialization with a
+shape mismatch in the predictor.  Root cause: face-local samples use
+`sample_vertex_ids` shaped `[N, 3]`, so each pixel contributes three local
+corners.  The per-face scale must broadcast as `[N, 1, 1, 1]`, not as
+`[N, 1, 1]`.
+
+Fix:
+
+- `predict_shared(...)` now computes the scale view from `sample_coeff.ndim`;
+- `py_compile` and `git diff --check` passed;
+- a direct shape smoke with `[N, 3]` sample ids verified scaled mode applies,
+  logs two `face_scales`, and keeps clamp count at zero for the synthetic case.
+
+Fixed `flowers` rerun:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v10d_scaledcluster_shapefix_20260514_flowers
+```
+
+W&B group:
+
+```text
+phase_s_patchcert_v10d_scaledcluster_shapefix_20260514
+```
+
+## 2026-05-14 20:55 PDT - Phase-S v17 Policy-Val Carrier Holdout Repair
+
+Continued the Phase-S PatchCert carrier line after v14/v15 showed that seed
+starvation was no longer the only problem.  v15 produced positive mean
+train-val deltas on `bicycle` but failed the tail-CVaR gate, so the next
+method focus became carrier-level tail risk rather than looser face selection.
+
+Implemented v16 whole-carrier holdout selection, then rejected it for the final
+claim after review found that its carrier holdout grouped all train views.  That
+did not touch held-out test views, but it allowed fitted train views to vote in
+the holdout certificate.
+
+v17 repair:
+
+- carrier-holdout cache uses only the train policy-val split;
+- strict PatchCert carrier mode now requires carrier holdout;
+- strict plan replay validates cluster-basis pass/faces/applied status even
+  when carrier holdout passes;
+- carrier holdout rejects upstream partial-carrier splits instead of silently
+  redefining a smaller carrier.
+
+Validation before launch:
+
+- `py_compile` passed for the apply script, runner, and carrier selector;
+- `git diff --check` passed for the touched scripts.
+
+Active W&B group:
+
+```text
+phase_s_patchcert_v17_policyholdout_chartquad_20260514
+```
+
+Active artifacts:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v17_policyholdout_chartquad_key_20260514
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v17_policyholdout_chartquad_controls_20260514
+```
+
+Decision: `NOT COMPLETE`.  v17 is the current paper-facing candidate because
+it fixes the audit flaw, but it still needs completed decisions, metric
+summaries, qualitative panels, and an honest comparison against Phase-J / clean
+MeshSplat baselines before any claim can be promoted.
+
+## 2026-05-14 23:35 PDT - Phase-S v20 Auto-Prefix And Fixed Portfolio Guard
+
+Continued the Phase-S PatchCert carrier line after v18/v19 showed that
+policy-val carrier holdout needed stricter separation and that manual
+carrier-count variants were not a credible final policy.
+
+Implementation updates:
+
+- completed the v19b disjoint sample-holdout path for `sample_balanced`
+  carrier holdout;
+- added v20 `--patch_cert_carrier_holdout_auto_prefix`, which deterministically
+  scans train-only score-ordered carrier prefixes and selects the best passing
+  cumulative certificate instead of manually choosing top1/top2/full carriers;
+- added runner passthrough
+  `--delta_patch_cert_carrier_holdout_auto_prefix`;
+- added `scripts/car_model/ecsr_select_phase_s_policy_portfolio.py` for a fixed
+  train-val-only scene portfolio across existing candidate families;
+- hardened the portfolio selector so candidate decision JSONs must explicitly
+  record `selection_uses_test=false`; missing selection provenance is
+  ineligible.
+
+Completed evidence:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v19b_disjoint_sampleholdout_chartquad_key_20260514
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v19b_disjoint_sampleholdout_top1_bicycle_20260514
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v19b_disjoint_sampleholdout_top2_bicycle_20260514
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_disjoint_sampleholdout_chartquad_key_20260514
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v1_20260514
+```
+
+v20 results:
+
+- `bicycle`: real edit with `4` accepted faces and `12` added vertices;
+  policy-val samples split into `11336` tuning and `11336` disjoint carrier
+  holdout samples; report-only test delta is effectively zero
+  (`+0.000000` PSNR, `+0.000000119` SSIM, `-0.000000417` LPIPS), but the
+  train-val tail gate rejects.
+- `flowers`: real edit with `2` accepted faces and `6` added vertices;
+  policy-val samples split into `14701` tuning and `14701` disjoint carrier
+  holdout samples; report-only test delta is tiny positive
+  (`+0.000004` PSNR, `+0.000000` SSIM, `-0.000000` LPIPS), but the train-val
+  gate rejects.
+- v20 accepted count: `0 / 2`.
+
+Fixed portfolio result:
+
+- selected without held-out test metrics;
+- candidates: GeoRisk, PatchRisk, v19b, v19b top1, v19b top2, v20 auto-prefix;
+- accepted `2 / 7`: `flowers=georisk`, `counter=georisk`;
+- fallback to Phase-J on `garden`, `bicycle`, `room`, `kitchen`, `bonsai`;
+- mean effective report-only delta over the 7-scene portfolio:
+  `+0.000782013` PSNR, `+0.000067328` SSIM, `-0.000083983` LPIPS.
+
+Qualitative assets copied for README:
+
+```text
+assets/spcarnet_phase_s_portfolio_flowers_georisk_panel.png
+assets/spcarnet_phase_s_portfolio_counter_georisk_panel.png
+```
+
+Validation:
+
+```text
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python -m py_compile scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py scripts/car_model/ecsr_select_phase_s_policy_portfolio.py scripts/car_model/ecsr_fit_facelocal_plan_alphas.py scripts/car_model/ecsr_run_facelocal_coupled_selector.py scripts/car_model/ecsr_analyze_patchcert_starvation.py
+git diff --check -- scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py scripts/car_model/ecsr_select_phase_s_policy_portfolio.py scripts/car_model/ecsr_fit_facelocal_plan_alphas.py scripts/car_model/ecsr_run_facelocal_coupled_selector.py scripts/car_model/ecsr_analyze_patchcert_starvation.py README.md README.zh.md docs/car_model/5-14-PhaseS-v20-AutoPrefix-Portfolio-Policy.md
+```
+
+Interpretation: `NOT COMPLETE`. v20 is a better policy and audit mechanism, but
+not a performance breakthrough. The dominant bottleneck is tail instability and
+too-small effective edit capacity: the stricter carrier policy often makes
+near-noop checkpoint edits whose gains are at or near metric noise. The honest
+paper story is still Phase-J as the strong broad result plus Phase-S as a
+guarded representation-level local-repair extension with sparse positives.

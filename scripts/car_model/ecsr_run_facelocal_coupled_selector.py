@@ -217,6 +217,16 @@ def parse_args() -> argparse.Namespace:
             "the selected plan rows and pass them to the materializer."
         ),
     )
+    parser.add_argument(
+        "--selector_allow_uncertified_plan",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Explicit legacy-ablation escape hatch for old face-local plans that lack strict "
+            "PatchCert carrier metadata. When enabled, both alpha refit and materialization "
+            "are labeled as uncertified plan replay."
+        ),
+    )
     parser.add_argument("--selector_alpha_max", type=float, default=1.0)
     parser.add_argument("--selector_alpha_steps", type=int, default=450)
     parser.add_argument("--selector_alpha_lr", type=float, default=0.06)
@@ -936,7 +946,7 @@ def alpha_json_path(root: Path, scene: str, spec: TrialSpec) -> Path:
 
 
 def fit_alpha_command(args: argparse.Namespace, scene: str, spec: TrialSpec, face_ids: list[int], alpha_path: Path) -> list[str]:
-    return [
+    cmd = [
         sys.executable,
         "scripts/car_model/ecsr_fit_facelocal_plan_alphas.py",
         "--candidate_plan",
@@ -964,6 +974,9 @@ def fit_alpha_command(args: argparse.Namespace, scene: str, spec: TrialSpec, fac
         "--device",
         str(args.selector_alpha_device),
     ]
+    if bool(args.selector_allow_uncertified_plan):
+        cmd.append("--allow_uncertified_plan_rows")
+    return cmd
 
 
 def build_trial_command(
@@ -1027,6 +1040,8 @@ def build_trial_command(
         "--wandb_name",
         f"{label}_{scene}",
     ]
+    if bool(args.selector_allow_uncertified_plan):
+        cmd.append("--delta_facelocal_materialize_allow_uncertified_plan")
     if alpha_json is not None:
         cmd.extend(["--delta_facelocal_materialize_plan_alpha_json", str(alpha_json)])
     if bool(args.skip_failed_views):
@@ -1293,6 +1308,7 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             "selector_tail_min_mean_to_cvar_ratio": float(args.selector_tail_min_mean_to_cvar_ratio),
             "selector_tail_max_lpips_positive_fraction": float(args.selector_tail_max_lpips_positive_fraction),
             "alpha_refit": bool(args.selector_fit_plan_alphas),
+            "allow_uncertified_plan": bool(args.selector_allow_uncertified_plan),
             "face_ids": face_ids,
             "face_scores": face_score_entries(
                 score_rows,

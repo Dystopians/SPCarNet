@@ -195,6 +195,39 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--patch_cert_neighbor_mode", choices=("topology", "centroid", "both"), default="topology")
     parser.add_argument("--patch_cert_centroid_candidates_per_seed", type=int, default=64)
     parser.add_argument(
+        "--patch_cert_seed_rescue",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "When strict single-face certificates leave too few seeds, propose extra seeds "
+            "from the train policy-val face pool using a fixed group-first rule. The rescued "
+            "seeds still have to pass patch-level fold certificates, carrier-basis checks, "
+            "post-shrink policy validation, and the outer train-val gate."
+        ),
+    )
+    parser.add_argument(
+        "--patch_cert_seed_rescue_min_candidates",
+        type=int,
+        default=1,
+        help="Trigger seed rescue only when strict face candidates are below this count.",
+    )
+    parser.add_argument(
+        "--patch_cert_seed_rescue_max_seeds",
+        type=int,
+        default=16,
+        help="Maximum number of deterministic group-first rescue seeds to append.",
+    )
+    parser.add_argument(
+        "--patch_cert_seed_rescue_min_aux_witnesses",
+        type=int,
+        default=1,
+        help=(
+            "Minimum number of enabled auxiliary face witnesses that must pass for a rescue "
+            "seed. Auxiliary witnesses are face-view gain, face crossfold gain, and "
+            "face-view residual consensus."
+        ),
+    )
+    parser.add_argument(
         "--patch_cert_crossfold_folds",
         type=int,
         default=0,
@@ -222,6 +255,51 @@ def parse_args() -> argparse.Namespace:
         help="When patch certification is enabled, fit one train-only shrink scale per accepted patch.",
     )
     parser.add_argument(
+        "--patch_cert_cluster_basis",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Fit one shared corner-slot residual-SH basis per accepted PatchCert carrier before "
+            "shrink/crossfold checks, replacing independent face-row coefficients inside that carrier."
+        ),
+    )
+    parser.add_argument(
+        "--patch_cert_cluster_basis_mode",
+        choices=("shared", "scaled", "rank2", "chart_linear", "chart_quad"),
+        default="shared",
+        help=(
+            "Carrier-basis parameterization: 'shared' copies one corner-slot basis to every face; "
+            "'scaled' shares the basis but learns one positive face scale per carrier face; "
+            "'rank2' learns two shared corner-slot bases with per-face nonnegative simplex weights; "
+            "'chart_linear' fits a constant+linear residual field over a local patch chart; "
+            "'chart_quad' adds bounded quadratic chart terms."
+        ),
+    )
+    parser.add_argument("--patch_cert_cluster_basis_steps", type=int, default=240)
+    parser.add_argument("--patch_cert_cluster_basis_lr", type=float, default=0.025)
+    parser.add_argument("--patch_cert_cluster_basis_min_samples", type=int, default=32)
+    parser.add_argument(
+        "--patch_cert_cluster_basis_max_scale",
+        type=float,
+        default=2.0,
+        help="Maximum per-face positive scale for --patch_cert_cluster_basis_mode scaled.",
+    )
+    parser.add_argument(
+        "--patch_cert_cluster_basis_max_fit_mse_regression",
+        type=float,
+        default=0.02,
+        help=(
+            "Reject a shared-basis patch if its train-fit MSE exceeds the independent face-local "
+            "fit by more than this relative amount."
+        ),
+    )
+    parser.add_argument(
+        "--patch_cert_cluster_basis_init",
+        choices=("mean", "zero"),
+        default="mean",
+        help="Initialize the shared patch basis from the mean face-local coefficients or from zero.",
+    )
+    parser.add_argument(
         "--strict_patchcert_carrier",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -229,6 +307,65 @@ def parse_args() -> argparse.Namespace:
             "Require the paper-facing strict PatchCert carrier policy: patch growth, "
             "patch-fold certification, neighbor fold admission, post-shrink checks, "
             "and certified whole-carrier plan replay."
+        ),
+    )
+    parser.add_argument(
+        "--patch_cert_carrier_holdout_selector",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "After PatchCert growth, select whole carriers with a deterministic "
+            "train-only view-holdout stability rule. This never splits a carrier "
+            "and does not read held-out test views."
+        ),
+    )
+    parser.add_argument("--patch_cert_carrier_holdout_groups", type=int, default=4)
+    parser.add_argument(
+        "--patch_cert_carrier_holdout_grouping",
+        choices=("view", "sample_balanced"),
+        default="view",
+        help=(
+            "How to form policy-val carrier holdout groups. 'view' keeps disjoint "
+            "policy-val view groups. 'sample_balanced' deterministically splits "
+            "policy-val samples, which is useful when a carrier is visible in too "
+            "few policy-val views for view-level voting."
+        ),
+    )
+    parser.add_argument(
+        "--patch_cert_carrier_holdout_disjoint",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Reserve a deterministic half of the policy-val train samples for carrier "
+            "holdout and use the other half for policy tuning/shrink. This keeps the "
+            "carrier certificate train-only but disjoint from validation shrink samples."
+        ),
+    )
+    parser.add_argument("--patch_cert_carrier_holdout_min_passing_groups", type=int, default=3)
+    parser.add_argument("--patch_cert_carrier_holdout_min_group_relative_gain", type=float, default=0.0)
+    parser.add_argument("--patch_cert_carrier_holdout_min_group_samples", type=int, default=4)
+    parser.add_argument(
+        "--patch_cert_carrier_holdout_max_mse_regression",
+        type=float,
+        default=0.0,
+        help="Maximum per-holdout-group relative MSE regression allowed for a carrier.",
+    )
+    parser.add_argument("--patch_cert_carrier_holdout_cvar_fraction", type=float, default=0.25)
+    parser.add_argument("--patch_cert_carrier_holdout_cvar_weight", type=float, default=1.0)
+    parser.add_argument(
+        "--patch_cert_carrier_holdout_max_carriers",
+        type=int,
+        default=0,
+        help="Optional fixed cap on selected carriers after holdout ranking. 0 keeps all passing carriers.",
+    )
+    parser.add_argument(
+        "--patch_cert_carrier_holdout_auto_prefix",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Select a deterministic train-only prefix of holdout-stable carriers by "
+            "maximizing cumulative carrier-holdout score after score sorting. This "
+            "turns top-k carrier sweeps into a fixed auditable policy."
         ),
     )
     parser.add_argument(
@@ -286,7 +423,57 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no_op_on_fail", action="store_true", default=True)
     parser.add_argument("--force_apply", action="store_true")
     parser.add_argument("--device", default="cuda")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if float(args.patch_cert_cluster_basis_max_scale) <= 0.0:
+        parser.error("--patch_cert_cluster_basis_max_scale must be > 0")
+    if float(args.patch_cert_cluster_basis_lr) <= 0.0:
+        parser.error("--patch_cert_cluster_basis_lr must be > 0")
+    if int(args.patch_cert_cluster_basis_steps) < 0:
+        parser.error("--patch_cert_cluster_basis_steps must be >= 0")
+    if int(args.patch_cert_cluster_basis_min_samples) <= 0:
+        parser.error("--patch_cert_cluster_basis_min_samples must be > 0")
+    if int(args.patch_cert_seed_rescue_min_candidates) < 0:
+        parser.error("--patch_cert_seed_rescue_min_candidates must be >= 0")
+    if int(args.patch_cert_seed_rescue_max_seeds) < 0:
+        parser.error("--patch_cert_seed_rescue_max_seeds must be >= 0")
+    if int(args.patch_cert_seed_rescue_min_aux_witnesses) < 0:
+        parser.error("--patch_cert_seed_rescue_min_aux_witnesses must be >= 0")
+    if (
+        not math.isfinite(float(args.patch_cert_cluster_basis_max_fit_mse_regression))
+        or float(args.patch_cert_cluster_basis_max_fit_mse_regression) < 0.0
+    ):
+        parser.error("--patch_cert_cluster_basis_max_fit_mse_regression must be finite and >= 0")
+    if int(args.patch_cert_carrier_holdout_groups) < 2:
+        parser.error("--patch_cert_carrier_holdout_groups must be >= 2")
+    if int(args.patch_cert_carrier_holdout_min_passing_groups) < 0:
+        parser.error("--patch_cert_carrier_holdout_min_passing_groups must be >= 0")
+    if int(args.patch_cert_carrier_holdout_min_passing_groups) > int(args.patch_cert_carrier_holdout_groups):
+        parser.error("--patch_cert_carrier_holdout_min_passing_groups must be <= --patch_cert_carrier_holdout_groups")
+    if int(args.patch_cert_carrier_holdout_min_group_samples) < 0:
+        parser.error("--patch_cert_carrier_holdout_min_group_samples must be >= 0")
+    if (
+        not math.isfinite(float(args.patch_cert_carrier_holdout_max_mse_regression))
+        or float(args.patch_cert_carrier_holdout_max_mse_regression) < 0.0
+    ):
+        parser.error("--patch_cert_carrier_holdout_max_mse_regression must be finite and >= 0")
+    if (
+        not math.isfinite(float(args.patch_cert_carrier_holdout_cvar_fraction))
+        or float(args.patch_cert_carrier_holdout_cvar_fraction) <= 0.0
+        or float(args.patch_cert_carrier_holdout_cvar_fraction) > 1.0
+    ):
+        parser.error("--patch_cert_carrier_holdout_cvar_fraction must be in (0, 1]")
+    if not math.isfinite(float(args.patch_cert_carrier_holdout_cvar_weight)) or float(
+        args.patch_cert_carrier_holdout_cvar_weight
+    ) < 0.0:
+        parser.error("--patch_cert_carrier_holdout_cvar_weight must be finite and >= 0")
+    if int(args.patch_cert_carrier_holdout_max_carriers) < 0:
+        parser.error("--patch_cert_carrier_holdout_max_carriers must be >= 0")
+    if bool(args.patch_cert_carrier_holdout_disjoint) and str(args.patch_cert_carrier_holdout_grouping) != "sample_balanced":
+        parser.error(
+            "--patch_cert_carrier_holdout_disjoint currently requires "
+            "--patch_cert_carrier_holdout_grouping sample_balanced"
+        )
+    return args
 
 
 def _float(row: dict[str, str], key: str, default: float = 0.0) -> float:
@@ -479,6 +666,21 @@ def collect_samples(
         weights=np.concatenate(weight_chunks),
         camera_centers=np.concatenate(center_chunks),
         view_names=sample_view_names,
+    )
+
+
+def subset_pixel_samples(samples: PixelSamples, mask: np.ndarray) -> PixelSamples:
+    mask = np.asarray(mask, dtype=bool).reshape(-1)
+    if samples.count != int(mask.shape[0]):
+        raise ValueError("sample subset mask length mismatch")
+    view_np = np.asarray(samples.view_names, dtype=object)
+    return PixelSamples(
+        face_ids=samples.face_ids[mask],
+        barycentric=samples.barycentric[mask],
+        residual_rgb=samples.residual_rgb[mask],
+        weights=samples.weights[mask],
+        camera_centers=samples.camera_centers[mask],
+        view_names=[str(v) for v in view_np[mask].tolist()],
     )
 
 
@@ -969,12 +1171,20 @@ def summarize_crossfold_face_gain(
     face_stats: dict[int, dict[str, float]],
     args: argparse.Namespace,
     device: torch.device,
+    holdout_samples: PixelSamples | None = None,
 ) -> tuple[dict[int, dict[str, Any]], dict[str, Any]]:
     folds = int(args.crossfold_gain_certificate_folds)
+    has_reserved_holdout = holdout_samples is not None
     summary: dict[str, Any] = {
         "enabled": bool(folds > 1),
-        "certificate_type": "all_train_fold_consistency_not_crossfit",
+        "certificate_type": (
+            "reserved_policy_val_sample_fold_consistency"
+            if has_reserved_holdout
+            else "all_train_fold_consistency_not_crossfit"
+        ),
         "folds": max(folds, 0),
+        "fold_grouping": "sample_balanced" if has_reserved_holdout else "view_modulo",
+        "reserved_holdout_samples": int(holdout_samples.count) if holdout_samples is not None else 0,
         "min_passing_folds": int(args.crossfold_min_passing_folds),
         "min_fold_relative_gain": float(args.crossfold_min_fold_relative_gain),
         "min_fold_samples": int(args.crossfold_min_fold_samples),
@@ -988,7 +1198,7 @@ def summarize_crossfold_face_gain(
     if required_passing <= 0:
         required_passing = folds
     summary["min_passing_folds"] = int(required_passing)
-    if not selected_faces or not view_paths or coeff.numel() == 0:
+    if not selected_faces or coeff.numel() == 0 or (not view_paths and holdout_samples is None):
         return {}, summary
 
     per_face_rows: dict[int, dict[str, Any]] = {
@@ -1000,19 +1210,30 @@ def summarize_crossfold_face_gain(
         for fid in selected_faces
     }
     vertices_local = vertices[source_vertex_ids].float() if source_vertex_ids.numel() else torch.empty((0, 3), dtype=torch.float32)
+    reserved_indices = (
+        np.arange(int(holdout_samples.count), dtype=np.int64)
+        if holdout_samples is not None
+        else np.empty((0,), dtype=np.int64)
+    )
     for fold_idx in range(folds):
-        fold_paths = [path for idx, path in enumerate(view_paths) if idx % folds == fold_idx]
-        fold_samples = collect_samples(
-            fold_paths,
-            selected_faces,
-            face_stats,
-            high_error_quantile=float(args.high_error_quantile),
-            min_alpha=float(args.min_alpha),
-            barycentric_tolerance=float(args.barycentric_tolerance),
-            max_samples_per_face_view=int(args.max_samples_per_face_view),
-            max_total_samples=max(int(args.max_total_samples // max(folds, 1)), 1),
-            uniform_barycentric=bool(args.uniform_barycentric),
-        )
+        if holdout_samples is not None:
+            fold_mask = (reserved_indices % folds) == int(fold_idx)
+            fold_samples = subset_pixel_samples(holdout_samples, fold_mask)
+            fold_view_names = sorted(set(str(v) for v in fold_samples.view_names))
+        else:
+            fold_paths = [path for idx, path in enumerate(view_paths) if idx % folds == fold_idx]
+            fold_samples = collect_samples(
+                fold_paths,
+                selected_faces,
+                face_stats,
+                high_error_quantile=float(args.high_error_quantile),
+                min_alpha=float(args.min_alpha),
+                barycentric_tolerance=float(args.barycentric_tolerance),
+                max_samples_per_face_view=int(args.max_samples_per_face_view),
+                max_total_samples=max(int(args.max_total_samples // max(folds, 1)), 1),
+                uniform_barycentric=bool(args.uniform_barycentric),
+            )
+            fold_view_names = [p.stem for p in fold_paths]
         if fold_samples.count:
             _, _, fold_sample_vertex_ids = localize_samples(faces, selected_faces, fold_samples)
         else:
@@ -1053,7 +1274,7 @@ def summarize_crossfold_face_gain(
         summary["fold_summaries"].append(
             {
                 "fold": int(fold_idx),
-                "view_names": [p.stem for p in fold_paths],
+                "view_names": fold_view_names[:16],
                 "samples": int(fold_samples.count),
                 "proxy": fold_proxy,
                 "passing_faces": int(fold_passing_faces),
@@ -1195,6 +1416,7 @@ def build_patch_crossfold_cache(
     face_stats: dict[int, dict[str, float]],
     args: argparse.Namespace,
     device: torch.device,
+    holdout_samples: PixelSamples | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     folds = int(args.patch_cert_crossfold_folds)
     summary: dict[str, Any] = {
@@ -1323,6 +1545,542 @@ def patch_crossfold_certificate_for_faces(
     return result
 
 
+def build_carrier_holdout_cache(
+    *,
+    coeff: torch.Tensor,
+    faces: torch.Tensor,
+    selected_faces: list[int],
+    source_vertex_ids: torch.Tensor,
+    vertices: torch.Tensor,
+    view_paths: list[Path],
+    face_stats: dict[int, dict[str, float]],
+    args: argparse.Namespace,
+    device: torch.device,
+    holdout_samples: PixelSamples | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    groups = int(args.patch_cert_carrier_holdout_groups)
+    grouping = str(args.patch_cert_carrier_holdout_grouping)
+    explicit_sample_holdout = holdout_samples is not None
+    summary: dict[str, Any] = {
+        "enabled": bool(args.patch_cert_carrier_holdout_selector),
+        "certificate_type": (
+            "train_only_whole_carrier_sample_holdout"
+            if grouping == "sample_balanced"
+            else "train_only_whole_carrier_view_holdout"
+        ),
+        "selection_unit": "patchcert_carrier",
+        "test_usage": "none",
+        "holdout_source": "policy_val_train_split",
+        "grouping": grouping,
+        "disjoint_from_policy_tuning": bool(args.patch_cert_carrier_holdout_disjoint),
+        "explicit_holdout_samples": int(holdout_samples.count) if holdout_samples is not None else 0,
+        "groups": int(groups),
+        "source_view_count": int(len(view_paths)),
+        "fold_summaries": [],
+    }
+    if not bool(args.patch_cert_carrier_holdout_selector):
+        return [], summary
+    if groups <= 1 or not selected_faces or coeff.numel() == 0 or (not view_paths and not explicit_sample_holdout):
+        summary["blocked_reason"] = "missing_holdout_inputs"
+        return [], summary
+
+    vertices_local = vertices[source_vertex_ids].float() if source_vertex_ids.numel() else torch.empty((0, 3), dtype=torch.float32)
+    cache: list[dict[str, Any]] = []
+    if grouping == "sample_balanced":
+        all_samples = holdout_samples
+        if all_samples is None:
+            all_samples = collect_samples(
+                view_paths,
+                selected_faces,
+                face_stats,
+                high_error_quantile=float(args.high_error_quantile),
+                min_alpha=float(args.min_alpha),
+                barycentric_tolerance=float(args.barycentric_tolerance),
+                max_samples_per_face_view=int(args.max_samples_per_face_view),
+                max_total_samples=int(args.max_total_samples),
+                uniform_barycentric=bool(args.uniform_barycentric),
+            )
+        summary["sample_count"] = int(all_samples.count)
+        sample_indices = np.arange(int(all_samples.count), dtype=np.int64)
+        for group_idx in range(groups):
+            group_mask = (sample_indices % groups) == int(group_idx)
+            fold_samples = subset_pixel_samples(all_samples, group_mask)
+            if fold_samples.count:
+                _, _, fold_sample_vertex_ids = localize_samples(faces, selected_faces, fold_samples)
+            else:
+                fold_sample_vertex_ids = torch.empty((0, 3), dtype=torch.long)
+            fold_ids, fold_basis, fold_target, fold_weights = samples_to_tensors(
+                fold_samples,
+                fold_sample_vertex_ids,
+                vertices_local,
+                strength=float(args.strength),
+                max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+                sh_degree=int(args.sh_degree),
+                device=device,
+            )
+            fold_proxy = evaluate_proxy(coeff, fold_ids, fold_basis, fold_target, fold_weights)
+            view_names = sorted(set(str(v) for v in fold_samples.view_names))
+            row = {
+                "group": int(group_idx),
+                "view_names": view_names,
+                "samples": int(fold_samples.count),
+                "proxy": fold_proxy,
+                "ids": fold_ids,
+                "basis": fold_basis,
+                "target": fold_target,
+                "weights": fold_weights,
+                "face_ids": fold_samples.face_ids,
+            }
+            cache.append(row)
+            summary["fold_summaries"].append(
+                {
+                    "group": int(group_idx),
+                    "view_count": int(len(view_names)),
+                    "view_names": view_names[:16],
+                    "samples": int(fold_samples.count),
+                    "proxy": fold_proxy,
+                }
+            )
+        return cache, summary
+
+    for group_idx in range(groups):
+        fold_paths = [path for idx, path in enumerate(view_paths) if idx % groups == group_idx]
+        fold_samples = collect_samples(
+            fold_paths,
+            selected_faces,
+            face_stats,
+            high_error_quantile=float(args.high_error_quantile),
+            min_alpha=float(args.min_alpha),
+            barycentric_tolerance=float(args.barycentric_tolerance),
+            max_samples_per_face_view=int(args.max_samples_per_face_view),
+            max_total_samples=max(int(args.max_total_samples // max(groups, 1)), 1),
+            uniform_barycentric=bool(args.uniform_barycentric),
+        )
+        if fold_samples.count:
+            _, _, fold_sample_vertex_ids = localize_samples(faces, selected_faces, fold_samples)
+        else:
+            fold_sample_vertex_ids = torch.empty((0, 3), dtype=torch.long)
+        fold_ids, fold_basis, fold_target, fold_weights = samples_to_tensors(
+            fold_samples,
+            fold_sample_vertex_ids,
+            vertices_local,
+            strength=float(args.strength),
+            max_abs_delta_rgb=float(args.max_abs_delta_rgb),
+            sh_degree=int(args.sh_degree),
+            device=device,
+        )
+        fold_proxy = evaluate_proxy(coeff, fold_ids, fold_basis, fold_target, fold_weights)
+        row = {
+            "group": int(group_idx),
+            "view_names": [p.stem for p in fold_paths],
+            "samples": int(fold_samples.count),
+            "proxy": fold_proxy,
+            "ids": fold_ids,
+            "basis": fold_basis,
+            "target": fold_target,
+            "weights": fold_weights,
+            "face_ids": fold_samples.face_ids,
+        }
+        cache.append(row)
+        summary["fold_summaries"].append(
+            {
+                "group": int(group_idx),
+                "view_count": int(len(fold_paths)),
+                "view_names": row["view_names"][:16],
+                "samples": int(fold_samples.count),
+                "proxy": fold_proxy,
+            }
+        )
+    return cache, summary
+
+
+def carrier_holdout_certificate_for_faces(
+    coeff: torch.Tensor,
+    holdout_cache: list[dict[str, Any]],
+    face_ids: list[int],
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    groups = int(args.patch_cert_carrier_holdout_groups)
+    required_passing_raw = int(args.patch_cert_carrier_holdout_min_passing_groups)
+    required_passing = max(groups, 0) if required_passing_raw <= 0 else required_passing_raw
+    result: dict[str, Any] = {
+        "enabled": bool(args.patch_cert_carrier_holdout_selector),
+        "selection_unit": "patchcert_carrier",
+        "test_usage": "none",
+        "holdout_source": "policy_val_train_split",
+        "grouping": str(args.patch_cert_carrier_holdout_grouping),
+        "disjoint_from_policy_tuning": bool(args.patch_cert_carrier_holdout_disjoint),
+        "groups": int(groups),
+        "min_passing_groups": int(required_passing),
+        "min_group_relative_gain": float(args.patch_cert_carrier_holdout_min_group_relative_gain),
+        "min_group_samples": int(args.patch_cert_carrier_holdout_min_group_samples),
+        "max_mse_regression": float(args.patch_cert_carrier_holdout_max_mse_regression),
+        "passing_groups": 0,
+        "eligible_groups": 0,
+        "passed": False,
+        "score": 0.0,
+        "mean_relative_gain": 0.0,
+        "min_relative_gain": 0.0,
+        "cvar_loss": 0.0,
+        "group_rows": [],
+    }
+    if not bool(args.patch_cert_carrier_holdout_selector):
+        result["passed"] = True
+        return result
+    gains: list[float] = []
+    losses: list[float] = []
+    for row in holdout_cache:
+        proxy = evaluate_proxy_for_faces(
+            coeff,
+            row["ids"],
+            row["basis"],
+            row["target"],
+            row["weights"],
+            row["face_ids"],
+            face_ids,
+        )
+        samples = int(proxy.get("samples", 0))
+        relative_gain = float(proxy.get("relative_gain", -1.0))
+        mse_before = float(proxy.get("mse_before", 0.0))
+        mse_after = float(proxy.get("mse_after", 0.0))
+        mse_regression = float((mse_after - mse_before) / max(mse_before, 1e-12)) if samples > 0 else 0.0
+        eligible = samples >= int(args.patch_cert_carrier_holdout_min_group_samples)
+        gain_passed = relative_gain >= float(args.patch_cert_carrier_holdout_min_group_relative_gain)
+        regression_passed = mse_regression <= float(args.patch_cert_carrier_holdout_max_mse_regression)
+        passed = bool(eligible and gain_passed and regression_passed)
+        if eligible:
+            result["eligible_groups"] = int(result["eligible_groups"]) + 1
+            gains.append(relative_gain)
+            losses.append(max(-relative_gain, 0.0))
+        if passed:
+            result["passing_groups"] = int(result["passing_groups"]) + 1
+        result["group_rows"].append(
+            {
+                "group": int(row.get("group", len(result["group_rows"]))),
+                "samples": samples,
+                "relative_gain": relative_gain,
+                "mse_regression": mse_regression,
+                "eligible": bool(eligible),
+                "gain_passed": bool(gain_passed),
+                "regression_passed": bool(regression_passed),
+                "passed": bool(passed),
+            }
+        )
+    if gains:
+        gain_np = np.asarray(gains, dtype=np.float32)
+        loss_np = np.asarray(losses, dtype=np.float32)
+        cvar_count = max(int(math.ceil(float(args.patch_cert_carrier_holdout_cvar_fraction) * loss_np.size)), 1)
+        cvar_loss = float(np.sort(loss_np)[-cvar_count:].mean())
+        mean_gain = float(gain_np.mean())
+        result["mean_relative_gain"] = mean_gain
+        result["min_relative_gain"] = float(gain_np.min())
+        result["cvar_loss"] = cvar_loss
+        result["score"] = float(mean_gain - float(args.patch_cert_carrier_holdout_cvar_weight) * cvar_loss)
+    result["passed"] = bool(int(result["passing_groups"]) >= required_passing)
+    return result
+
+
+def select_holdout_stable_carriers(
+    *,
+    coeff: torch.Tensor,
+    accepted_faces: list[int],
+    patch_cert_by_face: dict[int, dict[str, Any]],
+    holdout_cache: list[dict[str, Any]],
+    args: argparse.Namespace,
+) -> tuple[list[int], dict[str, Any], dict[int, dict[str, Any]]]:
+    summary: dict[str, Any] = {
+        "enabled": bool(args.patch_cert_carrier_holdout_selector),
+        "selection_unit": "whole_patchcert_carrier",
+        "test_usage": "none",
+        "holdout_source": "policy_val_train_split",
+        "grouping": str(args.patch_cert_carrier_holdout_grouping),
+        "disjoint_from_policy_tuning": bool(args.patch_cert_carrier_holdout_disjoint),
+        "groups": int(args.patch_cert_carrier_holdout_groups),
+        "min_passing_groups": (
+            int(args.patch_cert_carrier_holdout_groups)
+            if int(args.patch_cert_carrier_holdout_min_passing_groups) <= 0
+            else int(args.patch_cert_carrier_holdout_min_passing_groups)
+        ),
+        "min_group_relative_gain": float(args.patch_cert_carrier_holdout_min_group_relative_gain),
+        "min_group_samples": int(args.patch_cert_carrier_holdout_min_group_samples),
+        "max_mse_regression": float(args.patch_cert_carrier_holdout_max_mse_regression),
+        "cvar_fraction": float(args.patch_cert_carrier_holdout_cvar_fraction),
+        "cvar_weight": float(args.patch_cert_carrier_holdout_cvar_weight),
+        "max_carriers": int(args.patch_cert_carrier_holdout_max_carriers),
+        "auto_prefix": bool(args.patch_cert_carrier_holdout_auto_prefix),
+        "auto_prefix_certificate": {},
+        "auto_prefix_candidates": [],
+        "input_faces": int(len(accepted_faces)),
+        "input_carriers": 0,
+        "selected_faces": int(len(accepted_faces)),
+        "selected_carriers": 0,
+        "rejected_carriers": 0,
+        "blocked_reason": None,
+        "carrier_rows": [],
+    }
+    if not bool(args.patch_cert_carrier_holdout_selector):
+        return list(accepted_faces), summary, {}
+    if not accepted_faces:
+        summary["selected_faces"] = 0
+        return [], summary, {}
+    if not holdout_cache:
+        summary["blocked_reason"] = "empty_holdout_cache"
+        summary["selected_faces"] = 0
+        summary["rejected_carriers"] = 0
+        return [], summary, {}
+
+    accepted_set = {int(fid) for fid in accepted_faces}
+    carriers: dict[str, dict[str, Any]] = {}
+    for fid in accepted_faces:
+        face_id = int(fid)
+        patch = patch_cert_by_face.get(face_id, {})
+        carrier_id = patch_carrier_id(patch, face_id)
+        carrier_faces = sorted({int(x) for x in patch_carrier_faces(patch, face_id)})
+        if not carrier_faces:
+            carrier_faces = [face_id]
+        row = carriers.setdefault(
+            carrier_id,
+            {
+                "carrier_id": carrier_id,
+                "seed_face": patch_seed_face(patch, face_id),
+                "faces": sorted(set(carrier_faces)),
+                "observed_accepted_faces": [],
+            },
+        )
+        row["faces"] = sorted(set([int(x) for x in row["faces"]] + carrier_faces))
+        row["observed_accepted_faces"] = sorted(set([int(x) for x in row["observed_accepted_faces"]] + [face_id]))
+
+    rows: list[dict[str, Any]] = []
+    for carrier_id, carrier in sorted(carriers.items()):
+        faces = sorted({int(fid) for fid in carrier.get("faces", [])})
+        missing_faces = [fid for fid in faces if fid not in accepted_set]
+        split_rejected = bool(missing_faces)
+        if split_rejected:
+            cert = {
+                "enabled": bool(args.patch_cert_carrier_holdout_selector),
+                "selection_unit": "patchcert_carrier",
+                "test_usage": "none",
+                "holdout_source": "policy_val_train_split",
+                "grouping": str(args.patch_cert_carrier_holdout_grouping),
+                "disjoint_from_policy_tuning": bool(args.patch_cert_carrier_holdout_disjoint),
+                "groups": int(args.patch_cert_carrier_holdout_groups),
+                "min_passing_groups": int(summary["min_passing_groups"]),
+                "passed": False,
+                "blocked_reason": "carrier_split_before_holdout",
+                "missing_accepted_faces": missing_faces[:20],
+                "missing_accepted_face_count": int(len(missing_faces)),
+            }
+        else:
+            cert = carrier_holdout_certificate_for_faces(coeff, holdout_cache, faces, args)
+        rows.append(
+            {
+                "carrier_id": str(carrier_id),
+                "seed_face": int(carrier.get("seed_face", faces[0] if faces else -1)),
+                "faces": faces,
+                "observed_accepted_faces": [int(fid) for fid in carrier.get("observed_accepted_faces", [])],
+                "face_count": int(len(faces)),
+                "certificate": cert,
+                "passed": bool(cert.get("passed", False)) and not split_rejected,
+                "split_rejected": bool(split_rejected),
+                "missing_accepted_face_count": int(len(missing_faces)),
+                "score": float(cert.get("score", 0.0)),
+                "mean_relative_gain": float(cert.get("mean_relative_gain", 0.0)),
+                "cvar_loss": float(cert.get("cvar_loss", 0.0)),
+            }
+        )
+    rows.sort(
+        key=lambda row: (
+            bool(row.get("passed", False)),
+            float(row.get("score", 0.0)),
+            float(row.get("mean_relative_gain", 0.0)),
+            int(row.get("face_count", 0)),
+        ),
+        reverse=True,
+    )
+    selected_rows: list[dict[str, Any]] = []
+    selected_faces: list[int] = []
+    max_carriers = int(args.patch_cert_carrier_holdout_max_carriers)
+    max_faces = max(int(args.max_faces_to_apply), 0)
+    if bool(args.patch_cert_carrier_holdout_auto_prefix):
+        prefix_rows: list[dict[str, Any]] = []
+        prefix_faces: list[int] = []
+        prefix_face_set: set[int] = set()
+        best_rows: list[dict[str, Any]] = []
+        best_faces: list[int] = []
+        best_cert: dict[str, Any] = {}
+        best_key: tuple[float, float, int, int] | None = None
+        for row in rows:
+            if not bool(row.get("passed", False)):
+                continue
+            if max_carriers > 0 and len(prefix_rows) >= max_carriers:
+                continue
+            faces = [int(fid) for fid in row.get("faces", [])]
+            new_faces = [fid for fid in faces if fid not in prefix_face_set]
+            if max_faces > 0 and len(prefix_faces) + len(new_faces) > max_faces:
+                continue
+            prefix_rows.append(row)
+            prefix_faces.extend(new_faces)
+            prefix_face_set.update(new_faces)
+            cumulative_cert = carrier_holdout_certificate_for_faces(coeff, holdout_cache, prefix_faces, args)
+            candidate = {
+                "prefix_carriers": int(len(prefix_rows)),
+                "prefix_faces": int(len(prefix_faces)),
+                "last_carrier_id": str(row.get("carrier_id", "")),
+                "passed": bool(cumulative_cert.get("passed", False)),
+                "score": float(cumulative_cert.get("score", 0.0)),
+                "mean_relative_gain": float(cumulative_cert.get("mean_relative_gain", 0.0)),
+                "cvar_loss": float(cumulative_cert.get("cvar_loss", 0.0)),
+            }
+            summary["auto_prefix_candidates"].append(candidate)
+            key = (
+                float(cumulative_cert.get("score", 0.0)),
+                float(cumulative_cert.get("mean_relative_gain", 0.0)),
+                -int(len(prefix_faces)),
+                -int(len(prefix_rows)),
+            )
+            if bool(cumulative_cert.get("passed", False)) and float(cumulative_cert.get("score", 0.0)) >= 0.0:
+                if best_key is None or key > best_key:
+                    best_key = key
+                    best_rows = list(prefix_rows)
+                    best_faces = list(prefix_faces)
+                    best_cert = cumulative_cert
+        selected_rows = best_rows
+        selected_faces = best_faces
+        summary["auto_prefix_certificate"] = best_cert
+        if not selected_rows:
+            summary["blocked_reason"] = "auto_prefix_no_nonnegative_cumulative_holdout_score"
+    else:
+        for row in rows:
+            if not bool(row.get("passed", False)):
+                continue
+            if max_carriers > 0 and len(selected_rows) >= max_carriers:
+                continue
+            faces = [int(fid) for fid in row.get("faces", [])]
+            if max_faces > 0 and len(selected_faces) + len(faces) > max_faces:
+                continue
+            selected_rows.append(row)
+            selected_faces.extend(faces)
+
+    by_face: dict[int, dict[str, Any]] = {}
+    selected_face_set = {int(fid) for fid in selected_faces}
+    for row in rows:
+        row["selected"] = bool(any(int(fid) in selected_face_set for fid in row.get("faces", [])))
+        for fid in row.get("faces", []):
+            by_face[int(fid)] = row
+
+    summary["input_carriers"] = int(len(rows))
+    summary["selected_carriers"] = int(len(selected_rows))
+    summary["selected_faces"] = int(len(selected_faces))
+    summary["rejected_carriers"] = int(len(rows) - len(selected_rows))
+    summary["carrier_rows"] = rows[:50]
+    selected_order = [fid for fid in accepted_faces if int(fid) in selected_face_set]
+    return selected_order, summary, by_face
+
+
+def apply_patch_cert_seed_rescue(
+    *,
+    strict_face_candidates: list[int],
+    selected_faces: list[int],
+    face_stats: dict[int, dict[str, float]],
+    face_policy: dict[int, dict[str, float]],
+    face_view_gain_certificate: dict[int, dict[str, Any]],
+    face_view_gain_certificate_summary: dict[str, Any],
+    crossfold_face_gain: dict[int, dict[str, Any]],
+    crossfold_face_gain_summary: dict[str, Any],
+    face_view_consensus: dict[int, dict[str, Any]],
+    face_view_consensus_summary: dict[str, Any],
+    args: argparse.Namespace,
+) -> tuple[list[int], dict[str, Any]]:
+    """Add deterministic group-first PatchCert seeds without weakening final gates."""
+
+    enabled_aux = [
+        (
+            "face_view_gain",
+            bool(face_view_gain_certificate_summary.get("enabled", False)),
+            face_view_gain_certificate,
+        ),
+        (
+            "face_crossfold_gain",
+            bool(crossfold_face_gain_summary.get("enabled", False)),
+            crossfold_face_gain,
+        ),
+        (
+            "face_view_consensus",
+            bool(face_view_consensus_summary.get("enabled", False)),
+            face_view_consensus,
+        ),
+    ]
+    enabled_aux = [(name, cert_map) for name, enabled, cert_map in enabled_aux if enabled]
+    required_witnesses = min(
+        int(args.patch_cert_seed_rescue_min_aux_witnesses),
+        len(enabled_aux),
+    )
+    summary: dict[str, Any] = {
+        "enabled": bool(args.patch_cert_seed_rescue),
+        "mode": "group_first_policy_val_seed_rescue",
+        "trigger_min_candidates": int(args.patch_cert_seed_rescue_min_candidates),
+        "max_seeds": int(args.patch_cert_seed_rescue_max_seeds),
+        "min_aux_witnesses": int(args.patch_cert_seed_rescue_min_aux_witnesses),
+        "effective_required_aux_witnesses": int(required_witnesses),
+        "enabled_aux_witnesses": [name for name, _ in enabled_aux],
+        "base_candidate_count": int(len(strict_face_candidates)),
+        "triggered": False,
+        "policy_eligible_faces": 0,
+        "aux_witness_eligible_faces": 0,
+        "added_seed_count": 0,
+        "added_seed_faces": [],
+        "witness_histogram": {},
+    }
+    if (
+        not bool(args.patch_cert_seed_rescue)
+        or int(args.patch_cert_rings) <= 0
+        or len(strict_face_candidates) >= int(args.patch_cert_seed_rescue_min_candidates)
+        or int(args.patch_cert_seed_rescue_max_seeds) <= 0
+    ):
+        return list(strict_face_candidates), summary
+
+    summary["triggered"] = True
+    strict_set = {int(fid) for fid in strict_face_candidates}
+    scored: list[tuple[tuple[float, float, float, float, float], int, int]] = []
+    witness_hist: dict[int, int] = {}
+    for fid_raw in selected_faces:
+        fid = int(fid_raw)
+        if fid in strict_set:
+            continue
+        policy = face_policy.get(fid, {})
+        samples = int(policy.get("samples", 0))
+        relative_gain = float(policy.get("relative_gain", -1.0))
+        if samples < int(args.min_face_policy_val_samples):
+            continue
+        if relative_gain < float(args.min_face_policy_val_relative_gain):
+            continue
+        summary["policy_eligible_faces"] = int(summary["policy_eligible_faces"]) + 1
+        witness_count = 0
+        for _, cert_map in enabled_aux:
+            if bool(cert_map.get(fid, {}).get("passed", False)):
+                witness_count += 1
+        witness_hist[witness_count] = int(witness_hist.get(witness_count, 0)) + 1
+        if witness_count < required_witnesses:
+            continue
+        summary["aux_witness_eligible_faces"] = int(summary["aux_witness_eligible_faces"]) + 1
+        stats = face_stats.get(fid, {})
+        score = (
+            float(witness_count),
+            float(relative_gain),
+            float(samples),
+            float(stats.get("score", 0.0)),
+            float(stats.get("pixel_count", 0.0)),
+        )
+        scored.append((score, fid, witness_count))
+
+    scored.sort(key=lambda row: row[0], reverse=True)
+    added = [fid for _, fid, _ in scored[: int(args.patch_cert_seed_rescue_max_seeds)]]
+    summary["added_seed_count"] = int(len(added))
+    summary["added_seed_faces"] = [int(fid) for fid in added[:50]]
+    summary["witness_histogram"] = {str(k): int(v) for k, v in sorted(witness_hist.items())}
+    return list(strict_face_candidates) + added, summary
+
+
 def clone_face_coeffs(coeff: torch.Tensor, selected_faces: list[int], face_ids: list[int]) -> dict[int, torch.Tensor]:
     if not face_ids or coeff.numel() == 0:
         return {}
@@ -1392,6 +2150,452 @@ def scale_face_coeffs(
         coeff[row * 3 : row * 3 + 3] = coeff[row * 3 : row * 3 + 3] * float(scale)
 
 
+def fit_patch_cluster_shared_basis(
+    coeff: torch.Tensor,
+    selected_faces: list[int],
+    face_ids: list[int],
+    sample_vertex_ids: torch.Tensor,
+    weighted_basis: torch.Tensor,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    sample_face_ids: np.ndarray,
+    args: argparse.Namespace,
+    faces: torch.Tensor | None = None,
+    vertices: torch.Tensor | None = None,
+) -> dict[str, Any]:
+    """Refit a low-rank three-corner residual basis for a certified patch.
+
+    Existing face-local fitting gives every face its own three local vertex
+    residuals.  This routine constrains all faces in a PatchCert carrier to a
+    shared corner-indexed SH residual basis, optionally with one learned
+    positive scale per face.  It writes the carrier coefficients only if the
+    fixed train-fit regression bound is satisfied.  The later policy-val and
+    fold certificates evaluate the materialized coefficients.
+    """
+
+    enabled = bool(args.patch_cert_cluster_basis)
+    mode = str(args.patch_cert_cluster_basis_mode)
+    basis_type = {
+        "scaled": "scaled_shared_patch_corner_sh",
+        "rank2": "rank2_mixture_patch_corner_sh",
+        "chart_linear": "chart_linear_patch_corner_sh",
+        "chart_quad": "chart_quadratic_patch_corner_sh",
+    }.get(mode, "shared_patch_corner_sh")
+    result: dict[str, Any] = {
+        "enabled": enabled,
+        "basis_type": basis_type,
+        "mode": mode,
+        "rank": 2 if mode == "rank2" else (6 if mode == "chart_quad" else (3 if mode == "chart_linear" else 1)),
+        "faces": [int(fid) for fid in face_ids],
+        "patch_size": int(len(face_ids)),
+        "steps": int(args.patch_cert_cluster_basis_steps),
+        "lr": float(args.patch_cert_cluster_basis_lr),
+        "min_samples": int(args.patch_cert_cluster_basis_min_samples),
+        "max_scale": float(args.patch_cert_cluster_basis_max_scale),
+        "max_fit_mse_regression": float(args.patch_cert_cluster_basis_max_fit_mse_regression),
+        "init": str(args.patch_cert_cluster_basis_init),
+        "samples": 0,
+        "applied": False,
+        "passed": not enabled,
+    }
+    if not enabled:
+        return result
+    if len(face_ids) <= 1:
+        result.update({"passed": True, "skip_reason": "single_face_patch"})
+        return result
+    if sample_vertex_ids.numel() == 0 or coeff.numel() == 0:
+        result.update({"passed": False, "rejected_reason": "no_fit_samples"})
+        return result
+
+    mask = np.isin(sample_face_ids.astype(np.int64, copy=False), np.asarray(face_ids, dtype=np.int64))
+    sample_count = int(mask.sum())
+    result["samples"] = sample_count
+    if sample_count < max(int(args.patch_cert_cluster_basis_min_samples), 1):
+        result.update({"passed": False, "rejected_reason": "insufficient_fit_samples"})
+        return result
+
+    masked_face_ids = sample_face_ids.astype(np.int64, copy=False)[mask]
+    face_to_patch_row = {int(fid): i for i, fid in enumerate(face_ids)}
+    patch_sample_rows = torch.as_tensor(
+        [face_to_patch_row[int(fid)] for fid in masked_face_ids],
+        dtype=torch.long,
+        device=coeff.device,
+    )
+    idx = torch.as_tensor(np.nonzero(mask)[0], dtype=torch.long, device=sample_vertex_ids.device)
+    ids = sample_vertex_ids[idx].to(device=coeff.device)
+    basis = weighted_basis[idx].to(device=coeff.device)
+    y = target[idx].to(device=coeff.device)
+    w = weights[idx].to(device=coeff.device).clamp_min(1e-8)
+    corner_ids = torch.remainder(ids, 3).long()
+    basis_count = int(basis.shape[2]) if basis.ndim == 3 else int(coeff.shape[1])
+
+    face_to_selected = {int(fid): row for row, fid in enumerate(selected_faces)}
+    local_rows_by_face: dict[int, int] = {}
+    missing_patch_faces: list[int] = []
+    for fid in face_ids:
+        row = face_to_selected.get(int(fid))
+        if row is None:
+            missing_patch_faces.append(int(fid))
+        else:
+            local_rows_by_face[int(fid)] = int(row)
+    if missing_patch_faces:
+        result.update(
+            {
+                "passed": False,
+                "rejected_reason": "patch_faces_not_in_selected_set",
+                "missing_patch_faces": missing_patch_faces[:20],
+            }
+        )
+        return result
+    local_rows = [local_rows_by_face[int(fid)] for fid in face_ids]
+
+    max_abs_dc_coeff = float(args.max_abs_delta_rgb) / float(C0)
+    max_abs_sh_coeff = (
+        float(args.max_abs_sh_coeff)
+        if float(args.max_abs_sh_coeff) > 0
+        else float(args.max_abs_delta_rgb) / float(C1)
+    )
+    bounds = torch.full((basis_count,), float(max_abs_sh_coeff), dtype=torch.float32, device=coeff.device)
+    bounds[0] = float(max_abs_dc_coeff)
+    bounds = bounds.view(1, basis_count, 1).clamp_min(1e-12)
+
+    def predict_shared(shared: torch.Tensor, face_scale: torch.Tensor | None = None) -> torch.Tensor:
+        sample_coeff = shared[corner_ids]
+        if face_scale is not None:
+            scale_shape = (-1,) + (1,) * (sample_coeff.ndim - 1)
+            sample_coeff = sample_coeff * face_scale[patch_sample_rows].view(*scale_shape)
+            sample_coeff = torch.clamp(sample_coeff, min=-bounds, max=bounds)
+        return (sample_coeff * basis[:, :, :, None]).sum(dim=(1, 2))
+
+    def predict_rank2(components: torch.Tensor, face_mix: torch.Tensor) -> torch.Tensor:
+        components_by_corner = components.permute(1, 0, 2, 3)
+        sample_components = components_by_corner[corner_ids]
+        sample_mix = face_mix[patch_sample_rows].view(-1, 1, int(face_mix.shape[1]), 1, 1)
+        sample_coeff = (sample_components * sample_mix).sum(dim=2)
+        return (sample_coeff * basis[:, :, :, None]).sum(dim=(1, 2))
+
+    chart_features: torch.Tensor | None = None
+    chart_uv_scale = 0.0
+    chart_svd_scale = 0.0
+    if mode in {"chart_linear", "chart_quad"}:
+        if faces is None or vertices is None:
+            result.update({"passed": False, "rejected_reason": "chart_geometry_unavailable"})
+            return result
+        face_index = torch.as_tensor(face_ids, dtype=torch.long, device=faces.device)
+        patch_vertex_ids = faces[face_index].long().to(device=vertices.device)
+        patch_points = vertices[patch_vertex_ids].float().to(device=coeff.device)
+        flat_points = patch_points.reshape(-1, 3)
+        center = flat_points.mean(dim=0, keepdim=True)
+        centered = flat_points - center
+        try:
+            _, singular_values, vh = torch.linalg.svd(centered, full_matrices=False)
+            axes = vh[:2].T
+            chart_svd_scale = float(singular_values[:2].max().detach().cpu().item())
+        except RuntimeError:
+            axes = torch.eye(3, 2, dtype=torch.float32, device=coeff.device)
+            chart_svd_scale = 0.0
+        uv = (patch_points.reshape(-1, 3) - center) @ axes
+        uv_scale = uv.norm(dim=1).max().clamp_min(1e-6)
+        uv = (uv / uv_scale).reshape(len(face_ids), 3, 2)
+        ones = torch.ones((len(face_ids), 3, 1), dtype=torch.float32, device=coeff.device)
+        if mode == "chart_quad":
+            u = uv[..., 0:1]
+            v = uv[..., 1:2]
+            chart_features = torch.cat([ones, uv, u * u, u * v, v * v], dim=-1)
+        else:
+            chart_features = torch.cat([ones, uv], dim=-1)
+        chart_uv_scale = float(uv_scale.detach().cpu().item())
+
+    def gather_chart_sample_features(features: torch.Tensor) -> torch.Tensor:
+        sample_face_features = features[patch_sample_rows]
+        gather_idx = corner_ids[..., None].expand(-1, -1, int(features.shape[-1]))
+        return torch.gather(sample_face_features, 1, gather_idx)
+
+    chart_sample_features = gather_chart_sample_features(chart_features) if chart_features is not None else None
+
+    def predict_chart_linear(params: torch.Tensor) -> torch.Tensor:
+        assert chart_sample_features is not None
+        sample_coeff = torch.einsum("ncf,fbr->ncbr", chart_sample_features, params)
+        sample_coeff = torch.clamp(sample_coeff, min=-bounds, max=bounds)
+        return (sample_coeff * basis[:, :, :, None]).sum(dim=(1, 2))
+
+    with torch.no_grad():
+        independent_before = _weighted_mse(coeff, ids, basis, y, w)
+        zero = torch.zeros((3, basis_count, 3), dtype=torch.float32, device=coeff.device)
+        zero_pred = (
+            predict_chart_linear(torch.zeros((int(chart_features.shape[-1]), basis_count, 3), dtype=torch.float32, device=coeff.device))
+            if chart_features is not None
+            else predict_shared(zero)
+        )
+        zero_mse = (((zero_pred - y) ** 2) * w[:, None]).sum() / (w.sum().clamp_min(1e-8) * 3.0)
+
+    rows = [coeff[row * 3 : row * 3 + 3, :basis_count, :].detach() for row in local_rows]
+    face_coeff_tensor = (
+        torch.stack(rows, dim=0).to(device=coeff.device, dtype=torch.float32)
+        if rows
+        else torch.zeros((0, 3, basis_count, 3), dtype=torch.float32, device=coeff.device)
+    )
+    init = torch.zeros((3, basis_count, 3), dtype=torch.float32, device=coeff.device)
+    if str(args.patch_cert_cluster_basis_init) == "mean" and face_coeff_tensor.numel():
+        init = face_coeff_tensor.mean(dim=0)
+    max_scale = max(float(args.patch_cert_cluster_basis_max_scale), 1e-6)
+    final_data = zero_mse
+    final_mag = torch.zeros((), dtype=torch.float32, device=coeff.device)
+    final_sh_mag = torch.zeros((), dtype=torch.float32, device=coeff.device)
+    final_scale_reg = torch.zeros((), dtype=torch.float32, device=coeff.device)
+
+    shared: torch.Tensor | None = None
+    face_scale: torch.Tensor | None = None
+    components: torch.Tensor | None = None
+    face_mix: torch.Tensor | None = None
+    chart_params: torch.Tensor | None = None
+    if mode in {"chart_linear", "chart_quad"}:
+        assert chart_features is not None
+        param_init = torch.zeros((int(chart_features.shape[-1]), basis_count, 3), dtype=torch.float32, device=coeff.device)
+        if str(args.patch_cert_cluster_basis_init) == "mean":
+            param_init[0] = init.mean(dim=0)
+        param_init = torch.clamp(param_init / bounds, -0.95, 0.95)
+        param = torch.atanh(param_init).detach().clone().requires_grad_(True)
+        optimizer = torch.optim.Adam([param], lr=float(args.patch_cert_cluster_basis_lr))
+        for _ in range(max(int(args.patch_cert_cluster_basis_steps), 0)):
+            current_params = bounds * torch.tanh(param)
+            pred = predict_chart_linear(current_params)
+            data = (((pred - y) ** 2) * w[:, None]).sum() / (w.sum().clamp_min(1e-8) * 3.0)
+            mag = (current_params[0, 0, :] ** 2).mean()
+            sh_mag = (
+                (current_params[:, 1:, :] ** 2).mean()
+                if basis_count > 1
+                else torch.zeros((), dtype=torch.float32, device=coeff.device)
+            )
+            linear_reg = (current_params[1:] ** 2).mean()
+            loss = data + float(args.lambda_mag) * mag + float(args.lambda_sh1_mag) * sh_mag + 0.001 * linear_reg
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+            final_data = data.detach()
+            final_mag = mag.detach()
+            final_sh_mag = sh_mag.detach()
+            final_scale_reg = linear_reg.detach()
+        with torch.no_grad():
+            chart_params = (bounds * torch.tanh(param)).detach()
+            final_mse = (((predict_chart_linear(chart_params) - y) ** 2) * w[:, None]).sum() / (
+                w.sum().clamp_min(1e-8) * 3.0
+            )
+    elif mode == "rank2":
+        component_bounds = bounds.view(1, 1, basis_count, 1)
+        component_init = torch.zeros((2, 3, basis_count, 3), dtype=torch.float32, device=coeff.device)
+        if str(args.patch_cert_cluster_basis_init) == "mean" and face_coeff_tensor.numel():
+            mean = face_coeff_tensor.mean(dim=0)
+            if int(face_coeff_tensor.shape[0]) > 1:
+                centered = face_coeff_tensor - mean.view(1, 3, basis_count, 3)
+                norms = centered.reshape(int(centered.shape[0]), -1).norm(dim=1)
+                direction = centered[int(torch.argmax(norms).detach().cpu().item())]
+                component_init[0] = torch.clamp(mean + 0.5 * direction, min=-bounds, max=bounds)
+                component_init[1] = torch.clamp(mean - 0.5 * direction, min=-bounds, max=bounds)
+            else:
+                component_init[0] = mean
+                component_init[1] = mean
+        component_param_init = torch.clamp(component_init / component_bounds, -0.95, 0.95)
+        component_param = torch.atanh(component_param_init).detach().clone().requires_grad_(True)
+        mix_logits = torch.zeros((len(face_ids), 2), dtype=torch.float32, device=coeff.device)
+        if str(args.patch_cert_cluster_basis_init) == "mean" and int(face_coeff_tensor.shape[0]) > 1:
+            with torch.no_grad():
+                d0 = ((face_coeff_tensor - component_init[0].view(1, 3, basis_count, 3)) ** 2).mean(dim=(1, 2, 3))
+                d1 = ((face_coeff_tensor - component_init[1].view(1, 3, basis_count, 3)) ** 2).mean(dim=(1, 2, 3))
+                scale = torch.stack([d0, d1]).median().clamp_min(1e-8)
+                mix_logits[:, 0] = -d0 / scale
+                mix_logits[:, 1] = -d1 / scale
+        mix_logits = mix_logits.detach().clone().requires_grad_(True)
+        optimizer = torch.optim.Adam([component_param, mix_logits], lr=float(args.patch_cert_cluster_basis_lr))
+        for _ in range(max(int(args.patch_cert_cluster_basis_steps), 0)):
+            current_components = component_bounds * torch.tanh(component_param)
+            current_mix = torch.softmax(mix_logits, dim=-1)
+            pred = predict_rank2(current_components, current_mix)
+            data = (((pred - y) ** 2) * w[:, None]).sum() / (w.sum().clamp_min(1e-8) * 3.0)
+            mag = (current_components[:, :, 0, :] ** 2).mean()
+            sh_mag = (
+                (current_components[:, :, 1:, :] ** 2).mean()
+                if basis_count > 1
+                else torch.zeros((), dtype=torch.float32, device=coeff.device)
+            )
+            mix_reg = ((current_mix - 0.5) ** 2).mean()
+            loss = data + float(args.lambda_mag) * mag + float(args.lambda_sh1_mag) * sh_mag + 0.0005 * mix_reg
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+            final_data = data.detach()
+            final_mag = mag.detach()
+            final_sh_mag = sh_mag.detach()
+            final_scale_reg = mix_reg.detach()
+        with torch.no_grad():
+            components = (component_bounds * torch.tanh(component_param)).detach()
+            face_mix = torch.softmax(mix_logits, dim=-1).detach()
+            final_mse = (((predict_rank2(components, face_mix) - y) ** 2) * w[:, None]).sum() / (
+                w.sum().clamp_min(1e-8) * 3.0
+            )
+    else:
+        param_init = torch.clamp(init / bounds, -0.95, 0.95)
+        param = torch.atanh(param_init).detach().clone().requires_grad_(True)
+        optim_params: list[torch.Tensor] = [param]
+        scale_param: torch.Tensor | None = None
+        if mode == "scaled":
+            init_scale = min(max(1.0 / max_scale, 1e-4), 1.0 - 1e-4)
+            scale_init = torch.full((len(face_ids),), init_scale, dtype=torch.float32, device=coeff.device)
+            scale_param = torch.logit(scale_init).detach().clone().requires_grad_(True)
+            optim_params.append(scale_param)
+        optimizer = torch.optim.Adam(optim_params, lr=float(args.patch_cert_cluster_basis_lr))
+        for _ in range(max(int(args.patch_cert_cluster_basis_steps), 0)):
+            current_shared = bounds * torch.tanh(param)
+            current_scale = max_scale * torch.sigmoid(scale_param) if scale_param is not None else None
+            pred = predict_shared(current_shared, current_scale)
+            data = (((pred - y) ** 2) * w[:, None]).sum() / (w.sum().clamp_min(1e-8) * 3.0)
+            mag = (current_shared[:, 0, :] ** 2).mean()
+            sh_mag = (
+                (current_shared[:, 1:, :] ** 2).mean()
+                if basis_count > 1
+                else torch.zeros((), dtype=torch.float32, device=coeff.device)
+            )
+            scale_reg = (
+                ((current_scale - 1.0) ** 2).mean()
+                if current_scale is not None
+                else torch.zeros((), dtype=torch.float32, device=coeff.device)
+            )
+            loss = data + float(args.lambda_mag) * mag + float(args.lambda_sh1_mag) * sh_mag + 0.001 * scale_reg
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+            final_data = data.detach()
+            final_mag = mag.detach()
+            final_sh_mag = sh_mag.detach()
+            final_scale_reg = scale_reg.detach()
+        with torch.no_grad():
+            shared = (bounds * torch.tanh(param)).detach()
+            face_scale = (max_scale * torch.sigmoid(scale_param)).detach() if scale_param is not None else None
+            final_mse = (((predict_shared(shared, face_scale) - y) ** 2) * w[:, None]).sum() / (
+                w.sum().clamp_min(1e-8) * 3.0
+            )
+
+    independent_value = float(independent_before.detach().cpu().item())
+    final_value = float(final_mse.detach().cpu().item())
+    zero_value = float(zero_mse.detach().cpu().item())
+    regression = (final_value - independent_value) / max(independent_value, 1e-12)
+    relative_gain = (zero_value - final_value) / max(zero_value, 1e-12)
+    passed = bool(regression <= float(args.patch_cert_cluster_basis_max_fit_mse_regression))
+
+    result.update(
+        {
+            "independent_fit_mse": independent_value,
+            "shared_fit_mse": final_value,
+            "cluster_fit_mse": final_value,
+            "zero_fit_mse": zero_value,
+            "shared_relative_gain_vs_zero": float(relative_gain),
+            "shared_fit_mse_regression_vs_independent": float(regression),
+            "cluster_fit_mse_regression_vs_independent": float(regression),
+            "final_mag_loss": float(final_mag.detach().cpu().item()),
+            "final_sh_mag_loss": float(final_sh_mag.detach().cpu().item()),
+            "final_scale_reg": float(final_scale_reg.detach().cpu().item()),
+            "passed": passed,
+            "applied": passed,
+        }
+    )
+    if mode == "rank2" and components is not None and face_mix is not None:
+        component_flat = components.detach().reshape(int(components.shape[0]), -1)
+        mix_sums = face_mix.sum(dim=-1)
+        face_mix_cpu = face_mix.detach().cpu().tolist()
+        result.update(
+            {
+                "component_count": int(components.shape[0]),
+                "component_coefficients": components.detach().cpu().tolist(),
+                "face_mixture_min": float(face_mix.min().detach().cpu().item()),
+                "face_mixture_max": float(face_mix.max().detach().cpu().item()),
+                "face_mixture_sum_min": float(mix_sums.min().detach().cpu().item()),
+                "face_mixture_sum_max": float(mix_sums.max().detach().cpu().item()),
+                "face_mixture_simplex_max_abs_error": float((mix_sums - 1.0).abs().max().detach().cpu().item()),
+                "face_mixture_entropy": float(
+                    (-(face_mix * face_mix.clamp_min(1e-8).log()).sum(dim=1).mean()).detach().cpu().item()
+                ),
+                "component_l2": [float(v) for v in component_flat.norm(dim=1).detach().cpu().tolist()],
+                "component_max_abs": [float(v) for v in component_flat.abs().max(dim=1).values.detach().cpu().tolist()],
+                "face_mixtures": [
+                    {"face_id": int(fid), "weights": [float(x) for x in face_mix_cpu[idx]]}
+                    for idx, fid in enumerate(face_ids)
+                ],
+                "final_mixture_reg": float(final_scale_reg.detach().cpu().item()),
+            }
+        )
+    if mode in {"chart_linear", "chart_quad"} and chart_params is not None and chart_features is not None:
+        chart_flat = chart_params.detach().reshape(int(chart_params.shape[0]), -1)
+        result.update(
+            {
+                "chart_feature_count": int(chart_params.shape[0]),
+                "chart_scale": float(chart_uv_scale),
+                "chart_uv_scale": float(chart_uv_scale),
+                "chart_svd_scale": float(chart_svd_scale),
+                "chart_feature_min": float(chart_features[..., 1:].min().detach().cpu().item()),
+                "chart_feature_max": float(chart_features[..., 1:].max().detach().cpu().item()),
+                "chart_component_l2": [float(v) for v in chart_flat.norm(dim=1).detach().cpu().tolist()],
+                "chart_component_max_abs": [float(v) for v in chart_flat.abs().max(dim=1).values.detach().cpu().tolist()],
+                "chart_coefficients": chart_params.detach().cpu().tolist(),
+                "face_chart_features": [
+                    {"face_id": int(fid), "corner_features": chart_features[idx].detach().cpu().tolist()}
+                    for idx, fid in enumerate(face_ids)
+                ],
+                "final_chart_linear_reg": float(final_scale_reg.detach().cpu().item()),
+            }
+        )
+    if face_scale is not None:
+        face_scale_cpu = face_scale.detach().cpu().tolist()
+        result.update(
+            {
+                "face_scale_min": float(face_scale.min().detach().cpu().item()),
+                "face_scale_mean": float(face_scale.mean().detach().cpu().item()),
+                "face_scale_max": float(face_scale.max().detach().cpu().item()),
+                "face_scales": [
+                    {"face_id": int(fid), "scale": float(face_scale_cpu[idx])}
+                    for idx, fid in enumerate(face_ids)
+                ],
+            }
+        )
+    if not passed:
+        result["rejected_reason"] = "shared_basis_fit_regression"
+        return result
+
+    clamped_count = 0
+    total_coeff_count = 0
+    max_clamp_excess = 0.0
+    for fid, row in zip(face_ids, local_rows):
+        if mode in {"chart_linear", "chart_quad"} and chart_params is not None and chart_features is not None:
+            materialized = torch.einsum(
+                "cf,fbr->cbr",
+                chart_features[face_to_patch_row[int(fid)]],
+                chart_params,
+            )
+        elif mode == "rank2" and components is not None and face_mix is not None:
+            materialized = (components * face_mix[face_to_patch_row[int(fid)]].view(-1, 1, 1, 1)).sum(dim=0)
+        else:
+            assert shared is not None
+            materialized = shared
+        if face_scale is not None:
+            materialized = materialized * face_scale[face_to_patch_row[int(fid)]].view(1, 1, 1)
+        excess = materialized.abs() - bounds
+        clamped_count += int((excess > 1e-7).sum().detach().cpu().item())
+        total_coeff_count += int(materialized.numel())
+        if excess.numel():
+            max_clamp_excess = max(max_clamp_excess, float(excess.clamp_min(0).max().detach().cpu().item()))
+        materialized = torch.clamp(materialized, min=-bounds, max=bounds)
+        coeff[row * 3 : row * 3 + 3, :basis_count, :] = materialized.to(dtype=coeff.dtype)
+    result.update(
+        {
+            "effective_max_scale": max_scale if face_scale is not None else 1.0,
+            "coeff_clamped_count": int(clamped_count),
+            "coeff_total_count": int(total_coeff_count),
+            "coeff_clamped_fraction": float(clamped_count / max(total_coeff_count, 1)),
+            "coeff_max_clamp_excess": float(max_clamp_excess),
+        }
+    )
+    return result
+
+
 def grow_patch_certified_faces(
     *,
     coeff: torch.Tensor,
@@ -1401,6 +2605,11 @@ def grow_patch_certified_faces(
     seed_faces: list[int],
     face_stats: dict[int, dict[str, float]],
     face_policy: dict[int, dict[str, float]],
+    fit_ids: torch.Tensor,
+    fit_basis: torch.Tensor,
+    fit_target: torch.Tensor,
+    fit_weights: torch.Tensor,
+    fit_samples: PixelSamples,
     val_ids: torch.Tensor,
     val_basis: torch.Tensor,
     val_target: torch.Tensor,
@@ -1424,6 +2633,12 @@ def grow_patch_certified_faces(
         "neighbor_mode": str(args.patch_cert_neighbor_mode),
         "centroid_candidates_per_seed": int(args.patch_cert_centroid_candidates_per_seed),
         "patch_shrink": bool(args.patch_cert_shrink),
+        "patch_cluster_basis": bool(args.patch_cert_cluster_basis),
+        "patch_cluster_basis_mode": str(args.patch_cert_cluster_basis_mode),
+        "patch_cluster_basis_steps": int(args.patch_cert_cluster_basis_steps),
+        "patch_cluster_basis_min_samples": int(args.patch_cert_cluster_basis_min_samples),
+        "patch_cluster_basis_max_scale": float(args.patch_cert_cluster_basis_max_scale),
+        "patch_cluster_basis_max_fit_mse_regression": float(args.patch_cert_cluster_basis_max_fit_mse_regression),
         "patch_crossfold_enabled": patch_crossfold_enabled,
         "patch_crossfold_folds": int(args.patch_cert_crossfold_folds),
         "patch_crossfold_min_passing_folds": int(args.patch_cert_crossfold_min_passing_folds),
@@ -1437,9 +2652,11 @@ def grow_patch_certified_faces(
         "rejected_patches": 0,
         "rejected_patch_crossfold": 0,
         "rejected_neighbor_crossfold": 0,
+        "rejected_cluster_basis": 0,
         "rejected_patch_budget": 0,
         "rejected_post_shrink_policy_val": 0,
         "accepted_patch_crossfold": 0,
+        "accepted_cluster_basis": 0,
         "accepted_post_shrink_policy_val": 0,
         "accepted_post_shrink_patch_crossfold": 0,
         "mean_patch_size": 1.0 if seed_faces else 0.0,
@@ -1518,6 +2735,20 @@ def grow_patch_certified_faces(
             if not frontier or len(patch) >= max(int(args.patch_cert_max_faces_per_seed), 1):
                 break
 
+        coeff_snapshot = clone_face_coeffs(coeff, selected_faces, patch)
+        patch_cluster_basis = fit_patch_cluster_shared_basis(
+            coeff,
+            selected_faces,
+            patch,
+            fit_ids,
+            fit_basis,
+            fit_target,
+            fit_weights,
+            fit_samples.face_ids,
+            args,
+            faces=faces,
+            vertices=vertices,
+        )
         proxy_before_shrink = evaluate_proxy_for_faces(
             coeff,
             val_ids,
@@ -1532,13 +2763,33 @@ def grow_patch_certified_faces(
             and float(proxy_before_shrink.get("relative_gain", -1.0)) >= float(args.patch_cert_min_relative_gain)
         )
         patch_crossfold = patch_crossfold_certificate_for_faces(coeff, patch_crossfold_cache, patch, args)
+        cluster_basis_failed = bool(args.patch_cert_cluster_basis) and not bool(patch_cluster_basis.get("passed", False))
         if patch_crossfold_enabled and not bool(patch_crossfold.get("passed", False)):
             passed = False
+        if cluster_basis_failed:
+            passed = False
         if not passed:
+            restore_face_coeffs(coeff, selected_faces, coeff_snapshot)
             summary["rejected_patches"] = int(summary["rejected_patches"]) + 1
             if patch_crossfold_enabled and not bool(patch_crossfold.get("passed", False)):
                 summary["rejected_patch_crossfold"] = int(summary["rejected_patch_crossfold"]) + 1
+            if cluster_basis_failed:
+                summary["rejected_cluster_basis"] = int(summary["rejected_cluster_basis"]) + 1
             patch = [seed_id]
+            coeff_snapshot = clone_face_coeffs(coeff, selected_faces, patch)
+            patch_cluster_basis = fit_patch_cluster_shared_basis(
+                coeff,
+                selected_faces,
+                patch,
+                fit_ids,
+                fit_basis,
+                fit_target,
+                fit_weights,
+                fit_samples.face_ids,
+                args,
+                faces=faces,
+                vertices=vertices,
+            )
             proxy_before_shrink = evaluate_proxy_for_faces(
                 coeff,
                 val_ids,
@@ -1571,6 +2822,7 @@ def grow_patch_certified_faces(
                     "proxy_before_shrink": proxy_before_shrink,
                     "passed_patch_gain": False,
                     "patch_crossfold_certificate": patch_crossfold,
+                    "patch_cluster_basis": patch_cluster_basis,
                     "scale": 0.0,
                     "raw_scale": 0.0,
                     "scale_samples": int(proxy_before_shrink.get("samples", 0)),
@@ -1583,7 +2835,6 @@ def grow_patch_certified_faces(
         scale = 1.0
         raw_scale = 1.0
         scale_samples = int(proxy_before_shrink.get("samples", 0))
-        coeff_snapshot = clone_face_coeffs(coeff, selected_faces, patch)
         if bool(args.patch_cert_shrink) and len(patch) > 1:
             scale, scale_samples, raw_scale = fit_patch_scale(
                 coeff,
@@ -1610,6 +2861,7 @@ def grow_patch_certified_faces(
                 "passed_patch_gain": False,
                 "patch_crossfold_certificate": patch_crossfold,
                 "post_shrink_patch_crossfold_certificate": post_shrink_patch_crossfold,
+                "patch_cluster_basis": patch_cluster_basis,
                 "scale": float(scale),
                 "raw_scale": float(raw_scale),
                 "scale_samples": int(scale_samples),
@@ -1645,6 +2897,7 @@ def grow_patch_certified_faces(
                 "passed_patch_gain": False,
                 "patch_crossfold_certificate": patch_crossfold,
                 "post_shrink_patch_crossfold_certificate": post_shrink_patch_crossfold,
+                "patch_cluster_basis": patch_cluster_basis,
                 "scale": float(scale),
                 "raw_scale": float(raw_scale),
                 "scale_samples": int(scale_samples),
@@ -1668,6 +2921,7 @@ def grow_patch_certified_faces(
                 "passed_patch_gain": False,
                 "patch_crossfold_certificate": patch_crossfold,
                 "post_shrink_patch_crossfold_certificate": post_shrink_patch_crossfold,
+                "patch_cluster_basis": patch_cluster_basis,
                 "scale": float(scale),
                 "raw_scale": float(raw_scale),
                 "scale_samples": int(scale_samples),
@@ -1683,6 +2937,8 @@ def grow_patch_certified_faces(
         patch_sizes.append(len(patch))
         if len(patch) > 1:
             summary["accepted_patches"] = int(summary["accepted_patches"]) + 1
+        if bool(args.patch_cert_cluster_basis) and bool(patch_cluster_basis.get("applied", False)):
+            summary["accepted_cluster_basis"] = int(summary["accepted_cluster_basis"]) + 1
         if patch_crossfold_enabled and bool(patch_crossfold.get("passed", False)):
             summary["accepted_patch_crossfold"] = int(summary["accepted_patch_crossfold"]) + 1
         if post_shrink_policy_pass:
@@ -1698,6 +2954,7 @@ def grow_patch_certified_faces(
             "passed_patch_gain": bool(passed),
             "patch_crossfold_certificate": patch_crossfold,
             "post_shrink_patch_crossfold_certificate": post_shrink_patch_crossfold,
+            "patch_cluster_basis": patch_cluster_basis,
             "scale": float(scale),
             "raw_scale": float(raw_scale),
             "scale_samples": int(scale_samples),
@@ -1987,6 +3244,11 @@ def validate_strict_plan_carrier_integrity(
                 "strict_patchcert_carrier": bool(meta.get("strict_patchcert_carrier", False)),
             }
         )
+    require_cluster_basis = bool(meta.get("patch_cert_cluster_basis", False)) if isinstance(meta, dict) else False
+    expected_cluster_mode = str(meta.get("patch_cert_cluster_basis_mode", "")) if isinstance(meta, dict) else ""
+    require_carrier_holdout = (
+        bool(meta.get("patch_cert_carrier_holdout_selector", False)) if isinstance(meta, dict) else False
+    )
     row_face_ids: set[int] = set()
     face_counts: dict[int, int] = {}
     for row in rows:
@@ -2038,6 +3300,58 @@ def validate_strict_plan_carrier_integrity(
                     "missing_patch_face_count": int(len(missing)),
                 }
             )
+        cluster_basis = None
+        if require_cluster_basis:
+            cluster_basis = patch_cert.get("patch_cluster_basis")
+            if not isinstance(cluster_basis, dict):
+                issues.append({"face_id": face_id, "decision_reason": "missing_patch_cluster_basis"})
+            else:
+                if not bool(cluster_basis.get("enabled", False)):
+                    issues.append({"face_id": face_id, "decision_reason": "patch_cluster_basis_not_enabled"})
+                observed_mode = str(cluster_basis.get("mode", ""))
+                if expected_cluster_mode and observed_mode != expected_cluster_mode:
+                    issues.append(
+                        {
+                            "face_id": face_id,
+                            "decision_reason": "patch_cluster_basis_mode_mismatch",
+                            "expected_mode": expected_cluster_mode,
+                            "observed_mode": observed_mode,
+                        }
+                    )
+                if not bool(cluster_basis.get("passed", False)):
+                    issues.append({"face_id": face_id, "decision_reason": "patch_cluster_basis_not_passed"})
+                cluster_faces_raw = cluster_basis.get("faces")
+                cluster_faces: set[int] = set()
+                if isinstance(cluster_faces_raw, list):
+                    for value in cluster_faces_raw:
+                        try:
+                            cluster_faces.add(int(value))
+                        except Exception:
+                            continue
+                if cluster_faces and cluster_faces != patch_faces:
+                    issues.append(
+                        {
+                            "face_id": face_id,
+                            "decision_reason": "patch_cluster_basis_faces_mismatch",
+                            "patch_face_count": int(len(patch_faces)),
+                            "cluster_face_count": int(len(cluster_faces)),
+                        }
+                    )
+                if len(patch_faces) > 1 and not bool(cluster_basis.get("applied", False)):
+                    issues.append(
+                        {
+                            "face_id": face_id,
+                            "decision_reason": "patch_cluster_basis_not_applied_for_multiface_carrier",
+                            "patch_face_count": int(len(patch_faces)),
+                            "cluster_rejected_reason": cluster_basis.get("rejected_reason", cluster_basis.get("skip_reason")),
+                        }
+                    )
+        if require_carrier_holdout:
+            holdout = row.get("carrier_holdout_certificate")
+            if not isinstance(holdout, dict):
+                issues.append({"face_id": face_id, "decision_reason": "missing_carrier_holdout_certificate"})
+            elif not bool(holdout.get("passed", False)):
+                issues.append({"face_id": face_id, "decision_reason": "carrier_holdout_certificate_not_passed"})
     for face_id, patch_faces in sorted(patch_faces_by_face.items()):
         for member in sorted(patch_faces):
             member_patch = patch_faces_by_face.get(int(member))
@@ -2061,6 +3375,7 @@ def plan_rows_to_facelocal_coeff(
     fallback_basis_count: int,
     alpha_by_face: dict[int, float] | None = None,
     require_certified: bool = True,
+    strict_coeff_bounds: tuple[float, float] | None = None,
 ) -> tuple[list[int], torch.Tensor, list[dict[str, Any]]]:
     selected_faces: list[int] = []
     coeff_rows: list[torch.Tensor] = []
@@ -2124,6 +3439,47 @@ def plan_rows_to_facelocal_coeff(
         basis_count = int(coeff.shape[1])
         if basis_count <= 0:
             basis_count = int(fallback_basis_count)
+        if not torch.isfinite(coeff).all():
+            rejected.append(
+                {
+                    "face_id": face_id,
+                    "decision_reasons": ["nonfinite_delta_coeff"],
+                }
+            )
+            continue
+        if strict_coeff_bounds is not None:
+            max_abs_dc_coeff, max_abs_sh_coeff = strict_coeff_bounds
+            if (
+                not math.isfinite(float(max_abs_dc_coeff))
+                or not math.isfinite(float(max_abs_sh_coeff))
+                or float(max_abs_dc_coeff) <= 0.0
+                or float(max_abs_sh_coeff) <= 0.0
+            ):
+                rejected.append(
+                    {
+                        "face_id": face_id,
+                        "decision_reasons": ["invalid_strict_coeff_bounds"],
+                        "max_abs_dc_coeff": float(max_abs_dc_coeff),
+                        "max_abs_sh_coeff": float(max_abs_sh_coeff),
+                    }
+                )
+                continue
+            bounds = torch.full((basis_count,), float(max_abs_sh_coeff), dtype=torch.float32)
+            bounds[0] = float(max_abs_dc_coeff)
+            bound_tensor = bounds.view(1, basis_count, 1)
+            excess = coeff.abs() - bound_tensor
+            if bool((excess > 1e-6).any().item()):
+                rejected.append(
+                    {
+                        "face_id": face_id,
+                        "decision_reasons": ["delta_coeff_out_of_strict_bounds"],
+                        "coeff_abs_max": float(coeff.abs().max().item()),
+                        "max_abs_dc_coeff": float(max_abs_dc_coeff),
+                        "max_abs_sh_coeff": float(max_abs_sh_coeff),
+                        "max_excess": float(excess.clamp_min(0).max().item()),
+                    }
+                )
+                continue
         selected_faces.append(face_id)
         coeff_rows.append(coeff[:, :basis_count, :])
     if not coeff_rows:
@@ -2140,12 +3496,55 @@ def plan_rows_to_facelocal_coeff(
     return selected_faces, torch.cat(padded, dim=0), rejected
 
 
+def patch_carrier_faces(patch_certificate: dict[str, Any] | None, fallback_face: int) -> list[int]:
+    faces: list[int] = []
+    raw_faces = patch_certificate.get("faces") if isinstance(patch_certificate, dict) else None
+    if isinstance(raw_faces, list):
+        for value in raw_faces:
+            try:
+                faces.append(int(value))
+            except Exception:
+                continue
+    if not faces:
+        faces = [int(fallback_face)]
+    return sorted(set(int(face_id) for face_id in faces))
+
+
+def patch_carrier_id(patch_certificate: dict[str, Any] | None, fallback_face: int) -> str:
+    return "carrier_" + "_".join(str(face_id) for face_id in patch_carrier_faces(patch_certificate, fallback_face))
+
+
+def patch_seed_face(patch_certificate: dict[str, Any] | None, fallback_face: int) -> int:
+    if isinstance(patch_certificate, dict):
+        try:
+            return int(patch_certificate.get("seed_face", fallback_face))
+        except Exception:
+            return int(fallback_face)
+    return int(fallback_face)
+
+
+def patch_seed_source(
+    patch_certificate: dict[str, Any] | None,
+    fallback_face: int,
+    strict_face_set: set[int],
+    *,
+    seed_rescue_enabled: bool,
+) -> str:
+    seed_face = patch_seed_face(patch_certificate, fallback_face)
+    if seed_face in strict_face_set:
+        return "strict_face_candidate_seed"
+    if seed_rescue_enabled:
+        return "rescued_seed"
+    return "non_strict_seed"
+
+
 def write_candidate_plan(
     path: Path,
     *,
     args: argparse.Namespace,
     selected_faces: list[int],
     plan_faces: list[int],
+    strict_face_candidates: list[int],
     coeff: torch.Tensor,
     face_stats: dict[int, dict[str, float]],
     face_policy: dict[int, dict[str, float]],
@@ -2154,28 +3553,60 @@ def write_candidate_plan(
     crossfold_face_gain: dict[int, dict[str, Any]],
     face_view_consensus: dict[int, dict[str, Any]],
     patch_cert_by_face: dict[int, dict[str, Any]],
+    carrier_holdout_by_face: dict[int, dict[str, Any]],
     fit_proxy: dict[str, float],
     val_proxy: dict[str, float],
 ) -> None:
     face_to_selected = {int(fid): idx for idx, fid in enumerate(selected_faces)}
+    strict_face_set = {int(fid) for fid in strict_face_candidates}
     candidates: list[dict[str, Any]] = []
     for fid in plan_faces:
         row = face_to_selected.get(int(fid))
         if row is None:
             continue
         local = coeff[row * 3 : row * 3 + 3].detach().cpu().float()
+        patch_certificate = patch_cert_by_face.get(int(fid), {})
+        post_cluster_proxy = patch_certificate.get("proxy", {}) if isinstance(patch_certificate, dict) else {}
+        policy_proxy = post_cluster_proxy if isinstance(post_cluster_proxy, dict) and post_cluster_proxy else face_policy.get(int(fid), {})
+        carrier_faces = patch_carrier_faces(patch_certificate, int(fid))
+        seed_face = patch_seed_face(patch_certificate, int(fid))
+        seed_source = patch_seed_source(
+            patch_certificate,
+            int(fid),
+            strict_face_set,
+            seed_rescue_enabled=bool(args.patch_cert_seed_rescue),
+        )
         candidates.append(
             {
                 "face_id": int(fid),
                 "rank": int(len(candidates)),
+                "carrier_id": patch_carrier_id(patch_certificate, int(fid)),
+                "carrier_faces": carrier_faces,
+                "carrier_size": int(len(carrier_faces)),
+                "carrier_seed_face": int(seed_face),
+                "carrier_seed_source": seed_source,
+                "carrier_seed_rescued": bool(seed_source == "rescued_seed"),
+                "certification_source": "seed_rescue_plus_patchcert"
+                if seed_source == "rescued_seed"
+                else "strict_face_seed_plus_patchcert",
+                "face_was_strict_candidate": bool(int(fid) in strict_face_set),
                 "delta_coeff": local.tolist(),
                 "face_stats": face_stats.get(int(fid), {}),
-                "policy_val_proxy": face_policy.get(int(fid), {}),
+                "policy_val_proxy": policy_proxy,
+                "policy_val_proxy_source": (
+                    "post_cluster_patch_certificate_proxy"
+                    if isinstance(post_cluster_proxy, dict) and post_cluster_proxy
+                    else "pre_cluster_face_proxy"
+                ),
+                "pre_cluster_policy_val_proxy": face_policy.get(int(fid), {}),
                 "validation_shrink": validation_shrink_by_face.get(int(fid), {}),
                 "face_view_gain_certificate": face_view_gain_certificate.get(int(fid), {}),
                 "crossfold_face_gain_certificate": crossfold_face_gain.get(int(fid), {}),
                 "face_view_consensus": face_view_consensus.get(int(fid), {}),
-                "patch_certificate": patch_cert_by_face.get(int(fid), {}),
+                "patch_certificate": patch_certificate,
+                "post_cluster_patch_certificate": patch_certificate,
+                "carrier_holdout_certificate": carrier_holdout_by_face.get(int(fid), {}),
+                "post_cluster_policy_val_proxy": post_cluster_proxy,
                 "policy_pass": True,
                 "final_certified_face": True,
             }
@@ -2193,9 +3624,47 @@ def write_candidate_plan(
                 "basis_count": int((int(args.sh_degree) + 1) ** 2),
                 "plan_export_policy": "final_certified_accepted_faces_only",
                 "strict_patchcert_carrier": bool(args.strict_patchcert_carrier),
+                "patch_cert_seed_rescue": bool(args.patch_cert_seed_rescue),
+                "patch_cert_seed_rescue_min_candidates": int(args.patch_cert_seed_rescue_min_candidates),
+                "patch_cert_seed_rescue_max_seeds": int(args.patch_cert_seed_rescue_max_seeds),
+                "patch_cert_seed_rescue_min_aux_witnesses": int(args.patch_cert_seed_rescue_min_aux_witnesses),
+                "patch_cert_cluster_basis": bool(args.patch_cert_cluster_basis),
+                "patch_cert_cluster_basis_mode": str(args.patch_cert_cluster_basis_mode),
+                "patch_cert_cluster_basis_steps": int(args.patch_cert_cluster_basis_steps),
+                "patch_cert_cluster_basis_lr": float(args.patch_cert_cluster_basis_lr),
+                "patch_cert_cluster_basis_min_samples": int(args.patch_cert_cluster_basis_min_samples),
+                "patch_cert_cluster_basis_max_scale": float(args.patch_cert_cluster_basis_max_scale),
+                "patch_cert_cluster_basis_max_fit_mse_regression": float(args.patch_cert_cluster_basis_max_fit_mse_regression),
+                "patch_cert_cluster_basis_init": str(args.patch_cert_cluster_basis_init),
+                "patch_cert_carrier_holdout_selector": bool(args.patch_cert_carrier_holdout_selector),
+                "patch_cert_carrier_holdout_groups": int(args.patch_cert_carrier_holdout_groups),
+                "patch_cert_carrier_holdout_grouping": str(args.patch_cert_carrier_holdout_grouping),
+                "patch_cert_carrier_holdout_disjoint": bool(args.patch_cert_carrier_holdout_disjoint),
+                "patch_cert_carrier_holdout_min_passing_groups": (
+                    int(args.patch_cert_carrier_holdout_groups)
+                    if int(args.patch_cert_carrier_holdout_min_passing_groups) <= 0
+                    else int(args.patch_cert_carrier_holdout_min_passing_groups)
+                ),
+                "patch_cert_carrier_holdout_source": "policy_val_train_split",
+                "patch_cert_carrier_holdout_min_group_relative_gain": float(
+                    args.patch_cert_carrier_holdout_min_group_relative_gain
+                ),
+                "patch_cert_carrier_holdout_min_group_samples": int(args.patch_cert_carrier_holdout_min_group_samples),
+                "patch_cert_carrier_holdout_max_mse_regression": float(args.patch_cert_carrier_holdout_max_mse_regression),
+                "patch_cert_carrier_holdout_cvar_fraction": float(args.patch_cert_carrier_holdout_cvar_fraction),
+                "patch_cert_carrier_holdout_cvar_weight": float(args.patch_cert_carrier_holdout_cvar_weight),
+                "patch_cert_carrier_holdout_max_carriers": int(args.patch_cert_carrier_holdout_max_carriers),
+                "patch_cert_carrier_holdout_auto_prefix": bool(args.patch_cert_carrier_holdout_auto_prefix),
                 "strength": float(args.strength),
                 "max_abs_delta_rgb": float(args.max_abs_delta_rgb),
+                "max_abs_dc_coeff": float(args.max_abs_delta_rgb) / float(C0),
+                "max_abs_sh_coeff": (
+                    float(args.max_abs_sh_coeff)
+                    if float(args.max_abs_sh_coeff) > 0.0
+                    else float(args.max_abs_delta_rgb) / float(C1)
+                ),
                 "candidate_count": int(len(candidates)),
+                "carrier_count": int(len({str(row.get("carrier_id", "")) for row in candidates})),
                 "fit_proxy": fit_proxy,
                 "policy_val_proxy": val_proxy,
                 "filters": {
@@ -2319,6 +3788,8 @@ def main() -> int:
             strict_errors.append("--patch_cert_neighbor_crossfold must be enabled")
         if not bool(args.patch_cert_shrink):
             strict_errors.append("--patch_cert_shrink must be enabled")
+        if not bool(args.patch_cert_carrier_holdout_selector):
+            strict_errors.append("--patch_cert_carrier_holdout_selector must be enabled")
         if bool(args.force_apply):
             strict_errors.append("--force_apply is incompatible with strict PatchCert carrier mode")
         if bool(args.materialize_allow_uncertified_plan):
@@ -2349,6 +3820,26 @@ def main() -> int:
             face_ids=_parse_face_id_filter(args.materialize_plan_face_ids),
         )
         plan_basis_count = int(plan_meta.get("basis_count", (int(args.sh_degree) + 1) ** 2)) if isinstance(plan_meta, dict) else int((int(args.sh_degree) + 1) ** 2)
+        plan_max_abs_delta_rgb = (
+            float(plan_meta.get("max_abs_delta_rgb", args.max_abs_delta_rgb))
+            if isinstance(plan_meta, dict)
+            else float(args.max_abs_delta_rgb)
+        )
+        plan_max_abs_dc_coeff = (
+            float(plan_meta.get("max_abs_dc_coeff", plan_max_abs_delta_rgb / float(C0)))
+            if isinstance(plan_meta, dict)
+            else plan_max_abs_delta_rgb / float(C0)
+        )
+        plan_max_abs_sh_coeff = (
+            float(
+                plan_meta.get(
+                    "max_abs_sh_coeff",
+                    (float(args.max_abs_sh_coeff) if float(args.max_abs_sh_coeff) > 0.0 else plan_max_abs_delta_rgb / float(C1)),
+                )
+            )
+            if isinstance(plan_meta, dict)
+            else (float(args.max_abs_sh_coeff) if float(args.max_abs_sh_coeff) > 0.0 else plan_max_abs_delta_rgb / float(C1))
+        )
         alpha_by_face = read_plan_alphas(args.materialize_plan_alpha_json)
         strict_plan_carrier_issues: list[dict[str, Any]] = []
         if strict_materialize:
@@ -2365,6 +3856,7 @@ def main() -> int:
             fallback_basis_count=plan_basis_count,
             alpha_by_face=alpha_by_face,
             require_certified=strict_materialize,
+            strict_coeff_bounds=(plan_max_abs_dc_coeff, plan_max_abs_sh_coeff) if strict_materialize else None,
         )
         if strict_materialize and rejected_plan_rows:
             preview = json.dumps(rejected_plan_rows[:20], indent=2)
@@ -2415,6 +3907,12 @@ def main() -> int:
             "plan_source_operator": plan_meta.get("operator") if isinstance(plan_meta, dict) else None,
             "plan_export_policy": plan_meta.get("plan_export_policy") if isinstance(plan_meta, dict) else None,
             "plan_source_model": plan_meta.get("source_model") if isinstance(plan_meta, dict) else None,
+            "plan_patch_cert_cluster_basis": bool(plan_meta.get("patch_cert_cluster_basis", False)) if isinstance(plan_meta, dict) else False,
+            "plan_patch_cert_cluster_basis_mode": plan_meta.get("patch_cert_cluster_basis_mode") if isinstance(plan_meta, dict) else None,
+            "plan_patch_cert_cluster_basis_max_scale": plan_meta.get("patch_cert_cluster_basis_max_scale") if isinstance(plan_meta, dict) else None,
+            "plan_patch_cert_cluster_basis_max_fit_mse_regression": plan_meta.get("patch_cert_cluster_basis_max_fit_mse_regression") if isinstance(plan_meta, dict) else None,
+            "plan_max_abs_dc_coeff": float(plan_max_abs_dc_coeff),
+            "plan_max_abs_sh_coeff": float(plan_max_abs_sh_coeff),
             "requested_plan_rows": int(len(plan_rows)),
             "rejected_plan_rows": rejected_plan_rows[:20],
             "selected_faces": int(len(accepted_faces)),
@@ -2490,6 +3988,20 @@ def main() -> int:
         max_total_samples=max(int(args.max_total_samples // 2), 1),
         uniform_barycentric=bool(args.uniform_barycentric),
     )
+    policy_val_all_sample_count = int(val_samples.count)
+    carrier_holdout_samples: PixelSamples | None = None
+    carrier_holdout_sample_count = 0
+    if bool(args.patch_cert_carrier_holdout_selector) and bool(args.patch_cert_carrier_holdout_disjoint):
+        if val_samples.count > 1:
+            sample_indices = np.arange(int(val_samples.count), dtype=np.int64)
+            tune_mask = (sample_indices % 2) == 0
+            holdout_mask = ~tune_mask
+            carrier_holdout_samples = subset_pixel_samples(val_samples, holdout_mask)
+            val_samples = subset_pixel_samples(val_samples, tune_mask)
+            carrier_holdout_sample_count = int(carrier_holdout_samples.count)
+        else:
+            carrier_holdout_samples = subset_pixel_samples(val_samples, np.zeros((int(val_samples.count),), dtype=bool))
+            val_samples = subset_pixel_samples(val_samples, np.ones((int(val_samples.count),), dtype=bool))
 
     if selected_faces and fit_samples.count:
         source_vertex_ids, selected_faces_local, fit_sample_vertex_ids = localize_samples(faces, selected_faces, fit_samples)
@@ -2581,6 +4093,7 @@ def main() -> int:
         face_stats=face_stats,
         args=args,
         device=device,
+        holdout_samples=carrier_holdout_samples,
     )
     patch_crossfold_cache, patch_crossfold_cache_summary = build_patch_crossfold_cache(
         coeff=coeff_device,
@@ -2592,6 +4105,18 @@ def main() -> int:
         face_stats=face_stats,
         args=args,
         device=device,
+    )
+    carrier_holdout_cache, carrier_holdout_cache_summary = build_carrier_holdout_cache(
+        coeff=coeff_device,
+        faces=faces,
+        selected_faces=selected_faces,
+        source_vertex_ids=source_vertex_ids,
+        vertices=vertices,
+        view_paths=val_paths,
+        face_stats=face_stats,
+        args=args,
+        device=device,
+        holdout_samples=carrier_holdout_samples,
     )
     face_view_consensus, face_view_consensus_summary = face_view_consensus_report(
         val_samples,
@@ -2636,6 +4161,20 @@ def main() -> int:
         ),
         reverse=True,
     )
+    strict_face_candidates = list(face_candidates)
+    face_candidates, patch_cert_seed_rescue_summary = apply_patch_cert_seed_rescue(
+        strict_face_candidates=strict_face_candidates,
+        selected_faces=selected_faces,
+        face_stats=face_stats,
+        face_policy=face_policy,
+        face_view_gain_certificate=face_view_gain_certificate,
+        face_view_gain_certificate_summary=face_view_gain_certificate_summary,
+        crossfold_face_gain=crossfold_face_gain,
+        crossfold_face_gain_summary=crossfold_face_gain_summary,
+        face_view_consensus=face_view_consensus,
+        face_view_consensus_summary=face_view_consensus_summary,
+        args=args,
+    )
     accepted_faces = face_candidates[: max(int(args.max_faces_to_apply), 0)]
     accepted_faces, patch_cert_summary, patch_cert_by_face = grow_patch_certified_faces(
         coeff=coeff_device,
@@ -2645,6 +4184,11 @@ def main() -> int:
         seed_faces=accepted_faces,
         face_stats=face_stats,
         face_policy=face_policy,
+        fit_ids=fit_ids,
+        fit_basis=fit_basis,
+        fit_target=fit_target,
+        fit_weights=fit_weights,
+        fit_samples=fit_samples,
         val_ids=val_ids,
         val_basis=val_basis,
         val_target=val_target,
@@ -2653,11 +4197,36 @@ def main() -> int:
         patch_crossfold_cache=patch_crossfold_cache,
         args=args,
     )
+    accepted_faces, carrier_holdout_summary, carrier_holdout_by_face = select_holdout_stable_carriers(
+        coeff=coeff_device,
+        accepted_faces=accepted_faces,
+        patch_cert_by_face=patch_cert_by_face,
+        holdout_cache=carrier_holdout_cache,
+        args=args,
+    )
     coeff = coeff_device.detach().cpu()
     accepted = bool((global_policy_pass and accepted_faces) or args.force_apply)
     if bool(args.force_apply) and not accepted_faces:
         accepted_faces = selected_faces[: max(int(args.max_faces_to_apply), 0)]
         accepted = bool(accepted_faces)
+    final_accepted_fit_proxy = evaluate_proxy_for_faces(
+        coeff_device,
+        fit_ids,
+        fit_basis,
+        fit_target,
+        fit_weights,
+        fit_samples.face_ids,
+        accepted_faces,
+    )
+    final_accepted_policy_val_proxy = evaluate_proxy_for_faces(
+        coeff_device,
+        val_ids,
+        val_basis,
+        val_target,
+        val_weights,
+        val_samples.face_ids,
+        accepted_faces,
+    )
     no_op_copy = bool((not accepted) and args.no_op_on_fail)
 
     if args.candidate_plan_out is not None:
@@ -2666,6 +4235,7 @@ def main() -> int:
             args=args,
             selected_faces=selected_faces,
             plan_faces=accepted_faces if accepted else [],
+            strict_face_candidates=strict_face_candidates,
             coeff=coeff,
             face_stats=face_stats,
             face_policy=face_policy,
@@ -2674,6 +4244,7 @@ def main() -> int:
             crossfold_face_gain=crossfold_face_gain,
             face_view_consensus=face_view_consensus,
             patch_cert_by_face=patch_cert_by_face,
+            carrier_holdout_by_face=carrier_holdout_by_face,
             fit_proxy=fit_proxy,
             val_proxy=val_proxy,
         )
@@ -2708,12 +4279,21 @@ def main() -> int:
         "evidence_dir": str(args.evidence_dir),
         "selected_faces": int(len(selected_faces)),
         "face_policy_candidates": int(len(face_candidates)),
+        "strict_face_policy_candidates": int(len(strict_face_candidates)),
         "accepted_faces": int(len(accepted_faces)) if accepted else 0,
         "vertices_added": int(vertices_added if accepted else 0),
         "fit_views": [p.stem for p in fit_paths],
         "policy_val_views": [p.stem for p in val_paths],
+        "policy_val_all_samples": int(policy_val_all_sample_count),
+        "policy_val_tuning_samples": int(val_samples.count),
+        "carrier_holdout_disjoint_samples": int(carrier_holdout_sample_count),
+        "carrier_holdout_disjoint_from_policy_tuning": bool(args.patch_cert_carrier_holdout_disjoint),
         "fit_proxy": fit_proxy,
         "policy_val_proxy": val_proxy,
+        "final_accepted_fit_proxy": final_accepted_fit_proxy,
+        "final_accepted_policy_val_proxy": final_accepted_policy_val_proxy,
+        "policy_val_proxy_scope": "all_selected_pre_patch_growth",
+        "final_accepted_policy_val_proxy_scope": "accepted_carrier_faces_after_cluster_basis_and_shrink",
         "fit_unique_faces": int(fit_unique_faces),
         "policy_val_unique_faces": int(val_unique_faces),
         "solver": solver,
@@ -2722,7 +4302,10 @@ def main() -> int:
         "crossfold_face_gain_certificate": crossfold_face_gain_summary,
         "face_view_consensus": face_view_consensus_summary,
         "patch_crossfold_cache": patch_crossfold_cache_summary,
+        "patch_cert_seed_rescue": patch_cert_seed_rescue_summary,
         "patch_certificate": patch_cert_summary,
+        "carrier_holdout_cache": carrier_holdout_cache_summary,
+        "carrier_holdout_selector": carrier_holdout_summary,
         "filters": {
             "top_k": int(args.top_k),
             "min_view_hits": int(args.min_view_hits),
@@ -2769,12 +4352,41 @@ def main() -> int:
         "patch_cert_min_relative_gain": float(args.patch_cert_min_relative_gain),
         "patch_cert_neighbor_mode": str(args.patch_cert_neighbor_mode),
         "patch_cert_centroid_candidates_per_seed": int(args.patch_cert_centroid_candidates_per_seed),
+        "patch_cert_seed_rescue_enabled": bool(args.patch_cert_seed_rescue),
+        "patch_cert_seed_rescue_min_candidates": int(args.patch_cert_seed_rescue_min_candidates),
+        "patch_cert_seed_rescue_max_seeds": int(args.patch_cert_seed_rescue_max_seeds),
+        "patch_cert_seed_rescue_min_aux_witnesses": int(args.patch_cert_seed_rescue_min_aux_witnesses),
         "patch_cert_crossfold_folds": int(args.patch_cert_crossfold_folds),
         "patch_cert_crossfold_min_passing_folds": int(args.patch_cert_crossfold_min_passing_folds),
         "patch_cert_crossfold_min_fold_relative_gain": float(args.patch_cert_crossfold_min_fold_relative_gain),
         "patch_cert_crossfold_min_fold_samples": int(args.patch_cert_crossfold_min_fold_samples),
         "patch_cert_neighbor_crossfold": bool(args.patch_cert_neighbor_crossfold),
         "patch_cert_shrink": bool(args.patch_cert_shrink),
+        "patch_cert_cluster_basis": bool(args.patch_cert_cluster_basis),
+        "patch_cert_cluster_basis_mode": str(args.patch_cert_cluster_basis_mode),
+        "patch_cert_cluster_basis_steps": int(args.patch_cert_cluster_basis_steps),
+        "patch_cert_cluster_basis_lr": float(args.patch_cert_cluster_basis_lr),
+        "patch_cert_cluster_basis_min_samples": int(args.patch_cert_cluster_basis_min_samples),
+        "patch_cert_cluster_basis_max_scale": float(args.patch_cert_cluster_basis_max_scale),
+        "patch_cert_cluster_basis_max_fit_mse_regression": float(args.patch_cert_cluster_basis_max_fit_mse_regression),
+        "patch_cert_cluster_basis_init": str(args.patch_cert_cluster_basis_init),
+        "patch_cert_carrier_holdout_selector": bool(args.patch_cert_carrier_holdout_selector),
+        "patch_cert_carrier_holdout_groups": int(args.patch_cert_carrier_holdout_groups),
+        "patch_cert_carrier_holdout_grouping": str(args.patch_cert_carrier_holdout_grouping),
+        "patch_cert_carrier_holdout_disjoint": bool(args.patch_cert_carrier_holdout_disjoint),
+        "patch_cert_carrier_holdout_min_passing_groups": (
+            int(args.patch_cert_carrier_holdout_groups)
+            if int(args.patch_cert_carrier_holdout_min_passing_groups) <= 0
+            else int(args.patch_cert_carrier_holdout_min_passing_groups)
+        ),
+        "patch_cert_carrier_holdout_source": "policy_val_train_split",
+        "patch_cert_carrier_holdout_min_group_relative_gain": float(args.patch_cert_carrier_holdout_min_group_relative_gain),
+        "patch_cert_carrier_holdout_min_group_samples": int(args.patch_cert_carrier_holdout_min_group_samples),
+        "patch_cert_carrier_holdout_max_mse_regression": float(args.patch_cert_carrier_holdout_max_mse_regression),
+        "patch_cert_carrier_holdout_cvar_fraction": float(args.patch_cert_carrier_holdout_cvar_fraction),
+        "patch_cert_carrier_holdout_cvar_weight": float(args.patch_cert_carrier_holdout_cvar_weight),
+        "patch_cert_carrier_holdout_max_carriers": int(args.patch_cert_carrier_holdout_max_carriers),
+        "patch_cert_carrier_holdout_auto_prefix": bool(args.patch_cert_carrier_holdout_auto_prefix),
         "strict_patchcert_carrier": bool(args.strict_patchcert_carrier),
         "global_policy_pass": bool(global_policy_pass),
         "policy_pass": bool(global_policy_pass),
@@ -2803,7 +4415,27 @@ def main() -> int:
                 "face_view_gain_certificate": face_view_gain_certificate.get(int(fid), {}),
                 "crossfold_face_gain_certificate": crossfold_face_gain.get(int(fid), {}),
                 "face_view_consensus": face_view_consensus.get(int(fid), {}),
+                "carrier_id": patch_carrier_id(patch_cert_by_face.get(int(fid), {}), int(fid)),
+                "carrier_faces": patch_carrier_faces(patch_cert_by_face.get(int(fid), {}), int(fid)),
+                "carrier_seed_face": patch_seed_face(patch_cert_by_face.get(int(fid), {}), int(fid)),
+                "carrier_seed_source": patch_seed_source(
+                    patch_cert_by_face.get(int(fid), {}),
+                    int(fid),
+                    {int(face_id) for face_id in strict_face_candidates},
+                    seed_rescue_enabled=bool(args.patch_cert_seed_rescue),
+                ),
+                "carrier_seed_rescued": bool(
+                    patch_seed_source(
+                        patch_cert_by_face.get(int(fid), {}),
+                        int(fid),
+                        {int(face_id) for face_id in strict_face_candidates},
+                        seed_rescue_enabled=bool(args.patch_cert_seed_rescue),
+                    )
+                    == "rescued_seed"
+                ),
+                "face_was_strict_candidate": bool(int(fid) in {int(face_id) for face_id in strict_face_candidates}),
                 "patch_certificate": patch_cert_by_face.get(int(fid), {}),
+                "carrier_holdout_certificate": carrier_holdout_by_face.get(int(fid), {}),
             }
             for fid in (accepted_faces[:20] if accepted else [])
         ],

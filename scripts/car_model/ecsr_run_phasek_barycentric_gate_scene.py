@@ -138,11 +138,14 @@ def _build_evidence(args: argparse.Namespace, *, scene: str, phasej_model: Path,
     existing_summary = _read_json(summary)
     operator = str(args.delta_operator)
     has_camera_center = "camera_center" in existing_summary.get("per_view_npz_fields", [])
+    evidence_split = str(existing_summary.get("split", "")).strip().lower()
+    train_split_ok = evidence_split == "train"
     requires_barycentric = operator == "subdivision" or not bool(args.delta_uniform_barycentric)
     rich_surface_ok = existing_summary.get("barycentric_available") is True or not requires_barycentric
     if (
         not bool(args.force)
         and summary.is_file()
+        and train_split_ok
         and rich_surface_ok
         and (operator not in {"sh1", "facelocal_sh1"} or has_camera_center)
     ):
@@ -467,6 +470,12 @@ def _apply_delta(
                 str(args.delta_patch_cert_neighbor_mode),
                 "--patch_cert_centroid_candidates_per_seed",
                 str(args.delta_patch_cert_centroid_candidates_per_seed),
+                "--patch_cert_seed_rescue_min_candidates",
+                str(args.delta_patch_cert_seed_rescue_min_candidates),
+                "--patch_cert_seed_rescue_max_seeds",
+                str(args.delta_patch_cert_seed_rescue_max_seeds),
+                "--patch_cert_seed_rescue_min_aux_witnesses",
+                str(args.delta_patch_cert_seed_rescue_min_aux_witnesses),
                 "--patch_cert_crossfold_folds",
                 str(args.delta_patch_cert_crossfold_folds),
                 "--patch_cert_crossfold_min_passing_folds",
@@ -475,8 +484,44 @@ def _apply_delta(
                 _fmt_arg(args.delta_patch_cert_crossfold_min_fold_relative_gain),
                 "--patch_cert_crossfold_min_fold_samples",
                 str(args.delta_patch_cert_crossfold_min_fold_samples),
+                "--patch_cert_cluster_basis_mode",
+                str(args.delta_patch_cert_cluster_basis_mode),
+                "--patch_cert_cluster_basis_steps",
+                str(args.delta_patch_cert_cluster_basis_steps),
+                "--patch_cert_cluster_basis_lr",
+                _fmt_arg(args.delta_patch_cert_cluster_basis_lr),
+                "--patch_cert_cluster_basis_min_samples",
+                str(args.delta_patch_cert_cluster_basis_min_samples),
+                "--patch_cert_cluster_basis_max_scale",
+                _fmt_arg(args.delta_patch_cert_cluster_basis_max_scale),
+                "--patch_cert_cluster_basis_max_fit_mse_regression",
+                _fmt_arg(args.delta_patch_cert_cluster_basis_max_fit_mse_regression),
+                "--patch_cert_cluster_basis_init",
+                str(args.delta_patch_cert_cluster_basis_init),
+                "--patch_cert_carrier_holdout_groups",
+                str(args.delta_patch_cert_carrier_holdout_groups),
+                "--patch_cert_carrier_holdout_grouping",
+                str(args.delta_patch_cert_carrier_holdout_grouping),
+                "--patch_cert_carrier_holdout_min_passing_groups",
+                str(args.delta_patch_cert_carrier_holdout_min_passing_groups),
+                "--patch_cert_carrier_holdout_min_group_relative_gain",
+                _fmt_arg(args.delta_patch_cert_carrier_holdout_min_group_relative_gain),
+                "--patch_cert_carrier_holdout_min_group_samples",
+                str(args.delta_patch_cert_carrier_holdout_min_group_samples),
+                "--patch_cert_carrier_holdout_max_mse_regression",
+                _fmt_arg(args.delta_patch_cert_carrier_holdout_max_mse_regression),
+                "--patch_cert_carrier_holdout_cvar_fraction",
+                _fmt_arg(args.delta_patch_cert_carrier_holdout_cvar_fraction),
+                "--patch_cert_carrier_holdout_cvar_weight",
+                _fmt_arg(args.delta_patch_cert_carrier_holdout_cvar_weight),
+                "--patch_cert_carrier_holdout_max_carriers",
+                str(args.delta_patch_cert_carrier_holdout_max_carriers),
             ]
         )
+        if bool(args.delta_patch_cert_cluster_basis):
+            cmd.append("--patch_cert_cluster_basis")
+        else:
+            cmd.append("--no-patch_cert_cluster_basis")
         if bool(args.delta_patch_cert_neighbor_crossfold):
             cmd.append("--patch_cert_neighbor_crossfold")
         else:
@@ -485,6 +530,22 @@ def _apply_delta(
             cmd.append("--patch_cert_shrink")
         else:
             cmd.append("--no-patch_cert_shrink")
+        if bool(args.delta_patch_cert_seed_rescue):
+            cmd.append("--patch_cert_seed_rescue")
+        else:
+            cmd.append("--no-patch_cert_seed_rescue")
+        if bool(args.delta_patch_cert_carrier_holdout_selector):
+            cmd.append("--patch_cert_carrier_holdout_selector")
+        else:
+            cmd.append("--no-patch_cert_carrier_holdout_selector")
+        if bool(args.delta_patch_cert_carrier_holdout_disjoint):
+            cmd.append("--patch_cert_carrier_holdout_disjoint")
+        else:
+            cmd.append("--no-patch_cert_carrier_holdout_disjoint")
+        if bool(args.delta_patch_cert_carrier_holdout_auto_prefix):
+            cmd.append("--patch_cert_carrier_holdout_auto_prefix")
+        else:
+            cmd.append("--no-patch_cert_carrier_holdout_auto_prefix")
         if bool(args.delta_strict_patchcert_carrier):
             cmd.append("--strict_patchcert_carrier")
     sh1_view_consensus = (
@@ -1098,10 +1159,42 @@ def main() -> int:
     parser.add_argument("--delta_patch_cert_min_relative_gain", type=float, default=0.0)
     parser.add_argument("--delta_patch_cert_neighbor_mode", choices=("topology", "centroid", "both"), default="topology")
     parser.add_argument("--delta_patch_cert_centroid_candidates_per_seed", type=int, default=64)
+    parser.add_argument("--delta_patch_cert_seed_rescue", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--delta_patch_cert_seed_rescue_min_candidates", type=int, default=1)
+    parser.add_argument("--delta_patch_cert_seed_rescue_max_seeds", type=int, default=16)
+    parser.add_argument("--delta_patch_cert_seed_rescue_min_aux_witnesses", type=int, default=1)
     parser.add_argument("--delta_patch_cert_crossfold_folds", type=int, default=0)
     parser.add_argument("--delta_patch_cert_crossfold_min_passing_folds", type=int, default=0)
     parser.add_argument("--delta_patch_cert_crossfold_min_fold_relative_gain", type=float, default=0.0)
     parser.add_argument("--delta_patch_cert_crossfold_min_fold_samples", type=int, default=4)
+    parser.add_argument("--delta_patch_cert_cluster_basis", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--delta_patch_cert_cluster_basis_mode",
+        choices=("shared", "scaled", "rank2", "chart_linear", "chart_quad"),
+        default="shared",
+    )
+    parser.add_argument("--delta_patch_cert_cluster_basis_steps", type=int, default=240)
+    parser.add_argument("--delta_patch_cert_cluster_basis_lr", type=float, default=0.025)
+    parser.add_argument("--delta_patch_cert_cluster_basis_min_samples", type=int, default=32)
+    parser.add_argument("--delta_patch_cert_cluster_basis_max_scale", type=float, default=2.0)
+    parser.add_argument("--delta_patch_cert_cluster_basis_max_fit_mse_regression", type=float, default=0.02)
+    parser.add_argument("--delta_patch_cert_cluster_basis_init", choices=("mean", "zero"), default="mean")
+    parser.add_argument("--delta_patch_cert_carrier_holdout_selector", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--delta_patch_cert_carrier_holdout_groups", type=int, default=4)
+    parser.add_argument(
+        "--delta_patch_cert_carrier_holdout_grouping",
+        choices=("view", "sample_balanced"),
+        default="view",
+    )
+    parser.add_argument("--delta_patch_cert_carrier_holdout_disjoint", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--delta_patch_cert_carrier_holdout_min_passing_groups", type=int, default=3)
+    parser.add_argument("--delta_patch_cert_carrier_holdout_min_group_relative_gain", type=float, default=0.0)
+    parser.add_argument("--delta_patch_cert_carrier_holdout_min_group_samples", type=int, default=4)
+    parser.add_argument("--delta_patch_cert_carrier_holdout_max_mse_regression", type=float, default=0.0)
+    parser.add_argument("--delta_patch_cert_carrier_holdout_cvar_fraction", type=float, default=0.25)
+    parser.add_argument("--delta_patch_cert_carrier_holdout_cvar_weight", type=float, default=1.0)
+    parser.add_argument("--delta_patch_cert_carrier_holdout_max_carriers", type=int, default=0)
+    parser.add_argument("--delta_patch_cert_carrier_holdout_auto_prefix", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--delta_patch_cert_neighbor_crossfold", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--delta_patch_cert_shrink", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--delta_strict_patchcert_carrier", action=argparse.BooleanOptionalAction, default=False)
@@ -1294,6 +1387,30 @@ def main() -> int:
     parser.add_argument("--wandb_group", default="phasek_barycentric_multiscene")
     parser.add_argument("--wandb_name", default="phasek_barycentric")
     args = parser.parse_args()
+    if float(args.delta_patch_cert_cluster_basis_max_scale) <= 0.0:
+        parser.error("--delta_patch_cert_cluster_basis_max_scale must be > 0")
+    if float(args.delta_patch_cert_cluster_basis_lr) <= 0.0:
+        parser.error("--delta_patch_cert_cluster_basis_lr must be > 0")
+    if int(args.delta_patch_cert_cluster_basis_steps) < 0:
+        parser.error("--delta_patch_cert_cluster_basis_steps must be >= 0")
+    if int(args.delta_patch_cert_cluster_basis_min_samples) <= 0:
+        parser.error("--delta_patch_cert_cluster_basis_min_samples must be > 0")
+    if int(args.delta_patch_cert_seed_rescue_min_candidates) < 0:
+        parser.error("--delta_patch_cert_seed_rescue_min_candidates must be >= 0")
+    if int(args.delta_patch_cert_seed_rescue_max_seeds) < 0:
+        parser.error("--delta_patch_cert_seed_rescue_max_seeds must be >= 0")
+    if int(args.delta_patch_cert_seed_rescue_min_aux_witnesses) < 0:
+        parser.error("--delta_patch_cert_seed_rescue_min_aux_witnesses must be >= 0")
+    if (
+        not math.isfinite(float(args.delta_patch_cert_cluster_basis_max_fit_mse_regression))
+        or float(args.delta_patch_cert_cluster_basis_max_fit_mse_regression) < 0.0
+    ):
+        parser.error("--delta_patch_cert_cluster_basis_max_fit_mse_regression must be finite and >= 0")
+    if bool(args.delta_patch_cert_carrier_holdout_disjoint) and str(args.delta_patch_cert_carrier_holdout_grouping) != "sample_balanced":
+        parser.error(
+            "--delta_patch_cert_carrier_holdout_disjoint currently requires "
+            "--delta_patch_cert_carrier_holdout_grouping sample_balanced"
+        )
     scenes = [scene.strip() for scene in str(args.scenes).replace(" ", ",").split(",") if scene.strip()]
     rows = [run_scene(args, scene) for scene in scenes]
     _write_aggregate(args, rows)

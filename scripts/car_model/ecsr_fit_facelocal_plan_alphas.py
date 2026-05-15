@@ -62,6 +62,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--selector_mode", choices=("top", "score", "risk", "georisk", "patchrisk"), default="risk")
     parser.add_argument("--selector_count", type=int, default=4)
     parser.add_argument("--risk_pair_lambda", type=float, default=0.65)
+    parser.add_argument(
+        "--allow_uncertified_plan_rows",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Allow legacy face-local candidate-plan rows that predate strict PatchCert carrier "
+            "metadata. Use only for explicitly labeled ablation/diagnostic selectors."
+        ),
+    )
     parser.add_argument("--policy_val_stride", type=int, default=4)
     parser.add_argument("--high_error_quantile", type=float, default=-1.0)
     parser.add_argument("--min_alpha", type=float, default=-1.0)
@@ -389,9 +398,25 @@ def main() -> int:
     faces = state["_triangle_indices"].detach().cpu().long()
     vertices = state["triangles_points"].detach().cpu().float()
     basis_count = int(meta.get("basis_count", (int(args.sh_degree) + 1) ** 2))
-    selected_faces, coeff, rejected = plan_rows_to_facelocal_coeff(selected_rows, faces, fallback_basis_count=basis_count)
+    selected_faces, coeff, rejected = plan_rows_to_facelocal_coeff(
+        selected_rows,
+        faces,
+        fallback_basis_count=basis_count,
+        require_certified=not bool(args.allow_uncertified_plan_rows),
+    )
     if not selected_faces:
         raise RuntimeError(f"selected plan rows were all rejected: {rejected[:3]}")
+    requested_selected_faces = sorted({int(row.get("face_id", -1)) for row in selected_rows if isinstance(row, dict)})
+    materialized_selected_faces = sorted({int(face_id) for face_id in selected_faces})
+    if requested_selected_faces != materialized_selected_faces:
+        missing = sorted(set(requested_selected_faces) - set(materialized_selected_faces))
+        extra = sorted(set(materialized_selected_faces) - set(requested_selected_faces))
+        raise RuntimeError(
+            "selected plan rows were only partially converted for alpha fitting: "
+            f"missing={missing[:20]} extra={extra[:20]} rejected={rejected[:3]}. "
+            "Use --allow_uncertified_plan_rows only for explicitly labeled legacy ablations, "
+            "and ensure the selected face set is converted as a whole."
+        )
 
     view_paths = sorted((args.evidence_dir / "views").glob("*.npz"))
     fit_paths, val_paths = split_view_paths(view_paths, int(args.policy_val_stride))
@@ -491,6 +516,7 @@ def main() -> int:
             "mode": str(args.selector_mode) if not requested_face_ids else "explicit_face_ids",
             "selector_count": int(args.selector_count),
             "risk_pair_lambda": float(args.risk_pair_lambda),
+            "allow_uncertified_plan_rows": bool(args.allow_uncertified_plan_rows),
             "selector_decision_json": str(args.selector_decision_json) if args.selector_decision_json else "",
             "selector_decision_trial": decision_trial,
             "face_ids": [int(fid) for fid in selected_faces],

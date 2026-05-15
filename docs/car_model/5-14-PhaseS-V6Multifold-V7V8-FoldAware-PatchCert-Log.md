@@ -539,19 +539,290 @@ This row is the intended paper-facing strict-carrier evidence row if it passes
 the same train-val gate and held-out report-only checks.  v8.2/v8.3 remain
 useful ablations and debugging evidence, but they should not supersede v8.4.
 
+Interim v8.4 operator audits:
+
+```text
+flowers: accepted=true, accepted_faces=18, vertices_added=54, strict_patchcert_carrier=true
+bicycle: accepted=false, accepted_faces=0, vertices_added=0, strict_patchcert_carrier=true
+```
+
+The flowers carrier is the same compact three-patch / eighteen-face structure
+seen in v8.1-v8.3, now produced from the hardened strict-validator code.  The
+bicycle result remains a safe no-op, which is scientifically useful but does
+not improve coverage.  Final decision files are still pending.
+
+Additional live evidence at `2026-05-14 15:36 PDT`:
+
+```text
+flowers base held-out test:
+  LPIPS=0.3947871029, PSNR=19.6687068939, SSIM=0.5116778612
+flowers Phase-J held-out reference:
+  LPIPS=0.3295054734, PSNR=20.3006076813, SSIM=0.5574578047
+flowers Phase-J train-val reference:
+  LPIPS=0.2972038686, PSNR=20.8552265167, SSIM=0.6471784711
+
+bicycle base held-out test:
+  LPIPS=0.3322745562, PSNR=23.2934818268, SSIM=0.6596511602
+bicycle Phase-J held-out reference:
+  LPIPS=0.2660875022, PSNR=24.0215435028, SSIM=0.7023565769
+```
+
+This interim table is deliberately not a promotion result.  It records that the
+surface-attached strict edit alone is far below the Phase-J appearance-adapted
+reference on held-out RGB.  The runner is still computing the candidate
+appearance-adapted train-val/test row and the final train-val gate.  Until that
+decision lands, v8.4 is best interpreted as a strict carrier-integrity
+experiment, not a solved paper endpoint.
+
+Final v8.4 summary:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v84_strictvalidator_20260514_summary/summary_2scene.md
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v84_strictvalidator_20260514_qualitative/patchcert_qualitative_contact_sheet.png
+```
+
+Result:
+
+| scene | selected | accepted | train-val dPSNR | train-val dSSIM | train-val dLPIPS | report test dPSNR | report test dSSIM | report test dLPIPS |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| bicycle | Phase-J fallback | false | +0.000000 | +0.000000 | +0.000000 | +0.000000 | +0.000000 | +0.000000 |
+| flowers | Phase-J fallback | false | +0.000042 | -0.000013 | +0.000004 | +0.000000 | +0.000000 | -0.000000 |
+
+v8.4 therefore closes as a negative but useful integrity row: the hardened
+strict carrier replay works, but fixed train-val promotion accepts `0 / 2`
+scenes.
+
+### v9 Patch-Cluster Shared-Basis Carrier
+
+Subagent method-gap review found that v7/v8/v8.4 mostly tightened certificate
+integrity while leaving the direct edit capacity almost unchanged. The next
+real method change is therefore a representation-level carrier constraint
+rather than another threshold scan.
+
+Implemented change:
+
+- the face-local residual-SH operator now supports
+  `--patch_cert_cluster_basis`;
+- when enabled, each accepted multi-face PatchCert carrier is refit with one
+  shared three-corner residual-SH basis copied across the faces in that carrier;
+- the fit uses train-only residual samples and compares its MSE against the
+  independent face-local fit on the same samples;
+- if the shared basis regresses beyond the fixed
+  `--patch_cert_cluster_basis_max_fit_mse_regression` bound, the carrier is
+  restored to its pre-refit coefficients and rejected under strict mode;
+- policy-val, shrink, and patch crossfold certificates are evaluated after the
+  shared basis is materialized.
+
+Important wording constraint: this is a shared corner-slot SH carrier basis,
+not a continuous geometric patch basis. It should be reported as a stronger
+representation prior over a certified carrier, not as mesh topology repair.
+
+Validation before scene launch:
+
+```bash
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python -m py_compile \
+  scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py \
+  scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py
+
+git diff --check -- \
+  scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py \
+  scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py
+```
+
+Additional review:
+
+- a static subagent review found no correctness or backward-compatibility bug
+  in the diff;
+- a runner forwarding smoke confirmed that
+  `--delta_patch_cert_cluster_basis*` is forwarded to the materializer as
+  `--patch_cert_cluster_basis*`;
+- a synthetic CPU unit smoke confirmed that the shared-basis fitter can improve
+  a two-face synthetic carrier and writes non-zero shared coefficients.
+
+Scene pilots launched at `2026-05-14 15:48 PDT`:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v9_clusterbasis_20260514_flowers
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v9_clusterbasis_20260514_bicycle
+```
+
+W&B group:
+
+```text
+phase_s_patchcert_v9_clusterbasis_20260514
+```
+
+Decision: `NOT COMPLETE`. v9 is the first post-v8 attempt that changes the
+carrier representation itself. It still needs full runner decisions,
+train-val/held-out metrics, and qualitative panels before it can be compared
+against v6/v8.4/Phase-J.
+
+Early v9 operator audit on `flowers` found an important failure mode:
+
+```text
+accepted=true, accepted_faces=5, vertices_added=15,
+accepted_cluster_basis=0, rejected_cluster_basis=6,
+accepted_patches=0, mean_patch_size=1.0
+```
+
+This means the strict shared-basis multi-face carriers were all rejected by the
+fit-regression bound and the run fell back to single-face certificates.  The
+v9 row must therefore not be described as a shared-basis success unless a later
+decision shows accepted shared carriers.  This failure motivates v10.
+
+Final v9 summary:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v9_clusterbasis_20260514_summary/summary_2scene.md
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v9_clusterbasis_20260514_qualitative/patchcert_qualitative_contact_sheet.png
+```
+
+Result: fixed train-val promotion accepts `0 / 2` scenes.  `bicycle` is a
+candidate no-op, and `flowers` is rejected by the balanced/tail/LPIPS gate with
+numerical-zero held-out change.  This closes v9 as a negative representation
+ablation.
+
+### v6 Multifold Train-Val Gate Follow-Up
+
+The four-offset train-val fairness check for the last positive v6 row now has a
+two-scene summary:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/multifold_trainval_gate/phase_s_patchcert_v6_compactstrat_gate_20260514/summary/summary_2scene.md
+```
+
+Result:
+
+| scene | accepted | reason | report test dPSNR | report test dSSIM | report test dLPIPS |
+|---|---:|---|---:|---:|---:|
+| bicycle | false | offset2 PSNR gain below 0 | +0.000387192 | +0.000035524 | -0.000115275 |
+| flowers | true | all offsets pass | +0.001676559 | +0.000158310 | -0.000304669 |
+
+Mean effective held-out delta after falling back on rejected scenes:
+
+```text
+dPSNR=+0.000838280
+dSSIM=+0.000079155
+dLPIPS=-0.000152335
+```
+
+This is useful evidence that v6 was not purely a single-offset artifact, but it
+also confirms that the effect size is small and not uniformly accepted.
+
+### v10 Scaled Shared-Basis Carrier
+
+To avoid the v9 collapse from over-tying all faces to identical coefficients, a
+second low-rank carrier parameterization was implemented:
+
+- `--patch_cert_cluster_basis_mode shared` preserves v9 behavior;
+- `--patch_cert_cluster_basis_mode scaled` fits one shared three-corner SH basis
+  plus one positive scale per face in the carrier;
+- `--patch_cert_cluster_basis_max_scale` bounds those face scales;
+- the same train-only fit-regression, policy-val, shrink, and patch crossfold
+  certificates still decide whether the carrier survives.
+
+This is still a carrier-level representation prior, not a topology or UV-chart
+method.  The intended effect is to preserve cross-face support sharing while
+allowing different residual amplitudes on neighboring faces.
+
+### v10c Audited Scaled Carrier
+
+A focused implementation review found that v10b's numerical path was mostly
+self-consistent, but the evidence trail was not yet strong enough for a paper
+claim.  The following audit hardening was added before the next pilot:
+
+- `--patch_cert_cluster_basis_max_scale <= 0` is rejected by both the
+  materializer and runner;
+- scaled carriers now record `face_scales`, `effective_max_scale`,
+  `coeff_clamped_count`, `coeff_total_count`,
+  `coeff_clamped_fraction`, and `coeff_max_clamp_excess`;
+- strict certified plan replay now rejects non-finite coefficients and
+  coefficients outside the saved DC/SH bounds;
+- candidate-plan metadata now stores cluster mode, steps, learning rate, min
+  samples, max scale, fit-regression threshold, init mode, DC bound, and SH
+  bound;
+- row payloads now include explicit `pre_cluster_policy_val_proxy`,
+  `post_cluster_policy_val_proxy`, and `post_cluster_patch_certificate` fields
+  while preserving legacy names for compatibility.
+
+Validation:
+
+```bash
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python -m py_compile \
+  scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py \
+  scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py
+
+git diff --check -- \
+  scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py \
+  scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py \
+  docs/car_model/5-14-PhaseS-V6Multifold-V7V8-FoldAware-PatchCert-Log.md \
+  docs/car_model/SPCarNet_research_log.md
+```
+
+A small direct unit check verified that strict plan replay rejects an
+out-of-bounds coefficient row with `delta_coeff_out_of_strict_bounds`.
+
+Scene pilots launched:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v10c_scaledcluster_audit_20260514_flowers
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v10c_scaledcluster_audit_20260514_bicycle
+```
+
+W&B group:
+
+```text
+phase_s_patchcert_v10c_scaledcluster_audit_20260514
+```
+
+Decision: `NOT COMPLETE`.  v10c supersedes v10b as the claimable scaled-carrier
+pilot because it has the required carrier-scale and strict-replay audit fields.
+
+v10c `flowers` then exposed a real shape bug in the scaled predictor:
+face-local samples carry three local corner ids per pixel, so the per-face scale
+must broadcast over both the corner and SH dimensions.  The predictor now uses
+a rank-aware scale view instead of a fixed `(-1, 1, 1)` view.
+
+Validation after the fix:
+
+- `py_compile` passed again;
+- `git diff --check` passed again;
+- a direct shape smoke with `sample_vertex_ids` shaped `[N, 3]` verified that
+  scaled mode applies, records two `face_scales`, and does not clamp the test
+  coefficients.
+
+The fixed `flowers` rerun is:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v10d_scaledcluster_shapefix_20260514_flowers
+```
+
+W&B group:
+
+```text
+phase_s_patchcert_v10d_scaledcluster_shapefix_20260514
+```
+
 ## Honest Read
 
-v6 remains the latest completed Phase-S evidence row. v7/v8/v8.1/v8.2 are not
-claimable until their train-val gate decisions, report-only held-out metrics,
-and qualitative outputs are complete. v8.3 is the first code path whose strict
-carrier preset also covers plan replay, but it is not a result row until it is
-run under the same fixed protocol.
+v6 remains the latest completed Phase-S evidence row. v7/v8 final summaries are
+negative ablations. v8.1/v8.2/v8.3 are useful implementation and integrity
+evidence, and v8.4 is the intended strict-validator result row because it was
+launched after the final row-level replay hardening landed.
 
-If v8.1 accepts `flowers` with comparable held-out gains, the method story
-becomes stronger: the positive compact outdoor result is no longer only a
-compact gate override; the patch neighbors and final materialized carrier are
-also supported by train-fold certificates. If v8.1 rejects or collapses the
-gain, the correct conclusion is that v6 was too permissive for a paper-facing
-representation edit and should remain an ablation or diagnostic rather than the
-endpoint. If v8.2 changes v8.1 materially, v8.2 supersedes v8.1 because it
-closes the plan/materialization and whole-patch integrity loopholes.
+The v8.4 operator result is scientifically mixed before the final decision:
+`flowers` proves the hardened strict direct path can materialize a tiny
+certificate-carrying representation edit, while `bicycle` proves the same
+policy can safely no-op when certificates are insufficient.  That is good
+method hygiene, but it does not solve the paper goal by itself.  The open
+question is whether the candidate row after the normal Phase-J appearance
+adapter can beat the Phase-J fallback under the fixed train-val gate.  If not,
+the honest conclusion is that fold-aware PatchCert is an integrity upgrade and
+ablation, not the next headline method.
+
+The v9 shared-basis carrier is the current active method upgrade. It is more
+research-relevant than another gate tweak because it changes how residual
+capacity is tied across a certified patch carrier, but it is not yet evidence
+of a paper-ready gain. It should become a claim only if the fixed scene pilots
+produce accepted decisions and visible/quantitative improvements over the
+Phase-J fallback.

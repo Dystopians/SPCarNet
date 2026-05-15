@@ -2,7 +2,7 @@
 
 **基于训练证据的几何安全 Mesh Splatting 压缩与渲染修复。**
 
-[English](README.md) | [当前方法/证据日志](docs/car_model/5-14-SPCarNet-Method-Modules-And-Evidence-Log.md) | [Phase-S fold-aware PatchCert 续跑日志](docs/car_model/5-14-PhaseS-V6Multifold-V7V8-FoldAware-PatchCert-Log.md) | [Phase-S Compact-Stratified PatchCert 日志](docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md) | [Phase-S Direct PatchCert 日志](docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md) | [Phase-S PatchRisk 日志](docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md) | [Phase-S GeoRisk/CVaR 日志](docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md) | [Phase-S risk-tail/alpha 日志](docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md) | [Phase-S coupled selector](docs/car_model/5-13-Coupled-Selector-Pilot.md) | [Phase-J 结果](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R 全折审计](docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md) | [Phase-S gaincert 审计](docs/car_model/5-12-PhaseS-GainCertV1-Audit.md) | [SPCarNet selector 审计](docs/car_model/5-12-SPCarNet-RagSym-Rerank-Audit.md) | [Full9 状态](docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md) | [闭环状态](docs/car_model/5-12-PaperLoop-ClosedLoop-Status.md) | [续跑报告](docs/car_model/5-12-Subagent-PaperLoop-Continuation-Report.md) | [Phase-J 外部验证](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
+[English](README.md) | [当前方法/证据日志](docs/car_model/5-14-SPCarNet-Method-Modules-And-Evidence-Log.md) | [Phase-S v20 auto-prefix / portfolio](docs/car_model/5-14-PhaseS-v20-AutoPrefix-Portfolio-Policy.md) | [Phase-S fold-aware PatchCert 续跑日志](docs/car_model/5-14-PhaseS-V6Multifold-V7V8-FoldAware-PatchCert-Log.md) | [Phase-S Compact-Stratified PatchCert 日志](docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md) | [Phase-S Direct PatchCert 日志](docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md) | [Phase-S PatchRisk 日志](docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md) | [Phase-S GeoRisk/CVaR 日志](docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md) | [Phase-S risk-tail/alpha 日志](docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md) | [Phase-S coupled selector](docs/car_model/5-13-Coupled-Selector-Pilot.md) | [Phase-J 结果](docs/car_model/5-8-ECSR-PhaseJ-GuardedAdaptiveEdgePolicy.md) | [Surface-lumigraph V8](docs/car_model/5-9-ECSR-SurfaceResidualLumigraphV8.md) | [Phase-R 全折审计](docs/car_model/5-12-PhaseR-FullRobust-Outdoor-Multifold-Audit.md) | [Phase-S gaincert 审计](docs/car_model/5-12-PhaseS-GainCertV1-Audit.md) | [SPCarNet selector 审计](docs/car_model/5-12-SPCarNet-RagSym-Rerank-Audit.md) | [Full9 状态](docs/car_model/5-12-Full9-PaperLoop-Evidence-Status.md) | [闭环状态](docs/car_model/5-12-PaperLoop-ClosedLoop-Status.md) | [续跑报告](docs/car_model/5-12-Subagent-PaperLoop-Continuation-Report.md) | [Phase-J 外部验证](docs/car_model/5-8-ECSR-PhaseJ-ExternalCourtyardValidation.md) | [当前版本留档](docs/car_model/5-7-Archive-Full9-CompactELA.md) | [执行日志](docs/car_model/5-8-ECSR-FinalDecisionExecutionLog.md) | [研究日志](docs/car_model/SPCarNet_research_log.md) | [旧版 README](docs/car_model/archive/README_zh_legacy_before_full9_2026-05-07.md)
 
 SPCarNet 是建立在 Mesh Splatting 之上的研究分支。当前 ECSR 版本保留固定的 Phase-F compact checkpoint，再用 train-evidence guarded portfolio 做外观修复：稳定场景走 adaptive-alpha ELA，不稳定场景走 train-selected structural edge fallback。branch、edge gate、alpha、压缩比例都不使用 held-out test 指标选择。
 
@@ -13,7 +13,7 @@ report: outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2
 
 5 月 7 日 Compact-ELA/SOR 版本仍以 `archive/full9-compact-ela-ssim-peak-20260507`、commit `fae7942` 留档。Phase-J 在当前 full9 RGB 口径上更强，但它仍然是 render-time ELA portfolio，不是完全 baked 到表示里的终局模型。
 
-**Paper-loop 状态，2026-05-14：** `NOT COMPLETE`。Phase-J 是当前最强 endpoint：clean-best 与 Phase-J RGB 行在 `9 / 9` 场景完整，且 Phase-J 相对 selected clean MeshSplatting 在 `9 / 9` 场景三指标严格胜出。Phase-S 现在是一个真实的 representation-level face-local repair 分支，并完成了 risk-tail 全 8 个有候选场景 replay：接受 `3 / 8`，相对 Phase-J fallback 的 mean effective report-only delta 为 `+0.000684500` PSNR、`+0.000058956` SSIM、`-0.000073545` LPIPS。GeoRisk/CVaR selector 加入几何邻域排序与 train-val CVaR 诊断，但在本轮 7 个 hard/control 场景 replay 中只接受 `2 / 7`，没有扩大到超过原 risk-tail 的覆盖范围。PatchRisk/direct PatchCert 进一步加入显式 patch carrier。最新 compact-stratified direct PatchCert gate 接受 `2 / 5`（`bicycle`、`flowers`），相对 Phase-J fallback 的 mean effective delta 为 `+0.001163` PSNR、`+0.000101` SSIM、`-0.000141` LPIPS，相比上一版 direct PatchCert `1 / 5` replay 明确提升。这是真实的方法里程碑，但接受覆盖仍然稀疏，因此还不是最终论文 endpoint。最新模块/证据日志：[`Compact-Stratified PatchCert`](docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md)、[`Direct PatchCert`](docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md)、[`PatchRisk`](docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md)、[`GeoRisk/CVaR`](docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md)、[`risk-tail/alpha`](docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md)。
+**Paper-loop 状态，2026-05-14：** `NOT COMPLETE`。Phase-J 是当前最强 endpoint：clean-best 与 Phase-J RGB 行在 `9 / 9` 场景完整，且 Phase-J 相对 selected clean MeshSplatting 在 `9 / 9` 场景三指标严格胜出。Phase-S 现在是一个真实的 representation-level face-local repair 分支，但可靠收益仍然稀疏。固定 7 场景 Phase-S portfolio 只接受 `2 / 7`（`flowers`、`counter`），另外 5 个场景回退到 Phase-J；相对 Phase-J fallback 的 mean effective report-only delta 为 `+0.000782013` PSNR、`+0.000067328` SSIM、`-0.000083983` LPIPS，且选择过程不使用 held-out test 指标，收益主要来自 `flowers` 的 GeoRisk 行。最新 v20 auto-prefix PatchCert carrier 去掉了手动 carrier-count 调参，并使用 disjoint policy-val carrier holdout，但在公平 train-val gate 下 `bicycle` 与 `flowers` 均未接受，即 `0 / 2`。这是真实的审计/方法里程碑，不是最终论文 endpoint。最新模块/证据日志：[`Phase-S v20 auto-prefix / portfolio`](docs/car_model/5-14-PhaseS-v20-AutoPrefix-Portfolio-Policy.md)、[`Compact-Stratified PatchCert`](docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md)、[`Direct PatchCert`](docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md)、[`PatchRisk`](docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md)、[`GeoRisk/CVaR`](docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md)、[`risk-tail/alpha`](docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md)。
 
 ## 当前结果
 
@@ -107,6 +107,12 @@ PatchCert 更强：v5 固定 5 场景 replay 接受 `bicycle`；新的 v6 compac
 gate 要求小容量 carrier，同时约束 train-val aggregate、tail 与分层 view-group
 risk，因此公平接受 `bicycle` 和 `flowers`。`garden`、`counter`、`bonsai` 仍回退到
 Phase-J。
+v19b/v20 carrier-holdout 线进一步收紧审计：policy-val tuning samples 与
+carrier holdout samples 分离，strict replay 会检查 cluster-basis 完整性，v20
+还使用 deterministic auto-prefix carrier policy，避免手动 top-k carrier 扫描。
+代价也很明确：当前 v20 在 `bicycle` 与 `flowers` 上会 materialize 真实 checkpoint
+edit，但公平 train-val gate 接受 `0 / 2`。因此固定 portfolio 最终只保留已经为正的
+GeoRisk `flowers` 与 `counter` 行，其它场景回退到 Phase-J。
 
 在 object-prior 侧，nested K=8 SPCarNet selector 新增了基于 observed-visible
 preservation 的 `visible_only` 策略。在 206 个验证物体上，它相对 contained
@@ -131,6 +137,8 @@ selector 升级，但 oracle 行仍然更强，因此 shape completion 故事还
 | Phase-S risk-tail full8 | 8 个有候选场景接受 `3 / 8`，相对 Phase-J fallback 的 mean effective report-only delta 为 `+0.000684500` PSNR，`+0.000058956` SSIM，`-0.000073545` LPIPS；定性图在 `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_coupled_selector_v1_riskpilot_20260513_qualitative` |
 | Phase-S GeoRisk/CVaR 7-scene replay | 本轮要求的 7 个 hard/control 场景接受 `2 / 7`（`flowers`、`counter`），相对 Phase-J fallback 的 mean effective report-only delta 为 `+0.000782013` PSNR，`+0.000067328` SSIM，`-0.000083983` LPIPS；新增几何/CVaR 可审计诊断，但没有超越旧 risk-tail 覆盖范围；定性图在 `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_georisk_cvar_v1_20260514_qualitative` |
 | Phase-S PatchRisk / direct PatchCert carrier | PatchRisk strict 5 场景 replay 接受 `1 / 5`（`counter`），均值 `+0.000014877` PSNR，`+0.000000072` SSIM，`-0.000000089` LPIPS；direct PatchCert v5 接受 `1 / 5`（`bicycle`），mean effective `+0.000077` PSNR，`+0.000007` SSIM，`-0.000023` LPIPS；direct PatchCert v6 compact-stratified gate 接受 `2 / 5`（`bicycle`、`flowers`），相对 Phase-J fallback 的 mean effective 为 `+0.001163` PSNR，`+0.000101` SSIM，`-0.000141` LPIPS；定性图在 `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v6_compactstrat_gate_20260514_qualitative` |
+| Phase-S v20 auto-prefix PatchCert | deterministic disjoint carrier-holdout auto-prefix policy；已完成 `bicycle` 与 `flowers`，接受 `0 / 2`；`bicycle` report-only test 近似不变（`+0.000000` PSNR，`+0.000000119` SSIM，`-0.000000417` LPIPS），但 train-val tail gate 拒绝；见 `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_disjoint_sampleholdout_chartquad_key_20260514` |
+| Phase-S fixed portfolio v1 | 在 GeoRisk/PatchRisk/v19b/v20 candidates 上只用 train-val 选择；接受 `2 / 7`（`flowers`、`counter`），`garden`、`bicycle`、`room`、`kitchen`、`bonsai` 回退；mean effective report-only delta 为 `+0.000782013` PSNR，`+0.000067328` SSIM，`-0.000083983` LPIPS；summary 在 `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v1_20260514/portfolio_summary.md` |
 | Phase-S gaincert v1 | 四折 gate 接受 `garden`、`flowers`、`bonsai`、`kitchen`、`room` 与近似 no-op 的 `stump`；拒绝 `bicycle`；`counter/treehill` 在 single-gate 阶段被阻断 |
 | full9 paper-loop collector | clean-best `9 / 9`，Phase-J `9 / 9`，Phase-J 相对 clean-best 三指标严格胜出 `9 / 9`；Phase-S closure 为 `False`，因为严格 gate 只有 `7 / 9`，接受 `6 / 9`，且只有 `3 / 7` 是 train-val all-axis 胜出 |
 | Stage ELA12 clean-best audit | selected-clean 子集仍是 `5 / 5` strict full-pass，per-view RGB pass 为 `164 / 165`，envelope pass 为 `163 / 165`；这不是 Mip-NeRF360 全 9 场景 benchmark |
@@ -214,6 +222,18 @@ gate 接受 `bicycle` 和 `flowers`；被拒绝的行也放在同一张图里，
 
 <p align="center">
   <img src="assets/spcarnet_phase_s_patchcert_v6_compactstrat_contact_sheet.png" width="980" alt="Phase-S PatchCert v6 compact-stratified 定性对比">
+</p>
+
+当前固定 Phase-S portfolio 更保守：v20 auto-prefix PatchCert 两个测试场景都被
+公平 gate 拒绝，portfolio 只接受 `flowers` 与 `counter` 的 GeoRisk 行。下面两张图
+是当前 portfolio 最诚实的正向定性证据，使用放大的 green/magenta error change。
+
+<p align="center">
+  <img src="assets/spcarnet_phase_s_portfolio_flowers_georisk_panel.png" width="980" alt="Phase-S portfolio GeoRisk flowers 定性对比">
+</p>
+
+<p align="center">
+  <img src="assets/spcarnet_phase_s_portfolio_counter_georisk_panel.png" width="980" alt="Phase-S portfolio GeoRisk counter 定性对比">
 </p>
 
 选图清单：`assets/spcarnet_m360_outdoor_detail_selection.json`、`assets/spcarnet_m360_where_it_helps_selection.json`，以及早期全图清单 `assets/spcarnet_m360_full9_gallery_selection.json`。
