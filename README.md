@@ -13,7 +13,7 @@ report: outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2
 
 The May 7 Compact-ELA/SOR checkpoint remains archived as `archive/full9-compact-ela-ssim-peak-20260507` at commit `fae7942`. Phase-J is stronger on the current selected full9 RGB protocol, but it is still a render-time ELA portfolio rather than a fully baked representation-level endpoint.
 
-**Paper-loop status, 2026-05-14:** `NOT COMPLETE`. Phase-J is the current strong endpoint: clean-best rows and Phase-J RGB rows are complete on `9 / 9` scenes, and Phase-J strictly beats the selected clean MeshSplatting row on `9 / 9`. Phase-S is now a real representation-level face-local repair branch, but its reliable gains remain sparse. The fixed 7-scene Phase-S portfolio accepts only `2 / 7` scenes (`flowers`, `counter`), falls back to Phase-J on the other five scenes, and gives mean effective report-only deltas of `+0.000782013` PSNR, `+0.000067328` SSIM, and `-0.000083983` LPIPS over Phase-J fallback; this is selected without held-out test metrics and is mostly driven by the `flowers` GeoRisk row. The latest v20 auto-prefix PatchCert carrier removes manual carrier-count tuning and uses disjoint policy-val carrier holdout, but it accepts `0 / 2` (`bicycle`, `flowers`) under the fair train-val gate. This is an audit/method milestone, not a final paper endpoint. Latest module/evidence logs: [`Phase-S v20 auto-prefix / portfolio`](docs/car_model/5-14-PhaseS-v20-AutoPrefix-Portfolio-Policy.md), [`Compact-Stratified PatchCert`](docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md), [`Direct PatchCert`](docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md), [`PatchRisk`](docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md), [`GeoRisk/CVaR`](docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md), [`risk-tail/alpha`](docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md).
+**Paper-loop status, 2026-05-15:** `NOT COMPLETE`. Phase-J remains the strong endpoint: clean-best rows and Phase-J RGB rows are complete on `9 / 9` scenes, and Phase-J strictly beats the selected clean MeshSplatting row on `9 / 9`. Phase-S is now a real representation-level face-local repair branch, but its reliable gains remain sparse. The full9 v20 auto-prefix PatchCert continuation has decisions for `9 / 9` scenes and accepts `2 / 9` (`garden`, `room`) using only train-val gates; both accepted report-only gains are at metric-noise scale. The fixed full9 Phase-S portfolio v2 accepts `4 / 9` (`flowers`, `counter`, `garden`, `room`), falls back to Phase-J elsewhere, and gives mean effective report-only deltas of `+0.000608232` PSNR, `+0.000052366` SSIM, and `-0.000065320` LPIPS over Phase-J fallback. This is cleaner coverage and a better audit package than v1, but not a final paper endpoint because the visible improvement is still dominated by `flowers` and most v20 edits are near no-op. Latest module/evidence logs: [`Phase-S v20 auto-prefix / portfolio`](docs/car_model/5-14-PhaseS-v20-AutoPrefix-Portfolio-Policy.md), [`Compact-Stratified PatchCert`](docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md), [`Direct PatchCert`](docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md), [`PatchRisk`](docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md), [`GeoRisk/CVaR`](docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md), [`risk-tail/alpha`](docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md).
 
 ## Current Result
 
@@ -113,10 +113,10 @@ The v19b/v20 carrier-holdout line then tightens the audit: policy-val tuning
 samples and carrier holdout samples are disjoint, strict replay checks
 cluster-basis integrity, and v20 uses a deterministic auto-prefix carrier policy
 instead of a manual top-k scan. The cost of this stricter evidence is clear in
-the current numbers: v20 applies real checkpoint edits on `bicycle` and
-`flowers`, but accepts `0 / 2` under the fair train-val gate. The fixed
-portfolio therefore keeps only the already-positive GeoRisk rows on `flowers`
-and `counter` and falls back elsewhere.
+the current numbers: the full9 v20 continuation accepts `garden` and `room`
+under the fair train-val gate, but both are held-out near-noops. The fixed
+portfolio v2 therefore keeps the already-positive GeoRisk rows on `flowers`
+and `counter`, adds tiny v20 rows on `garden/room`, and falls back elsewhere.
 
 On the object-prior side, the nested K=8 SPCarNet selector now includes a
 `visible_only` observed-visible preservation policy.  On 206 validation objects
@@ -142,8 +142,9 @@ Current Phase-J summary:
 | Phase-S risk-tail full8 | `3 / 8` candidate-bearing scenes accepted, mean effective report-only delta `+0.000684500` PSNR, `+0.000058956` SSIM, `-0.000073545` LPIPS vs Phase-J fallback; qualitative panels in `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_coupled_selector_v1_riskpilot_20260513_qualitative` |
 | Phase-S GeoRisk/CVaR 7-scene replay | `2 / 7` requested hard/control scenes accepted (`flowers`, `counter`), mean effective report-only delta `+0.000782013` PSNR, `+0.000067328` SSIM, `-0.000083983` LPIPS vs Phase-J fallback; this adds auditable geometry/CVaR diagnostics but does not beat the prior risk-tail coverage; qualitative panels in `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_georisk_cvar_v1_20260514_qualitative` |
 | Phase-S PatchRisk / direct PatchCert carrier | PatchRisk strict 5-scene replay accepts `1 / 5` (`counter`), mean `+0.000014877` PSNR, `+0.000000072` SSIM, `-0.000000089` LPIPS; direct PatchCert v5 accepts `1 / 5` (`bicycle`), mean effective `+0.000077` PSNR, `+0.000007` SSIM, `-0.000023` LPIPS; direct PatchCert v6 compact-stratified gate accepts `2 / 5` (`bicycle`, `flowers`), mean effective `+0.001163` PSNR, `+0.000101` SSIM, `-0.000141` LPIPS vs Phase-J fallback; qualitative panels in `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v6_compactstrat_gate_20260514_qualitative` |
-| Phase-S v20 auto-prefix PatchCert | deterministic disjoint carrier-holdout auto-prefix policy; completed on `bicycle` and `flowers`, accepted `0 / 2`; `bicycle` report-only test is effectively zero (`+0.000000` PSNR, `+0.000000119` SSIM, `-0.000000417` LPIPS) but train-val tail gates reject; see `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_disjoint_sampleholdout_chartquad_key_20260514` |
-| Phase-S fixed portfolio v1 | train-val-only selection across GeoRisk/PatchRisk/v19b/v20 candidates; accepts `2 / 7` (`flowers`, `counter`), falls back on `garden`, `bicycle`, `room`, `kitchen`, `bonsai`; mean effective report-only delta `+0.000782013` PSNR, `+0.000067328` SSIM, `-0.000083983` LPIPS; summary in `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v1_20260514/portfolio_summary.md` |
+| Phase-S v20 auto-prefix PatchCert | deterministic disjoint carrier-holdout auto-prefix policy; full9 continuation now has decisions for `9 / 9`; accepts `2 / 9` (`garden`, `room`) under train-val gates, while `bicycle`, `flowers`, `counter`, `bonsai`, and `kitchen` are rejected by balanced/tail gates and `stump/treehill` are no-op; accepted report-only deltas are effectively zero-scale, so this is audit coverage rather than a visual breakthrough |
+| Phase-S fixed portfolio v2 | train-val-only selection across GeoRisk/PatchRisk/v19b/v20 candidates; accepts `4 / 9` (`flowers=georisk`, `counter=georisk`, `garden=v20`, `room=v20`), falls back elsewhere; mean effective report-only delta `+0.000608232` PSNR, `+0.000052366` SSIM, `-0.000065320` LPIPS; summary in `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v2_20260515/portfolio_summary.md` |
+| Phase-S v20 qualitative diagnostics | contact sheets copied to `assets/spcarnet_phase_s_v20_remainingA_contact_sheet.png`, `assets/spcarnet_phase_s_v20_remainingB_contact_sheet.png`, and `assets/spcarnet_phase_s_v20_remainingC_contact_sheet.png`; these are diagnostic amplified-difference panels, not strong full-frame visual wins |
 | Phase-S gaincert v1 | strict four-offset gate accepts `garden`, `flowers`, `bonsai`, `kitchen`, `room`, and near-no-op `stump`; rejects `bicycle`; `counter/treehill` are blocked by single-gate rejection |
 | full9 paper-loop collector | clean-best `9 / 9`, Phase-J `9 / 9`, Phase-J strict RGB wins vs clean-best `9 / 9`; Phase-S closure is `False` because strict gates are `7 / 9` with `6 / 9` accepts and only `3 / 7` all-axis train-val wins |
 | Stage ELA12 clean-best audit | selected-clean subset remains `5 / 5` strict full-pass with `164 / 165` per-view RGB pass and `163 / 165` envelope pass; this is not the full nine-scene Mip-NeRF360 benchmark |
@@ -231,11 +232,11 @@ to make the safety/fallback behavior explicit.
   <img src="assets/spcarnet_phase_s_patchcert_v6_compactstrat_contact_sheet.png" width="980" alt="Phase-S PatchCert v6 compact-stratified qualitative contact sheet">
 </p>
 
-The current fixed Phase-S portfolio is even more conservative: v20 auto-prefix
-PatchCert rejects both tested scenes, while the portfolio accepts the GeoRisk
-rows on `flowers` and `counter` only. The panels below are therefore the
-honest current positive qualitative evidence for the portfolio, with amplified
-green/magenta error change.
+The current fixed Phase-S portfolio v2 is conservative but now full9: it accepts
+GeoRisk rows on `flowers/counter` plus v20 rows on `garden/room`. The GeoRisk
+rows remain the only visibly useful positive examples; the v20 rows are
+included below as diagnostic contact sheets because they are train-val accepted
+but visually near no-op.
 
 <p align="center">
   <img src="assets/spcarnet_phase_s_portfolio_flowers_georisk_panel.png" width="980" alt="Phase-S portfolio GeoRisk qualitative panel on flowers">
@@ -243,6 +244,18 @@ green/magenta error change.
 
 <p align="center">
   <img src="assets/spcarnet_phase_s_portfolio_counter_georisk_panel.png" width="980" alt="Phase-S portfolio GeoRisk qualitative panel on counter">
+</p>
+
+<p align="center">
+  <img src="assets/spcarnet_phase_s_v20_remainingA_contact_sheet.png" width="980" alt="Phase-S v20 remainingA diagnostic contact sheet">
+</p>
+
+<p align="center">
+  <img src="assets/spcarnet_phase_s_v20_remainingB_contact_sheet.png" width="980" alt="Phase-S v20 remainingB diagnostic contact sheet">
+</p>
+
+<p align="center">
+  <img src="assets/spcarnet_phase_s_v20_remainingC_contact_sheet.png" width="980" alt="Phase-S v20 remainingC diagnostic contact sheet">
 </p>
 
 Selection manifests: `assets/spcarnet_m360_outdoor_detail_selection.json`, `assets/spcarnet_m360_where_it_helps_selection.json`, and the earlier full-frame manifest `assets/spcarnet_m360_full9_gallery_selection.json`.

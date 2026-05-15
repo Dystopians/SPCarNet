@@ -1,6 +1,7 @@
 # Phase-S v20 Auto-Prefix And Fixed Portfolio Policy
 
 Date: 2026-05-14
+Last updated: 2026-05-15
 
 Status: `NOT COMPLETE` as a final paper endpoint. This is a real method and
 audit milestone, but it does not yet solve broad Phase-S coverage.
@@ -54,7 +55,11 @@ outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v19b_disjoint_sampleh
 outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v19b_disjoint_sampleholdout_top1_bicycle_20260514
 outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v19b_disjoint_sampleholdout_top2_bicycle_20260514
 outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_disjoint_sampleholdout_chartquad_key_20260514
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingA_20260515
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingB_20260515
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingC_20260515
 outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v1_20260514
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v2_20260515
 outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_georisk_cvar_v1_20260514_qualitative
 ```
 
@@ -161,6 +166,88 @@ The portfolio selector was rerun after the explicit provenance guard was added;
 the accepted count remains `2 / 7`, so this fairness hardening did not change
 the current result.
 
+## v20 Full9 Continuation And Portfolio v2
+
+Date: 2026-05-15
+
+The missing v20 scenes were run with the same fixed auto-prefix policy and
+W&B-logged render/eval gates. Runs were split across GPUs to shorten wall-clock
+time. Group B was intentionally interrupted after `room` completed because
+Group C covered the remaining duplicated scenes (`kitchen/stump/treehill`).
+
+Evidence roots:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingA_20260515
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingB_20260515
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingC_20260515
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v2_20260515
+```
+
+v20 full9 decisions:
+
+| scene | root | accepted | train-val balanced | report-only test balanced | report-only dPSNR | report-only dSSIM | report-only dLPIPS | decision |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| bicycle | v20 original | false | -0.000001311 | +0.000010729 | +0.000000000 | +0.000000119 | -0.000000417 | tail/balanced reject |
+| flowers | v20 original | false | -0.000001073 | +0.000011563 | +0.000003815 | +0.000000000 | -0.000000387 | tail/balanced reject |
+| garden | remainingA | true | +0.000013828 | -0.000000596 | +0.000000000 | +0.000000000 | +0.000000030 | accepted, but report-only LPIPS regresses at noise scale |
+| room | remainingB | true | +0.000005901 | +0.000000596 | +0.000000000 | +0.000000000 | -0.000000030 | accepted, near no-op positive |
+| counter | remainingA | false | -0.000008881 | +0.000007927 | -0.000001907 | -0.000000179 | -0.000000671 | PSNR/balanced reject |
+| kitchen | remainingC | false | +0.000007480 | +0.000005007 | +0.000003815 | +0.000000060 | +0.000000000 | tail reject despite positive mean |
+| bonsai | remainingA | false | +0.000000298 | -0.000002682 | +0.000000000 | +0.000000000 | +0.000000134 | tail reject |
+| stump | remainingC | false | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 | operator no-op |
+| treehill | remainingC | false | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 | operator no-op |
+
+Portfolio v2 command:
+
+```bash
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_select_phase_s_policy_portfolio.py \
+  --scenes garden,bicycle,room,kitchen,bonsai,flowers,counter,stump,treehill \
+  --candidate georisk=outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_georisk_cvar_v1_20260514_{scene}/{scene}/coupled_selector_decision.json \
+  --candidate patchrisk=outputs/carnet/meshsplatopt/ecsr_phase_s/patchrisk_carrier_v1_20260514_{scene}/{scene}/coupled_selector_decision.json \
+  --candidate v19b=outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v19b_disjoint_sampleholdout_chartquad_key_20260514/decisions/{scene}_decision.json \
+  --candidate v19b_top1=outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v19b_disjoint_sampleholdout_top1_bicycle_20260514/decisions/{scene}_decision.json \
+  --candidate v19b_top2=outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v19b_disjoint_sampleholdout_top2_bicycle_20260514/decisions/{scene}_decision.json \
+  --candidate v20_auto=outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_disjoint_sampleholdout_chartquad_key_20260514/decisions/{scene}_decision.json \
+  --candidate v20_remainingA=outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingA_20260515/decisions/{scene}_decision.json \
+  --candidate v20_remainingB=outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingB_20260515/decisions/{scene}_decision.json \
+  --candidate v20_remainingC=outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingC_20260515/decisions/{scene}_decision.json \
+  --output_json outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v2_20260515/portfolio_summary.json \
+  --output_md outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v2_20260515/portfolio_summary.md \
+  --output_csv outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v2_20260515/portfolio_summary.csv
+```
+
+Portfolio v2 summary:
+
+| scene | selected policy | accepted | effective dPSNR | effective dSSIM | effective dLPIPS |
+|---|---|---:|---:|---:|---:|
+| garden | v20_remainingA | true | +0.000000000 | +0.000000000 | +0.000000030 |
+| bicycle | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| room | v20_remainingB | true | +0.000000000 | +0.000000000 | -0.000000030 |
+| kitchen | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| bonsai | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| flowers | georisk | true | +0.005418777 | +0.000470877 | -0.000586182 |
+| counter | georisk | true | +0.000055313 | +0.000000417 | -0.000001699 |
+| stump | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| treehill | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| **mean** | - | **4 / 9** | **+0.000608232** | **+0.000052366** | **-0.000065320** |
+
+The accepted count improves from v1 `2 / 7` to v2 `4 / 9`, but the mean delta
+falls because the denominator now includes all nine scenes and the two new v20
+accepts are essentially no-op metric changes. This is stronger fairness
+coverage, not a larger visual gain.
+
+Qualitative contact sheets:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingA_20260515_qualitative/patchcert_qualitative_contact_sheet.png
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingB_20260515_qualitative/patchcert_qualitative_contact_sheet.png
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingC_20260515_qualitative/patchcert_qualitative_contact_sheet.png
+assets/spcarnet_phase_s_v20_remainingA_contact_sheet.png
+assets/spcarnet_phase_s_v20_remainingB_contact_sheet.png
+assets/spcarnet_phase_s_v20_remainingC_contact_sheet.png
+```
+
 ## Qualitative Evidence
 
 The strongest current qualitative panels are still the GeoRisk/CVaR accepted
@@ -192,11 +279,15 @@ The positive interpretation:
   pass train-val gates.
 - The existing GeoRisk rows give small but real accepted improvements on
   `flowers` and `counter`.
+- The v20 continuation now adds train-val accepted `garden` and `room` rows,
+  which improves fixed-policy coverage, but those rows are near metric-noise
+  no-ops on held-out test.
 
 The hard negative interpretation:
 
-- v20 does not beat the Phase-J fallback on the fair train-val gate.
-- The best fixed portfolio only accepts `2 / 7` scenes.
+- v20 still does not produce meaningful visible gains over the Phase-J fallback.
+- The best fixed portfolio now accepts `4 / 9` scenes, but two accepted rows
+  are effectively zero-scale.
 - The average gain is tiny and not visually obvious at full-frame scale.
 - v20/top1 edits are often near the metric-noise floor: bicycle v20 adds only
   `4` accepted faces and `12` vertices on an approximately `8.31M` triangle
@@ -204,8 +295,8 @@ The hard negative interpretation:
 - The dominant failure is tail instability rather than mean quality: rejected
   rows repeatedly trip balanced-CVaR, negative-fraction, or LPIPS-positive-tail
   gates.
-- Hard scenes such as `bicycle`, `garden`, `room`, `kitchen`, and `bonsai`
-  still fall back to Phase-J.
+- Hard scenes such as `bicycle`, `kitchen`, `bonsai`, `stump`, and `treehill`
+  still fall back to Phase-J in the full9 portfolio.
 - This does not yet support a claim that representation-level Phase-S broadly
   dominates Phase-J or the underlying MeshSplatting baseline by itself.
 
@@ -214,9 +305,9 @@ The hard negative interpretation:
 | item | status | evidence |
 |---|---|---|
 | real method change in train/eval pipeline | done | v20 auto-prefix flags and portfolio selector script |
-| baseline/current/improved/ablation run | partial | Phase-J fallback, GeoRisk/PatchRisk, v19b, v19b top1/top2, v20 auto-prefix; not all scenes have v20 decisions |
-| metrics saved | done for completed rows | summary JSON/MD/CSV roots listed above |
-| qualitative outputs saved | partial | GeoRisk/CVaR panels only; no broad v20 qualitative win |
+| baseline/current/improved/ablation run | done for this stage | Phase-J fallback, GeoRisk/PatchRisk, v19b, v19b top1/top2, v20 original, v20 remaining A/B/C, portfolio v2 |
+| metrics saved | done | summary JSON/MD/CSV roots listed above |
+| qualitative outputs saved | done for diagnostics | GeoRisk/CVaR panels plus v20 full9 continuation contact sheets in `assets/` and output roots |
 | commands/configs/errors documented | done in this note and logs | `phasek_barycentric_gate.log`, portfolio command |
 | paper story written honestly | partial | usable for slides as audit-clean representation attempt, not final claim |
 | weaknesses marked | done | sparse acceptance and tiny visual gain called out explicitly |
@@ -231,8 +322,8 @@ train-val gate:
    representation-space capacity greater than the current tiny face-local SH1
    edit.
 2. Keep v20-style disjoint carrier holdout and train-val portfolio selection.
-3. Require the fixed policy to improve more than `2 / 7` scenes before promoting
-   it above Phase-J.
+3. Require the fixed policy to produce non-trivial accepted gains beyond the
+   current near-noop `4 / 9` portfolio before promoting it above Phase-J.
 4. Generate qualitative panels from accepted rows only and include rejected
    false-positive panels as safety evidence.
 

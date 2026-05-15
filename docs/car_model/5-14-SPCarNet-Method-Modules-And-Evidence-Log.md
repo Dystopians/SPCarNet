@@ -36,8 +36,14 @@ closes direct-path whole-patch-budget loopholes. A v8.3 strict preset now also
 closes the generic plan-replay loopholes by rejecting row slicing, coefficient
 rescaling, missing PatchCert metadata, row-level certification failures, and
 split patch carriers. v8.4 is the hardened strict-validator rerun intended to
-be the next claimable row if it passes. Those rows are still running/pending
-and are not yet claimable evidence. Logs:
+be the next claimable row if it passes. The later v20 auto-prefix continuation
+completed full9 decisions and a fixed portfolio v2: v20 accepts `2 / 9`
+(`garden`, `room`) under train-val gates, and the full portfolio accepts
+`4 / 9` (`flowers`, `counter`, `garden`, `room`) with mean effective
+report-only deltas of `+0.000608232` PSNR, `+0.000052366` SSIM, and
+`-0.000065320` LPIPS over Phase-J fallback. This improves coverage and audit
+cleanliness, but does not change the core conclusion because the new v20
+accepted rows are near no-op. Logs:
 `docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md` and
 `docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md`,
 `docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md`, and
@@ -61,6 +67,7 @@ and are not yet claimable evidence. Logs:
 | PatchRisk carrier replay | Expands selected train-only seed faces into local topology/centroid patches before materialization. | `scripts/car_model/ecsr_run_facelocal_coupled_selector.py`, `patchriskN` mode. | Strict 5-scene replay accepts only `counter`; useful negative ablation for post-hoc patch expansion. |
 | Direct patch-cert carrier | Builds the patch carrier inside the train-only certificate and materializes it directly through the Phase-K runner. | `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py` patch-cert flags and `scripts/car_model/ecsr_build_phase_s_patchcert_qualitative.py`. | v5 tail-gated replay accepts `bicycle`; v6 compact-stratified gate accepts `bicycle` and `flowers`; still sparse, but no longer only a one-scene hard edit. |
 | Fold-aware PatchCert carrier | Requires the seed face, patch-neighbor admission, and post-shrink materialized patch carrier to pass all-train fold proxy-gain certificates before materialization. v8.4 uses the hardened strict validator and certified whole-carrier plan replay. | `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py` crossfold, `patch_cert_crossfold_*`, `patch_cert_neighbor_crossfold`, `strict_patchcert_carrier`, strict plan materialization, and post-shrink gain checks, forwarded by `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`. | v7/v8 final gates accept 0 scenes; this is negative ablation evidence. v8.1/v8.2/v8.3/v8.4 are still running/pending; v8.4 is the intended next result row but still needs fixed-protocol decisions and qualitative outputs. |
+| v20 auto-prefix PatchCert + portfolio | Removes manual carrier-count selection by sorting train-only carrier rows and selecting a deterministic certified prefix; then picks a scene policy using only train-val decisions across candidate families. | `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py`, `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`, and `scripts/car_model/ecsr_select_phase_s_policy_portfolio.py`. | Full9 v20 accepts `garden` and `room`; portfolio v2 accepts `4 / 9`, but the added v20 effect is near metric noise. |
 | Per-face alpha refit | Fits train-only scalar multipliers for selected face-local residuals and passes them to materialization. | `scripts/car_model/ecsr_fit_facelocal_plan_alphas.py`; materializer arg `--materialize_plan_alpha_json`. | Interface complete, but first 3-scene pilot does not improve over uniform risk-tail. |
 | Train-val gate and fallback | Accepts repairs only with train-val metrics; test remains report-only. Rejected scenes fall back to Phase-J. | `scripts/car_model/ecsr_decide_phasek_trainval_gate.py` and coupled selector decision JSONs. | Now includes per-view tail checks plus compact-stratified promotion for small patch carriers; keeps the effective method from being harmed by risky Phase-S edits. |
 
@@ -271,6 +278,30 @@ override while the older balanced/tail gate still rejects it, so the claim is
 bounded compact-carrier tolerance rather than a clean all-diagnostic train-val
 win. A strict four-offset train-only validation is the next audit for this row.
 
+### v20 Auto-Prefix Full9 And Portfolio v2
+
+Evidence:
+
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingA_20260515`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingB_20260515`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingC_20260515`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v2_20260515/portfolio_summary.md`
+- `docs/car_model/5-14-PhaseS-v20-AutoPrefix-Portfolio-Policy.md`
+
+v20 removes manual carrier-count tuning by selecting a deterministic
+train-only carrier prefix. The full9 continuation shows the tradeoff clearly:
+the policy is more auditable, but most edits are either rejected by tail checks
+or too small to create visible held-out gains.
+
+| protocol | scenes | accepted | mean effective dPSNR | mean effective dSSIM | mean effective dLPIPS | reading |
+|---|---:|---:|---:|---:|---:|---|
+| v20 auto-prefix direct decisions | 9 | 2/9 | n/a | n/a | n/a | accepts `garden` and `room`; both are near no-op report-only changes |
+| fixed portfolio v2 | 9 | 4/9 | +0.000608232 | +0.000052366 | -0.000065320 | adds v20 `garden/room` to GeoRisk `flowers/counter`; still dominated by `flowers` |
+
+The portfolio is selected only from train-val decisions and rejects candidates
+without explicit `selection_uses_test=false` provenance. Its scientific value is
+fairness and coverage, not effect size.
+
 ### Alpha Refit and Stump Relaxed Checks
 
 Evidence:
@@ -308,6 +339,22 @@ Direct patch-cert v6 compact-stratified panels:
 `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v6_compactstrat_gate_20260514_qualitative/qualitative_summary.md`
 
 ![direct patch-cert v6 contact sheet](../../assets/spcarnet_phase_s_patchcert_v6_compactstrat_contact_sheet.png)
+
+v20 full9 continuation diagnostic sheets:
+
+`outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingA_20260515_qualitative/qualitative_summary.md`
+`outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingB_20260515_qualitative/qualitative_summary.md`
+`outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingC_20260515_qualitative/qualitative_summary.md`
+
+![v20 remainingA contact sheet](../../assets/spcarnet_phase_s_v20_remainingA_contact_sheet.png)
+
+![v20 remainingB contact sheet](../../assets/spcarnet_phase_s_v20_remainingB_contact_sheet.png)
+
+![v20 remainingC contact sheet](../../assets/spcarnet_phase_s_v20_remainingC_contact_sheet.png)
+
+These sheets are useful for error-map inspection and failure analysis. They do
+not provide strong full-frame qualitative wins; the accepted `garden/room`
+rows are visually near no-op.
 
 | scene | view | accepted | view dPSNR | view dSSIM | view dLPIPS | reading |
 |---|---|---:|---:|---:|---:|---|
@@ -352,12 +399,16 @@ not yet a strong final-paper visual claim.
 - GeoRisk/CVaR adds geometry adjacency and train-val CVaR diagnostics, but the
   result shows the remaining bottleneck is carrier capacity/evidence quality
   rather than only selector scoring.
+- v20 improves policy cleanliness and full9 coverage, but the accepted
+  `garden/room` rows are near no-op; it does not solve the visible-quality
+  bottleneck.
 
 ## Next Required Evidence
 
-The full8 closure is now complete for the fixed risk-tail trial set, and the
-v6 compact-stratified replay improves the direct PatchCert carrier from `1 / 5`
-to `2 / 5`. The next work is not more reporting; it is a stronger
+The full8 closure is complete for the fixed risk-tail trial set, the v6
+compact-stratified replay improves the direct PatchCert carrier from `1 / 5` to
+`2 / 5`, and v20 portfolio v2 extends the fixed portfolio to `4 / 9` full9
+accepted scenes. The next work is still not more reporting; it is a stronger
 representation operator or a better train-only risk predictor that can broaden
-acceptance beyond `flowers/counter/treehill/bicycle` without reopening the
-`garden` false-positive or the `bonsai` high-capacity failure.
+non-trivial acceptance beyond `flowers/counter` without reopening the `garden`
+false-positive or the `bonsai` high-capacity failure.

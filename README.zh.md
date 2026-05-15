@@ -13,7 +13,7 @@ report: outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2
 
 5 月 7 日 Compact-ELA/SOR 版本仍以 `archive/full9-compact-ela-ssim-peak-20260507`、commit `fae7942` 留档。Phase-J 在当前 full9 RGB 口径上更强，但它仍然是 render-time ELA portfolio，不是完全 baked 到表示里的终局模型。
 
-**Paper-loop 状态，2026-05-14：** `NOT COMPLETE`。Phase-J 是当前最强 endpoint：clean-best 与 Phase-J RGB 行在 `9 / 9` 场景完整，且 Phase-J 相对 selected clean MeshSplatting 在 `9 / 9` 场景三指标严格胜出。Phase-S 现在是一个真实的 representation-level face-local repair 分支，但可靠收益仍然稀疏。固定 7 场景 Phase-S portfolio 只接受 `2 / 7`（`flowers`、`counter`），另外 5 个场景回退到 Phase-J；相对 Phase-J fallback 的 mean effective report-only delta 为 `+0.000782013` PSNR、`+0.000067328` SSIM、`-0.000083983` LPIPS，且选择过程不使用 held-out test 指标，收益主要来自 `flowers` 的 GeoRisk 行。最新 v20 auto-prefix PatchCert carrier 去掉了手动 carrier-count 调参，并使用 disjoint policy-val carrier holdout，但在公平 train-val gate 下 `bicycle` 与 `flowers` 均未接受，即 `0 / 2`。这是真实的审计/方法里程碑，不是最终论文 endpoint。最新模块/证据日志：[`Phase-S v20 auto-prefix / portfolio`](docs/car_model/5-14-PhaseS-v20-AutoPrefix-Portfolio-Policy.md)、[`Compact-Stratified PatchCert`](docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md)、[`Direct PatchCert`](docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md)、[`PatchRisk`](docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md)、[`GeoRisk/CVaR`](docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md)、[`risk-tail/alpha`](docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md)。
+**Paper-loop 状态，2026-05-15：** `NOT COMPLETE`。Phase-J 仍是当前最强 endpoint：clean-best 与 Phase-J RGB 行在 `9 / 9` 场景完整，且 Phase-J 相对 selected clean MeshSplatting 在 `9 / 9` 场景三指标严格胜出。Phase-S 现在是一个真实的 representation-level face-local repair 分支，但可靠收益仍然稀疏。v20 auto-prefix PatchCert full9 continuation 已经补齐 `9 / 9` 场景 decision，并且只用 train-val gate 接受 `2 / 9`（`garden`、`room`）；这两个接受行的 report-only 增益都接近指标噪声。固定 full9 Phase-S portfolio v2 接受 `4 / 9`（`flowers`、`counter`、`garden`、`room`），其余场景回退 Phase-J；相对 Phase-J fallback 的 mean effective report-only delta 为 `+0.000608232` PSNR、`+0.000052366` SSIM、`-0.000065320` LPIPS。它比 v1 覆盖更完整、审计更干净，但还不是最终论文 endpoint，因为可见收益仍主要由 `flowers` 驱动，大部分 v20 edit 仍接近 no-op。最新模块/证据日志：[`Phase-S v20 auto-prefix / portfolio`](docs/car_model/5-14-PhaseS-v20-AutoPrefix-Portfolio-Policy.md)、[`Compact-Stratified PatchCert`](docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md)、[`Direct PatchCert`](docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md)、[`PatchRisk`](docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md)、[`GeoRisk/CVaR`](docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md)、[`risk-tail/alpha`](docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md)。
 
 ## 当前结果
 
@@ -110,9 +110,10 @@ Phase-J。
 v19b/v20 carrier-holdout 线进一步收紧审计：policy-val tuning samples 与
 carrier holdout samples 分离，strict replay 会检查 cluster-basis 完整性，v20
 还使用 deterministic auto-prefix carrier policy，避免手动 top-k carrier 扫描。
-代价也很明确：当前 v20 在 `bicycle` 与 `flowers` 上会 materialize 真实 checkpoint
-edit，但公平 train-val gate 接受 `0 / 2`。因此固定 portfolio 最终只保留已经为正的
-GeoRisk `flowers` 与 `counter` 行，其它场景回退到 Phase-J。
+代价也很明确：full9 v20 continuation 虽然在公平 train-val gate 下接受
+`garden` 与 `room`，但这两行在 held-out test 上接近 no-op。因此固定 portfolio v2
+保留已经为正的 GeoRisk `flowers/counter`，再加入很小的 v20 `garden/room` 行，其它
+场景回退到 Phase-J。
 
 在 object-prior 侧，nested K=8 SPCarNet selector 新增了基于 observed-visible
 preservation 的 `visible_only` 策略。在 206 个验证物体上，它相对 contained
@@ -137,8 +138,9 @@ selector 升级，但 oracle 行仍然更强，因此 shape completion 故事还
 | Phase-S risk-tail full8 | 8 个有候选场景接受 `3 / 8`，相对 Phase-J fallback 的 mean effective report-only delta 为 `+0.000684500` PSNR，`+0.000058956` SSIM，`-0.000073545` LPIPS；定性图在 `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_coupled_selector_v1_riskpilot_20260513_qualitative` |
 | Phase-S GeoRisk/CVaR 7-scene replay | 本轮要求的 7 个 hard/control 场景接受 `2 / 7`（`flowers`、`counter`），相对 Phase-J fallback 的 mean effective report-only delta 为 `+0.000782013` PSNR，`+0.000067328` SSIM，`-0.000083983` LPIPS；新增几何/CVaR 可审计诊断，但没有超越旧 risk-tail 覆盖范围；定性图在 `outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_georisk_cvar_v1_20260514_qualitative` |
 | Phase-S PatchRisk / direct PatchCert carrier | PatchRisk strict 5 场景 replay 接受 `1 / 5`（`counter`），均值 `+0.000014877` PSNR，`+0.000000072` SSIM，`-0.000000089` LPIPS；direct PatchCert v5 接受 `1 / 5`（`bicycle`），mean effective `+0.000077` PSNR，`+0.000007` SSIM，`-0.000023` LPIPS；direct PatchCert v6 compact-stratified gate 接受 `2 / 5`（`bicycle`、`flowers`），相对 Phase-J fallback 的 mean effective 为 `+0.001163` PSNR，`+0.000101` SSIM，`-0.000141` LPIPS；定性图在 `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v6_compactstrat_gate_20260514_qualitative` |
-| Phase-S v20 auto-prefix PatchCert | deterministic disjoint carrier-holdout auto-prefix policy；已完成 `bicycle` 与 `flowers`，接受 `0 / 2`；`bicycle` report-only test 近似不变（`+0.000000` PSNR，`+0.000000119` SSIM，`-0.000000417` LPIPS），但 train-val tail gate 拒绝；见 `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_disjoint_sampleholdout_chartquad_key_20260514` |
-| Phase-S fixed portfolio v1 | 在 GeoRisk/PatchRisk/v19b/v20 candidates 上只用 train-val 选择；接受 `2 / 7`（`flowers`、`counter`），`garden`、`bicycle`、`room`、`kitchen`、`bonsai` 回退；mean effective report-only delta 为 `+0.000782013` PSNR，`+0.000067328` SSIM，`-0.000083983` LPIPS；summary 在 `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v1_20260514/portfolio_summary.md` |
+| Phase-S v20 auto-prefix PatchCert | deterministic disjoint carrier-holdout auto-prefix policy；full9 continuation 已补齐 `9 / 9` decisions；train-val gate 接受 `2 / 9`（`garden`、`room`），`bicycle`、`flowers`、`counter`、`bonsai`、`kitchen` 被 balanced/tail gate 拒绝，`stump/treehill` 为 no-op；接受行 report-only delta 基本是零量级，因此这是审计覆盖提升，不是可视化突破 |
+| Phase-S fixed portfolio v2 | 在 GeoRisk/PatchRisk/v19b/v20 candidates 上只用 train-val 选择；接受 `4 / 9`（`flowers=georisk`、`counter=georisk`、`garden=v20`、`room=v20`），其它场景回退；mean effective report-only delta 为 `+0.000608232` PSNR，`+0.000052366` SSIM，`-0.000065320` LPIPS；summary 在 `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v2_20260515/portfolio_summary.md` |
+| Phase-S v20 定性诊断 | contact sheets 已复制到 `assets/spcarnet_phase_s_v20_remainingA_contact_sheet.png`、`assets/spcarnet_phase_s_v20_remainingB_contact_sheet.png`、`assets/spcarnet_phase_s_v20_remainingC_contact_sheet.png`；这些是放大差分诊断图，不是强 full-frame visual win |
 | Phase-S gaincert v1 | 四折 gate 接受 `garden`、`flowers`、`bonsai`、`kitchen`、`room` 与近似 no-op 的 `stump`；拒绝 `bicycle`；`counter/treehill` 在 single-gate 阶段被阻断 |
 | full9 paper-loop collector | clean-best `9 / 9`，Phase-J `9 / 9`，Phase-J 相对 clean-best 三指标严格胜出 `9 / 9`；Phase-S closure 为 `False`，因为严格 gate 只有 `7 / 9`，接受 `6 / 9`，且只有 `3 / 7` 是 train-val all-axis 胜出 |
 | Stage ELA12 clean-best audit | selected-clean 子集仍是 `5 / 5` strict full-pass，per-view RGB pass 为 `164 / 165`，envelope pass 为 `163 / 165`；这不是 Mip-NeRF360 全 9 场景 benchmark |
@@ -224,9 +226,10 @@ gate 接受 `bicycle` 和 `flowers`；被拒绝的行也放在同一张图里，
   <img src="assets/spcarnet_phase_s_patchcert_v6_compactstrat_contact_sheet.png" width="980" alt="Phase-S PatchCert v6 compact-stratified 定性对比">
 </p>
 
-当前固定 Phase-S portfolio 更保守：v20 auto-prefix PatchCert 两个测试场景都被
-公平 gate 拒绝，portfolio 只接受 `flowers` 与 `counter` 的 GeoRisk 行。下面两张图
-是当前 portfolio 最诚实的正向定性证据，使用放大的 green/magenta error change。
+当前固定 Phase-S portfolio v2 更完整但仍然保守：full9 上接受
+`flowers/counter` 的 GeoRisk 行，以及 `garden/room` 的 v20 行。真正有可见价值的
+正向例子仍主要是 GeoRisk `flowers/counter`；v20 contact sheet 放在下面作为诊断证据，
+因为它们虽然被 train-val gate 接受，但视觉上接近 no-op。
 
 <p align="center">
   <img src="assets/spcarnet_phase_s_portfolio_flowers_georisk_panel.png" width="980" alt="Phase-S portfolio GeoRisk flowers 定性对比">
@@ -234,6 +237,18 @@ gate 接受 `bicycle` 和 `flowers`；被拒绝的行也放在同一张图里，
 
 <p align="center">
   <img src="assets/spcarnet_phase_s_portfolio_counter_georisk_panel.png" width="980" alt="Phase-S portfolio GeoRisk counter 定性对比">
+</p>
+
+<p align="center">
+  <img src="assets/spcarnet_phase_s_v20_remainingA_contact_sheet.png" width="980" alt="Phase-S v20 remainingA 诊断 contact sheet">
+</p>
+
+<p align="center">
+  <img src="assets/spcarnet_phase_s_v20_remainingB_contact_sheet.png" width="980" alt="Phase-S v20 remainingB 诊断 contact sheet">
+</p>
+
+<p align="center">
+  <img src="assets/spcarnet_phase_s_v20_remainingC_contact_sheet.png" width="980" alt="Phase-S v20 remainingC 诊断 contact sheet">
 </p>
 
 选图清单：`assets/spcarnet_m360_outdoor_detail_selection.json`、`assets/spcarnet_m360_where_it_helps_selection.json`，以及早期全图清单 `assets/spcarnet_m360_full9_gallery_selection.json`。

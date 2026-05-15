@@ -7312,3 +7312,69 @@ too-small effective edit capacity: the stricter carrier policy often makes
 near-noop checkpoint edits whose gains are at or near metric noise. The honest
 paper story is still Phase-J as the strong broad result plus Phase-S as a
 guarded representation-level local-repair extension with sparse positives.
+
+## 2026-05-15 01:00 PDT - Phase-S v20 Full9 Continuation And Portfolio v2
+
+Completed the missing v20 auto-prefix PatchCert continuation scenes and rebuilt
+the fixed train-val-only Phase-S portfolio on all nine Mip-NeRF360 scenes.
+
+Execution:
+
+- Group A on GPU 1:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingA_20260515`
+  for `garden,counter,bonsai`.
+- Group B on GPU 4:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingB_20260515`
+  for `room,kitchen,stump,treehill`; intentionally interrupted after `room`
+  decision landed because Group C covered the remaining duplicate scenes.
+- Group C on GPU 6:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingC_20260515`
+  for `kitchen,stump,treehill`.
+- W&B group:
+  `phase_s_patchcert_v20_autoprefix_remaining_20260515`.
+
+v20 full9 decision summary:
+
+| scene | accepted | train-val balanced | report-only test balanced | report-only test delta | reading |
+|---|---:|---:|---:|---|---|
+| bicycle | false | -0.000001311 | +0.000010729 | `dP +0.000000000, dS +0.000000119, dL -0.000000417` | old v20 original; tail/balanced reject |
+| flowers | false | -0.000001073 | +0.000011563 | `dP +0.000003815, dS +0.000000000, dL -0.000000387` | old v20 original; tail/balanced reject |
+| garden | true | +0.000013828 | -0.000000596 | `dP +0.000000000, dS +0.000000000, dL +0.000000030` | accepted by train-val, report-only LPIPS noise regression |
+| room | true | +0.000005901 | +0.000000596 | `dP +0.000000000, dS +0.000000000, dL -0.000000030` | accepted, near no-op positive |
+| counter | false | -0.000008881 | +0.000007927 | `dP -0.000001907, dS -0.000000179, dL -0.000000671` | train-val balanced reject |
+| kitchen | false | +0.000007480 | +0.000005007 | `dP +0.000003815, dS +0.000000060, dL +0.000000000` | tail reject despite positive mean |
+| bonsai | false | +0.000000298 | -0.000002682 | `dP +0.000000000, dS +0.000000000, dL +0.000000134` | tail reject |
+| stump | false | +0.000000000 | +0.000000000 | `dP +0.000000000, dS +0.000000000, dL +0.000000000` | operator no-op |
+| treehill | false | +0.000000000 | +0.000000000 | `dP +0.000000000, dS +0.000000000, dL +0.000000000` | operator no-op |
+
+Portfolio v2:
+
+- root:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v2_20260515`
+- summary:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v2_20260515/portfolio_summary.md`
+- accepted `4 / 9`: `flowers=georisk`, `counter=georisk`,
+  `garden=v20_remainingA`, `room=v20_remainingB`;
+- mean effective report-only delta:
+  `+0.000608232` PSNR, `+0.000052366` SSIM, `-0.000065320` LPIPS.
+
+Qualitative diagnostics:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingA_20260515_qualitative
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingB_20260515_qualitative
+outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_patchcert_v20_autoprefix_remainingC_20260515_qualitative
+assets/spcarnet_phase_s_v20_remainingA_contact_sheet.png
+assets/spcarnet_phase_s_v20_remainingB_contact_sheet.png
+assets/spcarnet_phase_s_v20_remainingC_contact_sheet.png
+```
+
+Interpretation: `NOT COMPLETE`. This is real progress on the evidence
+checklist: v20 no longer has missing full9 decisions, portfolio v2 is fixed and
+train-val-only, metrics and qualitative diagnostics are saved, and README/docs
+now expose the result. Scientifically, it is still not a paper-level Phase-S
+breakthrough. The accepted count improved from `2 / 7` to `4 / 9`, but the two
+new v20 accepts are near metric-noise no-ops and the visual story is still
+driven by `flowers`. The next method step must increase representation edit
+capacity while keeping the v20 no-test, disjoint-holdout, tail-safe policy
+discipline.
