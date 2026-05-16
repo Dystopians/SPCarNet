@@ -28,6 +28,23 @@ Ran W&B-logged `garden` full render-gate pilots for v1, v2, and v3.
   accepted train-val render certificate with `selection_uses_test=false` and a
   matching plan sha256. A rejected v3 certificate smoke correctly fails strict
   materialization with `render_trust_certificate_not_accepted`.
+- Ran the first render-trust scale ablation on `garden` using the v3
+  positive-tail-safe plan at scale `0.5`. The replay was a real non-noop
+  checkpoint (`6` faces / `18` vertices, materialize scale `0.5`) but train-val
+  balanced delta remained negative at `-0.000004113`; the certificate writer
+  correctly produced `accepted=false`.
+- Added the first render-visible region carrier proposal interface:
+  `scripts/car_model/ecsr_build_render_visible_region_carriers.py`. It extracts
+  train-only image residual blobs from `views/*.npz`, merges them into
+  multi-view face carriers, and exports a region-ranked evidence directory for
+  the existing Phase-S fitter. This is the next method pivot away from
+  carrier-threshold and scale scans.
+- Garden render-visible region proposal smoke: `8` train evidence views produced
+  `64` residual regions, `49` merged carriers, and `1776` region-ranked faces.
+  A direct shared-field smoke selected `512` faces, accepted `274`, added `822`
+  local vertices, and achieved `+0.075074986` final accepted policy-val proxy
+  gain, but fit proxy remained negative. A full Phase-K render-gate run is
+  required before any method claim.
 
 **Decision**: `NOT_COMPLETE_PROXY_TO_RENDER_MISMATCH`. The shared-field
 operator and tail-safe guard are real implementation progress, but they do not
@@ -42,6 +59,11 @@ instead of another carrier-size or threshold sweep.
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_sharedfield_v3_tail_safe_garden_20260516/decisions/garden_decision.json`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_sharedfield_v3_tail_safe_garden_20260516_qualitative/qualitative_summary.md`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/render_trust_cert_smoke_20260516/garden_rejected_scale050.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/render_trust_scale_search_20260516/scale050_trial/decisions/garden_decision.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/render_trust_scale_search_20260516/garden/scale050_render_trust_certificate.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/render_trust_scale_search_20260516/scale050_trial_qualitative/qualitative_summary.md`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/garden/render_visible_region_carriers.md`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/direct_smoke/garden/model/surface_residual_facelocal_sh1_delta_audit.json`
 
 ---
 
@@ -7448,3 +7470,112 @@ new v20 accepts are near metric-noise no-ops and the visual story is still
 driven by `flowers`. The next method step must increase representation edit
 capacity while keeping the v20 no-test, disjoint-holdout, tail-safe policy
 discipline.
+
+## 2026-05-16 PDT - Phase-S Render-Visible Region Prior
+
+Implemented the render-visible region carrier proposal path after the shared
+residual-field v1/v2/v3 and render-trust scale `0.5` experiments showed that
+surface-proxy face ranking alone does not reliably translate into render-space
+improvement.
+
+New implementation:
+
+```text
+scripts/car_model/ecsr_build_render_visible_region_carriers.py
+scripts/car_model/ecsr_collect_phase_s_regionprior_summary.py
+```
+
+The proposal builder reads train-only `views/*.npz` surface evidence, extracts
+high-residual connected image regions, projects them to face ids, merges
+multi-view face-overlap carriers, and writes a region-ranked evidence directory
+that the existing Phase-K face-local fitter can consume. This is a method-side
+change in the proposal prior, not a scene-specific parameter sweep.
+
+Fixed policy carrier generation completed for all nine available scenes:
+
+| scene | carriers | regions | evidence faces |
+|---|---:|---:|---:|
+| bicycle | 61 | 64 | 1781 |
+| bonsai | 43 | 64 | 1962 |
+| counter | 27 | 64 | 2048 |
+| flowers | 62 | 64 | 1149 |
+| garden | 49 | 64 | 1777 |
+| kitchen | 30 | 64 | 1986 |
+| room | 38 | 64 | 2048 |
+| stump | 58 | 64 | 1627 |
+| treehill | 60 | 64 | 1685 |
+
+First full render-gated result on `garden`:
+
+- output root:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phasek_regionprior_garden`
+- decision:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phasek_regionprior_garden/decisions/garden_decision.json`
+- qualitative:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phasek_regionprior_garden_qualitative/patchcert_qualitative_contact_sheet.png`
+- render-trust certificate:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phasek_regionprior_garden/garden/render_visible_region_v1_render_trust_certificate.json`
+
+`garden` decision:
+
+| field | value |
+|---|---:|
+| accepted | true |
+| selection_uses_test | false |
+| train-val balanced delta | +0.000082791 |
+| train-val delta | dP +0.000070572, dS +0.000000000, dL -0.000000611 |
+| report-only test balanced delta | +0.000037313 |
+| report-only test delta | dP +0.000043869, dS -0.000000417, dL -0.000000089 |
+| accepted faces | 183 |
+| vertices added | 549 |
+| final policy-val proxy gain | +0.173052862 |
+| final fit proxy gain | +0.074261867 |
+
+Interpretation: `NOT COMPLETE`, but this is a real method step. It is the first
+shared-field Phase-S row in this branch that passes the strict train-val render
+gate after changing the proposal prior, and it writes a non-noop checkpoint with
+a valid render-trust certificate. The effect size is still too small to claim a
+paper-level visual breakthrough. The required next evidence is the fixed-policy
+multi-scene run, already launched with W&B online:
+
+- outdoor group on GPU 1:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phasek_regionprior_outdoor`
+  for `bicycle,flowers,stump,treehill`;
+- indoor group on GPU 6:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phasek_regionprior_indoor`
+  for `bonsai,counter,kitchen,room`.
+
+Full9 completion:
+
+- default summary:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phase_s_regionprior_full9_summary.md`
+- robust summary:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phase_s_regionprior_full9_robust_summary.md`
+- qualitative:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phasek_regionprior_garden_qualitative/patchcert_qualitative_contact_sheet.png`
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phasek_regionprior_indoor_qualitative/patchcert_qualitative_contact_sheet.png`
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phasek_regionprior_outdoor_qualitative/patchcert_qualitative_contact_sheet.png`
+
+Default Phase-K accepts `4 / 9` (`bonsai`, `garden`, `kitchen`, `treehill`) but
+has negative effective fallback mean because `bonsai` test regresses strongly.
+A train-val-only robust promotion layer was therefore added to the collector:
+require the default decision to accept, no test selection, no mean train-val
+LPIPS regression, tail CVaR >= `-0.0001`, and worst stratified group balanced
+delta >= `-0.00001`. This keeps `garden` and `kitchen` only.
+
+Full9 robust effective report-only deltas versus Phase-J fallback:
+
+| accepted | dPSNR | dSSIM | dLPIPS | reading |
+|---:|---:|---:|---:|---|
+| `2 / 9` | `+0.000298606` | `+0.000006563` | `-0.000020499` | all-axis positive, but still small |
+
+The saliency-weighted v2 garden ablation was also run:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phasek_regionweighted_garden
+```
+
+It accepted but only achieved train-val balanced `+0.000001252`, weaker than
+v1 `+0.000082791`, so simple face-score sample weighting is not promoted. The
+next method upgrade should use true per-view region core/context masks or a
+masked render-space objective.

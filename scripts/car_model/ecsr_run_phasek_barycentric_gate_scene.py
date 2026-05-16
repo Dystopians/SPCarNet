@@ -376,6 +376,10 @@ def _apply_delta(
         str(args.delta_max_total_samples),
         "--high_error_quantile",
         str(args.delta_high_error_quantile),
+        "--face_score_weight_power",
+        _fmt_arg(args.delta_face_score_weight_power),
+        "--face_score_weight_max",
+        _fmt_arg(args.delta_face_score_weight_max),
         "--strength",
         str(args.delta_strength),
         "--max_abs_delta_rgb",
@@ -1143,6 +1147,16 @@ def main() -> int:
     parser.add_argument("--delta_max_samples_per_face_view", type=int, default=64)
     parser.add_argument("--delta_max_total_samples", type=int, default=300000)
     parser.add_argument("--delta_high_error_quantile", type=float, default=0.70)
+    parser.add_argument(
+        "--delta_face_score_weight_power",
+        type=float,
+        default=0.0,
+        help=(
+            "Facelocal-only train residual saliency weighting. When >0, the fitter "
+            "upweights samples from high-score proposal faces without reading test data."
+        ),
+    )
+    parser.add_argument("--delta_face_score_weight_max", type=float, default=4.0)
     parser.add_argument("--delta_strength", type=float, default=0.08)
     parser.add_argument("--delta_max_abs_rgb", type=float, default=0.008)
     parser.add_argument("--delta_operator", choices=("dc", "sh1", "facelocal_sh1", "subdivision"), default="dc")
@@ -1467,6 +1481,10 @@ def main() -> int:
         parser.error("--delta_patch_cert_seed_rescue_max_seeds must be >= 0")
     if int(args.delta_patch_cert_seed_rescue_min_aux_witnesses) < 0:
         parser.error("--delta_patch_cert_seed_rescue_min_aux_witnesses must be >= 0")
+    if not math.isfinite(float(args.delta_face_score_weight_power)) or float(args.delta_face_score_weight_power) < 0.0:
+        parser.error("--delta_face_score_weight_power must be finite and >= 0")
+    if not math.isfinite(float(args.delta_face_score_weight_max)) or float(args.delta_face_score_weight_max) < 1.0:
+        parser.error("--delta_face_score_weight_max must be finite and >= 1")
     if (
         not math.isfinite(float(args.delta_patch_cert_cluster_basis_max_fit_mse_regression))
         or float(args.delta_patch_cert_cluster_basis_max_fit_mse_regression) < 0.0

@@ -63,6 +63,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_total_samples", type=int, default=320000)
     parser.add_argument("--high_error_quantile", type=float, default=0.65)
     parser.add_argument("--min_alpha", type=float, default=0.05)
+    parser.add_argument(
+        "--face_score_weight_power",
+        type=float,
+        default=0.0,
+        help=(
+            "Optional train-only saliency weighting for sampled residual fitting. "
+            "When >0, per-pixel residual weights are multiplied by "
+            "(face_score / median_selected_face_score) ** power and clipped by "
+            "--face_score_weight_max. Default 0 preserves historical behavior."
+        ),
+    )
+    parser.add_argument(
+        "--face_score_weight_max",
+        type=float,
+        default=4.0,
+        help="Upper clip for --face_score_weight_power saliency weights.",
+    )
     parser.add_argument("--barycentric_tolerance", type=float, default=0.35)
     parser.add_argument(
         "--uniform_barycentric",
@@ -540,6 +557,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force_apply", action="store_true")
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
+    if not math.isfinite(float(args.face_score_weight_power)) or float(args.face_score_weight_power) < 0.0:
+        parser.error("--face_score_weight_power must be finite and >= 0")
+    if not math.isfinite(float(args.face_score_weight_max)) or float(args.face_score_weight_max) < 1.0:
+        parser.error("--face_score_weight_max must be finite and >= 1")
     if float(args.patch_cert_cluster_basis_max_scale) <= 0.0:
         parser.error("--patch_cert_cluster_basis_max_scale must be > 0")
     if float(args.patch_cert_cluster_basis_lr) <= 0.0:
@@ -718,6 +739,8 @@ def collect_samples(
     max_samples_per_face_view: int,
     max_total_samples: int,
     uniform_barycentric: bool,
+    face_score_weight_power: float = 0.0,
+    face_score_weight_max: float = 4.0,
 ) -> PixelSamples:
     selected = set(int(fid) for fid in selected_faces)
     face_chunks: list[np.ndarray] = []
@@ -728,6 +751,15 @@ def collect_samples(
     sample_view_names: list[str] = []
     remaining = int(max_total_samples)
     tol = float(barycentric_tolerance)
+    score_power = max(float(face_score_weight_power), 0.0)
+    score_weight_max = max(float(face_score_weight_max), 1.0)
+    positive_scores = [
+        max(float(face_stats.get(int(fid), {}).get("score", 0.0)), 0.0)
+        for fid in selected_faces
+    ]
+    positive_scores = [score for score in positive_scores if score > 0.0]
+    score_ref = float(np.median(np.asarray(positive_scores, dtype=np.float64))) if positive_scores else 1.0
+    score_ref = max(score_ref, 1e-8)
 
     for view_path in view_paths:
         if remaining <= 0:
@@ -796,7 +828,11 @@ def collect_samples(
             l1 = residual_l1[ys, xs].astype(np.float32)
             stat = face_stats.get(int(fid), {})
             consistency = float(stat.get("consistency", 1.0))
-            weights = np.maximum(l1, 1e-4) * max(consistency, 1e-3)
+            score_weight = 1.0
+            if score_power > 0.0:
+                face_score = max(float(stat.get("score", score_ref)), 0.0)
+                score_weight = float(np.clip((face_score / score_ref) ** score_power, 1e-3, score_weight_max))
+            weights = np.maximum(l1, 1e-4) * max(consistency, 1e-3) * score_weight
             face_chunks.append(np.full((n,), int(fid), dtype=np.int64))
             bary_chunks.append(b.astype(np.float32))
             residual_chunks.append(residual.astype(np.float32))
@@ -1393,6 +1429,8 @@ def summarize_crossfold_face_gain(
                 max_samples_per_face_view=int(args.max_samples_per_face_view),
                 max_total_samples=max(int(args.max_total_samples // max(folds, 1)), 1),
                 uniform_barycentric=bool(args.uniform_barycentric),
+                face_score_weight_power=float(args.face_score_weight_power),
+                face_score_weight_max=float(args.face_score_weight_max),
             )
             fold_view_names = [p.stem for p in fold_paths]
         if fold_samples.count:
@@ -1609,6 +1647,8 @@ def build_patch_crossfold_cache(
             max_samples_per_face_view=int(args.max_samples_per_face_view),
             max_total_samples=max(int(args.max_total_samples // max(folds, 1)), 1),
             uniform_barycentric=bool(args.uniform_barycentric),
+            face_score_weight_power=float(args.face_score_weight_power),
+            face_score_weight_max=float(args.face_score_weight_max),
         )
         if fold_samples.count:
             _, _, fold_sample_vertex_ids = localize_samples(faces, selected_faces, fold_samples)
@@ -1760,6 +1800,8 @@ def build_carrier_holdout_cache(
                 max_samples_per_face_view=int(args.max_samples_per_face_view),
                 max_total_samples=int(args.max_total_samples),
                 uniform_barycentric=bool(args.uniform_barycentric),
+                face_score_weight_power=float(args.face_score_weight_power),
+                face_score_weight_max=float(args.face_score_weight_max),
             )
         summary["sample_count"] = int(all_samples.count)
         sample_indices = np.arange(int(all_samples.count), dtype=np.int64)
@@ -1816,6 +1858,8 @@ def build_carrier_holdout_cache(
             max_samples_per_face_view=int(args.max_samples_per_face_view),
             max_total_samples=max(int(args.max_total_samples // max(groups, 1)), 1),
             uniform_barycentric=bool(args.uniform_barycentric),
+            face_score_weight_power=float(args.face_score_weight_power),
+            face_score_weight_max=float(args.face_score_weight_max),
         )
         if fold_samples.count:
             _, _, fold_sample_vertex_ids = localize_samples(faces, selected_faces, fold_samples)
@@ -4638,6 +4682,8 @@ def main() -> int:
         max_samples_per_face_view=int(args.max_samples_per_face_view),
         max_total_samples=int(args.max_total_samples),
         uniform_barycentric=bool(args.uniform_barycentric),
+        face_score_weight_power=float(args.face_score_weight_power),
+        face_score_weight_max=float(args.face_score_weight_max),
     )
     val_samples = collect_samples(
         val_paths,
@@ -4649,6 +4695,8 @@ def main() -> int:
         max_samples_per_face_view=int(args.max_samples_per_face_view),
         max_total_samples=max(int(args.max_total_samples // 2), 1),
         uniform_barycentric=bool(args.uniform_barycentric),
+        face_score_weight_power=float(args.face_score_weight_power),
+        face_score_weight_max=float(args.face_score_weight_max),
     )
     policy_val_all_sample_count = int(val_samples.count)
     carrier_holdout_samples: PixelSamples | None = None
@@ -5011,6 +5059,8 @@ def main() -> int:
             "min_alpha": float(args.min_alpha),
             "barycentric_tolerance": float(args.barycentric_tolerance),
             "uniform_barycentric": bool(args.uniform_barycentric),
+            "face_score_weight_power": float(args.face_score_weight_power),
+            "face_score_weight_max": float(args.face_score_weight_max),
         },
         "strength": float(args.strength),
         "max_abs_delta_rgb": float(args.max_abs_delta_rgb),

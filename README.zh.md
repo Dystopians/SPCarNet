@@ -13,7 +13,7 @@ report: outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2
 
 5 月 7 日 Compact-ELA/SOR 版本仍以 `archive/full9-compact-ela-ssim-peak-20260507`、commit `fae7942` 留档。Phase-J 在当前 full9 RGB 口径上更强，但它仍然是 render-time ELA portfolio，不是完全 baked 到表示里的终局模型。
 
-**Paper-loop 状态，2026-05-16：** `NOT COMPLETE`。Phase-J 仍是当前最强 endpoint：clean-best 与 Phase-J RGB 行在 `9 / 9` 场景完整，且 Phase-J 相对 selected clean MeshSplatting 在 `9 / 9` 场景三指标严格胜出。Phase-S 现在是一个真实的 representation-level face-local repair 分支，但可靠收益仍然稀疏。v20 auto-prefix PatchCert full9 continuation 已经补齐 `9 / 9` 场景 decision，并且只用 train-val gate 接受 `2 / 9`（`garden`、`room`）；这两个接受行的 report-only 增益都接近指标噪声。固定 full9 Phase-S portfolio v2 接受 `4 / 9`，mean effective report-only delta 为 `+0.000608232` PSNR、`+0.000052366` SSIM、`-0.000065320` LPIPS。新的 effect-aware portfolio 会拒绝 near-noop accepted 行，只接受 `3 / 9`（`bicycle`、`flowers`、`counter`），均值变为 `+0.000652101` PSNR、`+0.000056287` SSIM、`-0.000078238` LPIPS，同时更明确地暴露覆盖不足。v21 rank2 与 v22 coverage-aware PatchCert 消融能产生真实 non-noop edit，但没有通过严格 effect-aware portfolio；v22 pilot 在 effect-size 与 tail-safety 检查后接受 `0 / 3`。2026-05-16 的 shared residual-field 是真实表示层改动，positive-tail-safe guard 把 `garden` tail negative fraction 从 `0.341463` 降到 `0.170732`，但 v1/v2/v3 仍全部被严格 train-val render gate 拒绝。这确认了 proxy-to-render mismatch，Phase-S 还不是终局 endpoint。最新模块/证据日志：[`Phase-S shared residual-field`](docs/car_model/5-16-PhaseS-SharedResidualField-Operator.md)、[`Phase-S effect-aware / rank2 / auto-visual`](docs/car_model/5-15-PhaseS-EffectAware-Portfolio-Rank2-AutoVisual.md)、[`Phase-S v20 auto-prefix / portfolio`](docs/car_model/5-14-PhaseS-v20-AutoPrefix-Portfolio-Policy.md)、[`Compact-Stratified PatchCert`](docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md)、[`Direct PatchCert`](docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md)、[`PatchRisk`](docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md)、[`GeoRisk/CVaR`](docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md)、[`risk-tail/alpha`](docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md)。
+**Paper-loop 状态，2026-05-16：** `NOT COMPLETE`。Phase-J 仍是当前最强 endpoint：clean-best 与 Phase-J RGB 行在 `9 / 9` 场景完整，且 Phase-J 相对 selected clean MeshSplatting 在 `9 / 9` 场景三指标严格胜出。Phase-S 现在是一个真实的 representation-level face-local repair 分支，但可靠收益仍然稀疏。最新的 render-visible region-prior shared-field 方法已经用 W&B 在 Mip-NeRF360 `9 / 9` 场景完整跑完。默认 Phase-K gate 接受 `4 / 9`，但 `bonsai` 虽然 train-val 接受，report-only test 明显负向，因此 fallback 后 effective 均值并不安全。新的 train-val-only robust promotion 层只保留 `garden` 和 `kitchen`，full9 effective report-only delta 为 `+0.000298606` PSNR、`+0.000006563` SSIM、`-0.000020499` LPIPS。这个版本修复了错误接受项拖垮全局的问题，但收益仍然很小，还不是论文级突破。证据：`outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phase_s_regionprior_full9_robust_summary.md`。最新模块/证据日志：[`Phase-S shared residual-field`](docs/car_model/5-16-PhaseS-SharedResidualField-Operator.md)、[`Phase-S effect-aware / rank2 / auto-visual`](docs/car_model/5-15-PhaseS-EffectAware-Portfolio-Rank2-AutoVisual.md)、[`Phase-S v20 auto-prefix / portfolio`](docs/car_model/5-14-PhaseS-v20-AutoPrefix-Portfolio-Policy.md)、[`Compact-Stratified PatchCert`](docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md)、[`Direct PatchCert`](docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md)、[`PatchRisk`](docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md)、[`GeoRisk/CVaR`](docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md)、[`risk-tail/alpha`](docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md)。
 
 ## 当前结果
 
@@ -141,6 +141,7 @@ selector 升级，但 oracle 行仍然更强，因此 shape completion 故事还
 | Phase-S v20 auto-prefix PatchCert | deterministic disjoint carrier-holdout auto-prefix policy；full9 continuation 已补齐 `9 / 9` decisions；train-val gate 接受 `2 / 9`（`garden`、`room`），`bicycle`、`flowers`、`counter`、`bonsai`、`kitchen` 被 balanced/tail gate 拒绝，`stump/treehill` 为 no-op；接受行 report-only delta 基本是零量级，因此这是审计覆盖提升，不是可视化突破 |
 | Phase-S fixed portfolio v2 | 在 GeoRisk/PatchRisk/v19b/v20 candidates 上只用 train-val 选择；接受 `4 / 9`（`flowers=georisk`、`counter=georisk`、`garden=v20`、`room=v20`），其它场景回退；mean effective report-only delta 为 `+0.000608232` PSNR，`+0.000052366` SSIM，`-0.000065320` LPIPS；summary 在 `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v2_20260515/portfolio_summary.md` |
 | Phase-S effect-aware portfolio v1 | 只用 train-val 的 portfolio，同时加入 non-noop、operator-pass 与 effect-size gate；接受 `3 / 9`（`bicycle=patchcert_v6`、`flowers=gaincert_v2`、`counter=riskpilot`），拒绝 v20 near-noop 行；mean effective report-only delta 为 `+0.000652101` PSNR，`+0.000056287` SSIM，`-0.000078238` LPIPS；summary 在 `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_effectaware_portfolio_v1_20260515/portfolio_summary.md` |
+| Phase-S render-visible region-prior robust | 用 train-only 图像残差连通区域反投影成 face carriers，再拟合 shared face-local residual field；只有默认 gate 通过且 LPIPS/tail/stratified train-val robustness 同时通过时才提升，否则回退 Phase-J；full9 默认 gate 接受 `4 / 9`，robust promotion 接受 `2 / 9`（`garden`、`kitchen`）；相对 Phase-J fallback 的 robust effective report-only delta 为 `+0.000298606` PSNR、`+0.000006563` SSIM、`-0.000020499` LPIPS；summary 在 `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phase_s_regionprior_full9_robust_summary.md` |
 | Phase-S v20 定性诊断 | contact sheets 已复制到 `assets/spcarnet_phase_s_v20_remainingA_contact_sheet.png`、`assets/spcarnet_phase_s_v20_remainingB_contact_sheet.png`、`assets/spcarnet_phase_s_v20_remainingC_contact_sheet.png`；这些是放大差分诊断图，不是强 full-frame visual win |
 | Phase-S gaincert v1 | 四折 gate 接受 `garden`、`flowers`、`bonsai`、`kitchen`、`room` 与近似 no-op 的 `stump`；拒绝 `bicycle`；`counter/treehill` 在 single-gate 阶段被阻断 |
 | full9 paper-loop collector | clean-best `9 / 9`，Phase-J `9 / 9`，Phase-J 相对 clean-best 三指标严格胜出 `9 / 9`；Phase-S closure 为 `False`，因为严格 gate 只有 `7 / 9`，接受 `6 / 9`，且只有 `3 / 7` 是 train-val all-axis 胜出 |
@@ -250,6 +251,23 @@ gate 接受 `bicycle` 和 `flowers`；被拒绝的行也放在同一张图里，
 
 <p align="center">
   <img src="assets/spcarnet_phase_s_v20_remainingC_contact_sheet.png" width="980" alt="Phase-S v20 remainingC 诊断 contact sheet">
+</p>
+
+render-visible region-prior 分支是最新的表示层修复尝试。它比纯 face-score
+选择更贴近可见残差区域，但 full9 收益仍然很小。默认 gate 会接受 `bonsai`，
+而该场景 report-only test 明显负向，所以当前汇报口径使用 train-val-only
+robust promotion，只保留 `garden/kitchen`。
+
+<p align="center">
+  <img src="assets/spcarnet_phase_s_regionprior_garden_contact_sheet.png" width="980" alt="Phase-S render-visible region-prior garden 诊断 contact sheet">
+</p>
+
+<p align="center">
+  <img src="assets/spcarnet_phase_s_regionprior_indoor_contact_sheet.png" width="980" alt="Phase-S render-visible region-prior indoor 诊断 contact sheet">
+</p>
+
+<p align="center">
+  <img src="assets/spcarnet_phase_s_regionprior_outdoor_contact_sheet.png" width="980" alt="Phase-S render-visible region-prior outdoor 诊断 contact sheet">
 </p>
 
 选图清单：`assets/spcarnet_m360_outdoor_detail_selection.json`、`assets/spcarnet_m360_where_it_helps_selection.json`，以及早期全图清单 `assets/spcarnet_m360_full9_gallery_selection.json`。
