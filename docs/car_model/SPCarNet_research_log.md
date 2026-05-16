@@ -24,6 +24,10 @@ Ran W&B-logged `garden` full render-gate pilots for v1, v2, and v3.
   dPSNR is `-0.000003815` and balanced delta is `-0.000005305`; rejected.
 - v3 qualitative panels were generated, but the best report-only test rows are
   still metric-noise scale and not visually meaningful.
+- Added a render-trust replay hook: strict non-unit plan scale now requires an
+  accepted train-val render certificate with `selection_uses_test=false` and a
+  matching plan sha256. A rejected v3 certificate smoke correctly fails strict
+  materialization with `render_trust_certificate_not_accepted`.
 
 **Decision**: `NOT_COMPLETE_PROXY_TO_RENDER_MISMATCH`. The shared-field
 operator and tail-safe guard are real implementation progress, but they do not
@@ -37,6 +41,7 @@ instead of another carrier-size or threshold sweep.
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_sharedfield_v2_facegain_garden_20260516/decisions/garden_decision.json`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_sharedfield_v3_tail_safe_garden_20260516/decisions/garden_decision.json`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_sharedfield_v3_tail_safe_garden_20260516_qualitative/qualitative_summary.md`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/render_trust_cert_smoke_20260516/garden_rejected_scale050.json`
 
 ---
 

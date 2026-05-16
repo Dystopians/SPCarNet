@@ -445,6 +445,13 @@ def _apply_delta(
                             _scene_format_path(args.delta_facelocal_materialize_plan_alpha_json, scene),
                         ]
                     )
+                if str(args.delta_facelocal_materialize_plan_render_trust_json).strip():
+                    cmd.extend(
+                        [
+                            "--materialize_plan_render_trust_json",
+                            _scene_format_path(args.delta_facelocal_materialize_plan_render_trust_json, scene),
+                        ]
+                    )
                 if bool(args.delta_facelocal_materialize_allow_uncertified_plan):
                     cmd.append("--materialize_allow_uncertified_plan")
                 else:
@@ -1273,6 +1280,11 @@ def main() -> int:
         "--delta_facelocal_materialize_plan_alpha_json",
         default="",
         help="Optional per-scene JSON template with face_id -> alpha multipliers for facelocal plan materialization.",
+    )
+    parser.add_argument(
+        "--delta_facelocal_materialize_plan_render_trust_json",
+        default="",
+        help="Optional per-scene render-trust certificate template for strict non-unit facelocal plan scale replay.",
     )
     parser.add_argument(
         "--delta_facelocal_materialize_allow_uncertified_plan",

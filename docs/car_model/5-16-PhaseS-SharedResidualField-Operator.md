@@ -187,3 +187,30 @@ render metrics improve under the same balanced objective used by the final
 gate. Strict plan replay currently forbids arbitrary coefficient scaling, so
 that mechanism must be implemented as an audited render-certified replay path,
 not by using an uncertified ablation flag.
+
+## Render-Trust Replay Hook
+
+The first infrastructure hook for that next step is now implemented:
+
+```text
+scripts/car_model/ecsr_write_render_trust_certificate.py
+--materialize_plan_render_trust_json
+--delta_facelocal_materialize_plan_render_trust_json
+```
+
+The certificate converts a Phase-K train-val decision into an explicit replay
+authorization. A non-unit strict `--materialize_plan_scale` is allowed only if
+the render-trust certificate is accepted, `selection_uses_test=false`, the
+scale matches, and the candidate plan sha256 matches. A negative smoke using
+the rejected v3 `garden` decision correctly produced `accepted=false` and strict
+materialization failed with
+`render_trust_certificate_not_accepted`:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_trust_cert_smoke_20260516/garden_rejected_scale050.json
+```
+
+This does not yet create a winning Phase-S row. It closes the safety/interface
+gap needed for the next experiment: render-space scale or region search must
+prove train-val render improvement before a scaled representation edit can be
+replayed as a strict certified checkpoint.

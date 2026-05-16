@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 from dataclasses import dataclass
@@ -512,6 +513,17 @@ def parse_args() -> argparse.Namespace:
             "Optional JSON containing per-face alpha multipliers for materialized plan rows. "
             "Supported forms: {'face_alphas': {'123': 0.5}} or "
             "{'face_alphas': [{'face_id': 123, 'alpha': 0.5}]}."
+        ),
+    )
+    parser.add_argument(
+        "--materialize_plan_render_trust_json",
+        type=Path,
+        default=None,
+        help=(
+            "Optional train-val render-space certificate authorizing a non-unit "
+            "--materialize_plan_scale under strict plan replay. The certificate "
+            "must be accepted, test-free, match the requested scale, and match "
+            "the plan sha256 when provided."
         ),
     )
     parser.add_argument(
@@ -3752,6 +3764,14 @@ def read_plan_alphas(path: Path | None) -> dict[int, float]:
     return alphas
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def validate_strict_materialize_request(args: argparse.Namespace) -> None:
     errors: list[str] = []
     scale = float(args.materialize_plan_scale)
@@ -3759,16 +3779,65 @@ def validate_strict_materialize_request(args: argparse.Namespace) -> None:
         errors.append("materialize_plan_limit would row-slice a certified carrier")
     if str(args.materialize_plan_face_ids or "").strip():
         errors.append("materialize_plan_face_ids would subset a certified carrier")
-    if not math.isfinite(scale) or abs(scale - 1.0) > 1e-12:
+    render_trust_path = args.materialize_plan_render_trust_json
+    if not math.isfinite(scale):
         errors.append("materialize_plan_scale would alter certified coefficients")
+    elif abs(scale - 1.0) > 1e-12 and render_trust_path is None:
+        errors.append("materialize_plan_scale would alter certified coefficients without a render-trust certificate")
     if args.materialize_plan_alpha_json is not None:
         errors.append("materialize_plan_alpha_json would alter certified coefficients")
     if errors:
         raise ValueError(
             "Strict certified plan materialization rejected unsafe replay controls: "
             + "; ".join(errors)
-            + ". Use --materialize_allow_uncertified_plan only for explicitly labeled legacy ablations."
+            + ". Use --materialize_plan_render_trust_json for audited train-val render-certified scale replay, "
+            + "or --materialize_allow_uncertified_plan only for explicitly labeled legacy ablations."
         )
+
+
+def validate_render_trust_certificate(
+    *,
+    cert_path: Path | None,
+    plan_path: Path,
+    requested_scale: float,
+) -> dict[str, Any]:
+    if cert_path is None:
+        if abs(float(requested_scale) - 1.0) <= 1e-12:
+            return {"enabled": False}
+        raise ValueError("non-unit strict materialize_plan_scale requires --materialize_plan_render_trust_json")
+    payload = json.loads(cert_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("--materialize_plan_render_trust_json must contain a JSON object")
+    errors: list[str] = []
+    if not bool(payload.get("accepted", False)):
+        errors.append("render_trust_certificate_not_accepted")
+    if bool(payload.get("selection_uses_test", True)):
+        errors.append("render_trust_certificate_used_test")
+    try:
+        accepted_scale = float(payload.get("accepted_scale", payload.get("scale")))
+    except Exception:
+        accepted_scale = float("nan")
+    if not math.isfinite(accepted_scale) or abs(accepted_scale - float(requested_scale)) > 1e-9:
+        errors.append("render_trust_scale_mismatch")
+    expected_sha = str(payload.get("plan_sha256", "")).strip()
+    actual_sha = file_sha256(plan_path)
+    if expected_sha and expected_sha != actual_sha:
+        errors.append("render_trust_plan_sha256_mismatch")
+    if errors:
+        raise ValueError(
+            "Strict certified plan materialization rejected render-trust certificate: "
+            + "; ".join(errors)
+        )
+    return {
+        "enabled": True,
+        "certificate": str(cert_path),
+        "accepted_scale": float(accepted_scale),
+        "plan_sha256": actual_sha,
+        "selection_uses_test": bool(payload.get("selection_uses_test", True)),
+        "accepted": bool(payload.get("accepted", False)),
+        "trainval_balanced_delta": payload.get("trainval_balanced_delta"),
+        "decision_json": payload.get("decision_json", ""),
+    }
 
 
 def validate_strict_plan_carrier_integrity(
@@ -4271,6 +4340,8 @@ def write_plan_materialize_audit(output_model: Path, audit: dict[str, Any]) -> N
         f"- operator: `{audit['operator']}`",
         f"- plan: `{audit['materialize_plan_in']}`",
         f"- requested plan rows: `{audit['requested_plan_rows']}`",
+        f"- render-trust certificate: `{audit.get('materialize_plan_render_trust', {}).get('certificate', '')}`",
+        f"- render-trust accepted scale: `{audit.get('materialize_plan_render_trust', {}).get('accepted_scale', audit.get('materialize_plan_scale', 1.0))}`",
         f"- alpha json: `{audit.get('materialize_plan_alpha_json', '')}`",
         f"- alpha faces: `{audit.get('materialize_plan_alpha_faces', 0)}`",
         f"- accepted faces: `{audit['accepted_faces']}`",
@@ -4400,6 +4471,15 @@ def main() -> int:
             limit=int(args.materialize_plan_limit),
             face_ids=_parse_face_id_filter(args.materialize_plan_face_ids),
         )
+        render_trust_certificate = (
+            validate_render_trust_certificate(
+                cert_path=args.materialize_plan_render_trust_json,
+                plan_path=args.materialize_plan_in,
+                requested_scale=float(args.materialize_plan_scale),
+            )
+            if strict_materialize
+            else {"enabled": False}
+        )
         plan_basis_count = int(plan_meta.get("basis_count", (int(args.sh_degree) + 1) ** 2)) if isinstance(plan_meta, dict) else int((int(args.sh_degree) + 1) ** 2)
         plan_max_abs_delta_rgb = (
             float(plan_meta.get("max_abs_delta_rgb", args.max_abs_delta_rgb))
@@ -4479,6 +4559,7 @@ def main() -> int:
             "materialize_plan_limit": int(args.materialize_plan_limit),
             "materialize_plan_face_ids": str(args.materialize_plan_face_ids),
             "materialize_plan_scale": float(args.materialize_plan_scale),
+            "materialize_plan_render_trust": render_trust_certificate,
             "materialize_allow_uncertified_plan": bool(args.materialize_allow_uncertified_plan),
             "strict_patchcert_carrier": bool(args.strict_patchcert_carrier),
             "strict_materialize": bool(strict_materialize),
