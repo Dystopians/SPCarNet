@@ -89,18 +89,65 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lambda_smooth", type=float, default=8e-2)
     parser.add_argument("--steps", type=int, default=800)
     parser.add_argument("--lr", type=float, default=0.025)
+    parser.add_argument(
+        "--shared_residual_field",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Fit one train-only RBF residual field shared by all selected face-local "
+            "corner slots instead of independent per-face local coefficients. The "
+            "field is still baked into duplicated face-local vertices, so existing "
+            "render/gate/portfolio code can evaluate it without renderer changes."
+        ),
+    )
+    parser.add_argument("--shared_residual_field_anchors", type=int, default=16)
+    parser.add_argument(
+        "--shared_residual_field_sigma",
+        type=float,
+        default=0.0,
+        help="RBF sigma in normalized scene units. 0 chooses a deterministic anchor-distance median.",
+    )
+    parser.add_argument("--shared_residual_field_lr", type=float, default=0.0)
+    parser.add_argument("--shared_residual_field_weight_l2", type=float, default=1.0e-4)
+    parser.add_argument(
+        "--shared_residual_field_view_hinge_weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Train-only per-view safety hinge. Penalizes fit-train views whose "
+            "weighted residual MSE would increase under the shared field."
+        ),
+    )
+    parser.add_argument("--shared_residual_field_view_hinge_min_samples", type=int, default=16)
+    parser.add_argument(
+        "--shared_residual_field_duplicate_smooth_weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Penalize coefficient disagreement among duplicated local slots that "
+            "originate from the same source mesh vertex."
+        ),
+    )
     parser.add_argument("--max_faces_to_apply", type=int, default=2048)
     parser.add_argument("--min_policy_val_relative_gain", type=float, default=0.02)
     parser.add_argument("--min_policy_val_samples", type=int, default=512)
     parser.add_argument("--min_policy_val_unique_faces", type=int, default=16)
     parser.add_argument(
         "--validation_shrink_mode",
-        choices=("none", "global", "face"),
+        choices=("none", "global", "face", "global_gain", "face_gain"),
         default="none",
         help=(
             "Train-only residual amplitude calibration. 'global' fits one shrink "
-            "scale on policy-val samples; 'face' fits one shrink scale per selected face."
+            "scale on policy-val samples; 'face' fits one shrink scale per selected face. "
+            "'global_gain'/'face_gain' use the same policy-val-only closed-form scale but "
+            "allow bounded amplification up to --validation_gain_max_scale."
         ),
+    )
+    parser.add_argument(
+        "--validation_gain_max_scale",
+        type=float,
+        default=1.0,
+        help="Maximum train-only amplitude scale for validation_shrink_mode '*_gain'.",
     )
     parser.add_argument(
         "--validation_shrink_min_samples",
@@ -265,14 +312,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--patch_cert_cluster_basis_mode",
-        choices=("shared", "scaled", "rank2", "chart_linear", "chart_quad"),
+        choices=("shared", "scaled", "rank2", "chart_linear", "chart_quad", "field_linear", "field_quad"),
         default="shared",
         help=(
             "Carrier-basis parameterization: 'shared' copies one corner-slot basis to every face; "
             "'scaled' shares the basis but learns one positive face scale per carrier face; "
             "'rank2' learns two shared corner-slot bases with per-face nonnegative simplex weights; "
             "'chart_linear' fits a constant+linear residual field over a local patch chart; "
-            "'chart_quad' adds bounded quadratic chart terms."
+            "'chart_quad' adds bounded quadratic chart terms; 'field_linear'/'field_quad' add "
+            "train-view hinge consistency and source-vertex field-continuity regularization."
         ),
     )
     parser.add_argument("--patch_cert_cluster_basis_steps", type=int, default=240)
@@ -298,6 +346,30 @@ def parse_args() -> argparse.Namespace:
         choices=("mean", "zero"),
         default="mean",
         help="Initialize the shared patch basis from the mean face-local coefficients or from zero.",
+    )
+    parser.add_argument(
+        "--patch_cert_cluster_basis_view_hinge_weight",
+        type=float,
+        default=0.0,
+        help=(
+            "For field_* carrier modes, penalize train views whose patch residual field "
+            "increases weighted residual MSE. This is a train-only view-consistency term."
+        ),
+    )
+    parser.add_argument(
+        "--patch_cert_cluster_basis_view_hinge_min_samples",
+        type=int,
+        default=16,
+        help="Minimum samples in one train view before it contributes to the field_* view hinge loss.",
+    )
+    parser.add_argument(
+        "--patch_cert_cluster_basis_geometry_smooth_weight",
+        type=float,
+        default=0.0,
+        help=(
+            "For field_* carrier modes, penalize discontinuities between field coefficients "
+            "at source vertices shared by carrier faces before local vertex duplication."
+        ),
     )
     parser.add_argument(
         "--strict_patchcert_carrier",
@@ -390,6 +462,17 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--patch_cert_carrier_holdout_auto_prefix_positive_tail_safe",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "When auto-prefix is enabled, stop before the first passed carrier whose "
+            "individual holdout certificate is not positive and tail-safe. This may "
+            "select a safe prefix below --patch_cert_carrier_holdout_auto_prefix_min_faces "
+            "instead of adding a negative/tail carrier only to satisfy coverage."
+        ),
+    )
+    parser.add_argument(
         "--candidate_plan_out",
         type=Path,
         default=None,
@@ -459,11 +542,43 @@ def parse_args() -> argparse.Namespace:
         parser.error("--patch_cert_seed_rescue_max_seeds must be >= 0")
     if int(args.patch_cert_seed_rescue_min_aux_witnesses) < 0:
         parser.error("--patch_cert_seed_rescue_min_aux_witnesses must be >= 0")
+    if int(args.shared_residual_field_anchors) <= 0:
+        parser.error("--shared_residual_field_anchors must be > 0")
+    if not math.isfinite(float(args.shared_residual_field_sigma)) or float(args.shared_residual_field_sigma) < 0.0:
+        parser.error("--shared_residual_field_sigma must be finite and >= 0")
+    if not math.isfinite(float(args.shared_residual_field_lr)) or float(args.shared_residual_field_lr) < 0.0:
+        parser.error("--shared_residual_field_lr must be finite and >= 0")
+    if not math.isfinite(float(args.shared_residual_field_weight_l2)) or float(args.shared_residual_field_weight_l2) < 0.0:
+        parser.error("--shared_residual_field_weight_l2 must be finite and >= 0")
+    if (
+        not math.isfinite(float(args.shared_residual_field_view_hinge_weight))
+        or float(args.shared_residual_field_view_hinge_weight) < 0.0
+    ):
+        parser.error("--shared_residual_field_view_hinge_weight must be finite and >= 0")
+    if int(args.shared_residual_field_view_hinge_min_samples) < 0:
+        parser.error("--shared_residual_field_view_hinge_min_samples must be >= 0")
+    if (
+        not math.isfinite(float(args.shared_residual_field_duplicate_smooth_weight))
+        or float(args.shared_residual_field_duplicate_smooth_weight) < 0.0
+    ):
+        parser.error("--shared_residual_field_duplicate_smooth_weight must be finite and >= 0")
     if (
         not math.isfinite(float(args.patch_cert_cluster_basis_max_fit_mse_regression))
         or float(args.patch_cert_cluster_basis_max_fit_mse_regression) < 0.0
     ):
         parser.error("--patch_cert_cluster_basis_max_fit_mse_regression must be finite and >= 0")
+    if (
+        not math.isfinite(float(args.patch_cert_cluster_basis_view_hinge_weight))
+        or float(args.patch_cert_cluster_basis_view_hinge_weight) < 0.0
+    ):
+        parser.error("--patch_cert_cluster_basis_view_hinge_weight must be finite and >= 0")
+    if int(args.patch_cert_cluster_basis_view_hinge_min_samples) < 0:
+        parser.error("--patch_cert_cluster_basis_view_hinge_min_samples must be >= 0")
+    if (
+        not math.isfinite(float(args.patch_cert_cluster_basis_geometry_smooth_weight))
+        or float(args.patch_cert_cluster_basis_geometry_smooth_weight) < 0.0
+    ):
+        parser.error("--patch_cert_cluster_basis_geometry_smooth_weight must be finite and >= 0")
     if int(args.patch_cert_carrier_holdout_groups) < 2:
         parser.error("--patch_cert_carrier_holdout_groups must be >= 2")
     if int(args.patch_cert_carrier_holdout_min_passing_groups) < 0:
@@ -489,6 +604,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--patch_cert_carrier_holdout_cvar_weight must be finite and >= 0")
     if int(args.patch_cert_carrier_holdout_max_carriers) < 0:
         parser.error("--patch_cert_carrier_holdout_max_carriers must be >= 0")
+    if not math.isfinite(float(args.validation_gain_max_scale)) or float(args.validation_gain_max_scale) < 1.0:
+        parser.error("--validation_gain_max_scale must be finite and >= 1")
     if int(args.patch_cert_carrier_holdout_auto_prefix_min_faces) < 0:
         parser.error("--patch_cert_carrier_holdout_auto_prefix_min_faces must be >= 0")
     if not math.isfinite(float(args.patch_cert_carrier_holdout_auto_prefix_face_bonus)) or float(
@@ -1090,12 +1207,17 @@ def calibrate_coeff_by_policy_val(
     *,
     mode: str,
     min_samples: int,
+    max_gain_scale: float,
 ) -> tuple[torch.Tensor, dict[str, Any], dict[int, dict[str, Any]]]:
     mode = str(mode)
+    gain_mode = mode in {"global_gain", "face_gain"}
+    upper_scale = float(max(max_gain_scale if gain_mode else 1.0, 1.0))
     summary: dict[str, Any] = {
         "mode": mode,
         "enabled": mode != "none",
         "min_samples": int(min_samples),
+        "gain_enabled": bool(gain_mode),
+        "max_gain_scale": float(upper_scale),
         "global_scale": 1.0,
         "faces_evaluated": 0,
         "faces_scaled": 0,
@@ -1107,7 +1229,7 @@ def calibrate_coeff_by_policy_val(
     if mode == "none":
         return coeff, summary, {}
     if samples.count == 0 or sample_vertex_ids.numel() == 0 or coeff.numel() == 0:
-        if mode == "global":
+        if mode in {"global", "global_gain"}:
             return coeff * 0.0, {**summary, "global_scale": 0.0, "mean_scale": 0.0, "min_scale": 0.0, "max_scale": 0.0}, {}
         return coeff * 0.0, {**summary, "mean_scale": 0.0, "min_scale": 0.0, "max_scale": 0.0}, {}
 
@@ -1131,10 +1253,10 @@ def calibrate_coeff_by_policy_val(
         if denominator <= 1e-12:
             return 0.0, sample_count, 0.0
         raw_scale = numerator / denominator
-        scale = float(min(max(raw_scale, 0.0), 1.0))
+        scale = float(min(max(raw_scale, 0.0), upper_scale))
         return scale, sample_count, float(raw_scale)
 
-    if mode == "global":
+    if mode in {"global", "global_gain"}:
         scale, sample_count, raw_scale = fit_scale(np.ones((target_np.shape[0],), dtype=bool))
         out = coeff * float(scale)
         summary.update(
@@ -1152,7 +1274,7 @@ def calibrate_coeff_by_policy_val(
         )
         return out, summary, {}
 
-    if mode != "face":
+    if mode not in {"face", "face_gain"}:
         raise ValueError(f"unsupported validation shrink mode: {mode}")
 
     out = coeff.clone()
@@ -1807,6 +1929,36 @@ def carrier_holdout_certificate_for_faces(
     return result
 
 
+def carrier_holdout_positive_tail_safety(cert: dict[str, Any]) -> dict[str, Any]:
+    """Return the per-carrier risk check used by opt-in safe auto-prefix selection."""
+
+    group_rows = cert.get("group_rows", [])
+    eligible_gains = [
+        float(row.get("relative_gain", -1.0))
+        for row in group_rows
+        if bool(row.get("eligible", False))
+    ]
+    score = float(cert.get("score", 0.0))
+    mean_relative_gain = float(cert.get("mean_relative_gain", 0.0))
+    min_relative_gain = float(min(eligible_gains)) if eligible_gains else float(cert.get("min_relative_gain", 0.0))
+    cvar_loss = float(cert.get("cvar_loss", 0.0))
+    passed = bool(cert.get("passed", False))
+    positive = bool(score >= 0.0 and mean_relative_gain >= 0.0)
+    tail_safe = bool(eligible_gains and min_relative_gain >= 0.0 and cvar_loss <= 1.0e-12)
+    return {
+        "passed": bool(passed and positive and tail_safe),
+        "criterion": "individual_carrier_score_mean_min_holdout_gain_nonnegative",
+        "carrier_passed": bool(passed),
+        "positive": bool(positive),
+        "tail_safe": bool(tail_safe),
+        "score": score,
+        "mean_relative_gain": mean_relative_gain,
+        "min_relative_gain": min_relative_gain,
+        "cvar_loss": cvar_loss,
+        "eligible_groups": int(cert.get("eligible_groups", len(eligible_gains))),
+    }
+
+
 def select_holdout_stable_carriers(
     *,
     coeff: torch.Tensor,
@@ -1836,7 +1988,11 @@ def select_holdout_stable_carriers(
         "max_carriers": int(args.patch_cert_carrier_holdout_max_carriers),
         "auto_prefix": bool(args.patch_cert_carrier_holdout_auto_prefix),
         "auto_prefix_min_faces": int(args.patch_cert_carrier_holdout_auto_prefix_min_faces),
+        "auto_prefix_effective_min_faces": int(args.patch_cert_carrier_holdout_auto_prefix_min_faces),
         "auto_prefix_face_bonus": float(args.patch_cert_carrier_holdout_auto_prefix_face_bonus),
+        "auto_prefix_positive_tail_safe": bool(args.patch_cert_carrier_holdout_auto_prefix_positive_tail_safe),
+        "auto_prefix_min_faces_relaxed_by_tail_safety": False,
+        "auto_prefix_tail_safety_stop": {},
         "auto_prefix_certificate": {},
         "auto_prefix_candidates": [],
         "input_faces": int(len(accepted_faces)),
@@ -1901,6 +2057,7 @@ def select_holdout_stable_carriers(
             }
         else:
             cert = carrier_holdout_certificate_for_faces(coeff, holdout_cache, faces, args)
+        tail_safety = carrier_holdout_positive_tail_safety(cert)
         rows.append(
             {
                 "carrier_id": str(carrier_id),
@@ -1915,6 +2072,7 @@ def select_holdout_stable_carriers(
                 "score": float(cert.get("score", 0.0)),
                 "mean_relative_gain": float(cert.get("mean_relative_gain", 0.0)),
                 "cvar_loss": float(cert.get("cvar_loss", 0.0)),
+                "positive_tail_safety": tail_safety,
             }
         )
     rows.sort(
@@ -1938,12 +2096,44 @@ def select_holdout_stable_carriers(
         best_faces: list[int] = []
         best_cert: dict[str, Any] = {}
         best_key: tuple[float, float, int, int] | None = None
+        best_under_floor_rows: list[dict[str, Any]] = []
+        best_under_floor_faces: list[int] = []
+        best_under_floor_cert: dict[str, Any] = {}
+        best_under_floor_key: tuple[float, float, int, int] | None = None
+        stopped_by_tail_safety = False
         min_prefix_faces = int(args.patch_cert_carrier_holdout_auto_prefix_min_faces)
+        if min_prefix_faces > 0 and int(summary["input_faces"]) > 0:
+            min_prefix_faces = min(min_prefix_faces, int(summary["input_faces"]))
+        summary["auto_prefix_effective_min_faces"] = int(min_prefix_faces)
         face_bonus_weight = float(args.patch_cert_carrier_holdout_auto_prefix_face_bonus)
         coverage_aware = bool(min_prefix_faces > 0 or face_bonus_weight > 0.0)
+        require_positive_tail_safe = bool(args.patch_cert_carrier_holdout_auto_prefix_positive_tail_safe)
         for row in rows:
             if not bool(row.get("passed", False)):
                 continue
+            tail_safety = row.get("positive_tail_safety", {})
+            if require_positive_tail_safe and not bool(tail_safety.get("passed", False)):
+                stopped_by_tail_safety = True
+                summary["auto_prefix_candidates"].append(
+                    {
+                        "prefix_carriers": int(len(prefix_rows)),
+                        "prefix_faces": int(len(prefix_faces)),
+                        "last_carrier_id": str(row.get("carrier_id", "")),
+                        "last_carrier_positive_tail_safety": tail_safety,
+                        "passed": False,
+                        "selected_into_prefix": False,
+                        "blocked_by_positive_tail_safety": True,
+                        "positive_tail_safe_required": True,
+                    }
+                )
+                summary["auto_prefix_tail_safety_stop"] = {
+                    "blocked_carrier_id": str(row.get("carrier_id", "")),
+                    "blocked_faces": [int(fid) for fid in row.get("faces", [])],
+                    "current_prefix_faces": int(len(prefix_faces)),
+                    "current_prefix_carriers": int(len(prefix_rows)),
+                    "risk": tail_safety,
+                }
+                break
             if max_carriers > 0 and len(prefix_rows) >= max_carriers:
                 continue
             faces = [int(fid) for fid in row.get("faces", [])]
@@ -1965,11 +2155,15 @@ def select_holdout_stable_carriers(
                 "prefix_carriers": prefix_row_count,
                 "prefix_faces": prefix_face_count,
                 "last_carrier_id": str(row.get("carrier_id", "")),
+                "last_carrier_positive_tail_safety": row.get("positive_tail_safety", {}),
                 "passed": bool(cumulative_cert.get("passed", False)),
                 "score": holdout_score,
                 "mean_relative_gain": mean_relative_gain,
                 "cvar_loss": float(cumulative_cert.get("cvar_loss", 0.0)),
                 "coverage_floor_passed": coverage_floor_passed,
+                "positive_tail_safe_required": bool(require_positive_tail_safe),
+                "selected_into_prefix": True,
+                "blocked_by_positive_tail_safety": False,
                 "coverage_bonus": face_bonus,
                 "coverage_score": coverage_score,
             }
@@ -1998,11 +2192,33 @@ def select_holdout_stable_carriers(
                     best_rows = list(prefix_rows)
                     best_faces = list(prefix_faces)
                     best_cert = cumulative_cert
+            elif (
+                require_positive_tail_safe
+                and bool(cumulative_cert.get("passed", False))
+                and holdout_score >= 0.0
+            ):
+                if best_under_floor_key is None or key > best_under_floor_key:
+                    best_under_floor_key = key
+                    best_under_floor_rows = list(prefix_rows)
+                    best_under_floor_faces = list(prefix_faces)
+                    best_under_floor_cert = cumulative_cert
+        if require_positive_tail_safe and not best_rows and stopped_by_tail_safety and best_under_floor_rows:
+            best_rows = list(best_under_floor_rows)
+            best_faces = list(best_under_floor_faces)
+            best_cert = best_under_floor_cert
+            best_cert["coverage_floor_passed"] = False
+            best_cert["coverage_floor_relaxed_by_tail_safety"] = True
+            best_cert["requested_min_faces"] = int(args.patch_cert_carrier_holdout_auto_prefix_min_faces)
+            best_cert["effective_min_faces_before_tail_safety"] = int(min_prefix_faces)
+            summary["auto_prefix_min_faces_relaxed_by_tail_safety"] = True
+            summary["auto_prefix_effective_min_faces"] = int(len(best_faces))
         selected_rows = best_rows
         selected_faces = best_faces
         summary["auto_prefix_certificate"] = best_cert
         if not selected_rows:
-            if min_prefix_faces > 0 and any(bool(row.get("passed", False)) for row in rows):
+            if require_positive_tail_safe and stopped_by_tail_safety:
+                summary["blocked_reason"] = "auto_prefix_stopped_by_positive_tail_safety_before_selectable_prefix"
+            elif min_prefix_faces > 0 and any(bool(row.get("passed", False)) for row in rows):
                 summary["blocked_reason"] = "auto_prefix_no_prefix_met_coverage_floor"
             else:
                 summary["blocked_reason"] = "auto_prefix_no_nonnegative_cumulative_holdout_score"
@@ -2216,6 +2432,7 @@ def fit_patch_cluster_shared_basis(
     target: torch.Tensor,
     weights: torch.Tensor,
     sample_face_ids: np.ndarray,
+    sample_view_names: list[str] | None,
     args: argparse.Namespace,
     faces: torch.Tensor | None = None,
     vertices: torch.Tensor | None = None,
@@ -2237,12 +2454,16 @@ def fit_patch_cluster_shared_basis(
         "rank2": "rank2_mixture_patch_corner_sh",
         "chart_linear": "chart_linear_patch_corner_sh",
         "chart_quad": "chart_quadratic_patch_corner_sh",
+        "field_linear": "view_consistent_linear_residual_field",
+        "field_quad": "view_consistent_quadratic_residual_field",
     }.get(mode, "shared_patch_corner_sh")
     result: dict[str, Any] = {
         "enabled": enabled,
         "basis_type": basis_type,
         "mode": mode,
-        "rank": 2 if mode == "rank2" else (6 if mode == "chart_quad" else (3 if mode == "chart_linear" else 1)),
+        "rank": 2
+        if mode == "rank2"
+        else (6 if mode in {"chart_quad", "field_quad"} else (3 if mode in {"chart_linear", "field_linear"} else 1)),
         "faces": [int(fid) for fid in face_ids],
         "patch_size": int(len(face_ids)),
         "steps": int(args.patch_cert_cluster_basis_steps),
@@ -2251,6 +2472,9 @@ def fit_patch_cluster_shared_basis(
         "max_scale": float(args.patch_cert_cluster_basis_max_scale),
         "max_fit_mse_regression": float(args.patch_cert_cluster_basis_max_fit_mse_regression),
         "init": str(args.patch_cert_cluster_basis_init),
+        "view_hinge_weight": float(args.patch_cert_cluster_basis_view_hinge_weight),
+        "view_hinge_min_samples": int(args.patch_cert_cluster_basis_view_hinge_min_samples),
+        "geometry_smooth_weight": float(args.patch_cert_cluster_basis_geometry_smooth_weight),
         "samples": 0,
         "applied": False,
         "passed": not enabled,
@@ -2334,7 +2558,8 @@ def fit_patch_cluster_shared_basis(
     chart_features: torch.Tensor | None = None
     chart_uv_scale = 0.0
     chart_svd_scale = 0.0
-    if mode in {"chart_linear", "chart_quad"}:
+    patch_vertex_ids: torch.Tensor | None = None
+    if mode in {"chart_linear", "chart_quad", "field_linear", "field_quad"}:
         if faces is None or vertices is None:
             result.update({"passed": False, "rejected_reason": "chart_geometry_unavailable"})
             return result
@@ -2355,7 +2580,7 @@ def fit_patch_cluster_shared_basis(
         uv_scale = uv.norm(dim=1).max().clamp_min(1e-6)
         uv = (uv / uv_scale).reshape(len(face_ids), 3, 2)
         ones = torch.ones((len(face_ids), 3, 1), dtype=torch.float32, device=coeff.device)
-        if mode == "chart_quad":
+        if mode in {"chart_quad", "field_quad"}:
             u = uv[..., 0:1]
             v = uv[..., 1:2]
             chart_features = torch.cat([ones, uv, u * u, u * v, v * v], dim=-1)
@@ -2406,7 +2631,7 @@ def fit_patch_cluster_shared_basis(
     components: torch.Tensor | None = None
     face_mix: torch.Tensor | None = None
     chart_params: torch.Tensor | None = None
-    if mode in {"chart_linear", "chart_quad"}:
+    if mode in {"chart_linear", "chart_quad", "field_linear", "field_quad"}:
         assert chart_features is not None
         param_init = torch.zeros((int(chart_features.shape[-1]), basis_count, 3), dtype=torch.float32, device=coeff.device)
         if str(args.patch_cert_cluster_basis_init) == "mean":
@@ -2425,14 +2650,27 @@ def fit_patch_cluster_shared_basis(
                 else torch.zeros((), dtype=torch.float32, device=coeff.device)
             )
             linear_reg = (current_params[1:] ** 2).mean()
-            loss = data + float(args.lambda_mag) * mag + float(args.lambda_sh1_mag) * sh_mag + 0.001 * linear_reg
+            field_geometry_smooth = torch.zeros((), dtype=torch.float32, device=coeff.device)
+            if mode in {"field_linear", "field_quad"} and patch_vertex_ids is not None:
+                corner_coeff = torch.einsum("mcf,fbr->mcbr", chart_features, current_params)
+                field_geometry_smooth = _duplicate_source_smooth_loss(
+                    corner_coeff.reshape(-1, basis_count, 3),
+                    patch_vertex_ids.to(device=coeff.device).reshape(-1),
+                )
+            loss = (
+                data
+                + float(args.lambda_mag) * mag
+                + float(args.lambda_sh1_mag) * sh_mag
+                + 0.001 * linear_reg
+                + float(args.patch_cert_cluster_basis_geometry_smooth_weight) * field_geometry_smooth
+            )
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
             final_data = data.detach()
             final_mag = mag.detach()
             final_sh_mag = sh_mag.detach()
-            final_scale_reg = linear_reg.detach()
+            final_scale_reg = (linear_reg + field_geometry_smooth).detach()
         with torch.no_grad():
             chart_params = (bounds * torch.tanh(param)).detach()
             final_mse = (((predict_chart_linear(chart_params) - y) ** 2) * w[:, None]).sum() / (
@@ -2580,7 +2818,7 @@ def fit_patch_cluster_shared_basis(
                 "final_mixture_reg": float(final_scale_reg.detach().cpu().item()),
             }
         )
-    if mode in {"chart_linear", "chart_quad"} and chart_params is not None and chart_features is not None:
+    if mode in {"chart_linear", "chart_quad", "field_linear", "field_quad"} and chart_params is not None and chart_features is not None:
         chart_flat = chart_params.detach().reshape(int(chart_params.shape[0]), -1)
         result.update(
             {
@@ -2621,7 +2859,7 @@ def fit_patch_cluster_shared_basis(
     total_coeff_count = 0
     max_clamp_excess = 0.0
     for fid, row in zip(face_ids, local_rows):
-        if mode in {"chart_linear", "chart_quad"} and chart_params is not None and chart_features is not None:
+        if mode in {"chart_linear", "chart_quad", "field_linear", "field_quad"} and chart_params is not None and chart_features is not None:
             materialized = torch.einsum(
                 "cf,fbr->cbr",
                 chart_features[face_to_patch_row[int(fid)]],
@@ -2802,6 +3040,7 @@ def grow_patch_certified_faces(
             fit_target,
             fit_weights,
             fit_samples.face_ids,
+            fit_samples.view_names,
             args,
             faces=faces,
             vertices=vertices,
@@ -2843,6 +3082,7 @@ def grow_patch_certified_faces(
                 fit_target,
                 fit_weights,
                 fit_samples.face_ids,
+                fit_samples.view_names,
                 args,
                 faces=faces,
                 vertices=vertices,
@@ -3106,6 +3346,258 @@ def solve_coeff_delta(
         "final_sh_mag_loss": float(final_sh_mag_loss.detach().cpu().item()),
         "basis_count": int(basis_count),
         "final_smooth_loss": float(final_smooth_loss.detach().cpu().item()),
+    }
+
+
+def build_shared_residual_field_features(
+    vertices_local: torch.Tensor,
+    *,
+    anchor_count: int,
+    sigma: float,
+) -> tuple[torch.Tensor, dict[str, Any]]:
+    """Build deterministic low-dimensional RBF features for local mesh slots."""
+
+    if vertices_local.numel() == 0:
+        return torch.empty((0, 0), dtype=torch.float32), {
+            "enabled": True,
+            "anchor_count_requested": int(anchor_count),
+            "anchor_count": 0,
+            "feature_count": 0,
+            "sigma": 0.0,
+        }
+    points = vertices_local.detach().cpu().float()
+    center = points.mean(dim=0, keepdim=True)
+    centered = points - center
+    scale = centered.norm(dim=1).max().clamp_min(1.0e-6)
+    norm_points = centered / scale
+    n = int(norm_points.shape[0])
+    k = min(max(int(anchor_count), 1), n)
+    anchor_indices: list[int] = [0]
+    if k > 1:
+        dist2 = ((norm_points - norm_points[0:1]) ** 2).sum(dim=1)
+        for _ in range(1, k):
+            idx = int(torch.argmax(dist2).item())
+            anchor_indices.append(idx)
+            next_dist2 = ((norm_points - norm_points[idx : idx + 1]) ** 2).sum(dim=1)
+            dist2 = torch.minimum(dist2, next_dist2)
+    anchors = norm_points[torch.as_tensor(anchor_indices, dtype=torch.long)]
+    if float(sigma) > 0.0:
+        sigma_value = float(sigma)
+    elif k > 1:
+        pairwise = torch.cdist(anchors, anchors).reshape(-1)
+        pairwise = pairwise[pairwise > 1.0e-6]
+        sigma_value = float(pairwise.median().item()) if pairwise.numel() else 1.0
+        sigma_value = max(sigma_value, 0.15)
+    else:
+        sigma_value = 1.0
+    rbf = torch.exp(-torch.cdist(norm_points, anchors) ** 2 / (2.0 * max(sigma_value, 1.0e-6) ** 2))
+    rbf = rbf / rbf.sum(dim=1, keepdim=True).clamp_min(1.0e-6)
+    features = torch.cat([torch.ones((n, 1), dtype=torch.float32), norm_points, rbf], dim=1)
+    meta = {
+        "enabled": True,
+        "basis_type": "global_rbf_shared_residual_field",
+        "anchor_count_requested": int(anchor_count),
+        "anchor_count": int(k),
+        "feature_count": int(features.shape[1]),
+        "sigma": float(sigma_value),
+        "normalization_center": [float(v) for v in center.reshape(-1).tolist()],
+        "normalization_scale": float(scale.item()),
+        "anchor_local_indices": [int(i) for i in anchor_indices],
+        "anchor_points_normalized": anchors.tolist(),
+    }
+    return features, meta
+
+
+def _view_hinge_loss(
+    coeff: torch.Tensor,
+    sample_vertex_ids: torch.Tensor,
+    weighted_basis: torch.Tensor,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    view_names: list[str],
+    *,
+    min_samples: int,
+) -> tuple[torch.Tensor, int]:
+    if sample_vertex_ids.numel() == 0 or not view_names:
+        return torch.zeros((), dtype=torch.float32, device=coeff.device), 0
+    view_np = np.asarray(view_names, dtype=object)
+    losses: list[torch.Tensor] = []
+    zero = torch.zeros_like(coeff)
+    for view_name in sorted(set(str(v) for v in view_np.tolist())):
+        mask_np = view_np == view_name
+        if int(mask_np.sum()) < max(int(min_samples), 1):
+            continue
+        idx = torch.as_tensor(np.nonzero(mask_np)[0], dtype=torch.long, device=sample_vertex_ids.device)
+        mse_before = _weighted_mse(
+            zero,
+            sample_vertex_ids[idx],
+            weighted_basis[idx],
+            target[idx],
+            weights[idx],
+        ).detach()
+        mse_after = _weighted_mse(
+            coeff,
+            sample_vertex_ids[idx],
+            weighted_basis[idx],
+            target[idx],
+            weights[idx],
+        )
+        losses.append(torch.relu((mse_after - mse_before) / mse_before.clamp_min(1.0e-12)))
+    if not losses:
+        return torch.zeros((), dtype=torch.float32, device=coeff.device), 0
+    return torch.stack(losses).mean(), len(losses)
+
+
+def _duplicate_source_smooth_loss(coeff: torch.Tensor, source_vertex_ids: torch.Tensor) -> torch.Tensor:
+    if coeff.numel() == 0 or source_vertex_ids.numel() != int(coeff.shape[0]):
+        return torch.zeros((), dtype=torch.float32, device=coeff.device)
+    source = source_vertex_ids.to(device=coeff.device, dtype=torch.long)
+    _, inverse, counts = torch.unique(source, return_inverse=True, return_counts=True)
+    repeated = counts[inverse] > 1
+    if not bool(repeated.any().item()):
+        return torch.zeros((), dtype=torch.float32, device=coeff.device)
+    means = torch.zeros((int(counts.shape[0]), int(coeff.shape[1]), int(coeff.shape[2])), dtype=coeff.dtype, device=coeff.device)
+    means.index_add_(0, inverse, coeff)
+    means = means / counts.to(device=coeff.device, dtype=coeff.dtype).view(-1, 1, 1).clamp_min(1.0)
+    return ((coeff[repeated] - means[inverse[repeated]]) ** 2).mean()
+
+
+def solve_shared_residual_field_delta(
+    selected_faces_local: torch.Tensor,
+    source_vertex_ids: torch.Tensor,
+    vertices_local: torch.Tensor,
+    fit_sample_vertex_ids: torch.Tensor,
+    fit_weighted_basis: torch.Tensor,
+    fit_target: torch.Tensor,
+    fit_weights: torch.Tensor,
+    fit_view_names: list[str],
+    *,
+    vertex_count: int,
+    max_abs_dc_coeff: float,
+    max_abs_sh_coeff: float,
+    lambda_mag: float,
+    lambda_sh1_mag: float,
+    lambda_smooth: float,
+    steps: int,
+    lr: float,
+    anchor_count: int,
+    sigma: float,
+    weight_l2: float,
+    view_hinge_weight: float,
+    view_hinge_min_samples: int,
+    duplicate_smooth_weight: float,
+    device: torch.device,
+) -> tuple[torch.Tensor, dict[str, Any]]:
+    basis_count = int(fit_weighted_basis.shape[2]) if fit_weighted_basis.ndim == 3 else 4
+    if vertex_count <= 0 or fit_sample_vertex_ids.numel() == 0:
+        return torch.empty((0, basis_count, 3), dtype=torch.float32), {
+            "solver_type": "shared_residual_field",
+            "initial_fit_mse": 0.0,
+            "final_fit_mse": 0.0,
+            "basis_count": int(basis_count),
+            "shared_residual_field": {"enabled": True, "blocked_reason": "empty_inputs"},
+        }
+
+    features_cpu, field_meta = build_shared_residual_field_features(
+        vertices_local,
+        anchor_count=int(anchor_count),
+        sigma=float(sigma),
+    )
+    fit_sample_vertex_ids = fit_sample_vertex_ids.to(device=device)
+    fit_weighted_basis = fit_weighted_basis.to(device=device)
+    fit_target = fit_target.to(device=device)
+    fit_weights = fit_weights.to(device=device).clamp_min(1e-8)
+    selected_faces_local = selected_faces_local.to(device=device)
+    source_vertex_ids = source_vertex_ids.to(device=device)
+    features = features_cpu.to(device=device)
+    edges = surface_edges(selected_faces_local.detach().cpu()).to(device=device)
+    bounds = torch.full((basis_count,), float(max_abs_sh_coeff), dtype=torch.float32, device=device)
+    bounds[0] = float(max_abs_dc_coeff)
+    bounds = bounds.view(1, basis_count, 1)
+
+    param = torch.zeros((int(features.shape[1]), basis_count, 3), dtype=torch.float32, device=device, requires_grad=True)
+    optimizer = torch.optim.Adam([param], lr=float(lr))
+
+    def coeff_from_param() -> torch.Tensor:
+        raw = torch.einsum("vf,fbc->vbc", features, param)
+        return bounds * torch.tanh(raw)
+
+    with torch.no_grad():
+        zero = torch.zeros((int(vertex_count), basis_count, 3), dtype=torch.float32, device=device)
+        initial_fit_mse = _weighted_mse(zero, fit_sample_vertex_ids, fit_weighted_basis, fit_target, fit_weights)
+
+    final_fit_mse = initial_fit_mse
+    final_mag_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_sh_mag_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_smooth_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_weight_l2 = torch.zeros((), dtype=torch.float32, device=device)
+    final_view_hinge = torch.zeros((), dtype=torch.float32, device=device)
+    final_duplicate_smooth = torch.zeros((), dtype=torch.float32, device=device)
+    view_hinge_groups = 0
+    for _ in range(int(steps)):
+        coeff = coeff_from_param()
+        data_loss = _weighted_mse(coeff, fit_sample_vertex_ids, fit_weighted_basis, fit_target, fit_weights)
+        mag_loss = (coeff[:, 0, :] ** 2).mean()
+        sh_mag_loss = (coeff[:, 1:, :] ** 2).mean() if basis_count > 1 else torch.zeros((), dtype=torch.float32, device=device)
+        if edges.numel():
+            smooth_loss = ((coeff[edges[:, 0]] - coeff[edges[:, 1]]) ** 2).mean()
+        else:
+            smooth_loss = torch.zeros((), dtype=torch.float32, device=device)
+        duplicate_smooth = _duplicate_source_smooth_loss(coeff, source_vertex_ids)
+        view_hinge, view_hinge_groups = _view_hinge_loss(
+            coeff,
+            fit_sample_vertex_ids,
+            fit_weighted_basis,
+            fit_target,
+            fit_weights,
+            fit_view_names,
+            min_samples=int(view_hinge_min_samples),
+        )
+        weight_l2_loss = (param**2).mean()
+        loss = (
+            data_loss
+            + float(lambda_mag) * mag_loss
+            + float(lambda_sh1_mag) * sh_mag_loss
+            + float(lambda_smooth) * smooth_loss
+            + float(duplicate_smooth_weight) * duplicate_smooth
+            + float(view_hinge_weight) * view_hinge
+            + float(weight_l2) * weight_l2_loss
+        )
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+        final_fit_mse = data_loss.detach()
+        final_mag_loss = mag_loss.detach()
+        final_sh_mag_loss = sh_mag_loss.detach()
+        final_smooth_loss = smooth_loss.detach()
+        final_weight_l2 = weight_l2_loss.detach()
+        final_view_hinge = view_hinge.detach()
+        final_duplicate_smooth = duplicate_smooth.detach()
+
+    with torch.no_grad():
+        coeff = coeff_from_param().detach().cpu()
+    field_meta.update(
+        {
+            "param_count": int(param.numel()),
+            "weight_l2": float(weight_l2),
+            "view_hinge_weight": float(view_hinge_weight),
+            "view_hinge_min_samples": int(view_hinge_min_samples),
+            "view_hinge_groups": int(view_hinge_groups),
+            "duplicate_smooth_weight": float(duplicate_smooth_weight),
+        }
+    )
+    return coeff, {
+        "solver_type": "shared_residual_field",
+        "initial_fit_mse": float(initial_fit_mse.detach().cpu().item()),
+        "final_fit_mse": float(final_fit_mse.detach().cpu().item()),
+        "final_mag_loss": float(final_mag_loss.detach().cpu().item()),
+        "final_sh_mag_loss": float(final_sh_mag_loss.detach().cpu().item()),
+        "basis_count": int(basis_count),
+        "final_smooth_loss": float(final_smooth_loss.detach().cpu().item()),
+        "final_weight_l2_loss": float(final_weight_l2.detach().cpu().item()),
+        "final_view_hinge_loss": float(final_view_hinge.detach().cpu().item()),
+        "final_duplicate_source_smooth_loss": float(final_duplicate_smooth.detach().cpu().item()),
+        "shared_residual_field": field_meta,
     }
 
 
@@ -3672,13 +4164,27 @@ def write_candidate_plan(
     path.write_text(
         json.dumps(
             {
-                "operator": "surface_residual_facelocal_sh_delta_candidate_plan",
+                "operator": (
+                    "surface_residual_facelocal_shared_field_delta_candidate_plan"
+                    if bool(args.shared_residual_field)
+                    else "surface_residual_facelocal_sh_delta_candidate_plan"
+                ),
                 "test_usage": "none",
                 "source_model": str(args.source_model),
                 "iteration": int(args.iteration),
                 "evidence_dir": str(args.evidence_dir),
                 "sh_degree": int(args.sh_degree),
                 "basis_count": int((int(args.sh_degree) + 1) ** 2),
+                "shared_residual_field": bool(args.shared_residual_field),
+                "shared_residual_field_anchors": int(args.shared_residual_field_anchors),
+                "shared_residual_field_sigma": float(args.shared_residual_field_sigma),
+                "shared_residual_field_lr": float(args.shared_residual_field_lr),
+                "shared_residual_field_weight_l2": float(args.shared_residual_field_weight_l2),
+                "shared_residual_field_view_hinge_weight": float(args.shared_residual_field_view_hinge_weight),
+                "shared_residual_field_view_hinge_min_samples": int(args.shared_residual_field_view_hinge_min_samples),
+                "shared_residual_field_duplicate_smooth_weight": float(args.shared_residual_field_duplicate_smooth_weight),
+                "validation_shrink_mode": str(args.validation_shrink_mode),
+                "validation_gain_max_scale": float(args.validation_gain_max_scale),
                 "plan_export_policy": "final_certified_accepted_faces_only",
                 "strict_patchcert_carrier": bool(args.strict_patchcert_carrier),
                 "patch_cert_seed_rescue": bool(args.patch_cert_seed_rescue),
@@ -3693,6 +4199,9 @@ def write_candidate_plan(
                 "patch_cert_cluster_basis_max_scale": float(args.patch_cert_cluster_basis_max_scale),
                 "patch_cert_cluster_basis_max_fit_mse_regression": float(args.patch_cert_cluster_basis_max_fit_mse_regression),
                 "patch_cert_cluster_basis_init": str(args.patch_cert_cluster_basis_init),
+                "patch_cert_cluster_basis_view_hinge_weight": float(args.patch_cert_cluster_basis_view_hinge_weight),
+                "patch_cert_cluster_basis_view_hinge_min_samples": int(args.patch_cert_cluster_basis_view_hinge_min_samples),
+                "patch_cert_cluster_basis_geometry_smooth_weight": float(args.patch_cert_cluster_basis_geometry_smooth_weight),
                 "patch_cert_carrier_holdout_selector": bool(args.patch_cert_carrier_holdout_selector),
                 "patch_cert_carrier_holdout_groups": int(args.patch_cert_carrier_holdout_groups),
                 "patch_cert_carrier_holdout_grouping": str(args.patch_cert_carrier_holdout_grouping),
@@ -3717,6 +4226,9 @@ def write_candidate_plan(
                 ),
                 "patch_cert_carrier_holdout_auto_prefix_face_bonus": float(
                     args.patch_cert_carrier_holdout_auto_prefix_face_bonus
+                ),
+                "patch_cert_carrier_holdout_auto_prefix_positive_tail_safe": bool(
+                    args.patch_cert_carrier_holdout_auto_prefix_positive_tail_safe
                 ),
                 "strength": float(args.strength),
                 "max_abs_delta_rgb": float(args.max_abs_delta_rgb),
@@ -3790,12 +4302,18 @@ def write_audit(output_model: Path, audit: dict[str, Any]) -> None:
         f"- source model: `{audit['source_model']}`",
         f"- output model: `{audit['output_model']}`",
         f"- evidence dir: `{audit['evidence_dir']}`",
+        f"- shared residual field: `{audit.get('shared_residual_field', False)}`",
+        f"- shared residual field anchors: `{audit.get('shared_residual_field_summary', {}).get('anchor_count', 0)}`",
+        f"- shared residual field parameters: `{audit.get('shared_residual_field_summary', {}).get('param_count', 0)}`",
         f"- selected faces: `{audit['selected_faces']}`",
         f"- accepted faces: `{audit['accepted_faces']}`",
         f"- vertices added: `{audit['vertices_added']}`",
         f"- fit samples: `{audit['fit_proxy']['samples']}`",
         f"- policy-val samples: `{audit['policy_val_proxy']['samples']}`",
         f"- policy-val relative gain: `{audit['policy_val_proxy']['relative_gain']:.6f}`",
+        f"- carrier auto-prefix positive/tail-safe: `{audit.get('patch_cert_carrier_holdout_auto_prefix_positive_tail_safe', False)}`",
+        f"- carrier auto-prefix min faces relaxed by tail safety: `{audit.get('carrier_holdout_selector', {}).get('auto_prefix_min_faces_relaxed_by_tail_safety', False)}`",
+        f"- carrier auto-prefix effective min faces: `{audit.get('carrier_holdout_selector', {}).get('auto_prefix_effective_min_faces', audit.get('patch_cert_carrier_holdout_auto_prefix_min_faces', 0))}`",
         f"- validation shrink enabled: `{audit['validation_shrink']['enabled']}`",
         f"- validation shrink mode: `{audit['validation_shrink']['mode']}`",
         f"- validation shrink mean scale: `{audit['validation_shrink']['mean_scale']:.6f}`",
@@ -4102,22 +4620,49 @@ def main() -> int:
 
     max_abs_dc_coeff = float(args.max_abs_delta_rgb) / float(C0)
     max_abs_sh_coeff = float(args.max_abs_sh_coeff) if float(args.max_abs_sh_coeff) > 0 else float(args.max_abs_delta_rgb) / float(C1)
-    coeff, solver = solve_coeff_delta(
-        selected_faces_local,
-        fit_ids,
-        fit_basis,
-        fit_target,
-        fit_weights,
-        vertex_count=int(source_vertex_ids.shape[0]),
-        max_abs_dc_coeff=max_abs_dc_coeff,
-        max_abs_sh_coeff=max_abs_sh_coeff,
-        lambda_mag=float(args.lambda_mag),
-        lambda_sh1_mag=float(args.lambda_sh1_mag),
-        lambda_smooth=float(args.lambda_smooth),
-        steps=int(args.steps),
-        lr=float(args.lr),
-        device=device,
-    )
+    if bool(args.shared_residual_field):
+        coeff, solver = solve_shared_residual_field_delta(
+            selected_faces_local,
+            source_vertex_ids,
+            vertices_local,
+            fit_ids,
+            fit_basis,
+            fit_target,
+            fit_weights,
+            fit_samples.view_names,
+            vertex_count=int(source_vertex_ids.shape[0]),
+            max_abs_dc_coeff=max_abs_dc_coeff,
+            max_abs_sh_coeff=max_abs_sh_coeff,
+            lambda_mag=float(args.lambda_mag),
+            lambda_sh1_mag=float(args.lambda_sh1_mag),
+            lambda_smooth=float(args.lambda_smooth),
+            steps=int(args.steps),
+            lr=float(args.shared_residual_field_lr) if float(args.shared_residual_field_lr) > 0.0 else float(args.lr),
+            anchor_count=int(args.shared_residual_field_anchors),
+            sigma=float(args.shared_residual_field_sigma),
+            weight_l2=float(args.shared_residual_field_weight_l2),
+            view_hinge_weight=float(args.shared_residual_field_view_hinge_weight),
+            view_hinge_min_samples=int(args.shared_residual_field_view_hinge_min_samples),
+            duplicate_smooth_weight=float(args.shared_residual_field_duplicate_smooth_weight),
+            device=device,
+        )
+    else:
+        coeff, solver = solve_coeff_delta(
+            selected_faces_local,
+            fit_ids,
+            fit_basis,
+            fit_target,
+            fit_weights,
+            vertex_count=int(source_vertex_ids.shape[0]),
+            max_abs_dc_coeff=max_abs_dc_coeff,
+            max_abs_sh_coeff=max_abs_sh_coeff,
+            lambda_mag=float(args.lambda_mag),
+            lambda_sh1_mag=float(args.lambda_sh1_mag),
+            lambda_smooth=float(args.lambda_smooth),
+            steps=int(args.steps),
+            lr=float(args.lr),
+            device=device,
+        )
     coeff_device = coeff.to(device=device)
     coeff_device, validation_shrink_summary, validation_shrink_by_face = calibrate_coeff_by_policy_val(
         coeff_device,
@@ -4129,6 +4674,7 @@ def main() -> int:
         selected_faces,
         mode=str(args.validation_shrink_mode),
         min_samples=int(args.validation_shrink_min_samples),
+        max_gain_scale=float(args.validation_gain_max_scale),
     )
     coeff = coeff_device.detach().cpu()
     fit_proxy = evaluate_proxy(coeff_device, fit_ids, fit_basis, fit_target, fit_weights)
@@ -4330,7 +4876,11 @@ def main() -> int:
             local_ids.extend([row * 3, row * 3 + 1, row * 3 + 2])
         accepted_coeff_abs = coeff[torch.as_tensor(local_ids, dtype=torch.long)].abs()
     audit = {
-        "operator": "surface_residual_facelocal_sh_delta",
+        "operator": (
+            "surface_residual_facelocal_shared_field_delta"
+            if bool(args.shared_residual_field)
+            else "surface_residual_facelocal_sh_delta"
+        ),
         "test_usage": "none",
         "source_model": str(args.source_model),
         "source_checkpoint": str(source_checkpoint),
@@ -4360,6 +4910,8 @@ def main() -> int:
         "fit_unique_faces": int(fit_unique_faces),
         "policy_val_unique_faces": int(val_unique_faces),
         "solver": solver,
+        "shared_residual_field": bool(args.shared_residual_field),
+        "shared_residual_field_summary": solver.get("shared_residual_field", {}) if isinstance(solver, dict) else {},
         "validation_shrink": validation_shrink_summary,
         "face_view_gain_certificate": face_view_gain_certificate_summary,
         "crossfold_face_gain_certificate": crossfold_face_gain_summary,
@@ -4386,12 +4938,20 @@ def main() -> int:
         "lambda_mag": float(args.lambda_mag),
         "lambda_sh1_mag": float(args.lambda_sh1_mag),
         "lambda_smooth": float(args.lambda_smooth),
+        "shared_residual_field_anchors": int(args.shared_residual_field_anchors),
+        "shared_residual_field_sigma": float(args.shared_residual_field_sigma),
+        "shared_residual_field_lr": float(args.shared_residual_field_lr),
+        "shared_residual_field_weight_l2": float(args.shared_residual_field_weight_l2),
+        "shared_residual_field_view_hinge_weight": float(args.shared_residual_field_view_hinge_weight),
+        "shared_residual_field_view_hinge_min_samples": int(args.shared_residual_field_view_hinge_min_samples),
+        "shared_residual_field_duplicate_smooth_weight": float(args.shared_residual_field_duplicate_smooth_weight),
         "max_faces_to_apply": int(args.max_faces_to_apply),
         "min_policy_val_relative_gain": float(args.min_policy_val_relative_gain),
         "min_policy_val_samples": int(args.min_policy_val_samples),
         "min_policy_val_unique_faces": int(args.min_policy_val_unique_faces),
         "validation_shrink_mode": str(args.validation_shrink_mode),
         "validation_shrink_min_samples": int(args.validation_shrink_min_samples),
+        "validation_gain_max_scale": float(args.validation_gain_max_scale),
         "crossfold_gain_certificate_folds": int(args.crossfold_gain_certificate_folds),
         "crossfold_min_passing_folds": int(args.crossfold_min_passing_folds),
         "crossfold_min_fold_relative_gain": float(args.crossfold_min_fold_relative_gain),
@@ -4433,6 +4993,9 @@ def main() -> int:
         "patch_cert_cluster_basis_max_scale": float(args.patch_cert_cluster_basis_max_scale),
         "patch_cert_cluster_basis_max_fit_mse_regression": float(args.patch_cert_cluster_basis_max_fit_mse_regression),
         "patch_cert_cluster_basis_init": str(args.patch_cert_cluster_basis_init),
+        "patch_cert_cluster_basis_view_hinge_weight": float(args.patch_cert_cluster_basis_view_hinge_weight),
+        "patch_cert_cluster_basis_view_hinge_min_samples": int(args.patch_cert_cluster_basis_view_hinge_min_samples),
+        "patch_cert_cluster_basis_geometry_smooth_weight": float(args.patch_cert_cluster_basis_geometry_smooth_weight),
         "patch_cert_carrier_holdout_selector": bool(args.patch_cert_carrier_holdout_selector),
         "patch_cert_carrier_holdout_groups": int(args.patch_cert_carrier_holdout_groups),
         "patch_cert_carrier_holdout_grouping": str(args.patch_cert_carrier_holdout_grouping),
@@ -4452,6 +5015,9 @@ def main() -> int:
         "patch_cert_carrier_holdout_auto_prefix": bool(args.patch_cert_carrier_holdout_auto_prefix),
         "patch_cert_carrier_holdout_auto_prefix_min_faces": int(args.patch_cert_carrier_holdout_auto_prefix_min_faces),
         "patch_cert_carrier_holdout_auto_prefix_face_bonus": float(args.patch_cert_carrier_holdout_auto_prefix_face_bonus),
+        "patch_cert_carrier_holdout_auto_prefix_positive_tail_safe": bool(
+            args.patch_cert_carrier_holdout_auto_prefix_positive_tail_safe
+        ),
         "strict_patchcert_carrier": bool(args.strict_patchcert_carrier),
         "global_policy_pass": bool(global_policy_pass),
         "policy_pass": bool(global_policy_pass),

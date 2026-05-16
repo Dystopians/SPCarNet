@@ -4,6 +4,42 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-16 — Phase-S shared residual-field and tail-safe carrier guard — NOT_COMPLETE_PROXY_TO_RENDER_MISMATCH
+
+**Outcome**: Implemented the first Phase-S representation-level update after
+the v21/v22 carrier bottleneck: a train-only shared RBF residual field over
+certified local mesh slots, baked back into the existing face-local checkpoint
+format. Added an opt-in positive/tail-safe carrier auto-prefix guard so the
+coverage floor cannot force a risky carrier into the materialized checkpoint.
+Ran W&B-logged `garden` full render-gate pilots for v1, v2, and v3.
+
+**Verification**:
+- v1 global shrink: non-noop shared field, `18` accepted faces / `54` vertices
+  added, but train-val balanced delta `-0.000008106`; rejected.
+- v2 face-gain: non-noop shared field, `15` accepted faces / `45` vertices
+  added, policy-val proxy stronger, but train-val balanced delta
+  `-0.000006020` and tail negative fraction `0.341463`; rejected.
+- v3 positive-tail-safe: non-noop shared field, `6` accepted faces / `18`
+  vertices added; tail negative fraction improves to `0.170732`, but train-val
+  dPSNR is `-0.000003815` and balanced delta is `-0.000005305`; rejected.
+- v3 qualitative panels were generated, but the best report-only test rows are
+  still metric-noise scale and not visually meaningful.
+
+**Decision**: `NOT_COMPLETE_PROXY_TO_RENDER_MISMATCH`. The shared-field
+operator and tail-safe guard are real implementation progress, but they do not
+close the paper loop. The next method must align proposal certification with
+render metrics, likely through an audited render-space trust-region replay
+instead of another carrier-size or threshold sweep.
+
+**Linked artefacts**:
+- `docs/car_model/5-16-PhaseS-SharedResidualField-Operator.md`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_sharedfield_v1_garden_retry_20260516/decisions/garden_decision.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_sharedfield_v2_facegain_garden_20260516/decisions/garden_decision.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_sharedfield_v3_tail_safe_garden_20260516/decisions/garden_decision.json`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_sharedfield_v3_tail_safe_garden_20260516_qualitative/qualitative_summary.md`
+
+---
+
 ## 2026-05-15 — Phase-S effect-aware portfolio, rank2 carrier, coverage-aware PatchCert — NOT_COMPLETE_METHOD_GAP_CONFIRMED
 
 **Outcome**: Added strict effect-aware Phase-S portfolio gates, a scene-agnostic

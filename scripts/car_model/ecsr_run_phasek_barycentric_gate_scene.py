@@ -386,6 +386,20 @@ def _apply_delta(
         str(args.delta_lambda_smooth),
         "--steps",
         str(args.delta_steps),
+        "--shared_residual_field_anchors",
+        str(args.delta_shared_residual_field_anchors),
+        "--shared_residual_field_sigma",
+        _fmt_arg(args.delta_shared_residual_field_sigma),
+        "--shared_residual_field_lr",
+        _fmt_arg(args.delta_shared_residual_field_lr),
+        "--shared_residual_field_weight_l2",
+        _fmt_arg(args.delta_shared_residual_field_weight_l2),
+        "--shared_residual_field_view_hinge_weight",
+        _fmt_arg(args.delta_shared_residual_field_view_hinge_weight),
+        "--shared_residual_field_view_hinge_min_samples",
+        str(args.delta_shared_residual_field_view_hinge_min_samples),
+        "--shared_residual_field_duplicate_smooth_weight",
+        _fmt_arg(args.delta_shared_residual_field_duplicate_smooth_weight),
         "--min_policy_val_relative_gain",
         str(args.delta_min_policy_val_relative_gain),
         "--min_policy_val_samples",
@@ -437,11 +451,18 @@ def _apply_delta(
                     cmd.append("--no-materialize_allow_uncertified_plan")
         if bool(args.delta_uniform_barycentric):
             cmd.append("--uniform_barycentric")
+        if str(args.delta_operator) == "facelocal_sh1":
+            if bool(args.delta_shared_residual_field):
+                cmd.append("--shared_residual_field")
+            else:
+                cmd.append("--no-shared_residual_field")
     if str(args.delta_operator) == "facelocal_sh1":
         cmd.extend(
             [
                 "--validation_shrink_mode",
                 str(args.delta_validation_shrink_mode),
+                "--validation_gain_max_scale",
+                _fmt_arg(args.delta_validation_gain_max_scale),
                 "--validation_shrink_min_samples",
                 str(args.delta_validation_shrink_min_samples),
                 "--crossfold_gain_certificate_folds",
@@ -498,6 +519,12 @@ def _apply_delta(
                 _fmt_arg(args.delta_patch_cert_cluster_basis_max_fit_mse_regression),
                 "--patch_cert_cluster_basis_init",
                 str(args.delta_patch_cert_cluster_basis_init),
+                "--patch_cert_cluster_basis_view_hinge_weight",
+                _fmt_arg(args.delta_patch_cert_cluster_basis_view_hinge_weight),
+                "--patch_cert_cluster_basis_view_hinge_min_samples",
+                str(args.delta_patch_cert_cluster_basis_view_hinge_min_samples),
+                "--patch_cert_cluster_basis_geometry_smooth_weight",
+                _fmt_arg(args.delta_patch_cert_cluster_basis_geometry_smooth_weight),
                 "--patch_cert_carrier_holdout_groups",
                 str(args.delta_patch_cert_carrier_holdout_groups),
                 "--patch_cert_carrier_holdout_grouping",
@@ -550,6 +577,10 @@ def _apply_delta(
             cmd.append("--patch_cert_carrier_holdout_auto_prefix")
         else:
             cmd.append("--no-patch_cert_carrier_holdout_auto_prefix")
+        if bool(args.delta_patch_cert_carrier_holdout_auto_prefix_positive_tail_safe):
+            cmd.append("--patch_cert_carrier_holdout_auto_prefix_positive_tail_safe")
+        else:
+            cmd.append("--no-patch_cert_carrier_holdout_auto_prefix_positive_tail_safe")
         if bool(args.delta_strict_patchcert_carrier):
             cmd.append("--strict_patchcert_carrier")
     sh1_view_consensus = (
@@ -1126,6 +1157,14 @@ def main() -> int:
     parser.add_argument("--delta_lambda_sh1_mag", type=float, default=0.06)
     parser.add_argument("--delta_lambda_smooth", type=float, default=0.10)
     parser.add_argument("--delta_steps", type=int, default=800)
+    parser.add_argument("--delta_shared_residual_field", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--delta_shared_residual_field_anchors", type=int, default=16)
+    parser.add_argument("--delta_shared_residual_field_sigma", type=float, default=0.0)
+    parser.add_argument("--delta_shared_residual_field_lr", type=float, default=0.0)
+    parser.add_argument("--delta_shared_residual_field_weight_l2", type=float, default=1.0e-4)
+    parser.add_argument("--delta_shared_residual_field_view_hinge_weight", type=float, default=0.0)
+    parser.add_argument("--delta_shared_residual_field_view_hinge_min_samples", type=int, default=16)
+    parser.add_argument("--delta_shared_residual_field_duplicate_smooth_weight", type=float, default=0.0)
     parser.add_argument("--delta_min_policy_val_relative_gain", type=float, default=0.02)
     parser.add_argument("--delta_min_policy_val_samples", type=int, default=512)
     parser.add_argument("--delta_min_policy_val_unique_faces", type=int, default=16)
@@ -1145,10 +1184,11 @@ def main() -> int:
     parser.add_argument("--delta_cluster_expand_target_faces", type=int, default=0)
     parser.add_argument(
         "--delta_validation_shrink_mode",
-        choices=("none", "global", "face"),
+        choices=("none", "global", "face", "global_gain", "face_gain"),
         default="none",
         help="For face-local SH1 deltas, calibrate residual amplitude on train-only policy-val samples.",
     )
+    parser.add_argument("--delta_validation_gain_max_scale", type=float, default=1.0)
     parser.add_argument("--delta_validation_shrink_min_samples", type=int, default=8)
     parser.add_argument("--delta_crossfold_gain_certificate_folds", type=int, default=0)
     parser.add_argument("--delta_crossfold_min_passing_folds", type=int, default=0)
@@ -1174,7 +1214,7 @@ def main() -> int:
     parser.add_argument("--delta_patch_cert_cluster_basis", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument(
         "--delta_patch_cert_cluster_basis_mode",
-        choices=("shared", "scaled", "rank2", "chart_linear", "chart_quad"),
+        choices=("shared", "scaled", "rank2", "chart_linear", "chart_quad", "field_linear", "field_quad"),
         default="shared",
     )
     parser.add_argument("--delta_patch_cert_cluster_basis_steps", type=int, default=240)
@@ -1183,6 +1223,9 @@ def main() -> int:
     parser.add_argument("--delta_patch_cert_cluster_basis_max_scale", type=float, default=2.0)
     parser.add_argument("--delta_patch_cert_cluster_basis_max_fit_mse_regression", type=float, default=0.02)
     parser.add_argument("--delta_patch_cert_cluster_basis_init", choices=("mean", "zero"), default="mean")
+    parser.add_argument("--delta_patch_cert_cluster_basis_view_hinge_weight", type=float, default=0.0)
+    parser.add_argument("--delta_patch_cert_cluster_basis_view_hinge_min_samples", type=int, default=16)
+    parser.add_argument("--delta_patch_cert_cluster_basis_geometry_smooth_weight", type=float, default=0.0)
     parser.add_argument("--delta_patch_cert_carrier_holdout_selector", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--delta_patch_cert_carrier_holdout_groups", type=int, default=4)
     parser.add_argument(
@@ -1201,6 +1244,11 @@ def main() -> int:
     parser.add_argument("--delta_patch_cert_carrier_holdout_auto_prefix", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--delta_patch_cert_carrier_holdout_auto_prefix_min_faces", type=int, default=0)
     parser.add_argument("--delta_patch_cert_carrier_holdout_auto_prefix_face_bonus", type=float, default=0.0)
+    parser.add_argument(
+        "--delta_patch_cert_carrier_holdout_auto_prefix_positive_tail_safe",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
     parser.add_argument("--delta_patch_cert_neighbor_crossfold", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--delta_patch_cert_shrink", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--delta_strict_patchcert_carrier", action=argparse.BooleanOptionalAction, default=False)

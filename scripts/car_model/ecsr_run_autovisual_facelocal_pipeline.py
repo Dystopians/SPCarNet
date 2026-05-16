@@ -131,10 +131,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--delta_lambda_sh1_mag", type=float, default=0.05)
     parser.add_argument("--delta_lambda_smooth", type=float, default=0.08)
     parser.add_argument("--delta_steps", type=int, default=None)
+    parser.add_argument("--delta_shared_residual_field", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--delta_shared_residual_field_anchors", type=int, default=16)
+    parser.add_argument("--delta_shared_residual_field_sigma", type=float, default=0.0)
+    parser.add_argument("--delta_shared_residual_field_lr", type=float, default=0.0)
+    parser.add_argument("--delta_shared_residual_field_weight_l2", type=float, default=1.0e-4)
+    parser.add_argument("--delta_shared_residual_field_view_hinge_weight", type=float, default=0.0)
+    parser.add_argument("--delta_shared_residual_field_view_hinge_min_samples", type=int, default=16)
+    parser.add_argument("--delta_shared_residual_field_duplicate_smooth_weight", type=float, default=0.0)
     parser.add_argument("--delta_max_faces_to_apply", type=int, default=None)
     parser.add_argument("--delta_min_policy_val_relative_gain", type=float, default=0.02)
     parser.add_argument("--delta_min_policy_val_samples", type=int, default=512)
     parser.add_argument("--delta_min_policy_val_unique_faces", type=int, default=16)
+    parser.add_argument(
+        "--delta_validation_shrink_mode",
+        choices=("none", "global", "face", "global_gain", "face_gain"),
+        default="face",
+    )
+    parser.add_argument("--delta_validation_gain_max_scale", type=float, default=1.0)
     parser.add_argument("--delta_min_face_policy_val_relative_gain", type=float, default=0.0)
     parser.add_argument("--delta_min_face_policy_val_samples", type=int, default=8)
     parser.add_argument("--delta_min_face_view_consensus", type=float, default=0.50)
@@ -146,14 +160,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--delta_patch_cert_rings", type=int, default=1)
     parser.add_argument("--delta_patch_cert_max_faces_per_seed", type=int, default=None)
     parser.add_argument("--delta_patch_cert_neighbor_mode", choices=("topology", "centroid", "both"), default="both")
-    parser.add_argument("--delta_patch_cert_cluster_basis_mode", choices=("shared", "scaled", "rank2", "chart_linear", "chart_quad"), default="chart_linear")
+    parser.add_argument(
+        "--delta_patch_cert_cluster_basis_mode",
+        choices=("shared", "scaled", "rank2", "chart_linear", "chart_quad", "field_linear", "field_quad"),
+        default="chart_linear",
+    )
     parser.add_argument("--delta_patch_cert_cluster_basis_steps", type=int, default=240)
     parser.add_argument("--delta_patch_cert_cluster_basis_min_samples", type=int, default=32)
     parser.add_argument("--delta_patch_cert_cluster_basis_max_fit_mse_regression", type=float, default=0.02)
+    parser.add_argument("--delta_patch_cert_cluster_basis_view_hinge_weight", type=float, default=0.0)
+    parser.add_argument("--delta_patch_cert_cluster_basis_view_hinge_min_samples", type=int, default=16)
+    parser.add_argument("--delta_patch_cert_cluster_basis_geometry_smooth_weight", type=float, default=0.0)
     parser.add_argument("--delta_patch_cert_carrier_holdout_groups", type=int, default=4)
     parser.add_argument("--delta_patch_cert_carrier_holdout_min_passing_groups", type=int, default=3)
     parser.add_argument("--delta_patch_cert_carrier_holdout_auto_prefix_min_faces", type=int, default=0)
     parser.add_argument("--delta_patch_cert_carrier_holdout_auto_prefix_face_bonus", type=float, default=0.0)
+    parser.add_argument(
+        "--delta_patch_cert_carrier_holdout_auto_prefix_positive_tail_safe",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
     parser.add_argument("--no_seed_rescue", action="store_true")
 
     parser.add_argument("--trial_specs", default="")
@@ -347,6 +373,20 @@ def plan_command(args: argparse.Namespace, scene: str) -> CommandRecord:
         str(args.delta_lambda_smooth),
         "--delta_steps",
         str(profile_value(args, "delta_steps")),
+        "--delta_shared_residual_field_anchors",
+        str(args.delta_shared_residual_field_anchors),
+        "--delta_shared_residual_field_sigma",
+        str(args.delta_shared_residual_field_sigma),
+        "--delta_shared_residual_field_lr",
+        str(args.delta_shared_residual_field_lr),
+        "--delta_shared_residual_field_weight_l2",
+        str(args.delta_shared_residual_field_weight_l2),
+        "--delta_shared_residual_field_view_hinge_weight",
+        str(args.delta_shared_residual_field_view_hinge_weight),
+        "--delta_shared_residual_field_view_hinge_min_samples",
+        str(args.delta_shared_residual_field_view_hinge_min_samples),
+        "--delta_shared_residual_field_duplicate_smooth_weight",
+        str(args.delta_shared_residual_field_duplicate_smooth_weight),
         "--delta_min_policy_val_relative_gain",
         str(args.delta_min_policy_val_relative_gain),
         "--delta_min_policy_val_samples",
@@ -354,7 +394,9 @@ def plan_command(args: argparse.Namespace, scene: str) -> CommandRecord:
         "--delta_min_policy_val_unique_faces",
         str(args.delta_min_policy_val_unique_faces),
         "--delta_validation_shrink_mode",
-        "face",
+        str(args.delta_validation_shrink_mode),
+        "--delta_validation_gain_max_scale",
+        str(args.delta_validation_gain_max_scale),
         "--delta_crossfold_gain_certificate_folds",
         str(args.delta_crossfold_folds),
         "--delta_crossfold_min_passing_folds",
@@ -397,6 +439,12 @@ def plan_command(args: argparse.Namespace, scene: str) -> CommandRecord:
         str(args.delta_patch_cert_cluster_basis_min_samples),
         "--delta_patch_cert_cluster_basis_max_fit_mse_regression",
         str(args.delta_patch_cert_cluster_basis_max_fit_mse_regression),
+        "--delta_patch_cert_cluster_basis_view_hinge_weight",
+        str(args.delta_patch_cert_cluster_basis_view_hinge_weight),
+        "--delta_patch_cert_cluster_basis_view_hinge_min_samples",
+        str(args.delta_patch_cert_cluster_basis_view_hinge_min_samples),
+        "--delta_patch_cert_cluster_basis_geometry_smooth_weight",
+        str(args.delta_patch_cert_cluster_basis_geometry_smooth_weight),
         "--delta_patch_cert_carrier_holdout_selector",
         "--delta_patch_cert_carrier_holdout_groups",
         str(args.delta_patch_cert_carrier_holdout_groups),
@@ -410,6 +458,11 @@ def plan_command(args: argparse.Namespace, scene: str) -> CommandRecord:
         str(args.delta_patch_cert_carrier_holdout_auto_prefix_min_faces),
         "--delta_patch_cert_carrier_holdout_auto_prefix_face_bonus",
         str(args.delta_patch_cert_carrier_holdout_auto_prefix_face_bonus),
+        (
+            "--delta_patch_cert_carrier_holdout_auto_prefix_positive_tail_safe"
+            if bool(args.delta_patch_cert_carrier_holdout_auto_prefix_positive_tail_safe)
+            else "--no-delta_patch_cert_carrier_holdout_auto_prefix_positive_tail_safe"
+        ),
         "--delta_strict_patchcert_carrier",
         "--delta_max_faces_to_apply",
         str(profile_value(args, "delta_max_faces_to_apply")),
@@ -442,6 +495,10 @@ def plan_command(args: argparse.Namespace, scene: str) -> CommandRecord:
         "--wandb_name",
         f"{label}_plan_{scene}",
     ]
+    if bool(args.delta_shared_residual_field):
+        command.append("--delta_shared_residual_field")
+    else:
+        command.append("--no-delta_shared_residual_field")
     if not bool(args.no_seed_rescue):
         command.extend(
             [

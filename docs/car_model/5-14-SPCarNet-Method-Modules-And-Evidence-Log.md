@@ -51,14 +51,20 @@ near-noop/operator-failed rows; it selects `3 / 9` (`bicycle`, `flowers`,
 portfolio row, but still not a broad Phase-S closure. The v21 rank2 and v22
 coverage-aware PatchCert continuation produced real non-noop edits on
 `garden`, `bonsai`, and `room`, but strict effect-aware promotion rejects all
-three because the render-space gains remain too small or tail-unsafe.
+three because the render-space gains remain too small or tail-unsafe. The
+2026-05-16 shared residual-field branch is a genuine representation update and
+adds a positive/tail-safe auto-prefix guard; on `garden` it reduces train-val
+tail negative fraction from `0.341463` to `0.170732`, but v1/v2/v3 still fail
+strict train-val render promotion. This confirms that Phase-S is blocked by a
+proxy-to-render mismatch, not by a missing carrier-count hyperparameter.
 Logs:
 `docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md` and
 `docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md`,
 `docs/car_model/5-14-PhaseS-PatchRisk-Carrier-Pilot.md`, and
 `docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md`,
-`docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md`, and
-`docs/car_model/5-14-PhaseS-V6Multifold-V7V8-FoldAware-PatchCert-Log.md`.
+`docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md`,
+`docs/car_model/5-14-PhaseS-V6Multifold-V7V8-FoldAware-PatchCert-Log.md`,
+and `docs/car_model/5-16-PhaseS-SharedResidualField-Operator.md`.
 
 ## Module Map
 
@@ -79,6 +85,7 @@ Logs:
 | v20 auto-prefix PatchCert + portfolio | Removes manual carrier-count selection by sorting train-only carrier rows and selecting a deterministic certified prefix; then picks a scene policy using only train-val decisions across candidate families. | `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py`, `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`, and `scripts/car_model/ecsr_select_phase_s_policy_portfolio.py`. | Full9 v20 accepts `garden` and `room`; portfolio v2 accepts `4 / 9`, but the added v20 effect is near metric noise. |
 | Effect-aware portfolio selector | Adds fixed train-val effect-size gates and operator audit checks so accepted near-noop rows cannot be counted as method progress. | `scripts/car_model/ecsr_select_phase_s_policy_portfolio.py`; log `docs/car_model/5-15-PhaseS-EffectAware-Portfolio-Rank2-AutoVisual.md`. | Selects `3 / 9` (`bicycle`, `flowers`, `counter`) with slightly stronger mean than v2 and clearer fallback coverage; strict v22 pilot accepts 0/3. |
 | Rank2 / coverage-aware PatchCert | Tests higher-capacity rank2 carriers and a train-only coverage-aware auto-prefix so certified edits cannot shrink to metric-noise prefixes. | `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py`, `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`, and `scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py`. | v21 rank2 does not improve the strict portfolio. v22 makes real edits on `garden`, `bonsai`, and `room`, but strict effect-aware promotion rejects them because gains are too small or tail-unsafe. |
+| Shared residual-field + positive-tail-safe carrier guard | Fits one train-only RBF residual field over certified local mesh slots and bakes it into face-local duplicated vertices; the tail-safe guard prevents auto-prefix coverage floors from admitting a carrier with negative holdout score or CVaR loss. | `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py`, `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`, and `scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py`; log `docs/car_model/5-16-PhaseS-SharedResidualField-Operator.md`. | Real non-noop checkpoints on `garden`; v3 reduces train-val tail negative fraction to `0.170732`, but v1/v2/v3 are rejected because full-render balanced deltas remain negative. The next step must be render-space trust-region certification. |
 | Auto-visual face-local pipeline | Reproducible scene-agnostic coordinator for strict plan generation, alpha refit, selector trials, W&B logging, and report-only held-out summaries. | `scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py`. | Smoke dry-run passes and now exposes coverage-aware auto-prefix controls; intended as execution infrastructure for future non-manual face-local repair runs. |
 | Per-face alpha refit | Fits train-only scalar multipliers for selected face-local residuals and passes them to materialization. | `scripts/car_model/ecsr_fit_facelocal_plan_alphas.py`; materializer arg `--materialize_plan_alpha_json`. | Interface complete, but first 3-scene pilot does not improve over uniform risk-tail. |
 | Train-val gate and fallback | Accepts repairs only with train-val metrics; test remains report-only. Rejected scenes fall back to Phase-J. | `scripts/car_model/ecsr_decide_phasek_trainval_gate.py` and coupled selector decision JSONs. | Now includes per-view tail checks plus compact-stratified promotion for small patch carriers; keeps the effective method from being harmed by risky Phase-S edits. |
