@@ -411,6 +411,21 @@ def _apply_delta(
         "--min_policy_val_unique_faces",
         str(args.delta_min_policy_val_unique_faces),
     ]
+    if str(args.delta_facelocal_region_carrier_json).strip():
+        cmd.extend(
+            [
+                "--region_carrier_json",
+                _scene_format_path(args.delta_facelocal_region_carrier_json, scene),
+                "--region_core_weight",
+                _fmt_arg(args.delta_region_core_weight),
+                "--region_context_weight",
+                _fmt_arg(args.delta_region_context_weight),
+                "--region_outside_weight",
+                _fmt_arg(args.delta_region_outside_weight),
+                "--region_boundary_px",
+                str(args.delta_region_boundary_px),
+            ]
+        )
     if str(args.delta_operator) in {"sh1", "facelocal_sh1"}:
         cmd.extend(
             [
@@ -1157,6 +1172,15 @@ def main() -> int:
         ),
     )
     parser.add_argument("--delta_face_score_weight_max", type=float, default=4.0)
+    parser.add_argument(
+        "--delta_facelocal_region_carrier_json",
+        default="",
+        help="Facelocal-only render-visible carrier JSON template used for per-view core/context sample weighting.",
+    )
+    parser.add_argument("--delta_region_core_weight", type=float, default=1.0)
+    parser.add_argument("--delta_region_context_weight", type=float, default=1.0)
+    parser.add_argument("--delta_region_outside_weight", type=float, default=1.0)
+    parser.add_argument("--delta_region_boundary_px", type=int, default=0)
     parser.add_argument("--delta_strength", type=float, default=0.08)
     parser.add_argument("--delta_max_abs_rgb", type=float, default=0.008)
     parser.add_argument("--delta_operator", choices=("dc", "sh1", "facelocal_sh1", "subdivision"), default="dc")
@@ -1485,6 +1509,12 @@ def main() -> int:
         parser.error("--delta_face_score_weight_power must be finite and >= 0")
     if not math.isfinite(float(args.delta_face_score_weight_max)) or float(args.delta_face_score_weight_max) < 1.0:
         parser.error("--delta_face_score_weight_max must be finite and >= 1")
+    for name in ("delta_region_core_weight", "delta_region_context_weight", "delta_region_outside_weight"):
+        value = float(getattr(args, name))
+        if not math.isfinite(value) or value < 0.0:
+            parser.error(f"--{name} must be finite and >= 0")
+    if int(args.delta_region_boundary_px) < 0:
+        parser.error("--delta_region_boundary_px must be >= 0")
     if (
         not math.isfinite(float(args.delta_patch_cert_cluster_basis_max_fit_mse_regression))
         or float(args.delta_patch_cert_cluster_basis_max_fit_mse_regression) < 0.0

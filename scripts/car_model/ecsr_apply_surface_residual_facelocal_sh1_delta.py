@@ -43,6 +43,7 @@ class PixelSamples:
     weights: np.ndarray
     camera_centers: np.ndarray
     view_names: list[str]
+    region_bins: np.ndarray
 
     @property
     def count(self) -> int:
@@ -80,6 +81,20 @@ def parse_args() -> argparse.Namespace:
         default=4.0,
         help="Upper clip for --face_score_weight_power saliency weights.",
     )
+    parser.add_argument(
+        "--region_carrier_json",
+        type=Path,
+        default=None,
+        help=(
+            "Optional render-visible region carrier JSON. When provided, sampled "
+            "train residuals are reweighted by per-view region core/context support. "
+            "No held-out test views are read."
+        ),
+    )
+    parser.add_argument("--region_core_weight", type=float, default=1.0)
+    parser.add_argument("--region_context_weight", type=float, default=1.0)
+    parser.add_argument("--region_outside_weight", type=float, default=1.0)
+    parser.add_argument("--region_boundary_px", type=int, default=0)
     parser.add_argument("--barycentric_tolerance", type=float, default=0.35)
     parser.add_argument(
         "--uniform_barycentric",
@@ -561,6 +576,12 @@ def parse_args() -> argparse.Namespace:
         parser.error("--face_score_weight_power must be finite and >= 0")
     if not math.isfinite(float(args.face_score_weight_max)) or float(args.face_score_weight_max) < 1.0:
         parser.error("--face_score_weight_max must be finite and >= 1")
+    for name in ("region_core_weight", "region_context_weight", "region_outside_weight"):
+        value = float(getattr(args, name))
+        if not math.isfinite(value) or value < 0.0:
+            parser.error(f"--{name} must be finite and >= 0")
+    if int(args.region_boundary_px) < 0:
+        parser.error("--region_boundary_px must be >= 0")
     if float(args.patch_cert_cluster_basis_max_scale) <= 0.0:
         parser.error("--patch_cert_cluster_basis_max_scale must be > 0")
     if float(args.patch_cert_cluster_basis_lr) <= 0.0:
@@ -728,6 +749,93 @@ def split_view_paths(view_paths: list[Path], stride: int) -> tuple[list[Path], l
     return fit, val
 
 
+def load_region_carrier_index(path: Path | None) -> dict[str, dict[int, list[tuple[int, int, int, int]]]]:
+    if path is None:
+        return {}
+    if not path.is_file():
+        raise FileNotFoundError(f"region carrier JSON not found: {path}")
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    carriers = payload.get("carriers", [])
+    if not isinstance(carriers, list):
+        return {}
+    index: dict[str, dict[int, list[tuple[int, int, int, int]]]] = {}
+    for carrier in carriers:
+        if not isinstance(carrier, dict):
+            continue
+        regions = carrier.get("regions", [])
+        if not isinstance(regions, list):
+            continue
+        for region in regions:
+            if not isinstance(region, dict):
+                continue
+            view = str(region.get("view", "")).strip()
+            if not view:
+                continue
+            view = Path(view).stem
+            bbox = region.get("bbox_xyxy", [])
+            if not isinstance(bbox, list) or len(bbox) != 4:
+                continue
+            try:
+                box = tuple(int(round(float(v))) for v in bbox)
+            except Exception:
+                continue
+            x0, y0, x1, y1 = box
+            if x1 <= x0 or y1 <= y0:
+                continue
+            faces = region.get("face_ids", [])
+            if not isinstance(faces, list):
+                continue
+            view_index = index.setdefault(view, {})
+            for fid_raw in faces:
+                try:
+                    fid = int(fid_raw)
+                except Exception:
+                    continue
+                view_index.setdefault(fid, []).append((x0, y0, x1, y1))
+    return index
+
+
+def region_bins_for_samples(
+    region_index: dict[str, dict[int, list[tuple[int, int, int, int]]]],
+    *,
+    view_name: str,
+    face_id: int,
+    xs: np.ndarray,
+    ys: np.ndarray,
+    boundary_px: int,
+) -> np.ndarray:
+    bins = np.zeros((int(xs.shape[0]),), dtype=np.uint8)
+    if not region_index:
+        return bins
+    boxes = region_index.get(str(view_name), {}).get(int(face_id), [])
+    if not boxes:
+        return bins
+    bins.fill(1)
+    margin = int(boundary_px)
+    for x0, y0, x1, y1 in boxes:
+        inside = (xs >= x0 - margin) & (xs < x1 + margin) & (ys >= y0 - margin) & (ys < y1 + margin)
+        bins[inside] = 2
+    return bins
+
+
+def summarize_region_bins(samples: PixelSamples) -> dict[str, Any]:
+    if samples.count == 0:
+        return {"outside": 0, "context": 0, "core": 0, "total": 0, "core_fraction": 0.0}
+    bins = samples.region_bins.astype(np.uint8, copy=False).reshape(-1)
+    outside = int((bins == 0).sum())
+    context = int((bins == 1).sum())
+    core = int((bins == 2).sum())
+    total = int(bins.shape[0])
+    return {
+        "outside": outside,
+        "context": context,
+        "core": core,
+        "total": total,
+        "core_fraction": float(core) / max(float(total), 1.0),
+    }
+
+
 def collect_samples(
     view_paths: list[Path],
     selected_faces: list[int],
@@ -741,6 +849,11 @@ def collect_samples(
     uniform_barycentric: bool,
     face_score_weight_power: float = 0.0,
     face_score_weight_max: float = 4.0,
+    region_index: dict[str, dict[int, list[tuple[int, int, int, int]]]] | None = None,
+    region_core_weight: float = 1.0,
+    region_context_weight: float = 1.0,
+    region_outside_weight: float = 1.0,
+    region_boundary_px: int = 0,
 ) -> PixelSamples:
     selected = set(int(fid) for fid in selected_faces)
     face_chunks: list[np.ndarray] = []
@@ -748,6 +861,7 @@ def collect_samples(
     residual_chunks: list[np.ndarray] = []
     weight_chunks: list[np.ndarray] = []
     center_chunks: list[np.ndarray] = []
+    region_bin_chunks: list[np.ndarray] = []
     sample_view_names: list[str] = []
     remaining = int(max_total_samples)
     tol = float(barycentric_tolerance)
@@ -832,12 +946,24 @@ def collect_samples(
             if score_power > 0.0:
                 face_score = max(float(stat.get("score", score_ref)), 0.0)
                 score_weight = float(np.clip((face_score / score_ref) ** score_power, 1e-3, score_weight_max))
-            weights = np.maximum(l1, 1e-4) * max(consistency, 1e-3) * score_weight
+            region_bins = region_bins_for_samples(
+                region_index or {},
+                view_name=view_path.stem,
+                face_id=int(fid),
+                xs=xs,
+                ys=ys,
+                boundary_px=int(region_boundary_px),
+            )
+            region_weights = np.full((n,), float(region_outside_weight), dtype=np.float32)
+            region_weights[region_bins == 1] = float(region_context_weight)
+            region_weights[region_bins == 2] = float(region_core_weight)
+            weights = np.maximum(l1, 1e-4) * max(consistency, 1e-3) * score_weight * region_weights
             face_chunks.append(np.full((n,), int(fid), dtype=np.int64))
             bary_chunks.append(b.astype(np.float32))
             residual_chunks.append(residual.astype(np.float32))
             weight_chunks.append(weights.astype(np.float32))
             center_chunks.append(np.repeat(camera_center[None, :], n, axis=0).astype(np.float32))
+            region_bin_chunks.append(region_bins.astype(np.uint8))
             sample_view_names.extend([view_path.stem] * n)
             remaining -= n
 
@@ -850,6 +976,7 @@ def collect_samples(
             weights=np.empty((0,), dtype=np.float32),
             camera_centers=np.empty((0, 3), dtype=np.float32),
             view_names=[],
+            region_bins=np.empty((0,), dtype=np.uint8),
         )
     return PixelSamples(
         face_ids=np.concatenate(face_chunks),
@@ -858,6 +985,7 @@ def collect_samples(
         weights=np.concatenate(weight_chunks),
         camera_centers=np.concatenate(center_chunks),
         view_names=sample_view_names,
+        region_bins=np.concatenate(region_bin_chunks),
     )
 
 
@@ -873,6 +1001,7 @@ def subset_pixel_samples(samples: PixelSamples, mask: np.ndarray) -> PixelSample
         weights=samples.weights[mask],
         camera_centers=samples.camera_centers[mask],
         view_names=[str(v) for v in view_np[mask].tolist()],
+        region_bins=samples.region_bins[mask],
     )
 
 
@@ -1431,6 +1560,11 @@ def summarize_crossfold_face_gain(
                 uniform_barycentric=bool(args.uniform_barycentric),
                 face_score_weight_power=float(args.face_score_weight_power),
                 face_score_weight_max=float(args.face_score_weight_max),
+                region_index=load_region_carrier_index(args.region_carrier_json),
+                region_core_weight=float(args.region_core_weight),
+                region_context_weight=float(args.region_context_weight),
+                region_outside_weight=float(args.region_outside_weight),
+                region_boundary_px=int(args.region_boundary_px),
             )
             fold_view_names = [p.stem for p in fold_paths]
         if fold_samples.count:
@@ -1649,6 +1783,11 @@ def build_patch_crossfold_cache(
             uniform_barycentric=bool(args.uniform_barycentric),
             face_score_weight_power=float(args.face_score_weight_power),
             face_score_weight_max=float(args.face_score_weight_max),
+            region_index=load_region_carrier_index(args.region_carrier_json),
+            region_core_weight=float(args.region_core_weight),
+            region_context_weight=float(args.region_context_weight),
+            region_outside_weight=float(args.region_outside_weight),
+            region_boundary_px=int(args.region_boundary_px),
         )
         if fold_samples.count:
             _, _, fold_sample_vertex_ids = localize_samples(faces, selected_faces, fold_samples)
@@ -1802,6 +1941,11 @@ def build_carrier_holdout_cache(
                 uniform_barycentric=bool(args.uniform_barycentric),
                 face_score_weight_power=float(args.face_score_weight_power),
                 face_score_weight_max=float(args.face_score_weight_max),
+                region_index=load_region_carrier_index(args.region_carrier_json),
+                region_core_weight=float(args.region_core_weight),
+                region_context_weight=float(args.region_context_weight),
+                region_outside_weight=float(args.region_outside_weight),
+                region_boundary_px=int(args.region_boundary_px),
             )
         summary["sample_count"] = int(all_samples.count)
         sample_indices = np.arange(int(all_samples.count), dtype=np.int64)
@@ -1860,6 +2004,11 @@ def build_carrier_holdout_cache(
             uniform_barycentric=bool(args.uniform_barycentric),
             face_score_weight_power=float(args.face_score_weight_power),
             face_score_weight_max=float(args.face_score_weight_max),
+            region_index=load_region_carrier_index(args.region_carrier_json),
+            region_core_weight=float(args.region_core_weight),
+            region_context_weight=float(args.region_context_weight),
+            region_outside_weight=float(args.region_outside_weight),
+            region_boundary_px=int(args.region_boundary_px),
         )
         if fold_samples.count:
             _, _, fold_sample_vertex_ids = localize_samples(faces, selected_faces, fold_samples)
@@ -4684,6 +4833,11 @@ def main() -> int:
         uniform_barycentric=bool(args.uniform_barycentric),
         face_score_weight_power=float(args.face_score_weight_power),
         face_score_weight_max=float(args.face_score_weight_max),
+        region_index=load_region_carrier_index(args.region_carrier_json),
+        region_core_weight=float(args.region_core_weight),
+        region_context_weight=float(args.region_context_weight),
+        region_outside_weight=float(args.region_outside_weight),
+        region_boundary_px=int(args.region_boundary_px),
     )
     val_samples = collect_samples(
         val_paths,
@@ -4697,6 +4851,11 @@ def main() -> int:
         uniform_barycentric=bool(args.uniform_barycentric),
         face_score_weight_power=float(args.face_score_weight_power),
         face_score_weight_max=float(args.face_score_weight_max),
+        region_index=load_region_carrier_index(args.region_carrier_json),
+        region_core_weight=float(args.region_core_weight),
+        region_context_weight=float(args.region_context_weight),
+        region_outside_weight=float(args.region_outside_weight),
+        region_boundary_px=int(args.region_boundary_px),
     )
     policy_val_all_sample_count = int(val_samples.count)
     carrier_holdout_samples: PixelSamples | None = None
@@ -5030,6 +5189,8 @@ def main() -> int:
         "policy_val_tuning_samples": int(val_samples.count),
         "carrier_holdout_disjoint_samples": int(carrier_holdout_sample_count),
         "carrier_holdout_disjoint_from_policy_tuning": bool(args.patch_cert_carrier_holdout_disjoint),
+        "fit_region_bins": summarize_region_bins(fit_samples),
+        "policy_val_region_bins": summarize_region_bins(val_samples),
         "fit_proxy": fit_proxy,
         "policy_val_proxy": val_proxy,
         "final_accepted_fit_proxy": final_accepted_fit_proxy,
@@ -5061,6 +5222,11 @@ def main() -> int:
             "uniform_barycentric": bool(args.uniform_barycentric),
             "face_score_weight_power": float(args.face_score_weight_power),
             "face_score_weight_max": float(args.face_score_weight_max),
+            "region_carrier_json": str(args.region_carrier_json) if args.region_carrier_json is not None else "",
+            "region_core_weight": float(args.region_core_weight),
+            "region_context_weight": float(args.region_context_weight),
+            "region_outside_weight": float(args.region_outside_weight),
+            "region_boundary_px": int(args.region_boundary_px),
         },
         "strength": float(args.strength),
         "max_abs_delta_rgb": float(args.max_abs_delta_rgb),

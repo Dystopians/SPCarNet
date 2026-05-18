@@ -4,6 +4,58 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-17 — Phase-S region core/context weighted fitting and fixed portfolio — NOT_COMPLETE_SMALL_POSITIVE
+
+**Outcome**: Implemented and validated a real Phase-S train/eval pipeline
+upgrade that pushes train-only render-visible region membership into the
+face-local residual fitting objective. The fitter now accepts a
+`--region_carrier_json`, assigns sampled pixels to `outside/context/core` bins,
+multiplies the existing fitting weights by fixed region weights, and records
+`fit_region_bins` plus `policy_val_region_bins` in the operator audit. The
+Phase-K runner forwards the matching `--delta_facelocal_region_carrier_json`
+and weight flags. The portfolio summarizer now also reports mean effective
+report-only balanced delta and computes it from report-only deltas when older
+candidate files do not store the explicit field.
+
+**Execution**:
+
+- Group A: `garden,flowers`, W&B group `phase_s_region_corectx_20260517`, output
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_A`
+- Group B: `kitchen,bonsai,counter`, W&B group
+  `phase_s_region_corectx_20260517`, output
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_B`
+- Final fixed portfolio:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v1.md`
+- Qualitative panels:
+  `assets/spcarnet_phase_s_region_corectx_A_contact_sheet.png` and
+  `assets/spcarnet_phase_s_region_corectx_B_contact_sheet.png`
+- Detailed log:
+  `docs/car_model/5-17-PhaseS-RegionCoreContext-Portfolio-Log.md`
+
+**Direct core/context result**:
+
+| scene | accepted | train-val balanced | report-only balanced | reading |
+|---|---:|---:|---:|---|
+| garden | true | +0.000037074 | +0.000015736 | safe but weaker than old region-prior garden |
+| flowers | true | +0.000135303 | +0.026483655 | useful new row |
+| kitchen | true | +0.000104040 | -0.026346326 | false positive |
+| bonsai | true | +0.000068069 | -0.009002686 | false positive |
+| counter | true | +0.000010073 | -0.013494253 | false positive |
+
+**Final fixed portfolio**: accepts `5 / 9` scenes:
+`bicycle=patchcert_v6`, `flowers=rvregion_corectx_A`,
+`garden=rvregion_garden`, `counter=riskpilot`, `kitchen=rvregion_indoor`.
+Mean effective report-only deltas over Phase-J fallback are `+0.000947740`
+PSNR, `+0.000062552` SSIM, `-0.000098634` LPIPS, and `+0.004171458`
+balanced.
+
+**Interpretation**: `NOT COMPLETE`. This is a meaningful method and evidence
+upgrade over the earlier effect-aware portfolio and 2026-05-16 robust region
+prior, but not a paper-level closure. The new fitting objective can make
+`flowers` visibly stronger, yet the direct gate still false-accepts three
+scenes. The next gate must repair that false-positive failure mode with
+tail/stratified decision logic or a stronger masked render-space objective.
+
 ## 2026-05-16 — Phase-S shared residual-field and tail-safe carrier guard — NOT_COMPLETE_PROXY_TO_RENDER_MISMATCH
 
 **Outcome**: Implemented the first Phase-S representation-level update after

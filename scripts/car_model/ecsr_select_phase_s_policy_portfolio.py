@@ -165,6 +165,12 @@ def trainval_effect_score(deltas: dict[str, float]) -> float:
     )
 
 
+def balanced_score(deltas: dict[str, float]) -> float:
+    return float(deltas.get("PSNR", 0.0)) + 20.0 * float(deltas.get("SSIM", 0.0)) - 20.0 * float(
+        deltas.get("LPIPS", 0.0)
+    )
+
+
 def operator_audit(decision: dict[str, Any]) -> dict[str, Any]:
     audit = decision.get("candidate_operator_audit")
     if isinstance(audit, dict):
@@ -232,6 +238,11 @@ def candidate_row(scene: str, label: str, path: Path, decision: dict[str, Any]) 
     if not selection_flag_present:
         reasons = list(reasons) + ["missing_selection_uses_test_field"]
     tv_delta = {metric: trainval_delta(decision, metric) for metric in METRICS}
+    heldout_delta = {metric: test_delta(decision, metric) for metric in METRICS}
+    if "test_balanced_delta_report_only" in decision:
+        heldout_balanced = number(decision.get("test_balanced_delta_report_only"), 0.0)
+    else:
+        heldout_balanced = balanced_score(heldout_delta)
     return {
         "scene": scene,
         "label": label,
@@ -246,8 +257,8 @@ def candidate_row(scene: str, label: str, path: Path, decision: dict[str, Any]) 
         "trainval_effect_score": trainval_effect_score(tv_delta),
         "candidate_operator_audit": operator_audit(decision),
         "decision_reasons": reasons,
-        "test_delta_report_only": {metric: test_delta(decision, metric) for metric in METRICS},
-        "test_balanced_delta_report_only": number(decision.get("test_balanced_delta_report_only"), 0.0),
+        "test_delta_report_only": heldout_delta,
+        "test_balanced_delta_report_only": heldout_balanced,
     }
 
 
@@ -346,6 +357,8 @@ def write_markdown(path: Path, payload: dict[str, Any]) -> None:
         f"- mean effective report-only dPSNR: `{fmt(payload['mean_effective_test_delta_report_only']['PSNR'])}`",
         f"- mean effective report-only dSSIM: `{fmt(payload['mean_effective_test_delta_report_only']['SSIM'])}`",
         f"- mean effective report-only dLPIPS: `{fmt(payload['mean_effective_test_delta_report_only']['LPIPS'])}`",
+        f"- mean effective report-only balanced delta: "
+        f"`{fmt(payload['mean_effective_test_balanced_delta_report_only'])}`",
         "",
         "| scene | selected policy | accepted | train-val balanced | train-val dPSNR | train-val dSSIM | train-val dLPIPS | effective dPSNR | effective dSSIM | effective dLPIPS | candidates | eligible |",
         "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
@@ -458,6 +471,7 @@ def main() -> int:
         metric: sum(float(row["effective_test_delta_report_only"][metric]) for row in rows) / max(len(rows), 1)
         for metric in METRICS
     }
+    mean_balanced = sum(float(row["effective_test_balanced_delta_report_only"]) for row in rows) / max(len(rows), 1)
     payload = {
         "selection_uses_test": False,
         "scene_count": int(len(rows)),
@@ -475,6 +489,7 @@ def main() -> int:
         },
         "min_trainval_balanced_delta": float(args.min_trainval_balanced_delta),
         "mean_effective_test_delta_report_only": mean_delta,
+        "mean_effective_test_balanced_delta_report_only": mean_balanced,
         "rows": rows,
     }
     args.output_json.parent.mkdir(parents=True, exist_ok=True)

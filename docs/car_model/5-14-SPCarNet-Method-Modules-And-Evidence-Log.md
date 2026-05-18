@@ -68,6 +68,16 @@ stratified-group floors; it keeps only `garden/kitchen` and yields full9
 effective report-only deltas of `+0.000298606` PSNR, `+0.000006563` SSIM, and
 `-0.000020499` LPIPS. This is an honest all-axis positive representation-level
 closure, but still a small effect rather than a top-tier result.
+The 2026-05-17 region core/context weighted fitting update pushes the same
+render-visible proposal signal into the residual fitting objective. It gives a
+new nontrivial `flowers` win, but it also exposes false positives on
+`kitchen/bonsai/counter`. The fixed effect-aware portfolio now accepts `5 / 9`
+(`bicycle=patchcert_v6`, `flowers=rvregion_corectx_A`,
+`garden=rvregion_garden`, `counter=riskpilot`, `kitchen=rvregion_indoor`) with
+mean effective report-only deltas of `+0.000947740` PSNR, `+0.000062552` SSIM,
+and `-0.000098634` LPIPS over Phase-J fallback. This is the cleanest current
+Phase-S portfolio row, but it remains a small, sparse representation-level
+gain, not a complete paper endpoint.
 Logs:
 `docs/car_model/5-14-PhaseS-RiskTail-Alpha-ModuleLog.md` and
 `docs/car_model/5-14-PhaseS-GeoRiskCVaR-Selector-Log.md`,
@@ -75,7 +85,8 @@ Logs:
 `docs/car_model/5-14-PhaseS-DirectPatchCert-Carrier-Pilot.md`,
 `docs/car_model/5-14-PhaseS-CompactStratified-Gate-Log.md`,
 `docs/car_model/5-14-PhaseS-V6Multifold-V7V8-FoldAware-PatchCert-Log.md`,
-and `docs/car_model/5-16-PhaseS-SharedResidualField-Operator.md`.
+`docs/car_model/5-16-PhaseS-SharedResidualField-Operator.md`, and
+`docs/car_model/5-17-PhaseS-RegionCoreContext-Portfolio-Log.md`.
 
 ## Module Map
 
@@ -99,6 +110,7 @@ and `docs/car_model/5-16-PhaseS-SharedResidualField-Operator.md`.
 | Shared residual-field + positive-tail-safe carrier guard | Fits one train-only RBF residual field over certified local mesh slots and bakes it into face-local duplicated vertices; the tail-safe guard prevents auto-prefix coverage floors from admitting a carrier with negative holdout score or CVaR loss. | `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py`, `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`, and `scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py`; log `docs/car_model/5-16-PhaseS-SharedResidualField-Operator.md`. | Real non-noop checkpoints on `garden`; v3 reduces train-val tail negative fraction to `0.170732`, but v1/v2/v3 are rejected because full-render balanced deltas remain negative. The next step must be render-space trust-region certification. |
 | Render-visible region carrier proposals | Changes the Phase-S proposal prior from face-score rows to train-only high-residual image regions projected back to face carriers. It writes a region-ranked evidence directory that the existing face-local fitter can consume. | `scripts/car_model/ecsr_build_render_visible_region_carriers.py`; output root `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516`. | Full9 fixed-policy validation is complete. Default Phase-K accepts `4 / 9` but is unsafe due to `bonsai`; robust train-val-only promotion accepts `garden/kitchen` and gives effective report-only deltas `+0.000298606` PSNR, `+0.000006563` SSIM, `-0.000020499` LPIPS. Summary: `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phase_s_regionprior_full9_robust_summary.md`. |
 | Region-prior robust promotion | Adds a train-val-only promotion layer over render-visible region prior decisions: original gate must accept, selection cannot use test, mean LPIPS must not regress, balanced tail CVaR must be >= `-0.0001`, and worst stratified group balanced delta must be >= `-0.00001`. | `scripts/car_model/ecsr_collect_phase_s_regionprior_summary.py --robust_policy`. | Rejects the unsafe default-accepted `bonsai/treehill` rows while keeping `garden/kitchen`; improves full9 effective fallback mean from negative to all-axis positive. |
+| Region core/context weighted fitting | Sends render-visible region membership into the Phase-S sampled fitting objective. Samples inside a train-only region box get high core weight, same-face/view context samples get lower weight, and outside samples get a small stabilizing weight. | `scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py` region binning and `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py` forwarding flags. | Direct core/context accepts `garden/flowers/kitchen/bonsai/counter`, but only `flowers` is a strong useful new row; `kitchen/bonsai/counter` are false positives. Final fixed portfolio accepts `5 / 9` with mean effective report-only deltas `+0.000947740` PSNR, `+0.000062552` SSIM, `-0.000098634` LPIPS. Log: `docs/car_model/5-17-PhaseS-RegionCoreContext-Portfolio-Log.md`. |
 | Auto-visual face-local pipeline | Reproducible scene-agnostic coordinator for strict plan generation, alpha refit, selector trials, W&B logging, and report-only held-out summaries. | `scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py`. | Smoke dry-run passes and now exposes coverage-aware auto-prefix controls; intended as execution infrastructure for future non-manual face-local repair runs. |
 | Per-face alpha refit | Fits train-only scalar multipliers for selected face-local residuals and passes them to materialization. | `scripts/car_model/ecsr_fit_facelocal_plan_alphas.py`; materializer arg `--materialize_plan_alpha_json`. | Interface complete, but first 3-scene pilot does not improve over uniform risk-tail. |
 | Train-val gate and fallback | Accepts repairs only with train-val metrics; test remains report-only. Rejected scenes fall back to Phase-J. | `scripts/car_model/ecsr_decide_phasek_trainval_gate.py` and coupled selector decision JSONs. | Now includes per-view tail checks plus compact-stratified promotion for small patch carriers; keeps the effective method from being harmed by risky Phase-S edits. |
@@ -330,6 +342,7 @@ or too small to create visible held-out gains.
 | v20 auto-prefix direct decisions | 9 | 2/9 | n/a | n/a | n/a | accepts `garden` and `room`; both are near no-op report-only changes |
 | fixed portfolio v2 | 9 | 4/9 | +0.000608232 | +0.000052366 | -0.000065320 | adds v20 `garden/room` to GeoRisk `flowers/counter`; still dominated by `flowers` |
 | effect-aware portfolio v1 | 9 | 3/9 | +0.000652101 | +0.000056287 | -0.000078238 | rejects v20 near-noop rows; selects `bicycle=patchcert_v6`, `flowers=gaincert_v2`, `counter=riskpilot` |
+| region core/context portfolio v1 | 9 | 5/9 | +0.000947740 | +0.000062552 | -0.000098634 | adds region-weighted `flowers`, keeps older safe `bicycle/counter/kitchen/garden`, blocks corectx false positives |
 
 The portfolio is selected only from train-val decisions and rejects candidates
 without explicit `selection_uses_test=false` provenance. Its scientific value is
