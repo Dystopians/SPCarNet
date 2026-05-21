@@ -383,3 +383,48 @@ Summary:
 This improves the qualitative evidence for `flowers`: the strongest story is a
 local crop/crop-LPIPS improvement on train-defined support regions, not a
 large full-frame perceptual jump.
+
+## 2026-05-20 Runner-Level Smoke
+
+After adding `--gate_compact_require`, I ran one end-to-end Phase-K pipeline
+smoke on `flowers` to verify the new gate path works through the orchestrator,
+not only through manual re-decision. W&B logging was online and the run was
+placed on physical GPU 7 via `CUDA_VISIBLE_DEVICES=7 --gpu 0`.
+
+Output root:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strictcompact_pipeline_smoke_20260520
+```
+
+Decision:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strictcompact_pipeline_smoke_20260520/decisions/flowers_decision.json
+```
+
+Result:
+
+| field | value |
+|---|---:|
+| accepted | true |
+| compact gate accepted | true |
+| train-val balanced | +0.000135303 |
+| train-val dPSNR / dSSIM / dLPIPS | +0.000114441 / -0.000001013 / -0.000002056 |
+| report-only test balanced | +0.026483655 |
+| report-only test dPSNR / dSSIM / dLPIPS | +0.005399704 / +0.000467956 / -0.000586241 |
+| tail negative fraction / CVaR | 0.473684 / -0.000163801 |
+| LPIPS positive fraction / worst regression | 0.447368 / +0.000015557 |
+
+W&B runs:
+
+```text
+https://wandb.ai/karamazovaniki-university-of-southern-california/mesh-splatting-ecsr/runs/40oag7se
+https://wandb.ai/karamazovaniki-university-of-southern-california/mesh-splatting-ecsr/runs/0rjogm71
+https://wandb.ai/karamazovaniki-university-of-southern-california/mesh-splatting-ecsr/runs/zlm9q5x1
+https://wandb.ai/karamazovaniki-university-of-southern-california/mesh-splatting-ecsr/runs/bboy0r5c
+```
+
+This confirms the new runner forwarding and required compact gate semantics in
+the real train/eval path. It is still a single-scene smoke; it does not replace
+the existing full9 fixed-portfolio evidence.

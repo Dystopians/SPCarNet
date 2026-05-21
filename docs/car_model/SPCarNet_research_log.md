@@ -7702,3 +7702,31 @@ mean delta crop SSIM:  +0.00038835
 mean delta crop LPIPS: -0.00060000
 wins crop PSNR / SSIM / LPIPS: 12/12, 12/12, 11/12
 ```
+
+Runner-level smoke:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strictcompact_pipeline_smoke_20260520/decisions/flowers_decision.json
+```
+
+This single-scene end-to-end run used `CUDA_VISIBLE_DEVICES=7 --gpu 0` with W&B
+online and verified that `--gate_compact_require` is correctly forwarded through
+`ecsr_run_phasek_barycentric_gate_scene.py`. The decision matches the manual
+strictcompact re-decision:
+
+```text
+accepted: true
+compact gate accepted: true
+train-val balanced: +0.000135303
+report-only test dPSNR/dSSIM/dLPIPS: +0.005399704 / +0.000467956 / -0.000586241
+report-only balanced: +0.026483655
+```
+
+W&B run ids:
+
+```text
+40oag7se
+0rjogm71
+zlm9q5x1
+bboy0r5c
+```
