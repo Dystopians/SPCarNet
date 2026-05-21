@@ -7776,3 +7776,72 @@ W&B run ids:
 zlm9q5x1
 bboy0r5c
 ```
+
+## 2026-05-21 Mask-Aware Region Core Follow-Up
+
+Status: `NOT_COMPLETE_FAILED_ABLATION`. After the strictcompact multi-scene
+replay, I implemented a train-only mask-aware region-carrier path and validated
+it on `flowers` because that is the scene where the current strictpipeline row
+has the clearest accepted local-support gain.
+
+Code interfaces added:
+
+```text
+scripts/car_model/ecsr_build_render_visible_region_carriers.py --store_region_masks
+scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py mask RLE decode + true mask dilation + tri-bin region weighting
+```
+
+The carrier builder now stores `mask_shape_hw` and `mask_rle_counts` for
+train-residual connected components. The face-local fitter decodes those masks,
+uses `--region_boundary_px` as true dilation, rejects malformed RLEs, and uses
+outside/context/core bins instead of treating every face/view sample as local
+context.
+
+A review subagent found one correctness issue in the initial implementation:
+samples far outside all masked supports could still receive context weight. I
+fixed it before the final `maskcore_tribin` run. Static checks passed:
+
+```text
+git diff --check
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python -m py_compile \
+  scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py \
+  scripts/car_model/ecsr_build_render_visible_region_carriers.py
+```
+
+Experiment roots:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/masked_region_carriers_v1_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_maskcore_v1_flowers_counter_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_maskcore_dilated_v1_flowers_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_maskcore_tribin_v1_flowers_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_maskcore_tribin_scale050_flowers_20260521
+```
+
+Fixed validation scene: `flowers`, iteration `26000`, W&B online, held-out
+test report-only, same strict compact/tail gate as the strictpipeline replay.
+
+| variant | accepted | train-val balanced | report-only balanced | train dPSNR | train dSSIM | train dLPIPS | test dPSNR | test dSSIM | test dLPIPS | reason |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| exact mask | false | +0.000045657 | +0.000032067 | +0.000034332 | +0.000000477 | -0.000000089 | -0.000001907 | +0.000000358 | -0.000001341 | compact stratified PSNR tail fail |
+| dilated mask | false | +0.001345992 | -0.000008464 | -0.000026703 | -0.000038564 | -0.000107199 | +0.000007629 | -0.000001848 | -0.000001043 | PSNR/SSIM train-val regression |
+| tri-bin mask | false | +0.001346588 | -0.000012636 | -0.000026703 | -0.000038564 | -0.000107229 | +0.000007629 | -0.000001967 | -0.000000954 | PSNR/SSIM train-val regression |
+| tri-bin scale 0.5 | false | +0.001362205 | +0.000014186 | -0.000053406 | -0.000036895 | -0.000107676 | +0.000007629 | -0.000000536 | -0.000000864 | PSNR/SSIM train-val regression |
+
+Conclusion:
+
+- The new mask-aware interface is valid infrastructure but not a portfolio
+  improvement.
+- Exact masks make the effect too small and still fail compact stratified PSNR.
+- Dilation and tri-bin weighting improve LPIPS but introduce train-val PSNR and
+  SSIM regressions, so the strict gate correctly rejects them.
+- The `scale=0.5` render-trust pilot is also rejected; no strict render-trust
+  certificate should be written from it.
+- Current best remains
+  `phase_s_effectaware_region_portfolio_v3_strictpipeline`; this follow-up is
+  a documented failed ablation, not progress toward a paper-level closed loop.
+
+Next step: do not continue mask parameter search. The next credible method
+change must directly address train-val render PSNR/SSIM risk, such as
+metric-aware carrier selection, render-trust line search with a strict accepted
+certificate, or a lower-frequency residual basis with less SSIM sensitivity.

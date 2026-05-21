@@ -749,7 +749,62 @@ def split_view_paths(view_paths: list[Path], stride: int) -> tuple[list[Path], l
     return fit, val
 
 
-def load_region_carrier_index(path: Path | None) -> dict[str, dict[int, list[tuple[int, int, int, int]]]]:
+def _decode_bool_mask_rle(shape_hw: Any, counts_raw: Any) -> np.ndarray | None:
+    if not isinstance(shape_hw, list) or len(shape_hw) != 2:
+        return None
+    if not isinstance(counts_raw, list):
+        return None
+    try:
+        height = int(shape_hw[0])
+        width = int(shape_hw[1])
+        counts = [int(v) for v in counts_raw]
+    except Exception:
+        return None
+    if height <= 0 or width <= 0 or not counts:
+        return None
+    total = int(height) * int(width)
+    arr = np.zeros((total,), dtype=bool)
+    pos = 0
+    value = False
+    for count in counts:
+        if count < 0:
+            return None
+        end = pos + int(count)
+        if end > total:
+            return None
+        if value and end > pos:
+            arr[pos:end] = True
+        pos = end
+        value = not value
+    if pos != total:
+        return None
+    return arr.reshape((height, width))
+
+
+def _dilate_mask_with_margin(mask: np.ndarray, margin: int) -> np.ndarray:
+    margin = max(int(margin), 0)
+    mask_bool = np.asarray(mask, dtype=bool)
+    if margin <= 0:
+        return mask_bool
+    padded = np.pad(mask_bool, ((margin, margin), (margin, margin)), mode="constant", constant_values=False)
+    try:
+        from scipy import ndimage
+
+        structure = np.ones((2 * margin + 1, 2 * margin + 1), dtype=bool)
+        return ndimage.binary_dilation(padded, structure=structure)
+    except Exception:
+        out = np.zeros_like(padded, dtype=bool)
+        for dy in range(-margin, margin + 1):
+            for dx in range(-margin, margin + 1):
+                y_src0 = margin
+                y_src1 = margin + mask_bool.shape[0]
+                x_src0 = margin
+                x_src1 = margin + mask_bool.shape[1]
+                out[y_src0 + dy : y_src1 + dy, x_src0 + dx : x_src1 + dx] |= mask_bool
+        return out
+
+
+def load_region_carrier_index(path: Path | None) -> dict[str, dict[int, list[dict[str, Any]]]]:
     if path is None:
         return {}
     if not path.is_file():
@@ -759,7 +814,7 @@ def load_region_carrier_index(path: Path | None) -> dict[str, dict[int, list[tup
     carriers = payload.get("carriers", [])
     if not isinstance(carriers, list):
         return {}
-    index: dict[str, dict[int, list[tuple[int, int, int, int]]]] = {}
+    index: dict[str, dict[int, list[dict[str, Any]]]] = {}
     for carrier in carriers:
         if not isinstance(carrier, dict):
             continue
@@ -783,6 +838,12 @@ def load_region_carrier_index(path: Path | None) -> dict[str, dict[int, list[tup
             x0, y0, x1, y1 = box
             if x1 <= x0 or y1 <= y0:
                 continue
+            mask = _decode_bool_mask_rle(region.get("mask_shape_hw"), region.get("mask_rle_counts"))
+            if mask is not None and mask.shape != (y1 - y0, x1 - x0):
+                mask = None
+            support: dict[str, Any] = {"bbox": (x0, y0, x1, y1)}
+            if mask is not None:
+                support["mask"] = mask
             faces = region.get("face_ids", [])
             if not isinstance(faces, list):
                 continue
@@ -792,12 +853,12 @@ def load_region_carrier_index(path: Path | None) -> dict[str, dict[int, list[tup
                     fid = int(fid_raw)
                 except Exception:
                     continue
-                view_index.setdefault(fid, []).append((x0, y0, x1, y1))
+                view_index.setdefault(fid, []).append(support)
     return index
 
 
 def region_bins_for_samples(
-    region_index: dict[str, dict[int, list[tuple[int, int, int, int]]]],
+    region_index: dict[str, dict[int, list[dict[str, Any]]]],
     *,
     view_name: str,
     face_id: int,
@@ -811,11 +872,51 @@ def region_bins_for_samples(
     boxes = region_index.get(str(view_name), {}).get(int(face_id), [])
     if not boxes:
         return bins
-    bins.fill(1)
+    has_precise_mask = any(
+        isinstance(support, dict) and isinstance(support.get("mask"), np.ndarray) for support in boxes
+    )
+    if not has_precise_mask:
+        bins.fill(1)
     margin = int(boundary_px)
-    for x0, y0, x1, y1 in boxes:
-        inside = (xs >= x0 - margin) & (xs < x1 + margin) & (ys >= y0 - margin) & (ys < y1 + margin)
-        bins[inside] = 2
+    for support in boxes:
+        bbox = support.get("bbox") if isinstance(support, dict) else None
+        if not isinstance(bbox, tuple) or len(bbox) != 4:
+            continue
+        x0, y0, x1, y1 = bbox
+        mask = support.get("mask") if isinstance(support, dict) else None
+        if isinstance(mask, np.ndarray):
+            if margin > 0:
+                cache_key = f"mask_dilated_margin_{margin}"
+                dilated = support.get(cache_key)
+                if not isinstance(dilated, np.ndarray):
+                    dilated = _dilate_mask_with_margin(mask, margin)
+                    support[cache_key] = dilated
+                mask_eval = dilated
+                eval_x0 = int(x0) - margin
+                eval_y0 = int(y0) - margin
+                eval_x1 = int(x1) + margin
+                eval_y1 = int(y1) + margin
+            else:
+                mask_eval = mask
+                eval_x0 = int(x0)
+                eval_y0 = int(y0)
+                eval_x1 = int(x1)
+                eval_y1 = int(y1)
+            inside_box = (xs >= eval_x0) & (xs < eval_x1) & (ys >= eval_y0) & (ys < eval_y1)
+            if not np.any(inside_box):
+                continue
+            bins[inside_box] = np.maximum(bins[inside_box], np.uint8(1))
+            idx = np.nonzero(inside_box)[0]
+            local_x = (xs[idx] - eval_x0).astype(np.int64, copy=False)
+            local_y = (ys[idx] - eval_y0).astype(np.int64, copy=False)
+            valid = (local_y >= 0) & (local_y < mask_eval.shape[0]) & (local_x >= 0) & (local_x < mask_eval.shape[1])
+            if not np.any(valid):
+                continue
+            core_idx = idx[valid][mask_eval[local_y[valid], local_x[valid]]]
+            bins[core_idx] = 2
+        else:
+            inside = (xs >= x0 - margin) & (xs < x1 + margin) & (ys >= y0 - margin) & (ys < y1 + margin)
+            bins[inside] = 2
     return bins
 
 
@@ -849,7 +950,7 @@ def collect_samples(
     uniform_barycentric: bool,
     face_score_weight_power: float = 0.0,
     face_score_weight_max: float = 4.0,
-    region_index: dict[str, dict[int, list[tuple[int, int, int, int]]]] | None = None,
+    region_index: dict[str, dict[int, list[dict[str, Any]]]] | None = None,
     region_core_weight: float = 1.0,
     region_context_weight: float = 1.0,
     region_outside_weight: float = 1.0,

@@ -547,3 +547,98 @@ Next gate:
    safer and fairer than the raw core/context gate.
 3. The next method work must improve the operator itself or the train-only risk
    predictor enough to add non-noise accepted coverage without test leakage.
+
+## 2026-05-21 Mask-Aware Region Core Ablation
+
+Status: `NOT_COMPLETE_FAILED_ABLATION`. This was a focused follow-up to the
+strictpipeline v3 bottleneck. The hypothesis was that bbox-level
+render-visible regions were too coarse, so the fitter should see the actual
+train residual connected-component mask and weight only those pixels as the
+high-confidence region core.
+
+Implemented interfaces:
+
+```text
+scripts/car_model/ecsr_build_render_visible_region_carriers.py
+  --store_region_masks
+  writes mask_shape_hw and mask_rle_counts for each train-only connected component
+
+scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py
+  decodes mask RLEs
+  applies --region_boundary_px as true mask dilation
+  assigns precise mask core / bbox context / outside bins for masked carriers
+  rejects malformed RLEs whose run lengths do not exactly match the mask area
+```
+
+Subagent review found one real issue before the final run: masked supports were
+initially too broad because any face/view with a carrier support could mark
+far-away samples as context. That is now fixed: masked carriers keep far-away
+samples in the outside bin, use bbox/dilated support as context, and use only
+the RLE mask hit as core. The same review found no row-major RLE, bbox-local
+shape, or dilation-indexing error after the fix.
+
+Carrier and experiment roots:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/masked_region_carriers_v1_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_maskcore_v1_flowers_counter_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_maskcore_dilated_v1_flowers_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_maskcore_tribin_v1_flowers_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_maskcore_tribin_scale050_flowers_20260521
+```
+
+Fixed validation scene: `flowers`, iteration `26000`, W&B online, same Phase-K
+gate as the strictpipeline replay, held-out test remains report-only. The
+`scale050` row is explicitly an uncertified render-trust pilot; it is not a
+strict accepted replay because the train-val gate did not accept it.
+
+| variant | accepted | train-val balanced | report-only balanced | train dPSNR | train dSSIM | train dLPIPS | test dPSNR | test dSSIM | test dLPIPS | gate reason |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| maskcore_v1_exact | false | +0.000045657 | +0.000032067 | +0.000034332 | +0.000000477 | -0.000000089 | -0.000001907 | +0.000000358 | -0.000001341 | compact stratified PSNR tail below threshold |
+| maskcore_dilated | false | +0.001345992 | -0.000008464 | -0.000026703 | -0.000038564 | -0.000107199 | +0.000007629 | -0.000001848 | -0.000001043 | PSNR/SSIM train-val regression and compact stratified failures |
+| maskcore_tribin | false | +0.001346588 | -0.000012636 | -0.000026703 | -0.000038564 | -0.000107229 | +0.000007629 | -0.000001967 | -0.000000954 | PSNR/SSIM train-val regression and compact stratified failures |
+| maskcore_tribin_scale050 | false | +0.001362205 | +0.000014186 | -0.000053406 | -0.000036895 | -0.000107676 | +0.000007629 | -0.000000536 | -0.000000864 | PSNR/SSIM train-val regression and compact stratified failures |
+
+Audit summaries:
+
+```text
+maskcore_v1_exact: selected 196 faces, accepted 114 faces, +342 vertices
+  fit bins outside/context/core: 3868 / 377 / 1790
+  policy-val bins outside/context/core: 154 / 440 / 2493
+
+maskcore_dilated: selected 196 faces, accepted 114 faces, +342 vertices
+  fit bins outside/context/core: 3868 / 28 / 2139
+  policy-val bins outside/context/core: 154 / 73 / 2860
+
+maskcore_tribin: selected 196 faces, accepted 114 faces, +342 vertices
+  fit bins outside/context/core: 3873 / 23 / 2139
+  policy-val bins outside/context/core: 174 / 53 / 2860
+
+maskcore_tribin_scale050: materialized 114 faces, +342 vertices, scale 0.5
+```
+
+Interpretation:
+
+- The mask-aware interface is useful and now implemented cleanly, but it is not
+  a winning operator by itself.
+- Exact masks are safer on PSNR/SSIM but shrink the effect to numerical noise
+  and still fail the stratified compact gate.
+- Mask dilation produces a larger LPIPS improvement, but the same train-val
+  render check shows PSNR/SSIM regressions. This is not acceptable for the
+  current balanced objective.
+- The `scale=0.5` render-trust pilot does not solve the problem; it keeps the
+  LPIPS-driven balanced gain but worsens train-val PSNR.
+- None of these rows should replace the v3 portfolio. The best current audited
+  policy remains `phase_s_effectaware_region_portfolio_v3_strictpipeline`.
+
+Next gate:
+
+1. Stop expanding the mask-core parameter sweep unless a new operator objective
+   changes the PSNR/SSIM behavior directly.
+2. The next credible method step should be metric-aware during training or
+   selection, not only mask-aware sampling. Candidate directions are
+   train-val render-trust line search with strict certification, per-carrier
+   PSNR/SSIM risk prediction, or a lower-frequency residual basis that cannot
+   create small full-frame SSIM drops.
+3. Keep the mask RLE support as infrastructure because it may be needed by a
+   future operator, but mark the current mask-core ablation as failed evidence.

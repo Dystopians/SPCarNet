@@ -56,6 +56,23 @@ def _round_float(value: float, digits: int = 8) -> float:
     return float(round(float(value), int(digits)))
 
 
+def _encode_bool_mask_rle(mask: np.ndarray) -> list[int]:
+    flat = np.asarray(mask, dtype=np.uint8).reshape(-1)
+    counts: list[int] = []
+    current = 0
+    run = 0
+    for value_raw in flat:
+        value = int(value_raw)
+        if value == current:
+            run += 1
+        else:
+            counts.append(run)
+            current = value
+            run = 1
+    counts.append(run)
+    return counts
+
+
 def _view_paths(evidence_dir: Path, *, max_views: int, view_stride: int, view_offset: int) -> list[Path]:
     paths = sorted((evidence_dir / "views").glob("*.npz"))
     if not paths:
@@ -77,6 +94,7 @@ def _component_regions(
     top_regions_per_view: int,
     max_faces_per_region: int,
     min_face_pixels: int,
+    store_region_masks: bool,
 ) -> list[dict[str, Any]]:
     data = np.load(path)
     face_id = data["face_id"].astype(np.int64, copy=False)
@@ -136,22 +154,25 @@ def _component_regions(
         face_pixels = sum(int(row["pixels"]) for row in face_rows)
         face_coverage = float(face_pixels) / max(float(pixel_count), 1.0)
         score = mean_l1 * math.sqrt(float(pixel_count)) * math.log1p(len(face_rows)) * max(face_coverage, 0.05)
-        rows.append(
-            {
-                "view": view_name,
-                "source_npz": str(path),
-                "bbox_xyxy": [int(slc[1].start), int(slc[0].start), int(slc[1].stop), int(slc[0].stop)],
-                "pixels": pixel_count,
-                "threshold": _round_float(threshold),
-                "mean_l1": _round_float(mean_l1),
-                "p90_l1": _round_float(p90_l1),
-                "mean_residual_rgb": [_round_float(v) for v in mean_rgb],
-                "face_coverage": _round_float(face_coverage),
-                "faces": face_rows,
-                "face_ids": [int(row["face_id"]) for row in face_rows],
-                "score": _round_float(score),
-            }
-        )
+        row = {
+            "view": view_name,
+            "source_npz": str(path),
+            "bbox_xyxy": [int(slc[1].start), int(slc[0].start), int(slc[1].stop), int(slc[0].stop)],
+            "pixels": pixel_count,
+            "threshold": _round_float(threshold),
+            "mean_l1": _round_float(mean_l1),
+            "p90_l1": _round_float(p90_l1),
+            "mean_residual_rgb": [_round_float(v) for v in mean_rgb],
+            "face_coverage": _round_float(face_coverage),
+            "faces": face_rows,
+            "face_ids": [int(row["face_id"]) for row in face_rows],
+            "score": _round_float(score),
+        }
+        if bool(store_region_masks):
+            mask_bool = np.asarray(local_mask, dtype=bool)
+            row["mask_shape_hw"] = [int(mask_bool.shape[0]), int(mask_bool.shape[1])]
+            row["mask_rle_counts"] = _encode_bool_mask_rle(mask_bool)
+        rows.append(row)
     rows.sort(key=lambda row: (float(row["score"]), int(row["pixels"])), reverse=True)
     return rows[: int(top_regions_per_view)]
 
@@ -389,6 +410,15 @@ def main() -> int:
     parser.add_argument("--min_merge_shared_faces", type=int, default=3)
     parser.add_argument("--max_carriers", type=int, default=64)
     parser.add_argument("--max_evidence_faces", type=int, default=2048)
+    parser.add_argument(
+        "--store_region_masks",
+        action="store_true",
+        help=(
+            "Store true train residual connected-component masks in the carrier JSON. "
+            "Downstream fitters can then distinguish precise core pixels from the "
+            "coarser bbox context without reading held-out views."
+        ),
+    )
     args = parser.parse_args()
 
     evidence_dir = Path(args.evidence_dir)
@@ -410,6 +440,7 @@ def main() -> int:
                 top_regions_per_view=int(args.top_regions_per_view),
                 max_faces_per_region=int(args.max_faces_per_region),
                 min_face_pixels=int(args.min_face_pixels),
+                store_region_masks=bool(args.store_region_masks),
             )
         )
     carriers = merge_regions(
@@ -439,6 +470,7 @@ def main() -> int:
             "top_regions_per_view": int(args.top_regions_per_view),
             "merge_face_jaccard": float(args.merge_face_jaccard),
             "min_merge_shared_faces": int(args.min_merge_shared_faces),
+            "store_region_masks": bool(args.store_region_masks),
         },
         "carriers": carriers,
         "evidence_faces_preview": face_rows[:50],
