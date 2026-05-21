@@ -4,38 +4,52 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
-## 2026-05-21 — Phase-S conservative coefficient lowpass residual — NOT_COMPLETE_ONE_STRONG_SCENE
+## 2026-05-21 — Phase-S conservative coefficient lowpass residual policy — NOT_COMPLETE_SMALL_POLICY_GAIN
 
 **Outcome**: Added a conservative residual-frequency control to the Phase-S
 face-local SH repair path. The fitter now supports
 `--coefficient_lowpass_mode {none,dc_only,sh_scale}` and the Phase-K runner
-forwards it through `--delta_coefficient_lowpass_mode`. The `dc_only` mode
-zeroes all non-DC SH residual coefficients after fitting and before render-gate
-evaluation, then records the coefficient energy change in the operator audit.
-This is a real train/eval pipeline method change, not a selector re-decision.
+forwards it through `--delta_coefficient_lowpass_mode`. `dc_only` zeroes all
+non-DC SH residual coefficients; `sh_scale` keeps DC and scales the non-DC SH
+residual coefficients after fitting and before render-gate evaluation. The
+operator audit records the coefficient energy change. I also added
+`ecsr_build_lowpass_policy_portfolio.py`, which promotes lowpass candidates
+using train-val metrics only and keeps held-out test deltas report-only.
 
 **Evidence paths**:
 
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_dc_only_flowers`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_dc_only_budget160_garden`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_dc_only_budget160_counter`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_flowers`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_budget160_garden`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_budget160_counter`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phase_s_lowpass_policy_v1_portfolio.md`
 - Detailed log: `docs/car_model/5-17-PhaseS-RegionCoreContext-Portfolio-Log.md`
 
-| scene | accepted | train-val balanced | report-only balanced | test dPSNR | test dSSIM | test dLPIPS | decision |
-|---|---:|---:|---:|---:|---:|---:|---|
-| flowers | true | +0.000516176 | +0.026504397 | +0.005397797 | +0.000469148 | -0.000586182 | new accepted low-frequency row |
-| garden | false | +0.000044644 | +0.000064254 | +0.000045776 | -0.000000238 | -0.000001162 | rejected by compact stratified PSNR |
-| counter | false | +0.000014186 | -0.000029385 | -0.000017166 | -0.000000179 | +0.000000432 | rejected by compact PSNR |
+**Fixed lowpass policy v1**: candidate set is fixed to `dc_only` and
+`sh_scale=0.5`; selection uses train-val gates only. It promotes `flowers` and
+`garden`, while `counter` remains the old `riskpilot` row because both lowpass
+variants fail the train-val gate.
 
-**Interpretation**: `NOT_COMPLETE_ONE_STRONG_SCENE`. The `flowers` result is
-the best Phase-S signal in this narrow family: train-val balanced improves from
-the strictpipeline row's `+0.000135303` to `+0.000516176`, while held-out
-report-only balanced is essentially preserved/slightly higher
-(`+0.026504397` vs `+0.026483655`). However, `garden` and `counter` do not pass
-the same strict train-val gate. This validates the diagnosis that high-frequency
-SH residuals are a render-risk source, but it does not close the paper-level
-Phase-S portfolio gap. Current final portfolio should remain the previous
-strictpipeline selection unless a later multi-scene low-frequency policy passes.
+| scene | selected source | train-val balanced | report-only balanced | test dPSNR | test dSSIM | test dLPIPS | decision |
+|---|---|---:|---:|---:|---:|---:|---|
+| flowers | `sh_scale=0.5` | +0.000567913 | +0.026497841 | +0.005397797 | +0.000468850 | -0.000586152 | promoted |
+| garden | `sh_scale=0.5` | +0.000086665 | +0.000076056 | +0.000053406 | -0.000000715 | -0.000001848 | promoted |
+| counter | `riskpilot` fallback | +0.000101507 | +0.000097632 | +0.000055313 | +0.000000417 | -0.000001699 | lowpass rejected |
+
+Portfolio change versus v3 strictpipeline: promoted scenes `2 / 9`; accepted
+count stays `5 / 9`; mean report-only deltas move from
+`+0.000947740 / +0.000062552 / -0.000098634` to
+`+0.000948588 / +0.000062618 / -0.000098820`, and mean report-only balanced
+from `+0.004171458` to `+0.004177339`.
+
+**Interpretation**: `NOT_COMPLETE_SMALL_POLICY_GAIN`. This validates the
+frequency-risk diagnosis better than the one-scene `dc_only` pass: the same
+fixed lowpass candidate set produces train-val accepted improvements on both
+`flowers` and `garden`. The portfolio lift is still small and coverage remains
+`5 / 9`, so it is not a paper-level Phase-S closure. The unsolved bottlenecks
+are `counter` PSNR/SSIM fragility and the four fallback scenes.
 
 ## 2026-05-21 — Phase-S strictcompact end-to-end multi-scene replay — NOT_COMPLETE_SMALL_POSITIVE
 

@@ -859,3 +859,84 @@ Interpretation:
   use `dc_only`, `sh_scale`, or fallback from train-only evidence. A broader
   scene run should only promote rows that pass non-noise train-val thresholds,
   with held-out test kept report-only.
+
+## 2026-05-21 Lowpass Policy v1 Follow-Up
+
+Status: `NOT_COMPLETE_SMALL_POLICY_GAIN`. I then fixed the candidate set to
+`dc_only` plus `sh_scale=0.5` and used train-val gates only to decide promotion.
+This is a policy-level follow-up, not manual per-scene parameter picking: the
+same two lowpass choices are evaluated, and candidates that fail train-val
+PSNR/SSIM/LPIPS/compact gates fall back to the existing portfolio row.
+
+Additional output roots:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_flowers
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_budget160_garden
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_budget160_counter
+```
+
+W&B run ids:
+
+```text
+flowers sh050: zqxlyhxa, rarln4g6, ip7fwono, xs6vaeqq
+garden sh050: 31maifrk, jb6tnept, 7zjdq04n, 1yyscz2w
+counter sh050: tmepqq63, ahec1url, x8qx8n0w, u0eia0je
+```
+
+Lowpass candidate table:
+
+| scene | mode | accepted | train-val balanced | report-only balanced | train dPSNR | train dSSIM | train dLPIPS | test dPSNR | test dSSIM | test dLPIPS | reading |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| flowers | dc_only | true | +0.000516176 | +0.026504397 | +0.000038147 | +0.000000238 | -0.000023663 | +0.005397797 | +0.000469148 | -0.000586182 | accepted, but lower train-val than sh050 |
+| flowers | sh050 | true | +0.000567913 | +0.026497841 | +0.000064850 | -0.000000119 | -0.000025272 | +0.005397797 | +0.000468850 | -0.000586152 | selected by train-val |
+| garden | dc_only | false | +0.000044644 | +0.000064254 | +0.000051498 | -0.000000060 | +0.000000283 | +0.000045776 | -0.000000238 | -0.000001162 | compact stratified PSNR reject |
+| garden | sh050 | true | +0.000086665 | +0.000076056 | +0.000080109 | +0.000000000 | -0.000000328 | +0.000053406 | -0.000000715 | -0.000001848 | selected by train-val |
+| counter | dc_only | false | +0.000014186 | -0.000029385 | +0.000007629 | +0.000000060 | -0.000000268 | -0.000017166 | -0.000000179 | +0.000000432 | compact PSNR reject |
+| counter | sh050 | false | +0.003451645 | +0.000084102 | -0.000186920 | -0.000034153 | -0.000216082 | +0.000091553 | +0.000000238 | +0.000000611 | attractive LPIPS, rejected by PSNR/SSIM |
+
+Policy artifact:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phase_s_lowpass_policy_v1_portfolio.md
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phase_s_lowpass_policy_v1_portfolio.json
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phase_s_lowpass_policy_v1_portfolio.csv
+```
+
+Builder command:
+
+```text
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_build_lowpass_policy_portfolio.py \
+  --base_portfolio_json outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v3_strictpipeline.json \
+  --output_prefix outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phase_s_lowpass_policy_v1_portfolio \
+  --candidate dc_flowers=outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_dc_only_flowers/decisions/{scene}_decision.json \
+  --candidate dc_budget160=outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_dc_only_budget160_{scene}/decisions/{scene}_decision.json \
+  --candidate sh050_flowers=outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_flowers/decisions/{scene}_decision.json \
+  --candidate sh050_budget160=outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_budget160_{scene}/decisions/{scene}_decision.json \
+  --min_trainval_psnr_gain 0.00002 \
+  --max_trainval_ssim_regression 0.000015 \
+  --max_trainval_lpips_regression 0.000005
+```
+
+Portfolio v1 result:
+
+| metric | strictpipeline v3 | lowpass policy v1 | delta |
+|---|---:|---:|---:|
+| promoted lowpass scenes | 0 / 9 | 2 / 9 | +2 |
+| accepted scenes | 5 / 9 | 5 / 9 | +0 |
+| mean report-only dPSNR | +0.000947740 | +0.000948588 | +0.000000848 |
+| mean report-only dSSIM | +0.000062552 | +0.000062618 | +0.000000066 |
+| mean report-only dLPIPS | -0.000098634 | -0.000098820 | -0.000000185 |
+| mean report-only balanced | +0.004171458 | +0.004177339 | +0.000005881 |
+
+Interpretation:
+
+- The method upgrade is real: residual-frequency projection is now exposed in
+  the train/eval pipeline, audited, W&B-logged, and merged through a train-only
+  portfolio policy.
+- The useful part is not `dc_only` alone. `sh_scale=0.5` is the stronger fixed
+  candidate for both `flowers` and `garden`, while `counter` exposes the same
+  old failure mode: LPIPS can improve while PSNR/SSIM tails become unsafe.
+- This is a measurable but still small portfolio lift. It does not solve
+  `counter`, `room`, `stump`, `treehill`, or `bonsai`, and therefore should be
+  treated as a better Phase-S checkpoint, not a completed paper method.
