@@ -789,3 +789,73 @@ Interpretation:
 - This strengthens the audit discipline but does not improve the current best
   portfolio. Current best remains
   `phase_s_effectaware_region_portfolio_v3_strictpipeline`.
+
+## 2026-05-21 Conservative Coefficient Lowpass Residual
+
+Status: `NOT_COMPLETE_ONE_STRONG_SCENE`. After the mask-core line failed the
+non-noise selector, I implemented a lower-frequency residual parameterization
+instead of continuing mask/top-k sweeps. The face-local SH fitter now supports:
+
+```text
+--coefficient_lowpass_mode none|dc_only|sh_scale
+--coefficient_lowpass_sh_scale <float>
+```
+
+and the Phase-K runner forwards it as:
+
+```text
+--delta_coefficient_lowpass_mode none|dc_only|sh_scale
+--delta_coefficient_lowpass_sh_scale <float>
+```
+
+`dc_only` keeps only the DC residual coefficient and zeroes all non-DC SH
+residual coefficients after fitting and before policy-val shrink/render-gate
+evaluation. The audit JSON records both `coefficient_lowpass` and
+`coefficient_lowpass_final`, including the SH energy ratio after/before.
+
+Output roots:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_dc_only_flowers
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_dc_only_budget160_garden
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_dc_only_budget160_counter
+```
+
+W&B run ids:
+
+```text
+flowers: uq3rf10q, 05kylvs4, 5881iw5r, 651aftdm
+garden: tyqbwhs0, icqefc3l, tx3pe6fa, j9sy2rhc
+counter: ds8so7r6, 5yeg0g00, w518f08q, 1l2hri0w
+```
+
+Direct lowpass decisions:
+
+| scene | accepted | train-val balanced | report-only balanced | train dPSNR | train dSSIM | train dLPIPS | test dPSNR | test dSSIM | test dLPIPS | faces | SH energy ratio | reason |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| flowers | true | +0.000516176 | +0.026504397 | +0.000038147 | +0.000000238 | -0.000023663 | +0.005397797 | +0.000469148 | -0.000586182 | 66 | 0.000000 | pass |
+| garden | false | +0.000044644 | +0.000064254 | +0.000051498 | -0.000000060 | +0.000000283 | +0.000045776 | -0.000000238 | -0.000001162 | 160 | 0.000000 | compact stratified PSNR |
+| counter | false | +0.000014186 | -0.000029385 | +0.000007629 | +0.000000060 | -0.000000268 | -0.000017166 | -0.000000179 | +0.000000432 | 142 | 0.000000 | compact PSNR |
+
+Same-scene comparison to the current v3 strictpipeline portfolio:
+
+| scene | current selected row | current report-only balanced | lowpass accepted | lowpass report-only balanced | reading |
+|---|---|---:|---:|---:|---|
+| flowers | `rvregion_corectx_strictpipeline` | +0.026483655 | true | +0.026504397 | lowpass materially improves train-val stability while preserving held-out gain |
+| garden | `rvregion_garden` | +0.000037313 | false | +0.000064254 | positive held-out sign, but the strict train-val gate blocks promotion |
+| counter | `riskpilot` | +0.000097632 | false | -0.000029385 | negative; do not promote |
+
+Interpretation:
+
+- This is a genuine method-side change in residual representation, not a
+  parameter scan or post-hoc selector tweak.
+- It confirms the main diagnosis: high-frequency SH residual coefficients can
+  destabilize render metrics, and a low-frequency projection makes `flowers`
+  substantially safer on train-val.
+- It is still not a paper-level Phase-S closure. Only `flowers` passes; `garden`
+  remains gate-fragile; `counter` regresses. The current best portfolio remains
+  `phase_s_effectaware_region_portfolio_v3_strictpipeline`.
+- Next credible step is an adaptive low-frequency policy that predicts when to
+  use `dc_only`, `sh_scale`, or fallback from train-only evidence. A broader
+  scene run should only promote rows that pass non-noise train-val thresholds,
+  with held-out test kept report-only.

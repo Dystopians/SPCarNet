@@ -117,6 +117,18 @@ def parse_args() -> argparse.Namespace:
         default=1,
         help="Face-local residual SH degree. 1 preserves historical behavior; 3 uses the full stored SH basis.",
     )
+    parser.add_argument(
+        "--coefficient_lowpass_mode",
+        choices=("none", "dc_only", "sh_scale"),
+        default="none",
+        help=(
+            "Post-fit coefficient projection for conservative representation repair. "
+            "'dc_only' removes all non-DC SH residual coefficients; 'sh_scale' "
+            "keeps DC and scales non-DC residual coefficients by "
+            "--coefficient_lowpass_sh_scale."
+        ),
+    )
+    parser.add_argument("--coefficient_lowpass_sh_scale", type=float, default=1.0)
     parser.add_argument("--lambda_mag", type=float, default=2e-2)
     parser.add_argument("--lambda_sh1_mag", type=float, default=5e-2)
     parser.add_argument("--lambda_smooth", type=float, default=8e-2)
@@ -611,6 +623,10 @@ def parse_args() -> argparse.Namespace:
         parser.error("--shared_residual_field_view_hinge_weight must be finite and >= 0")
     if int(args.shared_residual_field_view_hinge_min_samples) < 0:
         parser.error("--shared_residual_field_view_hinge_min_samples must be >= 0")
+    if not math.isfinite(float(args.coefficient_lowpass_sh_scale)) or float(args.coefficient_lowpass_sh_scale) < 0.0:
+        parser.error("--coefficient_lowpass_sh_scale must be finite and >= 0")
+    if str(args.coefficient_lowpass_mode) == "sh_scale" and float(args.coefficient_lowpass_sh_scale) > 1.0:
+        parser.error("--coefficient_lowpass_sh_scale must be <= 1 for --coefficient_lowpass_mode sh_scale")
     if (
         not math.isfinite(float(args.shared_residual_field_duplicate_smooth_weight))
         or float(args.shared_residual_field_duplicate_smooth_weight) < 0.0
@@ -3768,6 +3784,89 @@ def _duplicate_source_smooth_loss(coeff: torch.Tensor, source_vertex_ids: torch.
     return ((coeff[repeated] - means[inverse[repeated]]) ** 2).mean()
 
 
+def apply_coefficient_lowpass(coeff: torch.Tensor, *, mode: str, sh_scale: float) -> tuple[torch.Tensor, dict[str, Any]]:
+    """Project residual coefficients toward lower-frequency appearance updates."""
+
+    mode = str(mode)
+    scale = float(sh_scale)
+    summary: dict[str, Any] = {
+        "mode": mode,
+        "sh_scale": scale,
+        "applied": False,
+        "basis_count": int(coeff.shape[1]) if coeff.ndim >= 2 else 0,
+        "coeff_abs_mean_before": 0.0,
+        "coeff_abs_mean_after": 0.0,
+        "sh_abs_mean_before": 0.0,
+        "sh_abs_mean_after": 0.0,
+        "sh_energy_ratio_after_before": 1.0,
+    }
+    if coeff.numel() == 0 or coeff.ndim != 3:
+        return coeff, summary
+    with torch.no_grad():
+        out = coeff.clone()
+        basis_count = int(out.shape[1])
+        summary["coeff_abs_mean_before"] = float(out.abs().mean().detach().cpu().item())
+        if basis_count > 1:
+            sh_before = out[:, 1:, :]
+            sh_abs_before = float(sh_before.abs().mean().detach().cpu().item())
+            sh_energy_before = float((sh_before**2).mean().detach().cpu().item())
+        else:
+            sh_abs_before = 0.0
+            sh_energy_before = 0.0
+        summary["sh_abs_mean_before"] = sh_abs_before
+        if mode == "dc_only" and basis_count > 1:
+            out[:, 1:, :] = 0.0
+            summary["applied"] = True
+            summary["effective_sh_scale"] = 0.0
+        elif mode == "sh_scale" and basis_count > 1:
+            out[:, 1:, :] *= scale
+            summary["applied"] = bool(abs(scale - 1.0) > 1.0e-12)
+            summary["effective_sh_scale"] = scale
+        else:
+            summary["effective_sh_scale"] = 1.0
+        summary["coeff_abs_mean_after"] = float(out.abs().mean().detach().cpu().item()) if out.numel() else 0.0
+        if basis_count > 1:
+            sh_after = out[:, 1:, :]
+            sh_abs_after = float(sh_after.abs().mean().detach().cpu().item())
+            sh_energy_after = float((sh_after**2).mean().detach().cpu().item())
+        else:
+            sh_abs_after = 0.0
+            sh_energy_after = 0.0
+        summary["sh_abs_mean_after"] = sh_abs_after
+        if sh_energy_before > 0.0:
+            summary["sh_energy_ratio_after_before"] = float(sh_energy_after / sh_energy_before)
+        else:
+            summary["sh_energy_ratio_after_before"] = 0.0 if sh_energy_after == 0.0 else math.inf
+        return out, summary
+
+
+def coefficient_lowpass_state_summary(
+    coeff: torch.Tensor,
+    *,
+    mode: str,
+    sh_scale: float,
+    applied: bool,
+) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "mode": str(mode),
+        "sh_scale": float(sh_scale),
+        "applied": bool(applied),
+        "basis_count": int(coeff.shape[1]) if coeff.ndim >= 2 else 0,
+        "coeff_abs_mean_after": 0.0,
+        "sh_abs_mean_after": 0.0,
+        "sh_energy_after": 0.0,
+    }
+    if coeff.numel() == 0 or coeff.ndim != 3:
+        return summary
+    with torch.no_grad():
+        summary["coeff_abs_mean_after"] = float(coeff.abs().mean().detach().cpu().item())
+        if int(coeff.shape[1]) > 1:
+            sh = coeff[:, 1:, :]
+            summary["sh_abs_mean_after"] = float(sh.abs().mean().detach().cpu().item())
+            summary["sh_energy_after"] = float((sh**2).mean().detach().cpu().item())
+    return summary
+
+
 def solve_shared_residual_field_delta(
     selected_faces_local: torch.Tensor,
     source_vertex_ids: torch.Tensor,
@@ -4546,6 +4645,8 @@ def write_candidate_plan(
                 "shared_residual_field_view_hinge_weight": float(args.shared_residual_field_view_hinge_weight),
                 "shared_residual_field_view_hinge_min_samples": int(args.shared_residual_field_view_hinge_min_samples),
                 "shared_residual_field_duplicate_smooth_weight": float(args.shared_residual_field_duplicate_smooth_weight),
+                "coefficient_lowpass_mode": str(args.coefficient_lowpass_mode),
+                "coefficient_lowpass_sh_scale": float(args.coefficient_lowpass_sh_scale),
                 "validation_shrink_mode": str(args.validation_shrink_mode),
                 "validation_gain_max_scale": float(args.validation_gain_max_scale),
                 "plan_export_policy": "final_certified_accepted_faces_only",
@@ -4601,6 +4702,8 @@ def write_candidate_plan(
                     if float(args.max_abs_sh_coeff) > 0.0
                     else float(args.max_abs_delta_rgb) / float(C1)
                 ),
+                "coefficient_lowpass_mode": str(args.coefficient_lowpass_mode),
+                "coefficient_lowpass_sh_scale": float(args.coefficient_lowpass_sh_scale),
                 "candidate_count": int(len(candidates)),
                 "carrier_count": int(len({str(row.get("carrier_id", "")) for row in candidates})),
                 "fit_proxy": fit_proxy,
@@ -4670,6 +4773,8 @@ def write_audit(output_model: Path, audit: dict[str, Any]) -> None:
         f"- shared residual field: `{audit.get('shared_residual_field', False)}`",
         f"- shared residual field anchors: `{audit.get('shared_residual_field_summary', {}).get('anchor_count', 0)}`",
         f"- shared residual field parameters: `{audit.get('shared_residual_field_summary', {}).get('param_count', 0)}`",
+        f"- coefficient lowpass mode: `{audit.get('coefficient_lowpass', {}).get('mode', 'none')}`",
+        f"- coefficient lowpass SH energy ratio: `{audit.get('coefficient_lowpass_final', {}).get('sh_energy_ratio_after_before', 1.0):.6f}`",
         f"- selected faces: `{audit['selected_faces']}`",
         f"- accepted faces: `{audit['accepted_faces']}`",
         f"- vertices added: `{audit['vertices_added']}`",
@@ -5052,6 +5157,11 @@ def main() -> int:
             lr=float(args.lr),
             device=device,
         )
+    coeff, coefficient_lowpass_summary = apply_coefficient_lowpass(
+        coeff,
+        mode=str(args.coefficient_lowpass_mode),
+        sh_scale=float(args.coefficient_lowpass_sh_scale),
+    )
     coeff_device = coeff.to(device=device)
     coeff_device, validation_shrink_summary, validation_shrink_by_face = calibrate_coeff_by_policy_val(
         coeff_device,
@@ -5202,6 +5312,24 @@ def main() -> int:
         holdout_cache=carrier_holdout_cache,
         args=args,
     )
+    if bool(args.patch_cert_cluster_basis) and str(args.coefficient_lowpass_mode) != "none":
+        coeff_device, coefficient_lowpass_final_summary = apply_coefficient_lowpass(
+            coeff_device,
+            mode=str(args.coefficient_lowpass_mode),
+            sh_scale=float(args.coefficient_lowpass_sh_scale),
+        )
+        coefficient_lowpass_final_summary["stage"] = "post_cluster_reprojection"
+    else:
+        coefficient_lowpass_final_summary = coefficient_lowpass_state_summary(
+            coeff_device,
+            mode=str(args.coefficient_lowpass_mode),
+            sh_scale=float(args.coefficient_lowpass_sh_scale),
+            applied=False,
+        )
+        coefficient_lowpass_final_summary["sh_energy_ratio_after_before"] = float(
+            coefficient_lowpass_summary.get("sh_energy_ratio_after_before", 1.0)
+        )
+        coefficient_lowpass_final_summary["stage"] = "post_certification_state"
     coeff = coeff_device.detach().cpu()
     accepted = bool((global_policy_pass and accepted_faces) or args.force_apply)
     if bool(args.force_apply) and not accepted_faces:
@@ -5301,6 +5429,8 @@ def main() -> int:
         "fit_unique_faces": int(fit_unique_faces),
         "policy_val_unique_faces": int(val_unique_faces),
         "solver": solver,
+        "coefficient_lowpass": coefficient_lowpass_summary,
+        "coefficient_lowpass_final": coefficient_lowpass_final_summary,
         "shared_residual_field": bool(args.shared_residual_field),
         "shared_residual_field_summary": solver.get("shared_residual_field", {}) if isinstance(solver, dict) else {},
         "validation_shrink": validation_shrink_summary,
@@ -5343,6 +5473,8 @@ def main() -> int:
         "shared_residual_field_view_hinge_weight": float(args.shared_residual_field_view_hinge_weight),
         "shared_residual_field_view_hinge_min_samples": int(args.shared_residual_field_view_hinge_min_samples),
         "shared_residual_field_duplicate_smooth_weight": float(args.shared_residual_field_duplicate_smooth_weight),
+        "coefficient_lowpass_mode": str(args.coefficient_lowpass_mode),
+        "coefficient_lowpass_sh_scale": float(args.coefficient_lowpass_sh_scale),
         "max_faces_to_apply": int(args.max_faces_to_apply),
         "min_policy_val_relative_gain": float(args.min_policy_val_relative_gain),
         "min_policy_val_samples": int(args.min_policy_val_samples),

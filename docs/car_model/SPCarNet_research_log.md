@@ -4,6 +4,39 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-21 — Phase-S conservative coefficient lowpass residual — NOT_COMPLETE_ONE_STRONG_SCENE
+
+**Outcome**: Added a conservative residual-frequency control to the Phase-S
+face-local SH repair path. The fitter now supports
+`--coefficient_lowpass_mode {none,dc_only,sh_scale}` and the Phase-K runner
+forwards it through `--delta_coefficient_lowpass_mode`. The `dc_only` mode
+zeroes all non-DC SH residual coefficients after fitting and before render-gate
+evaluation, then records the coefficient energy change in the operator audit.
+This is a real train/eval pipeline method change, not a selector re-decision.
+
+**Evidence paths**:
+
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_dc_only_flowers`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_dc_only_budget160_garden`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_dc_only_budget160_counter`
+- Detailed log: `docs/car_model/5-17-PhaseS-RegionCoreContext-Portfolio-Log.md`
+
+| scene | accepted | train-val balanced | report-only balanced | test dPSNR | test dSSIM | test dLPIPS | decision |
+|---|---:|---:|---:|---:|---:|---:|---|
+| flowers | true | +0.000516176 | +0.026504397 | +0.005397797 | +0.000469148 | -0.000586182 | new accepted low-frequency row |
+| garden | false | +0.000044644 | +0.000064254 | +0.000045776 | -0.000000238 | -0.000001162 | rejected by compact stratified PSNR |
+| counter | false | +0.000014186 | -0.000029385 | -0.000017166 | -0.000000179 | +0.000000432 | rejected by compact PSNR |
+
+**Interpretation**: `NOT_COMPLETE_ONE_STRONG_SCENE`. The `flowers` result is
+the best Phase-S signal in this narrow family: train-val balanced improves from
+the strictpipeline row's `+0.000135303` to `+0.000516176`, while held-out
+report-only balanced is essentially preserved/slightly higher
+(`+0.026504397` vs `+0.026483655`). However, `garden` and `counter` do not pass
+the same strict train-val gate. This validates the diagnosis that high-frequency
+SH residuals are a render-risk source, but it does not close the paper-level
+Phase-S portfolio gap. Current final portfolio should remain the previous
+strictpipeline selection unless a later multi-scene low-frequency policy passes.
+
 ## 2026-05-21 — Phase-S strictcompact end-to-end multi-scene replay — NOT_COMPLETE_SMALL_POSITIVE
 
 **Outcome**: Completed the missing end-to-end replay for the strict compact

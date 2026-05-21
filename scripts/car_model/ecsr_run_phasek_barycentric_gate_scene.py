@@ -437,6 +437,14 @@ def _apply_delta(
         )
         if str(args.delta_operator) == "facelocal_sh1":
             cmd.extend(["--sh_degree", str(args.delta_sh_degree)])
+            cmd.extend(
+                [
+                    "--coefficient_lowpass_mode",
+                    str(args.delta_coefficient_lowpass_mode),
+                    "--coefficient_lowpass_sh_scale",
+                    _fmt_arg(args.delta_coefficient_lowpass_sh_scale),
+                ]
+            )
             if str(args.delta_facelocal_candidate_plan_out).strip():
                 cmd.extend(["--candidate_plan_out", _scene_format_path(args.delta_facelocal_candidate_plan_out, scene)])
             if str(args.delta_facelocal_materialize_plan_in).strip():
@@ -1193,6 +1201,13 @@ def main() -> int:
         default=1,
         help="For face-local SH deltas, use a higher residual SH degree while preserving degree-1 defaults.",
     )
+    parser.add_argument(
+        "--delta_coefficient_lowpass_mode",
+        choices=("none", "dc_only", "sh_scale"),
+        default="none",
+        help="Facelocal-only low-frequency projection of fitted residual coefficients before train-val gating.",
+    )
+    parser.add_argument("--delta_coefficient_lowpass_sh_scale", type=float, default=1.0)
     parser.add_argument("--candidate_label", default="bary_delta_v2wide_s08")
     parser.add_argument("--delta_max_abs_sh_coeff", type=float, default=0.0)
     parser.add_argument(
@@ -1518,6 +1533,16 @@ def main() -> int:
             parser.error(f"--{name} must be finite and >= 0")
     if int(args.delta_region_boundary_px) < 0:
         parser.error("--delta_region_boundary_px must be >= 0")
+    if (
+        not math.isfinite(float(args.delta_coefficient_lowpass_sh_scale))
+        or float(args.delta_coefficient_lowpass_sh_scale) < 0.0
+    ):
+        parser.error("--delta_coefficient_lowpass_sh_scale must be finite and >= 0")
+    if (
+        str(args.delta_coefficient_lowpass_mode) == "sh_scale"
+        and float(args.delta_coefficient_lowpass_sh_scale) > 1.0
+    ):
+        parser.error("--delta_coefficient_lowpass_sh_scale must be <= 1 for sh_scale lowpass")
     if (
         not math.isfinite(float(args.delta_patch_cert_cluster_basis_max_fit_mse_regression))
         or float(args.delta_patch_cert_cluster_basis_max_fit_mse_regression) < 0.0
