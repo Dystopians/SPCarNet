@@ -7845,3 +7845,53 @@ Next step: do not continue mask parameter search. The next credible method
 change must directly address train-val render PSNR/SSIM risk, such as
 metric-aware carrier selection, render-trust line search with a strict accepted
 certificate, or a lower-frequency residual basis with less SSIM sensitivity.
+
+## 2026-05-21 Mask-Core Coupled Selector Follow-Up
+
+Status: `NOT_COMPLETE_SAFE_BUT_TINY`. I then ran a narrow train-val coupled
+selector over the fixed `maskcore_tribin` candidate plan to see whether a
+smaller selected subset could remove the PSNR/SSIM regressions without using
+held-out test feedback.
+
+Output root:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/maskcore_tribin_coupled_selector_v1_20260521
+```
+
+Command summary:
+
+```text
+scripts/car_model/ecsr_run_facelocal_coupled_selector.py
+  --scenes flowers
+  --plan_template .../phasek_maskcore_tribin_v1_flowers_20260521/{scene}/maskcore_candidate_plan.json
+  --evidence_root .../masked_region_carriers_v1_20260521/evidence
+  --trial_specs top1x1,top4x1,top16x0.5
+  --selector_allow_uncertified_plan
+  --wandb_group phase_s_maskcore_tribin_selector_v1_20260521
+```
+
+Result:
+
+| trial | accepted | train-val balanced | report-only balanced | test dPSNR | test dSSIM | test dLPIPS |
+|---|---:|---:|---:|---:|---:|---:|
+| top1_s1 | true | +0.000006795 | +0.000001788 | +0.000000000 | +0.000000060 | -0.000000030 |
+| top4_s1 | true | +0.000003815 | +0.000004768 | +0.000000000 | +0.000000000 | -0.000000238 |
+| top16_s0p5 | true | +0.000009656 | -0.000011921 | +0.000000000 | -0.000000060 | +0.000000536 |
+
+The selector accepted `top16_s0p5` because it had the best train-val balanced
+delta, but its held-out report-only delta is effectively zero in PSNR and
+slightly worse in SSIM/LPIPS. This proves only that the coupled selector can
+make mask-core safe; it does not prove a material improvement. Current best
+remains `phase_s_effectaware_region_portfolio_v3_strictpipeline`.
+
+W&B run ids observed in the result tree:
+
+```text
+dlwdjl6u
+e8m2iaap
+i5ndsxib
+mhcqkxsg
+sxby96c3
+vbb0dluq
+```

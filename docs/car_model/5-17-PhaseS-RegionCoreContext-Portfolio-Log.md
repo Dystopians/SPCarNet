@@ -642,3 +642,77 @@ Next gate:
    create small full-frame SSIM drops.
 3. Keep the mask RLE support as infrastructure because it may be needed by a
    future operator, but mark the current mask-core ablation as failed evidence.
+
+## 2026-05-21 Mask-Core Coupled Selector Follow-Up
+
+Status: `NOT_COMPLETE_SAFE_BUT_TINY`. After the failed mask-core ablation, I
+ran a narrow train-val coupled selector over the final `maskcore_tribin`
+candidate plan. The goal was not to tune a new public result, but to check
+whether a smaller render-risk-selected subset could remove the PSNR/SSIM
+regressions that made the broader mask-core operator unsafe.
+
+Command shape:
+
+```text
+CUDA_VISIBLE_DEVICES=7 WANDB_MODE=online \
+python scripts/car_model/ecsr_run_facelocal_coupled_selector.py \
+  --scenes flowers \
+  --output_root outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/maskcore_tribin_coupled_selector_v1_20260521 \
+  --plan_template outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_maskcore_tribin_v1_flowers_20260521/{scene}/maskcore_candidate_plan.json \
+  --evidence_root outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/masked_region_carriers_v1_20260521/evidence \
+  --trial_specs top1x1,top4x1,top16x0.5 \
+  --candidate_prefix maskcore_tribin_selector_v1 \
+  --selector_allow_uncertified_plan \
+  --wandb_project mesh-splatting-ecsr \
+  --wandb_group phase_s_maskcore_tribin_selector_v1_20260521
+```
+
+Output root:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/maskcore_tribin_coupled_selector_v1_20260521
+```
+
+W&B run ids observed in the output tree:
+
+```text
+dlwdjl6u
+e8m2iaap
+i5ndsxib
+mhcqkxsg
+sxby96c3
+vbb0dluq
+```
+
+Selector summary:
+
+| trial | accepted | train-val balanced | report-only balanced | train dPSNR | train dSSIM | train dLPIPS | test dPSNR | test dSSIM | test dLPIPS |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| top1_s1 | true | +0.000006795 | +0.000001788 | +0.000003815 | +0.000000060 | -0.000000089 | +0.000000000 | +0.000000060 | -0.000000030 |
+| top4_s1 | true | +0.000003815 | +0.000004768 | +0.000003815 | +0.000000060 | +0.000000060 | +0.000000000 | +0.000000000 | -0.000000238 |
+| top16_s0p5 | true | +0.000009656 | -0.000011921 | +0.000011444 | +0.000000179 | +0.000000268 | +0.000000000 | -0.000000060 | +0.000000536 |
+
+The coupled selector chose `top16_s0p5` because it had the largest train-val
+balanced delta:
+
+```text
+accepted: true
+candidate_count: 114
+selected_trial: top16_s0p5
+selected_trainval_balanced_delta: +0.000009656
+effective report-only dPSNR: +0.000000000
+effective report-only dSSIM: -0.000000060
+effective report-only dLPIPS: +0.000000536
+```
+
+Interpretation:
+
+- The selector confirms that strict render-risk selection can remove the large
+  train-val PSNR/SSIM regressions from the broad mask-core run.
+- The effect size is too small to matter. The selected trial is accepted by the
+  gate but slightly worsens report-only LPIPS and SSIM, while the two smaller
+  trials are only numerical-noise improvements.
+- This is therefore not a new best method and must not replace
+  `phase_s_effectaware_region_portfolio_v3_strictpipeline`.
+- The next useful step is a non-noise objective change, not a broader sweep of
+  top-k subset sizes.
