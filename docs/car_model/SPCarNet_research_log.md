@@ -7895,3 +7895,40 @@ mhcqkxsg
 sxby96c3
 vbb0dluq
 ```
+
+## 2026-05-21 Non-Noise Selector Re-Decision
+
+Status: `NOT_COMPLETE_NO_NONNOISE_GAIN`. The previous coupled selector accepted
+tiny `1e-6` to `1e-5` train-val deltas. I added a replay-only selector mode so
+we can apply stricter paper-facing thresholds to already completed trial
+decisions without rerendering:
+
+```text
+scripts/car_model/ecsr_run_facelocal_coupled_selector.py --reuse_trials_root
+```
+
+Redecision output:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/maskcore_tribin_coupled_selector_nonnopass_redecision_v1_20260521
+```
+
+Thresholds:
+
+```text
+selector_min_trainval_psnr_gain: 0.00002
+selector_min_trainval_balanced_delta: 0.00005
+```
+
+Result:
+
+| trial | inner accepted | selector pass | train dPSNR | train-val balanced | report-only balanced |
+|---|---:|---:|---:|---:|---:|
+| top1_s1 | true | false | +0.000003815 | +0.000006795 | +0.000001788 |
+| top4_s1 | true | false | +0.000003815 | +0.000003815 | +0.000004768 |
+| top16_s0p5 | true | false | +0.000011444 | +0.000009656 | -0.000011921 |
+
+Final decision: `accepted=false`, `selected_trial=phasej_fallback`. This means
+the mask-core coupled selector is not a non-noise improvement. It remains useful
+as an audit/safety check, but it does not replace
+`phase_s_effectaware_region_portfolio_v3_strictpipeline`.

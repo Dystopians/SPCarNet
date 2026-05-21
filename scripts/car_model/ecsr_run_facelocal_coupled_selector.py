@@ -51,6 +51,15 @@ def parse_args() -> argparse.Namespace:
         "--output_root",
         default="outputs/carnet/meshsplatopt/ecsr_phase_s/facelocal_coupled_selector_v1_20260513",
     )
+    parser.add_argument(
+        "--reuse_trials_root",
+        default="",
+        help=(
+            "Optional existing coupled-selector output root whose per-trial Phase-K decisions "
+            "are reused for a re-decision pass. This lets stricter selector thresholds be "
+            "audited without rerendering the same trials."
+        ),
+    )
     parser.add_argument("--plan_template", default=DEFAULT_PLAN_TEMPLATE)
     parser.add_argument("--evidence_root", default=DEFAULT_EVIDENCE_ROOT)
     parser.add_argument(
@@ -313,6 +322,13 @@ def read_json(path: Path) -> dict[str, Any]:
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def path_label(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 def metric_block(payload: dict[str, Any] | None) -> dict[str, float]:
@@ -1181,7 +1197,7 @@ def decision_row(
         "scale": spec.scale,
         "face_ids": face_ids,
         "exit_code": int(exit_code),
-        "decision_path": str(path.relative_to(ROOT)) if path.is_file() else str(path),
+        "decision_path": path_label(path),
         "present": bool(decision),
         "accepted": bool(decision.get("accepted", False)),
         "selected_label": decision.get("selected_label", ""),
@@ -1211,6 +1227,8 @@ def effective_delta(row: dict[str, Any] | None) -> dict[str, float]:
 
 def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> dict[str, Any]:
     root = ROOT / args.output_root
+    reuse_trials_root = ROOT / str(args.reuse_trials_root) if str(args.reuse_trials_root).strip() else None
+    trial_decision_root = reuse_trials_root or root
     plan = read_json(plan_path(args.plan_template, scene))
     candidates = plan.get("candidates") if isinstance(plan.get("candidates"), list) else []
     scene_log = root / scene / "facelocal_coupled_selector.log"
@@ -1220,6 +1238,7 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             "scene": scene,
             "plan_path": str(plan_path(args.plan_template, scene).relative_to(ROOT)),
             "candidate_count": 0,
+            "reuse_trials_root": path_label(reuse_trials_root) if reuse_trials_root else "",
             "selected_trial": "phasej_fallback",
             "accepted": False,
             "selection_uses_test": False,
@@ -1309,6 +1328,7 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             "selector_tail_max_lpips_positive_fraction": float(args.selector_tail_max_lpips_positive_fraction),
             "alpha_refit": bool(args.selector_fit_plan_alphas),
             "allow_uncertified_plan": bool(args.selector_allow_uncertified_plan),
+            "reuse_trials_root": path_label(reuse_trials_root) if reuse_trials_root else "",
             "face_ids": face_ids,
             "face_scores": face_score_entries(
                 score_rows,
@@ -1321,7 +1341,10 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
         }
         manifest_path = root / scene / "trial_manifests" / f"{spec.label}.json"
         write_json(manifest_path, manifest)
-        decision = decision_path(root, spec, scene)
+        decision = decision_path(trial_decision_root, spec, scene)
+        if reuse_trials_root is not None:
+            rows.append(decision_row(trial_decision_root, spec, scene, face_ids, -1 if not decision.is_file() else 0, args))
+            continue
         if bool(args.force) or not decision.is_file():
             alpha_path: Path | None = None
             if bool(args.selector_fit_plan_alphas):
@@ -1336,7 +1359,7 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             if exit_code != 0:
                 rows.append(decision_row(root, spec, scene, face_ids, exit_code, args))
                 continue
-        rows.append(decision_row(root, spec, scene, face_ids, 0, args))
+        rows.append(decision_row(trial_decision_root, spec, scene, face_ids, 0, args))
 
     accepted = [
         row
@@ -1350,6 +1373,7 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
         "candidate_count": int(len(candidates)),
         "trial_specs": [spec.label for spec in specs],
         "selection_uses_test": False,
+        "reuse_trials_root": path_label(reuse_trials_root) if reuse_trials_root else "",
         "georisk_geometry": geometry_meta if uses_georisk else {},
         "accepted": bool(selected),
         "selected_trial": selected["trial"] if selected else "phasej_fallback",

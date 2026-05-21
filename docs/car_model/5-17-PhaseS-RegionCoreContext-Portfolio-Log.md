@@ -716,3 +716,76 @@ Interpretation:
   `phase_s_effectaware_region_portfolio_v3_strictpipeline`.
 - The next useful step is a non-noise objective change, not a broader sweep of
   top-k subset sizes.
+
+## 2026-05-21 Non-Noise Selector Re-Decision
+
+Status: `NOT_COMPLETE_NO_NONNOISE_GAIN`. The coupled selector result above was
+accepted only because the outer selector thresholds allowed `0` train-val mean
+gain. That is too permissive for paper-facing evidence: `1e-6`-scale deltas can
+come from metric/render noise and should not be promoted as a method result.
+
+I therefore added a replay-only selector interface:
+
+```text
+scripts/car_model/ecsr_run_facelocal_coupled_selector.py
+  --reuse_trials_root <existing coupled-selector root>
+```
+
+This reuses existing per-trial Phase-K decisions and per-view metric files, then
+rewrites only the coupled-selector decision/summary under a new output root. It
+avoids rerendering the same trials when the only intended change is the
+selection rule.
+
+Redecision command:
+
+```text
+python scripts/car_model/ecsr_run_facelocal_coupled_selector.py \
+  --scenes flowers \
+  --gpu -1 \
+  --output_root outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/maskcore_tribin_coupled_selector_nonnopass_redecision_v1_20260521 \
+  --reuse_trials_root outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/maskcore_tribin_coupled_selector_v1_20260521 \
+  --plan_template outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_maskcore_tribin_v1_flowers_20260521/{scene}/maskcore_candidate_plan.json \
+  --evidence_root outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/masked_region_carriers_v1_20260521/evidence \
+  --trial_specs top1x1,top4x1,top16x0.5 \
+  --selector_min_trainval_psnr_gain 0.00002 \
+  --selector_min_trainval_balanced_delta 0.00005
+```
+
+Output root:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/maskcore_tribin_coupled_selector_nonnopass_redecision_v1_20260521
+```
+
+Strict non-noise result:
+
+| trial | inner gate accepted | selector pass | train dPSNR | train-val balanced | report-only balanced | selector rejection |
+|---|---:|---:|---:|---:|---:|---|
+| top1_s1 | true | false | +0.000003815 | +0.000006795 | +0.000001788 | PSNR below `2e-5`; balanced below `5e-5` |
+| top4_s1 | true | false | +0.000003815 | +0.000003815 | +0.000004768 | PSNR below `2e-5`; balanced below `5e-5` |
+| top16_s0p5 | true | false | +0.000011444 | +0.000009656 | -0.000011921 | PSNR below `2e-5`; balanced below `5e-5` |
+
+Final strict selector decision:
+
+```text
+accepted: false
+selected_trial: phasej_fallback
+effective report-only dPSNR/dSSIM/dLPIPS: +0 / +0 / +0
+```
+
+Implementation/operations notes:
+
+- Static check passed:
+  `/home/peilincai/micromamba/envs/mesh_splatting/bin/python -m py_compile scripts/car_model/ecsr_run_facelocal_coupled_selector.py`.
+- I initially started a duplicate GPU rerender for this stricter decision and
+  stopped it after confirming the selector can reuse completed trials. The
+  final non-noise decision above is from the deterministic replay-only path.
+
+Interpretation:
+
+- The earlier coupled selector row is safe but not meaningful.
+- Under a minimal non-noise gate, mask-core has no promotable result on
+  `flowers`.
+- This strengthens the audit discipline but does not improve the current best
+  portfolio. Current best remains
+  `phase_s_effectaware_region_portfolio_v3_strictpipeline`.
