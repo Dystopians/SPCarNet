@@ -4,6 +4,49 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-21 — Phase-S lowpass tail-safe carrier prefix policy — NOT_COMPLETE_REAL_COVERAGE_GAIN
+
+**Outcome**: Extended the conservative lowpass residual line with a train-only
+carrier policy rather than another scalar sweep. The Phase-S fitter now uses
+sample-balanced disjoint carrier holdout, auto-prefix selection, and
+positive/tail-safe prefix stopping together with the existing `sh_scale=0.5` or
+`dc_only` coefficient projection. This is a real method-side selector: it changes
+which carrier faces are materialized before render-gate evaluation, and it keeps
+held-out test report-only.
+
+**Evidence paths**:
+
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_tailprefix_hard3_20260521`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_tailprefix_hard6_20260521`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_dconly_tailprefix_hard3_20260521`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phase_s_lowpass_tailprefix_policy_v2_portfolio.md`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phase_s_lowpass_tailprefix_policy_v2_strictpsnr_portfolio.md`
+- Detailed log: `docs/car_model/5-17-PhaseS-RegionCoreContext-Portfolio-Log.md`
+
+**Best clean portfolio**: `phase_s_lowpass_tailprefix_policy_v2_strictpsnr`
+uses train-val gates only and raises the promotion PSNR floor to `+0.00005`.
+It keeps `flowers` and `garden` from lowpass v1, adds a new `bonsai` row, and
+rejects `room/treehill` weak rows without reading held-out test for selection.
+
+| portfolio | accepted scenes | mean test dPSNR | mean test dSSIM | mean test dLPIPS | mean balanced |
+|---|---:|---:|---:|---:|---:|
+| lowpass v1 | 5 / 9 | +0.000948588 | +0.000062618 | -0.000098820 | +0.004177339 |
+| tail-prefix v2 strict-PSNR | 6 / 9 | +0.000958125 | +0.000062605 | -0.000098829 | +0.004186809 |
+
+New useful row:
+
+| scene | selected source | train-val balanced | report-only balanced | test dPSNR | test dSSIM | test dLPIPS |
+|---|---|---:|---:|---:|---:|---:|
+| bonsai | `sh050_tail_hard3` | +0.000037968 | +0.000085235 | +0.000085831 | -0.000000119 | -0.000000089 |
+
+**Interpretation**: This is the first lowpass follow-up that improves coverage,
+not just mean score: accepted scenes rise from `5 / 9` to `6 / 9` under a fixed
+train-only policy. It still does not solve the paper-level problem. `counter`
+remains a PSNR/SSIM direction failure even after shrinking to 16 faces; `room`
+can pass train-val but is report-only negative; `stump` remains no-op. The
+current honest status is a real but small representation-level coverage gain,
+not comprehensive domination of the MeshSplatting baseline.
+
 ## 2026-05-21 — Phase-S conservative coefficient lowpass residual policy — NOT_COMPLETE_SMALL_POLICY_GAIN
 
 **Outcome**: Added a conservative residual-frequency control to the Phase-S
