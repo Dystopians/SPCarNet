@@ -24,13 +24,16 @@ using train-val metrics only and keeps held-out test deltas report-only.
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_flowers`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_budget160_garden`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_budget160_counter`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_budget160_bonsai`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_budget160_room`
 - `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phase_s_lowpass_policy_v1_portfolio.md`
 - Detailed log: `docs/car_model/5-17-PhaseS-RegionCoreContext-Portfolio-Log.md`
 
 **Fixed lowpass policy v1**: candidate set is fixed to `dc_only` and
 `sh_scale=0.5`; selection uses train-val gates only. It promotes `flowers` and
-`garden`, while `counter` remains the old `riskpilot` row because both lowpass
-variants fail the train-val gate.
+`garden`. `counter` remains the old `riskpilot` row because both lowpass
+variants fail the train-val gate; `bonsai` and `room` sh050 follow-ups are also
+rejected and are report-only negative.
 
 | scene | selected source | train-val balanced | report-only balanced | test dPSNR | test dSSIM | test dLPIPS | decision |
 |---|---|---:|---:|---:|---:|---:|---|
@@ -49,7 +52,10 @@ frequency-risk diagnosis better than the one-scene `dc_only` pass: the same
 fixed lowpass candidate set produces train-val accepted improvements on both
 `flowers` and `garden`. The portfolio lift is still small and coverage remains
 `5 / 9`, so it is not a paper-level Phase-S closure. The unsolved bottlenecks
-are `counter` PSNR/SSIM fragility and the four fallback scenes.
+are `counter` PSNR/SSIM fragility and the fallback scenes. The `bonsai` and
+`room` follow-ups show that lowpass alone does not solve the broader coverage
+problem: both produce negative held-out report-only balanced deltas and remain
+blocked by strict gates.
 
 ## 2026-05-21 — Phase-S strictcompact end-to-end multi-scene replay — NOT_COMPLETE_SMALL_POSITIVE
 

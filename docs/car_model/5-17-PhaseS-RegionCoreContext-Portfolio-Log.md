@@ -874,6 +874,8 @@ Additional output roots:
 outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_flowers
 outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_budget160_garden
 outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_budget160_counter
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_budget160_bonsai
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_region_corectx_sh050_budget160_room
 ```
 
 W&B run ids:
@@ -882,6 +884,8 @@ W&B run ids:
 flowers sh050: zqxlyhxa, rarln4g6, ip7fwono, xs6vaeqq
 garden sh050: 31maifrk, jb6tnept, 7zjdq04n, 1yyscz2w
 counter sh050: tmepqq63, ahec1url, x8qx8n0w, u0eia0je
+bonsai sh050: 7c055bxb, wt6ev0c8, 9ive2wj9, fra0y9y7
+room sh050: 6a1z9v88, d1o4ibxo, wzxn7jqm, sqksvx9e
 ```
 
 Lowpass candidate table:
@@ -894,6 +898,8 @@ Lowpass candidate table:
 | garden | sh050 | true | +0.000086665 | +0.000076056 | +0.000080109 | +0.000000000 | -0.000000328 | +0.000053406 | -0.000000715 | -0.000001848 | selected by train-val |
 | counter | dc_only | false | +0.000014186 | -0.000029385 | +0.000007629 | +0.000000060 | -0.000000268 | -0.000017166 | -0.000000179 | +0.000000432 | compact PSNR reject |
 | counter | sh050 | false | +0.003451645 | +0.000084102 | -0.000186920 | -0.000034153 | -0.000216082 | +0.000091553 | +0.000000238 | +0.000000611 | attractive LPIPS, rejected by PSNR/SSIM |
+| bonsai | sh050 | false | +0.000077188 | -0.008988380 | +0.000133514 | -0.000001192 | +0.000001624 | -0.006866455 | +0.000661910 | +0.000768006 | compact face-ratio reject; report-only negative |
+| room | sh050 | false | +0.000019848 | -0.009710371 | +0.000083923 | -0.000002444 | +0.000000760 | -0.001504898 | +0.000011802 | +0.000422075 | worst LPIPS tail reject; report-only negative |
 
 Policy artifact:
 
@@ -937,6 +943,7 @@ Interpretation:
 - The useful part is not `dc_only` alone. `sh_scale=0.5` is the stronger fixed
   candidate for both `flowers` and `garden`, while `counter` exposes the same
   old failure mode: LPIPS can improve while PSNR/SSIM tails become unsafe.
-- This is a measurable but still small portfolio lift. It does not solve
-  `counter`, `room`, `stump`, `treehill`, or `bonsai`, and therefore should be
-  treated as a better Phase-S checkpoint, not a completed paper method.
+- This is a measurable but still small portfolio lift. The follow-up on
+  `bonsai` and `room` is explicitly negative, so lowpass should not be expanded
+  blindly as the answer for the four fallback scenes. It remains a better
+  Phase-S checkpoint, not a completed paper method.
