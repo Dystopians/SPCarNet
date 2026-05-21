@@ -4,6 +4,52 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-21 — Phase-S strictcompact end-to-end multi-scene replay — NOT_COMPLETE_SMALL_POSITIVE
+
+**Outcome**: Completed the missing end-to-end replay for the strict compact
+Phase-S core/context pipeline. The prior May 20 strictcompact result is no
+longer only a manual re-decision: `garden`, `kitchen`, `bonsai`, and `counter`
+were re-run through the Phase-K orchestrator with W&B online, fixed region
+core/context weights, shared residual field fitting, required tail evidence,
+and required compact gate. The `counter` scene was split into a separate runner
+for parallel completion, then the duplicate `indoorB` counter continuation was
+terminated after `bonsai` finished to avoid wasted GPU work.
+
+**Evidence paths**:
+
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strictcompact_pipeline_garden_20260521`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strictcompact_pipeline_indoorB_20260521`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strictcompact_pipeline_counter_20260521`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strictcompact_pipeline_merged_20260521`
+- `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v3_strictpipeline.md`
+- Detailed log: `docs/car_model/5-17-PhaseS-RegionCoreContext-Portfolio-Log.md`
+
+**Direct strictcompact decisions**:
+
+| scene | accepted | train-val balanced | report-only balanced | compact reading |
+|---|---:|---:|---:|---|
+| flowers | true | +0.000135303 | +0.026483655 | pass |
+| garden | false | +0.000037074 | +0.000015736 | over compact budget |
+| kitchen | false | +0.000104040 | -0.026346326 | over compact budget |
+| bonsai | false | +0.000068069 | -0.009002686 | over compact budget |
+| counter | false | +0.000010073 | -0.013494253 | stratified PSNR tail fails |
+
+**Fixed v3 portfolio**: accepts `5 / 9` scenes:
+`bicycle=patchcert_v6`, `flowers=rvregion_corectx_strictpipeline`,
+`garden=rvregion_garden`, `counter=riskpilot`, `kitchen=rvregion_indoor`.
+Mean effective report-only deltas over Phase-J fallback remain `+0.000947740`
+PSNR, `+0.000062552` SSIM, `-0.000098634` LPIPS, and `+0.004171458`
+balanced.
+
+**Interpretation**: `NOT_COMPLETE_SMALL_POSITIVE`. This is a real safety and
+fairness improvement because the final selected `flowers` row now comes from an
+end-to-end strictpipeline candidate and the bad direct rows are blocked before
+portfolio selection. It does not materially improve the final portfolio beyond
+May 20. The unsolved scientific bottleneck remains effect size and coverage:
+`room`, `stump`, `treehill`, and `bonsai` still fall back, and Phase-S remains a
+conservative representation-layer repair policy rather than a paper-level
+closed loop.
+
 ## 2026-05-17 — Phase-S region core/context weighted fitting and fixed portfolio — NOT_COMPLETE_SMALL_POSITIVE
 
 **Outcome**: Implemented and validated a real Phase-S train/eval pipeline

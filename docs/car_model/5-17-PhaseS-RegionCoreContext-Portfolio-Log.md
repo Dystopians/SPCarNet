@@ -428,3 +428,122 @@ https://wandb.ai/karamazovaniki-university-of-southern-california/mesh-splatting
 This confirms the new runner forwarding and required compact gate semantics in
 the real train/eval path. It is still a single-scene smoke; it does not replace
 the existing full9 fixed-portfolio evidence.
+
+## 2026-05-21 End-to-End Strictcompact Multi-Scene Replay
+
+Status: `NOT_COMPLETE_SMALL_POSITIVE`. This run turns the May 20 manual
+strictcompact re-decision into an end-to-end replay across the remaining
+core/context scenes. It is a fairness and reliability milestone, not a new
+large effect-size breakthrough.
+
+Fixed method configuration:
+
+```text
+operator: facelocal_sh1
+delta strength: 0.035
+max abs RGB delta: 0.05
+shared residual field: enabled, 16 anchors
+region core/context/outside weights: 4.0 / 0.5 / 0.15
+region boundary: 2 px
+policy-val minimum relative gain: 0.02
+strict gate: --gate_tail_require_available, --gate_compact_enable, --gate_compact_require
+compact budget: <=160 faces, <=512 vertices, <=1.5e-05 face ratio
+W&B group: phase_s_strictcompact_pipeline_20260521
+selection: train-val only; held-out test remains report-only
+```
+
+Output roots:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strictcompact_pipeline_smoke_20260520
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strictcompact_pipeline_garden_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strictcompact_pipeline_indoorB_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strictcompact_pipeline_counter_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strictcompact_pipeline_merged_20260521
+```
+
+Execution notes:
+
+- `garden` was replayed as a standalone W&B online run.
+- `kitchen,bonsai` were replayed in the `indoorB` runner.
+- `counter` was split into a standalone runner for parallel completion. After
+  `bonsai` and standalone `counter` both wrote decisions, the duplicate
+  `indoorB` counter continuation was terminated to avoid unnecessary GPU use.
+
+End-to-end strictcompact decisions:
+
+| scene | accepted | train-val balanced | report-only balanced | dPSNR test | dSSIM test | dLPIPS test | compact accepted | reason |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| flowers | true | +0.000135303 | +0.026483655 | +0.005399704 | +0.000467956 | -0.000586241 | true | pass |
+| garden | false | +0.000037074 | +0.000015736 | +0.000013351 | -0.000000119 | -0.000000238 | false | faces/vertices/face-ratio exceed compact budget |
+| kitchen | false | +0.000104040 | -0.026346326 | -0.022924423 | -0.000011384 | +0.000159711 | false | faces/vertices/face-ratio exceed compact budget |
+| bonsai | false | +0.000068069 | -0.009002686 | -0.006856918 | +0.000661612 | +0.000768900 | false | faces/vertices/face-ratio exceed compact budget |
+| counter | false | +0.000010073 | -0.013494253 | -0.004993439 | -0.000232875 | +0.000192165 | false | stratified PSNR tail below threshold |
+
+W&B run ids:
+
+```text
+garden: nyp1bofx, yexkhndb, ai4l9wnn, igzwyl46
+kitchen: ayeriwna, eg9847k8, tlv5eg2p, nfptbnlk
+bonsai: 7q9lf1mf, iu2wjloq, renmthd7, zy7fjqac
+counter: zdn5gfs1, 87s357yi, hs74w1jn, aggx5p5k
+```
+
+Merged strictpipeline candidate directory:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strictcompact_pipeline_merged_20260521/decisions/{scene}_decision.json
+```
+
+Fixed v3 portfolio:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v3_strictpipeline.md
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v3_strictpipeline.json
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v3_strictpipeline.csv
+```
+
+It accepts `5 / 9` scenes and preserves the May 20 effective mean:
+
+```text
+dPSNR:  +0.000947740
+dSSIM:  +0.000062552
+dLPIPS: -0.000098634
+balanced: +0.004171458
+```
+
+Selected policies:
+
+| scene | selected policy | accepted | effective dPSNR | effective dSSIM | effective dLPIPS |
+|---|---|---:|---:|---:|---:|
+| bicycle | patchcert_v6 | true | +0.000387192 | +0.000035524 | -0.000115275 |
+| flowers | rvregion_corectx_strictpipeline | true | +0.005399704 | +0.000467956 | -0.000586241 |
+| garden | rvregion_garden | true | +0.000043869 | -0.000000417 | -0.000000089 |
+| stump | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| treehill | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| room | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+| counter | riskpilot | true | +0.000055313 | +0.000000417 | -0.000001699 |
+| kitchen | rvregion_indoor | true | +0.002643585 | +0.000059485 | -0.000184402 |
+| bonsai | Phase-J fallback | false | +0.000000000 | +0.000000000 | +0.000000000 |
+
+Interpretation:
+
+- The end-to-end strict pipeline reproduces the manual strictcompact
+  conclusion, so the May 20 safety fix is no longer only a post-hoc
+  re-decision.
+- `flowers` is now selected from the strictpipeline end-to-end candidate rather
+  than the manually copied strictcompact row.
+- The strict compact/tail gate correctly blocks the three bad direct
+  core/context rows (`kitchen`, `bonsai`, `counter`) and the over-budget
+  `garden` row.
+- The final portfolio does not improve beyond the May 20 mean; the bottleneck
+  remains effect size and accepted coverage, especially `room`, `stump`,
+  `treehill`, and `bonsai`.
+
+Next gate:
+
+1. Do not claim Phase-S as a paper-level closed loop from this evidence alone.
+2. Keep v3 as the current audited representation-layer policy because it is
+   safer and fairer than the raw core/context gate.
+3. The next method work must improve the operator itself or the train-only risk
+   predictor enough to add non-noise accepted coverage without test leakage.
