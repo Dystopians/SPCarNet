@@ -253,3 +253,133 @@ not simply increase weights or scan more constants:
 3. Require any next claim to improve the final fixed portfolio by a non-noise
    amount and preserve `selection_uses_test=false`.
 
+## 2026-05-20 Strictcompact Re-Decision
+
+Status: `NOT COMPLETE`, but this closes a concrete fairness/safety gap in the
+May 17 portfolio.
+
+The previous `compact_gate_enable` implementation recorded compact/tail risk
+diagnostics, but compact gate failure did not reject a candidate that had
+already passed the ordinary mean train-val gate. That made the gate useful for
+auditing but insufficient as a fixed policy. The May 20 patch adds:
+
+```text
+ecsr_decide_phasek_trainval_gate.py: --compact_gate_require
+ecsr_run_phasek_barycentric_gate_scene.py: --gate_compact_require
+```
+
+When required, the candidate must pass the ordinary train-val gate, operator
+audit, and the compact/tail/stratified gate. Compact success no longer rescues a
+candidate that fails the ordinary gate in this mode.
+
+Re-decision outputs:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strict_compact_decisions/
+```
+
+Strictcompact direct results:
+
+| scene | accepted | compact accepted | report-only balanced | compact reason |
+|---|---:|---:|---:|---|
+| flowers | true | true | +0.026483655 | pass |
+| garden | false | false | +0.000015736 | faces/vertices/ratio exceed compact budget |
+| kitchen | false | false | -0.026346326 | faces/vertices/ratio exceed compact budget |
+| bonsai | false | false | -0.009002686 | faces/vertices/ratio exceed compact budget |
+| counter | false | false | -0.013494253 | stratified PSNR tail below threshold |
+
+The important change is not a larger mean score; it is cleaner provenance. Raw
+core/context false positives are now rejected before portfolio aggregation
+using train-val-only evidence.
+
+Fixed v2 portfolio outputs:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v2_strictcompact.md
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v2_strictcompact.json
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v2_strictcompact.csv
+```
+
+The v2 portfolio keeps the same effective full9 metrics as v1, but replaces raw
+`rvregion_corectx_A/B` eligibility with the strictcompact re-decision:
+
+```text
+accepted: 5 / 9
+dPSNR:  +0.000947740
+dSSIM:  +0.000062552
+dLPIPS: -0.000098634
+balanced: +0.004171458
+```
+
+Selected policies:
+
+| scene | selected policy | effective dPSNR | effective dSSIM | effective dLPIPS | report-only balanced |
+|---|---|---:|---:|---:|---:|
+| bicycle | patchcert_v6 | +0.000387192 | +0.000035524 | -0.000115275 | +0.003403187 |
+| flowers | rvregion_corectx_strictcompact | +0.005399704 | +0.000467956 | -0.000586241 | +0.026483655 |
+| garden | rvregion_garden | +0.000043869 | -0.000000417 | -0.000000089 | +0.000037313 |
+| stump | Phase-J fallback | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 |
+| treehill | Phase-J fallback | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 |
+| room | Phase-J fallback | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 |
+| counter | riskpilot | +0.000055313 | +0.000000417 | -0.000001699 | +0.000097632 |
+| kitchen | rvregion_indoor | +0.002643585 | +0.000059485 | -0.000184402 | +0.007521331 |
+| bonsai | Phase-J fallback | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 |
+
+Honest reading: this is a required policy fix, not a new visual breakthrough.
+It strengthens the paper-story auditability because it removes a known gate
+loophole, but the Phase-S scientific bottleneck remains non-trivial accepted
+coverage beyond `flowers`, `bicycle`, and `kitchen` via older region prior.
+
+## 2026-05-20 Local Visual Evidence
+
+To make the positive `flowers` result easier to inspect visually, I also ran the
+existing train-defined surface-support local metric protocol. The support masks
+come from train residual evidence, then are projected onto held-out test renders;
+metrics are computed only after those masks/crops are fixed.
+
+Command:
+
+```bash
+CUDA_VISIBLE_DEVICES=7 /home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/ecsr_eval_surface_support_local_metrics.py \
+  --scene flowers \
+  --evidence_dir outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/evidence/flowers \
+  --surface_maps_dir outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/test/ours_26000_surface_maps/surface_maps \
+  --baseline_dir outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela_replay_corectx_v1 \
+  --candidate_dir outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_A/flowers/model/test/ours_26000_phase_s_rvregion_corectx_v1_phasej_ela \
+  --baseline_label Phase-J \
+  --candidate_label SPCarNet-v2-corectx \
+  --output_dir outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_v2_strictcompact_local_metrics/flowers \
+  --top_faces 256 \
+  --min_mask_pixels 768 \
+  --alpha_min 0.05 \
+  --dilate 8 \
+  --crop_pad 24 \
+  --max_views 12 \
+  --save_panels \
+  --device cuda
+```
+
+Outputs:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_v2_strictcompact_local_metrics/flowers/surface_support_local_metrics.md
+assets/spcarnet_phase_s_v2_strictcompact_flowers_local_support.png
+```
+
+Summary:
+
+| metric | value |
+|---|---:|
+| evaluated held-out views | 12 |
+| mean delta mask PSNR | +0.003223 |
+| mean delta mask MAE | +0.00002632 |
+| mean delta crop PSNR | +0.010150 |
+| mean delta crop SSIM | +0.00038835 |
+| mean delta crop LPIPS | -0.00060000 |
+| wins mask PSNR / mask MAE | 9 / 12, 4 / 12 |
+| wins crop PSNR / crop SSIM / crop LPIPS | 12 / 12, 12 / 12, 11 / 12 |
+
+This improves the qualitative evidence for `flowers`: the strongest story is a
+local crop/crop-LPIPS improvement on train-defined support regions, not a
+large full-frame perceptual jump.

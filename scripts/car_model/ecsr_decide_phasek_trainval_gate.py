@@ -367,6 +367,16 @@ def main() -> int:
     parser.add_argument("--tail_max_worst_lpips_regression", type=float, default=1.0e30)
     parser.add_argument("--stratified_group_count", type=int, default=4)
     parser.add_argument("--compact_gate_enable", action="store_true")
+    parser.add_argument(
+        "--compact_gate_require",
+        action="store_true",
+        help=(
+            "Treat the compact stratified gate as a required acceptance gate. "
+            "Without this flag, the compact gate preserves legacy behavior: it can "
+            "rescue a candidate that fails the ordinary mean gate, but a compact "
+            "failure does not reject an otherwise accepted candidate."
+        ),
+    )
     parser.add_argument("--compact_gate_max_faces", type=int, default=160)
     parser.add_argument("--compact_gate_max_vertices", type=int, default=512)
     parser.add_argument("--compact_gate_max_face_ratio", type=float, default=1.5e-5)
@@ -416,7 +426,15 @@ def main() -> int:
             candidate_audit,
             args,
         )
-        if compact_ok and not operator_reasons:
+        compact_gate["required"] = bool(args.compact_gate_require)
+        if bool(args.compact_gate_require):
+            compact_gate["overrode_standard_gate"] = False
+            compact_gate["standard_gate_reasons"] = ordinary_decision_reasons
+            if not compact_ok:
+                accepted = False
+                compact_reasons = [str(item) for item in compact_gate.get("decision_reasons", [])]
+                reasons = list(dict.fromkeys(list(reasons) + compact_reasons))
+        elif compact_ok and not operator_reasons:
             accepted = True
             reasons = []
             compact_gate["overrode_standard_gate"] = bool(ordinary_decision_reasons)
@@ -456,6 +474,7 @@ def main() -> int:
             "tail_max_worst_lpips_regression": float(args.tail_max_worst_lpips_regression),
             "stratified_group_count": int(args.stratified_group_count),
             "compact_gate_enable": bool(args.compact_gate_enable),
+            "compact_gate_require": bool(args.compact_gate_require),
         },
         "compact_stratified_gate": compact_gate,
         "candidate_operator_audit": {

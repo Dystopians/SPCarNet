@@ -970,6 +970,8 @@ def _decide(
         cmd.append("--tail_require_available")
     if bool(args.gate_compact_enable):
         cmd.append("--compact_gate_enable")
+    if bool(args.gate_compact_require):
+        cmd.append("--compact_gate_require")
     _run(cmd, gpu=-1, log_path=log_path)
     return _read_json(decision_json)
 
@@ -1474,6 +1476,7 @@ def main() -> int:
     parser.add_argument("--gate_tail_max_worst_lpips_regression", type=float, default=1.0e30)
     parser.add_argument("--gate_stratified_group_count", type=int, default=4)
     parser.add_argument("--gate_compact_enable", action="store_true")
+    parser.add_argument("--gate_compact_require", action="store_true")
     parser.add_argument("--gate_compact_max_faces", type=int, default=160)
     parser.add_argument("--gate_compact_max_vertices", type=int, default=512)
     parser.add_argument("--gate_compact_max_face_ratio", type=float, default=1.5e-5)

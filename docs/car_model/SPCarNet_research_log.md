@@ -7631,3 +7631,74 @@ It accepted but only achieved train-val balanced `+0.000001252`, weaker than
 v1 `+0.000082791`, so simple face-score sample weighting is not promoted. The
 next method upgrade should use true per-view region core/context masks or a
 masked render-space objective.
+
+## 2026-05-20 Phase-S strictcompact gate enforcement
+
+Continuation after the May 17 region core/context portfolio found a policy bug:
+`compact_gate_enable` recorded compact/tail/stratified diagnostics, but compact
+gate failure did not reject candidates that already passed the ordinary mean
+train-val gate. This was unacceptable for paper-facing provenance because raw
+core/context accepted `kitchen/bonsai/counter` even though all three regressed
+on report-only test.
+
+Patch:
+
+- `scripts/car_model/ecsr_decide_phasek_trainval_gate.py` adds
+  `--compact_gate_require`.
+- `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py` forwards it as
+  `--gate_compact_require`.
+
+Re-decision path:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phasek_regionmasked_corectx_strict_compact_decisions/
+```
+
+Strictcompact direct result:
+
+| scene | accepted | report-only balanced | reason |
+|---|---:|---:|---|
+| flowers | true | +0.026483655 | pass |
+| garden | false | +0.000015736 | raw patch exceeds compact budget; older `rvregion_garden` remains selected |
+| kitchen | false | -0.026346326 | patch exceeds compact budget |
+| bonsai | false | -0.009002686 | patch exceeds compact budget |
+| counter | false | -0.013494253 | stratified PSNR tail fails |
+
+Fixed v2 portfolio:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v2_strictcompact.md
+```
+
+It accepts `5 / 9` with the same report-only effective mean as the May 17 v1
+portfolio, but raw corectx false positives are no longer eligible:
+
+```text
+dPSNR:  +0.000947740
+dSSIM:  +0.000062552
+dLPIPS: -0.000098634
+balanced: +0.004171458
+```
+
+Reading: `NOT COMPLETE`. This is a real fairness and safety fix for the
+train/eval pipeline, not a larger scientific gain. The next bottleneck is still
+a stronger representation operator or a better train-only risk predictor that
+can broaden non-trivial positive coverage without test leakage.
+
+Additional local visual evidence for `flowers`:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_v2_strictcompact_local_metrics/flowers/surface_support_local_metrics.md
+assets/spcarnet_phase_s_v2_strictcompact_flowers_local_support.png
+```
+
+Using train-defined surface-support masks projected to held-out test renders,
+the strictcompact `flowers` row gives:
+
+```text
+evaluated views: 12
+mean delta crop PSNR:  +0.010150
+mean delta crop SSIM:  +0.00038835
+mean delta crop LPIPS: -0.00060000
+wins crop PSNR / SSIM / LPIPS: 12/12, 12/12, 11/12
+```

@@ -142,20 +142,30 @@ selector 升级，但 oracle 行仍然更强，因此 shape completion 故事还
 | Phase-S fixed portfolio v2 | 在 GeoRisk/PatchRisk/v19b/v20 candidates 上只用 train-val 选择；接受 `4 / 9`（`flowers=georisk`、`counter=georisk`、`garden=v20`、`room=v20`），其它场景回退；mean effective report-only delta 为 `+0.000608232` PSNR，`+0.000052366` SSIM，`-0.000065320` LPIPS；summary 在 `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v2_20260515/portfolio_summary.md` |
 | Phase-S effect-aware portfolio v1 | 只用 train-val 的 portfolio，同时加入 non-noop、operator-pass 与 effect-size gate；接受 `3 / 9`（`bicycle=patchcert_v6`、`flowers=gaincert_v2`、`counter=riskpilot`），拒绝 v20 near-noop 行；mean effective report-only delta 为 `+0.000652101` PSNR，`+0.000056287` SSIM，`-0.000078238` LPIPS；summary 在 `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_effectaware_portfolio_v1_20260515/portfolio_summary.md` |
 | Phase-S render-visible region-prior robust | 用 train-only 图像残差连通区域反投影成 face carriers，再拟合 shared face-local residual field；只有默认 gate 通过且 LPIPS/tail/stratified train-val robustness 同时通过时才提升，否则回退 Phase-J；full9 默认 gate 接受 `4 / 9`，robust promotion 接受 `2 / 9`（`garden`、`kitchen`）；相对 Phase-J fallback 的 robust effective report-only delta 为 `+0.000298606` PSNR、`+0.000006563` SSIM、`-0.000020499` LPIPS；summary 在 `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phase_s_regionprior_full9_robust_summary.md` |
-| Phase-S region core/context weighted portfolio | 把 render-visible region 的 core/context/outside membership 接入 Phase-S fitting 权重，再用固定 effect-aware train-val-only portfolio 选择；直接 core/context 接受 `garden/flowers/kitchen/bonsai/counter`，但 `kitchen/bonsai/counter` 在 report-only test 上回退并被 portfolio 阻断；最终 full9 接受 `5 / 9`（`bicycle=patchcert_v6`、`flowers=rvregion_corectx_A`、`garden=rvregion_garden`、`counter=riskpilot`、`kitchen=rvregion_indoor`），相对 Phase-J fallback 的 mean effective report-only delta 为 `+0.000947740` PSNR，`+0.000062552` SSIM，`-0.000098634` LPIPS；summary 在 `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v1.md` |
+| Phase-S region core/context weighted portfolio | 把 render-visible region 的 core/context/outside membership 接入 Phase-S fitting 权重，再用固定 train-val-only portfolio 选择；5 月 20 日 strictcompact re-decision 已把 compact/tail/stratified gate 失败变成真正拒绝，因此 raw corectx 在 `kitchen/bonsai/counter` 上的 false positive 不再 eligible；最终 full9 仍接受 `5 / 9`（`bicycle=patchcert_v6`、`flowers=rvregion_corectx_strictcompact`、`garden=rvregion_garden`、`counter=riskpilot`、`kitchen=rvregion_indoor`），相对 Phase-J fallback 的 mean effective report-only delta 为 `+0.000947740` PSNR，`+0.000062552` SSIM，`-0.000098634` LPIPS；summary 在 `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v2_strictcompact.md` |
 | Phase-S v20 定性诊断 | contact sheets 已复制到 `assets/spcarnet_phase_s_v20_remainingA_contact_sheet.png`、`assets/spcarnet_phase_s_v20_remainingB_contact_sheet.png`、`assets/spcarnet_phase_s_v20_remainingC_contact_sheet.png`；这些是放大差分诊断图，不是强 full-frame visual win |
 | Phase-S gaincert v1 | 四折 gate 接受 `garden`、`flowers`、`bonsai`、`kitchen`、`room` 与近似 no-op 的 `stump`；拒绝 `bicycle`；`counter/treehill` 在 single-gate 阶段被阻断 |
 | full9 paper-loop collector | clean-best `9 / 9`，Phase-J `9 / 9`，Phase-J 相对 clean-best 三指标严格胜出 `9 / 9`；Phase-S closure 为 `False`，因为严格 gate 只有 `7 / 9`，接受 `6 / 9`，且只有 `3 / 7` 是 train-val all-axis 胜出 |
 | Stage ELA12 clean-best audit | selected-clean 子集仍是 `5 / 5` strict full-pass，per-view RGB pass 为 `164 / 165`，envelope pass 为 `163 / 165`；这不是 Mip-NeRF360 全 9 场景 benchmark |
 | SPCarNet visible selector | `visible_only` 相对 contained K=1/first 改善 nested K=8 recon/hidden/free/visible 指标；oracle gap 仍存在 |
 
-**最新 Phase-S region core/context 定性图。** A 组展示成功的
-`flowers/garden` 行；B 组是诊断图，故意展示最终 portfolio 需要阻断的
-false-positive 场景。
+**最新 Phase-S region core/context 定性图。** A 组展示 raw `flowers/garden`
+正向行；5 月 20 日 strictcompact policy 只从这组 core/context 候选中提升
+`flowers`，因为 raw `garden` edit 超出 compact patch budget，而旧的
+garden-specific region prior 更干净。B 组是诊断图：这些 false-positive 场景
+现在会被 required compact/tail/stratified train-val gate 拒绝。
 
 ![Phase-S region core/context A](assets/spcarnet_phase_s_region_corectx_A_contact_sheet.png)
 
 ![Phase-S region core/context B](assets/spcarnet_phase_s_region_corectx_B_contact_sheet.png)
+
+strictcompact `flowers` 行也补充了 train-defined surface-support 局部评估。
+mask/crop 位置来自训练残差支持，并投影到 held-out test 渲染后才计算指标。在前
+12 个 eligible held-out views 上，crop PSNR/SSIM 为 `12 / 12` 胜，crop LPIPS
+为 `11 / 12` 胜；均值 delta 为 `+0.010150` crop PSNR、`+0.00038835` crop
+SSIM、`-0.00060000` crop LPIPS。
+
+![Phase-S v2 strictcompact flowers local support](assets/spcarnet_phase_s_v2_strictcompact_flowers_local_support.png)
 
 下面的详细表格保留自 5 月 7 日 Compact-ELA/SOR 留档报告，用于 provenance。LPIPS、AbsRel、DepthMAE、Normal 越低越好。
 
@@ -262,10 +272,10 @@ gate 接受 `bicycle` 和 `flowers`；被拒绝的行也放在同一张图里，
   <img src="assets/spcarnet_phase_s_v20_remainingC_contact_sheet.png" width="980" alt="Phase-S v20 remainingC 诊断 contact sheet">
 </p>
 
-render-visible region-prior 分支是最新的表示层修复尝试。它比纯 face-score
-选择更贴近可见残差区域，但 full9 收益仍然很小。默认 gate 会接受 `bonsai`，
-而该场景 report-only test 明显负向，所以当前汇报口径使用 train-val-only
-robust promotion，只保留 `garden/kitchen`。
+render-visible region-prior/core-context 分支是最新的表示层修复尝试。它比纯
+face-score 选择更贴近可见残差区域，但 full9 收益仍然很小。5 月 20 日最新策略
+在 portfolio 聚合前强制执行 compact/tail/stratified re-decision；这修复了 raw
+false-positive admission 问题，但不改变 Phase-S 收益仍较细微的科学判断。
 
 <p align="center">
   <img src="assets/spcarnet_phase_s_regionprior_garden_contact_sheet.png" width="980" alt="Phase-S render-visible region-prior garden 诊断 contact sheet">

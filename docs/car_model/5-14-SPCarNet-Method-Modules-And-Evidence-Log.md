@@ -492,3 +492,39 @@ accepted scenes. The next work is still not more reporting; it is a stronger
 representation operator or a better train-only risk predictor that can broaden
 non-trivial acceptance beyond `flowers/counter` without reopening the `garden`
 false-positive or the `bonsai` high-capacity failure.
+
+## 2026-05-20 Method Detail Update: Required Compact Gate
+
+The latest Phase-S region core/context branch adds one important reliability
+interface to the train/eval pipeline:
+
+```text
+--compact_gate_require
+--gate_compact_require
+```
+
+With this enabled, compact/tail/stratified train-val evidence becomes a required
+acceptance condition instead of a diagnostic-only field. The strictcompact
+re-decision keeps `flowers` from the new core/context operator, rejects raw
+`kitchen/bonsai/counter` false positives before portfolio aggregation, and
+falls back to the older cleaner `rvregion_garden` row for `garden`.
+
+Current fixed v2 portfolio:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v2_strictcompact.md
+```
+
+Full9 effective report-only delta vs Phase-J fallback remains:
+
+```text
+accepted: 5 / 9
+dPSNR:  +0.000947740
+dSSIM:  +0.000062552
+dLPIPS: -0.000098634
+```
+
+This strengthens the method story as an auditable adaptive repair policy, but it
+does not by itself solve the weak effect-size problem. The Phase-S claim should
+therefore be framed as a conservative representation-level repair layer with
+strict fallback, while Phase-J remains the strong baseline-beating endpoint.

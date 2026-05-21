@@ -146,7 +146,7 @@ Current Phase-J summary:
 | Phase-S fixed portfolio v2 | train-val-only selection across GeoRisk/PatchRisk/v19b/v20 candidates; accepts `4 / 9` (`flowers=georisk`, `counter=georisk`, `garden=v20`, `room=v20`), falls back elsewhere; mean effective report-only delta `+0.000608232` PSNR, `+0.000052366` SSIM, `-0.000065320` LPIPS; summary in `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_portfolio_policy_v2_20260515/portfolio_summary.md` |
 | Phase-S effect-aware portfolio v1 | train-val-only portfolio with non-noop/operator-pass/effect-size gates; accepts `3 / 9` (`bicycle=patchcert_v6`, `flowers=gaincert_v2`, `counter=riskpilot`), falls back on v20 near-noop rows; mean effective report-only delta `+0.000652101` PSNR, `+0.000056287` SSIM, `-0.000078238` LPIPS; summary in `outputs/carnet/meshsplatopt/ecsr_phase_s/phase_s_effectaware_portfolio_v1_20260515/portfolio_summary.md` |
 | Phase-S render-visible region-prior robust | train-only image residual regions are projected back to face carriers, then a shared face-local residual field is fitted and promoted only if the original gate passes plus LPIPS/tail/stratified train-val robustness holds; full9 default gate accepts `4 / 9` but robust promotion accepts `2 / 9` (`garden`, `kitchen`); robust effective report-only delta is `+0.000298606` PSNR, `+0.000006563` SSIM, `-0.000020499` LPIPS vs Phase-J fallback; summary in `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/phase_s_regionprior_full9_robust_summary.md` |
-| Phase-S region core/context weighted portfolio | feeds render-visible region core/context/outside membership into the Phase-S fitting weights, then applies the fixed effect-aware train-val-only portfolio; direct core/context accepts `garden/flowers/kitchen/bonsai/counter`, but `kitchen/bonsai/counter` regress on report-only test and are blocked by portfolio; final full9 accepts `5 / 9` (`bicycle=patchcert_v6`, `flowers=rvregion_corectx_A`, `garden=rvregion_garden`, `counter=riskpilot`, `kitchen=rvregion_indoor`) with mean effective report-only delta `+0.000947740` PSNR, `+0.000062552` SSIM, `-0.000098634` LPIPS vs Phase-J fallback; summary in `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v1.md` |
+| Phase-S region core/context weighted portfolio | feeds render-visible region core/context/outside membership into the Phase-S fitting weights, then applies a fixed train-val-only portfolio; the May 20 strictcompact re-decision makes compact/tail/stratified gate failure a real rejection, so raw corectx false positives on `kitchen/bonsai/counter` are no longer eligible; final full9 still accepts `5 / 9` (`bicycle=patchcert_v6`, `flowers=rvregion_corectx_strictcompact`, `garden=rvregion_garden`, `counter=riskpilot`, `kitchen=rvregion_indoor`) with mean effective report-only delta `+0.000947740` PSNR, `+0.000062552` SSIM, `-0.000098634` LPIPS vs Phase-J fallback; summary in `outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260517/phase_s_effectaware_region_portfolio_v2_strictcompact.md` |
 | Phase-S v20 qualitative diagnostics | contact sheets copied to `assets/spcarnet_phase_s_v20_remainingA_contact_sheet.png`, `assets/spcarnet_phase_s_v20_remainingB_contact_sheet.png`, and `assets/spcarnet_phase_s_v20_remainingC_contact_sheet.png`; these are diagnostic amplified-difference panels, not strong full-frame visual wins |
 | Phase-S gaincert v1 | strict four-offset gate accepts `garden`, `flowers`, `bonsai`, `kitchen`, `room`, and near-no-op `stump`; rejects `bicycle`; `counter/treehill` are blocked by single-gate rejection |
 | full9 paper-loop collector | clean-best `9 / 9`, Phase-J `9 / 9`, Phase-J strict RGB wins vs clean-best `9 / 9`; Phase-S closure is `False` because strict gates are `7 / 9` with `6 / 9` accepts and only `3 / 7` all-axis train-val wins |
@@ -154,12 +154,24 @@ Current Phase-J summary:
 | SPCarNet visible selector | `visible_only` improves nested K=8 recon/hidden/free/visible metrics versus contained K=1/first; oracle gap remains |
 
 **Latest Phase-S region core/context qualitative panels.** Group A contains the
-successful `flowers/garden` rows; Group B is intentionally diagnostic and shows
-the false-positive scenes that the final portfolio must block.
+successful raw `flowers/garden` rows; the May 20 strictcompact policy promotes
+only `flowers` from this core/context set because the raw `garden` edit is
+larger than the compact patch budget and the older garden-specific region prior
+is cleaner. Group B is intentionally diagnostic: these false-positive scenes
+are now rejected by the required compact/tail/stratified train-val gate.
 
 ![Phase-S region core/context A](assets/spcarnet_phase_s_region_corectx_A_contact_sheet.png)
 
 ![Phase-S region core/context B](assets/spcarnet_phase_s_region_corectx_B_contact_sheet.png)
+
+The strictcompact `flowers` row also has a train-defined surface-support local
+evaluation. The mask/crop locations come from train residual supports and are
+projected to held-out test renders before metrics are computed. On the first 12
+eligible held-out views, crop PSNR/SSIM improve on `12 / 12` views and crop
+LPIPS improves on `11 / 12`; mean deltas are `+0.010150` crop PSNR,
+`+0.00038835` crop SSIM, and `-0.00060000` crop LPIPS.
+
+![Phase-S v2 strictcompact flowers local support](assets/spcarnet_phase_s_v2_strictcompact_flowers_local_support.png)
 
 The detailed tables below are retained from the May 7 archived Compact-ELA/SOR report for provenance. Lower is better for LPIPS, AbsRel, DepthMAE, and Normal.
 
@@ -269,11 +281,12 @@ but visually near no-op.
   <img src="assets/spcarnet_phase_s_v20_remainingC_contact_sheet.png" width="980" alt="Phase-S v20 remainingC diagnostic contact sheet">
 </p>
 
-The render-visible region-prior branch is the latest representation-level
-attempt. It is more aligned with visible residual regions than face-score-only
-selection, but the full9 result is still small. The default gate accepts
-`bonsai`, which hurts report-only test, so the paper-facing row uses a
-train-val-only robust promotion layer and keeps only `garden/kitchen`.
+The render-visible region-prior/core-context branch is the latest
+representation-level attempt. It is more aligned with visible residual regions
+than face-score-only selection, but the full9 result is still small. The newest
+May 20 policy uses a required compact/tail/stratified re-decision before
+portfolio aggregation; this fixes the raw false-positive admission problem, but
+does not change the hard scientific reading that Phase-S gains remain subtle.
 
 <p align="center">
   <img src="assets/spcarnet_phase_s_regionprior_garden_contact_sheet.png" width="980" alt="Phase-S render-visible region-prior garden diagnostic contact sheet">
