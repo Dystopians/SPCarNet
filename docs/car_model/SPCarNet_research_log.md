@@ -4,6 +4,52 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-22 — Candidate-aware ELA policy portfolio — FAIRNESS_FIXED_BUT_NOT_PAPER_LEVEL
+
+**Outcome**: Completed the four-scene symmetric candidate-aware ELA validation
+on `counter,bonsai,room,flowers` with W&B online logging. The run includes:
+
+- edge-gated per-model-auto ELA:
+  `/home/peilincai/spcarnet_runs/candidate_aware_ela_multiscene_edge_20260522`
+- plain per-model-auto ELA:
+  `/home/peilincai/spcarnet_runs/candidate_aware_ela_multiscene_plain_20260522`
+- fixed train-val portfolio:
+  `/home/peilincai/spcarnet_runs/phasek_policy_portfolio_20260522/portfolio_counter_bonsai_room_flowers.md`
+- qualitative panels:
+  `/home/peilincai/spcarnet_runs/candidate_aware_ela_multiscene_plain_20260522_qualitative/patchcert_qualitative_contact_sheet.png`
+
+**Code landed and pushed**:
+
+- `1b15645`: skip completed Phase-K scenes on resume.
+- `7dbeb5f`: add train-val Phase-K policy portfolio selector.
+- `e07ba5f`: add post-scene train artifact cleanup option.
+
+**Four-scene result**:
+
+| scene | selected variant | report dPSNR | report dSSIM | report dLPIPS | reading |
+|---|---|---:|---:|---:|---|
+| counter | plain | +0.000022888 | +0.000000000 | +0.000000492 | PSNR up, LPIPS slightly worse |
+| bonsai | plain | +0.000185013 | -0.000000715 | +0.000000432 | best PSNR gain, SSIM/LPIPS mixed |
+| room | plain | +0.000005722 | +0.000000000 | +0.000000149 | near no-op |
+| flowers | plain | +0.000001907 | -0.000000358 | +0.000000805 | report-only balanced regression |
+
+Portfolio mean report-only effective delta is `+0.000053883` PSNR,
+`-0.000000268` SSIM, and `+0.000000469` LPIPS. The edge variant accepts `4 / 4`
+under strict compact gates, but its absolute quality is lower than plain and
+`flowers` regresses on report-only balanced score. The fixed portfolio selects
+plain candidate on all four scenes using train-val evidence only.
+
+**Interpretation**: this closes a fairness/policy gap, not the paper-level
+method gap. Baseline and candidate now receive symmetric train-only ELA
+recalibration, and edge/plain is no longer a manual per-scene parameter choice.
+However, the selected result is still noise-scale and visually subtle. Continue
+only by changing the representation capacity/coherence, not by more edge/plain
+parameter scanning.
+
+Detailed logs:
+`docs/car_model/5-22-CandidateAwareELA-Multiscene-Validation-Log.md` and
+`docs/car_model/5-22-PhaseK-PolicyPortfolio-Closure.md`.
+
 ## 2026-05-21 — Candidate-aware ELA multiscene rerun — LIVE_EDGE_ACCEPTS_BUT_TINY
 
 **Outcome**: Fixed two runner interface problems found by live fair multiscene
