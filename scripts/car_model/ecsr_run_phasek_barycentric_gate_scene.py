@@ -574,6 +574,8 @@ def _apply_delta(
                 str(args.delta_patch_cert_cluster_basis_mode),
                 "--patch_cert_cluster_basis_steps",
                 str(args.delta_patch_cert_cluster_basis_steps),
+                "--patch_cert_cluster_basis_rank",
+                str(args.delta_patch_cert_cluster_basis_rank),
                 "--patch_cert_cluster_basis_lr",
                 _fmt_arg(args.delta_patch_cert_cluster_basis_lr),
                 "--patch_cert_cluster_basis_min_samples",
@@ -1399,6 +1401,7 @@ def main() -> int:
         default="shared",
     )
     parser.add_argument("--delta_patch_cert_cluster_basis_steps", type=int, default=240)
+    parser.add_argument("--delta_patch_cert_cluster_basis_rank", type=int, default=2)
     parser.add_argument("--delta_patch_cert_cluster_basis_lr", type=float, default=0.025)
     parser.add_argument("--delta_patch_cert_cluster_basis_min_samples", type=int, default=32)
     parser.add_argument("--delta_patch_cert_cluster_basis_max_scale", type=float, default=2.0)
@@ -1676,6 +1679,8 @@ def main() -> int:
         parser.error("--delta_patch_cert_cluster_basis_lr must be > 0")
     if int(args.delta_patch_cert_cluster_basis_steps) < 0:
         parser.error("--delta_patch_cert_cluster_basis_steps must be >= 0")
+    if int(args.delta_patch_cert_cluster_basis_rank) < 1:
+        parser.error("--delta_patch_cert_cluster_basis_rank must be >= 1")
     if int(args.delta_patch_cert_cluster_basis_min_samples) <= 0:
         parser.error("--delta_patch_cert_cluster_basis_min_samples must be > 0")
     if int(args.delta_patch_cert_seed_rescue_min_candidates) < 0:

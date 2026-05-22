@@ -396,13 +396,25 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Carrier-basis parameterization: 'shared' copies one corner-slot basis to every face; "
             "'scaled' shares the basis but learns one positive face scale per carrier face; "
-            "'rank2' learns two shared corner-slot bases with per-face nonnegative simplex weights; "
+            "'rank2' learns rank-K shared corner-slot bases with per-face nonnegative simplex weights "
+            "(K is controlled by --patch_cert_cluster_basis_rank and defaults to 2); "
             "'chart_linear' fits a constant+linear residual field over a local patch chart; "
             "'chart_quad' adds bounded quadratic chart terms; 'field_linear'/'field_quad' add "
             "train-view hinge consistency and source-vertex field-continuity regularization."
         ),
     )
     parser.add_argument("--patch_cert_cluster_basis_steps", type=int, default=240)
+    parser.add_argument(
+        "--patch_cert_cluster_basis_rank",
+        type=int,
+        default=2,
+        help=(
+            "Number of shared residual bases for --patch_cert_cluster_basis_mode rank2. "
+            "The default 2 preserves the historical rank2 behavior; larger values "
+            "increase coherent multi-face carrier capacity without changing the "
+            "train-val/test protocol."
+        ),
+    )
     parser.add_argument("--patch_cert_cluster_basis_lr", type=float, default=0.025)
     parser.add_argument("--patch_cert_cluster_basis_min_samples", type=int, default=32)
     parser.add_argument(
@@ -634,6 +646,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--patch_cert_cluster_basis_lr must be > 0")
     if int(args.patch_cert_cluster_basis_steps) < 0:
         parser.error("--patch_cert_cluster_basis_steps must be >= 0")
+    if int(args.patch_cert_cluster_basis_rank) < 1:
+        parser.error("--patch_cert_cluster_basis_rank must be >= 1")
     if int(args.patch_cert_cluster_basis_min_samples) <= 0:
         parser.error("--patch_cert_cluster_basis_min_samples must be > 0")
     if int(args.patch_cert_seed_rescue_min_candidates) < 0:
@@ -2958,22 +2972,24 @@ def fit_patch_cluster_shared_basis(
     mode = str(args.patch_cert_cluster_basis_mode)
     basis_type = {
         "scaled": "scaled_shared_patch_corner_sh",
-        "rank2": "rank2_mixture_patch_corner_sh",
+        "rank2": "rank_mixture_patch_corner_sh",
         "chart_linear": "chart_linear_patch_corner_sh",
         "chart_quad": "chart_quadratic_patch_corner_sh",
         "field_linear": "view_consistent_linear_residual_field",
         "field_quad": "view_consistent_quadratic_residual_field",
     }.get(mode, "shared_patch_corner_sh")
+    mixture_rank = int(args.patch_cert_cluster_basis_rank) if mode == "rank2" else 0
     result: dict[str, Any] = {
         "enabled": enabled,
         "basis_type": basis_type,
         "mode": mode,
-        "rank": 2
+        "rank": mixture_rank
         if mode == "rank2"
         else (6 if mode in {"chart_quad", "field_quad"} else (3 if mode in {"chart_linear", "field_linear"} else 1)),
         "faces": [int(fid) for fid in face_ids],
         "patch_size": int(len(face_ids)),
         "steps": int(args.patch_cert_cluster_basis_steps),
+        "mixture_rank": int(mixture_rank) if mode == "rank2" else 0,
         "lr": float(args.patch_cert_cluster_basis_lr),
         "min_samples": int(args.patch_cert_cluster_basis_min_samples),
         "max_scale": float(args.patch_cert_cluster_basis_max_scale),
@@ -3055,7 +3071,7 @@ def fit_patch_cluster_shared_basis(
             sample_coeff = torch.clamp(sample_coeff, min=-bounds, max=bounds)
         return (sample_coeff * basis[:, :, :, None]).sum(dim=(1, 2))
 
-    def predict_rank2(components: torch.Tensor, face_mix: torch.Tensor) -> torch.Tensor:
+    def predict_rank_mixture(components: torch.Tensor, face_mix: torch.Tensor) -> torch.Tensor:
         components_by_corner = components.permute(1, 0, 2, 3)
         sample_components = components_by_corner[corner_ids]
         sample_mix = face_mix[patch_sample_rows].view(-1, 1, int(face_mix.shape[1]), 1, 1)
@@ -3185,34 +3201,51 @@ def fit_patch_cluster_shared_basis(
             )
     elif mode == "rank2":
         component_bounds = bounds.view(1, 1, basis_count, 1)
-        component_init = torch.zeros((2, 3, basis_count, 3), dtype=torch.float32, device=coeff.device)
+        rank = max(int(args.patch_cert_cluster_basis_rank), 1)
+        component_init = torch.zeros((rank, 3, basis_count, 3), dtype=torch.float32, device=coeff.device)
         if str(args.patch_cert_cluster_basis_init) == "mean" and face_coeff_tensor.numel():
             mean = face_coeff_tensor.mean(dim=0)
-            if int(face_coeff_tensor.shape[0]) > 1:
+            component_init[:] = mean
+            if int(face_coeff_tensor.shape[0]) > 1 and rank > 1:
                 centered = face_coeff_tensor - mean.view(1, 3, basis_count, 3)
-                norms = centered.reshape(int(centered.shape[0]), -1).norm(dim=1)
-                direction = centered[int(torch.argmax(norms).detach().cpu().item())]
-                component_init[0] = torch.clamp(mean + 0.5 * direction, min=-bounds, max=bounds)
-                component_init[1] = torch.clamp(mean - 0.5 * direction, min=-bounds, max=bounds)
-            else:
-                component_init[0] = mean
-                component_init[1] = mean
+                flat = centered.reshape(int(centered.shape[0]), -1)
+                try:
+                    _, _, vh = torch.linalg.svd(flat, full_matrices=False)
+                    directions = vh[: min(rank - 1, int(vh.shape[0]))].reshape(-1, 3, basis_count, 3)
+                except RuntimeError:
+                    norms = flat.norm(dim=1)
+                    directions = centered[int(torch.argmax(norms).detach().cpu().item())].view(1, 3, basis_count, 3)
+                if rank == 2:
+                    direction = directions[0]
+                    component_init[0] = torch.clamp(mean + 0.5 * direction, min=-bounds, max=bounds)
+                    component_init[1] = torch.clamp(mean - 0.5 * direction, min=-bounds, max=bounds)
+                else:
+                    for comp_idx in range(1, rank):
+                        direction = directions[((comp_idx - 1) // 2) % int(directions.shape[0])]
+                        sign = 1.0 if comp_idx % 2 == 1 else -1.0
+                        component_init[comp_idx] = torch.clamp(mean + sign * 0.5 * direction, min=-bounds, max=bounds)
         component_param_init = torch.clamp(component_init / component_bounds, -0.95, 0.95)
         component_param = torch.atanh(component_param_init).detach().clone().requires_grad_(True)
-        mix_logits = torch.zeros((len(face_ids), 2), dtype=torch.float32, device=coeff.device)
+        mix_logits = torch.zeros((len(face_ids), rank), dtype=torch.float32, device=coeff.device)
         if str(args.patch_cert_cluster_basis_init) == "mean" and int(face_coeff_tensor.shape[0]) > 1:
             with torch.no_grad():
-                d0 = ((face_coeff_tensor - component_init[0].view(1, 3, basis_count, 3)) ** 2).mean(dim=(1, 2, 3))
-                d1 = ((face_coeff_tensor - component_init[1].view(1, 3, basis_count, 3)) ** 2).mean(dim=(1, 2, 3))
-                scale = torch.stack([d0, d1]).median().clamp_min(1e-8)
-                mix_logits[:, 0] = -d0 / scale
-                mix_logits[:, 1] = -d1 / scale
+                distances = torch.stack(
+                    [
+                        ((face_coeff_tensor - component_init[comp_idx].view(1, 3, basis_count, 3)) ** 2).mean(
+                            dim=(1, 2, 3)
+                        )
+                        for comp_idx in range(rank)
+                    ],
+                    dim=1,
+                )
+                scale = distances.median().clamp_min(1e-8)
+                mix_logits[:] = -distances / scale
         mix_logits = mix_logits.detach().clone().requires_grad_(True)
         optimizer = torch.optim.Adam([component_param, mix_logits], lr=float(args.patch_cert_cluster_basis_lr))
         for _ in range(max(int(args.patch_cert_cluster_basis_steps), 0)):
             current_components = component_bounds * torch.tanh(component_param)
             current_mix = torch.softmax(mix_logits, dim=-1)
-            pred = predict_rank2(current_components, current_mix)
+            pred = predict_rank_mixture(current_components, current_mix)
             data = (((pred - y) ** 2) * w[:, None]).sum() / (w.sum().clamp_min(1e-8) * 3.0)
             mag = (current_components[:, :, 0, :] ** 2).mean()
             sh_mag = (
@@ -3220,7 +3253,7 @@ def fit_patch_cluster_shared_basis(
                 if basis_count > 1
                 else torch.zeros((), dtype=torch.float32, device=coeff.device)
             )
-            mix_reg = ((current_mix - 0.5) ** 2).mean()
+            mix_reg = ((current_mix - (1.0 / float(rank))) ** 2).mean()
             loss = data + float(args.lambda_mag) * mag + float(args.lambda_sh1_mag) * sh_mag + 0.0005 * mix_reg
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
@@ -3232,7 +3265,7 @@ def fit_patch_cluster_shared_basis(
         with torch.no_grad():
             components = (component_bounds * torch.tanh(component_param)).detach()
             face_mix = torch.softmax(mix_logits, dim=-1).detach()
-            final_mse = (((predict_rank2(components, face_mix) - y) ** 2) * w[:, None]).sum() / (
+            final_mse = (((predict_rank_mixture(components, face_mix) - y) ** 2) * w[:, None]).sum() / (
                 w.sum().clamp_min(1e-8) * 3.0
             )
     else:
@@ -3307,6 +3340,7 @@ def fit_patch_cluster_shared_basis(
         result.update(
             {
                 "component_count": int(components.shape[0]),
+                "mixture_rank": int(components.shape[0]),
                 "component_coefficients": components.detach().cpu().tolist(),
                 "face_mixture_min": float(face_mix.min().detach().cpu().item()),
                 "face_mixture_max": float(face_mix.max().detach().cpu().item()),
@@ -3438,6 +3472,7 @@ def grow_patch_certified_faces(
         "patch_cluster_basis": bool(args.patch_cert_cluster_basis),
         "patch_cluster_basis_mode": str(args.patch_cert_cluster_basis_mode),
         "patch_cluster_basis_steps": int(args.patch_cert_cluster_basis_steps),
+        "patch_cluster_basis_rank": int(args.patch_cert_cluster_basis_rank),
         "patch_cluster_basis_min_samples": int(args.patch_cert_cluster_basis_min_samples),
         "patch_cluster_basis_max_scale": float(args.patch_cert_cluster_basis_max_scale),
         "patch_cluster_basis_max_fit_mse_regression": float(args.patch_cert_cluster_basis_max_fit_mse_regression),
@@ -4890,6 +4925,7 @@ def write_candidate_plan(
                 "patch_cert_cluster_basis": bool(args.patch_cert_cluster_basis),
                 "patch_cert_cluster_basis_mode": str(args.patch_cert_cluster_basis_mode),
                 "patch_cert_cluster_basis_steps": int(args.patch_cert_cluster_basis_steps),
+                "patch_cert_cluster_basis_rank": int(args.patch_cert_cluster_basis_rank),
                 "patch_cert_cluster_basis_lr": float(args.patch_cert_cluster_basis_lr),
                 "patch_cert_cluster_basis_min_samples": int(args.patch_cert_cluster_basis_min_samples),
                 "patch_cert_cluster_basis_max_scale": float(args.patch_cert_cluster_basis_max_scale),
@@ -5205,6 +5241,7 @@ def main() -> int:
             "plan_source_model": plan_meta.get("source_model") if isinstance(plan_meta, dict) else None,
             "plan_patch_cert_cluster_basis": bool(plan_meta.get("patch_cert_cluster_basis", False)) if isinstance(plan_meta, dict) else False,
             "plan_patch_cert_cluster_basis_mode": plan_meta.get("patch_cert_cluster_basis_mode") if isinstance(plan_meta, dict) else None,
+            "plan_patch_cert_cluster_basis_rank": plan_meta.get("patch_cert_cluster_basis_rank") if isinstance(plan_meta, dict) else None,
             "plan_patch_cert_cluster_basis_max_scale": plan_meta.get("patch_cert_cluster_basis_max_scale") if isinstance(plan_meta, dict) else None,
             "plan_patch_cert_cluster_basis_max_fit_mse_regression": plan_meta.get("patch_cert_cluster_basis_max_fit_mse_regression") if isinstance(plan_meta, dict) else None,
             "plan_max_abs_dc_coeff": float(plan_max_abs_dc_coeff),
@@ -5780,6 +5817,7 @@ def main() -> int:
         "patch_cert_cluster_basis": bool(args.patch_cert_cluster_basis),
         "patch_cert_cluster_basis_mode": str(args.patch_cert_cluster_basis_mode),
         "patch_cert_cluster_basis_steps": int(args.patch_cert_cluster_basis_steps),
+        "patch_cert_cluster_basis_rank": int(args.patch_cert_cluster_basis_rank),
         "patch_cert_cluster_basis_lr": float(args.patch_cert_cluster_basis_lr),
         "patch_cert_cluster_basis_min_samples": int(args.patch_cert_cluster_basis_min_samples),
         "patch_cert_cluster_basis_max_scale": float(args.patch_cert_cluster_basis_max_scale),
