@@ -1060,6 +1060,9 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
     policy_root = ROOT / args.policy_root
     output_root = ROOT / args.output_root
     evidence_root = ROOT / args.evidence_root
+    scene_summary_path = output_root / scene / "phasek_scene_summary.json"
+    if not bool(args.force) and scene_summary_path.is_file():
+        return _read_json(scene_summary_path)
     phasej_model = _selected_model(policy_root, scene)
     phasej_report_path = phasej_model / "test" / PHASEJ_METHOD / "ela_report.json"
     phasej_report = _read_json(phasej_report_path)
@@ -1177,7 +1180,7 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         "decision": decision,
         "log_path": _path_for_summary(log_path),
     }
-    (output_root / scene / "phasek_scene_summary.json").write_text(
+    scene_summary_path.write_text(
         json.dumps(scene_summary, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
