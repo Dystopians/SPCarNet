@@ -388,6 +388,12 @@ def _apply_delta(
         str(args.delta_lambda_mag),
         "--lambda_smooth",
         str(args.delta_lambda_smooth),
+        "--direction_luma_safety_weight",
+        _fmt_arg(args.delta_direction_luma_safety_weight),
+        "--direction_cosine_weight",
+        _fmt_arg(args.delta_direction_cosine_weight),
+        "--direction_cosine_margin",
+        _fmt_arg(args.delta_direction_cosine_margin),
         "--steps",
         str(args.delta_steps),
         "--shared_residual_field_anchors",
@@ -625,6 +631,10 @@ def _apply_delta(
         str(args.delta_operator) == "facelocal_sh1"
         and int(args.delta_min_face_gain_certificate_views) > 0
     )
+    facelocal_prediction_safety = (
+        str(args.delta_operator) == "facelocal_sh1"
+        and float(args.delta_min_face_prediction_safety_fraction) > 0.0
+    )
     if str(args.delta_operator) == "facelocal_sh1" or (
         str(args.delta_operator) == "sh1" and (bool(args.delta_sh1_face_policy) or sh1_view_consensus)
     ):
@@ -662,6 +672,17 @@ def _apply_delta(
                 str(args.delta_min_face_gain_certificate_view_samples),
                 "--min_face_gain_certificate_fraction",
                 str(args.delta_min_face_gain_certificate_fraction),
+            ]
+        )
+    if facelocal_prediction_safety:
+        cmd.extend(
+            [
+                "--min_face_prediction_safety_fraction",
+                str(args.delta_min_face_prediction_safety_fraction),
+                "--min_face_prediction_safety_samples",
+                str(args.delta_min_face_prediction_safety_samples),
+                "--face_prediction_safety_min_cosine",
+                str(args.delta_face_prediction_safety_min_cosine),
             ]
         )
     if str(args.delta_operator) == "dc":
@@ -1218,6 +1239,19 @@ def main() -> int:
     parser.add_argument("--delta_lambda_mag", type=float, default=0.03)
     parser.add_argument("--delta_lambda_sh1_mag", type=float, default=0.06)
     parser.add_argument("--delta_lambda_smooth", type=float, default=0.10)
+    parser.add_argument(
+        "--delta_direction_luma_safety_weight",
+        type=float,
+        default=0.0,
+        help="Facelocal-only train residual-direction luma safety loss weight.",
+    )
+    parser.add_argument(
+        "--delta_direction_cosine_weight",
+        type=float,
+        default=0.0,
+        help="Facelocal-only train residual-direction cosine alignment loss weight.",
+    )
+    parser.add_argument("--delta_direction_cosine_margin", type=float, default=0.0)
     parser.add_argument("--delta_steps", type=int, default=800)
     parser.add_argument("--delta_shared_residual_field", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--delta_shared_residual_field_anchors", type=int, default=16)
@@ -1460,6 +1494,17 @@ def main() -> int:
     parser.add_argument("--delta_min_face_gain_certificate_view_samples", type=int, default=4)
     parser.add_argument("--delta_min_face_gain_certificate_fraction", type=float, default=0.0)
     parser.add_argument(
+        "--delta_min_face_prediction_safety_fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "For face-local SH1 deltas, require a train-only policy-val prediction "
+            "safety fraction before a face can be materialized. 0 disables it."
+        ),
+    )
+    parser.add_argument("--delta_min_face_prediction_safety_samples", type=int, default=8)
+    parser.add_argument("--delta_face_prediction_safety_min_cosine", type=float, default=0.0)
+    parser.add_argument(
         "--phasej_test_method",
         default=PHASEJ_METHOD,
         help=(
@@ -1543,6 +1588,28 @@ def main() -> int:
         and float(args.delta_coefficient_lowpass_sh_scale) > 1.0
     ):
         parser.error("--delta_coefficient_lowpass_sh_scale must be <= 1 for sh_scale lowpass")
+    for name in ("delta_direction_luma_safety_weight", "delta_direction_cosine_weight"):
+        value = float(getattr(args, name))
+        if not math.isfinite(value) or value < 0.0:
+            parser.error(f"--{name} must be finite and >= 0")
+    if not math.isfinite(float(args.delta_direction_cosine_margin)):
+        parser.error("--delta_direction_cosine_margin must be finite")
+    if float(args.delta_direction_cosine_margin) < -1.0 or float(args.delta_direction_cosine_margin) > 1.0:
+        parser.error("--delta_direction_cosine_margin must be in [-1, 1]")
+    if (
+        not math.isfinite(float(args.delta_min_face_prediction_safety_fraction))
+        or float(args.delta_min_face_prediction_safety_fraction) < 0.0
+        or float(args.delta_min_face_prediction_safety_fraction) > 1.0
+    ):
+        parser.error("--delta_min_face_prediction_safety_fraction must be in [0, 1]")
+    if int(args.delta_min_face_prediction_safety_samples) < 0:
+        parser.error("--delta_min_face_prediction_safety_samples must be >= 0")
+    if (
+        not math.isfinite(float(args.delta_face_prediction_safety_min_cosine))
+        or float(args.delta_face_prediction_safety_min_cosine) < -1.0
+        or float(args.delta_face_prediction_safety_min_cosine) > 1.0
+    ):
+        parser.error("--delta_face_prediction_safety_min_cosine must be in [-1, 1]")
     if (
         not math.isfinite(float(args.delta_patch_cert_cluster_basis_max_fit_mse_regression))
         or float(args.delta_patch_cert_cluster_basis_max_fit_mse_regression) < 0.0

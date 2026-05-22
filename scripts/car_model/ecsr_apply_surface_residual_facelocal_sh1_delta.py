@@ -132,6 +132,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lambda_mag", type=float, default=2e-2)
     parser.add_argument("--lambda_sh1_mag", type=float, default=5e-2)
     parser.add_argument("--lambda_smooth", type=float, default=8e-2)
+    parser.add_argument(
+        "--direction_luma_safety_weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Train-only residual-direction objective. When >0, penalize samples "
+            "whose predicted repair would increase luma residual magnitude. "
+            "Default 0 preserves the historical RGB-MSE objective."
+        ),
+    )
+    parser.add_argument(
+        "--direction_cosine_weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Train-only residual-direction objective. When >0, penalize predicted "
+            "RGB residual directions whose cosine to the evidence residual is below "
+            "--direction_cosine_margin."
+        ),
+    )
+    parser.add_argument("--direction_cosine_margin", type=float, default=0.0)
     parser.add_argument("--steps", type=int, default=800)
     parser.add_argument("--lr", type=float, default=0.025)
     parser.add_argument(
@@ -242,6 +263,19 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="Optional minimum fraction of eligible policy-val train views that must certify a face.",
     )
+    parser.add_argument(
+        "--min_face_prediction_safety_fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "If >0, require a train-only prediction safety certificate on policy-val "
+            "samples before materializing a face-local repair. A sample is safe when "
+            "the predicted update reduces luma residual magnitude and the RGB update "
+            "is directionally aligned with the evidence residual."
+        ),
+    )
+    parser.add_argument("--min_face_prediction_safety_samples", type=int, default=8)
+    parser.add_argument("--face_prediction_safety_min_cosine", type=float, default=0.0)
     parser.add_argument(
         "--min_face_view_consensus",
         type=float,
@@ -627,6 +661,28 @@ def parse_args() -> argparse.Namespace:
         parser.error("--coefficient_lowpass_sh_scale must be finite and >= 0")
     if str(args.coefficient_lowpass_mode) == "sh_scale" and float(args.coefficient_lowpass_sh_scale) > 1.0:
         parser.error("--coefficient_lowpass_sh_scale must be <= 1 for --coefficient_lowpass_mode sh_scale")
+    for name in ("direction_luma_safety_weight", "direction_cosine_weight"):
+        value = float(getattr(args, name))
+        if not math.isfinite(value) or value < 0.0:
+            parser.error(f"--{name} must be finite and >= 0")
+    if not math.isfinite(float(args.direction_cosine_margin)):
+        parser.error("--direction_cosine_margin must be finite")
+    if float(args.direction_cosine_margin) < -1.0 or float(args.direction_cosine_margin) > 1.0:
+        parser.error("--direction_cosine_margin must be in [-1, 1]")
+    if (
+        not math.isfinite(float(args.min_face_prediction_safety_fraction))
+        or float(args.min_face_prediction_safety_fraction) < 0.0
+        or float(args.min_face_prediction_safety_fraction) > 1.0
+    ):
+        parser.error("--min_face_prediction_safety_fraction must be in [0, 1]")
+    if int(args.min_face_prediction_safety_samples) < 0:
+        parser.error("--min_face_prediction_safety_samples must be >= 0")
+    if (
+        not math.isfinite(float(args.face_prediction_safety_min_cosine))
+        or float(args.face_prediction_safety_min_cosine) < -1.0
+        or float(args.face_prediction_safety_min_cosine) > 1.0
+    ):
+        parser.error("--face_prediction_safety_min_cosine must be in [-1, 1]")
     if (
         not math.isfinite(float(args.shared_residual_field_duplicate_smooth_weight))
         or float(args.shared_residual_field_duplicate_smooth_weight) < 0.0
@@ -1229,6 +1285,42 @@ def _weighted_mse(
     return (((pred - target) ** 2) * weights[:, None]).sum() / (weights.sum().clamp_min(1e-8) * 3.0)
 
 
+def _residual_direction_losses(
+    coeff: torch.Tensor,
+    sample_vertex_ids: torch.Tensor,
+    weighted_basis: torch.Tensor,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    *,
+    cosine_margin: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if sample_vertex_ids.numel() == 0:
+        zero = torch.zeros((), dtype=torch.float32, device=coeff.device)
+        return zero, zero
+    pred = _predict(coeff, sample_vertex_ids, weighted_basis)
+    weights = weights.clamp_min(1e-8)
+
+    luma = torch.tensor([0.299, 0.587, 0.114], dtype=torch.float32, device=pred.device)
+    target_luma = (target * luma[None, :]).sum(dim=1)
+    after_luma = ((target - pred) * luma[None, :]).sum(dim=1)
+    # Starts at zero for a no-op edit and only penalizes train samples where the
+    # proposed repair increases luminance residual magnitude.
+    luma_safety = torch.relu(after_luma.abs() - target_luma.abs())
+    luma_safety_loss = ((luma_safety**2) * weights).sum() / weights.sum().clamp_min(1e-8)
+
+    pred_norm = pred.norm(dim=1)
+    target_norm = target.norm(dim=1)
+    valid = (pred_norm > 1e-8) & (target_norm > 1e-8)
+    if not bool(valid.any()):
+        cosine_loss = torch.zeros((), dtype=torch.float32, device=coeff.device)
+    else:
+        cosine = (pred[valid] * target[valid]).sum(dim=1) / (pred_norm[valid] * target_norm[valid]).clamp_min(1e-8)
+        cosine_penalty = torch.relu(float(cosine_margin) - cosine)
+        valid_weights = weights[valid]
+        cosine_loss = ((cosine_penalty**2) * valid_weights).sum() / valid_weights.sum().clamp_min(1e-8)
+    return luma_safety_loss, cosine_loss
+
+
 def evaluate_proxy(
     coeff: torch.Tensor,
     sample_vertex_ids: torch.Tensor,
@@ -1487,6 +1579,99 @@ def face_view_gain_certificate_report(
     summary["eligible_views"] = int(sum(int(row.get("eligible_view_count", 0)) for row in out.values()))
     summary["beneficial_views"] = int(sum(int(row.get("beneficial_view_count", 0)) for row in out.values()))
     summary["mean_beneficial_fraction"] = float(np.mean(beneficial_fractions)) if beneficial_fractions else 0.0
+    return out, summary
+
+
+def face_prediction_safety_report(
+    coeff: torch.Tensor,
+    sample_vertex_ids: torch.Tensor,
+    weighted_basis: torch.Tensor,
+    samples: PixelSamples,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    *,
+    min_fraction: float,
+    min_samples: int,
+    min_cosine: float,
+) -> tuple[dict[int, dict[str, Any]], dict[str, Any]]:
+    enabled = float(min_fraction) > 0.0
+    summary: dict[str, Any] = {
+        "enabled": bool(enabled),
+        "certificate_type": "train_only_policy_val_prediction_direction_safety",
+        "test_usage": "none",
+        "min_face_prediction_safety_fraction": float(min_fraction),
+        "min_face_prediction_safety_samples": int(min_samples),
+        "face_prediction_safety_min_cosine": float(min_cosine),
+        "faces_evaluated": 0,
+        "faces_passing": 0,
+        "mean_safe_fraction": 0.0,
+        "mean_luma_safe_fraction": 0.0,
+        "mean_cosine_safe_fraction": 0.0,
+    }
+    if not enabled:
+        return {}, summary
+    if samples.count == 0 or sample_vertex_ids.numel() == 0 or coeff.numel() == 0:
+        return {}, summary
+
+    with torch.no_grad():
+        pred_np = _predict(coeff, sample_vertex_ids, weighted_basis).detach().cpu().numpy().astype(np.float32, copy=False)
+    target_np = target.detach().cpu().numpy().astype(np.float32, copy=False)
+    weight_np = weights.detach().cpu().numpy().astype(np.float32, copy=False).reshape(-1)
+    face_np = samples.face_ids.astype(np.int64, copy=False).reshape(-1)
+    if pred_np.shape[0] != target_np.shape[0] or face_np.shape[0] != target_np.shape[0]:
+        raise ValueError("sample prediction/target/face arrays do not match for prediction safety")
+
+    luma = np.asarray([0.299, 0.587, 0.114], dtype=np.float32)
+    out: dict[int, dict[str, Any]] = {}
+    safe_fractions: list[float] = []
+    luma_fractions: list[float] = []
+    cosine_fractions: list[float] = []
+    required_samples = max(int(min_samples), 1)
+    for fid in np.unique(face_np).tolist():
+        mask = face_np == int(fid)
+        sample_count = int(mask.sum())
+        if sample_count <= 0:
+            continue
+        pred = pred_np[mask]
+        y = target_np[mask]
+        w = weight_np[mask].reshape(-1)
+        target_luma = y @ luma
+        after_luma = target_luma - (pred @ luma)
+        luma_safe = np.abs(after_luma) <= (np.abs(target_luma) + 1.0e-8)
+        pred_norm = np.linalg.norm(pred, axis=1)
+        target_norm = np.linalg.norm(y, axis=1)
+        valid_dir = (pred_norm > 1.0e-8) & (target_norm > 1.0e-8)
+        cosine = np.zeros((sample_count,), dtype=np.float32)
+        cosine[valid_dir] = np.sum(pred[valid_dir] * y[valid_dir], axis=1) / np.maximum(
+            pred_norm[valid_dir] * target_norm[valid_dir],
+            1.0e-8,
+        )
+        cosine_safe = (~valid_dir) | (cosine >= float(min_cosine))
+        safe = luma_safe & cosine_safe
+        denom = max(float(w.sum()), 1.0e-8)
+        safe_fraction = float((w * safe.astype(np.float32)).sum() / denom)
+        luma_fraction = float((w * luma_safe.astype(np.float32)).sum() / denom)
+        cosine_fraction = float((w * cosine_safe.astype(np.float32)).sum() / denom)
+        passed = bool(sample_count >= required_samples and safe_fraction >= float(min_fraction))
+        out[int(fid)] = {
+            "samples": sample_count,
+            "safe_fraction": safe_fraction,
+            "luma_safe_fraction": luma_fraction,
+            "cosine_safe_fraction": cosine_fraction,
+            "mean_cosine": float(np.mean(cosine[valid_dir])) if np.any(valid_dir) else 0.0,
+            "min_cosine": float(np.min(cosine[valid_dir])) if np.any(valid_dir) else 0.0,
+            "valid_direction_samples": int(np.sum(valid_dir)),
+            "passed": passed,
+        }
+        safe_fractions.append(safe_fraction)
+        luma_fractions.append(luma_fraction)
+        cosine_fractions.append(cosine_fraction)
+
+    summary["faces_evaluated"] = int(len(out))
+    summary["faces_passing"] = int(sum(1 for row in out.values() if bool(row.get("passed", False))))
+    summary["mean_safe_fraction"] = float(np.mean(safe_fractions)) if safe_fractions else 0.0
+    summary["mean_luma_safe_fraction"] = float(np.mean(luma_fractions)) if luma_fractions else 0.0
+    summary["mean_cosine_safe_fraction"] = float(np.mean(cosine_fractions)) if cosine_fractions else 0.0
     return out, summary
 
 
@@ -3602,6 +3787,9 @@ def solve_coeff_delta(
     lambda_mag: float,
     lambda_sh1_mag: float,
     lambda_smooth: float,
+    direction_luma_safety_weight: float,
+    direction_cosine_weight: float,
+    direction_cosine_margin: float,
     steps: int,
     lr: float,
     device: torch.device,
@@ -3636,9 +3824,19 @@ def solve_coeff_delta(
     final_mag_loss = torch.zeros((), dtype=torch.float32, device=device)
     final_sh_mag_loss = torch.zeros((), dtype=torch.float32, device=device)
     final_smooth_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_direction_luma_safety_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_direction_cosine_loss = torch.zeros((), dtype=torch.float32, device=device)
     for _ in range(int(steps)):
         coeff = bounds * torch.tanh(param)
         data_loss = _weighted_mse(coeff, fit_sample_vertex_ids, fit_weighted_basis, fit_target, fit_weights)
+        direction_luma_safety_loss, direction_cosine_loss = _residual_direction_losses(
+            coeff,
+            fit_sample_vertex_ids,
+            fit_weighted_basis,
+            fit_target,
+            fit_weights,
+            cosine_margin=float(direction_cosine_margin),
+        )
         mag_loss = (coeff[:, 0, :] ** 2).mean()
         sh_mag_loss = (coeff[:, 1:, :] ** 2).mean() if basis_count > 1 else torch.zeros((), dtype=torch.float32, device=device)
         if edges.numel():
@@ -3650,6 +3848,8 @@ def solve_coeff_delta(
             + float(lambda_mag) * mag_loss
             + float(lambda_sh1_mag) * sh_mag_loss
             + float(lambda_smooth) * smooth_loss
+            + float(direction_luma_safety_weight) * direction_luma_safety_loss
+            + float(direction_cosine_weight) * direction_cosine_loss
         )
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -3658,6 +3858,8 @@ def solve_coeff_delta(
         final_mag_loss = mag_loss.detach()
         final_sh_mag_loss = sh_mag_loss.detach()
         final_smooth_loss = smooth_loss.detach()
+        final_direction_luma_safety_loss = direction_luma_safety_loss.detach()
+        final_direction_cosine_loss = direction_cosine_loss.detach()
 
     with torch.no_grad():
         coeff = (bounds * torch.tanh(param)).detach().cpu()
@@ -3668,6 +3870,11 @@ def solve_coeff_delta(
         "final_sh_mag_loss": float(final_sh_mag_loss.detach().cpu().item()),
         "basis_count": int(basis_count),
         "final_smooth_loss": float(final_smooth_loss.detach().cpu().item()),
+        "direction_luma_safety_weight": float(direction_luma_safety_weight),
+        "direction_cosine_weight": float(direction_cosine_weight),
+        "direction_cosine_margin": float(direction_cosine_margin),
+        "final_direction_luma_safety_loss": float(final_direction_luma_safety_loss.detach().cpu().item()),
+        "final_direction_cosine_loss": float(final_direction_cosine_loss.detach().cpu().item()),
     }
 
 
@@ -3891,6 +4098,9 @@ def solve_shared_residual_field_delta(
     view_hinge_weight: float,
     view_hinge_min_samples: int,
     duplicate_smooth_weight: float,
+    direction_luma_safety_weight: float,
+    direction_cosine_weight: float,
+    direction_cosine_margin: float,
     device: torch.device,
 ) -> tuple[torch.Tensor, dict[str, Any]]:
     basis_count = int(fit_weighted_basis.shape[2]) if fit_weighted_basis.ndim == 3 else 4
@@ -3938,10 +4148,20 @@ def solve_shared_residual_field_delta(
     final_weight_l2 = torch.zeros((), dtype=torch.float32, device=device)
     final_view_hinge = torch.zeros((), dtype=torch.float32, device=device)
     final_duplicate_smooth = torch.zeros((), dtype=torch.float32, device=device)
+    final_direction_luma_safety_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_direction_cosine_loss = torch.zeros((), dtype=torch.float32, device=device)
     view_hinge_groups = 0
     for _ in range(int(steps)):
         coeff = coeff_from_param()
         data_loss = _weighted_mse(coeff, fit_sample_vertex_ids, fit_weighted_basis, fit_target, fit_weights)
+        direction_luma_safety_loss, direction_cosine_loss = _residual_direction_losses(
+            coeff,
+            fit_sample_vertex_ids,
+            fit_weighted_basis,
+            fit_target,
+            fit_weights,
+            cosine_margin=float(direction_cosine_margin),
+        )
         mag_loss = (coeff[:, 0, :] ** 2).mean()
         sh_mag_loss = (coeff[:, 1:, :] ** 2).mean() if basis_count > 1 else torch.zeros((), dtype=torch.float32, device=device)
         if edges.numel():
@@ -3967,6 +4187,8 @@ def solve_shared_residual_field_delta(
             + float(duplicate_smooth_weight) * duplicate_smooth
             + float(view_hinge_weight) * view_hinge
             + float(weight_l2) * weight_l2_loss
+            + float(direction_luma_safety_weight) * direction_luma_safety_loss
+            + float(direction_cosine_weight) * direction_cosine_loss
         )
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -3978,6 +4200,8 @@ def solve_shared_residual_field_delta(
         final_weight_l2 = weight_l2_loss.detach()
         final_view_hinge = view_hinge.detach()
         final_duplicate_smooth = duplicate_smooth.detach()
+        final_direction_luma_safety_loss = direction_luma_safety_loss.detach()
+        final_direction_cosine_loss = direction_cosine_loss.detach()
 
     with torch.no_grad():
         coeff = coeff_from_param().detach().cpu()
@@ -3989,6 +4213,9 @@ def solve_shared_residual_field_delta(
             "view_hinge_min_samples": int(view_hinge_min_samples),
             "view_hinge_groups": int(view_hinge_groups),
             "duplicate_smooth_weight": float(duplicate_smooth_weight),
+            "direction_luma_safety_weight": float(direction_luma_safety_weight),
+            "direction_cosine_weight": float(direction_cosine_weight),
+            "direction_cosine_margin": float(direction_cosine_margin),
         }
     )
     return coeff, {
@@ -4002,6 +4229,11 @@ def solve_shared_residual_field_delta(
         "final_weight_l2_loss": float(final_weight_l2.detach().cpu().item()),
         "final_view_hinge_loss": float(final_view_hinge.detach().cpu().item()),
         "final_duplicate_source_smooth_loss": float(final_duplicate_smooth.detach().cpu().item()),
+        "direction_luma_safety_weight": float(direction_luma_safety_weight),
+        "direction_cosine_weight": float(direction_cosine_weight),
+        "direction_cosine_margin": float(direction_cosine_margin),
+        "final_direction_luma_safety_loss": float(final_direction_luma_safety_loss.detach().cpu().item()),
+        "final_direction_cosine_loss": float(final_direction_cosine_loss.detach().cpu().item()),
         "shared_residual_field": field_meta,
     }
 
@@ -4775,6 +5007,9 @@ def write_audit(output_model: Path, audit: dict[str, Any]) -> None:
         f"- shared residual field parameters: `{audit.get('shared_residual_field_summary', {}).get('param_count', 0)}`",
         f"- coefficient lowpass mode: `{audit.get('coefficient_lowpass', {}).get('mode', 'none')}`",
         f"- coefficient lowpass SH energy ratio: `{audit.get('coefficient_lowpass_final', {}).get('sh_energy_ratio_after_before', 1.0):.6f}`",
+        f"- direction luma safety weight: `{audit.get('direction_luma_safety_weight', 0.0)}`",
+        f"- direction cosine weight: `{audit.get('direction_cosine_weight', 0.0)}`",
+        f"- direction cosine margin: `{audit.get('direction_cosine_margin', 0.0)}`",
         f"- selected faces: `{audit['selected_faces']}`",
         f"- accepted faces: `{audit['accepted_faces']}`",
         f"- vertices added: `{audit['vertices_added']}`",
@@ -5138,6 +5373,9 @@ def main() -> int:
             view_hinge_weight=float(args.shared_residual_field_view_hinge_weight),
             view_hinge_min_samples=int(args.shared_residual_field_view_hinge_min_samples),
             duplicate_smooth_weight=float(args.shared_residual_field_duplicate_smooth_weight),
+            direction_luma_safety_weight=float(args.direction_luma_safety_weight),
+            direction_cosine_weight=float(args.direction_cosine_weight),
+            direction_cosine_margin=float(args.direction_cosine_margin),
             device=device,
         )
     else:
@@ -5153,6 +5391,9 @@ def main() -> int:
             lambda_mag=float(args.lambda_mag),
             lambda_sh1_mag=float(args.lambda_sh1_mag),
             lambda_smooth=float(args.lambda_smooth),
+            direction_luma_safety_weight=float(args.direction_luma_safety_weight),
+            direction_cosine_weight=float(args.direction_cosine_weight),
+            direction_cosine_margin=float(args.direction_cosine_margin),
             steps=int(args.steps),
             lr=float(args.lr),
             device=device,
@@ -5190,6 +5431,17 @@ def main() -> int:
         min_relative_gain=float(args.min_face_gain_certificate_relative_gain),
         min_view_samples=int(args.min_face_gain_certificate_view_samples),
         min_fraction=float(args.min_face_gain_certificate_fraction),
+    )
+    face_prediction_safety, face_prediction_safety_summary = face_prediction_safety_report(
+        coeff_device,
+        val_ids,
+        val_basis,
+        val_samples,
+        val_target,
+        val_weights,
+        min_fraction=float(args.min_face_prediction_safety_fraction),
+        min_samples=int(args.min_face_prediction_safety_samples),
+        min_cosine=float(args.face_prediction_safety_min_cosine),
     )
     crossfold_face_gain, crossfold_face_gain_summary = summarize_crossfold_face_gain(
         coeff=coeff_device,
@@ -5253,6 +5505,9 @@ def main() -> int:
             continue
         gain_certificate = face_view_gain_certificate.get(int(fid), {})
         if bool(face_view_gain_certificate_summary.get("enabled", False)) and not bool(gain_certificate.get("passed", False)):
+            continue
+        prediction_safety = face_prediction_safety.get(int(fid), {})
+        if bool(face_prediction_safety_summary.get("enabled", False)) and not bool(prediction_safety.get("passed", False)):
             continue
         crossfold_certificate = crossfold_face_gain.get(int(fid), {})
         if bool(crossfold_face_gain_summary.get("enabled", False)) and not bool(crossfold_certificate.get("passed", False)):
@@ -5435,6 +5690,7 @@ def main() -> int:
         "shared_residual_field_summary": solver.get("shared_residual_field", {}) if isinstance(solver, dict) else {},
         "validation_shrink": validation_shrink_summary,
         "face_view_gain_certificate": face_view_gain_certificate_summary,
+        "face_prediction_safety": face_prediction_safety_summary,
         "crossfold_face_gain_certificate": crossfold_face_gain_summary,
         "face_view_consensus": face_view_consensus_summary,
         "patch_crossfold_cache": patch_crossfold_cache_summary,
@@ -5466,6 +5722,9 @@ def main() -> int:
         "lambda_mag": float(args.lambda_mag),
         "lambda_sh1_mag": float(args.lambda_sh1_mag),
         "lambda_smooth": float(args.lambda_smooth),
+        "direction_luma_safety_weight": float(args.direction_luma_safety_weight),
+        "direction_cosine_weight": float(args.direction_cosine_weight),
+        "direction_cosine_margin": float(args.direction_cosine_margin),
         "shared_residual_field_anchors": int(args.shared_residual_field_anchors),
         "shared_residual_field_sigma": float(args.shared_residual_field_sigma),
         "shared_residual_field_lr": float(args.shared_residual_field_lr),
@@ -5492,6 +5751,9 @@ def main() -> int:
         "min_face_gain_certificate_relative_gain": float(args.min_face_gain_certificate_relative_gain),
         "min_face_gain_certificate_view_samples": int(args.min_face_gain_certificate_view_samples),
         "min_face_gain_certificate_fraction": float(args.min_face_gain_certificate_fraction),
+        "min_face_prediction_safety_fraction": float(args.min_face_prediction_safety_fraction),
+        "min_face_prediction_safety_samples": int(args.min_face_prediction_safety_samples),
+        "face_prediction_safety_min_cosine": float(args.face_prediction_safety_min_cosine),
         "min_face_view_consensus": float(args.min_face_view_consensus),
         "min_face_consensus_views": int(args.min_face_consensus_views),
         "min_face_consensus_view_samples": int(args.min_face_consensus_view_samples),
@@ -5574,6 +5836,7 @@ def main() -> int:
                 "policy_val_proxy": face_policy.get(int(fid), {}),
                 "validation_shrink": validation_shrink_by_face.get(int(fid), {}),
                 "face_view_gain_certificate": face_view_gain_certificate.get(int(fid), {}),
+                "prediction_safety": face_prediction_safety.get(int(fid), {}),
                 "crossfold_face_gain_certificate": crossfold_face_gain.get(int(fid), {}),
                 "face_view_consensus": face_view_consensus.get(int(fid), {}),
                 "carrier_id": patch_carrier_id(patch_cert_by_face.get(int(fid), {}), int(fid)),

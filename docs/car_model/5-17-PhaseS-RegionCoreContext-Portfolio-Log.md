@@ -1074,3 +1074,133 @@ Interpretation:
   bar. The next credible method step is not more tail-prefix scanning; it needs a
   residual-direction/objective change that directly addresses PSNR/SSIM conflict
   on `counter` while preserving the new `bonsai` coverage gain.
+
+## 2026-05-21 Residual Direction and Prediction-Safety Validation
+
+Status: `NOT_COMPLETE_TINY_PORTFOLIO_LIFT`. I implemented and tested two
+default-off train-only safety mechanisms in the actual Phase-S train/eval path:
+
+```text
+direction objective:
+  --direction_luma_safety_weight
+  --direction_cosine_weight
+  --direction_cosine_margin
+
+prediction-safety certificate:
+  --min_face_prediction_safety_fraction
+  --min_face_prediction_safety_samples
+  --face_prediction_safety_min_cosine
+```
+
+Implementation:
+
+```text
+scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py
+scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py
+```
+
+The direction objective augments weighted residual fitting with luma-residual
+safety and RGB cosine-alignment terms. The prediction-safety certificate evaluates
+the fitted edit on train/policy-val samples per face and only materializes a face
+when enough weighted samples are both luma-safe and directionally aligned. Both
+mechanisms are selection-safe: held-out test is never used for promotion.
+
+Key run roots:
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_direction_lumasafe_sh050_tailprefix_hard3_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_direction_lumasafe_sh050_tailprefix_fg_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_prediction_safety_sh050_tailprefix_hard3_20260521
+outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phase_s_direction_predsafety_policy_v3_portfolio.md
+```
+
+W&B groups:
+
+```text
+phase_s_direction_lumasafe_20260521
+phase_s_prediction_safety_20260521
+```
+
+Representative launch flags:
+
+```text
+--delta_coefficient_lowpass_mode sh_scale
+--delta_coefficient_lowpass_sh_scale 0.5
+--delta_patch_cert_carrier_holdout_auto_prefix
+--delta_patch_cert_carrier_holdout_auto_prefix_positive_tail_safe
+--delta_direction_luma_safety_weight 1.0
+--delta_direction_cosine_weight 0.05
+--delta_direction_cosine_margin 0.0
+--delta_min_face_prediction_safety_fraction 0.75
+--delta_min_face_prediction_safety_samples 8
+--delta_face_prediction_safety_min_cosine 0.0
+```
+
+Direct results:
+
+| scene | candidate | accepted | faces | train-val balanced | report-only balanced | train dPSNR | train dSSIM | train dLPIPS | test dPSNR | test dSSIM | test dLPIPS | reading |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| counter | direction hard3 | false | 17 | +0.003392279 | -0.013656557 | -0.000230789 | -0.000033855 | -0.000215009 | -0.005153656 | -0.000232995 | +0.000192150 | direction loss makes the diagnostic hard scene worse |
+| bonsai | direction hard3 | true | 50 | +0.000043213 | +0.000145674 | +0.000076294 | -0.000000298 | +0.000001356 | +0.000137329 | +0.000000477 | +0.000000060 | small positive row, not visually meaningful |
+| flowers | direction fg | true | 16 | +0.000057817 | +0.026490211 | +0.000028610 | -0.000000238 | -0.000001699 | +0.005399704 | +0.000470102 | -0.000584424 | safe but weaker than lowpass v1 flowers |
+| garden | direction fg | false | 16 | +0.000018358 | +0.000007153 | +0.000017166 | -0.000000060 | -0.000000119 | +0.000009537 | -0.000000477 | -0.000000358 | rejected by compact PSNR floor |
+| counter | prediction safety hard3 | false | 16 | +0.003386378 | -0.000005960 | -0.000244141 | -0.000033855 | -0.000215381 | +0.000009537 | -0.000000179 | +0.000000596 | safety guard prevents the large held-out collapse, but gate still fails |
+
+Prediction-safety audit for `counter`:
+
+```text
+faces_evaluated: 162
+faces_passing: 125
+mean_safe_fraction: 0.9845871461762322
+mean_luma_safe_fraction: 0.9845871461762322
+mean_cosine_safe_fraction: 0.9885971674948563
+```
+
+Portfolio comparison:
+
+| metric | lowpass v1 | tail-prefix v2 strict-PSNR | direction/predsafety v3 |
+|---|---:|---:|---:|
+| accepted scenes | 5 / 9 | 6 / 9 | 6 / 9 |
+| mean report-only dPSNR | +0.000948588 | +0.000958125 | +0.000963847 |
+| mean report-only dSSIM | +0.000062618 | +0.000062605 | +0.000062671 |
+| mean report-only dLPIPS | -0.000098820 | -0.000098829 | -0.000098813 |
+| mean report-only balanced | +0.004177339 | +0.004186809 | +0.004193525 |
+
+Selected v3 rows:
+
+| scene | selected source | selected label | train-val balanced | test dPSNR | test dSSIM | test dLPIPS | test balanced |
+|---|---|---|---:|---:|---:|---:|---:|
+| bicycle | base portfolio | `patchcert_v6` | +0.000819683 | +0.000387192 | +0.000035524 | -0.000115275 | +0.003403187 |
+| flowers | sh050 lowpass | `phase_s_lowpass_sh050_flowers_20260521` | +0.000567913 | +0.005397797 | +0.000468850 | -0.000586152 | +0.026497841 |
+| garden | sh050 lowpass | `phase_s_lowpass_sh050_budget160_garden_20260521` | +0.000086665 | +0.000053406 | -0.000000715 | -0.000001848 | +0.000076056 |
+| stump | fallback | `phasej_fallback` | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 |
+| treehill | fallback | `phasej_fallback` | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 |
+| room | fallback | `phasej_fallback` | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 | +0.000000000 |
+| counter | base portfolio | `riskpilot` | +0.000101507 | +0.000055313 | +0.000000417 | -0.000001699 | +0.000097632 |
+| kitchen | base portfolio | `rvregion_indoor` | +0.000110507 | +0.002643585 | +0.000059485 | -0.000184402 | +0.007521331 |
+| bonsai | direction hard3 | `phase_s_direction_lumasafe_sh050_tailprefix_hard3_20260521` | +0.000043213 | +0.000137329 | +0.000000477 | +0.000000060 | +0.000145674 |
+
+Disk-space blocker:
+
+```text
+/data was at 100% usage during the run.
+direction hard3 room failed while writing ELA PNG evidence maps.
+prediction-safety bonsai failed while saving render evidence npy arrays.
+After deleting only failed/regenerable render directories from these runs,
+/data had about 12G free.
+```
+
+Interpretation:
+
+- This is a real method interface and not a reporting-only change.
+- It does not solve the scientific bottleneck. The only portfolio change is a
+  tiny `bonsai` replacement; accepted coverage stays `6 / 9`.
+- The direction objective is unsafe as a default because it worsens `counter`
+  under held-out report-only metrics.
+- Prediction safety is worth keeping as a guardrail because it prevents the
+  large direction-loss held-out collapse on `counter`, but it is not sufficient
+  to turn the scene into an accepted improvement.
+- The next credible improvement should target render-metric alignment directly
+  rather than adding more scalar carriers or direction weights. A candidate is a
+  train-only render-region weighted objective with explicit context/tail
+  regularization, followed by the same strict train-val gate.

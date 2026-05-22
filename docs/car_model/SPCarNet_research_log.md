@@ -4,6 +4,69 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-21 — Phase-S residual direction and prediction-safety gates — NOT_COMPLETE_TINY_PORTFOLIO_LIFT
+
+**Outcome**: Added two train-only residual-safety interfaces to the Phase-S
+face-local SH repair path:
+
+- a residual-direction loss (`--direction_luma_safety_weight`,
+  `--direction_cosine_weight`, `--direction_cosine_margin`) that penalizes
+  luma residual growth and RGB direction mismatch during coefficient fitting;
+- a per-face prediction-safety certificate
+  (`--min_face_prediction_safety_fraction`,
+  `--min_face_prediction_safety_samples`,
+  `--face_prediction_safety_min_cosine`) that filters candidate faces using
+  train/policy-val samples before materialization.
+
+Both interfaces are default-off, forwarded by the Phase-K scene runner, audited
+in `surface_residual_facelocal_sh1_delta_audit.{json,md}`, and keep held-out
+test metrics report-only.
+
+**Evidence paths**:
+
+- Direction/luma safety, hard fallback scenes:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_direction_lumasafe_sh050_tailprefix_hard3_20260521`
+- Direction/luma safety, foreground scenes:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_direction_lumasafe_sh050_tailprefix_fg_20260521`
+- Prediction-safety certificate:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phasek_prediction_safety_sh050_tailprefix_hard3_20260521`
+- Merged portfolio:
+  `outputs/carnet/meshsplatopt/ecsr_phase_s/lowpass_conservative_20260521/phase_s_direction_predsafety_policy_v3_portfolio.md`
+- Detailed log:
+  `docs/car_model/5-17-PhaseS-RegionCoreContext-Portfolio-Log.md`
+
+**Direct decisions**:
+
+| scene | candidate | accepted | train-val balanced | report-only balanced | dPSNR | dSSIM | dLPIPS | reading |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| counter | direction hard3 | false | +0.003392279 | -0.013656557 | -0.005153656 | -0.000232995 | +0.000192150 | worsens the diagnostic hard scene |
+| bonsai | direction hard3 | true | +0.000043213 | +0.000145674 | +0.000137329 | +0.000000477 | +0.000000060 | tiny positive row, LPIPS not improved |
+| flowers | direction fg | true | +0.000057817 | +0.026490211 | +0.005399704 | +0.000470102 | -0.000584424 | safe but weaker than the existing lowpass flowers row |
+| garden | direction fg | false | +0.000018358 | +0.000007153 | +0.000009537 | -0.000000477 | -0.000000358 | rejected by compact PSNR floor |
+| counter | prediction safety hard3 | false | +0.003386378 | -0.000005960 | +0.000009537 | -0.000000179 | +0.000000596 | avoids direction-loss collapse but still fails PSNR/SSIM gate |
+
+The merged `phase_s_direction_predsafety_policy_v3` portfolio keeps selection
+train-val-only and promotes only one new row over the previous strict-PSNR
+tail-prefix portfolio: `bonsai` switches from `sh050_tail_hard3`
+(`+0.000085235` report-only balanced) to `direction_hard3`
+(`+0.000145674` report-only balanced). Accepted scenes remain `6 / 9`; mean
+report-only balanced moves from `+0.004186809` to `+0.004193525`.
+
+**Interpretation**: `NOT_COMPLETE_TINY_PORTFOLIO_LIFT`. This is a real method
+change and a real, audited train/eval interface, but the scientific gain is far
+below the requested paper-level bar. The direction objective is not robust:
+`counter` becomes worse under the same fixed policy. Prediction safety is useful
+as a guard because it reduces the counter held-out collapse back to near zero,
+but it does not convert the scene into an accepted improvement. The remaining
+hard blocker is still residual direction/objective mismatch under full render
+metrics, not missing plumbing.
+
+**Run blocker**: `/data` was at `100%` usage during the continuation. The
+partial `room` direction run and `bonsai` prediction-safety rerun failed while
+writing render/evidence arrays with `No space left on device`; failed
+regenerable render directories were removed, leaving about `12G` free. No
+ECSR/renderer/evaluator process was still active after cleanup.
+
 ## 2026-05-21 — Phase-S lowpass tail-safe carrier prefix policy — NOT_COMPLETE_REAL_COVERAGE_GAIN
 
 **Outcome**: Extended the conservative lowpass residual line with a train-only
