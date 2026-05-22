@@ -4,6 +4,43 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-21 — Candidate-aware ELA multiscene rerun — LIVE_EDGE_ACCEPTS_BUT_TINY
+
+**Outcome**: Fixed two runner interface problems found by live fair multiscene
+validation and pushed both fixes to `SPCarNet/main`:
+
+- `f091673`: added missing `--support_policy_fit_only` to the Phase-K runner.
+- `4377fac`: made Phase-K summaries valid when `--output_root` is outside the
+  repository, e.g. under `/home`.
+
+**Live validation**: two W&B-online multiscene runs are active/completed in
+part:
+
+- edge-gated per-model-auto ELA:
+  `/home/peilincai/spcarnet_runs/candidate_aware_ela_multiscene_edge_20260522`
+- plain per-model-auto ELA:
+  `/home/peilincai/spcarnet_runs/candidate_aware_ela_multiscene_plain_20260522`
+
+Completed evidence so far:
+
+| variant | scene | accepted | faces | train-val balanced | report-only balanced | reading |
+|---|---|---:|---:|---:|---:|---|
+| edge | counter | true | 16 | +0.000070632 | +0.000039995 | passes strict compact gate, tiny gain |
+| edge | bonsai | true | 45 | +0.000172615 | +0.000320673 | passes, PSNR/SSIM up, LPIPS slightly worse |
+| plain | counter | false | 16 | +0.000021696 | +0.000013053 | better absolute ELA quality than edge, but compact stratified PSNR fails |
+
+Qualitative evidence:
+`/home/peilincai/spcarnet_runs/candidate_aware_ela_multiscene_edge_20260522_qualitative/patchcert_qualitative_contact_sheet.png`
+
+Full running log and interim interpretation:
+`docs/car_model/5-22-CandidateAwareELA-Multiscene-Validation-Log.md`
+
+**Interpretation**: this is still diagnostic, not a final paper-level closure.
+The edge variant is safer under strict compact gates but has worse absolute
+quality than plain ELA on `counter`; plain has better PSNR/SSIM/LPIPS absolute
+numbers but fails the compact stratified gate. Continue room/flowers before
+promoting any default policy.
+
 ## 2026-05-21 — Candidate-aware ELA recalibration ablation — COUNTER_STRICT_GATE_PASS_BUT_ABLATION_ONLY
 
 **Outcome**: Added a runner interface for symmetric candidate-aware ELA
