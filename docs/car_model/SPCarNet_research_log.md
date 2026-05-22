@@ -4,6 +4,45 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-22 — Rank-K PatchCert carrier basis — REAL_METHOD_CHANGE_BUT_STILL_TINY
+
+**Outcome**: Implemented and pushed a configurable rank-K PatchCert carrier
+basis (`542b0b6`). The default remains rank 2, but the new validation fixes the
+rank to 4 and runs the same Phase-K train-val gate, compact gate, fresh Phase-J
+replay, and held-out-test report-only protocol on
+`flowers,counter,bonsai,room`.
+
+Evidence:
+
+- run root:
+  `/home/peilincai/spcarnet_runs/phasek_rank4_patchbasis_rings1_20260522`
+- summary:
+  `/home/peilincai/spcarnet_runs/phasek_rank4_patchbasis_rings1_20260522/rank4_rings1_phasek_summary.md`
+- qualitative sheet:
+  `/home/peilincai/spcarnet_runs/phasek_rank4_patchbasis_rings1_20260522_qualitative/patchcert_qualitative_contact_sheet.png`
+- local support metrics:
+  `/home/peilincai/spcarnet_runs/phasek_rank4_patchbasis_rings1_20260522_local_support/{scene}/surface_support_local_metrics.md`
+- detailed log:
+  `docs/car_model/5-22-RankK-PatchBasis-Validation-Log.md`
+
+Corrected audit confirms the rank-4 path was actually exercised:
+`flowers/counter/bonsai/room` have `25/17/40/27` applied cluster-basis rows.
+An earlier `rings=0` run was killed and deleted because it did not test the
+intended coherent multi-face carrier basis.
+
+Four-scene effective held-out deltas are `+0.000042439` PSNR,
+`-0.000000015` SSIM, and `-0.000000183` LPIPS, with `3 / 4` accepted scenes.
+`bonsai` is the clearest positive row (`+0.000158` PSNR and `-0.000001207`
+LPIPS report-only), `flowers` is tiny positive, `counter` is rejected by the
+compact PSNR floor, and `room` train-val accepts but held-out balanced is
+slightly negative.
+
+**Interpretation**: this is a real representation-level method change and it
+improves the LPIPS direction over the previous four-scene candidate-aware
+portfolio, but it is still noise-scale and not paper-level. The next method
+should be a train-only render-region objective, not more rank/edge/plain
+scanning.
+
 ## 2026-05-22 — Candidate-aware ELA policy portfolio — FAIRNESS_FIXED_BUT_NOT_PAPER_LEVEL
 
 **Outcome**: Completed the four-scene symmetric candidate-aware ELA validation
