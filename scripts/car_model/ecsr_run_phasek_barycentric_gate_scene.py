@@ -25,6 +25,14 @@ PHASEJ_METHOD = "ours_26000_phasej_guarded_adaptedge_ela"
 BASE_METHOD = "ours_26000_phasef_extra_compact_base"
 
 
+def _path_for_summary(path: Path) -> str:
+    path = path.resolve()
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
@@ -1163,11 +1171,11 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
     )
     scene_summary = {
         "scene": scene,
-        "phasej_model": str(phasej_model.relative_to(ROOT)),
-        "candidate_model": str(candidate_model.relative_to(ROOT)),
-        "evidence_dir": str(evidence_dir.relative_to(ROOT)),
+        "phasej_model": _path_for_summary(phasej_model),
+        "candidate_model": _path_for_summary(candidate_model),
+        "evidence_dir": _path_for_summary(evidence_dir),
         "decision": decision,
-        "log_path": str(log_path.relative_to(ROOT)),
+        "log_path": _path_for_summary(log_path),
     }
     (output_root / scene / "phasek_scene_summary.json").write_text(
         json.dumps(scene_summary, indent=2, sort_keys=True) + "\n",
