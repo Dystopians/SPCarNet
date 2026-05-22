@@ -50,6 +50,19 @@ class PixelSamples:
         return int(self.face_ids.shape[0])
 
 
+@dataclass
+class RenderRegionObjectiveState:
+    enabled: bool
+    region_weights: torch.Tensor
+    outside_mask: torch.Tensor
+    view_indices: list[torch.Tensor]
+    core_samples: int
+    context_samples: int
+    outside_samples: int
+    view_groups: int
+    tail_fraction: float
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source_model", type=Path, required=True)
@@ -153,6 +166,23 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--direction_cosine_margin", type=float, default=0.0)
+    parser.add_argument(
+        "--render_region_objective",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Add a train-only render-region objective on top of per-sample residual fitting. "
+            "Core/context samples from --region_carrier_json get a region reconstruction "
+            "loss, outside samples get an update-magnitude penalty, and train-view tail "
+            "regressions can be penalized. No held-out test views are read."
+        ),
+    )
+    parser.add_argument("--render_region_core_weight", type=float, default=1.0)
+    parser.add_argument("--render_region_context_weight", type=float, default=0.25)
+    parser.add_argument("--render_region_outside_penalty", type=float, default=0.0)
+    parser.add_argument("--render_region_tail_cvar_weight", type=float, default=0.0)
+    parser.add_argument("--render_region_tail_fraction", type=float, default=0.25)
+    parser.add_argument("--render_region_min_view_samples", type=int, default=16)
     parser.add_argument("--steps", type=int, default=800)
     parser.add_argument("--lr", type=float, default=0.025)
     parser.add_argument(
@@ -683,6 +713,18 @@ def parse_args() -> argparse.Namespace:
         parser.error("--direction_cosine_margin must be finite")
     if float(args.direction_cosine_margin) < -1.0 or float(args.direction_cosine_margin) > 1.0:
         parser.error("--direction_cosine_margin must be in [-1, 1]")
+    for name in ("render_region_core_weight", "render_region_context_weight", "render_region_outside_penalty", "render_region_tail_cvar_weight"):
+        value = float(getattr(args, name))
+        if not math.isfinite(value) or value < 0.0:
+            parser.error(f"--{name} must be finite and >= 0")
+    if (
+        not math.isfinite(float(args.render_region_tail_fraction))
+        or float(args.render_region_tail_fraction) <= 0.0
+        or float(args.render_region_tail_fraction) > 1.0
+    ):
+        parser.error("--render_region_tail_fraction must be in (0, 1]")
+    if int(args.render_region_min_view_samples) < 0:
+        parser.error("--render_region_min_view_samples must be >= 0")
     if (
         not math.isfinite(float(args.min_face_prediction_safety_fraction))
         or float(args.min_face_prediction_safety_fraction) < 0.0
@@ -1333,6 +1375,112 @@ def _residual_direction_losses(
         valid_weights = weights[valid]
         cosine_loss = ((cosine_penalty**2) * valid_weights).sum() / valid_weights.sum().clamp_min(1e-8)
     return luma_safety_loss, cosine_loss
+
+
+def build_render_region_objective_state(
+    view_names: list[str],
+    region_bins: np.ndarray,
+    *,
+    enabled: bool,
+    core_weight: float,
+    context_weight: float,
+    tail_fraction: float,
+    min_view_samples: int,
+    device: torch.device,
+) -> RenderRegionObjectiveState:
+    bins_np = np.asarray(region_bins, dtype=np.uint8).reshape(-1)
+    if not bool(enabled) or bins_np.size == 0:
+        empty_weight = torch.empty((0,), dtype=torch.float32, device=device)
+        empty_mask = torch.empty((0,), dtype=torch.bool, device=device)
+        return RenderRegionObjectiveState(
+            enabled=False,
+            region_weights=empty_weight,
+            outside_mask=empty_mask,
+            view_indices=[],
+            core_samples=0,
+            context_samples=0,
+            outside_samples=0,
+            view_groups=0,
+            tail_fraction=float(tail_fraction),
+        )
+
+    weights_np = np.zeros_like(bins_np, dtype=np.float32)
+    weights_np[bins_np == 2] = float(core_weight)
+    weights_np[bins_np == 1] = float(context_weight)
+    region_mask_np = weights_np > 0.0
+    view_np = np.asarray(view_names, dtype=object)
+    view_indices: list[torch.Tensor] = []
+    if int(view_np.shape[0]) == int(bins_np.shape[0]):
+        for view_name in sorted(set(str(v) for v in view_np.tolist())):
+            mask = (view_np == view_name) & region_mask_np
+            if int(mask.sum()) < max(int(min_view_samples), 1):
+                continue
+            view_indices.append(torch.as_tensor(np.nonzero(mask)[0], dtype=torch.long, device=device))
+
+    return RenderRegionObjectiveState(
+        enabled=bool(region_mask_np.any() or (bins_np == 0).any()),
+        region_weights=torch.as_tensor(weights_np, dtype=torch.float32, device=device),
+        outside_mask=torch.as_tensor(bins_np == 0, dtype=torch.bool, device=device),
+        view_indices=view_indices,
+        core_samples=int((bins_np == 2).sum()),
+        context_samples=int((bins_np == 1).sum()),
+        outside_samples=int((bins_np == 0).sum()),
+        view_groups=int(len(view_indices)),
+        tail_fraction=float(tail_fraction),
+    )
+
+
+def _render_region_objective_terms(
+    coeff: torch.Tensor,
+    sample_vertex_ids: torch.Tensor,
+    weighted_basis: torch.Tensor,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    state: RenderRegionObjectiveState,
+    *,
+    outside_penalty: float,
+    tail_cvar_weight: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    zero = torch.zeros((), dtype=torch.float32, device=coeff.device)
+    if not bool(state.enabled) or sample_vertex_ids.numel() == 0:
+        return zero, zero, zero, zero
+
+    pred = _predict(coeff, sample_vertex_ids, weighted_basis)
+    per_sample_after = ((pred - target) ** 2).mean(dim=1)
+    base_weights = weights.clamp_min(1e-8)
+
+    region_loss = zero
+    if state.region_weights.numel() == int(per_sample_after.shape[0]):
+        region_weights = base_weights * state.region_weights.clamp_min(0.0)
+        if bool((region_weights > 0).any().item()):
+            region_loss = (per_sample_after * region_weights).sum() / region_weights.sum().clamp_min(1.0e-8)
+
+    outside_loss = zero
+    if float(outside_penalty) > 0.0 and state.outside_mask.numel() == int(per_sample_after.shape[0]):
+        outside_mask = state.outside_mask
+        if bool(outside_mask.any().item()):
+            outside_weights = base_weights[outside_mask]
+            outside_pred = pred[outside_mask]
+            outside_loss = (outside_pred.pow(2).mean(dim=1) * outside_weights).sum() / outside_weights.sum().clamp_min(1.0e-8)
+
+    tail_loss = zero
+    if float(tail_cvar_weight) > 0.0 and state.view_indices:
+        per_sample_before = (target.detach() ** 2).mean(dim=1)
+        regressions: list[torch.Tensor] = []
+        for idx in state.view_indices:
+            if idx.numel() == 0:
+                continue
+            view_weights = base_weights[idx]
+            before = (per_sample_before[idx] * view_weights).sum() / view_weights.sum().clamp_min(1.0e-8)
+            after = (per_sample_after[idx] * view_weights).sum() / view_weights.sum().clamp_min(1.0e-8)
+            regressions.append(torch.relu((after - before) / before.clamp_min(1.0e-12)))
+        if regressions:
+            reg = torch.stack(regressions)
+            k = max(1, int(math.ceil(float(state.tail_fraction) * int(reg.shape[0]))))
+            tail_loss = torch.topk(reg, k=min(k, int(reg.shape[0])), largest=True).values.mean()
+
+    total = region_loss + float(outside_penalty) * outside_loss + float(tail_cvar_weight) * tail_loss
+    return total, region_loss, outside_loss, tail_loss
 
 
 def evaluate_proxy(
@@ -3825,6 +3973,9 @@ def solve_coeff_delta(
     direction_luma_safety_weight: float,
     direction_cosine_weight: float,
     direction_cosine_margin: float,
+    render_region_state: RenderRegionObjectiveState | None,
+    render_region_outside_penalty: float,
+    render_region_tail_cvar_weight: float,
     steps: int,
     lr: float,
     device: torch.device,
@@ -3861,6 +4012,10 @@ def solve_coeff_delta(
     final_smooth_loss = torch.zeros((), dtype=torch.float32, device=device)
     final_direction_luma_safety_loss = torch.zeros((), dtype=torch.float32, device=device)
     final_direction_cosine_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_render_region_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_render_region_fit_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_render_region_outside_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_render_region_tail_loss = torch.zeros((), dtype=torch.float32, device=device)
     for _ in range(int(steps)):
         coeff = bounds * torch.tanh(param)
         data_loss = _weighted_mse(coeff, fit_sample_vertex_ids, fit_weighted_basis, fit_target, fit_weights)
@@ -3878,6 +4033,25 @@ def solve_coeff_delta(
             smooth_loss = ((coeff[edges[:, 0]] - coeff[edges[:, 1]]) ** 2).mean()
         else:
             smooth_loss = torch.zeros((), dtype=torch.float32, device=device)
+        render_region_loss, render_region_fit_loss, render_region_outside_loss, render_region_tail_loss = (
+            _render_region_objective_terms(
+                coeff,
+                fit_sample_vertex_ids,
+                fit_weighted_basis,
+                fit_target,
+                fit_weights,
+                render_region_state,
+                outside_penalty=float(render_region_outside_penalty),
+                tail_cvar_weight=float(render_region_tail_cvar_weight),
+            )
+            if render_region_state is not None and bool(render_region_state.enabled)
+            else (
+                torch.zeros((), dtype=torch.float32, device=device),
+                torch.zeros((), dtype=torch.float32, device=device),
+                torch.zeros((), dtype=torch.float32, device=device),
+                torch.zeros((), dtype=torch.float32, device=device),
+            )
+        )
         loss = (
             data_loss
             + float(lambda_mag) * mag_loss
@@ -3885,6 +4059,7 @@ def solve_coeff_delta(
             + float(lambda_smooth) * smooth_loss
             + float(direction_luma_safety_weight) * direction_luma_safety_loss
             + float(direction_cosine_weight) * direction_cosine_loss
+            + render_region_loss
         )
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -3895,6 +4070,10 @@ def solve_coeff_delta(
         final_smooth_loss = smooth_loss.detach()
         final_direction_luma_safety_loss = direction_luma_safety_loss.detach()
         final_direction_cosine_loss = direction_cosine_loss.detach()
+        final_render_region_loss = render_region_loss.detach()
+        final_render_region_fit_loss = render_region_fit_loss.detach()
+        final_render_region_outside_loss = render_region_outside_loss.detach()
+        final_render_region_tail_loss = render_region_tail_loss.detach()
 
     with torch.no_grad():
         coeff = (bounds * torch.tanh(param)).detach().cpu()
@@ -3910,6 +4089,20 @@ def solve_coeff_delta(
         "direction_cosine_margin": float(direction_cosine_margin),
         "final_direction_luma_safety_loss": float(final_direction_luma_safety_loss.detach().cpu().item()),
         "final_direction_cosine_loss": float(final_direction_cosine_loss.detach().cpu().item()),
+        "render_region_objective": {
+            "enabled": bool(render_region_state.enabled) if render_region_state is not None else False,
+            "core_samples": int(render_region_state.core_samples) if render_region_state is not None else 0,
+            "context_samples": int(render_region_state.context_samples) if render_region_state is not None else 0,
+            "outside_samples": int(render_region_state.outside_samples) if render_region_state is not None else 0,
+            "view_groups": int(render_region_state.view_groups) if render_region_state is not None else 0,
+            "tail_fraction": float(render_region_state.tail_fraction) if render_region_state is not None else 0.0,
+            "outside_penalty": float(render_region_outside_penalty),
+            "tail_cvar_weight": float(render_region_tail_cvar_weight),
+            "final_total_loss": float(final_render_region_loss.detach().cpu().item()),
+            "final_region_fit_loss": float(final_render_region_fit_loss.detach().cpu().item()),
+            "final_outside_loss": float(final_render_region_outside_loss.detach().cpu().item()),
+            "final_tail_loss": float(final_render_region_tail_loss.detach().cpu().item()),
+        },
     }
 
 
@@ -4136,6 +4329,9 @@ def solve_shared_residual_field_delta(
     direction_luma_safety_weight: float,
     direction_cosine_weight: float,
     direction_cosine_margin: float,
+    render_region_state: RenderRegionObjectiveState | None,
+    render_region_outside_penalty: float,
+    render_region_tail_cvar_weight: float,
     device: torch.device,
 ) -> tuple[torch.Tensor, dict[str, Any]]:
     basis_count = int(fit_weighted_basis.shape[2]) if fit_weighted_basis.ndim == 3 else 4
@@ -4185,6 +4381,10 @@ def solve_shared_residual_field_delta(
     final_duplicate_smooth = torch.zeros((), dtype=torch.float32, device=device)
     final_direction_luma_safety_loss = torch.zeros((), dtype=torch.float32, device=device)
     final_direction_cosine_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_render_region_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_render_region_fit_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_render_region_outside_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_render_region_tail_loss = torch.zeros((), dtype=torch.float32, device=device)
     view_hinge_groups = 0
     for _ in range(int(steps)):
         coeff = coeff_from_param()
@@ -4214,6 +4414,25 @@ def solve_shared_residual_field_delta(
             min_samples=int(view_hinge_min_samples),
         )
         weight_l2_loss = (param**2).mean()
+        render_region_loss, render_region_fit_loss, render_region_outside_loss, render_region_tail_loss = (
+            _render_region_objective_terms(
+                coeff,
+                fit_sample_vertex_ids,
+                fit_weighted_basis,
+                fit_target,
+                fit_weights,
+                render_region_state,
+                outside_penalty=float(render_region_outside_penalty),
+                tail_cvar_weight=float(render_region_tail_cvar_weight),
+            )
+            if render_region_state is not None and bool(render_region_state.enabled)
+            else (
+                torch.zeros((), dtype=torch.float32, device=device),
+                torch.zeros((), dtype=torch.float32, device=device),
+                torch.zeros((), dtype=torch.float32, device=device),
+                torch.zeros((), dtype=torch.float32, device=device),
+            )
+        )
         loss = (
             data_loss
             + float(lambda_mag) * mag_loss
@@ -4224,6 +4443,7 @@ def solve_shared_residual_field_delta(
             + float(weight_l2) * weight_l2_loss
             + float(direction_luma_safety_weight) * direction_luma_safety_loss
             + float(direction_cosine_weight) * direction_cosine_loss
+            + render_region_loss
         )
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -4237,6 +4457,10 @@ def solve_shared_residual_field_delta(
         final_duplicate_smooth = duplicate_smooth.detach()
         final_direction_luma_safety_loss = direction_luma_safety_loss.detach()
         final_direction_cosine_loss = direction_cosine_loss.detach()
+        final_render_region_loss = render_region_loss.detach()
+        final_render_region_fit_loss = render_region_fit_loss.detach()
+        final_render_region_outside_loss = render_region_outside_loss.detach()
+        final_render_region_tail_loss = render_region_tail_loss.detach()
 
     with torch.no_grad():
         coeff = coeff_from_param().detach().cpu()
@@ -4269,6 +4493,20 @@ def solve_shared_residual_field_delta(
         "direction_cosine_margin": float(direction_cosine_margin),
         "final_direction_luma_safety_loss": float(final_direction_luma_safety_loss.detach().cpu().item()),
         "final_direction_cosine_loss": float(final_direction_cosine_loss.detach().cpu().item()),
+        "render_region_objective": {
+            "enabled": bool(render_region_state.enabled) if render_region_state is not None else False,
+            "core_samples": int(render_region_state.core_samples) if render_region_state is not None else 0,
+            "context_samples": int(render_region_state.context_samples) if render_region_state is not None else 0,
+            "outside_samples": int(render_region_state.outside_samples) if render_region_state is not None else 0,
+            "view_groups": int(render_region_state.view_groups) if render_region_state is not None else 0,
+            "tail_fraction": float(render_region_state.tail_fraction) if render_region_state is not None else 0.0,
+            "outside_penalty": float(render_region_outside_penalty),
+            "tail_cvar_weight": float(render_region_tail_cvar_weight),
+            "final_total_loss": float(final_render_region_loss.detach().cpu().item()),
+            "final_region_fit_loss": float(final_render_region_fit_loss.detach().cpu().item()),
+            "final_outside_loss": float(final_render_region_outside_loss.detach().cpu().item()),
+            "final_tail_loss": float(final_render_region_tail_loss.detach().cpu().item()),
+        },
         "shared_residual_field": field_meta,
     }
 
@@ -5383,6 +5621,16 @@ def main() -> int:
         device=device,
         sh_degree=int(args.sh_degree),
     )
+    render_region_state = build_render_region_objective_state(
+        fit_samples.view_names,
+        fit_samples.region_bins,
+        enabled=bool(args.render_region_objective),
+        core_weight=float(args.render_region_core_weight),
+        context_weight=float(args.render_region_context_weight),
+        tail_fraction=float(args.render_region_tail_fraction),
+        min_view_samples=int(args.render_region_min_view_samples),
+        device=device,
+    )
 
     max_abs_dc_coeff = float(args.max_abs_delta_rgb) / float(C0)
     max_abs_sh_coeff = float(args.max_abs_sh_coeff) if float(args.max_abs_sh_coeff) > 0 else float(args.max_abs_delta_rgb) / float(C1)
@@ -5413,6 +5661,9 @@ def main() -> int:
             direction_luma_safety_weight=float(args.direction_luma_safety_weight),
             direction_cosine_weight=float(args.direction_cosine_weight),
             direction_cosine_margin=float(args.direction_cosine_margin),
+            render_region_state=render_region_state,
+            render_region_outside_penalty=float(args.render_region_outside_penalty),
+            render_region_tail_cvar_weight=float(args.render_region_tail_cvar_weight),
             device=device,
         )
     else:
@@ -5431,6 +5682,9 @@ def main() -> int:
             direction_luma_safety_weight=float(args.direction_luma_safety_weight),
             direction_cosine_weight=float(args.direction_cosine_weight),
             direction_cosine_margin=float(args.direction_cosine_margin),
+            render_region_state=render_region_state,
+            render_region_outside_penalty=float(args.render_region_outside_penalty),
+            render_region_tail_cvar_weight=float(args.render_region_tail_cvar_weight),
             steps=int(args.steps),
             lr=float(args.lr),
             device=device,
@@ -5721,6 +5975,19 @@ def main() -> int:
         "fit_unique_faces": int(fit_unique_faces),
         "policy_val_unique_faces": int(val_unique_faces),
         "solver": solver,
+        "render_region_objective": {
+            "enabled": bool(args.render_region_objective),
+            "core_weight": float(args.render_region_core_weight),
+            "context_weight": float(args.render_region_context_weight),
+            "outside_penalty": float(args.render_region_outside_penalty),
+            "tail_cvar_weight": float(args.render_region_tail_cvar_weight),
+            "tail_fraction": float(args.render_region_tail_fraction),
+            "min_view_samples": int(args.render_region_min_view_samples),
+            "core_samples": int(render_region_state.core_samples),
+            "context_samples": int(render_region_state.context_samples),
+            "outside_samples": int(render_region_state.outside_samples),
+            "view_groups": int(render_region_state.view_groups),
+        },
         "coefficient_lowpass": coefficient_lowpass_summary,
         "coefficient_lowpass_final": coefficient_lowpass_final_summary,
         "shared_residual_field": bool(args.shared_residual_field),

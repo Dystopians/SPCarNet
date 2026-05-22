@@ -8262,3 +8262,44 @@ Final decision: `accepted=false`, `selected_trial=phasej_fallback`. This means
 the mask-core coupled selector is not a non-noise improvement. It remains useful
 as an audit/safety check, but it does not replace
 `phase_s_effectaware_region_portfolio_v3_strictpipeline`.
+
+## 2026-05-22 Render-Verified Carrier Materialization v3
+
+Status: `NOT_COMPLETE_SCIENTIFICALLY`, `COMPLETE_AS_A_FAIR_V3_VALIDATION`.
+I implemented and validated a carrier-level render-region filter that removes
+whole face-local carriers before materialization if their train render-region
+evidence does not show real changed regions and nonnegative local/tail proxy
+gain.
+
+Evidence root:
+
+```text
+/data/peilincai/spcarnet_runs/phasek_render_region_filtered_v3_20260522
+```
+
+Full eval summary:
+
+```text
+/data/peilincai/spcarnet_runs/phasek_render_region_filtered_v3_20260522/final_eval/phasek_barycentric_gate_summary.md
+```
+
+Qualitative contact sheet:
+
+```text
+/data/peilincai/spcarnet_runs/phasek_render_region_filtered_v3_20260522_qualitative/patchcert_qualitative_contact_sheet.png
+```
+
+Result:
+
+| scene | selected | accepted | materialized faces | test dPSNR | test dSSIM | test dLPIPS | train-val dPSNR |
+|---|---|---:|---:|---:|---:|---:|---:|
+| flowers | phasej fallback | false | 0 | +0.000000 | +0.000000 | +0.000000 | +0.000000 |
+| counter | phasej fallback | false | 0 | +0.000000 | +0.000000 | +0.000000 | +0.000000 |
+| bonsai | render-region filtered v3 | true | 56 | +0.000059 | +0.000000 | -0.000000 | +0.000023 |
+| room | phasej fallback | false | 8 | +0.000006 | +0.000000 | +0.000000 | +0.000008 |
+
+Conclusion: v3 is safer and more auditable than the previous render-region
+objective, but it is still not a paper-level improvement. It mainly prevents
+bad/no-op carriers from being promoted; it does not yet create visible or
+statistically meaningful gains. Full details are in
+`docs/car_model/5-22-RenderVerifiedCarrierMaterialization-v3-Log.md`.

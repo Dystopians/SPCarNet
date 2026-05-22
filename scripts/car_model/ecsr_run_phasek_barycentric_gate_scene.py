@@ -457,6 +457,26 @@ def _apply_delta(
                 str(args.delta_region_boundary_px),
             ]
         )
+    if bool(args.delta_render_region_objective):
+        cmd.extend(
+            [
+                "--render_region_objective",
+                "--render_region_core_weight",
+                _fmt_arg(args.delta_render_region_core_weight),
+                "--render_region_context_weight",
+                _fmt_arg(args.delta_render_region_context_weight),
+                "--render_region_outside_penalty",
+                _fmt_arg(args.delta_render_region_outside_penalty),
+                "--render_region_tail_cvar_weight",
+                _fmt_arg(args.delta_render_region_tail_cvar_weight),
+                "--render_region_tail_fraction",
+                _fmt_arg(args.delta_render_region_tail_fraction),
+                "--render_region_min_view_samples",
+                str(args.delta_render_region_min_view_samples),
+            ]
+        )
+    else:
+        cmd.append("--no-render_region_objective")
     if str(args.delta_operator) in {"sh1", "facelocal_sh1"}:
         cmd.extend(
             [
@@ -936,6 +956,79 @@ def _evaluate_trainval(
     _run(cmd, gpu=int(args.gpu), log_path=log_path)
 
 
+def _evaluate_train_render_region_objective(
+    args: argparse.Namespace,
+    *,
+    scene: str,
+    phasej_model: Path,
+    candidate_model: Path,
+    output_root: Path,
+    log_path: Path,
+) -> Path:
+    source = str(args.train_render_region_eval_source)
+    if source == "raw_base":
+        out_json = output_root / scene / "train_render_region_objective_raw_base.json"
+        out_md = output_root / scene / "train_render_region_objective_raw_base.md"
+        baseline_dir = phasej_model / "train" / BASE_METHOD
+        candidate_dir = candidate_model / "train" / args.candidate_base_method
+        baseline_label = BASE_METHOD
+        candidate_label = args.candidate_base_method
+    elif source == "post_ela_trainval":
+        out_json = output_root / scene / "train_render_region_objective.json"
+        out_md = output_root / scene / "train_render_region_objective.md"
+        baseline_dir = phasej_model / "train" / args.phasej_trainval_method
+        candidate_dir = candidate_model / "train" / args.candidate_trainval_method
+        baseline_label = args.phasej_trainval_method
+        candidate_label = args.candidate_trainval_method
+    else:
+        raise ValueError(f"unsupported --train_render_region_eval_source: {source}")
+    if not bool(args.force) and out_json.is_file():
+        return out_json
+    carrier_template = str(args.train_render_region_carrier_json).strip() or str(args.delta_facelocal_region_carrier_json).strip()
+    if not carrier_template:
+        raise ValueError("--train_render_region_gate_enable requires --train_render_region_carrier_json or --delta_facelocal_region_carrier_json")
+    cmd = [
+        sys.executable,
+        "scripts/car_model/ecsr_eval_train_render_region_objective.py",
+        "--scene",
+        scene,
+        "--carrier_json",
+        _scene_format_path(carrier_template, scene),
+        "--baseline_dir",
+        str(baseline_dir),
+        "--candidate_dir",
+        str(candidate_dir),
+        "--baseline_label",
+        baseline_label,
+        "--candidate_label",
+        candidate_label,
+        "--output_json",
+        str(out_json),
+        "--output_md",
+        str(out_md),
+        "--max_regions",
+        str(args.train_render_region_max_regions),
+        "--min_region_pixels",
+        str(args.train_render_region_min_pixels),
+        "--min_crop_size",
+        str(args.train_render_region_min_crop_size),
+        "--context_pad",
+        str(args.train_render_region_context_pad),
+        "--tail_fraction",
+        _fmt_arg(args.train_render_region_tail_fraction),
+        "--ssim_weight",
+        _fmt_arg(args.gate_ssim_weight),
+        "--lpips_weight",
+        _fmt_arg(args.gate_lpips_weight),
+        "--device",
+        "cuda",
+    ]
+    if bool(args.train_render_region_skip_lpips):
+        cmd.append("--skip_lpips")
+    _run(cmd, gpu=int(args.gpu), log_path=log_path)
+    return out_json
+
+
 def _evaluate_test(
     args: argparse.Namespace,
     *,
@@ -978,6 +1071,7 @@ def _decide(
     phasej_trainval_results: Path,
     phasej_test_results: Path,
     log_path: Path,
+    render_region_objective_json: Path | None = None,
 ) -> dict[str, Any]:
     decision_json = output_root / "decisions" / f"{scene}_decision.json"
     decision_md = output_root / "decisions" / f"{scene}_decision.md"
@@ -1022,6 +1116,10 @@ def _decide(
         _fmt_arg(args.gate_max_lpips_regression),
         "--min_balanced_delta",
         _fmt_arg(args.gate_min_balanced_delta),
+        "--ssim_weight",
+        _fmt_arg(args.gate_ssim_weight),
+        "--lpips_weight",
+        _fmt_arg(args.gate_lpips_weight),
         "--tail_cvar_fraction",
         _fmt_arg(args.gate_tail_cvar_fraction),
         "--tail_max_balanced_negative_fraction",
@@ -1065,6 +1163,30 @@ def _decide(
         "--output_md",
         str(decision_md),
     ]
+    if bool(args.train_render_region_gate_enable):
+        cmd.extend(
+            [
+                "--render_region_gate_enable",
+                "--render_region_objective_json",
+                str(render_region_objective_json or output_root / scene / "train_render_region_objective.json"),
+                "--render_region_min_regions",
+                str(args.train_render_region_min_regions),
+                "--render_region_min_changed_regions",
+                str(args.train_render_region_min_changed_regions),
+                "--render_region_min_changed_fraction",
+                _fmt_arg(args.train_render_region_min_changed_fraction),
+                "--render_region_min_core_balanced_delta",
+                _fmt_arg(args.train_render_region_min_core_balanced_delta),
+                "--render_region_min_core_psnr_delta",
+                _fmt_arg(args.train_render_region_min_core_psnr_delta),
+                "--render_region_min_tail_cvar_delta",
+                _fmt_arg(args.train_render_region_min_tail_cvar_delta),
+                "--render_region_max_context_mse_regression",
+                _fmt_arg(args.train_render_region_max_context_mse_regression),
+                "--render_region_max_negative_fraction",
+                _fmt_arg(args.train_render_region_max_negative_fraction),
+            ]
+        )
     if bool(args.gate_tail_require_available):
         cmd.append("--tail_require_available")
     if bool(args.gate_compact_enable):
@@ -1181,6 +1303,16 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         per_view_output=candidate_model / "trainval_gate_per_view.json",
         log_path=log_path,
     )
+    render_region_objective_json: Path | None = None
+    if bool(args.train_render_region_gate_enable):
+        render_region_objective_json = _evaluate_train_render_region_objective(
+            args,
+            scene=scene,
+            phasej_model=phasej_model,
+            candidate_model=candidate_model,
+            output_root=output_root,
+            log_path=log_path,
+        )
     decision = _decide(
         args,
         scene=scene,
@@ -1190,6 +1322,7 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         phasej_trainval_results=phasej_trainval_results,
         phasej_test_results=phasej_test_results,
         log_path=log_path,
+        render_region_objective_json=render_region_objective_json,
     )
     scene_summary = {
         "scene": scene,
@@ -1339,6 +1472,13 @@ def main() -> int:
         help="Facelocal-only train residual-direction cosine alignment loss weight.",
     )
     parser.add_argument("--delta_direction_cosine_margin", type=float, default=0.0)
+    parser.add_argument("--delta_render_region_objective", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--delta_render_region_core_weight", type=float, default=1.0)
+    parser.add_argument("--delta_render_region_context_weight", type=float, default=0.25)
+    parser.add_argument("--delta_render_region_outside_penalty", type=float, default=0.0)
+    parser.add_argument("--delta_render_region_tail_cvar_weight", type=float, default=0.0)
+    parser.add_argument("--delta_render_region_tail_fraction", type=float, default=0.25)
+    parser.add_argument("--delta_render_region_min_view_samples", type=int, default=16)
     parser.add_argument("--delta_steps", type=int, default=800)
     parser.add_argument("--delta_shared_residual_field", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--delta_shared_residual_field_anchors", type=int, default=16)
@@ -1647,6 +1787,8 @@ def main() -> int:
     parser.add_argument("--gate_max_ssim_regression", type=float, default=5e-5)
     parser.add_argument("--gate_max_lpips_regression", type=float, default=1.5e-4)
     parser.add_argument("--gate_min_balanced_delta", type=float, default=0.0)
+    parser.add_argument("--gate_ssim_weight", type=float, default=20.0)
+    parser.add_argument("--gate_lpips_weight", type=float, default=20.0)
     parser.add_argument("--gate_tail_require_available", action="store_true")
     parser.add_argument("--gate_tail_cvar_fraction", type=float, default=0.20)
     parser.add_argument("--gate_tail_max_balanced_negative_fraction", type=float, default=1.0)
@@ -1669,6 +1811,48 @@ def main() -> int:
     parser.add_argument("--gate_compact_min_stratified_psnr_delta", type=float, default=-1.0e-5)
     parser.add_argument("--gate_compact_max_stratified_ssim_regression", type=float, default=2.0e-5)
     parser.add_argument("--gate_compact_max_stratified_lpips_regression", type=float, default=1.5e-5)
+    parser.add_argument("--train_render_region_gate_enable", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--train_render_region_carrier_json",
+        default="",
+        help=(
+            "Scene-templated train carrier JSON used to score actual train-rendered "
+            "regions before the Phase-K decision. Defaults to --delta_facelocal_region_carrier_json when empty."
+        ),
+    )
+    parser.add_argument("--train_render_region_max_regions", type=int, default=64)
+    parser.add_argument("--train_render_region_min_pixels", type=int, default=128)
+    parser.add_argument("--train_render_region_min_crop_size", type=int, default=32)
+    parser.add_argument("--train_render_region_context_pad", type=int, default=16)
+    parser.add_argument("--train_render_region_tail_fraction", type=float, default=0.25)
+    parser.add_argument(
+        "--train_render_region_skip_lpips",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Skip crop-level LPIPS in the train-render-region gate. This keeps the "
+            "gate fast for dense carrier scenes while the standard full-frame train/test "
+            "LPIPS metrics remain unchanged."
+        ),
+    )
+    parser.add_argument(
+        "--train_render_region_eval_source",
+        choices=("post_ela_trainval", "raw_base"),
+        default="post_ela_trainval",
+        help=(
+            "Render directories compared by the train-only region gate. raw_base compares "
+            "the compact Phase-F render to the raw Phase-S candidate before ELA so zero "
+            "or invisible edits are detected before the standard train-val gate."
+        ),
+    )
+    parser.add_argument("--train_render_region_min_regions", type=int, default=4)
+    parser.add_argument("--train_render_region_min_changed_regions", type=int, default=1)
+    parser.add_argument("--train_render_region_min_changed_fraction", type=float, default=0.0)
+    parser.add_argument("--train_render_region_min_core_balanced_delta", type=float, default=-1.0e30)
+    parser.add_argument("--train_render_region_min_core_psnr_delta", type=float, default=-1.0e30)
+    parser.add_argument("--train_render_region_min_tail_cvar_delta", type=float, default=-1.0e30)
+    parser.add_argument("--train_render_region_max_context_mse_regression", type=float, default=1.0e30)
+    parser.add_argument("--train_render_region_max_negative_fraction", type=float, default=1.0)
     parser.add_argument("--wandb_project", default="mesh-splatting-ecsr")
     parser.add_argument("--wandb_group", default="phasek_barycentric_multiscene")
     parser.add_argument("--wandb_name", default="phasek_barycentric")
@@ -1715,6 +1899,56 @@ def main() -> int:
         value = float(getattr(args, name))
         if not math.isfinite(value) or value < 0.0:
             parser.error(f"--{name} must be finite and >= 0")
+    for name in (
+        "delta_render_region_core_weight",
+        "delta_render_region_context_weight",
+        "delta_render_region_outside_penalty",
+        "delta_render_region_tail_cvar_weight",
+    ):
+        value = float(getattr(args, name))
+        if not math.isfinite(value) or value < 0.0:
+            parser.error(f"--{name} must be finite and >= 0")
+    if (
+        not math.isfinite(float(args.delta_render_region_tail_fraction))
+        or float(args.delta_render_region_tail_fraction) <= 0.0
+        or float(args.delta_render_region_tail_fraction) > 1.0
+    ):
+        parser.error("--delta_render_region_tail_fraction must be in (0, 1]")
+    if int(args.delta_render_region_min_view_samples) < 0:
+        parser.error("--delta_render_region_min_view_samples must be >= 0")
+    if int(args.train_render_region_max_regions) <= 0:
+        parser.error("--train_render_region_max_regions must be > 0")
+    if int(args.train_render_region_min_pixels) <= 0:
+        parser.error("--train_render_region_min_pixels must be > 0")
+    if int(args.train_render_region_min_crop_size) <= 0:
+        parser.error("--train_render_region_min_crop_size must be > 0")
+    if int(args.train_render_region_context_pad) < 0:
+        parser.error("--train_render_region_context_pad must be >= 0")
+    if (
+        not math.isfinite(float(args.train_render_region_tail_fraction))
+        or float(args.train_render_region_tail_fraction) <= 0.0
+        or float(args.train_render_region_tail_fraction) > 1.0
+    ):
+        parser.error("--train_render_region_tail_fraction must be in (0, 1]")
+    if int(args.train_render_region_min_regions) < 0:
+        parser.error("--train_render_region_min_regions must be >= 0")
+    if int(args.train_render_region_min_changed_regions) < 0:
+        parser.error("--train_render_region_min_changed_regions must be >= 0")
+    if (
+        not math.isfinite(float(args.train_render_region_min_changed_fraction))
+        or float(args.train_render_region_min_changed_fraction) < 0.0
+        or float(args.train_render_region_min_changed_fraction) > 1.0
+    ):
+        parser.error("--train_render_region_min_changed_fraction must be in [0, 1]")
+    for name in (
+        "train_render_region_min_core_balanced_delta",
+        "train_render_region_min_core_psnr_delta",
+        "train_render_region_min_tail_cvar_delta",
+        "train_render_region_max_context_mse_regression",
+        "train_render_region_max_negative_fraction",
+    ):
+        if not math.isfinite(float(getattr(args, name))):
+            parser.error(f"--{name} must be finite")
     if not math.isfinite(float(args.delta_direction_cosine_margin)):
         parser.error("--delta_direction_cosine_margin must be finite")
     if float(args.delta_direction_cosine_margin) < -1.0 or float(args.delta_direction_cosine_margin) > 1.0:

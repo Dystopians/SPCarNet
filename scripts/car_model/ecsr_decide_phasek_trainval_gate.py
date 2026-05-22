@@ -275,6 +275,65 @@ def _compact_stratified_gate(
     return not reasons, reasons, audit
 
 
+def _render_region_gate(args: argparse.Namespace) -> tuple[bool, dict[str, Any]]:
+    audit: dict[str, Any] = {
+        "enabled": bool(args.render_region_gate_enable),
+        "path": str(args.render_region_objective_json) if args.render_region_objective_json else "",
+    }
+    if not bool(args.render_region_gate_enable):
+        return True, audit
+    if not args.render_region_objective_json or not args.render_region_objective_json.is_file():
+        audit.update({"accepted": False, "decision_reasons": ["render_region_objective_missing"]})
+        return False, audit
+    payload = _load_optional_json(args.render_region_objective_json)
+    mean = payload.get("mean", {}) if isinstance(payload, dict) else {}
+    tail = payload.get("tail", {}) if isinstance(payload, dict) else {}
+    diagnostics = payload.get("diagnostics", {}) if isinstance(payload, dict) else {}
+    region_count = int(payload.get("region_count", 0)) if isinstance(payload, dict) else 0
+    changed_regions = int(diagnostics.get("changed_region_count", 0)) if isinstance(diagnostics, dict) else 0
+    changed_fraction = float(diagnostics.get("changed_region_fraction", 0.0)) if isinstance(diagnostics, dict) else 0.0
+    reasons: list[str] = []
+    if bool(diagnostics.get("baseline_candidate_same_path", False)):
+        reasons.append("render_region_baseline_candidate_same_path")
+    if region_count < int(args.render_region_min_regions):
+        reasons.append(f"render_region_regions_below_{int(args.render_region_min_regions)}")
+    if changed_regions < int(args.render_region_min_changed_regions):
+        reasons.append(f"render_region_changed_regions_below_{int(args.render_region_min_changed_regions)}")
+    if changed_fraction < float(args.render_region_min_changed_fraction):
+        reasons.append(f"render_region_changed_fraction_below_{args.render_region_min_changed_fraction:g}")
+    if float(mean.get("core_balanced_delta", -math.inf)) < float(args.render_region_min_core_balanced_delta):
+        reasons.append(f"render_region_core_balanced_below_{args.render_region_min_core_balanced_delta:g}")
+    if float(mean.get("delta_core_psnr", -math.inf)) < float(args.render_region_min_core_psnr_delta):
+        reasons.append(f"render_region_core_psnr_below_{args.render_region_min_core_psnr_delta:g}")
+    if float(tail.get("core_balanced_cvar_delta", -math.inf)) < float(args.render_region_min_tail_cvar_delta):
+        reasons.append(f"render_region_tail_cvar_below_{args.render_region_min_tail_cvar_delta:g}")
+    if float(tail.get("max_context_mse_regression", math.inf)) > float(args.render_region_max_context_mse_regression):
+        reasons.append(f"render_region_context_mse_regression_exceeds_{args.render_region_max_context_mse_regression:g}")
+    if float(tail.get("negative_core_balanced_fraction", math.inf)) > float(args.render_region_max_negative_fraction):
+        reasons.append(f"render_region_negative_fraction_exceeds_{args.render_region_max_negative_fraction:g}")
+    audit.update(
+        {
+            "accepted": not reasons,
+            "decision_reasons": reasons,
+            "region_count": region_count,
+            "mean": mean,
+            "tail": tail,
+            "diagnostics": diagnostics,
+            "thresholds": {
+                "min_regions": int(args.render_region_min_regions),
+                "min_changed_regions": int(args.render_region_min_changed_regions),
+                "min_changed_fraction": float(args.render_region_min_changed_fraction),
+                "min_core_balanced_delta": float(args.render_region_min_core_balanced_delta),
+                "min_core_psnr_delta": float(args.render_region_min_core_psnr_delta),
+                "min_tail_cvar_delta": float(args.render_region_min_tail_cvar_delta),
+                "max_context_mse_regression": float(args.render_region_max_context_mse_regression),
+                "max_negative_fraction": float(args.render_region_max_negative_fraction),
+            },
+        }
+    )
+    return not reasons, audit
+
+
 def _write_md(path: Path, audit: dict[str, Any]) -> None:
     train = audit["trainval_delta"]
     test = audit.get("test_delta_report_only")
@@ -323,6 +382,23 @@ def _write_md(path: Path, audit: dict[str, Any]) -> None:
                 f"- enabled / accepted: `{compact_gate.get('enabled', False)}` / `{compact_gate.get('accepted', False)}`",
                 f"- faces / vertices / face ratio: `{compact_gate.get('accepted_faces', 0)}` / `{compact_gate.get('vertices_added', 0)}` / `{float(compact_gate.get('face_ratio', 0.0)):.9g}`",
                 f"- compact gate reasons: `{', '.join(compact_gate.get('decision_reasons', [])) or 'pass'}`",
+            ]
+        )
+    render_region_gate = audit.get("render_region_gate", {})
+    if render_region_gate:
+        mean = render_region_gate.get("mean", {}) or {}
+        tail = render_region_gate.get("tail", {}) or {}
+        diagnostics = render_region_gate.get("diagnostics", {}) or {}
+        lines.extend(
+            [
+                "",
+                "Train render-region gate:",
+                f"- enabled / accepted / regions: `{render_region_gate.get('enabled', False)}` / `{render_region_gate.get('accepted', False)}` / `{render_region_gate.get('region_count', 0)}`",
+                f"- mean core balanced / dPSNR / dSSIM / dLPIPS: `{float(mean.get('core_balanced_delta', 0.0)):.9f}` / `{float(mean.get('delta_core_psnr', 0.0)):.9f}` / `{float(mean.get('delta_core_ssim', 0.0)):.9f}` / `{float(mean.get('delta_core_lpips', 0.0)):.9f}`",
+                f"- tail CVaR / max context MSE regression: `{float(tail.get('core_balanced_cvar_delta', 0.0)):.9f}` / `{float(tail.get('max_context_mse_regression', 0.0)):.9g}`",
+                f"- changed regions / fraction: `{diagnostics.get('changed_region_count', 0)}` / `{float(diagnostics.get('changed_region_fraction', 0.0)):.6f}`",
+                f"- max / mean crop abs diff: `{float(diagnostics.get('max_crop_abs_diff', 0.0)):.9f}` / `{float(diagnostics.get('mean_crop_abs_diff', 0.0)):.9f}`",
+                f"- render-region reasons: `{', '.join(render_region_gate.get('decision_reasons', [])) or 'pass'}`",
             ]
         )
     if test is not None:
@@ -390,6 +466,16 @@ def main() -> int:
     parser.add_argument("--compact_gate_min_stratified_psnr_delta", type=float, default=-1.0e-5)
     parser.add_argument("--compact_gate_max_stratified_ssim_regression", type=float, default=2.0e-5)
     parser.add_argument("--compact_gate_max_stratified_lpips_regression", type=float, default=1.5e-5)
+    parser.add_argument("--render_region_gate_enable", action="store_true")
+    parser.add_argument("--render_region_objective_json", type=Path, default=Path(""))
+    parser.add_argument("--render_region_min_regions", type=int, default=4)
+    parser.add_argument("--render_region_min_changed_regions", type=int, default=1)
+    parser.add_argument("--render_region_min_changed_fraction", type=float, default=0.0)
+    parser.add_argument("--render_region_min_core_balanced_delta", type=float, default=-1.0e30)
+    parser.add_argument("--render_region_min_core_psnr_delta", type=float, default=-1.0e30)
+    parser.add_argument("--render_region_min_tail_cvar_delta", type=float, default=-1.0e30)
+    parser.add_argument("--render_region_max_context_mse_regression", type=float, default=1.0e30)
+    parser.add_argument("--render_region_max_negative_fraction", type=float, default=1.0)
     parser.add_argument("--output_json", type=Path, required=True)
     parser.add_argument("--output_md", type=Path, required=True)
     args = parser.parse_args()
@@ -442,6 +528,10 @@ def main() -> int:
         else:
             compact_gate["overrode_standard_gate"] = False
             compact_gate["standard_gate_reasons"] = ordinary_decision_reasons
+    render_region_ok, render_region_gate = _render_region_gate(args)
+    if bool(args.render_region_gate_enable) and not render_region_ok:
+        accepted = False
+        reasons = list(dict.fromkeys(list(reasons) + [str(item) for item in render_region_gate.get("decision_reasons", [])]))
 
     audit: dict[str, Any] = {
         "scene": args.scene,
@@ -477,6 +567,7 @@ def main() -> int:
             "compact_gate_require": bool(args.compact_gate_require),
         },
         "compact_stratified_gate": compact_gate,
+        "render_region_gate": render_region_gate,
         "candidate_operator_audit": {
             "path": str(args.candidate_audit_json) if args.candidate_audit_json else "",
             "available": bool(candidate_audit),
