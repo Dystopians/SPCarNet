@@ -829,7 +829,50 @@ def _apply_ela(
         "--wandb_name",
         f"{args.wandb_name}_{scene}_{method_name}_{target_split}",
     ]
-    cmd.extend(_policy_args(phasej_report, trainval=trainval, args=args))
+    if str(args.ela_policy_source) == "fixed_phasej":
+        cmd.extend(_policy_args(phasej_report, trainval=trainval, args=args))
+    elif str(args.ela_policy_source) == "per_model_auto":
+        cmd.extend(
+            [
+                "--auto_policy",
+                "--policy_modes",
+                str(args.ela_policy_modes),
+                "--policy_k_values",
+                str(args.ela_policy_k_values),
+                "--policy_depth_rel_values",
+                str(args.ela_policy_depth_rel_values),
+                "--policy_residual_clip_values",
+                str(args.ela_policy_residual_clip_values),
+                "--policy_direction_weight_values",
+                str(args.ela_policy_direction_weight_values),
+                "--policy_edge_gate_quantiles",
+                str(args.ela_policy_edge_gate_quantiles),
+                "--policy_edge_gate_dilates",
+                str(args.ela_policy_edge_gate_dilates),
+                "--policy_objective",
+                str(args.ela_policy_objective),
+                "--alpha_grid",
+                str(args.ela_alpha_grid),
+                "--calib_sampler",
+                str(args.calib_sampler),
+                "--calib_max_views",
+                str(args.calib_max_views),
+                "--calib_stride",
+                str(args.calib_stride),
+                "--policy_holdout_fraction",
+                str(args.policy_holdout_fraction),
+                "--policy_holdout_offset",
+                str(args.policy_holdout_offset),
+            ]
+        )
+        if bool(args.ela_edge_gate):
+            cmd.extend(["--edge_gate", "--edge_gate_min", str(args.ela_edge_gate_min)])
+        if bool(args.ela_calib_lpips):
+            cmd.append("--calib_lpips")
+        if trainval and bool(args.support_policy_fit_only):
+            cmd.append("--support_policy_fit_only")
+    else:
+        raise ValueError(f"unknown ELA policy source: {args.ela_policy_source}")
     _run(cmd, gpu=int(args.gpu), log_path=log_path, wandb_online=True)
 
 
@@ -1099,7 +1142,11 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         args,
         model=candidate_model,
         method=args.candidate_trainval_method,
-        view_names_file=phasej_model / "train" / args.phasej_trainval_method / "ela_report.json",
+        view_names_file=(
+            candidate_model / "train" / args.candidate_trainval_method / "ela_report.json"
+            if str(args.ela_policy_source) == "per_model_auto"
+            else phasej_model / "train" / args.phasej_trainval_method / "ela_report.json"
+        ),
         output=candidate_model / "trainval_gate_results.json",
         per_view_output=candidate_model / "trainval_gate_per_view.json",
         log_path=log_path,
@@ -1522,6 +1569,36 @@ def main() -> int:
     parser.add_argument("--calib_sampler", choices=("stride_first", "uniform"), default="uniform")
     parser.add_argument("--calib_max_views", type=int, default=32)
     parser.add_argument("--calib_stride", type=int, default=1)
+    parser.add_argument(
+        "--ela_policy_source",
+        choices=("fixed_phasej", "per_model_auto"),
+        default="fixed_phasej",
+        help=(
+            "fixed_phasej replays the selected Phase-J ELA report on both arms. "
+            "per_model_auto runs the same train-only auto-policy ELA search for "
+            "the Phase-J baseline and candidate checkpoint before the gate."
+        ),
+    )
+    parser.add_argument("--ela_policy_objective", choices=("psnr", "balanced"), default="balanced")
+    parser.add_argument("--ela_calib_lpips", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--ela_alpha_grid", default="0,0.125,0.25,0.5,0.75,1.0")
+    parser.add_argument("--ela_policy_modes", default="residual,color")
+    parser.add_argument("--ela_policy_k_values", default="4,8")
+    parser.add_argument("--ela_policy_depth_rel_values", default="0.06,0.12")
+    parser.add_argument("--ela_policy_residual_clip_values", default="0.25")
+    parser.add_argument("--ela_policy_direction_weight_values", default="")
+    parser.add_argument("--ela_edge_gate", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--ela_edge_gate_min", type=float, default=0.0)
+    parser.add_argument(
+        "--ela_policy_edge_gate_quantiles",
+        default="",
+        help="Optional comma-separated edge-gate quantiles for per-model auto ELA.",
+    )
+    parser.add_argument(
+        "--ela_policy_edge_gate_dilates",
+        default="",
+        help="Optional comma-separated edge-gate dilation values for per-model auto ELA.",
+    )
     parser.add_argument("--alpha_feature_mode", choices=("confidence_magnitude", "confidence_magnitude_edge"), default="confidence_magnitude_edge")
     parser.add_argument("--alpha_default", type=float, default=0.0)
     parser.add_argument("--gate_min_psnr_gain", type=float, default=0.0)
@@ -1588,6 +1665,8 @@ def main() -> int:
         and float(args.delta_coefficient_lowpass_sh_scale) > 1.0
     ):
         parser.error("--delta_coefficient_lowpass_sh_scale must be <= 1 for sh_scale lowpass")
+    if str(args.ela_policy_source) == "per_model_auto" and float(args.policy_holdout_fraction) <= 0.0:
+        parser.error("--ela_policy_source per_model_auto requires --policy_holdout_fraction > 0")
     for name in ("delta_direction_luma_safety_weight", "delta_direction_cosine_weight"):
         value = float(getattr(args, name))
         if not math.isfinite(value) or value < 0.0:

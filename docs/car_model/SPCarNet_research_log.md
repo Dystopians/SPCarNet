@@ -4,6 +4,55 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-05-21 — Candidate-aware ELA recalibration ablation — COUNTER_STRICT_GATE_PASS_BUT_ABLATION_ONLY
+
+**Outcome**: Added a runner interface for symmetric candidate-aware ELA
+recalibration. The Phase-K runner now supports
+`--ela_policy_source per_model_auto`, which runs the same train-only ELA
+auto-policy search for both the Phase-J baseline checkpoint and the Phase-S
+candidate checkpoint before train-val gating. Default behavior remains
+`fixed_phasej`, so previous rows are unchanged.
+
+**Why this matters**: Earlier `counter` failures showed that the Phase-S
+representation edit could become negative when the candidate reused the fixed
+Phase-J ELA report. The new ablation tests whether the bottleneck is partly a
+representation/adapter mismatch. It is fair only because both arms receive the
+same policy search, same alpha grid including `0`, same train holdout split, and
+same held-out-test-as-report-only rule.
+
+**Evidence paths**:
+
+- Plain per-model auto ELA:
+  `/home/peilincai/spcarnet_runs/candidate_aware_ela_counter_20260521`
+- Edge-gated per-model auto ELA:
+  `/home/peilincai/spcarnet_runs/candidate_aware_ela_counter_edge_20260521`
+- Decision:
+  `/home/peilincai/spcarnet_runs/candidate_aware_ela_counter_edge_20260521/candidate_aware_edge_decision.json`
+
+**Results on `counter`**:
+
+| protocol | accepted | train-val balanced | report-only balanced | train dPSNR | train dSSIM | train dLPIPS | test dPSNR | test dSSIM | test dLPIPS | reading |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| per-model auto ELA | false | +0.000021696 | +0.000013053 | +0.000022888 | +0.000000000 | +0.000000060 | +0.000022888 | +0.000000000 | +0.000000492 | standard gate passes, compact stratified PSNR fails by a small margin |
+| edge-gated per-model auto ELA | true | +0.000070632 | +0.000039995 | +0.000038147 | +0.000000298 | -0.000001326 | +0.000043869 | +0.000000000 | +0.000000194 | strict compact gate passes |
+
+W&B groups:
+
+```text
+candidate_aware_ela_counter_20260521
+candidate_aware_ela_counter_edge_20260521
+```
+
+**Interpretation**: This is meaningful diagnostic progress, not a final
+paper-facing replacement. It proves that under a symmetric train-only
+candidate-aware adapter, the `counter` Phase-S checkpoint can pass strict compact
+gate. However, the edge-gated absolute baseline is worse than the plain
+auto-ELA baseline (`counter` test PSNR about `27.846` versus `27.973`), so this
+cannot be promoted as the default main result yet. It is best logged as an
+ablation showing that the fixed Phase-J ELA replay was suppressing a small
+representation-level benefit; multi-scene replication and a no-absolute-quality
+regression policy are still required before using it in the portfolio.
+
 ## 2026-05-21 — Phase-S residual direction and prediction-safety gates — NOT_COMPLETE_TINY_PORTFOLIO_LIFT
 
 **Outcome**: Added two train-only residual-safety interfaces to the Phase-S

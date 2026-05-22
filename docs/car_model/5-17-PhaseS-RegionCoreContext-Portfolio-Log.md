@@ -1204,3 +1204,121 @@ Interpretation:
   rather than adding more scalar carriers or direction weights. A candidate is a
   train-only render-region weighted objective with explicit context/tail
   regularization, followed by the same strict train-val gate.
+
+## 2026-05-21 Candidate-Aware ELA Recalibration Ablation
+
+Status: `COUNTER_STRICT_GATE_PASS_BUT_ABLATION_ONLY`.
+
+I added a formal runner interface for a fair candidate-aware ELA diagnostic:
+
+```text
+--ela_policy_source fixed_phasej|per_model_auto
+--ela_policy_objective psnr|balanced
+--ela_calib_lpips
+--ela_alpha_grid
+--ela_policy_modes
+--ela_policy_k_values
+--ela_policy_depth_rel_values
+--ela_policy_residual_clip_values
+--ela_policy_direction_weight_values
+--ela_edge_gate
+--ela_policy_edge_gate_quantiles
+--ela_policy_edge_gate_dilates
+```
+
+Default remains `fixed_phasej`, so existing Phase-K rows are unchanged. In
+`per_model_auto`, both the Phase-J baseline checkpoint and the Phase-S candidate
+checkpoint run the same train-only ELA auto-policy search. Candidate train-val
+evaluation now reads the candidate ELA report for `policy_val_views` in this
+mode, avoiding hidden coupling to the Phase-J report.
+
+Fairness rule:
+
+```text
+allowed: Phase-J checkpoint + per-model auto ELA vs Phase-S checkpoint + the same per-model auto ELA
+not allowed: Phase-S candidate auto-tuned against a fixed old Phase-J ELA row
+selection: train/policy-val only
+test: report-only
+alpha grid: includes 0
+holdout: policy_holdout_fraction=0.25, policy_holdout_offset=0
+support leakage guard: support_policy_fit_only on train-val runs
+```
+
+Plain per-model auto ELA command family:
+
+```text
+output root: /home/peilincai/spcarnet_runs/candidate_aware_ela_counter_20260521
+auto_policy: true
+policy_objective: balanced
+calib_lpips: true
+alpha_grid: 0,0.0625,0.125,0.25,0.5
+```
+
+Plain result:
+
+| scene | accepted | train-val balanced | report-only balanced | train dPSNR | train dSSIM | train dLPIPS | test dPSNR | test dSSIM | test dLPIPS | rejection |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| counter | false | +0.000021696 | +0.000013053 | +0.000022888 | +0.000000000 | +0.000000060 | +0.000022888 | +0.000000000 | +0.000000492 | compact stratified PSNR group min `-0.000012911` below `-0.000010` |
+
+Edge-gated per-model auto ELA command family:
+
+```text
+output root: /home/peilincai/spcarnet_runs/candidate_aware_ela_counter_edge_20260521
+auto_policy: true
+policy_modes: residual
+policy_k_values: 4
+policy_depth_rel_values: 0.06
+policy_residual_clip_values: 0.25
+policy_direction_weight_values: 0.35
+edge_gate: true
+policy_edge_gate_quantiles: 0.5,0.7
+policy_edge_gate_dilates: 1
+policy_objective: balanced
+calib_lpips: true
+alpha_grid: 0,0.0625,0.125,0.25,0.5
+```
+
+Edge-gated decision:
+
+```text
+/home/peilincai/spcarnet_runs/candidate_aware_ela_counter_edge_20260521/candidate_aware_edge_decision.json
+```
+
+Edge-gated result:
+
+| scene | accepted | train-val balanced | report-only balanced | train dPSNR | train dSSIM | train dLPIPS | test dPSNR | test dSSIM | test dLPIPS |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| counter | true | +0.000070632 | +0.000039995 | +0.000038147 | +0.000000298 | -0.000001326 | +0.000043869 | +0.000000000 | +0.000000194 |
+
+Strict compact details:
+
+```text
+accepted_faces: 16
+vertices_added: 48
+face_ratio: 1.6590201391565355e-06
+positive stratified balanced group fraction: 1.0
+min stratified PSNR delta: -0.000004108, above the -0.000010 floor
+selection_uses_test: false
+```
+
+Absolute-quality warning:
+
+```text
+plain per-model auto ELA Phase-J test PSNR: 27.973318
+edge-gated per-model auto ELA Phase-J test PSNR: 27.846403
+```
+
+Interpretation:
+
+- This is the first strict-gate pass for the hard `counter` candidate under a
+  fair symmetric candidate-aware adapter protocol.
+- It supports the diagnosis that fixed Phase-J ELA replay can suppress a small
+  representation-level Phase-S benefit.
+- It is not yet a default portfolio row because the edge-gated protocol lowers
+  the absolute ELA baseline substantially versus plain auto-ELA. A paper-facing
+  policy must include a no-absolute-quality-regression guard and multi-scene
+  replication before promoting candidate-aware ELA.
+- The most useful next step is not another per-scene offset sweep. It is to
+  integrate `per_model_auto` into Phase-K as an ablation switch and test the same
+  fixed edge-gated protocol on `bonsai`, `room`, and one outdoor scene, while
+  comparing against the best fair per-model-auto baseline for each scene.
