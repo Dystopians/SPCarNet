@@ -13,6 +13,7 @@ import argparse
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -37,6 +38,22 @@ def _read_json(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _remove_tree(path: Path) -> None:
+    if path.is_symlink() or path.is_file():
+        path.unlink(missing_ok=True)
+    elif path.is_dir():
+        shutil.rmtree(path)
+
+
+def _cleanup_scene_train_artifacts(args: argparse.Namespace, candidate_model: Path) -> None:
+    if not bool(args.cleanup_train_artifacts_after_scene):
+        return
+    for method_name in (args.candidate_base_method, args.candidate_trainval_method):
+        train_dir = candidate_model / "train" / str(method_name)
+        if train_dir.exists() or train_dir.is_symlink():
+            _remove_tree(train_dir)
 
 
 def _metric(path: Path, method: str) -> dict[str, float]:
@@ -1184,6 +1201,7 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         json.dumps(scene_summary, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    _cleanup_scene_train_artifacts(args, candidate_model)
     return scene_summary
 
 
@@ -1239,6 +1257,15 @@ def main() -> int:
     parser.add_argument("--outdoor_images", default="images_4")
     parser.add_argument("--indoor_images", default="images_2")
     parser.add_argument("--skip_failed_views", action="store_true")
+    parser.add_argument(
+        "--cleanup_train_artifacts_after_scene",
+        action="store_true",
+        help=(
+            "After a scene summary is written, remove candidate train-split render "
+            "artifacts for that scene. Metrics, per-view JSONs, test renders, and "
+            "checkpoint/audit files are preserved."
+        ),
+    )
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--evidence_max_views", type=int, default=8)
     parser.add_argument("--evidence_view_stride", type=int, default=6)
