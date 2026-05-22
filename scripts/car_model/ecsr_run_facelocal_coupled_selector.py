@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Run a train-val render-risk selector over face-local residual plan subsets.
+"""Run a train-val render-risk selector over face-local residual plans.
 
 The script is an outer-loop selector for Phase-S face-local residual plans. It
-does not change the underlying render/eval gate. Instead, it builds a fixed set
-of face subsets from a train-only candidate plan, runs the existing Phase-K/S
-gate for each subset, then promotes the accepted subset with the best train-val
-balanced delta. Held-out test deltas are copied as report-only evidence only.
+does not change the underlying render/eval gate. For legacy non-strict plans it
+can build a fixed set of face subsets from a train-only candidate plan. For
+strict PatchCert carrier plans it defaults to a certification-preserving full
+plan replay: no face subset, no coefficient rescale, and no alpha refit. Held-out
+test deltas are copied as report-only evidence only.
 """
 
 from __future__ import annotations
@@ -236,6 +237,17 @@ def parse_args() -> argparse.Namespace:
             "are labeled as uncertified plan replay."
         ),
     )
+    parser.add_argument(
+        "--selector_strict_cert_replay_mode",
+        choices=("full_plan", "reject"),
+        default="full_plan",
+        help=(
+            "How to handle strict PatchCert carrier plans when uncertified replay is disabled. "
+            "full_plan preserves certification by replaying the complete plan with scale 1 and "
+            "without alpha refit; reject records a Phase-J fallback instead of running unsafe "
+            "subset/scale/alpha trials."
+        ),
+    )
     parser.add_argument("--selector_alpha_max", type=float, default=1.0)
     parser.add_argument("--selector_alpha_steps", type=int, default=450)
     parser.add_argument("--selector_alpha_lr", type=float, default=0.06)
@@ -317,6 +329,27 @@ def read_json(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def is_strict_patchcert_plan(plan: dict[str, Any]) -> bool:
+    if bool(plan.get("strict_patchcert_carrier")):
+        return True
+    candidates = plan.get("candidates")
+    if not isinstance(candidates, list):
+        return False
+    for row in candidates:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("certification_source", "")).startswith("strict_"):
+            return True
+        if isinstance(row.get("carrier_holdout_certificate"), dict):
+            return True
+    return False
+
+
+def strict_full_plan_spec(candidates: list[dict[str, Any]]) -> TrialSpec:
+    count = max(1, len(candidates))
+    return TrialSpec(label="strictfull_s1", mode="strictfull", count=count, scale=1.0)
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -903,6 +936,8 @@ def selected_rows(
     face_adjacency: dict[int, set[int]] | None = None,
     args: argparse.Namespace | None = None,
 ) -> list[dict[str, Any]]:
+    if spec.mode == "strictfull":
+        return list(candidates)
     if spec.mode == "top":
         rows = list(candidates)
     elif spec.mode == "score":
@@ -1002,9 +1037,12 @@ def build_trial_command(
     face_ids: list[int],
     *,
     alpha_json: Path | None = None,
+    materialize_face_filter: bool = True,
+    materialize_scale: float | None = None,
 ) -> list[str]:
     label = f"{args.candidate_prefix}_{spec.label}"
     output_root = Path(args.output_root) / "trials" / spec.label
+    scale = float(spec.scale if materialize_scale is None else materialize_scale)
     cmd = [
         sys.executable,
         "scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py",
@@ -1025,10 +1063,8 @@ def build_trial_command(
         str(args.plan_template),
         "--delta_facelocal_materialize_plan_limit",
         "0",
-        "--delta_facelocal_materialize_plan_face_ids",
-        ",".join(str(fid) for fid in face_ids),
         "--delta_facelocal_materialize_plan_scale",
-        str(spec.scale),
+        str(scale),
         "--phasej_test_method",
         str(args.phasej_test_method),
         "--phasej_trainval_method",
@@ -1056,6 +1092,13 @@ def build_trial_command(
         "--wandb_name",
         f"{label}_{scene}",
     ]
+    if materialize_face_filter and face_ids:
+        cmd.extend(
+            [
+                "--delta_facelocal_materialize_plan_face_ids",
+                ",".join(str(fid) for fid in face_ids),
+            ]
+        )
     if bool(args.selector_allow_uncertified_plan):
         cmd.append("--delta_facelocal_materialize_allow_uncertified_plan")
     if alpha_json is not None:
@@ -1231,13 +1274,21 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
     trial_decision_root = reuse_trials_root or root
     plan = read_json(plan_path(args.plan_template, scene))
     candidates = plan.get("candidates") if isinstance(plan.get("candidates"), list) else []
+    strict_patchcert_plan = is_strict_patchcert_plan(plan)
+    strict_safe_replay = (
+        bool(strict_patchcert_plan)
+        and not bool(args.selector_allow_uncertified_plan)
+        and str(args.selector_strict_cert_replay_mode) == "full_plan"
+    )
     scene_log = root / scene / "facelocal_coupled_selector.log"
     rows: list[dict[str, Any]] = []
     if not candidates:
         payload = {
             "scene": scene,
-            "plan_path": str(plan_path(args.plan_template, scene).relative_to(ROOT)),
+            "plan_path": path_label(plan_path(args.plan_template, scene)),
             "candidate_count": 0,
+            "strict_patchcert_plan": bool(strict_patchcert_plan),
+            "strict_safe_replay": bool(strict_safe_replay),
             "reuse_trials_root": path_label(reuse_trials_root) if reuse_trials_root else "",
             "selected_trial": "phasej_fallback",
             "accepted": False,
@@ -1249,7 +1300,32 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
         write_json(root / scene / "coupled_selector_decision.json", payload)
         return payload
 
-    uses_georisk = any(spec.mode in {"georisk", "patchrisk"} for spec in specs)
+    if (
+        bool(strict_patchcert_plan)
+        and not bool(args.selector_allow_uncertified_plan)
+        and str(args.selector_strict_cert_replay_mode) == "reject"
+    ):
+        payload = {
+            "scene": scene,
+            "plan_path": path_label(plan_path(args.plan_template, scene)),
+            "candidate_count": int(len(candidates)),
+            "strict_patchcert_plan": True,
+            "strict_safe_replay": False,
+            "trial_specs": [spec.label for spec in specs],
+            "selection_uses_test": False,
+            "reuse_trials_root": path_label(reuse_trials_root) if reuse_trials_root else "",
+            "accepted": False,
+            "selected_trial": "phasej_fallback",
+            "selected_trainval_balanced_delta": 0.0,
+            "decision_reasons": ["strict_patchcert_plan_replay_rejected_by_selector_mode"],
+            "effective_report_only_test_delta": {key: 0.0 for key in METRICS},
+            "trials": rows,
+        }
+        write_json(root / scene / "coupled_selector_decision.json", payload)
+        return payload
+
+    active_specs = [strict_full_plan_spec(candidates)] if strict_safe_replay else specs
+    uses_georisk = any(spec.mode in {"georisk", "patchrisk"} for spec in active_specs)
     face_adjacency, face_centers, geometry_meta = face_adjacency_geometry(
         plan,
         candidates,
@@ -1261,9 +1337,10 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
         "risk": "risk_greedy_train_certificate_pair_penalty",
         "georisk": "geometry_neighborhood_cvar_train_certificate",
         "patchrisk": "patch_level_georisk_neighborhood_residual_carrier",
+        "strictfull": "strict_patchcert_full_plan_replay",
     }
     max_concentration = max((local_error_concentration(row) for row in candidates), default=1.0)
-    for spec in specs:
+    for spec in active_specs:
         trial_rows = selected_rows(
             candidates,
             spec,
@@ -1311,6 +1388,9 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             "mode": spec.mode,
             "count": spec.count,
             "scale": spec.scale,
+            "strict_patchcert_plan": bool(strict_patchcert_plan),
+            "strict_safe_replay": bool(strict_safe_replay),
+            "requested_trial_specs": [item.label for item in specs],
             "selection_uses_test": False,
             "score_type": score_types[spec.mode],
             "risk_pair_lambda": float(args.risk_pair_lambda) if spec.mode == "risk" else 0.0,
@@ -1326,8 +1406,10 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             "selector_tail_max_balanced_cvar_loss": float(args.selector_tail_max_balanced_cvar_loss),
             "selector_tail_min_mean_to_cvar_ratio": float(args.selector_tail_min_mean_to_cvar_ratio),
             "selector_tail_max_lpips_positive_fraction": float(args.selector_tail_max_lpips_positive_fraction),
-            "alpha_refit": bool(args.selector_fit_plan_alphas),
+            "alpha_refit": bool(args.selector_fit_plan_alphas and not strict_safe_replay),
             "allow_uncertified_plan": bool(args.selector_allow_uncertified_plan),
+            "materialize_face_filter": bool(not strict_safe_replay),
+            "materialize_scale": float(1.0 if strict_safe_replay else spec.scale),
             "reuse_trials_root": path_label(reuse_trials_root) if reuse_trials_root else "",
             "face_ids": face_ids,
             "face_scores": face_score_entries(
@@ -1347,14 +1429,22 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             continue
         if bool(args.force) or not decision.is_file():
             alpha_path: Path | None = None
-            if bool(args.selector_fit_plan_alphas):
+            if bool(args.selector_fit_plan_alphas and not strict_safe_replay):
                 alpha_path = alpha_json_path(root, scene, spec)
                 alpha_cmd = fit_alpha_command(args, scene, spec, face_ids, alpha_path)
                 alpha_exit = run_command(alpha_cmd, gpu=int(args.gpu), log_path=scene_log, dry_run=bool(args.dry_run))
                 if alpha_exit != 0:
                     rows.append(decision_row(root, spec, scene, face_ids, alpha_exit, args))
                     continue
-            cmd = build_trial_command(args, scene, spec, face_ids, alpha_json=alpha_path)
+            cmd = build_trial_command(
+                args,
+                scene,
+                spec,
+                face_ids,
+                alpha_json=alpha_path,
+                materialize_face_filter=bool(not strict_safe_replay),
+                materialize_scale=1.0 if strict_safe_replay else None,
+            )
             exit_code = run_command(cmd, gpu=int(args.gpu), log_path=scene_log, dry_run=bool(args.dry_run))
             if exit_code != 0:
                 rows.append(decision_row(root, spec, scene, face_ids, exit_code, args))
@@ -1369,9 +1459,12 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
     selected = max(accepted, key=lambda row: float(row["trainval_balanced_delta"])) if accepted else None
     payload = {
         "scene": scene,
-        "plan_path": str(plan_path(args.plan_template, scene).relative_to(ROOT)),
+        "plan_path": path_label(plan_path(args.plan_template, scene)),
         "candidate_count": int(len(candidates)),
-        "trial_specs": [spec.label for spec in specs],
+        "strict_patchcert_plan": bool(strict_patchcert_plan),
+        "strict_safe_replay": bool(strict_safe_replay),
+        "trial_specs": [spec.label for spec in active_specs],
+        "requested_trial_specs": [spec.label for spec in specs],
         "selection_uses_test": False,
         "reuse_trials_root": path_label(reuse_trials_root) if reuse_trials_root else "",
         "georisk_geometry": geometry_meta if uses_georisk else {},

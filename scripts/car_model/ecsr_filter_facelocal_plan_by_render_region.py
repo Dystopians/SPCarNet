@@ -232,6 +232,8 @@ def _passes(
         reasons.append("no_render_region_carrier_overlap")
     if bool(args.require_positive_plan_proxy) and not proxy_positive:
         reasons.append("plan_policy_proxy_negative")
+    if not mapped:
+        return (not reasons), reasons
     if int(stats.get("regions", 0)) < int(args.min_regions):
         reasons.append(f"regions_below_{int(args.min_regions)}")
     if int(stats.get("changed_regions", 0)) < int(args.min_changed_regions):
@@ -280,6 +282,9 @@ def main() -> int:
             mapped=bool(matches),
             proxy_positive=proxy_positive,
         )
+        notes: list[str] = []
+        if not matches:
+            notes.append("render_region_unmapped_proxy_fallback")
         row = {
             "plan_carrier_id": carrier_id,
             "plan_faces": sorted(plan_faces),
@@ -290,10 +295,22 @@ def main() -> int:
             "plan_proxy_positive": bool(proxy_positive),
             "accepted": bool(passed),
             "decision_reasons": reasons,
+            "decision_notes": notes,
         }
         carrier_rows.append(row)
         if passed:
-            kept_rows.extend(rows)
+            for candidate_row in rows:
+                annotated = dict(candidate_row)
+                annotated["render_region_filter_decision"] = {
+                    "accepted": bool(passed),
+                    "mapped": bool(matches),
+                    "plan_carrier_id": carrier_id,
+                    "decision_reasons": reasons,
+                    "decision_notes": notes,
+                    "render_region_stats": stats,
+                    "matched_region_carriers": matches,
+                }
+                kept_rows.append(annotated)
 
     kept_carriers = {str(row.get("carrier_id", "")) for row in kept_rows}
     out_meta = dict(plan_meta)
@@ -315,6 +332,7 @@ def main() -> int:
                 "rejected_carriers": int(len(rows_by_plan_carrier) - len(kept_carriers)),
                 "max_region_matches_per_plan_carrier": int(args.max_region_matches_per_plan_carrier),
                 "drop_unmapped": bool(args.drop_unmapped),
+                "unmapped_policy": "reject" if bool(args.drop_unmapped) else "proxy_positive_pass_through",
                 "require_positive_plan_proxy": bool(args.require_positive_plan_proxy),
                 "thresholds": {
                     "min_regions": int(args.min_regions),
@@ -360,8 +378,8 @@ def main() -> int:
         f"- source plan: `{args.candidate_plan}`",
         f"- render-region objective: `{args.render_region_objective}`",
         "",
-        "| plan carrier | accepted | rows | faces | matched region carriers | regions | changed | mean balanced | mean dPSNR | tail balanced | max context reg | reasons |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| plan carrier | accepted | rows | faces | matched region carriers | regions | changed | mean balanced | mean dPSNR | tail balanced | max context reg | reasons | notes |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in carrier_rows:
         stats = row["render_region_stats"]
@@ -374,7 +392,8 @@ def main() -> int:
             f"{float(stats.get('mean_delta_core_psnr', math.nan)):+.9f} | "
             f"{float(stats.get('tail_core_balanced_delta', math.nan)):+.9f} | "
             f"{float(stats.get('max_context_mse_regression', math.nan)):.9g} | "
-            f"`{', '.join(row['decision_reasons']) if row['decision_reasons'] else 'pass'}` |"
+            f"`{', '.join(row['decision_reasons']) if row['decision_reasons'] else 'pass'}` | "
+            f"`{', '.join(row['decision_notes']) if row['decision_notes'] else 'none'}` |"
         )
     args.output_md.parent.mkdir(parents=True, exist_ok=True)
     args.output_md.write_text("\n".join(lines) + "\n", encoding="utf-8")

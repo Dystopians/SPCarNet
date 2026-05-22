@@ -8303,3 +8303,99 @@ objective, but it is still not a paper-level improvement. It mainly prevents
 bad/no-op carriers from being promoted; it does not yet create visible or
 statistically meaningful gains. Full details are in
 `docs/car_model/5-22-RenderVerifiedCarrierMaterialization-v3-Log.md`.
+
+## 2026-05-22 AutoVisual Render-Region Filtered v1 Launch
+
+Status: `RUNNING`.
+
+I converted the AutoVisual FaceLocal coordinator into a stricter fixed-policy
+route instead of another raw candidate scan:
+
+- default profile is now `visual_medium`;
+- default stages are `plan,filter,selector`;
+- the plan stage emits a raw-base train render-region objective;
+- the filter stage removes carriers that do not show train-render region change;
+- the selector consumes the filtered plan by default;
+- selector promotion now requires non-noise train-val thresholds.
+
+Implementation files:
+
+```text
+scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py
+scripts/car_model/ecsr_run_facelocal_coupled_selector.py
+docs/car_model/5-22-AutoVisual-RenderRegion-Filtered-v1-Log.md
+```
+
+Validation:
+
+```text
+py_compile passed for the two edited scripts.
+/tmp/ecsr_autovisual_visual_medium_filter_check2/pipeline_command_manifest.md
+```
+
+Running fixed-policy experiment:
+
+```text
+/data/peilincai/spcarnet_runs/autovisual_visual_medium_filter_v1b_20260522_flowers_bonsai
+```
+
+Control/ablation run:
+
+```text
+/data/peilincai/spcarnet_runs/autovisual_facelocal_v2_20260522/medium_flowers_bonsai_20260522_114533
+```
+
+Decision gate: only a non-noise held-out effective gain with no LPIPS regression
+counts as real progress. If the filtered route falls back or produces `1e-5`
+scale deltas, it is a safety/plumbing improvement but not a paper-level Phase-S
+breakthrough.
+
+## 2026-05-22 AutoVisual Render-Region Filtered v1 Completion
+
+Status: `COMPLETE_AS_INTERFACE_AND_SAFETY_FIX`,
+`NOT_COMPLETE_SCIENTIFICALLY`.
+
+Final v1d root:
+
+```text
+/data/peilincai/spcarnet_runs/autovisual_visual_medium_filter_v1d_strictsafe_20260522_flowers_bonsai
+```
+
+I fixed two concrete weaknesses found during the AutoVisual run:
+
+- the render-region filter no longer rejects every proxy-positive carrier just
+  because plan carrier IDs cannot be matched to prebuilt render-region carriers;
+- the coupled selector is now certification-aware. Strict PatchCert plans replay
+  as `strictfull_s1` with scale `1.0`, no face-id subset, and no alpha refit.
+
+Validation:
+
+```text
+py_compile passed for:
+scripts/car_model/ecsr_filter_facelocal_plan_by_render_region.py
+scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py
+scripts/car_model/ecsr_run_facelocal_coupled_selector.py
+
+dry-run confirmed no strict-plan face_ids/alpha/non-unit-scale replay:
+/tmp/ecsr_selector_strictsafe_dry_20260522/flowers/facelocal_coupled_selector.log
+```
+
+Real W&B-online validation on `flowers,bonsai` completed on GPU 7:
+
+| scene | strict replay | inner gate | selector pass | selected | train-val dPSNR | train-val balanced | report-only test dPSNR | report-only test dLPIPS |
+|---|---|---:|---:|---|---:|---:|---:|---:|
+| flowers | strictfull_s1 | true | false | phasej fallback | +0.000005722 | +0.000001550 | +0.000000000 | +0.000000000 |
+| bonsai | strictfull_s1 | true | false | phasej fallback | +0.000007629 | +0.000010610 | +0.000000000 | +0.000000045 |
+
+Conclusion: this fixed a real legality/reliability bug, but it did not solve
+the scientific bottleneck. Both strictfull trials were accepted by the inner
+gate but rejected by the outer selector because gains were below non-noise
+thresholds. Effective held-out test delta is zero after fallback on both scenes.
+The current face-local certified residual representation still lacks enough
+effect size for visible or paper-level gains.
+
+Full details:
+
+```text
+docs/car_model/5-22-AutoVisual-RenderRegion-Filtered-v1-Log.md
+```

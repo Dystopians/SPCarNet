@@ -34,6 +34,10 @@ DEFAULT_OUTPUT_ROOT = "outputs/carnet/meshsplatopt/ecsr_autovisual_facelocal_v1"
 DEFAULT_DATASET_ROOT = "/data/peilincai/mesh_datasets/mipnerf360"
 DEFAULT_PHASEJ_TEST_METHOD = "ours_26000_phasej_guarded_adaptedge_ela"
 DEFAULT_PHASEJ_TRAINVAL_METHOD = "ours_26000_phasej_trainval_gate_rendercalib_v1"
+DEFAULT_RENDER_REGION_CARRIER_TEMPLATE = (
+    "outputs/carnet/meshsplatopt/ecsr_phase_s/render_visible_region_carriers_20260516/"
+    "{scene}/render_visible_region_carriers.json"
+)
 
 
 PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
@@ -43,11 +47,17 @@ PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
         "delta_top_k": 128,
         "delta_steps": 20,
         "delta_max_total_samples": 20000,
+        "delta_strength": 0.18,
+        "delta_max_abs_rgb": 0.014,
         "delta_max_faces_to_apply": 16,
         "delta_patch_cert_max_faces_per_seed": 4,
         "trial_specs": "top1x0.5,score1x0.5",
+        "selector_alpha_max": 1.0,
         "selector_alpha_steps": 8,
         "selector_alpha_max_total_samples": 20000,
+        "selector_min_trainval_psnr_gain": 0.0,
+        "selector_min_trainval_balanced_delta": 0.0,
+        "selector_tail_min_trainval_balanced_delta": 0.0,
     },
     "balanced": {
         "evidence_max_views": 12,
@@ -55,11 +65,35 @@ PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
         "delta_top_k": 4096,
         "delta_steps": 800,
         "delta_max_total_samples": 320000,
+        "delta_strength": 0.18,
+        "delta_max_abs_rgb": 0.014,
         "delta_max_faces_to_apply": 128,
         "delta_patch_cert_max_faces_per_seed": 6,
         "trial_specs": "georisk2x0.75,patchrisk2x0.75,patchrisk4x0.5,risk4x0.5",
+        "selector_alpha_max": 1.0,
         "selector_alpha_steps": 450,
         "selector_alpha_max_total_samples": 240000,
+        "selector_min_trainval_psnr_gain": 0.0,
+        "selector_min_trainval_balanced_delta": 0.0,
+        "selector_tail_min_trainval_balanced_delta": 1.8e-5,
+    },
+    "visual_medium": {
+        "evidence_max_views": 12,
+        "evidence_view_stride": 4,
+        "delta_top_k": 4096,
+        "delta_steps": 800,
+        "delta_max_total_samples": 320000,
+        "delta_strength": 0.30,
+        "delta_max_abs_rgb": 0.028,
+        "delta_max_faces_to_apply": 128,
+        "delta_patch_cert_max_faces_per_seed": 6,
+        "trial_specs": "georisk2x0.75,patchrisk2x0.75,patchrisk4x0.5,risk4x0.5",
+        "selector_alpha_max": 1.0,
+        "selector_alpha_steps": 450,
+        "selector_alpha_max_total_samples": 240000,
+        "selector_min_trainval_psnr_gain": 2.0e-5,
+        "selector_min_trainval_balanced_delta": 5.0e-5,
+        "selector_tail_min_trainval_balanced_delta": 5.0e-5,
     },
     "strict": {
         "evidence_max_views": 16,
@@ -67,13 +101,21 @@ PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
         "delta_top_k": 8192,
         "delta_steps": 1000,
         "delta_max_total_samples": 420000,
+        "delta_strength": 0.18,
+        "delta_max_abs_rgb": 0.014,
         "delta_max_faces_to_apply": 192,
         "delta_patch_cert_max_faces_per_seed": 8,
         "trial_specs": "georisk2x0.75,patchrisk2x0.75,patchrisk4x0.5,patchrisk6x0.35",
+        "selector_alpha_max": 1.0,
         "selector_alpha_steps": 600,
         "selector_alpha_max_total_samples": 300000,
+        "selector_min_trainval_psnr_gain": 2.0e-5,
+        "selector_min_trainval_balanced_delta": 5.0e-5,
+        "selector_tail_min_trainval_balanced_delta": 5.0e-5,
     },
 }
+
+PROFILE_FIELD_NAMES = tuple(next(iter(PROFILE_DEFAULTS.values())).keys())
 
 
 @dataclass
@@ -91,11 +133,13 @@ class CommandRecord:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scenes", default="bicycle")
-    parser.add_argument("--profile", choices=sorted(PROFILE_DEFAULTS), default="balanced")
+    parser.add_argument("--profile", choices=sorted(PROFILE_DEFAULTS), default="visual_medium")
     parser.add_argument("--policy_root", default=DEFAULT_POLICY_ROOT)
     parser.add_argument("--dataset_root", default=DEFAULT_DATASET_ROOT)
     parser.add_argument("--output_root", default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--plan_template", default="")
+    parser.add_argument("--filtered_plan_template", default="")
+    parser.add_argument("--selector_plan_template", default="")
     parser.add_argument("--evidence_root", default="")
     parser.add_argument("--iteration", type=int, default=26000)
     parser.add_argument("--gpu", type=int, default=-1)
@@ -104,9 +148,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pipeline_label", default="autovisual_facelocal_v1")
     parser.add_argument(
         "--stages",
-        default="plan,selector",
-        help="Comma/space separated stages from: plan, selector. Summary is always written.",
+        default="plan,filter,selector",
+        help="Comma/space separated stages from: plan, filter, selector. Summary is always written.",
     )
+    parser.add_argument("--use_filtered_plan_for_selector", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--dry_run", action="store_true")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--continue_on_error", action="store_true")
@@ -124,8 +169,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--delta_max_samples_per_face_view", type=int, default=64)
     parser.add_argument("--delta_max_total_samples", type=int, default=None)
     parser.add_argument("--delta_high_error_quantile", type=float, default=0.65)
-    parser.add_argument("--delta_strength", type=float, default=0.18)
-    parser.add_argument("--delta_max_abs_rgb", type=float, default=0.014)
+    parser.add_argument("--delta_strength", type=float, default=None)
+    parser.add_argument("--delta_max_abs_rgb", type=float, default=None)
     parser.add_argument("--delta_sh_degree", type=int, choices=(1, 2, 3), default=3)
     parser.add_argument("--delta_lambda_mag", type=float, default=0.02)
     parser.add_argument("--delta_lambda_sh1_mag", type=float, default=0.05)
@@ -183,11 +228,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no_seed_rescue", action="store_true")
 
     parser.add_argument("--trial_specs", default="")
-    parser.add_argument("--selector_alpha_max", type=float, default=1.0)
+    parser.add_argument("--selector_alpha_max", type=float, default=None)
     parser.add_argument("--selector_alpha_steps", type=int, default=None)
     parser.add_argument("--selector_alpha_lr", type=float, default=0.06)
     parser.add_argument("--selector_alpha_max_total_samples", type=int, default=None)
     parser.add_argument("--selector_alpha_device", default="cuda")
+    parser.add_argument("--selector_min_trainval_psnr_gain", type=float, default=None)
+    parser.add_argument("--selector_min_trainval_balanced_delta", type=float, default=None)
+    parser.add_argument("--selector_tail_min_trainval_balanced_delta", type=float, default=None)
     parser.add_argument("--selector_tail_stable_promotion", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--selector_tail_max_balanced_cvar_loss", type=float, default=0.0012)
     parser.add_argument("--selector_tail_min_mean_to_cvar_ratio", type=float, default=0.05)
@@ -198,6 +246,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gate_max_ssim_regression", type=float, default=5e-5)
     parser.add_argument("--gate_max_lpips_regression", type=float, default=1.5e-4)
     parser.add_argument("--gate_min_balanced_delta", type=float, default=0.0)
+
+    parser.add_argument("--render_region_carrier_template", default=DEFAULT_RENDER_REGION_CARRIER_TEMPLATE)
+    parser.add_argument("--filter_max_region_matches_per_plan_carrier", type=int, default=3)
+    parser.add_argument("--filter_min_regions", type=int, default=1)
+    parser.add_argument("--filter_min_changed_regions", type=int, default=1)
+    parser.add_argument("--filter_min_changed_fraction", type=float, default=0.10)
+    parser.add_argument("--filter_min_mean_core_balanced_delta", type=float, default=0.0)
+    parser.add_argument("--filter_min_mean_delta_psnr", type=float, default=0.0)
+    parser.add_argument("--filter_min_tail_core_balanced_delta", type=float, default=-1.0e-8)
+    parser.add_argument("--filter_max_context_mse_regression", type=float, default=1.0e-6)
+    parser.add_argument("--filter_drop_unmapped", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--filter_require_positive_plan_proxy", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--filter_train_render_region_max_regions", type=int, default=64)
+    parser.add_argument("--filter_train_render_region_min_pixels", type=int, default=128)
+    parser.add_argument("--filter_train_render_region_min_crop_size", type=int, default=32)
+    parser.add_argument("--filter_train_render_region_context_pad", type=int, default=16)
+    parser.add_argument("--filter_train_render_region_tail_fraction", type=float, default=0.25)
+    parser.add_argument("--filter_train_render_region_skip_lpips", action=argparse.BooleanOptionalAction, default=False)
     args = parser.parse_args()
 
     if int(args.delta_crossfold_folds) <= 1:
@@ -208,6 +274,23 @@ def parse_args() -> argparse.Namespace:
         parser.error("--delta_patch_cert_rings must be positive")
     if int(args.delta_patch_cert_carrier_holdout_min_passing_groups) <= 0:
         parser.error("--delta_patch_cert_carrier_holdout_min_passing_groups must be positive")
+    if int(args.filter_max_region_matches_per_plan_carrier) <= 0:
+        parser.error("--filter_max_region_matches_per_plan_carrier must be positive")
+    for name in ("filter_min_regions", "filter_min_changed_regions"):
+        if int(getattr(args, name)) < 0:
+            parser.error(f"--{name} must be >= 0")
+    if not 0.0 <= float(args.filter_min_changed_fraction) <= 1.0:
+        parser.error("--filter_min_changed_fraction must be in [0, 1]")
+    if int(args.filter_train_render_region_max_regions) <= 0:
+        parser.error("--filter_train_render_region_max_regions must be > 0")
+    if int(args.filter_train_render_region_min_pixels) <= 0:
+        parser.error("--filter_train_render_region_min_pixels must be > 0")
+    if int(args.filter_train_render_region_min_crop_size) <= 0:
+        parser.error("--filter_train_render_region_min_crop_size must be > 0")
+    if int(args.filter_train_render_region_context_pad) < 0:
+        parser.error("--filter_train_render_region_context_pad must be >= 0")
+    if not 0.0 < float(args.filter_train_render_region_tail_fraction) <= 1.0:
+        parser.error("--filter_train_render_region_tail_fraction must be in (0, 1]")
     return args
 
 
@@ -218,13 +301,17 @@ def profile_value(args: argparse.Namespace, name: str) -> Any:
     return PROFILE_DEFAULTS[str(args.profile)][name]
 
 
+def resolved_profile_values(args: argparse.Namespace) -> dict[str, Any]:
+    return {name: profile_value(args, name) for name in PROFILE_FIELD_NAMES}
+
+
 def scene_list(raw: str) -> list[str]:
     return [item.strip() for item in str(raw).replace(",", " ").split() if item.strip()]
 
 
 def stage_set(raw: str) -> set[str]:
     stages = {item.strip() for item in str(raw).replace(",", " ").split() if item.strip()}
-    allowed = {"plan", "selector"}
+    allowed = {"plan", "filter", "selector"}
     unknown = stages - allowed
     if unknown:
         raise ValueError(f"unknown stages: {', '.join(sorted(unknown))}")
@@ -264,8 +351,30 @@ def plan_template(args: argparse.Namespace) -> str:
     return str(output_root(args) / "candidate_plans" / "{scene}" / "facelocal_visual_candidate_plan.json")
 
 
+def filtered_plan_template(args: argparse.Namespace) -> str:
+    if str(args.filtered_plan_template).strip():
+        return str(resolve_path(args.filtered_plan_template))
+    return str(output_root(args) / "filtered_candidate_plans" / "{scene}" / "facelocal_visual_candidate_plan_filtered.json")
+
+
+def selector_plan_template(args: argparse.Namespace) -> str:
+    if str(args.selector_plan_template).strip():
+        return str(resolve_path(args.selector_plan_template))
+    if bool(args.use_filtered_plan_for_selector):
+        return filtered_plan_template(args)
+    return plan_template(args)
+
+
 def format_plan_path(args: argparse.Namespace, scene: str) -> Path:
     return Path(plan_template(args).format(scene=scene))
+
+
+def format_filtered_plan_path(args: argparse.Namespace, scene: str) -> Path:
+    return Path(filtered_plan_template(args).format(scene=scene))
+
+
+def format_region_carrier_path(args: argparse.Namespace, scene: str) -> Path:
+    return Path(str(resolve_path(args.render_region_carrier_template)).format(scene=scene))
 
 
 def command_log(root: Path, stage: str, scene: str) -> Path:
@@ -362,9 +471,9 @@ def plan_command(args: argparse.Namespace, scene: str) -> CommandRecord:
         "--delta_high_error_quantile",
         str(args.delta_high_error_quantile),
         "--delta_strength",
-        str(args.delta_strength),
+        str(profile_value(args, "delta_strength")),
         "--delta_max_abs_rgb",
-        str(args.delta_max_abs_rgb),
+        str(profile_value(args, "delta_max_abs_rgb")),
         "--delta_lambda_mag",
         str(args.delta_lambda_mag),
         "--delta_lambda_sh1_mag",
@@ -480,6 +589,34 @@ def plan_command(args: argparse.Namespace, scene: str) -> CommandRecord:
         str(args.phasej_test_method),
         "--phasej_trainval_method",
         str(args.phasej_trainval_method),
+        "--train_render_region_gate_enable",
+        "--train_render_region_carrier_json",
+        str(args.render_region_carrier_template),
+        "--train_render_region_eval_source",
+        "raw_base",
+        "--train_render_region_max_regions",
+        str(args.filter_train_render_region_max_regions),
+        "--train_render_region_min_pixels",
+        str(args.filter_train_render_region_min_pixels),
+        "--train_render_region_min_crop_size",
+        str(args.filter_train_render_region_min_crop_size),
+        "--train_render_region_context_pad",
+        str(args.filter_train_render_region_context_pad),
+        "--train_render_region_tail_fraction",
+        str(args.filter_train_render_region_tail_fraction),
+        "--train_render_region_min_regions",
+        "0",
+        "--train_render_region_min_changed_regions",
+        "0",
+        "--train_render_region_min_changed_fraction",
+        "0.0",
+        "--train_render_region_min_core_balanced_delta=-1e30",
+        "--train_render_region_min_core_psnr_delta=-1e30",
+        "--train_render_region_min_tail_cvar_delta=-1e30",
+        "--train_render_region_max_context_mse_regression",
+        "1e30",
+        "--train_render_region_max_negative_fraction",
+        "1.0",
         "--gate_min_psnr_gain",
         str(args.gate_min_psnr_gain),
         "--gate_max_ssim_regression",
@@ -499,6 +636,10 @@ def plan_command(args: argparse.Namespace, scene: str) -> CommandRecord:
         command.append("--delta_shared_residual_field")
     else:
         command.append("--no-delta_shared_residual_field")
+    if bool(args.filter_train_render_region_skip_lpips):
+        command.append("--train_render_region_skip_lpips")
+    else:
+        command.append("--no-train_render_region_skip_lpips")
     if not bool(args.no_seed_rescue):
         command.extend(
             [
@@ -520,8 +661,70 @@ def plan_command(args: argparse.Namespace, scene: str) -> CommandRecord:
         log_path=str(command_log(root, "plan", scene)),
         output_paths={
             "candidate_plan": str(plan_path),
+            "render_region_carrier_json": str(format_region_carrier_path(args, scene)),
+            "train_render_region_objective_raw_base": str(plan_run_root / scene / "train_render_region_objective_raw_base.json"),
             "evidence_dir": str(evidence_root(args) / scene),
             "plan_generation_root": str(plan_run_root / scene),
+        },
+    )
+
+
+def filter_command(args: argparse.Namespace, scene: str) -> CommandRecord:
+    root = output_root(args)
+    plan_path = format_plan_path(args, scene)
+    filtered_path = format_filtered_plan_path(args, scene)
+    summary_path = filtered_path.with_name("filter_summary.json")
+    md_path = filtered_path.with_name("filter_summary.md")
+    objective_path = root / "plan_generation" / scene / "train_render_region_objective_raw_base.json"
+    command = [
+        sys.executable,
+        "scripts/car_model/ecsr_filter_facelocal_plan_by_render_region.py",
+        "--scene",
+        scene,
+        "--candidate_plan",
+        str(plan_path),
+        "--render_region_objective",
+        str(objective_path),
+        "--carrier_json",
+        str(format_region_carrier_path(args, scene)),
+        "--output_plan",
+        str(filtered_path),
+        "--output_md",
+        str(md_path),
+        "--output_json",
+        str(summary_path),
+        "--max_region_matches_per_plan_carrier",
+        str(args.filter_max_region_matches_per_plan_carrier),
+        "--min_regions",
+        str(args.filter_min_regions),
+        "--min_changed_regions",
+        str(args.filter_min_changed_regions),
+        "--min_changed_fraction",
+        str(args.filter_min_changed_fraction),
+        f"--min_mean_core_balanced_delta={args.filter_min_mean_core_balanced_delta}",
+        f"--min_mean_delta_psnr={args.filter_min_mean_delta_psnr}",
+        f"--min_tail_core_balanced_delta={args.filter_min_tail_core_balanced_delta}",
+        "--max_context_mse_regression",
+        str(args.filter_max_context_mse_regression),
+    ]
+    command.append("--drop_unmapped" if bool(args.filter_drop_unmapped) else "--no-drop_unmapped")
+    command.append(
+        "--require_positive_plan_proxy"
+        if bool(args.filter_require_positive_plan_proxy)
+        else "--no-require_positive_plan_proxy"
+    )
+    return CommandRecord(
+        stage="filter",
+        scene=scene,
+        command=command,
+        log_path=str(command_log(root, "filter", scene)),
+        output_paths={
+            "raw_candidate_plan": str(plan_path),
+            "filtered_candidate_plan": str(filtered_path),
+            "filter_summary": str(summary_path),
+            "filter_summary_md": str(md_path),
+            "render_region_objective": str(objective_path),
+            "render_region_carrier_json": str(format_region_carrier_path(args, scene)),
         },
     )
 
@@ -539,7 +742,7 @@ def selector_command(args: argparse.Namespace, scenes: list[str]) -> CommandReco
         "--output_root",
         str(root / "selector"),
         "--plan_template",
-        plan_template(args),
+        selector_plan_template(args),
         "--evidence_root",
         str(evidence_root(args)),
         "--trial_specs",
@@ -552,7 +755,7 @@ def selector_command(args: argparse.Namespace, scenes: list[str]) -> CommandReco
         str(args.phasej_trainval_method),
         "--selector_fit_plan_alphas",
         "--selector_alpha_max",
-        str(args.selector_alpha_max),
+        str(profile_value(args, "selector_alpha_max")),
         "--selector_alpha_steps",
         str(profile_value(args, "selector_alpha_steps")),
         "--selector_alpha_lr",
@@ -561,6 +764,12 @@ def selector_command(args: argparse.Namespace, scenes: list[str]) -> CommandReco
         str(profile_value(args, "selector_alpha_max_total_samples")),
         "--selector_alpha_device",
         str(args.selector_alpha_device),
+        "--selector_min_trainval_psnr_gain",
+        str(profile_value(args, "selector_min_trainval_psnr_gain")),
+        "--selector_min_trainval_balanced_delta",
+        str(profile_value(args, "selector_min_trainval_balanced_delta")),
+        "--selector_tail_min_trainval_balanced_delta",
+        str(profile_value(args, "selector_tail_min_trainval_balanced_delta")),
         "--selector_tail_max_balanced_cvar_loss",
         str(args.selector_tail_max_balanced_cvar_loss),
         "--selector_tail_min_mean_to_cvar_ratio",
@@ -592,6 +801,7 @@ def selector_command(args: argparse.Namespace, scenes: list[str]) -> CommandReco
         output_paths={
             "selector_root": str(root / "selector"),
             "selector_summary": str(root / "selector" / "coupled_selector_summary.json"),
+            "selector_plan_template": selector_plan_template(args),
         },
     )
 
@@ -646,10 +856,15 @@ def write_manifest(args: argparse.Namespace, records: list[CommandRecord], scene
         "pipeline": "ecsr_autovisual_facelocal_pipeline",
         "pipeline_label": str(args.pipeline_label),
         "profile": str(args.profile),
+        "profile_defaults": PROFILE_DEFAULTS[str(args.profile)],
+        "resolved_profile_args": resolved_profile_values(args),
         "dry_run": bool(args.dry_run),
         "selection_uses_test": False,
         "scenes": scenes,
         "plan_template": plan_template(args),
+        "filtered_plan_template": filtered_plan_template(args),
+        "selector_plan_template": selector_plan_template(args),
+        "render_region_carrier_template": str(args.render_region_carrier_template),
         "evidence_root": str(evidence_root(args)),
         "commands": [asdict(record) for record in records],
     }
@@ -659,10 +874,16 @@ def write_manifest(args: argparse.Namespace, records: list[CommandRecord], scene
         "",
         f"- label: `{args.pipeline_label}`",
         f"- profile: `{args.profile}`",
+        f"- delta strength: `{profile_value(args, 'delta_strength')}`",
+        f"- delta max abs rgb: `{profile_value(args, 'delta_max_abs_rgb')}`",
+        f"- selector alpha max: `{profile_value(args, 'selector_alpha_max')}`",
         f"- dry run: `{str(bool(args.dry_run)).lower()}`",
         f"- selection uses test: `false`",
         f"- scenes: `{', '.join(scenes)}`",
         f"- plan template: `{rel(plan_template(args))}`",
+        f"- filtered plan template: `{rel(filtered_plan_template(args))}`",
+        f"- selector plan template: `{rel(selector_plan_template(args))}`",
+        f"- render-region carrier template: `{rel(args.render_region_carrier_template)}`",
         f"- evidence root: `{rel(evidence_root(args))}`",
         "",
         "| stage | scene | exit | log | command |",
@@ -684,9 +905,15 @@ def write_summary(args: argparse.Namespace, records: list[CommandRecord], scenes
         "pipeline": "ecsr_autovisual_facelocal_pipeline",
         "pipeline_label": str(args.pipeline_label),
         "profile": str(args.profile),
+        "profile_defaults": PROFILE_DEFAULTS[str(args.profile)],
+        "resolved_profile_args": resolved_profile_values(args),
         "dry_run": bool(args.dry_run),
         "selection_uses_test": False,
         "command_manifest": rel(root / "pipeline_command_manifest.json"),
+        "plan_template": plan_template(args),
+        "filtered_plan_template": filtered_plan_template(args),
+        "selector_plan_template": selector_plan_template(args),
+        "render_region_carrier_template": str(args.render_region_carrier_template),
         "selector_summary": rel(root / "selector" / "coupled_selector_summary.json"),
         "selector_summary_present": bool(selector_payload),
         "command_exit_codes": [
@@ -704,8 +931,12 @@ def write_summary(args: argparse.Namespace, records: list[CommandRecord], scenes
         "",
         f"- label: `{args.pipeline_label}`",
         f"- profile: `{args.profile}`",
+        f"- delta strength: `{profile_value(args, 'delta_strength')}`",
+        f"- delta max abs rgb: `{profile_value(args, 'delta_max_abs_rgb')}`",
+        f"- selector alpha max: `{profile_value(args, 'selector_alpha_max')}`",
         f"- dry run: `{str(bool(args.dry_run)).lower()}`",
         f"- command manifest: `{rel(root / 'pipeline_command_manifest.json')}`",
+        f"- selector plan template: `{rel(selector_plan_template(args))}`",
         "",
         "| scene | decision present | accepted | selected trial | train-val balanced | effective report-only dPSNR | dSSIM | dLPIPS |",
         "|---|---:|---:|---|---:|---:|---:|---:|",
@@ -758,6 +989,14 @@ def main() -> int:
                 exit_code=0,
             )
         )
+
+    if "filter" in stages:
+        for scene in scenes:
+            record = filter_command(args, scene)
+            if format_filtered_plan_path(args, scene).is_file() and not bool(args.force):
+                record.skipped = True
+                record.skip_reason = "filtered candidate plan exists; use --force to rebuild"
+            records.append(run_command(record, args))
 
     if "selector" in stages:
         records.append(run_command(selector_command(args, scenes), args))
