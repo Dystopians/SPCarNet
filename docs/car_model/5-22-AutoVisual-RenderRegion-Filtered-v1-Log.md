@@ -228,3 +228,17 @@ The next method step should not be another threshold sweep. The evidence points
 to insufficient effect size from the current face-local residual representation.
 The next serious attempt should change representation capacity or geometry
 coupling while preserving the strict certificate semantics introduced here.
+
+## 2026-06-20 Follow-Up
+
+The next attempt is tracked here:
+
+```text
+docs/car_model/5-22-RepresentationField-Pivot-Log.md
+```
+
+It introduces `field_smoke` and `field_medium` profiles with shared residual
+field and field-basis PatchCert replay. The first smoke validates that the new
+representation path is non-empty and strict-selector compatible, but its
+image-level gains remain noise-scale. The required next gate is a W&B-online
+`field_medium` run on `flowers,bonsai`.

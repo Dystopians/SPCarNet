@@ -15,6 +15,7 @@ No held-out test images or metrics are read.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 from collections import defaultdict
@@ -37,9 +38,50 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_mean_core_balanced_delta", type=float, default=0.0)
     parser.add_argument("--min_mean_delta_psnr", type=float, default=-1.0e30)
     parser.add_argument("--min_tail_core_balanced_delta", type=float, default=-1.0e-8)
+    parser.add_argument("--max_negative_core_balanced_fraction", type=float, default=1.0)
     parser.add_argument("--max_context_mse_regression", type=float, default=1.0e-6)
+    parser.add_argument(
+        "--min_mean_crop_abs_diff",
+        type=float,
+        default=0.0,
+        help="Reject carriers whose average train-render crop change is below this normalized RGB threshold.",
+    )
+    parser.add_argument(
+        "--min_max_crop_abs_diff",
+        type=float,
+        default=0.0,
+        help="Reject carriers whose maximum train-render crop change is below this normalized RGB threshold.",
+    )
     parser.add_argument("--drop_unmapped", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--require_positive_plan_proxy", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--tail_safe_shrink_on_tail_fail", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--tail_safe_shrink_min_scale", type=float, default=0.5)
+    parser.add_argument(
+        "--tail_safe_shrink_min_raw_scale",
+        type=float,
+        default=0.0,
+        help=(
+            "Reject tail-failure rescues when the analytic mean/tail shrink ratio "
+            "falls below this value before applying --tail_safe_shrink_min_scale."
+        ),
+    )
+    parser.add_argument(
+        "--rollback_severe_tail_fail",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Reject whole plan carriers whose train-render tail CVaR deficit exceeds "
+            "--rollback_tail_min_cvar_loss instead of admitting them through shrink."
+        ),
+    )
+    parser.add_argument(
+        "--rollback_tail_min_cvar_loss",
+        type=float,
+        default=0.0,
+        help="Positive train-render tail CVaR deficit required before severe-tail rollback is applied.",
+    )
+    parser.add_argument("--risk_safe_shrink_on_train_risk_fail", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--risk_safe_shrink_min_scale", type=float, default=0.25)
     parser.add_argument("--scene", default="")
     args = parser.parse_args()
     if int(args.max_region_matches_per_plan_carrier) <= 0:
@@ -54,14 +96,40 @@ def parse_args() -> argparse.Namespace:
         "min_mean_delta_psnr",
         "min_tail_core_balanced_delta",
         "max_context_mse_regression",
+        "max_negative_core_balanced_fraction",
+        "min_mean_crop_abs_diff",
+        "min_max_crop_abs_diff",
     ):
         if not math.isfinite(float(getattr(args, name))):
             parser.error(f"--{name} must be finite")
+    for name in ("min_mean_crop_abs_diff", "min_max_crop_abs_diff"):
+        if float(getattr(args, name)) < 0.0:
+            parser.error(f"--{name} must be >= 0")
+    if not 0.0 <= float(args.max_negative_core_balanced_fraction) <= 1.0:
+        parser.error("--max_negative_core_balanced_fraction must be in [0, 1]")
+    if not math.isfinite(float(args.tail_safe_shrink_min_scale)) or not 0.0 < float(args.tail_safe_shrink_min_scale) <= 1.0:
+        parser.error("--tail_safe_shrink_min_scale must be in (0, 1]")
+    if not math.isfinite(float(args.tail_safe_shrink_min_raw_scale)) or not 0.0 <= float(args.tail_safe_shrink_min_raw_scale) <= 1.0:
+        parser.error("--tail_safe_shrink_min_raw_scale must be in [0, 1]")
+    if not math.isfinite(float(args.rollback_tail_min_cvar_loss)) or float(args.rollback_tail_min_cvar_loss) < 0.0:
+        parser.error("--rollback_tail_min_cvar_loss must be finite and >= 0")
+    if not math.isfinite(float(args.risk_safe_shrink_min_scale)) or not 0.0 < float(args.risk_safe_shrink_min_scale) <= 1.0:
+        parser.error("--risk_safe_shrink_min_scale must be in (0, 1]")
     return args
 
 
 def _read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _sha256_file(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def _finite(values: list[float]) -> list[float]:
@@ -79,6 +147,71 @@ def _tail_cvar(values: list[float], fraction: float = 0.25) -> float:
         return math.nan
     count = max(1, int(math.ceil(float(fraction) * len(vals))))
     return float(sum(vals[:count]) / count)
+
+
+def _num(value: Any, default: float = math.nan) -> float:
+    try:
+        out = float(value)
+    except Exception:
+        return default
+    return out if math.isfinite(out) else default
+
+
+def _row_pixel_count(row: dict[str, Any]) -> float:
+    value = _num(row.get("pixels"), math.nan)
+    if math.isfinite(value) and value > 0.0:
+        return float(value)
+    bbox = row.get("bbox_xyxy", row.get("bbox", []))
+    if isinstance(bbox, list) and len(bbox) >= 4:
+        width = max(0.0, _num(bbox[2], 0.0) - _num(bbox[0], 0.0))
+        height = max(0.0, _num(bbox[3], 0.0) - _num(bbox[1], 0.0))
+        area = width * height
+        if area > 0.0:
+            return float(area)
+    return 0.0
+
+
+def _row_changed_pixel_count(row: dict[str, Any]) -> float:
+    pixels = _row_pixel_count(row)
+    value = _num(row.get("crop_nonzero_pixels"), math.nan)
+    if math.isfinite(value) and value >= 0.0:
+        return float(min(value, pixels)) if pixels > 0.0 else float(value)
+    fraction = _num(row.get("crop_nonzero_fraction"), math.nan)
+    if math.isfinite(fraction) and fraction >= 0.0:
+        return float(pixels * min(fraction, 1.0))
+    return pixels if bool(row.get("crop_changed", False)) else 0.0
+
+
+def _row_frame_pixel_count(row: dict[str, Any]) -> float:
+    value = _num(row.get("frame_pixels"), math.nan)
+    if math.isfinite(value) and value > 0.0:
+        return float(value)
+    width = _num(row.get("image_width"), math.nan)
+    height = _num(row.get("image_height"), math.nan)
+    if math.isfinite(width) and math.isfinite(height) and width > 0.0 and height > 0.0:
+        return float(width * height)
+    return 0.0
+
+
+def _full_frame_denominator(rows: list[dict[str, Any]]) -> float:
+    frame_pixels_by_view: dict[str, float] = {}
+    for row in rows:
+        view = str(row.get("view", row.get("view_name", "")))
+        frame_pixels = _row_frame_pixel_count(row)
+        if view and frame_pixels > 0.0:
+            frame_pixels_by_view.setdefault(view, frame_pixels)
+    return float(sum(frame_pixels_by_view.values())) if frame_pixels_by_view else math.nan
+
+
+def _weighted_mean(values: list[tuple[float, float]]) -> float:
+    numerator = 0.0
+    denominator = 0.0
+    for value, weight in values:
+        if not math.isfinite(float(value)) or not math.isfinite(float(weight)) or float(weight) <= 0.0:
+            continue
+        numerator += float(value) * float(weight)
+        denominator += float(weight)
+    return float(numerator / denominator) if denominator > 0.0 else math.nan
 
 
 def _as_int_set(values: Any) -> set[int]:
@@ -202,21 +335,110 @@ def _aggregate_region_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     dssim = [float(row.get("delta_core_ssim", math.nan)) for row in rows]
     dlpips = [float(row.get("delta_core_lpips", math.nan)) for row in rows]
     context = [float(row.get("context_mse_regression", math.nan)) for row in rows]
+    unique_views = {str(row.get("view", row.get("view_name", ""))) for row in rows}
+    unique_views.discard("")
+    changed_views = {str(row.get("view", row.get("view_name", ""))) for row in changed}
+    changed_views.discard("")
+    total_pixels = float(sum(_row_pixel_count(row) for row in rows))
+    changed_pixels = float(sum(_row_changed_pixel_count(row) for row in changed))
+    full_frame_pixels = _full_frame_denominator(rows)
+    full_frame_changed_fraction = (
+        changed_pixels / full_frame_pixels
+        if math.isfinite(full_frame_pixels) and full_frame_pixels > 0.0
+        else math.nan
+    )
+    changed_pixel_fraction = changed_pixels / total_pixels if total_pixels > 0.0 else math.nan
+    area_weighted_balanced = _weighted_mean(
+        [(float(row.get("core_balanced_delta", math.nan)), _row_pixel_count(row)) for row in rows]
+    )
+    full_frame_visibility_adjusted = (
+        area_weighted_balanced * full_frame_changed_fraction
+        if math.isfinite(area_weighted_balanced) and math.isfinite(full_frame_changed_fraction)
+        else math.nan
+    )
     return {
         "regions": int(len(rows)),
         "changed_regions": int(len(changed)),
         "changed_fraction": float(len(changed)) / max(float(len(rows)), 1.0),
+        "unique_views": int(len(unique_views)),
+        "changed_unique_views": int(len(changed_views)),
+        "total_pixels": total_pixels,
+        "changed_pixels": changed_pixels,
+        "changed_pixel_fraction": changed_pixel_fraction,
+        "full_frame_denominator_pixels": full_frame_pixels,
+        "full_frame_changed_pixel_fraction": full_frame_changed_fraction,
         "mean_core_balanced_delta": _mean(balanced),
+        "area_weighted_core_balanced_delta": area_weighted_balanced,
+        "full_frame_visibility_adjusted_delta": full_frame_visibility_adjusted,
         "mean_delta_core_psnr": _mean(dpsnr),
         "mean_delta_core_ssim": _mean(dssim),
         "mean_delta_core_lpips": _mean(dlpips),
         "tail_core_balanced_delta": _tail_cvar(balanced, 0.25),
+        "negative_core_balanced_fraction": (
+            float(sum(1 for value in _finite(balanced) if value < 0.0)) / max(float(len(_finite(balanced))), 1.0)
+        ),
         "max_context_mse_regression": max(_finite(context), default=math.nan),
         "max_crop_abs_diff": max(
             _finite([float(row.get("crop_max_abs_diff", math.nan)) for row in rows]),
             default=math.nan,
         ),
         "mean_crop_abs_diff": _mean([float(row.get("crop_mean_abs_diff", math.nan)) for row in rows]),
+    }
+
+
+def _tail_cvar_deficit(stats: dict[str, Any], args: argparse.Namespace) -> float:
+    tail_delta = float(stats.get("tail_core_balanced_delta", math.nan))
+    min_tail = float(args.min_tail_core_balanced_delta)
+    if not (math.isfinite(tail_delta) and math.isfinite(min_tail)):
+        return 0.0
+    return float(max(0.0, min_tail - tail_delta))
+
+
+def _bad_tail_attribution(
+    rows: list[dict[str, Any]],
+    *,
+    plan_faces: set[int],
+    region_carrier_faces: dict[str, set[int]],
+) -> dict[str, Any]:
+    scored: list[tuple[float, dict[str, Any]]] = []
+    for row in rows:
+        try:
+            score = float(row.get("core_balanced_delta", math.nan))
+        except Exception:
+            continue
+        if math.isfinite(score):
+            scored.append((score, row))
+    scored.sort(key=lambda item: item[0])
+    tail_count = max(1, int(math.ceil(0.25 * len(scored)))) if scored else 0
+    bad_rows: list[dict[str, Any]] = []
+    bad_region_carriers: set[str] = set()
+    bad_plan_faces: set[int] = set()
+    for _, row in scored[:tail_count]:
+        carrier_id = str(row.get("carrier_id", ""))
+        bad_region_carriers.add(carrier_id)
+        overlap_faces = sorted(int(face) for face in (region_carrier_faces.get(carrier_id, set()) & plan_faces))
+        bad_plan_faces.update(overlap_faces)
+        bad_rows.append(
+            {
+                "carrier_id": carrier_id,
+                "view_name": row.get("view_name", row.get("view", "")),
+                "bbox_xyxy": row.get("bbox_xyxy", row.get("bbox", [])),
+                "core_balanced_delta": float(row.get("core_balanced_delta", math.nan)),
+                "delta_core_psnr": float(row.get("delta_core_psnr", math.nan)),
+                "delta_core_ssim": float(row.get("delta_core_ssim", math.nan)),
+                "delta_core_lpips": float(row.get("delta_core_lpips", math.nan)),
+                "context_mse_regression": float(row.get("context_mse_regression", math.nan)),
+                "crop_changed": bool(row.get("crop_changed", False)),
+                "overlap_plan_faces": overlap_faces,
+            }
+        )
+    return {
+        "tail_fraction": 0.25,
+        "bad_tail_rows": bad_rows,
+        "bad_tail_row_count": int(len(bad_rows)),
+        "bad_tail_region_carriers": sorted(bad_region_carriers),
+        "bad_tail_plan_faces": sorted(bad_plan_faces),
+        "bad_tail_plan_face_count": int(len(bad_plan_faces)),
     }
 
 
@@ -246,15 +468,75 @@ def _passes(
         reasons.append(f"mean_delta_core_psnr_below_{float(args.min_mean_delta_psnr):g}")
     if float(stats.get("tail_core_balanced_delta", -math.inf)) < float(args.min_tail_core_balanced_delta):
         reasons.append(f"tail_core_balanced_delta_below_{float(args.min_tail_core_balanced_delta):g}")
+    if float(stats.get("negative_core_balanced_fraction", 1.0)) > float(args.max_negative_core_balanced_fraction):
+        reasons.append(f"negative_core_balanced_fraction_above_{float(args.max_negative_core_balanced_fraction):g}")
     if float(stats.get("max_context_mse_regression", math.inf)) > float(args.max_context_mse_regression):
         reasons.append(f"context_mse_regression_above_{float(args.max_context_mse_regression):g}")
+    if float(stats.get("mean_crop_abs_diff", 0.0)) < float(args.min_mean_crop_abs_diff):
+        reasons.append(f"mean_crop_abs_diff_below_{float(args.min_mean_crop_abs_diff):g}")
+    if float(stats.get("max_crop_abs_diff", 0.0)) < float(args.min_max_crop_abs_diff):
+        reasons.append(f"max_crop_abs_diff_below_{float(args.min_max_crop_abs_diff):g}")
     return (not reasons), reasons
+
+
+def _tail_safe_shrink_scales(stats: dict[str, Any], args: argparse.Namespace) -> tuple[float, float]:
+    mean_delta = float(stats.get("mean_core_balanced_delta", math.nan))
+    tail_delta = float(stats.get("tail_core_balanced_delta", math.nan))
+    min_tail = float(args.min_tail_core_balanced_delta)
+    if not (math.isfinite(mean_delta) and math.isfinite(tail_delta)):
+        return 1.0, 1.0
+    if mean_delta <= 0.0 or tail_delta >= min_tail:
+        return 1.0, 1.0
+    deficit = abs(tail_delta - min_tail)
+    raw_scale = float(min(1.0, mean_delta / max(mean_delta + deficit, 1.0e-12)))
+    effective_scale = float(max(float(args.tail_safe_shrink_min_scale), raw_scale))
+    return effective_scale, raw_scale
+
+
+def _tail_safe_shrink_scale(stats: dict[str, Any], args: argparse.Namespace) -> float:
+    return _tail_safe_shrink_scales(stats, args)[0]
+
+
+def _risk_safe_shrink_scale(stats: dict[str, Any], args: argparse.Namespace) -> float:
+    scales = [1.0]
+    tail_scale = _tail_safe_shrink_scale(stats, args)
+    if tail_scale < 1.0:
+        scales.append(tail_scale)
+    max_context = float(stats.get("max_context_mse_regression", math.nan))
+    allowed_context = float(args.max_context_mse_regression)
+    if math.isfinite(max_context) and math.isfinite(allowed_context) and max_context > allowed_context > 0.0:
+        scales.append(math.sqrt(allowed_context / max(max_context, 1.0e-12)))
+    scale = min(scales)
+    return float(max(float(args.risk_safe_shrink_min_scale), min(1.0, scale)))
+
+
+def _scaled_candidate_row(row: dict[str, Any], scale: float, raw_scale: float) -> dict[str, Any]:
+    out = dict(row)
+    coeff = out.get("delta_coeff")
+    if isinstance(coeff, list):
+        try:
+            out["delta_coeff"] = [
+                [
+                    [float(value) * float(scale) for value in channel]
+                    for channel in basis
+                ]
+                for basis in coeff
+            ]
+        except Exception:
+            out["delta_coeff"] = coeff
+    out["render_region_tail_safe_shrink"] = {
+        "enabled": True,
+        "scale": float(scale),
+        "raw_scale": float(raw_scale),
+        "policy": "analytic_mean_tail_ratio_train_only",
+    }
+    return out
 
 
 def main() -> int:
     args = parse_args()
     plan_meta, plan_rows = _load_plan(args.candidate_plan)
-    _, face_to_region_carriers = _load_region_carriers(args.carrier_json)
+    region_carrier_faces, face_to_region_carriers = _load_region_carriers(args.carrier_json)
     region_rows_by_carrier = _load_region_rows(args.render_region_objective)
 
     rows_by_plan_carrier: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -275,6 +557,12 @@ def main() -> int:
         for match in matches:
             region_rows.extend(region_rows_by_carrier.get(str(match["carrier_id"]), []))
         stats = _aggregate_region_rows(region_rows)
+        tail_deficit = _tail_cvar_deficit(stats, args)
+        tail_attribution = _bad_tail_attribution(
+            region_rows,
+            plan_faces=plan_faces,
+            region_carrier_faces=region_carrier_faces,
+        )
         proxy_positive = _plan_proxy_positive(rows)
         passed, reasons = _passes(
             stats,
@@ -285,6 +573,58 @@ def main() -> int:
         notes: list[str] = []
         if not matches:
             notes.append("render_region_unmapped_proxy_fallback")
+        shrink_scale = 1.0
+        shrink_raw_scale = 1.0
+        shrink_applied = False
+        tail_reasons_only = bool(reasons) and all(
+            reason.startswith("tail_core_balanced_delta_below_") for reason in reasons
+        )
+        tail_reason_present = any(reason.startswith("tail_core_balanced_delta_below_") for reason in reasons)
+        tail_shrink_scale, tail_shrink_raw_scale = _tail_safe_shrink_scales(stats, args)
+        if tail_reason_present:
+            shrink_scale = tail_shrink_scale
+            shrink_raw_scale = tail_shrink_raw_scale
+        severe_tail_rollback = (
+            bool(args.rollback_severe_tail_fail)
+            and tail_reason_present
+            and tail_deficit >= float(args.rollback_tail_min_cvar_loss)
+        )
+        if severe_tail_rollback:
+            notes.append("severe_tail_cvar_rollback")
+        tail_shrink_allowed = tail_shrink_raw_scale >= float(args.tail_safe_shrink_min_raw_scale)
+        if tail_reason_present and not tail_shrink_allowed:
+            notes.append("tail_safe_shrink_raw_scale_below_min")
+        if (
+            not passed
+            and bool(args.tail_safe_shrink_on_tail_fail)
+            and bool(matches)
+            and tail_reasons_only
+            and tail_shrink_allowed
+            and not severe_tail_rollback
+        ):
+            if shrink_scale < 1.0:
+                passed = True
+                shrink_applied = True
+                notes.append("tail_safe_shrink_applied")
+        if (
+            not passed
+            and bool(args.risk_safe_shrink_on_train_risk_fail)
+            and bool(matches)
+            and reasons
+            and all(
+                reason.startswith("tail_core_balanced_delta_below_")
+                or reason.startswith("context_mse_regression_above_")
+                for reason in reasons
+            )
+            and (not tail_reason_present or tail_shrink_allowed)
+            and not severe_tail_rollback
+        ):
+            shrink_scale = _risk_safe_shrink_scale(stats, args)
+            shrink_raw_scale = tail_shrink_raw_scale if tail_reason_present else shrink_scale
+            if shrink_scale < 1.0:
+                passed = True
+                shrink_applied = True
+                notes.append("risk_safe_shrink_applied")
         row = {
             "plan_carrier_id": carrier_id,
             "plan_faces": sorted(plan_faces),
@@ -294,19 +634,35 @@ def main() -> int:
             "render_region_stats": stats,
             "plan_proxy_positive": bool(proxy_positive),
             "accepted": bool(passed),
+            "tail_safe_shrink_applied": bool(shrink_applied),
+            "tail_safe_shrink_scale": float(shrink_scale),
+            "tail_safe_shrink_raw_scale": float(shrink_raw_scale),
+            "tail_cvar_deficit": float(tail_deficit),
+            "severe_tail_rollback": bool(severe_tail_rollback),
+            "bad_tail_attribution": tail_attribution,
             "decision_reasons": reasons,
             "decision_notes": notes,
         }
         carrier_rows.append(row)
         if passed:
             for candidate_row in rows:
-                annotated = dict(candidate_row)
+                annotated = (
+                    _scaled_candidate_row(candidate_row, shrink_scale, shrink_raw_scale)
+                    if shrink_applied
+                    else dict(candidate_row)
+                )
                 annotated["render_region_filter_decision"] = {
                     "accepted": bool(passed),
                     "mapped": bool(matches),
                     "plan_carrier_id": carrier_id,
                     "decision_reasons": reasons,
                     "decision_notes": notes,
+                    "tail_safe_shrink_applied": bool(shrink_applied),
+                    "tail_safe_shrink_scale": float(shrink_scale),
+                    "tail_safe_shrink_raw_scale": float(shrink_raw_scale),
+                    "tail_cvar_deficit": float(tail_deficit),
+                    "severe_tail_rollback": bool(severe_tail_rollback),
+                    "bad_tail_attribution": tail_attribution,
                     "render_region_stats": stats,
                     "matched_region_carriers": matches,
                 }
@@ -322,6 +678,9 @@ def main() -> int:
             "source_candidate_plan": str(args.candidate_plan),
             "source_render_region_objective": str(args.render_region_objective),
             "source_region_carrier_json": str(args.carrier_json),
+            "source_candidate_plan_sha256": _sha256_file(args.candidate_plan),
+            "source_render_region_objective_sha256": _sha256_file(args.render_region_objective),
+            "source_region_carrier_json_sha256": _sha256_file(args.carrier_json),
             "render_region_filtered": True,
             "render_region_filter": {
                 "scene": str(args.scene),
@@ -334,6 +693,13 @@ def main() -> int:
                 "drop_unmapped": bool(args.drop_unmapped),
                 "unmapped_policy": "reject" if bool(args.drop_unmapped) else "proxy_positive_pass_through",
                 "require_positive_plan_proxy": bool(args.require_positive_plan_proxy),
+                "tail_safe_shrink_on_tail_fail": bool(args.tail_safe_shrink_on_tail_fail),
+                "tail_safe_shrink_min_scale": float(args.tail_safe_shrink_min_scale),
+                "tail_safe_shrink_min_raw_scale": float(args.tail_safe_shrink_min_raw_scale),
+                "rollback_severe_tail_fail": bool(args.rollback_severe_tail_fail),
+                "rollback_tail_min_cvar_loss": float(args.rollback_tail_min_cvar_loss),
+                "risk_safe_shrink_on_train_risk_fail": bool(args.risk_safe_shrink_on_train_risk_fail),
+                "risk_safe_shrink_min_scale": float(args.risk_safe_shrink_min_scale),
                 "thresholds": {
                     "min_regions": int(args.min_regions),
                     "min_changed_regions": int(args.min_changed_regions),
@@ -341,7 +707,10 @@ def main() -> int:
                     "min_mean_core_balanced_delta": float(args.min_mean_core_balanced_delta),
                     "min_mean_delta_psnr": float(args.min_mean_delta_psnr),
                     "min_tail_core_balanced_delta": float(args.min_tail_core_balanced_delta),
+                    "max_negative_core_balanced_fraction": float(args.max_negative_core_balanced_fraction),
                     "max_context_mse_regression": float(args.max_context_mse_regression),
+                    "min_mean_crop_abs_diff": float(args.min_mean_crop_abs_diff),
+                    "min_max_crop_abs_diff": float(args.min_max_crop_abs_diff),
                 },
             },
             "candidate_count": int(len(kept_rows)),
@@ -358,7 +727,12 @@ def main() -> int:
         "candidate_plan": str(args.candidate_plan),
         "render_region_objective": str(args.render_region_objective),
         "carrier_json": str(args.carrier_json),
+        "candidate_plan_sha256": _sha256_file(args.candidate_plan),
+        "render_region_objective_sha256": _sha256_file(args.render_region_objective),
+        "carrier_json_sha256": _sha256_file(args.carrier_json),
         "output_plan": str(args.output_plan),
+        "rollback_severe_tail_fail": bool(args.rollback_severe_tail_fail),
+        "rollback_tail_min_cvar_loss": float(args.rollback_tail_min_cvar_loss),
         "input_rows": int(len(plan_rows)),
         "input_carriers": int(len(rows_by_plan_carrier)),
         "kept_rows": int(len(kept_rows)),
@@ -378,8 +752,8 @@ def main() -> int:
         f"- source plan: `{args.candidate_plan}`",
         f"- render-region objective: `{args.render_region_objective}`",
         "",
-        "| plan carrier | accepted | rows | faces | matched region carriers | regions | changed | mean balanced | mean dPSNR | tail balanced | max context reg | reasons | notes |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
+        "| plan carrier | accepted | rows | faces | matched region carriers | regions | changed | mean balanced | mean dPSNR | tail balanced | tail deficit | rollback | shrink raw/eff | neg frac | max context reg | mean diff | max diff | bad tail faces | reasons | notes |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in carrier_rows:
         stats = row["render_region_stats"]
@@ -391,7 +765,14 @@ def main() -> int:
             f"{float(stats.get('mean_core_balanced_delta', math.nan)):+.9f} | "
             f"{float(stats.get('mean_delta_core_psnr', math.nan)):+.9f} | "
             f"{float(stats.get('tail_core_balanced_delta', math.nan)):+.9f} | "
+            f"{float(row.get('tail_cvar_deficit', 0.0)):.9f} | "
+            f"{str(bool(row.get('severe_tail_rollback', False))).lower()} | "
+            f"{float(row.get('tail_safe_shrink_raw_scale', 1.0)):.6f}/{float(row.get('tail_safe_shrink_scale', 1.0)):.6f} | "
+            f"{float(stats.get('negative_core_balanced_fraction', math.nan)):.6f} | "
             f"{float(stats.get('max_context_mse_regression', math.nan)):.9g} | "
+            f"{float(stats.get('mean_crop_abs_diff', math.nan)):.9f} | "
+            f"{float(stats.get('max_crop_abs_diff', math.nan)):.9f} | "
+            f"{int(row.get('bad_tail_attribution', {}).get('bad_tail_plan_face_count', 0))} | "
             f"`{', '.join(row['decision_reasons']) if row['decision_reasons'] else 'pass'}` | "
             f"`{', '.join(row['decision_notes']) if row['decision_notes'] else 'none'}` |"
         )

@@ -233,13 +233,21 @@ SSIM、`-0.00060000` crop LPIPS。
   <img src="assets/spcarnet_m360_full9_qualitative_gallery.png" width="980" alt="SPCarNet 与 clean MeshSplatting 的全图定性对比">
 </p>
 
-更有说服力的定性展示是下面这组局部 held-out error-reduction 图。它由 [`scripts/car_model/generate_spcarnet_advantage_showcase.py`](scripts/car_model/generate_spcarnet_advantage_showcase.py) 自动生成：每个场景先要求该 view 在同一 full9 口径下满足全图 `dPSNR > 0`、`dSSIM > 0`、`dLPIPS < 0`，再在该 view 内寻找纹理区域中 SPCarNet 相对 GT 的局部 RGB 误差下降最大的位置。绿色表示 SPCarNet 比 clean MeshSplatting 更接近 GT，紫红色表示变差。
+最有说服力的定性展示是下面这组 Phase-J closure-audit 局部 held-out
+error-reduction 图。它由
+[`scripts/car_model/generate_spcarnet_advantage_showcase.py`](scripts/car_model/generate_spcarnet_advantage_showcase.py)
+根据 `phasej_closure_audit.csv` 和 `phasej_per_view_deltas.csv` 自动生成：每个场景先要求该 view 在同一 selected-clean full9 口径下满足全图 `dPSNR > 0`、`dSSIM > 0`、`dLPIPS < 0`，再在该 view 内寻找纹理区域中 SPCarNet 相对 GT 的局部 RGB 误差下降最大的位置。绿色表示 SPCarNet 比 clean MeshSplatting 更接近 GT，紫红色表示变差。
+
+<p align="center">
+  <img src="assets/spcarnet_phasej_where_it_helps_showcase_20260622.png" width="980" alt="SPCarNet Phase-J 与 clean MeshSplatting 的局部 held-out 误差下降对比">
+</p>
+
+这张新的 Phase-J 专用图更适合放进汇报，因为它的 manifest 直接指向当前接受的 endpoint
+`ours_26000_phasej_guarded_adaptedge_ela`。旧的室外图和混合室内/室外图仍保留为 provenance/backup：
 
 <p align="center">
   <img src="assets/spcarnet_m360_outdoor_detail_showcase.png" width="980" alt="SPCarNet 与 clean MeshSplatting 的室外局部 held-out 误差下降对比">
 </p>
-
-这组室外 crop 更能体现实际视觉收益：clean MeshSplatting 在花叶、地面纹理、长椅条纹、树皮等位置容易出现局部三角块状平滑或细节丢失；SPCarNet 的 residual repair 会把这些区域拉回到更接近 GT 的状态。另有一组混合室内/室外版本：
 
 <p align="center">
   <img src="assets/spcarnet_m360_where_it_helps_showcase.png" width="980" alt="SPCarNet 与 clean MeshSplatting 的混合局部 held-out 误差下降对比">
@@ -295,16 +303,19 @@ false-positive admission 问题，但不改变 Phase-S 收益仍较细微的科�
   <img src="assets/spcarnet_phase_s_regionprior_outdoor_contact_sheet.png" width="980" alt="Phase-S render-visible region-prior outdoor 诊断 contact sheet">
 </p>
 
-选图清单：`assets/spcarnet_m360_outdoor_detail_selection.json`、`assets/spcarnet_m360_where_it_helps_selection.json`，以及早期全图清单 `assets/spcarnet_m360_full9_gallery_selection.json`。
+选图清单：`assets/spcarnet_phasej_where_it_helps_selection_20260622.json`、
+`assets/spcarnet_m360_outdoor_detail_selection.json`、
+`assets/spcarnet_m360_where_it_helps_selection.json`，以及早期全图清单
+`assets/spcarnet_m360_full9_gallery_selection.json`。
 
 | 定性 crop | 全图 delta PSNR/SSIM/LPIPS | 局部 dPSNR | 局部 MAE 下降 |
 |---|---:|---:|---:|
-| flowers / `00014.png` | +0.99 / +0.0616 / -0.0682 | +2.05 | 24.2% |
-| garden / `00008.png` | +1.27 / +0.0432 / -0.0551 | +2.70 | 27.6% |
-| treehill / `00010.png` | +0.59 / +0.0491 / -0.0881 | +3.03 | 32.0% |
-| bicycle / `00021.png` | +1.13 / +0.0385 / -0.0615 | +1.88 | 17.5% |
-| stump / `00007.png` | +0.26 / +0.0122 / -0.0208 | +0.81 | 12.8% |
-| bonsai / `00001.png` | +2.79 / +0.0063 / -0.0007 | +3.82 | 43.6% |
+| bonsai / `00001.png` | +6.63 / +0.0452 / -0.0878 | +11.79 | 78.6% |
+| kitchen / `00011.png` | +3.43 / +0.0250 / -0.0578 | +10.48 | 71.4% |
+| room / `00011.png` | +3.50 / +0.0220 / -0.0656 | +10.36 | 67.7% |
+| counter / `00013.png` | +2.17 / +0.0407 / -0.0665 | +6.02 | 54.9% |
+| garden / `00006.png` | +1.74 / +0.0479 / -0.0678 | +4.26 | 44.4% |
+| flowers / `00014.png` | +1.12 / +0.0754 / -0.1028 | +2.15 | 25.3% |
 
 ## 方法概述
 

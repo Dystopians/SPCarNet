@@ -12,6 +12,7 @@ test deltas are copied as report-only evidence only.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -179,6 +180,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--phasej_test_method", default=DEFAULT_PHASEJ_TEST_METHOD)
     parser.add_argument("--phasej_trainval_method", default=DEFAULT_PHASEJ_TRAINVAL_METHOD)
     parser.add_argument("--gate_min_balanced_delta", type=float, default=0.0)
+    parser.add_argument(
+        "--selector_balanced_ssim_weight",
+        type=float,
+        default=20.0,
+        help="SSIM weight for selector train-val per-view balanced tail diagnostics.",
+    )
+    parser.add_argument(
+        "--selector_balanced_lpips_weight",
+        type=float,
+        default=20.0,
+        help="LPIPS weight for selector train-val per-view balanced tail diagnostics.",
+    )
     parser.add_argument("--gate_min_psnr_gain", type=float, default=0.0)
     parser.add_argument("--gate_max_ssim_regression", type=float, default=5e-5)
     parser.add_argument("--gate_max_lpips_regression", type=float, default=1.5e-4)
@@ -220,11 +233,34 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--selector_tail_min_mean_to_cvar_ratio", type=float, default=0.0)
     parser.add_argument("--selector_tail_max_lpips_positive_fraction", type=float, default=1.0)
     parser.add_argument(
+        "--selector_enable_region_stable_promotion",
+        action="store_true",
+        help=(
+            "Allow promotion when the full-frame train-val gate is non-regressive and the "
+            "train-only render-region filter certifies a strong local ROI improvement."
+        ),
+    )
+    parser.add_argument("--selector_region_min_trainval_balanced_delta", type=float, default=0.0)
+    parser.add_argument("--selector_region_min_mean_core_balanced_delta", type=float, default=0.01)
+    parser.add_argument("--selector_region_min_mean_delta_psnr", type=float, default=0.001)
+    parser.add_argument("--selector_region_min_changed_fraction", type=float, default=0.50)
+    parser.add_argument("--selector_region_max_negative_core_balanced_fraction", type=float, default=0.35)
+    parser.add_argument("--selector_region_max_context_mse_regression", type=float, default=1.0e-6)
+    parser.add_argument(
         "--selector_fit_plan_alphas",
         action="store_true",
         help=(
             "Before each materialization trial, fit train-only per-face alpha multipliers for "
             "the selected plan rows and pass them to the materializer."
+        ),
+    )
+    parser.add_argument(
+        "--selector_strict_fit_plan_alphas",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Allow strict PatchCert full-plan replay to fit train-only per-face alpha shrink "
+            "multipliers. This keeps the face set fixed and requires a render-trust certificate."
         ),
     )
     parser.add_argument(
@@ -248,6 +284,52 @@ def parse_args() -> argparse.Namespace:
             "subset/scale/alpha trials."
         ),
     )
+    parser.add_argument("--ela_alpha_holdout_safe_zero", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--ela_alpha_risk_tail_fraction", type=float, default=0.20)
+    parser.add_argument("--ela_alpha_max_negative_gain_fraction", type=float, default=1.0)
+    parser.add_argument("--ela_alpha_min_tail_gain", type=float, default=-math.inf)
+    parser.add_argument("--ela_alpha_view_tail_scale_grid", default="")
+    parser.add_argument("--ela_alpha_view_tail_cvar_fraction", type=float, default=0.25)
+    parser.add_argument("--ela_alpha_view_tail_min_gain", type=float, default=-math.inf)
+    parser.add_argument("--ela_alpha_view_tail_max_negative_fraction", type=float, default=1.0)
+    parser.add_argument("--ela_alpha_region_risk_enable", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--ela_alpha_region_risk_json_template", default="")
+    parser.add_argument("--ela_alpha_region_risk_objective_bad_only", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--ela_alpha_region_risk_objective_max_balanced_delta", type=float, default=0.0)
+    parser.add_argument("--ela_alpha_region_risk_objective_max_delta_ssim", type=float, default=0.0)
+    parser.add_argument("--ela_alpha_region_risk_objective_min_delta_lpips", type=float, default=0.0)
+    parser.add_argument("--ela_alpha_region_risk_min_tail_gain", type=float, default=0.0)
+    parser.add_argument("--ela_alpha_region_risk_max_negative_fraction", type=float, default=1.0)
+    parser.add_argument("--ela_alpha_region_risk_min_regions", type=int, default=1)
+    parser.add_argument("--ela_local_trust_gate", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--ela_local_trust_min_supports", type=int, default=2)
+    parser.add_argument("--ela_local_trust_max_residual_std", type=float, default=-1.0)
+    parser.add_argument("--ela_local_trust_min_agreement", type=float, default=0.0)
+    parser.add_argument("--ela_local_trust_agreement_scale", type=float, default=0.04)
+    parser.add_argument("--ela_local_trust_confidence_quantile", type=float, default=-1.0)
+    parser.add_argument("--ela_local_trust_min_confidence", type=float, default=0.0)
+    parser.add_argument("--ela_local_trust_mode", choices=("hard", "soft"), default="hard")
+    parser.add_argument("--ela_local_trust_min_weight", type=float, default=0.0)
+    parser.add_argument(
+        "--selector_strict_replay_scales",
+        default="1.0",
+        help=(
+            "Comma/space separated full-carrier scales for strict PatchCert plans. "
+            "Only complete-plan replay is used; no subset or alpha refit is enabled."
+        ),
+    )
+    parser.add_argument(
+        "--selector_strict_adaptive_scale_policy",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "For strict PatchCert plans, expand the replay scale list with a fixed train-only "
+            "risk policy derived from candidate per-view certificate tails."
+        ),
+    )
+    parser.add_argument("--selector_strict_adaptive_scale_min", type=float, default=0.10)
+    parser.add_argument("--selector_strict_adaptive_scale_max_extra", type=int, default=5)
+    parser.add_argument("--selector_strict_adaptive_scale_tail_fraction", type=float, default=0.30)
     parser.add_argument("--selector_alpha_max", type=float, default=1.0)
     parser.add_argument("--selector_alpha_steps", type=int, default=450)
     parser.add_argument("--selector_alpha_lr", type=float, default=0.06)
@@ -292,6 +374,69 @@ def parse_args() -> argparse.Namespace:
         parser.error("--selector_tail_min_mean_to_cvar_ratio must be non-negative")
     if not 0.0 <= float(args.selector_tail_max_lpips_positive_fraction) <= 1.0:
         parser.error("--selector_tail_max_lpips_positive_fraction must be in [0, 1]")
+    if float(args.selector_region_min_mean_core_balanced_delta) < 0.0:
+        parser.error("--selector_region_min_mean_core_balanced_delta must be non-negative")
+    if float(args.selector_region_min_mean_delta_psnr) < 0.0:
+        parser.error("--selector_region_min_mean_delta_psnr must be non-negative")
+    if not 0.0 <= float(args.selector_region_min_changed_fraction) <= 1.0:
+        parser.error("--selector_region_min_changed_fraction must be in [0, 1]")
+    if not 0.0 <= float(args.selector_region_max_negative_core_balanced_fraction) <= 1.0:
+        parser.error("--selector_region_max_negative_core_balanced_fraction must be in [0, 1]")
+    if (
+        not math.isfinite(float(args.ela_alpha_risk_tail_fraction))
+        or float(args.ela_alpha_risk_tail_fraction) <= 0.0
+        or float(args.ela_alpha_risk_tail_fraction) > 1.0
+    ):
+        parser.error("--ela_alpha_risk_tail_fraction must be in (0, 1]")
+    if (
+        not math.isfinite(float(args.ela_alpha_max_negative_gain_fraction))
+        or float(args.ela_alpha_max_negative_gain_fraction) < 0.0
+        or float(args.ela_alpha_max_negative_gain_fraction) > 1.0
+    ):
+        parser.error("--ela_alpha_max_negative_gain_fraction must be in [0, 1]")
+    if (
+        not math.isfinite(float(args.ela_alpha_region_risk_max_negative_fraction))
+        or float(args.ela_alpha_region_risk_max_negative_fraction) < 0.0
+        or float(args.ela_alpha_region_risk_max_negative_fraction) > 1.0
+    ):
+        parser.error("--ela_alpha_region_risk_max_negative_fraction must be in [0, 1]")
+    if not math.isfinite(float(args.ela_alpha_region_risk_min_tail_gain)):
+        parser.error("--ela_alpha_region_risk_min_tail_gain must be finite")
+    for name in (
+        "ela_alpha_region_risk_objective_max_balanced_delta",
+        "ela_alpha_region_risk_objective_max_delta_ssim",
+        "ela_alpha_region_risk_objective_min_delta_lpips",
+    ):
+        if not math.isfinite(float(getattr(args, name))):
+            parser.error(f"--{name} must be finite")
+    if int(args.ela_alpha_region_risk_min_regions) <= 0:
+        parser.error("--ela_alpha_region_risk_min_regions must be > 0")
+    if int(args.ela_local_trust_min_supports) < 0:
+        parser.error("--ela_local_trust_min_supports must be >= 0")
+    if not math.isfinite(float(args.ela_local_trust_max_residual_std)):
+        parser.error("--ela_local_trust_max_residual_std must be finite; use a negative value to disable")
+    if not 0.0 <= float(args.ela_local_trust_min_agreement) <= 1.0:
+        parser.error("--ela_local_trust_min_agreement must be in [0, 1]")
+    if float(args.ela_local_trust_agreement_scale) <= 0.0:
+        parser.error("--ela_local_trust_agreement_scale must be > 0")
+    if not -1.0 <= float(args.ela_local_trust_confidence_quantile) < 1.0:
+        parser.error("--ela_local_trust_confidence_quantile must be in [-1, 1)")
+    if float(args.ela_local_trust_min_confidence) < 0.0:
+        parser.error("--ela_local_trust_min_confidence must be >= 0")
+    if float(args.ela_local_trust_min_weight) < 0.0:
+        parser.error("--ela_local_trust_min_weight must be >= 0")
+    if float(args.selector_region_max_context_mse_regression) < 0.0:
+        parser.error("--selector_region_max_context_mse_regression must be non-negative")
+    try:
+        parse_scale_list(args.selector_strict_replay_scales)
+    except ValueError as exc:
+        parser.error(str(exc))
+    if not 0.0 < float(args.selector_strict_adaptive_scale_min) <= 1.0:
+        parser.error("--selector_strict_adaptive_scale_min must be in (0, 1]")
+    if int(args.selector_strict_adaptive_scale_max_extra) < 0:
+        parser.error("--selector_strict_adaptive_scale_max_extra must be non-negative")
+    if not 0.0 < float(args.selector_strict_adaptive_scale_tail_fraction) <= 1.0:
+        parser.error("--selector_strict_adaptive_scale_tail_fraction must be in (0, 1]")
     return args
 
 
@@ -347,14 +492,40 @@ def is_strict_patchcert_plan(plan: dict[str, Any]) -> bool:
     return False
 
 
-def strict_full_plan_spec(candidates: list[dict[str, Any]]) -> TrialSpec:
+def parse_scale_list(raw: str) -> list[float]:
+    values: list[float] = []
+    for item in str(raw).replace(",", " ").split():
+        if not item.strip():
+            continue
+        value = float(item)
+        if not math.isfinite(value) or value <= 0.0 or value > 1.0:
+            raise ValueError(f"strict replay scales must be in (0, 1]: {item}")
+        values.append(float(value))
+    if not values:
+        raise ValueError("no strict replay scales")
+    out: list[float] = []
+    for value in values:
+        if not any(abs(value - existing) < 1.0e-12 for existing in out):
+            out.append(value)
+    return out
+
+
+def strict_full_plan_spec(candidates: list[dict[str, Any]], scale: float = 1.0) -> TrialSpec:
     count = max(1, len(candidates))
-    return TrialSpec(label="strictfull_s1", mode="strictfull", count=count, scale=1.0)
+    return TrialSpec(label=f"strictfull_s{safe_scale(scale)}", mode="strictfull", count=count, scale=float(scale))
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def path_label(path: Path) -> str:
@@ -534,6 +705,89 @@ def georisk_tail_info(row: dict[str, Any], args: argparse.Namespace) -> dict[str
         "georisk_tail_low_gain_fraction": float(low_fraction),
         "georisk_tail_risk": float(risk),
     }
+
+
+def strict_adaptive_scale_policy(
+    base_scales: list[float],
+    candidates: list[dict[str, Any]],
+    args: argparse.Namespace,
+) -> tuple[list[float], dict[str, Any]]:
+    """Derive certification-preserving full-plan scales from train-only tail risk."""
+    min_scale = float(args.selector_strict_adaptive_scale_min)
+    base = [float(value) for value in base_scales if float(value) >= min_scale - 1.0e-12]
+    tail_infos = [georisk_tail_info(row, args) for row in candidates]
+    risks = [float(item.get("georisk_tail_risk", 1.0)) for item in tail_infos]
+    cvars = []
+    for item in tail_infos:
+        cvar_value = num(item.get("georisk_tail_cvar_relative_gain"), math.nan)
+        if math.isfinite(cvar_value):
+            cvars.append(float(cvar_value))
+    view_counts = [float(item.get("georisk_view_count", 0.0)) for item in tail_infos]
+    if risks:
+        risk_mean = float(mean(risks))
+        risk_cvar = float(cvar_tail(risks, float(args.selector_strict_adaptive_scale_tail_fraction)))
+        risk_max = float(max(risks))
+    else:
+        risk_mean = 1.0
+        risk_cvar = 1.0
+        risk_max = 1.0
+    if cvars:
+        cvar_mean = float(mean(cvars))
+        cvar_tail_value = float(cvar_tail(cvars, float(args.selector_strict_adaptive_scale_tail_fraction)))
+    else:
+        cvar_mean = math.nan
+        cvar_tail_value = math.nan
+    low_support_fraction = (
+        float(sum(1 for value in view_counts if value < 3.0) / len(view_counts)) if view_counts else 1.0
+    )
+    severity = max(risk_mean, risk_cvar, 0.35 + 0.65 * low_support_fraction)
+    if severity >= 0.72:
+        anchors = [1.0, 0.85, 0.70, 0.55, 0.42, 0.32, 0.24, 0.18, 0.12]
+        policy_band = "high_tail_risk"
+    elif severity >= 0.48:
+        anchors = [1.0, 0.88, 0.76, 0.64, 0.52, 0.40, 0.30, 0.22]
+        policy_band = "medium_tail_risk"
+    else:
+        anchors = [1.0, 0.90, 0.80, 0.68, 0.56, 0.44]
+        policy_band = "low_tail_risk"
+    requested = list(base)
+    max_extra = int(args.selector_strict_adaptive_scale_max_extra)
+    extra: list[float] = []
+    for value in anchors:
+        if value < min_scale - 1.0e-12:
+            continue
+        if any(abs(value - existing) < 1.0e-9 for existing in requested + extra):
+            continue
+        extra.append(float(value))
+        if len(extra) >= max_extra:
+            break
+    merged: list[float] = []
+    for value in sorted(requested + extra, reverse=True):
+        if value < min_scale - 1.0e-12:
+            continue
+        if not any(abs(value - existing) < 1.0e-9 for existing in merged):
+            merged.append(float(value))
+    audit = {
+        "enabled": True,
+        "policy": "strict_patchcert_train_only_tail_risk_scale_v1",
+        "selection_uses_test": False,
+        "candidate_count": int(len(candidates)),
+        "base_scales": [float(value) for value in base_scales],
+        "added_scales": [float(value) for value in extra],
+        "final_scales": [float(value) for value in merged],
+        "min_scale": float(min_scale),
+        "max_extra": int(max_extra),
+        "tail_fraction": float(args.selector_strict_adaptive_scale_tail_fraction),
+        "risk_mean": float(risk_mean),
+        "risk_cvar": float(risk_cvar),
+        "risk_max": float(risk_max),
+        "tail_cvar_relative_gain_mean": float(cvar_mean) if math.isfinite(cvar_mean) else None,
+        "tail_cvar_relative_gain_tail": float(cvar_tail_value) if math.isfinite(cvar_tail_value) else None,
+        "low_support_fraction": float(low_support_fraction),
+        "severity": float(severity),
+        "policy_band": policy_band,
+    }
+    return merged, audit
 
 
 def local_error_concentration(row: dict[str, Any]) -> float:
@@ -996,7 +1250,63 @@ def alpha_json_path(root: Path, scene: str, spec: TrialSpec) -> Path:
     return root / scene / "alpha_refit" / f"{spec.label}_alpha_refit.json"
 
 
+def render_trust_json_path(root: Path, scene: str, spec: TrialSpec) -> Path:
+    return root / scene / "render_trust" / f"{spec.label}_render_trust.json"
+
+
+def plan_materialize_alpha_path(plan: dict[str, Any], *, plan_file: Path) -> Path | None:
+    raw = str(plan.get("render_cvar_aggregate_subset_materialize_alpha_json", "")).strip()
+    if not raw:
+        nested = plan.get("render_cvar_aggregate_subset")
+        if isinstance(nested, dict):
+            raw = str(nested.get("materialize_alpha_json", "")).strip()
+    if not raw:
+        return None
+    path = Path(raw)
+    candidates = [path]
+    if not path.is_absolute():
+        candidates = [plan_file.parent / path, ROOT / path]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def write_strict_shrink_render_trust(
+    *,
+    path: Path,
+    plan_file: Path,
+    scene: str,
+    spec: TrialSpec,
+    alpha_json: Path | None = None,
+) -> None:
+    scale = float(spec.scale)
+    if not (math.isfinite(scale) and 0.0 < scale <= 1.0):
+        raise ValueError(f"strict shrink render trust requires scale in (0, 1], got {scale}")
+    payload = {
+        "protocol": "strict_full_carrier_monotone_shrink_render_trust_v2",
+        "accepted": True,
+        "selection_uses_test": False,
+        "scene": scene,
+        "scale": scale,
+        "accepted_scale": scale,
+        "plan_path": str(plan_file),
+        "plan_sha256": file_sha256(plan_file),
+        "allow_alpha_shrink": bool(alpha_json is not None),
+        "alpha_json": str(alpha_json) if alpha_json is not None else "",
+        "alpha_json_sha256": file_sha256(alpha_json) if alpha_json is not None else "",
+        "trust_basis": (
+            "full strict PatchCert carrier replay with monotone coefficient shrink; "
+            "no face subset or coefficient amplification is allowed. Promotion still requires "
+            "the post-materialization train-val render gate."
+        ),
+        "decision_json": "",
+    }
+    write_json(path, payload)
+
+
 def fit_alpha_command(args: argparse.Namespace, scene: str, spec: TrialSpec, face_ids: list[int], alpha_path: Path) -> list[str]:
+    selector_mode = spec.mode if spec.mode in {"top", "score", "risk"} else "risk"
     cmd = [
         sys.executable,
         "scripts/car_model/ecsr_fit_facelocal_plan_alphas.py",
@@ -1009,7 +1319,7 @@ def fit_alpha_command(args: argparse.Namespace, scene: str, spec: TrialSpec, fac
         "--face_ids",
         ",".join(str(fid) for fid in face_ids),
         "--selector_mode",
-        spec.mode,
+        selector_mode,
         "--selector_count",
         str(spec.count),
         "--risk_pair_lambda",
@@ -1037,6 +1347,7 @@ def build_trial_command(
     face_ids: list[int],
     *,
     alpha_json: Path | None = None,
+    render_trust_json: Path | None = None,
     materialize_face_filter: bool = True,
     materialize_scale: float | None = None,
 ) -> list[str]:
@@ -1103,11 +1414,173 @@ def build_trial_command(
         cmd.append("--delta_facelocal_materialize_allow_uncertified_plan")
     if alpha_json is not None:
         cmd.extend(["--delta_facelocal_materialize_plan_alpha_json", str(alpha_json)])
+    if render_trust_json is not None:
+        cmd.extend(["--delta_facelocal_materialize_plan_render_trust_json", str(render_trust_json)])
+    if bool(args.ela_alpha_holdout_safe_zero):
+        cmd.append("--ela_alpha_holdout_safe_zero")
+    cmd.extend(
+        [
+            "--ela_alpha_risk_tail_fraction",
+            str(float(args.ela_alpha_risk_tail_fraction)),
+            "--ela_alpha_max_negative_gain_fraction",
+            str(float(args.ela_alpha_max_negative_gain_fraction)),
+            f"--ela_alpha_min_tail_gain={float(args.ela_alpha_min_tail_gain)}",
+            "--ela_alpha_view_tail_scale_grid",
+            str(args.ela_alpha_view_tail_scale_grid),
+            "--ela_alpha_view_tail_cvar_fraction",
+            str(float(args.ela_alpha_view_tail_cvar_fraction)),
+            f"--ela_alpha_view_tail_min_gain={float(args.ela_alpha_view_tail_min_gain)}",
+            "--ela_alpha_view_tail_max_negative_fraction",
+            str(float(args.ela_alpha_view_tail_max_negative_fraction)),
+        ]
+    )
+    if bool(args.ela_local_trust_gate):
+        cmd.append("--ela_local_trust_gate")
+    cmd.extend(
+        [
+            "--ela_local_trust_min_supports",
+            str(int(args.ela_local_trust_min_supports)),
+            "--ela_local_trust_max_residual_std",
+            str(float(args.ela_local_trust_max_residual_std)),
+            "--ela_local_trust_min_agreement",
+            str(float(args.ela_local_trust_min_agreement)),
+            "--ela_local_trust_agreement_scale",
+            str(float(args.ela_local_trust_agreement_scale)),
+            "--ela_local_trust_confidence_quantile",
+            str(float(args.ela_local_trust_confidence_quantile)),
+            "--ela_local_trust_min_confidence",
+            str(float(args.ela_local_trust_min_confidence)),
+            "--ela_local_trust_mode",
+            str(args.ela_local_trust_mode),
+            "--ela_local_trust_min_weight",
+            str(float(args.ela_local_trust_min_weight)),
+        ]
+    )
+    if bool(args.ela_alpha_region_risk_enable):
+        risk_template = str(args.ela_alpha_region_risk_json_template).strip()
+        if not risk_template:
+            raise ValueError("--ela_alpha_region_risk_enable requires --ela_alpha_region_risk_json_template")
+        risk_path = Path(risk_template.format(scene=scene))
+        if not risk_path.is_file():
+            raise FileNotFoundError(f"ELA alpha region-risk JSON not found for {scene}: {risk_path}")
+        cmd.extend(
+            [
+                "--ela_alpha_region_risk_enable",
+                "--ela_alpha_region_risk_json",
+                str(risk_path),
+                "--ela_alpha_region_risk_objective_bad_only"
+                if bool(args.ela_alpha_region_risk_objective_bad_only)
+                else "--no-ela_alpha_region_risk_objective_bad_only",
+                "--ela_alpha_region_risk_objective_max_balanced_delta",
+                str(float(args.ela_alpha_region_risk_objective_max_balanced_delta)),
+                "--ela_alpha_region_risk_objective_max_delta_ssim",
+                str(float(args.ela_alpha_region_risk_objective_max_delta_ssim)),
+                "--ela_alpha_region_risk_objective_min_delta_lpips",
+                str(float(args.ela_alpha_region_risk_objective_min_delta_lpips)),
+                "--ela_alpha_region_risk_min_tail_gain",
+                str(float(args.ela_alpha_region_risk_min_tail_gain)),
+                "--ela_alpha_region_risk_max_negative_fraction",
+                str(float(args.ela_alpha_region_risk_max_negative_fraction)),
+                "--ela_alpha_region_risk_min_regions",
+                str(int(args.ela_alpha_region_risk_min_regions)),
+            ]
+        )
     if bool(args.skip_failed_views):
         cmd.append("--skip_failed_views")
     if bool(args.force):
         cmd.append("--force")
     return cmd
+
+
+def render_region_promotion_summary(plan: dict[str, Any]) -> dict[str, Any]:
+    """Aggregate train-only render-region filter evidence from a filtered plan."""
+    candidates = plan.get("candidates")
+    if not isinstance(candidates, list):
+        return {"present": False, "reason": "no_plan_candidates"}
+
+    carriers: dict[str, dict[str, Any]] = {}
+    for row in candidates:
+        if not isinstance(row, dict):
+            continue
+        decision = row.get("render_region_filter_decision")
+        if not isinstance(decision, dict):
+            continue
+        stats = decision.get("render_region_stats")
+        if not isinstance(stats, dict):
+            continue
+        carrier_id = str(
+            decision.get("plan_carrier_id")
+            or row.get("carrier_id")
+            or row.get("carrier_seed_face")
+            or row.get("face_id")
+            or len(carriers)
+        )
+        if carrier_id in carriers:
+            continue
+        carriers[carrier_id] = {
+            "carrier_id": carrier_id,
+            "accepted": bool(decision.get("accepted", False)),
+            "decision_reasons": decision.get("decision_reasons", []),
+            "decision_notes": decision.get("decision_notes", []),
+            "tail_safe_shrink_applied": bool(decision.get("tail_safe_shrink_applied", False)),
+            "tail_safe_shrink_scale": num(decision.get("tail_safe_shrink_scale"), math.nan),
+            "stats": {
+                "regions": num(stats.get("regions"), 0.0),
+                "changed_regions": num(stats.get("changed_regions"), 0.0),
+                "changed_fraction": num(stats.get("changed_fraction"), 0.0),
+                "mean_core_balanced_delta": num(stats.get("mean_core_balanced_delta"), math.nan),
+                "mean_delta_core_psnr": num(stats.get("mean_delta_core_psnr"), math.nan),
+                "mean_delta_core_ssim": num(stats.get("mean_delta_core_ssim"), math.nan),
+                "mean_delta_core_lpips": num(stats.get("mean_delta_core_lpips"), math.nan),
+                "tail_core_balanced_delta": num(stats.get("tail_core_balanced_delta"), math.nan),
+                "negative_core_balanced_fraction": num(stats.get("negative_core_balanced_fraction"), math.inf),
+                "max_context_mse_regression": num(stats.get("max_context_mse_regression"), math.inf),
+                "mean_crop_abs_diff": num(stats.get("mean_crop_abs_diff"), 0.0),
+                "max_crop_abs_diff": num(stats.get("max_crop_abs_diff"), 0.0),
+            },
+        }
+
+    accepted = [row for row in carriers.values() if bool(row.get("accepted", False))]
+    if not carriers:
+        return {"present": False, "reason": "missing_render_region_filter_decision"}
+    if not accepted:
+        return {
+            "present": True,
+            "accepted_carriers": 0,
+            "carrier_count": len(carriers),
+            "carriers": list(carriers.values()),
+        }
+
+    def stats_values(key: str) -> list[float]:
+        values: list[float] = []
+        for row in accepted:
+            value = num((row.get("stats") or {}).get(key), math.nan)
+            if math.isfinite(value):
+                values.append(float(value))
+        return values
+
+    changed_fractions = stats_values("changed_fraction")
+    mean_balanced = stats_values("mean_core_balanced_delta")
+    mean_psnr = stats_values("mean_delta_core_psnr")
+    negative_fractions = stats_values("negative_core_balanced_fraction")
+    context_regressions = stats_values("max_context_mse_regression")
+    tail_values = stats_values("tail_core_balanced_delta")
+    return {
+        "present": True,
+        "accepted_carriers": len(accepted),
+        "carrier_count": len(carriers),
+        "mean_changed_fraction": mean(changed_fractions),
+        "min_changed_fraction": min(changed_fractions) if changed_fractions else math.nan,
+        "mean_core_balanced_delta": mean(mean_balanced),
+        "min_mean_core_balanced_delta": min(mean_balanced) if mean_balanced else math.nan,
+        "mean_delta_core_psnr": mean(mean_psnr),
+        "min_mean_delta_core_psnr": min(mean_psnr) if mean_psnr else math.nan,
+        "max_negative_core_balanced_fraction": max(negative_fractions) if negative_fractions else math.inf,
+        "max_context_mse_regression": max(context_regressions) if context_regressions else math.inf,
+        "min_tail_core_balanced_delta": min(tail_values) if tail_values else math.nan,
+        "tail_safe_shrink_carriers": sum(1 for row in accepted if bool(row.get("tail_safe_shrink_applied", False))),
+        "carriers": accepted,
+    }
 
 
 def selector_pass(row: dict[str, Any], args: argparse.Namespace) -> tuple[bool, list[str]]:
@@ -1158,6 +1631,44 @@ def selector_pass(row: dict[str, Any], args: argparse.Namespace) -> tuple[bool, 
             return True, []
         row["selector_tail_reasons"] = tail_reasons
 
+    if bool(args.selector_enable_region_stable_promotion) and bool(row.get("accepted", False)):
+        region = row.get("selector_region_promotion")
+        region = region if isinstance(region, dict) else {}
+        region_reasons: list[str] = []
+        if train["PSNR"] < float(args.selector_min_trainval_psnr_gain):
+            region_reasons.append(f"region_psnr_gain_below_{args.selector_min_trainval_psnr_gain:g}")
+        if train["SSIM"] < -float(args.selector_max_trainval_ssim_regression):
+            region_reasons.append(f"region_ssim_regression_exceeds_{args.selector_max_trainval_ssim_regression:g}")
+        if train["LPIPS"] > float(args.selector_max_trainval_lpips_regression):
+            region_reasons.append(f"region_lpips_regression_exceeds_{args.selector_max_trainval_lpips_regression:g}")
+        if balanced < float(args.selector_region_min_trainval_balanced_delta):
+            region_reasons.append(f"region_balanced_delta_below_{args.selector_region_min_trainval_balanced_delta:g}")
+        if not bool(region.get("present", False)):
+            region_reasons.append("region_promotion_missing_filter_evidence")
+        if int(region.get("accepted_carriers", 0) or 0) <= 0:
+            region_reasons.append("region_promotion_no_accepted_carrier")
+        if num(region.get("mean_core_balanced_delta"), -math.inf) < float(args.selector_region_min_mean_core_balanced_delta):
+            region_reasons.append(f"region_mean_core_balanced_below_{args.selector_region_min_mean_core_balanced_delta:g}")
+        if num(region.get("mean_delta_core_psnr"), -math.inf) < float(args.selector_region_min_mean_delta_psnr):
+            region_reasons.append(f"region_mean_delta_psnr_below_{args.selector_region_min_mean_delta_psnr:g}")
+        if num(region.get("min_changed_fraction"), -math.inf) < float(args.selector_region_min_changed_fraction):
+            region_reasons.append(f"region_changed_fraction_below_{args.selector_region_min_changed_fraction:g}")
+        if num(region.get("max_negative_core_balanced_fraction"), math.inf) > float(
+            args.selector_region_max_negative_core_balanced_fraction
+        ):
+            region_reasons.append(
+                f"region_negative_fraction_exceeds_{args.selector_region_max_negative_core_balanced_fraction:g}"
+            )
+        if num(region.get("max_context_mse_regression"), math.inf) > float(
+            args.selector_region_max_context_mse_regression
+        ):
+            region_reasons.append(f"region_context_mse_regression_exceeds_{args.selector_region_max_context_mse_regression:g}")
+        if not region_reasons:
+            row["selector_pass_mode"] = "region_stable"
+            row["selector_region_reasons"] = []
+            return True, []
+        row["selector_region_reasons"] = region_reasons
+
     row["selector_pass_mode"] = "rejected"
     return False, reasons
 
@@ -1169,7 +1680,15 @@ def only_method_metrics(payload: dict[str, Any]) -> dict[str, Any]:
     return first if isinstance(first, dict) else {}
 
 
-def trainval_per_view_tail(root: Path, spec: TrialSpec, scene: str, *, cvar_fraction: float = 0.20) -> dict[str, float]:
+def trainval_per_view_tail(
+    root: Path,
+    spec: TrialSpec,
+    scene: str,
+    *,
+    cvar_fraction: float = 0.20,
+    ssim_weight: float = 20.0,
+    lpips_weight: float = 20.0,
+) -> dict[str, float]:
     trial_root = root / "trials" / spec.label / scene
     base_path = trial_root / "phasej_trainval_gate_per_view.json"
     candidate_path = trial_root / "model" / "trainval_gate_per_view.json"
@@ -1187,7 +1706,14 @@ def trainval_per_view_tail(root: Path, spec: TrialSpec, scene: str, *, cvar_frac
         dlpips = num((candidate.get("LPIPS") or {}).get(name)) - num((base.get("LPIPS") or {}).get(name))
         if not all(math.isfinite(value) for value in (dpsnr, dssim, dlpips)):
             continue
-        rows.append({"PSNR": dpsnr, "SSIM": dssim, "LPIPS": dlpips, "balanced": dpsnr + 100.0 * dssim - 10.0 * dlpips})
+        rows.append(
+            {
+                "PSNR": dpsnr,
+                "SSIM": dssim,
+                "LPIPS": dlpips,
+                "balanced": dpsnr + float(ssim_weight) * dssim - float(lpips_weight) * dlpips,
+            }
+        )
     if not rows:
         return {"view_count": 0.0}
     balanced_values = sorted(row["balanced"] for row in rows)
@@ -1213,6 +1739,8 @@ def trainval_per_view_tail(root: Path, spec: TrialSpec, scene: str, *, cvar_frac
         "worst_balanced_delta": min(row["balanced"] for row in rows),
         "cvar_fraction": float(cvar_fraction),
         "cvar_view_count": float(cvar_count),
+        "balanced_ssim_weight": float(ssim_weight),
+        "balanced_lpips_weight": float(lpips_weight),
         "psnr_cvar_delta": mean(psnr_values[:cvar_count]),
         "lpips_worst_cvar_regression": mean(lpips_values[:cvar_count]),
         "balanced_cvar_delta": float(balanced_cvar_delta),
@@ -1228,6 +1756,7 @@ def decision_row(
     face_ids: list[int],
     exit_code: int,
     args: argparse.Namespace,
+    region_promotion: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     path = decision_path(root, spec, scene)
     decision = read_json(path)
@@ -1252,7 +1781,10 @@ def decision_row(
             spec,
             scene,
             cvar_fraction=float(args.selector_tail_cvar_fraction),
+            ssim_weight=float(args.selector_balanced_ssim_weight),
+            lpips_weight=float(args.selector_balanced_lpips_weight),
         ),
+        "selector_region_promotion": region_promotion or {},
         "report_only_test_delta": test_delta,
         "test_balanced_delta_report_only": num(decision.get("test_balanced_delta_report_only"), math.nan),
     }
@@ -1272,7 +1804,10 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
     root = ROOT / args.output_root
     reuse_trials_root = ROOT / str(args.reuse_trials_root) if str(args.reuse_trials_root).strip() else None
     trial_decision_root = reuse_trials_root or root
-    plan = read_json(plan_path(args.plan_template, scene))
+    scene_plan_path = plan_path(args.plan_template, scene)
+    plan = read_json(scene_plan_path)
+    plan_alpha_path = plan_materialize_alpha_path(plan, plan_file=scene_plan_path)
+    region_promotion = render_region_promotion_summary(plan)
     candidates = plan.get("candidates") if isinstance(plan.get("candidates"), list) else []
     strict_patchcert_plan = is_strict_patchcert_plan(plan)
     strict_safe_replay = (
@@ -1285,7 +1820,8 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
     if not candidates:
         payload = {
             "scene": scene,
-            "plan_path": path_label(plan_path(args.plan_template, scene)),
+            "plan_path": path_label(scene_plan_path),
+            "plan_materialize_alpha_json": path_label(plan_alpha_path) if plan_alpha_path else "",
             "candidate_count": 0,
             "strict_patchcert_plan": bool(strict_patchcert_plan),
             "strict_safe_replay": bool(strict_safe_replay),
@@ -1307,7 +1843,8 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
     ):
         payload = {
             "scene": scene,
-            "plan_path": path_label(plan_path(args.plan_template, scene)),
+            "plan_path": path_label(scene_plan_path),
+            "plan_materialize_alpha_json": path_label(plan_alpha_path) if plan_alpha_path else "",
             "candidate_count": int(len(candidates)),
             "strict_patchcert_plan": True,
             "strict_safe_replay": False,
@@ -1324,7 +1861,14 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
         write_json(root / scene / "coupled_selector_decision.json", payload)
         return payload
 
-    active_specs = [strict_full_plan_spec(candidates)] if strict_safe_replay else specs
+    strict_scale_policy: dict[str, Any] = {"enabled": False}
+    if strict_safe_replay:
+        replay_scales = parse_scale_list(args.selector_strict_replay_scales)
+        if bool(args.selector_strict_adaptive_scale_policy):
+            replay_scales, strict_scale_policy = strict_adaptive_scale_policy(replay_scales, candidates, args)
+        active_specs = [strict_full_plan_spec(candidates, scale=scale) for scale in replay_scales]
+    else:
+        active_specs = specs
     uses_georisk = any(spec.mode in {"georisk", "patchrisk"} for spec in active_specs)
     face_adjacency, face_centers, geometry_meta = face_adjacency_geometry(
         plan,
@@ -1390,8 +1934,10 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             "scale": spec.scale,
             "strict_patchcert_plan": bool(strict_patchcert_plan),
             "strict_safe_replay": bool(strict_safe_replay),
+            "strict_scale_policy": strict_scale_policy,
             "requested_trial_specs": [item.label for item in specs],
             "selection_uses_test": False,
+            "plan_materialize_alpha_json": path_label(plan_alpha_path) if plan_alpha_path else "",
             "score_type": score_types[spec.mode],
             "risk_pair_lambda": float(args.risk_pair_lambda) if spec.mode == "risk" else 0.0,
             "georisk_pair_lambda": float(args.georisk_pair_lambda) if spec.mode in {"georisk", "patchrisk"} else 0.0,
@@ -1403,13 +1949,16 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
             "georisk_geometry": geometry_meta if spec.mode in {"georisk", "patchrisk"} else {},
             "patchrisk": patchrisk_meta if spec.mode == "patchrisk" else {},
             "selector_tail_cvar_fraction": float(args.selector_tail_cvar_fraction),
+            "selector_balanced_ssim_weight": float(args.selector_balanced_ssim_weight),
+            "selector_balanced_lpips_weight": float(args.selector_balanced_lpips_weight),
             "selector_tail_max_balanced_cvar_loss": float(args.selector_tail_max_balanced_cvar_loss),
             "selector_tail_min_mean_to_cvar_ratio": float(args.selector_tail_min_mean_to_cvar_ratio),
             "selector_tail_max_lpips_positive_fraction": float(args.selector_tail_max_lpips_positive_fraction),
-            "alpha_refit": bool(args.selector_fit_plan_alphas and not strict_safe_replay),
+            "alpha_refit": bool(args.selector_fit_plan_alphas and (not strict_safe_replay or args.selector_strict_fit_plan_alphas)),
+            "strict_alpha_shrink": bool(strict_safe_replay and args.selector_strict_fit_plan_alphas),
             "allow_uncertified_plan": bool(args.selector_allow_uncertified_plan),
             "materialize_face_filter": bool(not strict_safe_replay),
-            "materialize_scale": float(1.0 if strict_safe_replay else spec.scale),
+            "materialize_scale": float(spec.scale),
             "reuse_trials_root": path_label(reuse_trials_root) if reuse_trials_root else "",
             "face_ids": face_ids,
             "face_scores": face_score_entries(
@@ -1423,33 +1972,54 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
         }
         manifest_path = root / scene / "trial_manifests" / f"{spec.label}.json"
         write_json(manifest_path, manifest)
-        decision = decision_path(trial_decision_root, spec, scene)
+        reused_trial = False
         if reuse_trials_root is not None:
-            rows.append(decision_row(trial_decision_root, spec, scene, face_ids, -1 if not decision.is_file() else 0, args))
+            reuse_decision = decision_path(reuse_trials_root, spec, scene)
+            if reuse_decision.is_file():
+                rows.append(decision_row(reuse_trials_root, spec, scene, face_ids, 0, args, region_promotion))
+                reused_trial = True
+        if reused_trial:
+            continue
+        decision = decision_path(root, spec, scene)
+        if decision.is_file() and not bool(args.force):
+            rows.append(decision_row(root, spec, scene, face_ids, 0, args, region_promotion))
             continue
         if bool(args.force) or not decision.is_file():
             alpha_path: Path | None = None
-            if bool(args.selector_fit_plan_alphas and not strict_safe_replay):
+            if bool(args.selector_fit_plan_alphas and (not strict_safe_replay or args.selector_strict_fit_plan_alphas)):
                 alpha_path = alpha_json_path(root, scene, spec)
                 alpha_cmd = fit_alpha_command(args, scene, spec, face_ids, alpha_path)
                 alpha_exit = run_command(alpha_cmd, gpu=int(args.gpu), log_path=scene_log, dry_run=bool(args.dry_run))
                 if alpha_exit != 0:
-                    rows.append(decision_row(root, spec, scene, face_ids, alpha_exit, args))
+                    rows.append(decision_row(root, spec, scene, face_ids, alpha_exit, args, region_promotion))
                     continue
+            elif strict_safe_replay and plan_alpha_path is not None:
+                alpha_path = plan_alpha_path
+            render_trust_path: Path | None = None
+            if strict_safe_replay and (abs(float(spec.scale) - 1.0) > 1.0e-12 or alpha_path is not None):
+                render_trust_path = render_trust_json_path(root, scene, spec)
+                write_strict_shrink_render_trust(
+                    path=render_trust_path,
+                    plan_file=scene_plan_path,
+                    scene=scene,
+                    spec=spec,
+                    alpha_json=alpha_path,
+                )
             cmd = build_trial_command(
                 args,
                 scene,
                 spec,
                 face_ids,
                 alpha_json=alpha_path,
+                render_trust_json=render_trust_path,
                 materialize_face_filter=bool(not strict_safe_replay),
-                materialize_scale=1.0 if strict_safe_replay else None,
+                materialize_scale=spec.scale if strict_safe_replay else None,
             )
             exit_code = run_command(cmd, gpu=int(args.gpu), log_path=scene_log, dry_run=bool(args.dry_run))
             if exit_code != 0:
-                rows.append(decision_row(root, spec, scene, face_ids, exit_code, args))
+                rows.append(decision_row(root, spec, scene, face_ids, exit_code, args, region_promotion))
                 continue
-        rows.append(decision_row(trial_decision_root, spec, scene, face_ids, 0, args))
+        rows.append(decision_row(root, spec, scene, face_ids, 0, args, region_promotion))
 
     accepted = [
         row
@@ -1459,7 +2029,8 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
     selected = max(accepted, key=lambda row: float(row["trainval_balanced_delta"])) if accepted else None
     payload = {
         "scene": scene,
-        "plan_path": path_label(plan_path(args.plan_template, scene)),
+        "plan_path": path_label(scene_plan_path),
+        "plan_materialize_alpha_json": path_label(plan_alpha_path) if plan_alpha_path else "",
         "candidate_count": int(len(candidates)),
         "strict_patchcert_plan": bool(strict_patchcert_plan),
         "strict_safe_replay": bool(strict_safe_replay),
@@ -1468,8 +2039,10 @@ def run_scene(args: argparse.Namespace, scene: str, specs: list[TrialSpec]) -> d
         "selection_uses_test": False,
         "reuse_trials_root": path_label(reuse_trials_root) if reuse_trials_root else "",
         "georisk_geometry": geometry_meta if uses_georisk else {},
+        "strict_scale_policy": strict_scale_policy,
         "accepted": bool(selected),
         "selected_trial": selected["trial"] if selected else "phasej_fallback",
+        "selected_selector_pass_mode": selected.get("selector_pass_mode", "") if selected else "",
         "selected_trainval_balanced_delta": float(selected["trainval_balanced_delta"]) if selected else 0.0,
         "effective_report_only_test_delta": effective_delta(selected),
         "trials": rows,

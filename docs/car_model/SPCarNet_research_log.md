@@ -4,6 +4,245 @@ Single source of truth for "what was tried under the SP-CarNet research line and
 
 ---
 
+## 2026-06-22 — Phase-J qualitative refresh + v28 audit hardening — IMPLEMENTED_NOT_PROMOTED
+
+**Outcome**: Refreshed the paper/PPT qualitative evidence using the current
+Phase-J closure-audit protocol, and hardened v28 before the first real
+medium/full validation.
+
+Phase-J qualitative refresh:
+
+- Generated a new current-endpoint local held-out error-reduction panel:
+  `assets/spcarnet_phasej_where_it_helps_showcase_20260622.png`.
+- Manifest:
+  `assets/spcarnet_phasej_where_it_helps_selection_20260622.json`.
+- Source CSVs:
+  `outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_closure_audit.csv`
+  and
+  `outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_per_view_deltas.csv`.
+- The selected examples are strong and directly tied to
+  `ours_26000_phasej_guarded_adaptedge_ela`: bonsai crop `+11.79` dPSNR,
+  kitchen `+10.48`, room `+10.36`, counter `+6.02`, garden `+4.26`,
+  flowers `+2.15`.
+- `README.md`, `README.zh.md`, and the mentor/PPT technical report now point
+  to this Phase-J-specific panel as the preferred qualitative figure.
+
+v28 hardening:
+
+- Added fail-fast protection in
+  `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py`: if a v28
+  `ela_alpha_view_tail_scale_grid` is supplied while fixed Phase-J replay
+  points to a non-`adaptive_bins` report, the run errors instead of silently
+  becoming a non-v28/global-alpha replay.
+- Added `AlphaCalibrator` JSON diagnostics:
+  `view_tail_safe_scale_found`, `view_tail_fallback_used`, and
+  `view_tail_candidate_stats`.
+- Added W&B scalar logging for v28 view-tail enablement, selected scale,
+  safe/fallback status, mean gain, CVaR gain, and negative-view fraction.
+- Updated the ELA smoke test to require the new diagnostics.
+- Unified selector train-val per-view balanced tail diagnostics with the
+  PhaseK gate default by adding explicit `selector_balanced_ssim_weight` and
+  `selector_balanced_lpips_weight` controls, defaulting to `20/20` instead of
+  the older hidden `100/10` formula.
+- Refreshed the v28 dry-run manifest. It now explicitly contains
+  `--selector_balanced_ssim_weight 20.0`,
+  `--selector_balanced_lpips_weight 20.0`, and the v28 alpha view-tail grid.
+
+Verification:
+
+```text
+py_compile passed for the touched ELA/PhaseK/AutoVisual/selector/showcase files.
+git diff --check passed for touched code, docs, README files.
+scripts/car_model/smoke_test_stageELA0_evidence_lumigraph_adapter.py passed.
+Direct fail-fast probe passed:
+  global alpha + v28 grid -> ValueError
+  adaptive_bins + v28 grid -> view-tail args threaded
+Selector tail balanced-weight smoke passed.
+```
+
+Current status remains `NOT_PROMOTED_AS_HEADLINE`: Phase-J is still the
+accepted main result. v28 is now safer and more auditable, but it still needs a
+real W&B-online medium/long run before any performance claim.
+
+## 2026-06-22 — Soft Local-Trust v27 — IMPLEMENTED_MEDIUM_VALIDATED_REJECTED_BY_GATE
+
+**Outcome**: Implemented `field_region_render_risk_strict_v27`, a fixed
+soft local-trust ELA profile. This is a direct response to the v26 diagnosis:
+hard local-trust zeroed too much residual evidence and repeatedly drove ELA
+alpha to `0`, leaving bonsai far below the Phase-J headline.
+
+Method change:
+
+- `utils/evidence_lumigraph_adapter.py` adds `local_trust_weight_map(...)`.
+- ELA now supports `local_trust_mode=hard|soft` and `local_trust_min_weight`.
+- benefit fitting, adaptive-alpha fitting, alpha calibration, and final render
+  all use the same hard/soft trust path.
+- `meshsplatopt_apply_evidence_lumigraph_adapter.py`, PhaseK, selector, and
+  autovisual now pass/report the new trust mode.
+- v27 fixed profile:
+  `field_region_render_risk_strict_v27_soft_local_trust_weighted_residual`.
+
+Validation completed:
+
+```text
+py_compile passed.
+scripts/car_model/smoke_test_stageELA0_evidence_lumigraph_adapter.py passed.
+dry-run passed:
+/data/peilincai/spcarnet_runs/dryrun_field_region_render_risk_strict_v27_softtrust_recheck
+fixed profile override rejection passed for --ela_local_trust_mode hard.
+```
+
+W&B-online medium validation:
+
+```text
+session: 63353
+gpu: 4
+root: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v27_softtrust_20260622_bonsai_medium_gpu4
+```
+
+Key bonsai medium results:
+
+| row | split | PSNR | SSIM | LPIPS |
+|---|---|---:|---:|---:|
+| plan base | test | 28.8649 | 0.8960 | 0.2594 |
+| compact soft ELA fallback | test | 29.5067 | 0.9061 | 0.2320 |
+| plan soft ELA candidate | test | 29.5038 | 0.9063 | 0.2320 |
+| compact soft ELA fallback | trainval | 30.4714 | 0.9144 | 0.2241 |
+| plan soft ELA candidate | trainval | 30.4506 | 0.9142 | 0.2247 |
+
+Mechanism evidence:
+
+```text
+test mean local-trust weight: 0.6132
+test active fraction: 0.9629
+train mean local-trust weight: 0.5873
+train active fraction: 0.9574
+```
+
+Decision:
+
+```text
+accepted: false
+selected_label: phasej_guarded_adaptedge
+reasons:
+  - psnr_gain_below_0
+  - ssim_regression_exceeds_5e-05
+  - lpips_regression_exceeds_0.00015
+  - balanced_delta_below_0
+trainval_balanced_delta: -0.0379335880
+trainval tail balanced_cvar_delta: -0.1221391925
+```
+
+Detailed log:
+
+```text
+docs/car_model/6-22-SoftLocalTrust-v27-Implementation-And-Bonsai-Medium-Log.md
+```
+
+Current scientific status is `NOT_ACCEPTED_AS_HEADLINE`. v27 fixes the v26
+hard-gate pathology by making local trust continuous and nonzero, and it is
+slightly better than v26 on bonsai candidate test. It still fails the honest
+trainval gate and remains far below the Phase-J bonsai headline, so it should
+be reported as a useful mechanism validation / failure diagnosis rather than
+the current main method.
+
+Follow-up audit utility:
+
+```text
+scripts/car_model/ecsr_summarize_autovisual_run.py
+/data/peilincai/spcarnet_runs/20260622_v26_v27_autovisual_run_summary.md
+```
+
+This makes the v26/v27 distinction explicit: v26 plan/candidate-owned variants
+show positive balanced deltas but fail SSIM/tail safety, while v27 soft trust
+fixes the zero-trust pathology but fails trainval globally. The next credible
+method should therefore target per-view/per-region tail-safe alpha or
+view-conditional residual repair, not another scalar trust threshold.
+
+## 2026-06-22 — Witness-group CVaR v25 — REAL_TRAIN_OBJECTIVE_CHANGE_REJECTED
+
+**Outcome**: Implemented `field_region_render_risk_strict_v25`, a fixed
+train-only witness-group CVaR objective inside the face-local residual fitter.
+The objective groups samples by full train view, render-region view, and
+bystander view, then penalizes the tail of normalized post-fit MSE regressions.
+This is a real train/eval pipeline method change, not a parameter scan.
+
+Evidence:
+
+- detailed log:
+  `docs/car_model/5-30-WitnessGroupCVaR-v25-Log.md`
+- final GPU4 root:
+  `/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v25_witness_20260622_bonsai_medium_gpu4`
+- plan decision:
+  `/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v25_witness_20260622_bonsai_medium_gpu4/plan_generation/decisions/bonsai_decision.json`
+- candidate-owned refit decision:
+  `/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v25_witness_20260622_bonsai_medium_gpu4/candidate_owned_refit/decisions/bonsai_decision.json`
+- selector decision:
+  `/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v25_witness_20260622_bonsai_medium_gpu4/selector/bonsai/coupled_selector_decision.json`
+
+Key `bonsai` medium results:
+
+| stage | accepted | train-val balanced | report-only test LPIPS | report-only test PSNR | report-only test SSIM | main rejection |
+|---|---:|---:|---:|---:|---:|---|
+| plan | false | -0.000281334 | +0.000010818 | +0.000547409 | -0.000007510 | balanced below 0 |
+| candidate-owned refit | false | -0.000420392 | +0.000136852 | -0.002649307 | -0.000073910 | balanced below 0; ROI tail CVaR below floor |
+| selector strictfull_s1 | false | -0.000123024 | +0.000008732 | +0.000068665 | -0.000002503 | balanced below 0 |
+| outer selector | false | 0.0 | 0.0 | 0.0 | 0.0 | phasej fallback |
+
+The substantive W&B-online plan/filter/selector work completed. The top-level
+pipeline crashed only while writing the final command manifest because a
+comma-separated face-id allowlist was treated as a filesystem path; the manifest
+writer has been hardened to skip obvious non-path metadata strings.
+
+**Interpretation**: v25 is useful as a failure diagnosis. It confirms that
+explicit train-time witness protection is not enough: the face-local SH1
+residual still produces tiny full-frame LPIPS/SSIM regressions that dominate
+the balanced gate. The next credible step should change the representation or
+rendering update path so that local repairs become spatially reversible or
+view-conditional, rather than adding more acceptance thresholds around the same
+residual.
+
+## 2026-06-21 — Full-frame-visible carrier preselection v16 — REAL_AUDIT_CHANGE_REJECTED_AS_PERFORMANCE_METHOD
+
+**Outcome**: Implemented a fixed v16 profile that ranks and filters
+render-region carriers by train-only full-frame visibility and residual mass,
+then makes the aggregate subset prefer full-frame-visible support. This is a
+real train/eval pipeline method-audit change, not just a parameter rerun.
+
+Evidence:
+
+- run root:
+  `/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v16_20260621_flowers_bonsai_medium`
+- pipeline summary:
+  `/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v16_20260621_flowers_bonsai_medium/pipeline_summary.md`
+- selector summary:
+  `/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v16_20260621_flowers_bonsai_medium/selector/coupled_selector_summary.md`
+- detailed log:
+  `docs/car_model/5-24-FullFrameVisibleCarrierPreselection-v16-Log.md`
+
+v16 completed all GPU5 W&B-online filter/selector stages for `bonsai` after an
+earlier GPU3 OOM and after repairing a truncated bonsai cached render. The final
+selector had `0` plan candidates and selected `phasej_fallback`, so the
+effective promoted held-out delta is zero.
+
+Key evidence:
+
+| scene | candidate refit accepted | train-val balanced | report-only test balanced | main rejection |
+|---|---:|---:|---:|---|
+| flowers | false | +0.000051737 | +0.000013471 | render-region tail CVaR below `-2e-05` |
+| bonsai | false | -0.000244498 | -0.000055015 | PSNR below 0, balanced below 0, tail CVaR below `-2e-05` |
+
+Filter/aggregate evidence explains the failure. `flowers` has a positive mean
+render-region score but tail balanced `-0.002410293`; `bonsai` has large ROI
+mean gains but is removed by full-frame changed-pixel coverage. The method is
+not a no-op, but it is not a performance breakthrough.
+
+**Interpretation**: v16 should be retained as a claim-safety layer. It prevents
+locally attractive ROI rows from being promoted as full-frame wins, but it does
+not solve the core scientific bottleneck. The next method change should be a
+risk-adaptive materialization step that shrinks or zeroes unsafe carriers using
+train-only holdout evidence, rather than another carrier-threshold sweep.
+
 ## 2026-05-22 — Rank-K PatchCert carrier basis — REAL_METHOD_CHANGE_BUT_STILL_TINY
 
 **Outcome**: Implemented and pushed a configurable rank-K PatchCert carrier
@@ -8399,3 +8638,1737 @@ Full details:
 ```text
 docs/car_model/5-22-AutoVisual-RenderRegion-Filtered-v1-Log.md
 ```
+
+## 2026-06-20 Representation-Field Pivot Smoke
+
+Status: `IN_PROGRESS_ENGINEERING_MILESTONE`,
+`NOT_COMPLETE_SCIENTIFICALLY`.
+
+I added profile-controlled representation-capacity knobs to the AutoVisual
+face-local pipeline:
+
+```text
+scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py
+```
+
+New profiles:
+
+```text
+field_smoke
+field_medium
+```
+
+The smoke run completed with W&B online on GPU 5:
+
+```text
+/data/peilincai/spcarnet_runs/autovisual_field_smoke_fixed_20260620_flowers
+```
+
+It is a non-noop: `field_smoke` produced 2 candidates, 1 carrier, 16 basis rows,
+and a `field_linear` shared residual field plan. The strict replay selector
+accepted `strictfull_s1`, with `selection_uses_test=false`.
+
+However, the image-level gains are still noise-scale:
+
+| scene | selected trial | accepted | train-val dPSNR | train-val balanced | tail balanced CVaR | report-only test dPSNR | report-only test dLPIPS |
+|---|---|---:|---:|---:|---:|---:|---:|
+| flowers | strictfull_s1 | true | +0.000003815 | +0.000006199 | -0.000062477 | +0.000001907 | +0.000000149 |
+
+Conclusion: the representation-field path is now wired through the train/eval
+pipeline and has passed a smoke-level legality test, but it has not yet produced
+scientific evidence of a stronger method. The next required gate is a W&B-online
+`field_medium` run on `flowers,bonsai` with non-noise selector thresholds.
+
+Full details:
+
+```text
+docs/car_model/5-22-RepresentationField-Pivot-Log.md
+```
+
+## 2026-06-20 Carrier-Restricted Refit Fix
+
+Status: `IN_PROGRESS_REAL_METHOD_FIX`,
+`NOT_COMPLETE_SCIENTIFICALLY`.
+
+Candidate-owned refit exposed a structural failure mode: on `flowers`, the seed
+candidate carrier was `509936,790063,1448551`, but unrestricted refit expanded
+to include an extra face `32621`. This made the local tail objective worse and
+caused the render-region filter to reject all rows. I implemented an explicit
+carrier-restriction interface so refit can only use faces owned by the
+candidate-owned render-region carrier.
+
+Code path:
+
+```text
+scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py
+scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py
+scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py
+```
+
+Validation so far:
+
+```text
+py_compile passed
+dry-run confirmed:
+--delta_facelocal_allowed_face_ids 509936,790063,1448551
+```
+
+Running W&B-online validation:
+
+```text
+/data/peilincai/spcarnet_runs/autovisual_field_region_owned_refit_restricted_20260620_flowers
+/data/peilincai/spcarnet_runs/autovisual_field_region_owned_refit_medium_20260620_bonsai
+```
+
+This is a method-level locality/certification fix, not a scene-specific
+parameter setting. Scientific status remains open until the restricted run
+finishes and proves non-noise gains against the current clean baseline route.
+
+## 2026-06-20 Strict Adaptive Scale Policy Follow-Up
+
+Status: `IMPLEMENTED_AND_RUNNING_VALIDATION`,
+`NOT_COMPLETE_SCIENTIFICALLY`.
+
+Finished restricted/refit validation did not solve the core scientific gap:
+
+- `flowers` raw-seed strict replay scales `1.0,0.75,0.5,0.35,0.2` all passed
+  the inner render gate, but all failed the outer selector. Best mean
+  train-val balanced was only `+0.000027657`, below the `5e-5` non-noise gate,
+  and tail CVaR remained negative.
+- `bonsai` unrestricted candidate-owned refit generated 6 faces, but the refit
+  train-val balanced delta was `-0.000017524`; the render-region filter kept
+  `0/6` rows and selector fell back.
+
+New implemented method/policy:
+
+```text
+strict_patchcert_train_only_tail_risk_scale_v1
+```
+
+Code:
+
+```text
+scripts/car_model/ecsr_run_facelocal_coupled_selector.py
+scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py
+```
+
+The policy automatically expands strict full-plan replay scales from train-only
+candidate tail-risk statistics, records the policy audit in manifests/selector
+decisions, and never uses held-out test metrics for selection. A new pipeline
+profile, `field_region_owned_refit_adaptive_medium`, keeps render-region filter
+outputs as diagnostics but sends the raw strict candidate plan into selector
+replay so shrink candidates are not deleted before they can be evaluated.
+
+Dry-run validation passed:
+
+```text
+/tmp/spcarnet_selector_adaptive_dry
+/tmp/spcarnet_pipeline_adaptive_profile_dry
+```
+
+Running W&B-online selector validation:
+
+```text
+/data/peilincai/spcarnet_runs/autovisual_field_region_owned_refit_adaptive_20260620_flowers_selector
+/data/peilincai/spcarnet_runs/autovisual_field_region_owned_refit_adaptive_20260620_bonsai_selector
+```
+
+Current decision: if this fixed adaptive policy still cannot pass the non-noise
+selector gate, the remaining bottleneck is representation/objective strength,
+not parameter selection.
+
+## 2026-06-20 Strict Per-Face Alpha-Shrink Interface
+
+Status: `IMPLEMENTED_AND_RUNNING_VALIDATION`,
+`NOT_COMPLETE_SCIENTIFICALLY`.
+
+To move beyond uniform scale search, I implemented strict per-face monotone
+alpha shrink:
+
+```text
+--selector_strict_fit_plan_alphas
+profile: field_region_owned_refit_alpha_medium
+render-trust protocol: strict_full_carrier_monotone_shrink_render_trust_v2
+```
+
+The materializer now accepts strict alpha replay only if the render-trust
+certificate binds the alpha JSON hash, the plan hash matches, `selection_uses_test=false`,
+all alpha face IDs are in the plan, and every alpha is in `[0,1]`.
+
+First flowers live audit:
+
+```text
+/data/peilincai/spcarnet_runs/autovisual_field_region_owned_refit_alpha_20260620_flowers_s1
+alpha count: 10
+alpha min / max / mean: 0.990521 / 0.999999 / 0.997405
+strict materialize: true
+vertices added: 30
+invalid alpha faces/values: none
+```
+
+This is an important interface/certification improvement, but the first alpha
+fit is nearly identity. The rendered selector result is still running; if it
+does not pass the non-noise gate, the next alpha variant must use stronger
+train-only risk terms or render-region objective samples.
+
+Update after completion on `flowers`:
+
+```text
+uniform adaptive selector:
+  selected: phasej_fallback
+  best train-val balanced: +0.000027657
+  best tail CVaR remained negative
+
+strict alpha-shrink s1:
+  train-val balanced: +0.000027657
+  tail CVaR: -0.000048146
+  selected: phasej_fallback
+```
+
+Conclusion: both the adaptive scale policy and the strict alpha-shrink interface
+are implemented and valid, but neither reaches the non-noise selector gate on
+`flowers`. This is still not a scientific success.
+
+## 2026-06-20 Fixed Strict Render-Region-Risk v1
+
+Status: `IMPLEMENTED_AND_RUNNING_VALIDATION`, `NOT_COMPLETE_SCIENTIFICALLY`.
+
+After the adaptive-scale and strict-alpha branches failed to clear the
+non-noise selector gate, I locked the next validation into a fixed train-only
+policy contract instead of another parameter search.
+
+Implemented profile:
+
+```text
+field_region_render_risk_strict_v1
+contract: field_region_render_risk_strict_v1_fixed_train_only_no_scale_search
+```
+
+Code updates:
+
+```text
+scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py
+scripts/car_model/ecsr_filter_facelocal_plan_by_render_region.py
+```
+
+Fixed-policy properties:
+
+- candidate-owned region carrier + candidate-owned refit are mandatory;
+- selector consumes the filtered plan;
+- strict replay scale is fixed at `1.0`;
+- adaptive scale search is disabled;
+- selector alpha fitting and strict alpha fitting are disabled;
+- render-region gate uses non-permissive train-only thresholds;
+- filter now requires nonzero visible train crop change via
+  `min_mean_crop_abs_diff` and `min_max_crop_abs_diff`;
+- fixed profile fields are rejected if overridden by CLI;
+- pipeline manifest records `profile_contract_id`, fixed-profile status,
+  override fields, profile SHA-256 values, and explicit plan/filter/selector
+  contracts.
+
+Validation:
+
+```text
+py_compile passed for pipeline + render-region filter.
+dry-run manifest passed:
+  /tmp/ecsr_strict_render_region_risk_dry/pipeline_command_manifest.json
+override rejection passed:
+  --selector_strict_replay_scales 1.0,0.5 -> rejected
+  --selector_fit_plan_alphas -> rejected
+```
+
+Running W&B-online validation:
+
+```text
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v1_20260620_flowers
+GPU: 1
+```
+
+Interpretation gate:
+
+- Accepted result: cleaner than prior adaptive/alpha variants because it is a
+  fixed test-free policy with no scale or alpha search.
+- Rejected result: strong evidence that the current face-local SH
+  representation remains too weak under a fair fixed render-region-risk policy.
+
+## 2026-06-20 Update: v1 Rejected, v2 Coverage-Support Policy Implemented
+
+The fixed strict `flowers` v1 run finished and rejected the candidate:
+
+```text
+run: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v1_20260620_flowers
+profile: field_region_render_risk_strict_v1
+plan gate: rejected
+reason: render_region_changed_fraction_below_0.05
+broad train regions changed: 1 / 62 = 0.016129
+candidate-owned raw regions changed: 12 / 12 = 1.0
+candidate-owned refit: no-op
+filtered rows: 0 / 13
+selector: phasej_fallback, no_plan_candidates
+```
+
+Interpretation: the raw face-local operator can affect tiny owned crops, but
+its support is too narrow to produce broad visible improvement under a fair
+fixed train-only render-region gate.
+
+Implemented fixed v2:
+
+```text
+profile: field_region_render_risk_strict_v2
+contract: field_region_render_risk_strict_v2_coverage_prefix_fixed_train_only_no_scale_search
+```
+
+New method components:
+
+- train-only coverage-prefix carrier selection;
+- fixed minimum prefix coverage by face fraction: `0.70`;
+- fixed coverage bonus: `0.02`;
+- candidate-owned train-region support expansion from seed faces to
+  train-visible region faces;
+- expansion is written as `seed_face_ids`, `expanded_face_ids`, and fixed
+  expansion settings in the carrier JSON/manifest;
+- fixed profile still forbids CLI profile overrides and disables alpha/scale
+  selector games.
+
+Validation:
+
+```text
+py_compile passed for apply, PhaseK wrapper, pipeline, and candidate-region builder.
+dry-run manifest passed: /tmp/ecsr_strict_render_region_risk_v2_dry/pipeline_command_manifest.json
+override rejection passed: --delta_patch_cert_carrier_holdout_auto_prefix_min_face_fraction 0.2
+offline builder sanity on v1 flowers plan: 13 seed faces -> 64 carrier faces, 51 expanded faces.
+```
+
+Running W&B-online validation:
+
+```text
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v2_20260620_flowers
+GPU: 1
+early operator-audit signal: accepted, 19 faces, 3 carriers, effective coverage floor 15 faces.
+final plan-gate decision so far: rejected by render_region_changed_fraction_below_0.05.
+```
+
+Current status remains `NOT_COMPLETE_SCIENTIFICALLY`: v2 must still pass
+candidate-owned refit, render-region filter, selector, and multi-scene
+validation before it can be treated as a real method improvement.
+
+## 2026-06-20 Update: v3 Support-Aware Policy Floor
+
+The v2 `flowers` refit audit showed a positive local repair being erased by the
+absolute `min_policy_val_samples=512` gate:
+
+```text
+v2 refit selected faces before final gate: 24
+carrier-holdout selected faces: 16
+carrier-holdout selected carriers: 2
+final accepted policy-val relative gain: 0.164315
+final accepted policy-val samples: 187
+configured min_policy_val_samples: 512
+candidate plan rows written: 0
+```
+
+Implemented fixed v3:
+
+```text
+profile: field_region_render_risk_strict_v3
+contract: field_region_render_risk_strict_v3_support_aware_policy_floor_fixed_train_only_no_scale_search
+```
+
+New fixed support-aware sample rule:
+
+```text
+effective_min_policy_val_samples =
+  min(512, max(128, ceil(0.30 * available_policy_val_samples)))
+```
+
+This is intended to preserve the original 512-sample standard for broad-support
+repairs while avoiding a hard no-op for local region repairs with positive
+train-only holdout evidence.
+
+Validation:
+
+```text
+py_compile passed.
+dry-run manifest passed: /tmp/ecsr_strict_render_region_risk_v3_dry/pipeline_command_manifest.json
+fixed profile override rejection passed:
+  --delta_min_policy_val_adaptive_sample_fraction 0.1 -> rejected
+```
+
+Running W&B-online validation:
+
+```text
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v3_20260620_flowers
+GPU: 4
+```
+
+Status remains `NOT_COMPLETE_SCIENTIFICALLY`.
+
+## 2026-06-22 Update: v28 View-Tail-Safe Alpha Shrink
+
+Implemented a new v28 ELA safety mechanism in response to the v26/v27 Bonsai
+failure evidence.
+
+Diagnosis:
+
+- v26 hard local-trust was interface-complete but selector-final rejected. The
+  final selector chose `phasej_fallback`; `strictfull_s1` had train-val balanced
+  `-0.062735`, tail CVaR `-0.223829`, negative fraction `1.0`, and LPIPS
+  positive fraction `0.96875`.
+- v27 soft local-trust fixed the all-zero trust pathology but still showed
+  view-level trainval tail regression in the plan decision.
+- The missing safety level is per-view tail certification after per-bin alpha
+  calibration.
+
+Implemented:
+
+```text
+profile: field_region_render_risk_strict_v28
+contract: field_region_render_risk_strict_v28_view_tail_safe_alpha_shrink
+alpha view-tail scale grid: 1.0,0.75,0.5,0.25,0.0
+alpha view-tail CVaR fraction: 0.25
+alpha view-tail min gain: 0.0
+alpha view-tail max negative fraction: 0.50
+```
+
+Touched files:
+
+```text
+utils/evidence_lumigraph_adapter.py
+scripts/car_model/meshsplatopt_apply_evidence_lumigraph_adapter.py
+scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py
+scripts/car_model/ecsr_run_facelocal_coupled_selector.py
+scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py
+scripts/car_model/smoke_test_stageELA0_evidence_lumigraph_adapter.py
+scripts/car_model/ecsr_summarize_autovisual_run.py
+```
+
+Verification:
+
+```text
+py_compile: passed
+git diff --check: passed
+ELA smoke: [ELA smoke] passed
+v28 dry-run: /data/peilincai/spcarnet_runs/dryrun_field_region_render_risk_strict_v28_viewtail_20260622
+```
+
+The dry-run command manifest confirms that plan, candidate-owned refit, and
+selector commands all receive `--ela_alpha_view_tail_*` arguments.
+
+Additional hardening:
+
+- ELA alpha region-risk now fails closed if enabled without an existing JSON.
+- PhaseK and selector region-risk wiring now also fails closed instead of
+  silently no-oping.
+- `ecsr_summarize_autovisual_run.py` was fixed to handle selector-final rows and
+  missing stage roots.
+
+Status remains `NOT_COMPLETE_SCIENTIFICALLY`: v28 is implemented and dry-run
+verified, but no medium/full W&B-online validation has promoted it yet.
+
+## 2026-06-22 Update: v26 Render-Layer Local-Trust ELA
+
+Implemented the fixed v26 profile as a local-trust extension of the current
+Evidence Lumigraph Adapter path:
+
+```text
+profile: field_region_render_risk_strict_v26
+contract: field_region_render_risk_strict_v26_render_layer_local_trust_reversible_residual
+```
+
+The key method change is a render-layer local-trust gate that suppresses ELA
+residual transfer when support count, multi-view residual stability, agreement,
+or confidence is weak. This is intended to reduce out-of-trajectory residual
+collapse while keeping the current Phase-J train-only guarded policy.
+
+Interface validation:
+
+```text
+py_compile: passed
+ELA local-trust smoke: passed
+autovisual dry-run: passed, 8 commands
+dry-run manifest:
+/data/peilincai/spcarnet_runs/dryrun_field_region_render_risk_strict_v26_localtrust_recheck/pipeline_command_manifest.json
+```
+
+Medium validation status:
+
+```text
+GPU2 bonsai medium: failed due CUDA OOM on a crowded GPU, not a method result.
+GPU5 bonsai medium: running with W&B online.
+root:
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v26_localtrust_20260622_bonsai_medium_gpu5
+```
+
+Detailed log:
+
+```text
+docs/car_model/6-22-LocalTrust-v26-Integration-And-Bonsai-Medium-Log.md
+```
+
+Status remains `NOT_COMPLETE_SCIENTIFICALLY`: v26 is interface-complete and
+smoke-tested, but not yet proven by medium/long multi-scene evaluation.
+
+## 2026-06-22 Update: v24 Negative Evidence and v25 Witness-CVaR Pivot
+
+v24 bystander-zero-delta was implemented and validated as an active train
+objective, but the medium `bonsai` run is not a successful result. Plan
+generation failed the strict train-val gate:
+
+```text
+run root: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v24_bystander_20260622_bonsai_medium
+accepted: false
+decision_reasons: balanced_delta_below_0
+trainval balanced delta: -0.0002480149269
+test delta report-only: LPIPS +0.0000088513, PSNR +0.0005474091, SSIM -0.0000075102
+```
+
+The key diagnostic is that v24 still has a severe local-tail failure:
+
+```text
+candidate-owned render-region mean core balanced delta: +0.2048213503
+candidate-owned render-region tail core balanced CVaR: -0.1804324199
+negative core-balanced fraction: 0.2619047619
+```
+
+This makes v24 a useful failure analysis point, not a paper-quality method.
+The current pivot is v25 witness-group CVaR: a train-objective loss that groups
+full-view, render-region, and bystander samples by train view and penalizes the
+tail of relative MSE regressions.
+
+v25 implementation status:
+
+```text
+profile: field_region_render_risk_strict_v25
+contract: field_region_render_risk_strict_v25_train_objective_witness_group_cvar
+py_compile/help/dry-run: passed
+first GPU2 fit audit: accepted true, policy_pass true, accepted_faces 169
+witness groups: 19 total, including 9 bystander-view groups
+final witness constraint loss: 0.0
+```
+
+The first GPU2 medium attempt was resource-blocked after fitting by CUDA OOM
+during render evidence maps, so it is not metric evidence. A clean GPU4 retry
+is running at:
+
+```text
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v25_witness_20260622_bonsai_medium_gpu4
+```
+
+Status remains `NOT_COMPLETE_SCIENTIFICALLY`. The immediate gate is whether
+v25 can finish plan/filter/selector and improve train-val/test metrics without
+LPIPS/SSIM tail regressions.
+
+Follow-up v24 selector result:
+
+```text
+selector decision: accepted false
+selected_trial: phasej_fallback
+strictfull_s1 test delta vs PhaseJ:
+  LPIPS +0.0000006557, PSNR +0.0000057220, SSIM -0.0000002384
+selector rejection:
+  inner_gate_rejected
+  selector_psnr_gain_below_2e-05
+  selector_balanced_delta_below_5e-05
+region-local promotion:
+  mean_core_balanced_delta +0.3826133188
+  tail_core_balanced_delta +0.0158917546
+```
+
+This sharpens the diagnosis: the local region view can be improved, but the
+improvement still does not transfer into the global train-val gate. The v25
+witness-group CVaR objective is therefore the right next test, because it
+targets cross-view regressions inside the fitter rather than rescuing them
+afterward in selector logic.
+
+Pipeline reliability fix:
+
+```text
+file: scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py
+change: command_record_output_sha256s now catches OSError
+reason: comma-separated allowed_face_ids metadata was being treated as a path
+```
+
+The selector-only no-force rerun successfully wrote:
+
+```text
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v24_bystander_20260622_bonsai_medium/pipeline_summary.json
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v24_bystander_20260622_bonsai_medium/pipeline_command_manifest.json
+```
+
+## 2026-06-22 Update: v24 Bystander Zero-Delta Objective
+
+v21 and v23 both failed the scientific gate. v21 selector strictfull_s1 was
+rejected with `balanced_delta_below_0`; v23 candidate-owned refit was rejected
+with `balanced_delta_below_0` and `render_region_tail_cvar_below_-2e-05`.
+
+The observed pattern is stable:
+
+```text
+PSNR can increase by a tiny amount;
+LPIPS and SSIM regress;
+render-region mean gains do not protect the tail;
+the selector/gate correctly falls back to PhaseJ.
+```
+
+Implemented v24 as a mechanism-level training-objective change rather than
+another threshold scan:
+
+```text
+profile: field_region_render_risk_strict_v24
+contract: field_region_render_risk_strict_v24_train_objective_bystander_zero_delta
+new term: weighted zero-delta loss on non-core bystander samples
+fixed weight: 0.20
+include context samples: true
+min bystander samples: 64
+```
+
+Touched interfaces:
+
+```text
+scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py
+scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py
+scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py
+```
+
+Validation so far:
+
+```text
+py_compile passed
+v24 dry-run passed with 8 commands
+dry-run command contains --delta_bystander_zero_delta_weight 0.2
+```
+
+Detailed log:
+
+```text
+docs/car_model/5-29-BystanderZeroDelta-v24-Log.md
+```
+
+Status remains `NOT_COMPLETE_SCIENTIFICALLY`: v24 still needs a real W&B-online
+medium run, gate decision, metrics, render-region objective, and qualitative
+outputs before any claim of improvement.
+
+## 2026-06-22 Update: v21/v23 Failed Gate, v24 Objective-Level Pivot
+
+The risk-aware carrier-shrink line now has a clear negative result on bonsai.
+v21 candidate-owned refit and v23 audited local suppression both failed the
+registered train-only gate:
+
+```text
+v21 candidate-owned refit:
+  accepted: false
+  reasons: balanced_delta_below_0, render_region_tail_cvar_below_-2e-05
+  train-val balanced delta: -0.0006714463
+  train-val delta: LPIPS +0.0000314862, PSNR +0.0003433228, SSIM -0.0000192523
+  render-region mean core balanced: +0.2351670927
+  render-region tail CVaR: -0.0996001417
+  worst render-region core balanced: -0.3704202175
+
+v23 plan-generation:
+  accepted: false
+  reason: balanced_delta_below_0
+  train-val balanced delta: -0.0002019405
+  train-val delta: LPIPS +0.0000158548, PSNR +0.0003833771, SSIM -0.0000134110
+  changed render regions: 5 / 62
+  mean render-region core balanced: +0.0020345228
+```
+
+Interpretation: v23 fixed auditability and stale-artifact risks, but it did not
+fix the method. The repeated pattern is tiny PSNR gain with LPIPS/SSIM
+regression, plus severe local-tail failures in v21. The next work item is not
+multi-scene packaging or looser thresholds. It is v24: objective-level
+bystander / zero-delta witness protection inside the facelocal residual solver,
+with PhaseK and autovisual profile plumbing, followed by a W&B-online bonsai
+medium gate before any expansion.
+
+## 2026-06-22 Update: v20-v23 Risk-Aware Carrier Shrink
+
+v20 implemented a real train/eval pipeline connection for pre-refit carrier
+risk shrink. The pipeline now writes a per-face alpha JSON from train-only
+render-region objective evidence and forwards it into facelocal materialization,
+where selected face-local coefficient rows are scaled before candidate-owned
+refit evaluation.
+
+Key v20 evidence:
+
+```text
+run root: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v20_trainrisk_20260622_bonsai_medium
+pre-refit shrink status: applied
+shrunk carriers: 3 / 8
+facelocal face_risk_scale.enabled: true
+matched scaled faces: 144
+affected coefficient rows: 432
+candidate-owned decision: rejected
+reasons: balanced_delta_below_0, render_region_tail_cvar_below_-2e-05
+selector final: rejected; selected_trial=phasej_fallback
+strictfull_s1 trainval balanced delta: -0.0000489354
+strictfull_s1 trainval delta: LPIPS +0.0000051409, PSNR +0.0000896454, SSIM -0.0000017881
+```
+
+This is an interface milestone but not a scientific success. v20 gains tiny
+PSNR over the Phase-J fallback while regressing SSIM/LPIPS and failing the
+strict render-region tail gate.
+
+v21 is now implemented as a fixed severity-aware extension:
+
+```text
+profile: field_region_render_risk_strict_v21
+contract: field_region_render_risk_strict_v21_severity_aware_pre_refit_carrier_risk_shrink
+min scale: 0.10
+severity inputs: bad fraction, worst core-balanced regression, tail CVaR
+dry-run and py_compile: passed
+```
+
+v22 added train-only local bad-row suppression, but code review found it should
+only be treated as an ablation because the refit and selector reports still
+shared one path, local suppression could fall back to arbitrary carrier faces
+when view/pixel metadata was insufficient, and positive-witness preservation
+was effectively disabled for normal view-labeled rows.
+
+v23 is now implemented as the audited fixed-method successor:
+
+```text
+profile: field_region_render_risk_strict_v23
+contract: field_region_render_risk_strict_v23_audited_metadata_local_suppression
+report split: pre_refit_risk_shrink_report_refit.json vs pre_refit_risk_shrink_report_selector.json
+alpha split: pre_refit_risk_scale_refit.json vs selector_materialize_alpha.json
+manifest hashing: output_path_sha256s recorded for existing output files
+stale refit guard: risk-shrink refit cannot silently reuse an old refit plan without --force
+facelocal audit assertion: face_risk_scale must be enabled, matched, and affect coefficient rows
+local suppression: no arbitrary carrier fallback; skipped rows are reported when view/pixel metadata is missing
+dry-run: /data/peilincai/spcarnet_runs/dryrun_field_region_render_risk_strict_v23_audited_local_suppression
+```
+
+Active validation:
+
+```text
+v21 medium bonsai run running on GPU1 with W&B online:
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v21_severity_20260622_bonsai_medium
+
+v22 medium bonsai run was aborted after review confirmed it should only be
+treated as a flawed ablation:
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v22_local_suppression_20260622_bonsai_medium
+
+v23 medium bonsai run started on GPU5 with W&B online:
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v23_audited_local_suppression_20260622_bonsai_medium
+```
+
+Detailed log:
+
+```text
+docs/car_model/5-28-RiskAwareCarrierShrink-v20-v21-Log.md
+```
+
+## 2026-06-22 Update: v19 Objective-Aware Pre-Refit Carrier Risk Pruning
+
+v18 completed as a clean negative medium run on `bonsai`:
+
+```text
+run root: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v18_20260622_bonsai_medium
+profile: field_region_render_risk_strict_v18
+contract: field_region_render_risk_strict_v18_objective_aware_bad_region_alpha_risk
+commands: 8 / 8 exit_code=0
+candidate-owned refit: rejected
+reasons: balanced_delta_below_0, render_region_tail_cvar_below_-2e-05
+selector: no accepted candidate, phasej_fallback
+train-val delta: PSNR +0.0004844666, SSIM -0.0000111461, LPIPS +0.0000191480, balanced -0.0001214147
+```
+
+Diagnosis: v18 applied objective-aware risk only during ELA materialization, after
+unstable carrier faces had already entered candidate-owned refit. It therefore
+did not prevent train-val/tail regressions.
+
+Implemented v19 fixed profile:
+
+```text
+profile: field_region_render_risk_strict_v19
+contract: field_region_render_risk_strict_v19_objective_aware_pre_refit_carrier_risk_pruning
+override policy: forbidden
+```
+
+New method behavior:
+
+- uses train-only candidate-owned render-region objective before refit;
+- maps objective rows by `carrier_id` back to `candidate_render_regions.json`;
+- ignores non-changed/equal-crop rows;
+- prunes whole carrier face sets when more than half of evaluable rows are bad;
+- defines bad rows by `core_balanced_delta < -0.001`, or by the auxiliary pair
+  `delta_core_ssim < -0.001` and `delta_core_lpips > 0.001`;
+- caps removal at 50% of the candidate face set;
+- writes a sidecar audit report at
+  `candidate_owned_refit_plans/{scene}/pre_refit_risk_prune_report.json`.
+
+Validation:
+
+```text
+py_compile passed:
+  scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py
+  utils/evidence_lumigraph_adapter.py
+
+dry-run passed:
+  /data/peilincai/spcarnet_runs/dryrun_field_region_render_risk_strict_v19
+
+v18-artifact prune probe:
+  carriers: 8
+  faces: 411
+  removed carriers: 3
+  removed faces: 192
+  remaining faces: 219
+  removed fraction: 0.4671532847
+```
+
+Dedicated log:
+
+```text
+docs/car_model/5-27-PreRefitCarrierRiskPruning-v19-Log.md
+```
+
+Status remains `NOT_COMPLETE_SCIENTIFICALLY` until the W&B-online v19 medium run
+proves that pre-refit carrier risk pruning improves the actual train/eval gate,
+not just the offline candidate-space audit.
+
+## 2026-06-22 Update: v18 Objective-Aware Bad-Region Alpha Risk
+
+Created a dedicated log for the new v18 repair attempt:
+
+```text
+docs/car_model/5-26-ObjectiveAwareBadRegionAlpha-v18-Log.md
+```
+
+Fixed profile:
+
+```text
+profile: field_region_render_risk_strict_v18
+contract: field_region_render_risk_strict_v18_objective_aware_bad_region_alpha_risk
+```
+
+v18 addresses a concrete v17 weakness: train-render-region objective evidence
+showed bad regions, but alpha region-risk calibration consumed all region rows
+instead of restricting suppression to measured-bad objective rows. The new path
+adds `objective_bad_only` thresholds to the ELA adapter, Phase-K wrapper,
+selector, and autovisual pipeline.
+
+Validation already passed:
+
+```text
+py_compile passed.
+dry-run manifest passed.
+objective bad-row loader filtered v17 bonsai rows from 41 total boxes to
+31 objective-bad boxes.
+```
+
+Active W&B-online medium validation:
+
+```text
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v18_20260622_bonsai_medium
+scene: bonsai
+GPU: 5
+```
+
+The plan-stage ELA reports are expected to show region-risk disabled because
+candidate-owned objective JSON is not available yet. The decisive evidence will
+come from candidate-owned refit and selector. If v18 still fails, the next
+repair should move bad-region evidence earlier than ELA and use objective-bad
+rows to constrain candidate carrier / allowed-face selection before refit.
+
+## 2026-06-21 Update: v15 Full-Frame Visibility Guard Outcome
+
+v15 added full-frame visibility accounting to prevent ROI-local residual edits
+from being treated as full-frame improvements. The implementation compiled,
+passed diff checks, and dry-ran successfully. Offline replay rejected bonsai
+because the changed full-frame fraction was only `1.4315e-05`; flowers passed
+the train-only visibility replay and was promoted to a W&B-online Phase-K
+selector run.
+
+Final flowers validation:
+
+```text
+root: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v15_20260621_flowers_visibility_guard_selector
+phase-k accepted: true
+coupled selector accepted: false
+selected trial: phasej_fallback
+train-val balanced delta: +3.5048e-05
+selector threshold: +5.0000e-05
+report-only test delta:
+  LPIPS: -2.6822e-07
+  PSNR:  +1.9073e-06
+  SSIM:  -5.9605e-08
+main rejection reason: selector_balanced_delta_below_5e-05
+tail risk:
+  balanced negative fraction: 0.4737
+  psnr negative fraction: 0.2368
+  worst balanced delta: -0.0010177
+```
+
+Conclusion:
+
+v15 should stay in the codebase as a necessary safety and reporting guard, but
+it does not solve the scientific problem. The current failure mode is no longer
+"implementation does nothing"; it is "valid local repairs are too spatially
+diluted and tail-unstable to beat MeshSplatting at full-frame evidence level."
+The next credible step is a representation/candidate-generation upgrade that
+selects or creates repairs with larger visible support before filtering and
+selector gating. More threshold scans on the same candidates are unlikely to
+change the conclusion.
+
+## 2026-06-21 Update: v15 Full-Frame Visibility Guard
+
+v15 adds a fixed train-only full-frame visibility correction on top of v14:
+
+```text
+profile: field_region_render_risk_strict_v15
+contract: field_region_render_risk_strict_v15_full_frame_visibility_guarded_alpha_shrink
+new gate:
+  full_frame_changed_pixel_fraction >= 2.0e-05
+  full_frame_visibility_adjusted_delta >= 5.0e-07
+```
+
+Motivation: v14 showed positive local ROI evidence but almost no full-frame
+effect. On bonsai, the selected candidate changed only `1484` pixels over a
+`64 x 1619801` train-val pixel budget (`1.4315e-05`). That is below the
+visibility threshold and explains why the final metrics collapsed to numerical
+noise around the Phase-J baseline.
+
+Implementation summary:
+
+- `scripts/car_model/ecsr_eval_train_render_region_objective.py` now writes
+  image/frame pixel metadata into each train-render region row.
+- `scripts/car_model/ecsr_apply_render_cvar_aggregate_subset.py` now computes
+  `full_frame_changed_pixel_fraction` and
+  `full_frame_visibility_adjusted_delta`.
+- `scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py` adds fixed
+  profile `field_region_render_risk_strict_v15` and automatically infers frame
+  pixels from the scene image directory when not explicitly configured.
+
+Offline replay using existing v11 evidence:
+
+```text
+bonsai:
+  root: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v15_20260621_bonsai_visibility_guard_replay2
+  selected carriers / rows: 0 / 0
+  final reason: full_frame_changed_pixel_fraction_below_2e-05
+
+flowers:
+  root: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v15_20260621_flowers_visibility_guard_replay2
+  selected carriers / rows: 2 / 14
+  full_frame_changed_pixel_fraction: 2.9658e-05
+  full_frame_visibility_adjusted_delta: 6.8651e-07
+  train-render tail balanced delta: +1.4512e-05
+```
+
+Validation:
+
+```text
+py_compile passed
+git diff --check passed
+dry-run root: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v15_20260621_dryrun2
+```
+
+Active W&B-online selector validation:
+
+```text
+scene: flowers
+GPU: 1
+session: 34220
+root: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v15_20260621_flowers_visibility_guard_selector
+```
+
+Current interpretation: v15 improves claim hygiene and prevents low-visibility
+ROI wins from being promoted. It is not yet proof of scientific success. The
+active flowers selector must show stable nonzero train-val improvement; if it
+does not, the next method change must increase visible candidate support during
+candidate generation rather than loosening selector thresholds.
+
+Status remains `NOT_COMPLETE_SCIENTIFICALLY`.
+
+## 2026-06-21 Update: v14 Per-Carrier Alpha Shrink Result
+
+v14 implemented the fixed support-preserving per-carrier alpha shrink policy
+for aggregate render-CVaR candidates:
+
+```text
+profile: field_region_render_risk_strict_v14
+contract: field_region_render_risk_strict_v14_coverage_dilution_guarded_per_carrier_alpha_shrink
+selector root: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v14_20260621_bonsai_carrier_shrink_guard_refit_support_preserve_selector
+plan alpha json: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v14_20260621_bonsai_carrier_shrink_guard_refit_support_preserve/bonsai/aggregate_subset_materialize_alpha.json
+selection_uses_test: false
+```
+
+This is a real pipeline improvement: the train-only aggregate subset stage can
+now emit carrier-specific materialization alphas, and the strict selector
+automatically consumes that alpha JSON through the render-trust path.
+
+However, the bonsai validation rejected the method:
+
+```text
+accepted: false
+selected_trial: phasej_fallback
+decision reason: balanced_delta_below_0
+
+train-val delta vs Phase-J baseline:
+  LPIPS +0.0000001639
+  PSNR  +0.0000000000
+  SSIM  -0.0000002980
+  balanced -0.0000092387
+
+report-only test delta vs Phase-J baseline:
+  LPIPS -0.0000002086
+  PSNR  -0.0000114441
+  SSIM  +0.0000000000
+  balanced -0.0000072718
+```
+
+Current interpretation: v14 fixes an interface and auditability weakness, but
+the scientific bottleneck remains unresolved. The residual candidate still does
+not create stable full-frame improvement over the clean MeshSplatting-derived
+Phase-J baseline; ELA mostly pulls the result back to baseline-like behavior.
+
+Next decision: do not spend full multi-scene budget on this v14 policy as a
+claimed method. The next research step must improve the residual
+materialization itself so that a nonzero candidate survives train-val gating
+before any report-only test comparison is considered.
+
+Status remains `NOT_COMPLETE_SCIENTIFICALLY`.
+
+## 2026-06-21 Update: v14 Support-Preserving Aggregate Carrier Alpha Shrink
+
+Implemented a fixed, train-only policy step instead of another selector-scale
+scan:
+
+- aggregate subset can now emit `aggregate_subset_materialize_alpha.json`;
+- selector automatically consumes that plan-level alpha JSON and records it in
+  strict render-trust;
+- new fixed profile:
+  `field_region_render_risk_strict_v14_coverage_dilution_guarded_per_carrier_alpha_shrink`;
+- v14 selector replay is fixed to `strictfull_s1`, so the candidate is judged
+  by the policy itself rather than by a global shrink sweep.
+
+Important correction: shrink must preserve spatial support. The first attempt
+also shrank `crop_nonzero_pixels/fraction`, which made coverage/dilution checks
+fail for the wrong reason. The current implementation shrinks residual
+amplitude metrics while keeping coverage support for positive alpha.
+
+Offline bonsai replay with existing v11 train-only evidence:
+
+```text
+root: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v14_20260621_bonsai_carrier_shrink_guard_refit_support_preserve
+selected carriers / rows: 2 / 20
+alpha values: 0.035 and 1.0
+mean_core_balanced_delta: +0.0304807189
+mean_delta_core_psnr: +0.0186366671
+tail_core_balanced_delta: -0.00001826296
+dilution_adjusted_core_balanced_delta: +0.0027501253
+```
+
+Active W&B-online validation:
+
+```text
+session: 7852
+GPU: 1
+root: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v14_20260621_bonsai_carrier_shrink_guard_refit_support_preserve_selector
+```
+
+Status remains `NOT_COMPLETE_SCIENTIFICALLY` until the Phase-K render gate and
+report-only test deltas are available, and still requires multi-scene replay
+before any paper-level claim.
+
+## 2026-06-21 Update: v13 Coverage/Dilution Guard and v14/v15 Holdout-Safe Alpha
+
+Detailed log:
+
+```text
+docs/car_model/5-23-CoverageDilution-HoldoutAlpha-Log.md
+```
+
+Current status remains `NOT_COMPLETE_SCIENTIFICALLY`.
+
+The latest diagnosis is that bonsai is not failing because the operator is a
+no-op. The v12 selected carrier is locally strong but covers only two
+train-render regions, so the gain dilutes to full-frame numerical noise. The
+broader carrier has stronger coverage but unsafe train-render tail behavior.
+
+Implemented and validated:
+
+```text
+v13 profile: field_region_render_risk_strict_v13
+contract: field_region_render_risk_strict_v13_coverage_dilution_guarded_aggregate_subset
+new policy: unique-view, changed-view, pixel, area-weighted, and dilution-adjusted train-only guards
+dry-run manifest: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v13_20260621_dryrun2/pipeline_command_manifest.json
+offline bonsai replay: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v13_20260621_bonsai_coverage_dilution_guard_refit/bonsai/aggregate_subset_summary.json
+```
+
+The v13 offline replay correctly rejects the v12 narrow ROI subset:
+
+```text
+selected_carriers: 0
+selected_rows: 0
+final reasons: unique_views_below_4, changed_unique_views_below_4
+```
+
+This is an honesty and reliability improvement, not a performance breakthrough.
+
+The v13 full20 risk-carrier alpha-rescue diagnostic was also rejected:
+
+```text
+accepted: false
+reason: psnr_gain_below_0
+trainval balanced delta: +2.1517276763916016e-05
+trainval PSNR delta: -3.814697265625e-06
+trainval SSIM delta: -2.384185791015625e-07
+trainval LPIPS delta: -1.5050172805786133e-06
+```
+
+Running W&B-online validation:
+
+```text
+v12 selector rerun session: 42672, GPU5
+v14 holdout-safe alpha Phase-K session: 81026, GPU4
+v15 full20 + holdout-safe ELA diagnostic session: 46251, GPU1
+```
+
+v14 and v15 both failed hard after this note was started. v14 regressed
+trainval by `-2.531665802001953` PSNR, `-0.025668740272521973` SSIM, and
+`+0.072795569896698` LPIPS. v15 produced similarly poor absolute metrics
+after holdout-safe zeroing (`test LPIPS 0.25426793098449707`, `test PSNR
+29.04352378845215`, `test SSIM 0.8983045220375061`). Holdout-safe ELA zeroing
+is therefore not a viable performance policy by itself; it is a useful risk
+diagnostic that can over-suppress correction.
+
+An interface bug was found and fixed: `ela_alpha_min_tail_gain=-inf` must be
+emitted as `--arg=value`, not as two argv tokens. The pre-fix v12 selector
+rerun was terminated and restarted with patched code as session `55042`.
+
+The next real method change should convert the manual alpha-rescue idea into a
+fixed aggregate-subset per-carrier shrink policy that emits a face-alpha JSON
+and strict render-trust certificate for selector consumption.
+
+## 2026-06-21 Update: v12 Aggregate Render-CVaR Subset
+
+v11 confirmed the core failure mode more sharply:
+
+```text
+flowers v11 filtered plan:
+  input/kept: 14 rows, 2 carriers
+  carrier A: 10 rows, mean balanced +0.029325, dPSNR +0.018512,
+             tail +0.000059, context max 0
+  carrier B: 4 rows, mean balanced +0.007166, dPSNR +0.004343,
+             tail +0.000044, context max 1.049e-05
+
+flowers v11 selector:
+  strictfull_s1 train-val balanced +0.000044942, dPSNR +0.000041962
+  strictfull_s0p85 train-val balanced +0.000032425, dPSNR +0.000032425
+  both pass the inner train-val gate, but s1 remains below the selector
+  balanced threshold of +0.000050.
+
+bonsai v11 plan_generation:
+  render-region gate accepted, but train-val rejected:
+  dPSNR -0.000175476, dSSIM -0.000003457,
+  dLPIPS +0.000000656, balanced -0.000257730.
+```
+
+This means the method has real local render signal, but whole-image transfer is
+not monotonic. v11's severe-tail rollback is necessary but not sufficient.
+
+Implemented fixed v12:
+
+```text
+profile: field_region_render_risk_strict_v12
+contract: field_region_render_risk_strict_v12_monotonic_aggregate_render_cvar_subset
+fixed profile override policy: forbidden
+```
+
+New method component:
+
+- after the existing train-render region filter, v12 applies a train-only
+  aggregate render-CVaR whole-carrier subset;
+- it keeps or drops complete strict PatchCert carriers only;
+- context-risk failures are not promoted by shrink;
+- the selected carrier set must satisfy fixed mean/tail/context/negative-rate
+  thresholds on the union of matched train-render regions;
+- selector receives the aggregate-subset plan rather than the ordinary filtered
+  plan, so the full-frame train-val gate remains the final promotion rule.
+
+Implemented files:
+
+```text
+scripts/car_model/ecsr_apply_render_cvar_aggregate_subset.py
+scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py
+```
+
+Validation:
+
+```text
+py_compile passed:
+  ecsr_apply_render_cvar_aggregate_subset.py
+  ecsr_run_autovisual_facelocal_pipeline.py
+
+git diff --check passed for the edited scripts.
+
+dry-run passed:
+  /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/_dryrun_v12_aggregate_subset
+  commands: 15
+  selector plan template:
+    filtered_candidate_plans/{scene}/facelocal_visual_candidate_plan_filtered_aggregate_subset.json
+```
+
+Offline v12 replay on flowers v11 artifacts:
+
+```text
+input: 14 rows / 2 carriers
+selected: 10 rows / 1 carrier
+rejected carrier:
+  context_mse_regression_above_1e-06
+selected aggregate:
+  mean balanced +0.029325053
+  mean dPSNR +0.018511772
+  mean dSSIM +0.000260967
+  mean dLPIPS -0.000279697
+  tail balanced +0.000059104
+  negative fraction 0.05
+  max context regression 0
+```
+
+Active W&B-online validation:
+
+```text
+v11 flowers:
+  /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v11_20260621_flowers
+  GPU 1, selector still running strict replay.
+
+v11 bonsai:
+  /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v11_20260621_bonsai
+  GPU 5, candidate-owned refit still running.
+
+v12 flowers selector from the offline aggregate subset:
+  /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v12_offline_20260621_flowers_selector
+  GPU 2, W&B online, completed.
+  selected: strictfull_s1
+  selector pass mode: region_stable
+  train-val balanced: +0.000035644
+  report-only dPSNR: +0.000001907
+  report-only dSSIM: +0.000000060
+  report-only dLPIPS: -0.000000298
+```
+
+Interpretation:
+
+- v12 fixes the specific v11 flowers failure mode: v11 fell back because
+  region-stable promotion was blocked by a context-risk carrier, while v12
+  removes that carrier and is accepted by the selector.
+- This is a real method improvement over v11 on the selected flowers protocol,
+  but it is not yet a strong visual or paper-level metric gain. The held-out
+  dPSNR is only +0.000001907, so this should be described as safety/selection
+  progress rather than a rendering-quality breakthrough.
+
+Status: `V12_IMPLEMENTED`, `FLOWERS_V12_ACCEPTED_MICRO_GAIN`,
+`NOT_COMPLETE_SCIENTIFICALLY`.
+
+## 2026-06-21 Update: v10 Diagnosis and v11 Render-CVaR Rollback
+
+v10 is a real method milestone, but not a paper-ready result. It introduced
+region-core expansion priority and witness rescue so candidate-owned expanded
+faces become real certified rows instead of unused metadata.
+
+Implemented code paths:
+
+```text
+profile: field_region_render_risk_strict_v10
+contract: field_region_render_risk_strict_v10_region_core_expansion_witness
+main scripts:
+- scripts/car_model/ecsr_apply_surface_residual_facelocal_sh1_delta.py
+- scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py
+- scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py
+```
+
+v10 validation was run with W&B online:
+
+```text
+flowers: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v10_20260621_flowers
+bonsai:  /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v10_20260621_bonsai
+```
+
+Key v10 evidence:
+
+```text
+flowers candidate-owned refit:
+  accepted faces: 10
+  expanded accepted faces: 10
+  strict expanded witness faces: 3
+  render-region mean core balanced: +0.0288647
+  render-region tail CVaR: -0.0025027
+  strict replay s1 train-val balanced: +0.00004148
+  strict replay s0.85 train-val balanced: +0.00003386
+  strict replay s0.75 train-val balanced: +0.00003016
+  strict replay s0.6 train-val balanced: +0.00002635
+  strict replay s0.5 train-val balanced: +0.00002074
+  strict replay s0.35 train-val balanced: +0.00001812
+
+bonsai candidate-owned refit:
+  accepted faces: 160
+  expanded accepted faces: 160
+  strict expanded face candidates: 57
+  render-region mean core balanced: +0.0912025
+  render-region dPSNR: +0.194416
+  render-region tail CVaR: -0.145011
+  train-val balanced: -0.00030458
+  decision: rejected
+
+bonsai v10 filtered selector strictfull_s1:
+  filter kept rows/carriers: 40 / 4
+  train-val balanced: +0.00000989
+  PSNR delta: -0.00002289
+  decision: rejected because psnr_gain_below_0
+```
+
+Interpretation: v10 finally fixes the "support is found but not applied" bug.
+The remaining failure is different and sharper: sample-space PatchCert/holdout
+can pass while render-space LPIPS/SSIM tail risk still leaks into some crops.
+The bonsai result shows strong mean ROI improvement, but the tail CVaR and
+full-frame PSNR transfer are not safe enough.
+
+v11 implements a fixed train-only render-CVaR rollback policy:
+
+```text
+profile: field_region_render_risk_strict_v11
+contract: field_region_render_risk_strict_v11_render_cvar_severe_tail_carrier_rollback
+new filter fields:
+- rollback_severe_tail_fail
+- rollback_tail_min_cvar_loss
+- tail_cvar_deficit
+- severe_tail_rollback
+- bad_tail_attribution
+```
+
+Mechanism: a carrier whose train-render tail CVaR failure exceeds a fixed
+deficit budget is rejected as a whole carrier instead of being admitted through
+tail-safe shrink. Mild tail failures can still use the existing analytic shrink.
+This preserves strict replay integrity because no PatchCert carrier is sliced
+inside the materializer.
+
+Validation before launching v11:
+
+```text
+py_compile:
+  passed for ecsr_filter_facelocal_plan_by_render_region.py
+  passed for ecsr_run_autovisual_facelocal_pipeline.py
+
+git diff --check: passed
+
+dry run:
+  /home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py \
+  --profile field_region_render_risk_strict_v11 \
+  --scenes counter \
+  --stages filter \
+  --output_root outputs/carnet/meshsplatopt/_dryrun_v11_rollback \
+  --pipeline_label v11_rollback_smoke \
+  --dry_run --force --wandb_mode disabled
+
+manifest check:
+  fixed profile: true
+  override fields: []
+  rollback_severe_tail_fail: true
+  rollback_tail_min_cvar_loss: 0.005
+```
+
+Offline replay on v10 bonsai refit artifacts:
+
+```text
+input rows / carriers: 160 / 16
+v10 filter kept rows / carriers: 40 / 4
+v11 replay kept rows / carriers: 20 / 2
+replay output:
+  /data/peilincai/spcarnet_runs/v11_filter_replay_20260621_bonsai/filter_summary.json
+```
+
+The replay confirms v11 is not a cosmetic edit: it removes the severe-tail
+carriers while retaining one mild-tail shrunken carrier and one non-tail carrier.
+
+Active v11 W&B-online validation:
+
+```text
+bonsai:
+  /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v11_20260621_bonsai
+  GPU 5
+
+flowers:
+  /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v11_20260621_flowers
+  GPU 1
+```
+
+Current status remains `NOT_COMPLETE_SCIENTIFICALLY`. v11 must prove that the
+rollback fixes bonsai's negative PSNR/full-frame transfer without erasing the
+flowers improvement.
+
+## 2026-06-21 Update: v10 Region-Core Expansion Witness
+
+v9 showed that candidate-region expansion closure was real but insufficient.
+On `flowers`, v9 still fell back with no accepted selector candidate. On
+`bonsai`, strict replay improved as the scale was reduced, but it never crossed
+the train-val gate:
+
+```text
+v9 bonsai strictfull_s1:   trainval balanced -8.6546e-05
+v9 bonsai strictfull_s0p85: trainval balanced -6.7115e-05
+v9 bonsai strictfull_s0p75: trainval balanced -4.3392e-05
+v9 bonsai strictfull_s0p6:  trainval balanced -3.0994e-05
+all rejected: psnr_gain_below_0, balanced_delta_below_0
+```
+
+The diagnosis is structural rather than another scalar-search problem:
+expanded faces were allowed into the candidate pool, but the fitter sampled them
+like ordinary faces and the final strict ranking did not guarantee an expanded
+witness for each candidate-owned carrier.
+
+Implemented fixed v10:
+
+```text
+profile: field_region_render_risk_strict_v10
+contract: field_region_render_risk_strict_v10_region_core_expansion_witness
+core-priority sampling: enabled for candidate-region expanded faces
+core min samples: 8
+core min fraction: 0.5
+expanded witness rescue: enabled
+max witnesses per carrier: 1
+fixed profile override policy: forbidden
+```
+
+Code validation:
+
+```text
+py_compile passed.
+git diff --check passed.
+dry run passed:
+outputs/carnet/meshsplatopt/_dryrun_v10_expansion_witness_main
+```
+
+Active W&B-online validation:
+
+```text
+flowers:
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v10_20260621_flowers
+GPU: 5
+
+bonsai:
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v10_20260621_bonsai
+GPU: 4
+```
+
+First concrete v10 mechanism evidence on `flowers` candidate-owned refit:
+
+```text
+requested expanded faces: 96
+selected expanded faces after allowed filter: 17
+fit core-priority faces with core samples: 16
+fit core-priority core samples: 534
+strict expanded face candidates: 3
+rescued expanded witness faces: 3
+accepted expanded faces: 10
+accepted expanded witness carriers: 3 / 3
+```
+
+First `flowers` candidate-owned refit metrics:
+
+```text
+trainval balanced delta: +4.2796e-05
+trainval PSNR delta: +3.6240e-05
+trainval SSIM delta: +5.9605e-08
+trainval LPIPS delta: -2.6822e-07
+decision: rejected by render_region_tail_cvar_below_-2e-05
+candidate-owned mean core balanced delta: +0.028865
+candidate-owned tail core balanced CVaR: -0.002503
+filter result: kept 10 / 10 rows with tail_safe_shrink scale 0.920801
+```
+
+Current interpretation:
+
+v10 is a real method change and fixes the previous "expanded support is present
+but not used" weakness. It has not yet solved the scientific problem because the
+same local-tail instability remains. Selector replay is still running for
+`flowers`, and `bonsai` candidate-owned refit is still running. Status remains
+`NOT_COMPLETE_SCIENTIFICALLY`.
+
+## 2026-06-21 Update: v8 Tail-Severity-Gated Shrink
+
+Implemented fixed profile:
+
+```text
+field_region_render_risk_strict_v8
+contract: field_region_render_risk_strict_v8_tail_severity_gated_roi_stable_promotion
+```
+
+The change addresses the main v7 bonsai failure mode. v7 could keep carriers
+with very positive ROI means but severe tail CVaR losses because the analytic
+shrink scale was floored at `0.5`. v8 records the raw mean/tail shrink ratio
+and only permits shrink rescue when the raw ratio is at least `0.60`.
+
+Validation completed:
+
+```text
+py_compile passed.
+dry-run manifest passed:
+  /tmp/ecsr_strict_render_region_risk_v8_dry/pipeline_command_manifest.json
+fixed-profile override rejection passed for:
+  --filter_tail_safe_shrink_min_raw_scale
+```
+
+Offline fixed-policy replay:
+
+```text
+bonsai:
+  v7 filter kept 150 rows / 15 carriers
+  v8 filter kept 90 rows / 9 carriers
+  all accepted carriers have raw_scale >= 0.634739
+  all 8 rejected carriers have raw_scale < 0.60
+
+flowers:
+  v8 filter kept 10 rows / 1 carrier
+  no loss of the v7-promotable candidate carrier
+```
+
+Active W&B-online validation:
+
+```text
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v8_replay_20260621_bonsai/selector
+GPU: 4
+```
+
+Status: `V8_IMPLEMENTED`, `BONSAI_SELECTOR_RUNNING`, `NOT_COMPLETE_SCIENTIFICALLY`.
+
+### 2026-06-21 Follow-up: Full v7 Flowers and v8 Bonsai Retry
+
+Full v7 flowers validation completed:
+
+```text
+run: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v7_20260621_flowers
+accepted: true
+selected trial: strictfull_s1
+selected pass mode: region_stable
+selection uses test: false
+train-val balanced delta: +0.0000375509
+report-only test deltas:
+  PSNR +0.000169754
+  SSIM +0.0000709295
+  LPIPS +0.0000178516
+```
+
+The first v8 bonsai selector replay failed due to transient PNG read/write
+race in the base evidence cache, not due to selector metrics. I added longer
+image-read retry in `utils/evidence_lumigraph_adapter.py`, stopped the failed
+replay, and restarted bonsai v8 with isolated method names:
+
+```text
+retry run:
+  /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v8_retry_20260621_bonsai/selector
+GPU: 4
+W&B mode: online
+```
+
+Status: `FLOWERS_V7_FULL_ACCEPTED`, `BONSAI_V8_RETRY_RUNNING`, `NOT_COMPLETE_SCIENTIFICALLY`.
+
+## 2026-06-21 Update: v7 ROI-Stable Selector Under Validation
+
+Added fixed profile `field_region_render_risk_strict_v7` with contract
+`field_region_render_risk_strict_v7_roi_stable_trainval_promotion`.
+
+The new policy keeps the full-frame train-val gate as a non-regression guard,
+but allows promotion when train-only render-region evidence shows a strong,
+stable ROI repair. It is fixed and profile-locked; it is not a per-scene manual
+parameter search.
+
+Current flowers evidence:
+
+```text
+candidate-owned ROI objective:
+  mean core balanced delta: +0.0169456
+  mean core dPSNR: +0.0090981
+  negative core balanced fraction: 0.185185
+
+filtered refit plan:
+  kept rows: 10 / 10
+  kept carriers: 1
+  filter mean core balanced delta: +0.0194297
+  filter mean dPSNR: +0.0113588
+  tail-safe shrink applied: true
+
+selector strictfull_s1 inner gate:
+  accepted: true
+  train-val balanced delta: +0.00003755
+  report-only test balanced delta: +0.00123131
+```
+
+Current bonsai evidence:
+
+```text
+initial plan rows / carriers: 172 / 19
+train-val balanced delta: -0.00025773
+report-only test balanced delta: -0.00014448
+render-region gate: pass, mean core balanced +0.0020345
+```
+
+Interpretation: v7 is the strongest current method direction, but it is not a
+paper-level close yet. Flowers is positive; bonsai still exposes the main
+failure mode where local ROI gains do not automatically translate into
+full-frame improvements.
+
+Status: `V7_VALIDATION_RUNNING`, `NOT_COMPLETE_SCIENTIFICALLY`.
+
+### v6/v7 Interim Validation Notes
+
+v6 pre-registered shrink ladder finished on flowers and was rejected by the
+outer selector:
+
+```text
+output: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v6_selector_ladder_20260621_flowers/selector
+accepted: false
+selected: phasej_fallback
+
+strictfull_s1:
+  train-val balanced delta: +0.00003159
+  report-only test balanced delta: +0.00124454
+  rejected: selector_balanced_delta_below_5e-05 and tail instability
+
+strictfull_s0p75:
+  train-val balanced delta: +0.00002813
+  report-only test balanced delta: +0.00124633
+  rejected by the same selector family
+```
+
+v7 flowers partial re-decision over completed scales `1.0,0.85` accepted via
+the new ROI-stable promotion:
+
+```text
+output: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v7_partial_redecision_20260621_flowers/selector
+accepted: true
+selected trial: strictfull_s1
+selected pass mode: region_stable
+selection uses test: false
+train-val balanced delta: +0.00003755
+report-only test balanced delta: +0.00123131
+ROI mean core balanced delta: +0.0194297
+ROI mean dPSNR: +0.0113588
+ROI changed fraction: 0.9375
+```
+
+v7 bonsai remains the hard negative case:
+
+```text
+candidate-owned refit decision: rejected
+train-val balanced delta: -0.00025296
+report-only test balanced delta: -0.00329977
+ROI mean core balanced delta: +0.114849
+ROI tail core balanced CVaR: -0.118622
+worst ROI core balanced delta: -0.392172
+```
+
+Current interpretation: v7 is the right direction for flowers because it
+formalizes a fixed local-repair claim, but bonsai shows the next real method
+gap. The remaining shortcoming is residual spillover and tail instability, not
+candidate discovery.
+
+## 2026-06-21 Update: v5 Evidence and v6 Fixed Shrink Ladder
+
+v5 adds context/tail risk-safe shrink on top of v4:
+
+```text
+profile: field_region_render_risk_strict_v5
+contract: field_region_render_risk_strict_v5_context_tail_risk_shrink_fixed_train_only_no_scale_search
+run: /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v5_20260620_flowers
+```
+
+Observed `flowers` result:
+
+```text
+broad plan gate: rejected, changed regions 1 / 62
+candidate-owned refit rows: 10
+candidate-owned changed regions: 26 / 27
+candidate-owned mean core balanced: +0.0125318
+candidate-owned tail CVaR: -0.0040394
+filter kept rows: 10 / 10
+filter shrink scale: 0.7503097
+selector inner strictfull_s1: accepted
+selector train-val balanced: +0.00003159
+selector report-only test balanced: +0.0012445
+outer selector: rejected because train-val balanced < 5e-5
+```
+
+This is progress over the earlier empty/no-op paths, but it is still not a
+paper-level close. The method now creates a real local repair and survives the
+filter, yet the train-val selector still refuses promotion.
+
+v6 is now implemented as a fixed profile:
+
+```text
+profile: field_region_render_risk_strict_v6
+contract: field_region_render_risk_strict_v6_pre_registered_trainval_shrink_ladder
+selector_strict_replay_scales: 1.0,0.85,0.75,0.6,0.5,0.35,0.2
+adaptive scale: disabled
+strict alpha shrink: disabled
+fixed profile override policy: forbidden
+```
+
+Validation:
+
+```text
+py_compile passed.
+dry-run manifest passed: /tmp/ecsr_strict_render_region_risk_v6_dry/pipeline_command_manifest.json
+override rejection passed for selector_strict_replay_scales.
+```
+
+Active W&B-online validation:
+
+```text
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v6_selector_ladder_20260621_flowers/selector
+GPU: 4
+```
+
+Status remains `NOT_COMPLETE_SCIENTIFICALLY`.
+
+## 2026-06-20 Update: v4 Tail-Safe Shrink
+
+v3 successfully prevented candidate-owned refit from becoming a no-op, but it
+failed the train-only tail risk gate:
+
+```text
+v3 refit candidate rows: 10
+candidate-owned changed regions: 7 / 16 = 0.4375
+mean core balanced delta: +0.021256
+tail core balanced CVaR: -0.002509
+worst core balanced delta: -0.006660
+filter kept rows: 0 / 10
+filter reason: tail_core_balanced_delta_below_-2e-05
+```
+
+Implemented fixed v4:
+
+```text
+profile: field_region_render_risk_strict_v4
+contract: field_region_render_risk_strict_v4_tail_safe_shrink_fixed_train_only_no_scale_search
+```
+
+New filter-stage mechanism:
+
+- applies only when the only render-region filter failure is tail CVaR;
+- keeps the whole strict carrier intact;
+- scales all candidate coefficients by a deterministic train-only
+  mean/tail-ratio shrink;
+- writes `render_region_tail_safe_shrink` into candidate rows;
+- selector still has to rerender and validate the shrunken plan.
+
+Offline replay on v3 refit:
+
+```text
+input rows: 10
+kept rows: 10
+shrink scale: 0.894813
+decision note: tail_safe_shrink_applied
+```
+
+Running W&B-online validation:
+
+```text
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v4_20260620_flowers
+GPU: 4
+```
+
+Status remains `NOT_COMPLETE_SCIENTIFICALLY`.

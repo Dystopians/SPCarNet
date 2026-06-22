@@ -239,6 +239,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         base_np = np.asarray(base_img)
         cand_np = np.asarray(cand_img)
         gt_np = np.asarray(gt_img)
+        frame_pixels = int(width) * int(height)
+        bbox_pixels = int(max(0, x1 - x0) * max(0, y1 - y0))
         diff_stats = _crop_diff_stats(base_np, cand_np, bbox)
         metrics_skipped_equal_crop = not bool(diff_stats.get("crop_changed", False))
         if metrics_skipped_equal_crop:
@@ -268,6 +270,11 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                 "view": stem,
                 "carrier_id": region["carrier_id"],
                 "bbox_xyxy": list(bbox),
+                "image_width": int(width),
+                "image_height": int(height),
+                "frame_pixels": int(frame_pixels),
+                "bbox_pixels": int(bbox_pixels),
+                "bbox_frame_fraction": float(bbox_pixels) / max(float(frame_pixels), 1.0),
                 "pixels": int(region["pixels"]),
                 "score": float(region["score"]),
                 "baseline_core_psnr": base_core["psnr"],
@@ -287,6 +294,9 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                 **diff_stats,
             }
         )
+        rows[-1]["changed_frame_fraction"] = float(rows[-1].get("crop_nonzero_pixels", 0)) / max(
+            float(frame_pixels), 1.0
+        )
 
     balanced_values = [row["core_balanced_delta"] for row in rows]
     context_reg = [row["context_mse_regression"] for row in rows]
@@ -296,6 +306,11 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     skipped_equal_crop_metrics = int(sum(1 for row in rows if bool(row.get("metrics_skipped_equal_crop", False))))
     max_crop_abs_diff = max((float(row.get("crop_max_abs_diff", 0.0)) for row in rows), default=0.0)
     mean_crop_abs_diff = _finite_mean([float(row.get("crop_mean_abs_diff", 0.0)) for row in rows])
+    frame_pixels_values = [
+        int(row.get("frame_pixels", 0))
+        for row in rows
+        if int(row.get("frame_pixels", 0)) > 0
+    ]
     summary = {
         "scene": args.scene,
         "protocol": "train_render_region_objective_from_train_carrier_bboxes",
@@ -316,6 +331,11 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             "skipped_equal_crop_metrics": skipped_equal_crop_metrics,
             "max_crop_abs_diff": float(max_crop_abs_diff),
             "mean_crop_abs_diff": float(mean_crop_abs_diff),
+            "frame_pixels_min": int(min(frame_pixels_values)) if frame_pixels_values else 0,
+            "frame_pixels_max": int(max(frame_pixels_values)) if frame_pixels_values else 0,
+            "mean_changed_frame_fraction": _finite_mean(
+                [float(row.get("changed_frame_fraction", 0.0)) for row in rows]
+            ),
         },
         "settings": {
             "max_regions": int(args.max_regions),

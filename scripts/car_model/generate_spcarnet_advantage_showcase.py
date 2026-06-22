@@ -55,6 +55,21 @@ def parse_args() -> argparse.Namespace:
             "compact_ela_sor_adaptive_geo_26k/compact_ela_vs_clean.csv"
         ),
     )
+    parser.add_argument(
+        "--phasej_audit_csv",
+        type=Path,
+        default=Path(""),
+        help=(
+            "Optional Phase-J closure audit CSV. When set, model_path/method_name/"
+            "clean_baseline_method are read from this file instead of the legacy paper_m360_repro layout."
+        ),
+    )
+    parser.add_argument(
+        "--phasej_per_view_csv",
+        type=Path,
+        default=Path(""),
+        help="Phase-J per-view delta CSV used with --phasej_audit_csv.",
+    )
     parser.add_argument("--policy_tag", default="sor_adaptive_geo")
     parser.add_argument(
         "--method_name", default="ours_26000_sor_adaptive_geo_compact_ela"
@@ -101,6 +116,21 @@ def read_baseline_iterations(report_csv: Path) -> dict[str, str]:
         for row in csv.DictReader(f):
             selected[row["scene"]] = row["baseline_iteration"]
     return selected
+
+
+def read_phasej_audit_rows(path: Path) -> dict[str, dict[str, str]]:
+    rows: dict[str, dict[str, str]] = {}
+    with path.open("r", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            scene = str(row.get("scene", "")).strip()
+            if scene:
+                rows[scene] = dict(row)
+    return rows
+
+
+def read_phasej_per_view_rows(path: Path) -> list[dict[str, str]]:
+    with path.open("r", encoding="utf-8") as f:
+        return [dict(row) for row in csv.DictReader(f)]
 
 
 def imread_float(path: Path) -> np.ndarray:
@@ -188,6 +218,13 @@ def choose_crop(
     }
 
 
+def baseline_iteration_from_method(method_name: str) -> int:
+    for token in str(method_name).split("_"):
+        if token.isdigit():
+            return int(token)
+    return 0
+
+
 def image_crop(path: Path, box: tuple[int, int, int, int], size: tuple[int, int]) -> Image.Image:
     return Image.open(path).convert("RGB").crop(box).resize(size, Image.Resampling.LANCZOS)
 
@@ -217,6 +254,8 @@ def draw_label(
 
 
 def collect_candidates(args: argparse.Namespace) -> list[dict[str, Any]]:
+    if str(args.phasej_audit_csv).strip():
+        return collect_phasej_candidates(args)
     scenes = [s.strip() for s in args.scenes.split(",") if s.strip()]
     baseline_iters = read_baseline_iterations(args.report_csv)
     candidates: list[dict[str, Any]] = []
@@ -286,6 +325,102 @@ def collect_candidates(args: argparse.Namespace) -> list[dict[str, Any]]:
                     "crop": crop,
                 }
             )
+
+    candidates.sort(key=lambda x: x["ranking_score"], reverse=True)
+    selected: list[dict[str, Any]] = []
+    used_scenes: set[str] = set()
+    for candidate in candidates:
+        if candidate["scene"] in used_scenes:
+            continue
+        selected.append(candidate)
+        used_scenes.add(candidate["scene"])
+        if len(selected) >= args.max_examples:
+            break
+    if len(selected) < args.max_examples:
+        used_pairs = {(x["scene"], x["view"]) for x in selected}
+        for candidate in candidates:
+            pair = (candidate["scene"], candidate["view"])
+            if pair in used_pairs:
+                continue
+            selected.append(candidate)
+            used_pairs.add(pair)
+            if len(selected) >= args.max_examples:
+                break
+    return selected
+
+
+def collect_phasej_candidates(args: argparse.Namespace) -> list[dict[str, Any]]:
+    if not args.phasej_audit_csv.is_file():
+        raise FileNotFoundError(f"Phase-J audit CSV not found: {args.phasej_audit_csv}")
+    if not args.phasej_per_view_csv.is_file():
+        raise FileNotFoundError(f"Phase-J per-view CSV not found: {args.phasej_per_view_csv}")
+    scenes = {s.strip() for s in args.scenes.split(",") if s.strip()}
+    audit_rows = read_phasej_audit_rows(args.phasej_audit_csv)
+    candidates: list[dict[str, Any]] = []
+
+    for row in read_phasej_per_view_rows(args.phasej_per_view_csv):
+        scene = str(row.get("scene", "")).strip()
+        if scenes and scene not in scenes:
+            continue
+        audit = audit_rows.get(scene)
+        if not audit:
+            continue
+        view_name = str(row.get("frame", "")).strip()
+        try:
+            dpsnr = float(row.get("dPSNR", 0.0))
+            dssim = float(row.get("dSSIM", 0.0))
+            dlpips = float(row.get("dLPIPS", 0.0))
+        except ValueError:
+            continue
+        if dpsnr <= 0.0 or dssim <= 0.0 or dlpips >= 0.0:
+            continue
+
+        method_name = str(audit.get("method_name", "")).strip()
+        clean_key = str(audit.get("clean_baseline_method", "")).strip() or "ours_26000"
+        model_path = Path(str(audit.get("model_path", "")).strip())
+        if not method_name or not model_path:
+            continue
+        clean_dir = args.clean_root / scene / "test" / clean_key
+        method_dir = model_path / "test" / method_name
+        gt_path = method_dir / "gt" / view_name
+        if not gt_path.exists():
+            gt_path = clean_dir / "gt" / view_name
+        clean_path = clean_dir / "renders" / view_name
+        ours_path = method_dir / "renders" / view_name
+        if not gt_path.exists() or not clean_path.exists() or not ours_path.exists():
+            continue
+
+        gt = imread_float(gt_path)
+        clean = imread_float(clean_path)
+        ours = imread_float(ours_path)
+        if gt.shape != clean.shape or gt.shape != ours.shape:
+            continue
+
+        crop = choose_crop(gt, clean, ours, args.crop_w, args.crop_h)
+        ranking_score = (
+            crop["local_score"]
+            * max(crop["local_mae_drop_pct"], 0.0)
+            * (1.0 + crop["local_positive_pixel_ratio"])
+        )
+        candidates.append(
+            {
+                "scene": scene,
+                "view": view_name,
+                "baseline_iteration": baseline_iteration_from_method(clean_key),
+                "dPSNR": dpsnr,
+                "dSSIM": dssim,
+                "dLPIPS": dlpips,
+                "ranking_score": ranking_score,
+                "phasej_audit_csv": str(args.phasej_audit_csv),
+                "phasej_per_view_csv": str(args.phasej_per_view_csv),
+                "paths": {
+                    "gt": str(gt_path),
+                    "clean": str(clean_path),
+                    "ours": str(ours_path),
+                },
+                "crop": crop,
+            }
+        )
 
     candidates.sort(key=lambda x: x["ranking_score"], reverse=True)
     selected: list[dict[str, Any]] = []
@@ -403,6 +538,8 @@ def main() -> None:
             "full9 baseline selection, then rank crops by local positive error "
             "reduction weighted by GT texture and penalized by negative error."
         ),
+        "phasej_audit_csv": str(args.phasej_audit_csv) if str(args.phasej_audit_csv).strip() else "",
+        "phasej_per_view_csv": str(args.phasej_per_view_csv) if str(args.phasej_per_view_csv).strip() else "",
         "showcase": str(args.out),
         "examples": selected,
     }

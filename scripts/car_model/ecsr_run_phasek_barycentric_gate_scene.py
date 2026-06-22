@@ -47,6 +47,59 @@ def _remove_tree(path: Path) -> None:
         shutil.rmtree(path)
 
 
+def _append_log(log_path: Path, message: str) -> None:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(message.rstrip() + "\n")
+
+
+def _dir_has_files(path: Path) -> bool:
+    if not path.is_dir():
+        return False
+    try:
+        next(path.iterdir())
+    except StopIteration:
+        return False
+    return True
+
+
+def _split_render_cache_complete(model: Path, split: str, method_name: str, *, require_depths: bool) -> bool:
+    root = model / split / method_name
+    if not (root / "camera_index.json").is_file():
+        return False
+    if not _dir_has_files(root / "renders"):
+        return False
+    if require_depths and not _dir_has_files(root / "depths"):
+        return False
+    failures = root / "render_failures.json"
+    if failures.is_file():
+        payload = _read_json(failures)
+        if isinstance(payload, list):
+            return len(payload) == 0
+        if isinstance(payload, dict):
+            for key in ("failures", "failed_views", "errors"):
+                value = payload.get(key)
+                if isinstance(value, list) and value:
+                    return False
+    return True
+
+
+def _render_maps_complete(model: Path, method_name: str) -> bool:
+    return _split_render_cache_complete(model, "train", method_name, require_depths=True) and _split_render_cache_complete(
+        model, "test", method_name, require_depths=True
+    )
+
+
+def _ela_cache_complete(model: Path, split: str, method_name: str) -> bool:
+    root = model / split / method_name
+    report = _read_json(root / "ela_report.json")
+    if not report:
+        return False
+    if split == "train" and not isinstance(report.get("policy_val_views"), list):
+        return False
+    return _dir_has_files(root / "renders")
+
+
 def _cleanup_scene_train_artifacts(args: argparse.Namespace, candidate_model: Path) -> None:
     if not bool(args.cleanup_train_artifacts_after_scene):
         return
@@ -124,16 +177,10 @@ def _render_maps(
     model: Path,
     method_name: str,
     log_path: Path,
+    reuse_when_complete: bool = False,
 ) -> None:
-    train_dir = model / "train" / method_name
-    test_dir = model / "test" / method_name
-    if (
-        not bool(args.force)
-        and (train_dir / "camera_index.json").is_file()
-        and (test_dir / "camera_index.json").is_file()
-        and (train_dir / "depths").is_dir()
-        and (test_dir / "depths").is_dir()
-    ):
+    if ((not bool(args.force)) or bool(reuse_when_complete)) and _render_maps_complete(model, method_name):
+        _append_log(log_path, f"[cache] reuse complete render evidence maps: {method_name}")
         return
     cmd = [
         sys.executable,
@@ -158,7 +205,15 @@ def _render_maps(
     _run(cmd, gpu=int(args.gpu), log_path=log_path)
 
 
-def _build_evidence(args: argparse.Namespace, *, scene: str, phasej_model: Path, evidence_dir: Path, log_path: Path) -> None:
+def _build_evidence(
+    args: argparse.Namespace,
+    *,
+    scene: str,
+    phasej_model: Path,
+    evidence_dir: Path,
+    log_path: Path,
+    reuse_when_complete: bool = False,
+) -> None:
     summary = evidence_dir / "surface_evidence_summary.json"
     existing_summary = _read_json(summary)
     operator = str(args.delta_operator)
@@ -168,12 +223,13 @@ def _build_evidence(args: argparse.Namespace, *, scene: str, phasej_model: Path,
     requires_barycentric = operator == "subdivision" or not bool(args.delta_uniform_barycentric)
     rich_surface_ok = existing_summary.get("barycentric_available") is True or not requires_barycentric
     if (
-        not bool(args.force)
+        ((not bool(args.force)) or bool(reuse_when_complete))
         and summary.is_file()
         and train_split_ok
         and rich_surface_ok
         and (operator not in {"sh1", "facelocal_sh1"} or has_camera_center)
     ):
+        _append_log(log_path, f"[cache] reuse complete surface evidence cache: {evidence_dir}")
         return
     cmd = [
         sys.executable,
@@ -439,6 +495,10 @@ def _apply_delta(
         str(args.delta_min_policy_val_relative_gain),
         "--min_policy_val_samples",
         str(args.delta_min_policy_val_samples),
+        "--min_policy_val_adaptive_sample_fraction",
+        _fmt_arg(args.delta_min_policy_val_adaptive_sample_fraction),
+        "--min_policy_val_adaptive_min_samples",
+        str(args.delta_min_policy_val_adaptive_min_samples),
         "--min_policy_val_unique_faces",
         str(args.delta_min_policy_val_unique_faces),
     ]
@@ -473,6 +533,38 @@ def _apply_delta(
                 _fmt_arg(args.delta_render_region_tail_fraction),
                 "--render_region_min_view_samples",
                 str(args.delta_render_region_min_view_samples),
+                "--bystander_zero_delta_weight",
+                _fmt_arg(args.delta_bystander_zero_delta_weight),
+                (
+                    "--bystander_zero_delta_include_context"
+                    if bool(args.delta_bystander_zero_delta_include_context)
+                    else "--no-bystander_zero_delta_include_context"
+                ),
+                "--bystander_zero_delta_min_samples",
+                str(args.delta_bystander_zero_delta_min_samples),
+                "--witness_constraint_weight",
+                _fmt_arg(args.delta_witness_constraint_weight),
+                "--witness_constraint_tail_fraction",
+                _fmt_arg(args.delta_witness_constraint_tail_fraction),
+                "--witness_constraint_min_samples",
+                str(args.delta_witness_constraint_min_samples),
+                "--witness_constraint_margin",
+                _fmt_arg(args.delta_witness_constraint_margin),
+                (
+                    "--witness_constraint_include_full_view"
+                    if bool(args.delta_witness_constraint_include_full_view)
+                    else "--no-witness_constraint_include_full_view"
+                ),
+                (
+                    "--witness_constraint_include_region_view"
+                    if bool(args.delta_witness_constraint_include_region_view)
+                    else "--no-witness_constraint_include_region_view"
+                ),
+                (
+                    "--witness_constraint_include_bystander_view"
+                    if bool(args.delta_witness_constraint_include_bystander_view)
+                    else "--no-witness_constraint_include_bystander_view"
+                ),
             ]
         )
     else:
@@ -498,6 +590,46 @@ def _apply_delta(
             )
             if str(args.delta_facelocal_candidate_plan_out).strip():
                 cmd.extend(["--candidate_plan_out", _scene_format_path(args.delta_facelocal_candidate_plan_out, scene)])
+            if str(args.delta_facelocal_allowed_face_ids).strip():
+                cmd.extend(["--allowed_face_ids", str(args.delta_facelocal_allowed_face_ids)])
+            if str(args.delta_facelocal_face_risk_scale_json).strip():
+                cmd.extend(
+                    [
+                        "--face_risk_scale_json",
+                        _scene_format_path(args.delta_facelocal_face_risk_scale_json, scene),
+                    ]
+                )
+            if str(args.delta_facelocal_candidate_region_expansion_carrier_json).strip():
+                cmd.extend(
+                    [
+                        "--candidate_region_expansion_carrier_json",
+                        _scene_format_path(args.delta_facelocal_candidate_region_expansion_carrier_json, scene),
+                    ]
+                )
+            cmd.append(
+                "--candidate_region_expansion_core_priority"
+                if bool(args.delta_candidate_region_expansion_core_priority)
+                else "--no-candidate_region_expansion_core_priority"
+            )
+            cmd.extend(
+                [
+                    "--candidate_region_expansion_core_min_samples",
+                    str(args.delta_candidate_region_expansion_core_min_samples),
+                    "--candidate_region_expansion_core_min_fraction",
+                    _fmt_arg(args.delta_candidate_region_expansion_core_min_fraction),
+                ]
+            )
+            cmd.append(
+                "--candidate_region_expansion_witness_rescue"
+                if bool(args.delta_candidate_region_expansion_witness_rescue)
+                else "--no-candidate_region_expansion_witness_rescue"
+            )
+            cmd.extend(
+                [
+                    "--candidate_region_expansion_max_witnesses_per_carrier",
+                    str(args.delta_candidate_region_expansion_max_witnesses_per_carrier),
+                ]
+            )
             if str(args.delta_facelocal_materialize_plan_in).strip():
                 cmd.extend(
                     [
@@ -632,6 +764,8 @@ def _apply_delta(
                 str(args.delta_patch_cert_carrier_holdout_max_carriers),
                 "--patch_cert_carrier_holdout_auto_prefix_min_faces",
                 str(args.delta_patch_cert_carrier_holdout_auto_prefix_min_faces),
+                "--patch_cert_carrier_holdout_auto_prefix_min_face_fraction",
+                _fmt_arg(args.delta_patch_cert_carrier_holdout_auto_prefix_min_face_fraction),
                 "--patch_cert_carrier_holdout_auto_prefix_face_bonus",
                 _fmt_arg(args.delta_patch_cert_carrier_holdout_auto_prefix_face_bonus),
             ]
@@ -776,6 +910,10 @@ def _candidate_audit_path(args: argparse.Namespace, candidate_model: Path) -> Pa
     return candidate_model / "surface_residual_barycentric_delta_audit.json"
 
 
+def _ela_view_tail_requested(args: argparse.Namespace) -> bool:
+    return bool(str(getattr(args, "ela_alpha_view_tail_scale_grid", "")).strip())
+
+
 def _policy_args(report: dict[str, Any], *, trainval: bool, args: argparse.Namespace) -> list[str]:
     policy = report.get("policy") or {}
     out = [
@@ -819,7 +957,35 @@ def _policy_args(report: dict[str, Any], *, trainval: bool, args: argparse.Names
                 str(args.alpha_default),
             ]
         )
+        if bool(args.ela_alpha_holdout_safe_zero):
+            out.append("--alpha_holdout_safe_zero")
+        out.extend(
+            [
+                "--alpha_risk_tail_fraction",
+                str(float(args.ela_alpha_risk_tail_fraction)),
+                "--alpha_max_negative_gain_fraction",
+                str(float(args.ela_alpha_max_negative_gain_fraction)),
+                f"--alpha_min_tail_gain={float(args.ela_alpha_min_tail_gain)}",
+                "--alpha_view_tail_scale_grid",
+                str(args.ela_alpha_view_tail_scale_grid),
+                "--alpha_view_tail_cvar_fraction",
+                str(float(args.ela_alpha_view_tail_cvar_fraction)),
+                f"--alpha_view_tail_min_gain={float(args.ela_alpha_view_tail_min_gain)}",
+                "--alpha_view_tail_max_negative_fraction",
+                str(float(args.ela_alpha_view_tail_max_negative_fraction)),
+            ]
+        )
     else:
+        if _ela_view_tail_requested(args):
+            raise ValueError(
+                "--ela_alpha_view_tail_scale_grid was supplied, but the fixed "
+                f"Phase-J report uses alpha_policy={alpha_policy!r}. "
+                "View-tail-safe alpha shrink only applies when the adapter "
+                "fits an adaptive_bins alpha calibrator. Use "
+                "--ela_policy_source per_model_auto, select an adaptive Phase-J "
+                "report, or clear --ela_alpha_view_tail_scale_grid for a "
+                "deliberate non-v28 replay."
+            )
         out.extend(["--alpha", str(float(report.get("alpha", 0.0))), "--skip_fixed_alpha_calibration"])
     if trainval:
         out.extend(
@@ -840,6 +1006,31 @@ def _policy_args(report: dict[str, Any], *, trainval: bool, args: argparse.Names
     return out
 
 
+def _append_ela_local_trust_args(cmd: list[str], args: argparse.Namespace) -> None:
+    if bool(args.ela_local_trust_gate):
+        cmd.append("--local_trust_gate")
+    cmd.extend(
+        [
+            "--local_trust_min_supports",
+            str(int(args.ela_local_trust_min_supports)),
+            "--local_trust_max_residual_std",
+            str(float(args.ela_local_trust_max_residual_std)),
+            "--local_trust_min_agreement",
+            str(float(args.ela_local_trust_min_agreement)),
+            "--local_trust_agreement_scale",
+            str(float(args.ela_local_trust_agreement_scale)),
+            "--local_trust_confidence_quantile",
+            str(float(args.ela_local_trust_confidence_quantile)),
+            "--local_trust_min_confidence",
+            str(float(args.ela_local_trust_min_confidence)),
+            "--local_trust_mode",
+            str(args.ela_local_trust_mode),
+            "--local_trust_min_weight",
+            str(float(args.ela_local_trust_min_weight)),
+        ]
+    )
+
+
 def _apply_ela(
     args: argparse.Namespace,
     *,
@@ -850,9 +1041,11 @@ def _apply_ela(
     phasej_report: dict[str, Any],
     target_split: str,
     log_path: Path,
+    alpha_region_risk_json: str | Path | None = None,
+    reuse_when_complete: bool = False,
 ) -> None:
-    report = model / target_split / method_name / "ela_report.json"
-    if not bool(args.force) and report.is_file():
+    if ((not bool(args.force)) or bool(reuse_when_complete)) and _ela_cache_complete(model, target_split, method_name):
+        _append_log(log_path, f"[cache] reuse complete ELA output: {target_split}/{method_name}")
         return
     trainval = target_split == "train"
     cmd = [
@@ -912,6 +1105,24 @@ def _apply_ela(
                 str(args.policy_holdout_offset),
             ]
         )
+        if bool(args.ela_alpha_holdout_safe_zero):
+            cmd.append("--alpha_holdout_safe_zero")
+        cmd.extend(
+            [
+                "--alpha_risk_tail_fraction",
+                str(float(args.ela_alpha_risk_tail_fraction)),
+                "--alpha_max_negative_gain_fraction",
+                str(float(args.ela_alpha_max_negative_gain_fraction)),
+                f"--alpha_min_tail_gain={float(args.ela_alpha_min_tail_gain)}",
+                "--alpha_view_tail_scale_grid",
+                str(args.ela_alpha_view_tail_scale_grid),
+                "--alpha_view_tail_cvar_fraction",
+                str(float(args.ela_alpha_view_tail_cvar_fraction)),
+                f"--alpha_view_tail_min_gain={float(args.ela_alpha_view_tail_min_gain)}",
+                "--alpha_view_tail_max_negative_fraction",
+                str(float(args.ela_alpha_view_tail_max_negative_fraction)),
+            ]
+        )
         if bool(args.ela_edge_gate):
             cmd.extend(["--edge_gate", "--edge_gate_min", str(args.ela_edge_gate_min)])
         if bool(args.ela_calib_lpips):
@@ -920,6 +1131,35 @@ def _apply_ela(
             cmd.append("--support_policy_fit_only")
     else:
         raise ValueError(f"unknown ELA policy source: {args.ela_policy_source}")
+    _append_ela_local_trust_args(cmd, args)
+    if bool(args.ela_alpha_region_risk_enable):
+        risk_path = _scene_format_path(alpha_region_risk_json or args.ela_alpha_region_risk_json, scene)
+        if not str(risk_path).strip():
+            raise ValueError("--ela_alpha_region_risk_enable requires a non-empty region-risk JSON path")
+        if not Path(str(risk_path)).is_file():
+            raise FileNotFoundError(f"ELA alpha region-risk JSON not found for {scene}: {risk_path}")
+        cmd.extend(
+            [
+                "--alpha_region_risk_enable",
+                "--alpha_region_risk_json",
+                str(risk_path),
+                "--alpha_region_risk_objective_bad_only"
+                if bool(args.ela_alpha_region_risk_objective_bad_only)
+                else "--no-alpha_region_risk_objective_bad_only",
+                "--alpha_region_risk_objective_max_balanced_delta",
+                str(float(args.ela_alpha_region_risk_objective_max_balanced_delta)),
+                "--alpha_region_risk_objective_max_delta_ssim",
+                str(float(args.ela_alpha_region_risk_objective_max_delta_ssim)),
+                "--alpha_region_risk_objective_min_delta_lpips",
+                str(float(args.ela_alpha_region_risk_objective_min_delta_lpips)),
+                "--alpha_region_risk_min_tail_gain",
+                str(float(args.ela_alpha_region_risk_min_tail_gain)),
+                "--alpha_region_risk_max_negative_fraction",
+                str(float(args.ela_alpha_region_risk_max_negative_fraction)),
+                "--alpha_region_risk_min_regions",
+                str(int(args.ela_alpha_region_risk_min_regions)),
+            ]
+        )
     _run(cmd, gpu=int(args.gpu), log_path=log_path, wandb_online=True)
 
 
@@ -932,8 +1172,10 @@ def _evaluate_trainval(
     output: Path,
     per_view_output: Path,
     log_path: Path,
+    reuse_when_complete: bool = False,
 ) -> None:
-    if not bool(args.force) and _has_metric(output, method) and per_view_output.is_file():
+    if ((not bool(args.force)) or bool(reuse_when_complete)) and _has_metric(output, method) and per_view_output.is_file():
+        _append_log(log_path, f"[cache] reuse complete trainval metrics: {method}")
         return
     cmd = [
         sys.executable,
@@ -1038,9 +1280,12 @@ def _evaluate_test(
     output: Path | None = None,
     per_view_output: Path | None = None,
     merge_model_results: bool = True,
+    reuse_when_complete: bool = False,
 ) -> None:
     metric_path = output if output is not None else model / "results.json"
-    if not bool(args.force) and _has_metric(metric_path, method):
+    per_view_ok = per_view_output is None or per_view_output.is_file()
+    if ((not bool(args.force)) or bool(reuse_when_complete)) and _has_metric(metric_path, method) and per_view_ok:
+        _append_log(log_path, f"[cache] reuse complete test metrics: {method}")
         return
     cmd = [
         sys.executable,
@@ -1217,8 +1462,22 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
     phasej_test_per_view = output_root / scene / "phasej_test_per_view.json"
     phasej_trainval_results = output_root / scene / "phasej_trainval_gate_results.json"
     phasej_trainval_per_view = output_root / scene / "phasej_trainval_gate_per_view.json"
-    _render_maps(args, scene=scene, model=phasej_model, method_name=BASE_METHOD, log_path=log_path)
-    _build_evidence(args, scene=scene, phasej_model=phasej_model, evidence_dir=evidence_dir, log_path=log_path)
+    _render_maps(
+        args,
+        scene=scene,
+        model=phasej_model,
+        method_name=BASE_METHOD,
+        log_path=log_path,
+        reuse_when_complete=True,
+    )
+    _build_evidence(
+        args,
+        scene=scene,
+        phasej_model=phasej_model,
+        evidence_dir=evidence_dir,
+        log_path=log_path,
+        reuse_when_complete=True,
+    )
     _apply_delta(
         args,
         scene=scene,
@@ -1228,7 +1487,7 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         log_path=log_path,
     )
     _render_maps(args, scene=scene, model=candidate_model, method_name=args.candidate_base_method, log_path=log_path)
-    _evaluate_test(args, model=phasej_model, method=BASE_METHOD, log_path=log_path)
+    _evaluate_test(args, model=phasej_model, method=BASE_METHOD, log_path=log_path, reuse_when_complete=True)
     _evaluate_test(args, model=candidate_model, method=args.candidate_base_method, log_path=log_path)
     _apply_ela(
         args,
@@ -1239,6 +1498,7 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         phasej_report=phasej_report,
         target_split="test",
         log_path=log_path,
+        reuse_when_complete=True,
     )
     _evaluate_test(
         args,
@@ -1248,6 +1508,7 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         per_view_output=phasej_test_per_view,
         merge_model_results=False,
         log_path=log_path,
+        reuse_when_complete=True,
     )
 
     _apply_ela(
@@ -1259,6 +1520,7 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         phasej_report=phasej_report,
         target_split="train",
         log_path=log_path,
+        reuse_when_complete=True,
     )
     _evaluate_trainval(
         args,
@@ -1268,6 +1530,7 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         output=phasej_trainval_results,
         per_view_output=phasej_trainval_per_view,
         log_path=log_path,
+        reuse_when_complete=True,
     )
     _apply_ela(
         args,
@@ -1278,6 +1541,7 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         phasej_report=phasej_report,
         target_split="test",
         log_path=log_path,
+        alpha_region_risk_json=args.ela_alpha_region_risk_json,
     )
     _evaluate_test(args, model=candidate_model, method=args.candidate_test_method, log_path=log_path)
     _apply_ela(
@@ -1289,6 +1553,7 @@ def run_scene(args: argparse.Namespace, scene: str) -> dict[str, Any]:
         phasej_report=phasej_report,
         target_split="train",
         log_path=log_path,
+        alpha_region_risk_json=args.ela_alpha_region_risk_json,
     )
     _evaluate_trainval(
         args,
@@ -1479,6 +1744,16 @@ def main() -> int:
     parser.add_argument("--delta_render_region_tail_cvar_weight", type=float, default=0.0)
     parser.add_argument("--delta_render_region_tail_fraction", type=float, default=0.25)
     parser.add_argument("--delta_render_region_min_view_samples", type=int, default=16)
+    parser.add_argument("--delta_bystander_zero_delta_weight", type=float, default=0.0)
+    parser.add_argument("--delta_bystander_zero_delta_include_context", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--delta_bystander_zero_delta_min_samples", type=int, default=0)
+    parser.add_argument("--delta_witness_constraint_weight", type=float, default=0.0)
+    parser.add_argument("--delta_witness_constraint_tail_fraction", type=float, default=0.25)
+    parser.add_argument("--delta_witness_constraint_min_samples", type=int, default=0)
+    parser.add_argument("--delta_witness_constraint_margin", type=float, default=0.0)
+    parser.add_argument("--delta_witness_constraint_include_full_view", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--delta_witness_constraint_include_region_view", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--delta_witness_constraint_include_bystander_view", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--delta_steps", type=int, default=800)
     parser.add_argument("--delta_shared_residual_field", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--delta_shared_residual_field_anchors", type=int, default=16)
@@ -1490,6 +1765,8 @@ def main() -> int:
     parser.add_argument("--delta_shared_residual_field_duplicate_smooth_weight", type=float, default=0.0)
     parser.add_argument("--delta_min_policy_val_relative_gain", type=float, default=0.02)
     parser.add_argument("--delta_min_policy_val_samples", type=int, default=512)
+    parser.add_argument("--delta_min_policy_val_adaptive_sample_fraction", type=float, default=0.0)
+    parser.add_argument("--delta_min_policy_val_adaptive_min_samples", type=int, default=0)
     parser.add_argument("--delta_min_policy_val_unique_faces", type=int, default=16)
     parser.add_argument("--delta_policy_val_filter_faces", action="store_true")
     parser.add_argument("--delta_policy_val_face_min_samples", type=int, default=8)
@@ -1567,6 +1844,7 @@ def main() -> int:
     parser.add_argument("--delta_patch_cert_carrier_holdout_max_carriers", type=int, default=0)
     parser.add_argument("--delta_patch_cert_carrier_holdout_auto_prefix", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--delta_patch_cert_carrier_holdout_auto_prefix_min_faces", type=int, default=0)
+    parser.add_argument("--delta_patch_cert_carrier_holdout_auto_prefix_min_face_fraction", type=float, default=0.0)
     parser.add_argument("--delta_patch_cert_carrier_holdout_auto_prefix_face_bonus", type=float, default=0.0)
     parser.add_argument(
         "--delta_patch_cert_carrier_holdout_auto_prefix_positive_tail_safe",
@@ -1581,6 +1859,30 @@ def main() -> int:
         default="",
         help="Facelocal-only candidate plan output path template. Use {scene} for scene-specific paths.",
     )
+    parser.add_argument(
+        "--delta_facelocal_allowed_face_ids",
+        default="",
+        help="Optional comma-separated face ids allowed during facelocal fitting/refit.",
+    )
+    parser.add_argument(
+        "--delta_facelocal_face_risk_scale_json",
+        default="",
+        help="Optional per-scene train-derived face risk scale JSON template passed to facelocal fitting/refit.",
+    )
+    parser.add_argument(
+        "--delta_facelocal_candidate_region_expansion_carrier_json",
+        default="",
+        help=(
+            "Optional facelocal-only candidate-region carrier JSON template. Its "
+            "expanded_face_ids are passed to the fitter as extra train-evidence "
+            "candidate seeds; they are still certified normally."
+        ),
+    )
+    parser.add_argument("--delta_candidate_region_expansion_core_priority", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--delta_candidate_region_expansion_core_min_samples", type=int, default=0)
+    parser.add_argument("--delta_candidate_region_expansion_core_min_fraction", type=float, default=0.0)
+    parser.add_argument("--delta_candidate_region_expansion_witness_rescue", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--delta_candidate_region_expansion_max_witnesses_per_carrier", type=int, default=0)
     parser.add_argument(
         "--delta_facelocal_materialize_plan_in",
         default="",
@@ -1764,6 +2066,23 @@ def main() -> int:
     parser.add_argument("--ela_policy_objective", choices=("psnr", "balanced"), default="balanced")
     parser.add_argument("--ela_calib_lpips", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--ela_alpha_grid", default="0,0.125,0.25,0.5,0.75,1.0")
+    parser.add_argument("--ela_alpha_holdout_safe_zero", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--ela_alpha_risk_tail_fraction", type=float, default=0.20)
+    parser.add_argument("--ela_alpha_max_negative_gain_fraction", type=float, default=1.0)
+    parser.add_argument("--ela_alpha_min_tail_gain", type=float, default=-math.inf)
+    parser.add_argument("--ela_alpha_view_tail_scale_grid", default="")
+    parser.add_argument("--ela_alpha_view_tail_cvar_fraction", type=float, default=0.25)
+    parser.add_argument("--ela_alpha_view_tail_min_gain", type=float, default=-math.inf)
+    parser.add_argument("--ela_alpha_view_tail_max_negative_fraction", type=float, default=1.0)
+    parser.add_argument("--ela_alpha_region_risk_enable", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--ela_alpha_region_risk_json", default="")
+    parser.add_argument("--ela_alpha_region_risk_objective_bad_only", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--ela_alpha_region_risk_objective_max_balanced_delta", type=float, default=0.0)
+    parser.add_argument("--ela_alpha_region_risk_objective_max_delta_ssim", type=float, default=0.0)
+    parser.add_argument("--ela_alpha_region_risk_objective_min_delta_lpips", type=float, default=0.0)
+    parser.add_argument("--ela_alpha_region_risk_min_tail_gain", type=float, default=0.0)
+    parser.add_argument("--ela_alpha_region_risk_max_negative_fraction", type=float, default=1.0)
+    parser.add_argument("--ela_alpha_region_risk_min_regions", type=int, default=1)
     parser.add_argument("--ela_policy_modes", default="residual,color")
     parser.add_argument("--ela_policy_k_values", default="4,8")
     parser.add_argument("--ela_policy_depth_rel_values", default="0.06,0.12")
@@ -1771,6 +2090,15 @@ def main() -> int:
     parser.add_argument("--ela_policy_direction_weight_values", default="")
     parser.add_argument("--ela_edge_gate", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--ela_edge_gate_min", type=float, default=0.0)
+    parser.add_argument("--ela_local_trust_gate", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--ela_local_trust_min_supports", type=int, default=2)
+    parser.add_argument("--ela_local_trust_max_residual_std", type=float, default=-1.0)
+    parser.add_argument("--ela_local_trust_min_agreement", type=float, default=0.0)
+    parser.add_argument("--ela_local_trust_agreement_scale", type=float, default=0.04)
+    parser.add_argument("--ela_local_trust_confidence_quantile", type=float, default=-1.0)
+    parser.add_argument("--ela_local_trust_min_confidence", type=float, default=0.0)
+    parser.add_argument("--ela_local_trust_mode", choices=("hard", "soft"), default="hard")
+    parser.add_argument("--ela_local_trust_min_weight", type=float, default=0.0)
     parser.add_argument(
         "--ela_policy_edge_gate_quantiles",
         default="",
@@ -1873,6 +2201,24 @@ def main() -> int:
         parser.error("--delta_patch_cert_seed_rescue_max_seeds must be >= 0")
     if int(args.delta_patch_cert_seed_rescue_min_aux_witnesses) < 0:
         parser.error("--delta_patch_cert_seed_rescue_min_aux_witnesses must be >= 0")
+    if (
+        not math.isfinite(float(args.delta_min_policy_val_adaptive_sample_fraction))
+        or float(args.delta_min_policy_val_adaptive_sample_fraction) < 0.0
+        or float(args.delta_min_policy_val_adaptive_sample_fraction) > 1.0
+    ):
+        parser.error("--delta_min_policy_val_adaptive_sample_fraction must be in [0, 1]")
+    if int(args.delta_min_policy_val_adaptive_min_samples) < 0:
+        parser.error("--delta_min_policy_val_adaptive_min_samples must be >= 0")
+    if int(args.delta_candidate_region_expansion_core_min_samples) < 0:
+        parser.error("--delta_candidate_region_expansion_core_min_samples must be >= 0")
+    if (
+        not math.isfinite(float(args.delta_candidate_region_expansion_core_min_fraction))
+        or float(args.delta_candidate_region_expansion_core_min_fraction) < 0.0
+        or float(args.delta_candidate_region_expansion_core_min_fraction) > 1.0
+    ):
+        parser.error("--delta_candidate_region_expansion_core_min_fraction must be in [0, 1]")
+    if int(args.delta_candidate_region_expansion_max_witnesses_per_carrier) < 0:
+        parser.error("--delta_candidate_region_expansion_max_witnesses_per_carrier must be >= 0")
     if not math.isfinite(float(args.delta_face_score_weight_power)) or float(args.delta_face_score_weight_power) < 0.0:
         parser.error("--delta_face_score_weight_power must be finite and >= 0")
     if not math.isfinite(float(args.delta_face_score_weight_max)) or float(args.delta_face_score_weight_max) < 1.0:
@@ -1895,6 +2241,49 @@ def main() -> int:
         parser.error("--delta_coefficient_lowpass_sh_scale must be <= 1 for sh_scale lowpass")
     if str(args.ela_policy_source) == "per_model_auto" and float(args.policy_holdout_fraction) <= 0.0:
         parser.error("--ela_policy_source per_model_auto requires --policy_holdout_fraction > 0")
+    if (
+        not math.isfinite(float(args.ela_alpha_risk_tail_fraction))
+        or float(args.ela_alpha_risk_tail_fraction) <= 0.0
+        or float(args.ela_alpha_risk_tail_fraction) > 1.0
+    ):
+        parser.error("--ela_alpha_risk_tail_fraction must be in (0, 1]")
+    if (
+        not math.isfinite(float(args.ela_alpha_max_negative_gain_fraction))
+        or float(args.ela_alpha_max_negative_gain_fraction) < 0.0
+        or float(args.ela_alpha_max_negative_gain_fraction) > 1.0
+    ):
+        parser.error("--ela_alpha_max_negative_gain_fraction must be in [0, 1]")
+    if (
+        not math.isfinite(float(args.ela_alpha_region_risk_max_negative_fraction))
+        or float(args.ela_alpha_region_risk_max_negative_fraction) < 0.0
+        or float(args.ela_alpha_region_risk_max_negative_fraction) > 1.0
+    ):
+        parser.error("--ela_alpha_region_risk_max_negative_fraction must be in [0, 1]")
+    if not math.isfinite(float(args.ela_alpha_region_risk_min_tail_gain)):
+        parser.error("--ela_alpha_region_risk_min_tail_gain must be finite")
+    for name in (
+        "ela_alpha_region_risk_objective_max_balanced_delta",
+        "ela_alpha_region_risk_objective_max_delta_ssim",
+        "ela_alpha_region_risk_objective_min_delta_lpips",
+    ):
+        if not math.isfinite(float(getattr(args, name))):
+            parser.error(f"--{name} must be finite")
+    if int(args.ela_alpha_region_risk_min_regions) <= 0:
+        parser.error("--ela_alpha_region_risk_min_regions must be > 0")
+    if int(args.ela_local_trust_min_supports) < 0:
+        parser.error("--ela_local_trust_min_supports must be >= 0")
+    if not math.isfinite(float(args.ela_local_trust_max_residual_std)):
+        parser.error("--ela_local_trust_max_residual_std must be finite; use a negative value to disable")
+    if not 0.0 <= float(args.ela_local_trust_min_agreement) <= 1.0:
+        parser.error("--ela_local_trust_min_agreement must be in [0, 1]")
+    if float(args.ela_local_trust_agreement_scale) <= 0.0:
+        parser.error("--ela_local_trust_agreement_scale must be > 0")
+    if not -1.0 <= float(args.ela_local_trust_confidence_quantile) < 1.0:
+        parser.error("--ela_local_trust_confidence_quantile must be in [-1, 1)")
+    if float(args.ela_local_trust_min_confidence) < 0.0:
+        parser.error("--ela_local_trust_min_confidence must be >= 0")
+    if float(args.ela_local_trust_min_weight) < 0.0:
+        parser.error("--ela_local_trust_min_weight must be >= 0")
     for name in ("delta_direction_luma_safety_weight", "delta_direction_cosine_weight"):
         value = float(getattr(args, name))
         if not math.isfinite(value) or value < 0.0:
@@ -1908,6 +2297,8 @@ def main() -> int:
         value = float(getattr(args, name))
         if not math.isfinite(value) or value < 0.0:
             parser.error(f"--{name} must be finite and >= 0")
+    if not math.isfinite(float(args.delta_bystander_zero_delta_weight)) or float(args.delta_bystander_zero_delta_weight) < 0.0:
+        parser.error("--delta_bystander_zero_delta_weight must be finite and >= 0")
     if (
         not math.isfinite(float(args.delta_render_region_tail_fraction))
         or float(args.delta_render_region_tail_fraction) <= 0.0
@@ -1916,6 +2307,20 @@ def main() -> int:
         parser.error("--delta_render_region_tail_fraction must be in (0, 1]")
     if int(args.delta_render_region_min_view_samples) < 0:
         parser.error("--delta_render_region_min_view_samples must be >= 0")
+    if int(args.delta_bystander_zero_delta_min_samples) < 0:
+        parser.error("--delta_bystander_zero_delta_min_samples must be >= 0")
+    if not math.isfinite(float(args.delta_witness_constraint_weight)) or float(args.delta_witness_constraint_weight) < 0.0:
+        parser.error("--delta_witness_constraint_weight must be finite and >= 0")
+    if (
+        not math.isfinite(float(args.delta_witness_constraint_tail_fraction))
+        or float(args.delta_witness_constraint_tail_fraction) <= 0.0
+        or float(args.delta_witness_constraint_tail_fraction) > 1.0
+    ):
+        parser.error("--delta_witness_constraint_tail_fraction must be in (0, 1]")
+    if int(args.delta_witness_constraint_min_samples) < 0:
+        parser.error("--delta_witness_constraint_min_samples must be >= 0")
+    if not math.isfinite(float(args.delta_witness_constraint_margin)) or float(args.delta_witness_constraint_margin) < 0.0:
+        parser.error("--delta_witness_constraint_margin must be finite and >= 0")
     if int(args.train_render_region_max_regions) <= 0:
         parser.error("--train_render_region_max_regions must be > 0")
     if int(args.train_render_region_min_pixels) <= 0:
@@ -1974,6 +2379,12 @@ def main() -> int:
         parser.error("--delta_patch_cert_cluster_basis_max_fit_mse_regression must be finite and >= 0")
     if int(args.delta_patch_cert_carrier_holdout_auto_prefix_min_faces) < 0:
         parser.error("--delta_patch_cert_carrier_holdout_auto_prefix_min_faces must be >= 0")
+    if (
+        not math.isfinite(float(args.delta_patch_cert_carrier_holdout_auto_prefix_min_face_fraction))
+        or float(args.delta_patch_cert_carrier_holdout_auto_prefix_min_face_fraction) < 0.0
+        or float(args.delta_patch_cert_carrier_holdout_auto_prefix_min_face_fraction) > 1.0
+    ):
+        parser.error("--delta_patch_cert_carrier_holdout_auto_prefix_min_face_fraction must be in [0, 1]")
     if (
         not math.isfinite(float(args.delta_patch_cert_carrier_holdout_auto_prefix_face_bonus))
         or float(args.delta_patch_cert_carrier_holdout_auto_prefix_face_bonus) < 0.0

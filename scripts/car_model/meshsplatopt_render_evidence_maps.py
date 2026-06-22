@@ -168,10 +168,14 @@ def render_set(
         if save_depth:
             del depth, depth_np
         torch.cuda.empty_cache()
-    if not camera_records:
-        raise RuntimeError(f"no evidence views rendered for split={name}")
-    save_camera_index(camera_records, method_dir / "camera_index.json")
     (method_dir / "render_failures.json").write_text(json.dumps(failures, indent=2) + "\n", encoding="utf-8")
+    if not camera_records:
+        first_error = failures[0].get("error", "unknown") if failures else "no failures recorded"
+        raise RuntimeError(
+            f"no evidence views rendered for split={name}; "
+            f"skipped_failures={len(failures)}; first_error={first_error}"
+        )
+    save_camera_index(camera_records, method_dir / "camera_index.json")
 
 
 def render_sets(

@@ -51,15 +51,53 @@ class PixelSamples:
 
 
 @dataclass
+class CandidateRegionExpansionIndex:
+    expanded_face_ids: set[int]
+    face_to_carrier_ids: dict[int, set[str]]
+    carrier_to_expanded_face_ids: dict[str, set[int]]
+    face_expansion_pixels: dict[int, int]
+    face_expansion_view_count: dict[int, int]
+
+    @classmethod
+    def empty(cls) -> "CandidateRegionExpansionIndex":
+        return cls(
+            expanded_face_ids=set(),
+            face_to_carrier_ids={},
+            carrier_to_expanded_face_ids={},
+            face_expansion_pixels={},
+            face_expansion_view_count={},
+        )
+
+
+@dataclass
+class WitnessGroup:
+    group_type: str
+    view_name: str
+    indices: torch.Tensor
+    samples: int
+
+
+@dataclass
 class RenderRegionObjectiveState:
     enabled: bool
     region_weights: torch.Tensor
     outside_mask: torch.Tensor
+    bystander_mask: torch.Tensor
     view_indices: list[torch.Tensor]
+    witness_groups: list[WitnessGroup]
     core_samples: int
     context_samples: int
     outside_samples: int
+    bystander_samples: int
     view_groups: int
+    witness_group_counts: dict[str, int]
+    witness_sample_counts: dict[str, int]
+    witness_tail_fraction: float
+    witness_min_samples: int
+    witness_margin: float
+    witness_include_full_view: bool
+    witness_include_region_view: bool
+    witness_include_bystander_view: bool
     tail_fraction: float
 
 
@@ -183,6 +221,40 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--render_region_tail_cvar_weight", type=float, default=0.0)
     parser.add_argument("--render_region_tail_fraction", type=float, default=0.25)
     parser.add_argument("--render_region_min_view_samples", type=int, default=16)
+    parser.add_argument(
+        "--bystander_zero_delta_weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Train-only non-core preservation objective. When >0, penalize predicted "
+            "delta magnitude on render-region bystander samples so local repairs do "
+            "not spill into full-frame background/context."
+        ),
+    )
+    parser.add_argument(
+        "--bystander_zero_delta_include_context",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include render-region context samples, not only outside samples, in the zero-delta bystander set.",
+    )
+    parser.add_argument("--bystander_zero_delta_min_samples", type=int, default=0)
+    parser.add_argument(
+        "--witness_constraint_weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Train-only group CVaR regression objective. When >0, penalize the "
+            "worst witness groups whose weighted MSE after the residual fit is "
+            "worse than their zero-delta before MSE by more than "
+            "--witness_constraint_margin."
+        ),
+    )
+    parser.add_argument("--witness_constraint_tail_fraction", type=float, default=0.25)
+    parser.add_argument("--witness_constraint_min_samples", type=int, default=0)
+    parser.add_argument("--witness_constraint_margin", type=float, default=0.0)
+    parser.add_argument("--witness_constraint_include_full_view", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--witness_constraint_include_region_view", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--witness_constraint_include_bystander_view", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--steps", type=int, default=800)
     parser.add_argument("--lr", type=float, default=0.025)
     parser.add_argument(
@@ -227,6 +299,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_faces_to_apply", type=int, default=2048)
     parser.add_argument("--min_policy_val_relative_gain", type=float, default=0.02)
     parser.add_argument("--min_policy_val_samples", type=int, default=512)
+    parser.add_argument(
+        "--min_policy_val_adaptive_sample_fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "Optional support-aware sample floor. When >0, the effective global "
+            "policy-val sample requirement is min(--min_policy_val_samples, "
+            "max(--min_policy_val_adaptive_min_samples, "
+            "ceil(fraction * available_policy_val_samples)))."
+        ),
+    )
+    parser.add_argument("--min_policy_val_adaptive_min_samples", type=int, default=0)
     parser.add_argument("--min_policy_val_unique_faces", type=int, default=16)
     parser.add_argument(
         "--validation_shrink_mode",
@@ -573,6 +657,17 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--patch_cert_carrier_holdout_auto_prefix_min_face_fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "Optional scene-adaptive coverage floor for auto-prefix selection. "
+            "When >0, the selected cumulative carrier prefix must cover at least "
+            "ceil(fraction * train-certified candidate faces), capped by the "
+            "available candidate faces. This avoids per-scene face-count tuning."
+        ),
+    )
+    parser.add_argument(
         "--patch_cert_carrier_holdout_auto_prefix_face_bonus",
         type=float,
         default=0.0,
@@ -619,6 +714,56 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional comma-separated face ids to materialize from --materialize_plan_in.",
     )
+    parser.add_argument(
+        "--allowed_face_ids",
+        default="",
+        help=(
+            "Optional comma-separated face ids allowed during fitting/refit. "
+            "Faces outside this set are removed before sample collection and certification."
+        ),
+    )
+    parser.add_argument(
+        "--face_risk_scale_json",
+        type=Path,
+        default=None,
+        help=(
+            "Optional train-derived per-face risk scale JSON applied after validation shrink "
+            "and before proxy/gate evaluation. Supported forms match --materialize_plan_alpha_json."
+        ),
+    )
+    parser.add_argument(
+        "--candidate_region_expansion_carrier_json",
+        type=Path,
+        default=None,
+        help=(
+            "Optional candidate-owned render-region carrier JSON. During fitting only, "
+            "expanded_face_ids from this train-derived file are appended to the "
+            "face-local candidate pool when they also have valid train evidence rows. "
+            "They are not certificates and still pass normal sample, policy, and PatchCert gates."
+        ),
+    )
+    parser.add_argument(
+        "--candidate_region_expansion_core_priority",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "For train-derived candidate-region expanded faces, prioritize render-region "
+            "core samples before the per-face/view sample cap. Default is off."
+        ),
+    )
+    parser.add_argument("--candidate_region_expansion_core_min_samples", type=int, default=0)
+    parser.add_argument("--candidate_region_expansion_core_min_fraction", type=float, default=0.0)
+    parser.add_argument(
+        "--candidate_region_expansion_witness_rescue",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Before max-face truncation, promote already strict-certified expanded "
+            "faces as candidate-region carrier witnesses. They still pass PatchCert "
+            "and carrier holdout normally."
+        ),
+    )
+    parser.add_argument("--candidate_region_expansion_max_witnesses_per_carrier", type=int, default=0)
     parser.add_argument(
         "--materialize_plan_scale",
         type=float,
@@ -701,6 +846,18 @@ def parse_args() -> argparse.Namespace:
         parser.error("--shared_residual_field_view_hinge_weight must be finite and >= 0")
     if int(args.shared_residual_field_view_hinge_min_samples) < 0:
         parser.error("--shared_residual_field_view_hinge_min_samples must be >= 0")
+    if int(args.min_policy_val_samples) < 0:
+        parser.error("--min_policy_val_samples must be >= 0")
+    if (
+        not math.isfinite(float(args.min_policy_val_adaptive_sample_fraction))
+        or float(args.min_policy_val_adaptive_sample_fraction) < 0.0
+        or float(args.min_policy_val_adaptive_sample_fraction) > 1.0
+    ):
+        parser.error("--min_policy_val_adaptive_sample_fraction must be in [0, 1]")
+    if int(args.min_policy_val_adaptive_min_samples) < 0:
+        parser.error("--min_policy_val_adaptive_min_samples must be >= 0")
+    if int(args.min_policy_val_unique_faces) < 0:
+        parser.error("--min_policy_val_unique_faces must be >= 0")
     if not math.isfinite(float(args.coefficient_lowpass_sh_scale)) or float(args.coefficient_lowpass_sh_scale) < 0.0:
         parser.error("--coefficient_lowpass_sh_scale must be finite and >= 0")
     if str(args.coefficient_lowpass_mode) == "sh_scale" and float(args.coefficient_lowpass_sh_scale) > 1.0:
@@ -725,6 +882,22 @@ def parse_args() -> argparse.Namespace:
         parser.error("--render_region_tail_fraction must be in (0, 1]")
     if int(args.render_region_min_view_samples) < 0:
         parser.error("--render_region_min_view_samples must be >= 0")
+    if not math.isfinite(float(args.bystander_zero_delta_weight)) or float(args.bystander_zero_delta_weight) < 0.0:
+        parser.error("--bystander_zero_delta_weight must be finite and >= 0")
+    if int(args.bystander_zero_delta_min_samples) < 0:
+        parser.error("--bystander_zero_delta_min_samples must be >= 0")
+    if not math.isfinite(float(args.witness_constraint_weight)) or float(args.witness_constraint_weight) < 0.0:
+        parser.error("--witness_constraint_weight must be finite and >= 0")
+    if (
+        not math.isfinite(float(args.witness_constraint_tail_fraction))
+        or float(args.witness_constraint_tail_fraction) <= 0.0
+        or float(args.witness_constraint_tail_fraction) > 1.0
+    ):
+        parser.error("--witness_constraint_tail_fraction must be in (0, 1]")
+    if int(args.witness_constraint_min_samples) < 0:
+        parser.error("--witness_constraint_min_samples must be >= 0")
+    if not math.isfinite(float(args.witness_constraint_margin)) or float(args.witness_constraint_margin) < 0.0:
+        parser.error("--witness_constraint_margin must be finite and >= 0")
     if (
         not math.isfinite(float(args.min_face_prediction_safety_fraction))
         or float(args.min_face_prediction_safety_fraction) < 0.0
@@ -790,6 +963,22 @@ def parse_args() -> argparse.Namespace:
         parser.error("--validation_gain_max_scale must be finite and >= 1")
     if int(args.patch_cert_carrier_holdout_auto_prefix_min_faces) < 0:
         parser.error("--patch_cert_carrier_holdout_auto_prefix_min_faces must be >= 0")
+    if int(args.candidate_region_expansion_core_min_samples) < 0:
+        parser.error("--candidate_region_expansion_core_min_samples must be >= 0")
+    if (
+        not math.isfinite(float(args.candidate_region_expansion_core_min_fraction))
+        or float(args.candidate_region_expansion_core_min_fraction) < 0.0
+        or float(args.candidate_region_expansion_core_min_fraction) > 1.0
+    ):
+        parser.error("--candidate_region_expansion_core_min_fraction must be in [0, 1]")
+    if int(args.candidate_region_expansion_max_witnesses_per_carrier) < 0:
+        parser.error("--candidate_region_expansion_max_witnesses_per_carrier must be >= 0")
+    if (
+        not math.isfinite(float(args.patch_cert_carrier_holdout_auto_prefix_min_face_fraction))
+        or float(args.patch_cert_carrier_holdout_auto_prefix_min_face_fraction) < 0.0
+        or float(args.patch_cert_carrier_holdout_auto_prefix_min_face_fraction) > 1.0
+    ):
+        parser.error("--patch_cert_carrier_holdout_auto_prefix_min_face_fraction must be in [0, 1]")
     if not math.isfinite(float(args.patch_cert_carrier_holdout_auto_prefix_face_bonus)) or float(
         args.patch_cert_carrier_holdout_auto_prefix_face_bonus
     ) < 0.0:
@@ -809,6 +998,139 @@ def _float(row: dict[str, str], key: str, default: float = 0.0) -> float:
     return float(value)
 
 
+def _add_int_face_id(target: set[int], value: Any) -> None:
+    try:
+        face_id = int(value)
+    except Exception:
+        return
+    if face_id >= 0:
+        target.add(face_id)
+
+
+def _int_face_id(value: Any) -> int | None:
+    try:
+        face_id = int(value)
+    except Exception:
+        return None
+    return face_id if face_id >= 0 else None
+
+
+def _collect_candidate_expanded_face_ids(payload: Any, face_ids: set[int]) -> None:
+    if isinstance(payload, dict):
+        value = payload.get("expanded_face_ids")
+        if isinstance(value, list):
+            for item in value:
+                _add_int_face_id(face_ids, item)
+        for key in ("carriers", "regions", "expansion"):
+            child = payload.get(key)
+            if isinstance(child, (dict, list)):
+                _collect_candidate_expanded_face_ids(child, face_ids)
+    elif isinstance(payload, list):
+        for item in payload:
+            _collect_candidate_expanded_face_ids(item, face_ids)
+
+
+def _merge_expansion_row_stats(index: CandidateRegionExpansionIndex, row: Any) -> None:
+    if not isinstance(row, dict):
+        return
+    face_id = _int_face_id(row.get("face_id"))
+    if face_id is None:
+        return
+    pixels = row.get("pixels")
+    try:
+        index.face_expansion_pixels[face_id] = max(
+            int(index.face_expansion_pixels.get(face_id, 0)),
+            int(pixels),
+        )
+    except Exception:
+        pass
+    views = row.get("views")
+    if isinstance(views, list):
+        index.face_expansion_view_count[face_id] = max(
+            int(index.face_expansion_view_count.get(face_id, 0)),
+            len({str(view) for view in views}),
+        )
+    else:
+        try:
+            index.face_expansion_view_count[face_id] = max(
+                int(index.face_expansion_view_count.get(face_id, 0)),
+                int(row.get("view_count", 0)),
+            )
+        except Exception:
+            pass
+
+
+def _load_candidate_region_expansion_index_from_payload(payload: Any) -> CandidateRegionExpansionIndex:
+    index = CandidateRegionExpansionIndex.empty()
+    fallback_ids: set[int] = set()
+    _collect_candidate_expanded_face_ids(payload, fallback_ids)
+
+    carriers = payload.get("carriers", []) if isinstance(payload, dict) else []
+    if isinstance(carriers, list):
+        for carrier_idx, carrier in enumerate(carriers):
+            if not isinstance(carrier, dict):
+                continue
+            carrier_id = str(carrier.get("carrier_id") or carrier_idx)
+            carrier_faces: set[int] = set()
+            expanded_values = carrier.get("expanded_face_ids", [])
+            if isinstance(expanded_values, list):
+                for item in expanded_values:
+                    face_id = _int_face_id(item)
+                    if face_id is not None:
+                        carrier_faces.add(face_id)
+            expansion = carrier.get("expansion")
+            rows = expansion.get("rows", []) if isinstance(expansion, dict) else []
+            if isinstance(rows, list):
+                for row in rows:
+                    if not isinstance(row, dict) or bool(row.get("seed_face", False)):
+                        continue
+                    face_id = _int_face_id(row.get("face_id"))
+                    if face_id is None:
+                        continue
+                    carrier_faces.add(face_id)
+                    _merge_expansion_row_stats(index, row)
+            for region in carrier.get("regions", []) if isinstance(carrier.get("regions"), list) else []:
+                if not isinstance(region, dict):
+                    continue
+                for key in ("expanded_face_ids",):
+                    values = region.get(key)
+                    if isinstance(values, list):
+                        for item in values:
+                            face_id = _int_face_id(item)
+                            if face_id is not None:
+                                carrier_faces.add(face_id)
+                candidates = region.get("expanded_face_pixel_candidates", [])
+                if isinstance(candidates, list):
+                    for row in candidates:
+                        if not isinstance(row, dict):
+                            continue
+                        face_id = _int_face_id(row.get("face_id"))
+                        if face_id is not None and face_id in carrier_faces:
+                            _merge_expansion_row_stats(index, row)
+            for face_id in carrier_faces:
+                index.expanded_face_ids.add(face_id)
+                index.face_to_carrier_ids.setdefault(face_id, set()).add(carrier_id)
+                index.carrier_to_expanded_face_ids.setdefault(carrier_id, set()).add(face_id)
+
+    for face_id in fallback_ids:
+        index.expanded_face_ids.add(face_id)
+    return index
+
+
+def load_candidate_region_expansion_index(path: Path | None) -> CandidateRegionExpansionIndex:
+    if path is None:
+        return CandidateRegionExpansionIndex.empty()
+    if not path.is_file():
+        raise FileNotFoundError(f"candidate region expansion carrier JSON not found: {path}")
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    return _load_candidate_region_expansion_index_from_payload(payload)
+
+
+def load_candidate_region_expansion_face_ids(path: Path | None) -> set[int]:
+    return set(load_candidate_region_expansion_index(path).expanded_face_ids)
+
+
 def read_selected_faces(
     csv_path: Path,
     *,
@@ -816,6 +1138,8 @@ def read_selected_faces(
     min_view_hits: int,
     min_consistency: float,
     min_pixel_count: float,
+    extra_face_ids: set[int] | None = None,
+    expansion_index: CandidateRegionExpansionIndex | None = None,
 ) -> tuple[list[int], dict[int, dict[str, float]]]:
     rows: list[dict[str, Any]] = []
     with csv_path.open("r", encoding="utf-8") as f:
@@ -841,10 +1165,38 @@ def read_selected_faces(
                     "mean_residual_r": _float(row, "mean_residual_r"),
                     "mean_residual_g": _float(row, "mean_residual_g"),
                     "mean_residual_b": _float(row, "mean_residual_b"),
+                    "candidate_region_expanded": 0.0,
                 }
             )
     rows.sort(key=lambda r: (float(r["score"]), float(r["pixel_count"])), reverse=True)
-    rows = rows[: int(top_k)]
+    eligible_by_face = {int(row["face_id"]): row for row in rows}
+    selected_rows = rows[: int(top_k)]
+    selected_ids = {int(row["face_id"]) for row in selected_rows}
+    extra_ids = {int(fid) for fid in (extra_face_ids or set())}
+    extra_rows: list[dict[str, Any]] = []
+    for fid in sorted(extra_ids - selected_ids):
+        row = eligible_by_face.get(int(fid))
+        if row is None:
+            continue
+        row = dict(row)
+        row["candidate_region_expanded"] = 1.0
+        extra_rows.append(row)
+    extra_rows.sort(key=lambda r: (float(r["score"]), float(r["pixel_count"])), reverse=True)
+    rows = selected_rows + extra_rows
+    for row in rows:
+        if int(row["face_id"]) in extra_ids:
+            row["candidate_region_expanded"] = 1.0
+            if expansion_index is not None:
+                face_id = int(row["face_id"])
+                row["candidate_region_expansion_pixels"] = float(
+                    expansion_index.face_expansion_pixels.get(face_id, 0)
+                )
+                row["candidate_region_expansion_view_count"] = float(
+                    expansion_index.face_expansion_view_count.get(face_id, 0)
+                )
+                row["candidate_region_expansion_carrier_count"] = float(
+                    len(expansion_index.face_to_carrier_ids.get(face_id, set()))
+                )
     stats = {
         int(row["face_id"]): {
             "score": float(row["score"]),
@@ -855,6 +1207,14 @@ def read_selected_faces(
             "mean_residual_r": float(row["mean_residual_r"]),
             "mean_residual_g": float(row["mean_residual_g"]),
             "mean_residual_b": float(row["mean_residual_b"]),
+            "candidate_region_expanded": float(row.get("candidate_region_expanded", 0.0)),
+            "candidate_region_expansion_pixels": float(row.get("candidate_region_expansion_pixels", 0.0)),
+            "candidate_region_expansion_view_count": float(
+                row.get("candidate_region_expansion_view_count", 0.0)
+            ),
+            "candidate_region_expansion_carrier_count": float(
+                row.get("candidate_region_expansion_carrier_count", 0.0)
+            ),
         }
         for row in rows
     }
@@ -1065,6 +1425,71 @@ def summarize_region_bins(samples: PixelSamples) -> dict[str, Any]:
     }
 
 
+def summarize_region_bins_for_faces(samples: PixelSamples, face_ids: set[int]) -> dict[str, Any]:
+    if samples.count == 0 or not face_ids:
+        return {"faces": 0, "faces_with_core_samples": 0, "core_samples": 0}
+    face_arr = samples.face_ids.astype(np.int64, copy=False).reshape(-1)
+    bins = samples.region_bins.astype(np.uint8, copy=False).reshape(-1)
+    selected_mask = np.isin(face_arr, np.asarray(sorted(face_ids), dtype=np.int64))
+    if not np.any(selected_mask):
+        return {"faces": 0, "faces_with_core_samples": 0, "core_samples": 0}
+    selected_faces = {int(fid) for fid in np.unique(face_arr[selected_mask]).tolist()}
+    core_mask = selected_mask & (bins == 2)
+    core_faces = {int(fid) for fid in np.unique(face_arr[core_mask]).tolist()} if np.any(core_mask) else set()
+    return {
+        "faces": int(len(selected_faces)),
+        "faces_with_core_samples": int(len(core_faces)),
+        "core_samples": int(core_mask.sum()),
+    }
+
+
+def priority_sample_indices(
+    *,
+    n: int,
+    cap: int,
+    region_bins: np.ndarray,
+    min_core_samples: int,
+    min_core_fraction: float,
+) -> np.ndarray:
+    if n <= cap:
+        return np.arange(n, dtype=np.int64)
+    if cap <= 0:
+        return np.empty((0,), dtype=np.int64)
+    bins = region_bins.astype(np.uint8, copy=False).reshape(-1)
+    core_idx = np.nonzero(bins == 2)[0]
+    context_idx = np.nonzero(bins == 1)[0]
+    outside_idx = np.nonzero(bins == 0)[0]
+    if core_idx.size <= 0:
+        return np.linspace(0, n - 1, cap, dtype=np.int64)
+
+    target_core = max(int(min_core_samples), int(math.ceil(float(min_core_fraction) * float(cap))))
+    target_core = min(int(target_core), int(cap), int(core_idx.size))
+
+    def take_even(values: np.ndarray, count: int) -> list[int]:
+        if count <= 0 or values.size <= 0:
+            return []
+        if values.size <= count:
+            return [int(v) for v in values.tolist()]
+        take = np.linspace(0, values.size - 1, count, dtype=np.int64)
+        return [int(v) for v in values[take].tolist()]
+
+    selected: list[int] = take_even(core_idx, target_core)
+    selected_set = set(selected)
+    remaining = int(cap) - len(selected)
+    for values in (context_idx, outside_idx, core_idx):
+        if remaining <= 0:
+            break
+        available = np.asarray([int(v) for v in values.tolist() if int(v) not in selected_set], dtype=np.int64)
+        chosen = take_even(available, remaining)
+        selected.extend(chosen)
+        selected_set.update(chosen)
+        remaining = int(cap) - len(selected)
+    if len(selected) < int(cap):
+        available = np.asarray([idx for idx in range(n) if idx not in selected_set], dtype=np.int64)
+        selected.extend(take_even(available, int(cap) - len(selected)))
+    return np.asarray(sorted(selected[: int(cap)]), dtype=np.int64)
+
+
 def collect_samples(
     view_paths: list[Path],
     selected_faces: list[int],
@@ -1083,8 +1508,12 @@ def collect_samples(
     region_context_weight: float = 1.0,
     region_outside_weight: float = 1.0,
     region_boundary_px: int = 0,
+    region_core_priority_face_ids: set[int] | None = None,
+    region_core_priority_min_samples: int = 0,
+    region_core_priority_min_fraction: float = 0.0,
 ) -> PixelSamples:
     selected = set(int(fid) for fid in selected_faces)
+    priority_faces = {int(fid) for fid in (region_core_priority_face_ids or set())}
     face_chunks: list[np.ndarray] = []
     bary_chunks: list[np.ndarray] = []
     residual_chunks: list[np.ndarray] = []
@@ -1161,8 +1590,28 @@ def collect_samples(
             if n <= 0:
                 continue
             cap = min(int(max_samples_per_face_view), remaining, n)
+            region_bins: np.ndarray | None = None
+            if int(fid) in priority_faces and (region_index or {}):
+                region_bins = region_bins_for_samples(
+                    region_index or {},
+                    view_name=view_path.stem,
+                    face_id=int(fid),
+                    xs=xs,
+                    ys=ys,
+                    boundary_px=int(region_boundary_px),
+                )
             if n > cap:
-                take = np.linspace(0, n - 1, cap, dtype=np.int64)
+                if region_bins is not None:
+                    take = priority_sample_indices(
+                        n=n,
+                        cap=cap,
+                        region_bins=region_bins,
+                        min_core_samples=int(region_core_priority_min_samples),
+                        min_core_fraction=float(region_core_priority_min_fraction),
+                    )
+                    region_bins = region_bins[take]
+                else:
+                    take = np.linspace(0, n - 1, cap, dtype=np.int64)
                 ys = ys[take]
                 xs = xs[take]
                 b = b[take]
@@ -1175,14 +1624,15 @@ def collect_samples(
             if score_power > 0.0:
                 face_score = max(float(stat.get("score", score_ref)), 0.0)
                 score_weight = float(np.clip((face_score / score_ref) ** score_power, 1e-3, score_weight_max))
-            region_bins = region_bins_for_samples(
-                region_index or {},
-                view_name=view_path.stem,
-                face_id=int(fid),
-                xs=xs,
-                ys=ys,
-                boundary_px=int(region_boundary_px),
-            )
+            if region_bins is None:
+                region_bins = region_bins_for_samples(
+                    region_index or {},
+                    view_name=view_path.stem,
+                    face_id=int(fid),
+                    xs=xs,
+                    ys=ys,
+                    boundary_px=int(region_boundary_px),
+                )
             region_weights = np.full((n,), float(region_outside_weight), dtype=np.float32)
             region_weights[region_bins == 1] = float(region_context_weight)
             region_weights[region_bins == 2] = float(region_core_weight)
@@ -1386,6 +1836,14 @@ def build_render_region_objective_state(
     context_weight: float,
     tail_fraction: float,
     min_view_samples: int,
+    bystander_include_context: bool,
+    bystander_min_samples: int,
+    witness_tail_fraction: float,
+    witness_min_samples: int,
+    witness_margin: float,
+    witness_include_full_view: bool,
+    witness_include_region_view: bool,
+    witness_include_bystander_view: bool,
     device: torch.device,
 ) -> RenderRegionObjectiveState:
     bins_np = np.asarray(region_bins, dtype=np.uint8).reshape(-1)
@@ -1396,11 +1854,22 @@ def build_render_region_objective_state(
             enabled=False,
             region_weights=empty_weight,
             outside_mask=empty_mask,
+            bystander_mask=empty_mask,
             view_indices=[],
+            witness_groups=[],
             core_samples=0,
             context_samples=0,
             outside_samples=0,
+            bystander_samples=0,
             view_groups=0,
+            witness_group_counts={"full_view": 0, "region_view": 0, "bystander_view": 0},
+            witness_sample_counts={"full_view": 0, "region_view": 0, "bystander_view": 0},
+            witness_tail_fraction=float(witness_tail_fraction),
+            witness_min_samples=int(witness_min_samples),
+            witness_margin=float(witness_margin),
+            witness_include_full_view=bool(witness_include_full_view),
+            witness_include_region_view=bool(witness_include_region_view),
+            witness_include_bystander_view=bool(witness_include_bystander_view),
             tail_fraction=float(tail_fraction),
         )
 
@@ -1417,15 +1886,64 @@ def build_render_region_objective_state(
                 continue
             view_indices.append(torch.as_tensor(np.nonzero(mask)[0], dtype=torch.long, device=device))
 
+    bystander_candidate_mask_np = bins_np == 0
+    if bool(bystander_include_context):
+        bystander_candidate_mask_np = bystander_candidate_mask_np | (bins_np == 1)
+    bystander_mask_np = bystander_candidate_mask_np.copy()
+    if int(bystander_mask_np.sum()) < int(bystander_min_samples):
+        bystander_mask_np = np.zeros_like(bins_np, dtype=bool)
+
+    witness_groups: list[WitnessGroup] = []
+    witness_group_counts = {"full_view": 0, "region_view": 0, "bystander_view": 0}
+    witness_sample_counts = {"full_view": 0, "region_view": 0, "bystander_view": 0}
+
+    def add_witness_groups(group_type: str, mask_np: np.ndarray) -> None:
+        if int(view_np.shape[0]) != int(bins_np.shape[0]):
+            return
+        threshold = max(int(witness_min_samples), 1)
+        for view_name in sorted(set(str(v) for v in view_np.tolist())):
+            group_mask = (view_np == view_name) & mask_np
+            sample_count = int(group_mask.sum())
+            if sample_count < threshold:
+                continue
+            witness_groups.append(
+                WitnessGroup(
+                    group_type=group_type,
+                    view_name=str(view_name),
+                    indices=torch.as_tensor(np.nonzero(group_mask)[0], dtype=torch.long, device=device),
+                    samples=sample_count,
+                )
+            )
+            witness_group_counts[group_type] += 1
+            witness_sample_counts[group_type] += sample_count
+
+    if bool(witness_include_full_view):
+        add_witness_groups("full_view", np.ones_like(bins_np, dtype=bool))
+    if bool(witness_include_region_view):
+        add_witness_groups("region_view", region_mask_np)
+    if bool(witness_include_bystander_view):
+        add_witness_groups("bystander_view", bystander_candidate_mask_np)
+
     return RenderRegionObjectiveState(
-        enabled=bool(region_mask_np.any() or (bins_np == 0).any()),
+        enabled=bool(region_mask_np.any() or (bins_np == 0).any() or witness_groups),
         region_weights=torch.as_tensor(weights_np, dtype=torch.float32, device=device),
         outside_mask=torch.as_tensor(bins_np == 0, dtype=torch.bool, device=device),
+        bystander_mask=torch.as_tensor(bystander_mask_np, dtype=torch.bool, device=device),
         view_indices=view_indices,
+        witness_groups=witness_groups,
         core_samples=int((bins_np == 2).sum()),
         context_samples=int((bins_np == 1).sum()),
         outside_samples=int((bins_np == 0).sum()),
+        bystander_samples=int(bystander_mask_np.sum()),
         view_groups=int(len(view_indices)),
+        witness_group_counts=witness_group_counts,
+        witness_sample_counts=witness_sample_counts,
+        witness_tail_fraction=float(witness_tail_fraction),
+        witness_min_samples=int(witness_min_samples),
+        witness_margin=float(witness_margin),
+        witness_include_full_view=bool(witness_include_full_view),
+        witness_include_region_view=bool(witness_include_region_view),
+        witness_include_bystander_view=bool(witness_include_bystander_view),
         tail_fraction=float(tail_fraction),
     )
 
@@ -1440,14 +1958,20 @@ def _render_region_objective_terms(
     *,
     outside_penalty: float,
     tail_cvar_weight: float,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    bystander_zero_delta_weight: float,
+    witness_constraint_weight: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     zero = torch.zeros((), dtype=torch.float32, device=coeff.device)
     if not bool(state.enabled) or sample_vertex_ids.numel() == 0:
-        return zero, zero, zero, zero
+        return zero, zero, zero, zero, zero, zero
 
     pred = _predict(coeff, sample_vertex_ids, weighted_basis)
     per_sample_after = ((pred - target) ** 2).mean(dim=1)
     base_weights = weights.clamp_min(1e-8)
+    needs_before = (float(tail_cvar_weight) > 0.0 and bool(state.view_indices)) or (
+        float(witness_constraint_weight) > 0.0 and bool(state.witness_groups)
+    )
+    per_sample_before = (target.detach() ** 2).mean(dim=1) if needs_before else None
 
     region_loss = zero
     if state.region_weights.numel() == int(per_sample_after.shape[0]):
@@ -1463,9 +1987,16 @@ def _render_region_objective_terms(
             outside_pred = pred[outside_mask]
             outside_loss = (outside_pred.pow(2).mean(dim=1) * outside_weights).sum() / outside_weights.sum().clamp_min(1.0e-8)
 
+    bystander_loss = zero
+    if float(bystander_zero_delta_weight) > 0.0 and state.bystander_mask.numel() == int(per_sample_after.shape[0]):
+        bystander_mask = state.bystander_mask
+        if bool(bystander_mask.any().item()):
+            bystander_weights = base_weights[bystander_mask]
+            bystander_pred = pred[bystander_mask]
+            bystander_loss = (bystander_pred.pow(2).mean(dim=1) * bystander_weights).sum() / bystander_weights.sum().clamp_min(1.0e-8)
+
     tail_loss = zero
     if float(tail_cvar_weight) > 0.0 and state.view_indices:
-        per_sample_before = (target.detach() ** 2).mean(dim=1)
         regressions: list[torch.Tensor] = []
         for idx in state.view_indices:
             if idx.numel() == 0:
@@ -1479,8 +2010,35 @@ def _render_region_objective_terms(
             k = max(1, int(math.ceil(float(state.tail_fraction) * int(reg.shape[0]))))
             tail_loss = torch.topk(reg, k=min(k, int(reg.shape[0])), largest=True).values.mean()
 
-    total = region_loss + float(outside_penalty) * outside_loss + float(tail_cvar_weight) * tail_loss
-    return total, region_loss, outside_loss, tail_loss
+    witness_loss = zero
+    if (
+        float(witness_constraint_weight) > 0.0
+        and state.witness_groups
+        and per_sample_before is not None
+        and int(per_sample_after.shape[0]) == int(base_weights.shape[0])
+    ):
+        regressions = []
+        for group in state.witness_groups:
+            idx = group.indices
+            if idx.numel() == 0:
+                continue
+            group_weights = base_weights[idx]
+            before = (per_sample_before[idx] * group_weights).sum() / group_weights.sum().clamp_min(1.0e-8)
+            after = (per_sample_after[idx] * group_weights).sum() / group_weights.sum().clamp_min(1.0e-8)
+            regressions.append(torch.relu((after - before) / before.clamp_min(1.0e-12) - float(state.witness_margin)))
+        if regressions:
+            reg = torch.stack(regressions)
+            k = max(1, int(math.ceil(float(state.witness_tail_fraction) * int(reg.shape[0]))))
+            witness_loss = torch.topk(reg, k=min(k, int(reg.shape[0])), largest=True).values.mean()
+
+    total = (
+        region_loss
+        + float(outside_penalty) * outside_loss
+        + float(tail_cvar_weight) * tail_loss
+        + float(bystander_zero_delta_weight) * bystander_loss
+        + float(witness_constraint_weight) * witness_loss
+    )
+    return total, region_loss, outside_loss, tail_loss, bystander_loss, witness_loss
 
 
 def evaluate_proxy(
@@ -2658,6 +3216,7 @@ def select_holdout_stable_carriers(
         "auto_prefix": bool(args.patch_cert_carrier_holdout_auto_prefix),
         "auto_prefix_min_faces": int(args.patch_cert_carrier_holdout_auto_prefix_min_faces),
         "auto_prefix_effective_min_faces": int(args.patch_cert_carrier_holdout_auto_prefix_min_faces),
+        "auto_prefix_min_face_fraction": float(args.patch_cert_carrier_holdout_auto_prefix_min_face_fraction),
         "auto_prefix_face_bonus": float(args.patch_cert_carrier_holdout_auto_prefix_face_bonus),
         "auto_prefix_positive_tail_safe": bool(args.patch_cert_carrier_holdout_auto_prefix_positive_tail_safe),
         "auto_prefix_min_faces_relaxed_by_tail_safety": False,
@@ -2771,6 +3330,12 @@ def select_holdout_stable_carriers(
         best_under_floor_key: tuple[float, float, int, int] | None = None
         stopped_by_tail_safety = False
         min_prefix_faces = int(args.patch_cert_carrier_holdout_auto_prefix_min_faces)
+        min_prefix_fraction = float(args.patch_cert_carrier_holdout_auto_prefix_min_face_fraction)
+        if min_prefix_fraction > 0.0 and int(summary["input_faces"]) > 0:
+            min_prefix_faces = max(
+                min_prefix_faces,
+                int(math.ceil(min_prefix_fraction * int(summary["input_faces"]))),
+            )
         if min_prefix_faces > 0 and int(summary["input_faces"]) > 0:
             min_prefix_faces = min(min_prefix_faces, int(summary["input_faces"]))
         summary["auto_prefix_effective_min_faces"] = int(min_prefix_faces)
@@ -2878,6 +3443,9 @@ def select_holdout_stable_carriers(
             best_cert["coverage_floor_passed"] = False
             best_cert["coverage_floor_relaxed_by_tail_safety"] = True
             best_cert["requested_min_faces"] = int(args.patch_cert_carrier_holdout_auto_prefix_min_faces)
+            best_cert["requested_min_face_fraction"] = float(
+                args.patch_cert_carrier_holdout_auto_prefix_min_face_fraction
+            )
             best_cert["effective_min_faces_before_tail_safety"] = int(min_prefix_faces)
             summary["auto_prefix_min_faces_relaxed_by_tail_safety"] = True
             summary["auto_prefix_effective_min_faces"] = int(len(best_faces))
@@ -3021,6 +3589,62 @@ def apply_patch_cert_seed_rescue(
     summary["added_seed_faces"] = [int(fid) for fid in added[:50]]
     summary["witness_histogram"] = {str(k): int(v) for k, v in sorted(witness_hist.items())}
     return list(strict_face_candidates) + added, summary
+
+
+def apply_candidate_region_expansion_witness_rescue(
+    *,
+    ranked_face_candidates: list[int],
+    strict_face_candidates: list[int],
+    expansion_index: CandidateRegionExpansionIndex,
+    args: argparse.Namespace,
+) -> tuple[list[int], dict[str, Any]]:
+    strict_set = {int(fid) for fid in strict_face_candidates}
+    ranked_set = {int(fid) for fid in ranked_face_candidates}
+    expanded_strict = sorted(int(fid) for fid in strict_set & expansion_index.expanded_face_ids)
+    summary: dict[str, Any] = {
+        "enabled": bool(args.candidate_region_expansion_witness_rescue),
+        "max_witnesses_per_carrier": int(args.candidate_region_expansion_max_witnesses_per_carrier),
+        "strict_expanded_face_candidates": int(len(expanded_strict)),
+        "carrier_count": int(len(expansion_index.carrier_to_expanded_face_ids)),
+        "rescued_expanded_witness_faces": 0,
+        "rescued_expanded_witness_carriers": 0,
+        "rescued_face_ids": [],
+        "uses_test": False,
+    }
+    if (
+        not bool(args.candidate_region_expansion_witness_rescue)
+        or int(args.candidate_region_expansion_max_witnesses_per_carrier) <= 0
+        or not ranked_face_candidates
+        or not expanded_strict
+    ):
+        return list(ranked_face_candidates), summary
+
+    rank = {int(fid): idx for idx, fid in enumerate(ranked_face_candidates)}
+    rescued: list[int] = []
+    for carrier_id in sorted(expansion_index.carrier_to_expanded_face_ids):
+        candidates = [
+            int(fid)
+            for fid in expansion_index.carrier_to_expanded_face_ids.get(carrier_id, set())
+            if int(fid) in strict_set and int(fid) in ranked_set
+        ]
+        candidates.sort(key=lambda fid: rank.get(int(fid), 10**12))
+        for fid in candidates[: int(args.candidate_region_expansion_max_witnesses_per_carrier)]:
+            if fid not in rescued:
+                rescued.append(fid)
+
+    if not rescued:
+        return list(ranked_face_candidates), summary
+    rescued_set = {int(fid) for fid in rescued}
+    reordered = rescued + [int(fid) for fid in ranked_face_candidates if int(fid) not in rescued_set]
+    rescued_carriers = {
+        str(carrier_id)
+        for carrier_id, faces in expansion_index.carrier_to_expanded_face_ids.items()
+        if any(int(fid) in rescued_set for fid in faces)
+    }
+    summary["rescued_expanded_witness_faces"] = int(len(rescued))
+    summary["rescued_expanded_witness_carriers"] = int(len(rescued_carriers))
+    summary["rescued_face_ids"] = [int(fid) for fid in rescued[:50]]
+    return reordered, summary
 
 
 def clone_face_coeffs(coeff: torch.Tensor, selected_faces: list[int], face_ids: list[int]) -> dict[int, torch.Tensor]:
@@ -3976,6 +4600,8 @@ def solve_coeff_delta(
     render_region_state: RenderRegionObjectiveState | None,
     render_region_outside_penalty: float,
     render_region_tail_cvar_weight: float,
+    bystander_zero_delta_weight: float,
+    witness_constraint_weight: float,
     steps: int,
     lr: float,
     device: torch.device,
@@ -4016,6 +4642,8 @@ def solve_coeff_delta(
     final_render_region_fit_loss = torch.zeros((), dtype=torch.float32, device=device)
     final_render_region_outside_loss = torch.zeros((), dtype=torch.float32, device=device)
     final_render_region_tail_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_bystander_zero_delta_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_witness_constraint_loss = torch.zeros((), dtype=torch.float32, device=device)
     for _ in range(int(steps)):
         coeff = bounds * torch.tanh(param)
         data_loss = _weighted_mse(coeff, fit_sample_vertex_ids, fit_weighted_basis, fit_target, fit_weights)
@@ -4033,7 +4661,14 @@ def solve_coeff_delta(
             smooth_loss = ((coeff[edges[:, 0]] - coeff[edges[:, 1]]) ** 2).mean()
         else:
             smooth_loss = torch.zeros((), dtype=torch.float32, device=device)
-        render_region_loss, render_region_fit_loss, render_region_outside_loss, render_region_tail_loss = (
+        (
+            render_region_loss,
+            render_region_fit_loss,
+            render_region_outside_loss,
+            render_region_tail_loss,
+            bystander_zero_delta_loss,
+            witness_constraint_loss,
+        ) = (
             _render_region_objective_terms(
                 coeff,
                 fit_sample_vertex_ids,
@@ -4043,9 +4678,13 @@ def solve_coeff_delta(
                 render_region_state,
                 outside_penalty=float(render_region_outside_penalty),
                 tail_cvar_weight=float(render_region_tail_cvar_weight),
+                bystander_zero_delta_weight=float(bystander_zero_delta_weight),
+                witness_constraint_weight=float(witness_constraint_weight),
             )
             if render_region_state is not None and bool(render_region_state.enabled)
             else (
+                torch.zeros((), dtype=torch.float32, device=device),
+                torch.zeros((), dtype=torch.float32, device=device),
                 torch.zeros((), dtype=torch.float32, device=device),
                 torch.zeros((), dtype=torch.float32, device=device),
                 torch.zeros((), dtype=torch.float32, device=device),
@@ -4074,6 +4713,8 @@ def solve_coeff_delta(
         final_render_region_fit_loss = render_region_fit_loss.detach()
         final_render_region_outside_loss = render_region_outside_loss.detach()
         final_render_region_tail_loss = render_region_tail_loss.detach()
+        final_bystander_zero_delta_loss = bystander_zero_delta_loss.detach()
+        final_witness_constraint_loss = witness_constraint_loss.detach()
 
     with torch.no_grad():
         coeff = (bounds * torch.tanh(param)).detach().cpu()
@@ -4094,14 +4735,28 @@ def solve_coeff_delta(
             "core_samples": int(render_region_state.core_samples) if render_region_state is not None else 0,
             "context_samples": int(render_region_state.context_samples) if render_region_state is not None else 0,
             "outside_samples": int(render_region_state.outside_samples) if render_region_state is not None else 0,
+            "bystander_samples": int(render_region_state.bystander_samples) if render_region_state is not None else 0,
             "view_groups": int(render_region_state.view_groups) if render_region_state is not None else 0,
+            "witness_groups": int(len(render_region_state.witness_groups)) if render_region_state is not None else 0,
+            "witness_group_counts": dict(render_region_state.witness_group_counts) if render_region_state is not None else {},
+            "witness_sample_counts": dict(render_region_state.witness_sample_counts) if render_region_state is not None else {},
             "tail_fraction": float(render_region_state.tail_fraction) if render_region_state is not None else 0.0,
             "outside_penalty": float(render_region_outside_penalty),
             "tail_cvar_weight": float(render_region_tail_cvar_weight),
+            "bystander_zero_delta_weight": float(bystander_zero_delta_weight),
+            "witness_constraint_weight": float(witness_constraint_weight),
+            "witness_constraint_tail_fraction": float(render_region_state.witness_tail_fraction) if render_region_state is not None else 0.0,
+            "witness_constraint_min_samples": int(render_region_state.witness_min_samples) if render_region_state is not None else 0,
+            "witness_constraint_margin": float(render_region_state.witness_margin) if render_region_state is not None else 0.0,
+            "witness_constraint_include_full_view": bool(render_region_state.witness_include_full_view) if render_region_state is not None else False,
+            "witness_constraint_include_region_view": bool(render_region_state.witness_include_region_view) if render_region_state is not None else False,
+            "witness_constraint_include_bystander_view": bool(render_region_state.witness_include_bystander_view) if render_region_state is not None else False,
             "final_total_loss": float(final_render_region_loss.detach().cpu().item()),
             "final_region_fit_loss": float(final_render_region_fit_loss.detach().cpu().item()),
             "final_outside_loss": float(final_render_region_outside_loss.detach().cpu().item()),
             "final_tail_loss": float(final_render_region_tail_loss.detach().cpu().item()),
+            "final_bystander_zero_delta_loss": float(final_bystander_zero_delta_loss.detach().cpu().item()),
+            "final_witness_constraint_loss": float(final_witness_constraint_loss.detach().cpu().item()),
         },
     }
 
@@ -4332,6 +4987,8 @@ def solve_shared_residual_field_delta(
     render_region_state: RenderRegionObjectiveState | None,
     render_region_outside_penalty: float,
     render_region_tail_cvar_weight: float,
+    bystander_zero_delta_weight: float,
+    witness_constraint_weight: float,
     device: torch.device,
 ) -> tuple[torch.Tensor, dict[str, Any]]:
     basis_count = int(fit_weighted_basis.shape[2]) if fit_weighted_basis.ndim == 3 else 4
@@ -4385,6 +5042,8 @@ def solve_shared_residual_field_delta(
     final_render_region_fit_loss = torch.zeros((), dtype=torch.float32, device=device)
     final_render_region_outside_loss = torch.zeros((), dtype=torch.float32, device=device)
     final_render_region_tail_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_bystander_zero_delta_loss = torch.zeros((), dtype=torch.float32, device=device)
+    final_witness_constraint_loss = torch.zeros((), dtype=torch.float32, device=device)
     view_hinge_groups = 0
     for _ in range(int(steps)):
         coeff = coeff_from_param()
@@ -4414,7 +5073,14 @@ def solve_shared_residual_field_delta(
             min_samples=int(view_hinge_min_samples),
         )
         weight_l2_loss = (param**2).mean()
-        render_region_loss, render_region_fit_loss, render_region_outside_loss, render_region_tail_loss = (
+        (
+            render_region_loss,
+            render_region_fit_loss,
+            render_region_outside_loss,
+            render_region_tail_loss,
+            bystander_zero_delta_loss,
+            witness_constraint_loss,
+        ) = (
             _render_region_objective_terms(
                 coeff,
                 fit_sample_vertex_ids,
@@ -4424,9 +5090,13 @@ def solve_shared_residual_field_delta(
                 render_region_state,
                 outside_penalty=float(render_region_outside_penalty),
                 tail_cvar_weight=float(render_region_tail_cvar_weight),
+                bystander_zero_delta_weight=float(bystander_zero_delta_weight),
+                witness_constraint_weight=float(witness_constraint_weight),
             )
             if render_region_state is not None and bool(render_region_state.enabled)
             else (
+                torch.zeros((), dtype=torch.float32, device=device),
+                torch.zeros((), dtype=torch.float32, device=device),
                 torch.zeros((), dtype=torch.float32, device=device),
                 torch.zeros((), dtype=torch.float32, device=device),
                 torch.zeros((), dtype=torch.float32, device=device),
@@ -4461,6 +5131,8 @@ def solve_shared_residual_field_delta(
         final_render_region_fit_loss = render_region_fit_loss.detach()
         final_render_region_outside_loss = render_region_outside_loss.detach()
         final_render_region_tail_loss = render_region_tail_loss.detach()
+        final_bystander_zero_delta_loss = bystander_zero_delta_loss.detach()
+        final_witness_constraint_loss = witness_constraint_loss.detach()
 
     with torch.no_grad():
         coeff = coeff_from_param().detach().cpu()
@@ -4498,14 +5170,28 @@ def solve_shared_residual_field_delta(
             "core_samples": int(render_region_state.core_samples) if render_region_state is not None else 0,
             "context_samples": int(render_region_state.context_samples) if render_region_state is not None else 0,
             "outside_samples": int(render_region_state.outside_samples) if render_region_state is not None else 0,
+            "bystander_samples": int(render_region_state.bystander_samples) if render_region_state is not None else 0,
             "view_groups": int(render_region_state.view_groups) if render_region_state is not None else 0,
+            "witness_groups": int(len(render_region_state.witness_groups)) if render_region_state is not None else 0,
+            "witness_group_counts": dict(render_region_state.witness_group_counts) if render_region_state is not None else {},
+            "witness_sample_counts": dict(render_region_state.witness_sample_counts) if render_region_state is not None else {},
             "tail_fraction": float(render_region_state.tail_fraction) if render_region_state is not None else 0.0,
             "outside_penalty": float(render_region_outside_penalty),
             "tail_cvar_weight": float(render_region_tail_cvar_weight),
+            "bystander_zero_delta_weight": float(bystander_zero_delta_weight),
+            "witness_constraint_weight": float(witness_constraint_weight),
+            "witness_constraint_tail_fraction": float(render_region_state.witness_tail_fraction) if render_region_state is not None else 0.0,
+            "witness_constraint_min_samples": int(render_region_state.witness_min_samples) if render_region_state is not None else 0,
+            "witness_constraint_margin": float(render_region_state.witness_margin) if render_region_state is not None else 0.0,
+            "witness_constraint_include_full_view": bool(render_region_state.witness_include_full_view) if render_region_state is not None else False,
+            "witness_constraint_include_region_view": bool(render_region_state.witness_include_region_view) if render_region_state is not None else False,
+            "witness_constraint_include_bystander_view": bool(render_region_state.witness_include_bystander_view) if render_region_state is not None else False,
             "final_total_loss": float(final_render_region_loss.detach().cpu().item()),
             "final_region_fit_loss": float(final_render_region_fit_loss.detach().cpu().item()),
             "final_outside_loss": float(final_render_region_outside_loss.detach().cpu().item()),
             "final_tail_loss": float(final_render_region_tail_loss.detach().cpu().item()),
+            "final_bystander_zero_delta_loss": float(final_bystander_zero_delta_loss.detach().cpu().item()),
+            "final_witness_constraint_loss": float(final_witness_constraint_loss.detach().cpu().item()),
         },
         "shared_residual_field": field_meta,
     }
@@ -4662,6 +5348,91 @@ def read_plan_alphas(path: Path | None) -> dict[int, float]:
     return alphas
 
 
+def apply_face_risk_scale(
+    coeff: torch.Tensor,
+    selected_faces: list[int],
+    path: Path | None,
+) -> tuple[torch.Tensor, dict[str, Any], dict[int, dict[str, Any]]]:
+    summary: dict[str, Any] = {
+        "enabled": path is not None,
+        "path": str(path) if path is not None else "",
+        "input_scale_faces": 0,
+        "selected_faces": int(len(selected_faces)),
+        "matched_faces": 0,
+        "unmatched_faces": 0,
+        "affected_coeff_rows": 0,
+        "min_scale": 1.0,
+        "mean_scale": 1.0,
+        "max_scale": 1.0,
+        "scale_policy": "clamp_to_[0,1]_then_multiply_face_local_coefficients",
+    }
+    if path is None:
+        return coeff, summary, {}
+    alpha_by_face = read_plan_alphas(path)
+    summary["input_scale_faces"] = int(len(alpha_by_face))
+    if not selected_faces or coeff.numel() == 0 or not alpha_by_face:
+        summary["unmatched_faces"] = int(len(alpha_by_face))
+        return coeff, summary, {}
+
+    face_to_selected = {int(fid): idx for idx, fid in enumerate(selected_faces)}
+    by_face: dict[int, dict[str, Any]] = {}
+    matched_scales: list[float] = []
+    unmatched = 0
+    for face_id, raw_scale in sorted(alpha_by_face.items()):
+        row = face_to_selected.get(int(face_id))
+        if row is None:
+            unmatched += 1
+            continue
+        scale = max(0.0, min(1.0, float(raw_scale)))
+        coeff[row * 3 : row * 3 + 3] = coeff[row * 3 : row * 3 + 3] * scale
+        matched_scales.append(scale)
+        by_face[int(face_id)] = {
+            "scale": float(scale),
+            "raw_scale": float(raw_scale),
+            "coeff_rows": [int(row * 3), int(row * 3 + 1), int(row * 3 + 2)],
+        }
+
+    if matched_scales:
+        summary.update(
+            {
+                "matched_faces": int(len(matched_scales)),
+                "unmatched_faces": int(unmatched),
+                "affected_coeff_rows": int(3 * len(matched_scales)),
+                "min_scale": float(min(matched_scales)),
+                "mean_scale": float(sum(matched_scales) / len(matched_scales)),
+                "max_scale": float(max(matched_scales)),
+            }
+        )
+    else:
+        summary["unmatched_faces"] = int(unmatched)
+    return coeff, summary, by_face
+
+
+def plan_face_ids_from_file(path: Path) -> set[int]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, list):
+        rows = payload
+    elif isinstance(payload, dict):
+        rows = payload.get("candidates")
+        if not isinstance(rows, list):
+            rows = payload.get("accepted")
+        if not isinstance(rows, list):
+            rows = payload.get("accepted_preview")
+    else:
+        rows = []
+    out: set[int] = set()
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            face_id = int(row.get("face_id", -1))
+        except Exception:
+            continue
+        if face_id >= 0:
+            out.add(face_id)
+    return out
+
+
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -4682,8 +5453,8 @@ def validate_strict_materialize_request(args: argparse.Namespace) -> None:
         errors.append("materialize_plan_scale would alter certified coefficients")
     elif abs(scale - 1.0) > 1e-12 and render_trust_path is None:
         errors.append("materialize_plan_scale would alter certified coefficients without a render-trust certificate")
-    if args.materialize_plan_alpha_json is not None:
-        errors.append("materialize_plan_alpha_json would alter certified coefficients")
+    if args.materialize_plan_alpha_json is not None and render_trust_path is None:
+        errors.append("materialize_plan_alpha_json would alter certified coefficients without a render-trust certificate")
     if errors:
         raise ValueError(
             "Strict certified plan materialization rejected unsafe replay controls: "
@@ -4698,11 +5469,12 @@ def validate_render_trust_certificate(
     cert_path: Path | None,
     plan_path: Path,
     requested_scale: float,
+    alpha_path: Path | None = None,
 ) -> dict[str, Any]:
     if cert_path is None:
-        if abs(float(requested_scale) - 1.0) <= 1e-12:
+        if abs(float(requested_scale) - 1.0) <= 1e-12 and alpha_path is None:
             return {"enabled": False}
-        raise ValueError("non-unit strict materialize_plan_scale requires --materialize_plan_render_trust_json")
+        raise ValueError("strict replay scale/alpha changes require --materialize_plan_render_trust_json")
     payload = json.loads(cert_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("--materialize_plan_render_trust_json must contain a JSON object")
@@ -4721,6 +5493,38 @@ def validate_render_trust_certificate(
     actual_sha = file_sha256(plan_path)
     if expected_sha and expected_sha != actual_sha:
         errors.append("render_trust_plan_sha256_mismatch")
+    alpha_summary: dict[str, Any] = {"enabled": False}
+    if alpha_path is not None:
+        if not bool(payload.get("allow_alpha_shrink", False)):
+            errors.append("render_trust_alpha_not_allowed")
+        expected_alpha_sha = str(payload.get("alpha_json_sha256", "")).strip()
+        actual_alpha_sha = file_sha256(alpha_path)
+        if expected_alpha_sha and expected_alpha_sha != actual_alpha_sha:
+            errors.append("render_trust_alpha_sha256_mismatch")
+        alpha_by_face = read_plan_alphas(alpha_path)
+        plan_faces = plan_face_ids_from_file(plan_path)
+        alpha_faces = set(alpha_by_face)
+        invalid_faces = sorted(alpha_faces - plan_faces)
+        invalid_values = {
+            int(face_id): float(alpha)
+            for face_id, alpha in alpha_by_face.items()
+            if (not math.isfinite(float(alpha))) or float(alpha) < -1.0e-9 or float(alpha) > 1.0 + 1.0e-9
+        }
+        if not alpha_by_face:
+            errors.append("render_trust_alpha_json_empty")
+        if invalid_faces:
+            errors.append("render_trust_alpha_faces_not_in_plan")
+        if invalid_values:
+            errors.append("render_trust_alpha_out_of_monotone_shrink_bounds")
+        alpha_summary = {
+            "enabled": True,
+            "alpha_json": str(alpha_path),
+            "alpha_json_sha256": actual_alpha_sha,
+            "alpha_face_count": int(len(alpha_by_face)),
+            "invalid_face_preview": invalid_faces[:20],
+            "invalid_value_preview": dict(list(invalid_values.items())[:20]),
+            "allow_alpha_shrink": bool(payload.get("allow_alpha_shrink", False)),
+        }
     if errors:
         raise ValueError(
             "Strict certified plan materialization rejected render-trust certificate: "
@@ -4735,6 +5539,7 @@ def validate_render_trust_certificate(
         "accepted": bool(payload.get("accepted", False)),
         "trainval_balanced_delta": payload.get("trainval_balanced_delta"),
         "decision_json": payload.get("decision_json", ""),
+        "alpha": alpha_summary,
     }
 
 
@@ -5065,6 +5870,7 @@ def write_candidate_plan(
     face_stats: dict[int, dict[str, float]],
     face_policy: dict[int, dict[str, float]],
     validation_shrink_by_face: dict[int, dict[str, Any]],
+    face_risk_scale_by_face: dict[int, dict[str, Any]] | None,
     face_view_gain_certificate: dict[int, dict[str, Any]],
     crossfold_face_gain: dict[int, dict[str, Any]],
     face_view_consensus: dict[int, dict[str, Any]],
@@ -5116,6 +5922,7 @@ def write_candidate_plan(
                 ),
                 "pre_cluster_policy_val_proxy": face_policy.get(int(fid), {}),
                 "validation_shrink": validation_shrink_by_face.get(int(fid), {}),
+                "face_risk_scale": (face_risk_scale_by_face or {}).get(int(fid), {}),
                 "face_view_gain_certificate": face_view_gain_certificate.get(int(fid), {}),
                 "crossfold_face_gain_certificate": crossfold_face_gain.get(int(fid), {}),
                 "face_view_consensus": face_view_consensus.get(int(fid), {}),
@@ -5154,6 +5961,7 @@ def write_candidate_plan(
                 "coefficient_lowpass_sh_scale": float(args.coefficient_lowpass_sh_scale),
                 "validation_shrink_mode": str(args.validation_shrink_mode),
                 "validation_gain_max_scale": float(args.validation_gain_max_scale),
+                "face_risk_scale_json": str(args.face_risk_scale_json) if args.face_risk_scale_json else "",
                 "plan_export_policy": "final_certified_accepted_faces_only",
                 "strict_patchcert_carrier": bool(args.strict_patchcert_carrier),
                 "patch_cert_seed_rescue": bool(args.patch_cert_seed_rescue),
@@ -5193,6 +6001,9 @@ def write_candidate_plan(
                 "patch_cert_carrier_holdout_auto_prefix": bool(args.patch_cert_carrier_holdout_auto_prefix),
                 "patch_cert_carrier_holdout_auto_prefix_min_faces": int(
                     args.patch_cert_carrier_holdout_auto_prefix_min_faces
+                ),
+                "patch_cert_carrier_holdout_auto_prefix_min_face_fraction": float(
+                    args.patch_cert_carrier_holdout_auto_prefix_min_face_fraction
                 ),
                 "patch_cert_carrier_holdout_auto_prefix_face_bonus": float(
                     args.patch_cert_carrier_holdout_auto_prefix_face_bonus
@@ -5293,10 +6104,13 @@ def write_audit(output_model: Path, audit: dict[str, Any]) -> None:
         f"- carrier auto-prefix positive/tail-safe: `{audit.get('patch_cert_carrier_holdout_auto_prefix_positive_tail_safe', False)}`",
         f"- carrier auto-prefix min faces relaxed by tail safety: `{audit.get('carrier_holdout_selector', {}).get('auto_prefix_min_faces_relaxed_by_tail_safety', False)}`",
         f"- carrier auto-prefix effective min faces: `{audit.get('carrier_holdout_selector', {}).get('auto_prefix_effective_min_faces', audit.get('patch_cert_carrier_holdout_auto_prefix_min_faces', 0))}`",
+        f"- carrier auto-prefix min face fraction: `{audit.get('carrier_holdout_selector', {}).get('auto_prefix_min_face_fraction', audit.get('patch_cert_carrier_holdout_auto_prefix_min_face_fraction', 0.0))}`",
         f"- validation shrink enabled: `{audit['validation_shrink']['enabled']}`",
         f"- validation shrink mode: `{audit['validation_shrink']['mode']}`",
         f"- validation shrink mean scale: `{audit['validation_shrink']['mean_scale']:.6f}`",
         f"- validation shrink zero-scale faces: `{audit['validation_shrink']['zero_scale_faces']}`",
+        f"- face risk scale matched faces: `{audit.get('face_risk_scale', {}).get('matched_faces', 0)}`",
+        f"- face risk scale mean/min: `{audit.get('face_risk_scale', {}).get('mean_scale', 1.0):.6f}` / `{audit.get('face_risk_scale', {}).get('min_scale', 1.0):.6f}`",
         f"- face/view gain certificate enabled: `{audit['face_view_gain_certificate']['enabled']}`",
         f"- face/view gain certificate passing faces: `{audit['face_view_gain_certificate']['faces_passing']}`",
         f"- train-fold consistency enabled: `{audit['crossfold_face_gain_certificate']['enabled']}`",
@@ -5384,6 +6198,7 @@ def main() -> int:
                 cert_path=args.materialize_plan_render_trust_json,
                 plan_path=args.materialize_plan_in,
                 requested_scale=float(args.materialize_plan_scale),
+                alpha_path=args.materialize_plan_alpha_json,
             )
             if strict_materialize
             else {"enabled": False}
@@ -5524,19 +6339,46 @@ def main() -> int:
         print(json.dumps(audit, indent=2))
         return 0 if degenerate == 0 and invalid == 0 else 1
 
+    candidate_region_expansion_index = load_candidate_region_expansion_index(
+        args.candidate_region_expansion_carrier_json
+    )
+    candidate_region_expanded_face_ids = set(candidate_region_expansion_index.expanded_face_ids)
     selected_faces, face_stats = read_selected_faces(
         args.evidence_dir / "top_residual_supports.csv",
         top_k=int(args.top_k),
         min_view_hits=int(args.min_view_hits),
         min_consistency=float(args.min_consistency),
         min_pixel_count=float(args.min_pixel_count),
+        extra_face_ids=candidate_region_expanded_face_ids,
+        expansion_index=candidate_region_expansion_index,
     )
+    selected_faces_before_allowed_filter = int(len(selected_faces))
+    selected_region_expanded_faces_before_allowed_filter = sum(
+        1
+        for fid in selected_faces
+        if float(face_stats.get(int(fid), {}).get("candidate_region_expanded", 0.0)) > 0.0
+    )
+    allowed_face_ids = _parse_face_id_filter(args.allowed_face_ids)
+    if allowed_face_ids:
+        selected_faces = [fid for fid in selected_faces if int(fid) in allowed_face_ids]
+        face_stats = {int(fid): stats for fid, stats in face_stats.items() if int(fid) in allowed_face_ids}
     selected_faces = [fid for fid in selected_faces if 0 <= int(fid) < int(faces.shape[0])]
+    selected_region_expanded_faces = sum(
+        1
+        for fid in selected_faces
+        if float(face_stats.get(int(fid), {}).get("candidate_region_expanded", 0.0)) > 0.0
+    )
 
     view_paths = sorted((args.evidence_dir / "views").glob("*.npz"))
     if not view_paths:
         view_paths = sorted((args.evidence_dir / "per_view_npz").glob("*.npz"))
     fit_paths, val_paths = split_view_paths(view_paths, int(args.policy_val_stride))
+    region_index = load_region_carrier_index(args.region_carrier_json)
+    priority_expanded_faces = (
+        set(candidate_region_expanded_face_ids)
+        if bool(args.candidate_region_expansion_core_priority)
+        else set()
+    )
     fit_samples = collect_samples(
         fit_paths,
         selected_faces,
@@ -5549,11 +6391,14 @@ def main() -> int:
         uniform_barycentric=bool(args.uniform_barycentric),
         face_score_weight_power=float(args.face_score_weight_power),
         face_score_weight_max=float(args.face_score_weight_max),
-        region_index=load_region_carrier_index(args.region_carrier_json),
+        region_index=region_index,
         region_core_weight=float(args.region_core_weight),
         region_context_weight=float(args.region_context_weight),
         region_outside_weight=float(args.region_outside_weight),
         region_boundary_px=int(args.region_boundary_px),
+        region_core_priority_face_ids=priority_expanded_faces,
+        region_core_priority_min_samples=int(args.candidate_region_expansion_core_min_samples),
+        region_core_priority_min_fraction=float(args.candidate_region_expansion_core_min_fraction),
     )
     val_samples = collect_samples(
         val_paths,
@@ -5567,12 +6412,16 @@ def main() -> int:
         uniform_barycentric=bool(args.uniform_barycentric),
         face_score_weight_power=float(args.face_score_weight_power),
         face_score_weight_max=float(args.face_score_weight_max),
-        region_index=load_region_carrier_index(args.region_carrier_json),
+        region_index=region_index,
         region_core_weight=float(args.region_core_weight),
         region_context_weight=float(args.region_context_weight),
         region_outside_weight=float(args.region_outside_weight),
         region_boundary_px=int(args.region_boundary_px),
+        region_core_priority_face_ids=priority_expanded_faces,
+        region_core_priority_min_samples=int(args.candidate_region_expansion_core_min_samples),
+        region_core_priority_min_fraction=float(args.candidate_region_expansion_core_min_fraction),
     )
+    fit_core_priority_summary = summarize_region_bins_for_faces(fit_samples, priority_expanded_faces)
     policy_val_all_sample_count = int(val_samples.count)
     carrier_holdout_samples: PixelSamples | None = None
     carrier_holdout_sample_count = 0
@@ -5587,6 +6436,7 @@ def main() -> int:
         else:
             carrier_holdout_samples = subset_pixel_samples(val_samples, np.zeros((int(val_samples.count),), dtype=bool))
             val_samples = subset_pixel_samples(val_samples, np.ones((int(val_samples.count),), dtype=bool))
+    policy_core_priority_summary = summarize_region_bins_for_faces(val_samples, priority_expanded_faces)
 
     if selected_faces and fit_samples.count:
         source_vertex_ids, selected_faces_local, fit_sample_vertex_ids = localize_samples(faces, selected_faces, fit_samples)
@@ -5629,6 +6479,14 @@ def main() -> int:
         context_weight=float(args.render_region_context_weight),
         tail_fraction=float(args.render_region_tail_fraction),
         min_view_samples=int(args.render_region_min_view_samples),
+        bystander_include_context=bool(args.bystander_zero_delta_include_context),
+        bystander_min_samples=int(args.bystander_zero_delta_min_samples),
+        witness_tail_fraction=float(args.witness_constraint_tail_fraction),
+        witness_min_samples=int(args.witness_constraint_min_samples),
+        witness_margin=float(args.witness_constraint_margin),
+        witness_include_full_view=bool(args.witness_constraint_include_full_view),
+        witness_include_region_view=bool(args.witness_constraint_include_region_view),
+        witness_include_bystander_view=bool(args.witness_constraint_include_bystander_view),
         device=device,
     )
 
@@ -5664,6 +6522,8 @@ def main() -> int:
             render_region_state=render_region_state,
             render_region_outside_penalty=float(args.render_region_outside_penalty),
             render_region_tail_cvar_weight=float(args.render_region_tail_cvar_weight),
+            bystander_zero_delta_weight=float(args.bystander_zero_delta_weight),
+            witness_constraint_weight=float(args.witness_constraint_weight),
             device=device,
         )
     else:
@@ -5685,6 +6545,8 @@ def main() -> int:
             render_region_state=render_region_state,
             render_region_outside_penalty=float(args.render_region_outside_penalty),
             render_region_tail_cvar_weight=float(args.render_region_tail_cvar_weight),
+            bystander_zero_delta_weight=float(args.bystander_zero_delta_weight),
+            witness_constraint_weight=float(args.witness_constraint_weight),
             steps=int(args.steps),
             lr=float(args.lr),
             device=device,
@@ -5706,6 +6568,11 @@ def main() -> int:
         mode=str(args.validation_shrink_mode),
         min_samples=int(args.validation_shrink_min_samples),
         max_gain_scale=float(args.validation_gain_max_scale),
+    )
+    coeff_device, face_risk_scale_summary, face_risk_scale_by_face = apply_face_risk_scale(
+        coeff_device,
+        selected_faces,
+        args.face_risk_scale_json,
     )
     coeff = coeff_device.detach().cpu()
     fit_proxy = evaluate_proxy(coeff_device, fit_ids, fit_basis, fit_target, fit_weights)
@@ -5780,10 +6647,18 @@ def main() -> int:
     )
     fit_unique_faces = int(np.unique(fit_samples.face_ids).size) if fit_samples.count else 0
     val_unique_faces = int(np.unique(val_samples.face_ids).size) if val_samples.count else 0
+    configured_min_policy_val_samples = int(args.min_policy_val_samples)
+    effective_min_policy_val_samples = configured_min_policy_val_samples
+    adaptive_sample_floor = 0
+    adaptive_fraction = float(args.min_policy_val_adaptive_sample_fraction)
+    if adaptive_fraction > 0.0:
+        adaptive_sample_floor = int(math.ceil(adaptive_fraction * int(val_samples.count)))
+        adaptive_sample_floor = max(adaptive_sample_floor, int(args.min_policy_val_adaptive_min_samples))
+        effective_min_policy_val_samples = min(configured_min_policy_val_samples, adaptive_sample_floor)
 
     global_policy_pass = (
         fit_samples.count > 0
-        and val_samples.count >= int(args.min_policy_val_samples)
+        and val_samples.count >= int(effective_min_policy_val_samples)
         and val_unique_faces >= int(args.min_policy_val_unique_faces)
         and float(val_proxy["relative_gain"]) >= float(args.min_policy_val_relative_gain)
     )
@@ -5827,6 +6702,12 @@ def main() -> int:
         crossfold_face_gain_summary=crossfold_face_gain_summary,
         face_view_consensus=face_view_consensus,
         face_view_consensus_summary=face_view_consensus_summary,
+        args=args,
+    )
+    face_candidates, candidate_region_witness_rescue_summary = apply_candidate_region_expansion_witness_rescue(
+        ranked_face_candidates=face_candidates,
+        strict_face_candidates=strict_face_candidates,
+        expansion_index=candidate_region_expansion_index,
         args=args,
     )
     accepted_faces = face_candidates[: max(int(args.max_faces_to_apply), 0)]
@@ -5912,6 +6793,7 @@ def main() -> int:
             face_stats=face_stats,
             face_policy=face_policy,
             validation_shrink_by_face=validation_shrink_by_face,
+            face_risk_scale_by_face=face_risk_scale_by_face,
             face_view_gain_certificate=face_view_gain_certificate,
             crossfold_face_gain=crossfold_face_gain,
             face_view_consensus=face_view_consensus,
@@ -5938,6 +6820,16 @@ def main() -> int:
             row = face_to_selected[int(fid)]
             local_ids.extend([row * 3, row * 3 + 1, row * 3 + 2])
         accepted_coeff_abs = coeff[torch.as_tensor(local_ids, dtype=torch.long)].abs()
+    accepted_expanded_faces = {
+        int(fid)
+        for fid in accepted_faces
+        if int(fid) in candidate_region_expanded_face_ids
+    } if accepted else set()
+    accepted_expanded_witness_carriers = {
+        str(carrier_id)
+        for carrier_id, face_ids in candidate_region_expansion_index.carrier_to_expanded_face_ids.items()
+        if any(int(fid) in accepted_expanded_faces for fid in face_ids)
+    }
     audit = {
         "operator": (
             "surface_residual_facelocal_shared_field_delta"
@@ -5953,7 +6845,38 @@ def main() -> int:
         "sh_degree": int(args.sh_degree),
         "basis_count": int((int(args.sh_degree) + 1) ** 2),
         "evidence_dir": str(args.evidence_dir),
+        "allowed_face_ids_count": int(len(allowed_face_ids)),
+        "selected_faces_before_allowed_filter": int(selected_faces_before_allowed_filter),
         "selected_faces": int(len(selected_faces)),
+        "candidate_region_expansion": {
+            "path": str(args.candidate_region_expansion_carrier_json)
+            if args.candidate_region_expansion_carrier_json is not None
+            else "",
+            "requested_expanded_faces": int(len(candidate_region_expanded_face_ids)),
+            "selected_before_allowed_filter": int(selected_region_expanded_faces_before_allowed_filter),
+            "selected_after_allowed_filter": int(selected_region_expanded_faces),
+            "carrier_count": int(len(candidate_region_expansion_index.carrier_to_expanded_face_ids)),
+            "core_priority": bool(args.candidate_region_expansion_core_priority),
+            "core_min_samples": int(args.candidate_region_expansion_core_min_samples),
+            "core_min_fraction": float(args.candidate_region_expansion_core_min_fraction),
+            "fit_core_priority_faces": int(fit_core_priority_summary["faces"]),
+            "fit_core_priority_faces_with_core_samples": int(
+                fit_core_priority_summary["faces_with_core_samples"]
+            ),
+            "fit_core_priority_core_samples": int(fit_core_priority_summary["core_samples"]),
+            "policy_core_priority_faces_with_core_samples": int(
+                policy_core_priority_summary["faces_with_core_samples"]
+            ),
+            "strict_expanded_face_candidates": int(
+                candidate_region_witness_rescue_summary.get("strict_expanded_face_candidates", 0)
+            ),
+            "rescued_expanded_witness_faces": int(
+                candidate_region_witness_rescue_summary.get("rescued_expanded_witness_faces", 0)
+            ),
+            "accepted_expanded_faces": int(len(accepted_expanded_faces)),
+            "accepted_expanded_witness_carriers": int(len(accepted_expanded_witness_carriers)),
+            "witness_rescue": candidate_region_witness_rescue_summary,
+        },
         "face_policy_candidates": int(len(face_candidates)),
         "strict_face_policy_candidates": int(len(strict_face_candidates)),
         "accepted_faces": int(len(accepted_faces)) if accepted else 0,
@@ -5983,16 +6906,31 @@ def main() -> int:
             "tail_cvar_weight": float(args.render_region_tail_cvar_weight),
             "tail_fraction": float(args.render_region_tail_fraction),
             "min_view_samples": int(args.render_region_min_view_samples),
+            "bystander_zero_delta_weight": float(args.bystander_zero_delta_weight),
+            "bystander_zero_delta_include_context": bool(args.bystander_zero_delta_include_context),
+            "bystander_zero_delta_min_samples": int(args.bystander_zero_delta_min_samples),
+            "witness_constraint_weight": float(args.witness_constraint_weight),
+            "witness_constraint_tail_fraction": float(args.witness_constraint_tail_fraction),
+            "witness_constraint_min_samples": int(args.witness_constraint_min_samples),
+            "witness_constraint_margin": float(args.witness_constraint_margin),
+            "witness_constraint_include_full_view": bool(args.witness_constraint_include_full_view),
+            "witness_constraint_include_region_view": bool(args.witness_constraint_include_region_view),
+            "witness_constraint_include_bystander_view": bool(args.witness_constraint_include_bystander_view),
             "core_samples": int(render_region_state.core_samples),
             "context_samples": int(render_region_state.context_samples),
             "outside_samples": int(render_region_state.outside_samples),
+            "bystander_samples": int(render_region_state.bystander_samples),
             "view_groups": int(render_region_state.view_groups),
+            "witness_groups": int(len(render_region_state.witness_groups)),
+            "witness_group_counts": dict(render_region_state.witness_group_counts),
+            "witness_sample_counts": dict(render_region_state.witness_sample_counts),
         },
         "coefficient_lowpass": coefficient_lowpass_summary,
         "coefficient_lowpass_final": coefficient_lowpass_final_summary,
         "shared_residual_field": bool(args.shared_residual_field),
         "shared_residual_field_summary": solver.get("shared_residual_field", {}) if isinstance(solver, dict) else {},
         "validation_shrink": validation_shrink_summary,
+        "face_risk_scale": face_risk_scale_summary,
         "face_view_gain_certificate": face_view_gain_certificate_summary,
         "face_prediction_safety": face_prediction_safety_summary,
         "crossfold_face_gain_certificate": crossfold_face_gain_summary,
@@ -6041,10 +6979,15 @@ def main() -> int:
         "max_faces_to_apply": int(args.max_faces_to_apply),
         "min_policy_val_relative_gain": float(args.min_policy_val_relative_gain),
         "min_policy_val_samples": int(args.min_policy_val_samples),
+        "effective_min_policy_val_samples": int(effective_min_policy_val_samples),
+        "min_policy_val_adaptive_sample_fraction": float(args.min_policy_val_adaptive_sample_fraction),
+        "min_policy_val_adaptive_min_samples": int(args.min_policy_val_adaptive_min_samples),
+        "min_policy_val_adaptive_sample_floor": int(adaptive_sample_floor),
         "min_policy_val_unique_faces": int(args.min_policy_val_unique_faces),
         "validation_shrink_mode": str(args.validation_shrink_mode),
         "validation_shrink_min_samples": int(args.validation_shrink_min_samples),
         "validation_gain_max_scale": float(args.validation_gain_max_scale),
+        "face_risk_scale_json": str(args.face_risk_scale_json) if args.face_risk_scale_json else "",
         "crossfold_gain_certificate_folds": int(args.crossfold_gain_certificate_folds),
         "crossfold_min_passing_folds": int(args.crossfold_min_passing_folds),
         "crossfold_min_fold_relative_gain": float(args.crossfold_min_fold_relative_gain),
@@ -6111,6 +7054,9 @@ def main() -> int:
         "patch_cert_carrier_holdout_max_carriers": int(args.patch_cert_carrier_holdout_max_carriers),
         "patch_cert_carrier_holdout_auto_prefix": bool(args.patch_cert_carrier_holdout_auto_prefix),
         "patch_cert_carrier_holdout_auto_prefix_min_faces": int(args.patch_cert_carrier_holdout_auto_prefix_min_faces),
+        "patch_cert_carrier_holdout_auto_prefix_min_face_fraction": float(
+            args.patch_cert_carrier_holdout_auto_prefix_min_face_fraction
+        ),
         "patch_cert_carrier_holdout_auto_prefix_face_bonus": float(args.patch_cert_carrier_holdout_auto_prefix_face_bonus),
         "patch_cert_carrier_holdout_auto_prefix_positive_tail_safe": bool(
             args.patch_cert_carrier_holdout_auto_prefix_positive_tail_safe
@@ -6140,6 +7086,7 @@ def main() -> int:
                 "face_stats": face_stats.get(int(fid), {}),
                 "policy_val_proxy": face_policy.get(int(fid), {}),
                 "validation_shrink": validation_shrink_by_face.get(int(fid), {}),
+                "face_risk_scale": face_risk_scale_by_face.get(int(fid), {}),
                 "face_view_gain_certificate": face_view_gain_certificate.get(int(fid), {}),
                 "prediction_safety": face_prediction_safety.get(int(fid), {}),
                 "crossfold_face_gain_certificate": crossfold_face_gain.get(int(fid), {}),

@@ -101,6 +101,7 @@ def _fit_optional_benefit(
         min_bin_count=args.benefit_min_bin_count,
         max_pixels_per_view=args.benefit_max_pixels_per_view,
         feature_mode=str(policy.get("benefit_feature_mode", args.benefit_feature_mode)),
+        **_local_trust_kwargs(args),
         device=device,
     )
 
@@ -124,9 +125,26 @@ def _fit_optional_alpha(args: argparse.Namespace, train_frames, policy: dict, de
         bins=args.alpha_bins,
         min_gain=args.alpha_min_gain,
         min_bin_count=args.alpha_min_bin_count,
+        risk_tail_fraction=args.alpha_risk_tail_fraction,
+        max_negative_gain_fraction=args.alpha_max_negative_gain_fraction,
+        min_tail_gain=args.alpha_min_tail_gain,
+        holdout_safe_zero=args.alpha_holdout_safe_zero,
         max_pixels_per_view=args.alpha_max_pixels_per_view,
         feature_mode=args.alpha_feature_mode,
         default_alpha=args.alpha_default,
+        region_risk_json=args.alpha_region_risk_json if bool(args.alpha_region_risk_enable) else "",
+        region_risk_objective_bad_only=args.alpha_region_risk_objective_bad_only,
+        region_risk_objective_max_balanced_delta=args.alpha_region_risk_objective_max_balanced_delta,
+        region_risk_objective_max_delta_ssim=args.alpha_region_risk_objective_max_delta_ssim,
+        region_risk_objective_min_delta_lpips=args.alpha_region_risk_objective_min_delta_lpips,
+        region_risk_min_tail_gain=args.alpha_region_risk_min_tail_gain,
+        region_risk_max_negative_fraction=args.alpha_region_risk_max_negative_fraction,
+        region_risk_min_regions=args.alpha_region_risk_min_regions,
+        view_tail_scale_grid=_parse_float_grid(args.alpha_view_tail_scale_grid),
+        view_tail_cvar_fraction=args.alpha_view_tail_cvar_fraction,
+        view_tail_min_gain=args.alpha_view_tail_min_gain,
+        view_tail_max_negative_fraction=args.alpha_view_tail_max_negative_fraction,
+        **_local_trust_kwargs(args),
         device=device,
     )
 
@@ -159,6 +177,20 @@ def _fd_kwargs(args: argparse.Namespace, fd_judge_cache: list, device: torch.dev
     }
 
 
+def _local_trust_kwargs(args: argparse.Namespace) -> dict:
+    return {
+        "local_trust_gate": bool(args.local_trust_gate),
+        "local_trust_min_supports": int(args.local_trust_min_supports),
+        "local_trust_max_residual_std": float(args.local_trust_max_residual_std),
+        "local_trust_min_agreement": float(args.local_trust_min_agreement),
+        "local_trust_agreement_scale": float(args.local_trust_agreement_scale),
+        "local_trust_confidence_quantile": float(args.local_trust_confidence_quantile),
+        "local_trust_min_confidence": float(args.local_trust_min_confidence),
+        "local_trust_mode": str(args.local_trust_mode),
+        "local_trust_min_weight": float(args.local_trust_min_weight),
+    }
+
+
 def _choose_policy(
     args: argparse.Namespace,
     train_frames,
@@ -184,6 +216,7 @@ def _choose_policy(
             "edge_gate_quantile": float(args.edge_gate_quantile),
             "edge_gate_min": float(args.edge_gate_min),
             "edge_gate_dilate": int(args.edge_gate_dilate),
+            **_local_trust_kwargs(args),
         }
         if args.alpha >= 0.0 and args.skip_fixed_alpha_calibration and not args.benefit_policy:
             calibration = {
@@ -221,6 +254,7 @@ def _choose_policy(
             edge_gate_quantile=float(policy.get("edge_gate_quantile", -1.0)),
             edge_gate_min=float(policy.get("edge_gate_min", 0.0)),
             edge_gate_dilate=int(policy.get("edge_gate_dilate", 0)),
+            **_local_trust_kwargs(args),
             policy_objective=args.policy_objective,
             ssim_weight=args.policy_ssim_weight,
             lpips_weight=args.policy_lpips_weight,
@@ -274,6 +308,7 @@ def _choose_policy(
                                         "edge_gate_quantile": float(edge_quantile),
                                         "edge_gate_min": float(args.edge_gate_min),
                                         "edge_gate_dilate": int(edge_dilate),
+                                        **_local_trust_kwargs(args),
                                     }
                                     support_frames = benefit_fit_frames if args.policy_holdout_fraction > 0.0 else train_frames
                                     target_frames = policy_val_frames if args.policy_holdout_fraction > 0.0 else None
@@ -296,6 +331,7 @@ def _choose_policy(
                                         edge_gate_quantile=float(policy.get("edge_gate_quantile", -1.0)),
                                         edge_gate_min=float(policy.get("edge_gate_min", 0.0)),
                                         edge_gate_dilate=int(policy.get("edge_gate_dilate", 0)),
+                                        **_local_trust_kwargs(args),
                                         policy_objective=args.policy_objective,
                                         ssim_weight=args.policy_ssim_weight,
                                         lpips_weight=args.policy_lpips_weight,
@@ -387,6 +423,15 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
             "edge_gate_quantile": args.edge_gate_quantile,
             "edge_gate_min": args.edge_gate_min,
             "edge_gate_dilate": args.edge_gate_dilate,
+            "local_trust_gate": args.local_trust_gate,
+            "local_trust_min_supports": args.local_trust_min_supports,
+            "local_trust_max_residual_std": args.local_trust_max_residual_std,
+            "local_trust_min_agreement": args.local_trust_min_agreement,
+            "local_trust_agreement_scale": args.local_trust_agreement_scale,
+            "local_trust_confidence_quantile": args.local_trust_confidence_quantile,
+            "local_trust_min_confidence": args.local_trust_min_confidence,
+            "local_trust_mode": args.local_trust_mode,
+            "local_trust_min_weight": args.local_trust_min_weight,
             "fd_weight": args.fd_weight,
             "fd_backbone": args.fd_backbone,
             "fd_pool": args.fd_pool,
@@ -407,6 +452,20 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
         "ela/mean_confidence": float(report.get("mean_confidence", 0.0)),
         "ela/mean_benefit_accept_fraction": float(report.get("mean_benefit_accept_fraction", 0.0)),
         "ela/mean_edge_accept_fraction": float(report.get("mean_edge_accept_fraction", 0.0)),
+        "ela/local_trust_gate": int(bool(report.get("local_trust_gate", False))),
+        "ela/mean_local_trust_accept_fraction": float(
+            report.get("mean_local_trust_accept_fraction", 0.0)
+        ),
+        "ela/mean_local_trust_support_count": float(report.get("mean_local_trust_support_count", 0.0)),
+        "ela/mean_local_trust_residual_std": float(report.get("mean_local_trust_residual_std", 0.0)),
+        "ela/mean_local_trust_agreement": float(report.get("mean_local_trust_agreement", 0.0)),
+        "ela/mean_local_trust_confidence_threshold": float(
+            report.get("mean_local_trust_confidence_threshold", 0.0)
+        ),
+        "ela/mean_local_trust_weight": float(report.get("mean_local_trust_weight", 0.0)),
+        "ela/mean_local_trust_active_fraction": float(
+            report.get("mean_local_trust_active_fraction", 0.0)
+        ),
         "ela/mean_alpha": float(report.get("mean_alpha", 0.0)),
         "ela/mean_alpha_active_fraction": float(report.get("mean_alpha_active_fraction", 0.0)),
     }
@@ -428,6 +487,47 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
         except Exception:
             return math.nan
         return out if math.isfinite(out) else math.nan
+
+    alpha_calibrator = report.get("alpha_calibrator") or {}
+    if isinstance(alpha_calibrator, dict):
+        flat.update(
+            {
+                "ela/alpha_holdout_safe_zero": int(bool(alpha_calibrator.get("holdout_safe_zero", False))),
+                "ela/alpha_accepted_bins": int(alpha_calibrator.get("accepted_bins", 0) or 0),
+                "ela/alpha_risk_zeroed_bins": int(alpha_calibrator.get("risk_zeroed_bins", 0) or 0),
+                "ela/alpha_risk_tail_fraction": _wandb_float(alpha_calibrator.get("risk_tail_fraction")),
+                "ela/alpha_max_negative_gain_fraction": _wandb_float(
+                    alpha_calibrator.get("max_negative_gain_fraction")
+                ),
+                "ela/alpha_min_tail_gain": _wandb_float(alpha_calibrator.get("min_tail_gain")),
+                "ela/alpha_region_risk_enabled": int(bool(alpha_calibrator.get("region_risk_enabled", False))),
+                "ela/alpha_region_risk_zeroed_bins": int(
+                    alpha_calibrator.get("region_risk_zeroed_bins", 0) or 0
+                ),
+                "ela/alpha_region_risk_objective_bad_only": int(
+                    bool(alpha_calibrator.get("region_risk_objective_bad_only", False))
+                ),
+                "ela/alpha_region_risk_min_tail_gain": _wandb_float(
+                    alpha_calibrator.get("region_risk_min_tail_gain")
+                ),
+                "ela/alpha_region_risk_max_negative_fraction": _wandb_float(
+                    alpha_calibrator.get("region_risk_max_negative_fraction")
+                ),
+                "ela/alpha_view_tail_enabled": int(bool(alpha_calibrator.get("view_tail_enabled", False))),
+                "ela/alpha_view_tail_scale": _wandb_float(alpha_calibrator.get("view_tail_scale")),
+                "ela/alpha_view_tail_safe_scale_found": int(
+                    bool(alpha_calibrator.get("view_tail_safe_scale_found", False))
+                ),
+                "ela/alpha_view_tail_fallback_used": int(
+                    bool(alpha_calibrator.get("view_tail_fallback_used", False))
+                ),
+                "ela/alpha_view_tail_mean_gain": _wandb_float(alpha_calibrator.get("view_tail_mean_gain")),
+                "ela/alpha_view_tail_cvar_gain": _wandb_float(alpha_calibrator.get("view_tail_cvar_gain")),
+                "ela/alpha_view_tail_negative_fraction": _wandb_float(
+                    alpha_calibrator.get("view_tail_negative_fraction")
+                ),
+            }
+        )
 
     fd_gains = []
     for row in calibration_rows:
@@ -476,6 +576,12 @@ def run(args: argparse.Namespace) -> dict:
         else train_frames
     )
     alpha_grid = _parse_alpha_grid(args.alpha_grid)
+    if bool(args.alpha_region_risk_enable):
+        risk_path_text = str(args.alpha_region_risk_json).strip()
+        if not risk_path_text:
+            raise ValueError("--alpha_region_risk_enable requires --alpha_region_risk_json")
+        if not Path(risk_path_text).is_file():
+            raise FileNotFoundError(f"alpha region-risk JSON not found: {risk_path_text}")
     policy, calibration, policy_candidates, benefit_calibrator = _choose_policy(
         args, train_frames, alpha_grid, device
     )
@@ -509,6 +615,7 @@ def run(args: argparse.Namespace) -> dict:
             edge_gate_quantile=float(policy.get("edge_gate_quantile", -1.0)),
             edge_gate_min=float(policy.get("edge_gate_min", 0.0)),
             edge_gate_dilate=int(policy.get("edge_gate_dilate", 0)),
+            **_local_trust_kwargs(args),
             loader=loader,
             device=device,
         )
@@ -545,6 +652,23 @@ def run(args: argparse.Namespace) -> dict:
         "benefit_policy": benefit_calibrator.to_json() if benefit_calibrator is not None else None,
         "alpha_policy": str(args.alpha_policy),
         "alpha_calibrator": alpha_calibrator.to_json() if alpha_calibrator is not None else None,
+        "alpha_holdout_safe_zero": bool(args.alpha_holdout_safe_zero),
+        "alpha_risk_tail_fraction": float(args.alpha_risk_tail_fraction),
+        "alpha_max_negative_gain_fraction": float(args.alpha_max_negative_gain_fraction),
+        "alpha_min_tail_gain": float(args.alpha_min_tail_gain),
+        "alpha_region_risk_enable": bool(args.alpha_region_risk_enable),
+        "alpha_region_risk_json": str(args.alpha_region_risk_json),
+        "alpha_region_risk_objective_bad_only": bool(args.alpha_region_risk_objective_bad_only),
+        "alpha_region_risk_objective_max_balanced_delta": float(args.alpha_region_risk_objective_max_balanced_delta),
+        "alpha_region_risk_objective_max_delta_ssim": float(args.alpha_region_risk_objective_max_delta_ssim),
+        "alpha_region_risk_objective_min_delta_lpips": float(args.alpha_region_risk_objective_min_delta_lpips),
+        "alpha_region_risk_min_tail_gain": float(args.alpha_region_risk_min_tail_gain),
+        "alpha_region_risk_max_negative_fraction": float(args.alpha_region_risk_max_negative_fraction),
+        "alpha_region_risk_min_regions": int(args.alpha_region_risk_min_regions),
+        "alpha_view_tail_scale_grid": str(args.alpha_view_tail_scale_grid),
+        "alpha_view_tail_cvar_fraction": float(args.alpha_view_tail_cvar_fraction),
+        "alpha_view_tail_min_gain": float(args.alpha_view_tail_min_gain),
+        "alpha_view_tail_max_negative_fraction": float(args.alpha_view_tail_max_negative_fraction),
         "benefit_feature_mode": str(policy.get("benefit_feature_mode", args.benefit_feature_mode)),
         "requested_benefit_feature_mode": str(args.benefit_feature_mode),
         "policy_holdout_fraction": float(args.policy_holdout_fraction),
@@ -555,6 +679,15 @@ def run(args: argparse.Namespace) -> dict:
         "edge_gate_quantile": float(policy.get("edge_gate_quantile", -1.0)),
         "edge_gate_min": float(policy.get("edge_gate_min", 0.0)),
         "edge_gate_dilate": int(policy.get("edge_gate_dilate", 0)),
+        "local_trust_gate": bool(args.local_trust_gate),
+        "local_trust_min_supports": int(args.local_trust_min_supports),
+        "local_trust_max_residual_std": float(args.local_trust_max_residual_std),
+        "local_trust_min_agreement": float(args.local_trust_min_agreement),
+        "local_trust_agreement_scale": float(args.local_trust_agreement_scale),
+        "local_trust_confidence_quantile": float(args.local_trust_confidence_quantile),
+        "local_trust_min_confidence": float(args.local_trust_min_confidence),
+        "local_trust_mode": str(args.local_trust_mode),
+        "local_trust_min_weight": float(args.local_trust_min_weight),
         "mode": str(policy["mode"]),
         "k": int(policy["k"]),
         "residual_clip": float(policy["residual_clip"]),
@@ -568,6 +701,27 @@ def run(args: argparse.Namespace) -> dict:
         ),
         "mean_edge_accept_fraction": float(
             sum(float(x.get("edge_accept_fraction", 0.0)) for x in infos) / max(len(infos), 1)
+        ),
+        "mean_local_trust_accept_fraction": float(
+            sum(float(x.get("local_trust_accept_fraction", 0.0)) for x in infos) / max(len(infos), 1)
+        ),
+        "mean_local_trust_active_fraction": float(
+            sum(float(x.get("local_trust_active_fraction", 0.0)) for x in infos) / max(len(infos), 1)
+        ),
+        "mean_local_trust_weight": float(
+            sum(float(x.get("local_trust_mean_weight", 0.0)) for x in infos) / max(len(infos), 1)
+        ),
+        "mean_local_trust_support_count": float(
+            sum(float(x.get("local_trust_mean_support_count", 0.0)) for x in infos) / max(len(infos), 1)
+        ),
+        "mean_local_trust_residual_std": float(
+            sum(float(x.get("local_trust_mean_residual_std", 0.0)) for x in infos) / max(len(infos), 1)
+        ),
+        "mean_local_trust_agreement": float(
+            sum(float(x.get("local_trust_mean_agreement", 0.0)) for x in infos) / max(len(infos), 1)
+        ),
+        "mean_local_trust_confidence_threshold": float(
+            sum(float(x.get("local_trust_confidence_threshold", 0.0)) for x in infos) / max(len(infos), 1)
         ),
         "mean_alpha": float(sum(float(x.get("alpha_mean", 0.0)) for x in infos) / max(len(infos), 1)),
         "mean_alpha_active_fraction": float(
@@ -650,7 +804,31 @@ def main() -> int:
     parser.add_argument("--alpha_bins", default=5, type=int)
     parser.add_argument("--alpha_min_gain", default=0.0, type=float)
     parser.add_argument("--alpha_min_bin_count", default=64, type=int)
+    parser.add_argument("--alpha_holdout_safe_zero", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--alpha_risk_tail_fraction", default=0.20, type=float)
+    parser.add_argument("--alpha_max_negative_gain_fraction", default=1.0, type=float)
+    parser.add_argument("--alpha_min_tail_gain", default=-math.inf, type=float)
     parser.add_argument("--alpha_max_pixels_per_view", default=4096, type=int)
+    parser.add_argument("--alpha_region_risk_enable", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--alpha_region_risk_json", default="")
+    parser.add_argument("--alpha_region_risk_objective_bad_only", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--alpha_region_risk_objective_max_balanced_delta", default=0.0, type=float)
+    parser.add_argument("--alpha_region_risk_objective_max_delta_ssim", default=0.0, type=float)
+    parser.add_argument("--alpha_region_risk_objective_min_delta_lpips", default=0.0, type=float)
+    parser.add_argument("--alpha_region_risk_min_tail_gain", default=0.0, type=float)
+    parser.add_argument("--alpha_region_risk_max_negative_fraction", default=1.0, type=float)
+    parser.add_argument("--alpha_region_risk_min_regions", default=1, type=int)
+    parser.add_argument(
+        "--alpha_view_tail_scale_grid",
+        default="",
+        help=(
+            "Optional comma-separated global alpha scales selected by policy-view tail safety. "
+            "Empty keeps legacy per-bin alpha behavior."
+        ),
+    )
+    parser.add_argument("--alpha_view_tail_cvar_fraction", default=0.25, type=float)
+    parser.add_argument("--alpha_view_tail_min_gain", default=-math.inf, type=float)
+    parser.add_argument("--alpha_view_tail_max_negative_fraction", default=1.0, type=float)
     parser.add_argument(
         "--alpha_feature_mode",
         choices=("confidence_magnitude", "confidence_magnitude_edge"),
@@ -661,6 +839,15 @@ def main() -> int:
     parser.add_argument("--edge_gate_quantile", default=-1.0, type=float)
     parser.add_argument("--edge_gate_min", default=0.0, type=float)
     parser.add_argument("--edge_gate_dilate", default=0, type=int)
+    parser.add_argument("--local_trust_gate", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--local_trust_min_supports", default=2, type=int)
+    parser.add_argument("--local_trust_max_residual_std", default=-1.0, type=float)
+    parser.add_argument("--local_trust_min_agreement", default=0.0, type=float)
+    parser.add_argument("--local_trust_agreement_scale", default=0.04, type=float)
+    parser.add_argument("--local_trust_confidence_quantile", default=-1.0, type=float)
+    parser.add_argument("--local_trust_min_confidence", default=0.0, type=float)
+    parser.add_argument("--local_trust_mode", choices=("hard", "soft"), default="hard")
+    parser.add_argument("--local_trust_min_weight", default=0.0, type=float)
     parser.add_argument("--alpha", default=-1.0, type=float, help="Override alpha. Default <0 uses train-only calibration.")
     parser.add_argument(
         "--skip_fixed_alpha_calibration",
@@ -727,6 +914,20 @@ def main() -> int:
     parser.add_argument("--wandb_name", default="")
     parser.add_argument("--wandb_mode", default=os.environ.get("WANDB_MODE", "online"))
     args = parser.parse_args()
+    if int(args.local_trust_min_supports) < 0:
+        parser.error("--local_trust_min_supports must be >= 0")
+    if not math.isfinite(float(args.local_trust_max_residual_std)):
+        parser.error("--local_trust_max_residual_std must be finite; use a negative value to disable the std gate")
+    if not 0.0 <= float(args.local_trust_min_agreement) <= 1.0:
+        parser.error("--local_trust_min_agreement must be in [0, 1]")
+    if float(args.local_trust_agreement_scale) <= 0.0:
+        parser.error("--local_trust_agreement_scale must be > 0")
+    if not -1.0 <= float(args.local_trust_confidence_quantile) < 1.0:
+        parser.error("--local_trust_confidence_quantile must be in [-1, 1)")
+    if float(args.local_trust_min_confidence) < 0.0:
+        parser.error("--local_trust_min_confidence must be >= 0")
+    if float(args.local_trust_min_weight) < 0.0:
+        parser.error("--local_trust_min_weight must be >= 0")
     run(args)
     return 0
 

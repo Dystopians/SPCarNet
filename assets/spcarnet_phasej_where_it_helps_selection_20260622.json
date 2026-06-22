@@ -1,0 +1,189 @@
+{
+  "description": "Automatically selected local held-out crops where SPCarNet reduces RGB error relative to the selected clean MeshSplatting baseline.",
+  "selection_rule": "Per scene, require full-view dPSNR>0, dSSIM>0, dLPIPS<0 under the full9 baseline selection, then rank crops by local positive error reduction weighted by GT texture and penalized by negative error.",
+  "phasej_audit_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_closure_audit.csv",
+  "phasej_per_view_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_per_view_deltas.csv",
+  "showcase": "assets/spcarnet_phasej_where_it_helps_showcase_20260622.png",
+  "examples": [
+    {
+      "scene": "bonsai",
+      "view": "00001.png",
+      "baseline_iteration": 26000,
+      "dPSNR": 6.634023666381836,
+      "dSSIM": 0.04520082473754883,
+      "dLPIPS": -0.08780597150325775,
+      "ranking_score": 6.871554907842088,
+      "phasej_audit_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_closure_audit.csv",
+      "phasej_per_view_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_per_view_deltas.csv",
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/bonsai/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/gt/00001.png",
+        "clean": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/bonsai/test/ours_26000/renders/00001.png",
+        "ours": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/bonsai/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/renders/00001.png"
+      },
+      "crop": {
+        "x": 510,
+        "y": 659,
+        "w": 360,
+        "h": 250,
+        "local_clean_psnr": 18.8773271839186,
+        "local_ours_psnr": 30.66413219875593,
+        "local_dpsnr": 11.78680501483733,
+        "local_clean_mae": 0.09076235443353653,
+        "local_ours_mae": 0.01942020282149315,
+        "local_mae_drop_pct": 78.60324036028156,
+        "local_positive_pixel_ratio": 0.8901666666666667,
+        "local_score": 0.04625029116868973
+      }
+    },
+    {
+      "scene": "kitchen",
+      "view": "00011.png",
+      "baseline_iteration": 26000,
+      "dPSNR": 3.4337158203125,
+      "dSSIM": 0.02501004934310913,
+      "dLPIPS": -0.05784514546394348,
+      "ranking_score": 2.943927673503596,
+      "phasej_audit_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_closure_audit.csv",
+      "phasej_per_view_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_per_view_deltas.csv",
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/kitchen/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/gt/00011.png",
+        "clean": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/kitchen/test/ours_26000/renders/00011.png",
+        "ours": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/kitchen/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/renders/00011.png"
+      },
+      "crop": {
+        "x": 385,
+        "y": 139,
+        "w": 360,
+        "h": 250,
+        "local_clean_psnr": 19.02617559786158,
+        "local_ours_psnr": 29.504167887783808,
+        "local_dpsnr": 10.477992289922227,
+        "local_clean_mae": 0.07819201052188873,
+        "local_ours_mae": 0.022360287606716156,
+        "local_mae_drop_pct": 71.40336019310219,
+        "local_positive_pixel_ratio": 0.7983444444444444,
+        "local_score": 0.022926386445760727
+      }
+    },
+    {
+      "scene": "room",
+      "view": "00011.png",
+      "baseline_iteration": 26000,
+      "dPSNR": 3.496551513671875,
+      "dSSIM": 0.021969139575958252,
+      "dLPIPS": -0.06555867195129395,
+      "ranking_score": 2.0623543668038833,
+      "phasej_audit_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_closure_audit.csv",
+      "phasej_per_view_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_per_view_deltas.csv",
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/room/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/gt/00011.png",
+        "clean": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/room/test/ours_26000/renders/00011.png",
+        "ours": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/room/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/renders/00011.png"
+      },
+      "crop": {
+        "x": 1197,
+        "y": 254,
+        "w": 360,
+        "h": 250,
+        "local_clean_psnr": 22.774075474558654,
+        "local_ours_psnr": 33.132339168412905,
+        "local_dpsnr": 10.358263693854251,
+        "local_clean_mae": 0.052631694823503494,
+        "local_ours_mae": 0.01700974628329277,
+        "local_mae_drop_pct": 67.68155321554113,
+        "local_positive_pixel_ratio": 0.8894333333333333,
+        "local_score": 0.016127290204167366
+      }
+    },
+    {
+      "scene": "counter",
+      "view": "00013.png",
+      "baseline_iteration": 26000,
+      "dPSNR": 2.1658706665039062,
+      "dSSIM": 0.040742337703704834,
+      "dLPIPS": -0.06650865077972412,
+      "ranking_score": 1.3641563179340161,
+      "phasej_audit_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_closure_audit.csv",
+      "phasej_per_view_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_per_view_deltas.csv",
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/counter/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/gt/00013.png",
+        "clean": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/counter/test/ours_26000/renders/00013.png",
+        "ours": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/counter/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/renders/00013.png"
+      },
+      "crop": {
+        "x": 130,
+        "y": 514,
+        "w": 360,
+        "h": 250,
+        "local_clean_psnr": 24.749610922511998,
+        "local_ours_psnr": 30.774598875410675,
+        "local_dpsnr": 6.024987952898677,
+        "local_clean_mae": 0.03990648686885834,
+        "local_ours_mae": 0.018006928265094757,
+        "local_mae_drop_pct": 54.87718995593483,
+        "local_positive_pixel_ratio": 0.8161111111111111,
+        "local_score": 0.0136876804754138
+      }
+    },
+    {
+      "scene": "garden",
+      "view": "00006.png",
+      "baseline_iteration": 26000,
+      "dPSNR": 1.7378120422363281,
+      "dSSIM": 0.04788196086883545,
+      "dLPIPS": -0.06782495975494385,
+      "ranking_score": 0.9613679989186424,
+      "phasej_audit_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_closure_audit.csv",
+      "phasej_per_view_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_per_view_deltas.csv",
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/garden/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/gt/00006.png",
+        "clean": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/test/ours_26000/renders/00006.png",
+        "ours": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/garden/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/renders/00006.png"
+      },
+      "crop": {
+        "x": 216,
+        "y": 311,
+        "w": 360,
+        "h": 250,
+        "local_clean_psnr": 22.30950735234883,
+        "local_ours_psnr": 26.56987061288962,
+        "local_dpsnr": 4.260363260540789,
+        "local_clean_mae": 0.06174241006374359,
+        "local_ours_mae": 0.03435353562235832,
+        "local_mae_drop_pct": 44.359904987687834,
+        "local_positive_pixel_ratio": 0.7792888888888889,
+        "local_score": 0.012180148623883724
+      }
+    },
+    {
+      "scene": "flowers",
+      "view": "00014.png",
+      "baseline_iteration": 26000,
+      "dPSNR": 1.118814468383789,
+      "dSSIM": 0.07541340589523315,
+      "dLPIPS": -0.10284039378166199,
+      "ranking_score": 0.6955970582616945,
+      "phasej_audit_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_closure_audit.csv",
+      "phasej_per_view_csv": "outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_per_view_deltas.csv",
+      "paths": {
+        "gt": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/gt/00014.png",
+        "clean": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/flowers/test/ours_26000/renders/00014.png",
+        "ours": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/renders/00014.png"
+      },
+      "crop": {
+        "x": 418,
+        "y": 389,
+        "w": 360,
+        "h": 250,
+        "local_clean_psnr": 18.198969726934994,
+        "local_ours_psnr": 20.35345093048194,
+        "local_dpsnr": 2.154481203546947,
+        "local_clean_mae": 0.0884241834282875,
+        "local_ours_mae": 0.06601212918758392,
+        "local_mae_drop_pct": 25.346068656523,
+        "local_positive_pixel_ratio": 0.6783666666666667,
+        "local_score": 0.016351601108908653
+      }
+    }
+  ]
+}

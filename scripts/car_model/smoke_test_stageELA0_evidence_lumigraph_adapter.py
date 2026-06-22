@@ -19,6 +19,7 @@ from utils.evidence_lumigraph_adapter import (
     FrameRecord,
     adapt_frame,
     calibrate_alpha,
+    fit_alpha_calibrator,
     fit_benefit_calibrator,
     save_camera_index,
     warp_support_residual,
@@ -117,6 +118,33 @@ def main() -> int:
             device="cpu",
         )
         assert benefit.to_json()["accepted_bins"] > 0, benefit.to_json()
+        alpha_calibrator = fit_alpha_calibrator(
+            [support, target],
+            k=1,
+            mode="residual",
+            alpha_grid=[0.0, 0.5, 1.0],
+            calib_stride=1,
+            calib_max_views=2,
+            calib_sampler="uniform",
+            residual_clip=1.0,
+            depth_abs_tol=0.001,
+            depth_rel_tol=0.001,
+            direction_weight=0.0,
+            bins=2,
+            min_bin_count=1,
+            view_tail_scale_grid=[1.0, 0.5, 0.0],
+            view_tail_min_gain=0.0,
+            view_tail_max_negative_fraction=0.0,
+            device="cpu",
+        )
+        alpha_json = alpha_calibrator.to_json()
+        assert bool(alpha_json["view_tail_enabled"]), alpha_json
+        assert float(alpha_json["view_tail_scale"]) in {0.0, 0.5, 1.0}, alpha_json
+        assert "view_tail_safe_scale_found" in alpha_json, alpha_json
+        assert "view_tail_fallback_used" in alpha_json, alpha_json
+        assert isinstance(alpha_json["view_tail_candidate_stats"], list), alpha_json
+        assert len(alpha_json["view_tail_candidate_stats"]) == 3, alpha_json
+        assert alpha_json["accepted_bins"] > 0, alpha_json
         adapted, info = adapt_frame(
             target,
             [support],
@@ -133,6 +161,70 @@ def main() -> int:
         target_tensor = torch.from_numpy(gt.transpose(2, 0, 1))
         assert torch.mean(torch.abs(adapted.cpu() - target_tensor)).item() < 1e-2
         assert float(info["covered_fraction"]) > 0.1, info
+
+        trusted, trusted_info = adapt_frame(
+            target,
+            [support],
+            k=1,
+            alpha=1.0,
+            mode="residual",
+            residual_clip=1.0,
+            depth_abs_tol=0.001,
+            depth_rel_tol=0.001,
+            direction_weight=0.0,
+            benefit_calibrator=benefit,
+            local_trust_gate=True,
+            local_trust_min_supports=1,
+            local_trust_max_residual_std=0.01,
+            local_trust_min_agreement=0.5,
+            local_trust_confidence_quantile=0.0,
+            device="cpu",
+        )
+        assert torch.mean(torch.abs(trusted.cpu() - target_tensor)).item() < 1e-2
+        assert bool(trusted_info["local_trust_enabled"]), trusted_info
+        assert float(trusted_info["local_trust_accept_fraction"]) > 0.1, trusted_info
+        assert float(trusted_info["local_trust_mean_support_count"]) >= 1.0, trusted_info
+
+        rejected, rejected_info = adapt_frame(
+            target,
+            [support],
+            k=1,
+            alpha=1.0,
+            mode="residual",
+            residual_clip=1.0,
+            depth_abs_tol=0.001,
+            depth_rel_tol=0.001,
+            direction_weight=0.0,
+            benefit_calibrator=benefit,
+            local_trust_gate=True,
+            local_trust_min_supports=2,
+            device="cpu",
+        )
+        assert float(rejected_info["local_trust_accept_fraction"]) == 0.0, rejected_info
+        assert torch.mean(torch.abs(rejected.cpu() - target_tensor)).item() > 0.02
+
+        softened, softened_info = adapt_frame(
+            target,
+            [support],
+            k=1,
+            alpha=1.0,
+            mode="residual",
+            residual_clip=1.0,
+            depth_abs_tol=0.001,
+            depth_rel_tol=0.001,
+            direction_weight=0.0,
+            local_trust_gate=True,
+            local_trust_mode="soft",
+            local_trust_min_supports=2,
+            local_trust_min_weight=0.0,
+            device="cpu",
+        )
+        assert softened_info["local_trust_mode"] == "soft", softened_info
+        assert float(softened_info["local_trust_mean_weight"]) > 0.0, softened_info
+        assert float(softened_info["local_trust_active_fraction"]) > 0.1, softened_info
+        softened_err = torch.mean(torch.abs(softened.cpu() - target_tensor)).item()
+        rejected_err = torch.mean(torch.abs(rejected.cpu() - target_tensor)).item()
+        assert softened_err < rejected_err, (softened_info, softened_err, rejected_err)
     print("[ELA smoke] passed")
     return 0
 
