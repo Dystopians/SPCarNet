@@ -1,0 +1,7 @@
+{
+ "ours_26000_counter_v66_bin_rgb_alpha_max035_support4096_tex16_nearest_region_texture_adapter": {
+  "SSIM": 0.8620777130126953,
+  "PSNR": 26.751209259033203,
+  "LPIPS": 0.2519610524177551
+ }
+}

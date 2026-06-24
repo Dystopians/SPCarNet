@@ -1,0 +1,7 @@
+{
+ "ours_26000_kitchen_v66_bin_rgb_alpha_max035_support4096_tex16_nearest_region_texture_adapter": {
+  "SSIM": 0.8765379190444946,
+  "PSNR": 27.8226261138916,
+  "LPIPS": 0.1988488882780075
+ }
+}
