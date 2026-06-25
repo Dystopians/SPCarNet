@@ -1,0 +1,90 @@
+{
+  "date": "2026-06-25",
+  "status": "complete",
+  "method": "v104c_shrink_view_affine_min1_minviews1",
+  "claim_boundary": "Hard-triad representation-field improvement over clean, v103, and v104a. Still below v101/v102a endpoint ceiling.",
+  "scenes": {
+    "counter": {
+      "metrics": {
+        "clean": {"PSNR": 26.751773834228516, "SSIM": 0.862055242061615, "LPIPS": 0.2520033121109009},
+        "v103_affine_min1": {"PSNR": 27.208200454711914, "SSIM": 0.8634048700332642, "LPIPS": 0.24317626655101776},
+        "v104a_view_affine_min1": {"PSNR": 27.49237823486328, "SSIM": 0.8673436641693115, "LPIPS": 0.23900321125984192},
+        "v104c_shrink_view_affine": {"PSNR": 27.49806785583496, "SSIM": 0.8674196004867554, "LPIPS": 0.23898616433143616},
+        "v101_v102a_endpoint_ceiling": {"PSNR": 28.442907333374023, "SSIM": 0.8936957120895386, "LPIPS": 0.18655678629875183}
+      },
+      "field_manifest": "/dev/shm/peilincai_spcarnet_v104c_shrink_view_affine_field_20260625/counter/v104c_shrink_view_affine_min1_minviews1_field.manifest.json",
+      "render_report": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/counter/detached_model/test/ours_26000_v104c_shrink_view_affine_min1_minviews1_counter/render_py_endpoint_report.json",
+      "result_key": "ours_26000_v104c_shrink_view_affine_min1_minviews1_counter",
+      "field_stats": {
+        "valid_triangles": 2716449,
+        "total_accumulated_pixels": 48475638,
+        "view_affine_triangles": 2716449,
+        "fallback_triangles": 0,
+        "shrink_alpha_mean": 0.5661972670939155,
+        "manifest_elapsed_sec": 573.7214689254761,
+        "render_elapsed_sec": 49.783804416656494,
+        "mean_abs_delta": 0.008245761288950841,
+        "mean_surface_valid_fraction": 0.999158364534378
+      }
+    },
+    "kitchen": {
+      "metrics": {
+        "clean": {"PSNR": 27.818552017211914, "SSIM": 0.8764522671699524, "LPIPS": 0.19918586313724518},
+        "v103_affine_min1": {"PSNR": 28.310152053833008, "SSIM": 0.8775535225868225, "LPIPS": 0.19451770186424255},
+        "v104a_view_affine_min1": {"PSNR": 28.765291213989258, "SSIM": 0.8815281391143799, "LPIPS": 0.18809644877910614},
+        "v104c_shrink_view_affine": {"PSNR": 28.770448684692383, "SSIM": 0.8815901279449463, "LPIPS": 0.18802082538604736},
+        "v101_v102a_endpoint_ceiling": {"PSNR": 30.19739532470703, "SSIM": 0.9160934686660767, "LPIPS": 0.1320038139820099}
+      },
+      "field_manifest": "/dev/shm/peilincai_spcarnet_v104c_shrink_view_affine_field_20260625/kitchen/v104c_shrink_view_affine_min1_minviews1_field.manifest.json",
+      "render_report": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/kitchen/detached_model/test/ours_26000_v104c_shrink_view_affine_min1_minviews1_kitchen/render_py_endpoint_report.json",
+      "result_key": "ours_26000_v104c_shrink_view_affine_min1_minviews1_kitchen",
+      "field_stats": {
+        "valid_triangles": 3076129,
+        "total_accumulated_pixels": 56628492,
+        "view_affine_triangles": 3076129,
+        "fallback_triangles": 0,
+        "shrink_alpha_mean": 0.6307335724000305,
+        "manifest_elapsed_sec": 1271.105639219284,
+        "render_elapsed_sec": 54.0908784866333,
+        "mean_abs_delta": 0.009386059788188765,
+        "mean_surface_valid_fraction": 0.9995105130331857
+      }
+    },
+    "bonsai": {
+      "metrics": {
+        "clean": {"PSNR": 28.895233154296875, "SSIM": 0.8964002728462219, "LPIPS": 0.25949278473854065},
+        "v103_affine_min1": {"PSNR": 29.63490104675293, "SSIM": 0.8986066579818726, "LPIPS": 0.24213986098766327},
+        "v104a_view_affine_min1": {"PSNR": 30.21146583557129, "SSIM": 0.9059099555015564, "LPIPS": 0.23137512803077698},
+        "v104c_shrink_view_affine": {"PSNR": 30.310876846313477, "SSIM": 0.9073665738105774, "LPIPS": 0.230185866355896},
+        "v101_v102a_endpoint_ceiling": {"PSNR": 31.861888885498047, "SSIM": 0.9302757978439331, "LPIPS": 0.17256629467010498}
+      },
+      "field_manifest": "/dev/shm/peilincai_spcarnet_v104c_shrink_view_affine_field_20260625/bonsai/v104c_shrink_view_affine_min1_minviews1_field.manifest.json",
+      "render_report": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/bonsai/detached_model/test/ours_26000_v104c_shrink_view_affine_min1_minviews1_bonsai/render_py_endpoint_report.json",
+      "result_key": "ours_26000_v104c_shrink_view_affine_min1_minviews1_bonsai",
+      "field_stats": {
+        "valid_triangles": 3405888,
+        "total_accumulated_pixels": 59912816,
+        "view_affine_triangles": 3405888,
+        "fallback_triangles": 0,
+        "shrink_alpha_mean": 0.5837694897777026,
+        "manifest_elapsed_sec": 1290.6484878063202,
+        "render_elapsed_sec": 60.662583351135254,
+        "mean_abs_delta": 0.010236281599547412,
+        "mean_surface_valid_fraction": 0.999664269589089
+      }
+    }
+  },
+  "means": {
+    "clean": {"PSNR": 27.821853001912434, "SSIM": 0.8783025940259298, "LPIPS": 0.2368939866622289},
+    "v103_affine_min1": {"PSNR": 28.38441785176595, "SSIM": 0.8798550168673197, "LPIPS": 0.2266112764676412},
+    "v104a_view_affine_min1": {"PSNR": 28.82304509480794, "SSIM": 0.8849272529284159, "LPIPS": 0.21949159602324167},
+    "v104c_shrink_view_affine": {"PSNR": 28.859797795613606, "SSIM": 0.885458767414093, "LPIPS": 0.21906428535779318},
+    "v101_v102a_endpoint_ceiling": {"PSNR": 30.167397181193035, "SSIM": 0.9133549928665161, "LPIPS": 0.16370896498362222}
+  },
+  "mean_deltas": {
+    "v104c_minus_clean": {"PSNR": 1.0379447937011719, "SSIM": 0.007156173388163249, "LPIPS": -0.01782970130443573},
+    "v104c_minus_v103": {"PSNR": 0.47537994384765625, "SSIM": 0.0056037505467732745, "LPIPS": -0.0075469911098480225},
+    "v104c_minus_v104a": {"PSNR": 0.03675270080566406, "SSIM": 0.0005315144856770834, "LPIPS": -0.00042731066544850666},
+    "v104c_minus_v101_v102a": {"PSNR": -1.307599385579427, "SSIM": -0.027896225452423096, "LPIPS": 0.05535532037417094}
+  }
+}

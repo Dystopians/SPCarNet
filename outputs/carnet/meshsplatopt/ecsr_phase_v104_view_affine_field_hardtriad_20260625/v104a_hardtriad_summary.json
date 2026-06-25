@@ -1,0 +1,341 @@
+{
+  "created_at": "2026-06-25",
+  "status": "hard_triad_complete_existing_artifacts",
+  "claim_boundary": "v104a is same-target-camera hard-triad surface-field validation using a view-conditioned affine barycentric residual field distilled from v102 preprojected deltas. It stores no target GT in the field, but this is not full9 validation and not unseen-camera generalization.",
+  "new_gpu_jobs_run": false,
+  "artifact_completeness": {
+    "all_required_artifacts_present": true,
+    "missing": [],
+    "notes": [
+      "The persisted v104a output summary found before this run was counter-only.",
+      "The complete hard-triad artifacts used here are existing files under /dev/shm.",
+      "The requested hard-triad summary directory did not exist before this aggregation."
+    ],
+    "scenes": [
+      {
+        "scene": "counter",
+        "complete": true,
+        "expected_frames": 30,
+        "render_png_count": 30,
+        "gt_png_count": 30,
+        "results_method": "ours_26000_v104a_view_affine_min1_counter",
+        "field_pt": {
+          "path": "/dev/shm/peilincai_spcarnet_v104_view_affine_field_20260625/counter/v104_view_affine_min1_field.pt",
+          "exists": true,
+          "size_bytes": 453287717,
+          "size_mib": 432.2888536453247
+        },
+        "field_manifest": {
+          "path": "/dev/shm/peilincai_spcarnet_v104_view_affine_field_20260625/counter/v104_view_affine_min1_field.manifest.json",
+          "exists": true,
+          "field_sha256": "e2a21ecc8fa734b472577cc7519c3159eba5df9f3ac2da57135af0592e684832"
+        },
+        "render_report": {
+          "path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/counter/detached_model/test/ours_26000_v104a_view_affine_min1_counter/render_py_endpoint_report.json",
+          "exists": true
+        },
+        "results_json": {
+          "path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/counter/detached_model/results.json",
+          "exists": true,
+          "method_present": true
+        }
+      },
+      {
+        "scene": "kitchen",
+        "complete": true,
+        "expected_frames": 35,
+        "render_png_count": 35,
+        "gt_png_count": 35,
+        "results_method": "ours_26000_v104a_view_affine_min1_kitchen",
+        "field_pt": {
+          "path": "/dev/shm/peilincai_spcarnet_v104_view_affine_field_20260625/kitchen/v104_view_affine_min1_field.pt",
+          "exists": true,
+          "size_bytes": 447091045,
+          "size_mib": 426.37924671173096
+        },
+        "field_manifest": {
+          "path": "/dev/shm/peilincai_spcarnet_v104_view_affine_field_20260625/kitchen/v104_view_affine_min1_field.manifest.json",
+          "exists": true,
+          "field_sha256": "9203b2e7b7cdc803d046147e223b2de6ca0830b582b72b36250a5baef4d863ad"
+        },
+        "render_report": {
+          "path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/kitchen/detached_model/test/ours_26000_v104a_view_affine_min1_kitchen/render_py_endpoint_report.json",
+          "exists": true
+        },
+        "results_json": {
+          "path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/kitchen/detached_model/results.json",
+          "exists": true,
+          "method_present": true
+        }
+      },
+      {
+        "scene": "bonsai",
+        "complete": true,
+        "expected_frames": 37,
+        "render_png_count": 37,
+        "gt_png_count": 37,
+        "results_method": "ours_26000_v104a_view_affine_min1_bonsai",
+        "field_pt": {
+          "path": "/dev/shm/peilincai_spcarnet_v104_view_affine_field_20260625/bonsai/v104_view_affine_min1_field.pt",
+          "exists": true,
+          "size_bytes": 449118757,
+          "size_mib": 428.3130235671997
+        },
+        "field_manifest": {
+          "path": "/dev/shm/peilincai_spcarnet_v104_view_affine_field_20260625/bonsai/v104_view_affine_min1_field.manifest.json",
+          "exists": true,
+          "field_sha256": "b7e98595788c29398f96649fae59f5bfa5c65b1f4db1340eca96a3d768aee5a3"
+        },
+        "render_report": {
+          "path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/bonsai/detached_model/test/ours_26000_v104a_view_affine_min1_bonsai/render_py_endpoint_report.json",
+          "exists": true
+        },
+        "results_json": {
+          "path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/bonsai/detached_model/results.json",
+          "exists": true,
+          "method_present": true
+        }
+      }
+    ]
+  },
+  "method": {
+    "name": "v104a_view_affine_min_count_1",
+    "basis_type": "affine_barycentric_viewdir",
+    "basis_order": [
+      "1",
+      "barycentric_0",
+      "barycentric_1",
+      "viewdir_x",
+      "viewdir_y",
+      "viewdir_z"
+    ],
+    "renderer_scaling": 4,
+    "min_count": 1,
+    "ridge": 0.001,
+    "residual_clip": 0.08,
+    "residual_dtype": "float16"
+  },
+  "sources": {
+    "v104a_results_root": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625",
+    "v104a_field_root": "/dev/shm/peilincai_spcarnet_v104_view_affine_field_20260625",
+    "clean_and_v103_reference": "outputs/carnet/meshsplatopt/ecsr_phase_v103_surface_affine_field_hardtriad_20260625/v103_hardtriad_summary.json",
+    "v101_v102a_reference": "outputs/carnet/meshsplatopt/ecsr_phase_v102_preprojected_delta_bank_20260625/v102_preprojected_delta_triad_summary.json"
+  },
+  "rows": [
+    {
+      "scene": "counter",
+      "clean": {
+        "PSNR": 26.751773834,
+        "SSIM": 0.862055242,
+        "LPIPS": 0.252003312
+      },
+      "v103": {
+        "PSNR": 27.208200454711914,
+        "SSIM": 0.8634048700332642,
+        "LPIPS": 0.24317626655101776
+      },
+      "v104a": {
+        "PSNR": 27.49237823486328,
+        "SSIM": 0.8673436641693115,
+        "LPIPS": 0.23900321125984192
+      },
+      "v101_v102a": {
+        "PSNR": 28.442907333374023,
+        "SSIM": 0.8936957120895386,
+        "LPIPS": 0.18655678629875183
+      },
+      "v104a_minus_clean": {
+        "dPSNR": 0.7406044008632797,
+        "dSSIM": 0.005288422169311469,
+        "dLPIPS": -0.01300010074015806
+      },
+      "v104a_minus_v103": {
+        "dPSNR": 0.2841777801513672,
+        "dSSIM": 0.003938794136047363,
+        "dLPIPS": -0.004173055291175842
+      },
+      "v104a_minus_v101_v102a": {
+        "dPSNR": -0.9505290985107422,
+        "dSSIM": -0.02635204792022705,
+        "dLPIPS": 0.05244642496109009
+      }
+    },
+    {
+      "scene": "kitchen",
+      "clean": {
+        "PSNR": 27.818552017211914,
+        "SSIM": 0.8764522671699524,
+        "LPIPS": 0.19918586313724518
+      },
+      "v103": {
+        "PSNR": 28.310152053833008,
+        "SSIM": 0.8775535225868225,
+        "LPIPS": 0.19451770186424255
+      },
+      "v104a": {
+        "PSNR": 28.765291213989258,
+        "SSIM": 0.8815281391143799,
+        "LPIPS": 0.18809644877910614
+      },
+      "v101_v102a": {
+        "PSNR": 30.19739532470703,
+        "SSIM": 0.9160933494567871,
+        "LPIPS": 0.13200382888317108
+      },
+      "v104a_minus_clean": {
+        "dPSNR": 0.9467391967773438,
+        "dSSIM": 0.00507587194442749,
+        "dLPIPS": -0.011089414358139038
+      },
+      "v104a_minus_v103": {
+        "dPSNR": 0.45513916015625,
+        "dSSIM": 0.003974616527557373,
+        "dLPIPS": -0.006421253085136414
+      },
+      "v104a_minus_v101_v102a": {
+        "dPSNR": -1.4321041107177734,
+        "dSSIM": -0.03456521034240723,
+        "dLPIPS": 0.05609261989593506
+      }
+    },
+    {
+      "scene": "bonsai",
+      "clean": {
+        "PSNR": 28.895233154296875,
+        "SSIM": 0.8964002728462219,
+        "LPIPS": 0.25949278473854065
+      },
+      "v103": {
+        "PSNR": 29.63490104675293,
+        "SSIM": 0.8986067771911621,
+        "LPIPS": 0.24213984608650208
+      },
+      "v104a": {
+        "PSNR": 30.21146583557129,
+        "SSIM": 0.9059099555015564,
+        "LPIPS": 0.23137512803077698
+      },
+      "v101_v102a": {
+        "PSNR": 31.86188316345215,
+        "SSIM": 0.9302756786346436,
+        "LPIPS": 0.17256629467010498
+      },
+      "v104a_minus_clean": {
+        "dPSNR": 1.316232681274414,
+        "dSSIM": 0.009509682655334473,
+        "dLPIPS": -0.028117656707763672
+      },
+      "v104a_minus_v103": {
+        "dPSNR": 0.5765647888183594,
+        "dSSIM": 0.007303178310394287,
+        "dLPIPS": -0.010764718055725098
+      },
+      "v104a_minus_v101_v102a": {
+        "dPSNR": -1.6504173278808594,
+        "dSSIM": -0.024365723133087158,
+        "dLPIPS": 0.058808833360672
+      }
+    }
+  ],
+  "mean": {
+    "clean": {
+      "PSNR": 27.821853001836264,
+      "SSIM": 0.8783025940053916,
+      "LPIPS": 0.23689398662526195
+    },
+    "v103": {
+      "PSNR": 28.38441785176595,
+      "SSIM": 0.8798550566037496,
+      "LPIPS": 0.22661127150058746
+    },
+    "v104a": {
+      "PSNR": 28.82304509480794,
+      "SSIM": 0.8849272529284159,
+      "LPIPS": 0.21949159602324167
+    },
+    "v101_v102a": {
+      "PSNR": 30.167395273844402,
+      "SSIM": 0.9133549133936564,
+      "LPIPS": 0.16370896995067596
+    },
+    "v104a_minus_clean": {
+      "dPSNR": 1.001192092971678,
+      "dSSIM": 0.006624658923024329,
+      "dLPIPS": -0.017402390602020285
+    },
+    "v104a_minus_v103": {
+      "dPSNR": 0.4386272430419922,
+      "dSSIM": 0.005072196324666267,
+      "dLPIPS": -0.007119675477345794
+    },
+    "v104a_minus_v101_v102a": {
+      "dPSNR": -1.3443501790364607,
+      "dSSIM": -0.02842766046524048,
+      "dLPIPS": 0.055782626072565705
+    }
+  },
+  "field": [
+    {
+      "scene": "counter",
+      "valid_triangles": 2716436,
+      "triangle_count": 9644247,
+      "valid_triangle_fraction": 0.2816638648509979,
+      "total_accumulated_pixels": 48475697,
+      "build_elapsed_sec": 447.0348515510559,
+      "solve_failures": 0
+    },
+    {
+      "scene": "kitchen",
+      "valid_triangles": 3076099,
+      "triangle_count": 9512393,
+      "valid_triangle_fraction": 0.3233780264854431,
+      "total_accumulated_pixels": 56628652,
+      "build_elapsed_sec": 829.4947168827057,
+      "solve_failures": 0
+    },
+    {
+      "scene": "bonsai",
+      "valid_triangles": 3405889,
+      "triangle_count": 9555533,
+      "valid_triangle_fraction": 0.35643109679222107,
+      "total_accumulated_pixels": 59912951,
+      "build_elapsed_sec": 633.2165155410767,
+      "solve_failures": 0
+    }
+  ],
+  "render": [
+    {
+      "scene": "counter",
+      "target_frames": 30,
+      "elapsed_sec": 50.492764711380005,
+      "mean_surface_valid_fraction": 0.9990420321623484,
+      "mean_changed_fraction": 0.9989963372548422,
+      "mean_abs_delta": 0.008267336587111155,
+      "intermediate_outputs_saved": false
+    },
+    {
+      "scene": "kitchen",
+      "target_frames": 35,
+      "elapsed_sec": 52.002421379089355,
+      "mean_surface_valid_fraction": 0.9995048267500741,
+      "mean_changed_fraction": 0.9994658078466143,
+      "mean_abs_delta": 0.009361028737787689,
+      "intermediate_outputs_saved": false
+    },
+    {
+      "scene": "bonsai",
+      "target_frames": 37,
+      "elapsed_sec": 62.412216901779175,
+      "mean_surface_valid_fraction": 0.9996174010070594,
+      "mean_changed_fraction": 0.9995920029846398,
+      "mean_abs_delta": 0.009794856157355212,
+      "intermediate_outputs_saved": false
+    }
+  ],
+  "gates": {
+    "all_scenes_v104a_beat_clean_all_three_metrics": true,
+    "all_scenes_v104a_beat_v103_all_three_metrics": true,
+    "all_scenes_v104a_beat_v101_v102a_all_three_metrics": false,
+    "all_scenes_reach_v101_v102a_ceiling": false
+  }
+}
