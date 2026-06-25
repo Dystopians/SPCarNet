@@ -1,0 +1,175 @@
+{
+  "created_at": "2026-06-25",
+  "status": "hard_triad_surface_field_evidence",
+  "scenes": [
+    "counter",
+    "kitchen",
+    "bonsai"
+  ],
+  "method": {
+    "name": "v103_affine_barycentric_surface_field_min_count_1",
+    "basis_type": "affine_barycentric",
+    "basis_order": [
+      "1",
+      "barycentric_0",
+      "barycentric_1"
+    ],
+    "renderer_scaling": 4,
+    "min_count": 1,
+    "ridge": 0.0001,
+    "residual_dtype": "float16",
+    "claim_boundary": "Same-target-camera hard-triad surface-field validation distilled from v102 preprojected deltas. It stores no target GT, but this is not unseen-camera generalization or full9 validation."
+  },
+  "rows": [
+    {
+      "scene": "counter",
+      "clean": {
+        "PSNR": 26.751773834,
+        "SSIM": 0.862055242,
+        "LPIPS": 0.252003312
+      },
+      "v103": {
+        "method": "ours_26000_v103_affine_min1_surface_field_counter",
+        "PSNR": 27.208200454711914,
+        "SSIM": 0.8634048700332642,
+        "LPIPS": 0.24317626655101776
+      },
+      "v101_v102a": {
+        "PSNR": 28.442907333374023,
+        "SSIM": 0.8936957120895386,
+        "LPIPS": 0.18655678629875183
+      },
+      "field": {
+        "path": "/dev/shm/peilincai_spcarnet_v103_surface_affine_field_20260625/counter/v103_surface_affine_min1_field.pt",
+        "manifest": "/dev/shm/peilincai_spcarnet_v103_surface_affine_field_20260625/counter/v103_surface_affine_min1_field.manifest.json",
+        "valid_triangles": 2716465,
+        "triangle_count": 9644247,
+        "valid_triangle_fraction": 0.2816668748855591,
+        "mean_surface_valid_fraction": 0.9990390837192535,
+        "render_elapsed_sec": 47.20761227607727,
+        "solve_failures": 0
+      },
+      "delta_vs_clean": {
+        "dPSNR": 0.45642662071191253,
+        "dSSIM": 0.0013496280332641053,
+        "dLPIPS": -0.008827045448982218
+      },
+      "delta_vs_v101_v102a": {
+        "dPSNR": -1.2347068786621094,
+        "dSSIM": -0.030290842056274414,
+        "dLPIPS": 0.05661948025226593
+      }
+    },
+    {
+      "scene": "kitchen",
+      "clean": {
+        "PSNR": 27.818552017211914,
+        "SSIM": 0.8764522671699524,
+        "LPIPS": 0.19918586313724518
+      },
+      "v103": {
+        "method": "ours_26000_v103_affine_min1_surface_field_kitchen",
+        "PSNR": 28.310152053833008,
+        "SSIM": 0.8775535225868225,
+        "LPIPS": 0.19451770186424255
+      },
+      "v101_v102a": {
+        "PSNR": 30.19739532470703,
+        "SSIM": 0.9160933494567871,
+        "LPIPS": 0.13200382888317108
+      },
+      "field": {
+        "path": "/dev/shm/peilincai_spcarnet_v103_surface_affine_field_20260625/kitchen/v103_surface_affine_min1_field.pt",
+        "manifest": "/dev/shm/peilincai_spcarnet_v103_surface_affine_field_20260625/kitchen/v103_surface_affine_min1_field.manifest.json",
+        "valid_triangles": 3076126,
+        "triangle_count": 9512393,
+        "valid_triangle_fraction": 0.32338088750839233,
+        "mean_surface_valid_fraction": 0.9995012317,
+        "render_elapsed_sec": 49.6192,
+        "solve_failures": 0
+      },
+      "delta_vs_clean": {
+        "dPSNR": 0.49160003662109375,
+        "dSSIM": 0.0011012554168701172,
+        "dLPIPS": -0.0046681612730026245
+      },
+      "delta_vs_v101_v102a": {
+        "dPSNR": -1.8872432708740234,
+        "dSSIM": -0.0385398268699646,
+        "dLPIPS": 0.06251387298107147
+      },
+      "notes": [
+        "One failed render attempt intentionally hit the surface-field/preprojected-bank mutual exclusion guard, then reran successfully without the preprojected bank."
+      ]
+    },
+    {
+      "scene": "bonsai",
+      "clean": {
+        "PSNR": 28.895233154296875,
+        "SSIM": 0.8964002728462219,
+        "LPIPS": 0.25949278473854065
+      },
+      "v103": {
+        "method": "ours_26000_v103_affine_min1_surface_field_bonsai",
+        "PSNR": 29.63490104675293,
+        "SSIM": 0.8986067771911621,
+        "LPIPS": 0.24213984608650208
+      },
+      "v101_v102a": {
+        "PSNR": 31.86188316345215,
+        "SSIM": 0.9302756786346436,
+        "LPIPS": 0.17256629467010498
+      },
+      "field": {
+        "path": "/dev/shm/peilincai_spcarnet_v103_surface_affine_field_20260625/bonsai/v103_surface_affine_min1_field.pt",
+        "manifest": "/dev/shm/peilincai_spcarnet_v103_surface_affine_field_20260625/bonsai/v103_surface_affine_min1_field.manifest.json",
+        "valid_triangles": 3405864,
+        "triangle_count": 9555533,
+        "valid_triangle_fraction": 0.35642847418785095,
+        "mean_surface_valid_fraction": 0.9996663750828924,
+        "render_elapsed_sec": 56.98273730278015,
+        "solve_failures": 0
+      },
+      "delta_vs_clean": {
+        "dPSNR": 0.7396678924560547,
+        "dSSIM": 0.0022065043449401855,
+        "dLPIPS": -0.017352938652038574
+      },
+      "delta_vs_v101_v102a": {
+        "dPSNR": -2.2269821166992188,
+        "dSSIM": -0.031668901443481445,
+        "dLPIPS": 0.0695735514163971
+      }
+    }
+  ],
+  "mean": {
+    "clean": {
+      "PSNR": 27.821853001836264,
+      "SSIM": 0.8783025940053916,
+      "LPIPS": 0.23689398662526195
+    },
+    "v103": {
+      "PSNR": 28.38441785176595,
+      "SSIM": 0.8798550566037496,
+      "LPIPS": 0.22661127150058746
+    },
+    "v101_v102a": {
+      "PSNR": 30.167395273844402,
+      "SSIM": 0.9133549133936564,
+      "LPIPS": 0.16370896995067596
+    },
+    "delta_vs_clean": {
+      "dPSNR": 0.562564849929687,
+      "dSSIM": 0.001552462598358136,
+      "dLPIPS": -0.010282715124674472
+    },
+    "delta_vs_v101_v102a": {
+      "dPSNR": -1.7829774220784504,
+      "dSSIM": -0.03349985678990682,
+      "dLPIPS": 0.0629023015499115
+    }
+  },
+  "all_scenes_beat_clean_all_three_metrics": true,
+  "all_scenes_beat_v101_v102a_all_three_metrics": false,
+  "next_required_step": "Implement v104 view-conditioned and evidence-gated residual coefficients, then validate counter and hard triad before full9."
+}
