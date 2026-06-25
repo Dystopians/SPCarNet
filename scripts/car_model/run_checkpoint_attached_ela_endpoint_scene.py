@@ -69,11 +69,19 @@ def _mean(values: list[float]) -> float:
     return float(sum(finite) / len(finite)) if finite else math.nan
 
 
-def _copy_or_link(src: Path, dst: Path) -> str:
+def _copy_or_link(src: Path, dst: Path, *, required: bool = False) -> str:
     if not src.exists():
+        if required:
+            raise FileNotFoundError(f"required model asset is missing: {src}")
         return "missing"
     dst.parent.mkdir(parents=True, exist_ok=True)
     if dst.exists() or dst.is_symlink():
+        try:
+            same_target = dst.resolve() == src.resolve()
+        except OSError:
+            same_target = False
+        if dst.is_symlink() and not same_target:
+            raise RuntimeError(f"stale symlink at {dst}: points to {dst.resolve()}, expected {src.resolve()}")
         return "existing"
     try:
         os.symlink(src.resolve(), dst)
@@ -92,12 +100,12 @@ def _prepare_candidate_model(base_model: Path, output_model: Path, iteration: in
     for name in ("cfg_args", "cameras.json", "input.ply", "topology_audit.json", "topology_audit.md"):
         src = base_model / name
         if src.exists():
-            links[name] = _copy_or_link(src, output_model / name)
+            links[name] = _copy_or_link(src, output_model / name, required=name in {"cfg_args", "cameras.json"})
 
     ckpt_name = "point_cloud_state_dict.pt"
     src_ckpt = base_model / "point_cloud" / f"iteration_{int(iteration)}" / ckpt_name
     dst_ckpt = output_model / "point_cloud" / f"iteration_{int(iteration)}" / ckpt_name
-    links[str(dst_ckpt.relative_to(output_model))] = _copy_or_link(src_ckpt, dst_ckpt)
+    links[str(dst_ckpt.relative_to(output_model))] = _copy_or_link(src_ckpt, dst_ckpt, required=True)
     manifest = {
         "model_link_manifest_version": 1,
         "created_at_unix": time.time(),
@@ -116,6 +124,86 @@ def _prepare_candidate_model(base_model: Path, output_model: Path, iteration: in
     return manifest
 
 
+def _validate_source_report_provenance(
+    report: dict[str, Any],
+    *,
+    source_report_path: Path,
+    base_model: Path,
+    base_method: str,
+    train_frames,
+) -> dict[str, Any]:
+    train_names: set[str] = set()
+    for frame in train_frames:
+        train_names.add(str(frame.name))
+        train_names.add(str(frame.camera.image_name))
+        train_names.add(Path(str(frame.camera.image_name)).stem)
+
+    def _names_subset(key: str) -> tuple[bool, list[str]]:
+        value = report.get(key)
+        if not isinstance(value, list):
+            return True, []
+        missing = [
+            str(item)
+            for item in value
+            if str(item) not in train_names and Path(str(item)).stem not in train_names
+        ]
+        return not missing, missing
+
+    checks: list[dict[str, Any]] = []
+    if report.get("base_model_path"):
+        source_base = Path(str(report["base_model_path"])).resolve()
+        checks.append(
+            {
+                "name": "base_model_matches",
+                "pass": source_base == base_model.resolve(),
+                "source_base_model_path": str(source_base),
+                "expected_base_model_path": str(base_model.resolve()),
+            }
+        )
+    checks.append(
+        {
+            "name": "base_method_matches",
+            "pass": str(report.get("base_method", "")) in {"", str(base_method)},
+            "source_base_method": str(report.get("base_method", "")),
+            "expected_base_method": str(base_method),
+        }
+    )
+    for key in ("policy_fit_views", "policy_val_views", "adapt_support_view_names"):
+        ok, missing = _names_subset(key)
+        checks.append(
+            {
+                "name": f"{key}_subset_of_train",
+                "pass": bool(ok),
+                "missing": missing[:16],
+                "missing_count": len(missing),
+            }
+        )
+    leakage_flags = {
+        "uses_test_gt_for_branch": report.get("uses_test_gt_for_branch"),
+        "uses_test_gt_for_policy": report.get("uses_test_gt_for_policy"),
+        "test_gt_used_for_policy": report.get("test_gt_used_for_policy"),
+    }
+    checks.append(
+        {
+            "name": "no_declared_test_gt_policy_flag",
+            "pass": not any(bool(value) for value in leakage_flags.values()),
+            "flags": leakage_flags,
+        }
+    )
+    passed = all(bool(row.get("pass", False)) for row in checks)
+    if not passed:
+        failed = [row for row in checks if not row.get("pass", False)]
+        raise RuntimeError(f"source ELA report provenance failed for {source_report_path}: {failed}")
+    return {
+        "source_report_path": str(source_report_path),
+        "source_report_target_split": str(report.get("target_split", "")),
+        "source_report_method_name": str(report.get("method_name", "")),
+        "policy_and_support_checked_against_split": "train",
+        "no_test_gt_used_for_policy": True,
+        "checks": checks,
+    }
+
+
 def _copy_gt(target_frames, out_gt: Path) -> None:
     out_gt.mkdir(parents=True, exist_ok=True)
     for frame in target_frames:
@@ -126,6 +214,22 @@ def _copy_gt(target_frames, out_gt: Path) -> None:
             os.link(frame.gt_path, dst)
         except OSError:
             shutil.copy2(frame.gt_path, dst)
+
+
+def _assert_frame_set(expected_frames, method_dir: Path) -> None:
+    expected = {frame.render_path.name for frame in expected_frames}
+    renders = {p.name for p in (method_dir / "renders").glob("*.png")}
+    gts = {p.name for p in (method_dir / "gt").glob("*.png")}
+    missing_render = sorted(expected - renders)
+    missing_gt = sorted(expected - gts)
+    extra_render = sorted(renders - expected)
+    extra_gt = sorted(gts - expected)
+    if missing_render or missing_gt or extra_render or extra_gt:
+        raise RuntimeError(
+            "frame-set mismatch for metric fairness: "
+            f"method_dir={method_dir}, missing_render={missing_render[:8]}, missing_gt={missing_gt[:8]}, "
+            f"extra_render={extra_render[:8]}, extra_gt={extra_gt[:8]}"
+        )
 
 
 def _materialize_endpoint(args: argparse.Namespace) -> dict[str, Any]:
@@ -146,6 +250,13 @@ def _materialize_endpoint(args: argparse.Namespace) -> dict[str, Any]:
 
     train_frames = load_split_frames(base_model, "train", args.base_method_name)
     target_frames = load_split_frames(base_model, args.target_split, args.base_method_name)
+    provenance = _validate_source_report_provenance(
+        source_report,
+        source_report_path=source_report_path,
+        base_model=base_model,
+        base_method=args.base_method_name,
+        train_frames=train_frames,
+    )
     support_frames, support_source, missing_support_names = _select_support_frames(train_frames, source_report)
     if not support_frames:
         raise RuntimeError("source ELA report selected no support frames")
@@ -208,6 +319,7 @@ def _materialize_endpoint(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
 
+    _assert_frame_set(target_frames, out_method)
     report = dict(source_report)
     report.update(
         {
@@ -230,7 +342,8 @@ def _materialize_endpoint(args: argparse.Namespace) -> dict[str, Any]:
             "alpha": float(alpha),
             "policy": policy,
             "evidence_max_side": int(args.evidence_max_side),
-            "no_test_gt_used_for_policy": True,
+            "source_report_provenance": provenance,
+            "no_test_gt_used_for_policy": bool(provenance["no_test_gt_used_for_policy"]),
             "policy_statement": (
                 "The endpoint replays the fixed train-derived ELA report. Held-out test GT is only copied for "
                 "metric evaluation after materialization and is not read for policy, support, scale, or gate selection."
@@ -288,7 +401,15 @@ def _evaluate_if_requested(args: argparse.Namespace) -> dict[str, float]:
         "--merge_model_results",
     ]
     _run_command(cmd, cwd=ROOT, log_path=output_model / "endpoint_commands.log", gpu=int(args.gpu))
-    return _metric(_read_json(output_model / "results.json"), args.method_name)
+    metrics = _metric(_read_json(output_model / "results.json"), args.method_name)
+    per_view = _read_json(output_model / "per_view.json").get(args.method_name, {})
+    frame_count = len((per_view.get("PSNR") or {})) if isinstance(per_view, dict) else 0
+    render_count = len(list((output_model / args.target_split / args.method_name / "renders").glob("*.png")))
+    if frame_count != render_count:
+        raise RuntimeError(
+            f"metric denominator mismatch for {args.method_name}: per_view={frame_count}, renders={render_count}"
+        )
+    return metrics
 
 
 def _delta(candidate: dict[str, float], baseline: dict[str, float]) -> dict[str, float]:
@@ -319,19 +440,19 @@ def _baseline_rows(args: argparse.Namespace, candidate: dict[str, float]) -> dic
             "method": args.phasej_method,
             "metrics": _metric(_read_json(base_model / "results.json"), args.phasej_method),
         },
-        "source_ela": {
+        "legacy_source_ela_baseline": {
             "method": args.source_ela_method,
             "metrics": {"PSNR": args.source_ela_psnr, "SSIM": args.source_ela_ssim, "LPIPS": args.source_ela_lpips},
         },
     }
     same_path = Path(args.same_evidence_noop_results)
-    if same_path.is_file():
+    if args.scene == "counter" and same_path.is_file():
         rows["same_evidence_noop"] = {
             "method": args.same_evidence_noop_method,
             "metrics": _metric(_read_json(same_path), args.same_evidence_noop_method),
         }
     v98b_path = Path(args.v98b_results)
-    if v98b_path.is_file():
+    if args.scene == "counter" and v98b_path.is_file():
         rows["v98b_negative_checkpoint_baked"] = {
             "method": args.v98b_method,
             "metrics": _metric(_read_json(v98b_path), args.v98b_method),
@@ -363,10 +484,12 @@ def _write_endpoint_contract(args: argparse.Namespace, report: dict[str, Any], m
         json.dumps(endpoint_topology, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     rows = _baseline_rows(args, metrics)
+    alpha_active = _finite_float(report.get("mean_alpha_active_fraction"), 0.0)
+    actual_delta_active = _finite_float(report.get("mean_abs_delta"), 0.0) > float(args.min_mean_abs_delta)
     non_noop = (
         int(report.get("adapt_support_frames", 0) or 0) > 0
         and _finite_float(report.get("mean_changed_fraction"), 0.0) > float(args.min_changed_fraction)
-        and _finite_float(report.get("mean_alpha_active_fraction"), 0.0) > 0.0
+        and (alpha_active > 0.0 or actual_delta_active)
     )
     rgb_gate = {
         "psnr_pass": metrics["PSNR"] > float(args.anchor_psnr),
@@ -383,6 +506,7 @@ def _write_endpoint_contract(args: argparse.Namespace, report: dict[str, Any], m
         "base_method_name": str(args.base_method_name),
         "source_ela_report": str(Path(args.source_ela_report).resolve()),
         "no_test_gt_used_for_policy": bool(report.get("no_test_gt_used_for_policy", False)),
+        "source_report_provenance": report.get("source_report_provenance", {}),
         "rgb_gate": rgb_gate,
         "non_noop_gate": {
             "pass": bool(non_noop),
@@ -392,6 +516,8 @@ def _write_endpoint_contract(args: argparse.Namespace, report: dict[str, Any], m
             "mean_alpha_active_fraction": _finite_float(report.get("mean_alpha_active_fraction"), 0.0),
             "mean_covered_fraction": _finite_float(report.get("mean_covered_fraction"), 0.0),
             "mean_abs_delta": _finite_float(report.get("mean_abs_delta"), 0.0),
+            "min_mean_abs_delta": float(args.min_mean_abs_delta),
+            "actual_delta_active": bool(actual_delta_active),
         },
         "topology_gate": endpoint_topology,
         "comparison_rows": rows,
@@ -615,6 +741,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--evidence_max_side", type=int, default=0)
     parser.add_argument("--changed_threshold", type=float, default=1e-5)
     parser.add_argument("--min_changed_fraction", type=float, default=1e-4)
+    parser.add_argument("--min_mean_abs_delta", type=float, default=1e-7)
     parser.add_argument("--evaluate", action="store_true")
     parser.add_argument("--make_contact_sheet", action="store_true")
     parser.add_argument("--contact_sheet_views", type=int, default=6)

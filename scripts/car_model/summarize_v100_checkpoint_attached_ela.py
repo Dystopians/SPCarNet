@@ -112,7 +112,7 @@ def _frame_delta_rows(args: argparse.Namespace, gate: dict[str, Any]) -> list[di
 def _write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
+        writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
@@ -171,9 +171,9 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
         "v98b_PSNR": _num(baselines.get("v98b_negative_checkpoint_baked", {}).get("PSNR")),
         "v98b_SSIM": _num(baselines.get("v98b_negative_checkpoint_baked", {}).get("SSIM")),
         "v98b_LPIPS": _num(baselines.get("v98b_negative_checkpoint_baked", {}).get("LPIPS")),
-        "source_ela_PSNR": _num(baselines.get("source_ela", {}).get("PSNR")),
-        "source_ela_SSIM": _num(baselines.get("source_ela", {}).get("SSIM")),
-        "source_ela_LPIPS": _num(baselines.get("source_ela", {}).get("LPIPS")),
+        "source_ela_PSNR": _num((baselines.get("legacy_source_ela_baseline") or baselines.get("source_ela", {})).get("PSNR")),
+        "source_ela_SSIM": _num((baselines.get("legacy_source_ela_baseline") or baselines.get("source_ela", {})).get("SSIM")),
+        "source_ela_LPIPS": _num((baselines.get("legacy_source_ela_baseline") or baselines.get("source_ela", {})).get("LPIPS")),
         "pre_triangles": int(base_topology.get("pre_triangles", base_topology.get("triangles", 0)) or 0),
         "post_triangles": int(base_topology.get("post_triangles", base_topology.get("triangles", 0)) or 0),
         "pre_vertices": int(base_topology.get("pre_vertices", base_topology.get("vertices", 0)) or 0),
@@ -271,7 +271,7 @@ def write_markdown(path: Path, payload: dict[str, Any]) -> None:
         f"| v100 endpoint | {row['PSNR']:.6f} | {row['SSIM']:.6f} | {row['LPIPS']:.6f} | {row['dPSNR_vs_clean']:+.6f} | {row['dSSIM_vs_clean']:+.6f} | {row['dLPIPS_vs_clean']:+.6f} |",
         f"| clean MeshSplatting | {row['clean_PSNR']:.6f} | {row['clean_SSIM']:.6f} | {row['clean_LPIPS']:.6f} | 0 | 0 | 0 |",
         f"| strict gate floor | {row['gate_PSNR']:.6f} | {row['gate_SSIM']:.6f} | {row['gate_LPIPS']:.6f} | | | |",
-        f"| source ELA | {row['source_ela_PSNR']:.6f} | {row['source_ela_SSIM']:.6f} | {row['source_ela_LPIPS']:.6f} | {row['dPSNR_vs_source_ela']:+.6f} | {row['dSSIM_vs_source_ela']:+.6f} | {row['dLPIPS_vs_source_ela']:+.6f} |",
+        f"| legacy source ELA baseline | {row['source_ela_PSNR']:.6f} | {row['source_ela_SSIM']:.6f} | {row['source_ela_LPIPS']:.6f} | {row['dPSNR_vs_source_ela']:+.6f} | {row['dSSIM_vs_source_ela']:+.6f} | {row['dLPIPS_vs_source_ela']:+.6f} |",
         f"| v98b checkpoint-baked negative | {row['v98b_PSNR']:.6f} | {row['v98b_SSIM']:.6f} | {row['v98b_LPIPS']:.6f} | {row['dPSNR_vs_v98b']:+.6f} | {row['dSSIM_vs_v98b']:+.6f} | {row['dLPIPS_vs_v98b']:+.6f} |",
         f"| Phase-J ceiling | {row['phasej_PSNR']:.6f} | {row['phasej_SSIM']:.6f} | {row['phasej_LPIPS']:.6f} | {row['dPSNR_vs_phasej']:+.6f} | {row['dSSIM_vs_phasej']:+.6f} | {row['dLPIPS_vs_phasej']:+.6f} |",
         "",
@@ -304,7 +304,8 @@ def write_markdown(path: Path, payload: dict[str, Any]) -> None:
         "",
         "## Interpretation",
         "",
-        "This v100 artifact converts the strongest Phase-J/ELA render-time repair into a checkpoint-attached endpoint sidecar. "
+        "This v100 artifact packages the existing Phase-J/ELA render-time repair as a checkpoint-attached endpoint sidecar. "
+        "It is a replay/materialization of the Phase-J endpoint, not an independent improvement over Phase-J. "
         "It does not mutate MeshSplatting geometry or select any policy from held-out test GT. On counter it reaches the Phase-J ceiling while preserving the 2.0% compact topology reduction and inherited COLMAP geometry.",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
