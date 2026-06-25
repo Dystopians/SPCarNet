@@ -21,6 +21,8 @@ Both runs completed all 9 scenes with per-scene render/eval return codes equal t
 Additional evidence:
 
 - Target-GT non-use smoke passed: `outputs/carnet/meshsplatopt/ecsr_phase_v101_renderpy_endpoint_full9_20260625/target_gt_nonuse_smoke_counter.json` reports `max_abs_output_diff=0.0` after replacing the target GT path with a dummy nonexistent path.
+- Detached-package validation passed on counter: `outputs/carnet/meshsplatopt/ecsr_phase_v101_detached_package_20260625/counter_detached_package_report.json` reports `used_required_bank=true` and `30/30` render PNG SHA-256 matches against the reference bankfp16 output after forcing the package-local bank and overriding the endpoint base model to a nonexistent path.
+- Detached runtime audit passed on counter: `outputs/carnet/meshsplatopt/ecsr_phase_v101_runtime_audit_20260625/counter_runtime_audit.json` reports standard render `2.238598 sec/view`, v101 require-bank render `4.220285 sec/view`, wall slowdown `1.885235x`, and `used_required_bank=true`.
 - Qualitative comparison panel: `assets/spcarnet_v101_bankfp16_full9_qualitative_panel.png`; manifest: `assets/spcarnet_v101_bankfp16_full9_qualitative_panel_manifest.json`.
 - W&B offline runs:
   - auto endpoint: `/dev/shm/peilincai_spcarnet_v101_renderpy_endpoint_full9_20260625/wandb/wandb/offline-run-20260625_042308-44qa0b99`
@@ -171,6 +173,42 @@ Manifest: `assets/spcarnet_v101_bankfp16_full9_qualitative_panel_manifest.json`
 
 The panel compares local clean MeshSplatting `official_clean30k/<scene>/test/ours_26000` against `ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed` and GT. Rows are selected by held-out LPIPS improvement, and the crop is selected by local absolute-error reduction. It is designed for PPT use because full-frame visual differences are often subtle.
 
+### Detached-package validation
+
+Script: `scripts/car_model/validate_v101_detached_package.py`
+
+Counter report: `outputs/carnet/meshsplatopt/ecsr_phase_v101_detached_package_20260625/counter_detached_package_report.json`
+
+Result:
+
+- `render_rc=0`, `eval_rc=0`
+- detached metrics: `28.442907 PSNR / 0.893696 SSIM / 0.186557 LPIPS`
+- reference metrics: `28.442907 PSNR / 0.893696 SSIM / 0.186557 LPIPS`
+- hash comparison: `30/30` PNG SHA-256 matches, `0` mismatches
+- `used_required_bank=true`
+- `render_support_source=v101_evidence_bank:/dev/shm/peilincai_spcarnet_v101_detached_package_20260625/counter/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/v101_evidence_bank.pt`
+- run-time guard:
+  - `--checkpoint_endpoint_base_model /__spcarnet_detached_package_must_not_read_train_evidence__`
+  - `--checkpoint_endpoint_bank_path <detached package>/v101_evidence_bank.pt`
+  - `--checkpoint_endpoint_require_bank`
+
+This is the strongest evidence that, once the checkpoint/camera files and bank are in the package, render-time support evidence no longer needs the original compact train render folder.
+
+### Runtime audit
+
+Script: `scripts/car_model/benchmark_v101_detached_runtime.py`
+
+Counter report: `outputs/carnet/meshsplatopt/ecsr_phase_v101_runtime_audit_20260625/counter_runtime_audit.json`
+
+| path | views | wall sec | sec/view | return code |
+|---|---:|---:|---:|---:|
+| standard `render.py` | 30 | 67.157954 | 2.238598 | 0 |
+| v101 require-bank `render.py` | 30 | 126.608550 | 4.220285 | 0 |
+
+Wall slowdown: `1.885235x`.
+
+The interpretation should stay conservative: v101 now has a usable packaged deployment path, but it is still slower than a standard render because every target view applies residual warping and gating.
+
 ## 5. Claim boundary
 
 - v101 currently supports a render.py-consuming checkpoint-attached endpoint path plus an optional train-derived evidence bank.
@@ -184,8 +222,8 @@ The panel compares local clean MeshSplatting `official_clean30k/<scene>/test/our
 
 ## 6. Next steps
 
-1. Add a detached-package test: copy only checkpoint links / endpoint report / evidence bank into a fresh directory, temporarily hide the original compact train render folder, and verify `render.py --checkpoint_endpoint_require_bank` still reproduces the outputs.
-2. Add a float32-bank full9 or targeted float32-bank checks for the scenes with the largest fp16 drift (`counter`, `flowers`, `kitchen`) if exact Phase-J parity is needed.
-3. Add a runtime table for auto endpoint versus fp16 bank endpoint. Current evidence supports quality and packaging, not speed.
-4. Keep the paper story explicit: v101 is a render-entrypoint and train-evidence-bank closure over Phase-J/v100, not a checkpoint-baked representation-level final method.
-5. Continue representation-level work separately if the target claim is a vanilla MeshSplatting checkpoint with absorbed repair behavior.
+1. Add a float32-bank full9 or targeted float32-bank checks for the scenes with the largest fp16 drift (`counter`, `flowers`, `kitchen`) if exact Phase-J parity is needed.
+2. Add full9 detached-package validation if storage budget allows; current detached evidence is counter-only but strong.
+3. Keep the paper story explicit: v101 is a render-entrypoint and train-evidence-bank closure over Phase-J/v100, not a checkpoint-baked representation-level final method.
+4. Continue representation-level work separately if the target claim is a vanilla MeshSplatting checkpoint with absorbed repair behavior.
+5. Investigate lower-cost residual-field or preprojected bank variants if runtime becomes a primary paper claim.

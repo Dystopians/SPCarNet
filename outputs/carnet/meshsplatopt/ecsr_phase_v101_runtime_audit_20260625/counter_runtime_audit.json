@@ -1,0 +1,36 @@
+{
+  "claim_boundary": "This benchmark compares standard render.py against v101 require-bank render.py on the same detached package. It measures deployment overhead, not training time or quality.",
+  "iteration": 26000,
+  "model_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_20260625/counter/detached_model",
+  "passed": true,
+  "rows": [
+    {
+      "log_path": "outputs/carnet/meshsplatopt/ecsr_phase_v101_runtime_audit_20260625/counter_runtime_baseline.log",
+      "method": "ours_26000",
+      "name": "standard_render",
+      "returncode": 0,
+      "sec_per_view": 2.238598460269471,
+      "views": 30,
+      "wall_sec": 67.15795380808413
+    },
+    {
+      "bank_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_20260625/counter/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/v101_evidence_bank.pt",
+      "internal_elapsed_sec": 102.25376105308533,
+      "internal_sec_per_view": 3.408458701769511,
+      "log_path": "outputs/carnet/meshsplatopt/ecsr_phase_v101_runtime_audit_20260625/counter_runtime_v101_bank.log",
+      "mean_abs_delta": 0.011392864864319563,
+      "mean_changed_fraction": 0.9990177710851034,
+      "method": "ours_26000_v101_detached_runtime_bank",
+      "name": "v101_require_bank_render",
+      "returncode": 0,
+      "sec_per_view": 4.2202850118900335,
+      "support_source": "v101_evidence_bank:/dev/shm/peilincai_spcarnet_v101_detached_package_20260625/counter/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/v101_evidence_bank.pt",
+      "used_required_bank": true,
+      "views": 30,
+      "wall_sec": 126.60855035670102
+    }
+  ],
+  "scene": "counter",
+  "schema_version": 1,
+  "slowdown_wall": 1.885235376862547
+}
