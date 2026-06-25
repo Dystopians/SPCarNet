@@ -247,6 +247,11 @@ def _load_surface_residual_field(path, report_path, endpoint_method):
         if not torch.is_tensor(coeffs) or coeffs.ndim != 3 or tuple(coeffs.shape[1:]) != (3, 3):
             raise RuntimeError("v102 surface residual field has invalid triangle_coefficients")
         triangle_count = int(coeffs.shape[0])
+    elif basis_type == "affine_barycentric_viewdir":
+        coeffs = payload.get("triangle_coefficients", None)
+        if not torch.is_tensor(coeffs) or coeffs.ndim != 3 or tuple(coeffs.shape[1:]) != (6, 3):
+            raise RuntimeError("v102 surface residual field has invalid view-conditioned triangle_coefficients")
+        triangle_count = int(coeffs.shape[0])
     else:
         residuals = payload.get("triangle_residuals", None)
         if not torch.is_tensor(residuals) or residuals.ndim != 2 or int(residuals.shape[1]) != 3:
@@ -279,7 +284,7 @@ def _downsample_rend_ids_nearest(rend_ids, target_hw):
     return sampled.long()
 
 
-def _surface_affine_basis(flat_ids, pixel_yx, pkg, triangles, *, device):
+def _surface_affine_basis(flat_ids, pixel_yx, pkg, triangles, *, device, view=None, include_viewdir=False):
     if triangles is None:
         raise RuntimeError("affine surface residual field requires TriangleModel topology")
     image_2d = pkg.get("image_2D", None)
@@ -303,15 +308,27 @@ def _surface_affine_basis(flat_ids, pixel_yx, pkg, triangles, *, device):
     w1 = ((c[:, 1] - a[:, 1]) * (p[:, 0] - c[:, 0]) + (a[:, 0] - c[:, 0]) * (p[:, 1] - c[:, 1])) / denom
     w0 = torch.where(safe, w0, torch.zeros_like(w0))
     w1 = torch.where(safe, w1, torch.zeros_like(w1))
-    return torch.stack([torch.ones_like(w0), w0, w1], dim=1)
+    if not include_viewdir:
+        return torch.stack([torch.ones_like(w0), w0, w1], dim=1)
+    if view is None:
+        raise RuntimeError("view-conditioned affine surface residual field requires the current camera view")
+    vertices = triangles.get_vertices.to(device=device, dtype=torch.float32)
+    centers = vertices[tri_vertices].mean(dim=1)
+    camera_center = view.camera_center.to(device=device, dtype=torch.float32)
+    direction = camera_center.unsqueeze(0) - centers
+    direction = direction / direction.norm(dim=1, keepdim=True).clamp_min(1e-8)
+    return torch.cat([torch.stack([torch.ones_like(w0), w0, w1], dim=1), direction], dim=1)
 
 
-def _apply_surface_residual_field(rendering, pkg, field, *, device, triangles=None):
+def _apply_surface_residual_field(rendering, pkg, field, *, device, triangles=None, view=None):
     rend_ids = pkg.get("rend_ids") if isinstance(pkg, dict) else pkg
     if rend_ids is None:
         raise RuntimeError("surface residual field endpoint requires renderer package key 'rend_ids'")
     basis_type = str(field.get("basis_type", "constant") or "constant")
     if basis_type == "affine_barycentric":
+        residuals = field["triangle_coefficients"].to(device=device, dtype=torch.float32)
+        triangle_count = int(residuals.shape[0])
+    elif basis_type == "affine_barycentric_viewdir":
         residuals = field["triangle_coefficients"].to(device=device, dtype=torch.float32)
         triangle_count = int(residuals.shape[0])
     else:
@@ -331,8 +348,23 @@ def _apply_surface_residual_field(rendering, pkg, field, *, device, triangles=No
             pixel_yx = valid.nonzero(as_tuple=False)
             basis = _surface_affine_basis(flat_ids, pixel_yx, pkg, triangles, device=device)
             values = torch.einsum("nf,nfc->nc", basis, residuals[flat_ids])
+        elif basis_type == "affine_barycentric_viewdir":
+            pixel_yx = valid.nonzero(as_tuple=False)
+            basis = _surface_affine_basis(
+                flat_ids,
+                pixel_yx,
+                pkg,
+                triangles,
+                device=device,
+                view=view,
+                include_viewdir=True,
+            )
+            values = torch.einsum("nf,nfc->nc", basis, residuals[flat_ids])
         else:
             values = residuals[flat_ids]
+        residual_clip = float(field.get("residual_clip", 0.0) or 0.0)
+        if residual_clip > 0.0:
+            values = values.clamp(min=-residual_clip, max=residual_clip)
         residual_map.permute(1, 2, 0)[valid] = values
     adapted = torch.clamp(rendering + residual_map, 0.0, 1.0)
     return adapted, {
@@ -597,6 +629,7 @@ def _render_endpoint_set(model_path, name, iteration, views, triangles, pipeline
                 surface_field,
                 device=rendering.device,
                 triangles=triangles,
+                view=view,
             )
         elif use_preprojected_bank:
             if key not in preprojected_deltas:

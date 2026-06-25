@@ -1,0 +1,93 @@
+{
+  "created_at": "2026-06-25",
+  "status": "counter_smoke_passed",
+  "method": {
+    "name": "v104a_view_affine_min_count_1",
+    "basis_type": "affine_barycentric_viewdir",
+    "basis_order": [
+      "1",
+      "barycentric_0",
+      "barycentric_1",
+      "viewdir_x",
+      "viewdir_y",
+      "viewdir_z"
+    ],
+    "renderer_scaling": 4,
+    "min_count": 1,
+    "ridge": 0.001,
+    "residual_clip": 0.08,
+    "residual_dtype": "float16",
+    "claim_boundary": "Counter-only same-target-camera surface-field smoke. Not hard-triad, not full9, not unseen-camera generalization, and not final paper closure."
+  },
+  "paths": {
+    "model": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/counter/detached_model",
+    "source_delta_bank": "/dev/shm/peilincai_spcarnet_v102_preprojected_delta_bank_20260625/counter/v102_preprojected_delta_bank.pt",
+    "field": "/dev/shm/peilincai_spcarnet_v104_view_affine_field_20260625/counter/v104_view_affine_min1_field.pt",
+    "manifest": "/dev/shm/peilincai_spcarnet_v104_view_affine_field_20260625/counter/v104_view_affine_min1_field.manifest.json",
+    "render_report": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/counter/detached_model/test/ours_26000_v104a_view_affine_min1_counter/render_py_endpoint_report.json",
+    "results": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/counter/detached_model/results.json"
+  },
+  "metrics": {
+    "clean_counter_reference": {
+      "PSNR": 26.751773834,
+      "SSIM": 0.862055242,
+      "LPIPS": 0.252003312
+    },
+    "v103_affine_min_count_1": {
+      "PSNR": 27.208200454711914,
+      "SSIM": 0.8634048700332642,
+      "LPIPS": 0.24317626655101776
+    },
+    "v104a_view_affine_min_count_1": {
+      "method": "ours_26000_v104a_view_affine_min1_counter",
+      "PSNR": 27.49237823486328,
+      "SSIM": 0.8673436641693115,
+      "LPIPS": 0.23900321125984192
+    },
+    "v101_v102a_endpoint_ceiling": {
+      "PSNR": 28.442907333374023,
+      "SSIM": 0.8936957120895386,
+      "LPIPS": 0.18655678629875183
+    }
+  },
+  "deltas": {
+    "v104a_minus_clean": {
+      "dPSNR": 0.7406044008632797,
+      "dSSIM": 0.005288422169311469,
+      "dLPIPS": -0.01300010074015806
+    },
+    "v104a_minus_v103": {
+      "dPSNR": 0.2841777801513672,
+      "dSSIM": 0.003938794136047363,
+      "dLPIPS": -0.004173055291175842
+    },
+    "v104a_minus_v101_v102a": {
+      "dPSNR": -0.9505290985107422,
+      "dSSIM": -0.02635204792022705,
+      "dLPIPS": 0.05244642496109009
+    }
+  },
+  "field": {
+    "valid_triangles": 2716436,
+    "triangle_count": 9644247,
+    "valid_triangle_fraction": 0.2816638648509979,
+    "total_accumulated_pixels": 48475697,
+    "build_elapsed_sec": 447.0348515510559,
+    "field_size_mib": 433,
+    "solve_failures": 0
+  },
+  "render": {
+    "target_frames": 30,
+    "elapsed_sec": 50.492764711380005,
+    "mean_surface_valid_fraction": 0.9990420321623484,
+    "mean_abs_delta": 0.008267336587111155,
+    "mean_changed_fraction": 0.9989963372548422,
+    "intermediate_outputs_saved": false,
+    "no_test_gt_used_for_policy": true
+  },
+  "smoke_gate": {
+    "threshold": "not worse than v103 min_count=1 on all three metrics and at least one strict improvement",
+    "passed": true
+  },
+  "next_required_step": "Run hard-triad validation on kitchen and bonsai. If it regresses, implement v104b centered view features and v103 fallback."
+}
