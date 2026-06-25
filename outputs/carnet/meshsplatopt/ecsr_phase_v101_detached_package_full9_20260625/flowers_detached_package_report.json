@@ -1,0 +1,45 @@
+{
+  "claim": "render.py was run with --checkpoint_endpoint_require_bank, an explicit package bank path, and --checkpoint_endpoint_base_model set to a nonexistent path, so support evidence must come from the package bank.",
+  "elapsed_sec": 96.81323981285095,
+  "eval_rc": 0,
+  "hash_report": {
+    "common_count": 22,
+    "hash_match_count": 22,
+    "hash_mismatch_count": 0,
+    "hash_mismatches": [],
+    "reference_count": 22,
+    "render_count": 22
+  },
+  "log_path": "outputs/carnet/meshsplatopt/ecsr_phase_v101_detached_package_full9_20260625/flowers_detached_package.log",
+  "method": "ours_26000_v101_detached_package_full9_flowers",
+  "package": {
+    "bank_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/flowers/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/v101_evidence_bank.pt",
+    "bank_sha256": "552f2776ed181c6c793ec6a951d7102230723850224f1d4f6d010fd1ac193ba5",
+    "checkpoint_sha256": "21fdfe3822a2bab8b00cb24349902a047f76b4a2e66157d76d559bc3877025b3",
+    "detached_base_model_override": "/__spcarnet_detached_package_must_not_read_train_evidence__",
+    "endpoint_dir": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/flowers/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint",
+    "endpoint_report": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/flowers/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/ela_report.json",
+    "endpoint_report_sha256": "d4cbb42b0037972e0d1806b5ecbee9e0311c39d914a17e35363e3636f2d1c20a",
+    "package_model": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/flowers/detached_model",
+    "scene": "flowers",
+    "source_model": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/flowers/recovery_model"
+  },
+  "passed": true,
+  "reference_method": "ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed",
+  "reference_results": {
+    "LPIPS": 0.3295125365257263,
+    "PSNR": 20.300580978393555,
+    "SSIM": 0.5574560761451721
+  },
+  "render_rc": 0,
+  "render_report_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/flowers/detached_model/test/ours_26000_v101_detached_package_full9_flowers/render_py_endpoint_report.json",
+  "render_support_source": "v101_evidence_bank:/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/flowers/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/v101_evidence_bank.pt",
+  "results": {
+    "LPIPS": 0.3295125365257263,
+    "PSNR": 20.300580978393555,
+    "SSIM": 0.5574560761451721
+  },
+  "scene": "flowers",
+  "schema_version": 1,
+  "used_required_bank": true
+}

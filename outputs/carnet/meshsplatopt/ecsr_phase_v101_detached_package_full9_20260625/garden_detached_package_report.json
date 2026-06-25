@@ -1,0 +1,45 @@
+{
+  "claim": "render.py was run with --checkpoint_endpoint_require_bank, an explicit package bank path, and --checkpoint_endpoint_base_model set to a nonexistent path, so support evidence must come from the package bank.",
+  "elapsed_sec": 109.91791939735413,
+  "eval_rc": 0,
+  "hash_report": {
+    "common_count": 24,
+    "hash_match_count": 24,
+    "hash_mismatch_count": 0,
+    "hash_mismatches": [],
+    "reference_count": 24,
+    "render_count": 24
+  },
+  "log_path": "outputs/carnet/meshsplatopt/ecsr_phase_v101_detached_package_full9_20260625/garden_detached_package.log",
+  "method": "ours_26000_v101_detached_package_full9_garden",
+  "package": {
+    "bank_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/garden/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/v101_evidence_bank.pt",
+    "bank_sha256": "1e7007f72d4639c4ecd2ab28a3e41f99b9487486046e0257c312b11e02edc7d7",
+    "checkpoint_sha256": "2436fcd3211d26197d1a6df2ed212dcfc9b23e00b084b90a9ba1d6aa9433d1fd",
+    "detached_base_model_override": "/__spcarnet_detached_package_must_not_read_train_evidence__",
+    "endpoint_dir": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/garden/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint",
+    "endpoint_report": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/garden/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/ela_report.json",
+    "endpoint_report_sha256": "23a6757e6df7f911f0d50620b5be58557f1cbb3e10d85ad18b7243c7ad91826a",
+    "package_model": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/garden/detached_model",
+    "scene": "garden",
+    "source_model": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/garden/recovery_model"
+  },
+  "passed": true,
+  "reference_method": "ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed",
+  "reference_results": {
+    "LPIPS": 0.13586343824863434,
+    "PSNR": 26.310476303100586,
+    "SSIM": 0.8278298377990723
+  },
+  "render_rc": 0,
+  "render_report_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/garden/detached_model/test/ours_26000_v101_detached_package_full9_garden/render_py_endpoint_report.json",
+  "render_support_source": "v101_evidence_bank:/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/garden/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/v101_evidence_bank.pt",
+  "results": {
+    "LPIPS": 0.13586343824863434,
+    "PSNR": 26.310476303100586,
+    "SSIM": 0.8278298377990723
+  },
+  "scene": "garden",
+  "schema_version": 1,
+  "used_required_bank": true
+}

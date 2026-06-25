@@ -37,6 +37,7 @@ The claim must stay narrow:
 | v101 `render.py` endpoint hook | Loads endpoint report, recomputes target base renders, applies guarded residual transfer, writes endpoint renders | full9 auto endpoint and require-bank fp16 endpoint both complete with zero render/eval return codes |
 | v101 evidence bank builder | Stores train-derived residuals, depths, cameras, hashes, and manifest beside the endpoint | require-bank fp16 full9 builds and consumes scene-specific banks for all 9 scenes |
 | Detached-package validator | Tests whether the package can run without reading original train evidence folders | counter detached package passes with `used_required_bank=true` and `30/30` PNG SHA-256 matches after forcing the package-local bank and overriding the endpoint base model to a nonexistent path |
+| Full9 detached-package validation | Validates every local full9 detached package against the bankfp16 reference | `all_present=true`, `all_passed=true`, `all_used_required_bank=true`, `all_hash_exact=true`, mean reference delta `0.000000 / 0.000000 / 0.000000` |
 | Runtime audit | Measures deploy-time overhead | counter standard render: `2.238598 sec/view`; v101 require-bank render: `4.220285 sec/view` |
 
 The key paper-facing distinction from generic image postprocessing is that the residual evidence is selected from train/support views and transferred through the existing MeshSplatting surface/camera/depth evidence path. The key limitation is that the endpoint still performs this transfer at render time.
@@ -65,6 +66,7 @@ Counter-specific supporting checks:
 - Float32 bank/non-bank render.py endpoint paths reproduce v100 on counter with `30/30` render PNG SHA-256 matches.
 - Target-GT non-use smoke reports `max_abs_output_diff=0.0` after replacing the target GT path with a dummy nonexistent path.
 - Detached-package counter validation reports identical metrics to the reference bankfp16 output and `30/30` PNG hash matches.
+- Full9 detached-package validation reports `9/9` exact package reproductions, all with `used_required_bank=true` and exact PNG hash matches against the bankfp16 render.py endpoint reference.
 
 ## 3. Qualitative Evidence
 
@@ -106,8 +108,8 @@ Paper wording should say that v101 "builds on MeshSplatting" or "adds an evidenc
 2. Runtime is worse than standard render.
    The counter audit measures `4.220285 sec/view` for v101 require-bank versus `2.238598 sec/view` for standard render on the detached package. This blocks speed/deployment-efficiency claims.
 
-3. Full9 detached packaging is not closed.
-   Counter detached-package validation is strong, but full9 detached-package validation is still missing.
+3. Float32 parity against Phase-J itself is not closed.
+   Full9 detached packaging is now closed against the fp16 bank reference, but the fp16 bank still has tiny Phase-J drift. A float32 full9 bank or targeted float32 checks are needed only if the paper wants exact Phase-J parity rather than exact deployed-package parity.
 
 4. fp16 bank has small Phase-J drift.
    The biggest observed dPSNR drifts are on `counter`, `flowers`, and `kitchen`. If exact Phase-J parity matters, add float32-bank checks for those scenes or a full9 float32 bank run.
@@ -133,13 +135,12 @@ Recommended paper hierarchy:
 1. Main method: evidence-certified post-training repair and compaction for MeshSplatting checkpoints.
 2. Main local result: full9 gains over selected clean MeshSplatting under the same local evaluator.
 3. Deployment artifact closure: v101 `render.py` endpoint plus forceable evidence bank.
-4. Limitations: render-time overhead, not a vanilla baked checkpoint, full9 detached package still pending.
+4. Limitations: render-time overhead, not a vanilla baked checkpoint, tiny fp16 drift versus Phase-J.
 
 ## 7. Next Actions
 
 P0:
 
-- Run full9 detached-package validation, or at least hard-triad detached validation on `counter/kitchen/bonsai`.
 - Add float32-bank targeted checks for `counter`, `flowers`, and `kitchen` if exact Phase-J parity is needed.
 - Create a final claim-to-artifact manifest that maps each table/figure sentence to an exact output path and command.
 

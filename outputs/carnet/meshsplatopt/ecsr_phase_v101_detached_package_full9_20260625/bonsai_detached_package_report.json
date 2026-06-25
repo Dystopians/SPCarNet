@@ -1,0 +1,45 @@
+{
+  "claim": "render.py was run with --checkpoint_endpoint_require_bank, an explicit package bank path, and --checkpoint_endpoint_base_model set to a nonexistent path, so support evidence must come from the package bank.",
+  "elapsed_sec": 220.53595614433289,
+  "eval_rc": 0,
+  "hash_report": {
+    "common_count": 37,
+    "hash_match_count": 37,
+    "hash_mismatch_count": 0,
+    "hash_mismatches": [],
+    "reference_count": 37,
+    "render_count": 37
+  },
+  "log_path": "outputs/carnet/meshsplatopt/ecsr_phase_v101_detached_package_full9_20260625/bonsai_detached_package.log",
+  "method": "ours_26000_v101_detached_package_full9_bonsai",
+  "package": {
+    "bank_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/bonsai/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/v101_evidence_bank.pt",
+    "bank_sha256": "9d58c6aca0a2e03cfc2ebcdd4c635f14cd70fe5ec521e0e0b6441b4fbfd18cf3",
+    "checkpoint_sha256": "5c7ccd925f672cd4f416fd6f4c1f1923a09cd487cc60070893a8913f5a676f8c",
+    "detached_base_model_override": "/__spcarnet_detached_package_must_not_read_train_evidence__",
+    "endpoint_dir": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/bonsai/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint",
+    "endpoint_report": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/bonsai/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/ela_report.json",
+    "endpoint_report_sha256": "77f9aaf1170963c0211797c830ef8b354de2336833cba246fa056cbd94556c77",
+    "package_model": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/bonsai/detached_model",
+    "scene": "bonsai",
+    "source_model": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/bonsai/recovery_model"
+  },
+  "passed": true,
+  "reference_method": "ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed",
+  "reference_results": {
+    "LPIPS": 0.17256629467010498,
+    "PSNR": 31.86188316345215,
+    "SSIM": 0.9302756786346436
+  },
+  "render_rc": 0,
+  "render_report_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/bonsai/detached_model/test/ours_26000_v101_detached_package_full9_bonsai/render_py_endpoint_report.json",
+  "render_support_source": "v101_evidence_bank:/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/bonsai/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/v101_evidence_bank.pt",
+  "results": {
+    "LPIPS": 0.17256629467010498,
+    "PSNR": 31.86188316345215,
+    "SSIM": 0.9302756786346436
+  },
+  "scene": "bonsai",
+  "schema_version": 1,
+  "used_required_bank": true
+}

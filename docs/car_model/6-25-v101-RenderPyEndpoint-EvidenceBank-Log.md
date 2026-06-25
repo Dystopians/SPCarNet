@@ -22,6 +22,7 @@ Additional evidence:
 
 - Target-GT non-use smoke passed: `outputs/carnet/meshsplatopt/ecsr_phase_v101_renderpy_endpoint_full9_20260625/target_gt_nonuse_smoke_counter.json` reports `max_abs_output_diff=0.0` after replacing the target GT path with a dummy nonexistent path.
 - Detached-package validation passed on counter: `outputs/carnet/meshsplatopt/ecsr_phase_v101_detached_package_20260625/counter_detached_package_report.json` reports `used_required_bank=true` and `30/30` render PNG SHA-256 matches against the reference bankfp16 output after forcing the package-local bank and overriding the endpoint base model to a nonexistent path.
+- Full9 detached-package validation passed: `outputs/carnet/meshsplatopt/ecsr_phase_v101_detached_package_full9_20260625/v101_detached_package_full9_summary.json` reports `all_present=true`, `all_passed=true`, `all_used_required_bank=true`, and `all_hash_exact=true`; mean delta against the bankfp16 render.py endpoint reference is exactly `0.000000 / 0.000000 / 0.000000`.
 - Detached runtime audit passed on counter: `outputs/carnet/meshsplatopt/ecsr_phase_v101_runtime_audit_20260625/counter_runtime_audit.json` reports standard render `2.238598 sec/view`, v101 require-bank render `4.220285 sec/view`, wall slowdown `1.885235x`, and `used_required_bank=true`.
 - Qualitative comparison panel: `assets/spcarnet_v101_bankfp16_full9_qualitative_panel.png`; manifest: `assets/spcarnet_v101_bankfp16_full9_qualitative_panel_manifest.json`.
 - W&B offline runs:
@@ -209,6 +210,35 @@ Wall slowdown: `1.885235x`.
 
 The interpretation should stay conservative: v101 now has a usable packaged deployment path, but it is still slower than a standard render because every target view applies residual warping and gating.
 
+### Full9 detached-package validation
+
+Script: `scripts/car_model/summarize_v101_detached_package_full9.py`
+
+Summary: `outputs/carnet/meshsplatopt/ecsr_phase_v101_detached_package_full9_20260625/v101_detached_package_full9_summary.json`
+
+Result:
+
+- `all_present=true`
+- `all_passed=true`
+- `all_used_required_bank=true`
+- `all_hash_exact=true`
+- mean PSNR / SSIM / LPIPS: `26.481309 / 0.783675 / 0.224305`
+- mean delta vs bankfp16 reference: `0.000000 / 0.000000 / 0.000000`
+
+| scene | hash exact | PSNR | SSIM | LPIPS |
+|---|---:|---:|---:|---:|
+| bicycle | `25/25` | 24.021442 | 0.702352 | 0.266102 |
+| flowers | `22/22` | 20.300581 | 0.557456 | 0.329513 |
+| garden | `24/24` | 26.310476 | 0.827830 | 0.135863 |
+| stump | `16/16` | 25.595201 | 0.724082 | 0.263924 |
+| treehill | `18/18` | 21.296227 | 0.595606 | 0.336322 |
+| room | `39/39` | 30.305668 | 0.905688 | 0.195890 |
+| counter | `30/30` | 28.442907 | 0.893696 | 0.186557 |
+| kitchen | `35/35` | 30.197395 | 0.916093 | 0.132004 |
+| bonsai | `37/37` | 31.861883 | 0.930276 | 0.172566 |
+
+This closes the v101 deployment-package evidence gap across the local full9 set: the detached packages reproduce the strict bankfp16 render.py endpoint outputs exactly while forcing package-local bank evidence.
+
 ## 5. Claim boundary
 
 - v101 currently supports a render.py-consuming checkpoint-attached endpoint path plus an optional train-derived evidence bank.
@@ -222,8 +252,7 @@ The interpretation should stay conservative: v101 now has a usable packaged depl
 
 ## 6. Next steps
 
-1. Add a float32-bank full9 or targeted float32-bank checks for the scenes with the largest fp16 drift (`counter`, `flowers`, `kitchen`) if exact Phase-J parity is needed.
-2. Add full9 detached-package validation if storage budget allows; current detached evidence is counter-only but strong.
-3. Keep the paper story explicit: v101 is a render-entrypoint and train-evidence-bank closure over Phase-J/v100, not a checkpoint-baked representation-level final method.
-4. Continue representation-level work separately if the target claim is a vanilla MeshSplatting checkpoint with absorbed repair behavior.
-5. Investigate lower-cost residual-field or preprojected bank variants if runtime becomes a primary paper claim.
+1. Add a float32-bank full9 or targeted float32-bank checks for the scenes with the largest fp16 drift (`counter`, `flowers`, `kitchen`) if exact Phase-J parity against Phase-J itself is needed.
+2. Keep the paper story explicit: v101 is a render-entrypoint and train-evidence-bank closure over Phase-J/v100, not a checkpoint-baked representation-level final method.
+3. Continue representation-level work separately if the target claim is a vanilla MeshSplatting checkpoint with absorbed repair behavior.
+4. Investigate lower-cost residual-field or preprojected bank variants if runtime becomes a primary paper claim.
