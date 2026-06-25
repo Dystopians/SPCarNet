@@ -1,0 +1,102 @@
+{
+  "method": "ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed",
+  "panel": "assets/spcarnet_v101_bankfp16_full9_qualitative_panel.png",
+  "rows": [
+    {
+      "clean_render": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/kitchen/test/ours_26000/renders/00024.png",
+      "crop_xywh": [
+        885,
+        110,
+        360,
+        240
+      ],
+      "gt": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/kitchen/recovery_model/test/ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed/gt/00024.png",
+      "lpips_improvement_clean_minus_v101": 0.11236648261547089,
+      "mean_crop_abs_error_reduction": 0.035219982266426086,
+      "psnr_improvement_v101_minus_clean": 5.882453918457031,
+      "scene": "kitchen",
+      "v101_render": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/kitchen/recovery_model/test/ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed/renders/00024.png",
+      "view": "00024.png"
+    },
+    {
+      "clean_render": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/treehill/test/ours_26000/renders/00010.png",
+      "crop_xywh": [
+        845,
+        30,
+        360,
+        240
+      ],
+      "gt": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/treehill/recovery_model/test/ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed/gt/00010.png",
+      "lpips_improvement_clean_minus_v101": 0.10615777969360352,
+      "mean_crop_abs_error_reduction": 0.012919921427965164,
+      "psnr_improvement_v101_minus_clean": 0.8554954528808594,
+      "scene": "treehill",
+      "v101_render": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/treehill/recovery_model/test/ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed/renders/00010.png",
+      "view": "00010.png"
+    },
+    {
+      "clean_render": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/flowers/test/ours_26000/renders/00014.png",
+      "crop_xywh": [
+        445,
+        390,
+        360,
+        240
+      ],
+      "gt": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/flowers/recovery_model/test/ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed/gt/00014.png",
+      "lpips_improvement_clean_minus_v101": 0.10257616639137268,
+      "mean_crop_abs_error_reduction": 0.02261193096637726,
+      "psnr_improvement_v101_minus_clean": 1.1159934997558594,
+      "scene": "flowers",
+      "v101_render": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/flowers/recovery_model/test/ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed/renders/00014.png",
+      "view": "00014.png"
+    },
+    {
+      "clean_render": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/bicycle/test/ours_26000/renders/00011.png",
+      "crop_xywh": [
+        405,
+        550,
+        360,
+        240
+      ],
+      "gt": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/bicycle/recovery_model/test/ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed/gt/00011.png",
+      "lpips_improvement_clean_minus_v101": 0.09648263454437256,
+      "mean_crop_abs_error_reduction": 0.007575965486466885,
+      "psnr_improvement_v101_minus_clean": 0.7699470520019531,
+      "scene": "bicycle",
+      "v101_render": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/bicycle/recovery_model/test/ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed/renders/00011.png",
+      "view": "00011.png"
+    },
+    {
+      "clean_render": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/room/test/ours_26000/renders/00015.png",
+      "crop_xywh": [
+        845,
+        150,
+        360,
+        240
+      ],
+      "gt": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/room/recovery_model/test/ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed/gt/00015.png",
+      "lpips_improvement_clean_minus_v101": 0.0961085855960846,
+      "mean_crop_abs_error_reduction": 0.024438481777906418,
+      "psnr_improvement_v101_minus_clean": 3.3204116821289062,
+      "scene": "room",
+      "v101_render": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/room/recovery_model/test/ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed/renders/00015.png",
+      "view": "00015.png"
+    },
+    {
+      "clean_render": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/counter/test/ours_26000/renders/00007.png",
+      "crop_xywh": [
+        285,
+        150,
+        360,
+        240
+      ],
+      "gt": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/counter/recovery_model/test/ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed/gt/00007.png",
+      "lpips_improvement_clean_minus_v101": 0.09064914286136627,
+      "mean_crop_abs_error_reduction": 0.024733994156122208,
+      "psnr_improvement_v101_minus_clean": 3.509815216064453,
+      "scene": "counter",
+      "v101_render": "/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/counter/recovery_model/test/ours_26000_v101_bankfp16_renderpy_endpoint_full9_fixed/renders/00007.png",
+      "view": "00007.png"
+    }
+  ]
+}

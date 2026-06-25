@@ -1,0 +1,11 @@
+{
+  "dummy_gt_path": "/tmp/spcarnet_target_gt_must_not_be_read.png",
+  "max_abs_output_diff": 0.0,
+  "mean_abs_output_diff": 0.0,
+  "passed": true,
+  "scene": "counter",
+  "support_count_a": 4,
+  "support_count_b": 4,
+  "support_source": "v101_evidence_bank:/dev/shm/peilincai_spcarnet_v100_checkpoint_attached_ela_full9_fixed_20260625/counter/recovery_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/v101_evidence_bank.pt",
+  "target_name": "00000"
+}
