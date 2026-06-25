@@ -252,11 +252,34 @@ def _load_surface_residual_field(path, report_path, endpoint_method):
         if not torch.is_tensor(coeffs) or coeffs.ndim != 3 or tuple(coeffs.shape[1:]) != (6, 3):
             raise RuntimeError("v102 surface residual field has invalid view-conditioned triangle_coefficients")
         triangle_count = int(coeffs.shape[0])
-    else:
+    elif basis_type == "affine_barycentric_viewdir_mixture":
+        base = payload.get("triangle_base_coefficients", None)
+        delta = payload.get("triangle_delta_coefficients", None)
+        gate = payload.get("triangle_gate", None)
+        if not torch.is_tensor(base) or base.ndim != 3 or tuple(base.shape[1:]) != (6, 3):
+            raise RuntimeError("v102 surface residual field has invalid mixture triangle_base_coefficients")
+        if not torch.is_tensor(delta) or delta.ndim != 3 or tuple(delta.shape) != tuple(base.shape):
+            raise RuntimeError("v102 surface residual field has invalid mixture triangle_delta_coefficients")
+        if not torch.is_tensor(gate) or gate.ndim != 1 or int(gate.numel()) != int(base.shape[0]):
+            raise RuntimeError("v102 surface residual field has invalid mixture triangle_gate")
+        view_means = payload.get("triangle_view_means", None)
+        view_scales = payload.get("triangle_view_scales", None)
+        if view_means is not None and (
+            not torch.is_tensor(view_means) or view_means.ndim != 2 or tuple(view_means.shape) != (int(base.shape[0]), 3)
+        ):
+            raise RuntimeError("v102 surface residual field has invalid mixture triangle_view_means")
+        if view_scales is not None and (
+            not torch.is_tensor(view_scales) or view_scales.ndim != 2 or tuple(view_scales.shape) != (int(base.shape[0]), 3)
+        ):
+            raise RuntimeError("v102 surface residual field has invalid mixture triangle_view_scales")
+        triangle_count = int(base.shape[0])
+    elif basis_type in {"", "constant"}:
         residuals = payload.get("triangle_residuals", None)
         if not torch.is_tensor(residuals) or residuals.ndim != 2 or int(residuals.shape[1]) != 3:
             raise RuntimeError("v102 surface residual field has invalid triangle_residuals")
         triangle_count = int(residuals.shape[0])
+    else:
+        raise RuntimeError(f"unsupported surface residual field basis_type: {basis_type}")
     counts = payload.get("triangle_counts", None)
     if counts is not None and (not torch.is_tensor(counts) or int(counts.numel()) != triangle_count):
         raise RuntimeError("v102 surface residual field triangle_counts mismatch")
@@ -331,9 +354,23 @@ def _apply_surface_residual_field(rendering, pkg, field, *, device, triangles=No
     elif basis_type == "affine_barycentric_viewdir":
         residuals = field["triangle_coefficients"].to(device=device, dtype=torch.float32)
         triangle_count = int(residuals.shape[0])
-    else:
+    elif basis_type == "affine_barycentric_viewdir_mixture":
+        base_coeffs = field["triangle_base_coefficients"].to(device=device, dtype=torch.float32)
+        delta_coeffs = field["triangle_delta_coefficients"].to(device=device, dtype=torch.float32)
+        gate = field["triangle_gate"].to(device=device, dtype=torch.float32).clamp(0.0, 1.0)
+        view_means = field.get("triangle_view_means", None)
+        view_scales = field.get("triangle_view_scales", None)
+        if view_means is not None:
+            view_means = view_means.to(device=device, dtype=torch.float32)
+        if view_scales is not None:
+            view_scales = view_scales.to(device=device, dtype=torch.float32).clamp_min(1e-6)
+        residuals = base_coeffs
+        triangle_count = int(base_coeffs.shape[0])
+    elif basis_type in {"", "constant"}:
         residuals = field["triangle_residuals"].to(device=device, dtype=torch.float32)
         triangle_count = int(residuals.shape[0])
+    else:
+        raise RuntimeError(f"unsupported surface residual field basis_type: {basis_type}")
     counts = field.get("triangle_counts", None)
     if counts is not None:
         counts = counts.to(device=device)
@@ -360,6 +397,27 @@ def _apply_surface_residual_field(rendering, pkg, field, *, device, triangles=No
                 include_viewdir=True,
             )
             values = torch.einsum("nf,nfc->nc", basis, residuals[flat_ids])
+        elif basis_type == "affine_barycentric_viewdir_mixture":
+            pixel_yx = valid.nonzero(as_tuple=False)
+            basis = _surface_affine_basis(
+                flat_ids,
+                pixel_yx,
+                pkg,
+                triangles,
+                device=device,
+                view=view,
+                include_viewdir=True,
+            )
+            base_values = torch.einsum("nf,nfc->nc", basis, base_coeffs[flat_ids])
+            delta_values = torch.einsum("nf,nfc->nc", basis, delta_coeffs[flat_ids])
+            gate_values = gate[flat_ids]
+            temperature = float(field.get("view_gate_temperature", 0.0) or 0.0)
+            if temperature > 0.0 and view_means is not None and view_scales is not None:
+                viewdir = basis[:, 3:6]
+                z2 = ((viewdir - view_means[flat_ids]) / view_scales[flat_ids]).square().mean(dim=1)
+                view_gate = torch.exp(-0.5 * z2 / temperature).clamp(0.0, 1.0)
+                gate_values = gate_values * (0.5 + 0.5 * view_gate)
+            values = base_values + gate_values[:, None] * delta_values
         else:
             values = residuals[flat_ids]
         residual_clip = float(field.get("residual_clip", 0.0) or 0.0)
@@ -427,12 +485,36 @@ def _load_endpoint_runtime(
         surface_field_manifest = {
             "field_path": str(surface_field_path),
             "field_sha256": _sha256(surface_field_path),
+            "schema_version": int(surface_field.get("schema_version", 0) or 0),
+            "field_type": str(surface_field.get("field_type", "") or ""),
+            "basis_type": str(surface_field.get("basis_type", "") or ""),
+            "builder_variant": str(surface_field.get("builder_variant", "") or ""),
             "triangle_count": int(surface_field.get("triangle_count", 0) or 0),
             "valid_triangles": int(surface_field.get("valid_triangles", 0) or 0),
+            "render_min_count_valid_triangles": int(
+                surface_field.get("render_min_count_valid_triangles", 0) or 0
+            ),
+            "min_count": int(surface_field.get("min_count", 0) or 0),
+            "min_views": int(surface_field.get("min_views", 0) or 0),
+            "ridge": float(surface_field.get("ridge", 0.0) or 0.0),
+            "view_std_floor": float(surface_field.get("view_std_floor", 0.0) or 0.0),
+            "rank_rtol": float(surface_field.get("rank_rtol", 0.0) or 0.0),
+            "condition_max": float(surface_field.get("condition_max", 0.0) or 0.0),
+            "gate_boost": float(surface_field.get("gate_boost", 0.0) or 0.0),
+            "gate_source": str(surface_field.get("gate_source", "") or ""),
+            "view_gate_temperature": float(surface_field.get("view_gate_temperature", 0.0) or 0.0),
+            "renderer_scaling": int(surface_field.get("renderer_scaling", 0) or 0),
+            "residual_clip": float(surface_field.get("residual_clip", 0.0) or 0.0),
             "residual_dtype": str(surface_field.get("residual_dtype", "")),
             "endpoint_report_sha256": str(surface_field.get("endpoint_report_sha256", "") or ""),
             "source_delta_bank_sha256": str(surface_field.get("source_delta_bank_sha256", "") or ""),
+            "source_target_frames": int(surface_field.get("source_target_frames", 0) or 0),
         }
+        field_scaling = int(surface_field_manifest.get("renderer_scaling", 0) or 0)
+        if field_scaling and field_scaling != 4:
+            raise RuntimeError(
+                f"surface residual field renderer_scaling={field_scaling} is incompatible with render.py scaling=4"
+            )
     elif explicit_surface_field_path or bool(require_surface_field):
         raise FileNotFoundError(f"required v102 surface residual field not found: {surface_field_path}")
 
