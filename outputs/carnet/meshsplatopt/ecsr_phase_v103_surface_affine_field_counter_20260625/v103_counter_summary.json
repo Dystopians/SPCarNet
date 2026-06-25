@@ -1,0 +1,87 @@
+{
+  "created_at": "2026-06-25",
+  "status": "counter_only_method_evidence",
+  "claim_boundary": "v103 is a counter-only same-target-camera surface-field prototype. It improves over clean and v102b on counter, but it is not full9 validation, not unseen-camera generalization, and not a final paper endpoint.",
+  "model_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/counter/detached_model",
+  "source_delta_bank": "/dev/shm/peilincai_spcarnet_v102_preprojected_delta_bank_20260625/counter/v102_preprojected_delta_bank.pt",
+  "methods": {
+    "clean_counter_reference": {
+      "PSNR": 26.751773834,
+      "SSIM": 0.862055242,
+      "LPIPS": 0.252003312
+    },
+    "v101_counter_reference": {
+      "method": "ours_26000_v101_detached_package_full9_counter",
+      "PSNR": 28.442907333374023,
+      "SSIM": 0.8936957120895386,
+      "LPIPS": 0.18655678629875183
+    },
+    "v102a_preprojected_counter_reference": {
+      "method": "ours_26000_v102_delta_fast_counter",
+      "PSNR": 28.442907333374023,
+      "SSIM": 0.8936957120895386,
+      "LPIPS": 0.18655678629875183
+    },
+    "v102b_constant_surface_field": {
+      "method": "ours_26000_v102b_surface_field_counter",
+      "field": "/dev/shm/peilincai_spcarnet_v102_surface_residual_field_20260625/counter/v102_surface_residual_field.pt",
+      "PSNR": 27.058162689208984,
+      "SSIM": 0.8606528043746948,
+      "LPIPS": 0.24983195960521698
+    },
+    "v102b_zero_surface_field": {
+      "method": "ours_26000_v102b_zero_surface_field_counter",
+      "field": "/dev/shm/peilincai_spcarnet_v102_surface_residual_field_20260625/counter/v102_surface_zero_field.pt",
+      "PSNR": 26.72695541381836,
+      "SSIM": 0.8607411980628967,
+      "LPIPS": 0.2519949972629547
+    },
+    "v103_affine_surface_field_min_count_3": {
+      "method": "ours_26000_v103_affine_surface_field_counter",
+      "field": "/dev/shm/peilincai_spcarnet_v103_surface_affine_field_20260625/counter/v103_surface_affine_field.pt",
+      "manifest": "/dev/shm/peilincai_spcarnet_v103_surface_affine_field_20260625/counter/v103_surface_affine_field.manifest.json",
+      "basis_type": "affine_barycentric",
+      "min_count": 3,
+      "valid_triangles": 1771636,
+      "valid_triangle_fraction": 0.18369874358177185,
+      "mean_surface_valid_fraction": 0.9725882867972057,
+      "render_elapsed_sec": 47.59625458717346,
+      "PSNR": 27.167144775390625,
+      "SSIM": 0.8626444935798645,
+      "LPIPS": 0.24451829493045807
+    },
+    "v103_affine_surface_field_min_count_1": {
+      "method": "ours_26000_v103_affine_min1_surface_field_counter",
+      "field": "/dev/shm/peilincai_spcarnet_v103_surface_affine_field_20260625/counter/v103_surface_affine_min1_field.pt",
+      "manifest": "/dev/shm/peilincai_spcarnet_v103_surface_affine_field_20260625/counter/v103_surface_affine_min1_field.manifest.json",
+      "basis_type": "affine_barycentric",
+      "min_count": 1,
+      "valid_triangles": 2716465,
+      "valid_triangle_fraction": 0.2816668748855591,
+      "mean_surface_valid_fraction": 0.9990390837192535,
+      "render_elapsed_sec": 47.20761227607727,
+      "PSNR": 27.208200454711914,
+      "SSIM": 0.8634048700332642,
+      "LPIPS": 0.24317626655101776
+    }
+  },
+  "best_counter_surface_field": "v103_affine_surface_field_min_count_1",
+  "deltas_for_best": {
+    "vs_clean": {
+      "dPSNR": 0.45642662071191403,
+      "dSSIM": 0.0013496280332641663,
+      "dLPIPS": -0.008827045448982238
+    },
+    "vs_v102b_constant": {
+      "dPSNR": 0.1500377655029297,
+      "dSSIM": 0.002752065658569336,
+      "dLPIPS": -0.006655693054199219
+    },
+    "vs_v101_v102a": {
+      "dPSNR": -1.2347068786621094,
+      "dSSIM": -0.030290842056274414,
+      "dLPIPS": 0.05661948025226593
+    }
+  },
+  "next_required_step": "Build a view-conditioned and evidence-gated residual field, then validate on hard triad before any full9 claim."
+}

@@ -228,6 +228,123 @@ def _load_preprojected_delta_bank(path, report_path, endpoint_method):
     return payload
 
 
+def _load_surface_residual_field(path, report_path, endpoint_method):
+    payload = _torch_load(path)
+    if not isinstance(payload, dict) or int(payload.get("schema_version", 0) or 0) < 1:
+        raise RuntimeError(f"invalid v102 surface residual field: {path}")
+    if str(payload.get("field_type", "")) != "v102_surface_residual_field":
+        raise RuntimeError(f"unexpected surface residual field type: {payload.get('field_type')}")
+    if str(payload.get("endpoint_method", "")) and str(payload.get("endpoint_method", "")) != str(endpoint_method):
+        raise RuntimeError(
+            f"surface residual field endpoint mismatch: field={payload.get('endpoint_method')} endpoint={endpoint_method}"
+        )
+    report_sha = str(payload.get("endpoint_report_sha256", "") or "")
+    if report_sha and report_sha != _sha256(report_path):
+        raise RuntimeError("v102 surface residual field endpoint_report_sha256 mismatch")
+    basis_type = str(payload.get("basis_type", "constant") or "constant")
+    if basis_type == "affine_barycentric":
+        coeffs = payload.get("triangle_coefficients", None)
+        if not torch.is_tensor(coeffs) or coeffs.ndim != 3 or tuple(coeffs.shape[1:]) != (3, 3):
+            raise RuntimeError("v102 surface residual field has invalid triangle_coefficients")
+        triangle_count = int(coeffs.shape[0])
+    else:
+        residuals = payload.get("triangle_residuals", None)
+        if not torch.is_tensor(residuals) or residuals.ndim != 2 or int(residuals.shape[1]) != 3:
+            raise RuntimeError("v102 surface residual field has invalid triangle_residuals")
+        triangle_count = int(residuals.shape[0])
+    counts = payload.get("triangle_counts", None)
+    if counts is not None and (not torch.is_tensor(counts) or int(counts.numel()) != triangle_count):
+        raise RuntimeError("v102 surface residual field triangle_counts mismatch")
+    return payload
+
+
+def _downsample_rend_ids_nearest(rend_ids, target_hw):
+    if rend_ids.ndim == 3:
+        ids = rend_ids[0]
+    elif rend_ids.ndim == 2:
+        ids = rend_ids
+    else:
+        raise RuntimeError(f"unexpected rend_ids shape: {tuple(rend_ids.shape)}")
+    target_h, target_w = int(target_hw[0]), int(target_hw[1])
+    src_h, src_w = int(ids.shape[-2]), int(ids.shape[-1])
+    if src_h == target_h and src_w == target_w:
+        return ids.long()
+    stride_y = max(1, src_h // target_h)
+    stride_x = max(1, src_w // target_w)
+    off_y = stride_y // 2
+    off_x = stride_x // 2
+    sampled = ids[off_y : off_y + target_h * stride_y : stride_y, off_x : off_x + target_w * stride_x : stride_x]
+    if int(sampled.shape[-2]) != target_h or int(sampled.shape[-1]) != target_w:
+        sampled = sampled[:target_h, :target_w]
+    return sampled.long()
+
+
+def _surface_affine_basis(flat_ids, pixel_yx, pkg, triangles, *, device):
+    if triangles is None:
+        raise RuntimeError("affine surface residual field requires TriangleModel topology")
+    image_2d = pkg.get("image_2D", None)
+    if image_2d is None:
+        raise RuntimeError("affine surface residual field requires renderer package key 'image_2D'")
+    tri_indices = triangles.get_triangle_indices.to(device=device)
+    projected = image_2d.to(device=device, dtype=torch.float32)
+    tri_vertices = tri_indices[flat_ids]
+    xy = projected[tri_vertices]
+    p = torch.stack(
+        [pixel_yx[:, 1].to(device=device, dtype=torch.float32), pixel_yx[:, 0].to(device=device, dtype=torch.float32)],
+        dim=1,
+    )
+    a = xy[:, 0, :]
+    b = xy[:, 1, :]
+    c = xy[:, 2, :]
+    denom = (b[:, 1] - c[:, 1]) * (a[:, 0] - c[:, 0]) + (c[:, 0] - b[:, 0]) * (a[:, 1] - c[:, 1])
+    safe = denom.abs() > 1e-8
+    denom = torch.where(safe, denom, torch.ones_like(denom))
+    w0 = ((b[:, 1] - c[:, 1]) * (p[:, 0] - c[:, 0]) + (c[:, 0] - b[:, 0]) * (p[:, 1] - c[:, 1])) / denom
+    w1 = ((c[:, 1] - a[:, 1]) * (p[:, 0] - c[:, 0]) + (a[:, 0] - c[:, 0]) * (p[:, 1] - c[:, 1])) / denom
+    w0 = torch.where(safe, w0, torch.zeros_like(w0))
+    w1 = torch.where(safe, w1, torch.zeros_like(w1))
+    return torch.stack([torch.ones_like(w0), w0, w1], dim=1)
+
+
+def _apply_surface_residual_field(rendering, pkg, field, *, device, triangles=None):
+    rend_ids = pkg.get("rend_ids") if isinstance(pkg, dict) else pkg
+    if rend_ids is None:
+        raise RuntimeError("surface residual field endpoint requires renderer package key 'rend_ids'")
+    basis_type = str(field.get("basis_type", "constant") or "constant")
+    if basis_type == "affine_barycentric":
+        residuals = field["triangle_coefficients"].to(device=device, dtype=torch.float32)
+        triangle_count = int(residuals.shape[0])
+    else:
+        residuals = field["triangle_residuals"].to(device=device, dtype=torch.float32)
+        triangle_count = int(residuals.shape[0])
+    counts = field.get("triangle_counts", None)
+    if counts is not None:
+        counts = counts.to(device=device)
+    ids = _downsample_rend_ids_nearest(rend_ids, rendering.shape[-2:]).to(device=device)
+    valid = (ids >= 0) & (ids < triangle_count)
+    if counts is not None:
+        valid = valid & (counts[ids.clamp(min=0, max=triangle_count - 1)] >= int(field.get("min_count", 1) or 1))
+    residual_map = torch.zeros_like(rendering)
+    if bool(valid.any().item()):
+        flat_ids = ids[valid].long()
+        if basis_type == "affine_barycentric":
+            pixel_yx = valid.nonzero(as_tuple=False)
+            basis = _surface_affine_basis(flat_ids, pixel_yx, pkg, triangles, device=device)
+            values = torch.einsum("nf,nfc->nc", basis, residuals[flat_ids])
+        else:
+            values = residuals[flat_ids]
+        residual_map.permute(1, 2, 0)[valid] = values
+    adapted = torch.clamp(rendering + residual_map, 0.0, 1.0)
+    return adapted, {
+        "surface_residual_field": True,
+        "surface_basis_type": basis_type,
+        "surface_valid_fraction": float(valid.float().mean().detach().cpu().item()),
+        "surface_unique_triangles": int(torch.unique(ids[valid]).numel()) if bool(valid.any().item()) else 0,
+        "surface_field_triangles": triangle_count,
+        "surface_field_valid_triangles": int(field.get("valid_triangles", 0) or 0),
+    }
+
+
 def _load_endpoint_runtime(
     model_path,
     iteration,
@@ -242,6 +359,8 @@ def _load_endpoint_runtime(
     require_preprojected_bank=False,
     write_preprojected_bank_path="",
     preprojected_delta_dtype="float32",
+    surface_field_path_override="",
+    require_surface_field=False,
     no_intermediate_outputs=False,
 ):
     endpoint_method = str(endpoint_method or "").strip()
@@ -267,12 +386,32 @@ def _load_endpoint_runtime(
     base_method = str(base_method_override or report.get("base_method") or report.get("base_method_name") or "")
     if not base_method:
         raise RuntimeError(f"endpoint report has no base method: {report_path}")
+    explicit_surface_field_path = bool(str(surface_field_path_override or "").strip())
+    surface_field_path = Path(str(surface_field_path_override)).expanduser() if explicit_surface_field_path else None
+    surface_field = None
+    surface_field_manifest = {}
+    if surface_field_path is not None and surface_field_path.is_file():
+        surface_field = _load_surface_residual_field(surface_field_path, report_path, endpoint_method)
+        surface_field_manifest = {
+            "field_path": str(surface_field_path),
+            "field_sha256": _sha256(surface_field_path),
+            "triangle_count": int(surface_field.get("triangle_count", 0) or 0),
+            "valid_triangles": int(surface_field.get("valid_triangles", 0) or 0),
+            "residual_dtype": str(surface_field.get("residual_dtype", "")),
+            "endpoint_report_sha256": str(surface_field.get("endpoint_report_sha256", "") or ""),
+            "source_delta_bank_sha256": str(surface_field.get("source_delta_bank_sha256", "") or ""),
+        }
+    elif explicit_surface_field_path or bool(require_surface_field):
+        raise FileNotFoundError(f"required v102 surface residual field not found: {surface_field_path}")
+
     explicit_preprojected_bank_path = bool(str(preprojected_bank_path_override or "").strip())
     preprojected_bank_path = (
         Path(str(preprojected_bank_path_override)).expanduser() if explicit_preprojected_bank_path else None
     )
     preprojected_bank = None
     preprojected_bank_manifest = {}
+    if surface_field is not None and explicit_preprojected_bank_path:
+        raise RuntimeError("surface residual field and preprojected delta bank modes are mutually exclusive")
     if preprojected_bank_path is not None and preprojected_bank_path.is_file():
         preprojected_bank = _load_preprojected_delta_bank(preprojected_bank_path, report_path, endpoint_method)
         preprojected_bank_manifest = {
@@ -291,7 +430,11 @@ def _load_endpoint_runtime(
     bank_path = Path(str(bank_path_override)).expanduser() if explicit_bank_path else endpoint_dir / "v101_evidence_bank.pt"
     bank = None
     bank_manifest = {}
-    if preprojected_bank is not None:
+    if surface_field is not None:
+        support_frames = []
+        support_source = f"v102_surface_residual_field:{surface_field_path}"
+        missing_support_names = []
+    elif preprojected_bank is not None:
         source_bank_sha = str(preprojected_bank.get("source_evidence_bank_sha256", "") or "")
         if explicit_bank_path:
             if not bank_path.is_file():
@@ -340,7 +483,7 @@ def _load_endpoint_runtime(
             raise FileNotFoundError(f"required v101 evidence bank not found: {bank_path}")
         train_frames = load_split_frames(base_model, "train", base_method)
         support_frames, support_source, missing_support_names = _select_support_frames(train_frames, report)
-    if preprojected_bank is None and not support_frames:
+    if surface_field is None and preprojected_bank is None and not support_frames:
         raise RuntimeError(f"endpoint selected no support frames: {report_path}")
     evidence_max_side = int(evidence_max_side_override)
     if evidence_max_side < 0:
@@ -368,6 +511,8 @@ def _load_endpoint_runtime(
         "bank_manifest": bank_manifest,
         "preprojected_bank": preprojected_bank,
         "preprojected_bank_manifest": preprojected_bank_manifest,
+        "surface_field": surface_field,
+        "surface_field_manifest": surface_field_manifest,
         "write_preprojected_bank_path": str(write_preprojected_bank_path or "").strip(),
         "preprojected_delta_dtype": str(preprojected_delta_dtype or "float32"),
         "no_intermediate_outputs": bool(no_intermediate_outputs),
@@ -392,15 +537,21 @@ def _render_endpoint_set(model_path, name, iteration, views, triangles, pipeline
     policy = endpoint["policy"]
     preprojected_bank = endpoint.get("preprojected_bank")
     use_preprojected_bank = preprojected_bank is not None
+    surface_field = endpoint.get("surface_field")
+    use_surface_field = surface_field is not None
     preprojected_frames = preprojected_bank.get("frames", {}) if use_preprojected_bank else {}
     if isinstance(preprojected_frames, list):
         preprojected_frames = {str(row.get("frame", row.get("name", idx))): row for idx, row in enumerate(preprojected_frames)}
     preprojected_deltas = preprojected_bank.get("deltas", {}) if use_preprojected_bank else {}
     write_preprojected_bank_path = str(endpoint.get("write_preprojected_bank_path", "") or "").strip()
+    if use_surface_field and write_preprojected_bank_path:
+        raise RuntimeError("surface residual field mode cannot also write a preprojected delta bank")
     write_preprojected_dtype = _tensor_dtype(endpoint.get("preprojected_delta_dtype", "float32"))
     collected_preprojected_deltas = {} if write_preprojected_bank_path and not use_preprojected_bank else None
     collected_preprojected_frames = {} if write_preprojected_bank_path and not use_preprojected_bank else None
-    save_intermediate_outputs = not (use_preprojected_bank and bool(endpoint.get("no_intermediate_outputs", False)))
+    save_intermediate_outputs = not (
+        (use_preprojected_bank or use_surface_field) and bool(endpoint.get("no_intermediate_outputs", False))
+    )
     loader = (
         _EndpointBankFrameLoader(endpoint["bank"], device=background.device)
         if endpoint.get("bank") is not None
@@ -439,7 +590,15 @@ def _render_endpoint_set(model_path, name, iteration, views, triangles, pipeline
             depth_path=base_depth_file,
             camera=camera,
         )
-        if use_preprojected_bank:
+        if use_surface_field:
+            adapted, info = _apply_surface_residual_field(
+                rendering,
+                pkg,
+                surface_field,
+                device=rendering.device,
+                triangles=triangles,
+            )
+        elif use_preprojected_bank:
             if key not in preprojected_deltas:
                 raise RuntimeError(f"v102 preprojected delta bank missing target frame {key}")
             _assert_camera_matches_bank(camera, preprojected_frames.get(key, {}).get("target_camera", {}), key)
@@ -523,7 +682,7 @@ def _render_endpoint_set(model_path, name, iteration, views, triangles, pipeline
         del pkg, rendering, gt, depth, adapted, diff
         if use_preprojected_bank:
             del delta
-        if not use_preprojected_bank:
+        if not (use_preprojected_bank or use_surface_field):
             torch.cuda.empty_cache()
 
     preprojected_written_manifest = {}
@@ -576,7 +735,13 @@ def _render_endpoint_set(model_path, name, iteration, views, triangles, pipeline
     save_camera_index(camera_records, endpoint_method_dir / "camera_index.json")
     report = {
         "render_py_endpoint_version": 1,
-        "mode": "preprojected_delta_endpoint" if use_preprojected_bank else "online_checkpoint_attached_endpoint",
+        "mode": (
+            "surface_residual_field_endpoint"
+            if use_surface_field
+            else "preprojected_delta_endpoint"
+            if use_preprojected_bank
+            else "online_checkpoint_attached_endpoint"
+        ),
         "split": str(name),
         "iteration": int(iteration),
         "endpoint_method": endpoint["endpoint_method"],
@@ -592,11 +757,15 @@ def _render_endpoint_set(model_path, name, iteration, views, triangles, pipeline
         "evidence_max_side": int(endpoint["evidence_max_side"]),
         "support_source": endpoint["support_source"],
         "support_frames": int(
-            preprojected_bank.get("source_support_frames", 0) if use_preprojected_bank else len(support_frames)
+            preprojected_bank.get("source_support_frames", 0)
+            if use_preprojected_bank
+            else len(support_frames)
         ),
+        "field_source_target_frames": int(surface_field.get("source_target_frames", 0)) if use_surface_field else 0,
         "missing_report_support_names": endpoint["missing_support_names"],
         "evidence_bank": endpoint.get("bank_manifest", {}),
         "preprojected_delta_bank": endpoint.get("preprojected_bank_manifest", {}),
+        "surface_residual_field": endpoint.get("surface_field_manifest", {}),
         "preprojected_delta_bank_written": preprojected_written_manifest,
         "intermediate_outputs_saved": bool(save_intermediate_outputs),
         "target_frames": int(len(camera_records)),
@@ -605,12 +774,17 @@ def _render_endpoint_set(model_path, name, iteration, views, triangles, pipeline
         "mean_abs_delta": _mean([row.get("mean_abs_delta") for row in frame_infos]),
         "mean_covered_fraction": _mean([row.get("covered_fraction") for row in frame_infos]),
         "mean_alpha_active_fraction": _mean([row.get("alpha_active_fraction") for row in frame_infos]),
+        "mean_surface_valid_fraction": _mean([row.get("surface_valid_fraction") for row in frame_infos]),
+        "mean_surface_unique_triangles": _mean([row.get("surface_unique_triangles") for row in frame_infos]),
         "no_test_gt_used_for_policy": True,
         "claim_boundary": (
             "This render.py endpoint consumes a preprojected target-camera residual bank generated from the "
             "train-evidence endpoint. It does not use held-out target GT, but it is still an endpoint sidecar, "
             "not a vanilla checkpoint-baked representation."
             if use_preprojected_bank
+            else "This render.py endpoint consumes a surface-addressed residual field generated from train-evidence "
+            "endpoint outputs. It is a representation-attached endpoint, not a vanilla checkpoint-baked renderer."
+            if use_surface_field
             else "This render.py endpoint consumes a checkpoint-attached train-derived sidecar at render time. "
             "It recomputes target renders online and does not rely on pre-materialized target endpoint images."
         ),
@@ -658,6 +832,8 @@ def render_sets(
     checkpoint_endpoint_require_preprojected_bank: bool = False,
     checkpoint_endpoint_write_preprojected_bank: str = "",
     checkpoint_endpoint_preprojected_delta_dtype: str = "float32",
+    checkpoint_endpoint_surface_field_path: str = "",
+    checkpoint_endpoint_require_surface_field: bool = False,
     checkpoint_endpoint_no_intermediate_outputs: bool = False,
 ):
     with torch.no_grad():
@@ -686,6 +862,8 @@ def render_sets(
             checkpoint_endpoint_require_preprojected_bank,
             checkpoint_endpoint_write_preprojected_bank,
             checkpoint_endpoint_preprojected_delta_dtype,
+            checkpoint_endpoint_surface_field_path,
+            checkpoint_endpoint_require_surface_field,
             checkpoint_endpoint_no_intermediate_outputs,
         )
 
@@ -718,6 +896,8 @@ if __name__ == "__main__":
         default="float32",
         choices=("float32", "float16"),
     )
+    parser.add_argument("--checkpoint_endpoint_surface_field_path", default="")
+    parser.add_argument("--checkpoint_endpoint_require_surface_field", action="store_true")
     parser.add_argument("--checkpoint_endpoint_no_intermediate_outputs", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     args = get_combined_args(parser)
@@ -743,5 +923,7 @@ if __name__ == "__main__":
         args.checkpoint_endpoint_require_preprojected_bank,
         args.checkpoint_endpoint_write_preprojected_bank,
         args.checkpoint_endpoint_preprojected_delta_dtype,
+        args.checkpoint_endpoint_surface_field_path,
+        args.checkpoint_endpoint_require_surface_field,
         args.checkpoint_endpoint_no_intermediate_outputs,
     )
