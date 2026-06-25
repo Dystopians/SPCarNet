@@ -2,7 +2,7 @@
 
 Date: 2026-06-25
 
-Scope: mentor/PPT technical synthesis for the current SPCarNet paper loop. This report summarizes existing v101-v104c documents and artifacts only. It does not claim that v104c full9 is complete.
+Scope: mentor/PPT technical synthesis for the current SPCarNet paper loop. This report summarizes existing v101-v104c documents and the completed v104c full9 fixed-policy artifacts.
 
 ## 0. One-Page Takeaway
 
@@ -27,9 +27,9 @@ distill endpoint residual behavior into a surface-addressed field
 The honest story is:
 
 - v101/v102a is still the strongest quality endpoint. On full9, v101 bank-backed render.py endpoint gives mean `26.481309 / 0.783675 / 0.224305` and improves selected clean by `+1.329627 PSNR / +0.034657 SSIM / -0.063316 LPIPS`.
-- v104c is the current best surface-field variant. On the hard triad (`counter`, `kitchen`, `bonsai`), it improves clean, v103, and v104a on all mean RGB metrics.
-- v104c does not yet close the endpoint-to-field gap. Hard-triad mean is still `-1.307599 PSNR / -0.027896 SSIM / +0.055355 LPIPS` behind the v101/v102a endpoint ceiling.
-- Full9 v104c is in progress or awaiting aggregation. Only partial artifacts were observed under `outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/`.
+- v104c is the current best surface-field variant. Its fixed policy is now complete on full9: `9/9` scenes pass, and every scene improves over the local selected clean MeshSplatting `ours_26000` baseline on PSNR, SSIM, and LPIPS.
+- Full9 v104c mean is `25.829099 / 0.760727 / 0.268548`, improving clean by `+0.677417 PSNR / +0.011709 SSIM / -0.019073 LPIPS`.
+- v104c does not yet close the endpoint-to-field gap. Full9 mean remains `-0.652211 PSNR / -0.022949 SSIM / +0.044243 LPIPS` behind the v101/v102a endpoint reference; hard-triad mean is still `-1.307599 / -0.027896 / +0.055355`.
 
 PPT headline should not be "v104c beats the endpoint." The stronger and defensible headline is:
 
@@ -164,40 +164,46 @@ Interpretation for PPT:
 - The v104c gain over clean is meaningful on the hard triad.
 - The endpoint gap is still large and should be shown, not hidden.
 
-### Full9 Status Placeholder
+### Full9 Fixed-Policy Results
 
-Observed full9 directory:
-
-```text
-outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/
-```
-
-Observed partial files:
+Full9 summary:
 
 ```text
-counter/counter_v104c_shrink_view_affine_report.md
-counter/counter_v104c_shrink_view_affine_report.json
-bicycle/bicycle_v102.log
-bicycle/bicycle_field.log
-flowers/flowers_v102.log
-flowers/flowers_field.log
-room/room_v102.log
+outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/v104c_shrink_view_affine_full9_summary.md
+outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/v104c_shrink_view_affine_full9_summary.json
+outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/v104c_shrink_view_affine_full9_summary.csv
 ```
 
-Full9 table to be filled by main thread after aggregation:
+Aggregation status: `present_scenes=9`, `ok_scenes=9`, `all_present=True`, `all_ok=True`.
 
-| scene | status | v104c PSNR | v104c SSIM | v104c LPIPS | dPSNR clean | dSSIM clean | dLPIPS clean | dPSNR v101/v102a | dSSIM v101/v102a | dLPIPS v101/v102a | note |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| bicycle | running / pending aggregation | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | field log exists |
-| flowers | running / pending aggregation | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | field log exists |
-| garden | pending / not observed | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | no report observed |
-| stump | pending / not observed | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | no report observed |
-| treehill | pending / not observed | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | no report observed |
-| room | running / pending aggregation | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | v102 log exists |
-| counter | complete partial report | 27.498068 | 0.867420 | 0.238986 | +0.746294 | +0.005364 | -0.013017 | -0.944839 | -0.026276 | +0.052429 | hard-triad row |
-| kitchen | complete hard-triad | 28.770449 | 0.881590 | 0.188021 | TBD | TBD | TBD | TBD | TBD | TBD | aggregate from hard-triad summary |
-| bonsai | complete hard-triad | 30.310877 | 0.907367 | 0.230186 | TBD | TBD | TBD | TBD | TBD | TBD | aggregate from hard-triad summary |
-| mean | pending | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | do not claim until all 9 complete |
+| method | PSNR | SSIM | LPIPS |
+|---|---:|---:|---:|
+| clean MeshSplatting (`ours_26000`) | 25.151682 | 0.749018 | 0.287621 |
+| v104c shrink view-affine field | 25.829099 | 0.760727 | 0.268548 |
+| v101/v102a endpoint/reference | 26.481310 | 0.783675 | 0.224305 |
+
+| comparison | dPSNR | dSSIM | dLPIPS |
+|---|---:|---:|---:|
+| v104c minus clean | +0.677417 | +0.011709 | -0.019073 |
+| v104c minus endpoint/reference | -0.652211 | -0.022949 | +0.044243 |
+
+| scene | clean PSNR | v104c PSNR | endpoint PSNR | dPSNR clean | dSSIM clean | dLPIPS clean |
+|---|---:|---:|---:|---:|---:|---:|
+| bicycle | 23.301613 | 23.717649 | 24.021442 | +0.416037 | +0.015104 | -0.018574 |
+| bonsai | 28.895233 | 30.310877 | 31.861889 | +1.415644 | +0.010966 | -0.029307 |
+| counter | 26.751774 | 27.498068 | 28.442907 | +0.746294 | +0.005364 | -0.013017 |
+| flowers | 19.682257 | 20.075844 | 20.300581 | +0.393587 | +0.019255 | -0.020090 |
+| garden | 25.029211 | 25.788094 | 26.310476 | +0.758883 | +0.019228 | -0.026730 |
+| kitchen | 27.818552 | 28.770449 | 30.197395 | +0.951897 | +0.005138 | -0.011165 |
+| room | 28.747276 | 29.597836 | 30.305668 | +0.850559 | +0.006994 | -0.019239 |
+| stump | 25.205042 | 25.459311 | 25.595201 | +0.254269 | +0.009434 | -0.011791 |
+| treehill | 20.934181 | 21.243763 | 21.296227 | +0.309582 | +0.013896 | -0.021746 |
+
+Fairness boundary:
+
+- The clean row is the local selected clean MeshSplatting `ours_26000` baseline from `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/*/results.json`, not a copied paper table and not train metrics.
+- v104c and clean use the same local scene set and held-out test split.
+- v104c uses a target-camera delta/reference distillation path through v102 and a surface-field endpoint. It is not a train-only unseen-camera generalization result and not a vanilla MeshSplatting checkpoint.
 
 ## 4. Qualitative Results and Visualization Plan
 
@@ -223,9 +229,16 @@ How to use it:
 - Say crops were selected by held-out LPIPS improvement and local absolute-error reduction.
 - Do not imply that every full-frame render has obvious visual improvement.
 
-v104c visualization should wait for full9 aggregation or a hard-triad panel built from exact v104c reports. Until then, safe wording is:
+v104c visualization can now be selected from the completed full9 per-scene renders:
 
-> On hard-triad metrics, v104c improves the surface-field line. Visual differences should be shown as crop/error-map evidence, because full-frame RGB differences may be subtle.
+```text
+/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/<scene>/detached_model/test/ours_26000_v104c_shrink_view_affine_min1_minviews1_<scene>/renders/*.png
+/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/<scene>/detached_model/test/ours_26000_v104c_shrink_view_affine_min1_minviews1_<scene>/gt/*.png
+```
+
+Safe wording:
+
+> On full9 metrics, v104c improves the fixed-policy surface-field line over clean MeshSplatting. Visual differences should be shown as crop/error-map evidence, because full-frame RGB differences may be subtle.
 
 ## 5. Ablations and Claim Boundary
 
@@ -233,6 +246,8 @@ v104c visualization should wait for full9 aggregation or a hard-triad panel buil
 
 - v101/v102a wins as the strong quality endpoint.
 - v104c wins within the surface-field ladder:
+  - full9 `9/9` complete against the selected clean baseline;
+  - better than clean on every full9 scene and every reported RGB metric;
   - better than clean on hard-triad mean;
   - better than v103;
   - better than v104a;
@@ -240,8 +255,7 @@ v104c visualization should wait for full9 aggregation or a hard-triad panel buil
 
 ### What Is Still Weak
 
-- v104c is not full9 validated yet.
-- v104c is still far below v101/v102a on hard-triad mean.
+- v104c is full9 validated against the selected local clean baseline, but still below v101/v102a on full9 and hard-triad means.
 - v103/v104 fields are distilled from v102 target-camera deltas; this is not yet a train-only unseen-camera field claim.
 - The current field is large and build-heavy. Hard-triad field manifests are hundreds of MiB and build times are minutes per scene.
 - The surface-field endpoint still depends on `render.py` support for triangle ids and field sampling; it is not a plain MeshSplatting checkpoint.
@@ -255,7 +269,7 @@ v104c visualization should wait for full9 aggregation or a hard-triad panel buil
 | v103 affine barycentric | shows face-local variation helps | hard-triad positive |
 | v104a raw view-affine | shows view direction helps | hard-triad positive |
 | v104b hard fallback | shows hard safety gate is over-conservative | counter diagnostic |
-| v104c shrink fallback | current best field policy | hard-triad positive |
+| v104c shrink fallback | current best field policy | full9 `9/9` positive vs selected clean |
 | v101/v102a endpoint ceiling | upper reference for current endpoint quality | hard-triad and v101 full9 available |
 
 ### Safe Claims
@@ -264,11 +278,12 @@ v104c visualization should wait for full9 aggregation or a hard-triad panel buil
 - v101 packages the endpoint through `render.py` with forceable train-derived evidence banks and detached-package validation.
 - v102a preprojected deltas reproduce the v101 endpoint on validated target-camera sets while reducing online adapter overhead.
 - v104c is a fixed-policy representation-field improvement over v103/v104a on hard triad.
+- v104c full9 is complete against the selected local clean `ours_26000` baseline and improves all 9 scenes on PSNR, SSIM, and LPIPS.
 
 ### Unsafe Claims
 
 - v104c replaces v101/v102a.
-- v104c full9 is complete.
+- v104c reaches the endpoint/reference ceiling.
 - v104c is an unseen-camera train-only residual field.
 - The qualitative improvement is obvious in every full-frame render.
 - The endpoint or field is a vanilla MeshSplatting checkpoint without special render logic.
@@ -371,6 +386,45 @@ Full9 working directory:
 
 ```text
 outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/
+```
+
+Single-scene fixed-policy runner:
+
+```bash
+SCENE=<scene>
+GPU=<gpu>
+
+CUDA_VISIBLE_DEVICES=${GPU} PYTHONUNBUFFERED=1 WANDB_MODE=offline \
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/run_v104c_shrink_view_affine_scene.py \
+  --scene ${SCENE} \
+  --gpu ${GPU} \
+  --package_root /dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625 \
+  --v102_bank_root /dev/shm/peilincai_spcarnet_v102_preprojected_delta_bank_20260625 \
+  --field_root /dev/shm/peilincai_spcarnet_v104c_shrink_view_affine_field_20260625 \
+  --report_root outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625 \
+  --v102_report_root outputs/carnet/meshsplatopt/ecsr_phase_v102_preprojected_delta_bank_20260625 \
+  --clean_root outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k \
+  --endpoint_method ours_26000_v100_checkpoint_attached_ela_endpoint \
+  --iteration 26000 \
+  --renderer_scaling 4 \
+  --residual_dtype float16 \
+  --ridge 1e-3 \
+  --residual_clip 0.08 \
+  --view_std_floor 1e-4 \
+  --rank_rtol 1e-7 \
+  --condition_max 1e8 \
+  --chunk_pixels 262144 \
+  --build_v102_if_missing
+```
+
+Full9 aggregation:
+
+```bash
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/summarize_v104c_shrink_view_affine_full9.py \
+  --root outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625 \
+  --out_dir outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625
 ```
 
 Build command template:
