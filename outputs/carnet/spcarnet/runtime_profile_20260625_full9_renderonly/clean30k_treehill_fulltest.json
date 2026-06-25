@@ -1,0 +1,53 @@
+{
+  "label": "clean30k_treehill_fulltest",
+  "model_path": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/treehill",
+  "split": "test",
+  "requested_iteration": 30000,
+  "loaded_iteration": 30000,
+  "num_views": 18,
+  "view_stride": 1,
+  "warmup_views": 2,
+  "repeats": 3,
+  "elapsed_sec_mean": 0.4962342046201229,
+  "elapsed_sec_stdev": 0.002339563694749775,
+  "ms_per_view_mean": 27.56856692334016,
+  "ms_per_view_stdev": 0.12997576081943302,
+  "fps_mean": 36.273732014694566,
+  "fps_stdev": 0.17090099386304752,
+  "peak_allocated_mib_mean": 7109.63916015625,
+  "peak_allocated_mib_max": 7109.63916015625,
+  "peak_reserved_mib_mean": 7442.0,
+  "peak_reserved_mib_max": 7442.0,
+  "triangles": 9527637,
+  "vertices": 3607676,
+  "checkpoint_bytes": 979063711,
+  "point_cloud_dir": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/treehill/point_cloud/iteration_30000",
+  "checksum": 1.1213299334049225,
+  "repeat_rows": [
+    {
+      "repeat": 1,
+      "elapsed_sec": 0.4986807517707348,
+      "ms_per_view": 27.704486209485268,
+      "fps": 36.09523715540435,
+      "peak_allocated_mib": 7109.63916015625,
+      "peak_reserved_mib": 7442.0
+    },
+    {
+      "repeat": 2,
+      "elapsed_sec": 0.4960030820220709,
+      "ms_per_view": 27.555726779003937,
+      "fps": 36.290097082902896,
+      "peak_allocated_mib": 7109.63916015625,
+      "peak_reserved_mib": 7442.0
+    },
+    {
+      "repeat": 3,
+      "elapsed_sec": 0.49401878006756306,
+      "ms_per_view": 27.44548778153128,
+      "fps": 36.435861805776455,
+      "peak_allocated_mib": 7109.63916015625,
+      "peak_reserved_mib": 7442.0
+    }
+  ],
+  "scope": "render_only_no_png_no_metrics_no_adapter_postprocess"
+}

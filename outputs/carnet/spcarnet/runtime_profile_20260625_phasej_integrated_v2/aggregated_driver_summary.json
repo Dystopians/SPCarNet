@@ -1,0 +1,115 @@
+{
+  "source": "aggregated_raw_profiles",
+  "raw_dir": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/raw",
+  "generated_at_utc": "2026-06-25T07:35:53.309607+00:00",
+  "aggregate_summary": {
+    "label": "phasej_integrated_v2",
+    "raw_dir": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/raw",
+    "generated_at_utc": "2026-06-25T07:35:53.309607+00:00",
+    "scenes": 9,
+    "target_views": 246,
+    "raw_json_count": 9,
+    "repeats_per_scene": [
+      2
+    ],
+    "mean_scene_ms_per_view": 941.0961600303991,
+    "weighted_ms_per_view": 951.4108962508116,
+    "weighted_fps": 1.0510705773295868,
+    "mean_scene_fps": 1.0847647081142116,
+    "weighted_render_ms_per_view": 37.09043419306598,
+    "weighted_adapter_ms_per_view": 913.8552447992976,
+    "weighted_adapter_over_render_ratio": 24.63856961184191,
+    "mean_scene_render_ms_per_view": 36.11534196930432,
+    "mean_scene_adapter_ms_per_view": 904.5271943209021,
+    "max_peak_allocated_mib": 17703.595703125,
+    "mean_peak_allocated_mib": 13684.014485677084,
+    "max_peak_reserved_mib": 24498.0,
+    "mean_peak_reserved_mib": 17146.0,
+    "mean_covered_fraction": 0.9338978422534969,
+    "mean_confidence": 2.566556071273367,
+    "scope": "phasej_integrated_runtime_raw_aggregation_no_cuda_imports",
+    "render_only_summary_json": "outputs/carnet/spcarnet/runtime_profile_20260625_full9_renderonly/summary.json",
+    "render_only_scene_matches": 9,
+    "render_only_compact_mean_ms_per_view": 34.092124427487626,
+    "render_only_clean_mean_ms_per_view": 32.18586030581139,
+    "weighted_render_only_compact_ms_per_view": 35.179789223503775,
+    "weighted_render_only_clean_ms_per_view": 33.07593647178595,
+    "integrated_over_render_only_compact_ms_ratio": 27.044246632812957,
+    "adapter_over_render_only_compact_ms_ratio": 25.976711770312335,
+    "skipped_json_count": 0
+  },
+  "results": [
+    {
+      "scene": "bicycle",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/raw/bicycle.json",
+      "target_views": 25,
+      "repeats": 2,
+      "ms_per_view_mean": 1116.8391000851989,
+      "fps_mean": 0.8993914504054946
+    },
+    {
+      "scene": "bonsai",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/raw/bonsai.json",
+      "target_views": 37,
+      "repeats": 2,
+      "ms_per_view_mean": 791.1086883899328,
+      "fps_mean": 1.265503423045983
+    },
+    {
+      "scene": "counter",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/raw/counter.json",
+      "target_views": 30,
+      "repeats": 2,
+      "ms_per_view_mean": 1134.6195107015471,
+      "fps_mean": 0.883179849892749
+    },
+    {
+      "scene": "flowers",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/raw/flowers.json",
+      "target_views": 22,
+      "repeats": 2,
+      "ms_per_view_mean": 832.6197852041912,
+      "fps_mean": 1.2011497499575674
+    },
+    {
+      "scene": "garden",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/raw/garden.json",
+      "target_views": 24,
+      "repeats": 2,
+      "ms_per_view_mean": 849.4389733144392,
+      "fps_mean": 1.1813031792363446
+    },
+    {
+      "scene": "kitchen",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/raw/kitchen.json",
+      "target_views": 35,
+      "repeats": 2,
+      "ms_per_view_mean": 1010.5277396738529,
+      "fps_mean": 0.993914496083725
+    },
+    {
+      "scene": "room",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/raw/room.json",
+      "target_views": 39,
+      "repeats": 2,
+      "ms_per_view_mean": 1012.5815730589704,
+      "fps_mean": 0.9899546555149509
+    },
+    {
+      "scene": "stump",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/raw/stump.json",
+      "target_views": 16,
+      "repeats": 2,
+      "ms_per_view_mean": 872.5839725229889,
+      "fps_mean": 1.1538218476927216
+    },
+    {
+      "scene": "treehill",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/raw/treehill.json",
+      "target_views": 18,
+      "repeats": 2,
+      "ms_per_view_mean": 849.5460973224706,
+      "fps_mean": 1.1946637211983675
+    }
+  ]
+}

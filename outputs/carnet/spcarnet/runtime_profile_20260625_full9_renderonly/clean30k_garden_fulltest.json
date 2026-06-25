@@ -1,0 +1,53 @@
+{
+  "label": "clean30k_garden_fulltest",
+  "model_path": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden",
+  "split": "test",
+  "requested_iteration": 30000,
+  "loaded_iteration": 30000,
+  "num_views": 24,
+  "view_stride": 1,
+  "warmup_views": 2,
+  "repeats": 3,
+  "elapsed_sec_mean": 0.7720730931808552,
+  "elapsed_sec_stdev": 0.0003140169750549475,
+  "ms_per_view_mean": 32.16971221586896,
+  "ms_per_view_stdev": 0.013084040627290548,
+  "fps_mean": 31.085143180462378,
+  "fps_stdev": 0.012645698665777267,
+  "peak_allocated_mib_mean": 8274.193359375,
+  "peak_allocated_mib_max": 8274.193359375,
+  "peak_reserved_mib_mean": 13520.0,
+  "peak_reserved_mib_max": 13520.0,
+  "triangles": 11568056,
+  "vertices": 3414016,
+  "checkpoint_bytes": 987752543,
+  "point_cloud_dir": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/point_cloud/iteration_30000",
+  "checksum": 1.1630492806434631,
+  "repeat_rows": [
+    {
+      "repeat": 1,
+      "elapsed_sec": 0.7717131897807121,
+      "ms_per_view": 32.154716240863,
+      "fps": 31.099636908914015,
+      "peak_allocated_mib": 8274.193359375,
+      "peak_reserved_mib": 13520.0
+    },
+    {
+      "repeat": 2,
+      "elapsed_sec": 0.7722912393510342,
+      "ms_per_view": 32.17880163962642,
+      "fps": 31.07635925038784,
+      "peak_allocated_mib": 8274.193359375,
+      "peak_reserved_mib": 13520.0
+    },
+    {
+      "repeat": 3,
+      "elapsed_sec": 0.772214850410819,
+      "ms_per_view": 32.17561876711746,
+      "fps": 31.07943338208528,
+      "peak_allocated_mib": 8274.193359375,
+      "peak_reserved_mib": 13520.0
+    }
+  ],
+  "scope": "render_only_no_png_no_metrics_no_adapter_postprocess"
+}

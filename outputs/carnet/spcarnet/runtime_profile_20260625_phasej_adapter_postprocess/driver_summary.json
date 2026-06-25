@@ -1,0 +1,96 @@
+{
+  "started_at": 1782371255.1921022,
+  "elapsed_sec": 240.05215334892273,
+  "results": [
+    {
+      "scene": "flowers",
+      "gpu": "3",
+      "log": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/logs/flowers_gpu3.log",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/flowers_phasej_adapter_postprocess.json",
+      "out_md": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/flowers_phasej_adapter_postprocess.md",
+      "started": 1782371255.1937916,
+      "returncode": 0,
+      "elapsed_sec": 50.00812292098999
+    },
+    {
+      "scene": "garden",
+      "gpu": "5",
+      "log": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/logs/garden_gpu5.log",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/garden_phasej_adapter_postprocess.json",
+      "out_md": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/garden_phasej_adapter_postprocess.md",
+      "started": 1782371255.194638,
+      "returncode": 0,
+      "elapsed_sec": 55.02096891403198
+    },
+    {
+      "scene": "bicycle",
+      "gpu": "2",
+      "log": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/logs/bicycle_gpu2.log",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/bicycle_phasej_adapter_postprocess.json",
+      "out_md": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/bicycle_phasej_adapter_postprocess.md",
+      "started": 1782371255.1930978,
+      "returncode": 0,
+      "elapsed_sec": 70.02970767021179
+    },
+    {
+      "scene": "stump",
+      "gpu": "3",
+      "log": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/logs/stump_gpu3.log",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/stump_phasej_adapter_postprocess.json",
+      "out_md": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/stump_phasej_adapter_postprocess.md",
+      "started": 1782371305.2153144,
+      "returncode": 0,
+      "elapsed_sec": 35.018436431884766
+    },
+    {
+      "scene": "treehill",
+      "gpu": "5",
+      "log": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/logs/treehill_gpu5.log",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/treehill_phasej_adapter_postprocess.json",
+      "out_md": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/treehill_phasej_adapter_postprocess.md",
+      "started": 1782371310.2222383,
+      "returncode": 0,
+      "elapsed_sec": 40.01305365562439
+    },
+    {
+      "scene": "room",
+      "gpu": "2",
+      "log": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/logs/room_gpu2.log",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/room_phasej_adapter_postprocess.json",
+      "out_md": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/room_phasej_adapter_postprocess.md",
+      "started": 1782371325.2331107,
+      "returncode": 0,
+      "elapsed_sec": 95.00698232650757
+    },
+    {
+      "scene": "counter",
+      "gpu": "3",
+      "log": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/logs/counter_gpu3.log",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/counter_phasej_adapter_postprocess.json",
+      "out_md": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/counter_phasej_adapter_postprocess.md",
+      "started": 1782371340.2348359,
+      "returncode": 0,
+      "elapsed_sec": 85.00668668746948
+    },
+    {
+      "scene": "kitchen",
+      "gpu": "5",
+      "log": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/logs/kitchen_gpu5.log",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/kitchen_phasej_adapter_postprocess.json",
+      "out_md": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/kitchen_phasej_adapter_postprocess.md",
+      "started": 1782371350.2364452,
+      "returncode": 0,
+      "elapsed_sec": 90.00632095336914
+    },
+    {
+      "scene": "bonsai",
+      "gpu": "2",
+      "log": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/logs/bonsai_gpu2.log",
+      "out_json": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/bonsai_phasej_adapter_postprocess.json",
+      "out_md": "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/bonsai_phasej_adapter_postprocess.md",
+      "started": 1782371420.2412548,
+      "returncode": 0,
+      "elapsed_sec": 75.0029239654541
+    }
+  ]
+}

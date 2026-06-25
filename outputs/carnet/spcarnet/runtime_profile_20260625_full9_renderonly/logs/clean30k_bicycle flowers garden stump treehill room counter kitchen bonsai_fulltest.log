@@ -1,0 +1,12 @@
+[GsTaichi] version 4.6.0, llvm 20.1.0, commit 72f02b06, linux, python 3.11.14
+Looking for config file in outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/bicycle flowers garden stump treehill room counter kitchen bonsai/cfg_args
+Traceback (most recent call last):
+  File "/data/peilincai/mesh-splatting/scripts/car_model/benchmark_render_runtime_profile.py", line 229, in <module>
+    main()
+  File "/data/peilincai/mesh-splatting/scripts/car_model/benchmark_render_runtime_profile.py", line 123, in main
+    args = get_combined_args(parser)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/peilincai/mesh-splatting/arguments/__init__.py", line 562, in get_combined_args
+    with open(cfgfilepath) as cfg_file:
+         ^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/bicycle flowers garden stump treehill room counter kitchen bonsai/cfg_args'

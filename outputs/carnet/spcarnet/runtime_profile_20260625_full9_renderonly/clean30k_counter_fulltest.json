@@ -1,0 +1,53 @@
+{
+  "label": "clean30k_counter_fulltest",
+  "model_path": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/counter",
+  "split": "test",
+  "requested_iteration": 30000,
+  "loaded_iteration": 30000,
+  "num_views": 30,
+  "view_stride": 1,
+  "warmup_views": 2,
+  "repeats": 3,
+  "elapsed_sec_mean": 1.2474491478254397,
+  "elapsed_sec_stdev": 0.0014079492084122843,
+  "ms_per_view_mean": 41.58163826084799,
+  "ms_per_view_stdev": 0.046931640280410095,
+  "fps_mean": 24.049096948192616,
+  "fps_stdev": 0.02716077496580558,
+  "peak_allocated_mib_mean": 12098.71728515625,
+  "peak_allocated_mib_max": 12098.71728515625,
+  "peak_reserved_mib_mean": 15152.0,
+  "peak_reserved_mib_max": 15152.0,
+  "triangles": 9850919,
+  "vertices": 2537250,
+  "checkpoint_bytes": 764173855,
+  "point_cloud_dir": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/counter/point_cloud/iteration_30000",
+  "checksum": 0.9308736026287079,
+  "repeat_rows": [
+    {
+      "repeat": 1,
+      "elapsed_sec": 1.2481833212077618,
+      "ms_per_view": 41.60611070692539,
+      "fps": 24.034930999535813,
+      "peak_allocated_mib": 12098.71728515625,
+      "peak_reserved_mib": 15152.0
+    },
+    {
+      "repeat": 2,
+      "elapsed_sec": 1.2458258513361216,
+      "ms_per_view": 41.527528377870716,
+      "fps": 24.080412176248906,
+      "peak_allocated_mib": 12098.71728515625,
+      "peak_reserved_mib": 15152.0
+    },
+    {
+      "repeat": 3,
+      "elapsed_sec": 1.248338270932436,
+      "ms_per_view": 41.611275697747864,
+      "fps": 24.03194766879313,
+      "peak_allocated_mib": 12098.71728515625,
+      "peak_reserved_mib": 15152.0
+    }
+  ],
+  "scope": "render_only_no_png_no_metrics_no_adapter_postprocess"
+}

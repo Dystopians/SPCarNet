@@ -1,0 +1,700 @@
+{
+  "benchmark": "integrated_phasej_runtime",
+  "scope": "renderer_forward_plus_adapt_frame_no_png_no_metrics_no_policy_calibration",
+  "command": [
+    "scripts/car_model/benchmark_phasej_integrated_runtime.py",
+    "-m",
+    "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model",
+    "--iteration",
+    "26000",
+    "--split",
+    "test",
+    "--base_method_name",
+    "ours_26000_phasef_extra_compact_base",
+    "--ela_report",
+    "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/ela_report.json",
+    "--max_views",
+    "0",
+    "--repeats",
+    "2",
+    "--gpu",
+    "0",
+    "--quiet",
+    "--label",
+    "treehill_phasej_integrated_v2",
+    "--out_json",
+    "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/raw/treehill.json",
+    "--out_md",
+    "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/md/treehill.md"
+  ],
+  "label": "treehill_phasej_integrated_v2",
+  "model_path": "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model",
+  "split": "test",
+  "base_method_name": "ours_26000_phasef_extra_compact_base",
+  "ela_report": "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/ela_report.json",
+  "policy_source": "ela_report",
+  "alpha_source": "ela_report",
+  "requested_iteration": 26000,
+  "loaded_iteration": 26000,
+  "num_views": 18,
+  "available_target_frame_count": 18,
+  "view_stride": 1,
+  "warmup_views": 1,
+  "repeats": 2,
+  "support_frame_count": 123,
+  "support_source": "all_train",
+  "missing_report_support_names": [],
+  "target_frame_names": [
+    "00000",
+    "00001",
+    "00002",
+    "00003",
+    "00004",
+    "00005",
+    "00006",
+    "00007",
+    "00008",
+    "00009",
+    "00010",
+    "00011",
+    "00012",
+    "00013",
+    "00014",
+    "00015",
+    "00016",
+    "00017"
+  ],
+  "alpha": 0.75,
+  "k": 4,
+  "mode": "residual",
+  "depth_abs_tol": 0.02,
+  "depth_rel_tol": 0.06,
+  "residual_clip": 0.2,
+  "direction_weight": 0.35,
+  "benefit_calibrator_loaded": false,
+  "alpha_calibrator_loaded": false,
+  "elapsed_sec_mean": 15.291829751804471,
+  "elapsed_sec_stdev": 2.6222266740037754,
+  "ms_per_view_mean": 849.5460973224706,
+  "ms_per_view_stdev": 145.6792596668764,
+  "fps_mean": 1.1946637211983675,
+  "fps_stdev": 0.20485966212259887,
+  "render_ms_per_view_mean": 30.35968438618713,
+  "adapter_ms_per_view_mean": 818.822917011049,
+  "adapter_over_render_ratio_mean": 26.898831652195454,
+  "peak_allocated_mib_mean": 9759.738037109375,
+  "peak_allocated_mib_max": 10301.59423828125,
+  "peak_reserved_mib_mean": 11254.0,
+  "peak_reserved_mib_max": 11932.0,
+  "triangles": 8402362,
+  "vertices": 3419320,
+  "checksum": 12.271700203418732,
+  "repeat_rows": [
+    {
+      "repeat": 1,
+      "elapsed_sec": 17.146024014800787,
+      "ms_per_view": 952.5568897111548,
+      "fps": 1.049806064919893,
+      "render_elapsed_sec": 0.5614300277084112,
+      "adapter_elapsed_sec": 16.576806791126728,
+      "render_ms_per_view": 31.190557094911735,
+      "adapter_ms_per_view": 920.9337106181515,
+      "adapter_over_render_ratio": 29.526042379293955,
+      "frames": [
+        {
+          "frame": "00000",
+          "support_count": 4,
+          "support_names": [
+            "00025",
+            "00024",
+            "00027",
+            "00049"
+          ],
+          "mean_confidence": 1.041181206703186,
+          "covered_fraction": 0.5439285635948181,
+          "mean_signal_support_count": 2.0245800018310547,
+          "mean_signal_residual_std": 0.011790329590439796,
+          "edge_accept_fraction": 0.7447142004966736,
+          "edge_threshold": 0.012029680423438549
+        },
+        {
+          "frame": "00001",
+          "support_count": 4,
+          "support_names": [
+            "00007",
+            "00055",
+            "00029",
+            "00032"
+          ],
+          "mean_confidence": 1.063823938369751,
+          "covered_fraction": 0.4273315668106079,
+          "mean_signal_support_count": 2.4700844287872314,
+          "mean_signal_residual_std": 0.02438868209719658,
+          "edge_accept_fraction": 0.669135332107544,
+          "edge_threshold": 0.017211148515343666
+        },
+        {
+          "frame": "00002",
+          "support_count": 4,
+          "support_names": [
+            "00014",
+            "00037",
+            "00036",
+            "00062"
+          ],
+          "mean_confidence": 1.363523006439209,
+          "covered_fraction": 0.5411661267280579,
+          "mean_signal_support_count": 2.5347914695739746,
+          "mean_signal_residual_std": 0.02614917978644371,
+          "edge_accept_fraction": 0.7241505980491638,
+          "edge_threshold": 0.02201448380947113
+        },
+        {
+          "frame": "00003",
+          "support_count": 4,
+          "support_names": [
+            "00021",
+            "00044",
+            "00043",
+            "00067"
+          ],
+          "mean_confidence": 1.147617220878601,
+          "covered_fraction": 0.41838783025741577,
+          "mean_signal_support_count": 2.7358627319335938,
+          "mean_signal_residual_std": 0.0226645115762949,
+          "edge_accept_fraction": 0.6798985600471497,
+          "edge_threshold": 0.016260989010334015
+        },
+        {
+          "frame": "00004",
+          "support_count": 4,
+          "support_names": [
+            "00028",
+            "00051",
+            "00003",
+            "00050"
+          ],
+          "mean_confidence": 1.8980605602264404,
+          "covered_fraction": 0.7126076221466064,
+          "mean_signal_support_count": 2.5631604194641113,
+          "mean_signal_residual_std": 0.023374494165182114,
+          "edge_accept_fraction": 0.7856308221817017,
+          "edge_threshold": 0.016173113137483597
+        },
+        {
+          "frame": "00005",
+          "support_count": 4,
+          "support_names": [
+            "00035",
+            "00058",
+            "00081",
+            "00012"
+          ],
+          "mean_confidence": 1.632528305053711,
+          "covered_fraction": 0.6981067061424255,
+          "mean_signal_support_count": 2.3574602603912354,
+          "mean_signal_residual_std": 0.020428024232387543,
+          "edge_accept_fraction": 0.7949559092521667,
+          "edge_threshold": 0.018644442781805992
+        },
+        {
+          "frame": "00006",
+          "support_count": 4,
+          "support_names": [
+            "00065",
+            "00042",
+            "00064",
+            "00019"
+          ],
+          "mean_confidence": 1.8588004112243652,
+          "covered_fraction": 0.7321049571037292,
+          "mean_signal_support_count": 2.5755391120910645,
+          "mean_signal_residual_std": 0.02221257984638214,
+          "edge_accept_fraction": 0.8123482465744019,
+          "edge_threshold": 0.01977483555674553
+        },
+        {
+          "frame": "00007",
+          "support_count": 4,
+          "support_names": [
+            "00071",
+            "00072",
+            "00049",
+            "00095"
+          ],
+          "mean_confidence": 1.7000887393951416,
+          "covered_fraction": 0.7090027928352356,
+          "mean_signal_support_count": 2.3048758506774902,
+          "mean_signal_residual_std": 0.013841948471963406,
+          "edge_accept_fraction": 0.8312090635299683,
+          "edge_threshold": 0.02026301994919777
+        },
+        {
+          "frame": "00008",
+          "support_count": 4,
+          "support_names": [
+            "00056",
+            "00078",
+            "00099",
+            "00100"
+          ],
+          "mean_confidence": 1.9408100843429565,
+          "covered_fraction": 0.7482678294181824,
+          "mean_signal_support_count": 2.681009292602539,
+          "mean_signal_residual_std": 0.023483432829380035,
+          "edge_accept_fraction": 0.8347076177597046,
+          "edge_threshold": 0.023867903277277946
+        },
+        {
+          "frame": "00009",
+          "support_count": 4,
+          "support_names": [
+            "00107",
+            "00106",
+            "00063",
+            "00120"
+          ],
+          "mean_confidence": 1.9244356155395508,
+          "covered_fraction": 0.7673458456993103,
+          "mean_signal_support_count": 2.560332775115967,
+          "mean_signal_residual_std": 0.017330104485154152,
+          "edge_accept_fraction": 0.850498616695404,
+          "edge_threshold": 0.02305513620376587
+        },
+        {
+          "frame": "00010",
+          "support_count": 4,
+          "support_names": [
+            "00070",
+            "00047",
+            "00092",
+            "00093"
+          ],
+          "mean_confidence": 2.0047645568847656,
+          "covered_fraction": 0.7895771265029907,
+          "mean_signal_support_count": 2.478642702102661,
+          "mean_signal_residual_std": 0.023437222465872765,
+          "edge_accept_fraction": 0.8335512280464172,
+          "edge_threshold": 0.020866574719548225
+        },
+        {
+          "frame": "00011",
+          "support_count": 4,
+          "support_names": [
+            "00077",
+            "00054",
+            "00099",
+            "00100"
+          ],
+          "mean_confidence": 1.8022737503051758,
+          "covered_fraction": 0.7960525751113892,
+          "mean_signal_support_count": 2.257901668548584,
+          "mean_signal_residual_std": 0.021485086530447006,
+          "edge_accept_fraction": 0.8372176885604858,
+          "edge_threshold": 0.023671206086874008
+        },
+        {
+          "frame": "00012",
+          "support_count": 4,
+          "support_names": [
+            "00084",
+            "00038",
+            "00119",
+            "00061"
+          ],
+          "mean_confidence": 1.8894985914230347,
+          "covered_fraction": 0.8079313635826111,
+          "mean_signal_support_count": 2.5381827354431152,
+          "mean_signal_residual_std": 0.02244485169649124,
+          "edge_accept_fraction": 0.852358877658844,
+          "edge_threshold": 0.023543385788798332
+        },
+        {
+          "frame": "00013",
+          "support_count": 4,
+          "support_names": [
+            "00091",
+            "00112",
+            "00068",
+            "00045"
+          ],
+          "mean_confidence": 1.8272062540054321,
+          "covered_fraction": 0.8028903007507324,
+          "mean_signal_support_count": 2.5063529014587402,
+          "mean_signal_residual_std": 0.020068775862455368,
+          "edge_accept_fraction": 0.8552408814430237,
+          "edge_threshold": 0.02271098643541336
+        },
+        {
+          "frame": "00014",
+          "support_count": 4,
+          "support_names": [
+            "00098",
+            "00075",
+            "00076",
+            "00052"
+          ],
+          "mean_confidence": 1.7877217531204224,
+          "covered_fraction": 0.7624347805976868,
+          "mean_signal_support_count": 2.4606120586395264,
+          "mean_signal_residual_std": 0.0192732997238636,
+          "edge_accept_fraction": 0.8461130857467651,
+          "edge_threshold": 0.024714328348636627
+        },
+        {
+          "frame": "00015",
+          "support_count": 4,
+          "support_names": [
+            "00105",
+            "00061",
+            "00119",
+            "00082"
+          ],
+          "mean_confidence": 2.0447468757629395,
+          "covered_fraction": 0.8110021352767944,
+          "mean_signal_support_count": 2.6517786979675293,
+          "mean_signal_residual_std": 0.02403026446700096,
+          "edge_accept_fraction": 0.857572615146637,
+          "edge_threshold": 0.024897199124097824
+        },
+        {
+          "frame": "00016",
+          "support_count": 4,
+          "support_names": [
+            "00112",
+            "00068",
+            "00091",
+            "00045"
+          ],
+          "mean_confidence": 1.81462824344635,
+          "covered_fraction": 0.7830078601837158,
+          "mean_signal_support_count": 2.5523462295532227,
+          "mean_signal_residual_std": 0.021650345996022224,
+          "edge_accept_fraction": 0.8597032427787781,
+          "edge_threshold": 0.023743055760860443
+        },
+        {
+          "frame": "00017",
+          "support_count": 4,
+          "support_names": [
+            "00103",
+            "00059",
+            "00082",
+            "00104"
+          ],
+          "mean_confidence": 2.133469820022583,
+          "covered_fraction": 0.8209457397460938,
+          "mean_signal_support_count": 3.0021934509277344,
+          "mean_signal_residual_std": 0.025696836411952972,
+          "edge_accept_fraction": 0.8714340925216675,
+          "edge_threshold": 0.026808107271790504
+        }
+      ],
+      "cuda_peak_allocated_mib": 9217.8818359375,
+      "cuda_peak_reserved_mib": 10576.0
+    },
+    {
+      "repeat": 2,
+      "elapsed_sec": 13.437635488808155,
+      "ms_per_view": 746.5353049337864,
+      "fps": 1.3395213774768422,
+      "render_elapsed_sec": 0.5315186101943254,
+      "adapter_elapsed_sec": 12.900818221271038,
+      "render_ms_per_view": 29.528811677462524,
+      "adapter_ms_per_view": 716.7121234039465,
+      "adapter_over_render_ratio": 24.27162092509695,
+      "frames": [
+        {
+          "frame": "00000",
+          "support_count": 4,
+          "support_names": [
+            "00025",
+            "00024",
+            "00027",
+            "00049"
+          ],
+          "mean_confidence": 1.041181206703186,
+          "covered_fraction": 0.5439285635948181,
+          "mean_signal_support_count": 2.0245800018310547,
+          "mean_signal_residual_std": 0.011790329590439796,
+          "edge_accept_fraction": 0.7447142004966736,
+          "edge_threshold": 0.012029680423438549
+        },
+        {
+          "frame": "00001",
+          "support_count": 4,
+          "support_names": [
+            "00007",
+            "00055",
+            "00029",
+            "00032"
+          ],
+          "mean_confidence": 1.063823938369751,
+          "covered_fraction": 0.4273315668106079,
+          "mean_signal_support_count": 2.4700844287872314,
+          "mean_signal_residual_std": 0.02438868209719658,
+          "edge_accept_fraction": 0.669135332107544,
+          "edge_threshold": 0.017211148515343666
+        },
+        {
+          "frame": "00002",
+          "support_count": 4,
+          "support_names": [
+            "00014",
+            "00037",
+            "00036",
+            "00062"
+          ],
+          "mean_confidence": 1.363523006439209,
+          "covered_fraction": 0.5411661267280579,
+          "mean_signal_support_count": 2.5347914695739746,
+          "mean_signal_residual_std": 0.02614917978644371,
+          "edge_accept_fraction": 0.7241505980491638,
+          "edge_threshold": 0.02201448380947113
+        },
+        {
+          "frame": "00003",
+          "support_count": 4,
+          "support_names": [
+            "00021",
+            "00044",
+            "00043",
+            "00067"
+          ],
+          "mean_confidence": 1.147617220878601,
+          "covered_fraction": 0.41838783025741577,
+          "mean_signal_support_count": 2.7358627319335938,
+          "mean_signal_residual_std": 0.0226645115762949,
+          "edge_accept_fraction": 0.6798985600471497,
+          "edge_threshold": 0.016260989010334015
+        },
+        {
+          "frame": "00004",
+          "support_count": 4,
+          "support_names": [
+            "00028",
+            "00051",
+            "00003",
+            "00050"
+          ],
+          "mean_confidence": 1.8980605602264404,
+          "covered_fraction": 0.7126076221466064,
+          "mean_signal_support_count": 2.5631604194641113,
+          "mean_signal_residual_std": 0.023374494165182114,
+          "edge_accept_fraction": 0.7856308221817017,
+          "edge_threshold": 0.016173113137483597
+        },
+        {
+          "frame": "00005",
+          "support_count": 4,
+          "support_names": [
+            "00035",
+            "00058",
+            "00081",
+            "00012"
+          ],
+          "mean_confidence": 1.632528305053711,
+          "covered_fraction": 0.6981067061424255,
+          "mean_signal_support_count": 2.3574602603912354,
+          "mean_signal_residual_std": 0.020428024232387543,
+          "edge_accept_fraction": 0.7949559092521667,
+          "edge_threshold": 0.018644442781805992
+        },
+        {
+          "frame": "00006",
+          "support_count": 4,
+          "support_names": [
+            "00065",
+            "00042",
+            "00064",
+            "00019"
+          ],
+          "mean_confidence": 1.8588004112243652,
+          "covered_fraction": 0.7321049571037292,
+          "mean_signal_support_count": 2.5755391120910645,
+          "mean_signal_residual_std": 0.02221257984638214,
+          "edge_accept_fraction": 0.8123482465744019,
+          "edge_threshold": 0.01977483555674553
+        },
+        {
+          "frame": "00007",
+          "support_count": 4,
+          "support_names": [
+            "00071",
+            "00072",
+            "00049",
+            "00095"
+          ],
+          "mean_confidence": 1.7000887393951416,
+          "covered_fraction": 0.7090027928352356,
+          "mean_signal_support_count": 2.3048758506774902,
+          "mean_signal_residual_std": 0.013841948471963406,
+          "edge_accept_fraction": 0.8312090635299683,
+          "edge_threshold": 0.02026301994919777
+        },
+        {
+          "frame": "00008",
+          "support_count": 4,
+          "support_names": [
+            "00056",
+            "00078",
+            "00099",
+            "00100"
+          ],
+          "mean_confidence": 1.9408100843429565,
+          "covered_fraction": 0.7482678294181824,
+          "mean_signal_support_count": 2.681009292602539,
+          "mean_signal_residual_std": 0.023483432829380035,
+          "edge_accept_fraction": 0.8347076177597046,
+          "edge_threshold": 0.023867903277277946
+        },
+        {
+          "frame": "00009",
+          "support_count": 4,
+          "support_names": [
+            "00107",
+            "00106",
+            "00063",
+            "00120"
+          ],
+          "mean_confidence": 1.9244356155395508,
+          "covered_fraction": 0.7673458456993103,
+          "mean_signal_support_count": 2.560332775115967,
+          "mean_signal_residual_std": 0.017330104485154152,
+          "edge_accept_fraction": 0.850498616695404,
+          "edge_threshold": 0.02305513620376587
+        },
+        {
+          "frame": "00010",
+          "support_count": 4,
+          "support_names": [
+            "00070",
+            "00047",
+            "00092",
+            "00093"
+          ],
+          "mean_confidence": 2.0047645568847656,
+          "covered_fraction": 0.7895771265029907,
+          "mean_signal_support_count": 2.478642702102661,
+          "mean_signal_residual_std": 0.023437222465872765,
+          "edge_accept_fraction": 0.8335512280464172,
+          "edge_threshold": 0.020866574719548225
+        },
+        {
+          "frame": "00011",
+          "support_count": 4,
+          "support_names": [
+            "00077",
+            "00054",
+            "00099",
+            "00100"
+          ],
+          "mean_confidence": 1.8022737503051758,
+          "covered_fraction": 0.7960525751113892,
+          "mean_signal_support_count": 2.257901668548584,
+          "mean_signal_residual_std": 0.021485086530447006,
+          "edge_accept_fraction": 0.8372176885604858,
+          "edge_threshold": 0.023671206086874008
+        },
+        {
+          "frame": "00012",
+          "support_count": 4,
+          "support_names": [
+            "00084",
+            "00038",
+            "00119",
+            "00061"
+          ],
+          "mean_confidence": 1.8894985914230347,
+          "covered_fraction": 0.8079313635826111,
+          "mean_signal_support_count": 2.5381827354431152,
+          "mean_signal_residual_std": 0.02244485169649124,
+          "edge_accept_fraction": 0.852358877658844,
+          "edge_threshold": 0.023543385788798332
+        },
+        {
+          "frame": "00013",
+          "support_count": 4,
+          "support_names": [
+            "00091",
+            "00112",
+            "00068",
+            "00045"
+          ],
+          "mean_confidence": 1.8272062540054321,
+          "covered_fraction": 0.8028903007507324,
+          "mean_signal_support_count": 2.5063529014587402,
+          "mean_signal_residual_std": 0.020068775862455368,
+          "edge_accept_fraction": 0.8552408814430237,
+          "edge_threshold": 0.02271098643541336
+        },
+        {
+          "frame": "00014",
+          "support_count": 4,
+          "support_names": [
+            "00098",
+            "00075",
+            "00076",
+            "00052"
+          ],
+          "mean_confidence": 1.7877217531204224,
+          "covered_fraction": 0.7624347805976868,
+          "mean_signal_support_count": 2.4606120586395264,
+          "mean_signal_residual_std": 0.0192732997238636,
+          "edge_accept_fraction": 0.8461130857467651,
+          "edge_threshold": 0.024714328348636627
+        },
+        {
+          "frame": "00015",
+          "support_count": 4,
+          "support_names": [
+            "00105",
+            "00061",
+            "00119",
+            "00082"
+          ],
+          "mean_confidence": 2.0447468757629395,
+          "covered_fraction": 0.8110021352767944,
+          "mean_signal_support_count": 2.6517786979675293,
+          "mean_signal_residual_std": 0.02403026446700096,
+          "edge_accept_fraction": 0.857572615146637,
+          "edge_threshold": 0.024897199124097824
+        },
+        {
+          "frame": "00016",
+          "support_count": 4,
+          "support_names": [
+            "00112",
+            "00068",
+            "00091",
+            "00045"
+          ],
+          "mean_confidence": 1.81462824344635,
+          "covered_fraction": 0.7830078601837158,
+          "mean_signal_support_count": 2.5523462295532227,
+          "mean_signal_residual_std": 0.021650345996022224,
+          "edge_accept_fraction": 0.8597032427787781,
+          "edge_threshold": 0.023743055760860443
+        },
+        {
+          "frame": "00017",
+          "support_count": 4,
+          "support_names": [
+            "00103",
+            "00059",
+            "00082",
+            "00104"
+          ],
+          "mean_confidence": 2.133469820022583,
+          "covered_fraction": 0.8209457397460938,
+          "mean_signal_support_count": 3.0021934509277344,
+          "mean_signal_residual_std": 0.025696836411952972,
+          "edge_accept_fraction": 0.8714340925216675,
+          "edge_threshold": 0.026808107271790504
+        }
+      ],
+      "cuda_peak_allocated_mib": 10301.59423828125,
+      "cuda_peak_reserved_mib": 11932.0
+    }
+  ]
+}

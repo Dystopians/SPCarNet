@@ -1,0 +1,85 @@
+{
+  "summary": {
+    "rows": 4,
+    "notes": [
+      "LPIPS lower is better.",
+      "Integrated timing measures renderer forward plus adapt_frame in one process, excluding PNG writes, metrics.py, LPIPS, and policy calibration.",
+      "Do not claim speedup for Phase-J."
+    ],
+    "integrated_runtime_source": "outputs/carnet/spcarnet/runtime_profile_20260625_phasej_integrated_v2/summary.json"
+  },
+  "rows": [
+    {
+      "method": "MeshSplatting official clean30k reproduction",
+      "psnr": 24.800172170003254,
+      "ssim": 0.7310046884748671,
+      "lpips": 0.3071771131621467,
+      "dpsnr_vs_selected_clean": "n/a",
+      "dssim_vs_selected_clean": "n/a",
+      "dlpips_vs_selected_clean": "n/a",
+      "triangle_reduction": 0,
+      "checkpoint_byte_reduction": 0,
+      "peak_vram_reduction": "n/a",
+      "render_only_fps_ratio": "n/a",
+      "adapter_postprocess_ms_per_view": 0,
+      "integrated_ms_per_view": "n/a",
+      "integrated_fps": "n/a",
+      "integrated_over_render_only_compact_ms_ratio": "n/a",
+      "claim_status": "paper-table bridge only"
+    },
+    {
+      "method": "Selected clean MeshSplatting baseline",
+      "psnr": 25.15168211195204,
+      "ssim": 0.7490181260638766,
+      "lpips": 0.28762074146005845,
+      "dpsnr_vs_selected_clean": 0,
+      "dssim_vs_selected_clean": 0,
+      "dlpips_vs_selected_clean": 0,
+      "triangle_reduction": 0,
+      "checkpoint_byte_reduction": 0,
+      "peak_vram_reduction": 0,
+      "render_only_fps_ratio": 1.0,
+      "adapter_postprocess_ms_per_view": 0,
+      "integrated_ms_per_view": "n/a",
+      "integrated_fps": "n/a",
+      "integrated_over_render_only_compact_ms_ratio": "n/a",
+      "claim_status": "same-protocol baseline"
+    },
+    {
+      "method": "Compact-ELA support",
+      "psnr": 25.64962281121148,
+      "ssim": 0.7647735410266452,
+      "lpips": 0.2642473346657223,
+      "dpsnr_vs_selected_clean": 0.4979406992594401,
+      "dssim_vs_selected_clean": 0.015755414962768555,
+      "dlpips_vs_selected_clean": -0.023373406794336107,
+      "triangle_reduction": 0.05763203025442286,
+      "checkpoint_byte_reduction": 0.039467358419404464,
+      "peak_vram_reduction": "not_measured",
+      "render_only_fps_ratio": "not_measured",
+      "adapter_postprocess_ms_per_view": "not_measured",
+      "integrated_ms_per_view": "not_measured",
+      "integrated_fps": "not_measured",
+      "integrated_over_render_only_compact_ms_ratio": "not_measured",
+      "claim_status": "RGB+compact support; not strongest headline"
+    },
+    {
+      "method": "Phase-J SPCarNet",
+      "psnr": 26.482765621609158,
+      "ssim": 0.7837197648154365,
+      "lpips": 0.2242612921529346,
+      "dpsnr_vs_selected_clean": 1.331083509657118,
+      "dssim_vs_selected_clean": 0.03470163875155979,
+      "dlpips_vs_selected_clean": -0.06335944930712382,
+      "triangle_reduction": 0.07647939543725629,
+      "checkpoint_byte_reduction": 0.04675308806516529,
+      "peak_vram_reduction": 0.025733466391426887,
+      "render_only_fps_ratio": 0.9460226053019999,
+      "adapter_postprocess_ms_per_view": 1061.2981826619707,
+      "integrated_ms_per_view": 951.4108962508116,
+      "integrated_fps": 1.0510705773295868,
+      "integrated_over_render_only_compact_ms_ratio": 27.044246632812957,
+      "claim_status": "strong RGB+triangles; memory/size positive; integrated no-IO runtime speed-negative"
+    }
+  ]
+}

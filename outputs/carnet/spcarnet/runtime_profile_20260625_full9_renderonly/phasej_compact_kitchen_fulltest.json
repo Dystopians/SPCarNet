@@ -1,0 +1,53 @@
+{
+  "label": "phasej_compact_kitchen_fulltest",
+  "model_path": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/kitchen/ratio_0200/compact_model",
+  "split": "test",
+  "requested_iteration": 26000,
+  "loaded_iteration": 26000,
+  "num_views": 35,
+  "view_stride": 1,
+  "warmup_views": 2,
+  "repeats": 3,
+  "elapsed_sec_mean": 1.452754206955433,
+  "elapsed_sec_stdev": 0.0031140019748602506,
+  "ms_per_view_mean": 41.507263055869515,
+  "ms_per_view_stdev": 0.08897148499600857,
+  "fps_mean": 24.092242802100955,
+  "fps_stdev": 0.05158270085121578,
+  "peak_allocated_mib_mean": 11712.97412109375,
+  "peak_allocated_mib_max": 11712.97412109375,
+  "peak_reserved_mib_mean": 18312.0,
+  "peak_reserved_mib_max": 18312.0,
+  "triangles": 9512393,
+  "vertices": 2391146,
+  "checkpoint_bytes": 725659423,
+  "point_cloud_dir": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/kitchen/ratio_0200/compact_model/point_cloud/iteration_26000",
+  "checksum": 1.3639480769634247,
+  "repeat_rows": [
+    {
+      "repeat": 1,
+      "elapsed_sec": 1.45632204413414,
+      "ms_per_view": 41.60920126097543,
+      "fps": 24.033145787344953,
+      "peak_allocated_mib": 11712.97412109375,
+      "peak_reserved_mib": 18312.0
+    },
+    {
+      "repeat": 2,
+      "elapsed_sec": 1.4513574726879597,
+      "ms_per_view": 41.46735636251314,
+      "fps": 24.11535452749549,
+      "peak_allocated_mib": 11712.97412109375,
+      "peak_reserved_mib": 18312.0
+    },
+    {
+      "repeat": 3,
+      "elapsed_sec": 1.450583104044199,
+      "ms_per_view": 41.44523154411997,
+      "fps": 24.12822809146242,
+      "peak_allocated_mib": 11712.97412109375,
+      "peak_reserved_mib": 18312.0
+    }
+  ],
+  "scope": "render_only_no_png_no_metrics_no_adapter_postprocess"
+}

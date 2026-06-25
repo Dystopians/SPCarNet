@@ -1,0 +1,898 @@
+{
+  "benchmark": "integrated_phasej_runtime",
+  "scope": "renderer_forward_plus_adapt_frame_no_png_no_metrics_no_policy_calibration",
+  "command": [
+    "scripts/car_model/benchmark_phasej_integrated_runtime.py",
+    "-m",
+    "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/garden/ratio_0200/compact_model",
+    "--iteration",
+    "26000",
+    "--split",
+    "test",
+    "--base_method_name",
+    "ours_26000_phasef_extra_compact_base",
+    "--ela_report",
+    "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/garden/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/ela_report.json",
+    "--max_views",
+    "0",
+    "--repeats",
+    "2",
+    "--gpu",
+    "0",
+    "--quiet",
+    "--label",
+    "garden_phasej_integrated_v2",
+    "--out_json",
+    "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/raw/garden.json",
+    "--out_md",
+    "/dev/shm/spcarnet_runtime_profile_20260625_phasej_integrated_v2/md/garden.md"
+  ],
+  "label": "garden_phasej_integrated_v2",
+  "model_path": "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/garden/ratio_0200/compact_model",
+  "split": "test",
+  "base_method_name": "ours_26000_phasef_extra_compact_base",
+  "ela_report": "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/garden/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/ela_report.json",
+  "policy_source": "ela_report",
+  "alpha_source": "ela_report",
+  "requested_iteration": 26000,
+  "loaded_iteration": 26000,
+  "num_views": 24,
+  "available_target_frame_count": 24,
+  "view_stride": 1,
+  "warmup_views": 1,
+  "repeats": 2,
+  "support_frame_count": 161,
+  "support_source": "all_train",
+  "missing_report_support_names": [],
+  "target_frame_names": [
+    "00000",
+    "00001",
+    "00002",
+    "00003",
+    "00004",
+    "00005",
+    "00006",
+    "00007",
+    "00008",
+    "00009",
+    "00010",
+    "00011",
+    "00012",
+    "00013",
+    "00014",
+    "00015",
+    "00016",
+    "00017",
+    "00018",
+    "00019",
+    "00020",
+    "00021",
+    "00022",
+    "00023"
+  ],
+  "alpha": 0.0,
+  "k": 4,
+  "mode": "residual",
+  "depth_abs_tol": 0.02,
+  "depth_rel_tol": 0.06,
+  "residual_clip": 0.2,
+  "direction_weight": 0.35,
+  "benefit_calibrator_loaded": false,
+  "alpha_calibrator_loaded": true,
+  "elapsed_sec_mean": 20.386535359546542,
+  "elapsed_sec_stdev": 1.6892880906804129,
+  "ms_per_view_mean": 849.4389733144392,
+  "ms_per_view_stdev": 70.38700377835056,
+  "fps_mean": 1.1813031792363446,
+  "fps_stdev": 0.09788624486565291,
+  "render_ms_per_view_mean": 35.90371832251549,
+  "adapter_ms_per_view_mean": 813.1062092337136,
+  "adapter_over_render_ratio_mean": 22.633025566795062,
+  "peak_allocated_mib_mean": 11572.34033203125,
+  "peak_allocated_mib_max": 11966.77587890625,
+  "peak_reserved_mib_mean": 15885.0,
+  "peak_reserved_mib_max": 17046.0,
+  "triangles": 11166587,
+  "vertices": 3315236,
+  "checksum": 19.35924255847931,
+  "repeat_rows": [
+    {
+      "repeat": 1,
+      "elapsed_sec": 21.581042423844337,
+      "ms_per_view": 899.2101009935141,
+      "fps": 1.1120871517069546,
+      "render_elapsed_sec": 0.8727123029530048,
+      "adapter_elapsed_sec": 20.695402838289738,
+      "render_ms_per_view": 36.36301262304187,
+      "adapter_ms_per_view": 862.3084515954057,
+      "adapter_over_render_ratio": 23.71388918004537,
+      "frames": [
+        {
+          "frame": "00000",
+          "support_count": 4,
+          "support_names": [
+            "00028",
+            "00059",
+            "00058",
+            "00085"
+          ],
+          "mean_confidence": 2.2600953578948975,
+          "covered_fraction": 0.873175323009491,
+          "mean_signal_support_count": 3.2823145389556885,
+          "mean_signal_residual_std": 0.014691720716655254,
+          "alpha_mean": 0.8178622722625732,
+          "alpha_active_fraction": 0.873175323009491
+        },
+        {
+          "frame": "00001",
+          "support_count": 4,
+          "support_names": [
+            "00036",
+            "00007",
+            "00035",
+            "00006"
+          ],
+          "mean_confidence": 2.3471555709838867,
+          "covered_fraction": 0.9634256958961487,
+          "mean_signal_support_count": 3.056666374206543,
+          "mean_signal_residual_std": 0.023889120668172836,
+          "alpha_mean": 0.7584298253059387,
+          "alpha_active_fraction": 0.9634256958961487
+        },
+        {
+          "frame": "00002",
+          "support_count": 4,
+          "support_names": [
+            "00044",
+            "00043",
+            "00014",
+            "00013"
+          ],
+          "mean_confidence": 2.3829634189605713,
+          "covered_fraction": 0.985832691192627,
+          "mean_signal_support_count": 2.9857547283172607,
+          "mean_signal_residual_std": 0.01853085681796074,
+          "alpha_mean": 0.7391523122787476,
+          "alpha_active_fraction": 0.985832691192627
+        },
+        {
+          "frame": "00003",
+          "support_count": 4,
+          "support_names": [
+            "00051",
+            "00020",
+            "00021",
+            "00050"
+          ],
+          "mean_confidence": 2.397174119949341,
+          "covered_fraction": 0.9883275032043457,
+          "mean_signal_support_count": 2.9800467491149902,
+          "mean_signal_residual_std": 0.020564323291182518,
+          "alpha_mean": 0.7215840220451355,
+          "alpha_active_fraction": 0.9883275032043457
+        },
+        {
+          "frame": "00004",
+          "support_count": 4,
+          "support_names": [
+            "00058",
+            "00028",
+            "00027",
+            "00057"
+          ],
+          "mean_confidence": 2.0452566146850586,
+          "covered_fraction": 0.9277986288070679,
+          "mean_signal_support_count": 2.917720079421997,
+          "mean_signal_residual_std": 0.016385620459914207,
+          "alpha_mean": 0.7489963173866272,
+          "alpha_active_fraction": 0.9277986288070679
+        },
+        {
+          "frame": "00005",
+          "support_count": 4,
+          "support_names": [
+            "00065",
+            "00035",
+            "00064",
+            "00006"
+          ],
+          "mean_confidence": 2.497178077697754,
+          "covered_fraction": 0.9604389667510986,
+          "mean_signal_support_count": 3.1966323852539062,
+          "mean_signal_residual_std": 0.02075420320034027,
+          "alpha_mean": 0.7869205474853516,
+          "alpha_active_fraction": 0.9604389667510986
+        },
+        {
+          "frame": "00006",
+          "support_count": 4,
+          "support_names": [
+            "00070",
+            "00041",
+            "00042",
+            "00012"
+          ],
+          "mean_confidence": 2.7946038246154785,
+          "covered_fraction": 0.9894399642944336,
+          "mean_signal_support_count": 3.3807454109191895,
+          "mean_signal_residual_std": 0.020286323502659798,
+          "alpha_mean": 0.8465006351470947,
+          "alpha_active_fraction": 0.9894399642944336
+        },
+        {
+          "frame": "00007",
+          "support_count": 4,
+          "support_names": [
+            "00018",
+            "00076",
+            "00049",
+            "00103"
+          ],
+          "mean_confidence": 2.5690996646881104,
+          "covered_fraction": 0.994194507598877,
+          "mean_signal_support_count": 3.1450724601745605,
+          "mean_signal_residual_std": 0.019760167226195335,
+          "alpha_mean": 0.7738685011863708,
+          "alpha_active_fraction": 0.994194507598877
+        },
+        {
+          "frame": "00008",
+          "support_count": 4,
+          "support_names": [
+            "00083",
+            "00055",
+            "00025",
+            "00082"
+          ],
+          "mean_confidence": 2.8266401290893555,
+          "covered_fraction": 0.9947847127914429,
+          "mean_signal_support_count": 3.3765203952789307,
+          "mean_signal_residual_std": 0.020686663687229156,
+          "alpha_mean": 0.8631289005279541,
+          "alpha_active_fraction": 0.9947847127914429
+        },
+        {
+          "frame": "00009",
+          "support_count": 4,
+          "support_names": [
+            "00089",
+            "00032",
+            "00031",
+            "00062"
+          ],
+          "mean_confidence": 2.8087127208709717,
+          "covered_fraction": 0.9787917733192444,
+          "mean_signal_support_count": 3.4637434482574463,
+          "mean_signal_residual_std": 0.02106196992099285,
+          "alpha_mean": 0.85237717628479,
+          "alpha_active_fraction": 0.9787917733192444
+        },
+        {
+          "frame": "00010",
+          "support_count": 4,
+          "support_names": [
+            "00040",
+            "00096",
+            "00041",
+            "00070"
+          ],
+          "mean_confidence": 2.9297327995300293,
+          "covered_fraction": 0.9904872179031372,
+          "mean_signal_support_count": 3.5125045776367188,
+          "mean_signal_residual_std": 0.018514759838581085,
+          "alpha_mean": 0.8787738084793091,
+          "alpha_active_fraction": 0.9904872179031372
+        },
+        {
+          "frame": "00011",
+          "support_count": 4,
+          "support_names": [
+            "00103",
+            "00049",
+            "00104",
+            "00076"
+          ],
+          "mean_confidence": 2.8138153553009033,
+          "covered_fraction": 0.9920926094055176,
+          "mean_signal_support_count": 3.3890299797058105,
+          "mean_signal_residual_std": 0.0196023378521204,
+          "alpha_mean": 0.8432057499885559,
+          "alpha_active_fraction": 0.9920926094055176
+        },
+        {
+          "frame": "00012",
+          "support_count": 4,
+          "support_names": [
+            "00056",
+            "00057",
+            "00109",
+            "00110"
+          ],
+          "mean_confidence": 2.8237266540527344,
+          "covered_fraction": 0.9934859275817871,
+          "mean_signal_support_count": 3.401766300201416,
+          "mean_signal_residual_std": 0.021046333014965057,
+          "alpha_mean": 0.8539688587188721,
+          "alpha_active_fraction": 0.9934859275817871
+        },
+        {
+          "frame": "00013",
+          "support_count": 4,
+          "support_names": [
+            "00115",
+            "00064",
+            "00116",
+            "00090"
+          ],
+          "mean_confidence": 2.6704866886138916,
+          "covered_fraction": 0.9766117930412292,
+          "mean_signal_support_count": 3.316787004470825,
+          "mean_signal_residual_std": 0.01647230237722397,
+          "alpha_mean": 0.8212813138961792,
+          "alpha_active_fraction": 0.9766117930412292
+        },
+        {
+          "frame": "00014",
+          "support_count": 4,
+          "support_names": [
+            "00071",
+            "00123",
+            "00122",
+            "00097"
+          ],
+          "mean_confidence": 2.6254515647888184,
+          "covered_fraction": 0.9908314347267151,
+          "mean_signal_support_count": 3.2215330600738525,
+          "mean_signal_residual_std": 0.016333535313606262,
+          "alpha_mean": 0.8015446662902832,
+          "alpha_active_fraction": 0.9908314347267151
+        },
+        {
+          "frame": "00015",
+          "support_count": 4,
+          "support_names": [
+            "00078",
+            "00130",
+            "00129",
+            "00077"
+          ],
+          "mean_confidence": 2.6930274963378906,
+          "covered_fraction": 0.994082510471344,
+          "mean_signal_support_count": 3.2260162830352783,
+          "mean_signal_residual_std": 0.019201114773750305,
+          "alpha_mean": 0.8350611329078674,
+          "alpha_active_fraction": 0.994082510471344
+        },
+        {
+          "frame": "00016",
+          "support_count": 4,
+          "support_names": [
+            "00087",
+            "00138",
+            "00112",
+            "00137"
+          ],
+          "mean_confidence": 2.8468174934387207,
+          "covered_fraction": 0.9935675859451294,
+          "mean_signal_support_count": 3.4588358402252197,
+          "mean_signal_residual_std": 0.020382853224873543,
+          "alpha_mean": 0.8260329961776733,
+          "alpha_active_fraction": 0.9935675859451294
+        },
+        {
+          "frame": "00017",
+          "support_count": 4,
+          "support_names": [
+            "00118",
+            "00145",
+            "00094",
+            "00093"
+          ],
+          "mean_confidence": 2.914344310760498,
+          "covered_fraction": 0.9931132793426514,
+          "mean_signal_support_count": 3.599154233932495,
+          "mean_signal_residual_std": 0.017383437603712082,
+          "alpha_mean": 0.8440582752227783,
+          "alpha_active_fraction": 0.9931132793426514
+        },
+        {
+          "frame": "00018",
+          "support_count": 4,
+          "support_names": [
+            "00150",
+            "00100",
+            "00125",
+            "00101"
+          ],
+          "mean_confidence": 2.676910638809204,
+          "covered_fraction": 0.9797637462615967,
+          "mean_signal_support_count": 3.386991024017334,
+          "mean_signal_residual_std": 0.017581727355718613,
+          "alpha_mean": 0.8069244027137756,
+          "alpha_active_fraction": 0.9797637462615967
+        },
+        {
+          "frame": "00019",
+          "support_count": 4,
+          "support_names": [
+            "00107",
+            "00156",
+            "00106",
+            "00132"
+          ],
+          "mean_confidence": 2.78542160987854,
+          "covered_fraction": 0.9973905086517334,
+          "mean_signal_support_count": 3.3855271339416504,
+          "mean_signal_residual_std": 0.021061599254608154,
+          "alpha_mean": 0.8171910047531128,
+          "alpha_active_fraction": 0.9973905086517334
+        },
+        {
+          "frame": "00020",
+          "support_count": 4,
+          "support_names": [
+            "00113",
+            "00112",
+            "00089",
+            "00139"
+          ],
+          "mean_confidence": 2.56091570854187,
+          "covered_fraction": 0.9492684602737427,
+          "mean_signal_support_count": 3.3727951049804688,
+          "mean_signal_residual_std": 0.018562516197562218,
+          "alpha_mean": 0.8342936635017395,
+          "alpha_active_fraction": 0.9492684602737427
+        },
+        {
+          "frame": "00021",
+          "support_count": 4,
+          "support_names": [
+            "00121",
+            "00147",
+            "00120",
+            "00096"
+          ],
+          "mean_confidence": 2.6518571376800537,
+          "covered_fraction": 0.9769275784492493,
+          "mean_signal_support_count": 3.3930301666259766,
+          "mean_signal_residual_std": 0.02009258233010769,
+          "alpha_mean": 0.825039803981781,
+          "alpha_active_fraction": 0.9769275784492493
+        },
+        {
+          "frame": "00022",
+          "support_count": 4,
+          "support_names": [
+            "00129",
+            "00130",
+            "00153",
+            "00154"
+          ],
+          "mean_confidence": 2.5655229091644287,
+          "covered_fraction": 0.9857785701751709,
+          "mean_signal_support_count": 3.1910183429718018,
+          "mean_signal_residual_std": 0.019600246101617813,
+          "alpha_mean": 0.7641223669052124,
+          "alpha_active_fraction": 0.9857785701751709
+        },
+        {
+          "frame": "00023",
+          "support_count": 4,
+          "support_names": [
+            "00138",
+            "00086",
+            "00160",
+            "00137"
+          ],
+          "mean_confidence": 2.6143150329589844,
+          "covered_fraction": 0.9599855542182922,
+          "mean_signal_support_count": 3.3229455947875977,
+          "mean_signal_residual_std": 0.016529221087694168,
+          "alpha_mean": 0.8238374590873718,
+          "alpha_active_fraction": 0.9599855542182922
+        }
+      ],
+      "cuda_peak_allocated_mib": 11177.90478515625,
+      "cuda_peak_reserved_mib": 14724.0
+    },
+    {
+      "repeat": 2,
+      "elapsed_sec": 19.192028295248747,
+      "ms_per_view": 799.6678456353644,
+      "fps": 1.2505192067657347,
+      "render_elapsed_sec": 0.8506661765277386,
+      "adapter_elapsed_sec": 18.333695204928517,
+      "render_ms_per_view": 35.44442402198911,
+      "adapter_ms_per_view": 763.9039668720216,
+      "adapter_over_render_ratio": 21.552161953544758,
+      "frames": [
+        {
+          "frame": "00000",
+          "support_count": 4,
+          "support_names": [
+            "00028",
+            "00059",
+            "00058",
+            "00085"
+          ],
+          "mean_confidence": 2.2600953578948975,
+          "covered_fraction": 0.873175323009491,
+          "mean_signal_support_count": 3.2823145389556885,
+          "mean_signal_residual_std": 0.014691720716655254,
+          "alpha_mean": 0.8178622722625732,
+          "alpha_active_fraction": 0.873175323009491
+        },
+        {
+          "frame": "00001",
+          "support_count": 4,
+          "support_names": [
+            "00036",
+            "00007",
+            "00035",
+            "00006"
+          ],
+          "mean_confidence": 2.3471555709838867,
+          "covered_fraction": 0.9634256958961487,
+          "mean_signal_support_count": 3.056666374206543,
+          "mean_signal_residual_std": 0.023889120668172836,
+          "alpha_mean": 0.7584298253059387,
+          "alpha_active_fraction": 0.9634256958961487
+        },
+        {
+          "frame": "00002",
+          "support_count": 4,
+          "support_names": [
+            "00044",
+            "00043",
+            "00014",
+            "00013"
+          ],
+          "mean_confidence": 2.3829634189605713,
+          "covered_fraction": 0.985832691192627,
+          "mean_signal_support_count": 2.9857547283172607,
+          "mean_signal_residual_std": 0.01853085681796074,
+          "alpha_mean": 0.7391523122787476,
+          "alpha_active_fraction": 0.985832691192627
+        },
+        {
+          "frame": "00003",
+          "support_count": 4,
+          "support_names": [
+            "00051",
+            "00020",
+            "00021",
+            "00050"
+          ],
+          "mean_confidence": 2.397174119949341,
+          "covered_fraction": 0.9883275032043457,
+          "mean_signal_support_count": 2.9800467491149902,
+          "mean_signal_residual_std": 0.020564323291182518,
+          "alpha_mean": 0.7215840220451355,
+          "alpha_active_fraction": 0.9883275032043457
+        },
+        {
+          "frame": "00004",
+          "support_count": 4,
+          "support_names": [
+            "00058",
+            "00028",
+            "00027",
+            "00057"
+          ],
+          "mean_confidence": 2.0452566146850586,
+          "covered_fraction": 0.9277986288070679,
+          "mean_signal_support_count": 2.917720079421997,
+          "mean_signal_residual_std": 0.016385620459914207,
+          "alpha_mean": 0.7489963173866272,
+          "alpha_active_fraction": 0.9277986288070679
+        },
+        {
+          "frame": "00005",
+          "support_count": 4,
+          "support_names": [
+            "00065",
+            "00035",
+            "00064",
+            "00006"
+          ],
+          "mean_confidence": 2.497178077697754,
+          "covered_fraction": 0.9604389667510986,
+          "mean_signal_support_count": 3.1966323852539062,
+          "mean_signal_residual_std": 0.02075420320034027,
+          "alpha_mean": 0.7869205474853516,
+          "alpha_active_fraction": 0.9604389667510986
+        },
+        {
+          "frame": "00006",
+          "support_count": 4,
+          "support_names": [
+            "00070",
+            "00041",
+            "00042",
+            "00012"
+          ],
+          "mean_confidence": 2.7946038246154785,
+          "covered_fraction": 0.9894399642944336,
+          "mean_signal_support_count": 3.3807454109191895,
+          "mean_signal_residual_std": 0.020286323502659798,
+          "alpha_mean": 0.8465006351470947,
+          "alpha_active_fraction": 0.9894399642944336
+        },
+        {
+          "frame": "00007",
+          "support_count": 4,
+          "support_names": [
+            "00018",
+            "00076",
+            "00049",
+            "00103"
+          ],
+          "mean_confidence": 2.5690996646881104,
+          "covered_fraction": 0.994194507598877,
+          "mean_signal_support_count": 3.1450724601745605,
+          "mean_signal_residual_std": 0.019760167226195335,
+          "alpha_mean": 0.7738685011863708,
+          "alpha_active_fraction": 0.994194507598877
+        },
+        {
+          "frame": "00008",
+          "support_count": 4,
+          "support_names": [
+            "00083",
+            "00055",
+            "00025",
+            "00082"
+          ],
+          "mean_confidence": 2.8266401290893555,
+          "covered_fraction": 0.9947847127914429,
+          "mean_signal_support_count": 3.3765203952789307,
+          "mean_signal_residual_std": 0.020686663687229156,
+          "alpha_mean": 0.8631289005279541,
+          "alpha_active_fraction": 0.9947847127914429
+        },
+        {
+          "frame": "00009",
+          "support_count": 4,
+          "support_names": [
+            "00089",
+            "00032",
+            "00031",
+            "00062"
+          ],
+          "mean_confidence": 2.8087127208709717,
+          "covered_fraction": 0.9787917733192444,
+          "mean_signal_support_count": 3.4637434482574463,
+          "mean_signal_residual_std": 0.02106196992099285,
+          "alpha_mean": 0.85237717628479,
+          "alpha_active_fraction": 0.9787917733192444
+        },
+        {
+          "frame": "00010",
+          "support_count": 4,
+          "support_names": [
+            "00040",
+            "00096",
+            "00041",
+            "00070"
+          ],
+          "mean_confidence": 2.9297327995300293,
+          "covered_fraction": 0.9904872179031372,
+          "mean_signal_support_count": 3.5125045776367188,
+          "mean_signal_residual_std": 0.018514759838581085,
+          "alpha_mean": 0.8787738084793091,
+          "alpha_active_fraction": 0.9904872179031372
+        },
+        {
+          "frame": "00011",
+          "support_count": 4,
+          "support_names": [
+            "00103",
+            "00049",
+            "00104",
+            "00076"
+          ],
+          "mean_confidence": 2.8138153553009033,
+          "covered_fraction": 0.9920926094055176,
+          "mean_signal_support_count": 3.3890299797058105,
+          "mean_signal_residual_std": 0.0196023378521204,
+          "alpha_mean": 0.8432057499885559,
+          "alpha_active_fraction": 0.9920926094055176
+        },
+        {
+          "frame": "00012",
+          "support_count": 4,
+          "support_names": [
+            "00056",
+            "00057",
+            "00109",
+            "00110"
+          ],
+          "mean_confidence": 2.8237266540527344,
+          "covered_fraction": 0.9934859275817871,
+          "mean_signal_support_count": 3.401766300201416,
+          "mean_signal_residual_std": 0.021046333014965057,
+          "alpha_mean": 0.8539688587188721,
+          "alpha_active_fraction": 0.9934859275817871
+        },
+        {
+          "frame": "00013",
+          "support_count": 4,
+          "support_names": [
+            "00115",
+            "00064",
+            "00116",
+            "00090"
+          ],
+          "mean_confidence": 2.6704866886138916,
+          "covered_fraction": 0.9766117930412292,
+          "mean_signal_support_count": 3.316787004470825,
+          "mean_signal_residual_std": 0.01647230237722397,
+          "alpha_mean": 0.8212813138961792,
+          "alpha_active_fraction": 0.9766117930412292
+        },
+        {
+          "frame": "00014",
+          "support_count": 4,
+          "support_names": [
+            "00071",
+            "00123",
+            "00122",
+            "00097"
+          ],
+          "mean_confidence": 2.6254515647888184,
+          "covered_fraction": 0.9908314347267151,
+          "mean_signal_support_count": 3.2215330600738525,
+          "mean_signal_residual_std": 0.016333535313606262,
+          "alpha_mean": 0.8015446662902832,
+          "alpha_active_fraction": 0.9908314347267151
+        },
+        {
+          "frame": "00015",
+          "support_count": 4,
+          "support_names": [
+            "00078",
+            "00130",
+            "00129",
+            "00077"
+          ],
+          "mean_confidence": 2.6930274963378906,
+          "covered_fraction": 0.994082510471344,
+          "mean_signal_support_count": 3.2260162830352783,
+          "mean_signal_residual_std": 0.019201114773750305,
+          "alpha_mean": 0.8350611329078674,
+          "alpha_active_fraction": 0.994082510471344
+        },
+        {
+          "frame": "00016",
+          "support_count": 4,
+          "support_names": [
+            "00087",
+            "00138",
+            "00112",
+            "00137"
+          ],
+          "mean_confidence": 2.8468174934387207,
+          "covered_fraction": 0.9935675859451294,
+          "mean_signal_support_count": 3.4588358402252197,
+          "mean_signal_residual_std": 0.020382853224873543,
+          "alpha_mean": 0.8260329961776733,
+          "alpha_active_fraction": 0.9935675859451294
+        },
+        {
+          "frame": "00017",
+          "support_count": 4,
+          "support_names": [
+            "00118",
+            "00145",
+            "00094",
+            "00093"
+          ],
+          "mean_confidence": 2.914344310760498,
+          "covered_fraction": 0.9931132793426514,
+          "mean_signal_support_count": 3.599154233932495,
+          "mean_signal_residual_std": 0.017383437603712082,
+          "alpha_mean": 0.8440582752227783,
+          "alpha_active_fraction": 0.9931132793426514
+        },
+        {
+          "frame": "00018",
+          "support_count": 4,
+          "support_names": [
+            "00150",
+            "00100",
+            "00125",
+            "00101"
+          ],
+          "mean_confidence": 2.676910638809204,
+          "covered_fraction": 0.9797637462615967,
+          "mean_signal_support_count": 3.386991024017334,
+          "mean_signal_residual_std": 0.017581727355718613,
+          "alpha_mean": 0.8069244027137756,
+          "alpha_active_fraction": 0.9797637462615967
+        },
+        {
+          "frame": "00019",
+          "support_count": 4,
+          "support_names": [
+            "00107",
+            "00156",
+            "00106",
+            "00132"
+          ],
+          "mean_confidence": 2.78542160987854,
+          "covered_fraction": 0.9973905086517334,
+          "mean_signal_support_count": 3.3855271339416504,
+          "mean_signal_residual_std": 0.021061599254608154,
+          "alpha_mean": 0.8171910047531128,
+          "alpha_active_fraction": 0.9973905086517334
+        },
+        {
+          "frame": "00020",
+          "support_count": 4,
+          "support_names": [
+            "00113",
+            "00112",
+            "00089",
+            "00139"
+          ],
+          "mean_confidence": 2.56091570854187,
+          "covered_fraction": 0.9492684602737427,
+          "mean_signal_support_count": 3.3727951049804688,
+          "mean_signal_residual_std": 0.018562516197562218,
+          "alpha_mean": 0.8342936635017395,
+          "alpha_active_fraction": 0.9492684602737427
+        },
+        {
+          "frame": "00021",
+          "support_count": 4,
+          "support_names": [
+            "00121",
+            "00147",
+            "00120",
+            "00096"
+          ],
+          "mean_confidence": 2.6518571376800537,
+          "covered_fraction": 0.9769275784492493,
+          "mean_signal_support_count": 3.3930301666259766,
+          "mean_signal_residual_std": 0.02009258233010769,
+          "alpha_mean": 0.825039803981781,
+          "alpha_active_fraction": 0.9769275784492493
+        },
+        {
+          "frame": "00022",
+          "support_count": 4,
+          "support_names": [
+            "00129",
+            "00130",
+            "00153",
+            "00154"
+          ],
+          "mean_confidence": 2.5655229091644287,
+          "covered_fraction": 0.9857785701751709,
+          "mean_signal_support_count": 3.1910183429718018,
+          "mean_signal_residual_std": 0.019600246101617813,
+          "alpha_mean": 0.7641223669052124,
+          "alpha_active_fraction": 0.9857785701751709
+        },
+        {
+          "frame": "00023",
+          "support_count": 4,
+          "support_names": [
+            "00138",
+            "00086",
+            "00160",
+            "00137"
+          ],
+          "mean_confidence": 2.6143150329589844,
+          "covered_fraction": 0.9599855542182922,
+          "mean_signal_support_count": 3.3229455947875977,
+          "mean_signal_residual_std": 0.016529221087694168,
+          "alpha_mean": 0.8238374590873718,
+          "alpha_active_fraction": 0.9599855542182922
+        }
+      ],
+      "cuda_peak_allocated_mib": 11966.77587890625,
+      "cuda_peak_reserved_mib": 17046.0
+    }
+  ]
+}

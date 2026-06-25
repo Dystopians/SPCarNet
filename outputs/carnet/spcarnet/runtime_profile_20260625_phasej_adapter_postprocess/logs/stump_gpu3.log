@@ -1,0 +1,729 @@
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python /data/peilincai/mesh-splatting/scripts/car_model/benchmark_ela_postprocess_runtime.py --base_model_path /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/stump/ratio_0200/compact_model --base_method_name ours_26000_phasef_extra_compact_base --target_split test --ela_report /data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/stump/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/ela_report.json --max_views 0 --repeats 2 --device cuda:0 --out_json /dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/stump_phasej_adapter_postprocess.json --out_md /dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/stump_phasej_adapter_postprocess.md
+ELA adapt repeat 1:   0%|          | 0/16 [00:00<?, ?it/s]ELA adapt repeat 1:   6%|▋         | 1/16 [00:01<00:18,  1.22s/it]ELA adapt repeat 1:  12%|█▎        | 2/16 [00:02<00:14,  1.04s/it]ELA adapt repeat 1:  19%|█▉        | 3/16 [00:03<00:12,  1.02it/s]ELA adapt repeat 1:  25%|██▌       | 4/16 [00:03<00:10,  1.13it/s]ELA adapt repeat 1:  31%|███▏      | 5/16 [00:04<00:09,  1.13it/s]ELA adapt repeat 1:  38%|███▊      | 6/16 [00:05<00:08,  1.11it/s]ELA adapt repeat 1:  44%|████▍     | 7/16 [00:06<00:08,  1.04it/s]ELA adapt repeat 1:  50%|█████     | 8/16 [00:07<00:06,  1.19it/s]ELA adapt repeat 1:  56%|█████▋    | 9/16 [00:08<00:06,  1.04it/s]ELA adapt repeat 1:  62%|██████▎   | 10/16 [00:09<00:06,  1.05s/it]ELA adapt repeat 1:  69%|██████▉   | 11/16 [00:10<00:05,  1.11s/it]ELA adapt repeat 1:  75%|███████▌  | 12/16 [00:12<00:04,  1.14s/it]ELA adapt repeat 1:  81%|████████▏ | 13/16 [00:13<00:03,  1.07s/it]ELA adapt repeat 1:  88%|████████▊ | 14/16 [00:14<00:02,  1.03s/it]ELA adapt repeat 1:  94%|█████████▍| 15/16 [00:14<00:00,  1.07it/s]ELA adapt repeat 1: 100%|██████████| 16/16 [00:15<00:00,  1.33it/s]                                                                   ELA adapt repeat 2:   0%|          | 0/16 [00:00<?, ?it/s]ELA adapt repeat 2:   6%|▋         | 1/16 [00:00<00:11,  1.26it/s]ELA adapt repeat 2:  12%|█▎        | 2/16 [00:01<00:11,  1.20it/s]ELA adapt repeat 2:  19%|█▉        | 3/16 [00:02<00:10,  1.19it/s]ELA adapt repeat 2:  25%|██▌       | 4/16 [00:03<00:09,  1.30it/s]ELA adapt repeat 2:  31%|███▏      | 5/16 [00:04<00:08,  1.24it/s]ELA adapt repeat 2:  38%|███▊      | 6/16 [00:04<00:08,  1.25it/s]ELA adapt repeat 2:  44%|████▍     | 7/16 [00:05<00:07,  1.21it/s]ELA adapt repeat 2:  50%|█████     | 8/16 [00:06<00:05,  1.36it/s]ELA adapt repeat 2:  56%|█████▋    | 9/16 [00:07<00:05,  1.24it/s]ELA adapt repeat 2:  62%|██████▎   | 10/16 [00:08<00:05,  1.16it/s]ELA adapt repeat 2:  69%|██████▉   | 11/16 [00:09<00:04,  1.13it/s]ELA adapt repeat 2:  75%|███████▌  | 12/16 [00:10<00:03,  1.08it/s]ELA adapt repeat 2:  81%|████████▏ | 13/16 [00:11<00:02,  1.03it/s]ELA adapt repeat 2:  88%|████████▊ | 14/16 [00:12<00:01,  1.00it/s]ELA adapt repeat 2:  94%|█████████▍| 15/16 [00:13<00:00,  1.02it/s]ELA adapt repeat 2: 100%|██████████| 16/16 [00:13<00:00,  1.26it/s]                                                                   {
+  "benchmark": "ela_postprocess_runtime",
+  "scope": "adapt_frame_no_png_no_metrics_no_renderer_no_calibration",
+  "command": [
+    "/data/peilincai/mesh-splatting/scripts/car_model/benchmark_ela_postprocess_runtime.py",
+    "--base_model_path",
+    "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/stump/ratio_0200/compact_model",
+    "--base_method_name",
+    "ours_26000_phasef_extra_compact_base",
+    "--target_split",
+    "test",
+    "--ela_report",
+    "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/stump/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/ela_report.json",
+    "--max_views",
+    "0",
+    "--repeats",
+    "2",
+    "--device",
+    "cuda:0",
+    "--out_json",
+    "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/stump_phasej_adapter_postprocess.json",
+    "--out_md",
+    "/dev/shm/spcarnet_runtime_profile_20260625_phasej_adapter_postprocess/raw/stump_phasej_adapter_postprocess.md"
+  ],
+  "base_model_path": "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/stump/ratio_0200/compact_model",
+  "base_method_name": "ours_26000_phasef_extra_compact_base",
+  "target_split": "test",
+  "ela_report": "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/stump/ratio_0200/compact_model/test/ours_26000_phasej_guarded_adaptedge_ela/ela_report.json",
+  "policy_source": "ela_report",
+  "alpha_source": "ela_report",
+  "requested_device": "cuda:0",
+  "device": "cuda:0",
+  "max_views": 0,
+  "repeats": 2,
+  "available_target_frame_count": 16,
+  "target_frame_count": 16,
+  "support_frame_count": 109,
+  "support_source": "all_train",
+  "missing_report_support_names": [],
+  "target_frame_names": [
+    "00000",
+    "00001",
+    "00002",
+    "00003",
+    "00004",
+    "00005",
+    "00006",
+    "00007",
+    "00008",
+    "00009",
+    "00010",
+    "00011",
+    "00012",
+    "00013",
+    "00014",
+    "00015"
+  ],
+  "support_frame_names": [
+    "00000",
+    "00001",
+    "00002",
+    "00003",
+    "00004",
+    "00005",
+    "00006",
+    "00007",
+    "00008",
+    "00009",
+    "00010",
+    "00011",
+    "00012",
+    "00013",
+    "00014",
+    "00015",
+    "00016",
+    "00017",
+    "00018",
+    "00019",
+    "00020",
+    "00021",
+    "00022",
+    "00023",
+    "00024",
+    "00025",
+    "00026",
+    "00027",
+    "00028",
+    "00029",
+    "00030",
+    "00031",
+    "00032",
+    "00033",
+    "00034",
+    "00035",
+    "00036",
+    "00037",
+    "00038",
+    "00039",
+    "00040",
+    "00041",
+    "00042",
+    "00043",
+    "00044",
+    "00045",
+    "00046",
+    "00047",
+    "00048",
+    "00049",
+    "00050",
+    "00051",
+    "00052",
+    "00053",
+    "00054",
+    "00055",
+    "00056",
+    "00057",
+    "00058",
+    "00059",
+    "00060",
+    "00061",
+    "00062",
+    "00063",
+    "00064",
+    "00065",
+    "00066",
+    "00067",
+    "00068",
+    "00069",
+    "00070",
+    "00071",
+    "00072",
+    "00073",
+    "00074",
+    "00075",
+    "00076",
+    "00077",
+    "00078",
+    "00079",
+    "00080",
+    "00081",
+    "00082",
+    "00083",
+    "00084",
+    "00085",
+    "00086",
+    "00087",
+    "00088",
+    "00089",
+    "00090",
+    "00091",
+    "00092",
+    "00093",
+    "00094",
+    "00095",
+    "00096",
+    "00097",
+    "00098",
+    "00099",
+    "00100",
+    "00101",
+    "00102",
+    "00103",
+    "00104",
+    "00105",
+    "00106",
+    "00107",
+    "00108"
+  ],
+  "alpha": 0.0,
+  "k": 4,
+  "mode": "residual",
+  "depth_abs_tol": 0.02,
+  "depth_rel_tol": 0.12,
+  "residual_clip": 0.2,
+  "direction_weight": 0.2,
+  "min_confidence": 0.0001,
+  "edge_gate": false,
+  "edge_gate_quantile": -1.0,
+  "edge_gate_min": 0.0,
+  "edge_gate_dilate": 0,
+  "local_trust_gate": false,
+  "local_trust_min_supports": 2,
+  "local_trust_max_residual_std": -1.0,
+  "local_trust_min_agreement": 0.0,
+  "local_trust_agreement_scale": 0.04,
+  "local_trust_confidence_quantile": -1.0,
+  "local_trust_min_confidence": 0.0,
+  "local_trust_mode": "hard",
+  "local_trust_min_weight": 0.0,
+  "benefit_calibrator_loaded": false,
+  "alpha_calibrator_loaded": true,
+  "cpu_wall_time_sec_mean": 14.345430844463408,
+  "cpu_wall_time_sec_stdev": 1.0555941930287076,
+  "cpu_wall_time_sec_min": 13.599013032391667,
+  "cpu_wall_time_sec_max": 15.091848656535149,
+  "ms_per_target_frame_mean": 896.589427778963,
+  "ms_per_target_frame_stdev": 65.97463706429423,
+  "target_frames_per_sec_mean": 1.1183654646099281,
+  "target_frames_per_sec_stdev": 0.0822938051095008,
+  "cuda_peak_allocated_mib_mean": 2447.96044921875,
+  "cuda_peak_allocated_mib_max": 2865.306640625,
+  "cuda_peak_reserved_mib_mean": 2522.0,
+  "cuda_peak_reserved_mib_max": 2980.0,
+  "repeat_rows": [
+    {
+      "repeat": 1,
+      "cpu_wall_time_sec": 15.091848656535149,
+      "ms_per_target_frame": 943.2405410334468,
+      "target_frames_per_sec": 1.060174956967356,
+      "mean_covered_fraction": 0.9391649663448334,
+      "mean_confidence": 1.5054271332919598,
+      "checksum": 39.11347359418869,
+      "frames": [
+        {
+          "frame": "00000",
+          "support_count": 4,
+          "support_names": [
+            "00016",
+            "00014",
+            "00015",
+            "00049"
+          ],
+          "mean_confidence": 1.2874701023101807,
+          "covered_fraction": 0.8024671077728271,
+          "mean_signal_support_count": 2.232313871383667,
+          "mean_signal_residual_std": 0.020818350836634636,
+          "alpha_mean": 0.3753727972507477,
+          "alpha_active_fraction": 0.6859486699104309
+        },
+        {
+          "frame": "00001",
+          "support_count": 4,
+          "support_names": [
+            "00023",
+            "00022",
+            "00039",
+            "00006"
+          ],
+          "mean_confidence": 1.4096760749816895,
+          "covered_fraction": 0.9429494738578796,
+          "mean_signal_support_count": 2.098270893096924,
+          "mean_signal_residual_std": 0.015137090347707272,
+          "alpha_mean": 0.3356848955154419,
+          "alpha_active_fraction": 0.7582679986953735
+        },
+        {
+          "frame": "00002",
+          "support_count": 4,
+          "support_names": [
+            "00032",
+            "00031",
+            "00048",
+            "00065"
+          ],
+          "mean_confidence": 1.3813953399658203,
+          "covered_fraction": 0.8791928887367249,
+          "mean_signal_support_count": 2.0055501461029053,
+          "mean_signal_residual_std": 0.014294732362031937,
+          "alpha_mean": 0.3416268229484558,
+          "alpha_active_fraction": 0.712560772895813
+        },
+        {
+          "frame": "00003",
+          "support_count": 4,
+          "support_names": [
+            "00021",
+            "00005",
+            "00006",
+            "00055"
+          ],
+          "mean_confidence": 1.7332987785339355,
+          "covered_fraction": 0.9461944699287415,
+          "mean_signal_support_count": 2.3396074771881104,
+          "mean_signal_residual_std": 0.01816747523844242,
+          "alpha_mean": 0.40124207735061646,
+          "alpha_active_fraction": 0.8250855803489685
+        },
+        {
+          "frame": "00004",
+          "support_count": 4,
+          "support_names": [
+            "00011",
+            "00028",
+            "00044",
+            "00043"
+          ],
+          "mean_confidence": 1.8974525928497314,
+          "covered_fraction": 0.9603933095932007,
+          "mean_signal_support_count": 2.4775829315185547,
+          "mean_signal_residual_std": 0.016480328515172005,
+          "alpha_mean": 0.42451319098472595,
+          "alpha_active_fraction": 0.8348185420036316
+        },
+        {
+          "frame": "00005",
+          "support_count": 4,
+          "support_names": [
+            "00035",
+            "00051",
+            "00017",
+            "00050"
+          ],
+          "mean_confidence": 1.4696102142333984,
+          "covered_fraction": 0.9639907479286194,
+          "mean_signal_support_count": 2.132758140563965,
+          "mean_signal_residual_std": 0.017311280593276024,
+          "alpha_mean": 0.36350172758102417,
+          "alpha_active_fraction": 0.8250144720077515
+        },
+        {
+          "frame": "00006",
+          "support_count": 4,
+          "support_names": [
+            "00042",
+            "00060",
+            "00059",
+            "00026"
+          ],
+          "mean_confidence": 1.4727941751480103,
+          "covered_fraction": 0.9551953077316284,
+          "mean_signal_support_count": 2.084613800048828,
+          "mean_signal_residual_std": 0.014187173917889595,
+          "alpha_mean": 0.3589855432510376,
+          "alpha_active_fraction": 0.7990157008171082
+        },
+        {
+          "frame": "00007",
+          "support_count": 4,
+          "support_names": [
+            "00033",
+            "00034",
+            "00049",
+            "00015"
+          ],
+          "mean_confidence": 1.8253448009490967,
+          "covered_fraction": 0.9612686038017273,
+          "mean_signal_support_count": 2.404981851577759,
+          "mean_signal_residual_std": 0.01850982755422592,
+          "alpha_mean": 0.4216915965080261,
+          "alpha_active_fraction": 0.8645510673522949
+        },
+        {
+          "frame": "00008",
+          "support_count": 4,
+          "support_names": [
+            "00056",
+            "00072",
+            "00038",
+            "00071"
+          ],
+          "mean_confidence": 1.5579109191894531,
+          "covered_fraction": 0.9648182988166809,
+          "mean_signal_support_count": 2.1324100494384766,
+          "mean_signal_residual_std": 0.014880326576530933,
+          "alpha_mean": 0.3725775182247162,
+          "alpha_active_fraction": 0.8197795152664185
+        },
+        {
+          "frame": "00009",
+          "support_count": 4,
+          "support_names": [
+            "00063",
+            "00045",
+            "00079",
+            "00078"
+          ],
+          "mean_confidence": 1.6519215106964111,
+          "covered_fraction": 0.9577364325523376,
+          "mean_signal_support_count": 2.2117860317230225,
+          "mean_signal_residual_std": 0.015203264541924,
+          "alpha_mean": 0.40944722294807434,
+          "alpha_active_fraction": 0.8428720831871033
+        },
+        {
+          "frame": "00010",
+          "support_count": 3,
+          "support_names": [
+            "00054",
+            "00086",
+            "00085"
+          ],
+          "mean_confidence": 0.8233497738838196,
+          "covered_fraction": 0.8594056367874146,
+          "mean_signal_support_count": 1.3927702903747559,
+          "mean_signal_residual_std": 0.00615380285307765,
+          "alpha_mean": 0.2213423103094101,
+          "alpha_active_fraction": 0.5512658953666687
+        },
+        {
+          "frame": "00011",
+          "support_count": 2,
+          "support_names": [
+            "00092",
+            "00061"
+          ],
+          "mean_confidence": 1.3652483224868774,
+          "covered_fraction": 0.9820518493652344,
+          "mean_signal_support_count": 1.7378708124160767,
+          "mean_signal_residual_std": 0.012008610181510448,
+          "alpha_mean": 0.370658814907074,
+          "alpha_active_fraction": 0.8380907773971558
+        },
+        {
+          "frame": "00012",
+          "support_count": 3,
+          "support_names": [
+            "00099",
+            "00066",
+            "00068"
+          ],
+          "mean_confidence": 1.6853500604629517,
+          "covered_fraction": 0.9528246521949768,
+          "mean_signal_support_count": 2.441502332687378,
+          "mean_signal_residual_std": 0.013324801810085773,
+          "alpha_mean": 0.4206262230873108,
+          "alpha_active_fraction": 0.8242268562316895
+        },
+        {
+          "frame": "00013",
+          "support_count": 2,
+          "support_names": [
+            "00075",
+            "00104"
+          ],
+          "mean_confidence": 1.3427494764328003,
+          "covered_fraction": 0.9388954639434814,
+          "mean_signal_support_count": 1.7450015544891357,
+          "mean_signal_residual_std": 0.010859343223273754,
+          "alpha_mean": 0.38046136498451233,
+          "alpha_active_fraction": 0.8042643070220947
+        },
+        {
+          "frame": "00014",
+          "support_count": 3,
+          "support_names": [
+            "00066",
+            "00082",
+            "00083"
+          ],
+          "mean_confidence": 1.654820203781128,
+          "covered_fraction": 0.9795497059822083,
+          "mean_signal_support_count": 1.9586291313171387,
+          "mean_signal_residual_std": 0.01212097518146038,
+          "alpha_mean": 0.43536219000816345,
+          "alpha_active_fraction": 0.8878704905509949
+        },
+        {
+          "frame": "00015",
+          "support_count": 3,
+          "support_names": [
+            "00105",
+            "00104",
+            "00092"
+          ],
+          "mean_confidence": 1.5284417867660522,
+          "covered_fraction": 0.9797055125236511,
+          "mean_signal_support_count": 2.3724818229675293,
+          "mean_signal_residual_std": 0.01593622751533985,
+          "alpha_mean": 0.3205101788043976,
+          "alpha_active_fraction": 0.7608187794685364
+        }
+      ],
+      "cuda_peak_allocated_mib": 2030.6142578125,
+      "cuda_peak_reserved_mib": 2064.0
+    },
+    {
+      "repeat": 2,
+      "cpu_wall_time_sec": 13.599013032391667,
+      "ms_per_target_frame": 849.9383145244792,
+      "target_frames_per_sec": 1.1765559722525003,
+      "mean_covered_fraction": 0.9391649663448334,
+      "mean_confidence": 1.5054271332919598,
+      "checksum": 39.11347359418869,
+      "frames": [
+        {
+          "frame": "00000",
+          "support_count": 4,
+          "support_names": [
+            "00016",
+            "00014",
+            "00015",
+            "00049"
+          ],
+          "mean_confidence": 1.2874701023101807,
+          "covered_fraction": 0.8024671077728271,
+          "mean_signal_support_count": 2.232313871383667,
+          "mean_signal_residual_std": 0.020818350836634636,
+          "alpha_mean": 0.3753727972507477,
+          "alpha_active_fraction": 0.6859486699104309
+        },
+        {
+          "frame": "00001",
+          "support_count": 4,
+          "support_names": [
+            "00023",
+            "00022",
+            "00039",
+            "00006"
+          ],
+          "mean_confidence": 1.4096760749816895,
+          "covered_fraction": 0.9429494738578796,
+          "mean_signal_support_count": 2.098270893096924,
+          "mean_signal_residual_std": 0.015137090347707272,
+          "alpha_mean": 0.3356848955154419,
+          "alpha_active_fraction": 0.7582679986953735
+        },
+        {
+          "frame": "00002",
+          "support_count": 4,
+          "support_names": [
+            "00032",
+            "00031",
+            "00048",
+            "00065"
+          ],
+          "mean_confidence": 1.3813953399658203,
+          "covered_fraction": 0.8791928887367249,
+          "mean_signal_support_count": 2.0055501461029053,
+          "mean_signal_residual_std": 0.014294732362031937,
+          "alpha_mean": 0.3416268229484558,
+          "alpha_active_fraction": 0.712560772895813
+        },
+        {
+          "frame": "00003",
+          "support_count": 4,
+          "support_names": [
+            "00021",
+            "00005",
+            "00006",
+            "00055"
+          ],
+          "mean_confidence": 1.7332987785339355,
+          "covered_fraction": 0.9461944699287415,
+          "mean_signal_support_count": 2.3396074771881104,
+          "mean_signal_residual_std": 0.01816747523844242,
+          "alpha_mean": 0.40124207735061646,
+          "alpha_active_fraction": 0.8250855803489685
+        },
+        {
+          "frame": "00004",
+          "support_count": 4,
+          "support_names": [
+            "00011",
+            "00028",
+            "00044",
+            "00043"
+          ],
+          "mean_confidence": 1.8974525928497314,
+          "covered_fraction": 0.9603933095932007,
+          "mean_signal_support_count": 2.4775829315185547,
+          "mean_signal_residual_std": 0.016480328515172005,
+          "alpha_mean": 0.42451319098472595,
+          "alpha_active_fraction": 0.8348185420036316
+        },
+        {
+          "frame": "00005",
+          "support_count": 4,
+          "support_names": [
+            "00035",
+            "00051",
+            "00017",
+            "00050"
+          ],
+          "mean_confidence": 1.4696102142333984,
+          "covered_fraction": 0.9639907479286194,
+          "mean_signal_support_count": 2.132758140563965,
+          "mean_signal_residual_std": 0.017311280593276024,
+          "alpha_mean": 0.36350172758102417,
+          "alpha_active_fraction": 0.8250144720077515
+        },
+        {
+          "frame": "00006",
+          "support_count": 4,
+          "support_names": [
+            "00042",
+            "00060",
+            "00059",
+            "00026"
+          ],
+          "mean_confidence": 1.4727941751480103,
+          "covered_fraction": 0.9551953077316284,
+          "mean_signal_support_count": 2.084613800048828,
+          "mean_signal_residual_std": 0.014187173917889595,
+          "alpha_mean": 0.3589855432510376,
+          "alpha_active_fraction": 0.7990157008171082
+        },
+        {
+          "frame": "00007",
+          "support_count": 4,
+          "support_names": [
+            "00033",
+            "00034",
+            "00049",
+            "00015"
+          ],
+          "mean_confidence": 1.8253448009490967,
+          "covered_fraction": 0.9612686038017273,
+          "mean_signal_support_count": 2.404981851577759,
+          "mean_signal_residual_std": 0.01850982755422592,
+          "alpha_mean": 0.4216915965080261,
+          "alpha_active_fraction": 0.8645510673522949
+        },
+        {
+          "frame": "00008",
+          "support_count": 4,
+          "support_names": [
+            "00056",
+            "00072",
+            "00038",
+            "00071"
+          ],
+          "mean_confidence": 1.5579109191894531,
+          "covered_fraction": 0.9648182988166809,
+          "mean_signal_support_count": 2.1324100494384766,
+          "mean_signal_residual_std": 0.014880326576530933,
+          "alpha_mean": 0.3725775182247162,
+          "alpha_active_fraction": 0.8197795152664185
+        },
+        {
+          "frame": "00009",
+          "support_count": 4,
+          "support_names": [
+            "00063",
+            "00045",
+            "00079",
+            "00078"
+          ],
+          "mean_confidence": 1.6519215106964111,
+          "covered_fraction": 0.9577364325523376,
+          "mean_signal_support_count": 2.2117860317230225,
+          "mean_signal_residual_std": 0.015203264541924,
+          "alpha_mean": 0.40944722294807434,
+          "alpha_active_fraction": 0.8428720831871033
+        },
+        {
+          "frame": "00010",
+          "support_count": 3,
+          "support_names": [
+            "00054",
+            "00086",
+            "00085"
+          ],
+          "mean_confidence": 0.8233497738838196,
+          "covered_fraction": 0.8594056367874146,
+          "mean_signal_support_count": 1.3927702903747559,
+          "mean_signal_residual_std": 0.00615380285307765,
+          "alpha_mean": 0.2213423103094101,
+          "alpha_active_fraction": 0.5512658953666687
+        },
+        {
+          "frame": "00011",
+          "support_count": 2,
+          "support_names": [
+            "00092",
+            "00061"
+          ],
+          "mean_confidence": 1.3652483224868774,
+          "covered_fraction": 0.9820518493652344,
+          "mean_signal_support_count": 1.7378708124160767,
+          "mean_signal_residual_std": 0.012008610181510448,
+          "alpha_mean": 0.370658814907074,
+          "alpha_active_fraction": 0.8380907773971558
+        },
+        {
+          "frame": "00012",
+          "support_count": 3,
+          "support_names": [
+            "00099",
+            "00066",
+            "00068"
+          ],
+          "mean_confidence": 1.6853500604629517,
+          "covered_fraction": 0.9528246521949768,
+          "mean_signal_support_count": 2.441502332687378,
+          "mean_signal_residual_std": 0.013324801810085773,
+          "alpha_mean": 0.4206262230873108,
+          "alpha_active_fraction": 0.8242268562316895
+        },
+        {
+          "frame": "00013",
+          "support_count": 2,
+          "support_names": [
+            "00075",
+            "00104"
+          ],
+          "mean_confidence": 1.3427494764328003,
+          "covered_fraction": 0.9388954639434814,
+          "mean_signal_support_count": 1.7450015544891357,
+          "mean_signal_residual_std": 0.010859343223273754,
+          "alpha_mean": 0.38046136498451233,
+          "alpha_active_fraction": 0.8042643070220947
+        },
+        {
+          "frame": "00014",
+          "support_count": 3,
+          "support_names": [
+            "00066",
+            "00082",
+            "00083"
+          ],
+          "mean_confidence": 1.654820203781128,
+          "covered_fraction": 0.9795497059822083,
+          "mean_signal_support_count": 1.9586291313171387,
+          "mean_signal_residual_std": 0.01212097518146038,
+          "alpha_mean": 0.43536219000816345,
+          "alpha_active_fraction": 0.8878704905509949
+        },
+        {
+          "frame": "00015",
+          "support_count": 3,
+          "support_names": [
+            "00105",
+            "00104",
+            "00092"
+          ],
+          "mean_confidence": 1.5284417867660522,
+          "covered_fraction": 0.9797055125236511,
+          "mean_signal_support_count": 2.3724818229675293,
+          "mean_signal_residual_std": 0.01593622751533985,
+          "alpha_mean": 0.3205101788043976,
+          "alpha_active_fraction": 0.7608187794685364
+        }
+      ],
+      "cuda_peak_allocated_mib": 2865.306640625,
+      "cuda_peak_reserved_mib": 2980.0
+    }
+  ]
+}
