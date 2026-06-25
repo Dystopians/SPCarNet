@@ -1,0 +1,74 @@
+{
+  "build_method": "ours_26000_v102_delta_build_kitchen",
+  "build_rc": 0,
+  "build_wall_sec": 0.0,
+  "dLPIPS_reference": 1.4901161193847656e-08,
+  "dPSNR_reference": 0.0,
+  "dSSIM_reference": -1.1920928955078125e-07,
+  "delta_dtype": "float32",
+  "endpoint_method": "ours_26000_v100_checkpoint_attached_ela_endpoint",
+  "eval_rc": 0,
+  "fast_internal_elapsed_sec": 49.32312989234924,
+  "fast_internal_sec_per_view": 1.4092322826385497,
+  "fast_method": "ours_26000_v102_delta_fast_kitchen",
+  "fast_rc": 0,
+  "fast_sec_per_view": 2.646130190363952,
+  "fast_wall_sec": 92.61455666273832,
+  "hash_report": {
+    "common_count": 35,
+    "hash_match_count": 31,
+    "hash_mismatch_count": 4,
+    "hash_mismatches": [
+      "00002.png",
+      "00018.png",
+      "00024.png",
+      "00031.png"
+    ],
+    "max_abs_uint8": 1,
+    "mean_abs_uint8": 1.1178442597020498e-07,
+    "nonzero_fraction": 1.1178442597020498e-07,
+    "numerically_exact": true,
+    "output_count": 35,
+    "p99_abs_uint8": 0.0,
+    "reference_count": 35
+  },
+  "intermediate_outputs_saved": false,
+  "logs": {
+    "build": "outputs/carnet/meshsplatopt/ecsr_phase_v102_preprojected_delta_bank_20260625/kitchen/kitchen_build.log",
+    "eval": "outputs/carnet/meshsplatopt/ecsr_phase_v102_preprojected_delta_bank_20260625/kitchen/kitchen_eval.log",
+    "fast": "outputs/carnet/meshsplatopt/ecsr_phase_v102_preprojected_delta_bank_20260625/kitchen/kitchen_fast.log"
+  },
+  "mean_abs_delta": 0.014446594566106797,
+  "mean_changed_fraction": 0.9993922557149615,
+  "metrics": {
+    "LPIPS": 0.13200382888317108,
+    "PSNR": 30.19739532470703,
+    "SSIM": 0.9160933494567871
+  },
+  "mode": "preprojected_delta_endpoint",
+  "model": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/kitchen/detached_model",
+  "no_intermediate_outputs": true,
+  "passed": true,
+  "reference_method": "ours_26000_v101_detached_package_full9_kitchen",
+  "reference_metrics": {
+    "LPIPS": 0.1320038139820099,
+    "PSNR": 30.19739532470703,
+    "SSIM": 0.9160934686660767
+  },
+  "scene": "kitchen",
+  "schema_version": 1,
+  "support_source": "v102_preprojected_delta_bank:/dev/shm/peilincai_spcarnet_v102_preprojected_delta_bank_20260625/kitchen/v102_preprojected_delta_bank.pt",
+  "v101_bank": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/kitchen/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/v101_evidence_bank.pt",
+  "v102_bank": "/dev/shm/peilincai_spcarnet_v102_preprojected_delta_bank_20260625/kitchen/v102_preprojected_delta_bank.pt",
+  "v102_bank_bytes": 679917335,
+  "v102_bank_manifest": {
+    "bank_path": "/dev/shm/peilincai_spcarnet_v102_preprojected_delta_bank_20260625/kitchen/v102_preprojected_delta_bank.pt",
+    "bank_sha256": "6ed37810fc4243164635e9a8b095aa8ffdc9e0c8806f193efe5f07f3ab0997dd",
+    "delta_dtype": "float32",
+    "note": "Generated during online v101 endpoint rendering; contains no held-out target GT.",
+    "source_evidence_bank_sha256": "073ca3ad39fe55571d1c52371415234f3ee7f19731148e01f2edc7fe0df54144",
+    "source_support_frames": 244,
+    "source_support_source": "v101_evidence_bank:/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/kitchen/detached_model/point_cloud/iteration_26000/render_residual_endpoint/ours_26000_v100_checkpoint_attached_ela_endpoint/v101_evidence_bank.pt",
+    "target_frames": 35
+  }
+}
