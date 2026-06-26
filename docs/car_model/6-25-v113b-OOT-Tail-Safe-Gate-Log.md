@@ -76,12 +76,15 @@ Static/smoke checks passed:
   scripts/car_model/smoke_test_v109_gate_subset.py \
   scripts/car_model/smoke_test_v109_oot_gate.py \
   scripts/car_model/smoke_test_v110_strict_runner_args.py \
-  scripts/car_model/smoke_test_v111_runner_args.py
+  scripts/car_model/smoke_test_v111_runner_args.py \
+  scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py \
+  scripts/car_model/smoke_test_v113b_replay_runner_args.py
 
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v109_gate_subset.py
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v109_oot_gate.py
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v110_strict_runner_args.py
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v111_runner_args.py
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v113b_replay_runner_args.py
 ```
 
 W&B offline runs:
@@ -130,3 +133,44 @@ Not safe to claim:
 ## Next Work
 
 The next research step is not more fallback. We need a candidate generator that can pass the v113b lower-tail and OOT certificates while improving beyond v106. Until then, v113b should be presented as a safety certificate and failure-mode repair, not as the final paper method.
+
+## Replay Runner
+
+A gate/eval-only replay runner was added so unfinished long jobs can be consumed without rebuilding fields:
+
+```text
+scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py
+scripts/car_model/smoke_test_v113b_replay_runner_args.py
+```
+
+Use this after a strict candidate has both train/test renders and a field manifest.
+
+Counter or bonsai v110 continuation:
+
+```bash
+CUDA_VISIBLE_DEVICES=<gpu> WANDB_MODE=offline \
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py \
+  --scene <counter_or_bonsai> \
+  --gpu <gpu> \
+  --merge_model_results \
+  --wandb \
+  --output_root /dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625
+```
+
+Flowers v111 end-to-end strict continuation after parent/candidate renders exist:
+
+```bash
+CUDA_VISIBLE_DEVICES=<gpu> WANDB_MODE=offline \
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py \
+  --scene flowers \
+  --gpu <gpu> \
+  --parent_method_name ours_26000_v111_train_all_parent_flowers \
+  --candidate_method_name ours_26000_v111_train_even_candidate_flowers \
+  --gate_method_name ours_26000_v111b_oot_strict_parent_gate_flowers \
+  --candidate_field_path /dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/fields/ours_26000_v111_train_even_candidate_flowers_field.pt \
+  --output_root /dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625 \
+  --merge_model_results \
+  --wandb
+```

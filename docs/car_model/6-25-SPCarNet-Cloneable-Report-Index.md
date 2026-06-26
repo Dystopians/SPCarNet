@@ -49,6 +49,7 @@ Each contact sheet has a sibling `.json` manifest with source render paths and c
 | `scripts/car_model/meshsplatopt_v109_render_realized_parent_gate.py` | render-realized parent gate; now supports calibration view subsets |
 | `scripts/car_model/run_v110_strict_split_parent_gate_scene.py` | strict candidate/gate runner with v106 parent and train/even -> train/odd -> test protocol |
 | `scripts/car_model/run_v111_end_to_end_strict_parent_gate_scene.py` | end-to-end strict parent/candidate/gate runner; parent is rebuilt from train/all |
+| `scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py` | gate/eval-only replay runner for prebuilt strict candidates using the v113b lower-tail and OOT support certificates |
 | `scripts/car_model/collect_v110_strict_split_report.py` | collects clean/v106/v110 strict-split metrics into Markdown/JSON summaries |
 
 ## Smoke and Static Checks
@@ -59,11 +60,17 @@ The current report package records these checks as passing:
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python -m py_compile \
   scripts/car_model/run_v110_strict_split_parent_gate_scene.py \
   scripts/car_model/run_v111_end_to_end_strict_parent_gate_scene.py \
+  scripts/car_model/meshsplatopt_v109_render_realized_parent_gate.py \
+  scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py \
   scripts/car_model/smoke_test_v110_strict_runner_args.py \
-  scripts/car_model/smoke_test_v111_runner_args.py
+  scripts/car_model/smoke_test_v111_runner_args.py \
+  scripts/car_model/smoke_test_v109_oot_gate.py \
+  scripts/car_model/smoke_test_v113b_replay_runner_args.py
 
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v110_strict_runner_args.py
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v111_runner_args.py
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v109_oot_gate.py
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v113b_replay_runner_args.py
 ```
 
 ## Current Local Runtime Roots

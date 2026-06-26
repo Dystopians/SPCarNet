@@ -14,6 +14,7 @@ The main progress since the large-method rebuild started is concrete:
 - strict train/even -> train/odd -> test interfaces were added to the field builder, delta-bank builder, parent gate, and orchestration scripts;
 - v110/v110b exposed an important weakness: a gate that looks good on train/odd can still harm held-out test relative to the v106 parent;
 - v113b repairs that weakness on flowers/garden by adding lower-tail metric checks and a target-GT-free out-of-trajectory support certificate;
+- a v113b replay runner now exists so prebuilt strict candidates can be re-gated and re-evaluated under the latest certificate without rebuilding long field artifacts;
 - v111 now exists as the end-to-end strict runner where even the parent field is rebuilt from train/all rather than inherited from a target-sidecar artifact.
 
 The honest current conclusion is: SPCarNet has a real, measurable improvement line over the local clean baseline, and the strict-gate branch now has a stronger safety repair. The paper-final claim is still not closed because v113b restores unsafe candidates to v106 rather than improving beyond v106.
@@ -167,6 +168,8 @@ These are better PPT assets than showing only aggregate numbers, but they should
 | render-realized parent gate calibration subset | `scripts/car_model/meshsplatopt_v109_render_realized_parent_gate.py` | implemented |
 | strict v110 runner | `scripts/car_model/run_v110_strict_split_parent_gate_scene.py` | implemented and smoke-tested |
 | end-to-end strict v111 runner | `scripts/car_model/run_v111_end_to_end_strict_parent_gate_scene.py` | implemented and smoke-tested |
+| lower-tail and OOT support gate | `scripts/car_model/meshsplatopt_v109_render_realized_parent_gate.py` | implemented and smoke-tested as v113b |
+| v113b gate/eval replay | `scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py` | implemented and smoke-tested |
 | v110 collector | `scripts/car_model/collect_v110_strict_split_report.py` | implemented |
 
 ## Commands and Repro Pointers
@@ -177,11 +180,17 @@ Smoke/static checks:
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python -m py_compile \
   scripts/car_model/run_v110_strict_split_parent_gate_scene.py \
   scripts/car_model/run_v111_end_to_end_strict_parent_gate_scene.py \
+  scripts/car_model/meshsplatopt_v109_render_realized_parent_gate.py \
+  scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py \
   scripts/car_model/smoke_test_v110_strict_runner_args.py \
-  scripts/car_model/smoke_test_v111_runner_args.py
+  scripts/car_model/smoke_test_v111_runner_args.py \
+  scripts/car_model/smoke_test_v109_oot_gate.py \
+  scripts/car_model/smoke_test_v113b_replay_runner_args.py
 
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v110_strict_runner_args.py
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v111_runner_args.py
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v109_oot_gate.py
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v113b_replay_runner_args.py
 ```
 
 Representative v110 run command:
@@ -210,13 +219,26 @@ CUDA_VISIBLE_DEVICES=<gpu> WANDB_MODE=offline \
   --output_root /dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625
 ```
 
+Representative v113b replay command for a prebuilt strict candidate:
+
+```bash
+CUDA_VISIBLE_DEVICES=<gpu> WANDB_MODE=offline \
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py \
+  --scene counter \
+  --gpu <gpu> \
+  --merge_model_results \
+  --wandb \
+  --output_root /dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625
+```
+
 ## Current Running or Unfinished Items
 
 | item | status |
 |---|---|
-| v110 counter | candidate field build still running in the local `/dev/shm` workspace at the last audit |
-| v110 bonsai | candidate field build relaunched after stale preflight issue; old report is not a final result |
-| v111 flowers | parent train/all field build running; no completed end-to-end result yet |
+| v110 counter | candidate field build still running in the local `/dev/shm` workspace; last checked around 72/105 train/even views |
+| v110 bonsai | candidate field build still running in the local `/dev/shm` workspace; last checked around 64/128 train/even views |
+| v111 flowers | parent train/all field build still running; last checked around 76/151 views; no completed end-to-end result yet |
 | garden v110b | completed as a negative strict-gate diagnostic |
 
 ## Weaknesses to State Honestly
