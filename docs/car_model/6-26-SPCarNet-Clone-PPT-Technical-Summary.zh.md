@@ -14,7 +14,7 @@
 v106 POD-MoE base-preserve 是当前 verified representation-quality line；
 它在 assembled selected full9 表上全面优于本地 clean MeshSplatting baseline。
 vNext structure-aware shrink 是最新 strict no-target-GT surface-texture 里程碑，
-但目前只完成 counter/bonsai/room 三场景，收益很小，还不能宣称超过 v106 或完成顶会终局。
+目前完成 counter/bonsai/room/garden 四个 ready 场景，收益很小，还不能宣称超过 v106 或完成顶会终局。
 ```
 
 ## 当前最重要结果
@@ -54,7 +54,7 @@ Phase-J 是当前最强 broad RGB endpoint：
 
 ### 3. 最新 vNext strict 里程碑
 
-最新结构感知 shrink 已经把 vNext 从旧 face-softshrink 的 `2 / 3` nonzero accepted 推到 `3 / 3` nonzero accepted，并修复了 room 旧策略 fallback/no-op 的短板。
+最新结构感知 shrink 已经把 vNext 从旧 face-softshrink 的 `2 / 3` nonzero accepted 推到 ready4 的 `4 / 4` nonzero accepted，并修复了 room 旧策略 fallback/no-op 的短板，同时补齐 garden 的 strict structure-aware shrink 结果。
 
 固定策略：
 
@@ -74,7 +74,8 @@ strict_no_target_gt_apply=true
 | counter | true | 0.125 | 0.01234357 | +0.00129890 | -0.00000906 | -0.00004268 |
 | bonsai | true | 0.25 | 0.00148974 | +0.00113869 | -0.00000954 | -0.00001693 |
 | room | true | 0.0625 | 0.00519912 | +0.00046921 | +0.00000334 | -0.00001399 |
-| mean | 3 / 3 | - | - | +0.00096893 | -0.00000509 | -0.00002453 |
+| garden | true | 0.125 | 0.00205038 | +0.00013924 | +0.00000316 | -0.00000791 |
+| mean | 4 / 4 | - | - | +0.00076151 | -0.00000302 | -0.00002038 |
 
 这是真实方法里程碑，因为：
 
@@ -83,14 +84,17 @@ strict_no_target_gt_apply=true
 - `target_gt_visible_to_apply=false`；
 - `target_forbidden_keys_stripped=true`；
 - `target_apply_leak=false`；
-- room 从旧策略 fallback/no-op 变成 accepted nonzero，并且 room 自身三指标相对 Phase-F parent 都正向。
+- room 从旧策略 fallback/no-op 变成 accepted nonzero，并且 room 自身三指标相对 Phase-F parent 都正向；
+- garden 相对 Phase-F parent 和旧 garden face-softshrink pilot 都三指标小幅正向；
+- manifest runner 和 preflight artifact 已记录 full9 当前 `4 / 9` ready、`5 / 9` missing input。
 
 但它还不能当作论文终局，因为：
 
-- 只覆盖 `counter,bonsai,room` 三场景，不是 full9；
+- 只覆盖 `counter,bonsai,room,garden` 四个 ready 场景，不是 full9；
 - 平均收益仍是 `1e-3 / 1e-5` 量级；
 - counter/bonsai 仍有极小 SSIM 回退；
-- 尚未同表完整比较 clean MeshSplatting、v104c、v106、Phase-J teacher 和 ablation。
+- 尚未同表完整比较 clean MeshSplatting、v104c、v106、Phase-J teacher 和 ablation；
+- `bicycle,flowers,kitchen,stump,treehill` 仍需重建 fit/target evidence 与 policy-val pruned carrier。
 
 ## 已经取得的主要进展
 
@@ -109,7 +113,7 @@ strict_no_target_gt_apply=true
 - v106 定性 contact sheets 已放入仓库，可直接用于 PPT。
 - v110/v110b 暴露了 strict train-even -> train-odd -> test 泛化失败，是重要负结果。
 - v113b/v113c 修复安全 fallback，但没有产生超过 v106 的质量突破。
-- vNext 已完成 garden proof-of-life、counter/bonsai/room strict face-softshrink，以及 counter/bonsai/room structure-aware shrink 聚合表。
+- vNext 已完成 garden proof-of-life、counter/bonsai/room strict face-softshrink、garden structure-aware shrink、counter/bonsai/room/garden ready4 structure-aware shrink 聚合表、manifest runner、ready4 preflight 和 full9 gap preflight。
 - 最新 vNext artifact 说明已经把“哪些可以汇报、哪些不能过度声称”写清楚。
 
 ### 文档与可克隆性
@@ -124,7 +128,7 @@ strict_no_target_gt_apply=true
 2. 方法：SPCarNet 把 mesh surface 当作地址空间，在三角形/face/bin 上挂 residual experts，并用 train evidence 证书控制何时应用。
 3. 当前 verified 主线：v106 POD-MoE base-preserve，在本地 selected full9 表上优于 clean MeshSplatting baseline。
 4. 严格性教训：v110/v113 证明 naive gate 不够，必须做 split、lower-tail、OOT 和 fallback。
-5. 最新推进：vNext 把 Phase-J render-time residual teacher 变成 strict no-target-GT residual surface texture；structure-aware shrink 已在三场景全部 nonzero accepted。
+5. 最新推进：vNext 把 Phase-J render-time residual teacher 变成 strict no-target-GT residual surface texture；structure-aware shrink 已在四个 ready 场景全部 nonzero accepted。
 6. 诚实边界：vNext 还不是 full9/顶会终局；下一步要扩大到 full9、补预算/速度/三角形/定性 changed-region panel。
 
 ## 克隆后阅读顺序
@@ -134,15 +138,19 @@ strict_no_target_gt_apply=true
 | 1 | 根入口 | `SPCARNET_REPORT_INDEX.md` |
 | 2 | 本文件：PPT 总览 | `docs/car_model/6-26-SPCarNet-Clone-PPT-Technical-Summary.zh.md` |
 | 3 | 最新状态附录 | `docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md` |
-| 4 | vNext 最新结构感知 shrink 日志 | `docs/car_model/6-26-vNext-StructureAwareShrink-Strict-Multiscene-Log.md` |
-| 5 | vNext artifact 索引 | `docs/car_model/vnext_artifacts/README.md` |
-| 6 | vNext 技术报告与旧 pilot 解释 | `docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md` |
-| 7 | 报告包 manifest | `docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md` |
-| 8 | v106 full9 对比表 | `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md` |
-| 9 | v106 assembled 表 | `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_assembled.md` |
-| 10 | v106 mentor 技术报告 | `docs/car_model/6-25-v106-PODMoE-Mentor-Technical-Report-Final.md` |
-| 11 | 当前长版中文技术报告 | `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md` |
-| 12 | car-model 文档目录 | `docs/car_model/README.md` |
+| 4 | vNext manifest runner / full9 gap | `docs/car_model/6-26-vNext-ManifestRunner-and-Full9Gap-Log.md` |
+| 5 | vNext ready4 聚合表 | `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.md` |
+| 6 | vNext ready4 preflight | `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.md` |
+| 7 | vNext full9 gap preflight | `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.md` |
+| 8 | vNext 最新结构感知 shrink 日志 | `docs/car_model/6-26-vNext-StructureAwareShrink-Strict-Multiscene-Log.md` |
+| 9 | vNext artifact 索引 | `docs/car_model/vnext_artifacts/README.md` |
+| 10 | vNext 技术报告与旧 pilot 解释 | `docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md` |
+| 11 | 报告包 manifest | `docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md` |
+| 12 | v106 full9 对比表 | `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md` |
+| 13 | v106 assembled 表 | `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_assembled.md` |
+| 14 | v106 mentor 技术报告 | `docs/car_model/6-25-v106-PODMoE-Mentor-Technical-Report-Final.md` |
+| 15 | 当前长版中文技术报告 | `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md` |
+| 16 | car-model 文档目录 | `docs/car_model/README.md` |
 
 ## PPT 可直接引用的 artifact
 
@@ -151,7 +159,10 @@ strict_no_target_gt_apply=true
 ```text
 docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md
 docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.json
-docs/car_model/vnext_artifacts/strict_structure_aware_shrink_multiscene_20260626_0718/strict_structure_aware_shrink_multiscene_summary.md
+docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.md
+docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.json
+docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.md
+docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.json
 docs/car_model/vnext_artifacts/strict_frozen_policy_multiscene_20260626_052500/strict_frozen_policy_multiscene_summary.md
 ```
 
@@ -172,9 +183,17 @@ docs/car_model/vnext_artifacts/garden_face_softshrink_20260626_040558/garden_fac
 docs/car_model/vnext_artifacts/counter_structure_shrink_tau002_20260626_0558/target_evidence_no_gt_audit.json
 docs/car_model/vnext_artifacts/bonsai_structure_shrink_tau002_20260626_0718/target_evidence_no_gt_audit.json
 docs/car_model/vnext_artifacts/room_structure_shrink_tau002_20260626_0718/target_evidence_no_gt_audit.json
+docs/car_model/vnext_artifacts/garden_structure_shrink_tau002_20260626_071413/target_evidence_no_gt_audit.json
 docs/car_model/vnext_artifacts/counter_structure_shrink_tau002_20260626_0558/surface_residual_region_texture_adapter_audit.json
 docs/car_model/vnext_artifacts/bonsai_structure_shrink_tau002_20260626_0718/surface_residual_region_texture_adapter_audit.json
 docs/car_model/vnext_artifacts/room_structure_shrink_tau002_20260626_0718/surface_residual_region_texture_adapter_audit.json
+docs/car_model/vnext_artifacts/garden_structure_shrink_tau002_20260626_071413/surface_residual_region_texture_adapter_audit.json
+docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_scene_config_20260626.json
+docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_scene_config_20260626.json
+docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.md
+docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.json
+docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.md
+docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.json
 ```
 
 ## 当前仍未完成的事项
@@ -193,7 +212,7 @@ docs/car_model/vnext_artifacts/room_structure_shrink_tau002_20260626_0718/surfac
 我们已经搭建出一个可复现的 SPCarNet 方法闭环雏形：
 在本地 full9 上，v106 representation-level line 优于 clean MeshSplatting baseline；
 同时，vNext 已经把 residual surface texture 的 no-test-GT 协议、证书、fallback、
-结构感知 shrink 和三场景非零 accepted 结果跑通。
+结构感知 shrink 和四个 ready 场景非零 accepted 结果跑通。
 ```
 
 不要说：
@@ -201,7 +220,7 @@ docs/car_model/vnext_artifacts/room_structure_shrink_tau002_20260626_0718/surfac
 ```text
 不要说 vNext 已经全面超越 MeshSplatting/v106/Phase-J。
 不要说所有 strict branch 长程实验已经结束。
-不要说当前三场景 tiny gain 已足够支撑顶会最终 claim。
+不要说当前 ready4 tiny gain 已足够支撑顶会最终 claim。
 ```
 
 ## Final Status

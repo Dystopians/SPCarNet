@@ -2,7 +2,7 @@
 
 **基于训练证据、协议审计安全的 Mesh Splatting 压缩与渲染修复。**
 
-## 当前报告包（2026-06-25）
+## 当前报告包（2026-06-26）
 
 本地 clone 后做 mentor/PPT 分析请从这里开始：
 
@@ -14,7 +14,10 @@
 - [vNext soft-shrink garden 里程碑](docs/car_model/6-26-SPCarNet-vNext-SoftShrink-Garden-Milestone-Log.md)
 - [vNext 技术报告与 artifact 索引](docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md)
 - [vNext structure-aware shrink strict 多场景日志](docs/car_model/6-26-vNext-StructureAwareShrink-Strict-Multiscene-Log.md)
-- [vNext structure-aware shrink artifact 聚合表](docs/car_model/vnext_artifacts/strict_structure_aware_shrink_multiscene_20260626_0718/strict_structure_aware_shrink_multiscene_summary.md)
+- [vNext manifest runner 与 full9 缺口日志](docs/car_model/6-26-vNext-ManifestRunner-and-Full9Gap-Log.md)
+- [vNext structure-aware shrink ready4 artifact 聚合表](docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.md)
+- [vNext ready4 preflight](docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.md)
+- [vNext full9 gap preflight](docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.md)
 - [可克隆报告包 manifest](docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md)
 - [当前 mentor/PPT 技术报告](docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md)
 - [中文长版导师技术报告](docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md)
@@ -22,7 +25,7 @@
 
 简短状态：`v106 POD-MoE base-preserve` 是当前已验证的质量主线，在 assembled selected full9 表上相对本地 clean MeshSplatting baseline 三个指标均值都更好。`v113b/v113c` 是严格 gate 的安全修复，改善安全性并部分修复 garden v110b，但没有超过 v106。`v114_oof_refit_pod_moe` 是当前正在跑的 candidate-side 长程实验，还不是已完成结果。最新状态附录：v110 counter 在 field build 阶段以 return code `-9` 失败，大概率是内存/共享盘压力导致，因此 strict branch 仍需低内存 field-builder 修复后重跑。
 
-vNext 状态：certified residual surface texture 方向可以推进，但不能承诺已经产生论文级结果。最新 structure-aware shrink 里程碑新增 train-policy-val 局部 L1/gradient 结构风险 shrink，并修复了 parent-edge apply/profile 接口转发。在 `counter,bonsai,room` strict no-target-GT apply 下，固定 structure-aware policy 为 `3 / 3` accepted，相对 Phase-F compact parent 的平均变化是 `+0.00096893` PSNR、`-0.00000509` SSIM、`-0.00002453` LPIPS。最重要修复是 `room`：它从旧 strict face-softshrink 的 fallback/no-op 变成 accepted nonzero output，并且相对自己的 Phase-F parent 三指标全正向。这是真实里程碑，但还不是 full9 闭环，也不能证明已经超过 v106 或 clean MeshSplatting。
+vNext 状态：certified residual surface texture 方向可以推进，但不能承诺已经产生论文级结果。最新 structure-aware shrink 里程碑新增 train-policy-val 局部 L1/gradient 结构风险 shrink，并修复了 parent-edge apply/profile 接口转发。在 ready 场景 `counter,bonsai,room,garden` strict no-target-GT apply 下，固定 structure-aware policy 为 `4 / 4` accepted，相对 Phase-F compact parent 的平均变化是 `+0.00076151` PSNR、`-0.00000302` SSIM、`-0.00002038` LPIPS。最重要修复是 `room` 从旧 strict face-softshrink fallback/no-op 变成 accepted nonzero output，`garden` 也相对 Phase-F parent 和旧 garden face-softshrink pilot 三指标小幅正向。新的 manifest runner 与 full9 preflight 已把剩余缺口固化：当前 `4 / 9` ready，`bicycle,flowers,kitchen,stump,treehill` 还需要重建 fit/target evidence 和 policy-val pruned carrier 后才可能做 full9 结论。
 
 ## 当前 v106 POD-MoE 状态（2026-06-25）
 

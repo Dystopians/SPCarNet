@@ -47,7 +47,7 @@ The honest paper status is not final-complete. `v110/v110b` exposed strict train
 - Completed the v106 selected full9 table and stored both Markdown/JSON/CSV summaries and qualitative contact-sheet assets in the repo.
 - Completed v110/v110b flowers/garden diagnostics showing that a gate can beat clean MeshSplatting while still being worse than v106 parent.
 - Completed v113b/v113c safety repairs on flowers/garden; useful as risk control, not as a new quality headline.
-- Implemented vNext strict no-target-GT apply protocol and completed a frozen-policy strict face-softshrink multiscene pilot on `counter,bonsai,room`, with lightweight artifacts committed under `docs/car_model/vnext_artifacts/`.
+- Implemented vNext strict no-target-GT apply protocol, completed frozen-policy face-softshrink diagnostics on `counter,bonsai,room`, added the fixed structure-aware shrink policy, and extended the strict structure-aware table to ready scenes `counter,bonsai,room,garden`.
 
 ## Latest Live Experiment State
 
@@ -96,8 +96,14 @@ swap: 9 GiB used / 0 free
 | structure-aware shrink bonsai | `docs/car_model/vnext_artifacts/bonsai_structure_shrink_tau002_20260626_0718/` | COMPLETE; protocol audit passed; `target_gt_visible_to_apply=false`; `accepted=true`; `alpha=0.25`; `changed_fraction=0.00148974`; delta vs Phase-F compact parent `+0.00113869 / -0.00000954 / -0.00001693` |
 | structure-aware shrink room | `docs/car_model/vnext_artifacts/room_structure_shrink_tau002_20260626_0718/` | COMPLETE; protocol audit passed; `target_gt_visible_to_apply=false`; `accepted=true`; `alpha=0.0625`; `changed_fraction=0.00519912`; delta vs Phase-F compact parent `+0.00046921 / +0.00000334 / -0.00001399` |
 | structure-aware shrink aggregate | `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_multiscene_20260626_0718/strict_structure_aware_shrink_multiscene_summary.md` | 3/3 complete; 3/3 protocol pass; 3/3 target GT hidden from apply; 3/3 nonzero accepted; mean delta `+0.00096893 / -0.00000509 / -0.00002453`; converts room from old fallback/no-op to accepted nonzero |
+| structure-aware shrink garden | `docs/car_model/vnext_artifacts/garden_structure_shrink_tau002_20260626_071413/` | COMPLETE; protocol audit passed; `target_gt_visible_to_apply=false`; `accepted=true`; `alpha=0.125`; `changed_fraction=0.00205038`; delta vs Phase-F compact parent `+0.00013924 / +0.00000316 / -0.00000791`; also improves old garden face-softshrink by `+0.00006294 / +0.00000119 / -0.00000468` |
+| structure-aware shrink ready4 aggregate | `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.md` | 4/4 complete; 4/4 protocol pass; 4/4 target GT hidden from apply; 4/4 nonzero accepted; mean delta `+0.00076151 / -0.00000302 / -0.00002038` |
+| manifest runner and full9 preflight | `docs/car_model/6-26-vNext-ManifestRunner-and-Full9Gap-Log.md` | per-scene manifest runner implemented; ready4 preflight is `4/4`; full9 gap preflight is `4/9` ready and `5/9` missing fit/target evidence plus carrier |
+| ready4 scene config | `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_scene_config_20260626.json` | machine-readable manifest runner config for `bonsai,counter,garden,room` |
+| full9 gap scene config | `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_scene_config_20260626.json` | machine-readable target full9 config; five missing scenes point at the planned normalized input tree |
+| ready4/full9 preflight JSON | `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.json`, `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.json` | machine-readable readiness audit for clone-side review |
 
-The old strict frozen-policy face-softshrink result is a no-target-GT apply protocol milestone across three scenes, but it has 2/3 nonzero accepted and room fallback/no-op. The newer structure-aware shrink result is the preferred vNext milestone for PPT: it keeps strict no-target-GT apply, makes all three scenes accepted/nonzero, and converts room into a positive three-metric row versus its Phase-F compact parent. The effect size is still tiny and counter/bonsai still have extremely small SSIM regressions, so it should not be described as full9 closure or proof of superiority over v106/clean MeshSplatting.
+The old strict frozen-policy face-softshrink result is a no-target-GT apply protocol milestone across three scenes, but it has 2/3 nonzero accepted and room fallback/no-op. The newer structure-aware shrink result is the preferred vNext milestone for PPT: it keeps strict no-target-GT apply, makes all four ready scenes accepted/nonzero, converts room into a positive three-metric row versus its Phase-F compact parent, and adds garden as a fourth strict scene. The effect size is still tiny and counter/bonsai still have extremely small SSIM regressions, so it should not be described as full9 closure or proof of superiority over v106/clean MeshSplatting.
 
 ## Current Claim Boundary
 
@@ -113,7 +119,7 @@ What is not safe to say:
 - Do not claim v113b/v113c are quality breakthroughs; they are safety repairs that preserve or partially recover v106.
 - Do not claim v114 improves quality until field build, render, eval, and collector summaries complete.
 - Do not conflate v106 residual-field gains with earlier Phase-J triangle-reduction claims; v106 itself is not the triangle-pruning result.
-- Do not claim vNext is superior to v106 or clean MeshSplatting; current vNext garden/counter/bonsai/room pilots are proof-of-life and protocol evidence with tiny or mixed deltas.
+- Do not claim vNext is superior to v106 or clean MeshSplatting; current vNext counter/bonsai/room/garden ready4 pilots are proof-of-life and protocol evidence with tiny or mixed deltas.
 
 ## Best PPT Story
 
@@ -126,7 +132,7 @@ v106 adds a base-preserving mixture of detail and boundary residual experts.
 The result beats the local clean MeshSplatting baseline on selected full9.
 Strict split experiments then reveal where naive candidate gates fail.
 vNext then starts converting the Phase-J render-time teacher into strict no-target-GT residual surface texture.
-The current next step is fixing SSIM/structure consistency and turning that proof-of-life into full9, visible, three-metric gains.
+The current next step is rebuilding the missing full9 evidence/carrier inputs, then turning that proof-of-life into fixed-policy full9, visible, three-metric gains.
 ```
 
 For slides, use the v106 full9 table and the committed contact sheets under:
@@ -155,14 +161,15 @@ For the v106 strict branch, the required closure sequence is:
 
 For vNext, the required closure sequence is:
 
-1. run full9 with the exact frozen structure-aware shrink policy;
-2. add a fixed comparison table with clean MeshSplatting, Phase-F parent, v104c, v106, Phase-J teacher, old face-softshrink, structure-aware shrink, no-certificate ablation, and exact fallback;
-3. generate changed-region qualitative panels where residual changes are visually interpretable;
-4. add budget accounting: triangle count, residual texture storage, parameter count, render overhead, fallback rate;
-5. only promote vNext if it beats the chosen parent and clean baseline under the same frozen protocol.
+1. rebuild or recover missing fit/target evidence and policy-val pruned carriers for `bicycle,flowers,kitchen,stump,treehill`;
+2. run full9 with the exact frozen structure-aware shrink policy through the manifest runner;
+3. add a fixed comparison table with clean MeshSplatting, Phase-F parent, v104c, v106, Phase-J teacher, old face-softshrink, structure-aware shrink, no-certificate ablation, and exact fallback;
+4. generate changed-region qualitative panels where residual changes are visually interpretable;
+5. add budget accounting: triangle count, residual texture storage, parameter count, render overhead, fallback rate;
+6. only promote vNext if it beats the chosen parent and clean baseline under the same frozen protocol.
 
 ## Final Status
 
 `NOT COMPLETE`.
 
-The report package is uploaded and useful for PPT preparation, but the research loop is not fully closed because strict branch long jobs are unfinished or failed, and vNext has delivered strict three-scene structure-aware proof-of-life metrics rather than full9, v106/clean-baseline superiority.
+The report package is uploaded and useful for PPT preparation, but the research loop is not fully closed because strict branch long jobs are unfinished or failed, and vNext has delivered strict ready4 structure-aware proof-of-life metrics rather than full9, v106/clean-baseline superiority.

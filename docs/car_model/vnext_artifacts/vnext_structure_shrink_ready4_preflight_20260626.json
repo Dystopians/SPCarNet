@@ -1,0 +1,105 @@
+{
+  "assembly": null,
+  "config": "docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_scene_config_20260626.json",
+  "dry_run": false,
+  "failed_scene_count": 0,
+  "max_parallel": 1,
+  "missing_input_scene_count": 0,
+  "missing_inputs": {},
+  "output_root": "/dev/shm/peilincai_vnext_manifest_ready4_preflight_20260626_repo",
+  "preflight_only": true,
+  "ready_scene_count": 4,
+  "rows": [
+    {
+      "elapsed_sec": 0.0,
+      "log_path": "",
+      "preflight": {
+        "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_train_images2/bonsai_teacher_surface_evidence_visible_alpha1",
+        "gpu": "3",
+        "input_exists": {
+          "fit_evidence_dir": true,
+          "region_carrier_json": true,
+          "source_model": true,
+          "target_evidence_dir": true
+        },
+        "ready": true,
+        "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/bonsai_teacher_render_visible_region_carriers_v37_visible_alpha1_policyval_pruned.json",
+        "scene": "bonsai",
+        "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/bonsai/ratio_0200/compact_model",
+        "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai"
+      },
+      "returncode": 0,
+      "scene": "bonsai",
+      "status": "READY"
+    },
+    {
+      "elapsed_sec": 0.0,
+      "log_path": "",
+      "preflight": {
+        "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/train_visible_bary_images2/counter_teacher_surface_evidence_phasej_trainval_alpha1",
+        "gpu": "2",
+        "input_exists": {
+          "fit_evidence_dir": true,
+          "region_carrier_json": true,
+          "source_model": true,
+          "target_evidence_dir": true
+        },
+        "ready": true,
+        "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/counter_teacher_render_visible_region_carriers_phasej_trainval_alpha1_policyval_pruned.json",
+        "scene": "counter",
+        "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/counter/ratio_0200/compact_model",
+        "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter"
+      },
+      "returncode": 0,
+      "scene": "counter",
+      "status": "READY"
+    },
+    {
+      "elapsed_sec": 0.0,
+      "log_path": "",
+      "preflight": {
+        "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/train_visible_bary_images2/garden_teacher_surface_evidence_phasej_trainval_resize_alpha1",
+        "gpu": "3",
+        "input_exists": {
+          "fit_evidence_dir": true,
+          "region_carrier_json": true,
+          "source_model": true,
+          "target_evidence_dir": true
+        },
+        "ready": true,
+        "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/garden_teacher_render_visible_region_carriers_phasej_trainval_resize_alpha1_policyval_pruned.json",
+        "scene": "garden",
+        "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/garden/ratio_0200/compact_model",
+        "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/garden"
+      },
+      "returncode": 0,
+      "scene": "garden",
+      "status": "READY"
+    },
+    {
+      "elapsed_sec": 0.0,
+      "log_path": "",
+      "preflight": {
+        "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/train_visible_bary_images2/room_teacher_surface_evidence_phasej_trainval_alpha1",
+        "gpu": "2",
+        "input_exists": {
+          "fit_evidence_dir": true,
+          "region_carrier_json": true,
+          "source_model": true,
+          "target_evidence_dir": true
+        },
+        "ready": true,
+        "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/room_teacher_render_visible_region_carriers_phasej_trainval_alpha1_policyval_pruned.json",
+        "scene": "room",
+        "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/room/ratio_0200/compact_model",
+        "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/room"
+      },
+      "returncode": 0,
+      "scene": "room",
+      "status": "READY"
+    }
+  ],
+  "schema_version": 1,
+  "status": "PREFLIGHT",
+  "unknown_passthrough_args": []
+}

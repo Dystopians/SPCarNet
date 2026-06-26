@@ -1,0 +1,41 @@
+{
+  "description": "Ready-scene manifest for strict vNext structure-aware shrink validation. These four scenes have source model, fit evidence, target evidence, and region carrier paths available in the current workspace snapshot.",
+  "scenes": [
+    {
+      "scene": "bonsai",
+      "gpu": "3",
+      "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/bonsai/ratio_0200/compact_model",
+      "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_train_images2/bonsai_teacher_surface_evidence_visible_alpha1",
+      "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai",
+      "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/bonsai_teacher_render_visible_region_carriers_v37_visible_alpha1_policyval_pruned.json",
+      "note": "Existing structure-aware shrink artifact is already committed under bonsai_structure_shrink_tau002_20260626_0718."
+    },
+    {
+      "scene": "counter",
+      "gpu": "2",
+      "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/counter/ratio_0200/compact_model",
+      "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/train_visible_bary_images2/counter_teacher_surface_evidence_phasej_trainval_alpha1",
+      "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter",
+      "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/counter_teacher_render_visible_region_carriers_phasej_trainval_alpha1_policyval_pruned.json",
+      "note": "Existing structure-aware shrink artifact is already committed under counter_structure_shrink_tau002_20260626_0558."
+    },
+    {
+      "scene": "garden",
+      "gpu": "3",
+      "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/garden/ratio_0200/compact_model",
+      "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/train_visible_bary_images2/garden_teacher_surface_evidence_phasej_trainval_resize_alpha1",
+      "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/garden",
+      "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/garden_teacher_render_visible_region_carriers_phasej_trainval_resize_alpha1_policyval_pruned.json",
+      "note": "Structure-aware shrink run launched on 2026-06-26; this row is the ready missing strict scene."
+    },
+    {
+      "scene": "room",
+      "gpu": "2",
+      "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/room/ratio_0200/compact_model",
+      "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/train_visible_bary_images2/room_teacher_surface_evidence_phasej_trainval_alpha1",
+      "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/room",
+      "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/room_teacher_render_visible_region_carriers_phasej_trainval_alpha1_policyval_pruned.json",
+      "note": "Existing structure-aware shrink artifact is already committed under room_structure_shrink_tau002_20260626_0718."
+    }
+  ]
+}

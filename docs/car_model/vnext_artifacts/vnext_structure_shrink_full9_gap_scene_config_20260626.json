@@ -1,0 +1,85 @@
+{
+  "description": "Full9 preflight manifest for strict vNext structure-aware shrink. Ready rows point to existing evidence. Missing rows point to the intended normalized /dev/shm input tree that must be rebuilt or symlinked before full9 execution.",
+  "normalized_input_root": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626",
+  "scenes": [
+    {
+      "scene": "bicycle",
+      "gpu": "2",
+      "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/bicycle/ratio_0200/compact_model",
+      "fit_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/fit_evidence",
+      "target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence",
+      "region_carrier_json": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/carrier.json",
+      "missing_reason": "fit/target visible-bary evidence and policy-pruned carrier are not present in the current snapshot."
+    },
+    {
+      "scene": "bonsai",
+      "gpu": "3",
+      "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/bonsai/ratio_0200/compact_model",
+      "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_train_images2/bonsai_teacher_surface_evidence_visible_alpha1",
+      "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai",
+      "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/bonsai_teacher_render_visible_region_carriers_v37_visible_alpha1_policyval_pruned.json",
+      "note": "Ready but uses v37 evidence naming rather than v39 template."
+    },
+    {
+      "scene": "counter",
+      "gpu": "2",
+      "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/counter/ratio_0200/compact_model",
+      "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/train_visible_bary_images2/counter_teacher_surface_evidence_phasej_trainval_alpha1",
+      "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter",
+      "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/counter_teacher_render_visible_region_carriers_phasej_trainval_alpha1_policyval_pruned.json"
+    },
+    {
+      "scene": "flowers",
+      "gpu": "3",
+      "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model",
+      "fit_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/flowers/fit_evidence",
+      "target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/flowers/target_evidence",
+      "region_carrier_json": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/flowers/carrier.json",
+      "missing_reason": "fit/target visible-bary evidence and policy-pruned carrier are not present in the current snapshot."
+    },
+    {
+      "scene": "garden",
+      "gpu": "3",
+      "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/garden/ratio_0200/compact_model",
+      "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/train_visible_bary_images2/garden_teacher_surface_evidence_phasej_trainval_resize_alpha1",
+      "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/garden",
+      "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/garden_teacher_render_visible_region_carriers_phasej_trainval_resize_alpha1_policyval_pruned.json",
+      "note": "Ready and launched as the fourth strict structure-aware scene on 2026-06-26."
+    },
+    {
+      "scene": "kitchen",
+      "gpu": "2",
+      "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/kitchen/ratio_0200/compact_model",
+      "fit_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/kitchen/fit_evidence",
+      "target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/kitchen/target_evidence",
+      "region_carrier_json": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/kitchen/carrier.json",
+      "missing_reason": "fit/target visible-bary evidence and policy-pruned carrier are not present in the current snapshot."
+    },
+    {
+      "scene": "room",
+      "gpu": "2",
+      "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/room/ratio_0200/compact_model",
+      "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/train_visible_bary_images2/room_teacher_surface_evidence_phasej_trainval_alpha1",
+      "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/room",
+      "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/room_teacher_render_visible_region_carriers_phasej_trainval_alpha1_policyval_pruned.json"
+    },
+    {
+      "scene": "stump",
+      "gpu": "3",
+      "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/stump/ratio_0200/compact_model",
+      "fit_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/stump/fit_evidence",
+      "target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/stump/target_evidence",
+      "region_carrier_json": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/stump/carrier.json",
+      "missing_reason": "fit/target visible-bary evidence and policy-pruned carrier are not present in the current snapshot."
+    },
+    {
+      "scene": "treehill",
+      "gpu": "2",
+      "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model",
+      "fit_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/treehill/fit_evidence",
+      "target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/treehill/target_evidence",
+      "region_carrier_json": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/treehill/carrier.json",
+      "missing_reason": "fit/target visible-bary evidence and policy-pruned carrier are not present in the current snapshot."
+    }
+  ]
+}

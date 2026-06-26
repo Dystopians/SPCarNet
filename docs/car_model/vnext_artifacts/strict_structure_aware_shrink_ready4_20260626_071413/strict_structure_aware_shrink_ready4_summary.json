@@ -1,0 +1,106 @@
+{
+  "counts": {
+    "accepted_nonzero": 4,
+    "lpips_better_vs_parent": 4,
+    "protocol_passed": 4,
+    "psnr_better_vs_parent": 4,
+    "scene_count": 4,
+    "ssim_better_vs_parent": 2,
+    "target_gt_hidden_from_apply": 4
+  },
+  "created_at": "2026-06-26",
+  "interpretation": "Ready4 extends the strict structure-aware shrink table from counter/bonsai/room to garden. Garden is accepted/nonzero and improves PSNR/SSIM/LPIPS versus its Phase-F compact parent and the previous garden face-softshrink pilot. The result is still not full9 because five scenes lack evidence/carrier inputs.",
+  "mean_delta_vs_phasef_compact_parent": {
+    "LPIPS": -2.037733793258667e-05,
+    "PSNR": 0.0007615089416503906,
+    "SSIM": -3.0249357223510742e-06
+  },
+  "name": "strict_structure_aware_shrink_ready4_20260626_071413",
+  "policy": {
+    "name": "policy_val_structure_aware_shrink_tau002",
+    "strict_no_target_gt_apply": true,
+    "structure_shrink_edge_weight": 0.0,
+    "structure_shrink_gradient_weight": 1.0,
+    "structure_shrink_l1_weight": 1.0,
+    "structure_shrink_risk_tau": 0.002
+  },
+  "scenes": {
+    "bonsai": {
+      "accepted": true,
+      "artifact_dir": "docs/car_model/vnext_artifacts/bonsai_structure_shrink_tau002_20260626_0718",
+      "changed_fraction": 0.0014897392217198787,
+      "delta_vs_phasef_compact_parent": {
+        "LPIPS": -1.6927719116210938e-05,
+        "PSNR": 0.0011386871337890625,
+        "SSIM": -9.5367431640625e-06
+      },
+      "metrics": {
+        "LPIPS": 0.25932276248931885,
+        "PSNR": 28.865478515625,
+        "SSIM": 0.8960027694702148
+      },
+      "protocol_passed": true,
+      "selected_alpha": 0.25,
+      "target_gt_visible_to_apply": false
+    },
+    "counter": {
+      "accepted": true,
+      "artifact_dir": "docs/car_model/vnext_artifacts/counter_structure_shrink_tau002_20260626_0558",
+      "changed_fraction": 0.012343567457579047,
+      "delta_vs_phasef_compact_parent": {
+        "LPIPS": -4.267692565917969e-05,
+        "PSNR": 0.0012989044189453125,
+        "SSIM": -9.059906005859375e-06
+      },
+      "metrics": {
+        "LPIPS": 0.2519550621509552,
+        "PSNR": 26.751171112060547,
+        "SSIM": 0.862042248249054
+      },
+      "protocol_passed": true,
+      "selected_alpha": 0.125,
+      "target_gt_visible_to_apply": false
+    },
+    "garden": {
+      "accepted": true,
+      "artifact_dir": "docs/car_model/vnext_artifacts/garden_structure_shrink_tau002_20260626_071413",
+      "changed_fraction": 0.0020503790620978123,
+      "delta_vs_old_garden_face_softshrink": {
+        "LPIPS": -4.678964614868164e-06,
+        "PSNR": 6.29425048828125e-05,
+        "SSIM": 1.1920928955078125e-06
+      },
+      "delta_vs_phasef_compact_parent": {
+        "LPIPS": -7.912516593933105e-06,
+        "PSNR": 0.0001392364501953125,
+        "SSIM": 3.159046173095703e-06
+      },
+      "metrics": {
+        "LPIPS": 0.24801529943943024,
+        "PSNR": 24.74114227294922,
+        "SSIM": 0.7540521621704102
+      },
+      "protocol_passed": true,
+      "selected_alpha": 0.125,
+      "target_gt_visible_to_apply": false
+    },
+    "room": {
+      "accepted": true,
+      "artifact_dir": "docs/car_model/vnext_artifacts/room_structure_shrink_tau002_20260626_0718",
+      "changed_fraction": 0.005199120032002298,
+      "delta_vs_phasef_compact_parent": {
+        "LPIPS": -1.399219036102295e-05,
+        "PSNR": 0.000469207763671875,
+        "SSIM": 3.337860107421875e-06
+      },
+      "metrics": {
+        "LPIPS": 0.24990937113761902,
+        "PSNR": 28.73957061767578,
+        "SSIM": 0.8847965598106384
+      },
+      "protocol_passed": true,
+      "selected_alpha": 0.0625,
+      "target_gt_visible_to_apply": false
+    }
+  }
+}
