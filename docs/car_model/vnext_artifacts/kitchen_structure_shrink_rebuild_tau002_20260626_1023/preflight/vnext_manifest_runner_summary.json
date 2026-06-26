@@ -1,0 +1,252 @@
+{
+  "assembly": null,
+  "config": "docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_scene_config_20260626.json",
+  "dry_run": false,
+  "failed_scene_count": 0,
+  "max_parallel": 1,
+  "missing_input_scene_count": 1,
+  "missing_inputs": {
+    "bicycle": {
+      "fit_evidence_dir": false,
+      "region_carrier_json": false,
+      "source_model": true,
+      "target_evidence_dir": false
+    }
+  },
+  "output_root": "/dev/shm/peilincai_spcarnet_vnext_full9_gap_preflight_after_kitchen_20260626",
+  "preflight_only": true,
+  "ready_scene_count": 8,
+  "rows": [
+    {
+      "elapsed_sec": 0.0,
+      "log_path": "",
+      "preflight": {
+        "fit_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/fit_evidence",
+        "gpu": "2",
+        "input_exists": {
+          "fit_evidence_dir": false,
+          "region_carrier_json": false,
+          "source_model": true,
+          "target_evidence_dir": false
+        },
+        "ready": false,
+        "region_carrier_json": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/carrier.json",
+        "scene": "bicycle",
+        "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/bicycle/ratio_0200/compact_model",
+        "target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence"
+      },
+      "returncode": null,
+      "scene": "bicycle",
+      "status": "MISSING_INPUT"
+    },
+    {
+      "elapsed_sec": 0.0,
+      "log_path": "",
+      "preflight": {
+        "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_train_images2/bonsai_teacher_surface_evidence_visible_alpha1",
+        "gpu": "3",
+        "input_exists": {
+          "fit_evidence_dir": true,
+          "region_carrier_json": true,
+          "source_model": true,
+          "target_evidence_dir": true
+        },
+        "ready": true,
+        "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/bonsai_teacher_render_visible_region_carriers_v37_visible_alpha1_policyval_pruned.json",
+        "scene": "bonsai",
+        "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/bonsai/ratio_0200/compact_model",
+        "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai"
+      },
+      "returncode": 0,
+      "scene": "bonsai",
+      "status": "READY"
+    },
+    {
+      "elapsed_sec": 0.0,
+      "log_path": "",
+      "preflight": {
+        "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/train_visible_bary_images2/counter_teacher_surface_evidence_phasej_trainval_alpha1",
+        "gpu": "2",
+        "input_exists": {
+          "fit_evidence_dir": true,
+          "region_carrier_json": true,
+          "source_model": true,
+          "target_evidence_dir": true
+        },
+        "ready": true,
+        "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/counter_teacher_render_visible_region_carriers_phasej_trainval_alpha1_policyval_pruned.json",
+        "scene": "counter",
+        "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/counter/ratio_0200/compact_model",
+        "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter"
+      },
+      "returncode": 0,
+      "scene": "counter",
+      "status": "READY"
+    },
+    {
+      "elapsed_sec": 0.0,
+      "log_path": "",
+      "preflight": {
+        "fit_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/flowers/fit_evidence",
+        "gpu": "3",
+        "input_exists": {
+          "fit_evidence_dir": true,
+          "region_carrier_json": true,
+          "source_model": true,
+          "target_evidence_dir": true
+        },
+        "ready": true,
+        "region_carrier_json": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/flowers/carrier.json",
+        "scene": "flowers",
+        "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model",
+        "target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/flowers/target_evidence"
+      },
+      "returncode": 0,
+      "scene": "flowers",
+      "status": "READY"
+    },
+    {
+      "elapsed_sec": 0.0,
+      "log_path": "",
+      "preflight": {
+        "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/train_visible_bary_images2/garden_teacher_surface_evidence_phasej_trainval_resize_alpha1",
+        "gpu": "3",
+        "input_exists": {
+          "fit_evidence_dir": true,
+          "region_carrier_json": true,
+          "source_model": true,
+          "target_evidence_dir": true
+        },
+        "ready": true,
+        "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/garden_teacher_render_visible_region_carriers_phasej_trainval_resize_alpha1_policyval_pruned.json",
+        "scene": "garden",
+        "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/garden/ratio_0200/compact_model",
+        "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/garden"
+      },
+      "returncode": 0,
+      "scene": "garden",
+      "status": "READY"
+    },
+    {
+      "elapsed_sec": 0.0,
+      "log_path": "",
+      "preflight": {
+        "fit_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/kitchen/fit_evidence",
+        "gpu": "2",
+        "input_exists": {
+          "fit_evidence_dir": true,
+          "region_carrier_json": true,
+          "source_model": true,
+          "target_evidence_dir": true
+        },
+        "ready": true,
+        "region_carrier_json": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/kitchen/carrier.json",
+        "scene": "kitchen",
+        "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/kitchen/ratio_0200/compact_model",
+        "target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/kitchen/target_evidence"
+      },
+      "returncode": 0,
+      "scene": "kitchen",
+      "status": "READY"
+    },
+    {
+      "elapsed_sec": 0.0,
+      "log_path": "",
+      "preflight": {
+        "fit_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/train_visible_bary_images2/room_teacher_surface_evidence_phasej_trainval_alpha1",
+        "gpu": "2",
+        "input_exists": {
+          "fit_evidence_dir": true,
+          "region_carrier_json": true,
+          "source_model": true,
+          "target_evidence_dir": true
+        },
+        "ready": true,
+        "region_carrier_json": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/room_teacher_render_visible_region_carriers_phasej_trainval_alpha1_policyval_pruned.json",
+        "scene": "room",
+        "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/room/ratio_0200/compact_model",
+        "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/room"
+      },
+      "returncode": 0,
+      "scene": "room",
+      "status": "READY"
+    },
+    {
+      "elapsed_sec": 0.0,
+      "log_path": "",
+      "preflight": {
+        "fit_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/stump/fit_evidence",
+        "gpu": "3",
+        "input_exists": {
+          "fit_evidence_dir": true,
+          "region_carrier_json": true,
+          "source_model": true,
+          "target_evidence_dir": true
+        },
+        "ready": true,
+        "region_carrier_json": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/stump/carrier.json",
+        "scene": "stump",
+        "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/stump/ratio_0200/compact_model",
+        "target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/stump/target_evidence"
+      },
+      "returncode": 0,
+      "scene": "stump",
+      "status": "READY"
+    },
+    {
+      "elapsed_sec": 0.0,
+      "log_path": "",
+      "preflight": {
+        "fit_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/treehill/fit_evidence",
+        "gpu": "2",
+        "input_exists": {
+          "fit_evidence_dir": true,
+          "region_carrier_json": true,
+          "source_model": true,
+          "target_evidence_dir": true
+        },
+        "ready": true,
+        "region_carrier_json": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/treehill/carrier.json",
+        "scene": "treehill",
+        "source_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model",
+        "target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/treehill/target_evidence"
+      },
+      "returncode": 0,
+      "scene": "treehill",
+      "status": "READY"
+    }
+  ],
+  "schema_version": 1,
+  "status": "MISSING_INPUT",
+  "unknown_passthrough_args": [
+    "--skip_teacher_cache",
+    "--strict_no_target_gt_apply",
+    "--texture_size",
+    "16",
+    "--texture_size_candidates",
+    "16",
+    "--support_expansion_mode",
+    "none",
+    "--atlas_empty_bin_fill_mode",
+    "face_mean",
+    "--surface_multiscale_prior_mode",
+    "local_patch",
+    "--surface_multiscale_prior_blend_candidates",
+    "0.5",
+    "--max_abs_delta_rgb_candidates",
+    "0.12",
+    "--bin_uncertainty_shrink_policy_mode",
+    "keep_with_downweight",
+    "--enable_policy_val_structure_aware_shrink",
+    "--structure_shrink_l1_weight",
+    "1.0",
+    "--structure_shrink_gradient_weight",
+    "1.0",
+    "--structure_shrink_edge_weight",
+    "0.0",
+    "--structure_shrink_risk_tau",
+    "0.002",
+    "--structure_shrink_max_penalty",
+    "1.0"
+  ]
+}

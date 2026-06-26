@@ -1,0 +1,194 @@
+$ /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_populate_eval_gt_from_target_evidence.py --target_evidence_dir /dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/kitchen/target_evidence --output_model /dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model --split test --method_name ours_26000_vnext_structure_aware_shrink --audit_path /dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/reports/kitchen_ours_26000_vnext_structure_aware_shrink_test_eval_gt_population_audit.json --force
+
+populate eval gt:   0%|          | 0/35 [00:00<?, ?it/s]populate eval gt:   3%|▎         | 1/35 [00:00<00:31,  1.08it/s]populate eval gt:   6%|▌         | 2/35 [00:01<00:29,  1.14it/s]populate eval gt:   9%|▊         | 3/35 [00:02<00:26,  1.21it/s]populate eval gt:  11%|█▏        | 4/35 [00:03<00:23,  1.31it/s]populate eval gt:  14%|█▍        | 5/35 [00:03<00:22,  1.34it/s]populate eval gt:  17%|█▋        | 6/35 [00:04<00:21,  1.37it/s]populate eval gt:  20%|██        | 7/35 [00:05<00:20,  1.38it/s]populate eval gt:  23%|██▎       | 8/35 [00:05<00:18,  1.44it/s]populate eval gt:  26%|██▌       | 9/35 [00:06<00:18,  1.43it/s]populate eval gt:  29%|██▊       | 10/35 [00:07<00:17,  1.45it/s]populate eval gt:  31%|███▏      | 11/35 [00:07<00:16,  1.47it/s]populate eval gt:  34%|███▍      | 12/35 [00:08<00:15,  1.49it/s]populate eval gt:  37%|███▋      | 13/35 [00:09<00:14,  1.52it/s]populate eval gt:  40%|████      | 14/35 [00:10<00:14,  1.47it/s]populate eval gt:  43%|████▎     | 15/35 [00:10<00:13,  1.50it/s]populate eval gt:  46%|████▌     | 16/35 [00:11<00:13,  1.45it/s]populate eval gt:  49%|████▊     | 17/35 [00:12<00:12,  1.45it/s]populate eval gt:  51%|█████▏    | 18/35 [00:12<00:11,  1.47it/s]populate eval gt:  54%|█████▍    | 19/35 [00:13<00:10,  1.49it/s]populate eval gt:  57%|█████▋    | 20/35 [00:14<00:09,  1.51it/s]populate eval gt:  60%|██████    | 21/35 [00:14<00:09,  1.51it/s]populate eval gt:  63%|██████▎   | 22/35 [00:15<00:08,  1.48it/s]populate eval gt:  66%|██████▌   | 23/35 [00:16<00:08,  1.50it/s]populate eval gt:  69%|██████▊   | 24/35 [00:16<00:07,  1.47it/s]populate eval gt:  71%|███████▏  | 25/35 [00:17<00:06,  1.53it/s]populate eval gt:  74%|███████▍  | 26/35 [00:17<00:05,  1.59it/s]populate eval gt:  77%|███████▋  | 27/35 [00:18<00:05,  1.59it/s]populate eval gt:  80%|████████  | 28/35 [00:19<00:04,  1.54it/s]populate eval gt:  83%|████████▎ | 29/35 [00:19<00:03,  1.59it/s]populate eval gt:  86%|████████▌ | 30/35 [00:20<00:03,  1.52it/s]populate eval gt:  89%|████████▊ | 31/35 [00:21<00:02,  1.51it/s]populate eval gt:  91%|█████████▏| 32/35 [00:21<00:01,  1.51it/s]populate eval gt:  94%|█████████▍| 33/35 [00:22<00:01,  1.51it/s]populate eval gt:  97%|█████████▋| 34/35 [00:23<00:00,  1.48it/s]populate eval gt: 100%|██████████| 35/35 [00:23<00:00,  1.43it/s]populate eval gt: 100%|██████████| 35/35 [00:23<00:00,  1.46it/s]
+{
+  "gt_dir": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/gt",
+  "method_name": "ours_26000_vnext_structure_aware_shrink",
+  "missing_render_images": 0,
+  "output_model": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model",
+  "render_dir": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders",
+  "schema_version": 1,
+  "split": "test",
+  "target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/kitchen/target_evidence",
+  "target_gt_visible_to_apply": false,
+  "target_gt_visible_to_eval": true,
+  "view_count": 35,
+  "views": [
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00000.png",
+      "view": "00000.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00001.png",
+      "view": "00001.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00002.png",
+      "view": "00002.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00003.png",
+      "view": "00003.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00004.png",
+      "view": "00004.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00005.png",
+      "view": "00005.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00006.png",
+      "view": "00006.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00007.png",
+      "view": "00007.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00008.png",
+      "view": "00008.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00009.png",
+      "view": "00009.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00010.png",
+      "view": "00010.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00011.png",
+      "view": "00011.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00012.png",
+      "view": "00012.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00013.png",
+      "view": "00013.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00014.png",
+      "view": "00014.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00015.png",
+      "view": "00015.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00016.png",
+      "view": "00016.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00017.png",
+      "view": "00017.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00018.png",
+      "view": "00018.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00019.png",
+      "view": "00019.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00020.png",
+      "view": "00020.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00021.png",
+      "view": "00021.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00022.png",
+      "view": "00022.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00023.png",
+      "view": "00023.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00024.png",
+      "view": "00024.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00025.png",
+      "view": "00025.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00026.png",
+      "view": "00026.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00027.png",
+      "view": "00027.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00028.png",
+      "view": "00028.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00029.png",
+      "view": "00029.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00030.png",
+      "view": "00030.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00031.png",
+      "view": "00031.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00032.png",
+      "view": "00032.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00033.png",
+      "view": "00033.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_kitchen_strict_20260626_1023/kitchen/model/test/ours_26000_vnext_structure_aware_shrink/renders/00034.png",
+      "view": "00034.npz"
+    }
+  ],
+  "written_gt_images": 35
+}

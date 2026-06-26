@@ -215,27 +215,28 @@ scripts/car_model/ecsr_prune_region_carriers_by_policy_val.py
 
 ## Follow-Up Rebuild Status
 
-After this original full9 gap audit, three missing input chains were rebuilt locally and committed as lightweight evidence packages:
+After this original full9 gap audit, four missing input chains were rebuilt locally and committed as lightweight evidence packages:
 
 | scene | input state | strict result | artifact |
 |---|---|---|---|
 | stump | fit evidence + target evidence + policy-val carrier rebuilt | fallback/no-op; certificate rejected tail-risk candidate | `docs/car_model/6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md` |
 | treehill | fit evidence + target evidence + policy-val carrier rebuilt | fallback/no-op; certificate rejected lower-tail/SSIM/L1 candidate | `docs/car_model/6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md` |
 | flowers | fit evidence + target evidence + policy-val carrier rebuilt | fallback/no-op; certificate rejected lower-tail/SSIM/L1 candidate; same-evidence parent equals fallback | `docs/car_model/6-26-vNext-FlowersInputRebuild-Ready7-and-SameEvidenceFallback-Log.md` |
+| kitchen | fit evidence + target evidence + policy-val carrier rebuilt | accepted nonzero; same-evidence delta `+0.000786 PSNR / +0.00000256 SSIM / -0.00002818 LPIPS` | `docs/car_model/6-26-vNext-KitchenInputRebuild-Ready8-and-AcceptedMilestone-Log.md` |
 
 The latest local preflight is now:
 
 ```text
-ready_scene_count: 7 / 9
-missing_input_scene_count: 2 / 9
-missing scenes: bicycle,kitchen
+ready_scene_count: 8 / 9
+missing_input_scene_count: 1 / 9
+missing scenes: bicycle
 ```
 
-The latest committed preflight evidence is stored with the flowers artifact:
+The latest committed preflight evidence is stored with the kitchen artifact:
 
 ```text
-docs/car_model/vnext_artifacts/flowers_structure_shrink_rebuild_tau002_20260626_0935/preflight/vnext_manifest_runner_summary.md
-docs/car_model/vnext_artifacts/flowers_structure_shrink_rebuild_tau002_20260626_0935/preflight/vnext_manifest_runner_summary.json
+docs/car_model/vnext_artifacts/kitchen_structure_shrink_rebuild_tau002_20260626_1023/preflight/vnext_manifest_runner_summary.md
+docs/car_model/vnext_artifacts/kitchen_structure_shrink_rebuild_tau002_20260626_1023/preflight/vnext_manifest_runner_summary.json
 ```
 
 ## Claim Boundary
@@ -246,7 +247,7 @@ docs/car_model/vnext_artifacts/flowers_structure_shrink_rebuild_tau002_20260626_
 
 ```text
 vNext 已经不再依赖单一模板 full9 wrapper；异构 evidence 的 manifest runner 已实现并通过 ready4 dry-run。
-当前 full9 缺口已机器可读定位为 2 个场景的 evidence/carrier 输入缺失，而不是 scene runner 或 strict no-target-GT 协议缺失。
+当前 full9 缺口已机器可读定位为 1 个场景的 evidence/carrier 输入缺失，而不是 scene runner 或 strict no-target-GT 协议缺失。
 ```
 
 不能说：
