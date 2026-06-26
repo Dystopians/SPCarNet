@@ -17,6 +17,7 @@
 - [vNext manifest runner 与 full9 缺口日志](docs/car_model/6-26-vNext-ManifestRunner-and-Full9Gap-Log.md)
 - [vNext structure-aware shrink ready4 artifact 聚合表](docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.md)
 - [vNext stump 重建 / ready5 拒绝日志](docs/car_model/6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md)
+- [vNext treehill 重建 / ready6 拒绝日志](docs/car_model/6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md)
 - [vNext ready4 preflight](docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.md)
 - [vNext full9 gap preflight](docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.md)
 - [可克隆报告包 manifest](docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md)
@@ -26,7 +27,7 @@
 
 简短状态：`v106 POD-MoE base-preserve` 是当前已验证的质量主线，在 assembled selected full9 表上相对本地 clean MeshSplatting baseline 三个指标均值都更好。`v113b/v113c` 是严格 gate 的安全修复，改善安全性并部分修复 garden v110b，但没有超过 v106。`v114_oof_refit_pod_moe` 是当前正在跑的 candidate-side 长程实验，还不是已完成结果。最新状态附录：v110 counter 在 field build 阶段以 return code `-9` 失败，大概率是内存/共享盘压力导致，因此 strict branch 仍需低内存 field-builder 修复后重跑。
 
-vNext 状态：certified residual surface texture 方向可以推进，但不能承诺已经产生论文级结果。最新 structure-aware shrink 里程碑新增 train-policy-val 局部 L1/gradient 结构风险 shrink，并修复了 parent-edge apply/profile 接口转发。在 ready 场景 `counter,bonsai,room,garden` strict no-target-GT apply 下，固定 structure-aware policy 为 `4 / 4` accepted，相对 Phase-F compact parent 的平均变化是 `+0.00076151` PSNR、`-0.00000302` SSIM、`-0.00002038` LPIPS。最重要修复是 `room` 从旧 strict face-softshrink fallback/no-op 变成 accepted nonzero output，`garden` 也相对 Phase-F parent 和旧 garden face-softshrink pilot 三指标小幅正向。下一步本地重建补齐了 `stump` 输入链，把 preflight 推进到 `5 / 9` ready；但 strict stump run 被 tail-risk certificate 正确拒绝为 fallback/no-op。剩余缺输入场景是 `bicycle,flowers,kitchen,treehill`。
+vNext 状态：certified residual surface texture 方向可以推进，但不能承诺已经产生论文级结果。最新 structure-aware shrink 里程碑新增 train-policy-val 局部 L1/gradient 结构风险 shrink，并修复了 parent-edge apply/profile 接口转发。在 ready 场景 `counter,bonsai,room,garden` strict no-target-GT apply 下，固定 structure-aware policy 为 `4 / 4` accepted，相对 Phase-F compact parent 的平均变化是 `+0.00076151` PSNR、`-0.00000302` SSIM、`-0.00002038` LPIPS。最重要修复是 `room` 从旧 strict face-softshrink fallback/no-op 变成 accepted nonzero output，`garden` 也相对 Phase-F parent 和旧 garden face-softshrink pilot 三指标小幅正向。当前本地重建已补齐 `stump` 与 `treehill` 输入链，把 preflight 推进到 `6 / 9` ready；但两个 outdoor strict run 都被 tail-risk/SSIM certificate 正确拒绝为 fallback/no-op。剩余缺输入场景是 `bicycle,flowers,kitchen`。
 
 ## 当前 v106 POD-MoE 状态（2026-06-25）
 

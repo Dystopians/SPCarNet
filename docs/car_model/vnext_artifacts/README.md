@@ -7,7 +7,7 @@
 
 ## Summary
 
-当前 artifacts 有三个真实 `garden` 单场景 run、三个 strict frozen-policy 场景 run、三场景 structure-aware shrink 表、四场景 ready4 structure-aware shrink 表、`stump` 输入链重建/拒绝结果，以及 full9 preflight 缺口记录：
+当前 artifacts 有三个真实 `garden` 单场景 run、三个 strict frozen-policy 场景 run、三场景 structure-aware shrink 表、四场景 ready4 structure-aware shrink 表、`stump/treehill` 输入链重建/拒绝结果，以及 full9 preflight 缺口记录：
 
 ```text
 garden_20260626_004134
@@ -25,6 +25,8 @@ garden_structure_shrink_tau002_20260626_071413
 strict_structure_aware_shrink_ready4_20260626_071413
 stump_structure_shrink_rebuild_tau002_20260626_080257
 full9_gap_after_stump_preflight_20260626
+treehill_structure_shrink_rebuild_tau002_20260626_0832
+full9_gap_after_treehill_preflight_20260626
 vnext_structure_shrink_ready4_scene_config_20260626.json
 vnext_structure_shrink_full9_gap_scene_config_20260626.json
 vnext_structure_shrink_ready4_preflight_20260626.md
@@ -49,7 +51,7 @@ room strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, 
 1. **vNext 安全证书和 no-op fallback 机制有效，并且同一套 frozen face-softshrink policy 已经在 counter/bonsai 上产生真实非零 accepted residual surface texture，在 room 上安全回退且 `changed_fraction=0`**。
 2. **新一轮 structure-aware shrink policy 在严格 no-target-GT apply 下让 counter/bonsai/room/garden 四场景全部 accepted，其中 room 从旧策略 fallback 变为真实非零 residual output，garden 则相对旧 face-softshrink 也三指标小幅提升**。
 
-四场景 ready4 平均仍只有 `+0.00076151 PSNR / -0.00000302 SSIM / -0.00002038 LPIPS`，还不是 full9、v106、clean MeshSplatting 或 Phase-J teacher 超越证据。完整解释见 `../6-26-vNext-StructureAwareShrink-Strict-Multiscene-Log.md` 和 `../6-26-vNext-ManifestRunner-and-Full9Gap-Log.md`。
+四场景 ready4 平均仍只有 `+0.00076151 PSNR / -0.00000302 SSIM / -0.00002038 LPIPS`，后续 `stump/treehill` 是安全拒绝的 fallback/no-op 负结果，因此还不是 full9、v106、clean MeshSplatting 或 Phase-J teacher 超越证据。完整解释见 `../6-26-vNext-StructureAwareShrink-Strict-Multiscene-Log.md`、`../6-26-vNext-ManifestRunner-and-Full9Gap-Log.md`、`../6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md`、`../6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md`。
 
 ---
 
@@ -86,6 +88,8 @@ room strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, 
 | `vnext_structure_shrink_full9_gap_preflight_20260626.md` | full9 gap preflight summary | 证明当前 full9 是 4/9 ready、5/9 missing input |
 | `stump_structure_shrink_rebuild_tau002_20260626_080257/` | rebuilt stump input-chain strict scene run：manifest、audit、metrics、per-view、policy-val carrier summary | 第五个 input-ready scene；strict run 完成但证书拒绝为 fallback/no-op |
 | `full9_gap_after_stump_preflight_20260626/vnext_manifest_runner_summary.md` | stump rebuild 后的 full9 preflight summary | 证明 local snapshot 从 4/9 ready 推进到 5/9 ready；剩余缺 `bicycle/flowers/kitchen/treehill` |
+| `treehill_structure_shrink_rebuild_tau002_20260626_0832/` | rebuilt treehill input-chain strict scene run：manifest、audit、metrics、per-view、policy-val carrier summary、teacher evidence summary | 第六个 input-ready scene；strict run 完成但证书因 lower-tail/SSIM/L1 风险拒绝为 fallback/no-op |
+| `full9_gap_after_treehill_preflight_20260626/vnext_manifest_runner_summary.md` | treehill rebuild 后的 full9 preflight summary | 证明 local snapshot 从 5/9 ready 推进到 6/9 ready；剩余缺 `bicycle/flowers/kitchen` |
 
 ---
 
@@ -148,7 +152,7 @@ Garden also improves over the previous garden face-softshrink pilot by `+0.00006
 
 Ready4 full9 preflight was `4 / 9` ready. Missing input scenes were `bicycle,flowers,kitchen,stump,treehill`.
 
-After the local stump input rebuild, the current local preflight is `5 / 9` ready. Stump itself is not an accepted quality row: strict no-target-GT vNext completed but fell back/no-op because the policy-val tail-risk certificate rejected it. The remaining missing-input scenes are `bicycle,flowers,kitchen,treehill`. See `../6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md`.
+After the local stump and treehill input rebuilds, the current local preflight is `6 / 9` ready. Neither outdoor rebuild is an accepted quality row: strict no-target-GT vNext completed for both, but stump fell back/no-op because the policy-val tail-risk certificate rejected it, and treehill fell back/no-op because lower-tail, SSIM, and L1 gates rejected it. The remaining missing-input scenes are `bicycle,flowers,kitchen`. See `../6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md` and `../6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md`.
 
 ---
 

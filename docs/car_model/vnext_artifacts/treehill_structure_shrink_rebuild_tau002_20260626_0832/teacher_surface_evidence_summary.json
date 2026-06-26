@@ -1,0 +1,619 @@
+{
+  "operator": "ecsr_build_teacher_surface_evidence_cache",
+  "test_usage": "none",
+  "base_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/treehill/train_visible_bary_base/treehill",
+  "teacher_render_dir": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders",
+  "parent_render_dir": null,
+  "parent_source": "npz:rgb_render",
+  "out_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/treehill/fit_evidence",
+  "processed_views": 46,
+  "skipped_views": 0,
+  "skipped": [],
+  "selection_mode": "better_masked_residual",
+  "mask_target": true,
+  "teacher_render_error_margin": 0.001,
+  "teacher_parent_delta_min": 0.01,
+  "fields_written": [
+    "teacher_residual_rgb",
+    "teacher_residual_l1",
+    "teacher_residual_rgb_raw",
+    "teacher_better_mask",
+    "teacher_gain_l1",
+    "teacher_parent_delta_l1"
+  ],
+  "mean_active_fraction": 0.24309453933747416,
+  "mean_target_l1": 0.009338758744137443,
+  "mean_raw_parent_delta_l1": 0.020203826402354498,
+  "mean_positive_teacher_gain_l1": 0.008935672990248902,
+  "view_summaries": [
+    {
+      "view": "00000",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00000.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.17700416666666666,
+      "mean_target_l1": 0.008333301171660423,
+      "mean_raw_parent_delta_l1": 0.02116568572819233,
+      "mean_positive_teacher_gain_l1": 0.00821754988282919
+    },
+    {
+      "view": "00002",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00002.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2047482142857143,
+      "mean_target_l1": 0.010370136238634586,
+      "mean_raw_parent_delta_l1": 0.022943299263715744,
+      "mean_positive_teacher_gain_l1": 0.010109909810125828
+    },
+    {
+      "view": "00004",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00004.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2013511904761905,
+      "mean_target_l1": 0.009974522516131401,
+      "mean_raw_parent_delta_l1": 0.024092670530080795,
+      "mean_positive_teacher_gain_l1": 0.009531453251838684
+    },
+    {
+      "view": "00006",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00006.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.21624583333333333,
+      "mean_target_l1": 0.01053488440811634,
+      "mean_raw_parent_delta_l1": 0.022531231865286827,
+      "mean_positive_teacher_gain_l1": 0.010066327638924122
+    },
+    {
+      "view": "00008",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00008.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.19216785714285714,
+      "mean_target_l1": 0.00862191990017891,
+      "mean_raw_parent_delta_l1": 0.017014333978295326,
+      "mean_positive_teacher_gain_l1": 0.008407982997596264
+    },
+    {
+      "view": "00010",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00010.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.1811047619047619,
+      "mean_target_l1": 0.008056729100644588,
+      "mean_raw_parent_delta_l1": 0.015220791101455688,
+      "mean_positive_teacher_gain_l1": 0.00792335532605648
+    },
+    {
+      "view": "00012",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00012.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.19150059523809523,
+      "mean_target_l1": 0.007381124887615442,
+      "mean_raw_parent_delta_l1": 0.015386388637125492,
+      "mean_positive_teacher_gain_l1": 0.00729282945394516
+    },
+    {
+      "view": "00014",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00014.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.26485535714285713,
+      "mean_target_l1": 0.012177839875221252,
+      "mean_raw_parent_delta_l1": 0.027183962985873222,
+      "mean_positive_teacher_gain_l1": 0.011346344836056232
+    },
+    {
+      "view": "00016",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00016.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.26424761904761906,
+      "mean_target_l1": 0.012097664177417755,
+      "mean_raw_parent_delta_l1": 0.026014411821961403,
+      "mean_positive_teacher_gain_l1": 0.011427630670368671
+    },
+    {
+      "view": "00018",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00018.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.27105416666666665,
+      "mean_target_l1": 0.011888834647834301,
+      "mean_raw_parent_delta_l1": 0.024013249203562737,
+      "mean_positive_teacher_gain_l1": 0.011351455934345722
+    },
+    {
+      "view": "00020",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00020.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2505345238095238,
+      "mean_target_l1": 0.012781747616827488,
+      "mean_raw_parent_delta_l1": 0.025960784405469894,
+      "mean_positive_teacher_gain_l1": 0.012132877483963966
+    },
+    {
+      "view": "00022",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00022.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.18669583333333334,
+      "mean_target_l1": 0.0074910614639520645,
+      "mean_raw_parent_delta_l1": 0.014968079514801502,
+      "mean_positive_teacher_gain_l1": 0.007615497335791588
+    },
+    {
+      "view": "00024",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00024.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.21405416666666666,
+      "mean_target_l1": 0.0066430396400392056,
+      "mean_raw_parent_delta_l1": 0.016106201335787773,
+      "mean_positive_teacher_gain_l1": 0.0064399512484669685
+    },
+    {
+      "view": "00026",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00026.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.19447619047619047,
+      "mean_target_l1": 0.005778394639492035,
+      "mean_raw_parent_delta_l1": 0.013654329814016819,
+      "mean_positive_teacher_gain_l1": 0.005899815354496241
+    },
+    {
+      "view": "00028",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00028.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.1807875,
+      "mean_target_l1": 0.007834332063794136,
+      "mean_raw_parent_delta_l1": 0.020280933007597923,
+      "mean_positive_teacher_gain_l1": 0.007612391375005245
+    },
+    {
+      "view": "00030",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00030.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.20407023809523808,
+      "mean_target_l1": 0.010210041888058186,
+      "mean_raw_parent_delta_l1": 0.021781504154205322,
+      "mean_positive_teacher_gain_l1": 0.009647895582020283
+    },
+    {
+      "view": "00032",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00032.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2598714285714286,
+      "mean_target_l1": 0.01314532570540905,
+      "mean_raw_parent_delta_l1": 0.028079243376851082,
+      "mean_positive_teacher_gain_l1": 0.012203454971313477
+    },
+    {
+      "view": "00034",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00034.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.24762738095238096,
+      "mean_target_l1": 0.01317652314901352,
+      "mean_raw_parent_delta_l1": 0.028930863365530968,
+      "mean_positive_teacher_gain_l1": 0.012211760506033897
+    },
+    {
+      "view": "00036",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00036.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2693988095238095,
+      "mean_target_l1": 0.00869218073785305,
+      "mean_raw_parent_delta_l1": 0.019562115892767906,
+      "mean_positive_teacher_gain_l1": 0.008296742103993893
+    },
+    {
+      "view": "00038",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00038.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.27299464285714287,
+      "mean_target_l1": 0.007532189134508371,
+      "mean_raw_parent_delta_l1": 0.015645388513803482,
+      "mean_positive_teacher_gain_l1": 0.007525412831455469
+    },
+    {
+      "view": "00040",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00040.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2590863095238095,
+      "mean_target_l1": 0.007533865049481392,
+      "mean_raw_parent_delta_l1": 0.016764601692557335,
+      "mean_positive_teacher_gain_l1": 0.007417496293783188
+    },
+    {
+      "view": "00042",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00042.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.22021130952380952,
+      "mean_target_l1": 0.009465483017265797,
+      "mean_raw_parent_delta_l1": 0.023753564804792404,
+      "mean_positive_teacher_gain_l1": 0.008928140625357628
+    },
+    {
+      "view": "00044",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00044.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2474761904761905,
+      "mean_target_l1": 0.010700558312237263,
+      "mean_raw_parent_delta_l1": 0.023398181423544884,
+      "mean_positive_teacher_gain_l1": 0.010150988586246967
+    },
+    {
+      "view": "00046",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00046.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2622940476190476,
+      "mean_target_l1": 0.01251159980893135,
+      "mean_raw_parent_delta_l1": 0.028480425477027893,
+      "mean_positive_teacher_gain_l1": 0.011761159636080265
+    },
+    {
+      "view": "00048",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00048.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2575547619047619,
+      "mean_target_l1": 0.008183001540601254,
+      "mean_raw_parent_delta_l1": 0.01795903407037258,
+      "mean_positive_teacher_gain_l1": 0.00783695001155138
+    },
+    {
+      "view": "00050",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00050.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2588017857142857,
+      "mean_target_l1": 0.007482779212296009,
+      "mean_raw_parent_delta_l1": 0.014689638279378414,
+      "mean_positive_teacher_gain_l1": 0.007606609258800745
+    },
+    {
+      "view": "00052",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00052.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2515327380952381,
+      "mean_target_l1": 0.00724543584510684,
+      "mean_raw_parent_delta_l1": 0.015796901658177376,
+      "mean_positive_teacher_gain_l1": 0.007284875493496656
+    },
+    {
+      "view": "00054",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00054.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2690375,
+      "mean_target_l1": 0.008240894414484501,
+      "mean_raw_parent_delta_l1": 0.01754293404519558,
+      "mean_positive_teacher_gain_l1": 0.008028581738471985
+    },
+    {
+      "view": "00056",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00056.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.26015,
+      "mean_target_l1": 0.008966105990111828,
+      "mean_raw_parent_delta_l1": 0.01979926787316799,
+      "mean_positive_teacher_gain_l1": 0.00853389035910368
+    },
+    {
+      "view": "00058",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00058.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.27155595238095237,
+      "mean_target_l1": 0.009596711955964565,
+      "mean_raw_parent_delta_l1": 0.020468242466449738,
+      "mean_positive_teacher_gain_l1": 0.008785201236605644
+    },
+    {
+      "view": "00060",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00060.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.28398630952380954,
+      "mean_target_l1": 0.00900452770292759,
+      "mean_raw_parent_delta_l1": 0.01851898990571499,
+      "mean_positive_teacher_gain_l1": 0.008618185296654701
+    },
+    {
+      "view": "00062",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00062.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.25486785714285715,
+      "mean_target_l1": 0.007885751314461231,
+      "mean_raw_parent_delta_l1": 0.019167765974998474,
+      "mean_positive_teacher_gain_l1": 0.007165113463997841
+    },
+    {
+      "view": "00064",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00064.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.24195595238095238,
+      "mean_target_l1": 0.006967713125050068,
+      "mean_raw_parent_delta_l1": 0.01566978543996811,
+      "mean_positive_teacher_gain_l1": 0.006966989487409592
+    },
+    {
+      "view": "00066",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00066.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.24627083333333333,
+      "mean_target_l1": 0.006718539632856846,
+      "mean_raw_parent_delta_l1": 0.015134071931242943,
+      "mean_positive_teacher_gain_l1": 0.006798295769840479
+    },
+    {
+      "view": "00068",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00068.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.268575,
+      "mean_target_l1": 0.007115731947124004,
+      "mean_raw_parent_delta_l1": 0.014657446183264256,
+      "mean_positive_teacher_gain_l1": 0.007178208790719509
+    },
+    {
+      "view": "00070",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00070.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.24865535714285714,
+      "mean_target_l1": 0.008994757197797298,
+      "mean_raw_parent_delta_l1": 0.020080622285604477,
+      "mean_positive_teacher_gain_l1": 0.008589773438870907
+    },
+    {
+      "view": "00072",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00072.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.21020178571428572,
+      "mean_target_l1": 0.008430765941739082,
+      "mean_raw_parent_delta_l1": 0.017916647717356682,
+      "mean_positive_teacher_gain_l1": 0.00809067115187645
+    },
+    {
+      "view": "00074",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00074.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.26516488095238094,
+      "mean_target_l1": 0.012486250139772892,
+      "mean_raw_parent_delta_l1": 0.024198831990361214,
+      "mean_positive_teacher_gain_l1": 0.01163072232156992
+    },
+    {
+      "view": "00076",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00076.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2449761904761905,
+      "mean_target_l1": 0.010287484154105186,
+      "mean_raw_parent_delta_l1": 0.021279482170939445,
+      "mean_positive_teacher_gain_l1": 0.009566021151840687
+    },
+    {
+      "view": "00078",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00078.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2778452380952381,
+      "mean_target_l1": 0.009186209179461002,
+      "mean_raw_parent_delta_l1": 0.01884886622428894,
+      "mean_positive_teacher_gain_l1": 0.00876676943153143
+    },
+    {
+      "view": "00080",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00080.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.29806369047619047,
+      "mean_target_l1": 0.009354399517178535,
+      "mean_raw_parent_delta_l1": 0.017941007390618324,
+      "mean_positive_teacher_gain_l1": 0.00895925983786583
+    },
+    {
+      "view": "00082",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00082.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3027095238095238,
+      "mean_target_l1": 0.009527191519737244,
+      "mean_raw_parent_delta_l1": 0.018933208659291267,
+      "mean_positive_teacher_gain_l1": 0.008993000723421574
+    },
+    {
+      "view": "00084",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00084.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.24814166666666668,
+      "mean_target_l1": 0.008808065205812454,
+      "mean_raw_parent_delta_l1": 0.019682276993989944,
+      "mean_positive_teacher_gain_l1": 0.008197080343961716
+    },
+    {
+      "view": "00086",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00086.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.25822261904761906,
+      "mean_target_l1": 0.010313834995031357,
+      "mean_raw_parent_delta_l1": 0.02213289402425289,
+      "mean_positive_teacher_gain_l1": 0.009531252086162567
+    },
+    {
+      "view": "00088",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00088.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2664922619047619,
+      "mean_target_l1": 0.011265880428254604,
+      "mean_raw_parent_delta_l1": 0.02349000796675682,
+      "mean_positive_teacher_gain_l1": 0.01045580580830574
+    },
+    {
+      "view": "00090",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00090.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2637285714285714,
+      "mean_target_l1": 0.010587572120130062,
+      "mean_raw_parent_delta_l1": 0.02253584936261177,
+      "mean_positive_teacher_gain_l1": 0.009939276613295078
+    }
+  ],
+  "top_support_rebuild": {
+    "top_residual_supports_csv": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/treehill/fit_evidence/top_residual_supports.csv",
+    "parent_top_residual_supports_csv": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/treehill/fit_evidence/top_residual_supports_parent.csv",
+    "rows": 8192,
+    "nonzero_faces": 2333383,
+    "top_support_limit": 8192,
+    "top_preview": [
+      {
+        "face_id": 4,
+        "score": 4.242504435351265,
+        "pixel_count": 7013,
+        "view_hits": 46,
+        "mean_l1_error": 0.07063538015407213,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.04560813410177085,
+        "mean_residual_g": 0.04519948951871321,
+        "mean_residual_b": 0.03636533514878455
+      },
+      {
+        "face_id": 581838,
+        "score": 2.973896975783183,
+        "pixel_count": 806,
+        "view_hits": 10,
+        "mean_l1_error": 0.1405025131944983,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.1282043646346251,
+        "mean_residual_g": 0.12852230024692735,
+        "mean_residual_b": 0.11847851589950675
+      },
+      {
+        "face_id": 0,
+        "score": 2.8076354553806313,
+        "pixel_count": 631,
+        "view_hits": 41,
+        "mean_l1_error": 0.06799294642525505,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.04635085696841571,
+        "mean_residual_g": 0.04562874263515563,
+        "mean_residual_b": 0.03735509651776539
+      },
+      {
+        "face_id": 2159663,
+        "score": 2.29414433458229,
+        "pixel_count": 3871,
+        "view_hits": 11,
+        "mean_l1_error": 0.08372672378354773,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.04189999606744229,
+        "mean_residual_g": 0.041723694982407966,
+        "mean_residual_b": 0.0458165558078621
+      },
+      {
+        "face_id": 6549662,
+        "score": 2.25142265609537,
+        "pixel_count": 71,
+        "view_hits": 8,
+        "mean_l1_error": 0.18612584933428697,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.18413919798085387,
+        "mean_residual_g": 0.18331672775913294,
+        "mean_residual_b": 0.17247820572114328
+      },
+      {
+        "face_id": 162022,
+        "score": 2.223526571975747,
+        "pixel_count": 1293,
+        "view_hits": 8,
+        "mean_l1_error": 0.10971126571147827,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": -0.09199715103184818,
+        "mean_residual_g": -0.0919833172225067,
+        "mean_residual_b": -0.09172977999209989
+      },
+      {
+        "face_id": 478336,
+        "score": 2.2052719671996206,
+        "pixel_count": 837,
+        "view_hits": 7,
+        "mean_l1_error": 0.12383185492621528,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": -0.1173428913740844,
+        "mean_residual_g": -0.11725343968563468,
+        "mean_residual_b": -0.12526740253042862
+      },
+      {
+        "face_id": 118825,
+        "score": 2.1819449809292193,
+        "pixel_count": 354,
+        "view_hits": 9,
+        "mean_l1_error": 0.12385906068618688,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.12730901254772467,
+        "mean_residual_g": 0.12810365493688206,
+        "mean_residual_b": 0.11034347243228201
+      },
+      {
+        "face_id": 2041394,
+        "score": 2.1008803315551625,
+        "pixel_count": 1140,
+        "view_hits": 12,
+        "mean_l1_error": 0.0861507348846971,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.0904728839271947,
+        "mean_residual_g": 0.08523906239292078,
+        "mean_residual_b": 0.07257924665484512
+      },
+      {
+        "face_id": 576277,
+        "score": 2.090412939127346,
+        "pixel_count": 142,
+        "view_hits": 8,
+        "mean_l1_error": 0.14892116063077684,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.12993600334919675,
+        "mean_residual_g": 0.1280332753356074,
+        "mean_residual_b": 0.11470730203977773
+      }
+    ]
+  }
+}
