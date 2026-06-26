@@ -9,6 +9,7 @@ This index is the entry point for a fresh clone of `https://github.com/Dystopian
 | purpose | file |
 |---|---|
 | report package manifest | `docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md` |
+| latest 2026-06-26 live status addendum | `docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md` |
 | current complete technical report | `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md` |
 | long Chinese mentor/PPT report | `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md` |
 | v110 strict-split technical report draft | `docs/car_model/6-25-SPCarNet-v110-StrictSplit-Technical-Report-Draft.md` |
@@ -99,4 +100,4 @@ These roots are not committed because they contain large render/model artifacts.
 
 ## One-Line Status
 
-`v106` is the current quality line and beats the local clean MeshSplatting baseline on the assembled selected full9 table. `v113b` is the current strict-gate safety repair. `v113c` improves garden v110b but remains below v106, and `v114` is the active candidate-side attempt now running. The paper-final method is not closed.
+`v106` is the current quality line and beats the local clean MeshSplatting baseline on the assembled selected full9 table. `v113b` is the current strict-gate safety repair. `v113c` improves garden v110b but remains below v106, and `v114` is the active candidate-side attempt now running. The paper-final method is not closed. Latest live update: v110 counter failed during field build with return code `-9`, likely due to memory/shared-storage pressure, so it must be rerun after a lower-memory field-builder fix or resource cleanup.

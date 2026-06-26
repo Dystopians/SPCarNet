@@ -4,6 +4,8 @@ Date: 2026-06-25
 
 用途：2026-06-26 给 mentor 做 PPT 的技术报告。本文以当前已完成的 **v106 POD-MoE base-preserve** full9 结果为主，补充 SPCarNet 相对基础 MeshSplatting 的方法差异、模块级实现、证据路径、局限与下一步。所有结果按“已完成 / 未验证”分开标注。
 
+最新状态附录：`docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md`。该附录记录了本文初版整理后的最新 live 状态：v110 counter 在 field build 阶段以 return code `-9` 失败，大概率是内存/共享盘压力导致；v110 bonsai、v111 flowers、v114 garden 在最近一次进程检查时仍在运行。
+
 ## 0. 当前汇报入口与最新状态
 
 从 fresh clone 准备 PPT 时，建议先看这些入口文件：

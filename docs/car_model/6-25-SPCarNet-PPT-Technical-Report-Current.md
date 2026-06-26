@@ -2,6 +2,8 @@
 
 Date: 2026-06-25
 
+Latest status addendum: `docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md`. It records the newest live state after this report package was first assembled: v110 counter failed during field build with return code `-9`, likely due to memory/shared-storage pressure; v110 bonsai, v111 flowers, and v114 garden were still running at the latest process check.
+
 ## Executive Summary
 
 SPCarNet is currently best described as a MeshSplatting-compatible surface residual system. It keeps MeshSplatting's trained geometry and renderer as the parent, then attaches a guarded residual field to visible mesh triangles. The current verified quality line is `v106 POD-MoE base-preserve`; the current strict-fairness line is `v110/v110b/v111`.
