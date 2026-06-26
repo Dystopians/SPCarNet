@@ -16,28 +16,31 @@ Read in this order:
 8. `docs/car_model/6-26-vNext-ManifestRunner-and-Full9Gap-Log.md`
 9. `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.md`
 10. `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.json`
-11. `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.md`
-12. `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.json`
-13. `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.md`
-14. `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.json`
-15. `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_scene_config_20260626.json`
-16. `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_scene_config_20260626.json`
-17. `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_multiscene_20260626_0718/strict_structure_aware_shrink_multiscene_summary.md`
-18. `docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md`
-19. `docs/car_model/6-26-SPCarNet-vNext-SoftShrink-Garden-Milestone-Log.md`
-20. `docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md`
-21. `docs/car_model/vnext_artifacts/README.md`
-22. `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md`
-23. `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md`
-24. `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md`
-25. `docs/car_model/6-25-v113b-OOT-Tail-Safe-Gate-Log.md`
-26. `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md`
-27. `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md`
-28. `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md`
-29. `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md`
-30. `docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md`
-31. `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md`
-32. `docs/car_model/README.md`
+11. `docs/car_model/6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md`
+12. `docs/car_model/vnext_artifacts/full9_gap_after_stump_preflight_20260626/vnext_manifest_runner_summary.md`
+13. `docs/car_model/vnext_artifacts/stump_structure_shrink_rebuild_tau002_20260626_080257/stump_vnext_certified_residual_texture_report.md`
+14. `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.md`
+15. `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.json`
+16. `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.md`
+17. `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.json`
+18. `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_scene_config_20260626.json`
+19. `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_scene_config_20260626.json`
+20. `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_multiscene_20260626_0718/strict_structure_aware_shrink_multiscene_summary.md`
+21. `docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md`
+22. `docs/car_model/6-26-SPCarNet-vNext-SoftShrink-Garden-Milestone-Log.md`
+23. `docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md`
+24. `docs/car_model/vnext_artifacts/README.md`
+25. `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md`
+26. `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md`
+27. `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md`
+28. `docs/car_model/6-25-v113b-OOT-Tail-Safe-Gate-Log.md`
+29. `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md`
+30. `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md`
+31. `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md`
+32. `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md`
+33. `docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md`
+34. `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md`
+35. `docs/car_model/README.md`
 
 Current short status:
 
@@ -52,6 +55,7 @@ Current short status:
 - Latest addendum: v110 counter strict candidate failed with return code `-9` during field build after about `15695.6s`; no field artifact was written. This is recorded as a resource/memory execution blocker, not a promoted or rejected metric result.
 - `vNext_certified_residual_surface_texture` now has a strict face-softshrink diagnostic table and a stronger ready4 structure-aware shrink table. The older frozen face-softshrink table has 2/3 nonzero accepted and 1/3 fallback/no-op. The structure-aware ready4 table is 4/4 protocol pass, 4/4 `target_gt_visible_to_apply=false`, 4/4 nonzero accepted, converts `room` from fallback to accepted residual output, and adds `garden` as a fourth strict scene. Mean delta vs Phase-F compact parent is `+0.000762 PSNR / -0.000003 SSIM / -0.000020 LPIPS`. This is a real method/protocol milestone, but effect size remains tiny and it is still not full9 closure or proof of superiority over v106 or clean MeshSplatting.
 - `run_vnext_certified_residual_texture_manifest.py` now supports heterogeneous per-scene paths. Preflight proves current vNext full9 is `4 / 9` input-ready (`bonsai,counter,garden,room`) and `5 / 9` blocked by missing fit/target evidence plus carrier (`bicycle,flowers,kitchen,stump,treehill`).
+- Latest local rebuild: `stump` fit/target evidence and policy-val pruned carrier were rebuilt under `/dev/shm`, moving local preflight to `5 / 9` input-ready. The strict stump run completed with W&B offline and protocol pass, but the certificate rejected it to exact fallback/no-op because tail risk was unsafe (`cvar20_view_relative_gain=-0.172454`, `min_view_relative_gain=-0.344907`). Remaining missing-input scenes are `bicycle,flowers,kitchen,treehill`.
 - `spcarnet_v110_v111_v114_package` is the current mechanical strict-branch collector output; it is intentionally incomplete until the running long jobs finish.
 - For a fresh clone and mentor/PPT preparation, use `docs/car_model/6-26-SPCarNet-Clone-PPT-Technical-Summary.zh.md` as the compact executive report, then follow the artifact indices above for tables, images, commands, and protocol audits.
 

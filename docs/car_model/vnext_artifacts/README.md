@@ -7,7 +7,7 @@
 
 ## Summary
 
-当前 artifacts 有三个真实 `garden` 单场景 run、三个 strict frozen-policy 场景 run、三场景 structure-aware shrink 表、四场景 ready4 structure-aware shrink 表，以及 full9 preflight 缺口记录：
+当前 artifacts 有三个真实 `garden` 单场景 run、三个 strict frozen-policy 场景 run、三场景 structure-aware shrink 表、四场景 ready4 structure-aware shrink 表、`stump` 输入链重建/拒绝结果，以及 full9 preflight 缺口记录：
 
 ```text
 garden_20260626_004134
@@ -23,6 +23,8 @@ room_structure_shrink_tau002_20260626_0718
 strict_structure_aware_shrink_multiscene_20260626_0718
 garden_structure_shrink_tau002_20260626_071413
 strict_structure_aware_shrink_ready4_20260626_071413
+stump_structure_shrink_rebuild_tau002_20260626_080257
+full9_gap_after_stump_preflight_20260626
 vnext_structure_shrink_ready4_scene_config_20260626.json
 vnext_structure_shrink_full9_gap_scene_config_20260626.json
 vnext_structure_shrink_ready4_preflight_20260626.md
@@ -82,6 +84,8 @@ room strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, 
 | `vnext_structure_shrink_full9_gap_scene_config_20260626.json` | manifest runner 的 full9 gap 场景配置 | 记录 full9 目标配置；5 个缺失场景指向待重建 normalized input tree |
 | `vnext_structure_shrink_ready4_preflight_20260626.md` | ready4 preflight summary | 证明当前 4/4 ready |
 | `vnext_structure_shrink_full9_gap_preflight_20260626.md` | full9 gap preflight summary | 证明当前 full9 是 4/9 ready、5/9 missing input |
+| `stump_structure_shrink_rebuild_tau002_20260626_080257/` | rebuilt stump input-chain strict scene run：manifest、audit、metrics、per-view、policy-val carrier summary | 第五个 input-ready scene；strict run 完成但证书拒绝为 fallback/no-op |
+| `full9_gap_after_stump_preflight_20260626/vnext_manifest_runner_summary.md` | stump rebuild 后的 full9 preflight summary | 证明 local snapshot 从 4/9 ready 推进到 5/9 ready；剩余缺 `bicycle/flowers/kitchen/treehill` |
 
 ---
 
@@ -142,7 +146,9 @@ Versus Phase-F compact parent:
 
 Garden also improves over the previous garden face-softshrink pilot by `+0.00006294 PSNR / +0.00000119 SSIM / -0.00000468 LPIPS`.
 
-Current full9 preflight is `4 / 9` ready. Missing input scenes are `bicycle,flowers,kitchen,stump,treehill`.
+Ready4 full9 preflight was `4 / 9` ready. Missing input scenes were `bicycle,flowers,kitchen,stump,treehill`.
+
+After the local stump input rebuild, the current local preflight is `5 / 9` ready. Stump itself is not an accepted quality row: strict no-target-GT vNext completed but fell back/no-op because the policy-val tail-risk certificate rejected it. The remaining missing-input scenes are `bicycle,flowers,kitchen,treehill`. See `../6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md`.
 
 ---
 

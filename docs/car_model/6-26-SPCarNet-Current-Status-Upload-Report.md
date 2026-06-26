@@ -48,6 +48,7 @@ The honest paper status is not final-complete. `v110/v110b` exposed strict train
 - Completed v110/v110b flowers/garden diagnostics showing that a gate can beat clean MeshSplatting while still being worse than v106 parent.
 - Completed v113b/v113c safety repairs on flowers/garden; useful as risk control, not as a new quality headline.
 - Implemented vNext strict no-target-GT apply protocol, completed frozen-policy face-softshrink diagnostics on `counter,bonsai,room`, added the fixed structure-aware shrink policy, and extended the strict structure-aware table to ready scenes `counter,bonsai,room,garden`.
+- Rebuilt the missing `stump` vNext input chain under `/dev/shm`, fixed a carrier-prune runner interface break, and completed a strict no-target-GT stump run. The run was safely rejected to fallback/no-op, so it improves full9 readiness but not the accepted-quality table.
 
 ## Latest Live Experiment State
 
@@ -102,6 +103,8 @@ swap: 9 GiB used / 0 free
 | ready4 scene config | `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_scene_config_20260626.json` | machine-readable manifest runner config for `bonsai,counter,garden,room` |
 | full9 gap scene config | `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_scene_config_20260626.json` | machine-readable target full9 config; five missing scenes point at the planned normalized input tree |
 | ready4/full9 preflight JSON | `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.json`, `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.json` | machine-readable readiness audit for clone-side review |
+| stump input rebuild and strict rejection | `docs/car_model/6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md` | `stump` fit/target evidence and carrier rebuilt locally; strict run completed with W&B offline, protocol pass, `accepted=false`, `fallback_noop`, `changed_fraction=0` |
+| after-stump preflight | `docs/car_model/vnext_artifacts/full9_gap_after_stump_preflight_20260626/vnext_manifest_runner_summary.md` | local full9 preflight moved to `5/9` ready; remaining missing scenes are `bicycle,flowers,kitchen,treehill` |
 
 The old strict frozen-policy face-softshrink result is a no-target-GT apply protocol milestone across three scenes, but it has 2/3 nonzero accepted and room fallback/no-op. The newer structure-aware shrink result is the preferred vNext milestone for PPT: it keeps strict no-target-GT apply, makes all four ready scenes accepted/nonzero, converts room into a positive three-metric row versus its Phase-F compact parent, and adds garden as a fourth strict scene. The effect size is still tiny and counter/bonsai still have extremely small SSIM regressions, so it should not be described as full9 closure or proof of superiority over v106/clean MeshSplatting.
 
@@ -161,7 +164,7 @@ For the v106 strict branch, the required closure sequence is:
 
 For vNext, the required closure sequence is:
 
-1. rebuild or recover missing fit/target evidence and policy-val pruned carriers for `bicycle,flowers,kitchen,stump,treehill`;
+1. rebuild or recover missing fit/target evidence and policy-val pruned carriers for `bicycle,flowers,kitchen,treehill`;
 2. run full9 with the exact frozen structure-aware shrink policy through the manifest runner;
 3. add a fixed comparison table with clean MeshSplatting, Phase-F parent, v104c, v106, Phase-J teacher, old face-softshrink, structure-aware shrink, no-certificate ablation, and exact fallback;
 4. generate changed-region qualitative panels where residual changes are visually interpretable;
@@ -172,4 +175,4 @@ For vNext, the required closure sequence is:
 
 `NOT COMPLETE`.
 
-The report package is uploaded and useful for PPT preparation, but the research loop is not fully closed because strict branch long jobs are unfinished or failed, and vNext has delivered strict ready4 structure-aware proof-of-life metrics rather than full9, v106/clean-baseline superiority.
+The report package is uploaded and useful for PPT preparation, but the research loop is not fully closed because strict branch long jobs are unfinished or failed, and vNext has delivered strict ready4 structure-aware proof-of-life metrics plus one stump fallback/rejection rather than full9, v106/clean-baseline superiority.
