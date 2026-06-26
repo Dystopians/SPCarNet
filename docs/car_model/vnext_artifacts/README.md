@@ -7,7 +7,7 @@
 
 ## Summary
 
-当前 artifacts 有三个真实 `garden` 单场景 run、三个 strict frozen-policy 场景 run、三场景 structure-aware shrink 表、四场景 ready4 structure-aware shrink 表、`stump/treehill/flowers/kitchen` 输入链重建结果，以及 full9 preflight 缺口记录：
+当前 artifacts 有三个真实 `garden` 单场景 run、三个 strict frozen-policy 场景 run、三场景 structure-aware shrink 表、四场景 ready4 structure-aware shrink 表、`stump/treehill/flowers/kitchen/bicycle` 输入链重建结果，以及 full9 preflight 缺口记录：
 
 ```text
 garden_20260626_004134
@@ -29,6 +29,7 @@ treehill_structure_shrink_rebuild_tau002_20260626_0832
 full9_gap_after_treehill_preflight_20260626
 flowers_structure_shrink_rebuild_tau002_20260626_0935
 kitchen_structure_shrink_rebuild_tau002_20260626_1023
+bicycle_structure_shrink_rebuild_tau002_20260626_1055
 vnext_structure_shrink_ready4_scene_config_20260626.json
 vnext_structure_shrink_full9_gap_scene_config_20260626.json
 vnext_structure_shrink_ready4_preflight_20260626.md
@@ -53,7 +54,7 @@ room strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, 
 1. **vNext 安全证书和 no-op fallback 机制有效，并且同一套 frozen face-softshrink policy 已经在 counter/bonsai 上产生真实非零 accepted residual surface texture，在 room 上安全回退且 `changed_fraction=0`**。
 2. **新一轮 structure-aware shrink policy 在严格 no-target-GT apply 下让 counter/bonsai/room/garden 四场景全部 accepted，其中 room 从旧策略 fallback 变为真实非零 residual output，garden 则相对旧 face-softshrink 也三指标小幅提升**。
 
-四场景 ready4 平均仍只有 `+0.00076151 PSNR / -0.00000302 SSIM / -0.00002038 LPIPS`，后续 `stump/treehill/flowers` 是安全拒绝的 fallback/no-op 负结果，`kitchen` 是 accepted nonzero 但仍只有 same-evidence 微小正收益。因此还不是 full9、v106、clean MeshSplatting 或 Phase-J teacher 超越证据。完整解释见 `../6-26-vNext-StructureAwareShrink-Strict-Multiscene-Log.md`、`../6-26-vNext-ManifestRunner-and-Full9Gap-Log.md`、`../6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md`、`../6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md`、`../6-26-vNext-FlowersInputRebuild-Ready7-and-SameEvidenceFallback-Log.md`、`../6-26-vNext-KitchenInputRebuild-Ready8-and-AcceptedMilestone-Log.md`。
+四场景 ready4 平均仍只有 `+0.00076151 PSNR / -0.00000302 SSIM / -0.00002038 LPIPS`，后续 `stump/treehill/flowers` 是安全拒绝的 fallback/no-op 负结果，`kitchen/bicycle` 是 accepted nonzero 但仍只有 same-evidence 微小正收益。因此还不是 full9 quality table、v106、clean MeshSplatting 或 Phase-J teacher 超越证据。完整解释见 `../6-26-vNext-StructureAwareShrink-Strict-Multiscene-Log.md`、`../6-26-vNext-ManifestRunner-and-Full9Gap-Log.md`、`../6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md`、`../6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md`、`../6-26-vNext-FlowersInputRebuild-Ready7-and-SameEvidenceFallback-Log.md`、`../6-26-vNext-KitchenInputRebuild-Ready8-and-AcceptedMilestone-Log.md`、`../6-26-vNext-BicycleInputRebuild-Ready9-and-Full9InputClosure-Log.md`。
 
 ---
 
@@ -96,6 +97,8 @@ room strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, 
 | `flowers_structure_shrink_rebuild_tau002_20260626_0935/preflight/vnext_manifest_runner_summary.md` | flowers rebuild 后的 full9 preflight summary | 证明 local snapshot 从 6/9 ready 推进到 7/9 ready；剩余缺 `bicycle/kitchen` |
 | `kitchen_structure_shrink_rebuild_tau002_20260626_1023/` | rebuilt kitchen input-chain strict scene run：manifest、audit、metrics、per-view、same-evidence parent comparison、policy-val carrier summary、teacher evidence summary | 第八个 input-ready scene；strict no-target-GT run accepted nonzero (`alpha=0.125`, `changed_fraction=0.003549714`) and improves same-evidence parent by `+0.000786 PSNR / +0.00000256 SSIM / -0.00002818 LPIPS` |
 | `kitchen_structure_shrink_rebuild_tau002_20260626_1023/preflight/vnext_manifest_runner_summary.md` | kitchen rebuild 后的 full9 preflight summary | 证明 local snapshot 从 7/9 ready 推进到 8/9 ready；剩余缺 `bicycle` |
+| `bicycle_structure_shrink_rebuild_tau002_20260626_1055/` | rebuilt bicycle input-chain strict scene run：manifest、audit、metrics、per-view、same-evidence parent comparison、policy-val carrier summary、teacher evidence summary、logs | 第九个 input-ready scene；strict no-target-GT run accepted nonzero (`alpha=0.015625`, `changed_fraction=0.000173916`) and improves same-evidence parent by `+0.00000954 PSNR / +0.000000179 SSIM / -0.000000030 LPIPS` |
+| `bicycle_structure_shrink_rebuild_tau002_20260626_1055/preflight/vnext_manifest_runner_summary.md` | bicycle rebuild 后的 full9 preflight summary | 证明 local snapshot 从 8/9 ready 推进到 9/9 input-ready；剩余缺输入为 `none` |
 
 ---
 
@@ -158,7 +161,7 @@ Garden also improves over the previous garden face-softshrink pilot by `+0.00006
 
 Ready4 full9 preflight was `4 / 9` ready. Missing input scenes were `bicycle,flowers,kitchen,stump,treehill`.
 
-After the local stump, treehill, flowers, and kitchen input rebuilds, the current local preflight is `8 / 9` ready. `stump/treehill/flowers` are not accepted quality rows: strict no-target-GT vNext completed for all three, but stump fell back/no-op because the policy-val tail-risk certificate rejected it, treehill fell back/no-op because lower-tail, SSIM, and L1 gates rejected it, and flowers fell back/no-op for the same lower-tail/SSIM/L1 reason. Flowers additionally records a same-evidence parent export proving that fallback and parent are identical under the rebuilt `images_2` target evidence resolution. Kitchen is the first accepted nonzero result among these rebuilt missing scenes, with same-evidence parent delta `+0.000786 PSNR / +0.00000256 SSIM / -0.00002818 LPIPS`; its effect is real but very small. The remaining missing-input scene is `bicycle`. See `../6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md`, `../6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md`, `../6-26-vNext-FlowersInputRebuild-Ready7-and-SameEvidenceFallback-Log.md`, and `../6-26-vNext-KitchenInputRebuild-Ready8-and-AcceptedMilestone-Log.md`.
+After the local stump, treehill, flowers, kitchen, and bicycle input rebuilds, the current local preflight is `9 / 9` input-ready. `stump/treehill/flowers` are not accepted quality rows: strict no-target-GT vNext completed for all three, but stump fell back/no-op because the policy-val tail-risk certificate rejected it, treehill fell back/no-op because lower-tail, SSIM, and L1 gates rejected it, and flowers fell back/no-op for the same lower-tail/SSIM/L1 reason. Flowers additionally records a same-evidence parent export proving that fallback and parent are identical under the rebuilt `images_2` target evidence resolution. Kitchen is the first accepted nonzero result among these rebuilt missing scenes, with same-evidence parent delta `+0.000786 PSNR / +0.00000256 SSIM / -0.00002818 LPIPS`; bicycle closes the final input gap with accepted nonzero output and same-evidence micro-delta `+0.00000954 PSNR / +0.000000179 SSIM / -0.000000030 LPIPS`. These effects are real but very small. The remaining missing-input scene count is `0 / 9`; the remaining work is full9 fixed-policy quality evaluation. See `../6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md`, `../6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md`, `../6-26-vNext-FlowersInputRebuild-Ready7-and-SameEvidenceFallback-Log.md`, `../6-26-vNext-KitchenInputRebuild-Ready8-and-AcceptedMilestone-Log.md`, and `../6-26-vNext-BicycleInputRebuild-Ready9-and-Full9InputClosure-Log.md`.
 
 ---
 
@@ -368,9 +371,9 @@ For the current structure-aware ready4 run, use this wording:
 
 > The fixed structure-aware vNext policy applies train-policy-val L1/gradient risk shrink and strict no-target-GT apply. On the four ready4 scenes (`counter,bonsai,room,garden`), it is `4/4` protocol pass, `4/4` target-GT-hidden, and `4/4` nonzero accepted, with mean delta vs Phase-F compact parent of `+0.00076151 PSNR / -0.00000302 SSIM / -0.00002038 LPIPS`. This is a vNext protocol/method milestone, but it is still not a full9 or v106/clean-baseline superiority result.
 
-For the current ready8 rebuild state, use this wording:
+For the current ready9 rebuild state, use this wording:
 
-> The missing-scene rebuild campaign has moved vNext input coverage from `4/9` to `8/9`. `stump/treehill/flowers` are strict protocol-pass safety rejections to fallback/no-op, while `kitchen` is an accepted nonzero same-evidence micro-gain (`alpha=0.125`, `changed_fraction=0.003549714`, `+0.000786 PSNR / +0.00000256 SSIM / -0.00002818 LPIPS`). This is a meaningful engineering/protocol milestone and reduces the full9 blocker to `bicycle`, but the current vNext line is still not a paper-final quality result.
+> The missing-scene rebuild campaign has moved vNext input coverage from `4/9` to `9/9`. `stump/treehill/flowers` are strict protocol-pass safety rejections to fallback/no-op, while `kitchen` and `bicycle` are accepted nonzero same-evidence micro-gains. Kitchen reports `alpha=0.125`, `changed_fraction=0.003549714`, and `+0.000786 PSNR / +0.00000256 SSIM / -0.00002818 LPIPS`; bicycle reports `alpha=0.015625`, `changed_fraction=0.000173916`, and `+0.00000954 PSNR / +0.000000179 SSIM / -0.000000030 LPIPS`. This is a meaningful full9 input/protocol closure milestone, but the current vNext line is still not a paper-final quality result.
 
 Avoid this wording:
 

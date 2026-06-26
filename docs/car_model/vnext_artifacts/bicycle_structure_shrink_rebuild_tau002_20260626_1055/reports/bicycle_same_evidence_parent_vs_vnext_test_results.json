@@ -1,0 +1,12 @@
+{
+  "bicycle_same_evidence_parent": {
+    "LPIPS": 0.3322694003582001,
+    "PSNR": 23.293506622314453,
+    "SSIM": 0.6596505641937256
+  },
+  "ours_26000_vnext_structure_aware_shrink": {
+    "LPIPS": 0.3322693705558777,
+    "PSNR": 23.293516159057617,
+    "SSIM": 0.6596507430076599
+  }
+}

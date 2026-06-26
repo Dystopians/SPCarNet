@@ -182,9 +182,9 @@ mean delta vs Phase-F compact parent:
   +0.00076151 PSNR / -0.00000302 SSIM / -0.00002038 LPIPS
 ```
 
-## Missing-Input Rebuild Plan
+## Original Missing-Input Rebuild Plan
 
-对 `bicycle/flowers/kitchen/stump/treehill`，下一步必须重建或恢复以下三类输入：
+对 `bicycle/flowers/kitchen/stump/treehill`，原计划必须重建或恢复以下三类输入；截至本日志后续更新，这五个输入链均已完成，当前待办已转为固定策略 full9 质量评估：
 
 1. target visible-bary evidence；
 2. train visible-bary evidence + teacher residual cache；
@@ -223,20 +223,21 @@ After this original full9 gap audit, four missing input chains were rebuilt loca
 | treehill | fit evidence + target evidence + policy-val carrier rebuilt | fallback/no-op; certificate rejected lower-tail/SSIM/L1 candidate | `docs/car_model/6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md` |
 | flowers | fit evidence + target evidence + policy-val carrier rebuilt | fallback/no-op; certificate rejected lower-tail/SSIM/L1 candidate; same-evidence parent equals fallback | `docs/car_model/6-26-vNext-FlowersInputRebuild-Ready7-and-SameEvidenceFallback-Log.md` |
 | kitchen | fit evidence + target evidence + policy-val carrier rebuilt | accepted nonzero; same-evidence delta `+0.000786 PSNR / +0.00000256 SSIM / -0.00002818 LPIPS` | `docs/car_model/6-26-vNext-KitchenInputRebuild-Ready8-and-AcceptedMilestone-Log.md` |
+| bicycle | fit evidence + target evidence + policy-val carrier rebuilt | accepted nonzero; same-evidence micro-delta `+0.00000954 PSNR / +0.000000179 SSIM / -0.000000030 LPIPS` | `docs/car_model/6-26-vNext-BicycleInputRebuild-Ready9-and-Full9InputClosure-Log.md` |
 
 The latest local preflight is now:
 
 ```text
-ready_scene_count: 8 / 9
-missing_input_scene_count: 1 / 9
-missing scenes: bicycle
+ready_scene_count: 9 / 9
+missing_input_scene_count: 0 / 9
+missing scenes: none
 ```
 
-The latest committed preflight evidence is stored with the kitchen artifact:
+The latest committed preflight evidence is stored with the bicycle artifact:
 
 ```text
-docs/car_model/vnext_artifacts/kitchen_structure_shrink_rebuild_tau002_20260626_1023/preflight/vnext_manifest_runner_summary.md
-docs/car_model/vnext_artifacts/kitchen_structure_shrink_rebuild_tau002_20260626_1023/preflight/vnext_manifest_runner_summary.json
+docs/car_model/vnext_artifacts/bicycle_structure_shrink_rebuild_tau002_20260626_1055/preflight/vnext_manifest_runner_summary.md
+docs/car_model/vnext_artifacts/bicycle_structure_shrink_rebuild_tau002_20260626_1055/preflight/vnext_manifest_runner_summary.json
 ```
 
 ## Claim Boundary
@@ -247,20 +248,20 @@ docs/car_model/vnext_artifacts/kitchen_structure_shrink_rebuild_tau002_20260626_
 
 ```text
 vNext 已经不再依赖单一模板 full9 wrapper；异构 evidence 的 manifest runner 已实现并通过 ready4 dry-run。
-当前 full9 缺口已机器可读定位为 1 个场景的 evidence/carrier 输入缺失，而不是 scene runner 或 strict no-target-GT 协议缺失。
+当前 full9 输入链已机器可读闭合为 9/9 ready、0/9 missing；剩余问题从输入缺失转为固定策略 full9 质量评估与磁盘/中间产物管理。
 ```
 
 不能说：
 
 ```text
-不能说 vNext full9 已完成。
-不能说剩余两个 missing scenes 已被验证。
+不能说 vNext full9 质量评估已完成。
+不能说 9/9 input-ready 等价于 9/9 quality-positive。
 不能说 vNext 已超过 v106/clean MeshSplatting。
 ```
 
 ## Next Required Work
 
-1. 分批重建 remaining missing 2 scenes 的 normalized input tree。
+1. 释放 `/data` 与 `/dev/shm` 空间，或给 manifest runner 增加逐场景 compact-copy-and-cleanup 模式。
 2. 用 manifest runner 运行 full9 fixed policy。
 3. 生成 full9 aggregate table 和同表对比 clean/Phase-F/v104c/v106/Phase-J。
 4. 生成 changed-region qualitative panels。

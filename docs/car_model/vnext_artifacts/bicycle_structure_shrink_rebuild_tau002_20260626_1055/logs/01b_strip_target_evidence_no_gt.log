@@ -1,0 +1,552 @@
+$ /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_strip_target_evidence_for_vnext.py --target_evidence_dir /dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence --out_dir /dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt --force
+
+strip target evidence:   0%|          | 0/25 [00:00<?, ?it/s]strip target evidence:   4%|▍         | 1/25 [00:01<00:40,  1.68s/it]strip target evidence:   8%|▊         | 2/25 [00:03<00:37,  1.62s/it]strip target evidence:  12%|█▏        | 3/25 [00:04<00:34,  1.57s/it]strip target evidence:  16%|█▌        | 4/25 [00:06<00:32,  1.55s/it]strip target evidence:  20%|██        | 5/25 [00:07<00:30,  1.53s/it]strip target evidence:  24%|██▍       | 6/25 [00:09<00:29,  1.54s/it]strip target evidence:  28%|██▊       | 7/25 [00:10<00:27,  1.54s/it]strip target evidence:  32%|███▏      | 8/25 [00:12<00:26,  1.54s/it]strip target evidence:  36%|███▌      | 9/25 [00:13<00:24,  1.54s/it]strip target evidence:  40%|████      | 10/25 [00:15<00:23,  1.54s/it]strip target evidence:  44%|████▍     | 11/25 [00:16<00:21,  1.53s/it]strip target evidence:  48%|████▊     | 12/25 [00:18<00:19,  1.53s/it]strip target evidence:  52%|█████▏    | 13/25 [00:20<00:18,  1.54s/it]strip target evidence:  56%|█████▌    | 14/25 [00:21<00:17,  1.56s/it]strip target evidence:  60%|██████    | 15/25 [00:23<00:15,  1.56s/it]strip target evidence:  64%|██████▍   | 16/25 [00:24<00:14,  1.56s/it]strip target evidence:  68%|██████▊   | 17/25 [00:26<00:12,  1.56s/it]strip target evidence:  72%|███████▏  | 18/25 [00:27<00:11,  1.58s/it]strip target evidence:  76%|███████▌  | 19/25 [00:29<00:09,  1.58s/it]strip target evidence:  80%|████████  | 20/25 [00:31<00:07,  1.59s/it]strip target evidence:  84%|████████▍ | 21/25 [00:32<00:06,  1.58s/it]strip target evidence:  88%|████████▊ | 22/25 [00:34<00:04,  1.59s/it]strip target evidence:  92%|█████████▏| 23/25 [00:35<00:03,  1.59s/it]strip target evidence:  96%|█████████▌| 24/25 [00:37<00:01,  1.57s/it]strip target evidence: 100%|██████████| 25/25 [00:39<00:00,  1.58s/it]strip target evidence: 100%|██████████| 25/25 [00:39<00:00,  1.56s/it]
+{
+  "allowed_keys": [
+    "alpha",
+    "barycentric",
+    "barycentric_valid",
+    "camera_center",
+    "depth",
+    "face_id",
+    "image_name",
+    "normal",
+    "rgb_render",
+    "texture"
+  ],
+  "always_forbidden_keys": [
+    "residual_l1",
+    "residual_rgb",
+    "rgb_gt",
+    "teacher_better_mask",
+    "teacher_gain_l1",
+    "teacher_parent_delta_l1",
+    "teacher_residual_l1",
+    "teacher_residual_rgb",
+    "teacher_residual_rgb_raw"
+  ],
+  "kept_key_counts": {
+    "alpha": 25,
+    "barycentric": 25,
+    "barycentric_valid": 25,
+    "camera_center": 25,
+    "depth": 25,
+    "face_id": 25,
+    "normal": 25,
+    "rgb_render": 25,
+    "texture": 25
+  },
+  "removed_key_counts": {
+    "residual_l1": 25,
+    "residual_rgb": 25,
+    "rgb_gt": 25
+  },
+  "schema_version": 1,
+  "source_target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence",
+  "stripped_target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt",
+  "target_gt_visible_to_apply": false,
+  "target_residual_visible_to_apply": false,
+  "view_count": 25,
+  "views": [
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00000.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00000.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00001.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00001.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00002.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00002.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00003.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00003.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00004.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00004.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00005.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00005.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00006.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00006.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00007.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00007.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00008.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00008.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00009.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00009.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00010.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00010.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00011.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00011.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00012.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00012.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00013.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00013.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00014.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00014.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00015.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00015.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00016.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00016.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00017.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00017.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00018.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00018.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00019.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00019.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00020.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00020.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00021.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00021.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00022.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00022.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00023.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00023.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_structure_shrink_bicycle_strict_20260626_1055/bicycle/target_evidence_no_gt/views/00024.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/target_evidence/views/00024.npz"
+    }
+  ]
+}

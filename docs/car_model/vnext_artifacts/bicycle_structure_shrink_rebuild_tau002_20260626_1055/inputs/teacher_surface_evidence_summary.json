@@ -1,0 +1,619 @@
+{
+  "operator": "ecsr_build_teacher_surface_evidence_cache",
+  "test_usage": "none",
+  "base_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/train_visible_bary_base/bicycle",
+  "teacher_render_dir": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders",
+  "parent_render_dir": null,
+  "parent_source": "npz:rgb_render",
+  "out_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/fit_evidence",
+  "processed_views": 46,
+  "skipped_views": 0,
+  "skipped": [],
+  "selection_mode": "better_masked_residual",
+  "mask_target": true,
+  "teacher_render_error_margin": 0.001,
+  "teacher_parent_delta_min": 0.01,
+  "fields_written": [
+    "teacher_residual_rgb",
+    "teacher_residual_l1",
+    "teacher_residual_rgb_raw",
+    "teacher_better_mask",
+    "teacher_gain_l1",
+    "teacher_parent_delta_l1"
+  ],
+  "mean_active_fraction": 0.19581388960795792,
+  "mean_target_l1": 0.007570873945951462,
+  "mean_raw_parent_delta_l1": 0.01654938227780487,
+  "mean_positive_teacher_gain_l1": 0.007186564171443815,
+  "view_summaries": [
+    {
+      "view": "00000",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00000.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.21494491617936023,
+      "mean_target_l1": 0.008722695522010326,
+      "mean_raw_parent_delta_l1": 0.01618528552353382,
+      "mean_positive_teacher_gain_l1": 0.008335561491549015
+    },
+    {
+      "view": "00002",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00002.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.20962240881813193,
+      "mean_target_l1": 0.009174728766083717,
+      "mean_raw_parent_delta_l1": 0.018793174996972084,
+      "mean_positive_teacher_gain_l1": 0.008691087365150452
+    },
+    {
+      "view": "00004",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00004.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.20182452247903745,
+      "mean_target_l1": 0.009313463233411312,
+      "mean_raw_parent_delta_l1": 0.019953982904553413,
+      "mean_positive_teacher_gain_l1": 0.008757118135690689
+    },
+    {
+      "view": "00006",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00006.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.19444755874722416,
+      "mean_target_l1": 0.009763840585947037,
+      "mean_raw_parent_delta_l1": 0.021886024624109268,
+      "mean_positive_teacher_gain_l1": 0.00920878816395998
+    },
+    {
+      "view": "00008",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00008.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.19961271186273988,
+      "mean_target_l1": 0.0070603531785309315,
+      "mean_raw_parent_delta_l1": 0.016111407428979874,
+      "mean_positive_teacher_gain_l1": 0.006760521791875362
+    },
+    {
+      "view": "00010",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00010.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2255732120132099,
+      "mean_target_l1": 0.007933677174150944,
+      "mean_raw_parent_delta_l1": 0.01663094200193882,
+      "mean_positive_teacher_gain_l1": 0.00745290145277977
+    },
+    {
+      "view": "00012",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00012.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2026083433154933,
+      "mean_target_l1": 0.0068628122098743916,
+      "mean_raw_parent_delta_l1": 0.015166861936450005,
+      "mean_positive_teacher_gain_l1": 0.006556743755936623
+    },
+    {
+      "view": "00014",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00014.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.16621328974620728,
+      "mean_target_l1": 0.007870562374591827,
+      "mean_raw_parent_delta_l1": 0.019524453207850456,
+      "mean_positive_teacher_gain_l1": 0.007307083811610937
+    },
+    {
+      "view": "00016",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00016.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.14423876933244428,
+      "mean_target_l1": 0.007150969933718443,
+      "mean_raw_parent_delta_l1": 0.016507189720869064,
+      "mean_positive_teacher_gain_l1": 0.006694268435239792
+    },
+    {
+      "view": "00018",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00018.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.16776617945858338,
+      "mean_target_l1": 0.008282315917313099,
+      "mean_raw_parent_delta_l1": 0.01801096647977829,
+      "mean_positive_teacher_gain_l1": 0.007789892610162497
+    },
+    {
+      "view": "00020",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00020.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.19210789780628512,
+      "mean_target_l1": 0.009465925395488739,
+      "mean_raw_parent_delta_l1": 0.019510287791490555,
+      "mean_positive_teacher_gain_l1": 0.008865396492183208
+    },
+    {
+      "view": "00022",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00022.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.22483856437853925,
+      "mean_target_l1": 0.00800765585154295,
+      "mean_raw_parent_delta_l1": 0.015404471196234226,
+      "mean_positive_teacher_gain_l1": 0.0077852969989180565
+    },
+    {
+      "view": "00024",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00024.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.19471309403686415,
+      "mean_target_l1": 0.006732532754540443,
+      "mean_raw_parent_delta_l1": 0.01632349006831646,
+      "mean_positive_teacher_gain_l1": 0.006323153618723154
+    },
+    {
+      "view": "00026",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00026.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.19609584447106354,
+      "mean_target_l1": 0.006387350615113974,
+      "mean_raw_parent_delta_l1": 0.015042086131870747,
+      "mean_positive_teacher_gain_l1": 0.006186942104250193
+    },
+    {
+      "view": "00028",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00028.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2012206755611154,
+      "mean_target_l1": 0.008818825706839561,
+      "mean_raw_parent_delta_l1": 0.017624927684664726,
+      "mean_positive_teacher_gain_l1": 0.008217762224376202
+    },
+    {
+      "view": "00030",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00030.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.1905491073096948,
+      "mean_target_l1": 0.007946108467876911,
+      "mean_raw_parent_delta_l1": 0.0160979051142931,
+      "mean_positive_teacher_gain_l1": 0.007463579066097736
+    },
+    {
+      "view": "00032",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00032.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.20369015375476734,
+      "mean_target_l1": 0.009336860850453377,
+      "mean_raw_parent_delta_l1": 0.017467832192778587,
+      "mean_positive_teacher_gain_l1": 0.008822104893624783
+    },
+    {
+      "view": "00034",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00034.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.18899326720521156,
+      "mean_target_l1": 0.00853350292891264,
+      "mean_raw_parent_delta_l1": 0.016537560150027275,
+      "mean_positive_teacher_gain_l1": 0.008214195258915424
+    },
+    {
+      "view": "00036",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00036.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.19059533011937285,
+      "mean_target_l1": 0.005885590333491564,
+      "mean_raw_parent_delta_l1": 0.013332958333194256,
+      "mean_positive_teacher_gain_l1": 0.005744505673646927
+    },
+    {
+      "view": "00038",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00038.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.219588833355953,
+      "mean_target_l1": 0.008349262177944183,
+      "mean_raw_parent_delta_l1": 0.01717258244752884,
+      "mean_positive_teacher_gain_l1": 0.007824057713150978
+    },
+    {
+      "view": "00040",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00040.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.19109984716968886,
+      "mean_target_l1": 0.007067891303449869,
+      "mean_raw_parent_delta_l1": 0.016599521040916443,
+      "mean_positive_teacher_gain_l1": 0.006377193611115217
+    },
+    {
+      "view": "00042",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00042.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.1831495239050603,
+      "mean_target_l1": 0.007543601561337709,
+      "mean_raw_parent_delta_l1": 0.01681683026254177,
+      "mean_positive_teacher_gain_l1": 0.00714915432035923
+    },
+    {
+      "view": "00044",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00044.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.165152132051683,
+      "mean_target_l1": 0.007193634752184153,
+      "mean_raw_parent_delta_l1": 0.017896417528390884,
+      "mean_positive_teacher_gain_l1": 0.006668638437986374
+    },
+    {
+      "view": "00046",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00046.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.1753919595914297,
+      "mean_target_l1": 0.007522477302700281,
+      "mean_raw_parent_delta_l1": 0.017073923721909523,
+      "mean_positive_teacher_gain_l1": 0.007249108981341124
+    },
+    {
+      "view": "00048",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00048.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.17763130720072698,
+      "mean_target_l1": 0.007183566223829985,
+      "mean_raw_parent_delta_l1": 0.016914457082748413,
+      "mean_positive_teacher_gain_l1": 0.0070322356186807156
+    },
+    {
+      "view": "00050",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00050.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.21010233926755534,
+      "mean_target_l1": 0.005895724520087242,
+      "mean_raw_parent_delta_l1": 0.011590361595153809,
+      "mean_positive_teacher_gain_l1": 0.006015649065375328
+    },
+    {
+      "view": "00052",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00052.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.18872281459539306,
+      "mean_target_l1": 0.005496990866959095,
+      "mean_raw_parent_delta_l1": 0.01401552278548479,
+      "mean_positive_teacher_gain_l1": 0.005302004516124725
+    },
+    {
+      "view": "00054",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00054.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.1879891504247581,
+      "mean_target_l1": 0.005556587129831314,
+      "mean_raw_parent_delta_l1": 0.014330445788800716,
+      "mean_positive_teacher_gain_l1": 0.005174608435481787
+    },
+    {
+      "view": "00056",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00056.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.17878196012250028,
+      "mean_target_l1": 0.007207008078694344,
+      "mean_raw_parent_delta_l1": 0.01791745238006115,
+      "mean_positive_teacher_gain_l1": 0.006757624447345734
+    },
+    {
+      "view": "00058",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00058.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.19866563599635725,
+      "mean_target_l1": 0.00865953229367733,
+      "mean_raw_parent_delta_l1": 0.019023971632122993,
+      "mean_positive_teacher_gain_l1": 0.008121947757899761
+    },
+    {
+      "view": "00060",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00060.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.20340298225634187,
+      "mean_target_l1": 0.008096303790807724,
+      "mean_raw_parent_delta_l1": 0.01791703701019287,
+      "mean_positive_teacher_gain_l1": 0.007638869807124138
+    },
+    {
+      "view": "00062",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00062.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.1985220502471445,
+      "mean_target_l1": 0.00807750504463911,
+      "mean_raw_parent_delta_l1": 0.01872708834707737,
+      "mean_positive_teacher_gain_l1": 0.007561348844319582
+    },
+    {
+      "view": "00064",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00064.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2073712596404062,
+      "mean_target_l1": 0.006407713983207941,
+      "mean_raw_parent_delta_l1": 0.014322780072689056,
+      "mean_positive_teacher_gain_l1": 0.006052960641682148
+    },
+    {
+      "view": "00066",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00066.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.23141007106511122,
+      "mean_target_l1": 0.00771757960319519,
+      "mean_raw_parent_delta_l1": 0.014699427410960197,
+      "mean_positive_teacher_gain_l1": 0.007377500180155039
+    },
+    {
+      "view": "00068",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00068.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.21460267069493535,
+      "mean_target_l1": 0.00722221564501524,
+      "mean_raw_parent_delta_l1": 0.014817412942647934,
+      "mean_positive_teacher_gain_l1": 0.006866795476526022
+    },
+    {
+      "view": "00070",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00070.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.22360726740583822,
+      "mean_target_l1": 0.009990955702960491,
+      "mean_raw_parent_delta_l1": 0.021304527297616005,
+      "mean_positive_teacher_gain_l1": 0.009394271299242973
+    },
+    {
+      "view": "00072",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00072.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.21351004215126856,
+      "mean_target_l1": 0.00894487276673317,
+      "mean_raw_parent_delta_l1": 0.02028561942279339,
+      "mean_positive_teacher_gain_l1": 0.008345907554030418
+    },
+    {
+      "view": "00074",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00074.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.20086367811615496,
+      "mean_target_l1": 0.008787496946752071,
+      "mean_raw_parent_delta_l1": 0.01918749324977398,
+      "mean_positive_teacher_gain_l1": 0.008271219208836555
+    },
+    {
+      "view": "00076",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00076.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.19273633132509976,
+      "mean_target_l1": 0.007726987823843956,
+      "mean_raw_parent_delta_l1": 0.01655787043273449,
+      "mean_positive_teacher_gain_l1": 0.007243805564939976
+    },
+    {
+      "view": "00078",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00078.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.20529221666892863,
+      "mean_target_l1": 0.006307204719632864,
+      "mean_raw_parent_delta_l1": 0.014158475212752819,
+      "mean_positive_teacher_gain_l1": 0.0059722294099628925
+    },
+    {
+      "view": "00080",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00080.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.18526692197393033,
+      "mean_target_l1": 0.005695289466530085,
+      "mean_raw_parent_delta_l1": 0.013259025290608406,
+      "mean_positive_teacher_gain_l1": 0.005373194348067045
+    },
+    {
+      "view": "00082",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00082.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.1865444417563094,
+      "mean_target_l1": 0.0051405238918960094,
+      "mean_raw_parent_delta_l1": 0.011425391770899296,
+      "mean_positive_teacher_gain_l1": 0.005004174541682005
+    },
+    {
+      "view": "00084",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00084.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.18481944583768517,
+      "mean_target_l1": 0.007483735680580139,
+      "mean_raw_parent_delta_l1": 0.016577385365962982,
+      "mean_positive_teacher_gain_l1": 0.007229124195873737
+    },
+    {
+      "view": "00086",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00086.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.16764226299008472,
+      "mean_target_l1": 0.007092731073498726,
+      "mean_raw_parent_delta_l1": 0.016708306968212128,
+      "mean_positive_teacher_gain_l1": 0.006776438094675541
+    },
+    {
+      "view": "00088",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00088.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.20971190404538095,
+      "mean_target_l1": 0.006621563341468573,
+      "mean_raw_parent_delta_l1": 0.013239908032119274,
+      "mean_positive_teacher_gain_l1": 0.006539280992001295
+    },
+    {
+      "view": "00090",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_g/teacher_bake_alpha0875_official_pilot_v1/bicycle/recovery_model/train/ours_26000_phaseg_alpha0875_train_teacher/renders/00090.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.19620402551499094,
+      "mean_target_l1": 0.006021474022418261,
+      "mean_raw_parent_delta_l1": 0.012620542198419571,
+      "mean_positive_teacher_gain_l1": 0.006085705477744341
+    }
+  ],
+  "top_support_rebuild": {
+    "top_residual_supports_csv": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/fit_evidence/top_residual_supports.csv",
+    "parent_top_residual_supports_csv": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/bicycle/fit_evidence/top_residual_supports_parent.csv",
+    "rows": 8192,
+    "nonzero_faces": 1457527,
+    "top_support_limit": 8192,
+    "top_preview": [
+      {
+        "face_id": 2822696,
+        "score": 3.9090507515018693,
+        "pixel_count": 1546,
+        "view_hits": 14,
+        "mean_l1_error": 0.14225590892165013,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.13815455664946838,
+        "mean_residual_g": 0.142971421275071,
+        "mean_residual_b": 0.13202872745124056
+      },
+      {
+        "face_id": 2077579,
+        "score": 3.668626673310621,
+        "pixel_count": 965,
+        "view_hits": 13,
+        "mean_l1_error": 0.14803866055345288,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.1462455117023053,
+        "mean_residual_g": 0.14961459797281057,
+        "mean_residual_b": 0.14142192583627652
+      },
+      {
+        "face_id": 2077578,
+        "score": 3.476715417314123,
+        "pixel_count": 1915,
+        "view_hits": 14,
+        "mean_l1_error": 0.12294150569109008,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.11804746797128383,
+        "mean_residual_g": 0.12500666246090483,
+        "mean_residual_b": 0.1091278813215211
+      },
+      {
+        "face_id": 909413,
+        "score": 2.8804075647981375,
+        "pixel_count": 429,
+        "view_hits": 10,
+        "mean_l1_error": 0.1502139040362307,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.14670859739219114,
+        "mean_residual_g": 0.14898084093640734,
+        "mean_residual_b": 0.14698062354312355
+      },
+      {
+        "face_id": 644807,
+        "score": 2.7794159931250983,
+        "pixel_count": 208,
+        "view_hits": 10,
+        "mean_l1_error": 0.16452143742487982,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.16373443603515625,
+        "mean_residual_g": 0.16608693049504206,
+        "mean_residual_b": 0.16373707697941706
+      },
+      {
+        "face_id": 2895833,
+        "score": 2.450740181775777,
+        "pixel_count": 260,
+        "view_hits": 10,
+        "mean_l1_error": 0.13927383422851564,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.13598336439866285,
+        "mean_residual_g": 0.14129638671875,
+        "mean_residual_b": 0.13730010986328126
+      },
+      {
+        "face_id": 32720,
+        "score": 2.2963677937801927,
+        "pixel_count": 405,
+        "view_hits": 44,
+        "mean_l1_error": 0.05763738184799383,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": -0.01399123344892337,
+        "mean_residual_g": -0.013269118320794753,
+        "mean_residual_b": -0.013192449970009887
+      },
+      {
+        "face_id": 1526962,
+        "score": 2.246207721002332,
+        "pixel_count": 216,
+        "view_hits": 8,
+        "mean_l1_error": 0.14761515016909,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": -0.14654802393030236,
+        "mean_residual_g": -0.14677114839907046,
+        "mean_residual_b": -0.14952214558919272
+      },
+      {
+        "face_id": 1918,
+        "score": 2.243887695941014,
+        "pixel_count": 485,
+        "view_hits": 11,
+        "mean_l1_error": 0.10936546718951354,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.10633607058180976,
+        "mean_residual_g": 0.1120415756382893,
+        "mean_residual_b": 0.10293032950961713
+      },
+      {
+        "face_id": 2077577,
+        "score": 2.1291070516118666,
+        "pixel_count": 104,
+        "view_hits": 9,
+        "mean_l1_error": 0.1524942838228666,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.15271817720853365,
+        "mean_residual_g": 0.15609154334435096,
+        "mean_residual_b": 0.14867870624248797
+      }
+    ]
+  }
+}
