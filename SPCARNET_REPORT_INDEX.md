@@ -10,21 +10,22 @@ Read in this order:
 2. `docs/car_model/6-26-SPCarNet-Mentor-PPT-Status-And-vNext-Strict-Report.zh.md`
 3. `docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md`
 4. `docs/car_model/6-26-SPCarNet-vNext-Implementation-Log.md`
-5. `docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md`
-6. `docs/car_model/6-26-SPCarNet-vNext-SoftShrink-Garden-Milestone-Log.md`
-7. `docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md`
-8. `docs/car_model/vnext_artifacts/README.md`
-9. `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md`
-10. `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md`
-11. `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md`
-12. `docs/car_model/6-25-v113b-OOT-Tail-Safe-Gate-Log.md`
-13. `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md`
-14. `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md`
-15. `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md`
-16. `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md`
-17. `docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md`
-18. `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md`
-19. `docs/car_model/README.md`
+5. `docs/car_model/6-26-SPCarNet-vNext-Strict-FrozenPolicy-Multiscene-Log.md`
+6. `docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md`
+7. `docs/car_model/6-26-SPCarNet-vNext-SoftShrink-Garden-Milestone-Log.md`
+8. `docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md`
+9. `docs/car_model/vnext_artifacts/README.md`
+10. `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md`
+11. `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md`
+12. `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md`
+13. `docs/car_model/6-25-v113b-OOT-Tail-Safe-Gate-Log.md`
+14. `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md`
+15. `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md`
+16. `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md`
+17. `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md`
+18. `docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md`
+19. `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md`
+20. `docs/car_model/README.md`
 
 Current short status:
 
@@ -37,7 +38,7 @@ Current short status:
 - `v114_oof_refit_pod_moe` is the current candidate-side attempt; garden field build is running and not yet a completed result.
 - `v111` end-to-end strict validation is still running and is not yet a completed result.
 - Latest addendum: v110 counter strict candidate failed with return code `-9` during field build after about `15695.6s`; no field artifact was written. This is recorded as a resource/memory execution blocker, not a promoted or rejected metric result.
-- `vNext_certified_residual_surface_texture` now has two real nonzero single-scene milestones. Garden face-softshrink accepts a residual atlas, changes `0.208%` target pixels, and gives a tiny held-out improvement over the no-op/fallback parent. Counter strict face-softshrink has `target_gt_visible_to_apply=false`, `accepted=true`, `selected_alpha=0.25`, `changed_fraction=1.177%`, and test delta vs Phase-F compact parent of `+0.002131 PSNR / -0.000047 SSIM / -0.000085 LPIPS`. This strengthens the fairness/protocol evidence but is still not full9 closure or proof of superiority over v106 or clean MeshSplatting.
+- `vNext_certified_residual_surface_texture` now has a strict frozen-policy three-scene table for `counter,bonsai,room`: 3/3 protocol pass, 3/3 `target_gt_visible_to_apply=false`, 2/3 nonzero accepted, 1/3 fallback/no-op with `changed_fraction=0`. Mean delta vs Phase-F compact parent is `+0.001086 PSNR / -0.000020 SSIM / -0.000037 LPIPS`; the fallback row is parent-level with tiny eval noise, not nonzero residual gain. This strengthens the fairness/protocol evidence, but SSIM regresses on all three scenes, so it is still not full9 closure or proof of superiority over v106 or clean MeshSplatting.
 - `spcarnet_v110_v111_v114_package` is the current mechanical strict-branch collector output; it is intentionally incomplete until the running long jobs finish.
 
 The large render/model trees remain local under `/dev/shm`; the committed repo contains the lightweight Markdown/JSON summaries and qualitative contact sheets needed for PPT analysis.

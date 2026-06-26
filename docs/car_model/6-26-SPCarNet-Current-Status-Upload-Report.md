@@ -46,7 +46,7 @@ The honest paper status is not final-complete. `v110/v110b` exposed strict train
 - Completed the v106 selected full9 table and stored both Markdown/JSON/CSV summaries and qualitative contact-sheet assets in the repo.
 - Completed v110/v110b flowers/garden diagnostics showing that a gate can beat clean MeshSplatting while still being worse than v106 parent.
 - Completed v113b/v113c safety repairs on flowers/garden; useful as risk control, not as a new quality headline.
-- Implemented vNext strict no-target-GT apply protocol and completed a counter strict face-softshrink pilot with lightweight artifacts committed under `docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/`.
+- Implemented vNext strict no-target-GT apply protocol and completed a frozen-policy strict face-softshrink multiscene pilot on `counter,bonsai,room`, with lightweight artifacts committed under `docs/car_model/vnext_artifacts/`.
 
 ## Latest Live Experiment State
 
@@ -88,8 +88,11 @@ swap: 9 GiB used / 0 free
 |---|---|---|
 | garden face-softshrink | `docs/car_model/vnext_artifacts/garden_face_softshrink_20260626_040558/` | COMPLETE; protocol audit passed; `accepted=true`; `alpha=0.0625`; `changed_fraction=0.002080`; tiny three-metric gain versus no-op/fallback parent |
 | counter strict face-softshrink | `docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/` | COMPLETE; protocol audit passed; `target_gt_visible_to_apply=false`; `accepted=true`; `alpha=0.25`; `changed_fraction=0.01177355`; test `26.752003 / 0.862004 / 0.251912`; delta vs Phase-F compact parent `+0.00213 / -0.000047 / -0.000085` |
+| bonsai strict face-softshrink | `docs/car_model/vnext_artifacts/bonsai_strict_face_softshrink_20260626_052500/` | COMPLETE; protocol audit passed; `target_gt_visible_to_apply=false`; `accepted=true`; `alpha=0.25`; `changed_fraction=0.00151333`; test `28.865564 / 0.896002 / 0.259322`; delta vs Phase-F compact parent `+0.001225 / -0.000010 / -0.000018` |
+| room strict face-softshrink | `docs/car_model/vnext_artifacts/room_strict_face_softshrink_20260626_052500/` | COMPLETE; protocol audit passed; `target_gt_visible_to_apply=false`; `accepted=false`; fallback/no-op; `changed_fraction=0`; test `28.739004 / 0.884790 / 0.249916`; tiny delta vs Phase-F compact parent `-0.000097 / -0.000003 / -0.000007` is parent-level eval noise |
+| strict frozen-policy aggregate | `docs/car_model/vnext_artifacts/strict_frozen_policy_multiscene_20260626_052500/strict_frozen_policy_multiscene_summary.md` | 3/3 complete; 3/3 protocol pass; 3/3 target GT hidden from apply; 2/3 nonzero accepted; mean delta `+0.001086 / -0.000020 / -0.000037` |
 
-The counter result is a strict no-target-GT apply protocol milestone. It improves PSNR and LPIPS slightly against the Phase-F compact parent, while SSIM slightly regresses, so it should not be described as a three-metric improvement or paper closure.
+The strict frozen-policy result is a no-target-GT apply protocol milestone across three scenes. It improves mean PSNR and LPIPS slightly against the Phase-F compact parent mainly through the two nonzero accepted scenes, while the room row is fallback/no-op with parent-level eval noise. SSIM regresses on all three scenes, so it should not be described as a three-metric improvement or paper closure.
 
 ## Current Claim Boundary
 
@@ -105,7 +108,7 @@ What is not safe to say:
 - Do not claim v113b/v113c are quality breakthroughs; they are safety repairs that preserve or partially recover v106.
 - Do not claim v114 improves quality until field build, render, eval, and collector summaries complete.
 - Do not conflate v106 residual-field gains with earlier Phase-J triangle-reduction claims; v106 itself is not the triangle-pruning result.
-- Do not claim vNext is superior to v106 or clean MeshSplatting; current vNext garden/counter pilots are proof-of-life and protocol evidence with tiny or mixed deltas.
+- Do not claim vNext is superior to v106 or clean MeshSplatting; current vNext garden/counter/bonsai/room pilots are proof-of-life and protocol evidence with tiny or mixed deltas.
 
 ## Best PPT Story
 
@@ -118,7 +121,7 @@ v106 adds a base-preserving mixture of detail and boundary residual experts.
 The result beats the local clean MeshSplatting baseline on selected full9.
 Strict split experiments then reveal where naive candidate gates fail.
 vNext then starts converting the Phase-J render-time teacher into strict no-target-GT residual surface texture.
-The current next step is turning that proof-of-life into full9, visible, three-metric gains.
+The current next step is fixing SSIM/structure consistency and turning that proof-of-life into full9, visible, three-metric gains.
 ```
 
 For slides, use the v106 full9 table and the committed contact sheets under:
@@ -147,7 +150,7 @@ For the v106 strict branch, the required closure sequence is:
 
 For vNext, the required closure sequence is:
 
-1. run strict no-target-GT apply on more viable scenes such as `bonsai` and `room`;
+1. implement an SSIM/structure-aware residual shrink or local-alpha mechanism that directly addresses the 0/3 SSIM regression;
 2. add a fixed frozen policy table with parent, vNext, no-certificate ablation, and exact fallback;
 3. generate qualitative panels where residual changes are visually interpretable;
 4. only promote vNext if it beats the chosen parent and clean baseline under the same frozen protocol.
@@ -156,4 +159,4 @@ For vNext, the required closure sequence is:
 
 `NOT COMPLETE`.
 
-The report package is uploaded and useful for PPT preparation, but the research loop is not fully closed because strict branch long jobs are unfinished or failed, and vNext has only delivered single-scene proof-of-life metrics rather than full9, v106/clean-baseline superiority.
+The report package is uploaded and useful for PPT preparation, but the research loop is not fully closed because strict branch long jobs are unfinished or failed, and vNext has delivered strict three-scene proof-of-life metrics rather than full9, v106/clean-baseline superiority.

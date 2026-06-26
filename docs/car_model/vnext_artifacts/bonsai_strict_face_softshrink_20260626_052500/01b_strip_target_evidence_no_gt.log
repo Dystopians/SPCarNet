@@ -1,0 +1,792 @@
+$ /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/ecsr_strip_target_evidence_for_vnext.py --target_evidence_dir outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai --out_dir /dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt --force
+
+strip target evidence:   0%|          | 0/37 [00:00<?, ?it/s]strip target evidence:   3%|▎         | 1/37 [00:02<01:35,  2.65s/it]strip target evidence:   5%|▌         | 2/37 [00:05<01:27,  2.49s/it]strip target evidence:   8%|▊         | 3/37 [00:07<01:30,  2.66s/it]strip target evidence:  11%|█         | 4/37 [00:10<01:23,  2.52s/it]strip target evidence:  14%|█▎        | 5/37 [00:13<01:24,  2.64s/it]strip target evidence:  16%|█▌        | 6/37 [00:15<01:18,  2.52s/it]strip target evidence:  19%|█▉        | 7/37 [00:18<01:18,  2.61s/it]strip target evidence:  22%|██▏       | 8/37 [00:20<01:12,  2.51s/it]strip target evidence:  24%|██▍       | 9/37 [00:23<01:14,  2.65s/it]strip target evidence:  27%|██▋       | 10/37 [00:25<01:08,  2.54s/it]strip target evidence:  30%|██▉       | 11/37 [00:28<01:08,  2.65s/it]strip target evidence:  32%|███▏      | 12/37 [00:30<01:03,  2.54s/it]strip target evidence:  35%|███▌      | 13/37 [00:33<01:04,  2.67s/it]strip target evidence:  38%|███▊      | 14/37 [00:36<00:59,  2.57s/it]strip target evidence:  41%|████      | 15/37 [00:39<00:58,  2.68s/it]strip target evidence:  43%|████▎     | 16/37 [00:41<00:54,  2.58s/it]strip target evidence:  46%|████▌     | 17/37 [00:44<00:54,  2.72s/it]strip target evidence:  49%|████▊     | 18/37 [00:46<00:49,  2.62s/it]strip target evidence:  51%|█████▏    | 19/37 [00:49<00:45,  2.54s/it]strip target evidence:  54%|█████▍    | 20/37 [00:51<00:42,  2.49s/it]strip target evidence:  57%|█████▋    | 21/37 [00:54<00:39,  2.46s/it]strip target evidence:  59%|█████▉    | 22/37 [00:56<00:36,  2.44s/it]strip target evidence:  62%|██████▏   | 23/37 [00:58<00:33,  2.43s/it]strip target evidence:  65%|██████▍   | 24/37 [01:01<00:31,  2.43s/it]strip target evidence:  68%|██████▊   | 25/37 [01:03<00:28,  2.41s/it]strip target evidence:  70%|███████   | 26/37 [01:05<00:26,  2.41s/it]strip target evidence:  73%|███████▎  | 27/37 [01:08<00:24,  2.43s/it]strip target evidence:  76%|███████▌  | 28/37 [01:10<00:21,  2.43s/it]strip target evidence:  78%|███████▊  | 29/37 [01:13<00:19,  2.42s/it]strip target evidence:  81%|████████  | 30/37 [01:15<00:16,  2.42s/it]strip target evidence:  84%|████████▍ | 31/37 [01:18<00:14,  2.41s/it]strip target evidence:  86%|████████▋ | 32/37 [01:20<00:12,  2.41s/it]strip target evidence:  89%|████████▉ | 33/37 [01:22<00:09,  2.40s/it]strip target evidence:  92%|█████████▏| 34/37 [01:25<00:07,  2.40s/it]strip target evidence:  95%|█████████▍| 35/37 [01:27<00:04,  2.41s/it]strip target evidence:  97%|█████████▋| 36/37 [01:30<00:02,  2.42s/it]strip target evidence: 100%|██████████| 37/37 [01:32<00:00,  2.41s/it]strip target evidence: 100%|██████████| 37/37 [01:32<00:00,  2.50s/it]
+{
+  "allowed_keys": [
+    "alpha",
+    "barycentric",
+    "barycentric_valid",
+    "camera_center",
+    "depth",
+    "face_id",
+    "image_name",
+    "normal",
+    "rgb_render",
+    "texture"
+  ],
+  "always_forbidden_keys": [
+    "residual_l1",
+    "residual_rgb",
+    "rgb_gt",
+    "teacher_better_mask",
+    "teacher_gain_l1",
+    "teacher_parent_delta_l1",
+    "teacher_residual_l1",
+    "teacher_residual_rgb",
+    "teacher_residual_rgb_raw"
+  ],
+  "kept_key_counts": {
+    "alpha": 37,
+    "barycentric": 37,
+    "barycentric_valid": 37,
+    "camera_center": 37,
+    "depth": 37,
+    "face_id": 37,
+    "normal": 37,
+    "rgb_render": 37,
+    "texture": 37
+  },
+  "removed_key_counts": {
+    "residual_l1": 37,
+    "residual_rgb": 37,
+    "rgb_gt": 37
+  },
+  "schema_version": 1,
+  "source_target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai",
+  "stripped_target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt",
+  "target_gt_visible_to_apply": false,
+  "target_residual_visible_to_apply": false,
+  "view_count": 37,
+  "views": [
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00000.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00000.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00001.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00001.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00002.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00002.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00003.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00003.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00004.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00004.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00005.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00005.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00006.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00006.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00007.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00007.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00008.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00008.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00009.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00009.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00010.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00010.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00011.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00011.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00012.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00012.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00013.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00013.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00014.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00014.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00015.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00015.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00016.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00016.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00017.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00017.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00018.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00018.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00019.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00019.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00020.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00020.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00021.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00021.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00022.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00022.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00023.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00023.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00024.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00024.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00025.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00025.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00026.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00026.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00027.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00027.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00028.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00028.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00029.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00029.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00030.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00030.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00031.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00031.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00032.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00032.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00033.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00033.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00034.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00034.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00035.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00035.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/target_evidence_no_gt/views/00036.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai/views/00036.npz"
+    }
+  ]
+}

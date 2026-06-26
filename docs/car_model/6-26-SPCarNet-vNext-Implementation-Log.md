@@ -339,7 +339,47 @@ Delta versus the Phase-F compact parent:
 +0.002131 PSNR / -0.000047 SSIM / -0.000085 LPIPS
 ```
 
-This is a stronger fairness/protocol proof than the initial garden artifacts because the adapter sees stripped target evidence. It is still not a paper-level quality result: SSIM is slightly worse than the Phase-F compact parent, and no full9 strict table exists yet.
+This is the first strict no-target-GT single-scene nonzero evidence because the adapter sees stripped target evidence. It is still not a paper-level quality result: SSIM is slightly worse than the Phase-F compact parent, and no full9 strict table exists yet.
+
+### Strict Frozen-Policy Multiscene Follow-up
+
+Artifact roots:
+
+```text
+docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/
+docs/car_model/vnext_artifacts/bonsai_strict_face_softshrink_20260626_052500/
+docs/car_model/vnext_artifacts/room_strict_face_softshrink_20260626_052500/
+docs/car_model/vnext_artifacts/strict_frozen_policy_multiscene_20260626_052500/
+```
+
+The same frozen face-softshrink policy was then run on `counter,bonsai,room` under strict no-target-GT apply:
+
+```text
+texture_size_candidates=16
+support_expansion_mode=none
+atlas_empty_bin_fill_mode=face_mean
+surface_multiscale_prior_blend_candidates=0.5
+max_abs_delta_rgb_candidates=0.12
+policy_val_bin_uncertainty_guard=disabled
+strict_no_target_gt_apply=true
+```
+
+Aggregate result:
+
+| scene | protocol pass | target GT visible to apply | accepted | alpha | changed fraction | delta PSNR | delta SSIM | delta LPIPS |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| counter | `True` | `False` | `True` | `0.25` | `0.01177355` | `+0.002131` | `-0.000047` | `-0.000085` |
+| bonsai | `True` | `False` | `True` | `0.25` | `0.00151333` | `+0.001225` | `-0.000010` | `-0.000018` |
+| room | `True` | `False` | `False` | `0.0` | `0.00000000` | `-0.000097` | `-0.000003` | `-0.000007` |
+| mean | 3/3 | 0/3 visible | 2/3 nonzero | - | - | `+0.001086` | `-0.000020` | `-0.000037` |
+
+This follow-up is the current strongest vNext protocol package. It proves that the no-target-GT apply path and frozen policy can run across multiple scenes, but it also shows the current method bottleneck: SSIM/structure quality regresses on all three strict scenes, and `room` requires fallback/no-op with `changed_fraction=0`; its tiny metric deltas are parent-level eval noise, not residual gain.
+
+Execution lesson:
+
+- do not rely on same-command temporary shell variables in arguments like `OUT=... command --output_root "$OUT"`; zsh expands `$OUT` before that temporary assignment is visible to the command;
+- use explicit output roots or export variables first;
+- keep real outputs in `/dev/shm` and copy only compact reports/artifacts into the repo.
 
 ## Current Resource Blocker
 
@@ -351,11 +391,11 @@ Full real experiments should still not be launched from the repo/output tree:
 Strict runs are more storage-heavy than legacy runs because they materialize stripped target evidence in `/dev/shm`. Use them for the final fair protocol and delete transient `/dev/shm` run trees after copying only manifests, audits, compact metrics, and qualitative panels into the repo.
 - full9 should either clean temporary outputs first or use a larger external artifact location.
 
-The safe next real run is a frozen-policy `flowers` pilot or a two-scene `flowers,garden` pilot, not a blind full9 expansion.
+The safe next method step is not another identical frozen-policy pilot. It is an SSIM/structure-aware residual shrink or local-alpha mechanism, followed by the same strict no-target-GT multiscene validation.
 
 ## Recommended Next Command
 
-Use the accepted face-softshrink policy on the next pilot scene after verifying paths:
+Use this only as a template after implementing the next SSIM/structure-aware variant and verifying paths:
 
 ```bash
 TAG=$(date +%Y%m%d_%H%M%S)
@@ -379,6 +419,7 @@ export WANDB_DIR=/dev/shm/peilincai_wandb_vnext_face_softshrink_<scene>_${TAG}
   --surface_multiscale_prior_blend_candidates 0.5 \
   --max_abs_delta_rgb_candidates 0.12 \
   --no_policy_val_bin_uncertainty_guard \
+  --strict_no_target_gt_apply \
   --wandb \
   --wandb_mode "$WANDB_MODE"
 ```
@@ -387,4 +428,4 @@ export WANDB_DIR=/dev/shm/peilincai_wandb_vnext_face_softshrink_<scene>_${TAG}
 
 `NOT COMPLETE`.
 
-The protocol/interface milestone is implemented and verified, and a first nonzero garden residual surface texture has been accepted with tiny positive held-out deltas. Full9, v106/clean-baseline comparison, ablations, and materially visible/large gains remain unfinished.
+The protocol/interface milestone is implemented and verified. Nonzero residual surface textures have been accepted on garden/counter/bonsai, and strict no-target-GT apply has been verified on counter/bonsai/room with fallback/no-op on room. Full9, v106/clean-baseline comparison, ablations, SSIM/structure repair, and materially visible/large gains remain unfinished.

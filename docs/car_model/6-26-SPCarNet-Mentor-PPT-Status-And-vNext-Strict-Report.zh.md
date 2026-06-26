@@ -18,10 +18,11 @@ cd SPCarNet
 2. `docs/car_model/6-26-SPCarNet-Mentor-PPT-Status-And-vNext-Strict-Report.zh.md`
 3. `docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md`
 4. `docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md`
-5. `docs/car_model/vnext_artifacts/README.md`
-6. `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md`
-7. `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md`
-8. `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md`
+5. `docs/car_model/6-26-SPCarNet-vNext-Strict-FrozenPolicy-Multiscene-Log.md`
+6. `docs/car_model/vnext_artifacts/README.md`
+7. `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md`
+8. `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md`
+9. `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md`
 
 ---
 
@@ -42,7 +43,8 @@ cd SPCarNet
 - vNext strict runner 已实现并通过 smoke/dry-run。
 - target split 为 test 时，adapter apply 阶段不再能看到 `rgb_gt` 或 teacher/GT residual keys。
 - garden 有第一个非零 accepted residual texture，但收益极小。
-- counter strict 也完成了非零 accepted run，且 protocol audit 显示 `target_gt_visible_to_apply=false`。
+- frozen face-softshrink policy 已在 `counter,bonsai,room` 三个 strict 场景上完成：3/3 protocol pass，3/3 `target_gt_visible_to_apply=false`，2/3 accepted nonzero，1/3 fallback/no-op 且 `changed_fraction=0`。
+- 三场景均值相对 Phase-F compact parent 为 `+0.001086` PSNR、`-0.000020` SSIM、`-0.000037` LPIPS；PSNR/LPIPS 弱正信号主要来自 counter/bonsai，room 是 parent-level fallback 微小评估差异，SSIM 三场景全退是当前最明确瓶颈。
 - vNext 仍不能宣称全面超越 clean MeshSplatting、v106 或 Phase-J；它目前是协议和表示路线的里程碑，不是 paper-final 质量闭环。
 
 ---
@@ -131,7 +133,26 @@ docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/
 | SSIM | 0.862051 | 0.862004 | -0.000047 |
 | LPIPS | 0.251998 | 0.251912 | -0.000085 |
 
-结论：counter strict 是更强的协议证据，因为 adapter apply 阶段完全看不到 target GT；质量上是 PSNR/LPIPS 微增、SSIM 微降，仍不能叫全面胜出。
+结论：counter strict 是第一条 strict no-target-GT 单场景非零证据；当前更完整的协议证据是 4.3 的 strict frozen-policy multiscene，因为同一套 policy 已跨 `counter,bonsai,room` 跑通。质量上 counter 是 PSNR/LPIPS 微增、SSIM 微降，仍不能叫全面胜出。
+
+### 4.3 Strict Frozen-Policy Multiscene
+
+Artifact root：
+
+```text
+docs/car_model/vnext_artifacts/strict_frozen_policy_multiscene_20260626_052500/
+```
+
+同一套 frozen policy 被复制到 `counter,bonsai,room`，没有按场景调参：
+
+| scene | protocol / apply GT | accepted | alpha | changed fraction | delta PSNR | delta SSIM | delta LPIPS |
+|---|---|---:|---:|---:|---:|---:|---:|
+| counter | pass / `False` | `True` | `0.25` | `0.011774` | `+0.002131` | `-0.000047` | `-0.000085` |
+| bonsai | pass / `False` | `True` | `0.25` | `0.001513` | `+0.001225` | `-0.000010` | `-0.000018` |
+| room | pass / `False` | `False` | `0.0` | `0.000000` | `-0.000097` | `-0.000003` | `-0.000007` |
+| mean | 3/3 pass | 2/3 nonzero | - | - | `+0.001086` | `-0.000020` | `-0.000037` |
+
+结论：这组实验比单场景 counter 更重要，因为它证明了 strict no-target-GT apply 协议和 frozen policy 可以跨场景跑通；但它也暴露了当前方法的核心质量短板：SSIM/结构一致性不足，`room` 会被证书正确拒绝并回退为 no-op，表中微小 delta 只能视为 parent-level 评估差异。
 
 ---
 
@@ -152,6 +173,7 @@ docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/
 | 路径 | 内容 |
 |---|---|
 | `docs/car_model/6-26-SPCarNet-vNext-Implementation-Log.md` | vNext runner、strict apply、smoke/dry-run、真实 pilot 日志 |
+| `docs/car_model/6-26-SPCarNet-vNext-Strict-FrozenPolicy-Multiscene-Log.md` | strict frozen-policy 三场景日志和结论边界 |
 | `docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md` | vNext 中文技术报告和 claim 边界 |
 | `docs/car_model/vnext_artifacts/README.md` | vNext artifact 根索引 |
 | `docs/car_model/vnext_artifacts/garden_face_softshrink_20260626_040558/garden_face_softshrink_summary.json` | garden 非零 accepted 摘要 |
@@ -160,6 +182,9 @@ docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/
 | `docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/counter_vnext_certified_residual_texture_manifest.json` | counter strict provenance / commands / protocol audit |
 | `docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/surface_residual_region_texture_adapter_audit.md` | counter adapter 人类可读证书 |
 | `docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/target_evidence_no_gt_audit.json` | target evidence stripping 审计 |
+| `docs/car_model/vnext_artifacts/bonsai_strict_face_softshrink_20260626_052500/bonsai_strict_face_softshrink_summary.json` | bonsai strict 摘要 |
+| `docs/car_model/vnext_artifacts/room_strict_face_softshrink_20260626_052500/room_strict_face_softshrink_summary.json` | room strict 摘要 |
+| `docs/car_model/vnext_artifacts/strict_frozen_policy_multiscene_20260626_052500/strict_frozen_policy_multiscene_summary.md` | 三场景 frozen-policy 聚合表 |
 
 ---
 
@@ -170,15 +195,15 @@ docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/
 3. v106 已经在本地 selected full9 表上超过 clean MeshSplatting baseline，是当前最稳的结果主线。
 4. 更严格的 split 实验暴露出 naive gate 会失败，因此 paper-level 方法不能只看平均指标。
 5. vNext 的贡献是把 Phase-J 的 render-time teacher 转成 persistent residual surface texture，并补上 no-target-GT apply 协议。
-6. garden/counter 证明非零 residual texture 可以被证书接受，但目前提升还很小，没有达到最终论文闭环。
-7. 下一步应集中解决“surface-addressed residual 的幅度和视觉可见性”，而不是继续扩大脆弱的参数搜索。
+6. garden/counter/bonsai/room 证明非零 residual texture 与 fallback/no-op 都可以在 strict 协议下工作，但目前提升还很小，没有达到最终论文闭环。
+7. 下一步应集中解决“SSIM/结构一致性”和“surface-addressed residual 的视觉可见性”，而不是继续扩大脆弱的参数搜索。
 
 ---
 
 ## 7. 当前短板
 
 - vNext 非零收益仍是微小级别，视觉优势不明显。
-- counter strict 没有三指标全胜，SSIM 略低于 Phase-F compact parent。
+- strict frozen-policy 三场景没有三指标全胜，SSIM 在 `counter,bonsai,room` 全部略低于 Phase-F compact parent。
 - full9 strict vNext 尚未完成。
 - vNext 尚未证明超过 v106 或 Phase-J。
 - `/data` 已接近满载，长程实验需要先清理或迁移 artifact root。
@@ -189,4 +214,4 @@ docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/
 
 `NOT COMPLETE`。
 
-当前 repo 已经包含可克隆的 v106 汇报包、vNext 严格协议实现记录、garden/counter 真实 vNext artifacts 和索引文件。它足够支持一次诚实的 mentor/PPT 技术汇报，但还不能作为“全面超越 MeshSplatting 的 paper-final 方法”提交。
+当前 repo 已经包含可克隆的 v106 汇报包、vNext 严格协议实现记录、garden/counter/bonsai/room 真实 vNext artifacts 和索引文件。它足够支持一次诚实的 mentor/PPT 技术汇报，但还不能作为“全面超越 MeshSplatting 的 paper-final 方法”提交。

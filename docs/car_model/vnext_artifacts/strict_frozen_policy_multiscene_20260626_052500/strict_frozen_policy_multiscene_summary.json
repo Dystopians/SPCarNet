@@ -1,0 +1,229 @@
+{
+  "claim_boundary": "This strict three-scene frozen policy proves leak-safe multi-scene execution and nonzero accepted residual textures on counter/bonsai, but it is not a paper-final win because SSIM regresses on all three scenes and room falls back.",
+  "counts": {
+    "accepted_nonzero": 2,
+    "complete": 3,
+    "fallback_noop": 1,
+    "lpips_better_vs_parent": 3,
+    "protocol_passed": 3,
+    "psnr_better_vs_parent": 2,
+    "scene_count": 3,
+    "ssim_better_vs_parent": 0,
+    "target_gt_hidden_from_apply": 3
+  },
+  "mean_delta_vs_phasef_compact_parent": {
+    "LPIPS": -3.6751230557759605e-05,
+    "PSNR": 0.0010859171549479167,
+    "SSIM": -2.014636993408203e-05
+  },
+  "name": "strict_frozen_policy_multiscene_20260626_052500",
+  "policy": "frozen face-softshrink strict no-target-GT apply; texture_size_candidates=16, support_expansion=none, face_mean fill, prior_blend=0.5, max_abs_delta_rgb=0.12, hard bin guard disabled, soft bin shrink enabled",
+  "rows": [
+    {
+      "accepted": true,
+      "artifact_dir": "docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300",
+      "delta_vs_phasef_compact_parent": {
+        "LPIPS": -8.532404899597168e-05,
+        "PSNR": 0.0021305084228515625,
+        "SSIM": -4.7326087951660156e-05
+      },
+      "effective_policy": "accepted_atlas",
+      "interpretation": "Strict no-target-GT apply protocol passes and produces nonzero accepted residual surface texture; PSNR and LPIPS improve slightly versus Phase-F compact parent while SSIM slightly regresses, so this is a protocol/multiscene milestone, not comprehensive MeshSplatting/v106 superiority.",
+      "phasef_compact_parent_metrics": {
+        "LPIPS": 0.2519977390766144,
+        "PSNR": 26.7498722076416,
+        "SSIM": 0.8620513081550598
+      },
+      "policy_val": {
+        "alpha": 0.25,
+        "cvar20_view_relative_gain": 0.01884696665223098,
+        "image_l1_gain": 1.421244814991951e-05,
+        "image_l1_min_view_gain": 7.264316082000732e-08,
+        "image_l1_positive_view_fraction": 1.0,
+        "min_view_relative_gain": 0.014912869986731307,
+        "positive_view_fraction": 1.0,
+        "relative_gain": 0.04431575294731716,
+        "safe_alpha_count": 8,
+        "selection_mode": "risk_gate",
+        "ssim_gain": 0.0001036524772644043,
+        "ssim_min_view_gain": 1.1324882507324219e-05,
+        "ssim_positive_view_fraction": 1.0
+      },
+      "protocol_audit": {
+        "capacity_selected_on": "train_policy_val_and_gt_free_target_footprint",
+        "fit_split": "train",
+        "forbidden_selection_fields": [],
+        "passed": true,
+        "policy_val_split": "train",
+        "selection_uses_test_gt": false,
+        "target_apply_leak": false,
+        "target_forbidden_keys_stripped": true,
+        "target_gt_visible_to_apply": false,
+        "target_gt_visible_to_eval": true,
+        "target_gt_visible_to_selection": false,
+        "target_split": "test",
+        "teacher_uses_train_gt": true,
+        "thresholds_selected_on": "train_policy_val"
+      },
+      "run": "counter_strict_face_softshrink_20260626_045300",
+      "scene": "counter",
+      "selected_alpha": 0.25,
+      "status": "COMPLETE",
+      "strict_test_metrics": {
+        "LPIPS": 0.2519124150276184,
+        "PSNR": 26.752002716064453,
+        "SSIM": 0.8620039820671082
+      },
+      "target_apply": {
+        "changed_fraction": 0.011773550729118487,
+        "changed_pixels": 571207,
+        "gt_dir": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_counter_strict_20260626_045300_counter_strict/counter/model/test/ours_26000_vnext_certified_residual_surface_texture/gt",
+        "method_name": "ours_26000_vnext_certified_residual_surface_texture",
+        "render_dir": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_counter_strict_20260626_045300_counter_strict/counter/model/test/ours_26000_vnext_certified_residual_surface_texture/renders",
+        "split": "test",
+        "total_pixels": 48516120,
+        "written_views": 30
+      }
+    },
+    {
+      "accepted": true,
+      "artifact_dir": "docs/car_model/vnext_artifacts/bonsai_strict_face_softshrink_20260626_052500",
+      "delta_vs_phasef_compact_parent": {
+        "LPIPS": -1.7523765563964844e-05,
+        "PSNR": 0.001224517822265625,
+        "SSIM": -9.894371032714844e-06
+      },
+      "effective_policy": "accepted_atlas",
+      "interpretation": "Strict no-target-GT apply passes and accepts a nonzero residual surface texture; PSNR and LPIPS improve slightly while SSIM slightly regresses versus the Phase-F compact parent.",
+      "phasef_compact_parent_metrics": {
+        "LPIPS": 0.25933969020843506,
+        "PSNR": 28.86433982849121,
+        "SSIM": 0.8960123062133789
+      },
+      "policy_val": {
+        "alpha": 0.25,
+        "cvar20_view_relative_gain": 0.00813113638226871,
+        "image_l1_gain": 3.4219895799954734e-06,
+        "image_l1_min_view_gain": -1.3783574104309082e-07,
+        "image_l1_positive_view_fraction": 0.9166666666666666,
+        "min_view_relative_gain": 0.003620487190081248,
+        "positive_view_fraction": 1.0,
+        "relative_gain": 0.016425598316211792,
+        "ssim_gain": 1.7369786898295086e-05,
+        "ssim_min_view_gain": 1.3709068298339844e-06,
+        "ssim_positive_view_fraction": 1.0
+      },
+      "protocol_audit": {
+        "capacity_selected_on": "train_policy_val_and_gt_free_target_footprint",
+        "fit_split": "train",
+        "forbidden_selection_fields": [],
+        "passed": true,
+        "policy_val_split": "train",
+        "selection_uses_test_gt": false,
+        "target_apply_leak": false,
+        "target_forbidden_keys_stripped": true,
+        "target_gt_visible_to_apply": false,
+        "target_gt_visible_to_eval": true,
+        "target_gt_visible_to_selection": false,
+        "target_split": "test",
+        "teacher_uses_train_gt": true,
+        "thresholds_selected_on": "train_policy_val"
+      },
+      "reject_reason": "",
+      "run": "bonsai_strict_face_softshrink_20260626_052500",
+      "scene": "bonsai",
+      "selected_alpha": 0.25,
+      "status": "COMPLETE",
+      "strict_test_metrics": {
+        "LPIPS": 0.2593221664428711,
+        "PSNR": 28.865564346313477,
+        "SSIM": 0.8960024118423462
+      },
+      "target_apply": {
+        "changed_fraction": 0.0015133323768149898,
+        "changed_pixels": 90698,
+        "gt_dir": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/gt",
+        "method_name": "ours_26000_vnext_certified_residual_surface_texture",
+        "render_dir": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders",
+        "split": "test",
+        "total_pixels": 59932637,
+        "written_views": 37
+      }
+    },
+    {
+      "accepted": false,
+      "artifact_dir": "docs/car_model/vnext_artifacts/room_strict_face_softshrink_20260626_052500",
+      "delta_vs_phasef_compact_parent": {
+        "LPIPS": -7.405877113342285e-06,
+        "PSNR": -9.72747802734375e-05,
+        "SSIM": -3.2186508178710938e-06
+      },
+      "effective_policy": "fallback_noop",
+      "interpretation": "Strict no-target-GT apply passes but the certificate rejects the nonzero candidate and writes exact fallback/no-op; final metrics are effectively parent-level with tiny evaluation noise.",
+      "phasef_compact_parent_metrics": {
+        "LPIPS": 0.24992336332798004,
+        "PSNR": 28.73910140991211,
+        "SSIM": 0.884793221950531
+      },
+      "policy_val": {
+        "alpha": 0.5,
+        "cvar20_view_relative_gain": -0.014188662226301177,
+        "image_l1_gain": 9.00845043361187e-06,
+        "image_l1_min_view_gain": -7.66851007938385e-06,
+        "image_l1_positive_view_fraction": 0.8333333333333334,
+        "min_view_relative_gain": -0.031167164462675114,
+        "positive_view_fraction": 0.75,
+        "relative_gain": 0.056431739375368495,
+        "ssim_gain": 4.067023595174154e-05,
+        "ssim_min_view_gain": -0.00011098384857177734,
+        "ssim_positive_view_fraction": 0.75
+      },
+      "protocol_audit": {
+        "capacity_selected_on": "train_policy_val_and_gt_free_target_footprint",
+        "fit_split": "train",
+        "forbidden_selection_fields": [],
+        "passed": true,
+        "policy_val_split": "train",
+        "selection_uses_test_gt": false,
+        "target_apply_leak": false,
+        "target_forbidden_keys_stripped": true,
+        "target_gt_visible_to_apply": false,
+        "target_gt_visible_to_eval": true,
+        "target_gt_visible_to_selection": false,
+        "target_split": "test",
+        "teacher_uses_train_gt": true,
+        "thresholds_selected_on": "train_policy_val"
+      },
+      "reject_reason": "cvar20_view_relative_gain -0.014189 < min_policy_val_cvar20_relative_gain 0.000000; min_view_relative_gain -0.031167 < min_policy_val_min_view_relative_gain -0.000001; ssim_min_view_gain -0.000110984 < min_policy_val_ssim_min_view_gain -0.000010000; image_l1_min_view_gain -0.000007669 < min_policy_val_l1_min_view_gain -0.000001000",
+      "run": "room_strict_face_softshrink_20260626_052500",
+      "scene": "room",
+      "selected_alpha": 0.0,
+      "status": "COMPLETE",
+      "strict_test_metrics": {
+        "LPIPS": 0.2499159574508667,
+        "PSNR": 28.739004135131836,
+        "SSIM": 0.8847900032997131
+      },
+      "target_apply": {
+        "changed_fraction": 0.0,
+        "changed_pixels": 0,
+        "fallback_copied_from_source": false,
+        "fallback_noop": true,
+        "fallback_source": "target_evidence",
+        "fallback_source_method": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/room/ratio_0200/compact_model/test/ours_26000_phasef_extra_compact_base",
+        "fallback_symlinked": false,
+        "gt_dir": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_room_strict_20260626_052500_room_strict/room/model/test/ours_26000_vnext_certified_residual_surface_texture/gt",
+        "method_name": "ours_26000_vnext_certified_residual_surface_texture",
+        "render_dir": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_room_strict_20260626_052500_room_strict/room/model/test/ours_26000_vnext_certified_residual_surface_texture/renders",
+        "split": "test",
+        "total_pixels": 63030474,
+        "written_views": 39
+      }
+    }
+  ],
+  "scenes": [
+    "counter",
+    "bonsai",
+    "room"
+  ]
+}

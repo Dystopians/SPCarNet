@@ -2,7 +2,7 @@
 
 日期：2026-06-26
 用途：给 2026-06-27 PPT 准备的中文技术报告、证据索引和结论边界。
-范围：基于现有 vNext prompt、feasibility plan、implementation log、`vnext_artifacts` 已有结果整理；2026-06-26 已补入 garden soft-shrink/face-softshrink 与 counter strict face-softshrink 真实 pilot 结果。
+范围：基于现有 vNext prompt、feasibility plan、implementation log、`vnext_artifacts` 已有结果整理；2026-06-26 已补入 garden soft-shrink/face-softshrink，以及 counter/bonsai/room strict frozen-policy face-softshrink 真实 pilot 结果。
 
 ---
 
@@ -23,13 +23,13 @@ Phase-J render-time teacher
 
 - **方法方向合理**：Phase-J 已证明 residual repair 有大收益，v106 证明 residual representation 可与 MeshSplatting parent 兼容。
 - **协议与编排层已跑通**：vNext scene/full9 runner、manifest、no-test-GT audit、dry-run、W&B offline dry-run、assembler dry-run 已完成。
-- **已有真实单场景 pilot 从 garden 扩展到 counter**：garden face-softshrink 是第一个非零 accepted proof-of-life；counter strict face-softshrink 进一步在严格 no-target-GT apply 协议下完成，`target_gt_visible_to_apply=false`、`accepted=true`、`selected_alpha=0.25`、`target changed fraction=0.01177355`。
-- **不能宣称 vNext 已全面超越 MeshSplatting baseline**：garden 相对 no-op/fallback parent 三指标微增；counter 相对 Phase-F compact parent 是 `+0.00213` PSNR、`-0.000047` SSIM、`-0.000085` LPIPS。它们是真实非零里程碑和严格协议证据，不是 full9 结果，也不是超过 v106 或 clean MeshSplatting 的证据。
+- **已有真实 pilot 从 garden 扩展到 strict 三场景 frozen-policy**：garden face-softshrink 是第一个非零 accepted proof-of-life；同一套 frozen face-softshrink policy 又在 `counter,bonsai,room` 上完成 strict no-target-GT apply 验证，3/3 protocol pass、3/3 `target_gt_visible_to_apply=false`、2/3 nonzero accepted、1/3 fallback/no-op 且 `changed_fraction=0`。
+- **不能宣称 vNext 已全面超越 MeshSplatting baseline**：strict 三场景相对 Phase-F compact parent 的均值是 `+0.001086` PSNR、`-0.000020` SSIM、`-0.000037` LPIPS。它们是真实非零里程碑和严格协议证据，但 PSNR/LPIPS 弱正信号主要来自 counter/bonsai，room 是 parent-level fallback 评估差异；SSIM 三场景全退，不是 full9 结果，也不是超过 v106 或 clean MeshSplatting 的证据。
 - **当前 verified representation 质量线仍是 v106 POD-MoE base-preserve**；当前 verified broad RGB endpoint 仍是 Phase-J，但 Phase-J 是 render-time guarded ELA portfolio，不是 baked representation。
 
 PPT 推荐讲法：
 
-> vNext 是把 Phase-J 的强 render-time residual teacher 转成可部署 surface texture representation 的下一阶段。我们已经完成 strict no-target-GT apply 协议，并在 garden/counter 两个单场景上得到非零 accepted residual surface texture；目前收益仍是微小级别，counter 还不是三指标全胜，因此远不足以证明超过 clean MeshSplatting 或 v106。
+> vNext 是把 Phase-J 的强 render-time residual teacher 转成可部署 surface texture representation 的下一阶段。我们已经完成 strict no-target-GT apply 协议，并在 garden/counter/bonsai 上得到非零 accepted residual surface texture，在 room 上安全回退；目前收益仍是微小级别，strict 三场景 SSIM 全部微退，因此远不足以证明超过 clean MeshSplatting 或 v106。
 
 ---
 
@@ -43,7 +43,8 @@ PPT 推荐讲法：
 | vNext protocol | py_compile、schema smoke、scene dry-run、W&B offline dry-run、two-scene wrapper dry-run | 协议、manifest、no-test-GT audit、runner interface 已可用 | 不能说 full9 已完成 |
 | vNext garden fallback pilot | 单场景真实 run，协议审计通过，但 fallback/no-op | 安全证书拒绝不可靠候选，未使用 test GT 做选择 | 不能说 fallback 指标是 vNext 非零方法收益 |
 | vNext garden face-softshrink pilot | 单场景真实 run，协议审计通过，非零 accepted atlas，`0.208%` target pixels changed | 第一个可汇报的非零 vNext residual surface texture 里程碑；相对 no-op parent 有极小三指标正向变化 | 不能说已 full9 闭环；不能说已超过 v106 或 clean MeshSplatting；不能说视觉效果明显 |
-| vNext counter strict face-softshrink pilot | 单场景真实 run，strict no-target-GT apply 协议审计通过，非零 accepted atlas，`1.177%` target pixels changed | 当前最强的 vNext 公平性/protocol proof-of-life；adapter apply 阶段看不到 target GT | 不能说已三指标全胜；SSIM 相对 Phase-F compact parent 微退 |
+| vNext counter strict face-softshrink pilot | 单场景真实 run，strict no-target-GT apply 协议审计通过，非零 accepted atlas，`1.177%` target pixels changed | strict no-target-GT apply 的第一个非零证据；adapter apply 阶段看不到 target GT | 不能说已三指标全胜；SSIM 相对 Phase-F compact parent 微退 |
+| vNext strict frozen-policy multiscene | `counter,bonsai,room` 三场景真实 run；3/3 protocol pass；3/3 target GT hidden from apply；2/3 nonzero accepted；1/3 fallback/no-op with `changed_fraction=0` | 当前最强的 vNext 公平性/protocol package；证明 frozen policy 可跨场景执行 | 不能说质量闭环；均值只是 `+0.001086` PSNR / `-0.000020` SSIM / `-0.000037` LPIPS，room delta 是 parent-level 评估差异，SSIM 0/3 胜 |
 
 ---
 
@@ -243,6 +244,8 @@ final eval JSON 中的 garden vNext fallback 输出：
 | hard-bin soft-shrink | `docs/car_model/vnext_artifacts/garden_hardbin_softshrink_20260626_035631/` | enabled | `False` | `0.0` | `0.000000` | `24.741003` | `0.754049` | `0.248023` | soft shrink 修复 SSIM 方向，但 hard bin guard 仍拒绝 |
 | face-softshrink | `docs/car_model/vnext_artifacts/garden_face_softshrink_20260626_040558/` | disabled | `True` | `0.0625` | `0.002080` | `24.741079` | `0.754051` | `0.248020` | 第一个非零 accepted residual surface texture |
 | counter strict face-softshrink | `docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/` | disabled | `True` | `0.25` | `0.011774` | `26.752003` | `0.862004` | `0.251912` | strict no-target-GT apply；vs Phase-F compact parent PSNR/LPIPS 微增、SSIM 微退 |
+| bonsai strict face-softshrink | `docs/car_model/vnext_artifacts/bonsai_strict_face_softshrink_20260626_052500/` | disabled | `True` | `0.25` | `0.001513` | `28.865564` | `0.896002` | `0.259322` | strict no-target-GT apply；vs Phase-F compact parent PSNR/LPIPS 微增、SSIM 微退 |
+| room strict face-softshrink | `docs/car_model/vnext_artifacts/room_strict_face_softshrink_20260626_052500/` | disabled | `False` | `0.0` | `0.000000` | `28.739004` | `0.884790` | `0.249916` | strict no-target-GT apply；证书拒绝并 fallback/no-op，微小 delta 视为 parent-level 评估差异 |
 
 face-softshrink 的 train-policy-val 证书字段：
 
@@ -326,14 +329,19 @@ protocol passed
 selection_uses_test_gt = false
 garden face-softshrink candidate accepted
 counter strict face-softshrink candidate accepted
+bonsai strict face-softshrink candidate accepted
+room strict face-softshrink candidate rejected to fallback
 counter target_gt_visible_to_apply = false
+bonsai target_gt_visible_to_apply = false
+room target_gt_visible_to_apply = false
 counter changed_fraction = 0.01177355
 counter held-out delta vs Phase-F compact parent = +0.00213 PSNR / -0.000047 SSIM / -0.000085 LPIPS
+strict frozen-policy 3-scene mean delta vs Phase-F compact parent = +0.001086 PSNR / -0.000020 SSIM / -0.000037 LPIPS
 ```
 
 所以对外结论应写成：
 
-> vNext 当前完成了 strict no-target-GT apply protocol、certificate/fallback proof-of-life，并在 garden/counter 上得到非零 accepted residual surface texture。garden 是微小三指标收益；counter 是 PSNR/LPIPS 微增但 SSIM 微退。因此它还没有提供超过 clean MeshSplatting baseline、v106 或 Phase-J teacher 的证据。
+> vNext 当前完成了 strict no-target-GT apply protocol、certificate/fallback proof-of-life，并在 garden/counter/bonsai 上得到非零 accepted residual surface texture，在 room 上安全回退且 `changed_fraction=0`。strict 三场景均值显示 counter/bonsai 带来 PSNR/LPIPS 弱正信号，但 SSIM 三场景全退，room 的微小 delta 只是 parent-level 评估差异。因此它还没有提供超过 clean MeshSplatting baseline、v106 或 Phase-J teacher 的证据。
 
 ---
 
@@ -346,6 +354,7 @@ counter held-out delta vs Phase-F compact parent = +0.00213 PSNR / -0.000047 SSI
 | vNext 原始 prompt | `docs/6-26-SPCarNet-vNext-ServerCodexPrompt.md` |
 | vNext feasibility plan | `docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md` |
 | vNext implementation log | `docs/car_model/6-26-SPCarNet-vNext-Implementation-Log.md` |
+| vNext strict multiscene log | `docs/car_model/6-26-SPCarNet-vNext-Strict-FrozenPolicy-Multiscene-Log.md` |
 | 当前状态 addendum | `docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md` |
 | Phase-J vs clean MeshSplatting 完整报告 | `docs/car_model/6-25-SPCarNet-Current-Method-vs-MeshSplatting-Complete-Report.zh.md` |
 | v106 final technical report | `docs/car_model/6-25-v106-PODMoE-Mentor-Technical-Report-Final.md` |
@@ -364,9 +373,12 @@ counter held-out delta vs Phase-F compact parent = +0.00213 PSNR / -0.000047 SSI
 | `docs/car_model/vnext_artifacts/garden_20260626_004134/garden_ours_26000_vnext_certified_residual_surface_texture_test_results.json` | final target split aggregate metrics |
 | `docs/car_model/vnext_artifacts/garden_20260626_004134/garden_ours_26000_vnext_certified_residual_surface_texture_test_per_view.json` | final target split per-view metrics |
 | `docs/car_model/vnext_artifacts/garden_face_softshrink_20260626_040558/garden_face_softshrink_summary.json` | garden 非零 accepted micro-gain 摘要 |
-| `docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/counter_strict_face_softshrink_summary.json` | counter strict 摘要，PPT 表格首选数据源 |
+| `docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/counter_strict_face_softshrink_summary.json` | counter strict 单场景摘要 |
 | `docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/counter_vnext_certified_residual_texture_manifest.json` | counter strict command/provenance/protocol audit |
 | `docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/target_evidence_no_gt_audit.json` | target evidence 去除 GT/residual keys 的审计 |
+| `docs/car_model/vnext_artifacts/bonsai_strict_face_softshrink_20260626_052500/bonsai_strict_face_softshrink_summary.json` | bonsai strict 摘要 |
+| `docs/car_model/vnext_artifacts/room_strict_face_softshrink_20260626_052500/room_strict_face_softshrink_summary.json` | room strict 摘要 |
+| `docs/car_model/vnext_artifacts/strict_frozen_policy_multiscene_20260626_052500/strict_frozen_policy_multiscene_summary.md` | strict frozen-policy 三场景聚合表 |
 
 ### 6.3 PPT 建议页序
 
@@ -376,18 +388,18 @@ counter held-out delta vs Phase-F compact parent = +0.00213 PSNR / -0.000047 SSI
 4. **Current Baselines**：Phase-J upper bound；v106 verified representation line。
 5. **Protocol Integrity**：fit/policy-val/test split；`selection_uses_test_gt=false`；machine-readable manifests。
 6. **Garden Pilot**：从 fallback/no-op 到 face-softshrink nonzero micro-gain。
-7. **Counter Strict Pilot**：`target_gt_visible_to_apply=false`，非零 accepted，PSNR/LPIPS 微增但 SSIM 微退。
-8. **Honest Gap**：还没有 full9、还没有超过 v106/clean baseline、视觉优势仍不明显。
+7. **Counter/Bonsai/Room Strict Pilot**：同一 frozen policy，3/3 no-target-GT apply，2/3 nonzero accepted，1/3 fallback。
+8. **Honest Gap**：SSIM 三场景全退，还没有 full9、还没有超过 v106/clean baseline、视觉优势仍不明显。
 
 ---
 
 ## 7. 主要短板
 
 1. **非零 vNext texture 已被接受，但收益仍太小**
-   garden changed fraction 为 `0.208%`，counter strict changed fraction 为 `1.177%`。这说明路线已从 fallback-only 推进到真实非零 apply，但当前增益仍不足以作为 paper-final 质量 claim。
+   garden changed fraction 为 `0.208%`，counter strict changed fraction 为 `1.177%`，bonsai strict changed fraction 为 `0.151%`，room strict fallback 为 `0%`。这说明路线已从 fallback-only 推进到真实非零 apply，但当前增益仍不足以作为 paper-final 质量 claim。
 
-2. **tail risk 仍是核心瓶颈**
-   selected candidate 的 mean relative gain 为正，但 CVaR20 与 min-view relative gain 明显为负，SSIM gate 也失败。
+2. **SSIM / 结构一致性是当前最硬瓶颈**
+   strict 三场景里 PSNR/LPIPS 均值略好，但主要由 counter/bonsai 的非零 accepted 输出贡献；`room` 是 fallback/no-op，changed fraction 为 0。SSIM 0/3 胜，`room` 的 policy-val mean relative gain 为正，但 lower-tail、min-view、SSIM 和 L1 gate 共同触发 fallback。
 
 3. **surface-addressability 未证明足够强**
    Phase-J 收益可能部分来自 view-support / ELA portfolio 效应，不一定能直接 bake 到 face/UV texture。需要 residual consistency 和 face/bin transfer audit。
@@ -464,4 +476,4 @@ Do not promote vNext as completed or superior yet.
 
 PPT 最后一页建议写：
 
-> vNext 已经把“方法应该如何公平验证”搭起来了，并在 garden/counter 上证明非零 residual surface texture 可以在证书约束下被接受。下一步的真正目标不是再证明 proof-of-life，而是在 strict full9 上把非零收益放大到可见、可复现、可超过 v106/clean baseline 的程度。
+> vNext 已经把“方法应该如何公平验证”搭起来了，并在 garden/counter/bonsai 上证明非零 residual surface texture 可以在证书约束下被接受，也在 room 上证明 fallback 能阻止不可靠候选。下一步的真正目标不是再证明 proof-of-life，而是解决 SSIM/结构一致性瓶颈，并在 strict full9 上把非零收益放大到可见、可复现、可超过 v106/clean baseline 的程度。

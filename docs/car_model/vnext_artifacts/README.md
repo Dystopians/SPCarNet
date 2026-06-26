@@ -7,13 +7,16 @@
 
 ## Summary
 
-当前 artifacts 有三个真实 `garden` 单场景 run 和一个 `counter` strict run：
+当前 artifacts 有三个真实 `garden` 单场景 run、三个 strict frozen-policy 场景 run，以及一个三场景聚合表：
 
 ```text
 garden_20260626_004134
 garden_hardbin_softshrink_20260626_035631
 garden_face_softshrink_20260626_040558
 counter_strict_face_softshrink_20260626_045300
+bonsai_strict_face_softshrink_20260626_052500
+room_strict_face_softshrink_20260626_052500
+strict_frozen_policy_multiscene_20260626_052500
 ```
 
 结论必须诚实表述：
@@ -23,9 +26,11 @@ initial full candidate: protocol passed, accepted=false, fallback_noop
 hard-bin soft-shrink: protocol passed, accepted=false, fallback_noop
 face-softshrink: protocol passed, accepted=true, selected_alpha=0.0625, changed_fraction=0.002080
 counter strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, accepted=true, selected_alpha=0.25, changed_fraction=0.01177355
+bonsai strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, accepted=true, selected_alpha=0.25, changed_fraction=0.00151333
+room strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, accepted=false, fallback_noop, changed_fraction=0.000000
 ```
 
-因此，这个目录证明的是：**vNext 安全证书和 no-op fallback 机制有效，并且 face-softshrink 已经在 garden/counter 上产生真实非零 accepted residual surface texture**。但这些非零收益仍很小或指标混合，还不是 full9、v106 或 clean MeshSplatting 超越证据。
+因此，这个目录证明的是：**vNext 安全证书和 no-op fallback 机制有效，并且同一套 frozen face-softshrink policy 已经在 counter/bonsai 上产生真实非零 accepted residual surface texture，在 room 上安全回退且 `changed_fraction=0`**。但这些非零收益仍很小或指标混合，三场景 SSIM 均略退，还不是 full9、v106 或 clean MeshSplatting 超越证据。
 
 ---
 
@@ -40,12 +45,15 @@ counter strict face-softshrink: protocol passed, target_gt_visible_to_apply=fals
 | `garden_20260626_004134/garden_ours_26000_vnext_certified_residual_surface_texture_test_results.json` | final target split aggregate metrics | 只能作为 fallback 输出指标，不可当作 vNext improvement |
 | `garden_20260626_004134/garden_ours_26000_vnext_certified_residual_surface_texture_test_per_view.json` | per-view PSNR/SSIM/LPIPS | 用于检查 fallback 输出 per-view 分布 |
 | `garden_hardbin_softshrink_20260626_035631/` | hard-bin soft-shrink 诊断：soft shrink 激活但 hard bin guard 仍拒绝 | 用于解释为什么最终策略改为 soft shrink 替代 hard bin allowlist |
-| `garden_face_softshrink_20260626_040558/` | face-softshrink accepted run：manifest、report、audit、metrics、per-view、logs、summary JSON、qualitative panel | 当前 vNext 最重要的非零里程碑证据 |
+| `garden_face_softshrink_20260626_040558/` | face-softshrink accepted run：manifest、report、audit、metrics、per-view、logs、summary JSON、qualitative panel | 第一个非零 vNext 里程碑证据 |
 | `garden_face_softshrink_20260626_040558/garden_face_softshrink_summary.json` | 三轮结果、delta、per-view win counts、guard 诊断 | PPT/脚本可读摘要 |
 | `garden_face_softshrink_20260626_040558/garden_face_softshrink_qualitative_panel.png` | GT / parent / vNext / error maps / vNext-parent amplified diff | 展示非零改动存在，但视觉收益非常弱 |
-| `counter_strict_face_softshrink_20260626_045300/` | counter strict face-softshrink accepted run：manifest、report、audit、metrics、per-view、summary JSON、logs | 当前最重要的 strict no-target-GT apply vNext 证据 |
-| `counter_strict_face_softshrink_20260626_045300/counter_strict_face_softshrink_summary.json` | parent/vNext metrics、delta、protocol audit、target apply 摘要 | PPT 表格首选数据源 |
+| `counter_strict_face_softshrink_20260626_045300/` | counter strict face-softshrink accepted run：manifest、report、audit、metrics、per-view、summary JSON、logs | strict no-target-GT apply 的非零证据 |
+| `counter_strict_face_softshrink_20260626_045300/counter_strict_face_softshrink_summary.json` | parent/vNext metrics、delta、protocol audit、target apply 摘要 | counter 单场景行数据源；三场景汇总首选 `strict_frozen_policy_multiscene_summary.md` |
 | `counter_strict_face_softshrink_20260626_045300/target_evidence_no_gt_audit.json` | target evidence stripped-key 审计 | 证明 adapter apply 阶段没有 target GT/residual keys |
+| `bonsai_strict_face_softshrink_20260626_052500/` | bonsai strict face-softshrink accepted run：manifest、report、audit、metrics、per-view、summary JSON、logs | frozen policy 第二个非零 accepted 场景 |
+| `room_strict_face_softshrink_20260626_052500/` | room strict face-softshrink fallback run：manifest、report、audit、metrics、per-view、summary JSON、logs | frozen policy 安全拒绝/回退场景 |
+| `strict_frozen_policy_multiscene_20260626_052500/strict_frozen_policy_multiscene_summary.md` | counter/bonsai/room 三场景聚合表 | PPT 首选三场景 protocol/metric 总结 |
 
 ---
 
@@ -170,10 +178,46 @@ Held-out counter test:
 
 Interpretation:
 
-- This is the strongest current vNext protocol evidence because target evidence is stripped before adapter apply.
+- This is the first strict no-target-GT single-scene evidence and one row of the frozen multiscene table; the current strongest protocol package is `strict_frozen_policy_multiscene_20260626_052500`.
 - It is a nonzero accepted residual surface texture with about `1.18%` changed target pixels.
 - It improves PSNR and LPIPS slightly relative to the Phase-F compact parent, but SSIM slightly regresses.
 - It should be described as strict protocol proof-of-life, not as a three-metric or paper-final win.
+
+---
+
+## Strict Frozen-Policy Multiscene Key Facts
+
+Artifact root:
+
+```text
+strict_frozen_policy_multiscene_20260626_052500
+```
+
+The same frozen policy was applied to `counter,bonsai,room`:
+
+```text
+texture_size_candidates=16
+support_expansion_mode=none
+atlas_empty_bin_fill_mode=face_mean
+surface_multiscale_prior_blend_candidates=0.5
+max_abs_delta_rgb_candidates=0.12
+policy_val_bin_uncertainty_guard=disabled
+strict_no_target_gt_apply=true
+```
+
+| scene | protocol pass | target GT visible to apply | accepted | alpha | changed fraction | delta PSNR | delta SSIM | delta LPIPS |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| counter | `True` | `False` | `True` | `0.25` | `0.01177355` | `+0.002131` | `-0.000047` | `-0.000085` |
+| bonsai | `True` | `False` | `True` | `0.25` | `0.00151333` | `+0.001225` | `-0.000010` | `-0.000018` |
+| room | `True` | `False` | `False` | `0.0` | `0.00000000` | `-0.000097` | `-0.000003` | `-0.000007` |
+| mean | 3/3 | 0/3 visible | 2/3 nonzero | - | - | `+0.001086` | `-0.000020` | `-0.000037` |
+
+Interpretation:
+
+- This is the current best strict vNext protocol package: no target GT is visible to adapter apply on all three scenes.
+- It gives weak positive PSNR and LPIPS movement versus the Phase-F compact parent mainly through the two nonzero accepted scenes; the `room` row is fallback/no-op with `changed_fraction=0`, so its tiny metric deltas should be treated as parent-level evaluation noise rather than residual gain.
+- It does not solve structure quality: SSIM regresses on all three scenes, and `room` correctly falls back to parent output.
+- It is useful for a mentor update and method diagnosis, not for a paper-final superiority claim.
 
 ---
 
@@ -211,9 +255,9 @@ Use this wording:
 
 > The garden vNext pilot first validated the safety path through exact fallback/no-op rejection. The follow-up face-softshrink run then accepted a nonzero residual surface texture (`accepted=true`, `selected_alpha=0.0625`, `target_changed_fraction=0.002080`) and gave tiny held-out gains versus the no-op/fallback parent. This is a real nonzero milestone, not full9 or v106/clean-baseline superiority.
 
-For the strict counter run, use this wording:
+For the strict frozen-policy multiscene run, use this wording:
 
-> The counter vNext strict pilot validated the no-target-GT apply path: `target_gt_visible_to_apply=false`, `accepted=true`, `selected_alpha=0.25`, `target_changed_fraction=0.01177355`. It gives a tiny PSNR/LPIPS improvement versus the Phase-F compact parent while SSIM slightly regresses, so it is a protocol milestone rather than a comprehensive quality win.
+> The strict frozen-policy vNext pilot applied the same face-softshrink policy to `counter,bonsai,room` with `target_gt_visible_to_apply=false` in all scenes. It accepted nonzero residual surface textures on counter and bonsai and safely fell back/no-op on room with `changed_fraction=0`. Mean PSNR/LPIPS move slightly in the right direction versus the Phase-F compact parent, but the fallback row is parent-level evaluation noise and SSIM regresses on all three scenes, so this is a protocol and diagnosis milestone rather than a comprehensive quality win.
 
 Avoid this wording:
 

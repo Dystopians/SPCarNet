@@ -1,0 +1,201 @@
+{
+  "gt_dir": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/gt",
+  "method_name": "ours_26000_vnext_certified_residual_surface_texture",
+  "missing_render_images": 0,
+  "output_model": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model",
+  "render_dir": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders",
+  "schema_version": 1,
+  "split": "test",
+  "target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v37_visible_bary_target_images2/bonsai",
+  "target_gt_visible_to_apply": false,
+  "target_gt_visible_to_eval": true,
+  "view_count": 37,
+  "views": [
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00000.png",
+      "view": "00000.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00001.png",
+      "view": "00001.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00002.png",
+      "view": "00002.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00003.png",
+      "view": "00003.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00004.png",
+      "view": "00004.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00005.png",
+      "view": "00005.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00006.png",
+      "view": "00006.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00007.png",
+      "view": "00007.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00008.png",
+      "view": "00008.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00009.png",
+      "view": "00009.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00010.png",
+      "view": "00010.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00011.png",
+      "view": "00011.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00012.png",
+      "view": "00012.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00013.png",
+      "view": "00013.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00014.png",
+      "view": "00014.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00015.png",
+      "view": "00015.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00016.png",
+      "view": "00016.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00017.png",
+      "view": "00017.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00018.png",
+      "view": "00018.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00019.png",
+      "view": "00019.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00020.png",
+      "view": "00020.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00021.png",
+      "view": "00021.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00022.png",
+      "view": "00022.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00023.png",
+      "view": "00023.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00024.png",
+      "view": "00024.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00025.png",
+      "view": "00025.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00026.png",
+      "view": "00026.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00027.png",
+      "view": "00027.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00028.png",
+      "view": "00028.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00029.png",
+      "view": "00029.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00030.png",
+      "view": "00030.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00031.png",
+      "view": "00031.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00032.png",
+      "view": "00032.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00033.png",
+      "view": "00033.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00034.png",
+      "view": "00034.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00035.png",
+      "view": "00035.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders/00036.png",
+      "view": "00036.npz"
+    }
+  ],
+  "written_gt_images": 37
+}

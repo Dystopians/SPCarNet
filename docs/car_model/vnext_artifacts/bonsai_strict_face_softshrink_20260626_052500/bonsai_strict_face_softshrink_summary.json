@@ -1,0 +1,65 @@
+{
+  "accepted": true,
+  "artifact_dir": "docs/car_model/vnext_artifacts/bonsai_strict_face_softshrink_20260626_052500",
+  "delta_vs_phasef_compact_parent": {
+    "LPIPS": -1.7523765563964844e-05,
+    "PSNR": 0.001224517822265625,
+    "SSIM": -9.894371032714844e-06
+  },
+  "effective_policy": "accepted_atlas",
+  "interpretation": "Strict no-target-GT apply passes and accepts a nonzero residual surface texture; PSNR and LPIPS improve slightly while SSIM slightly regresses versus the Phase-F compact parent.",
+  "phasef_compact_parent_metrics": {
+    "LPIPS": 0.25933969020843506,
+    "PSNR": 28.86433982849121,
+    "SSIM": 0.8960123062133789
+  },
+  "policy_val": {
+    "alpha": 0.25,
+    "cvar20_view_relative_gain": 0.00813113638226871,
+    "image_l1_gain": 3.4219895799954734e-06,
+    "image_l1_min_view_gain": -1.3783574104309082e-07,
+    "image_l1_positive_view_fraction": 0.9166666666666666,
+    "min_view_relative_gain": 0.003620487190081248,
+    "positive_view_fraction": 1.0,
+    "relative_gain": 0.016425598316211792,
+    "ssim_gain": 1.7369786898295086e-05,
+    "ssim_min_view_gain": 1.3709068298339844e-06,
+    "ssim_positive_view_fraction": 1.0
+  },
+  "protocol_audit": {
+    "capacity_selected_on": "train_policy_val_and_gt_free_target_footprint",
+    "fit_split": "train",
+    "forbidden_selection_fields": [],
+    "passed": true,
+    "policy_val_split": "train",
+    "selection_uses_test_gt": false,
+    "target_apply_leak": false,
+    "target_forbidden_keys_stripped": true,
+    "target_gt_visible_to_apply": false,
+    "target_gt_visible_to_eval": true,
+    "target_gt_visible_to_selection": false,
+    "target_split": "test",
+    "teacher_uses_train_gt": true,
+    "thresholds_selected_on": "train_policy_val"
+  },
+  "reject_reason": "",
+  "run": "bonsai_strict_face_softshrink_20260626_052500",
+  "scene": "bonsai",
+  "selected_alpha": 0.25,
+  "status": "COMPLETE",
+  "strict_test_metrics": {
+    "LPIPS": 0.2593221664428711,
+    "PSNR": 28.865564346313477,
+    "SSIM": 0.8960024118423462
+  },
+  "target_apply": {
+    "changed_fraction": 0.0015133323768149898,
+    "changed_pixels": 90698,
+    "gt_dir": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/gt",
+    "method_name": "ours_26000_vnext_certified_residual_surface_texture",
+    "render_dir": "/dev/shm/peilincai_spcarnet_vnext_face_softshrink_bonsai_strict_20260626_052500_bonsai_strict/bonsai/model/test/ours_26000_vnext_certified_residual_surface_texture/renders",
+    "split": "test",
+    "total_pixels": 59932637,
+    "written_views": 37
+  }
+}
