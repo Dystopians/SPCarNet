@@ -74,10 +74,12 @@ Static/smoke checks passed:
   scripts/car_model/run_v110_strict_split_parent_gate_scene.py \
   scripts/car_model/run_v111_end_to_end_strict_parent_gate_scene.py \
   scripts/car_model/smoke_test_v109_gate_subset.py \
+  scripts/car_model/smoke_test_v109_oot_gate.py \
   scripts/car_model/smoke_test_v110_strict_runner_args.py \
   scripts/car_model/smoke_test_v111_runner_args.py
 
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v109_gate_subset.py
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v109_oot_gate.py
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v110_strict_runner_args.py
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v111_runner_args.py
 ```
