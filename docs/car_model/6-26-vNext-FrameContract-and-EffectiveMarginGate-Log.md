@@ -159,6 +159,77 @@ Artifacts:
 - `docs/car_model/vnext_artifacts/garden_effective_margin_gate_20260626/model_audits/surface_residual_region_texture_adapter_audit.json`
 - `docs/car_model/vnext_artifacts/garden_effective_margin_gate_20260626/logs/02_certified_texture.log`
 
+## Full9 Effective-Margin Gate Validation
+
+The same effective-margin gate was then run on all nine selected scenes with
+W&B offline logging and the fixed full9 manifest config.
+
+Artifact root:
+
+```text
+docs/car_model/vnext_artifacts/full9_effective_margin_gate_20260626_1500
+```
+
+Run root:
+
+```text
+/dev/shm/peilincai_spcarnet_vnext_full9_margin_gate_20260626_1500
+```
+
+Summary:
+
+| item | value |
+|---|---:|
+| runner status | `COMPLETE` |
+| completed scenes | `9 / 9` |
+| failed scenes | `0 / 9` |
+| missing inputs | `0 / 9` |
+| protocol pass | `9 / 9` |
+| accepted nonzero | `1 / 9` |
+| fallback/no-op | `8 / 9` |
+| mean changed fraction | `0.001371507` |
+| mean PSNR | `25.067410` |
+| mean SSIM | `0.741259` |
+| mean LPIPS | `0.306695` |
+
+Scene decisions:
+
+| scene | decision | policy | alpha | changed fraction |
+|---|---|---|---:|---:|
+| bicycle | rejected | `fallback_noop` | `0.0` | `0.0` |
+| bonsai | rejected | `fallback_noop` | `0.0` | `0.0` |
+| counter | accepted | `accepted_atlas` | `0.125` | `0.012343567` |
+| flowers | rejected | `fallback_noop` | `0.0` | `0.0` |
+| garden | rejected | `fallback_noop` | `0.0` | `0.0` |
+| kitchen | rejected | `fallback_noop` | `0.0` | `0.0` |
+| room | rejected | `fallback_noop` | `0.0` | `0.0` |
+| stump | rejected | `fallback_noop` | `0.0` | `0.0` |
+| treehill | rejected | `fallback_noop` | `0.0` | `0.0` |
+
+Comparison:
+
+| method | PSNR | SSIM | LPIPS |
+|---|---:|---:|---:|
+| clean MeshSplatting | `25.151682` | `0.749018` | `0.287621` |
+| v106 POD-MoE base-preserve | `25.831280` | `0.760830` | `0.268435` |
+| vNext fixed-policy cleanup | `25.067699` | `0.741260` | `0.306689` |
+| vNext effective-margin gate | `25.067410` | `0.741259` | `0.306695` |
+
+Interpretation:
+
+This closes the full9 effective-margin safety audit. The stricter gate suppresses
+almost all low-effect residual texture candidates, but it does not create a
+quality-superior method. The run confirms that the current vNext representation
+has insufficient target impact: only `counter` survives the effect-size and
+lower-tail checks.
+
+Key artifacts:
+
+- `docs/car_model/vnext_artifacts/full9_effective_margin_gate_20260626_1500/summary/vnext_manifest_summary.md`
+- `docs/car_model/vnext_artifacts/full9_effective_margin_gate_20260626_1500/summary/vnext_manifest_summary_enhanced.md`
+- `docs/car_model/vnext_artifacts/full9_effective_margin_gate_20260626_1500/summary/vnext_manifest_runner_summary.md`
+- `docs/car_model/vnext_artifacts/full9_effective_margin_gate_20260626_1500/*/model_audits/surface_residual_region_texture_adapter_audit.json`
+
 ## Current Interpretation
 
 This milestone improves the reliability of the vNext evidence pipeline but does not solve the quality gap.
@@ -170,25 +241,26 @@ What improved:
 - selected panel frames are hash-auditable;
 - the adapter can reject low-effect policy-val candidates instead of accepting numerically tiny gains;
 - garden margin-gate validation correctly falls back to parent/no-op under strict no-target-GT apply.
+- full9 effective-margin validation is complete and correctly rejects `8 / 9` scenes to fallback/no-op.
 
 What remains weak:
 
 - vNext still does not beat clean MeshSplatting or v106 on the retained full9 table;
 - the effect size of accepted residual surface texture is extremely small;
 - same-resolution garden vNext improves target-evidence parent only by micro-deltas;
-- the existing full9 summary mixes several frame/evidence contracts and should be interpreted cautiously in paper figures;
-- no full9 rerun with the new effective-margin gate has been completed yet.
+- the stricter full9 gate leaves only `counter` as a nonzero accepted scene;
+- the current residual surface texture is therefore a weak representation edit, not a paper-final visual endpoint.
 
 ## Next Required Work
 
-1. Run full9 fixed-policy with `--enable_policy_val_effective_margin_gate` and the same thresholds to quantify how many previous accepted scenes become fallback/no-op.
-2. For paper visuals, use only panels with verified matching native size and selected-frame hashes.
-3. Build a same-frame-contract clean/parent/v106/vNext comparison table; do not mix official clean renders and target-evidence renders unless resize/camera contracts are explicitly proven equivalent.
-4. Treat Phase-J as teacher/upper bound and v106 as current stronger representation endpoint until vNext produces meaningful gains.
-5. Investigate why the residual surface field has such small target impact; likely next directions are adaptive capacity, stronger teacher residual field distillation, or region-local neural residual decoding rather than more global gates.
+1. For paper visuals, use only panels with verified matching native size and selected-frame hashes.
+2. Build a same-frame-contract clean/parent/v106/vNext comparison table; do not mix official clean renders and target-evidence renders unless resize/camera contracts are explicitly proven equivalent.
+3. Treat Phase-J as teacher/upper bound and v106 as current stronger representation endpoint until vNext produces meaningful gains.
+4. Investigate why the residual surface field has such small target impact; likely next directions are adaptive capacity, stronger teacher residual field distillation, or region-local neural residual decoding rather than more global gates.
+5. Any next vNext promotion must beat clean MeshSplatting and v106 under this full9 protocol, not merely pass the no-op fallback safety audit.
 
 ## Final Status for This Milestone
 
-`COMPLETE` for the frame-contract audit, panel provenance hardening, effective-margin gate implementation, and garden rejection validation.
+`COMPLETE` for the frame-contract audit, panel provenance hardening, effective-margin gate implementation, garden rejection validation, and full9 effective-margin safety validation.
 
 `NOT COMPLETE` for the overall paper-level vNext objective.

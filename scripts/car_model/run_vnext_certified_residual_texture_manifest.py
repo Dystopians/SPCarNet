@@ -315,6 +315,8 @@ def _assemble(args: argparse.Namespace) -> dict[str, Any]:
         "--method_name",
         str(args.method_name),
     ]
+    if args.compact_artifact_root:
+        cmd.extend(["--compact_artifact_root", str(args.compact_artifact_root)])
     with log_path.open("w", encoding="utf-8") as handle:
         handle.write("$ " + " ".join(str(token) for token in cmd) + "\n\n")
         handle.flush()

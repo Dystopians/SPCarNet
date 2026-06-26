@@ -1,0 +1,7 @@
+{
+  "ours_26000_phasej_subdivision_v13_sh1_anchor_lumamax_trainval_ela": {
+    "LPIPS": 0.31332311034202576,
+    "PSNR": 20.134069442749023,
+    "SSIM": 0.6477210521697998
+  }
+}

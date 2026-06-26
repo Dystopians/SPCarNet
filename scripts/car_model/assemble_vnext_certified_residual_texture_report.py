@@ -43,6 +43,13 @@ def _artifact_scene_root(args: argparse.Namespace, scene: str, manifest_path: Pa
     return manifest_path.parent.parent
 
 
+def _compact_copy_path(args: argparse.Namespace, scene: str, source_path: Path) -> Path:
+    if not args.compact_artifact_root or not str(source_path):
+        return source_path
+    compact = Path(args.compact_artifact_root) / scene / "reports" / source_path.name
+    return compact if compact.is_file() else source_path
+
+
 def _audit_summary(args: argparse.Namespace, scene: str, manifest_path: Path) -> dict[str, Any]:
     scene_root = _artifact_scene_root(args, scene, manifest_path)
     if args.compact_artifact_root:
@@ -113,15 +120,16 @@ def main() -> int:
     for manifest_path in manifests:
         manifest = _read_json(manifest_path)
         outputs = manifest.get("outputs", {}) or {}
-        results_path = Path(str(outputs.get("results_path", "")))
         scene = manifest.get("scene", manifest_path.parent.parent.name)
+        results_path = _compact_copy_path(args, str(scene), Path(str(outputs.get("results_path", ""))))
+        report_path = _compact_copy_path(args, str(scene), Path(str(outputs.get("report_path", ""))))
         row = {
             "scene": scene,
             "status": manifest.get("status", ""),
             "protocol_audit_passed": bool((manifest.get("protocol_audit", {}) or {}).get("passed", False)),
             "protocol_audit": manifest.get("protocol_audit", {}) or {},
             "results_path": str(results_path),
-            "report_path": str(outputs.get("report_path", "")),
+            "report_path": str(report_path),
             "metrics": _metrics(results_path, str(args.method_name)),
             "audit_summary": _audit_summary(args, str(scene), manifest_path),
             "errors": manifest.get("errors", []),
