@@ -251,7 +251,7 @@ def _texture_cmd(
         str(args.target_footprint_tail_risk_min_cvar20_view_gain),
         "--write_noop_on_reject",
         "--noop_fallback_source",
-        "target_evidence",
+        str(args.noop_fallback_source),
         "--force",
     ]
     if bool(args.no_policy_val_ssim_alpha_refinement):
@@ -266,6 +266,22 @@ def _texture_cmd(
                 str(args.bin_uncertainty_guard_min_bin_samples),
                 "--bin_uncertainty_guard_min_positive_view_fraction",
                 str(args.bin_uncertainty_guard_min_positive_view_fraction),
+            ]
+        )
+    if bool(args.enable_policy_val_effective_margin_gate):
+        cmd.extend(
+            [
+                "--enable_policy_val_effective_margin_gate",
+                "--min_policy_val_effective_relative_gain",
+                str(args.min_policy_val_effective_relative_gain),
+                "--min_policy_val_effective_ssim_gain",
+                str(args.min_policy_val_effective_ssim_gain),
+                "--min_policy_val_effective_l1_gain",
+                str(args.min_policy_val_effective_l1_gain),
+                "--min_policy_val_effective_ssim_cvar20_gain",
+                str(args.min_policy_val_effective_ssim_cvar20_gain),
+                "--min_policy_val_effective_l1_cvar20_gain",
+                str(args.min_policy_val_effective_l1_cvar20_gain),
             ]
         )
     if bool(args.no_policy_val_bin_uncertainty_shrink):
@@ -434,6 +450,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_policy_val_l1_mean_gain", type=float, default=0.0)
     parser.add_argument("--min_policy_val_l1_positive_view_fraction", type=float, default=0.55)
     parser.add_argument("--min_policy_val_l1_min_view_gain", type=float, default=-1.0e-6)
+    parser.add_argument(
+        "--enable_policy_val_effective_margin_gate",
+        action="store_true",
+        help=(
+            "Require train policy-val wins to exceed explicit effect-size margins before target apply. "
+            "This avoids accepting residual textures whose SSIM/L1 gains are near numerical noise."
+        ),
+    )
+    parser.add_argument("--min_policy_val_effective_relative_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_effective_ssim_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_effective_l1_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_effective_ssim_cvar20_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_effective_l1_cvar20_gain", type=float, default=-1.0)
     parser.add_argument("--face_gain_guard_min_positive_view_fraction", type=float, default=0.5)
     parser.add_argument("--no_policy_val_bin_uncertainty_guard", action="store_true")
     parser.add_argument("--bin_uncertainty_guard_min_bin_samples", type=int, default=16)
@@ -457,6 +486,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target_footprint_tail_risk_min_positive_view_fraction", type=float, default=0.75)
     parser.add_argument("--target_footprint_tail_risk_min_min_view_gain", type=float, default=-1.0e-8)
     parser.add_argument("--target_footprint_tail_risk_min_cvar20_view_gain", type=float, default=0.0)
+    parser.add_argument(
+        "--noop_fallback_source",
+        choices=("source_model", "target_evidence"),
+        default="target_evidence",
+        help=(
+            "Where rejected vNext candidates materialize the no-op parent. target_evidence keeps the same "
+            "resolution/evaluation canvas as the residual adapter; source_model is available only when the "
+            "source parent renders and target GT are known to share the same frame contract."
+        ),
+    )
     args = parser.parse_args()
     if bool(args.enable_policy_val_structure_aware_shrink) and bool(args.no_policy_val_bin_uncertainty_shrink):
         parser.error("--enable_policy_val_structure_aware_shrink requires bin uncertainty shrink to stay enabled")

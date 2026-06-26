@@ -8,6 +8,9 @@ Latest vNext qualitative addendum:
 
 - `docs/car_model/6-26-vNext-CounterQualitativePanel-RunLog.md`
 - `docs/car_model/vnext_artifacts/counter_qualitative_panel_20260626_125352/counter_cleanbest_base_vnext_panel.png`
+- `docs/car_model/6-26-vNext-FrameContract-and-EffectiveMarginGate-Log.md`
+- `docs/car_model/vnext_artifacts/accepted_nonzero_qual_panels_20260626/garden_same_resolution_diagnostic/garden_target_parent_vs_vnext_same_resolution.png`
+- `docs/car_model/vnext_artifacts/garden_effective_margin_gate_20260626/reports/garden_ours_26000_vnext_effective_margin_gate_test_results.json`
 
 Read in this order:
 
@@ -22,45 +25,49 @@ Read in this order:
 9. `docs/car_model/6-26-vNext-Full9FixedPolicy-CleanupRun-Log.md`
 10. `docs/car_model/vnext_artifacts/full9_structure_shrink_cleanup_20260626_1200/summary/vnext_manifest_summary_enhanced.md`
 11. `docs/car_model/vnext_artifacts/full9_structure_shrink_cleanup_20260626_1200/vnext_full9_cleanup_promotion_manifest.md`
-12. `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.md`
-13. `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.json`
-14. `docs/car_model/6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md`
-15. `docs/car_model/vnext_artifacts/full9_gap_after_stump_preflight_20260626/vnext_manifest_runner_summary.md`
-16. `docs/car_model/vnext_artifacts/stump_structure_shrink_rebuild_tau002_20260626_080257/stump_vnext_certified_residual_texture_report.md`
-17. `docs/car_model/6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md`
-18. `docs/car_model/vnext_artifacts/full9_gap_after_treehill_preflight_20260626/vnext_manifest_runner_summary.md`
-19. `docs/car_model/vnext_artifacts/treehill_structure_shrink_rebuild_tau002_20260626_0832/treehill_vnext_certified_residual_texture_report.md`
-20. `docs/car_model/6-26-vNext-FlowersInputRebuild-Ready7-and-SameEvidenceFallback-Log.md`
-21. `docs/car_model/vnext_artifacts/flowers_structure_shrink_rebuild_tau002_20260626_0935/flowers_vnext_certified_residual_texture_report.md`
-22. `docs/car_model/vnext_artifacts/flowers_structure_shrink_rebuild_tau002_20260626_0935/preflight/vnext_manifest_runner_summary.md`
-23. `docs/car_model/6-26-vNext-KitchenInputRebuild-Ready8-and-AcceptedMilestone-Log.md`
-24. `docs/car_model/vnext_artifacts/kitchen_structure_shrink_rebuild_tau002_20260626_1023/kitchen_vnext_certified_residual_texture_report.md`
-25. `docs/car_model/vnext_artifacts/kitchen_structure_shrink_rebuild_tau002_20260626_1023/preflight/vnext_manifest_runner_summary.md`
-26. `docs/car_model/6-26-vNext-BicycleInputRebuild-Ready9-and-Full9InputClosure-Log.md`
-27. `docs/car_model/vnext_artifacts/bicycle_structure_shrink_rebuild_tau002_20260626_1055/reports/bicycle_vnext_certified_residual_texture_report.md`
-28. `docs/car_model/vnext_artifacts/bicycle_structure_shrink_rebuild_tau002_20260626_1055/preflight/vnext_manifest_runner_summary.md`
-29. `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.md`
-30. `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.json`
-31. `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.md`
-32. `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.json`
-33. `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_scene_config_20260626.json`
-34. `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_scene_config_20260626.json`
-35. `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_multiscene_20260626_0718/strict_structure_aware_shrink_multiscene_summary.md`
-36. `docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md`
-37. `docs/car_model/6-26-SPCarNet-vNext-SoftShrink-Garden-Milestone-Log.md`
-38. `docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md`
-39. `docs/car_model/vnext_artifacts/README.md`
-40. `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md`
-41. `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md`
-42. `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md`
-43. `docs/car_model/6-25-v113b-OOT-Tail-Safe-Gate-Log.md`
-44. `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md`
-45. `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md`
-46. `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md`
-47. `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md`
-48. `docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md`
-49. `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md`
-50. `docs/car_model/README.md`
+12. `docs/car_model/6-26-vNext-FrameContract-and-EffectiveMarginGate-Log.md`
+13. `docs/car_model/vnext_artifacts/accepted_nonzero_qual_panels_20260626/cleanbest_qualitative_batch_summary.md`
+14. `docs/car_model/vnext_artifacts/accepted_nonzero_qual_panels_20260626/garden_same_resolution_diagnostic/garden_target_parent_vs_vnext_same_resolution_summary.md`
+15. `docs/car_model/vnext_artifacts/garden_effective_margin_gate_20260626/reports/garden_vnext_certified_residual_texture_report.md`
+16. `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.md`
+17. `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.json`
+18. `docs/car_model/6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md`
+19. `docs/car_model/vnext_artifacts/full9_gap_after_stump_preflight_20260626/vnext_manifest_runner_summary.md`
+20. `docs/car_model/vnext_artifacts/stump_structure_shrink_rebuild_tau002_20260626_080257/stump_vnext_certified_residual_texture_report.md`
+21. `docs/car_model/6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md`
+22. `docs/car_model/vnext_artifacts/full9_gap_after_treehill_preflight_20260626/vnext_manifest_runner_summary.md`
+23. `docs/car_model/vnext_artifacts/treehill_structure_shrink_rebuild_tau002_20260626_0832/treehill_vnext_certified_residual_texture_report.md`
+24. `docs/car_model/6-26-vNext-FlowersInputRebuild-Ready7-and-SameEvidenceFallback-Log.md`
+25. `docs/car_model/vnext_artifacts/flowers_structure_shrink_rebuild_tau002_20260626_0935/flowers_vnext_certified_residual_texture_report.md`
+26. `docs/car_model/vnext_artifacts/flowers_structure_shrink_rebuild_tau002_20260626_0935/preflight/vnext_manifest_runner_summary.md`
+27. `docs/car_model/6-26-vNext-KitchenInputRebuild-Ready8-and-AcceptedMilestone-Log.md`
+28. `docs/car_model/vnext_artifacts/kitchen_structure_shrink_rebuild_tau002_20260626_1023/kitchen_vnext_certified_residual_texture_report.md`
+29. `docs/car_model/vnext_artifacts/kitchen_structure_shrink_rebuild_tau002_20260626_1023/preflight/vnext_manifest_runner_summary.md`
+30. `docs/car_model/6-26-vNext-BicycleInputRebuild-Ready9-and-Full9InputClosure-Log.md`
+31. `docs/car_model/vnext_artifacts/bicycle_structure_shrink_rebuild_tau002_20260626_1055/reports/bicycle_vnext_certified_residual_texture_report.md`
+32. `docs/car_model/vnext_artifacts/bicycle_structure_shrink_rebuild_tau002_20260626_1055/preflight/vnext_manifest_runner_summary.md`
+33. `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.md`
+34. `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_preflight_20260626.json`
+35. `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.md`
+36. `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_preflight_20260626.json`
+37. `docs/car_model/vnext_artifacts/vnext_structure_shrink_ready4_scene_config_20260626.json`
+38. `docs/car_model/vnext_artifacts/vnext_structure_shrink_full9_gap_scene_config_20260626.json`
+39. `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_multiscene_20260626_0718/strict_structure_aware_shrink_multiscene_summary.md`
+40. `docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md`
+41. `docs/car_model/6-26-SPCarNet-vNext-SoftShrink-Garden-Milestone-Log.md`
+42. `docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md`
+43. `docs/car_model/vnext_artifacts/README.md`
+44. `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md`
+45. `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md`
+46. `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md`
+47. `docs/car_model/6-25-v113b-OOT-Tail-Safe-Gate-Log.md`
+48. `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md`
+49. `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md`
+50. `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md`
+51. `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md`
+52. `docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md`
+53. `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md`
+54. `docs/car_model/README.md`
 
 Current short status:
 
@@ -74,6 +81,7 @@ Current short status:
 - `v111` end-to-end strict validation is still running and is not yet a completed result.
 - Latest addendum: v110 counter strict candidate failed with return code `-9` during field build after about `15695.6s`; no field artifact was written. This is recorded as a resource/memory execution blocker, not a promoted or rejected metric result.
 - `vNext_certified_residual_surface_texture` now has a strict fixed-policy full9 run. It is `9/9` completed, `0/9` missing or failed, `9/9` protocol-pass, `6/9` nonzero accepted, and `3/9` explicit fallback/no-op. Mean metrics are `25.067699 PSNR / 0.741260 SSIM / 0.306689 LPIPS`, which is below local clean MeshSplatting (`25.151682 / 0.749018 / 0.287621`) and v106 (`25.831280 / 0.760830 / 0.268435`). This is full9 protocol/evidence closure and an honest bottleneck diagnosis, not quality superiority.
+- Latest vNext safety update: strict qualitative panel tooling now rejects native-size frame-contract mismatches, and the garden effective-margin gate rejects a low-effect candidate to fallback/no-op with protocol pass. Same-resolution target-evidence parent vs vNext on garden is only `+0.000139 PSNR / +0.000003 SSIM / -0.00000791 LPIPS`, confirming that current visual gains are extremely small.
 - `run_vnext_certified_residual_texture_manifest.py` now supports heterogeneous per-scene paths. The original full9 preflight was `4 / 9` input-ready (`bonsai,counter,garden,room`) with five missing evidence/carrier chains.
 - Latest local rebuilds: `stump`, `treehill`, `flowers`, `kitchen`, and `bicycle` fit/target evidence plus policy-val pruned carriers were rebuilt under `/dev/shm`, moving local preflight to `9 / 9` input-ready with `0 / 9` missing inputs. `stump/treehill/flowers` strict runs completed with W&B offline and protocol pass, but the certificate rejected them to exact fallback/no-op: `stump` failed tail risk (`cvar20_view_relative_gain=-0.172454`, `min_view_relative_gain=-0.344907`), `treehill` failed lower-tail/SSIM/L1 gates (`cvar20_view_relative_gain=-0.053640`, `min_view_relative_gain=-0.077837`, `ssim_gain=-0.000009413`), and `flowers` failed lower-tail/SSIM/L1 gates (`cvar20_view_relative_gain=-0.224441`, `min_view_relative_gain=-0.278408`, `ssim_gain=-0.000082279`). The flowers same-evidence parent export matches fallback exactly at `19.519194 / 0.490780 / 0.424170`, confirming the rebuilt `images_2` evidence comparison is fair. `kitchen` is accepted nonzero under the same strict no-target-GT protocol (`alpha=0.125`, `changed_fraction=0.003549714`) with same-evidence delta `+0.000786 PSNR / +0.00000256 SSIM / -0.00002818 LPIPS`. `bicycle` closes the final input gap, is accepted nonzero (`alpha=0.015625`, `changed_fraction=0.000173916`), and gives same-evidence micro-delta `+0.00000954 PSNR / +0.000000179 SSIM / -0.000000030 LPIPS`; this is input/protocol closure, not full9 quality closure.
 - `spcarnet_v110_v111_v114_package` is the current mechanical strict-branch collector output; it is intentionally incomplete until the running long jobs finish.

@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
+import sys
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Tuple
 
@@ -43,6 +45,19 @@ def _load_rgb(path: Path) -> Image.Image:
         return image.convert("RGB")
 
 
+def _sha1(path: Path) -> str:
+    digest = hashlib.sha1()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _image_size(path: Path) -> Tuple[int, int]:
+    with Image.open(path) as image:
+        return image.size
+
+
 def _resize_for_tile(image: Image.Image, width: int) -> Image.Image:
     if image.width == width:
         return image.copy()
@@ -63,8 +78,7 @@ def _labelled_tile(image: Image.Image, label: str, width: int, label_height: int
 
 def _diff_image(lhs: Image.Image, rhs: Image.Image, scale: float) -> Image.Image:
     if lhs.size != rhs.size:
-        resampling = getattr(Image, "Resampling", Image).BILINEAR
-        rhs = rhs.resize(lhs.size, resampling)
+        raise ValueError(f"Cannot diff images with different native sizes: {lhs.size} vs {rhs.size}")
     diff = ImageChops.difference(lhs, rhs)
     if scale != 1.0:
         diff = diff.point(lambda value: max(0, min(255, int(round(value * scale)))))
@@ -89,7 +103,19 @@ def _select_frames(
     explicit_frames: Sequence[str] | None,
 ) -> Tuple[List[str], Dict[str, float]]:
     if explicit_frames:
-        return [name for name in explicit_frames if name in common_names], {}
+        missing = [name for name in explicit_frames if name not in common_names]
+        if missing:
+            raise RuntimeError(f"Requested frames are not common to all inputs: {missing}")
+        return list(explicit_frames), {}
+
+    if selection_mode == "candidate_worst_gt_l1" and not candidate_label:
+        raise ValueError("--candidate_label is required for candidate_worst_gt_l1 selection")
+    if selection_mode == "largest_candidate_reference_delta" and (
+        not candidate_label or not reference_label
+    ):
+        raise ValueError(
+            "--candidate_label and --reference_label are required for largest_candidate_reference_delta"
+        )
 
     ranked: List[Tuple[float, str]] = []
     scores: Dict[str, float] = {}
@@ -190,6 +216,10 @@ def build_panel(args: argparse.Namespace) -> Dict[str, object]:
     method_order = [label for label, _ in methods]
     if len(method_order) != len(set(method_order)):
         raise ValueError(f"Duplicate method labels: {method_order}")
+    if args.reference_label and args.reference_label not in method_order:
+        raise ValueError(f"--reference_label {args.reference_label!r} is not in methods {method_order}")
+    if args.candidate_label and args.candidate_label not in method_order:
+        raise ValueError(f"--candidate_label {args.candidate_label!r} is not in methods {method_order}")
 
     method_images = {label: _list_images(path) for label, path in methods}
     common_names = sorted(
@@ -222,6 +252,23 @@ def build_panel(args: argparse.Namespace) -> Dict[str, object]:
     if not selected:
         raise RuntimeError("No frames selected for the qualitative panel.")
 
+    selected_file_audit: Dict[str, Dict[str, Dict[str, object]]] = {}
+    for name in selected:
+        selected_file_audit[name] = {
+            "gt": {
+                "path": str(gt_images[name]),
+                "sha1": _sha1(gt_images[name]),
+                "size": list(_image_size(gt_images[name])),
+            }
+        }
+        for label in method_order:
+            path = method_images[label][name]
+            selected_file_audit[name][label] = {
+                "path": str(path),
+                "sha1": _sha1(path),
+                "size": list(_image_size(path)),
+            }
+
     rows = [
         _make_row(
             frame_name=name,
@@ -251,9 +298,11 @@ def build_panel(args: argparse.Namespace) -> Dict[str, object]:
     panel.save(panel_path)
 
     manifest: Dict[str, object] = {
+        "schema_version": 2,
         "panel_path": str(panel_path),
         "manifest_path": str(manifest_path),
         "summary_path": str(summary_path),
+        "argv": list(getattr(args, "command", None) or sys.argv),
         "gt_dir": str(gt_dir),
         "methods": {label: str(path) for label, path in methods},
         "method_order": method_order,
@@ -265,7 +314,10 @@ def build_panel(args: argparse.Namespace) -> Dict[str, object]:
         "common_frame_count": len(common_names),
         "selected_count": len(selected),
         "selected_frames": selected,
+        "selected_file_audit": selected_file_audit,
         "selection_scores": {name: scores.get(name) for name in selected if name in scores},
+        "alignment_policy": "filename_intersection_with_selected_file_hashes",
+        "strict_native_size_diff": True,
         "missing_counts": {
             label: {
                 "missing_from_method": len(set(gt_images) - set(images)),
@@ -274,6 +326,9 @@ def build_panel(args: argparse.Namespace) -> Dict[str, object]:
             for label, images in method_images.items()
         },
     }
+    provenance_json = getattr(args, "provenance_json", None)
+    if provenance_json:
+        manifest["provenance"] = json.loads(provenance_json)
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
 
     summary = [

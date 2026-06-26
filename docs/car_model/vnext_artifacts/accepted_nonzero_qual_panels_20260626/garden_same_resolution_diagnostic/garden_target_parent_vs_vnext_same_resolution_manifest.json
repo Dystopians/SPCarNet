@@ -1,0 +1,231 @@
+{
+  "alignment_policy": "filename_intersection_with_selected_file_hashes",
+  "argv": [
+    "scripts/car_model/build_vnext_qualitative_panels.py",
+    "--gt_dir",
+    "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/gt",
+    "--method",
+    "target_parent=/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/target_evidence_parent/renders",
+    "--method",
+    "vnext=/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/renders",
+    "--reference_label",
+    "target_parent",
+    "--candidate_label",
+    "vnext",
+    "--output_dir",
+    "docs/car_model/vnext_artifacts/accepted_nonzero_qual_panels_20260626/garden_same_resolution_diagnostic",
+    "--panel_name",
+    "garden_target_parent_vs_vnext_same_resolution",
+    "--num_views",
+    "6",
+    "--tile_width",
+    "300",
+    "--selection_mode",
+    "largest_candidate_reference_delta"
+  ],
+  "candidate_label": "vnext",
+  "common_frame_count": 24,
+  "diff_scale": 4.0,
+  "gt_dir": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/gt",
+  "manifest_path": "docs/car_model/vnext_artifacts/accepted_nonzero_qual_panels_20260626/garden_same_resolution_diagnostic/garden_target_parent_vs_vnext_same_resolution_manifest.json",
+  "method_order": [
+    "target_parent",
+    "vnext"
+  ],
+  "methods": {
+    "target_parent": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/target_evidence_parent/renders",
+    "vnext": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/renders"
+  },
+  "missing_counts": {
+    "target_parent": {
+      "extra_in_method": 0,
+      "missing_from_method": 0
+    },
+    "vnext": {
+      "extra_in_method": 0,
+      "missing_from_method": 0
+    }
+  },
+  "panel_path": "docs/car_model/vnext_artifacts/accepted_nonzero_qual_panels_20260626/garden_same_resolution_diagnostic/garden_target_parent_vs_vnext_same_resolution.png",
+  "reference_label": "target_parent",
+  "schema_version": 2,
+  "selected_count": 6,
+  "selected_file_audit": {
+    "00006.png": {
+      "gt": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/gt/00006.png",
+        "sha1": "8c373031c52e5109acc34f5d6d0728ed8b525408",
+        "size": [
+          1600,
+          1036
+        ]
+      },
+      "target_parent": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/target_evidence_parent/renders/00006.png",
+        "sha1": "2814995e6d38e59f5abbf5fd9d5e8f12c69fe96d",
+        "size": [
+          1600,
+          1036
+        ]
+      },
+      "vnext": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/renders/00006.png",
+        "sha1": "45af45b32934860e22f38ba25b685773a239f2af",
+        "size": [
+          1600,
+          1036
+        ]
+      }
+    },
+    "00008.png": {
+      "gt": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/gt/00008.png",
+        "sha1": "e12ad4ac43528b72a733007cbb89289e1f2f85a1",
+        "size": [
+          1600,
+          1036
+        ]
+      },
+      "target_parent": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/target_evidence_parent/renders/00008.png",
+        "sha1": "fcac4d8ed399074e76c05b6089c479d55a2750aa",
+        "size": [
+          1600,
+          1036
+        ]
+      },
+      "vnext": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/renders/00008.png",
+        "sha1": "5c942d2f873167548a631b6c634164b88864de35",
+        "size": [
+          1600,
+          1036
+        ]
+      }
+    },
+    "00012.png": {
+      "gt": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/gt/00012.png",
+        "sha1": "142351d3ee5bfa0ffb09ba92bdf53eadfeeaf801",
+        "size": [
+          1600,
+          1036
+        ]
+      },
+      "target_parent": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/target_evidence_parent/renders/00012.png",
+        "sha1": "1887146e79eac59d520b252111c070e689292320",
+        "size": [
+          1600,
+          1036
+        ]
+      },
+      "vnext": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/renders/00012.png",
+        "sha1": "394cfc423636e904c79d62f642d960daefcedffb",
+        "size": [
+          1600,
+          1036
+        ]
+      }
+    },
+    "00015.png": {
+      "gt": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/gt/00015.png",
+        "sha1": "369d768b2615083755c9be2c72e643dca80c647d",
+        "size": [
+          1600,
+          1036
+        ]
+      },
+      "target_parent": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/target_evidence_parent/renders/00015.png",
+        "sha1": "f914234fe1e5c0f2d75c21490787f3ecda1c7b80",
+        "size": [
+          1600,
+          1036
+        ]
+      },
+      "vnext": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/renders/00015.png",
+        "sha1": "08ecbec33c7bf1179124e5c1a527d209d8c985cc",
+        "size": [
+          1600,
+          1036
+        ]
+      }
+    },
+    "00018.png": {
+      "gt": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/gt/00018.png",
+        "sha1": "8895b3159b08ffc1ff3e6cb62de808f30862eb4a",
+        "size": [
+          1600,
+          1036
+        ]
+      },
+      "target_parent": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/target_evidence_parent/renders/00018.png",
+        "sha1": "8a6a71658b386de9854c5908da5db8af6d52afe2",
+        "size": [
+          1600,
+          1036
+        ]
+      },
+      "vnext": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/renders/00018.png",
+        "sha1": "141af3a717e02bd14666471a3c88dca79b131eb1",
+        "size": [
+          1600,
+          1036
+        ]
+      }
+    },
+    "00019.png": {
+      "gt": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/gt/00019.png",
+        "sha1": "e626224ab5d56b0a59ddc2188d8147213d28050e",
+        "size": [
+          1600,
+          1036
+        ]
+      },
+      "target_parent": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/target_evidence_parent/renders/00019.png",
+        "sha1": "f9afec2730474328223e4bd2d8c68ee83ba91003",
+        "size": [
+          1600,
+          1036
+        ]
+      },
+      "vnext": {
+        "path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/test/ours_26000_vnext_structure_aware_shrink/renders/00019.png",
+        "sha1": "0ef46be3d55de5e41e7f1d5f20e4ec003e3d7286",
+        "size": [
+          1600,
+          1036
+        ]
+      }
+    }
+  },
+  "selected_frames": [
+    "00019.png",
+    "00008.png",
+    "00012.png",
+    "00018.png",
+    "00015.png",
+    "00006.png"
+  ],
+  "selection_mode": "largest_candidate_reference_delta",
+  "selection_scores": {
+    "00006.png": 2.7214714714714713e-06,
+    "00008.png": 2.8933870845635554e-06,
+    "00012.png": 2.8713061801297095e-06,
+    "00015.png": 2.763267469149822e-06,
+    "00018.png": 2.8381848234789407e-06,
+    "00019.png": 4.096007772478361e-06
+  },
+  "strict_native_size_diff": true,
+  "summary_path": "docs/car_model/vnext_artifacts/accepted_nonzero_qual_panels_20260626/garden_same_resolution_diagnostic/garden_target_parent_vs_vnext_same_resolution_summary.md",
+  "tile_width": 300
+}

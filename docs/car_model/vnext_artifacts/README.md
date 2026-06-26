@@ -32,6 +32,8 @@ kitchen_structure_shrink_rebuild_tau002_20260626_1023
 bicycle_structure_shrink_rebuild_tau002_20260626_1055
 full9_structure_shrink_cleanup_20260626_1200
 counter_qualitative_panel_20260626_125352
+accepted_nonzero_qual_panels_20260626
+garden_effective_margin_gate_20260626
 vnext_structure_shrink_ready4_scene_config_20260626.json
 vnext_structure_shrink_full9_gap_scene_config_20260626.json
 vnext_structure_shrink_ready4_preflight_20260626.md
@@ -56,7 +58,7 @@ room strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, 
 1. **vNext 安全证书和 no-op fallback 机制有效，并且同一套 frozen face-softshrink policy 已经在 counter/bonsai 上产生真实非零 accepted residual surface texture，在 room 上安全回退且 `changed_fraction=0`**。
 2. **新一轮 structure-aware shrink policy 在严格 no-target-GT apply 下让 counter/bonsai/room/garden 四场景全部 accepted，其中 room 从旧策略 fallback 变为真实非零 residual output，garden 则相对旧 face-softshrink 也三指标小幅提升**。
 
-四场景 ready4 平均仍只有 `+0.00076151 PSNR / -0.00000302 SSIM / -0.00002038 LPIPS`。后续 full9 fixed-policy cleanup run 已完成 `9 / 9` 场景，`6 / 9` accepted nonzero、`3 / 9` fallback/no-op，full9 均值为 `25.067699 PSNR / 0.741260 SSIM / 0.306689 LPIPS`。这低于本地 clean MeshSplatting baseline（`25.151682 / 0.749018 / 0.287621`）和 v106（`25.831280 / 0.760830 / 0.268435`），因此它是 full9 协议/证据闭环和瓶颈诊断，不是质量超越证据。完整解释见 `../6-26-vNext-Full9FixedPolicy-CleanupRun-Log.md`、`../6-26-vNext-StructureAwareShrink-Strict-Multiscene-Log.md`、`../6-26-vNext-ManifestRunner-and-Full9Gap-Log.md`、`../6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md`、`../6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md`、`../6-26-vNext-FlowersInputRebuild-Ready7-and-SameEvidenceFallback-Log.md`、`../6-26-vNext-KitchenInputRebuild-Ready8-and-AcceptedMilestone-Log.md`、`../6-26-vNext-BicycleInputRebuild-Ready9-and-Full9InputClosure-Log.md`。
+四场景 ready4 平均仍只有 `+0.00076151 PSNR / -0.00000302 SSIM / -0.00002038 LPIPS`。后续 full9 fixed-policy cleanup run 已完成 `9 / 9` 场景，`6 / 9` accepted nonzero、`3 / 9` fallback/no-op，full9 均值为 `25.067699 PSNR / 0.741260 SSIM / 0.306689 LPIPS`。这低于本地 clean MeshSplatting baseline（`25.151682 / 0.749018 / 0.287621`）和 v106（`25.831280 / 0.760830 / 0.268435`），因此它是 full9 协议/证据闭环和瓶颈诊断，不是质量超越证据。最新 frame-contract audit 进一步发现 garden clean/base 与 vNext target-evidence renders 存在原生尺寸不一致，旧的静默 resize 面板不可作为公平论文图；同分辨率 target-evidence parent vs vNext 只产生 `+0.000139 PSNR / +0.000003 SSIM / -0.00000791 LPIPS` 的微小收益。最新 effective-margin gate 验证已能把 garden 低效候选拒绝为 fallback/no-op。完整解释见 `../6-26-vNext-FrameContract-and-EffectiveMarginGate-Log.md`、`../6-26-vNext-Full9FixedPolicy-CleanupRun-Log.md`、`../6-26-vNext-StructureAwareShrink-Strict-Multiscene-Log.md`、`../6-26-vNext-ManifestRunner-and-Full9Gap-Log.md`、`../6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md`、`../6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md`、`../6-26-vNext-FlowersInputRebuild-Ready7-and-SameEvidenceFallback-Log.md`、`../6-26-vNext-KitchenInputRebuild-Ready8-and-AcceptedMilestone-Log.md`、`../6-26-vNext-BicycleInputRebuild-Ready9-and-Full9InputClosure-Log.md`。
 
 ---
 
@@ -104,6 +106,9 @@ room strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, 
 | `full9_structure_shrink_cleanup_20260626_1200/summary/vnext_manifest_summary_enhanced.md` | full9 fixed-policy cleanup run 聚合表 | 9/9 completed, 9/9 protocol pass, 6/9 accepted nonzero, 3/9 fallback/no-op；mean `25.067699 / 0.741260 / 0.306689`，低于 clean/v106 |
 | `full9_structure_shrink_cleanup_20260626_1200/vnext_full9_cleanup_promotion_manifest.md` | full9 cleanup artifact promotion manifest | 记录 205 个轻量文件已复制、0 skipped、每场景 reports/model_audits/logs/selector 均在 repo 内可复盘 |
 | `counter_qualitative_panel_20260626_125352/counter_cleanbest_base_vnext_panel.png` | counter no-cleanup rerun qualitative panel | clean-best `ours_26000` / compact base / vNext / error maps；证明可视化链路闭合，也暴露 vNext-base 视觉差异很小 |
+| `accepted_nonzero_qual_panels_20260626/cleanbest_qualitative_batch_summary.md` | clean-best/base/vNext qualitative batch with strict native-size checking | garden is marked `FRAME_CONTRACT_MISMATCH`, preventing misleading silent resize comparison |
+| `accepted_nonzero_qual_panels_20260626/garden_same_resolution_diagnostic/garden_target_parent_vs_vnext_same_resolution.png` | same-resolution target-evidence parent vs vNext diagnostic panel with hash/frame-size manifest | valid garden diagnostic; shows vNext changes are visually and numerically tiny |
+| `garden_effective_margin_gate_20260626/` | garden run with `--enable_policy_val_effective_margin_gate`, reports/logs/adapter audit | validates that low-effect and negative-tail policy-val candidates are rejected to fallback/no-op under strict no-target-GT apply |
 
 ---
 

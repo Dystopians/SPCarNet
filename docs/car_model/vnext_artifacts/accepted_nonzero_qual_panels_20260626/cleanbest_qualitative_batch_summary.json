@@ -1,0 +1,111 @@
+{
+  "argv": [
+    "scripts/car_model/build_vnext_cleanbest_batch_panels.py",
+    "--run_root",
+    "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403",
+    "--output_root",
+    "docs/car_model/vnext_artifacts/accepted_nonzero_qual_panels_20260626",
+    "--scenes",
+    "garden",
+    "--num_views",
+    "6",
+    "--tile_width",
+    "300"
+  ],
+  "clean_method": "",
+  "clean_selection_policy": "composite_psnr_ssim_lpips",
+  "output_root": "docs/car_model/vnext_artifacts/accepted_nonzero_qual_panels_20260626",
+  "rows": [
+    {
+      "base_metrics": {
+        "LPIPS": 0.2013215273618698,
+        "PSNR": 25.027536392211914,
+        "SSIM": 0.7800306677818298
+      },
+      "clean": {
+        "method": "ours_26000",
+        "metrics": {
+          "LPIPS": 0.20131449401378632,
+          "PSNR": 25.029211044311523,
+          "SSIM": 0.7800350785255432
+        },
+        "render_dir": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/test/ours_26000/renders",
+        "score": 36.60362273454666,
+        "selection": {
+          "candidate_count": 2,
+          "candidate_scores": {
+            "ours_26000": {
+              "metrics": {
+                "LPIPS": 0.20131449401378632,
+                "PSNR": 25.029211044311523,
+                "SSIM": 0.7800350785255432
+              },
+              "render_dir": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/test/ours_26000/renders",
+              "score": 36.60362273454666
+            },
+            "ours_30000": {
+              "metrics": {
+                "LPIPS": 0.21625535190105438,
+                "PSNR": 24.711999893188477,
+                "SSIM": 0.7617905735969543
+              },
+              "render_dir": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/test/ours_30000/renders",
+              "score": 35.622704327106476
+            }
+          },
+          "explicit_clean_method": "",
+          "policy": "composite_psnr_ssim_lpips",
+          "results_path": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/results.json"
+        }
+      },
+      "error": "Cannot diff images with different native sizes: (1600, 1036) vs (1297, 840)",
+      "panel_manifest": null,
+      "scene": "garden",
+      "source_paths": {
+        "adapter_audit_path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/model/surface_residual_region_texture_adapter_audit.json",
+        "base_results_path": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/garden/ratio_0200/compact_model/test_results.json",
+        "clean_results_path": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/results.json",
+        "clean_selection": {
+          "candidate_count": 2,
+          "candidate_scores": {
+            "ours_26000": {
+              "metrics": {
+                "LPIPS": 0.20131449401378632,
+                "PSNR": 25.029211044311523,
+                "SSIM": 0.7800350785255432
+              },
+              "render_dir": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/test/ours_26000/renders",
+              "score": 36.60362273454666
+            },
+            "ours_30000": {
+              "metrics": {
+                "LPIPS": 0.21625535190105438,
+                "PSNR": 24.711999893188477,
+                "SSIM": 0.7617905735969543
+              },
+              "render_dir": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/test/ours_30000/renders",
+              "score": 35.622704327106476
+            }
+          },
+          "explicit_clean_method": "",
+          "policy": "composite_psnr_ssim_lpips",
+          "results_path": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/results.json"
+        },
+        "scene": "garden",
+        "vnext_manifest_path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/reports/garden_vnext_certified_residual_texture_manifest.json",
+        "vnext_results_path": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403/garden/reports/garden_ours_26000_vnext_structure_aware_shrink_test_results.json"
+      },
+      "status": "FRAME_CONTRACT_MISMATCH",
+      "vnext_metrics": {
+        "LPIPS": 0.24801529943943024,
+        "PSNR": 24.74114227294922,
+        "SSIM": 0.7540521621704102
+      }
+    }
+  ],
+  "run_root": "/dev/shm/peilincai_spcarnet_vnext_garden_qual_20260626_131403",
+  "scenes": [
+    "garden"
+  ],
+  "schema_version": 2
+}

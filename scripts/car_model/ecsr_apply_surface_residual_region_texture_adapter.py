@@ -6012,6 +6012,42 @@ def policy_val_risk_reasons(row: dict[str, Any], args: argparse.Namespace) -> li
                 f"image_l1_cvar20_view_gain {l1_cvar20:.9f} < "
                 f"min_policy_val_l1_cvar20_view_gain {min_l1_cvar20:.9f}"
             )
+    if bool(getattr(args, "enable_policy_val_effective_margin_gate", False)):
+        effective_relative = float(row.get("relative_gain", 0.0))
+        min_effective_relative = float(args.min_policy_val_effective_relative_gain)
+        if min_effective_relative > -1.0 and effective_relative < min_effective_relative:
+            reasons.append(
+                f"effective_relative_gain {effective_relative:.9f} < "
+                f"min_policy_val_effective_relative_gain {min_effective_relative:.9f}"
+            )
+        effective_ssim = float(row.get("ssim_gain", 0.0))
+        min_effective_ssim = float(args.min_policy_val_effective_ssim_gain)
+        if min_effective_ssim > -1.0 and effective_ssim < min_effective_ssim:
+            reasons.append(
+                f"effective_ssim_gain {effective_ssim:.9f} < "
+                f"min_policy_val_effective_ssim_gain {min_effective_ssim:.9f}"
+            )
+        effective_l1 = float(row.get("image_l1_gain", 0.0))
+        min_effective_l1 = float(args.min_policy_val_effective_l1_gain)
+        if min_effective_l1 > -1.0 and effective_l1 < min_effective_l1:
+            reasons.append(
+                f"effective_image_l1_gain {effective_l1:.9f} < "
+                f"min_policy_val_effective_l1_gain {min_effective_l1:.9f}"
+            )
+        effective_ssim_cvar20 = float(row.get("ssim_cvar20_view_gain", 0.0))
+        min_effective_ssim_cvar20 = float(args.min_policy_val_effective_ssim_cvar20_gain)
+        if min_effective_ssim_cvar20 > -1.0 and effective_ssim_cvar20 < min_effective_ssim_cvar20:
+            reasons.append(
+                f"effective_ssim_cvar20_view_gain {effective_ssim_cvar20:.9f} < "
+                f"min_policy_val_effective_ssim_cvar20_gain {min_effective_ssim_cvar20:.9f}"
+            )
+        effective_l1_cvar20 = float(row.get("image_l1_cvar20_view_gain", 0.0))
+        min_effective_l1_cvar20 = float(args.min_policy_val_effective_l1_cvar20_gain)
+        if min_effective_l1_cvar20 > -1.0 and effective_l1_cvar20 < min_effective_l1_cvar20:
+            reasons.append(
+                f"effective_image_l1_cvar20_view_gain {effective_l1_cvar20:.9f} < "
+                f"min_policy_val_effective_l1_cvar20_gain {min_effective_l1_cvar20:.9f}"
+            )
     return reasons
 
 
@@ -6926,6 +6962,20 @@ def main() -> int:
     parser.add_argument("--min_policy_val_l1_positive_view_fraction", type=float, default=0.0)
     parser.add_argument("--min_policy_val_l1_min_view_gain", type=float, default=-1.0)
     parser.add_argument("--min_policy_val_l1_cvar20_view_gain", type=float, default=-1.0)
+    parser.add_argument(
+        "--enable_policy_val_effective_margin_gate",
+        action="store_true",
+        help=(
+            "Require selected train policy-val improvements to exceed explicit effect-size margins, not only "
+            "non-negative/noisy gains. This is intended to reject tiny policy-val wins that are unlikely to "
+            "survive target/test generalization."
+        ),
+    )
+    parser.add_argument("--min_policy_val_effective_relative_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_effective_ssim_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_effective_l1_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_effective_ssim_cvar20_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_effective_l1_cvar20_gain", type=float, default=-1.0)
     parser.add_argument(
         "--min_target_changed_fraction",
         type=float,
@@ -9469,6 +9519,20 @@ def main() -> int:
             "min_policy_val_l1_positive_view_fraction": float(args.min_policy_val_l1_positive_view_fraction),
             "min_policy_val_l1_min_view_gain": float(args.min_policy_val_l1_min_view_gain),
             "min_policy_val_l1_cvar20_view_gain": float(args.min_policy_val_l1_cvar20_view_gain),
+            "enable_policy_val_effective_margin_gate": bool(
+                args.enable_policy_val_effective_margin_gate
+            ),
+            "min_policy_val_effective_relative_gain": float(
+                args.min_policy_val_effective_relative_gain
+            ),
+            "min_policy_val_effective_ssim_gain": float(args.min_policy_val_effective_ssim_gain),
+            "min_policy_val_effective_l1_gain": float(args.min_policy_val_effective_l1_gain),
+            "min_policy_val_effective_ssim_cvar20_gain": float(
+                args.min_policy_val_effective_ssim_cvar20_gain
+            ),
+            "min_policy_val_effective_l1_cvar20_gain": float(
+                args.min_policy_val_effective_l1_cvar20_gain
+            ),
             "enable_prior_bin_gain_hybrid_l1_proxy_gate": bool(
                 args.enable_prior_bin_gain_hybrid_l1_proxy_gate
             ),
