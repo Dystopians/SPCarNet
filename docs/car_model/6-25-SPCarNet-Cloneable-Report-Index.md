@@ -10,6 +10,8 @@ This index is the entry point for a fresh clone of `https://github.com/Dystopian
 |---|---|
 | report package manifest | `docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md` |
 | latest 2026-06-26 live status addendum | `docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md` |
+| vNext first implementation milestone | `docs/car_model/6-26-SPCarNet-vNext-Implementation-Log.md` |
+| vNext feasibility and execution plan | `docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md` |
 | current complete technical report | `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md` |
 | long Chinese mentor/PPT report | `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md` |
 | v110 strict-split technical report draft | `docs/car_model/6-25-SPCarNet-v110-StrictSplit-Technical-Report-Draft.md` |

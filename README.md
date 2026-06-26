@@ -8,12 +8,16 @@ Start here for mentor/PPT analysis from a fresh clone:
 
 - [root report entry point](SPCARNET_REPORT_INDEX.md)
 - [latest 2026-06-26 status addendum](docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md)
+- [vNext implementation log](docs/car_model/6-26-SPCarNet-vNext-Implementation-Log.md)
+- [vNext feasibility and execution plan](docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md)
 - [clone-facing report package manifest](docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md)
 - [current mentor/PPT technical report](docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md)
 - [long Chinese mentor technical report](docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md)
 - [current cloneable report index](docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md)
 
 Short status: `v106 POD-MoE base-preserve` is the current verified quality line and improves over the local clean MeshSplatting baseline on the assembled selected full9 table. `v113b/v113c` are strict-gate safety repairs; they improve safety and partially repair garden v110b, but do not surpass v106. `v114_oof_refit_pod_moe` is the active candidate-side long experiment and is not yet a completed result. Latest live addendum: v110 counter failed during field build with return code `-9`, likely due to memory/shared-storage pressure, so the strict branch still needs a lower-memory field-builder rerun.
+
+vNext status: the certified residual surface texture direction is accepted as a realistic research route, not as a guaranteed result. The first protocol/interface milestone now includes a scene runner, full9 wrapper, no-test-GT certificate smoke test, report assembler, and W&B runner logging; real metrics still require a resource-safe pilot.
 
 ## Current v106 POD-MoE Status (2026-06-25)
 

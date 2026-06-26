@@ -27,15 +27,17 @@ The strict-fairness branch is not closed. `v110/v110b` exposed train/even -> tra
 |---:|---|---|
 | 1 | root entry point | `SPCARNET_REPORT_INDEX.md` |
 | 2 | latest 2026-06-26 live status addendum | `docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md` |
-| 3 | cloneable report index | `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md` |
-| 4 | current mentor/PPT technical report | `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md` |
-| 5 | long Chinese mentor report for slide preparation | `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md` |
-| 6 | v106 quality-line table | `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md` |
-| 7 | v113b strict-gate safety summary | `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md` |
-| 8 | v113c/v114 continuation summary | `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md` |
-| 9 | detailed v113c/v114 log | `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md` |
-| 10 | strict branch mechanical collector output | `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md` |
-| 11 | car-model docs catalog | `docs/car_model/README.md` |
+| 3 | vNext first implementation milestone | `docs/car_model/6-26-SPCarNet-vNext-Implementation-Log.md` |
+| 4 | vNext feasibility and execution plan | `docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md` |
+| 5 | cloneable report index | `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md` |
+| 6 | current mentor/PPT technical report | `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md` |
+| 7 | long Chinese mentor report for slide preparation | `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md` |
+| 8 | v106 quality-line table | `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md` |
+| 9 | v113b strict-gate safety summary | `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md` |
+| 10 | v113c/v114 continuation summary | `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md` |
+| 11 | detailed v113c/v114 log | `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md` |
+| 12 | strict branch mechanical collector output | `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md` |
+| 13 | car-model docs catalog | `docs/car_model/README.md` |
 
 ## Quantitative Artifacts
 
@@ -76,6 +78,11 @@ Each PNG has a sibling JSON manifest with source render paths and crop metadata.
 
 | component | file | status |
 |---|---|---|
+| vNext scene runner | `scripts/car_model/run_vnext_certified_residual_texture_scene.py` | implemented; dry-run verified; real metric pilot pending resources |
+| vNext full9 wrapper | `scripts/car_model/run_vnext_certified_residual_texture_full9.py` | implemented; two-scene dry-run verified; real full9 pending resources |
+| vNext protocol helpers | `scripts/car_model/ecsr_vnext_protocol.py` | implemented; records command manifest and no-test-GT audit |
+| vNext no-test-GT certificate smoke | `scripts/car_model/smoke_test_vnext_no_test_gt_certificate_schema.py` | implemented and passing |
+| vNext report assembler | `scripts/car_model/assemble_vnext_certified_residual_texture_report.py` | implemented and dry-run verified |
 | train/test delta-bank split | `scripts/car_model/run_v102_preprojected_delta_scene.py` | implemented |
 | field-builder view subsets and v114 OOF reliability | `scripts/car_model/build_v105_evidence_gated_mixture_field.py` | implemented and smoke-tested |
 | render-realized parent gate with lower-tail/OOT/frame fallback | `scripts/car_model/meshsplatopt_v109_render_realized_parent_gate.py` | implemented and smoke-tested |

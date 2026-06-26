@@ -10,6 +10,8 @@ Important scope rule:
 
 Current key docs:
 
+- [6-26-SPCarNet-vNext-Implementation-Log.md](6-26-SPCarNet-vNext-Implementation-Log.md) — first vNext implementation milestone; records the certified residual surface texture route, new scene/full9 runners, protocol audit, W&B runner logging, smoke/dry-run verification, resource blocker, and next real pilot command
+- [6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md](6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md) — feasibility review for `docs/6-26-SPCarNet-vNext-ServerCodexPrompt.md`; concludes the direction is reasonable but must be staged through pilot evidence before full9 or paper claims
 - [6-26-SPCarNet-Current-Status-Upload-Report.md](6-26-SPCarNet-Current-Status-Upload-Report.md) — latest clone-facing status addendum for mentor/PPT preparation; records the current v106 claim, report-upload status, v110 counter `-9` field-build failure, live long-job state, resource pressure, and the exact remaining blocker
 - [6-25-SPCarNet-Report-Package-Manifest.md](6-25-SPCarNet-Report-Package-Manifest.md) — clone-facing manifest for mentor/PPT use; points to the root entry point, current technical report, quantitative tables, qualitative contact sheets, implemented scripts, running long jobs, and honest claim boundary
 - [6-25-SPCarNet-Cloneable-Report-Index.md](6-25-SPCarNet-Cloneable-Report-Index.md) — current cloneable index for mentor/PPT analysis; points to the latest technical report, quantitative tables, qualitative contact sheets, strict-split diagnostics, implemented scripts, and large local runtime roots that are intentionally not committed
