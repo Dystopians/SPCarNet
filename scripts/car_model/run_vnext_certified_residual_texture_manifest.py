@@ -5,6 +5,7 @@ import argparse
 import concurrent.futures
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -84,6 +85,97 @@ def _existing_complete(output_root: Path, scene: str) -> bool:
         return _read_json(path).get("status") == "COMPLETE"
     except Exception:
         return False
+
+
+def _copy_file(src: Path, dst: Path) -> bool:
+    if not src.is_file():
+        return False
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
+    return True
+
+
+def _copy_dir_files(src_dir: Path, dst_dir: Path) -> int:
+    if not src_dir.is_dir():
+        return 0
+    copied = 0
+    for src in sorted(path for path in src_dir.rglob("*") if path.is_file()):
+        rel = src.relative_to(src_dir)
+        if _copy_file(src, dst_dir / rel):
+            copied += 1
+    return copied
+
+
+def _compact_scene_artifacts(args: argparse.Namespace, scene: str) -> dict[str, Any]:
+    scene_root = Path(args.output_root) / scene
+    compact_root = Path(args.compact_artifact_root) / scene
+    copied: dict[str, Any] = {
+        "scene": scene,
+        "scene_root": str(scene_root),
+        "compact_scene_root": str(compact_root),
+        "copied_file_count": 0,
+        "copied_groups": {},
+    }
+
+    for name in ("reports", "logs"):
+        count = _copy_dir_files(scene_root / name, compact_root / name)
+        copied["copied_file_count"] += count
+        copied["copied_groups"][name] = count
+
+    model_audits = [
+        "surface_residual_region_texture_adapter_audit.json",
+        "surface_residual_region_texture_adapter_audit.md",
+        "topology_audit.json",
+        "topology_audit.md",
+        "trainval_gate_results.json",
+        "trainval_gate_per_view.json",
+    ]
+    model_count = 0
+    for name in model_audits:
+        if _copy_file(scene_root / "model" / name, compact_root / "model_audits" / name):
+            model_count += 1
+    copied["copied_file_count"] += model_count
+    copied["copied_groups"]["model_audits"] = model_count
+
+    selector_count = _copy_dir_files(scene_root / "model" / "selector", compact_root / "selector")
+    copied["copied_file_count"] += selector_count
+    copied["copied_groups"]["selector"] = selector_count
+
+    target_count = 0
+    if _copy_file(
+        scene_root / "target_evidence_no_gt" / "target_evidence_no_gt_audit.json",
+        compact_root / "model_audits" / "target_evidence_no_gt_audit.json",
+    ):
+        target_count += 1
+    copied["copied_file_count"] += target_count
+    copied["copied_groups"]["target_no_gt_audit"] = target_count
+
+    manifest_log = Path(args.output_root) / "_manifest_logs" / f"{scene}_vnext_scene.log"
+    manifest_count = 0
+    if _copy_file(manifest_log, compact_root / "manifest_logs" / manifest_log.name):
+        manifest_count += 1
+    copied["copied_file_count"] += manifest_count
+    copied["copied_groups"]["manifest_logs"] = manifest_count
+    return copied
+
+
+def _cleanup_scene_outputs(args: argparse.Namespace, scene: str) -> dict[str, Any]:
+    scene_root = Path(args.output_root) / scene
+    protected = {"reports", "logs"}
+    removed: list[str] = []
+    skipped: list[str] = []
+    if not scene_root.is_dir():
+        return {"scene": scene, "scene_root": str(scene_root), "removed": removed, "skipped": skipped}
+    for child in sorted(scene_root.iterdir()):
+        if child.name in protected:
+            skipped.append(str(child))
+            continue
+        removed.append(str(child))
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child)
+        else:
+            child.unlink(missing_ok=True)
+    return {"scene": scene, "scene_root": str(scene_root), "removed": removed, "skipped": skipped}
 
 
 def _scene_cmd(
@@ -182,6 +274,13 @@ def _run_scene(
         handle.write("$ " + " ".join(str(token) for token in cmd) + "\n\n")
         handle.flush()
         proc = subprocess.run(cmd, cwd=str(ROOT), env=env, stdout=handle, stderr=subprocess.STDOUT, text=True)
+    compact_artifacts = None
+    cleanup = None
+    scene_succeeded = proc.returncode == 0
+    if scene_succeeded and args.compact_artifact_root and not bool(args.dry_run):
+        compact_artifacts = _compact_scene_artifacts(args, scene)
+    if scene_succeeded and bool(args.cleanup_scene_outputs) and not bool(args.dry_run):
+        cleanup = _cleanup_scene_outputs(args, scene)
     return {
         "scene": scene,
         "status": "COMPLETE" if proc.returncode == 0 else "FAILED",
@@ -191,6 +290,8 @@ def _run_scene(
         "cmd": cmd,
         "cmd_string": " ".join(str(token) for token in cmd),
         "preflight": preflight,
+        "compact_artifacts": compact_artifacts,
+        "cleanup": cleanup,
     }
 
 
@@ -299,6 +400,20 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
     parser.add_argument("--wandb_project", default=os.environ.get("WANDB_PROJECT", "spcarnet_meshprior"))
     parser.add_argument("--wandb_group", default="vnext_certified_residual_texture_manifest")
     parser.add_argument("--wandb_name_prefix", default="vnext-manifest-")
+    parser.add_argument(
+        "--compact_artifact_root",
+        type=Path,
+        default=None,
+        help="Optional root where each completed scene copies compact reports, audits, logs, and summaries.",
+    )
+    parser.add_argument(
+        "--cleanup_scene_outputs",
+        action="store_true",
+        help=(
+            "After optional compact artifact copy, delete bulky per-scene outputs under output_root/scene "
+            "while preserving output_root/scene/reports and output_root/scene/logs for final assembly."
+        ),
+    )
     parser.add_argument("--summary_json", type=Path, default=None)
     parser.add_argument("--summary_md", type=Path, default=None)
     return parser.parse_known_args()
@@ -308,6 +423,8 @@ def main() -> int:
     args, unknown = parse_args()
     if int(args.max_parallel) < 1:
         raise SystemExit("--max_parallel must be >= 1")
+    if bool(args.cleanup_scene_outputs) and int(args.max_parallel) != 1:
+        raise SystemExit("--cleanup_scene_outputs requires --max_parallel 1")
     rows_config = _scene_rows(_read_json(args.scene_config_json))
     Path(args.output_root).mkdir(parents=True, exist_ok=True)
     preflight = [_preflight_row(row) for row in rows_config]
