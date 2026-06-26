@@ -298,6 +298,49 @@ Qualitative panel:
 docs/car_model/vnext_artifacts/garden_face_softshrink_20260626_040558/garden_face_softshrink_qualitative_panel.png
 ```
 
+### Counter Strict No-Target-GT Apply Milestone
+
+Artifact root:
+
+```text
+docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/
+```
+
+This run repeated the frozen face-softshrink policy on `counter` with the strict no-target-GT apply path enabled:
+
+```text
+strip_target_evidence_no_gt -> apply_certified_residual_texture -> populate_eval_gt_from_target_evidence -> evaluate_vnext_target
+```
+
+Key protocol fields:
+
+- status: `COMPLETE`
+- protocol audit passed: `True`
+- selection uses test GT: `False`
+- target GT visible to apply: `False`
+- target GT visible to eval: `True`
+- target forbidden keys stripped: `True`
+- target apply leak: `False`
+
+Result:
+
+- accepted: `True`
+- effective policy: `accepted_atlas`
+- selected alpha: `0.25`
+- target changed pixels: `571207`
+- target changed fraction: `0.01177355`
+- policy-val relative gain: `0.04431575`
+- policy-val SSIM gain: `0.00010365`
+- test PSNR / SSIM / LPIPS: `26.752003 / 0.862004 / 0.251912`
+
+Delta versus the Phase-F compact parent:
+
+```text
++0.002131 PSNR / -0.000047 SSIM / -0.000085 LPIPS
+```
+
+This is a stronger fairness/protocol proof than the initial garden artifacts because the adapter sees stripped target evidence. It is still not a paper-level quality result: SSIM is slightly worse than the Phase-F compact parent, and no full9 strict table exists yet.
+
 ## Current Resource Blocker
 
 Full real experiments should still not be launched from the repo/output tree:

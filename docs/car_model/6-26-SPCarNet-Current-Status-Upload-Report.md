@@ -15,6 +15,7 @@ Start from:
 
 ```text
 SPCARNET_REPORT_INDEX.md
+docs/car_model/6-26-SPCarNet-Mentor-PPT-Status-And-vNext-Strict-Report.zh.md
 docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md
 docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md
 docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md
@@ -45,6 +46,7 @@ The honest paper status is not final-complete. `v110/v110b` exposed strict train
 - Completed the v106 selected full9 table and stored both Markdown/JSON/CSV summaries and qualitative contact-sheet assets in the repo.
 - Completed v110/v110b flowers/garden diagnostics showing that a gate can beat clean MeshSplatting while still being worse than v106 parent.
 - Completed v113b/v113c safety repairs on flowers/garden; useful as risk control, not as a new quality headline.
+- Implemented vNext strict no-target-GT apply protocol and completed a counter strict face-softshrink pilot with lightweight artifacts committed under `docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/`.
 
 ## Latest Live Experiment State
 
@@ -80,6 +82,15 @@ swap: 9 GiB used / 0 free
 /data: 100% used, about 420 MiB free
 ```
 
+## Latest vNext Artifact State
+
+| run | repo artifact | state |
+|---|---|---|
+| garden face-softshrink | `docs/car_model/vnext_artifacts/garden_face_softshrink_20260626_040558/` | COMPLETE; protocol audit passed; `accepted=true`; `alpha=0.0625`; `changed_fraction=0.002080`; tiny three-metric gain versus no-op/fallback parent |
+| counter strict face-softshrink | `docs/car_model/vnext_artifacts/counter_strict_face_softshrink_20260626_045300/` | COMPLETE; protocol audit passed; `target_gt_visible_to_apply=false`; `accepted=true`; `alpha=0.25`; `changed_fraction=0.01177355`; test `26.752003 / 0.862004 / 0.251912`; delta vs Phase-F compact parent `+0.00213 / -0.000047 / -0.000085` |
+
+The counter result is a strict no-target-GT apply protocol milestone. It improves PSNR and LPIPS slightly against the Phase-F compact parent, while SSIM slightly regresses, so it should not be described as a three-metric improvement or paper closure.
+
 ## Current Claim Boundary
 
 What is safe to say:
@@ -94,6 +105,7 @@ What is not safe to say:
 - Do not claim v113b/v113c are quality breakthroughs; they are safety repairs that preserve or partially recover v106.
 - Do not claim v114 improves quality until field build, render, eval, and collector summaries complete.
 - Do not conflate v106 residual-field gains with earlier Phase-J triangle-reduction claims; v106 itself is not the triangle-pruning result.
+- Do not claim vNext is superior to v106 or clean MeshSplatting; current vNext garden/counter pilots are proof-of-life and protocol evidence with tiny or mixed deltas.
 
 ## Best PPT Story
 
@@ -105,7 +117,8 @@ SPCarNet treats the mesh surface as an address space for train-evidence residual
 v106 adds a base-preserving mixture of detail and boundary residual experts.
 The result beats the local clean MeshSplatting baseline on selected full9.
 Strict split experiments then reveal where naive candidate gates fail.
-The current next step is candidate-side improvement plus lower-memory long-run execution.
+vNext then starts converting the Phase-J render-time teacher into strict no-target-GT residual surface texture.
+The current next step is turning that proof-of-life into full9, visible, three-metric gains.
 ```
 
 For slides, use the v106 full9 table and the committed contact sheets under:
@@ -124,7 +137,7 @@ The immediate blocker is not another hyperparameter scan. The field builder need
 - run garbage collection before `torch.save`;
 - relaunch counter after `/data` and `/dev/shm` pressure is relieved or after the builder is patched.
 
-After that, the required closure sequence is:
+For the v106 strict branch, the required closure sequence is:
 
 1. rerun v110 counter field/render/eval;
 2. finish or rerun v110 bonsai, v111 flowers, and v114 garden;
@@ -132,8 +145,15 @@ After that, the required closure sequence is:
 4. compare clean baseline, v106 parent, improved candidate, and fallback/gate ablations;
 5. update README/report tables only after completed metrics exist.
 
+For vNext, the required closure sequence is:
+
+1. run strict no-target-GT apply on more viable scenes such as `bonsai` and `room`;
+2. add a fixed frozen policy table with parent, vNext, no-certificate ablation, and exact fallback;
+3. generate qualitative panels where residual changes are visually interpretable;
+4. only promote vNext if it beats the chosen parent and clean baseline under the same frozen protocol.
+
 ## Final Status
 
 `NOT COMPLETE`.
 
-The report package is uploaded and useful for PPT preparation, but the research loop is not fully closed because strict branch long jobs are unfinished or failed, and the newest candidate-side method has not yet delivered completed metrics.
+The report package is uploaded and useful for PPT preparation, but the research loop is not fully closed because strict branch long jobs are unfinished or failed, and vNext has only delivered single-scene proof-of-life metrics rather than full9, v106/clean-baseline superiority.

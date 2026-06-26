@@ -7,12 +7,13 @@
 
 ## Summary
 
-当前 artifacts 有三个真实 `garden` 单场景 run：
+当前 artifacts 有三个真实 `garden` 单场景 run 和一个 `counter` strict run：
 
 ```text
 garden_20260626_004134
 garden_hardbin_softshrink_20260626_035631
 garden_face_softshrink_20260626_040558
+counter_strict_face_softshrink_20260626_045300
 ```
 
 结论必须诚实表述：
@@ -21,9 +22,10 @@ garden_face_softshrink_20260626_040558
 initial full candidate: protocol passed, accepted=false, fallback_noop
 hard-bin soft-shrink: protocol passed, accepted=false, fallback_noop
 face-softshrink: protocol passed, accepted=true, selected_alpha=0.0625, changed_fraction=0.002080
+counter strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, accepted=true, selected_alpha=0.25, changed_fraction=0.01177355
 ```
 
-因此，这个目录证明的是：**vNext 安全证书和 no-op fallback 机制有效，并且 face-softshrink 已经产生第一个真实非零 accepted residual surface texture**。但该非零收益极小，还不是 full9、v106 或 clean MeshSplatting 超越证据。
+因此，这个目录证明的是：**vNext 安全证书和 no-op fallback 机制有效，并且 face-softshrink 已经在 garden/counter 上产生真实非零 accepted residual surface texture**。但这些非零收益仍很小或指标混合，还不是 full9、v106 或 clean MeshSplatting 超越证据。
 
 ---
 
@@ -41,6 +43,9 @@ face-softshrink: protocol passed, accepted=true, selected_alpha=0.0625, changed_
 | `garden_face_softshrink_20260626_040558/` | face-softshrink accepted run：manifest、report、audit、metrics、per-view、logs、summary JSON、qualitative panel | 当前 vNext 最重要的非零里程碑证据 |
 | `garden_face_softshrink_20260626_040558/garden_face_softshrink_summary.json` | 三轮结果、delta、per-view win counts、guard 诊断 | PPT/脚本可读摘要 |
 | `garden_face_softshrink_20260626_040558/garden_face_softshrink_qualitative_panel.png` | GT / parent / vNext / error maps / vNext-parent amplified diff | 展示非零改动存在，但视觉收益非常弱 |
+| `counter_strict_face_softshrink_20260626_045300/` | counter strict face-softshrink accepted run：manifest、report、audit、metrics、per-view、summary JSON、logs | 当前最重要的 strict no-target-GT apply vNext 证据 |
+| `counter_strict_face_softshrink_20260626_045300/counter_strict_face_softshrink_summary.json` | parent/vNext metrics、delta、protocol audit、target apply 摘要 | PPT 表格首选数据源 |
+| `counter_strict_face_softshrink_20260626_045300/target_evidence_no_gt_audit.json` | target evidence stripped-key 审计 | 证明 adapter apply 阶段没有 target GT/residual keys |
 
 ---
 
@@ -129,6 +134,49 @@ Interpretation:
 
 ---
 
+## Counter Strict Face-SoftShrink Key Facts
+
+Artifact root:
+
+```text
+counter_strict_face_softshrink_20260626_045300
+```
+
+| 字段 | 值 |
+|---|---:|
+| scene | `counter` |
+| status | `COMPLETE` |
+| protocol audit passed | `True` |
+| selection uses test GT | `False` |
+| target GT visible to apply | `False` |
+| target GT visible to eval | `True` |
+| target forbidden keys stripped | `True` |
+| target apply leak | `False` |
+| accepted | `True` |
+| effective policy | `accepted_atlas` |
+| selected alpha | `0.25` |
+| target changed pixels | `571207` |
+| target changed fraction | `0.01177355` |
+| policy-val relative gain | `0.04431575` |
+| policy-val SSIM gain | `0.00010365` |
+
+Held-out counter test:
+
+| method | PSNR | SSIM | LPIPS |
+|---|---:|---:|---:|
+| Phase-F compact parent | `26.749872` | `0.862051` | `0.251998` |
+| vNext strict face-softshrink | `26.752003` | `0.862004` | `0.251912` |
+| delta, better direction | `+0.002131` | `-0.000047` | `-0.000085` |
+
+Interpretation:
+
+- This is the strongest current vNext protocol evidence because target evidence is stripped before adapter apply.
+- It is a nonzero accepted residual surface texture with about `1.18%` changed target pixels.
+- It improves PSNR and LPIPS slightly relative to the Phase-F compact parent, but SSIM slightly regresses.
+- It should be described as strict protocol proof-of-life, not as a three-metric or paper-final win.
+
+---
+
 ## Main Reject Reason
 
 The first full-candidate adapter rejected the selected nonzero candidate because risk gates failed:
@@ -162,6 +210,10 @@ This shows that hard bin allowlisting was still too brittle after soft shrink. T
 Use this wording:
 
 > The garden vNext pilot first validated the safety path through exact fallback/no-op rejection. The follow-up face-softshrink run then accepted a nonzero residual surface texture (`accepted=true`, `selected_alpha=0.0625`, `target_changed_fraction=0.002080`) and gave tiny held-out gains versus the no-op/fallback parent. This is a real nonzero milestone, not full9 or v106/clean-baseline superiority.
+
+For the strict counter run, use this wording:
+
+> The counter vNext strict pilot validated the no-target-GT apply path: `target_gt_visible_to_apply=false`, `accepted=true`, `selected_alpha=0.25`, `target_changed_fraction=0.01177355`. It gives a tiny PSNR/LPIPS improvement versus the Phase-F compact parent while SSIM slightly regresses, so it is a protocol milestone rather than a comprehensive quality win.
 
 Avoid this wording:
 
