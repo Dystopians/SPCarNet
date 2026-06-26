@@ -26,23 +26,28 @@ The strict-fairness branch is not closed. `v110/v110b` exposed train/even -> tra
 | order | purpose | file |
 |---:|---|---|
 | 1 | root entry point | `SPCARNET_REPORT_INDEX.md` |
-| 2 | latest 2026-06-26 live status addendum | `docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md` |
-| 3 | vNext first implementation milestone | `docs/car_model/6-26-SPCarNet-vNext-Implementation-Log.md` |
-| 4 | vNext feasibility and execution plan | `docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md` |
-| 5 | cloneable report index | `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md` |
-| 6 | current mentor/PPT technical report | `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md` |
-| 7 | long Chinese mentor report for slide preparation | `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md` |
-| 8 | v106 quality-line table | `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md` |
-| 9 | v113b strict-gate safety summary | `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md` |
-| 10 | v113c/v114 continuation summary | `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md` |
-| 11 | detailed v113c/v114 log | `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md` |
-| 12 | strict branch mechanical collector output | `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md` |
-| 13 | car-model docs catalog | `docs/car_model/README.md` |
+| 2 | clone/PPT executive technical summary | `docs/car_model/6-26-SPCarNet-Clone-PPT-Technical-Summary.zh.md` |
+| 3 | latest 2026-06-26 live status addendum | `docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md` |
+| 4 | vNext structure-aware shrink milestone | `docs/car_model/6-26-vNext-StructureAwareShrink-Strict-Multiscene-Log.md` |
+| 5 | vNext artifact index | `docs/car_model/vnext_artifacts/README.md` |
+| 6 | vNext first implementation milestone | `docs/car_model/6-26-SPCarNet-vNext-Implementation-Log.md` |
+| 7 | vNext feasibility and execution plan | `docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md` |
+| 8 | cloneable report index | `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md` |
+| 9 | current mentor/PPT technical report | `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md` |
+| 10 | long Chinese mentor report for slide preparation | `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md` |
+| 11 | v106 quality-line table | `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md` |
+| 12 | vNext structure-aware shrink table | `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_multiscene_20260626_0718/strict_structure_aware_shrink_multiscene_summary.md` |
+| 13 | v113b strict-gate safety summary | `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md` |
+| 14 | v113c/v114 continuation summary | `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md` |
+| 15 | detailed v113c/v114 log | `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md` |
+| 16 | strict branch mechanical collector output | `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md` |
+| 17 | car-model docs catalog | `docs/car_model/README.md` |
 
 ## Quantitative Artifacts
 
 | artifact | path |
 |---|---|
+| clone/PPT executive technical summary | `docs/car_model/6-26-SPCarNet-Clone-PPT-Technical-Summary.zh.md` |
 | latest status addendum | `docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md` |
 | v106 assembled Markdown | `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_assembled.md` |
 | v106 assembled JSON | `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_assembled.json` |
@@ -55,6 +60,7 @@ The strict-fairness branch is not closed. `v110/v110b` exposed train/even -> tra
 | v113c/v114 summary JSON | `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.json` |
 | v110/v111/v114 strict branch package Markdown | `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md` |
 | v110/v111/v114 strict branch package JSON | `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.json` |
+| vNext structure-aware shrink aggregate Markdown | `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_multiscene_20260626_0718/strict_structure_aware_shrink_multiscene_summary.md` |
 
 ## Qualitative Artifacts
 

@@ -7,6 +7,7 @@
 Start here for mentor/PPT analysis from a fresh clone:
 
 - [root report entry point](SPCARNET_REPORT_INDEX.md)
+- [clone/PPT executive technical summary](docs/car_model/6-26-SPCarNet-Clone-PPT-Technical-Summary.zh.md)
 - [latest 2026-06-26 status addendum](docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md)
 - [vNext implementation log](docs/car_model/6-26-SPCarNet-vNext-Implementation-Log.md)
 - [vNext feasibility and execution plan](docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md)

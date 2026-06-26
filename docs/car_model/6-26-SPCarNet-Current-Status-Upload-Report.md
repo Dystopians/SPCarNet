@@ -15,6 +15,7 @@ Start from:
 
 ```text
 SPCARNET_REPORT_INDEX.md
+docs/car_model/6-26-SPCarNet-Clone-PPT-Technical-Summary.zh.md
 docs/car_model/6-26-SPCarNet-Mentor-PPT-Status-And-vNext-Strict-Report.zh.md
 docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md
 docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md
@@ -91,8 +92,12 @@ swap: 9 GiB used / 0 free
 | bonsai strict face-softshrink | `docs/car_model/vnext_artifacts/bonsai_strict_face_softshrink_20260626_052500/` | COMPLETE; protocol audit passed; `target_gt_visible_to_apply=false`; `accepted=true`; `alpha=0.25`; `changed_fraction=0.00151333`; test `28.865564 / 0.896002 / 0.259322`; delta vs Phase-F compact parent `+0.001225 / -0.000010 / -0.000018` |
 | room strict face-softshrink | `docs/car_model/vnext_artifacts/room_strict_face_softshrink_20260626_052500/` | COMPLETE; protocol audit passed; `target_gt_visible_to_apply=false`; `accepted=false`; fallback/no-op; `changed_fraction=0`; test `28.739004 / 0.884790 / 0.249916`; tiny delta vs Phase-F compact parent `-0.000097 / -0.000003 / -0.000007` is parent-level eval noise |
 | strict frozen-policy aggregate | `docs/car_model/vnext_artifacts/strict_frozen_policy_multiscene_20260626_052500/strict_frozen_policy_multiscene_summary.md` | 3/3 complete; 3/3 protocol pass; 3/3 target GT hidden from apply; 2/3 nonzero accepted; mean delta `+0.001086 / -0.000020 / -0.000037` |
+| structure-aware shrink counter | `docs/car_model/vnext_artifacts/counter_structure_shrink_tau002_20260626_0558/` | COMPLETE; protocol audit passed; `target_gt_visible_to_apply=false`; `accepted=true`; `alpha=0.125`; `changed_fraction=0.01234357`; delta vs Phase-F compact parent `+0.00129890 / -0.00000906 / -0.00004268` |
+| structure-aware shrink bonsai | `docs/car_model/vnext_artifacts/bonsai_structure_shrink_tau002_20260626_0718/` | COMPLETE; protocol audit passed; `target_gt_visible_to_apply=false`; `accepted=true`; `alpha=0.25`; `changed_fraction=0.00148974`; delta vs Phase-F compact parent `+0.00113869 / -0.00000954 / -0.00001693` |
+| structure-aware shrink room | `docs/car_model/vnext_artifacts/room_structure_shrink_tau002_20260626_0718/` | COMPLETE; protocol audit passed; `target_gt_visible_to_apply=false`; `accepted=true`; `alpha=0.0625`; `changed_fraction=0.00519912`; delta vs Phase-F compact parent `+0.00046921 / +0.00000334 / -0.00001399` |
+| structure-aware shrink aggregate | `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_multiscene_20260626_0718/strict_structure_aware_shrink_multiscene_summary.md` | 3/3 complete; 3/3 protocol pass; 3/3 target GT hidden from apply; 3/3 nonzero accepted; mean delta `+0.00096893 / -0.00000509 / -0.00002453`; converts room from old fallback/no-op to accepted nonzero |
 
-The strict frozen-policy result is a no-target-GT apply protocol milestone across three scenes. It improves mean PSNR and LPIPS slightly against the Phase-F compact parent mainly through the two nonzero accepted scenes, while the room row is fallback/no-op with parent-level eval noise. SSIM regresses on all three scenes, so it should not be described as a three-metric improvement or paper closure.
+The old strict frozen-policy face-softshrink result is a no-target-GT apply protocol milestone across three scenes, but it has 2/3 nonzero accepted and room fallback/no-op. The newer structure-aware shrink result is the preferred vNext milestone for PPT: it keeps strict no-target-GT apply, makes all three scenes accepted/nonzero, and converts room into a positive three-metric row versus its Phase-F compact parent. The effect size is still tiny and counter/bonsai still have extremely small SSIM regressions, so it should not be described as full9 closure or proof of superiority over v106/clean MeshSplatting.
 
 ## Current Claim Boundary
 
@@ -150,13 +155,14 @@ For the v106 strict branch, the required closure sequence is:
 
 For vNext, the required closure sequence is:
 
-1. implement an SSIM/structure-aware residual shrink or local-alpha mechanism that directly addresses the 0/3 SSIM regression;
-2. add a fixed frozen policy table with parent, vNext, no-certificate ablation, and exact fallback;
-3. generate qualitative panels where residual changes are visually interpretable;
-4. only promote vNext if it beats the chosen parent and clean baseline under the same frozen protocol.
+1. run full9 with the exact frozen structure-aware shrink policy;
+2. add a fixed comparison table with clean MeshSplatting, Phase-F parent, v104c, v106, Phase-J teacher, old face-softshrink, structure-aware shrink, no-certificate ablation, and exact fallback;
+3. generate changed-region qualitative panels where residual changes are visually interpretable;
+4. add budget accounting: triangle count, residual texture storage, parameter count, render overhead, fallback rate;
+5. only promote vNext if it beats the chosen parent and clean baseline under the same frozen protocol.
 
 ## Final Status
 
 `NOT COMPLETE`.
 
-The report package is uploaded and useful for PPT preparation, but the research loop is not fully closed because strict branch long jobs are unfinished or failed, and vNext has delivered strict three-scene proof-of-life metrics rather than full9, v106/clean-baseline superiority.
+The report package is uploaded and useful for PPT preparation, but the research loop is not fully closed because strict branch long jobs are unfinished or failed, and vNext has delivered strict three-scene structure-aware proof-of-life metrics rather than full9, v106/clean-baseline superiority.

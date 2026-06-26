@@ -24,7 +24,8 @@ Phase-J render-time teacher
 - **方法方向合理**：Phase-J 已证明 residual repair 有大收益，v106 证明 residual representation 可与 MeshSplatting parent 兼容。
 - **协议与编排层已跑通**：vNext scene/full9 runner、manifest、no-test-GT audit、dry-run、W&B offline dry-run、assembler dry-run 已完成。
 - **已有真实 pilot 从 garden 扩展到 strict 三场景 frozen-policy**：garden face-softshrink 是第一个非零 accepted proof-of-life；同一套 frozen face-softshrink policy 又在 `counter,bonsai,room` 上完成 strict no-target-GT apply 验证，3/3 protocol pass、3/3 `target_gt_visible_to_apply=false`、2/3 nonzero accepted、1/3 fallback/no-op 且 `changed_fraction=0`。
-- **不能宣称 vNext 已全面超越 MeshSplatting baseline**：strict 三场景相对 Phase-F compact parent 的均值是 `+0.001086` PSNR、`-0.000020` SSIM、`-0.000037` LPIPS。它们是真实非零里程碑和严格协议证据，但 PSNR/LPIPS 弱正信号主要来自 counter/bonsai，room 是 parent-level fallback 评估差异；SSIM 三场景全退，不是 full9 结果，也不是超过 v106 或 clean MeshSplatting 的证据。
+- **最新 structure-aware shrink 是当前首选 vNext 里程碑**：它新增 train-policy-val 局部 L1/gradient structure-risk shrink，在 `counter,bonsai,room` strict no-target-GT apply 下达到 3/3 protocol pass、3/3 `target_gt_visible_to_apply=false`、3/3 nonzero accepted，并把 `room` 从旧策略 fallback/no-op 变成 accepted nonzero。相对 Phase-F compact parent 均值为 `+0.00096893` PSNR、`-0.00000509` SSIM、`-0.00002453` LPIPS。
+- **不能宣称 vNext 已全面超越 MeshSplatting baseline**：最新 strict 三场景是真实非零里程碑和严格协议证据，但收益很小，counter/bonsai 仍有极小 SSIM 回退，不是 full9 结果，也不是超过 v106 或 clean MeshSplatting 的证据。
 - **当前 verified representation 质量线仍是 v106 POD-MoE base-preserve**；当前 verified broad RGB endpoint 仍是 Phase-J，但 Phase-J 是 render-time guarded ELA portfolio，不是 baked representation。
 
 PPT 推荐讲法：
@@ -45,6 +46,7 @@ PPT 推荐讲法：
 | vNext garden face-softshrink pilot | 单场景真实 run，协议审计通过，非零 accepted atlas，`0.208%` target pixels changed | 第一个可汇报的非零 vNext residual surface texture 里程碑；相对 no-op parent 有极小三指标正向变化 | 不能说已 full9 闭环；不能说已超过 v106 或 clean MeshSplatting；不能说视觉效果明显 |
 | vNext counter strict face-softshrink pilot | 单场景真实 run，strict no-target-GT apply 协议审计通过，非零 accepted atlas，`1.177%` target pixels changed | strict no-target-GT apply 的第一个非零证据；adapter apply 阶段看不到 target GT | 不能说已三指标全胜；SSIM 相对 Phase-F compact parent 微退 |
 | vNext strict frozen-policy multiscene | `counter,bonsai,room` 三场景真实 run；3/3 protocol pass；3/3 target GT hidden from apply；2/3 nonzero accepted；1/3 fallback/no-op with `changed_fraction=0` | 当前最强的 vNext 公平性/protocol package；证明 frozen policy 可跨场景执行 | 不能说质量闭环；均值只是 `+0.001086` PSNR / `-0.000020` SSIM / `-0.000037` LPIPS，room delta 是 parent-level 评估差异，SSIM 0/3 胜 |
+| vNext structure-aware shrink multiscene | `counter,bonsai,room` 三场景真实 run；3/3 protocol pass；3/3 target GT hidden from apply；3/3 nonzero accepted；room 从 old fallback/no-op 变成 accepted nonzero | 当前首选 vNext 严格里程碑；证明 policy-val structure-risk shrink 能缓解 room fallback 和部分 SSIM 风险 | 不能说 paper-final；均值只是 `+0.00096893` PSNR / `-0.00000509` SSIM / `-0.00002453` LPIPS，仍未 full9，仍未超过 v106/clean |
 
 ---
 

@@ -7,6 +7,7 @@
 本地 clone 后做 mentor/PPT 分析请从这里开始：
 
 - [根目录报告入口](SPCARNET_REPORT_INDEX.md)
+- [克隆/PPT 技术总览](docs/car_model/6-26-SPCarNet-Clone-PPT-Technical-Summary.zh.md)
 - [2026-06-26 最新状态附录](docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md)
 - [vNext 实现日志](docs/car_model/6-26-SPCarNet-vNext-Implementation-Log.md)
 - [vNext 可行性与执行计划](docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md)
