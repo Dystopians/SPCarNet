@@ -1,0 +1,12 @@
+{
+  "flowers_same_evidence_parent": {
+    "LPIPS": 0.424169659614563,
+    "PSNR": 19.519193649291992,
+    "SSIM": 0.49077969789505005
+  },
+  "ours_26000_vnext_structure_aware_shrink": {
+    "LPIPS": 0.424169659614563,
+    "PSNR": 19.519193649291992,
+    "SSIM": 0.49077969789505005
+  }
+}

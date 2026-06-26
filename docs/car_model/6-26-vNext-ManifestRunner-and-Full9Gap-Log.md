@@ -213,6 +213,31 @@ scripts/car_model/ecsr_prune_region_carriers_by_policy_val.py
 - `/dev/shm` 约 `26G` 可用，只适合分批构建；
 - GPU 2/3 较空，可用于低并发重建。
 
+## Follow-Up Rebuild Status
+
+After this original full9 gap audit, three missing input chains were rebuilt locally and committed as lightweight evidence packages:
+
+| scene | input state | strict result | artifact |
+|---|---|---|---|
+| stump | fit evidence + target evidence + policy-val carrier rebuilt | fallback/no-op; certificate rejected tail-risk candidate | `docs/car_model/6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md` |
+| treehill | fit evidence + target evidence + policy-val carrier rebuilt | fallback/no-op; certificate rejected lower-tail/SSIM/L1 candidate | `docs/car_model/6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md` |
+| flowers | fit evidence + target evidence + policy-val carrier rebuilt | fallback/no-op; certificate rejected lower-tail/SSIM/L1 candidate; same-evidence parent equals fallback | `docs/car_model/6-26-vNext-FlowersInputRebuild-Ready7-and-SameEvidenceFallback-Log.md` |
+
+The latest local preflight is now:
+
+```text
+ready_scene_count: 7 / 9
+missing_input_scene_count: 2 / 9
+missing scenes: bicycle,kitchen
+```
+
+The latest committed preflight evidence is stored with the flowers artifact:
+
+```text
+docs/car_model/vnext_artifacts/flowers_structure_shrink_rebuild_tau002_20260626_0935/preflight/vnext_manifest_runner_summary.md
+docs/car_model/vnext_artifacts/flowers_structure_shrink_rebuild_tau002_20260626_0935/preflight/vnext_manifest_runner_summary.json
+```
+
 ## Claim Boundary
 
 这次新增的是工程闭环能力和 full9 前置审计，不是 paper-final 性能结论。
@@ -221,20 +246,20 @@ scripts/car_model/ecsr_prune_region_carriers_by_policy_val.py
 
 ```text
 vNext 已经不再依赖单一模板 full9 wrapper；异构 evidence 的 manifest runner 已实现并通过 ready4 dry-run。
-当前 full9 缺口已机器可读定位为 5 个场景的 evidence/carrier 输入缺失，而不是 scene runner 或 strict no-target-GT 协议缺失。
+当前 full9 缺口已机器可读定位为 2 个场景的 evidence/carrier 输入缺失，而不是 scene runner 或 strict no-target-GT 协议缺失。
 ```
 
 不能说：
 
 ```text
 不能说 vNext full9 已完成。
-不能说五个 missing scenes 已被验证。
+不能说剩余两个 missing scenes 已被验证。
 不能说 vNext 已超过 v106/clean MeshSplatting。
 ```
 
 ## Next Required Work
 
-1. 分批重建 missing 5 scenes 的 normalized input tree。
+1. 分批重建 remaining missing 2 scenes 的 normalized input tree。
 2. 用 manifest runner 运行 full9 fixed policy。
 3. 生成 full9 aggregate table 和同表对比 clean/Phase-F/v104c/v106/Phase-J。
 4. 生成 changed-region qualitative panels。

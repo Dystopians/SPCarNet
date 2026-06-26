@@ -1,0 +1,619 @@
+{
+  "operator": "ecsr_build_teacher_surface_evidence_cache",
+  "test_usage": "none",
+  "base_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/flowers/train_visible_bary_base/flowers",
+  "teacher_render_dir": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders",
+  "parent_render_dir": null,
+  "parent_source": "npz:rgb_render",
+  "out_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/flowers/fit_evidence",
+  "processed_views": 46,
+  "skipped_views": 0,
+  "skipped": [],
+  "selection_mode": "better_masked_residual",
+  "mask_target": true,
+  "teacher_render_error_margin": 0.001,
+  "teacher_parent_delta_min": 0.01,
+  "fields_written": [
+    "teacher_residual_rgb",
+    "teacher_residual_l1",
+    "teacher_residual_rgb_raw",
+    "teacher_better_mask",
+    "teacher_gain_l1",
+    "teacher_parent_delta_l1"
+  ],
+  "mean_active_fraction": 0.305502601373649,
+  "mean_target_l1": 0.011413792958078177,
+  "mean_raw_parent_delta_l1": 0.020639652710246002,
+  "mean_positive_teacher_gain_l1": 0.010627273672624775,
+  "view_summaries": [
+    {
+      "view": "00000",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00000.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2805176707779886,
+      "mean_target_l1": 0.009710228070616722,
+      "mean_raw_parent_delta_l1": 0.01948642171919346,
+      "mean_positive_teacher_gain_l1": 0.009242570959031582
+    },
+    {
+      "view": "00002",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00002.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3008699003795066,
+      "mean_target_l1": 0.01158003881573677,
+      "mean_raw_parent_delta_l1": 0.02169993706047535,
+      "mean_positive_teacher_gain_l1": 0.01068018563091755
+    },
+    {
+      "view": "00004",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00004.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.27630929791271347,
+      "mean_target_l1": 0.009750798344612122,
+      "mean_raw_parent_delta_l1": 0.019212760031223297,
+      "mean_positive_teacher_gain_l1": 0.009376372210681438
+    },
+    {
+      "view": "00006",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00006.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3070718690702087,
+      "mean_target_l1": 0.011862384155392647,
+      "mean_raw_parent_delta_l1": 0.021264901384711266,
+      "mean_positive_teacher_gain_l1": 0.011108577251434326
+    },
+    {
+      "view": "00008",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00008.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.24418821157495257,
+      "mean_target_l1": 0.008827036246657372,
+      "mean_raw_parent_delta_l1": 0.016826657578349113,
+      "mean_positive_teacher_gain_l1": 0.008534731343388557
+    },
+    {
+      "view": "00010",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00010.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.30304376185958254,
+      "mean_target_l1": 0.010404987260699272,
+      "mean_raw_parent_delta_l1": 0.020875519141554832,
+      "mean_positive_teacher_gain_l1": 0.009782879613339901
+    },
+    {
+      "view": "00012",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00012.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2810003557874763,
+      "mean_target_l1": 0.009730272926390171,
+      "mean_raw_parent_delta_l1": 0.019591210409998894,
+      "mean_positive_teacher_gain_l1": 0.009292337112128735
+    },
+    {
+      "view": "00014",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00014.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2498974146110057,
+      "mean_target_l1": 0.009264348074793816,
+      "mean_raw_parent_delta_l1": 0.019359339028596878,
+      "mean_positive_teacher_gain_l1": 0.008548896759748459
+    },
+    {
+      "view": "00016",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00016.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2709748576850095,
+      "mean_target_l1": 0.01104944758117199,
+      "mean_raw_parent_delta_l1": 0.018631774932146072,
+      "mean_positive_teacher_gain_l1": 0.010276750661432743
+    },
+    {
+      "view": "00018",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00018.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.25675640417457307,
+      "mean_target_l1": 0.010583741590380669,
+      "mean_raw_parent_delta_l1": 0.018991397693753242,
+      "mean_positive_teacher_gain_l1": 0.009923134930431843
+    },
+    {
+      "view": "00020",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00020.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2992261622390892,
+      "mean_target_l1": 0.011913568712770939,
+      "mean_raw_parent_delta_l1": 0.020832743495702744,
+      "mean_positive_teacher_gain_l1": 0.011157321743667126
+    },
+    {
+      "view": "00022",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00022.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.28666745730550286,
+      "mean_target_l1": 0.010294456034898758,
+      "mean_raw_parent_delta_l1": 0.019228311255574226,
+      "mean_positive_teacher_gain_l1": 0.00979657843708992
+    },
+    {
+      "view": "00024",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00024.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2713288662239089,
+      "mean_target_l1": 0.010118694975972176,
+      "mean_raw_parent_delta_l1": 0.01899133250117302,
+      "mean_positive_teacher_gain_l1": 0.009515764191746712
+    },
+    {
+      "view": "00026",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00026.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.26398126185958254,
+      "mean_target_l1": 0.009002408012747765,
+      "mean_raw_parent_delta_l1": 0.01700580306351185,
+      "mean_positive_teacher_gain_l1": 0.008705259300768375
+    },
+    {
+      "view": "00028",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00028.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.27582957779886147,
+      "mean_target_l1": 0.00974691566079855,
+      "mean_raw_parent_delta_l1": 0.01940368302166462,
+      "mean_positive_teacher_gain_l1": 0.009239863604307175
+    },
+    {
+      "view": "00030",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00030.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2731487191650854,
+      "mean_target_l1": 0.010059703141450882,
+      "mean_raw_parent_delta_l1": 0.019112147390842438,
+      "mean_positive_teacher_gain_l1": 0.00923119205981493
+    },
+    {
+      "view": "00032",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00032.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2497248576850095,
+      "mean_target_l1": 0.008992587216198444,
+      "mean_raw_parent_delta_l1": 0.01661655306816101,
+      "mean_positive_teacher_gain_l1": 0.008531862869858742
+    },
+    {
+      "view": "00034",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00034.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.29972426470588237,
+      "mean_target_l1": 0.01149800792336464,
+      "mean_raw_parent_delta_l1": 0.022674009203910828,
+      "mean_positive_teacher_gain_l1": 0.010677063837647438
+    },
+    {
+      "view": "00036",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00036.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.30658384724857685,
+      "mean_target_l1": 0.010549807921051979,
+      "mean_raw_parent_delta_l1": 0.019786126911640167,
+      "mean_positive_teacher_gain_l1": 0.009850021451711655
+    },
+    {
+      "view": "00038",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00038.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3233272058823529,
+      "mean_target_l1": 0.011939910240471363,
+      "mean_raw_parent_delta_l1": 0.02152111567556858,
+      "mean_positive_teacher_gain_l1": 0.01122586615383625
+    },
+    {
+      "view": "00040",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00040.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.292258064516129,
+      "mean_target_l1": 0.010563144460320473,
+      "mean_raw_parent_delta_l1": 0.0203253086656332,
+      "mean_positive_teacher_gain_l1": 0.00985720008611679
+    },
+    {
+      "view": "00042",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00042.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2887618595825427,
+      "mean_target_l1": 0.010026490315794945,
+      "mean_raw_parent_delta_l1": 0.01943143643438816,
+      "mean_positive_teacher_gain_l1": 0.009563479572534561
+    },
+    {
+      "view": "00044",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00044.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2514160341555977,
+      "mean_target_l1": 0.008704251609742641,
+      "mean_raw_parent_delta_l1": 0.0165761299431324,
+      "mean_positive_teacher_gain_l1": 0.00836953241378069
+    },
+    {
+      "view": "00046",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00046.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.27851340132827324,
+      "mean_target_l1": 0.010780787095427513,
+      "mean_raw_parent_delta_l1": 0.018379855901002884,
+      "mean_positive_teacher_gain_l1": 0.010050776414573193
+    },
+    {
+      "view": "00048",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00048.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.24815761385199242,
+      "mean_target_l1": 0.009296497330069542,
+      "mean_raw_parent_delta_l1": 0.016347400844097137,
+      "mean_positive_teacher_gain_l1": 0.00875158328562975
+    },
+    {
+      "view": "00050",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00050.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3437837998102467,
+      "mean_target_l1": 0.012546565383672714,
+      "mean_raw_parent_delta_l1": 0.021925514563918114,
+      "mean_positive_teacher_gain_l1": 0.011623993515968323
+    },
+    {
+      "view": "00052",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00052.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3206386385199241,
+      "mean_target_l1": 0.01268667820841074,
+      "mean_raw_parent_delta_l1": 0.022381722927093506,
+      "mean_positive_teacher_gain_l1": 0.011761553585529327
+    },
+    {
+      "view": "00054",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00054.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3371021110056926,
+      "mean_target_l1": 0.01301830355077982,
+      "mean_raw_parent_delta_l1": 0.022680625319480896,
+      "mean_positive_teacher_gain_l1": 0.01214434765279293
+    },
+    {
+      "view": "00056",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00056.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2780449478178368,
+      "mean_target_l1": 0.010673086158931255,
+      "mean_raw_parent_delta_l1": 0.019230810925364494,
+      "mean_positive_teacher_gain_l1": 0.009978518821299076
+    },
+    {
+      "view": "00058",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00058.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3172485768500949,
+      "mean_target_l1": 0.013112268410623074,
+      "mean_raw_parent_delta_l1": 0.023838510736823082,
+      "mean_positive_teacher_gain_l1": 0.01198640838265419
+    },
+    {
+      "view": "00060",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00060.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2910406783681214,
+      "mean_target_l1": 0.011307066306471825,
+      "mean_raw_parent_delta_l1": 0.020580904558300972,
+      "mean_positive_teacher_gain_l1": 0.010635592974722385
+    },
+    {
+      "view": "00062",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00062.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.2985294117647059,
+      "mean_target_l1": 0.011599387042224407,
+      "mean_raw_parent_delta_l1": 0.020885147154331207,
+      "mean_positive_teacher_gain_l1": 0.010732514783740044
+    },
+    {
+      "view": "00064",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00064.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3560620256166983,
+      "mean_target_l1": 0.013897432014346123,
+      "mean_raw_parent_delta_l1": 0.024015039205551147,
+      "mean_positive_teacher_gain_l1": 0.01253520231693983
+    },
+    {
+      "view": "00066",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00066.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3405769686907021,
+      "mean_target_l1": 0.01192752830684185,
+      "mean_raw_parent_delta_l1": 0.022370360791683197,
+      "mean_positive_teacher_gain_l1": 0.010852562263607979
+    },
+    {
+      "view": "00068",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00068.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3390352229601518,
+      "mean_target_l1": 0.011871674098074436,
+      "mean_raw_parent_delta_l1": 0.020401690155267715,
+      "mean_positive_teacher_gain_l1": 0.010951710864901543
+    },
+    {
+      "view": "00070",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00070.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.36137156072106263,
+      "mean_target_l1": 0.013583597727119923,
+      "mean_raw_parent_delta_l1": 0.02396790124475956,
+      "mean_positive_teacher_gain_l1": 0.012497938238084316
+    },
+    {
+      "view": "00072",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00072.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.36504150853889944,
+      "mean_target_l1": 0.014026504009962082,
+      "mean_raw_parent_delta_l1": 0.023559849709272385,
+      "mean_positive_teacher_gain_l1": 0.012915662489831448
+    },
+    {
+      "view": "00074",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00074.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.34338353889943074,
+      "mean_target_l1": 0.012656738981604576,
+      "mean_raw_parent_delta_l1": 0.022234687581658363,
+      "mean_positive_teacher_gain_l1": 0.011712812818586826
+    },
+    {
+      "view": "00076",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00076.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3172064753320683,
+      "mean_target_l1": 0.011436459608376026,
+      "mean_raw_parent_delta_l1": 0.019974062219262123,
+      "mean_positive_teacher_gain_l1": 0.010761721059679985
+    },
+    {
+      "view": "00078",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00078.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3101879743833017,
+      "mean_target_l1": 0.011147450655698776,
+      "mean_raw_parent_delta_l1": 0.01957499235868454,
+      "mean_positive_teacher_gain_l1": 0.01047512423247099
+    },
+    {
+      "view": "00080",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00080.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3348837760910816,
+      "mean_target_l1": 0.011703524738550186,
+      "mean_raw_parent_delta_l1": 0.02064291015267372,
+      "mean_positive_teacher_gain_l1": 0.010890033096075058
+    },
+    {
+      "view": "00082",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00082.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3599217267552182,
+      "mean_target_l1": 0.014089250937104225,
+      "mean_raw_parent_delta_l1": 0.02366534247994423,
+      "mean_positive_teacher_gain_l1": 0.012850330211222172
+    },
+    {
+      "view": "00084",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00084.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3772699240986717,
+      "mean_target_l1": 0.014681752771139145,
+      "mean_raw_parent_delta_l1": 0.024829057976603508,
+      "mean_positive_teacher_gain_l1": 0.013384837657213211
+    },
+    {
+      "view": "00086",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00086.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3734220825426945,
+      "mean_target_l1": 0.014519045129418373,
+      "mean_raw_parent_delta_l1": 0.02432340569794178,
+      "mean_positive_teacher_gain_l1": 0.013239583931863308
+    },
+    {
+      "view": "00088",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00088.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.3940684297912713,
+      "mean_target_l1": 0.01585695892572403,
+      "mean_raw_parent_delta_l1": 0.02512715943157673,
+      "mean_positive_teacher_gain_l1": 0.014356650412082672
+    },
+    {
+      "view": "00090",
+      "teacher_image": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model/train/ours_26000_phasej_trainval_gate/renders/00090.png",
+      "parent_image": "npz:rgb_render",
+      "has_gt": true,
+      "active_fraction": 0.31502134724857683,
+      "mean_target_l1": 0.012442689388990402,
+      "mean_raw_parent_delta_l1": 0.02104245312511921,
+      "mean_positive_teacher_gain_l1": 0.01127768773585558
+    }
+  ],
+  "top_support_rebuild": {
+    "top_residual_supports_csv": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/flowers/fit_evidence/top_residual_supports.csv",
+    "parent_top_residual_supports_csv": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/flowers/fit_evidence/top_residual_supports_parent.csv",
+    "rows": 8192,
+    "nonzero_faces": 2095815,
+    "top_support_limit": 8192,
+    "top_preview": [
+      {
+        "face_id": 4,
+        "score": 3.984149681417852,
+        "pixel_count": 2522,
+        "view_hits": 46,
+        "mean_l1_error": 0.0749924075121354,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.05769755554804246,
+        "mean_residual_g": 0.055927347985645026,
+        "mean_residual_b": 0.04135292274530306
+      },
+      {
+        "face_id": 648782,
+        "score": 2.8033387303884734,
+        "pixel_count": 1309,
+        "view_hits": 9,
+        "mean_l1_error": 0.13018592502253032,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": -0.1187754329422032,
+        "mean_residual_g": -0.11908127571263324,
+        "mean_residual_b": -0.12264695542745685
+      },
+      {
+        "face_id": 442308,
+        "score": 2.641591207945814,
+        "pixel_count": 212,
+        "view_hits": 11,
+        "mean_l1_error": 0.1485592824108196,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": -0.13959531963996166,
+        "mean_residual_g": -0.13962745666503906,
+        "mean_residual_b": -0.13537126217248305
+      },
+      {
+        "face_id": 548928,
+        "score": 2.521021139961119,
+        "pixel_count": 98,
+        "view_hits": 8,
+        "mean_l1_error": 0.19397003796635842,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.20096899538624044,
+        "mean_residual_g": 0.19812463254344706,
+        "mean_residual_b": 0.18280558683434311
+      },
+      {
+        "face_id": 3179811,
+        "score": 2.408764091786434,
+        "pixel_count": 113,
+        "view_hits": 9,
+        "mean_l1_error": 0.16952865735619468,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": 0.1676453446919939,
+        "mean_residual_g": 0.16877658810235757,
+        "mean_residual_b": 0.17178587786919247
+      },
+      {
+        "face_id": 6234760,
+        "score": 2.297950853577608,
+        "pixel_count": 591,
+        "view_hits": 8,
+        "mean_l1_error": 0.12727304319843222,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": -0.11706359858440264,
+        "mean_residual_g": -0.11949104786726021,
+        "mean_residual_b": -0.13205521481896415
+      },
+      {
+        "face_id": 5606313,
+        "score": 2.287718483896535,
+        "pixel_count": 279,
+        "view_hits": 11,
+        "mean_l1_error": 0.12241327976240479,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": -0.10811470059083782,
+        "mean_residual_g": -0.11009265530493952,
+        "mean_residual_b": -0.1443852045202768
+      },
+      {
+        "face_id": 7281294,
+        "score": 2.2168183109790327,
+        "pixel_count": 697,
+        "view_hits": 8,
+        "mean_l1_error": 0.11969111263324404,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": -0.11071575389188879,
+        "mean_residual_g": -0.11242341379524133,
+        "mean_residual_b": -0.11709136087206891
+      },
+      {
+        "face_id": 7391932,
+        "score": 2.2011184122841523,
+        "pixel_count": 742,
+        "view_hits": 17,
+        "mean_l1_error": 0.08075543426760445,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": -0.0016716293729540472,
+        "mean_residual_g": -0.0004763230480595098,
+        "mean_residual_b": -0.0008801539953185542
+      },
+      {
+        "face_id": 2935181,
+        "score": 2.198535884212755,
+        "pixel_count": 76,
+        "view_hits": 8,
+        "mean_l1_error": 0.1789444371273643,
+        "mean_texture": 0.0,
+        "residual_consistency": 1.0,
+        "mean_residual_r": -0.17148007844623767,
+        "mean_residual_g": -0.1745760064376028,
+        "mean_residual_b": -0.17189286884508634
+      }
+    ]
+  }
+}
