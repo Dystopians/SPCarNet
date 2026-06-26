@@ -10,6 +10,7 @@ Important scope rule:
 
 Current key docs:
 
+- [6-25-SPCarNet-Report-Package-Manifest.md](6-25-SPCarNet-Report-Package-Manifest.md) — clone-facing manifest for mentor/PPT use; points to the root entry point, current technical report, quantitative tables, qualitative contact sheets, implemented scripts, running long jobs, and honest claim boundary
 - [6-25-SPCarNet-Cloneable-Report-Index.md](6-25-SPCarNet-Cloneable-Report-Index.md) — current cloneable index for mentor/PPT analysis; points to the latest technical report, quantitative tables, qualitative contact sheets, strict-split diagnostics, implemented scripts, and large local runtime roots that are intentionally not committed
 - [6-25-SPCarNet-PPT-Technical-Report-Current.md](6-25-SPCarNet-PPT-Technical-Report-Current.md) — current first-read technical report for mentor/PPT use; separates the v106 quality line from the v110/v110b/v111 strict-fairness diagnostics, summarizes the local clean MeshSplatting comparison, qualitative assets, implemented scripts, commands, and honest remaining weaknesses
 - [6-25-SPCarNet-v110-StrictSplit-Technical-Report-Draft.md](6-25-SPCarNet-v110-StrictSplit-Technical-Report-Draft.md) — strict-split technical report; records v106 as the quality line, v109/v110 as safety/fairness gates, and the current claim boundary
