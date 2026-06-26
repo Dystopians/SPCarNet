@@ -9,14 +9,15 @@ Read in this order:
 1. `docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md`
 2. `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md`
 3. `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md`
-4. `docs/car_model/6-25-v113b-OOT-Tail-Safe-Gate-Log.md`
-5. `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md`
-6. `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md`
-7. `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md`
-8. `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md`
-9. `docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md`
-10. `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md`
-11. `docs/car_model/README.md`
+4. `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md`
+5. `docs/car_model/6-25-v113b-OOT-Tail-Safe-Gate-Log.md`
+6. `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md`
+7. `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md`
+8. `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md`
+9. `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md`
+10. `docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md`
+11. `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md`
+12. `docs/car_model/README.md`
 
 Current short status:
 

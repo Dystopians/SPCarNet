@@ -28,12 +28,13 @@ The strict-fairness branch is not closed. `v110/v110b` exposed train/even -> tra
 | 1 | root entry point | `SPCARNET_REPORT_INDEX.md` |
 | 2 | cloneable report index | `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md` |
 | 3 | current mentor/PPT technical report | `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md` |
-| 4 | v106 quality-line table | `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md` |
-| 5 | v113b strict-gate safety summary | `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md` |
-| 6 | v113c/v114 continuation summary | `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md` |
-| 7 | detailed v113c/v114 log | `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md` |
-| 8 | strict branch mechanical collector output | `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md` |
-| 9 | car-model docs catalog | `docs/car_model/README.md` |
+| 4 | long Chinese mentor report for slide preparation | `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md` |
+| 5 | v106 quality-line table | `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md` |
+| 6 | v113b strict-gate safety summary | `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md` |
+| 7 | v113c/v114 continuation summary | `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md` |
+| 8 | detailed v113c/v114 log | `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md` |
+| 9 | strict branch mechanical collector output | `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md` |
+| 10 | car-model docs catalog | `docs/car_model/README.md` |
 
 ## Quantitative Artifacts
 
@@ -88,10 +89,10 @@ These large local jobs are intentionally not committed because their artifacts l
 
 | job | local root | status at report time |
 |---|---|---|
-| v110 counter strict candidate | `/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter` | field build running |
-| v110 bonsai strict candidate | `/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/bonsai` | field build running |
-| v111 flowers end-to-end strict | `/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers` | parent field build running |
-| v114 garden OOF-refit POD-MoE | `/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden` | field build running |
+| v110 counter strict candidate | `/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter` | latest log check around 100/105 train/even views; field artifact not yet produced |
+| v110 bonsai strict candidate | `/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/bonsai` | latest log check around 105/128 train/even views; field artifact not yet produced |
+| v111 flowers end-to-end strict | `/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers` | latest log check around 121/151 train/all views; field artifact not yet produced |
+| v114 garden OOF-refit POD-MoE | `/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden` | latest log check around 26/161 train/all views; field artifact not yet produced |
 
 ## PPT-Ready Takeaway
 

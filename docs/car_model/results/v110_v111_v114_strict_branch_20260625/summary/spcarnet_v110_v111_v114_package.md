@@ -1,6 +1,6 @@
 # SPCarNet v110/v111/v114 Strict Branch Package
 
-- created_at: `2026-06-26T06:35:14.478744+00:00`
+- created_at: `2026-06-26T06:49:42.993762+00:00`
 - complete_rows: `0 / 4`
 - all_complete: `False`
 - missing_count: `27`
@@ -41,3 +41,4 @@ Metric triplets are `PSNR / SSIM / LPIPS`. Deltas are method minus reference; ne
 - eval_results: `/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/reports/garden_ours_26000_v114_oof_refit_podmoe_garden_test_results.json` present=`False`
 - field: `/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/fields/ours_26000_v114_oof_refit_podmoe_garden_field.pt` present=`False`
 - manifest: `/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/fields/ours_26000_v114_oof_refit_podmoe_garden_field.manifest.json` present=`False`
+

@@ -9,6 +9,7 @@
 - [根目录报告入口](SPCARNET_REPORT_INDEX.md)
 - [可克隆报告包 manifest](docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md)
 - [当前 mentor/PPT 技术报告](docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md)
+- [中文长版导师技术报告](docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md)
 - [当前可克隆报告索引](docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md)
 
 简短状态：`v106 POD-MoE base-preserve` 是当前已验证的质量主线，在 assembled selected full9 表上相对本地 clean MeshSplatting baseline 三个指标均值都更好。`v113b/v113c` 是严格 gate 的安全修复，改善安全性并部分修复 garden v110b，但没有超过 v106。`v114_oof_refit_pod_moe` 是当前正在跑的 candidate-side 长程实验，还不是已完成结果。

@@ -1,7 +1,7 @@
 {
   "all_complete": false,
   "complete_rows": 0,
-  "created_at": "2026-06-26T06:35:14.478744+00:00",
+  "created_at": "2026-06-26T06:49:42.993762+00:00",
   "inputs": {
     "clean_baseline_root": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k",
     "detached_root": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625",

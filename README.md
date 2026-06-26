@@ -9,6 +9,7 @@ Start here for mentor/PPT analysis from a fresh clone:
 - [root report entry point](SPCARNET_REPORT_INDEX.md)
 - [clone-facing report package manifest](docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md)
 - [current mentor/PPT technical report](docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md)
+- [long Chinese mentor technical report](docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md)
 - [current cloneable report index](docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md)
 
 Short status: `v106 POD-MoE base-preserve` is the current verified quality line and improves over the local clean MeshSplatting baseline on the assembled selected full9 table. `v113b/v113c` are strict-gate safety repairs; they improve safety and partially repair garden v110b, but do not surpass v106. `v114_oof_refit_pod_moe` is the active candidate-side long experiment and is not yet a completed result.

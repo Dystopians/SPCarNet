@@ -253,10 +253,10 @@ CUDA_VISIBLE_DEVICES=<gpu> WANDB_MODE=offline \
 
 | item | status |
 |---|---|
-| v110 counter | candidate field build still running in the local `/dev/shm` workspace; last checked around 72/105 train/even views |
-| v110 bonsai | candidate field build still running in the local `/dev/shm` workspace; last checked around 64/128 train/even views |
-| v111 flowers | parent train/all field build still running; last checked around 76/151 views; no completed end-to-end result yet |
-| v114 garden | OOF-refit train/all field build running in `/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden`; no completed render/eval result yet |
+| v110 counter | candidate field build still running in the local `/dev/shm` workspace; latest log check around 100/105 train/even views; field artifact not yet produced |
+| v110 bonsai | candidate field build still running in the local `/dev/shm` workspace; latest log check around 105/128 train/even views; field artifact not yet produced |
+| v111 flowers | parent train/all field build still running; latest log check around 121/151 views; no completed end-to-end result yet |
+| v114 garden | OOF-refit train/all field build running in `/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden`; latest log check around 26/161 views; no completed render/eval result yet |
 | garden v110b | completed as a negative strict-gate diagnostic |
 
 ## Weaknesses to State Honestly
