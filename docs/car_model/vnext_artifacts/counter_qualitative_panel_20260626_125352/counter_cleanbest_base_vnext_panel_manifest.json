@@ -1,0 +1,53 @@
+{
+  "candidate_label": "vnext",
+  "common_frame_count": 30,
+  "diff_scale": 4.0,
+  "gt_dir": "/dev/shm/peilincai_spcarnet_vnext_counter_qual_20260626_125352/counter/model/test/ours_26000_vnext_structure_aware_shrink/gt",
+  "manifest_path": "docs/car_model/vnext_artifacts/counter_qualitative_panel_20260626_125352/counter_cleanbest_base_vnext_panel_manifest.json",
+  "method_order": [
+    "cleanbest26000",
+    "compact_base",
+    "vnext"
+  ],
+  "methods": {
+    "cleanbest26000": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/counter/test/ours_26000/renders",
+    "compact_base": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/counter/ratio_0200/compact_model/test/ours_26000_phasef_extra_compact_base/renders",
+    "vnext": "/dev/shm/peilincai_spcarnet_vnext_counter_qual_20260626_125352/counter/model/test/ours_26000_vnext_structure_aware_shrink/renders"
+  },
+  "missing_counts": {
+    "cleanbest26000": {
+      "extra_in_method": 0,
+      "missing_from_method": 0
+    },
+    "compact_base": {
+      "extra_in_method": 0,
+      "missing_from_method": 0
+    },
+    "vnext": {
+      "extra_in_method": 0,
+      "missing_from_method": 0
+    }
+  },
+  "panel_path": "docs/car_model/vnext_artifacts/counter_qualitative_panel_20260626_125352/counter_cleanbest_base_vnext_panel.png",
+  "reference_label": "compact_base",
+  "selected_count": 6,
+  "selected_frames": [
+    "00000.png",
+    "00029.png",
+    "00027.png",
+    "00028.png",
+    "00009.png",
+    "00013.png"
+  ],
+  "selection_mode": "largest_candidate_reference_delta",
+  "selection_scores": {
+    "00000.png": 0.0001414601587929061,
+    "00009.png": 8.322845208205956e-05,
+    "00013.png": 8.234740268983246e-05,
+    "00027.png": 0.00010352249528448624,
+    "00028.png": 9.222970532228035e-05,
+    "00029.png": 0.00010487235994964149
+  },
+  "summary_path": "docs/car_model/vnext_artifacts/counter_qualitative_panel_20260626_125352/counter_cleanbest_base_vnext_panel_summary.md",
+  "tile_width": 300
+}

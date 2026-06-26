@@ -17,6 +17,7 @@ Start here for mentor/PPT analysis from a fresh clone:
 - [vNext manifest runner and full9 gap log](docs/car_model/6-26-vNext-ManifestRunner-and-Full9Gap-Log.md)
 - [vNext full9 fixed-policy cleanup/evidence log](docs/car_model/6-26-vNext-Full9FixedPolicy-CleanupRun-Log.md)
 - [vNext full9 fixed-policy artifact summary](docs/car_model/vnext_artifacts/full9_structure_shrink_cleanup_20260626_1200/summary/vnext_manifest_summary_enhanced.md)
+- [vNext counter clean-best/base/ours qualitative panel log](docs/car_model/6-26-vNext-CounterQualitativePanel-RunLog.md)
 - [vNext structure-aware shrink ready4 artifact summary](docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.md)
 - [vNext stump rebuild / ready5 rejection log](docs/car_model/6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md)
 - [vNext treehill rebuild / ready6 rejection log](docs/car_model/6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md)
@@ -33,6 +34,8 @@ Start here for mentor/PPT analysis from a fresh clone:
 Short status: `v106 POD-MoE base-preserve` is the current verified quality line and improves over the local clean MeshSplatting baseline on the assembled selected full9 table. `v113b/v113c` are strict-gate safety repairs; they improve safety and partially repair garden v110b, but do not surpass v106. `v114_oof_refit_pod_moe` is the active candidate-side long experiment and is not yet a completed result. Latest live addendum: v110 counter failed during field build with return code `-9`, likely due to memory/shared-storage pressure, so the strict branch still needs a lower-memory field-builder rerun.
 
 vNext status: the certified residual surface texture direction is implemented as a realistic research route, but the latest full9 evidence does **not** yet justify promotion as a paper-quality endpoint. The fixed structure-aware shrink policy has now completed a strict no-target-GT full9 manifest run: `9 / 9` scenes completed, `0 / 9` missing or failed, `9 / 9` protocol audits passed, `6 / 9` scenes accepted nonzero residual output (`bicycle,bonsai,counter,garden,kitchen,room`), and `3 / 9` scenes used explicit fallback/no-op (`flowers,stump,treehill`). Mean full9 metrics are `25.067699` PSNR, `0.741260` SSIM, and `0.306689` LPIPS, with mean changed fraction `0.002756271`. This closes fixed-policy full9 protocol/evidence execution, but it is below the local clean MeshSplatting baseline (`25.151682 / 0.749018 / 0.287621`) and below v106 (`25.831280 / 0.760830 / 0.268435`). Treat vNext as an auditable representation/policy milestone and bottleneck diagnosis, not as a quality-superior method yet.
+
+Qualitative addendum: a no-cleanup counter rerun now preserves vNext renders and exports a clean-best/base/vNext panel. It uses clean-best `ours_26000`, not worse `ours_30000`, and shows the current vNext edit is real but visually subtle: [counter qualitative panel log](docs/car_model/6-26-vNext-CounterQualitativePanel-RunLog.md), [panel PNG](docs/car_model/vnext_artifacts/counter_qualitative_panel_20260626_125352/counter_cleanbest_base_vnext_panel.png).
 
 ## Current v106 POD-MoE Status (2026-06-25)
 

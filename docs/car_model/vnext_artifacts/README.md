@@ -31,6 +31,7 @@ flowers_structure_shrink_rebuild_tau002_20260626_0935
 kitchen_structure_shrink_rebuild_tau002_20260626_1023
 bicycle_structure_shrink_rebuild_tau002_20260626_1055
 full9_structure_shrink_cleanup_20260626_1200
+counter_qualitative_panel_20260626_125352
 vnext_structure_shrink_ready4_scene_config_20260626.json
 vnext_structure_shrink_full9_gap_scene_config_20260626.json
 vnext_structure_shrink_ready4_preflight_20260626.md
@@ -102,6 +103,7 @@ room strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, 
 | `bicycle_structure_shrink_rebuild_tau002_20260626_1055/preflight/vnext_manifest_runner_summary.md` | bicycle rebuild 后的 full9 preflight summary | 证明 local snapshot 从 8/9 ready 推进到 9/9 input-ready；剩余缺输入为 `none` |
 | `full9_structure_shrink_cleanup_20260626_1200/summary/vnext_manifest_summary_enhanced.md` | full9 fixed-policy cleanup run 聚合表 | 9/9 completed, 9/9 protocol pass, 6/9 accepted nonzero, 3/9 fallback/no-op；mean `25.067699 / 0.741260 / 0.306689`，低于 clean/v106 |
 | `full9_structure_shrink_cleanup_20260626_1200/vnext_full9_cleanup_promotion_manifest.md` | full9 cleanup artifact promotion manifest | 记录 205 个轻量文件已复制、0 skipped、每场景 reports/model_audits/logs/selector 均在 repo 内可复盘 |
+| `counter_qualitative_panel_20260626_125352/counter_cleanbest_base_vnext_panel.png` | counter no-cleanup rerun qualitative panel | clean-best `ours_26000` / compact base / vNext / error maps；证明可视化链路闭合，也暴露 vNext-base 视觉差异很小 |
 
 ---
 

@@ -4,6 +4,11 @@ Date: 2026-06-26
 
 This file is the root-level entry point for the current SPCarNet technical-report package.
 
+Latest vNext qualitative addendum:
+
+- `docs/car_model/6-26-vNext-CounterQualitativePanel-RunLog.md`
+- `docs/car_model/vnext_artifacts/counter_qualitative_panel_20260626_125352/counter_cleanbest_base_vnext_panel.png`
+
 Read in this order:
 
 1. `docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md`
