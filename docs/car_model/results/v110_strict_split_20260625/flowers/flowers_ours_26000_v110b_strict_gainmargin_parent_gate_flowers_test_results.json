@@ -1,0 +1,7 @@
+{
+  "ours_26000_v110b_strict_gainmargin_parent_gate_flowers": {
+    "LPIPS": 0.37439286708831787,
+    "PSNR": 20.077722549438477,
+    "SSIM": 0.5312396883964539
+  }
+}

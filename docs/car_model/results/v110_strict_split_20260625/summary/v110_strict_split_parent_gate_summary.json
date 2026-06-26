@@ -1,0 +1,314 @@
+{
+  "all_clean_results_present": true,
+  "all_reports_present": false,
+  "all_required_metrics_present": false,
+  "all_results_present": true,
+  "clean_baseline_root": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k",
+  "detached_root": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625",
+  "generated_at": "2026-06-25T20:43:49",
+  "means": {
+    "clean_baseline": {
+      "LPIPS": 0.2768434174358845,
+      "PSNR": 25.089618682861328,
+      "SSIM": 0.7625780701637268
+    },
+    "v106_parent": {
+      "LPIPS": 0.2544426918029785,
+      "PSNR": 25.921100616455078,
+      "SSIM": 0.7764157801866531
+    },
+    "v110_gated": {
+      "LPIPS": 0.38038691878318787,
+      "PSNR": 19.966075897216797,
+      "SSIM": 0.5228427052497864
+    },
+    "v110_gated_minus_clean_baseline": {
+      "LPIPS": -0.014176160097122192,
+      "PSNR": 0.28381919860839844,
+      "SSIM": 0.011021018028259277
+    },
+    "v110_gated_minus_v106_parent": {
+      "LPIPS": 0.005994051694869995,
+      "PSNR": -0.11164665222167969,
+      "SSIM": -0.00839698314666748
+    }
+  },
+  "missing": [
+    {
+      "code": "missing_report_json",
+      "detail": "missing_file",
+      "path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/garden/reports/garden_v110_strict_split_parent_gate_report.json",
+      "scene": "garden"
+    },
+    {
+      "code": "missing_method",
+      "expected": [
+        "ours_26000_v110_strict_train_even_odd_parent_gate_garden"
+      ],
+      "label": "v110_gated",
+      "path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/garden/detached_model/results.json",
+      "scene": "garden"
+    },
+    {
+      "code": "missing_report_json",
+      "detail": "missing_file",
+      "path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter/reports/counter_v110_strict_split_parent_gate_report.json",
+      "scene": "counter"
+    },
+    {
+      "code": "missing_method",
+      "expected": [
+        "ours_26000_v110_strict_train_even_odd_parent_gate_counter"
+      ],
+      "label": "v110_gated",
+      "path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/counter/detached_model/results.json",
+      "scene": "counter"
+    },
+    {
+      "code": "missing_method",
+      "expected": [
+        "ours_26000_v110_strict_train_even_odd_parent_gate_bonsai",
+        "ours_26000_v110_strict_train_even_odd_parent_gate_bonsai"
+      ],
+      "label": "v110_gated",
+      "path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/bonsai/detached_model/results.json",
+      "scene": "bonsai"
+    }
+  ],
+  "missing_count": 5,
+  "out_json": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/v110_strict_split_parent_gate_summary.json",
+  "out_md": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/v110_strict_split_parent_gate_summary.md",
+  "output_root": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625",
+  "row_count": 4,
+  "rows": [
+    {
+      "clean_results_path": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/flowers/results.json",
+      "clean_results_present": true,
+      "deltas": {
+        "v110_gated_minus_clean_baseline": {
+          "LPIPS": -0.014176160097122192,
+          "PSNR": 0.28381919860839844,
+          "SSIM": 0.011021018028259277
+        },
+        "v110_gated_minus_v106_parent": {
+          "LPIPS": 0.005994051694869995,
+          "PSNR": -0.11164665222167969,
+          "SSIM": -0.00839698314666748
+        }
+      },
+      "methods": {
+        "clean_baseline": "ours_26000",
+        "v106_parent": "ours_26000_v106_podmoe_basepreserve_flowers",
+        "v110_gated": "ours_26000_v110_strict_train_even_odd_parent_gate_flowers"
+      },
+      "metrics": {
+        "clean_baseline": {
+          "LPIPS": 0.39456307888031006,
+          "PSNR": 19.6822566986084,
+          "SSIM": 0.5118216872215271
+        },
+        "v106_parent": {
+          "LPIPS": 0.37439286708831787,
+          "PSNR": 20.077722549438477,
+          "SSIM": 0.5312396883964539
+        },
+        "v110_gated": {
+          "LPIPS": 0.38038691878318787,
+          "PSNR": 19.966075897216797,
+          "SSIM": 0.5228427052497864
+        }
+      },
+      "missing": [],
+      "report_dry_run": false,
+      "report_path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/flowers/reports/flowers_v110_strict_split_parent_gate_report.json",
+      "report_present": true,
+      "report_status": "FAILED",
+      "results_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/flowers/detached_model/results.json",
+      "results_present": true,
+      "scene": "flowers"
+    },
+    {
+      "clean_results_path": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/results.json",
+      "clean_results_present": true,
+      "deltas": {
+        "v110_gated_minus_clean_baseline": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        },
+        "v110_gated_minus_v106_parent": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        }
+      },
+      "methods": {
+        "clean_baseline": "ours_26000",
+        "v106_parent": "ours_26000_v106_podmoe_basepreserve_garden",
+        "v110_gated": null
+      },
+      "metrics": {
+        "clean_baseline": {
+          "LPIPS": 0.20131449401378632,
+          "PSNR": 25.029211044311523,
+          "SSIM": 0.7800350785255432
+        },
+        "v106_parent": {
+          "LPIPS": 0.17448043823242188,
+          "PSNR": 25.790945053100586,
+          "SSIM": 0.799382209777832
+        },
+        "v110_gated": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        }
+      },
+      "missing": [
+        {
+          "code": "missing_report_json",
+          "detail": "missing_file",
+          "path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/garden/reports/garden_v110_strict_split_parent_gate_report.json"
+        },
+        {
+          "code": "missing_method",
+          "expected": [
+            "ours_26000_v110_strict_train_even_odd_parent_gate_garden"
+          ],
+          "label": "v110_gated",
+          "path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/garden/detached_model/results.json"
+        }
+      ],
+      "report_dry_run": null,
+      "report_path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/garden/reports/garden_v110_strict_split_parent_gate_report.json",
+      "report_present": false,
+      "report_status": null,
+      "results_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/garden/detached_model/results.json",
+      "results_present": true,
+      "scene": "garden"
+    },
+    {
+      "clean_results_path": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/counter/results.json",
+      "clean_results_present": true,
+      "deltas": {
+        "v110_gated_minus_clean_baseline": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        },
+        "v110_gated_minus_v106_parent": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        }
+      },
+      "methods": {
+        "clean_baseline": "ours_26000",
+        "v106_parent": "ours_26000_v106_podmoe_basepreserve_counter",
+        "v110_gated": null
+      },
+      "metrics": {
+        "clean_baseline": {
+          "LPIPS": 0.2520033121109009,
+          "PSNR": 26.751773834228516,
+          "SSIM": 0.862055242061615
+        },
+        "v106_parent": {
+          "LPIPS": 0.23884722590446472,
+          "PSNR": 27.499645233154297,
+          "SSIM": 0.8675211071968079
+        },
+        "v110_gated": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        }
+      },
+      "missing": [
+        {
+          "code": "missing_report_json",
+          "detail": "missing_file",
+          "path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter/reports/counter_v110_strict_split_parent_gate_report.json"
+        },
+        {
+          "code": "missing_method",
+          "expected": [
+            "ours_26000_v110_strict_train_even_odd_parent_gate_counter"
+          ],
+          "label": "v110_gated",
+          "path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/counter/detached_model/results.json"
+        }
+      ],
+      "report_dry_run": null,
+      "report_path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter/reports/counter_v110_strict_split_parent_gate_report.json",
+      "report_present": false,
+      "report_status": null,
+      "results_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/counter/detached_model/results.json",
+      "results_present": true,
+      "scene": "counter"
+    },
+    {
+      "clean_results_path": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/bonsai/results.json",
+      "clean_results_present": true,
+      "deltas": {
+        "v110_gated_minus_clean_baseline": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        },
+        "v110_gated_minus_v106_parent": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        }
+      },
+      "methods": {
+        "clean_baseline": "ours_26000",
+        "v106_parent": "ours_26000_v106_podmoe_basepreserve_bonsai",
+        "v110_gated": null
+      },
+      "metrics": {
+        "clean_baseline": {
+          "LPIPS": 0.25949278473854065,
+          "PSNR": 28.895233154296875,
+          "SSIM": 0.8964002728462219
+        },
+        "v106_parent": {
+          "LPIPS": 0.2300502359867096,
+          "PSNR": 30.316089630126953,
+          "SSIM": 0.9075201153755188
+        },
+        "v110_gated": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        }
+      },
+      "missing": [
+        {
+          "code": "missing_method",
+          "expected": [
+            "ours_26000_v110_strict_train_even_odd_parent_gate_bonsai",
+            "ours_26000_v110_strict_train_even_odd_parent_gate_bonsai"
+          ],
+          "label": "v110_gated",
+          "path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/bonsai/detached_model/results.json"
+        }
+      ],
+      "report_dry_run": false,
+      "report_path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/bonsai/reports/bonsai_v110_strict_split_parent_gate_report.json",
+      "report_present": true,
+      "report_status": "FAILED_PREFLIGHT",
+      "results_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/bonsai/detached_model/results.json",
+      "results_present": true,
+      "scene": "bonsai"
+    }
+  ],
+  "scenes": [
+    "flowers",
+    "garden",
+    "counter",
+    "bonsai"
+  ],
+  "schema_version": 1
+}

@@ -1,0 +1,32 @@
+{
+  "base_method": "ours_26000_v104c_shrink_view_affine_min1_minviews1_{scene}",
+  "candidate_method": "ours_26000_v106_podmoe_basepreserve_{scene}",
+  "crops": [
+    {
+      "label": "crop1:700,0,420,280",
+      "x0": 700,
+      "x1": 1120,
+      "y0": 0,
+      "y1": 280
+    }
+  ],
+  "error_scale": 0.25,
+  "frame_glob": "*.png",
+  "frame_index": [
+    4
+  ],
+  "frames": [
+    {
+      "base_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/garden/detached_model/test/ours_26000_v104c_shrink_view_affine_min1_minviews1_garden/renders/00004.png",
+      "candidate_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/garden/detached_model/test/ours_26000_v106_podmoe_basepreserve_garden/renders/00004.png",
+      "frame_name": "00004.png",
+      "gt_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/garden/detached_model/test/ours_26000_v106_podmoe_basepreserve_garden/gt/00004.png",
+      "scene": "garden"
+    }
+  ],
+  "max_frames": 1,
+  "model_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625",
+  "output": "docs/car_model/assets/v106_qualitative/garden_frame00004_bestcrop_contact_sheet.png",
+  "tile_height": 160,
+  "tile_width": 240
+}

@@ -1,0 +1,37 @@
+{
+  "date": "2026-06-25",
+  "protocol": {
+    "candidate_field": "train/even",
+    "gate_calibration": "train/odd",
+    "final_metrics": "test",
+    "test_gt_usage": "final evaluation only"
+  },
+  "clean_baseline_root": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k",
+  "metrics_order": ["PSNR", "SSIM", "LPIPS"],
+  "scenes": {
+    "flowers": {
+      "clean_meshsplatting": {"PSNR": 19.682257, "SSIM": 0.511822, "LPIPS": 0.394563},
+      "v106_parent": {"PSNR": 20.077723, "SSIM": 0.531240, "LPIPS": 0.374393},
+      "v110b_gain_margin_gate": {"PSNR": 20.077723, "SSIM": 0.531240, "LPIPS": 0.374393},
+      "v110b_minus_clean": {"PSNR": 0.395466, "SSIM": 0.019418, "LPIPS": -0.020170},
+      "v110b_minus_v106": {"PSNR": 0.0, "SSIM": 0.0, "LPIPS": 0.0},
+      "gate_decision": "fallback_to_parent"
+    },
+    "garden": {
+      "clean_meshsplatting": {"PSNR": 25.029211, "SSIM": 0.780035, "LPIPS": 0.201314},
+      "v106_parent": {"PSNR": 25.790945, "SSIM": 0.799382, "LPIPS": 0.174480},
+      "v110b_gain_margin_gate": {"PSNR": 25.430321, "SSIM": 0.783703, "LPIPS": 0.186970},
+      "v110b_minus_clean": {"PSNR": 0.401110, "SSIM": 0.003668, "LPIPS": -0.014345},
+      "v110b_minus_v106": {"PSNR": -0.360624, "SSIM": -0.015679, "LPIPS": 0.012489},
+      "gate_decision": "accepted_nonzero_mask"
+    }
+  },
+  "mean": {
+    "clean_meshsplatting": {"PSNR": 22.355734, "SSIM": 0.645929, "LPIPS": 0.297939},
+    "v106_parent": {"PSNR": 22.934334, "SSIM": 0.665311, "LPIPS": 0.274437},
+    "v110b_gain_margin_gate": {"PSNR": 22.754022, "SSIM": 0.657471, "LPIPS": 0.280681},
+    "v110b_minus_clean": {"PSNR": 0.398288, "SSIM": 0.011543, "LPIPS": -0.017257},
+    "v110b_minus_v106": {"PSNR": -0.180312, "SSIM": -0.007839, "LPIPS": 0.006245}
+  },
+  "conclusion": "v110b is a useful strict-gate safety diagnostic but is not promoted over v106 because garden regresses relative to the v106 parent."
+}

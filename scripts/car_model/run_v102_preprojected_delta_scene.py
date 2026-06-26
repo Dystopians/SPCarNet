@@ -87,6 +87,7 @@ def _compare_render_hashes(reference_dir: Path, output_dir: Path) -> dict[str, A
 
 def run_scene(args: argparse.Namespace) -> dict[str, Any]:
     scene = args.scene
+    target_split = str(args.target_split)
     model = Path(args.package_root) / scene / "detached_model"
     if not model.is_dir():
         raise FileNotFoundError(model)
@@ -98,10 +99,12 @@ def run_scene(args: argparse.Namespace) -> dict[str, Any]:
     report_root.mkdir(parents=True, exist_ok=True)
     bank_root = Path(args.v102_bank_root) / scene
     bank_root.mkdir(parents=True, exist_ok=True)
-    v102_bank = bank_root / "v102_preprojected_delta_bank.pt"
+    bank_name = "v102_preprojected_delta_bank.pt" if target_split == "test" else f"v102_preprojected_delta_bank_{target_split}.pt"
+    v102_bank = bank_root / bank_name
 
-    build_method = args.build_method or f"ours_{int(args.iteration)}_v102_delta_build_{scene}"
-    fast_method = args.fast_method or f"ours_{int(args.iteration)}_v102_delta_fast_{scene}"
+    split_suffix = "" if target_split == "test" else f"_{target_split}"
+    build_method = args.build_method or f"ours_{int(args.iteration)}_v102_delta_build_{scene}{split_suffix}"
+    fast_method = args.fast_method or f"ours_{int(args.iteration)}_v102_delta_fast_{scene}{split_suffix}"
     reference_method = args.reference_method or f"ours_{int(args.iteration)}_v101_detached_package_full9_{scene}"
 
     env = os.environ.copy()
@@ -109,9 +112,10 @@ def run_scene(args: argparse.Namespace) -> dict[str, Any]:
         env["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
-    build_log = report_root / f"{scene}_build.log"
-    fast_log = report_root / f"{scene}_fast.log"
-    eval_log = report_root / f"{scene}_eval.log"
+    log_suffix = "" if target_split == "test" else f"_{target_split}"
+    build_log = report_root / f"{scene}_build{log_suffix}.log"
+    fast_log = report_root / f"{scene}_fast{log_suffix}.log"
+    eval_log = report_root / f"{scene}_eval{log_suffix}.log"
     for log_path in (build_log, fast_log, eval_log):
         if log_path.exists() and args.force:
             log_path.unlink()
@@ -119,30 +123,31 @@ def run_scene(args: argparse.Namespace) -> dict[str, Any]:
     build_rc = 0
     build_wall = 0.0
     if args.force or not v102_bank.is_file():
+        build_cmd = [
+            sys.executable,
+            "render.py",
+            "-m",
+            str(model),
+            "--iteration",
+            str(args.iteration),
+            "--skip_train" if target_split == "test" else "--skip_test",
+            "--checkpoint_endpoint_method",
+            args.endpoint_method,
+            "--checkpoint_endpoint_output_method",
+            build_method,
+            "--checkpoint_endpoint_base_model",
+            f"/__spcarnet_v102_preprojected_build_split_{target_split}__",
+            "--checkpoint_endpoint_bank_path",
+            str(v101_bank),
+            "--checkpoint_endpoint_require_bank",
+            "--checkpoint_endpoint_write_preprojected_bank",
+            str(v102_bank),
+            "--checkpoint_endpoint_preprojected_delta_dtype",
+            args.delta_dtype,
+            "--quiet",
+        ]
         build_rc, build_wall = _run_cmd(
-            [
-                sys.executable,
-                "render.py",
-                "-m",
-                str(model),
-                "--iteration",
-                str(args.iteration),
-                "--skip_train",
-                "--checkpoint_endpoint_method",
-                args.endpoint_method,
-                "--checkpoint_endpoint_output_method",
-                build_method,
-                "--checkpoint_endpoint_base_model",
-                "/__spcarnet_v102_preprojected_build_must_not_read_train_evidence__",
-                "--checkpoint_endpoint_bank_path",
-                str(v101_bank),
-                "--checkpoint_endpoint_require_bank",
-                "--checkpoint_endpoint_write_preprojected_bank",
-                str(v102_bank),
-                "--checkpoint_endpoint_preprojected_delta_dtype",
-                args.delta_dtype,
-                "--quiet",
-            ],
+            build_cmd,
             build_log,
             env,
         )
@@ -157,7 +162,7 @@ def run_scene(args: argparse.Namespace) -> dict[str, Any]:
             str(model),
             "--iteration",
             str(args.iteration),
-            "--skip_train",
+            "--skip_train" if target_split == "test" else "--skip_test",
             "--checkpoint_endpoint_method",
             args.endpoint_method,
             "--checkpoint_endpoint_output_method",
@@ -180,7 +185,7 @@ def run_scene(args: argparse.Namespace) -> dict[str, Any]:
                 "-m",
                 str(model),
                 "--split",
-                "test",
+                target_split,
                 "--methods",
                 fast_method,
                 "--merge_model_results",
@@ -189,26 +194,35 @@ def run_scene(args: argparse.Namespace) -> dict[str, Any]:
             env,
         )
 
-    results = _read_json(model / "results.json")
+    results_path = model / "results.json" if target_split == "test" else model / f"{target_split}_results.json"
+    results = _read_json(results_path)
     fast_metrics = results.get(fast_method, {}) if isinstance(results.get(fast_method), dict) else {}
     reference_metrics = results.get(reference_method, {}) if isinstance(results.get(reference_method), dict) else {}
-    render_report = _read_json(model / "test" / fast_method / "render_py_endpoint_report.json")
+    render_report = _read_json(model / target_split / fast_method / "render_py_endpoint_report.json")
     bank_manifest = _read_json(v102_bank.with_suffix(".manifest.json"))
+    reference_render_method = reference_method
+    if not (model / target_split / reference_render_method / "renders").is_dir() and (
+        model / target_split / build_method / "renders"
+    ).is_dir():
+        reference_render_method = build_method
     hash_report = _compare_render_hashes(
-        model / "test" / reference_method / "renders",
-        model / "test" / fast_method / "renders",
+        model / target_split / reference_render_method / "renders",
+        model / target_split / fast_method / "renders",
     )
     sec_per_view = fast_wall / hash_report["output_count"] if hash_report["output_count"] else None
     payload = {
         "schema_version": 1,
         "scene": scene,
         "model": str(model),
+        "target_split": target_split,
         "endpoint_method": args.endpoint_method,
         "reference_method": reference_method,
+        "reference_render_method": reference_render_method,
         "build_method": build_method,
         "fast_method": fast_method,
         "v101_bank": str(v101_bank),
         "v102_bank": str(v102_bank),
+        "results_path": str(results_path),
         "v102_bank_bytes": int(v102_bank.stat().st_size) if v102_bank.is_file() else 0,
         "v102_bank_manifest": bank_manifest,
         "delta_dtype": args.delta_dtype,
@@ -267,15 +281,17 @@ def run_scene(args: argparse.Namespace) -> dict[str, Any]:
             "eval": str(eval_log),
         },
     }
-    out_json = report_root / f"{scene}_v102_preprojected_delta_report.json"
+    report_suffix = "" if target_split == "test" else f"_{target_split}"
+    out_json = report_root / f"{scene}_v102_preprojected_delta{report_suffix}_report.json"
     out_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    out_md = report_root / f"{scene}_v102_preprojected_delta_report.md"
+    out_md = report_root / f"{scene}_v102_preprojected_delta{report_suffix}_report.md"
     out_md.write_text(
         "\n".join(
             [
-                f"# v102 Preprojected Delta Report: {scene}",
+                f"# v102 Preprojected Delta Report: {scene} / {target_split}",
                 "",
                 f"- passed: `{payload['passed']}`",
+                f"- target_split: `{payload['target_split']}`",
                 f"- fast wall sec/view: `{payload['fast_sec_per_view']}`",
                 f"- hash exact: `{hash_report['hash_match_count']}/{hash_report['reference_count']}`",
                 f"- metrics: `{fast_metrics}`",
@@ -297,6 +313,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--report_root", default="outputs/carnet/meshsplatopt/ecsr_phase_v102_preprojected_delta_bank_20260625")
     parser.add_argument("--endpoint_method", default=ENDPOINT_METHOD)
     parser.add_argument("--iteration", type=int, default=26000)
+    parser.add_argument(
+        "--target_split",
+        default="test",
+        choices=("test", "train"),
+        help="Split rendered into the preprojected delta bank. Default preserves the historical test-bank path.",
+    )
     parser.add_argument("--reference_method", default="")
     parser.add_argument("--build_method", default="")
     parser.add_argument("--fast_method", default="")

@@ -1,0 +1,1080 @@
+{
+  "aggregate": {
+    "methods": [
+      {
+        "diff_vs_clean_mean": {
+          "lpips": -0.01907322307427724,
+          "psnr": 0.6774166954888238,
+          "ssim": 0.01170875628789266
+        },
+        "diff_vs_v104c_mean": {
+          "lpips": 0.0,
+          "psnr": 0.0,
+          "ssim": 0.0
+        },
+        "method": "v104c_shrink_view_affine_min1_minviews1",
+        "metrics_mean": {
+          "lpips": 0.26854751838578117,
+          "psnr": 25.829098807440865,
+          "ssim": 0.7607268823517693
+        },
+        "rows": 9,
+        "scenes": [
+          "bicycle",
+          "bonsai",
+          "counter",
+          "flowers",
+          "garden",
+          "kitchen",
+          "room",
+          "stump",
+          "treehill"
+        ]
+      },
+      {
+        "diff_vs_clean_mean": {
+          "lpips": -0.019185241725709703,
+          "psnr": 0.6795980665418837,
+          "ssim": 0.011811653772989908
+        },
+        "diff_vs_v104c_mean": {
+          "lpips": -0.00011201865143246121,
+          "psnr": 0.002181371053059896,
+          "ssim": 0.00010289748509724934
+        },
+        "method": "v106_podmoe_basepreserve",
+        "metrics_mean": {
+          "lpips": 0.2684354997343487,
+          "psnr": 25.831280178493923,
+          "ssim": 0.7608297798368666
+        },
+        "rows": 9,
+        "scenes": [
+          "bicycle",
+          "bonsai",
+          "counter",
+          "flowers",
+          "garden",
+          "kitchen",
+          "room",
+          "stump",
+          "treehill"
+        ]
+      }
+    ],
+    "row_count": 18,
+    "v106_vs_v104c": {
+      "diff_mean": {
+        "lpips": -0.00011201865143246121,
+        "psnr": 0.002181371053059896,
+        "ssim": 0.00010289748509724934
+      },
+      "rows": 9,
+      "scenes": [
+        "bicycle",
+        "bonsai",
+        "counter",
+        "flowers",
+        "garden",
+        "kitchen",
+        "room",
+        "stump",
+        "treehill"
+      ]
+    }
+  },
+  "inputs": [
+    "outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/v104c_shrink_view_affine_full9_summary.json",
+    "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_counter_20260625_reports/v106_podmoe_basepreserve_counter_summary.json",
+    "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_hardtriad_20260625_reports/v106_podmoe_basepreserve_hardtriad_kitchen_bonsai_summary.json",
+    "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_full9_20260625_reports/bicycle/bicycle_v105_evidence_gated_mixture_report.json",
+    "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_full9_20260625_reports/flowers/flowers_v105_evidence_gated_mixture_report.json",
+    "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_full9_20260625_reports/garden/garden_v105_evidence_gated_mixture_report.json",
+    "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_full9_20260625_reports/room/room_v105_evidence_gated_mixture_report.json",
+    "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_full9_20260625_reports/stump/stump_v105_evidence_gated_mixture_report.json",
+    "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_full9_20260625_reports/treehill/treehill_v105_evidence_gated_mixture_report.json"
+  ],
+  "notes": [
+    "Metric deltas are candidate minus reference; for LPIPS, negative is better.",
+    "diff_vs_v104c is null when the input did not carry v104c metrics and the gap cannot be derived."
+  ],
+  "row_count": 18,
+  "rows": [
+    {
+      "clean_metrics": {
+        "lpips": 0.3320768475532532,
+        "psnr": 23.301612854003906,
+        "ssim": 0.6598671674728394
+      },
+      "diff_vs_clean": {
+        "lpips": -0.018574178218841553,
+        "psnr": 0.41603660583496094,
+        "ssim": 0.015104472637176514
+      },
+      "diff_vs_v104c": {
+        "lpips": 0.0,
+        "psnr": 0.0,
+        "ssim": 0.0
+      },
+      "expert_mse_certificate": null,
+      "field_variant": null,
+      "method": "v104c_shrink_view_affine_min1_minviews1",
+      "metrics": {
+        "lpips": 0.3135026693344116,
+        "psnr": 23.717649459838867,
+        "ssim": 0.6749716401100159
+      },
+      "output_method": "ours_26000_v104c_shrink_view_affine_min1_minviews1_bicycle",
+      "passed": true,
+      "pod_base_keep_mode": null,
+      "pod_stats": {
+        "fallback_triangles": 0,
+        "field_elapsed_sec": 948.1457343101501,
+        "mean_abs_delta": 0.009774391539394855,
+        "mean_surface_valid_fraction": 0.9997447633743286,
+        "render_elapsed_sec": 57.22541260719299,
+        "shrink_alpha_mean": 0.5757565746266023,
+        "valid_triangles": 2088547,
+        "view_affine_triangles": 2088547
+      },
+      "scene": "bicycle",
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/v104c_shrink_view_affine_full9_summary.json",
+      "source_kind": "summary_row",
+      "status": "ok",
+      "v104c_metrics": {
+        "lpips": 0.3135026693344116,
+        "psnr": 23.717649459838867,
+        "ssim": 0.6749716401100159
+      },
+      "version": "v104c"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.25949278473854065,
+        "psnr": 28.895233154296875,
+        "ssim": 0.8964002728462219
+      },
+      "diff_vs_clean": {
+        "lpips": -0.029306918382644653,
+        "psnr": 1.4156436920166016,
+        "ssim": 0.010966300964355469
+      },
+      "diff_vs_v104c": {
+        "lpips": 0.0,
+        "psnr": 0.0,
+        "ssim": 0.0
+      },
+      "expert_mse_certificate": null,
+      "field_variant": null,
+      "method": "v104c_shrink_view_affine_min1_minviews1",
+      "metrics": {
+        "lpips": 0.230185866355896,
+        "psnr": 30.310876846313477,
+        "ssim": 0.9073665738105774
+      },
+      "output_method": "ours_26000_v104c_shrink_view_affine_min1_minviews1_bonsai",
+      "passed": true,
+      "pod_base_keep_mode": null,
+      "pod_stats": {
+        "fallback_triangles": 0,
+        "field_elapsed_sec": 1290.6484878063202,
+        "mean_abs_delta": 0.010236281599547412,
+        "mean_surface_valid_fraction": 0.999664269589089,
+        "render_elapsed_sec": 60.662583351135254,
+        "shrink_alpha_mean": 0.5837694897777026,
+        "valid_triangles": 3405888,
+        "view_affine_triangles": 3405888
+      },
+      "scene": "bonsai",
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/v104c_shrink_view_affine_full9_summary.json",
+      "source_kind": "summary_row",
+      "status": "ok",
+      "v104c_metrics": {
+        "lpips": 0.230185866355896,
+        "psnr": 30.310876846313477,
+        "ssim": 0.9073665738105774
+      },
+      "version": "v104c"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.2520033121109009,
+        "psnr": 26.751773834228516,
+        "ssim": 0.862055242061615
+      },
+      "diff_vs_clean": {
+        "lpips": -0.013017147779464722,
+        "psnr": 0.7462940216064453,
+        "ssim": 0.005364358425140381
+      },
+      "diff_vs_v104c": {
+        "lpips": 0.0,
+        "psnr": 0.0,
+        "ssim": 0.0
+      },
+      "expert_mse_certificate": null,
+      "field_variant": null,
+      "method": "v104c_shrink_view_affine_min1_minviews1",
+      "metrics": {
+        "lpips": 0.23898616433143616,
+        "psnr": 27.49806785583496,
+        "ssim": 0.8674196004867554
+      },
+      "output_method": "ours_26000_v104c_shrink_view_affine_min1_minviews1_counter",
+      "passed": true,
+      "pod_base_keep_mode": null,
+      "pod_stats": {
+        "fallback_triangles": 0,
+        "field_elapsed_sec": 573.7214689254761,
+        "mean_abs_delta": 0.008245761288950841,
+        "mean_surface_valid_fraction": 0.999158364534378,
+        "render_elapsed_sec": 49.783804416656494,
+        "shrink_alpha_mean": 0.5661972670939155,
+        "valid_triangles": 2716449,
+        "view_affine_triangles": 2716449
+      },
+      "scene": "counter",
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/v104c_shrink_view_affine_full9_summary.json",
+      "source_kind": "summary_row",
+      "status": "ok",
+      "v104c_metrics": {
+        "lpips": 0.23898616433143616,
+        "psnr": 27.49806785583496,
+        "ssim": 0.8674196004867554
+      },
+      "version": "v104c"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.39456307888031006,
+        "psnr": 19.6822566986084,
+        "ssim": 0.5118216872215271
+      },
+      "diff_vs_clean": {
+        "lpips": -0.020090192556381226,
+        "psnr": 0.3935871124267578,
+        "ssim": 0.01925450563430786
+      },
+      "diff_vs_v104c": {
+        "lpips": 0.0,
+        "psnr": 0.0,
+        "ssim": 0.0
+      },
+      "expert_mse_certificate": null,
+      "field_variant": null,
+      "method": "v104c_shrink_view_affine_min1_minviews1",
+      "metrics": {
+        "lpips": 0.37447288632392883,
+        "psnr": 20.075843811035156,
+        "ssim": 0.531076192855835
+      },
+      "output_method": "ours_26000_v104c_shrink_view_affine_min1_minviews1_flowers",
+      "passed": true,
+      "pod_base_keep_mode": null,
+      "pod_stats": {
+        "fallback_triangles": 0,
+        "field_elapsed_sec": 636.7439894676208,
+        "mean_abs_delta": 0.014428902544419874,
+        "mean_surface_valid_fraction": 0.9974960766055367,
+        "render_elapsed_sec": 53.16460204124451,
+        "shrink_alpha_mean": 0.5312934233806585,
+        "valid_triangles": 1853840,
+        "view_affine_triangles": 1853840
+      },
+      "scene": "flowers",
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/v104c_shrink_view_affine_full9_summary.json",
+      "source_kind": "summary_row",
+      "status": "ok",
+      "v104c_metrics": {
+        "lpips": 0.37447288632392883,
+        "psnr": 20.075843811035156,
+        "ssim": 0.531076192855835
+      },
+      "version": "v104c"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.20131449401378632,
+        "psnr": 25.029211044311523,
+        "ssim": 0.7800350785255432
+      },
+      "diff_vs_clean": {
+        "lpips": -0.026730090379714966,
+        "psnr": 0.7588825225830078,
+        "ssim": 0.01922774314880371
+      },
+      "diff_vs_v104c": {
+        "lpips": 0.0,
+        "psnr": 0.0,
+        "ssim": 0.0
+      },
+      "expert_mse_certificate": null,
+      "field_variant": null,
+      "method": "v104c_shrink_view_affine_min1_minviews1",
+      "metrics": {
+        "lpips": 0.17458440363407135,
+        "psnr": 25.78809356689453,
+        "ssim": 0.7992628216743469
+      },
+      "output_method": "ours_26000_v104c_shrink_view_affine_min1_minviews1_garden",
+      "passed": true,
+      "pod_base_keep_mode": null,
+      "pod_stats": {
+        "fallback_triangles": 0,
+        "field_elapsed_sec": 1193.51340508461,
+        "mean_abs_delta": 0.011177838585960368,
+        "mean_surface_valid_fraction": 0.9993981719017029,
+        "render_elapsed_sec": 23.99949336051941,
+        "shrink_alpha_mean": 0.5350185972549004,
+        "valid_triangles": 3311331,
+        "view_affine_triangles": 3311331
+      },
+      "scene": "garden",
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/v104c_shrink_view_affine_full9_summary.json",
+      "source_kind": "summary_row",
+      "status": "ok",
+      "v104c_metrics": {
+        "lpips": 0.17458440363407135,
+        "psnr": 25.78809356689453,
+        "ssim": 0.7992628216743469
+      },
+      "version": "v104c"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.19918586313724518,
+        "psnr": 27.818552017211914,
+        "ssim": 0.8764522671699524
+      },
+      "diff_vs_clean": {
+        "lpips": -0.011165037751197815,
+        "psnr": 0.9518966674804688,
+        "ssim": 0.0051378607749938965
+      },
+      "diff_vs_v104c": {
+        "lpips": 0.0,
+        "psnr": 0.0,
+        "ssim": 0.0
+      },
+      "expert_mse_certificate": null,
+      "field_variant": null,
+      "method": "v104c_shrink_view_affine_min1_minviews1",
+      "metrics": {
+        "lpips": 0.18802082538604736,
+        "psnr": 28.770448684692383,
+        "ssim": 0.8815901279449463
+      },
+      "output_method": "ours_26000_v104c_shrink_view_affine_min1_minviews1_kitchen",
+      "passed": true,
+      "pod_base_keep_mode": null,
+      "pod_stats": {
+        "fallback_triangles": 0,
+        "field_elapsed_sec": 1271.105639219284,
+        "mean_abs_delta": 0.009386059788188765,
+        "mean_surface_valid_fraction": 0.9995105130331857,
+        "render_elapsed_sec": 54.0908784866333,
+        "shrink_alpha_mean": 0.6307335724000305,
+        "valid_triangles": 3076129,
+        "view_affine_triangles": 3076129
+      },
+      "scene": "kitchen",
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/v104c_shrink_view_affine_full9_summary.json",
+      "source_kind": "summary_row",
+      "status": "ok",
+      "v104c_metrics": {
+        "lpips": 0.18802082538604736,
+        "psnr": 28.770448684692383,
+        "ssim": 0.8815901279449463
+      },
+      "version": "v104c"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.24990256130695343,
+        "psnr": 28.747276306152344,
+        "ssim": 0.8848429918289185
+      },
+      "diff_vs_clean": {
+        "lpips": -0.019238531589508057,
+        "psnr": 0.8505592346191406,
+        "ssim": 0.006994128227233887
+      },
+      "diff_vs_v104c": {
+        "lpips": 0.0,
+        "psnr": 0.0,
+        "ssim": 0.0
+      },
+      "expert_mse_certificate": null,
+      "field_variant": null,
+      "method": "v104c_shrink_view_affine_min1_minviews1",
+      "metrics": {
+        "lpips": 0.23066402971744537,
+        "psnr": 29.597835540771484,
+        "ssim": 0.8918371200561523
+      },
+      "output_method": "ours_26000_v104c_shrink_view_affine_min1_minviews1_room",
+      "passed": true,
+      "pod_base_keep_mode": null,
+      "pod_stats": {
+        "fallback_triangles": 0,
+        "field_elapsed_sec": 1784.1718430519104,
+        "mean_abs_delta": 0.00676492241044075,
+        "mean_surface_valid_fraction": 0.9983380742562122,
+        "render_elapsed_sec": 65.30988836288452,
+        "shrink_alpha_mean": 0.604729046410591,
+        "valid_triangles": 3200462,
+        "view_affine_triangles": 3200462
+      },
+      "scene": "room",
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/v104c_shrink_view_affine_full9_summary.json",
+      "source_kind": "summary_row",
+      "status": "ok",
+      "v104c_metrics": {
+        "lpips": 0.23066402971744537,
+        "psnr": 29.597835540771484,
+        "ssim": 0.8918371200561523
+      },
+      "version": "v104c"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.29400408267974854,
+        "psnr": 25.205041885375977,
+        "ssim": 0.7051656246185303
+      },
+      "diff_vs_clean": {
+        "lpips": -0.011790812015533447,
+        "psnr": 0.2542686462402344,
+        "ssim": 0.009433746337890625
+      },
+      "diff_vs_v104c": {
+        "lpips": 0.0,
+        "psnr": 0.0,
+        "ssim": 0.0
+      },
+      "expert_mse_certificate": null,
+      "field_variant": null,
+      "method": "v104c_shrink_view_affine_min1_minviews1",
+      "metrics": {
+        "lpips": 0.2822132706642151,
+        "psnr": 25.45931053161621,
+        "ssim": 0.7145993709564209
+      },
+      "output_method": "ours_26000_v104c_shrink_view_affine_min1_minviews1_stump",
+      "passed": true,
+      "pod_base_keep_mode": null,
+      "pod_stats": {
+        "fallback_triangles": 0,
+        "field_elapsed_sec": 695.4705533981323,
+        "mean_abs_delta": 0.005459683379740454,
+        "mean_surface_valid_fraction": 0.9984552748501301,
+        "render_elapsed_sec": 25.898897647857666,
+        "shrink_alpha_mean": 0.49986026126561733,
+        "valid_triangles": 2037135,
+        "view_affine_triangles": 2037135
+      },
+      "scene": "stump",
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/v104c_shrink_view_affine_full9_summary.json",
+      "source_kind": "summary_row",
+      "status": "ok",
+      "v104c_metrics": {
+        "lpips": 0.2822132706642151,
+        "psnr": 25.45931053161621,
+        "ssim": 0.7145993709564209
+      },
+      "version": "v104c"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.4060436487197876,
+        "psnr": 20.934181213378906,
+        "ssim": 0.5645228028297424
+      },
+      "diff_vs_clean": {
+        "lpips": -0.02174609899520874,
+        "psnr": 0.3095817565917969,
+        "ssim": 0.013895690441131592
+      },
+      "diff_vs_v104c": {
+        "lpips": 0.0,
+        "psnr": 0.0,
+        "ssim": 0.0
+      },
+      "expert_mse_certificate": null,
+      "field_variant": null,
+      "method": "v104c_shrink_view_affine_min1_minviews1",
+      "metrics": {
+        "lpips": 0.38429754972457886,
+        "psnr": 21.243762969970703,
+        "ssim": 0.578418493270874
+      },
+      "output_method": "ours_26000_v104c_shrink_view_affine_min1_minviews1_treehill",
+      "passed": true,
+      "pod_base_keep_mode": null,
+      "pod_stats": {
+        "fallback_triangles": 0,
+        "field_elapsed_sec": 622.4841907024384,
+        "mean_abs_delta": 0.010197982735310992,
+        "mean_surface_valid_fraction": 0.9973574380079905,
+        "render_elapsed_sec": 20.091171264648438,
+        "shrink_alpha_mean": 0.516394084427088,
+        "valid_triangles": 1839078,
+        "view_affine_triangles": 1839078
+      },
+      "scene": "treehill",
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v104c_shrink_view_affine_field_full9_20260625/v104c_shrink_view_affine_full9_summary.json",
+      "source_kind": "summary_row",
+      "status": "ok",
+      "v104c_metrics": {
+        "lpips": 0.38429754972457886,
+        "psnr": 21.243762969970703,
+        "ssim": 0.578418493270874
+      },
+      "version": "v104c"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.2520033121109009,
+        "psnr": 26.751773834228516,
+        "ssim": 0.862055242061615
+      },
+      "diff_vs_clean": {
+        "lpips": -0.013156086206436157,
+        "psnr": 0.7478713989257812,
+        "ssim": 0.005465865135192871
+      },
+      "diff_vs_v104c": {
+        "lpips": -0.00013893842697143555,
+        "psnr": 0.0015773773193359375,
+        "ssim": 0.00010150671005249023
+      },
+      "expert_mse_certificate": "weighted_normal_equation_lambda_star",
+      "field_variant": "pod_moe",
+      "method": "v106_podmoe_basepreserve",
+      "metrics": {
+        "lpips": 0.23884722590446472,
+        "psnr": 27.499645233154297,
+        "ssim": 0.8675211071968079
+      },
+      "output_method": "ours_26000_v106_podmoe_basepreserve_counter",
+      "passed": true,
+      "pod_base_keep_mode": "base_preserving_boundary",
+      "pod_stats": {
+        "base_observed_triangles": 2716466,
+        "boundary_debt_guard_mean": 0.8435148596763611,
+        "boundary_full_gain_mean": 0.3230937421321869,
+        "boundary_gain_mean": 0.32228773832321167,
+        "boundary_mse_scale_mean": 0.44181153178215027,
+        "boundary_reliability_mean": 0.21570859849452972,
+        "boundary_triangles": 1365871,
+        "boundary_weighted_pixels": 39174110,
+        "detail_debt_guard_mean": 0.3571622967720032,
+        "detail_full_gain_mean": 0.6372510194778442,
+        "detail_gain_mean": 0.6356670260429382,
+        "detail_mse_scale_mean": 0.9905707836151123,
+        "detail_reliability_mean": 0.16929079592227936,
+        "detail_triangles": 312907,
+        "detail_weighted_pixels": 2843610,
+        "elapsed_sec": 1377.3083791732788,
+        "mean_abs_delta": 0.008256520656868816,
+        "mean_surface_valid_fraction": 0.9991608778635661,
+        "render_elapsed_sec": 65.51294302940369,
+        "total_accumulated_pixels": 48475636,
+        "valid_triangles": 2716466
+      },
+      "scene": "counter",
+      "source": "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_counter_20260625_reports/v106_podmoe_basepreserve_counter_summary.json",
+      "source_kind": "summary_row",
+      "status": "ok",
+      "v104c_metrics": {
+        "lpips": 0.23898616433143616,
+        "psnr": 27.49806785583496,
+        "ssim": 0.8674196004867554
+      },
+      "version": "v106"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.19918586313724518,
+        "psnr": 27.818552017211914,
+        "ssim": 0.8764522671699524
+      },
+      "diff_vs_clean": {
+        "lpips": -0.01137058436870575,
+        "psnr": 0.9534912109375,
+        "ssim": 0.005199432373046875
+      },
+      "diff_vs_v104c": {
+        "lpips": -0.00020554661750793457,
+        "psnr": 0.00159454345703125,
+        "ssim": 6.157159805297852e-05
+      },
+      "expert_mse_certificate": "weighted_normal_equation_lambda_star",
+      "field_variant": "pod_moe",
+      "method": "v106_podmoe_basepreserve",
+      "metrics": {
+        "lpips": 0.18781527876853943,
+        "psnr": 28.772043228149414,
+        "ssim": 0.8816516995429993
+      },
+      "output_method": "ours_26000_v106_podmoe_basepreserve_kitchen",
+      "passed": true,
+      "pod_base_keep_mode": "base_preserving_boundary",
+      "pod_stats": {
+        "base_observed_triangles": 3076122,
+        "boundary_debt_guard_mean": 0.8587005734443665,
+        "boundary_full_gain_mean": 0.3942416310310364,
+        "boundary_gain_mean": 0.3931639492511749,
+        "boundary_mse_scale_mean": 0.42315173149108887,
+        "boundary_reliability_mean": 0.22747445106506348,
+        "boundary_triangles": 1584254,
+        "boundary_weighted_pixels": 51890715,
+        "detail_debt_guard_mean": 0.33460941910743713,
+        "detail_full_gain_mean": 0.7474448084831238,
+        "detail_gain_mean": 0.7440301775932312,
+        "detail_mse_scale_mean": 0.9891200661659241,
+        "detail_reliability_mean": 0.1660735160112381,
+        "detail_triangles": 267510,
+        "detail_weighted_pixels": 1729884,
+        "elapsed_sec": 2720.9628143310547,
+        "mean_abs_delta": 0.009398350771516562,
+        "mean_surface_valid_fraction": 0.9995038219860621,
+        "render_elapsed_sec": 79.75208520889282,
+        "total_accumulated_pixels": 56628559,
+        "valid_triangles": 3076122
+      },
+      "scene": "kitchen",
+      "source": "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_hardtriad_20260625_reports/v106_podmoe_basepreserve_hardtriad_kitchen_bonsai_summary.json",
+      "source_kind": "summary_row",
+      "status": "ok",
+      "v104c_metrics": {
+        "lpips": 0.18802082538604736,
+        "psnr": 28.770448684692383,
+        "ssim": 0.8815901279449463
+      },
+      "version": "v106"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.25949278473854065,
+        "psnr": 28.895233154296875,
+        "ssim": 0.8964002728462219
+      },
+      "diff_vs_clean": {
+        "lpips": -0.029442548751831055,
+        "psnr": 1.4208564758300781,
+        "ssim": 0.011119842529296875
+      },
+      "diff_vs_v104c": {
+        "lpips": -0.00013563036918640137,
+        "psnr": 0.0052127838134765625,
+        "ssim": 0.00015354156494140625
+      },
+      "expert_mse_certificate": "weighted_normal_equation_lambda_star",
+      "field_variant": "pod_moe",
+      "method": "v106_podmoe_basepreserve",
+      "metrics": {
+        "lpips": 0.2300502359867096,
+        "psnr": 30.316089630126953,
+        "ssim": 0.9075201153755188
+      },
+      "output_method": "ours_26000_v106_podmoe_basepreserve_bonsai",
+      "passed": true,
+      "pod_base_keep_mode": "base_preserving_boundary",
+      "pod_stats": {
+        "base_observed_triangles": 3405868,
+        "boundary_debt_guard_mean": 0.8325855731964111,
+        "boundary_full_gain_mean": 0.37622949481010437,
+        "boundary_gain_mean": 0.37473225593566895,
+        "boundary_mse_scale_mean": 0.4692518413066864,
+        "boundary_reliability_mean": 0.2458142638206482,
+        "boundary_triangles": 1801550,
+        "boundary_weighted_pixels": 48792388,
+        "detail_debt_guard_mean": 0.43634113669395447,
+        "detail_full_gain_mean": 0.6903234720230103,
+        "detail_gain_mean": 0.6824083924293518,
+        "detail_mse_scale_mean": 0.975169837474823,
+        "detail_reliability_mean": 0.2136024832725525,
+        "detail_triangles": 393300,
+        "detail_weighted_pixels": 3080715,
+        "elapsed_sec": 2953.1542086601257,
+        "mean_abs_delta": 0.010259284612697523,
+        "mean_surface_valid_fraction": 0.9996639876752287,
+        "render_elapsed_sec": 79.9791350364685,
+        "total_accumulated_pixels": 59912583,
+        "valid_triangles": 3405868
+      },
+      "scene": "bonsai",
+      "source": "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_hardtriad_20260625_reports/v106_podmoe_basepreserve_hardtriad_kitchen_bonsai_summary.json",
+      "source_kind": "summary_row",
+      "status": "ok",
+      "v104c_metrics": {
+        "lpips": 0.230185866355896,
+        "psnr": 30.310876846313477,
+        "ssim": 0.9073665738105774
+      },
+      "version": "v106"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.3320768475532532,
+        "psnr": 23.301612854003906,
+        "ssim": 0.6598671674728394
+      },
+      "diff_vs_clean": {
+        "lpips": -0.018671780824661255,
+        "psnr": 0.41756248474121094,
+        "ssim": 0.015219032764434814
+      },
+      "diff_vs_v104c": {
+        "lpips": -9.760260581970215e-05,
+        "psnr": 0.00152587890625,
+        "ssim": 0.00011456012725830078
+      },
+      "expert_mse_certificate": "weighted_normal_equation_lambda_star",
+      "field_variant": "pod_moe",
+      "method": "v106_podmoe_basepreserve",
+      "metrics": {
+        "lpips": 0.3134050667285919,
+        "psnr": 23.719175338745117,
+        "ssim": 0.6750862002372742
+      },
+      "output_method": "ours_26000_v106_podmoe_basepreserve_bicycle",
+      "passed": true,
+      "pod_base_keep_mode": "base_preserving_boundary",
+      "pod_stats": {
+        "base_observed_triangles": 2088538,
+        "boundary_debt_guard_mean": 0.8453824520111084,
+        "boundary_full_gain_mean": 0.3470231592655182,
+        "boundary_gain_mean": 0.3459431827068329,
+        "boundary_mse_scale_mean": 0.43960630893707275,
+        "boundary_reliability_mean": 0.22829493880271912,
+        "boundary_triangles": 1049943,
+        "boundary_weighted_pixels": 23014141,
+        "detail_debt_guard_mean": 0.3454642593860626,
+        "detail_full_gain_mean": 0.7284024357795715,
+        "detail_gain_mean": 0.7280633449554443,
+        "detail_mse_scale_mean": 0.9970957040786743,
+        "detail_reliability_mean": 0.1842830777168274,
+        "detail_triangles": 197321,
+        "detail_weighted_pixels": 1003879,
+        "elapsed_sec": 1692.8740870952606,
+        "mean_abs_delta": 0.009785207770764828,
+        "mean_surface_valid_fraction": 0.9997426676750183,
+        "total_accumulated_pixels": 25413880,
+        "valid_triangles": 2088538
+      },
+      "scene": "bicycle",
+      "source": "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_full9_20260625_reports/bicycle/bicycle_v105_evidence_gated_mixture_report.json",
+      "source_kind": "report",
+      "status": null,
+      "v104c_metrics": {
+        "lpips": 0.3135026693344116,
+        "psnr": 23.717649459838867,
+        "ssim": 0.6749716401100159
+      },
+      "version": "v106"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.39456307888031006,
+        "psnr": 19.6822566986084,
+        "ssim": 0.5118216872215271
+      },
+      "diff_vs_clean": {
+        "lpips": -0.020170211791992188,
+        "psnr": 0.3954658508300781,
+        "ssim": 0.019418001174926758
+      },
+      "diff_vs_v104c": {
+        "lpips": -8.001923561096191e-05,
+        "psnr": 0.0018787384033203125,
+        "ssim": 0.00016349554061889648
+      },
+      "expert_mse_certificate": "weighted_normal_equation_lambda_star",
+      "field_variant": "pod_moe",
+      "method": "v106_podmoe_basepreserve",
+      "metrics": {
+        "lpips": 0.37439286708831787,
+        "psnr": 20.077722549438477,
+        "ssim": 0.5312396883964539
+      },
+      "output_method": "ours_26000_v106_podmoe_basepreserve_flowers",
+      "passed": true,
+      "pod_base_keep_mode": "base_preserving_boundary",
+      "pod_stats": {
+        "base_observed_triangles": 1853826,
+        "boundary_debt_guard_mean": 0.8250654935836792,
+        "boundary_full_gain_mean": 0.3000487983226776,
+        "boundary_gain_mean": 0.2989259958267212,
+        "boundary_mse_scale_mean": 0.477082222700119,
+        "boundary_reliability_mean": 0.21266499161720276,
+        "boundary_triangles": 954099,
+        "boundary_weighted_pixels": 18963202,
+        "detail_debt_guard_mean": 0.3454521596431732,
+        "detail_full_gain_mean": 0.6740214228630066,
+        "detail_gain_mean": 0.6733720302581787,
+        "detail_mse_scale_mean": 0.9950235486030579,
+        "detail_reliability_mean": 0.18402059376239777,
+        "detail_triangles": 227992,
+        "detail_weighted_pixels": 1598834,
+        "elapsed_sec": 1864.8704025745392,
+        "mean_abs_delta": 0.014451888305219736,
+        "mean_surface_valid_fraction": 0.9975067377090454,
+        "total_accumulated_pixels": 22822365,
+        "valid_triangles": 1853826
+      },
+      "scene": "flowers",
+      "source": "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_full9_20260625_reports/flowers/flowers_v105_evidence_gated_mixture_report.json",
+      "source_kind": "report",
+      "status": null,
+      "v104c_metrics": {
+        "lpips": 0.37447288632392883,
+        "psnr": 20.075843811035156,
+        "ssim": 0.531076192855835
+      },
+      "version": "v106"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.20131449401378632,
+        "psnr": 25.029211044311523,
+        "ssim": 0.7800350785255432
+      },
+      "diff_vs_clean": {
+        "lpips": -0.02683405578136444,
+        "psnr": 0.7617340087890625,
+        "ssim": 0.01934713125228882
+      },
+      "diff_vs_v104c": {
+        "lpips": -0.0001039654016494751,
+        "psnr": 0.0028514862060546875,
+        "ssim": 0.00011938810348510742
+      },
+      "expert_mse_certificate": "weighted_normal_equation_lambda_star",
+      "field_variant": "pod_moe",
+      "method": "v106_podmoe_basepreserve",
+      "metrics": {
+        "lpips": 0.17448043823242188,
+        "psnr": 25.790945053100586,
+        "ssim": 0.799382209777832
+      },
+      "output_method": "ours_26000_v106_podmoe_basepreserve_garden",
+      "passed": true,
+      "pod_base_keep_mode": "base_preserving_boundary",
+      "pod_stats": {
+        "base_observed_triangles": 3311331,
+        "boundary_debt_guard_mean": 0.8403821587562561,
+        "boundary_full_gain_mean": 0.4995700716972351,
+        "boundary_gain_mean": 0.4980812072753906,
+        "boundary_mse_scale_mean": 0.422076940536499,
+        "boundary_reliability_mean": 0.30551183223724365,
+        "boundary_triangles": 1606718,
+        "boundary_weighted_pixels": 24786445,
+        "detail_debt_guard_mean": 0.37946707010269165,
+        "detail_full_gain_mean": 0.8061549663543701,
+        "detail_gain_mean": 0.805746853351593,
+        "detail_mse_scale_mean": 0.9977007508277893,
+        "detail_reliability_mean": 0.2335657775402069,
+        "detail_triangles": 142440,
+        "detail_weighted_pixels": 625589,
+        "elapsed_sec": 2385.6878814697266,
+        "mean_abs_delta": 0.011201112725151082,
+        "mean_surface_valid_fraction": 0.9994061663746834,
+        "total_accumulated_pixels": 26132365,
+        "valid_triangles": 3311331
+      },
+      "scene": "garden",
+      "source": "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_full9_20260625_reports/garden/garden_v105_evidence_gated_mixture_report.json",
+      "source_kind": "report",
+      "status": null,
+      "v104c_metrics": {
+        "lpips": 0.17458440363407135,
+        "psnr": 25.78809356689453,
+        "ssim": 0.7992628216743469
+      },
+      "version": "v106"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.24990256130695343,
+        "psnr": 28.747276306152344,
+        "ssim": 0.8848429918289185
+      },
+      "diff_vs_clean": {
+        "lpips": -0.01928606629371643,
+        "psnr": 0.8530750274658203,
+        "ssim": 0.007045567035675049
+      },
+      "diff_vs_v104c": {
+        "lpips": -4.7534704208374023e-05,
+        "psnr": 0.0025157928466796875,
+        "ssim": 5.143880844116211e-05
+      },
+      "expert_mse_certificate": "weighted_normal_equation_lambda_star",
+      "field_variant": "pod_moe",
+      "method": "v106_podmoe_basepreserve",
+      "metrics": {
+        "lpips": 0.230616495013237,
+        "psnr": 29.600351333618164,
+        "ssim": 0.8918885588645935
+      },
+      "output_method": "ours_26000_v106_podmoe_basepreserve_room",
+      "passed": true,
+      "pod_base_keep_mode": "base_preserving_boundary",
+      "pod_stats": {
+        "base_observed_triangles": 3200713,
+        "boundary_debt_guard_mean": 0.8415217995643616,
+        "boundary_full_gain_mean": 0.3620469868183136,
+        "boundary_gain_mean": 0.36089518666267395,
+        "boundary_mse_scale_mean": 0.43485766649246216,
+        "boundary_reliability_mean": 0.21987369656562805,
+        "boundary_triangles": 1646706,
+        "boundary_weighted_pixels": 51194627,
+        "detail_debt_guard_mean": 0.384866327047348,
+        "detail_full_gain_mean": 0.6454641222953796,
+        "detail_gain_mean": 0.6438062191009521,
+        "detail_mse_scale_mean": 0.9912639260292053,
+        "detail_reliability_mean": 0.18922697007656097,
+        "detail_triangles": 378450,
+        "detail_weighted_pixels": 3818030,
+        "elapsed_sec": 4654.6858739852905,
+        "mean_abs_delta": 0.0067739086345029184,
+        "mean_surface_valid_fraction": 0.9983244828688793,
+        "total_accumulated_pixels": 62926768,
+        "valid_triangles": 3200713
+      },
+      "scene": "room",
+      "source": "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_full9_20260625_reports/room/room_v105_evidence_gated_mixture_report.json",
+      "source_kind": "report",
+      "status": null,
+      "v104c_metrics": {
+        "lpips": 0.23066402971744537,
+        "psnr": 29.597835540771484,
+        "ssim": 0.8918371200561523
+      },
+      "version": "v106"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.29400408267974854,
+        "psnr": 25.205041885375977,
+        "ssim": 0.7051656246185303
+      },
+      "diff_vs_clean": {
+        "lpips": -0.011869072914123535,
+        "psnr": 0.2554149627685547,
+        "ssim": 0.009495139122009277
+      },
+      "diff_vs_v104c": {
+        "lpips": -7.826089859008789e-05,
+        "psnr": 0.0011463165283203125,
+        "ssim": 6.139278411865234e-05
+      },
+      "expert_mse_certificate": "weighted_normal_equation_lambda_star",
+      "field_variant": "pod_moe",
+      "method": "v106_podmoe_basepreserve",
+      "metrics": {
+        "lpips": 0.282135009765625,
+        "psnr": 25.46045684814453,
+        "ssim": 0.7146607637405396
+      },
+      "output_method": "ours_26000_v106_podmoe_basepreserve_stump",
+      "passed": true,
+      "pod_base_keep_mode": "base_preserving_boundary",
+      "pod_stats": {
+        "base_observed_triangles": 2037233,
+        "boundary_debt_guard_mean": 0.8529877066612244,
+        "boundary_full_gain_mean": 0.3212956190109253,
+        "boundary_gain_mean": 0.3206261098384857,
+        "boundary_mse_scale_mean": 0.4064851403236389,
+        "boundary_reliability_mean": 0.24321171641349792,
+        "boundary_triangles": 921436,
+        "boundary_weighted_pixels": 14896511,
+        "detail_debt_guard_mean": 0.3125678300857544,
+        "detail_full_gain_mean": 0.7516775727272034,
+        "detail_gain_mean": 0.7516725063323975,
+        "detail_mse_scale_mean": 0.9988196492195129,
+        "detail_reliability_mean": 0.180385559797287,
+        "detail_triangles": 159936,
+        "detail_weighted_pixels": 650330,
+        "elapsed_sec": 1470.0348920822144,
+        "mean_abs_delta": 0.005471321448567323,
+        "mean_surface_valid_fraction": 0.9984171241521835,
+        "total_accumulated_pixels": 16408350,
+        "valid_triangles": 2037233
+      },
+      "scene": "stump",
+      "source": "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_full9_20260625_reports/stump/stump_v105_evidence_gated_mixture_report.json",
+      "source_kind": "report",
+      "status": null,
+      "v104c_metrics": {
+        "lpips": 0.2822132706642151,
+        "psnr": 25.45931053161621,
+        "ssim": 0.7145993709564209
+      },
+      "version": "v106"
+    },
+    {
+      "clean_metrics": {
+        "lpips": 0.4060436487197876,
+        "psnr": 20.934181213378906,
+        "ssim": 0.5645228028297424
+      },
+      "diff_vs_clean": {
+        "lpips": -0.02186676859855652,
+        "psnr": 0.3109111785888672,
+        "ssim": 0.013994872570037842
+      },
+      "diff_vs_v104c": {
+        "lpips": -0.00012066960334777832,
+        "psnr": 0.0013294219970703125,
+        "ssim": 9.918212890625e-05
+      },
+      "expert_mse_certificate": "weighted_normal_equation_lambda_star",
+      "field_variant": "pod_moe",
+      "method": "v106_podmoe_basepreserve",
+      "metrics": {
+        "lpips": 0.3841768801212311,
+        "psnr": 21.245092391967773,
+        "ssim": 0.5785176753997803
+      },
+      "output_method": "ours_26000_v106_podmoe_basepreserve_treehill",
+      "passed": true,
+      "pod_base_keep_mode": "base_preserving_boundary",
+      "pod_stats": {
+        "base_observed_triangles": 1839082,
+        "boundary_debt_guard_mean": 0.8427358865737915,
+        "boundary_full_gain_mean": 0.3228769600391388,
+        "boundary_gain_mean": 0.3217976987361908,
+        "boundary_mse_scale_mean": 0.4251925051212311,
+        "boundary_reliability_mean": 0.22489750385284424,
+        "boundary_triangles": 862288,
+        "boundary_weighted_pixels": 16244072,
+        "detail_debt_guard_mean": 0.3333117663860321,
+        "detail_full_gain_mean": 0.7223795652389526,
+        "detail_gain_mean": 0.7222340106964111,
+        "detail_mse_scale_mean": 0.9982377886772156,
+        "detail_reliability_mean": 0.17739138007164001,
+        "detail_triangles": 175623,
+        "detail_weighted_pixels": 943632,
+        "elapsed_sec": 1506.4998381137848,
+        "mean_abs_delta": 0.010226525702617235,
+        "mean_surface_valid_fraction": 0.997361914979087,
+        "total_accumulated_pixels": 18925036,
+        "valid_triangles": 1839082
+      },
+      "scene": "treehill",
+      "source": "/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_full9_20260625_reports/treehill/treehill_v105_evidence_gated_mixture_report.json",
+      "source_kind": "report",
+      "status": null,
+      "v104c_metrics": {
+        "lpips": 0.38429754972457886,
+        "psnr": 21.243762969970703,
+        "ssim": 0.578418493270874
+      },
+      "version": "v106"
+    }
+  ],
+  "schema_version": 1
+}

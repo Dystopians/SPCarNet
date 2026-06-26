@@ -1,0 +1,7 @@
+{
+  "ours_26000_v110_strict_train_even_odd_parent_gate_flowers": {
+    "LPIPS": 0.38038691878318787,
+    "PSNR": 19.966075897216797,
+    "SSIM": 0.5228427052497864
+  }
+}

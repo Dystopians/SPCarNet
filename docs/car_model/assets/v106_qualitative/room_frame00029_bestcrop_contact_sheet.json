@@ -1,0 +1,32 @@
+{
+  "base_method": "ours_26000_v104c_shrink_view_affine_min1_minviews1_{scene}",
+  "candidate_method": "ours_26000_v106_podmoe_basepreserve_{scene}",
+  "crops": [
+    {
+      "label": "crop1:600,375,420,300",
+      "x0": 600,
+      "x1": 1020,
+      "y0": 375,
+      "y1": 675
+    }
+  ],
+  "error_scale": 0.25,
+  "frame_glob": "*.png",
+  "frame_index": [
+    29
+  ],
+  "frames": [
+    {
+      "base_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/room/detached_model/test/ours_26000_v104c_shrink_view_affine_min1_minviews1_room/renders/00029.png",
+      "candidate_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/room/detached_model/test/ours_26000_v106_podmoe_basepreserve_room/renders/00029.png",
+      "frame_name": "00029.png",
+      "gt_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/room/detached_model/test/ours_26000_v106_podmoe_basepreserve_room/gt/00029.png",
+      "scene": "room"
+    }
+  ],
+  "max_frames": 1,
+  "model_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625",
+  "output": "docs/car_model/assets/v106_qualitative/room_frame00029_bestcrop_contact_sheet.png",
+  "tile_height": 160,
+  "tile_width": 240
+}

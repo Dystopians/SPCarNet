@@ -1,0 +1,283 @@
+{
+  "base_method": "ours_26000_v104c_shrink_view_affine_min1_minviews1_stump",
+  "best_delta_mse_views": [
+    {
+      "base_mse": 0.008910424608164297,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.008906793924561491,
+      "cross_term_2ed": -3.857163690881753e-06,
+      "delta_energy_d2": 2.2648008807384801e-07,
+      "delta_mse": -3.630683602805565e-06,
+      "image": "00000.png",
+      "mean_abs_delta": 4.7509985456328466e-05
+    },
+    {
+      "base_mse": 0.00200621626565222,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.002005006736535832,
+      "cross_term_2ed": -1.5325024278839104e-06,
+      "delta_energy_d2": 3.229733114957607e-07,
+      "delta_mse": -1.209529116388136e-06,
+      "image": "00008.png",
+      "mean_abs_delta": 5.927707779428537e-05
+    },
+    {
+      "base_mse": 0.0019414252044460813,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.0019404882958560775,
+      "cross_term_2ed": -1.1089484141733908e-06,
+      "delta_energy_d2": 1.720398241696454e-07,
+      "delta_mse": -9.369085900037908e-07,
+      "image": "00013.png",
+      "mean_abs_delta": 4.365125498886858e-05
+    },
+    {
+      "base_mse": 0.0017244454053964937,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.0017235697046860939,
+      "cross_term_2ed": -1.0956427772053538e-06,
+      "delta_energy_d2": 2.1994206680542079e-07,
+      "delta_mse": -8.757007103998675e-07,
+      "image": "00014.png",
+      "mean_abs_delta": 5.475401445213164e-05
+    },
+    {
+      "base_mse": 0.00220537520765579,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.002204608597111296,
+      "cross_term_2ed": -1.0028926766694022e-06,
+      "delta_energy_d2": 2.3628213217561034e-07,
+      "delta_mse": -7.666105444940029e-07,
+      "image": "00007.png",
+      "mean_abs_delta": 5.9977045789960045e-05
+    }
+  ],
+  "candidate_method": "ours_26000_v106_podmoe_basepreserve_stump",
+  "interpretation": "delta_mse = 2 * (base - gt) * (candidate - base) + (candidate - base)^2. Positive mean_delta_mse means the candidate render increases MSE relative to the base render.",
+  "mean_abs_delta": 4.8132161294457275e-05,
+  "mean_base_mse": 0.0032740271020361067,
+  "mean_candidate_mse": 0.003273223446212544,
+  "mean_cross_term_2ed": -1.0197642875892814e-06,
+  "mean_delta_energy_d2": 2.16108464026317e-07,
+  "mean_delta_mse": -8.036558235629084e-07,
+  "model_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/stump/detached_model",
+  "mse_improved_views": 16,
+  "mse_worse_views": 0,
+  "rows": [
+    {
+      "base_mse": 0.008910424608164297,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.008906793924561491,
+      "cross_term_2ed": -3.857163690881753e-06,
+      "delta_energy_d2": 2.2648008807384801e-07,
+      "delta_mse": -3.630683602805565e-06,
+      "image": "00000.png",
+      "mean_abs_delta": 4.7509985456328466e-05
+    },
+    {
+      "base_mse": 0.006733351276928917,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.00673266510398895,
+      "cross_term_2ed": -1.135300142973235e-06,
+      "delta_energy_d2": 4.491272030060561e-07,
+      "delta_mse": -6.861729399667768e-07,
+      "image": "00001.png",
+      "mean_abs_delta": 6.255165386246376e-05
+    },
+    {
+      "base_mse": 0.00608890771703152,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.006088218394817259,
+      "cross_term_2ed": -9.172895776079603e-07,
+      "delta_energy_d2": 2.2796736334838866e-07,
+      "delta_mse": -6.893222142612468e-07,
+      "image": "00002.png",
+      "mean_abs_delta": 5.563724618071881e-05
+    },
+    {
+      "base_mse": 0.0035985673024704575,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.0035979251438938626,
+      "cross_term_2ed": -8.833117834516408e-07,
+      "delta_energy_d2": 2.411532068561072e-07,
+      "delta_mse": -6.421585765949145e-07,
+      "image": "00003.png",
+      "mean_abs_delta": 5.2880646308131364e-05
+    },
+    {
+      "base_mse": 0.002725332847587231,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.002724886435428075,
+      "cross_term_2ed": -5.987331069948196e-07,
+      "delta_energy_d2": 1.5232094783855015e-07,
+      "delta_mse": -4.464121591560635e-07,
+      "image": "00004.png",
+      "mean_abs_delta": 3.65714002826043e-05
+    },
+    {
+      "base_mse": 0.003054947240004605,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.0030544500009325624,
+      "cross_term_2ed": -7.027725326331056e-07,
+      "delta_energy_d2": 2.0553346059096302e-07,
+      "delta_mse": -4.972390720424553e-07,
+      "image": "00005.png",
+      "mean_abs_delta": 5.1148544386446944e-05
+    },
+    {
+      "base_mse": 0.0027060566756296604,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.00270553192198667,
+      "cross_term_2ed": -6.959749665756494e-07,
+      "delta_energy_d2": 1.712213235850904e-07,
+      "delta_mse": -5.247536429904727e-07,
+      "image": "00006.png",
+      "mean_abs_delta": 4.341199334352226e-05
+    },
+    {
+      "base_mse": 0.00220537520765579,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.002204608597111296,
+      "cross_term_2ed": -1.0028926766694022e-06,
+      "delta_energy_d2": 2.3628213217561034e-07,
+      "delta_mse": -7.666105444940029e-07,
+      "image": "00007.png",
+      "mean_abs_delta": 5.9977045789960045e-05
+    },
+    {
+      "base_mse": 0.00200621626565222,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.002005006736535832,
+      "cross_term_2ed": -1.5325024278839104e-06,
+      "delta_energy_d2": 3.229733114957607e-07,
+      "delta_mse": -1.209529116388136e-06,
+      "image": "00008.png",
+      "mean_abs_delta": 5.927707779428537e-05
+    },
+    {
+      "base_mse": 0.002464306128273511,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.002463571988243139,
+      "cross_term_2ed": -9.164210899676352e-07,
+      "delta_energy_d2": 1.8228105959581035e-07,
+      "delta_mse": -7.34140030371911e-07,
+      "image": "00009.png",
+      "mean_abs_delta": 4.6097323440357155e-05
+    },
+    {
+      "base_mse": 0.002210458778866855,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.0022104127581716155,
+      "cross_term_2ed": -1.8473157706226438e-07,
+      "delta_energy_d2": 1.3871088182280687e-07,
+      "delta_mse": -4.602069523943278e-08,
+      "image": "00010.png",
+      "mean_abs_delta": 3.509637762274705e-05
+    },
+    {
+      "base_mse": 0.0016815161556298379,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.001680809644976131,
+      "cross_term_2ed": -9.201742196764659e-07,
+      "delta_energy_d2": 2.1366356596996645e-07,
+      "delta_mse": -7.065106537068773e-07,
+      "image": "00011.png",
+      "mean_abs_delta": 4.6962737904727144e-05
+    },
+    {
+      "base_mse": 0.0018316692803953833,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.0018314290255670098,
+      "cross_term_2ed": -3.956950596771112e-07,
+      "delta_energy_d2": 1.5544023130346378e-07,
+      "delta_mse": -2.40254828373556e-07,
+      "image": "00012.png",
+      "mean_abs_delta": 3.9451448752261735e-05
+    },
+    {
+      "base_mse": 0.0019414252044460813,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.0019404882958560775,
+      "cross_term_2ed": -1.1089484141733908e-06,
+      "delta_energy_d2": 1.720398241696454e-07,
+      "delta_mse": -9.369085900037908e-07,
+      "image": "00013.png",
+      "mean_abs_delta": 4.365125498886858e-05
+    },
+    {
+      "base_mse": 0.0017244454053964937,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.0017235697046860939,
+      "cross_term_2ed": -1.0956427772053538e-06,
+      "delta_energy_d2": 2.1994206680542079e-07,
+      "delta_mse": -8.757007103998675e-07,
+      "image": "00014.png",
+      "mean_abs_delta": 5.475401445213164e-05
+    },
+    {
+      "base_mse": 0.0025014335384448473,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.002501207462644636,
+      "cross_term_2ed": -3.6867455799480377e-07,
+      "delta_energy_d2": 1.4259875778358363e-07,
+      "delta_mse": -2.2607580021146573e-07,
+      "image": "00015.png",
+      "mean_abs_delta": 3.51358301457619e-05
+    }
+  ],
+  "schema_version": 1,
+  "split": "test",
+  "view_count": 16,
+  "worst_delta_mse_views": [
+    {
+      "base_mse": 0.002210458778866855,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.0022104127581716155,
+      "cross_term_2ed": -1.8473157706226438e-07,
+      "delta_energy_d2": 1.3871088182280687e-07,
+      "delta_mse": -4.602069523943278e-08,
+      "image": "00010.png",
+      "mean_abs_delta": 3.509637762274705e-05
+    },
+    {
+      "base_mse": 0.0025014335384448473,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.002501207462644636,
+      "cross_term_2ed": -3.6867455799480377e-07,
+      "delta_energy_d2": 1.4259875778358363e-07,
+      "delta_mse": -2.2607580021146573e-07,
+      "image": "00015.png",
+      "mean_abs_delta": 3.51358301457619e-05
+    },
+    {
+      "base_mse": 0.0018316692803953833,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.0018314290255670098,
+      "cross_term_2ed": -3.956950596771112e-07,
+      "delta_energy_d2": 1.5544023130346378e-07,
+      "delta_mse": -2.40254828373556e-07,
+      "image": "00012.png",
+      "mean_abs_delta": 3.9451448752261735e-05
+    },
+    {
+      "base_mse": 0.002725332847587231,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.002724886435428075,
+      "cross_term_2ed": -5.987331069948196e-07,
+      "delta_energy_d2": 1.5232094783855015e-07,
+      "delta_mse": -4.464121591560635e-07,
+      "image": "00004.png",
+      "mean_abs_delta": 3.65714002826043e-05
+    },
+    {
+      "base_mse": 0.003054947240004605,
+      "candidate_improves_mse": true,
+      "candidate_mse": 0.0030544500009325624,
+      "cross_term_2ed": -7.027725326331056e-07,
+      "delta_energy_d2": 2.0553346059096302e-07,
+      "delta_mse": -4.972390720424553e-07,
+      "image": "00005.png",
+      "mean_abs_delta": 5.1148544386446944e-05
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "base_method": "ours_26000_v104c_shrink_view_affine_min1_minviews1_{scene}",
+  "candidate_method": "ours_26000_v106_podmoe_basepreserve_{scene}",
+  "crops": [
+    {
+      "label": "crop1:828,0,420,277",
+      "x0": 828,
+      "x1": 1248,
+      "y0": 0,
+      "y1": 277
+    }
+  ],
+  "error_scale": 0.25,
+  "frame_glob": "*.png",
+  "frame_index": [
+    10
+  ],
+  "frames": [
+    {
+      "base_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/treehill/detached_model/test/ours_26000_v104c_shrink_view_affine_min1_minviews1_treehill/renders/00010.png",
+      "candidate_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/treehill/detached_model/test/ours_26000_v106_podmoe_basepreserve_treehill/renders/00010.png",
+      "frame_name": "00010.png",
+      "gt_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/treehill/detached_model/test/ours_26000_v106_podmoe_basepreserve_treehill/gt/00010.png",
+      "scene": "treehill"
+    }
+  ],
+  "max_frames": 1,
+  "model_path": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625",
+  "output": "docs/car_model/assets/v106_qualitative/treehill_frame00010_bestcrop_contact_sheet.png",
+  "tile_height": 160,
+  "tile_width": 240
+}
