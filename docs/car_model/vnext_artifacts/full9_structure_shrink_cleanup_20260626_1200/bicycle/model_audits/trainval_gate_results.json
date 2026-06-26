@@ -1,0 +1,7 @@
+{
+  "ours_26000_phasej_trainval_gate_gaincert_v2_faceshrink_fair": {
+    "LPIPS": 0.29043254256248474,
+    "PSNR": 21.990375518798828,
+    "SSIM": 0.7016911506652832
+  }
+}

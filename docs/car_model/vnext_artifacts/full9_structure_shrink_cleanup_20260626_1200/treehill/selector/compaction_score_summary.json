@@ -1,0 +1,87 @@
+{
+  "area": {
+    "mean": 1.0,
+    "min": 1.0,
+    "max": 1.0
+  },
+  "area_smallness": {
+    "mean": 0.2165815084064275,
+    "min": 0.0,
+    "max": 1.0
+  },
+  "render_contribution": {
+    "mean": 0.7826350831587819,
+    "min": 0.0,
+    "max": 0.9990000128746033
+  },
+  "sparse_support": {
+    "mean": 0.0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "normal_support": {
+    "mean": 0.0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "local_redundancy": {
+    "mean": 0.2165815084064275,
+    "min": 0.0,
+    "max": 1.0
+  },
+  "boundary_risk": {
+    "mean": 0.0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "positive_surface_evidence": {
+    "mean": 0.7826350831587819,
+    "min": 0.0,
+    "max": 0.9990000128746033
+  },
+  "negative_free_space": {
+    "mean": 0.0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "explanation_debt": {
+    "mean": 0.0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "topology_cost": {
+    "mean": 0.2165815084064275,
+    "min": 0.0,
+    "max": 1.0
+  },
+  "uncertainty": {
+    "mean": 0.0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "protected": {
+    "mean": 0.0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "score_area_smallest": {
+    "mean": 0.2165815084064275,
+    "min": 0.0,
+    "max": 1.0
+  },
+  "score_csef_low_evidence": {
+    "mean": 0.21658150868660345,
+    "min": 0.0,
+    "max": 1.0
+  },
+  "score_csef_low_evidence_boundary_protected": {
+    "mean": 0.21658150868660345,
+    "min": 0.0,
+    "max": 1.0
+  },
+  "score_pareto_area_csef": {
+    "mean": 0.21658150868660345,
+    "min": 0.0,
+    "max": 1.0
+  }
+}

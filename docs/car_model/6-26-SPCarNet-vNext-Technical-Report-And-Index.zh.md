@@ -2,7 +2,7 @@
 
 日期：2026-06-26
 用途：给 2026-06-27 PPT 准备的中文技术报告、证据索引和结论边界。
-范围：基于现有 vNext prompt、feasibility plan、implementation log、`vnext_artifacts` 已有结果整理；2026-06-26 已补入 garden soft-shrink/face-softshrink，以及 counter/bonsai/room strict frozen-policy face-softshrink 真实 pilot 结果。
+范围：基于现有 vNext prompt、feasibility plan、implementation log、`vnext_artifacts` 已有结果整理；2026-06-26 已补入 garden soft-shrink/face-softshrink、counter/bonsai/room strict frozen-policy face-softshrink、ready4 structure-aware shrink，以及 full9 fixed-policy cleanup 结果。
 
 ---
 
@@ -25,13 +25,13 @@ Phase-J render-time teacher
 - **协议与编排层已跑通**：vNext scene/full9 runner、manifest、no-test-GT audit、dry-run、W&B offline dry-run、assembler dry-run 已完成。
 - **已有真实 pilot 从 garden 扩展到 strict 三场景 frozen-policy**：garden face-softshrink 是第一个非零 accepted proof-of-life；同一套 frozen face-softshrink policy 又在 `counter,bonsai,room` 上完成 strict no-target-GT apply 验证，3/3 protocol pass、3/3 `target_gt_visible_to_apply=false`、2/3 nonzero accepted、1/3 fallback/no-op 且 `changed_fraction=0`。
 - **最新 structure-aware shrink 是当前首选 vNext 里程碑**：它新增 train-policy-val 局部 L1/gradient structure-risk shrink，在 `counter,bonsai,room,garden` strict no-target-GT apply 下达到 4/4 protocol pass、4/4 `target_gt_visible_to_apply=false`、4/4 nonzero accepted，并把 `room` 从旧策略 fallback/no-op 变成 accepted nonzero。相对 Phase-F compact parent 均值为 `+0.00076151` PSNR、`-0.00000302` SSIM、`-0.00002038` LPIPS。
-- **最新输入闭环状态是 ready9**：`stump/treehill/flowers/kitchen/bicycle` 五个缺失输入链已经本地重建。`stump/treehill/flowers` 被 strict certificate 正确拒绝为 fallback/no-op；`kitchen` accepted nonzero，同证据微小提升 `+0.000786` PSNR、`+0.00000256` SSIM、`-0.00002818` LPIPS；`bicycle` 关闭最后一个 input gap，accepted nonzero，同证据微小提升 `+0.00000954` PSNR、`+0.000000179` SSIM、`-0.000000030` LPIPS。preflight 已是 `9 / 9` input-ready、`0 / 9` missing。
-- **不能宣称 vNext 已全面超越 MeshSplatting baseline**：最新 strict 三场景是真实非零里程碑和严格协议证据，但收益很小，counter/bonsai 仍有极小 SSIM 回退，不是 full9 结果，也不是超过 v106 或 clean MeshSplatting 的证据。
+- **最新 full9 固定策略结果已完成但不 promotion**：`stump/treehill/flowers/kitchen/bicycle` 五个缺失输入链重建后，固定 structure-aware shrink policy 完成 full9 cleanup run：`9 / 9` scenes complete、`9 / 9` protocol pass、`6 / 9` accepted nonzero、`3 / 9` fallback/no-op，mean changed fraction `0.002756271`，mean metrics `25.067699 PSNR / 0.741260 SSIM / 0.306689 LPIPS`。
+- **不能宣称 vNext 已全面超越 MeshSplatting baseline**：full9 fixed-policy cleanup 低于本地 clean MeshSplatting（`25.151682 / 0.749018 / 0.287621`）和 v106（`25.831280 / 0.760830 / 0.268435`）。它是真实 full9 协议闭环、审计闭环和瓶颈诊断，不是质量超越证据。
 - **当前 verified representation 质量线仍是 v106 POD-MoE base-preserve**；当前 verified broad RGB endpoint 仍是 Phase-J，但 Phase-J 是 render-time guarded ELA portfolio，不是 baked representation。
 
 PPT 推荐讲法：
 
-> vNext 是把 Phase-J 的强 render-time residual teacher 转成可部署 surface texture representation 的下一阶段。我们已经完成 strict no-target-GT apply 协议，结构感知 shrink 在 ready4 上 4/4 nonzero accepted，并且把原本缺失的 stump/treehill/flowers/kitchen/bicycle 输入链补齐到 9/9 input-ready。当前收益仍是微小级别，stump/treehill/flowers 是安全 fallback 负例，kitchen/bicycle 是 accepted micro-gain，因此远不足以证明超过 clean MeshSplatting 或 v106。
+> vNext 是把 Phase-J 的强 render-time residual teacher 转成可部署 surface texture representation 的下一阶段。我们已经完成 strict no-target-GT full9 固定策略执行：9/9 场景完成、6/9 accepted nonzero、3/9 fallback/no-op，并保存了完整机器可读审计。当前收益仍不足，full9 均值低于 clean MeshSplatting 和 v106，因此它是协议闭环与下一阶段研究 scaffold，不是 promoted endpoint。
 
 ---
 
@@ -42,13 +42,13 @@ PPT 推荐讲法：
 | Phase-J endpoint | full9：9/9 scene strict RGB wins vs selected clean MeshSplatting；mean `+1.3311` PSNR / `+0.0347` SSIM / `-0.0634` LPIPS；平均删去 `7.6479%` triangles | 当前最强 broad RGB endpoint，可作为 teacher / upper bound | 不能说它已经是持久 baked representation；不要把 7.65% triangle reduction 讲成 compression-paper 级结果 |
 | v106 POD-MoE base-preserve | full9：mean `+0.6796` PSNR / `+0.0118` SSIM / `-0.0192` LPIPS vs clean；但仅比 v104c 多约 `+0.0022` PSNR | 当前 verified MeshSplatting-compatible representation 质量线 | 不能说 v106 已关闭 paper-final branch；不能把微小增量讲成大突破 |
 | v110/v113 系列 | strict split / OOT / fallback 诊断 | 证明 naive train-only gate 仍可能 miss test failures，fallback 很重要 | 不能把 v113b/v113c 讲成质量突破，它们主要是安全修复 |
-| vNext protocol | py_compile、schema smoke、scene dry-run、W&B offline dry-run、two-scene wrapper dry-run | 协议、manifest、no-test-GT audit、runner interface 已可用 | 不能说 full9 已完成 |
+| vNext protocol | py_compile、schema smoke、scene dry-run、W&B offline dry-run、two-scene wrapper dry-run、full9 fixed-policy cleanup | 协议、manifest、no-test-GT audit、runner interface 和 full9 执行已可用 | 不能说 full9 协议完成等价于质量完成 |
 | vNext garden fallback pilot | 单场景真实 run，协议审计通过，但 fallback/no-op | 安全证书拒绝不可靠候选，未使用 test GT 做选择 | 不能说 fallback 指标是 vNext 非零方法收益 |
 | vNext garden face-softshrink pilot | 单场景真实 run，协议审计通过，非零 accepted atlas，`0.208%` target pixels changed | 第一个可汇报的非零 vNext residual surface texture 里程碑；相对 no-op parent 有极小三指标正向变化 | 不能说已 full9 闭环；不能说已超过 v106 或 clean MeshSplatting；不能说视觉效果明显 |
 | vNext counter strict face-softshrink pilot | 单场景真实 run，strict no-target-GT apply 协议审计通过，非零 accepted atlas，`1.177%` target pixels changed | strict no-target-GT apply 的第一个非零证据；adapter apply 阶段看不到 target GT | 不能说已三指标全胜；SSIM 相对 Phase-F compact parent 微退 |
 | vNext strict frozen-policy multiscene | `counter,bonsai,room` 三场景真实 run；3/3 protocol pass；3/3 target GT hidden from apply；2/3 nonzero accepted；1/3 fallback/no-op with `changed_fraction=0` | 当前最强的 vNext 公平性/protocol package；证明 frozen policy 可跨场景执行 | 不能说质量闭环；均值只是 `+0.001086` PSNR / `-0.000020` SSIM / `-0.000037` LPIPS，room delta 是 parent-level 评估差异，SSIM 0/3 胜 |
 | vNext structure-aware shrink ready4 | `counter,bonsai,room,garden` 四场景真实 run；4/4 protocol pass；4/4 target GT hidden from apply；4/4 nonzero accepted；room 从 old fallback/no-op 变成 accepted nonzero | 当前首选 vNext 严格里程碑；证明 policy-val structure-risk shrink 能缓解 room fallback 和部分 SSIM 风险，并把 garden 纳入 strict row | 不能说 paper-final；均值只是 `+0.00076151` PSNR / `-0.00000302` SSIM / `-0.00002038` LPIPS，仍未 full9 quality table，仍未超过 v106/clean |
-| vNext ready9 input closure | `stump/treehill/flowers/kitchen/bicycle` 输入链重建后，manifest preflight 为 `9/9` input-ready、`0/9` missing；kitchen/bicycle accepted nonzero micro-gain，stump/treehill/flowers strict fallback/no-op | 输入和协议阻塞已闭合，可以启动固定策略 full9 manifest quality run | 不能说 full9 quality 已完成；不能说 9/9 input-ready 等价于 9/9 quality-positive；不能说 vNext 超过 v106/clean |
+| vNext full9 fixed-policy cleanup | 9/9 complete；9/9 protocol pass；6/9 accepted nonzero；3/9 fallback/no-op；mean `25.067699 / 0.741260 / 0.306689` | full9 协议/审计/证据闭环已完成，当前方法瓶颈已被清楚定位 | 不能说质量 promotion；结果低于 clean MeshSplatting 和 v106，且没有 full9 定性图片 payload |
 
 ---
 
@@ -383,6 +383,9 @@ strict frozen-policy 3-scene mean delta vs Phase-F compact parent = +0.001086 PS
 | `docs/car_model/vnext_artifacts/bonsai_strict_face_softshrink_20260626_052500/bonsai_strict_face_softshrink_summary.json` | bonsai strict 摘要 |
 | `docs/car_model/vnext_artifacts/room_strict_face_softshrink_20260626_052500/room_strict_face_softshrink_summary.json` | room strict 摘要 |
 | `docs/car_model/vnext_artifacts/strict_frozen_policy_multiscene_20260626_052500/strict_frozen_policy_multiscene_summary.md` | strict frozen-policy 三场景聚合表 |
+| `docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.md` | structure-aware shrink ready4 聚合表 |
+| `docs/car_model/vnext_artifacts/full9_structure_shrink_cleanup_20260626_1200/summary/vnext_manifest_summary_enhanced.md` | full9 fixed-policy cleanup 聚合表 |
+| `docs/car_model/vnext_artifacts/full9_structure_shrink_cleanup_20260626_1200/vnext_full9_cleanup_promotion_manifest.md` | full9 cleanup 轻量 artifact promotion manifest |
 
 ### 6.3 PPT 建议页序
 
@@ -391,19 +394,19 @@ strict frozen-policy 3-scene mean delta vs Phase-F compact parent = +0.001086 PS
 3. **Method Diagram**：teacher cache -> residual surface texture -> capacity -> certificate -> fallback。
 4. **Current Baselines**：Phase-J upper bound；v106 verified representation line。
 5. **Protocol Integrity**：fit/policy-val/test split；`selection_uses_test_gt=false`；machine-readable manifests。
-6. **Garden Pilot**：从 fallback/no-op 到 face-softshrink nonzero micro-gain。
-7. **Counter/Bonsai/Room Strict Pilot**：同一 frozen policy，3/3 no-target-GT apply，2/3 nonzero accepted，1/3 fallback。
-8. **Honest Gap**：SSIM 三场景全退，还没有 full9、还没有超过 v106/clean baseline、视觉优势仍不明显。
+6. **Garden/Ready4 Pilot**：从 fallback/no-op 到 face-softshrink，再到 ready4 structure-aware shrink 4/4 nonzero accepted。
+7. **Full9 Fixed Policy**：9/9 complete，9/9 no-target-GT protocol pass，6/9 accepted nonzero，3/9 fallback/no-op。
+8. **Honest Gap**：full9 均值低于 clean/v106，mean changed fraction 只有 0.2756%，缺 full9 定性图片、完整 ablation 与预算表。
 
 ---
 
 ## 7. 主要短板
 
-1. **非零 vNext texture 已被接受，但收益仍太小**
-   garden changed fraction 为 `0.208%`，counter strict changed fraction 为 `1.177%`，bonsai strict changed fraction 为 `0.151%`，room strict fallback 为 `0%`。这说明路线已从 fallback-only 推进到真实非零 apply，但当前增益仍不足以作为 paper-final 质量 claim。
+1. **full9 协议已闭环，但质量低于 baseline**
+   full9 cleanup 为 `9 / 9` complete、`6 / 9` accepted nonzero、`3 / 9` fallback/no-op，mean changed fraction 为 `0.2756%`。但均值 `25.067699 / 0.741260 / 0.306689` 低于 clean MeshSplatting 和 v106，因此不能 promotion。
 
 2. **SSIM / 结构一致性是当前最硬瓶颈**
-   strict 三场景里 PSNR/LPIPS 均值略好，但主要由 counter/bonsai 的非零 accepted 输出贡献；`room` 是 fallback/no-op，changed fraction 为 0。SSIM 0/3 胜，`room` 的 policy-val mean relative gain 为正，但 lower-tail、min-view、SSIM 和 L1 gate 共同触发 fallback。
+   ready4/accepted scenes 中局部 PSNR/LPIPS 有微小正向，但全局 SSIM 与 LPIPS aggregate 仍不够。`flowers/stump/treehill` 被 lower-tail、min-view、SSIM/L1 风险拒绝为 fallback/no-op，说明当前 surface texture capacity 还不能稳定覆盖困难 outdoor/low-support view tail。
 
 3. **surface-addressability 未证明足够强**
    Phase-J 收益可能部分来自 view-support / ELA portfolio 效应，不一定能直接 bake 到 face/UV texture。需要 residual consistency 和 face/bin transfer audit。
@@ -414,35 +417,39 @@ strict frozen-policy 3-scene mean delta vs Phase-F compact parent = +0.001086 PS
 5. **teacher cache 不是完全 fresh vNext cache**
    garden run `skip_teacher_cache=True`，复用了既有 train evidence/cache。后续要跑 clean vNext teacher cache 或明确复用边界。
 
-6. **full9 和 ablations 未完成**
-   prompt 要求的 clean、Phase-F、Phase-J teacher、v104c、v106、fixed texture、no-certificate、full vNext 表格尚未完成。
+6. **full9 已完成，但 ablations 和同表比较未完成**
+   prompt 要求的 clean、Phase-F、Phase-J teacher、v104c、v106、fixed texture、no-certificate、adaptive capacity 和 full vNext 同表 ablation 仍未完成。
 
 7. **size / runtime / storage accounting 不完整**
    当前有 command elapsed time，但还缺系统化的 texture bytes、model storage、render overhead、triangle count、fallback rate 表。
+
+8. **full9 cleanup 没有保留定性 payload**
+   为了节省 `/dev/shm` 空间，本次 full9 run 使用了 scene cleanup。repo 内有定量、per-view、audit、selector 和 log 证据，但没有 full9 PNG/JPG/MP4 定性输出；已有 vNext 定性图只来自早期 garden face-softshrink pilot。
 
 ---
 
 ## 8. 下一步建议
 
-### 8.1 先做 leak-free one-scene recovery，而不是直接 full9
+### 8.1 以 full9 cleanup 作为协议 baseline，改做强表示升级
 
 推荐顺序：
 
-1. 固定 `flowers` 和 `garden` pilot protocol；
-2. 明确 parent row：建议至少包含 selected clean、v106 parent、Phase-F compact parent 三类；
-3. 重建或明确标记 train-only teacher cache；
-4. 先跑 fixed-capacity texture 和 full certificate；
-5. 只有出现至少一个 nonzero accepted texture 且不劣于 v106，才进入 adaptive capacity 和 full9。
+1. 固定当前 full9 cleanup 作为 protocol baseline，不再把 9/9 execution 当成待验证项；
+2. 明确 parent row：至少包含 selected clean、v106 parent、Phase-F compact parent 三类；
+3. 重建或明确标记 train-only Phase-J/ELA teacher cache；
+4. 从 fixed-capacity texture 升级到 adaptive per-region capacity；
+5. 加 no-certificate、no-structure、no-adaptive-capacity、fresh-teacher-cache ablation；
+6. 只有同一固定协议超过 clean/v106，才 promotion。
 
-### 8.2 针对 garden failure 的诊断
+### 8.2 针对 full9 失败模式的诊断
 
-garden pilot 的候选不是完全无信号，mean MSE 有收益，但 tail/SSIM 拒绝。下一轮应优先诊断：
+当前候选不是完全无信号，6/9 场景会产生非零 accepted residual output；但 aggregate 低于 clean/v106，说明收益过小且 view-tail 风险仍强。下一轮应优先诊断：
 
-- 哪些 face/bin 贡献了 mean gain，哪些 view 造成 tail loss；
-- SSIM 失败是否来自局部高频错位、边界错改或 view-conditioned basis OOD；
-- 是否需要 per-region/local alpha，而不是 scene-level alpha；
-- support expansion 是否把低支持 target footprint 区域带入了风险；
-- Phase-J teacher residual 是否在该区域真正 surface-consistent。
+- 哪些 face/bin 贡献了 accepted gain，哪些 view/region 造成 tail loss；
+- SSIM/LPIPS 失败是否来自局部高频错位、边界错改或 view-conditioned basis OOD；
+- 是否需要 per-region/local alpha 和 adaptive texture capacity，而不是固定 texture size 16；
+- `flowers/stump/treehill` 的 target footprint 是否本质低支持或 out-of-trajectory；
+- Phase-J teacher residual 是否在这些区域真正 surface-consistent。
 
 ### 8.3 Promotion / reject 标准
 
@@ -456,7 +463,7 @@ garden pilot 的候选不是完全无信号，mean MSE 有收益，但 tail/SSIM
 - 多个场景有 material nonzero accepted improvements，而不是仅有微小改动或 fallback-only；
 - 报告 storage、runtime、texture budget、triangle count、fallback rate。
 
-如果后续新场景重新退回 fallback-only，或只能得到不可见的微小改动，应停止盲目 full9，改为给出 no-go diagnosis：
+当前 full9 已经显示“只能得到不可见的微小改动或 fallback/no-op”这一瓶颈。后续若强 teacher/adaptive capacity 仍不能放大收益，应停止盲目重跑，改为给出 no-go diagnosis：
 
 ```text
 teacher residual is not surface-addressable
@@ -480,4 +487,4 @@ Do not promote vNext as completed or superior yet.
 
 PPT 最后一页建议写：
 
-> vNext 已经把“方法应该如何公平验证”搭起来了，并在 garden/counter/bonsai 上证明非零 residual surface texture 可以在证书约束下被接受，也在 room 上证明 fallback 能阻止不可靠候选。下一步的真正目标不是再证明 proof-of-life，而是解决 SSIM/结构一致性瓶颈，并在 strict full9 上把非零收益放大到可见、可复现、可超过 v106/clean baseline 的程度。
+> vNext 已经把“方法应该如何公平验证”搭起来了，并完成 full9 固定策略执行：9/9 场景、6/9 非零 accepted、3/9 fallback/no-op、无 target-GT selection/apply 泄漏。下一步的真正目标不是再证明 proof-of-life，而是用更强 teacher distillation 和 adaptive surface capacity 解决 SSIM/结构一致性瓶颈，把非零收益放大到可见、可复现、可超过 v106/clean baseline 的程度。

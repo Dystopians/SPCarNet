@@ -15,6 +15,8 @@
 - [vNext 技术报告与 artifact 索引](docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md)
 - [vNext structure-aware shrink strict 多场景日志](docs/car_model/6-26-vNext-StructureAwareShrink-Strict-Multiscene-Log.md)
 - [vNext manifest runner 与 full9 缺口日志](docs/car_model/6-26-vNext-ManifestRunner-and-Full9Gap-Log.md)
+- [vNext full9 固定策略 cleanup/evidence 日志](docs/car_model/6-26-vNext-Full9FixedPolicy-CleanupRun-Log.md)
+- [vNext full9 固定策略 artifact 汇总表](docs/car_model/vnext_artifacts/full9_structure_shrink_cleanup_20260626_1200/summary/vnext_manifest_summary_enhanced.md)
 - [vNext structure-aware shrink ready4 artifact 聚合表](docs/car_model/vnext_artifacts/strict_structure_aware_shrink_ready4_20260626_071413/strict_structure_aware_shrink_ready4_summary.md)
 - [vNext stump 重建 / ready5 拒绝日志](docs/car_model/6-26-vNext-StumpInputRebuild-Ready5-and-Rejection-Log.md)
 - [vNext treehill 重建 / ready6 拒绝日志](docs/car_model/6-26-vNext-TreehillInputRebuild-Ready6-and-Rejection-Log.md)
@@ -30,7 +32,7 @@
 
 简短状态：`v106 POD-MoE base-preserve` 是当前已验证的质量主线，在 assembled selected full9 表上相对本地 clean MeshSplatting baseline 三个指标均值都更好。`v113b/v113c` 是严格 gate 的安全修复，改善安全性并部分修复 garden v110b，但没有超过 v106。`v114_oof_refit_pod_moe` 是当前正在跑的 candidate-side 长程实验，还不是已完成结果。最新状态附录：v110 counter 在 field build 阶段以 return code `-9` 失败，大概率是内存/共享盘压力导致，因此 strict branch 仍需低内存 field-builder 修复后重跑。
 
-vNext 状态：certified residual surface texture 方向可以推进，但不能承诺已经产生论文级结果。最新 structure-aware shrink 里程碑新增 train-policy-val 局部 L1/gradient 结构风险 shrink，并修复了 parent-edge apply/profile 接口转发。在 ready 场景 `counter,bonsai,room,garden` strict no-target-GT apply 下，固定 structure-aware policy 为 `4 / 4` accepted，相对 Phase-F compact parent 的平均变化是 `+0.00076151` PSNR、`-0.00000302` SSIM、`-0.00002038` LPIPS。最重要修复是 `room` 从旧 strict face-softshrink fallback/no-op 变成 accepted nonzero output，`garden` 也相对 Phase-F parent 和旧 garden face-softshrink pilot 三指标小幅正向。当前本地重建已补齐 `stump`、`treehill`、`flowers`、`kitchen` 与 `bicycle` 输入链，把 preflight 推进到 `9 / 9` input-ready，缺输入为 `0 / 9`；`stump/treehill/flowers` 都被固定 certificate 正确拒绝为 fallback/no-op，`flowers` 额外证明 rebuilt `images_2` target-evidence 口径下 fallback 是精确 no-op。`kitchen` 是本轮缺失场景重建中的第一个 accepted nonzero 结果：`alpha=0.125`，`changed_fraction=0.003549714`，same-evidence held-out delta 为 `+0.000786` PSNR、`+0.00000256` SSIM、`-0.00002818` LPIPS。`bicycle` 闭合了最后一个 input gap，并在同一 strict 协议下 accepted nonzero（`alpha=0.015625`，`changed_fraction=0.000173916`），same-evidence 微小变化为 `+0.00000954` PSNR、`+0.000000179` SSIM、`-0.000000030` LPIPS。这是 full9 输入/协议闭环，不是 full9 质量闭环。
+vNext 状态：certified residual surface texture 方向已经形成可运行、可审计的固定策略 full9 evidence package，但最新 full9 结果还不能作为论文级质量主线提升。固定 structure-aware shrink policy 已完成 strict no-target-GT full9 manifest run：`9 / 9` 场景完成，`0 / 9` 缺失或失败，`9 / 9` protocol audit 通过，`6 / 9` 场景接受非零 residual output（`bicycle,bonsai,counter,garden,kitchen,room`），`3 / 9` 场景显式 fallback/no-op（`flowers,stump,treehill`）。full9 均值为 `25.067699` PSNR、`0.741260` SSIM、`0.306689` LPIPS，平均 changed fraction 为 `0.002756271`。这闭合了固定策略 full9 协议/证据执行，但低于本地 clean MeshSplatting baseline（`25.151682 / 0.749018 / 0.287621`）和 v106（`25.831280 / 0.760830 / 0.268435`）。因此 vNext 当前应定位为可审计 representation/policy 里程碑和瓶颈诊断，而不是已经质量超越的 promoted endpoint。
 
 ## 当前 v106 POD-MoE 状态（2026-06-25）
 

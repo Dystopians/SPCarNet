@@ -53,10 +53,11 @@ The honest paper status is not final-complete. `v110/v110b` exposed strict train
 - Rebuilt the missing `flowers` vNext input chain under `/dev/shm`, completed strict no-target-GT evaluation with W&B offline, and added a same-evidence parent export. The run is also safely rejected to fallback/no-op, but the same-evidence comparison proves that fallback is exact under the rebuilt `images_2` target-evidence resolution.
 - Rebuilt the missing `kitchen` vNext input chain under `/dev/shm`, completed strict no-target-GT evaluation with W&B offline, and added a same-evidence parent export. This is the first accepted nonzero result among the rebuilt missing scenes: `alpha=0.125`, `changed_fraction=0.003549714`, with same-evidence held-out delta `+0.000786 PSNR / +0.00000256 SSIM / -0.00002818 LPIPS`.
 - Rebuilt the missing `bicycle` vNext input chain under `/dev/shm`, completed strict no-target-GT evaluation with W&B offline, and added a same-evidence parent export. This closes vNext full9 input readiness at `9 / 9` with `0 / 9` missing inputs. The bicycle row is accepted nonzero (`alpha=0.015625`, `changed_fraction=0.000173916`) with same-evidence micro-delta `+0.00000954 PSNR / +0.000000179 SSIM / -0.000000030 LPIPS`.
+- Completed the vNext fixed-policy full9 cleanup run with W&B offline and scene cleanup enabled. The run is `9 / 9` complete, `0 / 9` failed or missing, `9 / 9` protocol-pass, `6 / 9` accepted nonzero, and `3 / 9` fallback/no-op. Mean metrics are `25.067699 PSNR / 0.741260 SSIM / 0.306689 LPIPS`, which is below local clean MeshSplatting and v106; this is protocol/evidence closure, not promotion.
 
 ## Latest Live Experiment State
 
-This snapshot has been extended after commit `5576211` with local bicycle vNext rebuild evidence; the next pushed commit records the exact bicycle artifact package.
+This snapshot has been extended with the full9 vNext cleanup evidence package. The next pushed commit records the exact fixed-policy full9 artifact package and the updated claim boundary.
 
 | job | local root | latest state |
 |---|---|---|
@@ -117,8 +118,10 @@ swap: 9 GiB used / 0 free
 | after-kitchen preflight | `docs/car_model/vnext_artifacts/kitchen_structure_shrink_rebuild_tau002_20260626_1023/preflight/vnext_manifest_runner_summary.md` | local full9 preflight moved to `8/9` ready; remaining missing scene is `bicycle` |
 | bicycle input rebuild and strict accepted micro-gain | `docs/car_model/6-26-vNext-BicycleInputRebuild-Ready9-and-Full9InputClosure-Log.md` | `bicycle` fit/target evidence and carrier rebuilt locally; strict run completed with W&B offline, protocol pass, `accepted=true`, `alpha=0.015625`, `changed_fraction=0.000173916`; same-evidence delta is `+0.00000954 PSNR / +0.000000179 SSIM / -0.000000030 LPIPS` |
 | after-bicycle preflight | `docs/car_model/vnext_artifacts/bicycle_structure_shrink_rebuild_tau002_20260626_1055/preflight/vnext_manifest_runner_summary.md` | local full9 preflight moved to `9/9` input-ready with `0/9` missing inputs |
+| full9 fixed-policy cleanup | `docs/car_model/vnext_artifacts/full9_structure_shrink_cleanup_20260626_1200/summary/vnext_manifest_summary_enhanced.md` | COMPLETE; `9/9` scenes, `9/9` protocol pass, `6/9` accepted nonzero, `3/9` fallback/no-op; mean `25.067699 / 0.741260 / 0.306689`, below clean MeshSplatting and v106 |
+| full9 cleanup promotion manifest | `docs/car_model/vnext_artifacts/full9_structure_shrink_cleanup_20260626_1200/vnext_full9_cleanup_promotion_manifest.md` | 205 lightweight files copied, 0 skipped; per-scene reports/model_audits/logs/selector summaries are clone-visible; no heavy render/model tree committed |
 
-The old strict frozen-policy face-softshrink result is a no-target-GT apply protocol milestone across three scenes, but it has 2/3 nonzero accepted and room fallback/no-op. The newer structure-aware shrink result is the preferred vNext milestone for PPT: it keeps strict no-target-GT apply, makes all four ready scenes accepted/nonzero, converts room into a positive three-metric row versus its Phase-F compact parent, and adds garden as a fourth strict scene. The effect size is still tiny and counter/bonsai still have extremely small SSIM regressions, so it should not be described as full9 closure or proof of superiority over v106/clean MeshSplatting.
+The old strict frozen-policy face-softshrink result is a no-target-GT apply protocol milestone across three scenes, but it has 2/3 nonzero accepted and room fallback/no-op. The newer structure-aware shrink ready4 result keeps strict no-target-GT apply, makes all four ready scenes accepted/nonzero, converts room into a positive three-metric row versus its Phase-F compact parent, and adds garden as a fourth strict scene. The full9 cleanup run then closes fixed-policy execution across all 9 scenes, but aggregate quality is lower than clean MeshSplatting and v106. It should be described as full9 protocol/evidence closure plus bottleneck diagnosis, not as quality superiority.
 
 ## Current Claim Boundary
 
@@ -134,7 +137,7 @@ What is not safe to say:
 - Do not claim v113b/v113c are quality breakthroughs; they are safety repairs that preserve or partially recover v106.
 - Do not claim v114 improves quality until field build, render, eval, and collector summaries complete.
 - Do not conflate v106 residual-field gains with earlier Phase-J triangle-reduction claims; v106 itself is not the triangle-pruning result.
-- Do not claim vNext is superior to v106 or clean MeshSplatting; current vNext counter/bonsai/room/garden ready4 pilots are proof-of-life and protocol evidence with tiny or mixed deltas, stump/treehill/flowers are safety-rejected fallback/no-op negative results, and kitchen/bicycle are accepted nonzero micro-gains rather than large visual breakthroughs.
+- Do not claim vNext is superior to v106 or clean MeshSplatting; the completed full9 fixed-policy cleanup run is below both baselines on mean PSNR/SSIM/LPIPS. It is proof-of-life and protocol evidence with 6/9 accepted nonzero rows and 3/9 fallback/no-op rows, not a promoted quality endpoint.
 
 ## Best PPT Story
 
@@ -147,7 +150,7 @@ v106 adds a base-preserving mixture of detail and boundary residual experts.
 The result beats the local clean MeshSplatting baseline on selected full9.
 Strict split experiments then reveal where naive candidate gates fail.
 vNext then starts converting the Phase-J render-time teacher into strict no-target-GT residual surface texture.
-The current next step is turning the ready9 full9-input proof-of-life into a fixed-policy full9 manifest evaluation, then deciding honestly whether vNext is a method result or only a protocol/reliability milestone.
+The fixed-policy full9 manifest evaluation now confirms protocol closure but also shows the current residual texture capacity is too weak; the next step is stronger teacher distillation, adaptive capacity, ablations, and qualitative changed-region evidence.
 ```
 
 For slides, use the v106 full9 table and the committed contact sheets under:
@@ -174,17 +177,17 @@ For the v106 strict branch, the required closure sequence is:
 4. compare clean baseline, v106 parent, improved candidate, and fallback/gate ablations;
 5. update README/report tables only after completed metrics exist.
 
-For vNext, the required closure sequence is:
+For vNext, the required closure sequence is now:
 
-1. free enough `/data` and `/dev/shm` space, or add a scene-cleanup mode to the manifest runner so full9 can run without keeping bulky intermediate trees;
-2. run full9 with the exact frozen structure-aware shrink policy through the manifest runner;
-3. add a fixed comparison table with clean MeshSplatting, Phase-F parent, v104c, v106, Phase-J teacher, old face-softshrink, structure-aware shrink, no-certificate ablation, and exact fallback;
-4. generate changed-region qualitative panels where residual changes are visually interpretable;
-5. add budget accounting: triangle count, residual texture storage, parameter count, render overhead, fallback rate;
-6. only promote vNext if it beats the chosen parent and clean baseline under the same frozen protocol.
+1. keep the current full9 cleanup package as the fixed-policy protocol baseline;
+2. add a fixed comparison table with clean MeshSplatting, Phase-F parent, v104c, v106, Phase-J teacher, old face-softshrink, structure-aware shrink, no-certificate ablation, and exact fallback;
+3. generate changed-region qualitative panels where residual changes are visually interpretable. The full9 cleanup package intentionally does not include PNG/JPG/MP4 render payloads because scene outputs were cleaned up;
+4. add budget accounting: triangle count, residual texture storage, parameter count, render overhead, fallback rate;
+5. replace scalar shrink tuning with stronger Phase-J teacher distillation and adaptive per-region residual capacity;
+6. only promote vNext if the same fixed protocol beats clean MeshSplatting and v106 under the same evaluator.
 
 ## Final Status
 
 `NOT COMPLETE`.
 
-The report package is uploaded and useful for PPT preparation, but the research loop is not fully closed because strict branch long jobs are unfinished or failed, and vNext has delivered strict ready4 structure-aware proof-of-life metrics plus five rebuilt input chains (`stump`, `treehill`, `flowers`, `kitchen`, `bicycle`) rather than a full9 fixed-policy quality table or v106/clean-baseline superiority. The kitchen and bicycle accepted rows are real but tiny; the input gap is closed, while the full9 quality run is still pending and currently blocked by severe `/data` and `/dev/shm` pressure.
+The report package is uploaded and useful for PPT preparation, but the research loop is not fully closed because strict branch long jobs are unfinished or failed, and vNext full9 fixed-policy cleanup is below clean MeshSplatting and v106. The current vNext package is valuable as a no-target-GT protocol/evidence baseline and bottleneck report, not as a promoted final method.

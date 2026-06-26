@@ -1,0 +1,649 @@
+{
+  "allowed_keys": [
+    "alpha",
+    "barycentric",
+    "barycentric_valid",
+    "camera_center",
+    "depth",
+    "face_id",
+    "image_name",
+    "normal",
+    "rgb_render",
+    "texture"
+  ],
+  "always_forbidden_keys": [
+    "residual_l1",
+    "residual_rgb",
+    "rgb_gt",
+    "teacher_better_mask",
+    "teacher_gain_l1",
+    "teacher_parent_delta_l1",
+    "teacher_residual_l1",
+    "teacher_residual_rgb",
+    "teacher_residual_rgb_raw"
+  ],
+  "kept_key_counts": {
+    "alpha": 30,
+    "barycentric": 30,
+    "barycentric_valid": 30,
+    "camera_center": 30,
+    "depth": 30,
+    "face_id": 30,
+    "normal": 30,
+    "rgb_render": 30,
+    "texture": 30
+  },
+  "removed_key_counts": {
+    "residual_l1": 30,
+    "residual_rgb": 30,
+    "rgb_gt": 30
+  },
+  "schema_version": 1,
+  "source_target_evidence_dir": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter",
+  "stripped_target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt",
+  "target_gt_visible_to_apply": false,
+  "target_residual_visible_to_apply": false,
+  "view_count": 30,
+  "views": [
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00000.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00000.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00001.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00001.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00002.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00002.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00003.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00003.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00004.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00004.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00005.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00005.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00006.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00006.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00007.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00007.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00008.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00008.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00009.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00009.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00010.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00010.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00011.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00011.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00012.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00012.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00013.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00013.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00014.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00014.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00015.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00015.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00016.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00016.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00017.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00017.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00018.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00018.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00019.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00019.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00020.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00020.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00021.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00021.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00022.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00022.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00023.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00023.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00024.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00024.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00025.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00025.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00026.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00026.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00027.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00027.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00028.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00028.npz"
+    },
+    {
+      "kept_keys": [
+        "alpha",
+        "barycentric",
+        "barycentric_valid",
+        "camera_center",
+        "depth",
+        "face_id",
+        "normal",
+        "rgb_render",
+        "texture"
+      ],
+      "output": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/counter/target_evidence_no_gt/views/00029.npz",
+      "removed_forbidden_keys": [
+        "residual_l1",
+        "residual_rgb",
+        "rgb_gt"
+      ],
+      "source": "outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter/views/00029.npz"
+    }
+  ]
+}

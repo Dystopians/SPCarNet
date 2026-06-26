@@ -1,0 +1,16 @@
+{
+  "source_model": "outputs/carnet/meshsplatopt/paper_m360_repro/compact_ela_sor_adaptive_geo_26k/treehill/sor_adaptive_geo/compact_model",
+  "source_checkpoint": "outputs/carnet/meshsplatopt/paper_m360_repro/compact_ela_sor_adaptive_geo_26k/treehill/sor_adaptive_geo/compact_model/point_cloud/iteration_26000/point_cloud_state_dict.pt",
+  "output_model": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model",
+  "output_checkpoint": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model/point_cloud/iteration_26000/point_cloud_state_dict.pt",
+  "iteration": 26000,
+  "selector_mode": "csef_low_evidence_boundary_protected",
+  "pre_triangles": 8573839,
+  "post_triangles": 8402362,
+  "pre_vertices": 3432502,
+  "post_vertices": 3419320,
+  "removed_triangles": 171477,
+  "removed_fraction": 0.0200000256594508,
+  "degenerate_face_count": 0,
+  "invalid_index_count": 0
+}

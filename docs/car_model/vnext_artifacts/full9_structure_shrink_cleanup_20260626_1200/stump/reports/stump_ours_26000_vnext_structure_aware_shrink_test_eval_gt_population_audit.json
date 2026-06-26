@@ -1,0 +1,96 @@
+{
+  "gt_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/gt",
+  "method_name": "ours_26000_vnext_structure_aware_shrink",
+  "missing_render_images": 0,
+  "output_model": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model",
+  "render_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders",
+  "schema_version": 1,
+  "split": "test",
+  "target_evidence_dir": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/stump/target_evidence",
+  "target_gt_visible_to_apply": false,
+  "target_gt_visible_to_eval": true,
+  "view_count": 16,
+  "views": [
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00000.png",
+      "view": "00000.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00001.png",
+      "view": "00001.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00002.png",
+      "view": "00002.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00003.png",
+      "view": "00003.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00004.png",
+      "view": "00004.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00005.png",
+      "view": "00005.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00006.png",
+      "view": "00006.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00007.png",
+      "view": "00007.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00008.png",
+      "view": "00008.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00009.png",
+      "view": "00009.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00010.png",
+      "view": "00010.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00011.png",
+      "view": "00011.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00012.png",
+      "view": "00012.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00013.png",
+      "view": "00013.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00014.png",
+      "view": "00014.npz"
+    },
+    {
+      "gt_written": true,
+      "render": "/dev/shm/peilincai_spcarnet_vnext_full9_cleanup_run_20260626_1200/stump/model/test/ours_26000_vnext_structure_aware_shrink/renders/00015.png",
+      "view": "00015.npz"
+    }
+  ],
+  "written_gt_images": 16
+}
