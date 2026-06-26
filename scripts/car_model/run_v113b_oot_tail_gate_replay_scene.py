@@ -89,6 +89,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     parent_method = args.parent_method_name or _default_parent_method(scene, iteration)
     candidate_method = args.candidate_method_name or _default_candidate_method(scene, iteration)
     gate_method = args.gate_method_name or _default_gate_method(scene, iteration)
+    report_stem = f"{scene}_{gate_method}_oot_tail_gate_replay"
     candidate_field = _resolve_candidate_field(args, output_root, candidate_method)
     candidate_manifest = _resolve_candidate_manifest(args, candidate_field)
     gate_output_model_path = Path(args.gate_output_model_path).expanduser().resolve() if args.gate_output_model_path else model_path
@@ -244,8 +245,8 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             "gate_report": str(gate_output_model_path / args.target_split / gate_method / "v109_render_realized_parent_gate_report.json"),
             "eval_output": str(eval_output),
             "per_view_output": str(per_view_output),
-            "orchestration_report_json": str(reports_dir / f"{scene}_v113b_oot_tail_gate_replay_report.json"),
-            "orchestration_report_md": str(reports_dir / f"{scene}_v113b_oot_tail_gate_replay_report.md"),
+            "orchestration_report_json": str(reports_dir / f"{report_stem}_report.json"),
+            "orchestration_report_md": str(reports_dir / f"{report_stem}_report.md"),
         },
         "settings": {
             "oot_gate_mode": args.oot_gate_mode,
@@ -455,7 +456,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--min_p05_psnr_gain", type=float, default=0.0)
     parser.add_argument("--min_p05_ssim_gain", type=float, default=-1e-6)
     parser.add_argument("--min_p05_lpips_gain", type=float, default=-1e9)
-    parser.add_argument("--oot_gate_mode", choices=("off", "report", "scene_fallback"), default="scene_fallback")
+    parser.add_argument("--oot_gate_mode", choices=("off", "report", "scene_fallback", "frame_fallback"), default="scene_fallback")
     parser.add_argument("--oot_source_view_subset", choices=("all", "even", "odd"), default="even")
     parser.add_argument("--oot_center_quantile", type=float, default=0.95)
     parser.add_argument("--oot_center_rel_margin", type=float, default=0.0)
@@ -493,4 +494,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -97,6 +97,10 @@ def main() -> int:
         if not zero_mask["pass"]:
             raise AssertionError(f"zero-mask parent fallback should not fail OOT: {zero_mask}")
 
+        frame_disabled = {str(row.get("image")) for row in far.get("frames", []) if row.get("oot_center_ood")}
+        if frame_disabled != {"00000.png", "00001.png"}:
+            raise AssertionError(f"frame-fallback disabled set mismatch: {frame_disabled}")
+
     print("v109 OOT gate smoke: OK")
     return 0
 

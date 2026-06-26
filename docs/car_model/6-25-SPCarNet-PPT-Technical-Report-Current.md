@@ -15,6 +15,8 @@ The main progress since the large-method rebuild started is concrete:
 - v110/v110b exposed an important weakness: a gate that looks good on train/odd can still harm held-out test relative to the v106 parent;
 - v113b repairs that weakness on flowers/garden by adding lower-tail metric checks and a target-GT-free out-of-trajectory support certificate;
 - a v113b replay runner now exists so prebuilt strict candidates can be re-gated and re-evaluated under the latest certificate without rebuilding long field artifacts;
+- v113c adds frame-level OOT fallback and improves garden v110b, but it still does not beat v106;
+- v114 is the current candidate-side attempt: train/all POD-MoE refit with out-of-fold positive reliability caps;
 - v111 now exists as the end-to-end strict runner where even the parent field is rebuilt from train/all rather than inherited from a target-sidecar artifact.
 
 The honest current conclusion is: SPCarNet has a real, measurable improvement line over the local clean baseline, and the strict-gate branch now has a stronger safety repair. The paper-final claim is still not closed because v113b restores unsafe candidates to v106 rather than improving beyond v106.
@@ -139,6 +141,16 @@ docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summar
 
 Interpretation: strict train/odd calibration is not enough by itself. v113b makes the gate non-regressive on the two completed representative scenes, but it still does not replace v106 with a better nonzero candidate.
 
+v113c then narrows OOT fallback from the whole scene to only OOT target frames. On garden it disables two OOT frames and improves over v110b:
+
+| method | PSNR | SSIM | LPIPS |
+|---|---:|---:|---:|
+| v110b garden | 25.430321 | 0.783703 | 0.186970 |
+| v113c garden | 25.499817 | 0.786888 | 0.184260 |
+| v106 parent | 25.790945 | 0.799382 | 0.174480 |
+
+This is useful but not enough, so the active next line is v114 OOF-refit POD-MoE, which changes the candidate field rather than only the gate.
+
 ## Qualitative Assets
 
 The current cloneable qualitative package is:
@@ -170,6 +182,8 @@ These are better PPT assets than showing only aggregate numbers, but they should
 | end-to-end strict v111 runner | `scripts/car_model/run_v111_end_to_end_strict_parent_gate_scene.py` | implemented and smoke-tested |
 | lower-tail and OOT support gate | `scripts/car_model/meshsplatopt_v109_render_realized_parent_gate.py` | implemented and smoke-tested as v113b |
 | v113b gate/eval replay | `scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py` | implemented and smoke-tested |
+| frame-level OOT fallback | `scripts/car_model/meshsplatopt_v109_render_realized_parent_gate.py` | implemented and garden-tested as v113c |
+| OOF-refit POD-MoE candidate | `scripts/car_model/build_v105_evidence_gated_mixture_field.py` | implemented and smoke-tested as v114; garden long run in progress |
 | v110 collector | `scripts/car_model/collect_v110_strict_split_report.py` | implemented |
 
 ## Commands and Repro Pointers
@@ -182,15 +196,18 @@ Smoke/static checks:
   scripts/car_model/run_v111_end_to_end_strict_parent_gate_scene.py \
   scripts/car_model/meshsplatopt_v109_render_realized_parent_gate.py \
   scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py \
+  scripts/car_model/build_v105_evidence_gated_mixture_field.py \
   scripts/car_model/smoke_test_v110_strict_runner_args.py \
   scripts/car_model/smoke_test_v111_runner_args.py \
   scripts/car_model/smoke_test_v109_oot_gate.py \
-  scripts/car_model/smoke_test_v113b_replay_runner_args.py
+  scripts/car_model/smoke_test_v113b_replay_runner_args.py \
+  scripts/car_model/smoke_test_v114_oof_refit.py
 
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v110_strict_runner_args.py
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v111_runner_args.py
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v109_oot_gate.py
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v113b_replay_runner_args.py
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v114_oof_refit.py
 ```
 
 Representative v110 run command:
@@ -239,6 +256,7 @@ CUDA_VISIBLE_DEVICES=<gpu> WANDB_MODE=offline \
 | v110 counter | candidate field build still running in the local `/dev/shm` workspace; last checked around 72/105 train/even views |
 | v110 bonsai | candidate field build still running in the local `/dev/shm` workspace; last checked around 64/128 train/even views |
 | v111 flowers | parent train/all field build still running; last checked around 76/151 views; no completed end-to-end result yet |
+| v114 garden | OOF-refit train/all field build running in `/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden`; no completed render/eval result yet |
 | garden v110b | completed as a negative strict-gate diagnostic |
 
 ## Weaknesses to State Honestly

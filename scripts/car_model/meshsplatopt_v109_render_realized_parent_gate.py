@@ -601,10 +601,33 @@ def _write_rows_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
-def _apply(args: argparse.Namespace, parent_dir: Path, candidate_dir: Path, out_method: Path, policy: dict[str, Any], device: torch.device) -> dict[str, Any]:
+def _parent_fallback_info(candidate: torch.Tensor, parent: torch.Tensor, kernels: list[int]) -> dict[str, float]:
+    score = _candidate_parent_score(candidate, parent, kernels)
+    frame_distance = float(torch.mean(torch.abs(candidate - parent)).detach().cpu().item())
+    flat_score = score.reshape(-1).detach().float()
+    return {
+        "frame_distance": frame_distance,
+        "mask_mean": 0.0,
+        "mask_p95": 0.0,
+        "score_mean": float(flat_score.mean().cpu().item()),
+        "score_p95": float(torch.quantile(flat_score, 0.95).cpu().item()),
+    }
+
+
+def _apply(
+    args: argparse.Namespace,
+    parent_dir: Path,
+    candidate_dir: Path,
+    out_method: Path,
+    policy: dict[str, Any],
+    device: torch.device,
+    disabled_names: set[str] | None = None,
+    disabled_reason: str = "",
+) -> dict[str, Any]:
     names = _common_names(parent_dir, candidate_dir)
     if not names:
         raise RuntimeError("No common target renders")
+    disabled_names = set(disabled_names or set())
     out_renders = out_method / "renders"
     out_gt = out_method / "gt"
     out_renders.mkdir(parents=True, exist_ok=True)
@@ -613,7 +636,15 @@ def _apply(args: argparse.Namespace, parent_dir: Path, candidate_dir: Path, out_
     for name in names:
         parent = _read_rgb(parent_dir / "renders" / name, device)
         candidate = _read_rgb(candidate_dir / "renders" / name, device)
-        pred, info = _blend(candidate, parent, policy)
+        if name in disabled_names:
+            pred = parent
+            info = _parent_fallback_info(candidate, parent, [int(value) for value in policy["kernels"]])
+            info["frame_fallback"] = True
+            info["frame_fallback_reason"] = disabled_reason
+        else:
+            pred, info = _blend(candidate, parent, policy)
+            info["frame_fallback"] = False
+            info["frame_fallback_reason"] = ""
         _save_rgb(pred, out_renders / name)
         shutil.copy2(parent_dir / "gt" / name, out_gt / name)
         frames.append({"image": name, **info})
@@ -623,6 +654,8 @@ def _apply(args: argparse.Namespace, parent_dir: Path, candidate_dir: Path, out_
         "target_views": len(names),
         "mean_mask": mean_mask,
         "mean_candidate_parent_distance": mean_distance,
+        "frame_fallback_count": int(sum(1 for row in frames if bool(row.get("frame_fallback", False)))),
+        "frame_fallback_reason": disabled_reason if disabled_names else "",
         "frames": frames,
     }
 
@@ -685,6 +718,10 @@ def _write_markdown(path: Path, report: dict[str, Any]) -> None:
                 f"- center_dist_threshold: `{float(thresholds.get('center_dist', 0.0)):.8f}`",
                 f"- target_frame_fraction: `{float(oot.get('target_frame_fraction', 0.0)):.8f}`",
                 f"- mask_weighted_ood_fraction: `{float(oot.get('mask_weighted_ood_fraction', 0.0)):.8f}`",
+                f"- applied_scene_fallback: `{bool(oot.get('applied_scene_fallback', False))}`",
+                f"- applied_frame_fallback: `{bool(oot.get('applied_frame_fallback', False))}`",
+                f"- frame_fallback_count: `{int(oot.get('frame_fallback_count', 0))}`",
+                f"- mask_weighted_fraction_after_frame_fallback: `{float(oot.get('mask_weighted_fraction_after_frame_fallback', 0.0)):.8f}`",
             ]
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -787,7 +824,7 @@ def main() -> int:
         help="Require the 5th-percentile per-frame LPIPS improvement on calibration views to exceed this value.",
     )
     parser.add_argument("--allow_failed_policy", action="store_true")
-    parser.add_argument("--oot_gate_mode", choices=("off", "report", "scene_fallback"), default="off")
+    parser.add_argument("--oot_gate_mode", choices=("off", "report", "scene_fallback", "frame_fallback"), default="off")
     parser.add_argument("--oot_source_manifest", default="")
     parser.add_argument(
         "--oot_source_view_subset",
@@ -852,8 +889,49 @@ def main() -> int:
         application = _apply(args, parent_target, candidate_target, out_method, calibration["selected_policy"], device)
         oot_report["applied_scene_fallback"] = True
         oot_report["application_before_oot"] = before_oot_application
+        oot_report["applied_frame_fallback"] = False
+    elif (
+        str(args.oot_gate_mode) == "frame_fallback"
+        and not bool(oot_report.get("pass", True))
+        and float(application.get("mean_mask", 0.0)) > 0.0
+    ):
+        before_oot_application = application
+        disabled_names = {
+            str(row.get("image"))
+            for row in oot_report.get("frames", [])
+            if isinstance(row, dict) and bool(row.get("oot_center_ood", False))
+        }
+        disabled_names.discard("")
+        if disabled_names:
+            application = _apply(
+                args,
+                parent_target,
+                candidate_target,
+                out_method,
+                calibration["selected_policy"],
+                device,
+                disabled_names=disabled_names,
+                disabled_reason=f"out_of_trajectory:{oot_report.get('fallback_reason', '')}",
+            )
+        oot_after_frame_fallback = _evaluate_out_of_trajectory_gate(
+            args,
+            parent_calib,
+            parent_target,
+            calib_names,
+            target_names,
+            application,
+        )
+        oot_report["applied_scene_fallback"] = False
+        oot_report["applied_frame_fallback"] = bool(disabled_names)
+        oot_report["frame_fallback_count"] = int(len(disabled_names))
+        oot_report["frame_fallback_images"] = sorted(disabled_names)
+        oot_report["mask_weighted_fraction_after_frame_fallback"] = float(
+            oot_after_frame_fallback.get("mask_weighted_ood_fraction", 0.0)
+        )
+        oot_report["application_before_oot"] = before_oot_application
     else:
         oot_report["applied_scene_fallback"] = False
+        oot_report["applied_frame_fallback"] = False
     report = {
         "method": "v109 Render-Realized Parent-Preserving Gate",
         "schema_version": 1,

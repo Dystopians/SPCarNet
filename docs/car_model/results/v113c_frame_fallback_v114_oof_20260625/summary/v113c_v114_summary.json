@@ -1,0 +1,57 @@
+{
+  "date": "2026-06-25",
+  "garden": {
+    "clean_meshsplatting": {
+      "LPIPS": 0.201314,
+      "PSNR": 25.029211,
+      "SSIM": 0.780035
+    },
+    "oot": {
+      "frame_fallback_count": 2,
+      "frame_fallback_images": [
+        "00020.png",
+        "00021.png"
+      ],
+      "mask_weighted_fraction_after_frame_fallback": 0.0,
+      "mask_weighted_ood_fraction_before": 0.0900306023450649,
+      "target_frame_fraction": 0.08333333333333333
+    },
+    "v106_parent": {
+      "LPIPS": 0.17448043823242188,
+      "PSNR": 25.790945053100586,
+      "SSIM": 0.799382209777832
+    },
+    "v110b": {
+      "LPIPS": 0.18697,
+      "PSNR": 25.430321,
+      "SSIM": 0.783703
+    },
+    "v113b_scene_fallback": {
+      "LPIPS": 0.17448043823242188,
+      "PSNR": 25.790945053100586,
+      "SSIM": 0.799382209777832
+    },
+    "v113c_delta_vs_v106": {
+      "LPIPS": 0.00978003442287445,
+      "PSNR": -0.29112815856933594,
+      "SSIM": -0.012494266033172607
+    },
+    "v113c_delta_vs_v110b": {
+      "LPIPS": -0.0027095273447036716,
+      "PSNR": 0.06949589453125071,
+      "SSIM": 0.0031849437446593853
+    },
+    "v113c_frame_fallback": {
+      "LPIPS": 0.18426047265529633,
+      "PSNR": 25.49981689453125,
+      "SSIM": 0.7868879437446594
+    }
+  },
+  "status": "v113c improves v110b but remains below v106; v114 implementation launched, long validation running",
+  "v114": {
+    "field_path": "/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/fields/ours_26000_v114_oof_refit_podmoe_garden_field.pt",
+    "implementation": "train/all POD-MoE refit with out-of-fold positive reliability cap and joint two-expert descent lock",
+    "method_version": "v114_oof_refit_pod_moe",
+    "running_command_log": "/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/logs/01_build_v114_field.log"
+  }
+}

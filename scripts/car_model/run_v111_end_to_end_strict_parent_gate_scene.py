@@ -668,7 +668,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--min_p05_psnr_gain", type=float, default=0.0)
     parser.add_argument("--min_p05_ssim_gain", type=float, default=-1e-6)
     parser.add_argument("--min_p05_lpips_gain", type=float, default=-1e9)
-    parser.add_argument("--oot_gate_mode", choices=("off", "report", "scene_fallback"), default="scene_fallback")
+    parser.add_argument("--oot_gate_mode", choices=("off", "report", "scene_fallback", "frame_fallback"), default="scene_fallback")
     parser.add_argument("--oot_source_view_subset", choices=("all", "even", "odd"), default="even")
     parser.add_argument("--oot_center_quantile", type=float, default=0.95)
     parser.add_argument("--oot_center_rel_margin", type=float, default=0.0)

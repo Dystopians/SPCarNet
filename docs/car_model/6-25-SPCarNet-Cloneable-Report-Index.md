@@ -12,6 +12,7 @@ This index is the entry point for a fresh clone of `https://github.com/Dystopian
 | v110 strict-split technical report draft | `docs/car_model/6-25-SPCarNet-v110-StrictSplit-Technical-Report-Draft.md` |
 | v110 execution log | `docs/car_model/6-25-v110-StrictSplitParentGate-Log.md` |
 | v113b OOT tail-safe gate log | `docs/car_model/6-25-v113b-OOT-Tail-Safe-Gate-Log.md` |
+| v113c/v114 continuation log | `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md` |
 | v106 quality-line technical report | `docs/car_model/6-25-v106-PODMoE-Technical-Report-Draft.md` |
 | v106 implementation/progress log | `docs/car_model/6-25-v106-PODMoE-BasePreserve-HardTriad-Log.md` |
 | v109 parent-gate log | `docs/car_model/6-25-v109-RenderRealizedParentGate-Log.md` |
@@ -27,6 +28,7 @@ This index is the entry point for a fresh clone of `https://github.com/Dystopian
 | v110 default strict-split summary | `docs/car_model/results/v110_strict_split_20260625/summary/v110_strict_split_parent_gate_summary.md` |
 | v110b flowers/garden strict diagnostic | `docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md` |
 | v113b OOT tail-safe strict diagnostic | `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md` |
+| v113c frame-fallback and v114 running summary | `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md` |
 
 ## Qualitative Result Package
 
@@ -50,6 +52,7 @@ Each contact sheet has a sibling `.json` manifest with source render paths and c
 | `scripts/car_model/run_v110_strict_split_parent_gate_scene.py` | strict candidate/gate runner with v106 parent and train/even -> train/odd -> test protocol |
 | `scripts/car_model/run_v111_end_to_end_strict_parent_gate_scene.py` | end-to-end strict parent/candidate/gate runner; parent is rebuilt from train/all |
 | `scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py` | gate/eval-only replay runner for prebuilt strict candidates using the v113b lower-tail and OOT support certificates |
+| `scripts/car_model/smoke_test_v114_oof_refit.py` | synthetic verification for the v114 OOF positive-cap reliability rule |
 | `scripts/car_model/collect_v110_strict_split_report.py` | collects clean/v106/v110 strict-split metrics into Markdown/JSON summaries |
 
 ## Smoke and Static Checks
@@ -62,15 +65,18 @@ The current report package records these checks as passing:
   scripts/car_model/run_v111_end_to_end_strict_parent_gate_scene.py \
   scripts/car_model/meshsplatopt_v109_render_realized_parent_gate.py \
   scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py \
+  scripts/car_model/build_v105_evidence_gated_mixture_field.py \
   scripts/car_model/smoke_test_v110_strict_runner_args.py \
   scripts/car_model/smoke_test_v111_runner_args.py \
   scripts/car_model/smoke_test_v109_oot_gate.py \
-  scripts/car_model/smoke_test_v113b_replay_runner_args.py
+  scripts/car_model/smoke_test_v113b_replay_runner_args.py \
+  scripts/car_model/smoke_test_v114_oof_refit.py
 
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v110_strict_runner_args.py
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v111_runner_args.py
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v109_oot_gate.py
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v113b_replay_runner_args.py
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python scripts/car_model/smoke_test_v114_oof_refit.py
 ```
 
 ## Current Local Runtime Roots
@@ -83,9 +89,10 @@ The repo stores lightweight report artifacts. Large render/model trees remain lo
 | `/dev/shm/peilincai_spcarnet_v106_podmoe_basepreserve_full9_20260625_field` | v106 field tensors |
 | `/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625` | v110/v110b strict-split working directory |
 | `/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625` | v111 end-to-end strict working directory |
+| `/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625` | v114 OOF-refit POD-MoE working directory |
 
 These roots are not committed because they contain large render/model artifacts.
 
 ## One-Line Status
 
-`v106` is the current quality line and beats the local clean MeshSplatting baseline on the assembled selected full9 table. `v113b` is the current strict-gate safety repair: it fixes the observed garden v110b regression back to the v106 parent using lower-tail and target-GT-free out-of-trajectory certificates. It is still a safety milestone rather than a quality breakthrough over v106.
+`v106` is the current quality line and beats the local clean MeshSplatting baseline on the assembled selected full9 table. `v113b` is the current strict-gate safety repair. `v113c` improves garden v110b but remains below v106, and `v114` is the active candidate-side attempt now running. The paper-final method is not closed.

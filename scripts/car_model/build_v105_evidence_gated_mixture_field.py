@@ -40,11 +40,13 @@ from scripts.car_model.build_v104b_centered_view_affine_residual_field import (
 V108_METHOD_VERSION = "v108_mse_descent_locked_pod_moe"
 V108_BUILDER_VARIANT = "v108_mse_descent_locked_pod_moe"
 V108_EXPERT_MSE_CERTIFICATE = "joint_two_expert_weighted_normal_equation_box_qp_descent_lock"
+V114_METHOD_VERSION = "v114_oof_refit_pod_moe"
+V114_BUILDER_VARIANT = "v114_oof_refit_pod_moe"
 
 
 def _resolved_method_version(field_variant: str, gate_source: str, requested: str = "auto") -> str:
-    if str(requested) == V108_METHOD_VERSION:
-        return V108_METHOD_VERSION
+    if str(requested) in {V108_METHOD_VERSION, V114_METHOD_VERSION}:
+        return str(requested)
     if str(field_variant) == "pod_moe" and str(gate_source) == "crossfit_risk":
         return "v107_crossfit_pod_moe_expert_reliability"
     if str(field_variant) == "pod_moe":
@@ -53,6 +55,8 @@ def _resolved_method_version(field_variant: str, gate_source: str, requested: st
 
 
 def _builder_variant(field_variant: str, method_version: str) -> str:
+    if str(method_version) == V114_METHOD_VERSION:
+        return V114_BUILDER_VARIANT
     if str(method_version) == V108_METHOD_VERSION:
         return V108_BUILDER_VARIANT
     return "v106_perceptual_occlusion_detail_moe" if str(field_variant) == "pod_moe" else "v105_evidence_gated_residual_mixture"
@@ -570,6 +574,7 @@ def _crossfit_weighted_risk_gain_and_scale(
     view_std_floor: float,
     rank_rtol: float,
     condition_max: float,
+    combine_mode: str = "strict_min",
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
     even_fallback, even_raw, even_counts, even_solve_success = _solve_base_raw_coefficients(
         xtx_flat=xtx_even,
@@ -600,9 +605,9 @@ def _crossfit_weighted_risk_gain_and_scale(
     gains = torch.zeros((int(tri_ids.numel()),), dtype=torch.float64)
     full_gains = torch.zeros_like(gains)
     scales = torch.zeros_like(gains)
-    both_supported = torch.zeros((int(tri_ids.numel()),), dtype=torch.bool)
+    supported = torch.zeros((int(tri_ids.numel()),), dtype=torch.bool)
     if int(tri_ids.numel()) == 0:
-        return gains, full_gains, scales, both_supported, {
+        return gains, full_gains, scales, supported, {
             f"{name}_crossfit_supported_triangles": 0,
             f"{name}_crossfit_even_fit_triangles": int(even_solve_success.sum().item()),
             f"{name}_crossfit_odd_fit_triangles": int(odd_solve_success.sum().item()),
@@ -637,30 +642,58 @@ def _crossfit_weighted_risk_gain_and_scale(
     even_to_odd_support = (torch.round(xtx_odd[tri_ids, 0]).to(dtype=torch.int64) > 0) & even_fit_support
     odd_to_even_support = (torch.round(xtx_even[tri_ids, 0]).to(dtype=torch.int64) > 0) & odd_fit_support
     both_supported = even_to_odd_support & odd_to_even_support
-    if bool(both_supported.any().item()):
-        gains[both_supported] = torch.minimum(even_to_odd_gain[both_supported], odd_to_even_gain[both_supported])
-        full_gains[both_supported] = torch.minimum(
-            even_to_odd_full_gain[both_supported],
-            odd_to_even_full_gain[both_supported],
-        )
-        scales[both_supported] = torch.minimum(even_to_odd_scale[both_supported], odd_to_even_scale[both_supported])
+    if str(combine_mode) == "oof_positive_cap":
+        even_positive = even_to_odd_support & (even_to_odd_gain > 0.0)
+        odd_positive = odd_to_even_support & (odd_to_even_gain > 0.0)
+        both_positive = even_positive & odd_positive
+        even_only_positive = even_positive & ~odd_positive
+        odd_only_positive = odd_positive & ~even_positive
+        if bool(both_positive.any().item()):
+            gains[both_positive] = torch.minimum(even_to_odd_gain[both_positive], odd_to_even_gain[both_positive]).clamp_min(0.0)
+            full_gains[both_positive] = torch.minimum(
+                even_to_odd_full_gain[both_positive],
+                odd_to_even_full_gain[both_positive],
+            ).clamp_min(0.0)
+            scales[both_positive] = torch.minimum(even_to_odd_scale[both_positive], odd_to_even_scale[both_positive])
+        if bool(even_only_positive.any().item()):
+            gains[even_only_positive] = (0.5 * even_to_odd_gain[even_only_positive]).clamp_min(0.0)
+            full_gains[even_only_positive] = (0.5 * even_to_odd_full_gain[even_only_positive]).clamp_min(0.0)
+            scales[even_only_positive] = 0.5 * even_to_odd_scale[even_only_positive]
+        if bool(odd_only_positive.any().item()):
+            gains[odd_only_positive] = (0.5 * odd_to_even_gain[odd_only_positive]).clamp_min(0.0)
+            full_gains[odd_only_positive] = (0.5 * odd_to_even_full_gain[odd_only_positive]).clamp_min(0.0)
+            scales[odd_only_positive] = 0.5 * odd_to_even_scale[odd_only_positive]
+        supported = gains > 0.0
+    else:
+        supported = both_supported
+        if bool(both_supported.any().item()):
+            gains[both_supported] = torch.minimum(even_to_odd_gain[both_supported], odd_to_even_gain[both_supported])
+            full_gains[both_supported] = torch.minimum(
+                even_to_odd_full_gain[both_supported],
+                odd_to_even_full_gain[both_supported],
+            )
+            scales[both_supported] = torch.minimum(even_to_odd_scale[both_supported], odd_to_even_scale[both_supported])
 
     stats = {
-        f"{name}_crossfit_supported_triangles": int(both_supported.sum().item()),
+        f"{name}_crossfit_supported_triangles": int(supported.sum().item()),
         f"{name}_crossfit_even_to_odd_supported_triangles": int(even_to_odd_support.sum().item()),
         f"{name}_crossfit_odd_to_even_supported_triangles": int(odd_to_even_support.sum().item()),
+        f"{name}_crossfit_both_supported_triangles": int(both_supported.sum().item()),
+        f"{name}_crossfit_even_only_positive_triangles": int((supported & even_to_odd_support & ~odd_to_even_support).sum().item()),
+        f"{name}_crossfit_odd_only_positive_triangles": int((supported & odd_to_even_support & ~even_to_odd_support).sum().item()),
+        f"{name}_crossfit_combine_mode": str(combine_mode),
         f"{name}_crossfit_even_fit_triangles": int(even_solve_success.sum().item()),
         f"{name}_crossfit_odd_fit_triangles": int(odd_solve_success.sum().item()),
         f"{name}_crossfit_even_weighted_pixels": int(torch.round(xtx_even[:, 0]).sum().item()),
         f"{name}_crossfit_odd_weighted_pixels": int(torch.round(xtx_odd[:, 0]).sum().item()),
         f"{name}_crossfit_gain_mean": (
-            float(gains[both_supported].mean().item()) if bool(both_supported.any().item()) else 0.0
+            float(gains[supported].mean().item()) if bool(supported.any().item()) else 0.0
         ),
         f"{name}_crossfit_mse_scale_mean": (
-            float(scales[both_supported].mean().item()) if bool(both_supported.any().item()) else 0.0
+            float(scales[supported].mean().item()) if bool(supported.any().item()) else 0.0
         ),
     }
-    return gains, full_gains, scales, both_supported, stats
+    return gains, full_gains, scales, supported, stats
 
 
 def _solve_pod_moe_coefficients(
@@ -702,8 +735,9 @@ def _solve_pod_moe_coefficients(
     residual_dtype: torch.dtype,
     method_version: str = "auto",
 ) -> tuple[torch.Tensor, ...]:
-    use_crossfit_reliability = str(gate_source) == "crossfit_risk"
-    use_descent_lock = str(method_version) == V108_METHOD_VERSION
+    use_oof_refit = str(method_version) == V114_METHOD_VERSION
+    use_crossfit_reliability = str(gate_source) == "crossfit_risk" or use_oof_refit
+    use_descent_lock = str(method_version) in {V108_METHOD_VERSION, V114_METHOD_VERSION}
     if use_crossfit_reliability:
         missing = [
             name
@@ -808,6 +842,7 @@ def _solve_pod_moe_coefficients(
                 view_std_floor=view_std_floor,
                 rank_rtol=rank_rtol,
                 condition_max=condition_max,
+                combine_mode="oof_positive_cap" if use_oof_refit else "strict_min",
             )
             crossfit_stats.update(detail_stats)
         else:
@@ -864,6 +899,7 @@ def _solve_pod_moe_coefficients(
                 view_std_floor=view_std_floor,
                 rank_rtol=rank_rtol,
                 condition_max=condition_max,
+                combine_mode="oof_positive_cap" if use_oof_refit else "strict_min",
             )
             crossfit_stats.update(boundary_stats)
         else:
@@ -925,7 +961,9 @@ def _solve_pod_moe_coefficients(
         "base_variant": "v104c_like_shrink_view_affine",
         "expert_names": ["detail", "occlusion_boundary"],
         "expert_reliability_variant": (
-            "v107_crossfit_heldout_weighted_risk" if use_crossfit_reliability else "v106_weighted_normal_equation_risk"
+            "v114_oof_positive_cap_train_all_refit"
+            if use_oof_refit
+            else ("v107_crossfit_heldout_weighted_risk" if use_crossfit_reliability else "v106_weighted_normal_equation_risk")
         ),
         "expert_mse_certificate": (
             V108_EXPERT_MSE_CERTIFICATE
@@ -939,13 +977,17 @@ def _solve_pod_moe_coefficients(
         "expert_reliability_combine": (
             (
                 "even_odd_crossfit_reliability_times_joint_two_expert_descent_scale"
-                if use_crossfit_reliability
+                if use_crossfit_reliability and not use_oof_refit
+                else "oof_positive_cap_reliability_times_joint_two_expert_descent_scale"
+                if use_oof_refit
                 else "same_stats_weighted_risk_reliability_times_joint_two_expert_descent_scale"
             )
             if use_descent_lock
             else (
                 "even_to_odd_and_odd_to_even_min_requires_both_splits"
-                if use_crossfit_reliability
+                if use_crossfit_reliability and not use_oof_refit
+                else "oof_positive_cap_allows_single_positive_fold"
+                if use_oof_refit
                 else "same_stats_weighted_risk"
             )
         ),
@@ -1325,10 +1367,12 @@ def build_field(args: argparse.Namespace) -> dict[str, Any]:
         str(args.gate_source),
         str(getattr(args, "method_version", "auto") or "auto"),
     )
-    if str(method_version) == V108_METHOD_VERSION and str(args.field_variant) != "pod_moe":
-        raise ValueError(f"--method_version {V108_METHOD_VERSION} requires --field_variant pod_moe")
+    if str(method_version) in {V108_METHOD_VERSION, V114_METHOD_VERSION} and str(args.field_variant) != "pod_moe":
+        raise ValueError(f"--method_version {method_version} requires --field_variant pod_moe")
     if str(method_version) == V108_METHOD_VERSION and str(args.gate_source) not in {"normal_equation", "crossfit_risk"}:
         raise ValueError(f"--method_version {V108_METHOD_VERSION} requires --gate_source normal_equation or crossfit_risk")
+    if str(method_version) == V114_METHOD_VERSION and str(args.gate_source) != "crossfit_risk":
+        raise ValueError(f"--method_version {V114_METHOD_VERSION} requires --gate_source crossfit_risk")
     delta_bank = _load_delta_bank(delta_bank_path, str(args.split), str(args.endpoint_method))
     deltas = delta_bank["deltas"]
     frames = delta_bank["frames"]
@@ -1861,7 +1905,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--renderer_scaling", type=int, required=True)
     parser.add_argument("--residual_dtype", default="float16", choices=("float16", "float32"))
     parser.add_argument("--field_variant", default="residual_mixture", choices=("residual_mixture", "pod_moe"))
-    parser.add_argument("--method_version", default="auto", choices=("auto", V108_METHOD_VERSION))
+    parser.add_argument("--method_version", default="auto", choices=("auto", V108_METHOD_VERSION, V114_METHOD_VERSION))
     parser.add_argument("--min_count", type=int, default=1)
     parser.add_argument("--min_views", type=int, default=1)
     parser.add_argument("--ridge", type=float, default=1e-3)
@@ -1883,7 +1927,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chunk_pixels", type=int, default=262144)
     args = parser.parse_args()
     if args.gate_source is None:
-        if str(args.method_version) == V108_METHOD_VERSION:
+        if str(args.method_version) in {V108_METHOD_VERSION, V114_METHOD_VERSION}:
             args.gate_source = "crossfit_risk"
         else:
             args.gate_source = "normal_equation" if str(args.field_variant) == "pod_moe" else "crossfit_risk"
