@@ -270,6 +270,34 @@ def _texture_cmd(
         )
     if bool(args.no_policy_val_bin_uncertainty_shrink):
         cmd = [token for token in cmd if token != "--enable_policy_val_bin_uncertainty_shrink"]
+    if bool(args.enable_policy_val_structure_aware_shrink):
+        cmd.extend(
+            [
+                "--enable_policy_val_structure_aware_shrink",
+                "--structure_shrink_l1_weight",
+                str(args.structure_shrink_l1_weight),
+                "--structure_shrink_gradient_weight",
+                str(args.structure_shrink_gradient_weight),
+                "--structure_shrink_edge_weight",
+                str(args.structure_shrink_edge_weight),
+                "--structure_shrink_risk_tau",
+                str(args.structure_shrink_risk_tau),
+                "--structure_shrink_max_penalty",
+                str(args.structure_shrink_max_penalty),
+            ]
+        )
+    if bool(args.enable_parent_edge_apply_shrink):
+        cmd.extend(
+            [
+                "--enable_parent_edge_apply_shrink",
+                "--parent_edge_apply_shrink_weight",
+                str(args.parent_edge_apply_shrink_weight),
+                "--parent_edge_apply_shrink_tau",
+                str(args.parent_edge_apply_shrink_tau),
+                "--parent_edge_apply_shrink_min_multiplier",
+                str(args.parent_edge_apply_shrink_min_multiplier),
+            ]
+        )
     return cmd
 
 
@@ -416,10 +444,39 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bin_uncertainty_shrink_min_relative_gain", type=float, default=0.0)
     parser.add_argument("--bin_uncertainty_shrink_min_positive_view_fraction", type=float, default=0.5)
     parser.add_argument("--bin_uncertainty_shrink_fallback_shrink", type=float, default=1.0)
+    parser.add_argument("--enable_policy_val_structure_aware_shrink", action="store_true")
+    parser.add_argument("--structure_shrink_l1_weight", type=float, default=0.0)
+    parser.add_argument("--structure_shrink_gradient_weight", type=float, default=0.0)
+    parser.add_argument("--structure_shrink_edge_weight", type=float, default=0.0)
+    parser.add_argument("--structure_shrink_risk_tau", type=float, default=0.002)
+    parser.add_argument("--structure_shrink_max_penalty", type=float, default=1.0)
+    parser.add_argument("--enable_parent_edge_apply_shrink", action="store_true")
+    parser.add_argument("--parent_edge_apply_shrink_weight", type=float, default=0.0)
+    parser.add_argument("--parent_edge_apply_shrink_tau", type=float, default=0.05)
+    parser.add_argument("--parent_edge_apply_shrink_min_multiplier", type=float, default=0.25)
     parser.add_argument("--target_footprint_tail_risk_min_positive_view_fraction", type=float, default=0.75)
     parser.add_argument("--target_footprint_tail_risk_min_min_view_gain", type=float, default=-1.0e-8)
     parser.add_argument("--target_footprint_tail_risk_min_cvar20_view_gain", type=float, default=0.0)
-    return parser.parse_args()
+    args = parser.parse_args()
+    if bool(args.enable_policy_val_structure_aware_shrink) and bool(args.no_policy_val_bin_uncertainty_shrink):
+        parser.error("--enable_policy_val_structure_aware_shrink requires bin uncertainty shrink to stay enabled")
+    if float(args.structure_shrink_l1_weight) < 0.0:
+        parser.error("--structure_shrink_l1_weight must be >= 0")
+    if float(args.structure_shrink_gradient_weight) < 0.0:
+        parser.error("--structure_shrink_gradient_weight must be >= 0")
+    if float(args.structure_shrink_edge_weight) < 0.0:
+        parser.error("--structure_shrink_edge_weight must be >= 0")
+    if float(args.structure_shrink_risk_tau) < 0.0:
+        parser.error("--structure_shrink_risk_tau must be >= 0")
+    if not 0.0 <= float(args.structure_shrink_max_penalty) <= 1.0:
+        parser.error("--structure_shrink_max_penalty must be in [0, 1]")
+    if float(args.parent_edge_apply_shrink_weight) < 0.0:
+        parser.error("--parent_edge_apply_shrink_weight must be >= 0")
+    if float(args.parent_edge_apply_shrink_tau) < 0.0:
+        parser.error("--parent_edge_apply_shrink_tau must be >= 0")
+    if not 0.0 <= float(args.parent_edge_apply_shrink_min_multiplier) <= 1.0:
+        parser.error("--parent_edge_apply_shrink_min_multiplier must be in [0, 1]")
+    return args
 
 
 def main() -> int:

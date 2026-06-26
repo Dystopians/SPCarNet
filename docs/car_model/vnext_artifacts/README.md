@@ -17,6 +17,10 @@ counter_strict_face_softshrink_20260626_045300
 bonsai_strict_face_softshrink_20260626_052500
 room_strict_face_softshrink_20260626_052500
 strict_frozen_policy_multiscene_20260626_052500
+counter_structure_shrink_tau002_20260626_0558
+bonsai_structure_shrink_tau002_20260626_0718
+room_structure_shrink_tau002_20260626_0718
+strict_structure_aware_shrink_multiscene_20260626_0718
 ```
 
 结论必须诚实表述：
@@ -30,7 +34,12 @@ bonsai strict face-softshrink: protocol passed, target_gt_visible_to_apply=false
 room strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, accepted=false, fallback_noop, changed_fraction=0.000000
 ```
 
-因此，这个目录证明的是：**vNext 安全证书和 no-op fallback 机制有效，并且同一套 frozen face-softshrink policy 已经在 counter/bonsai 上产生真实非零 accepted residual surface texture，在 room 上安全回退且 `changed_fraction=0`**。但这些非零收益仍很小或指标混合，三场景 SSIM 均略退，还不是 full9、v106 或 clean MeshSplatting 超越证据。
+因此，这个目录证明的是两件事：
+
+1. **vNext 安全证书和 no-op fallback 机制有效，并且同一套 frozen face-softshrink policy 已经在 counter/bonsai 上产生真实非零 accepted residual surface texture，在 room 上安全回退且 `changed_fraction=0`**。
+2. **新一轮 structure-aware shrink policy 在严格 no-target-GT apply 下让 counter/bonsai/room 三场景全部 accepted，其中 room 从旧策略 fallback 变为真实非零 residual output，并在 room 上相对 Phase-F compact parent 同时提升 PSNR/SSIM/LPIPS**。
+
+但这些非零收益仍很小，平均仍是 `+0.00096893 PSNR / -0.00000509 SSIM / -0.00002453 LPIPS` 量级，还不是 full9、v106、clean MeshSplatting 或 Phase-J teacher 超越证据。完整解释见 `../6-26-vNext-StructureAwareShrink-Strict-Multiscene-Log.md`。
 
 ---
 
@@ -54,6 +63,48 @@ room strict face-softshrink: protocol passed, target_gt_visible_to_apply=false, 
 | `bonsai_strict_face_softshrink_20260626_052500/` | bonsai strict face-softshrink accepted run：manifest、report、audit、metrics、per-view、summary JSON、logs | frozen policy 第二个非零 accepted 场景 |
 | `room_strict_face_softshrink_20260626_052500/` | room strict face-softshrink fallback run：manifest、report、audit、metrics、per-view、summary JSON、logs | frozen policy 安全拒绝/回退场景 |
 | `strict_frozen_policy_multiscene_20260626_052500/strict_frozen_policy_multiscene_summary.md` | counter/bonsai/room 三场景聚合表 | PPT 首选三场景 protocol/metric 总结 |
+| `counter_structure_shrink_tau002_20260626_0558/` | counter structure-aware shrink strict run：manifest、audit、metrics、per-view | 新结构风险 shrink 的 counter 证据；SSIM 回退显著小于旧 face-softshrink，但 PSNR/LPIPS 收益也更小 |
+| `bonsai_structure_shrink_tau002_20260626_0718/` | bonsai structure-aware shrink strict run：manifest、audit、metrics、per-view、logs | 新结构风险 shrink 的 bonsai 证据；结果基本接近旧 face-softshrink |
+| `room_structure_shrink_tau002_20260626_0718/` | room structure-aware shrink strict run：manifest、audit、metrics、per-view、logs | 新结构风险 shrink 的最重要新证据：旧策略 fallback 的 room 变为 accepted nonzero，并相对 Phase-F parent 三指标全正向 |
+| `strict_structure_aware_shrink_multiscene_20260626_0718/strict_structure_aware_shrink_multiscene_summary.md` | counter/bonsai/room 新结构风险 shrink 聚合表 | 新一轮汇报首选三场景结果表 |
+
+---
+
+## Structure-Aware Shrink Strict Key Facts
+
+Artifact roots:
+
+```text
+counter_structure_shrink_tau002_20260626_0558
+bonsai_structure_shrink_tau002_20260626_0718
+room_structure_shrink_tau002_20260626_0718
+```
+
+Fixed policy:
+
+```text
+enable_policy_val_structure_aware_shrink=true
+structure_shrink_l1_weight=1.0
+structure_shrink_gradient_weight=1.0
+structure_shrink_edge_weight=0.0
+structure_shrink_risk_tau=0.002
+strict_no_target_gt_apply=true
+```
+
+Versus Phase-F compact parent:
+
+| scene | protocol pass | target GT visible to apply | accepted | alpha | changed fraction | delta PSNR | delta SSIM | delta LPIPS |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| counter | `True` | `False` | `True` | `0.125` | `0.01234357` | `+0.00129890` | `-0.00000906` | `-0.00004268` |
+| bonsai | `True` | `False` | `True` | `0.25` | `0.00148974` | `+0.00113869` | `-0.00000954` | `-0.00001693` |
+| room | `True` | `False` | `True` | `0.0625` | `0.00519912` | `+0.00046921` | `+0.00000334` | `-0.00001399` |
+| mean | 3/3 | 0/3 visible | 3/3 nonzero | - | - | `+0.00096893` | `-0.00000509` | `-0.00002453` |
+
+Interpretation:
+
+- This is a real strict method milestone because room changes from old fallback/no-op to accepted nonzero residual output.
+- It reduces structure risk and SSIM regression but does not solve the small effect-size bottleneck.
+- Do not use `counter_structure_edge_confidence_20260626_0623` as parent-edge positive evidence; it was produced before a later interface fix that made final target apply receive the same `parent_edge_apply_profile` as policy-val.
 
 ---
 

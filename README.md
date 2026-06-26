@@ -12,6 +12,8 @@ Start here for mentor/PPT analysis from a fresh clone:
 - [vNext feasibility and execution plan](docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md)
 - [vNext soft-shrink garden milestone](docs/car_model/6-26-SPCarNet-vNext-SoftShrink-Garden-Milestone-Log.md)
 - [vNext technical report and artifact index](docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md)
+- [vNext structure-aware shrink strict multiscene log](docs/car_model/6-26-vNext-StructureAwareShrink-Strict-Multiscene-Log.md)
+- [vNext structure-aware shrink artifact summary](docs/car_model/vnext_artifacts/strict_structure_aware_shrink_multiscene_20260626_0718/strict_structure_aware_shrink_multiscene_summary.md)
 - [clone-facing report package manifest](docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md)
 - [current mentor/PPT technical report](docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md)
 - [long Chinese mentor technical report](docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md)
@@ -19,7 +21,7 @@ Start here for mentor/PPT analysis from a fresh clone:
 
 Short status: `v106 POD-MoE base-preserve` is the current verified quality line and improves over the local clean MeshSplatting baseline on the assembled selected full9 table. `v113b/v113c` are strict-gate safety repairs; they improve safety and partially repair garden v110b, but do not surpass v106. `v114_oof_refit_pod_moe` is the active candidate-side long experiment and is not yet a completed result. Latest live addendum: v110 counter failed during field build with return code `-9`, likely due to memory/shared-storage pressure, so the strict branch still needs a lower-memory field-builder rerun.
 
-vNext status: the certified residual surface texture direction is accepted as a realistic research route, not as a guaranteed result. The protocol/interface milestone includes a scene runner, full9 wrapper, no-test-GT certificate smoke test, report assembler, and W&B runner logging. A `garden` face-softshrink pilot now accepts a nonzero residual texture and gives a tiny three-metric held-out improvement over the no-op/fallback parent (`+0.000076` PSNR, `+0.00000197` SSIM, `-0.00000323` LPIPS), with `0.208%` target pixels changed. This is a real nonzero milestone, not full9 closure or proof of superiority over v106/clean MeshSplatting.
+vNext status: the certified residual surface texture direction is accepted as a realistic research route, not as a guaranteed result. The latest structure-aware shrink milestone adds train-policy-val local L1/gradient structure-risk shrink and fixes parent-edge apply/profile wiring. Under strict no-target-GT apply on `counter,bonsai,room`, the fixed structure-aware policy is `3 / 3` accepted with mean delta versus Phase-F compact parent of `+0.00096893` PSNR, `-0.00000509` SSIM, and `-0.00002453` LPIPS. The important repair is `room`: it moves from the previous strict face-softshrink fallback/no-op to accepted nonzero output and improves all three metrics versus its Phase-F parent. This is a real milestone, but still not full9 closure or proof of superiority over v106/clean MeshSplatting.
 
 ## Current v106 POD-MoE Status (2026-06-25)
 

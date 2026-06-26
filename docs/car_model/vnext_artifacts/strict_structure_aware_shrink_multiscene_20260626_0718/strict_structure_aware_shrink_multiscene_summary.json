@@ -1,0 +1,73 @@
+{
+  "created_at": "2026-06-26",
+  "policy": {
+    "name": "policy_val_structure_aware_shrink_tau002",
+    "strict_no_target_gt_apply": true,
+    "structure_shrink_l1_weight": 1.0,
+    "structure_shrink_gradient_weight": 1.0,
+    "structure_shrink_edge_weight": 0.0,
+    "structure_shrink_risk_tau": 0.002
+  },
+  "scenes": {
+    "counter": {
+      "artifact_dir": "docs/car_model/vnext_artifacts/counter_structure_shrink_tau002_20260626_0558",
+      "protocol_passed": true,
+      "target_gt_visible_to_apply": false,
+      "accepted": true,
+      "selected_alpha": 0.125,
+      "changed_fraction": 0.012343567457579047,
+      "metrics": {
+        "PSNR": 26.751171112060547,
+        "SSIM": 0.862042248249054,
+        "LPIPS": 0.2519550621509552
+      },
+      "delta_vs_phasef_compact_parent": {
+        "PSNR": 0.0012989044189453125,
+        "SSIM": -0.000009059906005859375,
+        "LPIPS": -0.00004267692565917969
+      }
+    },
+    "bonsai": {
+      "artifact_dir": "docs/car_model/vnext_artifacts/bonsai_structure_shrink_tau002_20260626_0718",
+      "protocol_passed": true,
+      "target_gt_visible_to_apply": false,
+      "accepted": true,
+      "selected_alpha": 0.25,
+      "changed_fraction": 0.0014897392217198787,
+      "metrics": {
+        "PSNR": 28.865478515625,
+        "SSIM": 0.8960027694702148,
+        "LPIPS": 0.25932276248931885
+      },
+      "delta_vs_phasef_compact_parent": {
+        "PSNR": 0.0011386871337890625,
+        "SSIM": -0.0000095367431640625,
+        "LPIPS": -0.000016927719116210938
+      }
+    },
+    "room": {
+      "artifact_dir": "docs/car_model/vnext_artifacts/room_structure_shrink_tau002_20260626_0718",
+      "protocol_passed": true,
+      "target_gt_visible_to_apply": false,
+      "accepted": true,
+      "selected_alpha": 0.0625,
+      "changed_fraction": 0.005199120032002298,
+      "metrics": {
+        "PSNR": 28.73957061767578,
+        "SSIM": 0.8847965598106384,
+        "LPIPS": 0.24990937113761902
+      },
+      "delta_vs_phasef_compact_parent": {
+        "PSNR": 0.000469207763671875,
+        "SSIM": 0.000003337860107421875,
+        "LPIPS": -0.00001399219036102295
+      }
+    }
+  },
+  "mean_delta_vs_phasef_compact_parent": {
+    "PSNR": 0.00096893310546875,
+    "SSIM": -0.000005086263020833333,
+    "LPIPS": -0.000024532278378804524
+  },
+  "interpretation": "Strict structure-aware shrink converts room from the previous fallback/no-op case into accepted nonzero residual output while preserving no-target-GT apply. Mean effects remain tiny, so this is a milestone rather than a paper-final result."
+}

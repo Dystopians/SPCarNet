@@ -1246,6 +1246,48 @@ def _local_alpha_for_samples(
     return np.clip(alphas[bucket], 0.0, float(profile.get("max_alpha", np.max(alphas) if alphas.size else 1.0)))
 
 
+def _as_rgb_chw(image: np.ndarray) -> np.ndarray | None:
+    arr = np.asarray(image, dtype=np.float32)
+    if arr.ndim != 3:
+        return None
+    if arr.shape[0] == 3:
+        return arr
+    if arr.shape[-1] == 3:
+        return np.moveaxis(arr, -1, 0)
+    return None
+
+
+def _luminance_gradient_magnitude_chw(image: np.ndarray) -> np.ndarray | None:
+    rgb = _as_rgb_chw(image)
+    if rgb is None:
+        return None
+    lum = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
+    dx = np.zeros_like(lum, dtype=np.float32)
+    dy = np.zeros_like(lum, dtype=np.float32)
+    dx[:, :-1] = lum[:, 1:] - lum[:, :-1]
+    dy[:-1, :] = lum[1:, :] - lum[:-1, :]
+    return np.sqrt(dx * dx + dy * dy).astype(np.float32)
+
+
+def make_parent_edge_apply_profile(
+    *,
+    enabled: bool,
+    weight: float,
+    edge_tau: float,
+    min_multiplier: float,
+) -> dict[str, Any]:
+    enabled = bool(enabled) and float(weight) > 0.0
+    return {
+        "enabled": bool(enabled),
+        "mode": "gt_free_parent_edge_apply_shrink",
+        "uses_target_or_test_gt": False,
+        "uses_parent_render": bool(enabled),
+        "weight": float(weight),
+        "edge_tau": float(edge_tau),
+        "min_multiplier": float(min_multiplier),
+    }
+
+
 def _profile_max_alpha(profile: dict[str, Any] | None) -> float:
     if not profile or not bool(profile.get("enabled", False)):
         return 1.0
@@ -2158,6 +2200,7 @@ def predict_delta_for_npz(
     local_alpha_profile: dict[str, Any] | None = None,
     face_gain_guard_profile: dict[str, Any] | None = None,
     bin_uncertainty_guard_profile: dict[str, Any] | None = None,
+    parent_edge_apply_profile: dict[str, Any] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     face_id = np.asarray(z["face_id"], dtype=np.int64)
     h, w = face_id.shape
@@ -2429,10 +2472,23 @@ def predict_delta_for_npz(
         if bool(np.any(support_valid)):
             final_valid[ys[support_valid], xs[support_valid]] = True
         valid = final_valid
+    parent_edge_multiplier = None
+    if parent_edge_apply_profile and bool(parent_edge_apply_profile.get("enabled", False)):
+        render_chw = _as_rgb_chw(np.asarray(z["rgb_render"], dtype=np.float32)) if "rgb_render" in z else None
+        edge = _luminance_gradient_magnitude_chw(render_chw) if render_chw is not None else None
+        if edge is not None:
+            edge_tau = max(float(parent_edge_apply_profile.get("edge_tau", 0.05)), 1.0e-12)
+            weight = max(0.0, float(parent_edge_apply_profile.get("weight", 0.0)))
+            min_multiplier = float(np.clip(parent_edge_apply_profile.get("min_multiplier", 0.0), 0.0, 1.0))
+            raw = 1.0 / (1.0 + weight * (edge / edge_tau))
+            parent_edge_multiplier = np.clip(raw, min_multiplier, 1.0).astype(np.float32)
     for c in range(3):
         channel = delta[c]
         if bool(np.any(support_valid)):
-            channel[ys[support_valid], xs[support_valid]] = float(alpha) * out_pixels[support_valid, c]
+            values = float(alpha) * out_pixels[support_valid, c]
+            if parent_edge_multiplier is not None:
+                values = values * parent_edge_multiplier[ys[support_valid], xs[support_valid]]
+            channel[ys[support_valid], xs[support_valid]] = values
     return delta, valid
 
 
@@ -2464,6 +2520,7 @@ def evaluate_policy_val(
     local_alpha_profile: dict[str, Any] | None = None,
     face_gain_guard_profile: dict[str, Any] | None = None,
     bin_uncertainty_guard_profile: dict[str, Any] | None = None,
+    parent_edge_apply_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not val_views:
         return {"enabled": False, "reason": "no_policy_val_views"}
@@ -2531,6 +2588,7 @@ def evaluate_policy_val(
                 local_alpha_profile=local_alpha_profile,
                 face_gain_guard_profile=face_gain_guard_profile,
                 bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
+                parent_edge_apply_profile=parent_edge_apply_profile,
             )
             pred = clip_delta_rgb(pred, float(max_abs_delta_rgb))
             pred_samples = np.stack([pred[0][mask], pred[1][mask], pred[2][mask]], axis=1)
@@ -3731,6 +3789,12 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
     fallback_shrink: float,
     policy_mode: str,
     max_profile_bins: int,
+    enable_structure_aware_shrink: bool = False,
+    structure_shrink_l1_weight: float = 0.0,
+    structure_shrink_gradient_weight: float = 0.0,
+    structure_shrink_edge_weight: float = 0.0,
+    structure_shrink_risk_tau: float = 0.002,
+    structure_shrink_max_penalty: float = 1.0,
 ) -> tuple[list[float], dict[str, Any]]:
     """Build a train-policy-val uncertainty-aware residual shrink field.
 
@@ -3762,8 +3826,19 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
     positive_view_count_by_key: dict[tuple[int, int], int] = {}
     variance_sum_by_key: dict[tuple[int, int], float] = {}
     sign_sum_by_key: dict[tuple[int, int], float] = {}
+    structure_l1_bad_sum_by_key: dict[tuple[int, int], float] = {}
+    structure_gradient_bad_sum_by_key: dict[tuple[int, int], float] = {}
+    structure_edge_sum_by_key: dict[tuple[int, int], float] = {}
+    structure_bad_view_count_by_key: dict[tuple[int, int], int] = {}
     total_active_samples = 0
     view_count = 0
+    structure_view_count = 0
+    structure_missing_view_count = 0
+    structure_enabled = bool(enable_structure_aware_shrink) and (
+        float(structure_shrink_l1_weight) > 0.0
+        or float(structure_shrink_gradient_weight) > 0.0
+        or float(structure_shrink_edge_weight) > 0.0
+    )
     texture_size = int(next(iter(atlas.values())).texture.shape[0])
     for path in tqdm(val_views, desc="calibrate bin uncertainty shrink"):
         z = np.load(path)
@@ -3805,6 +3880,8 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
         active = np.linalg.norm(pred_samples, axis=1) > 1.0e-12
         if not bool(np.any(active)):
             continue
+        sample_ys = ys[active]
+        sample_xs = xs[active]
         target = target.astype(np.float64)[active]
         pred_samples = pred_samples.astype(np.float64)[active]
         face_samples = face_samples[active]
@@ -3813,6 +3890,34 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
         before = np.sum(target * target, axis=1)
         err = target - pred_samples
         after = np.sum(err * err, axis=1)
+        l1_bad_samples = None
+        gradient_bad_samples = None
+        edge_samples = None
+        if structure_enabled:
+            render_chw = _as_rgb_chw(np.asarray(z["rgb_render"], dtype=np.float32)) if "rgb_render" in z else None
+            gt_chw = _as_rgb_chw(np.asarray(z["rgb_gt"], dtype=np.float32)) if "rgb_gt" in z else None
+            if render_chw is not None and gt_chw is not None and tuple(render_chw.shape) == tuple(gt_chw.shape):
+                adapted = np.clip(render_chw + pred.astype(np.float32), 0.0, 1.0)
+                l1_before_map = np.mean(np.abs(render_chw - gt_chw), axis=0)
+                l1_after_map = np.mean(np.abs(adapted - gt_chw), axis=0)
+                l1_bad_map = np.maximum(l1_after_map - l1_before_map, 0.0).astype(np.float32)
+                render_grad = _luminance_gradient_magnitude_chw(render_chw)
+                gt_grad = _luminance_gradient_magnitude_chw(gt_chw)
+                adapted_grad = _luminance_gradient_magnitude_chw(adapted)
+                if render_grad is not None and gt_grad is not None and adapted_grad is not None:
+                    gradient_bad_map = np.maximum(
+                        np.abs(adapted_grad - gt_grad) - np.abs(render_grad - gt_grad),
+                        0.0,
+                    ).astype(np.float32)
+                    edge_map = np.maximum(render_grad, gt_grad).astype(np.float32)
+                    l1_bad_samples = l1_bad_map[sample_ys, sample_xs].astype(np.float64)
+                    gradient_bad_samples = gradient_bad_map[sample_ys, sample_xs].astype(np.float64)
+                    edge_samples = edge_map[sample_ys, sample_xs].astype(np.float64)
+                    structure_view_count += 1
+                else:
+                    structure_missing_view_count += 1
+            else:
+                structure_missing_view_count += 1
         total_active_samples += int(target.shape[0])
         view_count += 1
         bin_ids = (uv_v.astype(np.int64) * texture_size) + uv_u.astype(np.int64)
@@ -3841,6 +3946,21 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
                 local_sign = float(np.mean(face_atlas.sign_consistency[ybin, xbin]))
                 variance_sum_by_key[key] = variance_sum_by_key.get(key, 0.0) + local_variance * local_count
                 sign_sum_by_key[key] = sign_sum_by_key.get(key, 0.0) + local_sign * local_count
+                if l1_bad_samples is not None and gradient_bad_samples is not None and edge_samples is not None:
+                    structure_l1 = float(np.sum(l1_bad_samples[bm]))
+                    structure_gradient = float(np.sum(gradient_bad_samples[bm]))
+                    structure_edge = float(np.sum(edge_samples[bm]))
+                    structure_l1_bad_sum_by_key[key] = structure_l1_bad_sum_by_key.get(key, 0.0) + structure_l1
+                    structure_gradient_bad_sum_by_key[key] = (
+                        structure_gradient_bad_sum_by_key.get(key, 0.0) + structure_gradient
+                    )
+                    structure_edge_sum_by_key[key] = structure_edge_sum_by_key.get(key, 0.0) + structure_edge
+                    if (
+                        structure_l1 * max(0.0, float(structure_shrink_l1_weight))
+                        + structure_gradient * max(0.0, float(structure_shrink_gradient_weight))
+                        + structure_edge * max(0.0, float(structure_shrink_edge_weight))
+                    ) > 0.0:
+                        structure_bad_view_count_by_key[key] = structure_bad_view_count_by_key.get(key, 0) + 1
 
     if not before_by_key:
         disabled["reason"] = "no_active_policy_val_predictions"
@@ -3866,6 +3986,24 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
         positive_fraction = float(positive_views / max(1, views))
         mean_variance = float(variance_sum_by_key.get(key, 0.0) / max(1, samples))
         mean_sign = float(sign_sum_by_key.get(key, 0.0) / max(1, samples))
+        mean_structure_l1_bad = float(structure_l1_bad_sum_by_key.get(key, 0.0) / max(1, samples))
+        mean_structure_gradient_bad = float(structure_gradient_bad_sum_by_key.get(key, 0.0) / max(1, samples))
+        mean_structure_edge = float(structure_edge_sum_by_key.get(key, 0.0) / max(1, samples))
+        structure_raw_risk = float(
+            max(0.0, float(structure_shrink_l1_weight)) * mean_structure_l1_bad
+            + max(0.0, float(structure_shrink_gradient_weight)) * mean_structure_gradient_bad
+            + max(0.0, float(structure_shrink_edge_weight)) * mean_structure_edge
+        )
+        if structure_enabled:
+            if float(structure_shrink_risk_tau) > 0.0:
+                structure_risk_conf = structure_raw_risk / (structure_raw_risk + float(structure_shrink_risk_tau))
+            else:
+                structure_risk_conf = structure_raw_risk
+            structure_risk_conf = float(
+                np.clip(structure_risk_conf, 0.0, max(0.0, min(1.0, float(structure_shrink_max_penalty))))
+            )
+        else:
+            structure_risk_conf = 0.0
         variance_ok = float(max_mean_variance) < 0.0 or mean_variance <= float(max_mean_variance)
         sign_ok = float(min_mean_sign_consistency) <= 0.0 or mean_sign >= float(min_mean_sign_consistency)
         evidence_ok = bool(
@@ -3931,6 +4069,7 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
                         positive_deficit,
                         variance_penalty,
                         sign_penalty,
+                        structure_risk_conf,
                     ),
                     0.0,
                     1.0,
@@ -3944,7 +4083,20 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
                 )
             )
             if evidence_ok:
-                shrink = float(np.clip(max(shrink, fallback_shrink_f, positive_shrink), min_shrink_f, max_shrink_f))
+                if structure_enabled and structure_risk_conf > 0.0:
+                    structure_limited_fallback = fallback_shrink_f - structure_risk_conf * (
+                        fallback_shrink_f - min_shrink_f
+                    )
+                    mse_supported_shrink = float(max(shrink, positive_shrink))
+                    shrink = float(
+                        np.clip(
+                            min(mse_supported_shrink, structure_limited_fallback),
+                            min_shrink_f,
+                            max_shrink_f,
+                        )
+                    )
+                else:
+                    shrink = float(np.clip(max(shrink, fallback_shrink_f, positive_shrink), min_shrink_f, max_shrink_f))
             profile_row = abs(shrink - fallback_shrink_f) > 1.0e-8
         else:
             risk_conf = 0.0
@@ -3953,6 +4105,11 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
             variance_penalty = 0.0
             sign_penalty = 0.0
             shrink = float(positive_shrink if evidence_ok else fallback_shrink_f)
+            if structure_enabled and evidence_ok and structure_risk_conf > 0.0:
+                structure_limited_fallback = fallback_shrink_f - structure_risk_conf * (
+                    fallback_shrink_f - min_shrink_f
+                )
+                shrink = float(np.clip(min(shrink, structure_limited_fallback), min_shrink_f, max_shrink_f))
             profile_row = bool(evidence_ok)
         row = {
             "face_id": int(face),
@@ -3977,6 +4134,12 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
             "sign_confidence": float(sign_conf),
             "positive_shrink": float(positive_shrink),
             "risk_confidence": float(risk_conf),
+            "structure_risk_confidence": float(structure_risk_conf),
+            "structure_raw_risk": float(structure_raw_risk),
+            "mean_structure_l1_bad": float(mean_structure_l1_bad),
+            "mean_structure_gradient_bad": float(mean_structure_gradient_bad),
+            "mean_structure_edge": float(mean_structure_edge),
+            "structure_bad_view_count": int(structure_bad_view_count_by_key.get(key, 0)),
             "negative_gain_confidence": float(negative_gain_conf),
             "positive_view_deficit": float(positive_deficit),
             "variance_penalty": float(variance_penalty),
@@ -4038,6 +4201,31 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
         "min_shrink": float(min_shrink_f),
         "max_shrink": float(max_shrink_f),
         "fallback_shrink": float(fallback_shrink_f),
+        "structure_aware_shrink": {
+            "enabled": bool(structure_enabled),
+            "uses_policy_val_gt": bool(structure_enabled),
+            "uses_target_or_test_gt": False,
+            "policy_val_views_with_structure": int(structure_view_count),
+            "policy_val_views_missing_structure": int(structure_missing_view_count),
+            "l1_weight": float(structure_shrink_l1_weight),
+            "gradient_weight": float(structure_shrink_gradient_weight),
+            "edge_weight": float(structure_shrink_edge_weight),
+            "risk_tau": float(structure_shrink_risk_tau),
+            "max_penalty": float(structure_shrink_max_penalty),
+            "mean_selected_structure_risk_confidence": float(
+                np.mean([float(row["structure_risk_confidence"]) for row in selected_rows])
+            )
+            if selected_rows
+            else 0.0,
+            "structure_downweighted_bin_count": int(
+                sum(
+                    1
+                    for row in selected_rows
+                    if float(row["structure_risk_confidence"]) > 1.0e-8
+                    and float(row["shrink"]) < fallback_shrink_f - 1.0e-8
+                )
+            ),
+        },
         "candidate_bin_count": int(len(rows)),
         "bin_uncertainty_shrink_count": int(len(selected_rows)),
         "fallback_bin_count": int(fallback_bin_count),
@@ -5117,6 +5305,7 @@ def apply_to_target(
     local_alpha_profile: dict[str, Any] | None = None,
     face_gain_guard_profile: dict[str, Any] | None = None,
     bin_uncertainty_guard_profile: dict[str, Any] | None = None,
+    parent_edge_apply_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     method_dir = output_model / split / method_name
     render_dir = method_dir / "renders"
@@ -5154,6 +5343,7 @@ def apply_to_target(
             local_alpha_profile=local_alpha_profile,
             face_gain_guard_profile=face_gain_guard_profile,
             bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
+            parent_edge_apply_profile=parent_edge_apply_profile,
         )
         if float(max_abs_delta_rgb) > 0.0:
             delta = np.clip(delta, -float(max_abs_delta_rgb), float(max_abs_delta_rgb))
@@ -5200,6 +5390,7 @@ def evaluate_target_support_profile(
     local_alpha_profile: dict[str, Any] | None = None,
     face_gain_guard_profile: dict[str, Any] | None = None,
     bin_uncertainty_guard_profile: dict[str, Any] | None = None,
+    parent_edge_apply_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     disabled = {
         "enabled": False,
@@ -5239,6 +5430,7 @@ def evaluate_target_support_profile(
             local_alpha_profile=local_alpha_profile,
             face_gain_guard_profile=face_gain_guard_profile,
             bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
+            parent_edge_apply_profile=parent_edge_apply_profile,
         )
         if float(max_abs_delta_rgb) > 0.0:
             delta = np.clip(delta, -float(max_abs_delta_rgb), float(max_abs_delta_rgb))
@@ -6648,6 +6840,37 @@ def main() -> int:
         help="Maximum number of uncertainty-shrink face/UV bins stored in the profile. <=0 stores all fitted bins.",
     )
     parser.add_argument(
+        "--enable_policy_val_structure_aware_shrink",
+        action="store_true",
+        help=(
+            "Augment policy-val bin uncertainty shrink with local structure-risk evidence from train-policy-val "
+            "views. Uses only fit/policy-val rgb_render/rgb_gt, never target/test GT, to downweight bins that "
+            "increase local L1 or gradient-structure error."
+        ),
+    )
+    parser.add_argument("--structure_shrink_l1_weight", type=float, default=0.0)
+    parser.add_argument("--structure_shrink_gradient_weight", type=float, default=0.0)
+    parser.add_argument("--structure_shrink_edge_weight", type=float, default=0.0)
+    parser.add_argument("--structure_shrink_risk_tau", type=float, default=0.002)
+    parser.add_argument(
+        "--structure_shrink_max_penalty",
+        type=float,
+        default=1.0,
+        help="Maximum normalized structure risk injected into keep-with-downweight local shrink.",
+    )
+    parser.add_argument(
+        "--enable_parent_edge_apply_shrink",
+        action="store_true",
+        help=(
+            "Apply an additional GT-free view-conditioned confidence based only on parent rgb_render edge "
+            "strength. This downweights residuals on high-gradient target/policy-val pixels without reading "
+            "target/test GT."
+        ),
+    )
+    parser.add_argument("--parent_edge_apply_shrink_weight", type=float, default=0.0)
+    parser.add_argument("--parent_edge_apply_shrink_tau", type=float, default=0.05)
+    parser.add_argument("--parent_edge_apply_shrink_min_multiplier", type=float, default=0.25)
+    parser.add_argument(
         "--enable_policy_val_face_gain_guard",
         action="store_true",
         help=(
@@ -6962,6 +7185,24 @@ def main() -> int:
         parser.error("--bin_uncertainty_shrink_sign_power must be >= 0")
     if float(args.bin_uncertainty_shrink_max_shrink) < float(args.bin_uncertainty_shrink_min_shrink):
         parser.error("--bin_uncertainty_shrink_max_shrink must be >= --bin_uncertainty_shrink_min_shrink")
+    if bool(args.enable_policy_val_structure_aware_shrink) and not bool(args.enable_policy_val_bin_uncertainty_shrink):
+        parser.error("--enable_policy_val_structure_aware_shrink requires --enable_policy_val_bin_uncertainty_shrink")
+    if float(args.structure_shrink_l1_weight) < 0.0:
+        parser.error("--structure_shrink_l1_weight must be >= 0")
+    if float(args.structure_shrink_gradient_weight) < 0.0:
+        parser.error("--structure_shrink_gradient_weight must be >= 0")
+    if float(args.structure_shrink_edge_weight) < 0.0:
+        parser.error("--structure_shrink_edge_weight must be >= 0")
+    if float(args.structure_shrink_risk_tau) < 0.0:
+        parser.error("--structure_shrink_risk_tau must be >= 0")
+    if not 0.0 <= float(args.structure_shrink_max_penalty) <= 1.0:
+        parser.error("--structure_shrink_max_penalty must be in [0, 1]")
+    if float(args.parent_edge_apply_shrink_weight) < 0.0:
+        parser.error("--parent_edge_apply_shrink_weight must be >= 0")
+    if float(args.parent_edge_apply_shrink_tau) < 0.0:
+        parser.error("--parent_edge_apply_shrink_tau must be >= 0")
+    if not 0.0 <= float(args.parent_edge_apply_shrink_min_multiplier) <= 1.0:
+        parser.error("--parent_edge_apply_shrink_min_multiplier must be in [0, 1]")
     local_alpha_modes = [
         bool(args.enable_policy_val_local_alpha_calibration),
         bool(args.enable_policy_val_face_alpha_calibration),
@@ -7014,6 +7255,12 @@ def main() -> int:
     fit_evidence = Path(args.fit_evidence_dir)
     target_evidence = Path(args.target_evidence_dir)
     carrier_json = Path(args.region_carrier_json)
+    parent_edge_apply_profile = make_parent_edge_apply_profile(
+        enabled=bool(args.enable_parent_edge_apply_shrink),
+        weight=float(args.parent_edge_apply_shrink_weight),
+        edge_tau=float(args.parent_edge_apply_shrink_tau),
+        min_multiplier=float(args.parent_edge_apply_shrink_min_multiplier),
+    )
 
     copy_model_shell(source_model, output_model, force=bool(args.force))
     candidate_faces, carrier_summary = load_carrier_faces(
@@ -7593,6 +7840,12 @@ def main() -> int:
                 fallback_shrink=float(args.bin_uncertainty_shrink_fallback_shrink),
                 policy_mode=str(args.bin_uncertainty_shrink_policy_mode),
                 max_profile_bins=int(args.bin_uncertainty_shrink_max_profile_bins),
+                enable_structure_aware_shrink=bool(args.enable_policy_val_structure_aware_shrink),
+                structure_shrink_l1_weight=float(args.structure_shrink_l1_weight),
+                structure_shrink_gradient_weight=float(args.structure_shrink_gradient_weight),
+                structure_shrink_edge_weight=float(args.structure_shrink_edge_weight),
+                structure_shrink_risk_tau=float(args.structure_shrink_risk_tau),
+                structure_shrink_max_penalty=float(args.structure_shrink_max_penalty),
             )
         alpha_candidates, ssim_alpha_refinement_summary = refine_alpha_grid_for_policy_val_ssim(
             alpha_candidates,
@@ -7628,9 +7881,11 @@ def main() -> int:
             enable_policy_val_image_l1=bool(args.enable_policy_val_image_l1_gate),
             policy_val_l1_max_size=int(args.policy_val_l1_max_size),
             local_alpha_profile=local_alpha_profile,
+            parent_edge_apply_profile=parent_edge_apply_profile,
         )
         cand_policy_val["alpha_calibration"] = dict(alpha_calibration_summary)
         cand_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
+        cand_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
         cand_policy_val["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
 
         def select_policy_val_payload(
@@ -7679,9 +7934,11 @@ def main() -> int:
                 enable_policy_val_image_l1=bool(args.enable_policy_val_image_l1_gate),
                 policy_val_l1_max_size=int(args.policy_val_l1_max_size),
                 local_alpha_profile=local_alpha_profile,
+                parent_edge_apply_profile=parent_edge_apply_profile,
             )
             legacy_policy_val["alpha_calibration"] = dict(alpha_calibration_summary)
             legacy_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
+            legacy_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
             legacy_policy_val["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
             legacy_policy_val, legacy_best, legacy_selected_alpha, legacy_risk_reasons, legacy_accepted = (
                 select_policy_val_payload(legacy_policy_val)
@@ -7773,9 +8030,11 @@ def main() -> int:
                 enable_policy_val_image_l1=bool(args.enable_policy_val_image_l1_gate),
                 policy_val_l1_max_size=int(args.policy_val_l1_max_size),
                 local_alpha_profile=local_alpha_profile,
+                parent_edge_apply_profile=parent_edge_apply_profile,
             )
             legacy_policy_val["alpha_calibration"] = dict(alpha_calibration_summary)
             legacy_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
+            legacy_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
             legacy_policy_val["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
             legacy_policy_val, legacy_best, legacy_selected_alpha, legacy_risk_reasons, legacy_accepted = (
                 select_policy_val_payload(legacy_policy_val)
@@ -7915,9 +8174,11 @@ def main() -> int:
                         policy_val_l1_max_size=int(args.policy_val_l1_max_size),
                         local_alpha_profile=local_alpha_profile,
                         face_gain_guard_profile=face_gain_guard_profile,
+                        parent_edge_apply_profile=parent_edge_apply_profile,
                     )
                     guarded_policy_val["alpha_calibration"] = dict(alpha_calibration_summary)
                     guarded_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
+                    guarded_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
                     guarded_policy_val["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
                     (
                         guarded_policy_val,
@@ -8024,9 +8285,11 @@ def main() -> int:
                         local_alpha_profile=local_alpha_profile,
                         face_gain_guard_profile=face_gain_guard_profile,
                         bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
+                        parent_edge_apply_profile=parent_edge_apply_profile,
                     )
                     guarded_policy_val["alpha_calibration"] = dict(alpha_calibration_summary)
                     guarded_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
+                    guarded_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
                     guarded_policy_val["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
                     (
                         guarded_policy_val,
@@ -8069,6 +8332,7 @@ def main() -> int:
                 }
         cand_fit_summary["face_gain_guard"] = dict(face_gain_guard_profile)
         cand_fit_summary["bin_uncertainty_guard"] = dict(bin_uncertainty_guard_profile)
+        cand_fit_summary["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
         print(
             "[policy-candidate] done "
             f"{candidate_label} "
@@ -8263,6 +8527,7 @@ def main() -> int:
                     {"enabled": False, "mode": "policy_val_bin_uncertainty_guard"},
                 )
             ),
+            parent_edge_apply_profile=dict(parent_edge_apply_profile),
         )
 
     def select_policy_val_payload_for_candidate(
@@ -8618,11 +8883,13 @@ def main() -> int:
                     local_alpha_profile=hybrid_local_alpha_profile,
                     face_gain_guard_profile=hybrid_face_gain_guard_profile,
                     bin_uncertainty_guard_profile=hybrid_bin_uncertainty_guard_profile,
+                    parent_edge_apply_profile=parent_edge_apply_profile,
                 )
                 hybrid_policy_val["alpha_calibration"] = dict(
                     (source_candidate.get("policy_val") or {}).get("alpha_calibration", {})
                 )
                 hybrid_policy_val["local_alpha_calibration"] = dict(hybrid_local_alpha_profile)
+                hybrid_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
                 hybrid_policy_val["ssim_alpha_refinement"] = dict(
                     (source_candidate.get("policy_val") or {}).get("ssim_alpha_refinement", {})
                 )
@@ -8639,6 +8906,7 @@ def main() -> int:
                     (source_candidate.get("fit_summary") or {}).get("ssim_alpha_refinement", {})
                 )
                 hybrid_fit_summary["policy_val_prior_bin_gain_hybrid"] = dict(hybrid_profile)
+                hybrid_fit_summary["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
                 hybrid_fit_summary["policy_val_prior_bin_gain_hybrid_source"] = {
                     "baseline_surface_multiscale_prior_blend": float(
                         baseline_candidate.get("surface_multiscale_prior_blend", 0.0)
@@ -9102,6 +9370,7 @@ def main() -> int:
             local_alpha_profile=local_alpha_profile,
             face_gain_guard_profile=face_gain_guard_profile,
             bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
+            parent_edge_apply_profile=parent_edge_apply_profile,
         )
         min_changed = float(args.min_target_changed_fraction)
         if min_changed > 0.0 and float(target_apply.get("changed_fraction", 0.0)) < min_changed:
@@ -9161,6 +9430,7 @@ def main() -> int:
                 "accepted": bool(candidate.get("accepted", False)),
                 "selected_alpha": float(candidate.get("selected_alpha", 0.0)),
                 "local_alpha_calibration": dict(candidate.get("local_alpha_profile", {"enabled": False})),
+                "parent_edge_apply_shrink": dict(parent_edge_apply_profile),
                 "face_gain_guard": {
                     key: value
                     for key, value in dict(candidate.get("face_gain_guard_profile", {})).items()
@@ -9181,6 +9451,7 @@ def main() -> int:
         "reject_reason": reject_reason,
         "selected_alpha": float(selected_alpha),
         "local_alpha_profile": local_alpha_profile,
+        "parent_edge_apply_profile": parent_edge_apply_profile,
         "face_gain_guard_profile": face_gain_guard_profile,
         "bin_uncertainty_guard_profile": bin_uncertainty_guard_profile,
         "policy_val_risk_gate": {
