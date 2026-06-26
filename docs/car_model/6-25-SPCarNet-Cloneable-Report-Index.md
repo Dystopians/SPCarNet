@@ -30,6 +30,7 @@ This index is the entry point for a fresh clone of `https://github.com/Dystopian
 | v110b flowers/garden strict diagnostic | `docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md` |
 | v113b OOT tail-safe strict diagnostic | `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md` |
 | v113c frame-fallback and v114 running summary | `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md` |
+| v110/v111/v114 strict branch package | `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md` |
 
 ## Qualitative Result Package
 
@@ -55,6 +56,7 @@ Each contact sheet has a sibling `.json` manifest with source render paths and c
 | `scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py` | gate/eval-only replay runner for prebuilt strict candidates using the v113b lower-tail and OOT support certificates |
 | `scripts/car_model/smoke_test_v114_oof_refit.py` | synthetic verification for the v114 OOF positive-cap reliability rule |
 | `scripts/car_model/collect_v110_strict_split_report.py` | collects clean/v106/v110 strict-split metrics into Markdown/JSON summaries |
+| `scripts/car_model/collect_v110_v111_v114_package.py` | collects the current strict-branch package status and metrics for v110 counter/bonsai, v111 flowers, and v114 garden |
 
 ## Smoke and Static Checks
 

@@ -1,0 +1,306 @@
+{
+  "all_complete": false,
+  "complete_rows": 0,
+  "created_at": "2026-06-26T06:35:14.478744+00:00",
+  "inputs": {
+    "clean_baseline_root": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k",
+    "detached_root": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625",
+    "v106_assembled": "docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_assembled.json",
+    "v110_root": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625",
+    "v111_root": "/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625",
+    "v114_root": "/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625"
+  },
+  "missing_count": 27,
+  "row_count": 4,
+  "rows": [
+    {
+      "artifacts": {
+        "eval_results": {
+          "path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter/reports/counter_ours_26000_v110_strict_train_even_odd_parent_gate_counter_test_results.json",
+          "present": false
+        },
+        "field": {
+          "path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter/fields/ours_26000_v110_strict_train_even_candidate_counter_field.pt",
+          "present": false
+        },
+        "manifest": {
+          "path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter/fields/ours_26000_v110_strict_train_even_candidate_counter_field.manifest.json",
+          "present": false
+        },
+        "report": {
+          "path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter/reports/counter_v110_strict_split_parent_gate_report.json",
+          "present": false
+        }
+      },
+      "branch": "v110_strict_split_parent_gate",
+      "clean_method": "ours_26000",
+      "complete": false,
+      "deltas": {
+        "method_minus_clean": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        },
+        "method_minus_v106": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        }
+      },
+      "label": "v110_counter",
+      "method_name": "ours_26000_v110_strict_train_even_odd_parent_gate_counter",
+      "metric_source": "",
+      "metrics": {
+        "clean": {
+          "LPIPS": 0.2520033121109009,
+          "PSNR": 26.751773834228516,
+          "SSIM": 0.862055242061615
+        },
+        "method": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        },
+        "v106_parent": {
+          "LPIPS": 0.23884722590446472,
+          "PSNR": 27.499645233154297,
+          "SSIM": 0.8675211071968079
+        }
+      },
+      "missing": [
+        "report:/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter/reports/counter_v110_strict_split_parent_gate_report.json:missing_file",
+        "method_results:/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter/reports/counter_ours_26000_v110_strict_train_even_odd_parent_gate_counter_test_results.json:missing_file",
+        "method_metrics_missing:ours_26000_v110_strict_train_even_odd_parent_gate_counter",
+        "report:/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter/reports/counter_v110_strict_split_parent_gate_report.json:missing",
+        "field:/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter/fields/ours_26000_v110_strict_train_even_candidate_counter_field.pt:missing",
+        "manifest:/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter/fields/ours_26000_v110_strict_train_even_candidate_counter_field.manifest.json:missing",
+        "eval_results:/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/counter/reports/counter_ours_26000_v110_strict_train_even_odd_parent_gate_counter_test_results.json:missing"
+      ],
+      "paths": {
+        "clean_results": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/counter/results.json",
+        "detached_results": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/counter/detached_model/results.json"
+      },
+      "scene": "counter",
+      "status": "MISSING_REPORT"
+    },
+    {
+      "artifacts": {
+        "eval_results": {
+          "path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/bonsai/reports/bonsai_ours_26000_v110_strict_train_even_odd_parent_gate_bonsai_test_results.json",
+          "present": false
+        },
+        "field": {
+          "path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/bonsai/fields/ours_26000_v110_strict_train_even_candidate_bonsai_field.pt",
+          "present": false
+        },
+        "manifest": {
+          "path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/bonsai/fields/ours_26000_v110_strict_train_even_candidate_bonsai_field.manifest.json",
+          "present": false
+        },
+        "report": {
+          "path": "/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/bonsai/reports/bonsai_v110_strict_split_parent_gate_report.json",
+          "present": true
+        }
+      },
+      "branch": "v110_strict_split_parent_gate",
+      "clean_method": "ours_26000",
+      "complete": false,
+      "deltas": {
+        "method_minus_clean": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        },
+        "method_minus_v106": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        }
+      },
+      "label": "v110_bonsai",
+      "method_name": "ours_26000_v110_strict_train_even_odd_parent_gate_bonsai",
+      "metric_source": "",
+      "metrics": {
+        "clean": {
+          "LPIPS": 0.25949278473854065,
+          "PSNR": 28.895233154296875,
+          "SSIM": 0.8964002728462219
+        },
+        "method": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        },
+        "v106_parent": {
+          "LPIPS": 0.2300502359867096,
+          "PSNR": 30.316089630126953,
+          "SSIM": 0.9075201153755188
+        }
+      },
+      "missing": [
+        "method_results:/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/bonsai/reports/bonsai_ours_26000_v110_strict_train_even_odd_parent_gate_bonsai_test_results.json:missing_file",
+        "method_metrics_missing:ours_26000_v110_strict_train_even_odd_parent_gate_bonsai",
+        "field:/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/bonsai/fields/ours_26000_v110_strict_train_even_candidate_bonsai_field.pt:missing",
+        "manifest:/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/bonsai/fields/ours_26000_v110_strict_train_even_candidate_bonsai_field.manifest.json:missing",
+        "eval_results:/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625/bonsai/reports/bonsai_ours_26000_v110_strict_train_even_odd_parent_gate_bonsai_test_results.json:missing"
+      ],
+      "paths": {
+        "clean_results": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/bonsai/results.json",
+        "detached_results": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/bonsai/detached_model/results.json"
+      },
+      "scene": "bonsai",
+      "status": "FAILED_PREFLIGHT_NO_METRICS"
+    },
+    {
+      "artifacts": {
+        "eval_results": {
+          "path": "/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/reports/flowers_ours_26000_v111_train_even_odd_parent_gate_flowers_test_results.json",
+          "present": false
+        },
+        "field": {
+          "path": "/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/fields/ours_26000_v111_train_even_candidate_flowers_field.pt",
+          "present": false
+        },
+        "manifest": {
+          "path": "/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/fields/ours_26000_v111_train_even_candidate_flowers_field.manifest.json",
+          "present": false
+        },
+        "parent_field": {
+          "path": "/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/fields/ours_26000_v111_train_all_parent_flowers_field.pt",
+          "present": false
+        },
+        "parent_manifest": {
+          "path": "/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/fields/ours_26000_v111_train_all_parent_flowers_field.manifest.json",
+          "present": false
+        },
+        "report": {
+          "path": "/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/reports/flowers_v111_end_to_end_strict_parent_gate_report.json",
+          "present": false
+        }
+      },
+      "branch": "v111_end_to_end_strict_parent_gate",
+      "clean_method": "ours_26000",
+      "complete": false,
+      "deltas": {
+        "method_minus_clean": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        },
+        "method_minus_v106": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        }
+      },
+      "label": "v111_flowers",
+      "method_name": "ours_26000_v111_train_even_odd_parent_gate_flowers",
+      "metric_source": "",
+      "metrics": {
+        "clean": {
+          "LPIPS": 0.39456307888031006,
+          "PSNR": 19.6822566986084,
+          "SSIM": 0.5118216872215271
+        },
+        "method": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        },
+        "v106_parent": {
+          "LPIPS": 0.37439286708831787,
+          "PSNR": 20.077722549438477,
+          "SSIM": 0.5312396883964539
+        }
+      },
+      "missing": [
+        "report:/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/reports/flowers_v111_end_to_end_strict_parent_gate_report.json:missing_file",
+        "method_results:/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/reports/flowers_ours_26000_v111_train_even_odd_parent_gate_flowers_test_results.json:missing_file",
+        "method_metrics_missing:ours_26000_v111_train_even_odd_parent_gate_flowers",
+        "report:/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/reports/flowers_v111_end_to_end_strict_parent_gate_report.json:missing",
+        "field:/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/fields/ours_26000_v111_train_even_candidate_flowers_field.pt:missing",
+        "manifest:/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/fields/ours_26000_v111_train_even_candidate_flowers_field.manifest.json:missing",
+        "eval_results:/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/reports/flowers_ours_26000_v111_train_even_odd_parent_gate_flowers_test_results.json:missing",
+        "parent_field:/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/fields/ours_26000_v111_train_all_parent_flowers_field.pt:missing",
+        "parent_manifest:/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625/flowers/fields/ours_26000_v111_train_all_parent_flowers_field.manifest.json:missing"
+      ],
+      "paths": {
+        "clean_results": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/flowers/results.json",
+        "detached_results": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/flowers/detached_model/results.json"
+      },
+      "scene": "flowers",
+      "status": "MISSING_REPORT"
+    },
+    {
+      "artifacts": {
+        "eval_per_view": {
+          "path": "/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/reports/garden_ours_26000_v114_oof_refit_podmoe_garden_test_per_view.json",
+          "present": false
+        },
+        "eval_results": {
+          "path": "/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/reports/garden_ours_26000_v114_oof_refit_podmoe_garden_test_results.json",
+          "present": false
+        },
+        "field": {
+          "path": "/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/fields/ours_26000_v114_oof_refit_podmoe_garden_field.pt",
+          "present": false
+        },
+        "manifest": {
+          "path": "/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/fields/ours_26000_v114_oof_refit_podmoe_garden_field.manifest.json",
+          "present": false
+        }
+      },
+      "branch": "v114_oof_refit_pod_moe",
+      "clean_method": "ours_26000",
+      "complete": false,
+      "deltas": {
+        "method_minus_clean": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        },
+        "method_minus_v106": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        }
+      },
+      "label": "v114_garden",
+      "method_name": "ours_26000_v114_oof_refit_podmoe_garden",
+      "metric_source": "",
+      "metrics": {
+        "clean": {
+          "LPIPS": 0.20131449401378632,
+          "PSNR": 25.029211044311523,
+          "SSIM": 0.7800350785255432
+        },
+        "method": {
+          "LPIPS": null,
+          "PSNR": null,
+          "SSIM": null
+        },
+        "v106_parent": {
+          "LPIPS": 0.17448043823242188,
+          "PSNR": 25.790945053100586,
+          "SSIM": 0.799382209777832
+        }
+      },
+      "missing": [
+        "method_results:/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/reports/garden_ours_26000_v114_oof_refit_podmoe_garden_test_results.json:missing_file",
+        "method_metrics_missing:ours_26000_v114_oof_refit_podmoe_garden",
+        "field:/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/fields/ours_26000_v114_oof_refit_podmoe_garden_field.pt:missing",
+        "manifest:/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/fields/ours_26000_v114_oof_refit_podmoe_garden_field.manifest.json:missing",
+        "eval_results:/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/reports/garden_ours_26000_v114_oof_refit_podmoe_garden_test_results.json:missing",
+        "eval_per_view:/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625/garden/reports/garden_ours_26000_v114_oof_refit_podmoe_garden_test_per_view.json:missing"
+      ],
+      "paths": {
+        "clean_results": "outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/results.json",
+        "detached_results": "/dev/shm/peilincai_spcarnet_v101_detached_package_full9_20260625/garden/detached_model/results.json"
+      },
+      "scene": "garden",
+      "status": "PENDING_OR_MISSING_METRICS"
+    }
+  ],
+  "schema_version": 1,
+  "v106_load_missing": []
+}

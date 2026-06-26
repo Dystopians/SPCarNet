@@ -32,7 +32,8 @@ The strict-fairness branch is not closed. `v110/v110b` exposed train/even -> tra
 | 5 | v113b strict-gate safety summary | `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md` |
 | 6 | v113c/v114 continuation summary | `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md` |
 | 7 | detailed v113c/v114 log | `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md` |
-| 8 | car-model docs catalog | `docs/car_model/README.md` |
+| 8 | strict branch mechanical collector output | `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md` |
+| 9 | car-model docs catalog | `docs/car_model/README.md` |
 
 ## Quantitative Artifacts
 
@@ -47,6 +48,8 @@ The strict-fairness branch is not closed. `v110/v110b` exposed train/even -> tra
 | v113b summary JSON | `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.json` |
 | v113c/v114 summary Markdown | `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md` |
 | v113c/v114 summary JSON | `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.json` |
+| v110/v111/v114 strict branch package Markdown | `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md` |
+| v110/v111/v114 strict branch package JSON | `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.json` |
 
 ## Qualitative Artifacts
 
@@ -77,6 +80,7 @@ Each PNG has a sibling JSON manifest with source render paths and crop metadata.
 | end-to-end strict v111 runner | `scripts/car_model/run_v111_end_to_end_strict_parent_gate_scene.py` | implemented and smoke-tested |
 | v113b/v113c replay runner | `scripts/car_model/run_v113b_oot_tail_gate_replay_scene.py` | implemented and smoke-tested |
 | v110 report collector | `scripts/car_model/collect_v110_strict_split_report.py` | implemented |
+| strict branch package collector | `scripts/car_model/collect_v110_v111_v114_package.py` | implemented; current output is pending until long jobs finish |
 
 ## Latest Running Jobs
 
