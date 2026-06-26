@@ -88,7 +88,42 @@ def _teacher_cache_cmd(args: argparse.Namespace, teacher_cache_dir: Path) -> lis
     return cmd
 
 
-def _texture_cmd(args: argparse.Namespace, fit_evidence_dir: Path, output_model: Path) -> list[str]:
+def _strip_target_evidence_cmd(args: argparse.Namespace, stripped_target_evidence_dir: Path) -> list[str]:
+    return [
+        _python(),
+        "scripts/car_model/ecsr_strip_target_evidence_for_vnext.py",
+        "--target_evidence_dir",
+        str(args.target_evidence_dir),
+        "--out_dir",
+        str(stripped_target_evidence_dir),
+        "--force",
+    ]
+
+
+def _populate_eval_gt_cmd(args: argparse.Namespace, output_model: Path, audit_path: Path) -> list[str]:
+    return [
+        _python(),
+        "scripts/car_model/ecsr_populate_eval_gt_from_target_evidence.py",
+        "--target_evidence_dir",
+        str(args.target_evidence_dir),
+        "--output_model",
+        str(output_model),
+        "--split",
+        str(args.target_split),
+        "--method_name",
+        str(args.method_name),
+        "--audit_path",
+        str(audit_path),
+        "--force",
+    ]
+
+
+def _texture_cmd(
+    args: argparse.Namespace,
+    fit_evidence_dir: Path,
+    target_evidence_dir: Path,
+    output_model: Path,
+) -> list[str]:
     cmd = [
         _python(),
         "scripts/car_model/ecsr_apply_surface_residual_region_texture_adapter.py",
@@ -97,7 +132,7 @@ def _texture_cmd(args: argparse.Namespace, fit_evidence_dir: Path, output_model:
         "--fit_evidence_dir",
         str(fit_evidence_dir),
         "--target_evidence_dir",
-        str(args.target_evidence_dir),
+        str(target_evidence_dir),
         "--region_carrier_json",
         str(args.region_carrier_json),
         "--output_model",
@@ -317,6 +352,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip_teacher_cache", action="store_true")
     parser.add_argument("--skip_texture", action="store_true")
     parser.add_argument("--skip_eval", action="store_true")
+    parser.add_argument(
+        "--strict_no_target_gt_apply",
+        action="store_true",
+        help=(
+            "Strip rgb_gt/residual/teacher keys from target evidence before adapter apply. "
+            "Final GT images are populated only after target apply, immediately before evaluation."
+        ),
+    )
     parser.add_argument("--wandb_mode", default=os.environ.get("WANDB_MODE", "offline"))
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb_project", default=os.environ.get("WANDB_PROJECT", "spcarnet_meshprior"))
@@ -385,11 +428,13 @@ def main() -> int:
     logs_dir = run_root / "logs"
     reports_dir = run_root / "reports"
     teacher_cache_dir = run_root / "teacher_surface_evidence"
+    stripped_target_evidence_dir = run_root / "target_evidence_no_gt"
     output_model = run_root / "model"
     results_path = reports_dir / f"{args.scene}_{args.method_name}_{args.target_split}_results.json"
     per_view_path = reports_dir / f"{args.scene}_{args.method_name}_{args.target_split}_per_view.json"
     manifest_path = reports_dir / f"{args.scene}_vnext_certified_residual_texture_manifest.json"
     report_path = reports_dir / f"{args.scene}_vnext_certified_residual_texture_report.md"
+    eval_gt_audit_path = reports_dir / f"{args.scene}_{args.method_name}_{args.target_split}_eval_gt_population_audit.json"
     reports_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -402,12 +447,35 @@ def main() -> int:
         raise SystemExit("--teacher_render_dir is required unless --skip_teacher_cache is set")
 
     texture_fit_evidence_dir = Path(args.fit_evidence_dir) if args.skip_teacher_cache else teacher_cache_dir
+    adapter_target_evidence_dir = stripped_target_evidence_dir if bool(args.strict_no_target_gt_apply) else Path(args.target_evidence_dir)
 
     commands: list[dict[str, Any]] = []
     if not args.skip_teacher_cache:
         commands.append(command_record("build_teacher_surface_evidence", _teacher_cache_cmd(args, teacher_cache_dir), log_path=logs_dir / "01_teacher_cache.log"))
+    if bool(args.strict_no_target_gt_apply) and not args.skip_texture:
+        commands.append(
+            command_record(
+                "strip_target_evidence_no_gt",
+                _strip_target_evidence_cmd(args, stripped_target_evidence_dir),
+                log_path=logs_dir / "01b_strip_target_evidence_no_gt.log",
+            )
+        )
     if not args.skip_texture:
-        commands.append(command_record("apply_certified_residual_texture", _texture_cmd(args, texture_fit_evidence_dir, output_model), log_path=logs_dir / "02_certified_texture.log"))
+        commands.append(
+            command_record(
+                "apply_certified_residual_texture",
+                _texture_cmd(args, texture_fit_evidence_dir, adapter_target_evidence_dir, output_model),
+                log_path=logs_dir / "02_certified_texture.log",
+            )
+        )
+    if bool(args.strict_no_target_gt_apply) and not args.skip_texture and not args.skip_eval:
+        commands.append(
+            command_record(
+                "populate_eval_gt_from_target_evidence",
+                _populate_eval_gt_cmd(args, output_model, eval_gt_audit_path),
+                log_path=logs_dir / "02b_populate_eval_gt.log",
+            )
+        )
     if not args.skip_eval:
         commands.append(command_record("evaluate_vnext_target", _eval_cmd(args, output_model, results_path, per_view_path), log_path=logs_dir / "03_eval.log"))
 
@@ -419,15 +487,21 @@ def main() -> int:
         selection_uses_test_gt=False,
         capacity_selected_on="train_policy_val_and_gt_free_target_footprint",
         thresholds_selected_on="train_policy_val",
+        target_gt_visible_to_selection=False,
+        target_gt_visible_to_apply=not bool(args.strict_no_target_gt_apply),
+        target_gt_visible_to_eval=not bool(args.skip_eval),
+        target_forbidden_keys_stripped=bool(args.strict_no_target_gt_apply),
     )
     inputs = {
         "source_model": path_record(args.source_model),
         "fit_evidence_dir": path_record(args.fit_evidence_dir),
         "target_evidence_dir": path_record(args.target_evidence_dir),
+        "adapter_target_evidence_dir": path_record(adapter_target_evidence_dir),
         "region_carrier_json": path_record(args.region_carrier_json, hash_file=True),
         "teacher_render_dir": path_record(args.teacher_render_dir) if args.teacher_render_dir else None,
         "parent_render_dir": path_record(args.parent_render_dir) if args.parent_render_dir else None,
         "texture_fit_evidence_dir": path_record(texture_fit_evidence_dir),
+        "stripped_target_evidence_dir": path_record(stripped_target_evidence_dir),
     }
     settings = {key: value for key, value in vars(args).items() if key not in {"source_model", "fit_evidence_dir", "target_evidence_dir", "region_carrier_json", "teacher_render_dir", "parent_render_dir"}}
     manifest = make_run_manifest(
@@ -465,6 +539,7 @@ def main() -> int:
         "output_model": str(output_model),
         "results_path": str(results_path),
         "per_view_path": str(per_view_path),
+        "eval_gt_audit_path": str(eval_gt_audit_path),
         "manifest_path": str(manifest_path),
         "report_path": str(report_path),
     }

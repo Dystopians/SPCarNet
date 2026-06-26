@@ -47,9 +47,37 @@ The vNext scene runner records:
 - generated commands;
 - train-only fit/policy-val split provenance;
 - explicit `selection_uses_test_gt=false`;
+- explicit target GT visibility fields for selection/apply/eval;
 - capacity selected by train-policy-val plus GT-free target footprint;
 - thresholds selected by train-policy-val only;
 - exact no-op fallback support through the underlying region texture adapter.
+
+### Strict No-Target-GT Apply Upgrade
+
+Subagent review identified that the first garden artifacts proved `selection_uses_test_gt=false`, but target evidence still contained `rgb_gt` during the adapter apply/fallback step. That is weaker than the final vNext prompt requirement, because a reviewer could argue that target GT was visible to non-evaluation code even if it was not used for branch selection.
+
+The runner now supports a stricter path:
+
+```bash
+--strict_no_target_gt_apply
+```
+
+When enabled, the scene runner inserts two explicit stages around the adapter:
+
+1. `ecsr_strip_target_evidence_for_vnext.py` writes `target_evidence_no_gt/views/*.npz` containing only geometry, parent render, camera, depth/normal, alpha, barycentric, face id, and texture keys. It strips `rgb_gt`, `residual_rgb`, `residual_l1`, and all `teacher_*` keys before the adapter sees target evidence.
+2. `ecsr_populate_eval_gt_from_target_evidence.py` copies `rgb_gt` images only after target apply, immediately before `evaluate_render_split_metrics.py`.
+
+The protocol audit now records:
+
+```text
+target_gt_visible_to_selection
+target_gt_visible_to_apply
+target_gt_visible_to_eval
+target_forbidden_keys_stripped
+target_apply_leak
+```
+
+For strict runs on `target_split=test`, `target_gt_visible_to_apply=false`, `target_gt_visible_to_eval=true`, and `target_apply_leak=false` are required for protocol audit pass. Non-strict runs remain executable for legacy comparison, but their audit marks target apply GT visibility explicitly.
 
 The full9 runner uses `{scene}` path templates so it can run either existing historical caches or newly rebuilt clean vNext caches without hard-coding one prior experiment root.
 
@@ -87,6 +115,64 @@ Dry-run protocol check completed with synthetic placeholder paths:
 ```
 
 The dry-run wrote a manifest/report with protocol audit passing and `selection_uses_test_gt=false`.
+
+Strict no-target-GT smoke checks completed:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 /home/peilincai/micromamba/envs/mesh_splatting/bin/python -m py_compile \
+  scripts/car_model/ecsr_vnext_protocol.py \
+  scripts/car_model/ecsr_strip_target_evidence_for_vnext.py \
+  scripts/car_model/ecsr_populate_eval_gt_from_target_evidence.py \
+  scripts/car_model/run_vnext_certified_residual_texture_scene.py
+
+PYTHONDONTWRITEBYTECODE=1 /home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/ecsr_strip_target_evidence_for_vnext.py \
+  --target_evidence_dir /dev/shm/peilincai_vnext_strip_smoke_counter/in \
+  --out_dir /dev/shm/peilincai_vnext_strip_smoke_counter/out \
+  --force
+
+PYTHONDONTWRITEBYTECODE=1 WANDB_MODE=offline \
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/run_vnext_certified_residual_texture_scene.py \
+  --scene counter \
+  --source_model outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/counter/ratio_0200/compact_model \
+  --fit_evidence_dir outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/train_visible_bary_images2/counter_teacher_surface_evidence_phasej_trainval_alpha1 \
+  --target_evidence_dir outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/target_visible_bary_images2/counter \
+  --region_carrier_json outputs/carnet/meshsplatopt/ecsr_phase_v39_multiscene_ssimaware/counter_teacher_render_visible_region_carriers_phasej_trainval_alpha1_policyval_pruned.json \
+  --output_root /dev/shm/peilincai_vnext_strict_dryrun_counter \
+  --skip_teacher_cache \
+  --texture_size_candidates 16 \
+  --support_expansion_mode none \
+  --atlas_empty_bin_fill_mode face_mean \
+  --surface_multiscale_prior_blend_candidates 0.5 \
+  --max_abs_delta_rgb_candidates 0.12 \
+  --no_policy_val_bin_uncertainty_guard \
+  --strict_no_target_gt_apply \
+  --dry_run
+```
+
+The one-view strip smoke kept only:
+
+```text
+alpha, barycentric, barycentric_valid, camera_center, depth, face_id, normal, rgb_render, texture
+```
+
+and confirmed no forbidden target keys remained. The strict dry-run command chain was:
+
+```text
+strip_target_evidence_no_gt -> apply_certified_residual_texture -> populate_eval_gt_from_target_evidence -> evaluate_vnext_target
+```
+
+with protocol audit:
+
+```text
+passed=true
+target_gt_visible_to_selection=false
+target_gt_visible_to_apply=false
+target_gt_visible_to_eval=true
+target_forbidden_keys_stripped=true
+target_apply_leak=false
+```
 
 W&B offline dry-run also completed:
 
@@ -218,6 +304,8 @@ Full real experiments should still not be launched from the repo/output tree:
 
 - `/data` is effectively full, with only about `420M` free at the latest check;
 - `/dev/shm` is usable for focused pilots but not safe for unbounded full9 artifact trees;
+
+Strict runs are more storage-heavy than legacy runs because they materialize stripped target evidence in `/dev/shm`. Use them for the final fair protocol and delete transient `/dev/shm` run trees after copying only manifests, audits, compact metrics, and qualitative panels into the repo.
 - full9 should either clean temporary outputs first or use a larger external artifact location.
 
 The safe next real run is a frozen-policy `flowers` pilot or a two-scene `flowers,garden` pilot, not a blind full9 expansion.

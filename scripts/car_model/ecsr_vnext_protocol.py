@@ -86,6 +86,10 @@ def make_protocol_audit(
     selection_uses_test_gt: bool = False,
     capacity_selected_on: str = "train_policy_val",
     thresholds_selected_on: str = "train_policy_val",
+    target_gt_visible_to_selection: bool = False,
+    target_gt_visible_to_apply: bool | None = None,
+    target_gt_visible_to_eval: bool | None = None,
+    target_forbidden_keys_stripped: bool = False,
 ) -> dict[str, Any]:
     forbidden = set()
     for key, value in {
@@ -96,7 +100,14 @@ def make_protocol_audit(
     }.items():
         if str(value).lower() in FORBIDDEN_SELECTION_SPLITS:
             forbidden.add(key)
-    passed = (not forbidden) and not bool(selection_uses_test_gt)
+    target_is_test = str(target_split).lower() in FORBIDDEN_SELECTION_SPLITS or str(target_split).lower() == "test"
+    target_apply_leak = bool(target_is_test and target_gt_visible_to_apply)
+    passed = (
+        (not forbidden)
+        and not bool(selection_uses_test_gt)
+        and not bool(target_gt_visible_to_selection)
+        and not bool(target_apply_leak)
+    )
     return {
         "passed": bool(passed),
         "fit_split": str(fit_split),
@@ -106,6 +117,11 @@ def make_protocol_audit(
         "selection_uses_test_gt": bool(selection_uses_test_gt),
         "capacity_selected_on": str(capacity_selected_on),
         "thresholds_selected_on": str(thresholds_selected_on),
+        "target_gt_visible_to_selection": bool(target_gt_visible_to_selection),
+        "target_gt_visible_to_apply": target_gt_visible_to_apply,
+        "target_gt_visible_to_eval": target_gt_visible_to_eval,
+        "target_forbidden_keys_stripped": bool(target_forbidden_keys_stripped),
+        "target_apply_leak": bool(target_apply_leak),
         "forbidden_selection_fields": sorted(forbidden),
     }
 
@@ -164,6 +180,10 @@ def write_vnext_report(path: Path, manifest: dict[str, Any]) -> None:
         f"- protocol audit passed: `{audit.get('passed', False)}`",
         f"- target split: `{audit.get('target_split', '')}`",
         f"- selection uses test GT: `{audit.get('selection_uses_test_gt', None)}`",
+        f"- target GT visible to selection: `{audit.get('target_gt_visible_to_selection', None)}`",
+        f"- target GT visible to apply: `{audit.get('target_gt_visible_to_apply', None)}`",
+        f"- target GT visible to eval: `{audit.get('target_gt_visible_to_eval', None)}`",
+        f"- target forbidden keys stripped: `{audit.get('target_forbidden_keys_stripped', None)}`",
         f"- capacity selected on: `{audit.get('capacity_selected_on', '')}`",
         f"- thresholds selected on: `{audit.get('thresholds_selected_on', '')}`",
         "",
