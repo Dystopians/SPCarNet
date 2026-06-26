@@ -10,6 +10,8 @@
 - [2026-06-26 最新状态附录](docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md)
 - [vNext 实现日志](docs/car_model/6-26-SPCarNet-vNext-Implementation-Log.md)
 - [vNext 可行性与执行计划](docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md)
+- [vNext soft-shrink garden 里程碑](docs/car_model/6-26-SPCarNet-vNext-SoftShrink-Garden-Milestone-Log.md)
+- [vNext 技术报告与 artifact 索引](docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md)
 - [可克隆报告包 manifest](docs/car_model/6-25-SPCarNet-Report-Package-Manifest.md)
 - [当前 mentor/PPT 技术报告](docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md)
 - [中文长版导师技术报告](docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md)
@@ -17,7 +19,7 @@
 
 简短状态：`v106 POD-MoE base-preserve` 是当前已验证的质量主线，在 assembled selected full9 表上相对本地 clean MeshSplatting baseline 三个指标均值都更好。`v113b/v113c` 是严格 gate 的安全修复，改善安全性并部分修复 garden v110b，但没有超过 v106。`v114_oof_refit_pod_moe` 是当前正在跑的 candidate-side 长程实验，还不是已完成结果。最新状态附录：v110 counter 在 field build 阶段以 return code `-9` 失败，大概率是内存/共享盘压力导致，因此 strict branch 仍需低内存 field-builder 修复后重跑。
 
-vNext 状态：certified residual surface texture 方向可以推进，但不能承诺已经产生论文级结果。当前完成的是第一阶段协议/接口里程碑：scene runner、full9 wrapper、no-test-GT certificate smoke、report assembler 和 W&B runner logging；真实指标仍需在资源安全后跑单场景 pilot。
+vNext 状态：certified residual surface texture 方向可以推进，但不能承诺已经产生论文级结果。当前已完成协议/接口里程碑：scene runner、full9 wrapper、no-test-GT certificate smoke、report assembler 和 W&B runner logging。新的 `garden` face-softshrink pilot 已经接受了非零 residual texture，并相对 no-op/fallback parent 取得极小的 held-out 三指标正向变化（`+0.000076` PSNR、`+0.00000197` SSIM、`-0.00000323` LPIPS），target changed fraction 为 `0.208%`。这是一个真实非零里程碑，但不是 full9 闭环，也不能证明已经超过 v106 或 clean MeshSplatting。
 
 ## 当前 v106 POD-MoE 状态（2026-06-25）
 

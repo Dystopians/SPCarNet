@@ -1,0 +1,7 @@
+{
+  "ours_26000_vnext_certified_residual_surface_texture": {
+    "LPIPS": 0.2480199784040451,
+    "PSNR": 24.741079330444336,
+    "SSIM": 0.7540509700775146
+  }
+}

@@ -46,8 +46,6 @@ def _scene_cmd(args: argparse.Namespace, scene: str, unknown: list[str]) -> list
         _format_template(args.target_evidence_template, scene),
         "--region_carrier_json",
         _format_template(args.region_carrier_template, scene),
-        "--teacher_render_dir",
-        _format_template(args.teacher_render_template, scene),
         "--output_root",
         str(args.output_root),
         "--target_split",
@@ -59,6 +57,8 @@ def _scene_cmd(args: argparse.Namespace, scene: str, unknown: list[str]) -> list
         "--wandb_mode",
         str(args.wandb_mode),
     ]
+    if args.teacher_render_template:
+        cmd.extend(["--teacher_render_dir", _format_template(args.teacher_render_template, scene)])
     if args.parent_render_template:
         cmd.extend(["--parent_render_dir", _format_template(args.parent_render_template, scene)])
     if args.gpu != "":
@@ -138,7 +138,7 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
     parser.add_argument("--fit_evidence_template", required=True)
     parser.add_argument("--target_evidence_template", required=True)
     parser.add_argument("--region_carrier_template", required=True)
-    parser.add_argument("--teacher_render_template", required=True)
+    parser.add_argument("--teacher_render_template", default="")
     parser.add_argument("--parent_render_template", default="")
     parser.add_argument("--output_root", type=Path, required=True)
     parser.add_argument("--target_split", choices=("train", "test"), default="test")

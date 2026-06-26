@@ -10,17 +10,20 @@ Read in this order:
 2. `docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md`
 3. `docs/car_model/6-26-SPCarNet-vNext-Implementation-Log.md`
 4. `docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md`
-5. `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md`
-6. `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md`
-7. `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md`
-8. `docs/car_model/6-25-v113b-OOT-Tail-Safe-Gate-Log.md`
-9. `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md`
-10. `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md`
-11. `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md`
-12. `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md`
-13. `docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md`
-14. `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md`
-15. `docs/car_model/README.md`
+5. `docs/car_model/6-26-SPCarNet-vNext-SoftShrink-Garden-Milestone-Log.md`
+6. `docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md`
+7. `docs/car_model/vnext_artifacts/README.md`
+8. `docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md`
+9. `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md`
+10. `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md`
+11. `docs/car_model/6-25-v113b-OOT-Tail-Safe-Gate-Log.md`
+12. `docs/car_model/6-25-v113c-FrameFallback-and-v114-OOFRefit-Log.md`
+13. `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.md`
+14. `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md`
+15. `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md`
+16. `docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md`
+17. `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md`
+18. `docs/car_model/README.md`
 
 Current short status:
 
@@ -33,7 +36,7 @@ Current short status:
 - `v114_oof_refit_pod_moe` is the current candidate-side attempt; garden field build is running and not yet a completed result.
 - `v111` end-to-end strict validation is still running and is not yet a completed result.
 - Latest addendum: v110 counter strict candidate failed with return code `-9` during field build after about `15695.6s`; no field artifact was written. This is recorded as a resource/memory execution blocker, not a promoted or rejected metric result.
-- `vNext_certified_residual_surface_texture` first protocol/interface milestone is implemented: scene runner, full9 wrapper, report assembler, no-test-GT certificate smoke test, and feasibility/implementation logs. This is a runnable dry-run/protocol milestone, not completed metric evidence.
+- `vNext_certified_residual_surface_texture` now has a first real nonzero `garden` milestone: face-softshrink accepts a residual atlas, changes `0.208%` target pixels, and gives a tiny held-out improvement over the no-op/fallback parent. This is still not full9 closure and not proof of superiority over v106 or clean MeshSplatting.
 - `spcarnet_v110_v111_v114_package` is the current mechanical strict-branch collector output; it is intentionally incomplete until the running long jobs finish.
 
 The large render/model trees remain local under `/dev/shm`; the committed repo contains the lightweight Markdown/JSON summaries and qualitative contact sheets needed for PPT analysis.

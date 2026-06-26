@@ -127,36 +127,127 @@ Two-scene full9-wrapper dry-run completed and the assembler summary reported bot
   --continue_on_error
 ```
 
+## Real Garden Pilot Results
+
+After the initial protocol milestone, three real `garden` pilots were run under W&B offline with outputs in `/dev/shm` and lightweight artifacts copied into the repo.
+
+### Initial Full Candidate Pilot
+
+Artifact root:
+
+```text
+docs/car_model/vnext_artifacts/garden_20260626_004134/
+```
+
+Result:
+
+- status: `COMPLETE`
+- protocol audit passed: `True`
+- selection uses test GT: `False`
+- accepted: `False`
+- effective policy: `fallback_noop`
+- selected alpha: `0.0`
+- target changed fraction: `0.0`
+- test PSNR / SSIM / LPIPS: `24.741003 / 0.754049 / 0.248023`
+
+This was a safety/fallback proof, not a quality improvement.
+
+### Hard-Bin Soft-Shrink Diagnostic
+
+Artifact root:
+
+```text
+docs/car_model/vnext_artifacts/garden_hardbin_softshrink_20260626_035631/
+```
+
+Result:
+
+- status: `COMPLETE`
+- protocol audit passed: `True`
+- soft bin uncertainty shrink enabled: `keep_with_downweight`
+- hard bin uncertainty guard enabled: `True`
+- accepted: `False`
+- effective policy: `fallback_noop`
+- test PSNR / SSIM / LPIPS: `24.741003 / 0.754049 / 0.248023`
+
+Diagnosis: alpha refinement and soft shrink made the image-level SSIM/L1 direction positive, but the hard bin guard still rejected the candidate because lower-tail relative gains stayed negative after the hard allowlist.
+
+### Face-SoftShrink Accepted Milestone
+
+Artifact root:
+
+```text
+docs/car_model/vnext_artifacts/garden_face_softshrink_20260626_040558/
+```
+
+Result:
+
+- status: `COMPLETE`
+- protocol audit passed: `True`
+- selection uses test GT: `False`
+- hard bin uncertainty guard: disabled
+- soft bin uncertainty shrink: `keep_with_downweight`
+- face guard decision: `keep_face_gain_guard`
+- accepted: `True`
+- effective policy: `accepted_atlas`
+- selected alpha: `0.0625`
+- target changed pixels: `82767`
+- target changed fraction: `0.002080`
+- test PSNR / SSIM / LPIPS: `24.741079 / 0.754051 / 0.248020`
+- delta vs no-op/fallback parent: `+0.000076` PSNR / `+0.00000197` SSIM / `-0.00000323` LPIPS
+- per-view wins vs no-op/fallback: PSNR `22/24`, SSIM `24/24`, LPIPS `22/24`
+
+This is the first real nonzero vNext residual surface texture milestone. The gain is positive but extremely small, so it should not be promoted as paper-level closure.
+
+W&B offline roots:
+
+```text
+/dev/shm/peilincai_wandb_vnext_softshrink_garden_20260626_035631/wandb/offline-run-20260626_040400-2ha0iu2v
+/dev/shm/peilincai_wandb_vnext_face_softshrink_garden_20260626_040558/wandb/offline-run-20260626_041227-nilps441
+```
+
+Qualitative panel:
+
+```text
+docs/car_model/vnext_artifacts/garden_face_softshrink_20260626_040558/garden_face_softshrink_qualitative_panel.png
+```
+
 ## Current Resource Blocker
 
-Full real experiments should not be launched from the repo/output tree right now:
+Full real experiments should still not be launched from the repo/output tree:
 
 - `/data` is effectively full, with only about `420M` free at the latest check;
-- `/dev/shm` has about `36G` free while several long jobs are still running;
-- active heavy jobs occupy GPUs `2`, `3`, and `5`.
+- `/dev/shm` is usable for focused pilots but not safe for unbounded full9 artifact trees;
+- full9 should either clean temporary outputs first or use a larger external artifact location.
 
-The safe next real run is a one-scene pilot on GPU `1` or `4`, with outputs and W&B cache under `/dev/shm`, after ensuring enough temporary space.
+The safe next real run is a frozen-policy `flowers` pilot or a two-scene `flowers,garden` pilot, not a blind full9 expansion.
 
 ## Recommended Next Command
 
-Once the exact scene cache paths are chosen and space is available:
+Use the accepted face-softshrink policy on the next pilot scene after verifying paths:
 
 ```bash
 TAG=$(date +%Y%m%d_%H%M%S)
-OUT=/dev/shm/peilincai_spcarnet_vnext_certified_residual_texture_${TAG}
+OUT=/dev/shm/peilincai_spcarnet_vnext_face_softshrink_<scene>_${TAG}
 export WANDB_MODE=offline
-export WANDB_DIR=/dev/shm/peilincai_wandb_vnext_${TAG}
+export WANDB_DIR=/dev/shm/peilincai_wandb_vnext_face_softshrink_<scene>_${TAG}
 
 /home/peilincai/micromamba/envs/mesh_splatting/bin/python \
   scripts/car_model/run_vnext_certified_residual_texture_scene.py \
-  --scene garden \
-  --gpu 4 \
+  --scene <scene> \
+  --gpu <low_or_mid_load_gpu> \
   --source_model <scene_model_path> \
-  --fit_evidence_dir <train_surface_evidence_dir> \
+  --fit_evidence_dir <train_teacher_surface_evidence_dir> \
   --target_evidence_dir <test_surface_evidence_dir> \
   --region_carrier_json <region_carrier_json> \
-  --teacher_render_dir <phasej_train_teacher_render_dir> \
   --output_root "$OUT" \
+  --skip_teacher_cache \
+  --texture_size_candidates 16 \
+  --support_expansion_mode none \
+  --atlas_empty_bin_fill_mode face_mean \
+  --surface_multiscale_prior_blend_candidates 0.5 \
+  --max_abs_delta_rgb_candidates 0.12 \
+  --no_policy_val_bin_uncertainty_guard \
   --wandb \
   --wandb_mode "$WANDB_MODE"
 ```
@@ -165,4 +256,4 @@ export WANDB_DIR=/dev/shm/peilincai_wandb_vnext_${TAG}
 
 `NOT COMPLETE`.
 
-The first protocol/interface milestone is implemented and verified. Real single-scene and full9 metrics remain blocked by resource pressure and by the need to choose or rebuild clean vNext evidence caches.
+The protocol/interface milestone is implemented and verified, and a first nonzero garden residual surface texture has been accepted with tiny positive held-out deltas. Full9, v106/clean-baseline comparison, ablations, and materially visible/large gains remain unfinished.

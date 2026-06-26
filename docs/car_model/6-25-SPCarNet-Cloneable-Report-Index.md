@@ -12,6 +12,9 @@ This index is the entry point for a fresh clone of `https://github.com/Dystopian
 | latest 2026-06-26 live status addendum | `docs/car_model/6-26-SPCarNet-Current-Status-Upload-Report.md` |
 | vNext first implementation milestone | `docs/car_model/6-26-SPCarNet-vNext-Implementation-Log.md` |
 | vNext feasibility and execution plan | `docs/car_model/6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md` |
+| vNext garden soft-shrink milestone | `docs/car_model/6-26-SPCarNet-vNext-SoftShrink-Garden-Milestone-Log.md` |
+| vNext PPT technical report and artifact index | `docs/car_model/6-26-SPCarNet-vNext-Technical-Report-And-Index.zh.md` |
+| vNext artifact directory index | `docs/car_model/vnext_artifacts/README.md` |
 | current complete technical report | `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md` |
 | long Chinese mentor/PPT report | `docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md` |
 | v110 strict-split technical report draft | `docs/car_model/6-25-SPCarNet-v110-StrictSplit-Technical-Report-Draft.md` |
@@ -35,6 +38,10 @@ This index is the entry point for a fresh clone of `https://github.com/Dystopian
 | v113b OOT tail-safe strict diagnostic | `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md` |
 | v113c frame-fallback and v114 running summary | `docs/car_model/results/v113c_frame_fallback_v114_oof_20260625/summary/v113c_v114_summary.md` |
 | v110/v111/v114 strict branch package | `docs/car_model/results/v110_v111_v114_strict_branch_20260625/summary/spcarnet_v110_v111_v114_package.md` |
+| vNext initial garden fallback result | `docs/car_model/vnext_artifacts/garden_20260626_004134/garden_ours_26000_vnext_certified_residual_surface_texture_test_results.json` |
+| vNext hard-bin soft-shrink diagnostic | `docs/car_model/vnext_artifacts/garden_hardbin_softshrink_20260626_035631/garden_ours_26000_vnext_certified_residual_surface_texture_test_results.json` |
+| vNext face-softshrink accepted result | `docs/car_model/vnext_artifacts/garden_face_softshrink_20260626_040558/garden_ours_26000_vnext_certified_residual_surface_texture_test_results.json` |
+| vNext face-softshrink structured summary | `docs/car_model/vnext_artifacts/garden_face_softshrink_20260626_040558/garden_face_softshrink_summary.json` |
 
 ## Qualitative Result Package
 
@@ -43,6 +50,7 @@ This index is the entry point for a fresh clone of `https://github.com/Dystopian
 | flowers | `docs/car_model/assets/v106_qualitative/flowers_frame00001_bestcrop_contact_sheet.png` |
 | garden | `docs/car_model/assets/v106_qualitative/garden_frame00000_crop_contact_sheet.png` |
 | garden best crop | `docs/car_model/assets/v106_qualitative/garden_frame00004_bestcrop_contact_sheet.png` |
+| vNext garden face-softshrink | `docs/car_model/vnext_artifacts/garden_face_softshrink_20260626_040558/garden_face_softshrink_qualitative_panel.png` |
 | room | `docs/car_model/assets/v106_qualitative/room_frame00029_bestcrop_contact_sheet.png` |
 | treehill | `docs/car_model/assets/v106_qualitative/treehill_frame00010_bestcrop_contact_sheet.png` |
 
@@ -61,6 +69,10 @@ Each contact sheet has a sibling `.json` manifest with source render paths and c
 | `scripts/car_model/smoke_test_v114_oof_refit.py` | synthetic verification for the v114 OOF positive-cap reliability rule |
 | `scripts/car_model/collect_v110_strict_split_report.py` | collects clean/v106/v110 strict-split metrics into Markdown/JSON summaries |
 | `scripts/car_model/collect_v110_v111_v114_package.py` | collects the current strict-branch package status and metrics for v110 counter/bonsai, v111 flowers, and v114 garden |
+| `scripts/car_model/run_vnext_certified_residual_texture_scene.py` | vNext certified residual surface texture scene runner; now supports face-softshrink by enabling soft bin uncertainty shrink and optionally disabling hard bin allowlisting |
+| `scripts/car_model/run_vnext_certified_residual_texture_full9.py` | vNext multi-scene wrapper with `{scene}` templates |
+| `scripts/car_model/assemble_vnext_certified_residual_texture_report.py` | assembles vNext scene manifests and metrics |
+| `scripts/car_model/smoke_test_vnext_no_test_gt_certificate_schema.py` | verifies vNext protocol audit schema and no-test-GT certificate fields |
 
 ## Smoke and Static Checks
 
@@ -97,6 +109,8 @@ The repo stores lightweight report artifacts. Large render/model trees remain lo
 | `/dev/shm/peilincai_spcarnet_v110_strict_split_parent_gate_20260625` | v110/v110b strict-split working directory |
 | `/dev/shm/peilincai_spcarnet_v111_end_to_end_strict_parent_gate_20260625` | v111 end-to-end strict working directory |
 | `/dev/shm/peilincai_spcarnet_v114_oof_refit_20260625` | v114 OOF-refit POD-MoE working directory |
+| `/dev/shm/peilincai_spcarnet_vnext_softshrink_garden_20260626_035631` | vNext hard-bin soft-shrink garden diagnostic, copied in lightweight form under `docs/car_model/vnext_artifacts/` |
+| `/dev/shm/peilincai_spcarnet_vnext_face_softshrink_garden_20260626_040558` | vNext face-softshrink accepted garden run, copied in lightweight form under `docs/car_model/vnext_artifacts/` |
 
 These roots are not committed because they contain large render/model artifacts.
 

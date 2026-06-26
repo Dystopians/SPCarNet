@@ -88,14 +88,14 @@ def _teacher_cache_cmd(args: argparse.Namespace, teacher_cache_dir: Path) -> lis
     return cmd
 
 
-def _texture_cmd(args: argparse.Namespace, teacher_cache_dir: Path, output_model: Path) -> list[str]:
+def _texture_cmd(args: argparse.Namespace, fit_evidence_dir: Path, output_model: Path) -> list[str]:
     cmd = [
         _python(),
         "scripts/car_model/ecsr_apply_surface_residual_region_texture_adapter.py",
         "--source_model",
         str(args.source_model),
         "--fit_evidence_dir",
-        str(teacher_cache_dir),
+        str(fit_evidence_dir),
         "--target_evidence_dir",
         str(args.target_evidence_dir),
         "--region_carrier_json",
@@ -163,6 +163,12 @@ def _texture_cmd(args: argparse.Namespace, teacher_cache_dir: Path, output_model
         "--teacher_distilled_basis_blend",
         str(args.teacher_distilled_basis_blend),
         "--select_alpha_by_risk_gate",
+        "--enable_policy_val_ssim_alpha_refinement",
+        "--policy_val_ssim_alpha_refinement_steps",
+        str(args.policy_val_ssim_alpha_refinement_steps),
+        "--policy_val_ssim_alpha_refinement_min_alpha",
+        str(args.policy_val_ssim_alpha_refinement_min_alpha),
+        "--enable_preacceptance_policy_val_guard_repair",
         "--min_policy_val_samples",
         str(args.min_policy_val_samples),
         "--min_policy_val_relative_gain",
@@ -171,28 +177,31 @@ def _texture_cmd(args: argparse.Namespace, teacher_cache_dir: Path, output_model
         str(args.min_policy_val_positive_view_fraction),
         "--min_policy_val_cvar20_relative_gain",
         str(args.min_policy_val_cvar20_relative_gain),
-        "--min_policy_val_min_view_relative_gain",
-        str(args.min_policy_val_min_view_relative_gain),
+        f"--min_policy_val_min_view_relative_gain={args.min_policy_val_min_view_relative_gain}",
         "--enable_policy_val_image_ssim_gate",
-        "--min_policy_val_ssim_mean_gain",
-        str(args.min_policy_val_ssim_mean_gain),
+        f"--min_policy_val_ssim_mean_gain={args.min_policy_val_ssim_mean_gain}",
         "--min_policy_val_ssim_positive_view_fraction",
         str(args.min_policy_val_ssim_positive_view_fraction),
-        "--min_policy_val_ssim_min_view_gain",
-        str(args.min_policy_val_ssim_min_view_gain),
+        f"--min_policy_val_ssim_min_view_gain={args.min_policy_val_ssim_min_view_gain}",
         "--enable_policy_val_image_l1_gate",
         "--min_policy_val_l1_mean_gain",
         str(args.min_policy_val_l1_mean_gain),
         "--min_policy_val_l1_positive_view_fraction",
         str(args.min_policy_val_l1_positive_view_fraction),
-        "--min_policy_val_l1_min_view_gain",
-        str(args.min_policy_val_l1_min_view_gain),
+        f"--min_policy_val_l1_min_view_gain={args.min_policy_val_l1_min_view_gain}",
         "--enable_policy_val_face_gain_guard",
         "--face_gain_guard_min_positive_view_fraction",
         str(args.face_gain_guard_min_positive_view_fraction),
-        "--enable_policy_val_bin_uncertainty_guard",
-        "--bin_uncertainty_guard_min_positive_view_fraction",
-        str(args.bin_uncertainty_guard_min_positive_view_fraction),
+        "--enable_policy_val_bin_uncertainty_shrink",
+        "--bin_uncertainty_shrink_policy_mode",
+        str(args.bin_uncertainty_shrink_policy_mode),
+        "--bin_uncertainty_shrink_min_bin_samples",
+        str(args.bin_uncertainty_shrink_min_bin_samples),
+        f"--bin_uncertainty_shrink_min_relative_gain={args.bin_uncertainty_shrink_min_relative_gain}",
+        "--bin_uncertainty_shrink_min_positive_view_fraction",
+        str(args.bin_uncertainty_shrink_min_positive_view_fraction),
+        "--bin_uncertainty_shrink_fallback_shrink",
+        str(args.bin_uncertainty_shrink_fallback_shrink),
         "--enable_target_support_candidate_selection",
         "--enable_policy_candidate_dominance_pruning",
         "--enable_policy_val_prior_bin_gain_hybrid",
@@ -202,8 +211,7 @@ def _texture_cmd(args: argparse.Namespace, teacher_cache_dir: Path, output_model
         "--enable_target_footprint_tail_risk_certificate",
         "--target_footprint_tail_risk_min_positive_view_fraction",
         str(args.target_footprint_tail_risk_min_positive_view_fraction),
-        "--target_footprint_tail_risk_min_min_view_gain",
-        str(args.target_footprint_tail_risk_min_min_view_gain),
+        f"--target_footprint_tail_risk_min_min_view_gain={args.target_footprint_tail_risk_min_min_view_gain}",
         "--target_footprint_tail_risk_min_cvar20_view_gain",
         str(args.target_footprint_tail_risk_min_cvar20_view_gain),
         "--write_noop_on_reject",
@@ -211,6 +219,22 @@ def _texture_cmd(args: argparse.Namespace, teacher_cache_dir: Path, output_model
         "target_evidence",
         "--force",
     ]
+    if bool(args.no_policy_val_ssim_alpha_refinement):
+        cmd = [token for token in cmd if token != "--enable_policy_val_ssim_alpha_refinement"]
+    if bool(args.no_preacceptance_policy_val_guard_repair):
+        cmd = [token for token in cmd if token != "--enable_preacceptance_policy_val_guard_repair"]
+    if not bool(args.no_policy_val_bin_uncertainty_guard):
+        cmd.extend(
+            [
+                "--enable_policy_val_bin_uncertainty_guard",
+                "--bin_uncertainty_guard_min_bin_samples",
+                str(args.bin_uncertainty_guard_min_bin_samples),
+                "--bin_uncertainty_guard_min_positive_view_fraction",
+                str(args.bin_uncertainty_guard_min_positive_view_fraction),
+            ]
+        )
+    if bool(args.no_policy_val_bin_uncertainty_shrink):
+        cmd = [token for token in cmd if token != "--enable_policy_val_bin_uncertainty_shrink"]
     return cmd
 
 
@@ -282,7 +306,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fit_evidence_dir", type=Path, required=True)
     parser.add_argument("--target_evidence_dir", type=Path, required=True)
     parser.add_argument("--region_carrier_json", type=Path, required=True)
-    parser.add_argument("--teacher_render_dir", type=Path, required=True)
+    parser.add_argument("--teacher_render_dir", type=Path, default=None)
     parser.add_argument("--parent_render_dir", type=Path, default=None)
     parser.add_argument("--output_root", type=Path, required=True)
     parser.add_argument("--target_split", choices=("train", "test"), default="test")
@@ -307,10 +331,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--texture_size", type=int, default=16)
     parser.add_argument("--texture_size_candidates", default="8,16")
     parser.add_argument("--support_expansion_mode", choices=("none", "fit_residual_topk", "target_footprint_residual_debt"), default="target_footprint_residual_debt")
-    parser.add_argument("--support_expansion_max_extra_faces_candidates", default="0,2048,4096")
+    parser.add_argument("--support_expansion_max_extra_faces_candidates", default="2048,4096")
     parser.add_argument("--support_expansion_min_face_samples", type=int, default=64)
     parser.add_argument("--policy_val_stride", type=int, default=4)
     parser.add_argument("--alpha_grid", default="0,0.125,0.25,0.5")
+    parser.add_argument("--no_policy_val_ssim_alpha_refinement", action="store_true")
+    parser.add_argument("--policy_val_ssim_alpha_refinement_steps", type=int, default=7)
+    parser.add_argument("--policy_val_ssim_alpha_refinement_min_alpha", type=float, default=0.001)
+    parser.add_argument("--no_preacceptance_policy_val_guard_repair", action="store_true")
     parser.add_argument("--min_l1", type=float, default=0.0)
     parser.add_argument("--min_alpha", type=float, default=0.03)
     parser.add_argument("--max_abs_delta_rgb", type=float, default=0.12)
@@ -336,7 +364,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_policy_val_l1_positive_view_fraction", type=float, default=0.55)
     parser.add_argument("--min_policy_val_l1_min_view_gain", type=float, default=-1.0e-6)
     parser.add_argument("--face_gain_guard_min_positive_view_fraction", type=float, default=0.5)
-    parser.add_argument("--bin_uncertainty_guard_min_positive_view_fraction", type=float, default=0.75)
+    parser.add_argument("--no_policy_val_bin_uncertainty_guard", action="store_true")
+    parser.add_argument("--bin_uncertainty_guard_min_bin_samples", type=int, default=16)
+    parser.add_argument("--bin_uncertainty_guard_min_positive_view_fraction", type=float, default=0.5)
+    parser.add_argument("--no_policy_val_bin_uncertainty_shrink", action="store_true")
+    parser.add_argument("--bin_uncertainty_shrink_policy_mode", choices=("sparse_positive", "keep_with_downweight"), default="keep_with_downweight")
+    parser.add_argument("--bin_uncertainty_shrink_min_bin_samples", type=int, default=16)
+    parser.add_argument("--bin_uncertainty_shrink_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--bin_uncertainty_shrink_min_positive_view_fraction", type=float, default=0.5)
+    parser.add_argument("--bin_uncertainty_shrink_fallback_shrink", type=float, default=1.0)
     parser.add_argument("--target_footprint_tail_risk_min_positive_view_fraction", type=float, default=0.75)
     parser.add_argument("--target_footprint_tail_risk_min_min_view_gain", type=float, default=-1.0e-8)
     parser.add_argument("--target_footprint_tail_risk_min_cvar20_view_gain", type=float, default=0.0)
@@ -362,11 +398,16 @@ def main() -> int:
     if args.gpu != "":
         env["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
 
+    if not args.skip_teacher_cache and args.teacher_render_dir is None:
+        raise SystemExit("--teacher_render_dir is required unless --skip_teacher_cache is set")
+
+    texture_fit_evidence_dir = Path(args.fit_evidence_dir) if args.skip_teacher_cache else teacher_cache_dir
+
     commands: list[dict[str, Any]] = []
     if not args.skip_teacher_cache:
         commands.append(command_record("build_teacher_surface_evidence", _teacher_cache_cmd(args, teacher_cache_dir), log_path=logs_dir / "01_teacher_cache.log"))
     if not args.skip_texture:
-        commands.append(command_record("apply_certified_residual_texture", _texture_cmd(args, teacher_cache_dir, output_model), log_path=logs_dir / "02_certified_texture.log"))
+        commands.append(command_record("apply_certified_residual_texture", _texture_cmd(args, texture_fit_evidence_dir, output_model), log_path=logs_dir / "02_certified_texture.log"))
     if not args.skip_eval:
         commands.append(command_record("evaluate_vnext_target", _eval_cmd(args, output_model, results_path, per_view_path), log_path=logs_dir / "03_eval.log"))
 
@@ -384,8 +425,9 @@ def main() -> int:
         "fit_evidence_dir": path_record(args.fit_evidence_dir),
         "target_evidence_dir": path_record(args.target_evidence_dir),
         "region_carrier_json": path_record(args.region_carrier_json, hash_file=True),
-        "teacher_render_dir": path_record(args.teacher_render_dir),
+        "teacher_render_dir": path_record(args.teacher_render_dir) if args.teacher_render_dir else None,
         "parent_render_dir": path_record(args.parent_render_dir) if args.parent_render_dir else None,
+        "texture_fit_evidence_dir": path_record(texture_fit_evidence_dir),
     }
     settings = {key: value for key, value in vars(args).items() if key not in {"source_model", "fit_evidence_dir", "target_evidence_dir", "region_carrier_json", "teacher_render_dir", "parent_render_dir"}}
     manifest = make_run_manifest(

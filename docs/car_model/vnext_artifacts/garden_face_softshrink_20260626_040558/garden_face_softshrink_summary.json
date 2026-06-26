@@ -1,0 +1,159 @@
+{
+  "accepted": true,
+  "baseline_fallback_metrics": {
+    "LPIPS": 0.24802321195602417,
+    "PSNR": 24.741003036499023,
+    "SSIM": 0.7540490031242371
+  },
+  "claim_boundary": "This is a real nonzero garden milestone with tiny test gains vs fallback/parent, not full9 or paper-level closure.",
+  "date": "2026-06-26",
+  "delta_vs_fallback": {
+    "LPIPS": -3.2335519790649414e-06,
+    "PSNR": 7.62939453125e-05,
+    "SSIM": 1.9669532775878906e-06
+  },
+  "effective_policy": "accepted_atlas",
+  "face_guard": {
+    "allowed_face_count": 58,
+    "allowed_sample_fraction": 0.5573482262902059,
+    "decision": "keep_face_gain_guard",
+    "enabled": true,
+    "post_guard_accepted": true,
+    "post_guard_best": {
+      "alpha": 0.0625,
+      "cvar20_view_relative_gain": 0.0023955958212327805,
+      "image_l1_after": 0.03097761624182264,
+      "image_l1_before": 0.03097779567663868,
+      "image_l1_cvar20_view_gain": -1.6825894514719644e-07,
+      "image_l1_gain": 1.7943481604258219e-07,
+      "image_l1_min_view_gain": -3.296881914138794e-07,
+      "image_l1_positive_view_fraction": 0.75,
+      "image_l1_view_count": 12,
+      "mae_after": 0.018639668822288513,
+      "min_view_relative_gain": 0.00025785236606110323,
+      "mse_after": 0.003647784935310483,
+      "mse_before": 0.003669837722554803,
+      "p10_view_relative_gain": 0.0031717023322422157,
+      "positive_view_fraction": 1.0,
+      "relative_gain": 0.006009199564543033,
+      "ssim_after": 0.8734240780274073,
+      "ssim_before": 0.8734224190314611,
+      "ssim_cvar20_view_gain": 3.7749608357747394e-07,
+      "ssim_gain": 1.6589959462483723e-06,
+      "ssim_min_view_gain": 0.0,
+      "ssim_positive_view_fraction": 0.9166666666666666,
+      "ssim_view_count": 12,
+      "view_count": 12
+    },
+    "post_guard_risk_reasons": [],
+    "post_guard_selected_alpha": 0.0625
+  },
+  "face_softshrink_metrics": {
+    "LPIPS": 0.2480199784040451,
+    "PSNR": 24.741079330444336,
+    "SSIM": 0.7540509700775146
+  },
+  "hard_bin_guard_profile": {
+    "allowed_bin_count": 87,
+    "allowed_face_count": 13,
+    "allowed_sample_fraction": 0.05028762293560957,
+    "decision": "reject_candidate_after_bin_uncertainty_guard",
+    "enabled": true,
+    "post_guard_accepted": false,
+    "post_guard_best": {
+      "alpha": 0.5,
+      "cvar20_view_relative_gain": -0.0007407410389824848,
+      "image_l1_after": 0.030977689816306036,
+      "image_l1_before": 0.03097779567663868,
+      "image_l1_cvar20_view_gain": -2.3034711678822836e-07,
+      "image_l1_gain": 1.058603326479594e-07,
+      "image_l1_min_view_gain": -3.8743019104003906e-07,
+      "image_l1_positive_view_fraction": 0.8333333333333334,
+      "image_l1_view_count": 12,
+      "mae_after": 0.018561838194727898,
+      "min_view_relative_gain": -0.0024239775309526147,
+      "mse_after": 0.0036602492909878492,
+      "mse_before": 0.003669837722554803,
+      "p10_view_relative_gain": -9.241830725668859e-05,
+      "positive_view_fraction": 0.8333333333333334,
+      "relative_gain": 0.002612767182598623,
+      "ssim_after": 0.8734242568413416,
+      "ssim_before": 0.8734224190314611,
+      "ssim_cvar20_view_gain": -4.569689432779948e-07,
+      "ssim_gain": 1.8378098805745442e-06,
+      "ssim_min_view_gain": -1.5497207641601562e-06,
+      "ssim_positive_view_fraction": 0.9166666666666666,
+      "ssim_view_count": 12,
+      "view_count": 12
+    },
+    "post_guard_risk_reasons": [
+      "cvar20_view_relative_gain -0.000741 < min_policy_val_cvar20_relative_gain 0.000000",
+      "min_view_relative_gain -0.002424 < min_policy_val_min_view_relative_gain -0.000001"
+    ],
+    "post_guard_selected_alpha": 0.0
+  },
+  "hard_bin_softshrink_diagnostic": {
+    "accepted": false,
+    "effective_policy": "fallback_noop",
+    "reject_reason": "cvar20_view_relative_gain -0.000741 < min_policy_val_cvar20_relative_gain 0.000000; min_view_relative_gain -0.002424 < min_policy_val_min_view_relative_gain -0.000001",
+    "selected_alpha": 0.0
+  },
+  "method": "vNext face-softshrink certified residual surface texture",
+  "per_view_better_counts_vs_fallback": {
+    "LPIPS": {
+      "better": 22,
+      "max_better_delta": 1.2427568435668945e-05,
+      "mean_better_delta": 3.2279640436172485e-06,
+      "min_better_delta": -2.7418136596679688e-06,
+      "tie": 0,
+      "worse": 2
+    },
+    "PSNR": {
+      "better": 22,
+      "max_better_delta": 0.00020599365234375,
+      "mean_better_delta": 7.748603820800781e-05,
+      "min_better_delta": -3.62396240234375e-05,
+      "tie": 0,
+      "worse": 2
+    },
+    "SSIM": {
+      "better": 24,
+      "max_better_delta": 5.543231964111328e-06,
+      "mean_better_delta": 2.04394261042277e-06,
+      "min_better_delta": 1.7881393432617188e-07,
+      "tie": 0,
+      "worse": 0
+    }
+  },
+  "policy_val_best": {
+    "alpha": 0.0625,
+    "cvar20_view_relative_gain": 0.0023955958212327805,
+    "image_l1_after": 0.03097761624182264,
+    "image_l1_before": 0.03097779567663868,
+    "image_l1_cvar20_view_gain": -1.6825894514719644e-07,
+    "image_l1_gain": 1.7943481604258219e-07,
+    "image_l1_min_view_gain": -3.296881914138794e-07,
+    "image_l1_positive_view_fraction": 0.75,
+    "image_l1_view_count": 12,
+    "mae_after": 0.018639668822288513,
+    "min_view_relative_gain": 0.00025785236606110323,
+    "mse_after": 0.003647784935310483,
+    "mse_before": 0.003669837722554803,
+    "p10_view_relative_gain": 0.0031717023322422157,
+    "positive_view_fraction": 1.0,
+    "relative_gain": 0.006009199564543033,
+    "ssim_after": 0.8734240780274073,
+    "ssim_before": 0.8734224190314611,
+    "ssim_cvar20_view_gain": 3.7749608357747394e-07,
+    "ssim_gain": 1.6589959462483723e-06,
+    "ssim_min_view_gain": 0.0,
+    "ssim_positive_view_fraction": 0.9166666666666666,
+    "ssim_view_count": 12,
+    "view_count": 12
+  },
+  "qualitative_panel": "garden_face_softshrink_qualitative_panel.png",
+  "scene": "garden",
+  "selected_alpha": 0.0625,
+  "target_changed_fraction": 0.002080492881274131,
+  "target_changed_pixels": 82767
+}
