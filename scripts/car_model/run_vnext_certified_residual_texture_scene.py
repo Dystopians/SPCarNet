@@ -64,7 +64,7 @@ def _teacher_cache_cmd(args: argparse.Namespace, teacher_cache_dir: Path) -> lis
         _python(),
         "scripts/car_model/ecsr_build_teacher_surface_evidence_cache.py",
         "--base_evidence_dir",
-        str(args.fit_evidence_dir),
+        str(args._effective_fit_evidence_dir),
         "--teacher_render_dir",
         str(args.teacher_render_dir),
         "--out_dir",
@@ -88,12 +88,38 @@ def _teacher_cache_cmd(args: argparse.Namespace, teacher_cache_dir: Path) -> lis
     return cmd
 
 
+def _reparent_evidence_cmd(
+    args: argparse.Namespace,
+    *,
+    base_evidence_dir: Path,
+    parent_render_dir: Path,
+    out_dir: Path,
+    split_label: str,
+) -> list[str]:
+    cmd = [
+        _python(),
+        "scripts/car_model/ecsr_reparent_surface_evidence_cache.py",
+        "--base_evidence_dir",
+        str(base_evidence_dir),
+        "--parent_render_dir",
+        str(parent_render_dir),
+        "--out_dir",
+        str(out_dir),
+        "--parent_label",
+        str(args.reparent_parent_label or f"{split_label}_parent"),
+        "--force",
+    ]
+    if bool(args.reparent_allow_resize):
+        cmd.append("--allow_resize")
+    return cmd
+
+
 def _strip_target_evidence_cmd(args: argparse.Namespace, stripped_target_evidence_dir: Path) -> list[str]:
     return [
         _python(),
         "scripts/car_model/ecsr_strip_target_evidence_for_vnext.py",
         "--target_evidence_dir",
-        str(args.target_evidence_dir),
+        str(args._effective_target_evidence_dir),
         "--out_dir",
         str(stripped_target_evidence_dir),
         "--force",
@@ -105,7 +131,7 @@ def _populate_eval_gt_cmd(args: argparse.Namespace, output_model: Path, audit_pa
         _python(),
         "scripts/car_model/ecsr_populate_eval_gt_from_target_evidence.py",
         "--target_evidence_dir",
-        str(args.target_evidence_dir),
+        str(args._effective_target_evidence_dir),
         "--output_model",
         str(output_model),
         "--split",
@@ -387,6 +413,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--region_carrier_json", type=Path, required=True)
     parser.add_argument("--teacher_render_dir", type=Path, default=None)
     parser.add_argument("--parent_render_dir", type=Path, default=None)
+    parser.add_argument(
+        "--reparent_fit_parent_render_dir",
+        type=Path,
+        default=None,
+        help=(
+            "Optional stronger parent render directory used to rewrite fit evidence rgb_render/residuals "
+            "before teacher-cache fitting. This is the v115 path for v106-anchored residual distillation."
+        ),
+    )
+    parser.add_argument(
+        "--reparent_target_parent_render_dir",
+        type=Path,
+        default=None,
+        help=(
+            "Optional stronger parent render directory used to rewrite target evidence rgb_render/residuals "
+            "before no-GT stripping and target apply/fallback."
+        ),
+    )
+    parser.add_argument("--reparent_parent_label", default="")
+    parser.add_argument("--reparent_allow_resize", action="store_true")
     parser.add_argument("--output_root", type=Path, required=True)
     parser.add_argument("--target_split", choices=("train", "test"), default="test")
     parser.add_argument("--base_method_name", default="ours_26000_phasef_extra_compact_base")
@@ -523,6 +569,8 @@ def main() -> int:
     run_root = Path(args.output_root) / str(args.scene)
     logs_dir = run_root / "logs"
     reports_dir = run_root / "reports"
+    reparented_fit_evidence_dir = run_root / "fit_evidence_reparented"
+    reparented_target_evidence_dir = run_root / "target_evidence_reparented"
     teacher_cache_dir = run_root / "teacher_surface_evidence"
     stripped_target_evidence_dir = run_root / "target_evidence_no_gt"
     output_model = run_root / "model"
@@ -542,10 +590,55 @@ def main() -> int:
     if not args.skip_teacher_cache and args.teacher_render_dir is None:
         raise SystemExit("--teacher_render_dir is required unless --skip_teacher_cache is set")
 
-    texture_fit_evidence_dir = Path(args.fit_evidence_dir) if args.skip_teacher_cache else teacher_cache_dir
-    adapter_target_evidence_dir = stripped_target_evidence_dir if bool(args.strict_no_target_gt_apply) else Path(args.target_evidence_dir)
+    args._effective_fit_evidence_dir = (
+        reparented_fit_evidence_dir
+        if args.reparent_fit_parent_render_dir is not None
+        else Path(args.fit_evidence_dir)
+    )
+    args._effective_target_evidence_dir = (
+        reparented_target_evidence_dir
+        if args.reparent_target_parent_render_dir is not None
+        else Path(args.target_evidence_dir)
+    )
+
+    texture_fit_evidence_dir = Path(args._effective_fit_evidence_dir) if args.skip_teacher_cache else teacher_cache_dir
+    adapter_target_evidence_dir = (
+        stripped_target_evidence_dir
+        if bool(args.strict_no_target_gt_apply)
+        else Path(args._effective_target_evidence_dir)
+    )
 
     commands: list[dict[str, Any]] = []
+    if args.reparent_fit_parent_render_dir is not None and (
+        not args.skip_texture or not args.skip_teacher_cache
+    ):
+        commands.append(
+            command_record(
+                "reparent_fit_evidence",
+                _reparent_evidence_cmd(
+                    args,
+                    base_evidence_dir=Path(args.fit_evidence_dir),
+                    parent_render_dir=Path(args.reparent_fit_parent_render_dir),
+                    out_dir=reparented_fit_evidence_dir,
+                    split_label="fit",
+                ),
+                log_path=logs_dir / "00_reparent_fit_evidence.log",
+            )
+        )
+    if args.reparent_target_parent_render_dir is not None and not args.skip_texture:
+        commands.append(
+            command_record(
+                "reparent_target_evidence",
+                _reparent_evidence_cmd(
+                    args,
+                    base_evidence_dir=Path(args.target_evidence_dir),
+                    parent_render_dir=Path(args.reparent_target_parent_render_dir),
+                    out_dir=reparented_target_evidence_dir,
+                    split_label="target",
+                ),
+                log_path=logs_dir / "00b_reparent_target_evidence.log",
+            )
+        )
     if not args.skip_teacher_cache:
         commands.append(command_record("build_teacher_surface_evidence", _teacher_cache_cmd(args, teacher_cache_dir), log_path=logs_dir / "01_teacher_cache.log"))
     if bool(args.strict_no_target_gt_apply) and not args.skip_texture:
@@ -592,7 +685,17 @@ def main() -> int:
         "source_model": path_record(args.source_model),
         "fit_evidence_dir": path_record(args.fit_evidence_dir),
         "target_evidence_dir": path_record(args.target_evidence_dir),
+        "effective_fit_evidence_dir": path_record(args._effective_fit_evidence_dir),
+        "effective_target_evidence_dir": path_record(args._effective_target_evidence_dir),
         "adapter_target_evidence_dir": path_record(adapter_target_evidence_dir),
+        "reparented_fit_evidence_dir": path_record(reparented_fit_evidence_dir),
+        "reparented_target_evidence_dir": path_record(reparented_target_evidence_dir),
+        "reparent_fit_parent_render_dir": path_record(args.reparent_fit_parent_render_dir)
+        if args.reparent_fit_parent_render_dir
+        else None,
+        "reparent_target_parent_render_dir": path_record(args.reparent_target_parent_render_dir)
+        if args.reparent_target_parent_render_dir
+        else None,
         "region_carrier_json": path_record(args.region_carrier_json, hash_file=True),
         "teacher_render_dir": path_record(args.teacher_render_dir) if args.teacher_render_dir else None,
         "parent_render_dir": path_record(args.parent_render_dir) if args.parent_render_dir else None,
@@ -631,6 +734,8 @@ def main() -> int:
     manifest["errors"] = errors
     manifest["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
     manifest["outputs"] = {
+        "reparented_fit_evidence_dir": str(reparented_fit_evidence_dir),
+        "reparented_target_evidence_dir": str(reparented_target_evidence_dir),
         "teacher_cache_dir": str(teacher_cache_dir),
         "output_model": str(output_model),
         "results_path": str(results_path),

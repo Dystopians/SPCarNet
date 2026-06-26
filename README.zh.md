@@ -18,6 +18,7 @@
 - [vNext full9 固定策略 cleanup/evidence 日志](docs/car_model/6-26-vNext-Full9FixedPolicy-CleanupRun-Log.md)
 - [vNext full9 固定策略 artifact 汇总表](docs/car_model/vnext_artifacts/full9_structure_shrink_cleanup_20260626_1200/summary/vnext_manifest_summary_enhanced.md)
 - [vNext full9 effective-margin gate artifact 汇总表](docs/car_model/vnext_artifacts/full9_effective_margin_gate_20260626_1500/summary/vnext_manifest_summary_enhanced.md)
+- [v115 v106-anchored evidence reparent 实现日志](docs/car_model/6-26-v115-v106AnchoredEvidenceReparent-Implementation-Log.md)
 - [vNext counter clean-best/base/ours 定性面板日志](docs/car_model/6-26-vNext-CounterQualitativePanel-RunLog.md)
 - [vNext frame-contract 与 effective-margin gate 日志](docs/car_model/6-26-vNext-FrameContract-and-EffectiveMarginGate-Log.md)
 - [vNext garden 同分辨率诊断面板](docs/car_model/vnext_artifacts/accepted_nonzero_qual_panels_20260626/garden_same_resolution_diagnostic/garden_target_parent_vs_vnext_same_resolution.png)
@@ -34,11 +35,13 @@
 - [中文长版导师技术报告](docs/car_model/6-25-SPCarNet-Mentor-Technical-Report.md)
 - [当前可克隆报告索引](docs/car_model/6-25-SPCarNet-Cloneable-Report-Index.md)
 
-简短状态：`v106 POD-MoE base-preserve` 是当前已验证的质量主线，在 assembled selected full9 表上相对本地 clean MeshSplatting baseline 三个指标均值都更好。`v113b/v113c` 是严格 gate 的安全修复，改善安全性并部分修复 garden v110b，但没有超过 v106。`v114_oof_refit_pod_moe` 是当前正在跑的 candidate-side 长程实验，还不是已完成结果。最新状态附录：v110 counter 在 field build 阶段以 return code `-9` 失败，大概率是内存/共享盘压力导致，因此 strict branch 仍需低内存 field-builder 修复后重跑。
+简短状态：`v106 POD-MoE base-preserve` 是当前已验证的质量主线，在 assembled selected full9 表上相对本地 clean MeshSplatting baseline 三个指标均值都更好。`v113b/v113c` 是严格 gate 的安全修复，改善安全性并部分修复 garden v110b，但没有超过 v106。`v114_oof_refit_pod_moe` 当前是 artifact/provenance blocker：field 存在，但原始 detached package 缺 `cfg_args`，替换成其它 model 会被 endpoint hash safety 正确拒绝。最新状态附录：v110 counter 在 field build 阶段以 return code `-9` 失败，大概率是内存/共享盘压力导致，因此 strict branch 仍需低内存 field-builder 修复后重跑。
 
 vNext 状态：certified residual surface texture 方向已经形成可运行、可审计的固定策略 full9 evidence package，但最新 full9 结果还不能作为论文级质量主线提升。第一版固定 structure-aware shrink policy 已完成 strict no-target-GT full9 manifest run，`6 / 9` 场景接受非零 residual output，均值为 `25.067699 / 0.741260 / 0.306689`，但仍低于 clean MeshSplatting 和 v106。更严格的 effective-margin gate full9 复跑现在也已完成：`9 / 9` 场景完成，`0 / 9` 缺失或失败，`9 / 9` protocol audit 通过，只有 `1 / 9` 场景接受非零 residual output（`counter`），`8 / 9` 场景显式 fallback/no-op。full9 均值为 `25.067410` PSNR、`0.741259` SSIM、`0.306695` LPIPS，平均 changed fraction 为 `0.001371507`。这证明 safety gate 可以压住低效候选，但它仍低于本地 clean MeshSplatting baseline（`25.151682 / 0.749018 / 0.287621`）和 v106（`25.831280 / 0.760830 / 0.268435`）。因此 vNext 当前应定位为可审计 representation/policy 里程碑和瓶颈诊断，而不是已经质量超越的 promoted endpoint。
 
 定性/安全补充：一次 no-cleanup counter 复现实验已经保留 vNext renders，并导出 clean-best/base/vNext 面板。后续 garden 审计发现 clean/base 与 vNext target-evidence renders 可能存在原生 frame contract 不一致，因此现在面板工具会拒绝静默 resize 对比，并记录 selected-frame hash。同分辨率 garden parent-vs-vNext 诊断只显示微小收益（`+0.000139` PSNR / `+0.000003` SSIM / `-0.00000791` LPIPS），full9 effective-margin gate 进一步确认这类低效行应该 fallback，而不是被 promoted：[counter 定性面板日志](docs/car_model/6-26-vNext-CounterQualitativePanel-RunLog.md)，[frame-contract/effective-margin 日志](docs/car_model/6-26-vNext-FrameContract-and-EffectiveMarginGate-Log.md)，[full9 effective-margin 汇总](docs/car_model/vnext_artifacts/full9_effective_margin_gate_20260626_1500/summary/vnext_manifest_summary_enhanced.md)，[garden 同分辨率面板](docs/car_model/vnext_artifacts/accepted_nonzero_qual_panels_20260626/garden_same_resolution_diagnostic/garden_target_parent_vs_vnext_same_resolution.png)。
+
+v115 接口更新：pipeline 现在补上了显式 evidence-reparent 步骤，用于真正做 v106-anchored residual distillation。`scripts/car_model/ecsr_reparent_surface_evidence_cache.py` 可以把 fit/target evidence 的 `rgb_render` 和 residual 字段重写到更强 parent render 上，`run_vnext_certified_residual_texture_scene.py` 也新增了 `--reparent_fit_parent_render_dir` / `--reparent_target_parent_render_dir`。这解决的是关键接口缺口，还不是指标胜利；公平的 v115 pilot 仍需要恢复或重新渲染 v106-compatible parent images。
 
 ## 当前 v106 POD-MoE 状态（2026-06-25）
 
