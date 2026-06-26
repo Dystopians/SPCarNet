@@ -11,6 +11,7 @@ This index is the entry point for a fresh clone of `https://github.com/Dystopian
 | current complete technical report | `docs/car_model/6-25-SPCarNet-PPT-Technical-Report-Current.md` |
 | v110 strict-split technical report draft | `docs/car_model/6-25-SPCarNet-v110-StrictSplit-Technical-Report-Draft.md` |
 | v110 execution log | `docs/car_model/6-25-v110-StrictSplitParentGate-Log.md` |
+| v113b OOT tail-safe gate log | `docs/car_model/6-25-v113b-OOT-Tail-Safe-Gate-Log.md` |
 | v106 quality-line technical report | `docs/car_model/6-25-v106-PODMoE-Technical-Report-Draft.md` |
 | v106 implementation/progress log | `docs/car_model/6-25-v106-PODMoE-BasePreserve-HardTriad-Log.md` |
 | v109 parent-gate log | `docs/car_model/6-25-v109-RenderRealizedParentGate-Log.md` |
@@ -25,6 +26,7 @@ This index is the entry point for a fresh clone of `https://github.com/Dystopian
 | v106 comparison JSON | `docs/car_model/results/v106_podmoe_basepreserve_full9_20260625/full9_compare.json` |
 | v110 default strict-split summary | `docs/car_model/results/v110_strict_split_20260625/summary/v110_strict_split_parent_gate_summary.md` |
 | v110b flowers/garden strict diagnostic | `docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md` |
+| v113b OOT tail-safe strict diagnostic | `docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md` |
 
 ## Qualitative Result Package
 
@@ -79,4 +81,4 @@ These roots are not committed because they contain large render/model artifacts.
 
 ## One-Line Status
 
-`v106` is the current quality line and beats the local clean MeshSplatting baseline on the assembled selected full9 table. `v110/v110b/v111` are the fairness/safety validation line; they have exposed a real out-of-trajectory gate-generalization weakness and are not yet promoted as the final paper method.
+`v106` is the current quality line and beats the local clean MeshSplatting baseline on the assembled selected full9 table. `v113b` is the current strict-gate safety repair: it fixes the observed garden v110b regression back to the v106 parent using lower-tail and target-GT-free out-of-trajectory certificates. It is still a safety milestone rather than a quality breakthrough over v106.

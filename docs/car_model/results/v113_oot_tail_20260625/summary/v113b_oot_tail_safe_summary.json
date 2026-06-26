@@ -1,0 +1,39 @@
+{
+  "date": "2026-06-25",
+  "protocol": {
+    "candidate_field": "train/even",
+    "gate_calibration": "train/odd",
+    "final_metrics": "test",
+    "test_gt_usage": "final evaluation only"
+  },
+  "metrics_order": ["PSNR", "SSIM", "LPIPS"],
+  "scenes": {
+    "flowers": {
+      "clean_meshsplatting": {"PSNR": 19.682257, "SSIM": 0.511822, "LPIPS": 0.394563},
+      "v106_parent": {"PSNR": 20.077723, "SSIM": 0.531240, "LPIPS": 0.374393},
+      "v110b_prior_strict_gate": {"PSNR": 20.077723, "SSIM": 0.531240, "LPIPS": 0.374393},
+      "v113b_oot_tail_safe_gate": {"PSNR": 20.077723, "SSIM": 0.531240, "LPIPS": 0.374393},
+      "decision": "tail_safe_fallback"
+    },
+    "garden": {
+      "clean_meshsplatting": {"PSNR": 25.029211, "SSIM": 0.780035, "LPIPS": 0.201314},
+      "v106_parent": {"PSNR": 25.790945, "SSIM": 0.799382, "LPIPS": 0.174480},
+      "v110b_prior_strict_gate": {"PSNR": 25.430321, "SSIM": 0.783703, "LPIPS": 0.186970},
+      "v113b_oot_tail_safe_gate": {"PSNR": 25.790945, "SSIM": 0.799382, "LPIPS": 0.174480},
+      "decision": "oot_scene_fallback",
+      "mask_weighted_ood_fraction": 0.090031,
+      "oot_threshold": 0.757181,
+      "target_p95_center_dist": 0.806651
+    }
+  },
+  "mean": {
+    "clean_meshsplatting": {"PSNR": 22.355734, "SSIM": 0.645929, "LPIPS": 0.297939},
+    "v106_parent": {"PSNR": 22.934334, "SSIM": 0.665311, "LPIPS": 0.274437},
+    "v110b_prior_strict_gate": {"PSNR": 22.754022, "SSIM": 0.657471, "LPIPS": 0.280681},
+    "v113b_oot_tail_safe_gate": {"PSNR": 22.934334, "SSIM": 0.665311, "LPIPS": 0.274437},
+    "v113b_minus_clean": {"PSNR": 0.578600, "SSIM": 0.019382, "LPIPS": -0.023502},
+    "v113b_minus_v110b": {"PSNR": 0.180312, "SSIM": 0.007839, "LPIPS": -0.006245},
+    "v113b_minus_v106": {"PSNR": 0.0, "SSIM": 0.0, "LPIPS": 0.0}
+  },
+  "conclusion": "v113b fixes the observed v110b garden regression by adding lower-tail and target-GT-free out-of-trajectory support certificates. It is a safety milestone, not a quality improvement over v106."
+}

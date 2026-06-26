@@ -58,6 +58,14 @@ def main() -> int:
     assert "--target_split" in gate_cmd and gate_cmd[gate_cmd.index("--target_split") + 1] == "test"
     assert "--parent_method_name" in gate_cmd and gate_cmd[gate_cmd.index("--parent_method_name") + 1] == plan["parent_method_name"]
     assert "--candidate_method_name" in gate_cmd and gate_cmd[gate_cmd.index("--candidate_method_name") + 1] == plan["candidate_method_name"]
+    assert "--min_p05_psnr_gain=0.0" in gate_cmd
+    assert "--min_p05_ssim_gain=-1e-06" in gate_cmd
+    assert "--min_p05_lpips_gain=-1000000000.0" in gate_cmd
+    assert "--oot_gate_mode" in gate_cmd and gate_cmd[gate_cmd.index("--oot_gate_mode") + 1] == "scene_fallback"
+    assert "--oot_source_manifest" in gate_cmd
+    assert gate_cmd[gate_cmd.index("--oot_source_manifest") + 1].endswith(
+        "ours_26000_v111_train_even_candidate_flowers_field.manifest.json"
+    )
     assert "--split" in eval_cmd and eval_cmd[eval_cmd.index("--split") + 1] == "test"
     assert plan["train_v102_bank_path"].endswith("/flowers/v102_preprojected_delta_bank_train.pt")
     assert plan["parent_method_name"] == "ours_26000_v111_train_all_parent_flowers"

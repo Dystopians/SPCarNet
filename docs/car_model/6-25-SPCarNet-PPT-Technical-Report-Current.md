@@ -13,9 +13,10 @@ The main progress since the large-method rebuild started is concrete:
 - v106 improves over the selected local clean MeshSplatting baseline on mean PSNR, SSIM, and LPIPS;
 - strict train/even -> train/odd -> test interfaces were added to the field builder, delta-bank builder, parent gate, and orchestration scripts;
 - v110/v110b exposed an important weakness: a gate that looks good on train/odd can still harm held-out test relative to the v106 parent;
+- v113b repairs that weakness on flowers/garden by adding lower-tail metric checks and a target-GT-free out-of-trajectory support certificate;
 - v111 now exists as the end-to-end strict runner where even the parent field is rebuilt from train/all rather than inherited from a target-sidecar artifact.
 
-The honest current conclusion is: SPCarNet has a real, measurable improvement line over the local clean baseline, but the paper-final claim is not closed because the strict-gate branch has not yet produced a method that both improves over v106 and survives the stronger fairness protocol.
+The honest current conclusion is: SPCarNet has a real, measurable improvement line over the local clean baseline, and the strict-gate branch now has a stronger safety repair. The paper-final claim is still not closed because v113b restores unsafe candidates to v106 rather than improving beyond v106.
 
 ## Method in Plain Language
 
@@ -129,7 +130,13 @@ The v110b two-scene diagnostic is stored here:
 docs/car_model/results/v110_strict_split_20260625/summary/v110b_manual_flowers_garden_summary.md
 ```
 
-Interpretation: strict train/odd calibration is not enough by itself. The current branch needs stronger out-of-trajectory risk modeling before it can replace v106.
+v113b adds that first stronger risk model. It repairs the garden regression by falling back when target masks land outside the empirical train/odd-to-train/even camera support:
+
+```text
+docs/car_model/results/v113_oot_tail_20260625/summary/v113b_oot_tail_safe_summary.md
+```
+
+Interpretation: strict train/odd calibration is not enough by itself. v113b makes the gate non-regressive on the two completed representative scenes, but it still does not replace v106 with a better nonzero candidate.
 
 ## Qualitative Assets
 

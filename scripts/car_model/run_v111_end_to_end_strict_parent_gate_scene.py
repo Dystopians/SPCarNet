@@ -286,6 +286,27 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         f"--min_mean_ssim_gain={args.min_mean_ssim_gain}",
         f"--min_mean_lpips_gain={args.min_mean_lpips_gain}",
         f"--min_p05_score_gain={args.min_p05_score_gain}",
+        f"--min_p05_psnr_gain={args.min_p05_psnr_gain}",
+        f"--min_p05_ssim_gain={args.min_p05_ssim_gain}",
+        f"--min_p05_lpips_gain={args.min_p05_lpips_gain}",
+        "--oot_gate_mode",
+        str(args.oot_gate_mode),
+        "--oot_source_manifest",
+        str(candidate_field.with_suffix(".manifest.json")),
+        "--oot_source_view_subset",
+        str(args.oot_source_view_subset),
+        "--oot_center_quantile",
+        str(args.oot_center_quantile),
+        "--oot_center_rel_margin",
+        str(args.oot_center_rel_margin),
+        "--oot_center_abs_margin",
+        str(args.oot_center_abs_margin),
+        "--oot_max_frame_fraction",
+        str(args.oot_max_frame_fraction),
+        "--oot_max_mask_weighted_fraction",
+        str(args.oot_max_mask_weighted_fraction),
+        "--oot_min_mask_mean_for_scene_check",
+        str(args.oot_min_mask_mean_for_scene_check),
         "--device",
         str(args.device),
         "--wandb_mode",
@@ -398,6 +419,13 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             "max_blend_grid": args.max_blend_grid,
             "local_kernels": args.local_kernels,
             "objective": args.objective,
+            "min_p05_psnr_gain": args.min_p05_psnr_gain,
+            "min_p05_ssim_gain": args.min_p05_ssim_gain,
+            "min_p05_lpips_gain": args.min_p05_lpips_gain,
+            "oot_gate_mode": args.oot_gate_mode,
+            "oot_center_quantile": args.oot_center_quantile,
+            "oot_center_rel_margin": args.oot_center_rel_margin,
+            "oot_center_abs_margin": args.oot_center_abs_margin,
             "wandb": bool(args.wandb),
             "wandb_mode": args.wandb_mode,
             "gpu": args.gpu,
@@ -637,6 +665,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--min_mean_ssim_gain", type=float, default=-1e-6)
     parser.add_argument("--min_mean_lpips_gain", type=float, default=-1e9)
     parser.add_argument("--min_p05_score_gain", type=float, default=-1e-4)
+    parser.add_argument("--min_p05_psnr_gain", type=float, default=0.0)
+    parser.add_argument("--min_p05_ssim_gain", type=float, default=-1e-6)
+    parser.add_argument("--min_p05_lpips_gain", type=float, default=-1e9)
+    parser.add_argument("--oot_gate_mode", choices=("off", "report", "scene_fallback"), default="scene_fallback")
+    parser.add_argument("--oot_source_view_subset", choices=("all", "even", "odd"), default="even")
+    parser.add_argument("--oot_center_quantile", type=float, default=0.95)
+    parser.add_argument("--oot_center_rel_margin", type=float, default=0.0)
+    parser.add_argument("--oot_center_abs_margin", type=float, default=0.0)
+    parser.add_argument("--oot_max_frame_fraction", type=float, default=0.10)
+    parser.add_argument("--oot_max_mask_weighted_fraction", type=float, default=0.05)
+    parser.add_argument("--oot_min_mask_mean_for_scene_check", type=float, default=0.05)
     parser.add_argument("--allow_failed_policy", action="store_true")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--merge_model_results", action="store_true")

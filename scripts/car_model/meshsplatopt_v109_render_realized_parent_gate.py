@@ -105,6 +105,14 @@ def _sample_names(names: list[str], max_views: int, sampler: str) -> list[str]:
     return out
 
 
+def _quantile(values: list[float], q: float) -> float:
+    if not values:
+        return 0.0
+    values = sorted(float(value) for value in values)
+    index = min(max(int(round(min(max(float(q), 0.0), 1.0) * (len(values) - 1))), 0), len(values) - 1)
+    return float(values[index])
+
+
 def _read_rgb(path: Path, device: torch.device) -> torch.Tensor:
     return TF.to_tensor(Image.open(path).convert("RGB")).to(device=device, dtype=torch.float32)
 
@@ -164,6 +172,28 @@ def _blend(candidate: torch.Tensor, parent: torch.Tensor, policy: dict[str, Any]
         "mask_p95": float(torch.quantile(flat_mask, 0.95).cpu().item()),
         "score_mean": float(flat_score.mean().cpu().item()),
         "score_p95": float(torch.quantile(flat_score, 0.95).cpu().item()),
+    }
+
+
+def _fallback_policy(kernels: list[int], calibration_views: int = 0) -> dict[str, Any]:
+    return {
+        "frame_threshold": 1e9,
+        "threshold": 1e9,
+        "softness": 0.0,
+        "max_blend": 0.0,
+        "dilate": 0,
+        "kernels": [int(value) for value in kernels],
+        "calibration_views": int(calibration_views),
+        "candidate_used_views": 0,
+        "score": 0.0,
+        "p05_frame_score_gain": 0.0,
+        "p05_d_psnr": 0.0,
+        "p05_d_ssim": 0.0,
+        "p05_d_lpips": 0.0,
+        "p95_delta_mse": 0.0,
+        "mean_mask": 0.0,
+        "pass_gate": True,
+        "fallback_to_parent": True,
     }
 
 
@@ -252,6 +282,9 @@ def _calibrate(args: argparse.Namespace, parent_dir: Path, candidate_dir: Path, 
                     pred_rows = []
                     parent_rows = []
                     frame_gains = []
+                    frame_d_psnr = []
+                    frame_d_ssim = []
+                    frame_d_lpips = []
                     delta_mses = []
                     mask_means = []
                     candidate_used = 0
@@ -264,6 +297,9 @@ def _calibrate(args: argparse.Namespace, parent_dir: Path, candidate_dir: Path, 
                         frame_gains.append(
                             _score_gain(pred_row, parent_row, args.objective, args.ssim_weight, args.lpips_weight)
                         )
+                        frame_d_psnr.append(float(pred_row["PSNR"] - parent_row["PSNR"]))
+                        frame_d_ssim.append(float(pred_row["SSIM"] - parent_row["SSIM"]))
+                        frame_d_lpips.append(float(parent_row.get("LPIPS", 0.0) - pred_row.get("LPIPS", 0.0)))
                         delta_mses.append(float(pred_row["MSE"] - parent_row["MSE"]))
                         mask_mean = float(info["mask_mean"])
                         mask_means.append(mask_mean)
@@ -283,10 +319,16 @@ def _calibrate(args: argparse.Namespace, parent_dir: Path, candidate_dir: Path, 
                         if "LPIPS" in mean:
                             score += float(args.lpips_weight) * gains["d_lpips"]
                     sorted_gains = sorted(frame_gains)
+                    sorted_d_psnr = sorted(frame_d_psnr)
+                    sorted_d_ssim = sorted(frame_d_ssim)
+                    sorted_d_lpips = sorted(frame_d_lpips)
                     sorted_delta_mses = sorted(delta_mses)
                     p05_index = min(max(int(math.floor(0.05 * (len(sorted_gains) - 1))), 0), len(sorted_gains) - 1)
                     p95_mse_index = min(max(int(math.floor(0.95 * (len(sorted_delta_mses) - 1))), 0), len(sorted_delta_mses) - 1)
                     p05_gain = float(sorted_gains[p05_index])
+                    p05_d_psnr = float(sorted_d_psnr[p05_index])
+                    p05_d_ssim = float(sorted_d_ssim[p05_index])
+                    p05_d_lpips = float(sorted_d_lpips[p05_index])
                     p95_delta_mse = float(sorted_delta_mses[p95_mse_index])
                     mean_mask = float(sum(mask_means) / max(len(mask_means), 1))
                     pass_gate = (
@@ -297,6 +339,9 @@ def _calibrate(args: argparse.Namespace, parent_dir: Path, candidate_dir: Path, 
                         and gains["d_ssim"] >= float(args.min_mean_ssim_gain)
                         and gains["d_lpips"] >= float(args.min_mean_lpips_gain)
                         and p05_gain >= float(args.min_p05_score_gain)
+                        and p05_d_psnr >= float(args.min_p05_psnr_gain)
+                        and p05_d_ssim >= float(args.min_p05_ssim_gain)
+                        and p05_d_lpips >= float(args.min_p05_lpips_gain)
                     )
                     row: dict[str, Any] = {
                         **policy,
@@ -304,6 +349,9 @@ def _calibrate(args: argparse.Namespace, parent_dir: Path, candidate_dir: Path, 
                         "candidate_used_views": int(candidate_used),
                         "score": float(score),
                         "p05_frame_score_gain": p05_gain,
+                        "p05_d_psnr": p05_d_psnr,
+                        "p05_d_ssim": p05_d_ssim,
+                        "p05_d_lpips": p05_d_lpips,
                         "p95_delta_mse": p95_delta_mse,
                         "mean_mask": mean_mask,
                         "pass_gate": bool(pass_gate),
@@ -323,22 +371,7 @@ def _calibrate(args: argparse.Namespace, parent_dir: Path, candidate_dir: Path, 
                         best = (rank, row)
     selected = dict(best[1] if best is not None else rows[0])
     if not bool(selected.get("pass_gate", False)) and not args.allow_failed_policy:
-        selected = {
-            "frame_threshold": 1e9,
-            "threshold": 1e9,
-            "softness": 0.0,
-            "max_blend": 0.0,
-            "dilate": 0,
-            "kernels": kernels,
-            "calibration_views": len(frames),
-            "candidate_used_views": 0,
-            "score": 0.0,
-            "p05_frame_score_gain": 0.0,
-            "p95_delta_mse": 0.0,
-            "mean_mask": 0.0,
-            "pass_gate": True,
-            "fallback_to_parent": True,
-        }
+        selected = _fallback_policy(kernels, calibration_views=len(frames))
     policy = {
         "frame_threshold": float(selected["frame_threshold"]),
         "threshold": float(selected["threshold"]),
@@ -357,6 +390,199 @@ def _calibrate(args: argparse.Namespace, parent_dir: Path, candidate_dir: Path, 
             "max": max(frame_distances) if frame_distances else 0.0,
         },
     }
+
+
+def _read_camera_index(method_dir: Path) -> dict[str, dict[str, Any]]:
+    path = method_dir / "camera_index.json"
+    if not path.is_file():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        idx = item.get("idx")
+        if idx is None:
+            continue
+        try:
+            out[f"{int(idx):05d}.png"] = item
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _camera_center(item: dict[str, Any]) -> tuple[float, float, float] | None:
+    value = item.get("camera_center", item.get("position"))
+    if not isinstance(value, list) or len(value) != 3:
+        return None
+    try:
+        return float(value[0]), float(value[1]), float(value[2])
+    except (TypeError, ValueError):
+        return None
+
+
+def _center_distance(lhs: tuple[float, float, float], rhs: tuple[float, float, float]) -> float:
+    return math.sqrt(sum((float(a) - float(b)) ** 2 for a, b in zip(lhs, rhs)))
+
+
+def _nearest_center_distances(
+    names: list[str],
+    camera_index: dict[str, dict[str, Any]],
+    support_centers: list[tuple[float, float, float]],
+) -> dict[str, float]:
+    out: dict[str, float] = {}
+    if not support_centers:
+        return out
+    for name in names:
+        center = _camera_center(camera_index.get(name, {}))
+        if center is None:
+            continue
+        out[name] = min(_center_distance(center, source) for source in support_centers)
+    return out
+
+
+def _source_names_from_manifest(path: str, fallback_names: list[str]) -> list[str]:
+    manifest_path = Path(path).expanduser() if path else Path()
+    if manifest_path.is_file():
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            payload = {}
+        keys = payload.get("selected_frame_keys") if isinstance(payload, dict) else None
+        if isinstance(keys, list):
+            out = []
+            for key in keys:
+                text = str(key)
+                if not text.endswith(".png"):
+                    text = f"{text}.png"
+                out.append(text)
+            if out:
+                return sorted(set(out))
+        indices = payload.get("selected_frame_indices") if isinstance(payload, dict) else None
+        if isinstance(indices, list):
+            out = []
+            for value in indices:
+                try:
+                    out.append(f"{int(value):05d}.png")
+                except (TypeError, ValueError):
+                    continue
+            if out:
+                return sorted(set(out))
+    return list(fallback_names)
+
+
+def _summarize_distances(values: list[float], q: float) -> dict[str, float]:
+    if not values:
+        return {"count": 0, "mean": 0.0, "p95": 0.0, "max": 0.0}
+    return {
+        "count": float(len(values)),
+        "mean": float(sum(values) / len(values)),
+        "p95": _quantile(values, q),
+        "max": float(max(values)),
+    }
+
+
+def _evaluate_out_of_trajectory_gate(
+    args: argparse.Namespace,
+    parent_calib: Path,
+    parent_target: Path,
+    calib_names: list[str],
+    target_names: list[str],
+    application: dict[str, Any],
+) -> dict[str, Any]:
+    mode = str(args.oot_gate_mode)
+    report: dict[str, Any] = {
+        "enabled": mode != "off",
+        "mode": mode,
+        "pass": True,
+        "fallback_reason": "",
+    }
+    if mode == "off":
+        return report
+
+    calib_index = _read_camera_index(parent_calib)
+    target_index = _read_camera_index(parent_target)
+    source_fallback = _filter_names_by_view_subset(list(calib_index), str(args.oot_source_view_subset))
+    source_names = _source_names_from_manifest(str(args.oot_source_manifest), source_fallback)
+    source_centers = [
+        center
+        for name in source_names
+        if (center := _camera_center(calib_index.get(name, {}))) is not None
+    ]
+    if not calib_index or not target_index or not source_centers:
+        report.update(
+            {
+                "pass": True,
+                "fallback_reason": "camera_index_or_source_support_unavailable",
+                "source_fit_view_count": len(source_centers),
+            }
+        )
+        return report
+
+    calib_dist_map = _nearest_center_distances(calib_names, calib_index, source_centers)
+    target_dist_map = _nearest_center_distances(target_names, target_index, source_centers)
+    calib_distances = list(calib_dist_map.values())
+    target_distances = list(target_dist_map.values())
+    calib_threshold = (
+        _quantile(calib_distances, float(args.oot_center_quantile)) * (1.0 + float(args.oot_center_rel_margin))
+        + float(args.oot_center_abs_margin)
+    )
+    app_frames = {str(row.get("image")): row for row in application.get("frames", []) if isinstance(row, dict)}
+    target_ood = [name for name, distance in target_dist_map.items() if distance > calib_threshold]
+    target_frame_fraction = float(len(target_ood) / max(len(target_dist_map), 1))
+    weighted_num = 0.0
+    weighted_den = 0.0
+    frame_reports: list[dict[str, Any]] = []
+    for name, distance in sorted(target_dist_map.items()):
+        mask_mean = float(app_frames.get(name, {}).get("mask_mean", 0.0))
+        is_ood = bool(distance > calib_threshold)
+        weighted_den += mask_mean
+        weighted_num += mask_mean if is_ood else 0.0
+        frame_reports.append(
+            {
+                "image": name,
+                "nearest_source_center_dist": float(distance),
+                "mask_mean_before_oot": mask_mean,
+                "oot_center_ood": is_ood,
+            }
+        )
+    mask_weighted_fraction = float(weighted_num / max(weighted_den, 1e-12))
+    target_mean_mask = float(application.get("mean_mask", 0.0))
+    pass_gate = True
+    reasons: list[str] = []
+    if target_mean_mask >= float(args.oot_min_mask_mean_for_scene_check):
+        if target_frame_fraction > float(args.oot_max_frame_fraction):
+            pass_gate = False
+            reasons.append("target_frame_fraction_exceeds_support")
+        if mask_weighted_fraction > float(args.oot_max_mask_weighted_fraction):
+            pass_gate = False
+            reasons.append("mask_weighted_fraction_exceeds_support")
+
+    report.update(
+        {
+            "pass": bool(pass_gate),
+            "fallback_reason": ",".join(reasons),
+            "source_manifest": str(args.oot_source_manifest),
+            "source_fit_view_count": len(source_centers),
+            "calib_trajectory_summary": _summarize_distances(calib_distances, float(args.oot_center_quantile)),
+            "target_trajectory_summary": _summarize_distances(target_distances, float(args.oot_center_quantile)),
+            "thresholds": {
+                "center_dist": float(calib_threshold),
+                "center_quantile": float(args.oot_center_quantile),
+                "center_rel_margin": float(args.oot_center_rel_margin),
+                "center_abs_margin": float(args.oot_center_abs_margin),
+                "max_frame_fraction": float(args.oot_max_frame_fraction),
+                "max_mask_weighted_fraction": float(args.oot_max_mask_weighted_fraction),
+                "min_mask_mean_for_scene_check": float(args.oot_min_mask_mean_for_scene_check),
+            },
+            "target_frame_fraction": target_frame_fraction,
+            "mask_weighted_ood_fraction": mask_weighted_fraction,
+            "frames": frame_reports,
+        }
+    )
+    return report
 
 
 def _write_rows_csv(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -404,6 +630,7 @@ def _apply(args: argparse.Namespace, parent_dir: Path, candidate_dir: Path, out_
 def _write_markdown(path: Path, report: dict[str, Any]) -> None:
     selected = report["calibration"]["selected_row"]
     application = report["application"]
+    oot = report.get("out_of_trajectory_gate", {})
     lines = [
         "# v109 Render-Realized Parent Gate Report",
         "",
@@ -422,21 +649,44 @@ def _write_markdown(path: Path, report: dict[str, Any]) -> None:
         f"- calib_mean_mask: `{float(selected.get('mean_mask', 0.0)):.8f}`",
         f"- target_mean_mask: `{float(application['mean_mask']):.8f}`",
         f"- target_views: `{int(application['target_views'])}`",
+        f"- oot_gate_mode: `{oot.get('mode', 'off')}`",
+        f"- oot_gate_pass: `{oot.get('pass', True)}`",
+        f"- oot_fallback_reason: `{oot.get('fallback_reason', '')}`",
         "",
         "## Selected Calibration Row",
         "",
-        "| dMSE | dPSNR | dSSIM | dLPIPS | p05 score gain | p95 delta MSE | pass |",
-        "|---:|---:|---:|---:|---:|---:|---:|",
-        "| {d_mse:.8e} | {d_psnr:.8f} | {d_ssim:.8f} | {d_lpips:.8f} | {p05:.8f} | {p95:.8e} | {passed} |".format(
+        "| dMSE | dPSNR | dSSIM | dLPIPS | p05 score gain | p05 dPSNR | p05 dSSIM | p05 dLPIPS | p95 delta MSE | pass |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| {d_mse:.8e} | {d_psnr:.8f} | {d_ssim:.8f} | {d_lpips:.8f} | {p05:.8f} | {p05_psnr:.8f} | {p05_ssim:.8f} | {p05_lpips:.8f} | {p95:.8e} | {passed} |".format(
             d_mse=float(selected.get("d_mse", 0.0)),
             d_psnr=float(selected.get("d_psnr", 0.0)),
             d_ssim=float(selected.get("d_ssim", 0.0)),
             d_lpips=float(selected.get("d_lpips", 0.0)),
             p05=float(selected.get("p05_frame_score_gain", 0.0)),
+            p05_psnr=float(selected.get("p05_d_psnr", 0.0)),
+            p05_ssim=float(selected.get("p05_d_ssim", 0.0)),
+            p05_lpips=float(selected.get("p05_d_lpips", 0.0)),
             p95=float(selected.get("p95_delta_mse", 0.0)),
             passed="yes" if selected.get("pass_gate") else "no",
         ),
     ]
+    if oot.get("enabled"):
+        target_summary = oot.get("target_trajectory_summary", {})
+        calib_summary = oot.get("calib_trajectory_summary", {})
+        thresholds = oot.get("thresholds", {})
+        lines.extend(
+            [
+                "",
+                "## Out-of-Trajectory Gate",
+                "",
+                f"- source_fit_view_count: `{int(oot.get('source_fit_view_count', 0))}`",
+                f"- calib_p95_center_dist: `{float(calib_summary.get('p95', 0.0)):.8f}`",
+                f"- target_p95_center_dist: `{float(target_summary.get('p95', 0.0)):.8f}`",
+                f"- center_dist_threshold: `{float(thresholds.get('center_dist', 0.0)):.8f}`",
+                f"- target_frame_fraction: `{float(oot.get('target_frame_fraction', 0.0)):.8f}`",
+                f"- mask_weighted_ood_fraction: `{float(oot.get('mask_weighted_ood_fraction', 0.0)):.8f}`",
+            ]
+        )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -467,6 +717,15 @@ def _maybe_wandb(args: argparse.Namespace, report: dict[str, Any]) -> None:
         "v109_parent_gate/target_views": int(report["application"]["target_views"]),
         "v109_parent_gate/fallback_to_parent": float(bool(selected.get("fallback_to_parent", False))),
     }
+    oot = report.get("out_of_trajectory_gate", {})
+    if oot.get("enabled"):
+        flat.update(
+            {
+                "v109_parent_gate/oot_pass": float(bool(oot.get("pass", True))),
+                "v109_parent_gate/oot_target_frame_fraction": float(oot.get("target_frame_fraction", 0.0)),
+                "v109_parent_gate/oot_mask_weighted_fraction": float(oot.get("mask_weighted_ood_fraction", 0.0)),
+            }
+        )
     run.log(flat)
     run.summary.update(flat)
     run.finish()
@@ -509,7 +768,39 @@ def main() -> int:
     parser.add_argument("--min_mean_ssim_gain", type=float, default=-1e-6)
     parser.add_argument("--min_mean_lpips_gain", type=float, default=-1e9)
     parser.add_argument("--min_p05_score_gain", type=float, default=-1e-4)
+    parser.add_argument(
+        "--min_p05_psnr_gain",
+        type=float,
+        default=-1e9,
+        help="Require the 5th-percentile per-frame PSNR gain on calibration views to exceed this value.",
+    )
+    parser.add_argument(
+        "--min_p05_ssim_gain",
+        type=float,
+        default=-1e9,
+        help="Require the 5th-percentile per-frame SSIM gain on calibration views to exceed this value.",
+    )
+    parser.add_argument(
+        "--min_p05_lpips_gain",
+        type=float,
+        default=-1e9,
+        help="Require the 5th-percentile per-frame LPIPS improvement on calibration views to exceed this value.",
+    )
     parser.add_argument("--allow_failed_policy", action="store_true")
+    parser.add_argument("--oot_gate_mode", choices=("off", "report", "scene_fallback"), default="off")
+    parser.add_argument("--oot_source_manifest", default="")
+    parser.add_argument(
+        "--oot_source_view_subset",
+        choices=("all", "even", "odd"),
+        default="even",
+        help="Fallback source-support subset used when oot_source_manifest is absent.",
+    )
+    parser.add_argument("--oot_center_quantile", type=float, default=0.95)
+    parser.add_argument("--oot_center_rel_margin", type=float, default=0.0)
+    parser.add_argument("--oot_center_abs_margin", type=float, default=0.0)
+    parser.add_argument("--oot_max_frame_fraction", type=float, default=0.10)
+    parser.add_argument("--oot_max_mask_weighted_fraction", type=float, default=0.05)
+    parser.add_argument("--oot_min_mask_mean_for_scene_check", type=float, default=0.05)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb_project", default=os.environ.get("WANDB_PROJECT", "spcarnet_meshprior"))
@@ -531,6 +822,38 @@ def main() -> int:
     calibration = _calibrate(args, parent_calib, candidate_calib, calib_names, device)
     out_method = Path(args.output_model_path) / args.target_split / args.method_name
     application = _apply(args, parent_target, candidate_target, out_method, calibration["selected_policy"], device)
+    target_names = [str(row.get("image")) for row in application.get("frames", []) if isinstance(row, dict)]
+    oot_report = _evaluate_out_of_trajectory_gate(
+        args,
+        parent_calib,
+        parent_target,
+        calib_names,
+        target_names,
+        application,
+    )
+    if (
+        str(args.oot_gate_mode) == "scene_fallback"
+        and not bool(oot_report.get("pass", True))
+        and float(application.get("mean_mask", 0.0)) > 0.0
+    ):
+        before_oot_application = application
+        fallback = _fallback_policy(calibration["selected_policy"]["kernels"], calibration_views=len(calib_names))
+        fallback["fallback_to_parent"] = True
+        fallback["fallback_reason"] = f"out_of_trajectory:{oot_report.get('fallback_reason', '')}"
+        calibration["selected_policy"] = {
+            "frame_threshold": float(fallback["frame_threshold"]),
+            "threshold": float(fallback["threshold"]),
+            "softness": float(fallback["softness"]),
+            "max_blend": float(fallback["max_blend"]),
+            "dilate": int(fallback["dilate"]),
+            "kernels": [int(value) for value in fallback["kernels"]],
+        }
+        calibration["selected_row"] = fallback
+        application = _apply(args, parent_target, candidate_target, out_method, calibration["selected_policy"], device)
+        oot_report["applied_scene_fallback"] = True
+        oot_report["application_before_oot"] = before_oot_application
+    else:
+        oot_report["applied_scene_fallback"] = False
     report = {
         "method": "v109 Render-Realized Parent-Preserving Gate",
         "schema_version": 1,
@@ -550,6 +873,7 @@ def main() -> int:
         "test_gt_usage": "copied for evaluator only after fixed policy application",
         "calibration": calibration,
         "application": application,
+        "out_of_trajectory_gate": oot_report,
     }
     out_method.mkdir(parents=True, exist_ok=True)
     report_path = out_method / "v109_render_realized_parent_gate_report.json"
