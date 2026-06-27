@@ -10,6 +10,7 @@ Important scope rule:
 
 Current key docs:
 
+- [6-26-v118-v119-FaceGraphResidualTransfer-Milestone-And-Bottleneck-Log.md](6-26-v118-v119-FaceGraphResidualTransfer-Milestone-And-Bottleneck-Log.md) — latest counter milestone after the new prompt: implements empirical co-visible face-graph support expansion, records v118/v119/v120/v121/v122 ablations, identifies transfer pseudo-count blending as non-promoted, and archives the first v122 counter run that beats the local v106 anchor on PSNR/SSIM/LPIPS with qualitative panels
 - [6-26-SPCarNet-vNext-Implementation-Log.md](6-26-SPCarNet-vNext-Implementation-Log.md) — first vNext implementation milestone; records the certified residual surface texture route, new scene/full9 runners, protocol audit, W&B runner logging, smoke/dry-run verification, resource blocker, and next real pilot command
 - [6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md](6-26-SPCarNet-vNext-Feasibility-And-Execution-Plan.md) — feasibility review for `docs/6-26-SPCarNet-vNext-ServerCodexPrompt.md`; concludes the direction is reasonable but must be staged through pilot evidence before full9 or paper claims
 - [6-26-SPCarNet-vNext-SoftShrink-Garden-Milestone-Log.md](6-26-SPCarNet-vNext-SoftShrink-Garden-Milestone-Log.md) — current vNext nonzero garden milestone; face-softshrink accepts a residual atlas and gives tiny held-out gains over the no-op/fallback parent, while clearly marking full9/v106/clean-baseline closure as unfinished

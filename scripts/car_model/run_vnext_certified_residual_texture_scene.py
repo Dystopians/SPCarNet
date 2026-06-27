@@ -286,6 +286,38 @@ def _texture_cmd(
     ]
     if not bool(args.no_target_visible_energy_score):
         cmd.append("--enable_target_visible_energy_score")
+    if bool(args.enable_coview_face_residual_transfer):
+        cmd.extend(
+            [
+                "--enable_coview_face_residual_transfer",
+                "--coview_transfer_max_faces",
+                str(args.coview_transfer_max_faces),
+                "--coview_transfer_neighbor_stride",
+                str(args.coview_transfer_neighbor_stride),
+                "--coview_transfer_min_source_samples",
+                str(args.coview_transfer_min_source_samples),
+                "--coview_transfer_min_source_mean_l1",
+                str(args.coview_transfer_min_source_mean_l1),
+                "--coview_transfer_min_edge_count",
+                str(args.coview_transfer_min_edge_count),
+                "--coview_transfer_min_target_pixels",
+                str(args.coview_transfer_min_target_pixels),
+                "--coview_transfer_min_policy_val_pixels",
+                str(args.coview_transfer_min_policy_val_pixels),
+                "--coview_transfer_max_views",
+                str(args.coview_transfer_max_views),
+                "--coview_transfer_residual_scale",
+                str(args.coview_transfer_residual_scale),
+                "--coview_transfer_synthetic_count",
+                str(args.coview_transfer_synthetic_count),
+                "--coview_transfer_existing_atlas_mode",
+                str(args.coview_transfer_existing_atlas_mode),
+                "--coview_transfer_blend_max_direct_bin_count",
+                str(args.coview_transfer_blend_max_direct_bin_count),
+            ]
+        )
+        if bool(args.coview_transfer_overwrite_existing_atlas):
+            cmd.append("--coview_transfer_overwrite_existing_atlas")
     if bool(args.no_policy_val_ssim_alpha_refinement):
         cmd = [token for token in cmd if token != "--enable_policy_val_ssim_alpha_refinement"]
     if bool(args.no_preacceptance_policy_val_guard_repair):
@@ -473,6 +505,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--support_expansion_max_extra_faces_candidates", default="2048,4096")
     parser.add_argument("--support_expansion_min_face_samples", type=int, default=64)
     parser.add_argument("--target_footprint_residual_debt_match_level", choices=("bin", "face"), default="bin")
+    parser.add_argument("--enable_coview_face_residual_transfer", action="store_true")
+    parser.add_argument("--coview_transfer_max_faces", type=int, default=0)
+    parser.add_argument("--coview_transfer_neighbor_stride", type=int, default=8)
+    parser.add_argument("--coview_transfer_min_source_samples", type=int, default=64)
+    parser.add_argument("--coview_transfer_min_source_mean_l1", type=float, default=0.0)
+    parser.add_argument("--coview_transfer_min_edge_count", type=int, default=8)
+    parser.add_argument("--coview_transfer_min_target_pixels", type=int, default=128)
+    parser.add_argument("--coview_transfer_min_policy_val_pixels", type=int, default=128)
+    parser.add_argument("--coview_transfer_max_views", type=int, default=0)
+    parser.add_argument("--coview_transfer_residual_scale", type=float, default=0.25)
+    parser.add_argument("--coview_transfer_synthetic_count", type=int, default=1)
+    parser.add_argument("--coview_transfer_existing_atlas_mode", choices=("skip", "overwrite", "blend"), default="skip")
+    parser.add_argument("--coview_transfer_blend_max_direct_bin_count", type=int, default=-1)
+    parser.add_argument("--coview_transfer_overwrite_existing_atlas", action="store_true")
     parser.add_argument("--policy_val_stride", type=int, default=4)
     parser.add_argument("--alpha_grid", default="0,0.125,0.25,0.5")
     parser.add_argument("--no_policy_val_ssim_alpha_refinement", action="store_true")

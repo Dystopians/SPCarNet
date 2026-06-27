@@ -872,6 +872,411 @@ def build_target_bin_footprint_stats(
     return samples_by_key, view_count_by_key, summary
 
 
+def geometry_face_mask(z: np.lib.npyio.NpzFile, min_alpha: float) -> np.ndarray:
+    face_id = np.asarray(z["face_id"], dtype=np.int64)
+    mask = face_id >= 0
+    if "barycentric_valid" in z:
+        mask &= np.asarray(z["barycentric_valid"]).astype(bool)
+    if "alpha" in z:
+        mask &= np.asarray(z["alpha"], dtype=np.float32) >= float(min_alpha)
+    if "barycentric" in z:
+        bary = np.asarray(z["barycentric"], dtype=np.float32)
+        if bary.ndim == 3 and bary.shape[0] >= 3:
+            mask &= np.all(np.isfinite(bary), axis=0)
+            mask &= np.all(bary >= -0.05, axis=0)
+            mask &= np.all(bary <= 1.05, axis=0)
+    return mask
+
+
+def build_face_footprint_stats(
+    view_paths: list[Path],
+    *,
+    min_alpha: float,
+    max_views: int = 0,
+) -> tuple[dict[int, int], dict[int, int], dict[str, Any]]:
+    views = list(view_paths)
+    if int(max_views) > 0:
+        views = views[: int(max_views)]
+    samples_by_face: dict[int, int] = {}
+    views_by_face: dict[int, int] = {}
+    views_examined = 0
+    total_valid_pixels = 0
+    for path in views:
+        z = np.load(path)
+        if "face_id" not in z:
+            continue
+        face_id = np.asarray(z["face_id"], dtype=np.int64)
+        mask = geometry_face_mask(z, float(min_alpha))
+        views_examined += 1
+        if not bool(np.any(mask)):
+            continue
+        faces, counts = np.unique(face_id[mask], return_counts=True)
+        for face, count in zip(faces, counts, strict=False):
+            face_i = int(face)
+            if face_i < 0:
+                continue
+            samples_by_face[face_i] = samples_by_face.get(face_i, 0) + int(count)
+            views_by_face[face_i] = views_by_face.get(face_i, 0) + 1
+            total_valid_pixels += int(count)
+    top_faces = sorted(samples_by_face, key=lambda face: samples_by_face[face], reverse=True)[:128]
+    return samples_by_face, views_by_face, {
+        "enabled": True,
+        "mode": "face_footprint_stats",
+        "views_requested": int(len(view_paths)),
+        "views_examined": int(views_examined),
+        "max_views": int(max_views),
+        "covered_faces": int(len(samples_by_face)),
+        "total_valid_pixels": int(total_valid_pixels),
+        "top_faces": [
+            {
+                "face": int(face),
+                "pixels": int(samples_by_face[face]),
+                "views": int(views_by_face.get(face, 0)),
+            }
+            for face in top_faces
+        ],
+    }
+
+
+def build_coview_face_residual_transfer_plan(
+    fit_view_paths: list[Path],
+    target_view_paths: list[Path],
+    *,
+    base_faces: set[int],
+    residual_rgb_key: str,
+    residual_l1_key: str,
+    policy_val_stride: int,
+    min_l1: float,
+    min_alpha: float,
+    max_samples_per_view: int,
+    neighbor_stride: int,
+    min_source_samples: int,
+    min_source_mean_l1: float,
+    min_edge_count: int,
+    min_target_pixels: int,
+    min_policy_val_pixels: int,
+    max_faces: int,
+    max_views: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Plan train-only residual transfer through image-space co-visible face adjacency."""
+    stride = max(0, int(policy_val_stride))
+    neighbor_stride = max(1, int(neighbor_stride))
+    rng = np.random.default_rng(37)
+    fit_paths: list[Path] = []
+    policy_val_paths: list[Path] = []
+    source_counts: dict[int, int] = {}
+    source_l1_sums: dict[int, float] = {}
+    source_rgb_sums: dict[int, np.ndarray] = {}
+    adjacency: dict[int, dict[int, int]] = {}
+
+    def add_edge(a: int, b: int, count: int) -> None:
+        if a < 0 or b < 0 or a == b or count <= 0:
+            return
+        adjacency.setdefault(int(a), {})[int(b)] = adjacency.setdefault(int(a), {}).get(int(b), 0) + int(count)
+        adjacency.setdefault(int(b), {})[int(a)] = adjacency.setdefault(int(b), {}).get(int(a), 0) + int(count)
+
+    for view_index, path in enumerate(tqdm(fit_view_paths, desc="coview transfer graph")):
+        if stride > 1 and view_index % stride == 0:
+            policy_val_paths.append(path)
+            continue
+        fit_paths.append(path)
+        z = np.load(path)
+        if "face_id" not in z:
+            continue
+        face_id = np.asarray(z["face_id"], dtype=np.int64)
+        geom_mask = geometry_face_mask(z, float(min_alpha))
+        sampled_faces = face_id[::neighbor_stride, ::neighbor_stride]
+        sampled_mask = geom_mask[::neighbor_stride, ::neighbor_stride]
+        for lhs, rhs in (
+            (sampled_faces[:, :-1], sampled_faces[:, 1:]),
+            (sampled_faces[:-1, :], sampled_faces[1:, :]),
+        ):
+            if lhs.size == 0 or rhs.size == 0:
+                continue
+            if lhs.shape[0] == sampled_mask.shape[0]:
+                mask_a = sampled_mask[:, :-1]
+                mask_b = sampled_mask[:, 1:]
+            else:
+                mask_a = sampled_mask[:-1, :]
+                mask_b = sampled_mask[1:, :]
+            pair_mask = mask_a & mask_b & (lhs >= 0) & (rhs >= 0) & (lhs != rhs)
+            if not bool(np.any(pair_mask)):
+                continue
+            a = lhs[pair_mask].astype(np.int64)
+            b = rhs[pair_mask].astype(np.int64)
+            lo = np.minimum(a, b)
+            hi = np.maximum(a, b)
+            pairs = np.stack([lo, hi], axis=1)
+            unique_pairs, counts = np.unique(pairs, axis=0, return_counts=True)
+            for pair, count in zip(unique_pairs, counts, strict=False):
+                add_edge(int(pair[0]), int(pair[1]), int(count))
+
+        if residual_l1_key not in z or residual_rgb_key not in z:
+            continue
+        residual_mask = _valid_sample_mask(z, set(), residual_l1_key, min_l1, min_alpha)
+        ys, xs = np.nonzero(residual_mask)
+        if ys.size == 0:
+            continue
+        if max_samples_per_view > 0 and ys.size > int(max_samples_per_view):
+            take = rng.choice(ys.size, size=int(max_samples_per_view), replace=False)
+            local_mask = np.zeros_like(residual_mask, dtype=bool)
+            local_mask[ys[take], xs[take]] = True
+            residual_mask = local_mask
+        faces = face_id[residual_mask]
+        l1 = np.asarray(z[residual_l1_key], dtype=np.float32)[residual_mask].astype(np.float64)
+        residual = np.asarray(z[residual_rgb_key], dtype=np.float32)
+        rgb = np.stack(
+            [residual[0][residual_mask], residual[1][residual_mask], residual[2][residual_mask]],
+            axis=1,
+        ).astype(np.float64)
+        valid = faces >= 0
+        faces = faces[valid]
+        l1 = l1[valid]
+        rgb = rgb[valid]
+        if faces.size == 0:
+            continue
+        unique_faces, inverse = np.unique(faces, return_inverse=True)
+        counts = np.bincount(inverse, minlength=int(unique_faces.size))
+        l1_sums = np.bincount(inverse, weights=l1, minlength=int(unique_faces.size))
+        rgb_sums = [
+            np.bincount(inverse, weights=rgb[:, channel], minlength=int(unique_faces.size))
+            for channel in range(3)
+        ]
+        for idx, face in enumerate(unique_faces):
+            face_i = int(face)
+            count = int(counts[idx])
+            if count <= 0:
+                continue
+            source_counts[face_i] = source_counts.get(face_i, 0) + count
+            source_l1_sums[face_i] = source_l1_sums.get(face_i, 0.0) + float(l1_sums[idx])
+            if face_i not in source_rgb_sums:
+                source_rgb_sums[face_i] = np.zeros(3, dtype=np.float64)
+            source_rgb_sums[face_i] += np.asarray(
+                [float(rgb_sums[channel][idx]) for channel in range(3)],
+                dtype=np.float64,
+            )
+
+    target_pixels, target_views, target_summary = build_face_footprint_stats(
+        list(target_view_paths),
+        min_alpha=float(min_alpha),
+        max_views=int(max_views),
+    )
+    policy_pixels, policy_views, policy_summary = build_face_footprint_stats(
+        policy_val_paths,
+        min_alpha=float(min_alpha),
+        max_views=int(max_views),
+    )
+
+    source_rows: dict[int, dict[str, Any]] = {}
+    for face, count in source_counts.items():
+        if int(count) < int(min_source_samples):
+            continue
+        mean_l1 = float(source_l1_sums.get(face, 0.0) / max(1, int(count)))
+        if mean_l1 < float(min_source_mean_l1):
+            continue
+        mean_rgb = source_rgb_sums[face] / max(1, int(count))
+        source_rows[int(face)] = {
+            "face_id": int(face),
+            "samples": int(count),
+            "mean_l1": float(mean_l1),
+            "mean_rgb": [float(x) for x in mean_rgb.tolist()],
+        }
+
+    best_by_dest: dict[int, dict[str, Any]] = {}
+    for source_face, source in source_rows.items():
+        for dest_face, edge_count in adjacency.get(int(source_face), {}).items():
+            if int(edge_count) < int(min_edge_count):
+                continue
+            if int(target_pixels.get(int(dest_face), 0)) < int(min_target_pixels):
+                continue
+            if int(policy_pixels.get(int(dest_face), 0)) < int(min_policy_val_pixels):
+                continue
+            source_mean_l1 = float(source["mean_l1"])
+            score = (
+                source_mean_l1
+                * math.log1p(float(source["samples"]))
+                * math.log1p(float(edge_count))
+                * math.log1p(float(target_pixels.get(int(dest_face), 0)))
+                * math.log1p(float(policy_pixels.get(int(dest_face), 0)))
+            )
+            row = {
+                "face_id": int(dest_face),
+                "source_face_id": int(source_face),
+                "score": float(score),
+                "edge_count": int(edge_count),
+                "source_samples": int(source["samples"]),
+                "source_mean_l1": float(source_mean_l1),
+                "source_mean_rgb": list(source["mean_rgb"]),
+                "target_pixels": int(target_pixels.get(int(dest_face), 0)),
+                "target_views": int(target_views.get(int(dest_face), 0)),
+                "policy_val_pixels": int(policy_pixels.get(int(dest_face), 0)),
+                "policy_val_views": int(policy_views.get(int(dest_face), 0)),
+                "already_base_face": bool(int(dest_face) in base_faces),
+            }
+            previous = best_by_dest.get(int(dest_face))
+            if previous is None or float(score) > float(previous.get("score", -1.0)):
+                best_by_dest[int(dest_face)] = row
+    rows = sorted(
+        best_by_dest.values(),
+        key=lambda row: (
+            float(row["score"]),
+            int(row["target_pixels"]),
+            int(row["policy_val_pixels"]),
+            float(row["source_mean_l1"]),
+        ),
+        reverse=True,
+    )
+    if int(max_faces) > 0:
+        rows = rows[: int(max_faces)]
+    return rows, {
+        "enabled": True,
+        "mode": "coview_face_residual_transfer",
+        "fit_view_count": int(len(fit_paths)),
+        "policy_val_view_count": int(len(policy_val_paths)),
+        "source_face_count": int(len(source_rows)),
+        "adjacency_source_face_count": int(len(adjacency)),
+        "eligible_transfer_faces": int(len(best_by_dest)),
+        "selected_transfer_faces": int(len(rows)),
+        "base_faces": int(len(base_faces)),
+        "min_source_samples": int(min_source_samples),
+        "min_source_mean_l1": float(min_source_mean_l1),
+        "min_edge_count": int(min_edge_count),
+        "min_target_pixels": int(min_target_pixels),
+        "min_policy_val_pixels": int(min_policy_val_pixels),
+        "neighbor_stride": int(neighbor_stride),
+        "target_footprint": dict(target_summary),
+        "policy_val_footprint": dict(policy_summary),
+        "rank_preview": rows[:64],
+    }
+
+
+def apply_coview_face_residual_transfer(
+    atlas: dict[int, FaceAtlas],
+    transfer_rows: list[dict[str, Any]],
+    *,
+    texture_size: int,
+    residual_scale: float,
+    max_abs_delta_rgb: float,
+    synthetic_count: int,
+    existing_atlas_mode: str,
+    blend_max_direct_bin_count: int,
+) -> dict[str, Any]:
+    applied_rows: list[dict[str, Any]] = []
+    skipped_existing = 0
+    skipped_zero = 0
+    skipped_no_blend_bins = 0
+    overwritten_existing = 0
+    blended_existing = 0
+    created_new = 0
+    size = int(texture_size)
+    mode = str(existing_atlas_mode)
+    max_blend_count = int(blend_max_direct_bin_count)
+    if mode not in {"skip", "overwrite", "blend"}:
+        raise ValueError(f"unknown coview existing atlas mode: {mode}")
+    for row in transfer_rows:
+        face = int(row.get("face_id", -1))
+        if face < 0:
+            continue
+        has_existing = face in atlas
+        if has_existing and mode == "skip":
+            skipped_existing += 1
+            continue
+        rgb = np.asarray(row.get("source_mean_rgb", [0.0, 0.0, 0.0]), dtype=np.float32).reshape(3)
+        delta = clip_delta_rgb(rgb * float(residual_scale), float(max_abs_delta_rgb)).astype(np.float32)
+        if float(np.max(np.abs(delta))) <= 0.0:
+            skipped_zero += 1
+            continue
+        count_value = max(0, int(synthetic_count))
+        synthetic_texture = np.repeat(delta.reshape(1, 1, 3), size, axis=0)
+        synthetic_texture = np.repeat(synthetic_texture, size, axis=1).astype(np.float32)
+        synthetic_counts = np.full((size, size), count_value, dtype=np.int32)
+        if has_existing and mode == "blend":
+            existing = atlas[face]
+            texture = np.asarray(existing.texture, dtype=np.float32)
+            counts = np.asarray(existing.counts, dtype=np.int32)
+            variance = np.asarray(existing.variance, dtype=np.float32)
+            sign_consistency = np.asarray(existing.sign_consistency, dtype=np.float32)
+            if texture.shape[:2] != (size, size):
+                skipped_existing += 1
+                continue
+            eligible_bins = np.ones((size, size), dtype=bool)
+            if max_blend_count >= 0:
+                eligible_bins = counts <= max_blend_count
+            if not bool(np.any(eligible_bins)):
+                skipped_no_blend_bins += 1
+                continue
+            blend_weight = float(count_value) / (np.asarray(counts, dtype=np.float32) + float(count_value) + 1.0e-6)
+            blend_weight = np.clip(blend_weight, 0.0, 1.0).astype(np.float32)
+            blend_weight = np.where(eligible_bins, blend_weight, 0.0).astype(np.float32)
+            texture = ((1.0 - blend_weight[..., None]) * texture) + (blend_weight[..., None] * synthetic_texture)
+            counts = np.asarray(counts + np.where(eligible_bins, synthetic_counts, 0), dtype=np.int32)
+            mean_rgb = np.mean(texture.reshape(-1, 3), axis=0).astype(np.float32)
+            atlas[face] = FaceAtlas(
+                texture=texture.astype(np.float32),
+                counts=counts,
+                variance=variance,
+                sign_consistency=sign_consistency,
+                mean_rgb=mean_rgb,
+                samples=int(existing.samples) + int(count_value * size * size),
+                view_basis_mode=str(existing.view_basis_mode),
+                view_basis_coefficients=existing.view_basis_coefficients,
+                view_basis_support=existing.view_basis_support,
+                view_basis_feature_mean=existing.view_basis_feature_mean,
+                view_basis_feature_std=existing.view_basis_feature_std,
+                view_basis_ood_mode=str(existing.view_basis_ood_mode),
+                view_basis_ood_max_z=float(existing.view_basis_ood_max_z),
+                view_basis_ood_min_std=float(existing.view_basis_ood_min_std),
+                teacher_basis_mode=str(existing.teacher_basis_mode),
+                teacher_basis_coefficients=existing.teacher_basis_coefficients,
+                teacher_basis_feature_mean=existing.teacher_basis_feature_mean,
+                teacher_basis_feature_std=existing.teacher_basis_feature_std,
+                teacher_basis_ood_max_z=float(existing.teacher_basis_ood_max_z),
+                teacher_basis_ood_min_std=float(existing.teacher_basis_ood_min_std),
+                teacher_basis_apply_mode=str(existing.teacher_basis_apply_mode),
+                teacher_basis_blend=float(existing.teacher_basis_blend),
+            )
+            blended_existing += 1
+        else:
+            atlas[face] = FaceAtlas(
+                texture=synthetic_texture,
+                counts=synthetic_counts,
+                variance=np.zeros((size, size, 3), dtype=np.float32),
+                sign_consistency=np.ones((size, size, 3), dtype=np.float32),
+                mean_rgb=delta.astype(np.float32),
+                samples=int(count_value * size * size),
+                view_basis_mode="none",
+                teacher_basis_mode="none",
+            )
+            if has_existing:
+                overwritten_existing += 1
+            else:
+                created_new += 1
+        applied = dict(row)
+        applied["applied_mean_rgb"] = [float(x) for x in delta.tolist()]
+        applied["synthetic_count"] = int(count_value)
+        applied["existing_atlas_mode"] = str(mode)
+        applied["had_existing_atlas"] = bool(has_existing)
+        applied_rows.append(applied)
+    return {
+        "enabled": True,
+        "mode": "coview_face_residual_transfer",
+        "requested_rows": int(len(transfer_rows)),
+        "applied_faces": int(len(applied_rows)),
+        "created_new_faces": int(created_new),
+        "overwritten_existing_atlas_faces": int(overwritten_existing),
+        "blended_existing_atlas_faces": int(blended_existing),
+        "skipped_existing_atlas_faces": int(skipped_existing),
+        "skipped_zero_delta_faces": int(skipped_zero),
+        "skipped_no_blend_bins_faces": int(skipped_no_blend_bins),
+        "residual_scale": float(residual_scale),
+        "synthetic_count": int(synthetic_count),
+        "existing_atlas_mode": str(mode),
+        "blend_max_direct_bin_count": int(max_blend_count),
+        "skip_existing_atlas": bool(mode == "skip"),
+        "applied_preview": applied_rows[:64],
+    }
+
+
 def _normalized_camera_center(z: np.lib.npyio.NpzFile) -> np.ndarray | None:
     if "camera_center" not in z:
         return None
@@ -6339,6 +6744,45 @@ def main() -> int:
             "face/UV bin as train residual debt, or allow train-certified debt to transfer within the same face."
         ),
     )
+    parser.add_argument(
+        "--enable_coview_face_residual_transfer",
+        action="store_true",
+        help=(
+            "Add a train-only co-visible face residual-transfer candidate. Source residuals are learned "
+            "from fit views, destination faces must be target-visible and policy-val-visible, and selection "
+            "still goes through the policy-val certificate."
+        ),
+    )
+    parser.add_argument("--coview_transfer_max_faces", type=int, default=0)
+    parser.add_argument("--coview_transfer_neighbor_stride", type=int, default=8)
+    parser.add_argument("--coview_transfer_min_source_samples", type=int, default=64)
+    parser.add_argument("--coview_transfer_min_source_mean_l1", type=float, default=0.0)
+    parser.add_argument("--coview_transfer_min_edge_count", type=int, default=8)
+    parser.add_argument("--coview_transfer_min_target_pixels", type=int, default=128)
+    parser.add_argument("--coview_transfer_min_policy_val_pixels", type=int, default=128)
+    parser.add_argument("--coview_transfer_max_views", type=int, default=0)
+    parser.add_argument("--coview_transfer_residual_scale", type=float, default=0.25)
+    parser.add_argument("--coview_transfer_synthetic_count", type=int, default=1)
+    parser.add_argument(
+        "--coview_transfer_existing_atlas_mode",
+        choices=("skip", "overwrite", "blend"),
+        default="skip",
+        help=(
+            "How coview transfer handles faces already fitted by the train atlas. "
+            "skip preserves v118 behavior, overwrite replaces the atlas with a synthetic residual, "
+            "and blend injects the transfer residual as pseudo-count evidence."
+        ),
+    )
+    parser.add_argument(
+        "--coview_transfer_blend_max_direct_bin_count",
+        type=int,
+        default=-1,
+        help=(
+            "For blend mode, only inject transfer pseudo-counts into atlas bins whose direct fit count is "
+            "<= this value. -1 blends all bins and preserves the original v119 behavior."
+        ),
+    )
+    parser.add_argument("--coview_transfer_overwrite_existing_atlas", action="store_true")
     parser.add_argument("--policy_val_stride", type=int, default=4)
     parser.add_argument("--alpha_grid", default="0,0.25,0.5,0.75,1.0")
     parser.add_argument("--min_l1", type=float, default=0.0)
@@ -7411,6 +7855,26 @@ def main() -> int:
         parser.error("--target_footprint_min_view_fraction must be in [0, 1]")
     if int(args.target_footprint_max_views) < 0:
         parser.error("--target_footprint_max_views must be >= 0")
+    if int(args.coview_transfer_max_faces) < 0:
+        parser.error("--coview_transfer_max_faces must be >= 0")
+    if int(args.coview_transfer_neighbor_stride) <= 0:
+        parser.error("--coview_transfer_neighbor_stride must be > 0")
+    if int(args.coview_transfer_min_source_samples) <= 0:
+        parser.error("--coview_transfer_min_source_samples must be > 0")
+    if float(args.coview_transfer_min_source_mean_l1) < 0.0:
+        parser.error("--coview_transfer_min_source_mean_l1 must be >= 0")
+    if int(args.coview_transfer_min_edge_count) <= 0:
+        parser.error("--coview_transfer_min_edge_count must be > 0")
+    if int(args.coview_transfer_min_target_pixels) <= 0:
+        parser.error("--coview_transfer_min_target_pixels must be > 0")
+    if int(args.coview_transfer_min_policy_val_pixels) <= 0:
+        parser.error("--coview_transfer_min_policy_val_pixels must be > 0")
+    if int(args.coview_transfer_max_views) < 0:
+        parser.error("--coview_transfer_max_views must be >= 0")
+    if float(args.coview_transfer_residual_scale) < 0.0:
+        parser.error("--coview_transfer_residual_scale must be >= 0")
+    if int(args.coview_transfer_synthetic_count) < 0:
+        parser.error("--coview_transfer_synthetic_count must be >= 0")
     if not 0.0 <= float(args.target_footprint_tail_risk_min_positive_view_fraction) <= 1.0:
         parser.error("--target_footprint_tail_risk_min_positive_view_fraction must be in [0, 1]")
     if bool(args.enable_target_footprint_tail_risk_certificate) and not bool(
@@ -7557,6 +8021,66 @@ def main() -> int:
                 "rank_preview": list(rank_summary.get("rank_preview", [])),
             }
     carrier_summary["support_expansion"] = support_expansion_summary
+    coview_transfer_summary: dict[str, Any] = {
+        "enabled": bool(args.enable_coview_face_residual_transfer),
+        "mode": "coview_face_residual_transfer",
+        "selected_transfer_faces": 0,
+    }
+    if bool(args.enable_coview_face_residual_transfer):
+        target_views_for_transfer = evidence_views(target_evidence)
+        if not target_views_for_transfer:
+            raise FileNotFoundError(f"no target npz views found in {target_evidence}")
+        transfer_rows, coview_transfer_summary = build_coview_face_residual_transfer_plan(
+            fit_views_all,
+            target_views_for_transfer,
+            base_faces=set(base_candidate_faces),
+            residual_rgb_key=str(args.residual_rgb_key),
+            residual_l1_key=str(args.residual_l1_key),
+            policy_val_stride=int(args.policy_val_stride),
+            min_l1=float(args.min_l1),
+            min_alpha=float(args.min_alpha),
+            max_samples_per_view=int(args.max_samples_per_view),
+            neighbor_stride=int(args.coview_transfer_neighbor_stride),
+            min_source_samples=int(args.coview_transfer_min_source_samples),
+            min_source_mean_l1=float(args.coview_transfer_min_source_mean_l1),
+            min_edge_count=int(args.coview_transfer_min_edge_count),
+            min_target_pixels=int(args.coview_transfer_min_target_pixels),
+            min_policy_val_pixels=int(args.coview_transfer_min_policy_val_pixels),
+            max_faces=int(args.coview_transfer_max_faces),
+            max_views=int(args.coview_transfer_max_views),
+        )
+        transfer_faces = {int(row["face_id"]) for row in transfer_rows}
+        coview_transfer_summary = dict(coview_transfer_summary)
+        coview_transfer_summary["transfer_rows"] = list(transfer_rows)
+        coview_transfer_summary["residual_scale"] = float(args.coview_transfer_residual_scale)
+        coview_transfer_summary["synthetic_count"] = int(args.coview_transfer_synthetic_count)
+        coview_transfer_summary["blend_max_direct_bin_count"] = int(args.coview_transfer_blend_max_direct_bin_count)
+        coview_existing_atlas_mode = str(args.coview_transfer_existing_atlas_mode)
+        if bool(args.coview_transfer_overwrite_existing_atlas):
+            coview_existing_atlas_mode = "overwrite"
+        coview_transfer_summary["existing_atlas_mode"] = str(coview_existing_atlas_mode)
+        coview_transfer_summary["overwrite_existing_atlas"] = bool(coview_existing_atlas_mode == "overwrite")
+        carrier_summary["coview_face_residual_transfer"] = dict(coview_transfer_summary)
+        if transfer_rows:
+            expanded_faces = set(base_candidate_faces)
+            expanded_faces.update(transfer_faces)
+            support_candidate_sets.append(
+                {
+                    "support_mode": "coview_face_residual_transfer",
+                    "faces": expanded_faces,
+                    "summary": {
+                        "enabled": True,
+                        "mode": "coview_face_residual_transfer",
+                        "base_faces": int(len(base_candidate_faces)),
+                        "added_faces": int(len(expanded_faces - set(base_candidate_faces))),
+                        "candidate_faces_after_expansion": int(len(expanded_faces)),
+                        "transfer_row_count": int(len(transfer_rows)),
+                        "coview_transfer": dict(coview_transfer_summary),
+                    },
+                }
+            )
+    else:
+        carrier_summary["coview_face_residual_transfer"] = dict(coview_transfer_summary)
     target_support_prerank_summary: dict[str, Any] = {
         "enabled": False,
         "mode": "target_support_prerank_face_proxy",
@@ -7810,6 +8334,29 @@ def main() -> int:
         cand_fit_summary["max_abs_delta_rgb_candidates"] = [
             float(x) for x in max_abs_delta_rgb_candidates
         ]
+        coview_transfer_payload = dict(support_summary.get("coview_transfer") or {})
+        if bool(coview_transfer_payload.get("enabled", False)):
+            transfer_rows = list(coview_transfer_payload.get("transfer_rows", []))
+            coview_application = apply_coview_face_residual_transfer(
+                cand_atlas,
+                transfer_rows,
+                texture_size=int(texture_size),
+                residual_scale=float(args.coview_transfer_residual_scale),
+                max_abs_delta_rgb=float(max_abs_delta_rgb_candidate),
+                synthetic_count=int(args.coview_transfer_synthetic_count),
+                existing_atlas_mode=str(coview_transfer_payload.get("existing_atlas_mode", "skip")),
+                blend_max_direct_bin_count=int(coview_transfer_payload.get("blend_max_direct_bin_count", -1)),
+            )
+            cand_fit_summary["coview_face_residual_transfer"] = {
+                "plan": coview_transfer_payload,
+                "application": coview_application,
+            }
+        else:
+            cand_fit_summary["coview_face_residual_transfer"] = {
+                "enabled": False,
+                "mode": "coview_face_residual_transfer",
+                "reason": "not_requested_for_candidate",
+            }
         alpha_candidates = parse_alpha_grid(args.alpha_grid)
         alpha_calibration_summary = {"enabled": False, "alpha_grid": list(alpha_candidates)}
         local_alpha_profile: dict[str, Any] = {"enabled": False, "alpha_grid": list(alpha_candidates)}
