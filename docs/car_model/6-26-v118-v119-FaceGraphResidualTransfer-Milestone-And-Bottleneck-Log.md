@@ -99,6 +99,8 @@ Fair anchor path:
 | v120 lowbin skip | `/dev/shm/peilincai_spcarnet_v120_counter_coview_lowbin_skip_20260626_1845/counter` | 27.499989 | 0.867463 | 0.238734 | 0.020591568 | 0.010340460 | coview_face_residual_transfer | 512 planned, 512 skipped |
 | v121 lowbin skip alpha125 | `/dev/shm/peilincai_spcarnet_v121_counter_coview_lowbin_skip_alpha125_20260626_1905/counter` | 27.500105 | 0.867516 | 0.238785 | 0.020591527 | 0.005549537 | coview_face_residual_transfer | alpha `0.125`, 512 planned/skipped |
 | v122 lowbin skip alpha1875 | `/dev/shm/peilincai_spcarnet_v122_counter_coview_lowbin_skip_alpha1875_20260626_1925/counter` | 27.500210 | 0.867499 | 0.238755 | 0.018806986 | 0.007708716 | coview_face_residual_transfer | alpha `0.1875`, 512 planned/skipped |
+| flowers v115 anchor | `/dev/shm/peilincai_spcarnet_v115_v100anchor_flowers_resize2_20260626_1558/flowers` | 20.452776 | 0.549059 | 0.355544 | 0.000000000 | n/a | base_carrier | fallback/no-op |
+| flowers v122 fixed policy | `/dev/shm/peilincai_spcarnet_v122_flowers_coview_lowbin_skip_alpha1875_20260626_1945/flowers` | 20.452776 | 0.549059 | 0.355544 | 0.000000000 | n/a | base_carrier | rejected/fallback/no-op |
 
 Interpretation before v119 finishes:
 
@@ -120,6 +122,7 @@ Interpretation before v119 finishes:
   - PNG-quantized changed fraction: `0.007708716`
 
 This is still a counter-only milestone. It is not yet a full paper endpoint.
+- A fixed-policy flowers replay with the same v122 settings is safe but no-op: both base and coview candidates are rejected and the run falls back to the parent, matching the v115 flowers anchor exactly. This is useful negative evidence: v122 has not generalized as a fixed policy.
 
 ## Running v119 Commands
 
@@ -256,6 +259,39 @@ docs/car_model/vnext_artifacts/counter_v122_alpha1875_panel_20260626/counter_v12
 docs/car_model/vnext_artifacts/counter_v122_alpha1875_panel_20260626/counter_v122_vs_v106_all_positive_panel_manifest.json
 ```
 
+### Flowers fixed-policy replay
+
+Output root:
+
+```text
+/dev/shm/peilincai_spcarnet_v122_flowers_coview_lowbin_skip_alpha1875_20260626_1945/flowers
+```
+
+This reuses available strict v115/v100-anchor flowers evidence and applies the same v122 counter policy:
+
+```bash
+--alpha_grid 0,0.125,0.1875
+--policy_val_ssim_alpha_refinement_steps 0
+--coview_transfer_max_faces 512
+--coview_transfer_neighbor_stride 4
+--coview_transfer_min_source_samples 128
+--coview_transfer_min_source_mean_l1 0.005
+--coview_transfer_min_edge_count 4
+--coview_transfer_min_target_pixels 64
+--coview_transfer_min_policy_val_pixels 64
+--coview_transfer_existing_atlas_mode skip
+```
+
+Result:
+
+```text
+PSNR  20.452775955200195
+SSIM  0.5490592122077942
+LPIPS 0.35554420948028564
+```
+
+The policy rejects and falls back to no-op, so it ties the v115 flowers anchor. This is not a failure of safety, but it is a failure of cross-scene improvement.
+
 ## Lessons and Claim Boundary
 
 The current evidence supports this claim:
@@ -269,7 +305,7 @@ The current evidence does **not** yet support this claim:
 Remaining required evidence:
 
 1. The promoted story must be renamed honestly: current evidence favors empirical co-visible graph support expansion plus alpha calibration, not residual pseudo-count transfer.
-2. The v122 counter result must be replicated on more scenes before any paper-level story is promoted.
+2. The v122 counter result must be replicated on more scenes before any paper-level story is promoted. The first fixed-policy flowers replay ties/no-ops, so this remains open.
 3. Additional ablations should separate `max_faces=512`, `neighbor_stride=4`, `min_source_mean_l1=0.005`, and alpha `0.1875`.
 4. Qualitative outputs should be expanded beyond counter and selected for visibly meaningful differences, not just metric-positive micro-deltas.
 5. The method needs a fixed adaptive policy that chooses alpha without hand-picking `0.1875` per scene.
