@@ -241,6 +241,177 @@ def evidence_views(evidence_dir: Path) -> list[Path]:
     return sorted(evidence_dir.glob("*.npz"))
 
 
+def plan_adaptive_texture_size_ladder(
+    view_paths: list[Path],
+    candidate_faces: set[int],
+    base_texture_sizes: list[int],
+    *,
+    residual_l1_key: str,
+    policy_val_stride: int,
+    min_l1: float,
+    min_alpha: float,
+    max_samples_per_view: int,
+    max_size: int,
+    min_fit_samples_per_face: float,
+    min_samples_per_current_bin: float,
+    min_mean_l1: float,
+    support_modes: list[str] | None = None,
+) -> tuple[list[int], dict[str, Any]]:
+    """Plan a texture-size ladder from train-fit residual density only."""
+    base_sizes = sorted(set(int(x) for x in base_texture_sizes if int(x) > 0))
+    if not base_sizes:
+        base_sizes = [16]
+    candidate_faces_set = set(int(face) for face in candidate_faces)
+    support_mode_names = sorted(set(str(mode) for mode in (support_modes or []) if str(mode)))
+    summary: dict[str, Any] = {
+        "enabled": True,
+        "mode": "train_fit_residual_density_ladder",
+        "capacity_candidate_generation_scope": "train_fit_residual_density_plus_gt_free_support_union",
+        "final_texture_size_selection_scope": "train_policy_val_over_train_generated_candidates",
+        "base_texture_size_candidates": list(base_sizes),
+        "planned_texture_size_candidates": list(base_sizes),
+        "max_size": int(max_size),
+        "input_view_count": int(len(view_paths)),
+        "policy_val_stride": int(policy_val_stride),
+        "fit_split_rule": "skip views where view_index % policy_val_stride == 0 when stride > 1",
+        "residual_l1_key": str(residual_l1_key),
+        "uses_policy_val_gt": False,
+        "uses_target_or_test_gt": False,
+        "uses_target_geometry_or_visibility": bool(
+            any("target" in mode or "coview" in mode for mode in support_mode_names)
+        ),
+        "support_modes": support_mode_names,
+        "support_union_faces_sha1": face_set_sha1(candidate_faces_set),
+        "candidate_faces": int(len(candidate_faces_set)),
+        "added_texture_size_candidates": [],
+        "rejected_texture_size_candidates": [],
+        "reason": "",
+    }
+    max_size = int(max_size)
+    if max_size <= max(base_sizes):
+        summary["reason"] = "max_size_not_larger_than_existing_candidates"
+        return base_sizes, summary
+    if not view_paths or not candidate_faces_set:
+        summary["reason"] = "no_fit_views_or_candidate_faces"
+        return base_sizes, summary
+
+    current_size = max(base_sizes)
+    rng = np.random.default_rng(59)
+    stride = max(0, int(policy_val_stride))
+    total_samples = 0
+    total_l1 = 0.0
+    fit_view_count = 0
+    skipped_policy_val_views = 0
+    active_faces: set[int] = set()
+    occupied_keys: set[int] = set()
+    bins_per_face = int(current_size) * int(current_size)
+
+    for view_index, path in enumerate(tqdm(view_paths, desc="adaptive texture-size ladder")):
+        if stride > 1 and view_index % stride == 0:
+            skipped_policy_val_views += 1
+            continue
+        fit_view_count += 1
+        with np.load(path) as z:
+            if residual_l1_key not in z or "face_id" not in z or "barycentric" not in z:
+                continue
+            mask = _valid_sample_mask(z, candidate_faces_set, residual_l1_key, min_l1, min_alpha)
+            ys, xs = np.nonzero(mask)
+            if ys.size == 0:
+                continue
+            if max_samples_per_view > 0 and ys.size > int(max_samples_per_view):
+                take = rng.choice(ys.size, size=int(max_samples_per_view), replace=False)
+                local_mask = np.zeros_like(mask, dtype=bool)
+                local_mask[ys[take], xs[take]] = True
+                mask = local_mask
+            face_ids = np.asarray(z["face_id"], dtype=np.int64)[mask]
+            if face_ids.size == 0:
+                continue
+            l1 = np.asarray(z[residual_l1_key], dtype=np.float32)[mask]
+            bin_mask = mask
+            total_samples += int(face_ids.size)
+            total_l1 += float(np.sum(l1.astype(np.float64)))
+            active_faces.update(int(face) for face in np.unique(face_ids) if int(face) >= 0)
+            bary = np.asarray(z["barycentric"], dtype=np.float32)
+            ubin, vbin = _uv_bins(bary, bin_mask, int(current_size))
+            bin_face_ids = np.asarray(z["face_id"], dtype=np.int64)[bin_mask]
+            keys = bin_face_ids.astype(np.int64) * int(bins_per_face) + (
+                vbin.astype(np.int64) * int(current_size) + ubin.astype(np.int64)
+            )
+            occupied_keys.update(int(key) for key in np.unique(keys))
+
+    active_face_count = int(len(active_faces))
+    mean_l1 = float(total_l1 / max(1, total_samples))
+    samples_per_active_face = float(total_samples / max(1, active_face_count))
+    samples_per_current_bin = float(total_samples / max(1, active_face_count * bins_per_face))
+    occupied_bin_fraction = float(len(occupied_keys) / max(1, active_face_count * bins_per_face))
+    summary.update(
+        {
+            "fit_view_count": int(fit_view_count),
+            "skipped_policy_val_views": int(skipped_policy_val_views),
+            "total_fit_samples": int(total_samples),
+            "active_face_count": int(active_face_count),
+            "current_texture_size": int(current_size),
+            "current_bins_per_face": int(bins_per_face),
+            "occupied_bin_count": int(len(occupied_keys)),
+            "occupied_bin_fraction": float(occupied_bin_fraction),
+            "samples_per_active_face": float(samples_per_active_face),
+            "samples_per_current_bin": float(samples_per_current_bin),
+            "mean_residual_l1": float(mean_l1),
+            "min_fit_samples_per_face": float(min_fit_samples_per_face),
+            "min_samples_per_current_bin": float(min_samples_per_current_bin),
+            "min_mean_l1": float(min_mean_l1),
+        }
+    )
+    reasons = []
+    if total_samples <= 0 or active_face_count <= 0:
+        reasons.append("no_active_train_fit_samples")
+    if samples_per_active_face < float(min_fit_samples_per_face):
+        reasons.append("insufficient_samples_per_active_face")
+    if samples_per_current_bin < float(min_samples_per_current_bin):
+        reasons.append("insufficient_samples_per_current_bin")
+    if mean_l1 < float(min_mean_l1):
+        reasons.append("mean_residual_l1_below_threshold")
+
+    planned = list(base_sizes)
+    added: list[int] = []
+    rejected_sizes: list[dict[str, Any]] = []
+    if not reasons:
+        next_size = current_size * 2
+        while next_size <= max_size:
+            projected_bins_per_face = int(next_size) * int(next_size)
+            projected_samples_per_bin = float(
+                total_samples / max(1, active_face_count * projected_bins_per_face)
+            )
+            decision = {
+                "texture_size": int(next_size),
+                "projected_bins_per_face": int(projected_bins_per_face),
+                "projected_samples_per_bin": float(projected_samples_per_bin),
+                "min_samples_per_bin": float(min_samples_per_current_bin),
+            }
+            if projected_samples_per_bin < float(min_samples_per_current_bin):
+                decision["accepted"] = False
+                decision["reason"] = "projected_samples_per_bin_below_threshold"
+                rejected_sizes.append(decision)
+                break
+            decision["accepted"] = True
+            decision["reason"] = "projected_density_passed"
+            if next_size not in planned:
+                planned.append(int(next_size))
+                added.append(int(next_size))
+            next_size *= 2
+        summary["reason"] = (
+            "expanded_high_density_train_fit_residual_capacity"
+            if added
+            else "not_expanded_no_projected_size_met_density"
+        )
+    else:
+        summary["reason"] = "not_expanded_" + ",".join(reasons)
+    summary["added_texture_size_candidates"] = list(added)
+    summary["rejected_texture_size_candidates"] = rejected_sizes
+    summary["planned_texture_size_candidates"] = sorted(set(planned))
+    return sorted(set(planned)), summary
+
+
 def load_carrier_faces(path: Path, max_carriers: int, max_faces_per_carrier: int, max_faces: int) -> tuple[set[int], dict[str, Any]]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     carriers = list(payload.get("carriers") or [])
@@ -1902,7 +2073,11 @@ def _allowed_faces_from_gain_guard(profile: dict[str, Any] | None) -> set[int] |
 def _allowed_bins_from_uncertainty_guard(profile: dict[str, Any] | None) -> dict[int, set[int]] | None:
     if not profile or not bool(profile.get("enabled", False)):
         return None
-    if str(profile.get("mode", "")) != "policy_val_bin_uncertainty_guard":
+    if str(profile.get("mode", "")) not in {
+        "policy_val_bin_uncertainty_guard",
+        "policy_val_sparse_residual_materialization",
+        "policy_val_sparse_residual_materialization_and_bin_uncertainty_guard",
+    }:
         return None
     raw = profile.get("allowed_bins_by_face", {}) or {}
     if not isinstance(raw, dict):
@@ -3038,6 +3213,8 @@ def evaluate_policy_val(
     policy_val_ssim_max_size: int,
     enable_policy_val_image_l1: bool,
     policy_val_l1_max_size: int,
+    enable_policy_val_image_lpips: bool,
+    policy_val_lpips_max_size: int,
     local_alpha_profile: dict[str, Any] | None = None,
     face_gain_guard_profile: dict[str, Any] | None = None,
     bin_uncertainty_guard_profile: dict[str, Any] | None = None,
@@ -3055,6 +3232,10 @@ def evaluate_policy_val(
     l1_gains_by_alpha: dict[float, list[float]] = {float(alpha): [] for alpha in alpha_grid}
     l1_before_by_alpha: dict[float, list[float]] = {float(alpha): [] for alpha in alpha_grid}
     l1_after_by_alpha: dict[float, list[float]] = {float(alpha): [] for alpha in alpha_grid}
+    lpips_gains_by_alpha: dict[float, list[float]] = {float(alpha): [] for alpha in alpha_grid}
+    lpips_before_by_alpha: dict[float, list[float]] = {float(alpha): [] for alpha in alpha_grid}
+    lpips_after_by_alpha: dict[float, list[float]] = {float(alpha): [] for alpha in alpha_grid}
+    lpips_model = build_lpips_model() if bool(enable_policy_val_image_lpips) else None
     face_count = set()
     for path in tqdm(val_views, desc="policy-val atlas"):
         z = np.load(path)
@@ -3089,6 +3270,14 @@ def evaluate_policy_val(
                 np.asarray(z["rgb_gt"], dtype=np.float32),
                 int(policy_val_l1_max_size),
             )
+        view_lpips_before = None
+        if bool(enable_policy_val_image_lpips) and "rgb_render" in z and "rgb_gt" in z:
+            view_lpips_before = image_lpips_chw(
+                np.asarray(z["rgb_render"], dtype=np.float32),
+                np.asarray(z["rgb_gt"], dtype=np.float32),
+                int(policy_val_lpips_max_size),
+                lpips_model,
+            )
         for alpha in alpha_grid:
             pred, _valid = predict_delta_for_npz(
                 z,
@@ -3121,8 +3310,10 @@ def evaluate_policy_val(
             view_ssim_gain = None
             view_l1_after = None
             view_l1_gain = None
+            view_lpips_after = None
+            view_lpips_gain = None
             adapted = None
-            if view_ssim_before is not None or view_l1_before is not None:
+            if view_ssim_before is not None or view_l1_before is not None or view_lpips_before is not None:
                 adapted = np.clip(np.asarray(z["rgb_render"], dtype=np.float32) + pred, 0.0, 1.0)
             if view_ssim_before is not None and adapted is not None:
                 view_ssim_after = image_ssim_chw(
@@ -3144,6 +3335,17 @@ def evaluate_policy_val(
                 l1_gains_by_alpha[float(alpha)].append(view_l1_gain)
                 l1_before_by_alpha[float(alpha)].append(float(view_l1_before))
                 l1_after_by_alpha[float(alpha)].append(float(view_l1_after))
+            if view_lpips_before is not None and adapted is not None:
+                view_lpips_after = image_lpips_chw(
+                    adapted,
+                    np.asarray(z["rgb_gt"], dtype=np.float32),
+                    int(policy_val_lpips_max_size),
+                    lpips_model,
+                )
+                view_lpips_gain = float(view_lpips_before - view_lpips_after)
+                lpips_gains_by_alpha[float(alpha)].append(view_lpips_gain)
+                lpips_before_by_alpha[float(alpha)].append(float(view_lpips_before))
+                lpips_after_by_alpha[float(alpha)].append(float(view_lpips_after))
             per_view_by_alpha[float(alpha)].append(
                 {
                     "view": path.stem,
@@ -3157,6 +3359,9 @@ def evaluate_policy_val(
                     "image_l1_before": view_l1_before,
                     "image_l1_after": view_l1_after,
                     "image_l1_gain": view_l1_gain,
+                    "lpips_before": view_lpips_before,
+                    "lpips_after": view_lpips_after,
+                    "lpips_gain": view_lpips_gain,
                 }
             )
     if not residual_chunks:
@@ -3237,6 +3442,29 @@ def evaluate_policy_val(
                 "image_l1_min_view_gain": 0.0,
                 "image_l1_cvar20_view_gain": 0.0,
             }
+        lpips_gains = np.asarray(lpips_gains_by_alpha.get(float(alpha), []), dtype=np.float64)
+        if lpips_gains.size:
+            sorted_lpips_gains = np.sort(lpips_gains)
+            cvar_count = max(1, int(math.ceil(0.20 * float(sorted_lpips_gains.size))))
+            lpips_stats = {
+                "lpips_view_count": int(lpips_gains.size),
+                "lpips_before": float(np.mean(lpips_before_by_alpha[float(alpha)])),
+                "lpips_after": float(np.mean(lpips_after_by_alpha[float(alpha)])),
+                "lpips_gain": float(np.mean(lpips_gains)),
+                "lpips_positive_view_fraction": float(np.mean(lpips_gains > 0.0)),
+                "lpips_min_view_gain": float(np.min(lpips_gains)),
+                "lpips_cvar20_view_gain": float(np.mean(sorted_lpips_gains[:cvar_count])),
+            }
+        else:
+            lpips_stats = {
+                "lpips_view_count": 0,
+                "lpips_before": 0.0,
+                "lpips_after": 0.0,
+                "lpips_gain": 0.0,
+                "lpips_positive_view_fraction": 0.0,
+                "lpips_min_view_gain": 0.0,
+                "lpips_cvar20_view_gain": 0.0,
+            }
         row = {
             "alpha": float(alpha),
             "mse_before": mse_before,
@@ -3246,6 +3474,7 @@ def evaluate_policy_val(
             **view_stats,
             **ssim_stats,
             **l1_stats,
+            **lpips_stats,
         }
         rows.append(row)
         if best is None or row["relative_gain"] > best["relative_gain"]:
@@ -4274,6 +4503,156 @@ def build_policy_val_bin_uncertainty_guard_profile(
         "worst_bins": rows_by_gain[:32],
         "best_sampled_bins": rows_by_samples[:32],
     }
+
+
+def select_sparse_materialization_seed(
+    policy_payload: dict[str, Any],
+    *,
+    min_relative_gain: float,
+) -> dict[str, Any]:
+    if not isinstance(policy_payload, dict) or not bool(policy_payload.get("enabled", False)):
+        return {}
+    best = policy_payload.get("best", {})
+    if isinstance(best, dict):
+        alpha = float(best.get("alpha", 0.0))
+        if alpha > 0.0 and float(best.get("relative_gain", -1.0)) >= float(min_relative_gain):
+            return dict(best)
+    rows = [row for row in policy_payload.get("rows", []) if isinstance(row, dict)]
+    candidates = []
+    for row in rows:
+        alpha = float(row.get("alpha", 0.0))
+        if alpha <= 0.0:
+            continue
+        if float(row.get("relative_gain", -1.0)) < float(min_relative_gain):
+            continue
+        candidates.append(row)
+    if not candidates:
+        return {}
+    return max(
+        candidates,
+        key=lambda row: (
+            float(row.get("relative_gain", -1.0)),
+            float(row.get("ssim_gain", 0.0)),
+            float(row.get("image_l1_gain", 0.0)),
+            -float(row.get("alpha", 0.0)),
+        ),
+    )
+
+
+def intersect_bin_guard_profiles(
+    sparse_profile: dict[str, Any],
+    bin_guard_profile: dict[str, Any],
+) -> dict[str, Any]:
+    sparse_bins = _allowed_bins_from_uncertainty_guard(sparse_profile)
+    guard_bins = _allowed_bins_from_uncertainty_guard(bin_guard_profile)
+    if sparse_bins is None:
+        return dict(bin_guard_profile)
+    if guard_bins is None:
+        return dict(sparse_profile)
+    allowed_bins_by_face: dict[str, list[int]] = {}
+    for face, sparse_allowed in sparse_bins.items():
+        guard_allowed = guard_bins.get(int(face))
+        if not guard_allowed:
+            continue
+        intersection = sorted(int(bin_id) for bin_id in sparse_allowed.intersection(guard_allowed))
+        if intersection:
+            allowed_bins_by_face[str(int(face))] = intersection
+    allowed_count = int(sum(len(bins) for bins in allowed_bins_by_face.values()))
+    merged = dict(bin_guard_profile)
+    merged["enabled"] = allowed_count > 0
+    merged["mode"] = "policy_val_sparse_residual_materialization_and_bin_uncertainty_guard"
+    merged["allowed_bins_by_face"] = allowed_bins_by_face
+    merged["allowed_bin_count"] = int(allowed_count)
+    merged["allowed_face_count"] = int(len(allowed_bins_by_face))
+    merged["sparse_materialization_intersection"] = {
+        "enabled": bool(sparse_profile.get("enabled", False)),
+        "sparse_allowed_bin_count": int(sparse_profile.get("allowed_bin_count", 0) or 0),
+        "bin_guard_allowed_bin_count": int(bin_guard_profile.get("allowed_bin_count", 0) or 0),
+        "intersection_allowed_bin_count": int(allowed_count),
+    }
+    if allowed_count <= 0:
+        merged["decision"] = "disabled_no_sparse_bin_guard_intersection"
+        merged["reason"] = "sparse_materialization_and_bin_uncertainty_guard_intersection_empty"
+    return merged
+
+
+def policy_val_sparse_materialization_profile(
+    val_views: list[Path],
+    atlas: dict[int, FaceAtlas],
+    policy_payload: dict[str, Any],
+    *,
+    residual_rgb_key: str,
+    residual_l1_key: str,
+    min_l1: float,
+    min_alpha: float,
+    max_abs_delta_rgb: float,
+    max_samples_per_view: int,
+    min_atlas_bin_count: int,
+    min_atlas_face_samples: int,
+    max_atlas_bin_rgb_variance: float,
+    min_atlas_bin_sign_consistency: float,
+    atlas_confidence_mode: str,
+    atlas_confidence_count_scale: float,
+    atlas_confidence_empty_bin: float,
+    atlas_confidence_variance_scale: float,
+    atlas_confidence_sign_power: float,
+    atlas_confidence_face_sample_scale: float,
+    min_atlas_confidence: float,
+    local_alpha_profile: dict[str, Any] | None,
+    face_gain_guard_profile: dict[str, Any] | None,
+    seed_min_relative_gain: float,
+    min_bin_samples: int,
+    min_relative_gain: float,
+    min_positive_view_fraction: float,
+    max_mean_variance: float,
+    min_mean_sign_consistency: float,
+) -> dict[str, Any]:
+    seed = select_sparse_materialization_seed(
+        policy_payload,
+        min_relative_gain=float(seed_min_relative_gain),
+    )
+    if not seed:
+        return {
+            "enabled": False,
+            "mode": "policy_val_sparse_residual_materialization",
+            "reason": "no_positive_nonzero_policy_val_seed",
+            "seed_min_relative_gain": float(seed_min_relative_gain),
+        }
+    profile = build_policy_val_bin_uncertainty_guard_profile(
+        val_views,
+        atlas,
+        residual_rgb_key=str(residual_rgb_key),
+        residual_l1_key=str(residual_l1_key),
+        alpha=float(seed.get("alpha", 0.0)),
+        min_l1=float(min_l1),
+        min_alpha=float(min_alpha),
+        max_abs_delta_rgb=float(max_abs_delta_rgb),
+        max_samples_per_view=int(max_samples_per_view),
+        min_atlas_bin_count=int(min_atlas_bin_count),
+        min_atlas_face_samples=int(min_atlas_face_samples),
+        max_atlas_bin_rgb_variance=float(max_atlas_bin_rgb_variance),
+        min_atlas_bin_sign_consistency=float(min_atlas_bin_sign_consistency),
+        atlas_confidence_mode=str(atlas_confidence_mode),
+        atlas_confidence_count_scale=float(atlas_confidence_count_scale),
+        atlas_confidence_empty_bin=float(atlas_confidence_empty_bin),
+        atlas_confidence_variance_scale=float(atlas_confidence_variance_scale),
+        atlas_confidence_sign_power=float(atlas_confidence_sign_power),
+        atlas_confidence_face_sample_scale=float(atlas_confidence_face_sample_scale),
+        min_atlas_confidence=float(min_atlas_confidence),
+        local_alpha_profile=local_alpha_profile,
+        face_gain_guard_profile=face_gain_guard_profile,
+        min_bin_samples=int(min_bin_samples),
+        min_relative_gain=float(min_relative_gain),
+        min_positive_view_fraction=float(min_positive_view_fraction),
+        max_mean_variance=float(max_mean_variance),
+        min_mean_sign_consistency=float(min_mean_sign_consistency),
+    )
+    profile["mode"] = "policy_val_sparse_residual_materialization"
+    profile["compatible_predict_mode"] = "policy_val_bin_uncertainty_guard"
+    profile["seed_policy_val_row"] = dict(seed)
+    profile["seed_alpha"] = float(seed.get("alpha", 0.0))
+    profile["seed_min_relative_gain"] = float(seed_min_relative_gain)
+    return profile
 
 
 def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
@@ -5811,6 +6190,35 @@ def image_l1_chw(render: np.ndarray, gt: np.ndarray, max_size: int) -> float:
     return float(torch.mean(torch.abs(render_t - gt_t)).detach().cpu().item())
 
 
+def build_lpips_model():
+    from lpipsPyTorch.modules.lpips import LPIPS
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = LPIPS("vgg").to(device).eval()
+    for param in model.parameters():
+        param.requires_grad_(False)
+    return model
+
+
+def image_lpips_chw(render: np.ndarray, gt: np.ndarray, max_size: int, lpips_model) -> float:
+    if lpips_model is None:
+        raise RuntimeError("LPIPS policy-val gate requested but LPIPS model is not initialized")
+    render_t = torch.from_numpy(np.asarray(render, dtype=np.float32)).unsqueeze(0)
+    gt_t = torch.from_numpy(np.asarray(gt, dtype=np.float32)).unsqueeze(0)
+    device = next(lpips_model.parameters()).device
+    render_t = render_t.to(device)
+    gt_t = gt_t.to(device)
+    if int(max_size) > 0:
+        _, _, h, w = render_t.shape
+        scale = min(1.0, float(max_size) / float(max(h, w)))
+        if scale < 1.0:
+            size = (max(1, int(round(h * scale))), max(1, int(round(w * scale))))
+            render_t = F.interpolate(render_t, size=size, mode="bilinear", align_corners=False)
+            gt_t = F.interpolate(gt_t, size=size, mode="bilinear", align_corners=False)
+    with torch.no_grad():
+        return float(lpips_model(render_t, gt_t).detach().mean().cpu().item())
+
+
 def apply_to_target(
     target_views: list[Path],
     atlas: dict[int, FaceAtlas],
@@ -6362,6 +6770,7 @@ def write_report(path: Path, audit: dict[str, Any]) -> None:
     multiscale_prior = audit.get("fit_summary", {}).get("surface_multiscale_prior", {})
     teacher_basis = audit.get("fit_summary", {}).get("teacher_distilled_basis", {})
     policy_candidate_control = audit.get("fit_summary", {}).get("policy_candidate_control", {})
+    adaptive_ladder = policy_candidate_control.get("adaptive_texture_size_ladder", {})
     fallback_alpha_value = local_alpha.get("fallback_alpha", 0.0)
     if isinstance(fallback_alpha_value, (list, tuple)):
         fallback_alpha_text = json.dumps([float(x) for x in fallback_alpha_value])
@@ -6395,6 +6804,17 @@ def write_report(path: Path, audit: dict[str, Any]) -> None:
         f"- policy candidates executed: `{policy_candidate_control.get('executed_candidate_count', 0)}`",
         f"- policy candidate early-stop mode: `{policy_candidate_control.get('early_stop_effective_mode', 'none')}`",
         f"- policy candidate early-stop skipped: `{policy_candidate_control.get('early_stop_skipped_count', 0)}`",
+        f"- adaptive texture-size ladder enabled: `{adaptive_ladder.get('enabled', False)}`",
+        f"- adaptive texture-size ladder reason: `{adaptive_ladder.get('reason', 'not_requested')}`",
+        f"- adaptive texture-size ladder base candidates: `{adaptive_ladder.get('base_texture_size_candidates', [])}`",
+        f"- adaptive texture-size ladder planned candidates: `{adaptive_ladder.get('planned_texture_size_candidates', [])}`",
+        f"- adaptive texture-size ladder added candidates: `{adaptive_ladder.get('added_texture_size_candidates', [])}`",
+        f"- adaptive texture-size ladder rejected candidates: `{adaptive_ladder.get('rejected_texture_size_candidates', [])}`",
+        f"- adaptive texture-size ladder fit samples: `{adaptive_ladder.get('total_fit_samples', 0)}`",
+        f"- adaptive texture-size ladder skipped policy-val views: `{adaptive_ladder.get('skipped_policy_val_views', 0)}`",
+        f"- adaptive texture-size ladder support modes: `{adaptive_ladder.get('support_modes', [])}`",
+        f"- adaptive texture-size ladder support union sha1: `{adaptive_ladder.get('support_union_faces_sha1', '')}`",
+        f"- adaptive texture-size ladder final selection scope: `{adaptive_ladder.get('final_texture_size_selection_scope', '')}`",
         f"- surface multiscale prior mode: `{multiscale_prior.get('mode', 'none')}`",
         f"- surface multiscale prior selected blend: `{float(audit.get('fit_summary', {}).get('selected_surface_multiscale_prior_blend', multiscale_prior.get('blend', 0.0)) or 0.0):.6f}`",
         f"- surface multiscale prior blend candidates: `{audit.get('fit_summary', {}).get('surface_multiscale_prior_blend_candidates', [multiscale_prior.get('blend', 0.0)])}`",
@@ -6460,6 +6880,9 @@ def write_report(path: Path, audit: dict[str, Any]) -> None:
         f"- policy-val image L1 gain: `{val.get('best', {}).get('image_l1_gain', 0.0):.9f}`",
         f"- policy-val image L1 positive-view fraction: `{val.get('best', {}).get('image_l1_positive_view_fraction', 0.0):.6f}`",
         f"- policy-val image L1 min-view gain: `{val.get('best', {}).get('image_l1_min_view_gain', 0.0):.9f}`",
+        f"- policy-val image LPIPS gain: `{val.get('best', {}).get('lpips_gain', 0.0):.9f}`",
+        f"- policy-val image LPIPS positive-view fraction: `{val.get('best', {}).get('lpips_positive_view_fraction', 0.0):.6f}`",
+        f"- policy-val image LPIPS min-view gain: `{val.get('best', {}).get('lpips_min_view_gain', 0.0):.9f}`",
         f"- policy-val risk gate: `{risk.get('passed', True)}`",
         f"- target written views: `{target.get('written_views', 0)}`",
         f"- target changed fraction: `{target.get('changed_fraction', 0.0):.6f}`",
@@ -6469,8 +6892,8 @@ def write_report(path: Path, audit: dict[str, Any]) -> None:
         "",
         "## Alpha Rows",
         "",
-        "| alpha | rel gain | pos view frac | cvar20 view gain | min view gain | ssim gain | ssim pos frac | ssim min gain | image L1 gain | L1 pos frac | L1 min gain | mse before | mse after |",
-        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| alpha | rel gain | pos view frac | cvar20 view gain | min view gain | ssim gain | ssim pos frac | ssim min gain | image L1 gain | L1 pos frac | L1 min gain | LPIPS gain | LPIPS pos frac | LPIPS min gain | mse before | mse after |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in val.get("rows", []) or []:
         lines.append(
@@ -6484,6 +6907,9 @@ def write_report(path: Path, audit: dict[str, Any]) -> None:
             f"{float(row.get('image_l1_gain', 0.0)):.9f} | "
             f"{float(row.get('image_l1_positive_view_fraction', 0.0)):.6f} | "
             f"{float(row.get('image_l1_min_view_gain', 0.0)):.9f} | "
+            f"{float(row.get('lpips_gain', 0.0)):.9f} | "
+            f"{float(row.get('lpips_positive_view_fraction', 0.0)):.6f} | "
+            f"{float(row.get('lpips_min_view_gain', 0.0)):.9f} | "
             f"{float(row.get('mse_before', 0.0)):.8f} | {float(row.get('mse_after', 0.0)):.8f} |"
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -6558,6 +6984,34 @@ def policy_val_risk_reasons(row: dict[str, Any], args: argparse.Namespace) -> li
                 f"image_l1_cvar20_view_gain {l1_cvar20:.9f} < "
                 f"min_policy_val_l1_cvar20_view_gain {min_l1_cvar20:.9f}"
             )
+    if bool(getattr(args, "enable_policy_val_image_lpips_gate", False)):
+        lpips_mean_gain = float(row.get("lpips_gain", 0.0))
+        min_lpips_mean_gain = float(args.min_policy_val_lpips_mean_gain)
+        if min_lpips_mean_gain > -1.0 and lpips_mean_gain < min_lpips_mean_gain:
+            reasons.append(
+                f"lpips_gain {lpips_mean_gain:.9f} < min_policy_val_lpips_mean_gain {min_lpips_mean_gain:.9f}"
+            )
+        lpips_pos_frac = float(row.get("lpips_positive_view_fraction", 0.0))
+        min_lpips_pos_frac = float(args.min_policy_val_lpips_positive_view_fraction)
+        if min_lpips_pos_frac > 0.0 and lpips_pos_frac < min_lpips_pos_frac:
+            reasons.append(
+                f"lpips_positive_view_fraction {lpips_pos_frac:.6f} < "
+                f"min_policy_val_lpips_positive_view_fraction {min_lpips_pos_frac:.6f}"
+            )
+        lpips_min_gain = float(row.get("lpips_min_view_gain", 0.0))
+        min_lpips_min_gain = float(args.min_policy_val_lpips_min_view_gain)
+        if min_lpips_min_gain > -1.0 and lpips_min_gain < min_lpips_min_gain:
+            reasons.append(
+                f"lpips_min_view_gain {lpips_min_gain:.9f} < "
+                f"min_policy_val_lpips_min_view_gain {min_lpips_min_gain:.9f}"
+            )
+        lpips_cvar20 = float(row.get("lpips_cvar20_view_gain", 0.0))
+        min_lpips_cvar20 = float(args.min_policy_val_lpips_cvar20_view_gain)
+        if min_lpips_cvar20 > -1.0 and lpips_cvar20 < min_lpips_cvar20:
+            reasons.append(
+                f"lpips_cvar20_view_gain {lpips_cvar20:.9f} < "
+                f"min_policy_val_lpips_cvar20_view_gain {min_lpips_cvar20:.9f}"
+            )
     if bool(getattr(args, "enable_policy_val_effective_margin_gate", False)):
         effective_relative = float(row.get("relative_gain", 0.0))
         min_effective_relative = float(args.min_policy_val_effective_relative_gain)
@@ -6593,6 +7047,20 @@ def policy_val_risk_reasons(row: dict[str, Any], args: argparse.Namespace) -> li
             reasons.append(
                 f"effective_image_l1_cvar20_view_gain {effective_l1_cvar20:.9f} < "
                 f"min_policy_val_effective_l1_cvar20_gain {min_effective_l1_cvar20:.9f}"
+            )
+        effective_lpips = float(row.get("lpips_gain", 0.0))
+        min_effective_lpips = float(args.min_policy_val_effective_lpips_gain)
+        if min_effective_lpips > -1.0 and effective_lpips < min_effective_lpips:
+            reasons.append(
+                f"effective_lpips_gain {effective_lpips:.9f} < "
+                f"min_policy_val_effective_lpips_gain {min_effective_lpips:.9f}"
+            )
+        effective_lpips_cvar20 = float(row.get("lpips_cvar20_view_gain", 0.0))
+        min_effective_lpips_cvar20 = float(args.min_policy_val_effective_lpips_cvar20_gain)
+        if min_effective_lpips_cvar20 > -1.0 and effective_lpips_cvar20 < min_effective_lpips_cvar20:
+            reasons.append(
+                f"effective_lpips_cvar20_view_gain {effective_lpips_cvar20:.9f} < "
+                f"min_policy_val_effective_lpips_cvar20_gain {min_effective_lpips_cvar20:.9f}"
             )
     return reasons
 
@@ -6647,13 +7115,21 @@ def select_policy_val_frontier_row(
         }
 
     mode = str(getattr(args, "policy_val_alpha_frontier_mode", "smallest_effective"))
-    if mode == "knee":
+    if mode in {"knee", "tail_knee"}:
         best_axis_gains = {
             "relative_gain": float(best_relative_gain),
             "ssim_gain": float(best_ssim_gain),
             "image_l1_gain": float(best_l1_gain),
         }
         active_axes = [axis for axis, best_gain in best_axis_gains.items() if float(best_gain) > 0.0]
+        tail_axes = [
+            "min_view_relative_gain",
+            "cvar20_view_relative_gain",
+            "ssim_min_view_gain",
+            "ssim_cvar20_view_gain",
+            "image_l1_min_view_gain",
+            "image_l1_cvar20_view_gain",
+        ]
 
         def normalized_score(row: dict[str, Any]) -> float:
             if not active_axes:
@@ -6688,6 +7164,13 @@ def select_policy_val_frontier_row(
 
         min_score = float(getattr(args, "policy_val_alpha_frontier_knee_min_score_fraction", 0.55))
         slope_drop = float(getattr(args, "policy_val_alpha_frontier_knee_slope_drop_fraction", 0.85))
+        tail_min_score = float(
+            getattr(args, "policy_val_alpha_frontier_tail_knee_min_score_fraction", 0.70)
+        )
+        tail_min_regression_count = int(
+            getattr(args, "policy_val_alpha_frontier_tail_knee_min_regression_count", 3)
+        )
+        tail_eps = float(getattr(args, "policy_val_alpha_frontier_tail_knee_eps", 1.0e-10))
         selected = None
         frontier_reason = "knee_not_found_fallback_to_smallest_effective"
         best_prior_slope = 0.0
@@ -6698,10 +7181,33 @@ def select_policy_val_frontier_row(
             slope_ratio = next_slope / max(best_prior_slope, 1.0e-12)
             profile["next_marginal_slope"] = float(next_slope)
             profile["next_slope_ratio"] = float(slope_ratio)
-            if float(profile["score"]) >= min_score and slope_ratio <= slope_drop:
-                selected = row
-                frontier_reason = "selected_knee_before_diminishing_returns"
-                break
+            next_row = sorted_safe[idx + 1]
+            regressed_tail_axes = [
+                axis
+                for axis in tail_axes
+                if float(next_row.get(axis, 0.0)) < float(row.get(axis, 0.0)) - tail_eps
+            ]
+            profile["next_tail_regressed_axes"] = regressed_tail_axes
+            profile["next_tail_regression_count"] = int(len(regressed_tail_axes))
+
+        if mode == "tail_knee":
+            for idx, row in enumerate(sorted_safe[:-1]):
+                profile = knee_profiles[idx]
+                if (
+                    float(profile["score"]) >= tail_min_score
+                    and int(profile.get("next_tail_regression_count", 0)) >= tail_min_regression_count
+                ):
+                    selected = row
+                    frontier_reason = "selected_tail_knee_before_robust_tail_regression"
+                    break
+        if selected is None:
+            for idx, row in enumerate(sorted_safe[:-1]):
+                profile = knee_profiles[idx]
+                slope_ratio = float(profile.get("next_slope_ratio", 1.0))
+                if float(profile["score"]) >= min_score and slope_ratio <= slope_drop:
+                    selected = row
+                    frontier_reason = "selected_knee_before_diminishing_returns"
+                    break
         if selected is None:
             selected = min(
                 eligible,
@@ -6755,7 +7261,7 @@ def select_policy_val_frontier_row(
         "frontier_enabled": True,
         "frontier_reason": (
             frontier_reason
-            if mode == "knee"
+            if mode in {"knee", "tail_knee"}
             else "selected_smallest_effective_alpha"
             if mode == "smallest_effective"
             else "selected_best_score"
@@ -6778,11 +7284,15 @@ def select_policy_val_frontier_row(
         },
         "frontier_preview": frontier_preview,
     }
-    if mode == "knee":
+    if mode in {"knee", "tail_knee"}:
         selection_payload["knee"] = {
             "min_score_fraction": float(args.policy_val_alpha_frontier_knee_min_score_fraction),
             "slope_drop_fraction": float(args.policy_val_alpha_frontier_knee_slope_drop_fraction),
+            "tail_min_score_fraction": float(args.policy_val_alpha_frontier_tail_knee_min_score_fraction),
+            "tail_min_regression_count": int(args.policy_val_alpha_frontier_tail_knee_min_regression_count),
+            "tail_eps": float(args.policy_val_alpha_frontier_tail_knee_eps),
             "active_axes": list(active_axes),
+            "tail_axes": list(tail_axes),
             "profiles": knee_profiles[:16],
         }
     return selected, selection_payload
@@ -6934,6 +7444,18 @@ def main() -> int:
             "If empty, keeps the fixed --texture_size legacy behavior."
         ),
     )
+    parser.add_argument(
+        "--enable_adaptive_texture_size_ladder",
+        action="store_true",
+        help=(
+            "Auto-augment texture-size candidates from train-fit residual density. "
+            "This uses only fit split evidence and never target/test GT."
+        ),
+    )
+    parser.add_argument("--adaptive_texture_size_ladder_max_size", type=int, default=32)
+    parser.add_argument("--adaptive_texture_size_ladder_min_fit_samples_per_face", type=float, default=512.0)
+    parser.add_argument("--adaptive_texture_size_ladder_min_samples_per_current_bin", type=float, default=2.0)
+    parser.add_argument("--adaptive_texture_size_ladder_min_mean_l1", type=float, default=0.002)
     parser.add_argument("--max_carriers", type=int, default=64)
     parser.add_argument("--max_faces_per_carrier", type=int, default=128)
     parser.add_argument("--max_faces", type=int, default=4096)
@@ -7445,7 +7967,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--policy_val_alpha_frontier_mode",
-        choices=("smallest_effective", "best_score", "knee"),
+        choices=("smallest_effective", "best_score", "knee", "tail_knee"),
         default="smallest_effective",
         help="Frontier selection mode used by --enable_policy_val_alpha_frontier_selection.",
     )
@@ -7475,6 +7997,30 @@ def main() -> int:
             "For --policy_val_alpha_frontier_mode knee, stop before the next alpha when its marginal "
             "normalized gain slope drops below this fraction of the best prior slope."
         ),
+    )
+    parser.add_argument(
+        "--policy_val_alpha_frontier_tail_knee_min_score_fraction",
+        type=float,
+        default=0.70,
+        help=(
+            "For --policy_val_alpha_frontier_mode tail_knee, require this normalized aggregate "
+            "policy-val score before a robust-tail regression can stop alpha growth."
+        ),
+    )
+    parser.add_argument(
+        "--policy_val_alpha_frontier_tail_knee_min_regression_count",
+        type=int,
+        default=3,
+        help=(
+            "For --policy_val_alpha_frontier_mode tail_knee, stop before the next alpha when at least "
+            "this many robust tail metrics regress."
+        ),
+    )
+    parser.add_argument(
+        "--policy_val_alpha_frontier_tail_knee_eps",
+        type=float,
+        default=1.0e-10,
+        help="Tolerance used when detecting robust tail regression for tail_knee mode.",
     )
     parser.add_argument(
         "--enable_preacceptance_policy_val_guard_repair",
@@ -7778,6 +8324,35 @@ def main() -> int:
             "with variance/sign uncertainty filters and apply residuals only on allowed bins."
         ),
     )
+    parser.add_argument(
+        "--enable_policy_val_sparse_residual_materialization",
+        action="store_true",
+        help=(
+            "Before final risk-gate selection, sparsify residual materialization at face/UV-bin level "
+            "using only train policy-val evidence. Unstable bins are not rendered on target views."
+        ),
+    )
+    parser.add_argument(
+        "--sparse_materialization_seed_min_relative_gain",
+        type=float,
+        default=0.0,
+        help="Minimum nonzero policy-val relative gain required to seed sparse residual materialization.",
+    )
+    parser.add_argument("--sparse_materialization_min_bin_samples", type=int, default=16)
+    parser.add_argument("--sparse_materialization_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--sparse_materialization_min_positive_view_fraction", type=float, default=0.5)
+    parser.add_argument(
+        "--sparse_materialization_max_mean_variance",
+        type=float,
+        default=-1.0,
+        help="If >=0, reject sparse materialization bins above this mean residual RGB variance.",
+    )
+    parser.add_argument(
+        "--sparse_materialization_min_mean_sign_consistency",
+        type=float,
+        default=0.0,
+        help="If >0, reject sparse materialization bins below this mean sign-consistency.",
+    )
     parser.add_argument("--bin_uncertainty_guard_min_bin_samples", type=int, default=64)
     parser.add_argument("--bin_uncertainty_guard_min_relative_gain", type=float, default=0.0)
     parser.add_argument("--bin_uncertainty_guard_min_positive_view_fraction", type=float, default=0.75)
@@ -7816,6 +8391,19 @@ def main() -> int:
     parser.add_argument("--min_policy_val_l1_min_view_gain", type=float, default=-1.0)
     parser.add_argument("--min_policy_val_l1_cvar20_view_gain", type=float, default=-1.0)
     parser.add_argument(
+        "--enable_policy_val_image_lpips_gate",
+        action="store_true",
+        help=(
+            "Compute train policy-val full-image LPIPS rows and allow LPIPS-aware risk gates. "
+            "The gain is LPIPS_before - LPIPS_after, so positive means lower perceptual distance."
+        ),
+    )
+    parser.add_argument("--policy_val_lpips_max_size", type=int, default=512)
+    parser.add_argument("--min_policy_val_lpips_mean_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_lpips_positive_view_fraction", type=float, default=0.0)
+    parser.add_argument("--min_policy_val_lpips_min_view_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_lpips_cvar20_view_gain", type=float, default=-1.0)
+    parser.add_argument(
         "--enable_policy_val_effective_margin_gate",
         action="store_true",
         help=(
@@ -7829,6 +8417,8 @@ def main() -> int:
     parser.add_argument("--min_policy_val_effective_l1_gain", type=float, default=-1.0)
     parser.add_argument("--min_policy_val_effective_ssim_cvar20_gain", type=float, default=-1.0)
     parser.add_argument("--min_policy_val_effective_l1_cvar20_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_effective_lpips_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_effective_lpips_cvar20_gain", type=float, default=-1.0)
     parser.add_argument(
         "--min_target_changed_fraction",
         type=float,
@@ -7959,6 +8549,14 @@ def main() -> int:
 
     if int(args.texture_size) <= 0:
         parser.error("--texture_size must be > 0")
+    if int(args.adaptive_texture_size_ladder_max_size) <= 0:
+        parser.error("--adaptive_texture_size_ladder_max_size must be > 0")
+    if float(args.adaptive_texture_size_ladder_min_fit_samples_per_face) < 0.0:
+        parser.error("--adaptive_texture_size_ladder_min_fit_samples_per_face must be >= 0")
+    if float(args.adaptive_texture_size_ladder_min_samples_per_current_bin) < 0.0:
+        parser.error("--adaptive_texture_size_ladder_min_samples_per_current_bin must be >= 0")
+    if float(args.adaptive_texture_size_ladder_min_mean_l1) < 0.0:
+        parser.error("--adaptive_texture_size_ladder_min_mean_l1 must be >= 0")
     if float(args.atlas_nearest_fill_decay) < 0.0:
         parser.error("--atlas_nearest_fill_decay must be >= 0")
     try:
@@ -8121,12 +8719,17 @@ def main() -> int:
         "policy_val_alpha_frontier_min_l1_fraction",
         "policy_val_alpha_frontier_knee_min_score_fraction",
         "policy_val_alpha_frontier_knee_slope_drop_fraction",
+        "policy_val_alpha_frontier_tail_knee_min_score_fraction",
     ):
         frontier_fraction = float(getattr(args, frontier_fraction_name))
         if not 0.0 <= frontier_fraction <= 1.0:
             parser.error(f"--{frontier_fraction_name} must be in [0, 1]")
     if float(args.policy_val_alpha_frontier_alpha_penalty) < 0.0:
         parser.error("--policy_val_alpha_frontier_alpha_penalty must be >= 0")
+    if int(args.policy_val_alpha_frontier_tail_knee_min_regression_count) < 1:
+        parser.error("--policy_val_alpha_frontier_tail_knee_min_regression_count must be >= 1")
+    if float(args.policy_val_alpha_frontier_tail_knee_eps) < 0.0:
+        parser.error("--policy_val_alpha_frontier_tail_knee_eps must be >= 0")
     local_alpha_modes = [
         bool(args.enable_policy_val_local_alpha_calibration),
         bool(args.enable_policy_val_face_alpha_calibration),
@@ -8487,6 +9090,7 @@ def main() -> int:
         "enabled": bool(
             args.enable_policy_candidate_dominance_pruning
             or str(args.policy_candidate_early_stop_mode) != "none"
+            or bool(args.enable_adaptive_texture_size_ladder)
         ),
         "dominance_pruning_requested": bool(args.enable_policy_candidate_dominance_pruning),
         "dominance_pruning_enabled": bool(args.enable_policy_candidate_dominance_pruning),
@@ -8556,6 +9160,37 @@ def main() -> int:
         texture_size_candidates = parse_int_candidates(str(args.texture_size_candidates), int(args.texture_size))
     except ValueError as exc:
         parser.error(str(exc))
+    adaptive_texture_size_ladder_summary: dict[str, Any] = {
+        "enabled": False,
+        "mode": "train_fit_residual_density_ladder",
+        "base_texture_size_candidates": [int(x) for x in texture_size_candidates],
+        "planned_texture_size_candidates": [int(x) for x in texture_size_candidates],
+        "reason": "not_requested",
+    }
+    if bool(args.enable_adaptive_texture_size_ladder):
+        support_union_faces: set[int] = set()
+        for support_candidate in support_candidate_sets:
+            support_union_faces.update(int(face) for face in support_candidate.get("faces", set()))
+        support_modes = [
+            str(support_candidate.get("support_mode", ""))
+            for support_candidate in support_candidate_sets
+        ]
+        texture_size_candidates, adaptive_texture_size_ladder_summary = plan_adaptive_texture_size_ladder(
+            fit_views_all,
+            support_union_faces,
+            texture_size_candidates,
+            residual_l1_key=str(args.residual_l1_key),
+            policy_val_stride=int(args.policy_val_stride),
+            min_l1=float(args.min_l1),
+            min_alpha=float(args.min_alpha),
+            max_samples_per_view=int(args.max_samples_per_view),
+            max_size=int(args.adaptive_texture_size_ladder_max_size),
+            min_fit_samples_per_face=float(args.adaptive_texture_size_ladder_min_fit_samples_per_face),
+            min_samples_per_current_bin=float(args.adaptive_texture_size_ladder_min_samples_per_current_bin),
+            min_mean_l1=float(args.adaptive_texture_size_ladder_min_mean_l1),
+            support_modes=support_modes,
+        )
+    policy_candidate_control["adaptive_texture_size_ladder"] = dict(adaptive_texture_size_ladder_summary)
 
     def build_policy_candidate(
         fill_mode: str,
@@ -8913,6 +9548,8 @@ def main() -> int:
             policy_val_ssim_max_size=int(args.policy_val_ssim_max_size),
             enable_policy_val_image_l1=bool(args.enable_policy_val_image_l1_gate),
             policy_val_l1_max_size=int(args.policy_val_l1_max_size),
+            enable_policy_val_image_lpips=bool(args.enable_policy_val_image_lpips_gate),
+            policy_val_lpips_max_size=int(args.policy_val_lpips_max_size),
             local_alpha_profile=local_alpha_profile,
             parent_edge_apply_profile=parent_edge_apply_profile,
         )
@@ -8967,6 +9604,8 @@ def main() -> int:
                 policy_val_ssim_max_size=int(args.policy_val_ssim_max_size),
                 enable_policy_val_image_l1=bool(args.enable_policy_val_image_l1_gate),
                 policy_val_l1_max_size=int(args.policy_val_l1_max_size),
+                enable_policy_val_image_lpips=bool(args.enable_policy_val_image_lpips_gate),
+                policy_val_lpips_max_size=int(args.policy_val_lpips_max_size),
                 local_alpha_profile=local_alpha_profile,
                 parent_edge_apply_profile=parent_edge_apply_profile,
             )
@@ -8987,6 +9626,14 @@ def main() -> int:
                 "image_l1_cvar20_view_gain",
                 "image_l1_min_view_gain",
             ]
+            if bool(args.enable_policy_val_image_lpips_gate):
+                guarded_metrics.extend(
+                    [
+                        "lpips_gain",
+                        "lpips_cvar20_view_gain",
+                        "lpips_min_view_gain",
+                    ]
+                )
             guard_reasons: list[str] = []
             eps = 1.0e-12
             if not cand_accepted and legacy_accepted:
@@ -9064,6 +9711,8 @@ def main() -> int:
                 policy_val_ssim_max_size=int(args.policy_val_ssim_max_size),
                 enable_policy_val_image_l1=bool(args.enable_policy_val_image_l1_gate),
                 policy_val_l1_max_size=int(args.policy_val_l1_max_size),
+                enable_policy_val_image_lpips=bool(args.enable_policy_val_image_lpips_gate),
+                policy_val_lpips_max_size=int(args.policy_val_lpips_max_size),
                 local_alpha_profile=local_alpha_profile,
                 parent_edge_apply_profile=parent_edge_apply_profile,
             )
@@ -9084,6 +9733,14 @@ def main() -> int:
                 "image_l1_cvar20_view_gain",
                 "image_l1_min_view_gain",
             ]
+            if bool(args.enable_policy_val_image_lpips_gate):
+                guarded_metrics.extend(
+                    [
+                        "lpips_gain",
+                        "lpips_cvar20_view_gain",
+                        "lpips_min_view_gain",
+                    ]
+                )
             guard_reasons: list[str] = []
             eps = 1.0e-12
             if not cand_accepted and legacy_accepted:
@@ -9146,6 +9803,114 @@ def main() -> int:
             "seed_best": dict(guard_repair_seed_row or {}),
             "seed_risk_reasons": list(guard_repair_seed_reasons),
         }
+        sparse_materialization_profile: dict[str, Any] = {
+            "enabled": False,
+            "mode": "policy_val_sparse_residual_materialization",
+            "decision": "not_requested",
+        }
+        selected_sparse_materialization_profile: dict[str, Any] = {
+            "enabled": False,
+            "mode": "policy_val_sparse_residual_materialization",
+            "decision": "not_selected",
+        }
+        if bool(args.enable_policy_val_sparse_residual_materialization):
+            sparse_materialization_profile = policy_val_sparse_materialization_profile(
+                cand_val_views,
+                cand_atlas,
+                cand_policy_val,
+                residual_rgb_key=str(args.residual_rgb_key),
+                residual_l1_key=str(args.residual_l1_key),
+                min_l1=float(args.min_l1),
+                min_alpha=float(args.min_alpha),
+                max_abs_delta_rgb=float(max_abs_delta_rgb_candidate),
+                max_samples_per_view=int(args.max_samples_per_view),
+                min_atlas_bin_count=int(args.min_atlas_bin_count),
+                min_atlas_face_samples=int(args.min_atlas_face_samples),
+                max_atlas_bin_rgb_variance=float(args.max_atlas_bin_rgb_variance),
+                min_atlas_bin_sign_consistency=float(args.min_atlas_bin_sign_consistency),
+                atlas_confidence_mode=str(args.atlas_confidence_mode),
+                atlas_confidence_count_scale=float(args.atlas_confidence_count_scale),
+                atlas_confidence_empty_bin=float(args.atlas_confidence_empty_bin),
+                atlas_confidence_variance_scale=float(args.atlas_confidence_variance_scale),
+                atlas_confidence_sign_power=float(args.atlas_confidence_sign_power),
+                atlas_confidence_face_sample_scale=float(args.atlas_confidence_face_sample_scale),
+                min_atlas_confidence=float(args.min_atlas_confidence),
+                local_alpha_profile=local_alpha_profile,
+                face_gain_guard_profile=None,
+                seed_min_relative_gain=float(args.sparse_materialization_seed_min_relative_gain),
+                min_bin_samples=int(args.sparse_materialization_min_bin_samples),
+                min_relative_gain=float(args.sparse_materialization_min_relative_gain),
+                min_positive_view_fraction=float(args.sparse_materialization_min_positive_view_fraction),
+                max_mean_variance=float(args.sparse_materialization_max_mean_variance),
+                min_mean_sign_consistency=float(args.sparse_materialization_min_mean_sign_consistency),
+            )
+            if bool(sparse_materialization_profile.get("enabled", False)) and int(
+                sparse_materialization_profile.get("allowed_bin_count", 0) or 0
+            ) > 0:
+                sparse_policy_val = evaluate_policy_val(
+                    cand_val_views,
+                    cand_atlas,
+                    residual_rgb_key=str(args.residual_rgb_key),
+                    residual_l1_key=str(args.residual_l1_key),
+                    alpha_grid=alpha_candidates,
+                    min_l1=float(args.min_l1),
+                    min_alpha=float(args.min_alpha),
+                    max_abs_delta_rgb=float(max_abs_delta_rgb_candidate),
+                    max_samples_per_view=int(args.max_samples_per_view),
+                    min_atlas_bin_count=int(args.min_atlas_bin_count),
+                    min_atlas_face_samples=int(args.min_atlas_face_samples),
+                    max_atlas_bin_rgb_variance=float(args.max_atlas_bin_rgb_variance),
+                    min_atlas_bin_sign_consistency=float(args.min_atlas_bin_sign_consistency),
+                    atlas_confidence_mode=str(args.atlas_confidence_mode),
+                    atlas_confidence_count_scale=float(args.atlas_confidence_count_scale),
+                    atlas_confidence_empty_bin=float(args.atlas_confidence_empty_bin),
+                    atlas_confidence_variance_scale=float(args.atlas_confidence_variance_scale),
+                    atlas_confidence_sign_power=float(args.atlas_confidence_sign_power),
+                    atlas_confidence_face_sample_scale=float(args.atlas_confidence_face_sample_scale),
+                    min_atlas_confidence=float(args.min_atlas_confidence),
+                    enable_policy_val_image_ssim=bool(args.enable_policy_val_image_ssim_gate),
+                    policy_val_ssim_max_size=int(args.policy_val_ssim_max_size),
+                    enable_policy_val_image_l1=bool(args.enable_policy_val_image_l1_gate),
+                    policy_val_l1_max_size=int(args.policy_val_l1_max_size),
+                    enable_policy_val_image_lpips=bool(args.enable_policy_val_image_lpips_gate),
+                    policy_val_lpips_max_size=int(args.policy_val_lpips_max_size),
+                    local_alpha_profile=local_alpha_profile,
+                    bin_uncertainty_guard_profile=sparse_materialization_profile,
+                    parent_edge_apply_profile=parent_edge_apply_profile,
+                )
+                sparse_policy_val["alpha_calibration"] = dict(alpha_calibration_summary)
+                sparse_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
+                sparse_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
+                sparse_policy_val["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
+                sparse_policy_val["alpha_midpoint_refinement"] = dict(alpha_midpoint_refinement_summary)
+                (
+                    sparse_policy_val,
+                    sparse_best,
+                    sparse_selected_alpha,
+                    sparse_risk_reasons,
+                    sparse_accepted,
+                ) = select_policy_val_payload(sparse_policy_val)
+                sparse_materialization_profile["post_materialization_accepted"] = bool(sparse_accepted)
+                sparse_materialization_profile["post_materialization_selected_alpha"] = float(sparse_selected_alpha)
+                sparse_materialization_profile["post_materialization_best"] = dict(sparse_best)
+                sparse_materialization_profile["post_materialization_risk_reasons"] = list(sparse_risk_reasons)
+                replace_with_sparse = bool(sparse_accepted or not cand_accepted)
+                sparse_materialization_profile["decision"] = (
+                    "replace_candidate_policy_val" if replace_with_sparse else "original_candidate_kept"
+                )
+                if replace_with_sparse:
+                    cand_policy_val = sparse_policy_val
+                    cand_best = sparse_best
+                    cand_selected_alpha = float(sparse_selected_alpha)
+                    cand_risk_reasons = sparse_risk_reasons
+                    cand_accepted = bool(sparse_accepted)
+                    guard_repair_seed_row = None
+                    guard_repair_seed_reasons = []
+                    guard_repair_seed_alpha = float(cand_selected_alpha)
+                    selected_sparse_materialization_profile = dict(sparse_materialization_profile)
+            else:
+                sparse_materialization_profile["decision"] = "disabled_no_active_allowed_bins"
+        cand_fit_summary["sparse_residual_materialization"] = dict(sparse_materialization_profile)
         face_gain_guard_profile: dict[str, Any] = {
             "enabled": False,
             "mode": "policy_val_face_gain_guard",
@@ -9208,6 +9973,8 @@ def main() -> int:
                         policy_val_ssim_max_size=int(args.policy_val_ssim_max_size),
                         enable_policy_val_image_l1=bool(args.enable_policy_val_image_l1_gate),
                         policy_val_l1_max_size=int(args.policy_val_l1_max_size),
+                        enable_policy_val_image_lpips=bool(args.enable_policy_val_image_lpips_gate),
+                        policy_val_lpips_max_size=int(args.policy_val_lpips_max_size),
                         local_alpha_profile=local_alpha_profile,
                         face_gain_guard_profile=face_gain_guard_profile,
                         parent_edge_apply_profile=parent_edge_apply_profile,
@@ -9242,6 +10009,8 @@ def main() -> int:
                         cand_selected_alpha = float(guarded_selected_alpha)
                         cand_risk_reasons = guarded_risk_reasons
                         cand_accepted = False
+                    if cand_accepted or not guard_repair_seed_row:
+                        guard_repair_seed_alpha = float(cand_selected_alpha)
                 else:
                     face_gain_guard_profile["decision"] = "disabled_no_active_allowed_faces"
                     if cand_accepted:
@@ -9259,9 +10028,11 @@ def main() -> int:
             "mode": "policy_val_bin_uncertainty_guard",
             "decision": "not_requested",
         }
+        if bool(selected_sparse_materialization_profile.get("enabled", False)):
+            bin_uncertainty_guard_profile = dict(selected_sparse_materialization_profile)
         if bool(args.enable_policy_val_bin_uncertainty_guard):
             if (cand_accepted or guard_repair_seed_row) and float(guard_repair_seed_alpha) > 0.0:
-                bin_uncertainty_guard_profile = build_policy_val_bin_uncertainty_guard_profile(
+                raw_bin_uncertainty_guard_profile = build_policy_val_bin_uncertainty_guard_profile(
                     cand_val_views,
                     cand_atlas,
                     residual_rgb_key=str(args.residual_rgb_key),
@@ -9290,6 +10061,13 @@ def main() -> int:
                     max_mean_variance=float(args.bin_uncertainty_guard_max_mean_variance),
                     min_mean_sign_consistency=float(args.bin_uncertainty_guard_min_mean_sign_consistency),
                 )
+                if bool(selected_sparse_materialization_profile.get("enabled", False)):
+                    bin_uncertainty_guard_profile = intersect_bin_guard_profiles(
+                        selected_sparse_materialization_profile,
+                        raw_bin_uncertainty_guard_profile,
+                    )
+                else:
+                    bin_uncertainty_guard_profile = raw_bin_uncertainty_guard_profile
                 if bool(bin_uncertainty_guard_profile.get("enabled", False)):
                     bin_uncertainty_guard_profile["preacceptance_repair"] = bool(
                         guard_repair_seed_row and not cand_accepted
@@ -9319,6 +10097,8 @@ def main() -> int:
                         policy_val_ssim_max_size=int(args.policy_val_ssim_max_size),
                         enable_policy_val_image_l1=bool(args.enable_policy_val_image_l1_gate),
                         policy_val_l1_max_size=int(args.policy_val_l1_max_size),
+                        enable_policy_val_image_lpips=bool(args.enable_policy_val_image_lpips_gate),
+                        policy_val_lpips_max_size=int(args.policy_val_lpips_max_size),
                         local_alpha_profile=local_alpha_profile,
                         face_gain_guard_profile=face_gain_guard_profile,
                         bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
@@ -9573,16 +10353,21 @@ def main() -> int:
     ) -> tuple[dict[str, Any], dict[str, Any], float, list[str], bool]:
         return select_policy_val_payload_by_risk_gate(policy_payload, args)
 
-    def policy_metric_score(candidate: dict[str, Any]) -> tuple[float, float, float, float, float, float, float, float, float, float]:
+    def policy_metric_score(
+        candidate: dict[str, Any],
+    ) -> tuple[float, float, float, float, float, float, float, float, float, float, float, float, float]:
         cand_best = dict(candidate.get("best") or {})
         return (
             float(cand_best.get("relative_gain", -1.0)),
             float(cand_best.get("ssim_gain", 0.0)),
             float(cand_best.get("image_l1_gain", 0.0)),
+            float(cand_best.get("lpips_gain", 0.0)),
             float(cand_best.get("cvar20_view_relative_gain", -1.0)),
             float(cand_best.get("min_view_relative_gain", -1.0)),
             float(cand_best.get("image_l1_cvar20_view_gain", -1.0)),
             float(cand_best.get("image_l1_min_view_gain", -1.0)),
+            float(cand_best.get("lpips_cvar20_view_gain", -1.0)),
+            float(cand_best.get("lpips_min_view_gain", -1.0)),
             float((candidate.get("support_summary") or {}).get("added_faces", 0)),
             -float(candidate.get("texture_size", 0)),
             -float(candidate.get("max_abs_delta_rgb", args.max_abs_delta_rgb)),
@@ -9996,6 +10781,8 @@ def main() -> int:
                     policy_val_ssim_max_size=int(args.policy_val_ssim_max_size),
                     enable_policy_val_image_l1=bool(args.enable_policy_val_image_l1_gate),
                     policy_val_l1_max_size=int(args.policy_val_l1_max_size),
+                    enable_policy_val_image_lpips=bool(args.enable_policy_val_image_lpips_gate),
+                    policy_val_lpips_max_size=int(args.policy_val_lpips_max_size),
                     local_alpha_profile=hybrid_local_alpha_profile,
                     face_gain_guard_profile=hybrid_face_gain_guard_profile,
                     bin_uncertainty_guard_profile=hybrid_bin_uncertainty_guard_profile,
@@ -10105,6 +10892,8 @@ def main() -> int:
                     base_best.get("image_l1_gain", 0.0)
                 ):
                     continue
+                if float(cand_best.get("lpips_gain", 0.0)) + eps < float(base_best.get("lpips_gain", 0.0)):
+                    continue
                 if float(cand_best.get("cvar20_view_relative_gain", -1.0)) + eps < float(
                     base_best.get("cvar20_view_relative_gain", -1.0)
                 ):
@@ -10119,6 +10908,14 @@ def main() -> int:
                     continue
                 if float(cand_best.get("image_l1_min_view_gain", -1.0)) + eps < float(
                     base_best.get("image_l1_min_view_gain", -1.0)
+                ):
+                    continue
+                if float(cand_best.get("lpips_cvar20_view_gain", -1.0)) + eps < float(
+                    base_best.get("lpips_cvar20_view_gain", -1.0)
+                ):
+                    continue
+                if float(cand_best.get("lpips_min_view_gain", -1.0)) + eps < float(
+                    base_best.get("lpips_min_view_gain", -1.0)
                 ):
                     continue
                 guarded_candidates.append(candidate)
@@ -10504,13 +11301,24 @@ def main() -> int:
             bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
             parent_edge_apply_profile=parent_edge_apply_profile,
         )
+        target_change_floor_enabled = bool(
+            args.enable_policy_val_sparse_residual_materialization
+            or args.enable_target_support_candidate_selection
+        )
         min_changed = float(args.min_target_changed_fraction)
+        if min_changed <= 0.0 and target_change_floor_enabled:
+            min_changed = 1.0e-12
+        png_changed_pixels = int(target_apply.get("png_quantized_changed_pixels", target_apply.get("changed_pixels", 0)) or 0)
         if min_changed > 0.0 and float(target_apply.get("changed_fraction", 0.0)) < min_changed:
             accepted = False
             reject_reason = (
                 f"target_changed_fraction {float(target_apply.get('changed_fraction', 0.0)):.8f} "
                 f"< min_target_changed_fraction {min_changed:.8f}"
             )
+            effective_policy = "rejected_target_coverage"
+        if accepted and target_change_floor_enabled and png_changed_pixels <= 0:
+            accepted = False
+            reject_reason = "target_png_quantized_changed_pixels <= 0 for target-visible/sparse policy"
             effective_policy = "rejected_target_coverage"
     if not accepted and bool(args.write_noop_on_reject):
         target_views = evidence_views(target_evidence)
@@ -10601,6 +11409,14 @@ def main() -> int:
             "min_policy_val_l1_positive_view_fraction": float(args.min_policy_val_l1_positive_view_fraction),
             "min_policy_val_l1_min_view_gain": float(args.min_policy_val_l1_min_view_gain),
             "min_policy_val_l1_cvar20_view_gain": float(args.min_policy_val_l1_cvar20_view_gain),
+            "enable_policy_val_image_lpips_gate": bool(args.enable_policy_val_image_lpips_gate),
+            "policy_val_lpips_max_size": int(args.policy_val_lpips_max_size),
+            "min_policy_val_lpips_mean_gain": float(args.min_policy_val_lpips_mean_gain),
+            "min_policy_val_lpips_positive_view_fraction": float(
+                args.min_policy_val_lpips_positive_view_fraction
+            ),
+            "min_policy_val_lpips_min_view_gain": float(args.min_policy_val_lpips_min_view_gain),
+            "min_policy_val_lpips_cvar20_view_gain": float(args.min_policy_val_lpips_cvar20_view_gain),
             "enable_policy_val_effective_margin_gate": bool(
                 args.enable_policy_val_effective_margin_gate
             ),
@@ -10614,6 +11430,10 @@ def main() -> int:
             ),
             "min_policy_val_effective_l1_cvar20_gain": float(
                 args.min_policy_val_effective_l1_cvar20_gain
+            ),
+            "min_policy_val_effective_lpips_gain": float(args.min_policy_val_effective_lpips_gain),
+            "min_policy_val_effective_lpips_cvar20_gain": float(
+                args.min_policy_val_effective_lpips_cvar20_gain
             ),
             "enable_prior_bin_gain_hybrid_l1_proxy_gate": bool(
                 args.enable_prior_bin_gain_hybrid_l1_proxy_gate
@@ -10643,6 +11463,10 @@ def main() -> int:
             "selected_image_l1_positive_view_fraction": float(best.get("image_l1_positive_view_fraction", 0.0)),
             "selected_image_l1_min_view_gain": float(best.get("image_l1_min_view_gain", 0.0)),
             "selected_image_l1_cvar20_view_gain": float(best.get("image_l1_cvar20_view_gain", 0.0)),
+            "selected_lpips_gain": float(best.get("lpips_gain", 0.0)),
+            "selected_lpips_positive_view_fraction": float(best.get("lpips_positive_view_fraction", 0.0)),
+            "selected_lpips_min_view_gain": float(best.get("lpips_min_view_gain", 0.0)),
+            "selected_lpips_cvar20_view_gain": float(best.get("lpips_cvar20_view_gain", 0.0)),
         },
         "target_footprint_tail_risk_gate": {
             "enabled": bool(args.enable_target_footprint_tail_risk_certificate),

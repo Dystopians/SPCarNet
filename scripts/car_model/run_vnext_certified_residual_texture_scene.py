@@ -146,6 +146,43 @@ def _populate_eval_gt_cmd(args: argparse.Namespace, output_model: Path, audit_pa
     ]
 
 
+def _append_arg(cmd: list[str], flag: str, value: Any) -> None:
+    text = str(value)
+    if text.startswith("-"):
+        cmd.append(f"{flag}={text}")
+    else:
+        cmd.extend([flag, text])
+
+
+def _looks_like_negative_number(value: str) -> bool:
+    if not value.startswith("-"):
+        return False
+    try:
+        float(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _normalize_negative_numeric_args(cmd: list[str]) -> list[str]:
+    normalized: list[str] = []
+    index = 0
+    while index < len(cmd):
+        token = cmd[index]
+        if (
+            token.startswith("--")
+            and "=" not in token
+            and index + 1 < len(cmd)
+            and _looks_like_negative_number(str(cmd[index + 1]))
+        ):
+            normalized.append(f"{token}={cmd[index + 1]}")
+            index += 2
+            continue
+        normalized.append(token)
+        index += 1
+    return normalized
+
+
 def _texture_cmd(
     args: argparse.Namespace,
     fit_evidence_dir: Path,
@@ -284,6 +321,20 @@ def _texture_cmd(
         str(args.noop_fallback_source),
         "--force",
     ]
+    if bool(args.enable_adaptive_texture_size_ladder):
+        cmd.extend(
+            [
+                "--enable_adaptive_texture_size_ladder",
+                "--adaptive_texture_size_ladder_max_size",
+                str(args.adaptive_texture_size_ladder_max_size),
+                "--adaptive_texture_size_ladder_min_fit_samples_per_face",
+                str(args.adaptive_texture_size_ladder_min_fit_samples_per_face),
+                "--adaptive_texture_size_ladder_min_samples_per_current_bin",
+                str(args.adaptive_texture_size_ladder_min_samples_per_current_bin),
+                "--adaptive_texture_size_ladder_min_mean_l1",
+                str(args.adaptive_texture_size_ladder_min_mean_l1),
+            ]
+        )
     if bool(args.enable_policy_val_alpha_midpoint_refinement):
         cmd.append("--enable_policy_val_alpha_midpoint_refinement")
     if bool(args.enable_policy_val_alpha_frontier_selection):
@@ -304,6 +355,12 @@ def _texture_cmd(
                 str(args.policy_val_alpha_frontier_knee_min_score_fraction),
                 "--policy_val_alpha_frontier_knee_slope_drop_fraction",
                 str(args.policy_val_alpha_frontier_knee_slope_drop_fraction),
+                "--policy_val_alpha_frontier_tail_knee_min_score_fraction",
+                str(args.policy_val_alpha_frontier_tail_knee_min_score_fraction),
+                "--policy_val_alpha_frontier_tail_knee_min_regression_count",
+                str(args.policy_val_alpha_frontier_tail_knee_min_regression_count),
+                "--policy_val_alpha_frontier_tail_knee_eps",
+                str(args.policy_val_alpha_frontier_tail_knee_eps),
             ]
         )
     if not bool(args.no_target_visible_energy_score):
@@ -344,6 +401,14 @@ def _texture_cmd(
         cmd = [token for token in cmd if token != "--enable_policy_val_ssim_alpha_refinement"]
     if bool(args.no_preacceptance_policy_val_guard_repair):
         cmd = [token for token in cmd if token != "--enable_preacceptance_policy_val_guard_repair"]
+    if bool(args.enable_policy_val_sparse_residual_materialization):
+        cmd.append("--enable_policy_val_sparse_residual_materialization")
+        _append_arg(cmd, "--sparse_materialization_seed_min_relative_gain", args.sparse_materialization_seed_min_relative_gain)
+        _append_arg(cmd, "--sparse_materialization_min_bin_samples", args.sparse_materialization_min_bin_samples)
+        _append_arg(cmd, "--sparse_materialization_min_relative_gain", args.sparse_materialization_min_relative_gain)
+        _append_arg(cmd, "--sparse_materialization_min_positive_view_fraction", args.sparse_materialization_min_positive_view_fraction)
+        _append_arg(cmd, "--sparse_materialization_max_mean_variance", args.sparse_materialization_max_mean_variance)
+        _append_arg(cmd, "--sparse_materialization_min_mean_sign_consistency", args.sparse_materialization_min_mean_sign_consistency)
     if not bool(args.no_policy_val_bin_uncertainty_guard):
         cmd.extend(
             [
@@ -355,21 +420,29 @@ def _texture_cmd(
             ]
         )
     if bool(args.enable_policy_val_effective_margin_gate):
+        cmd.append("--enable_policy_val_effective_margin_gate")
+        _append_arg(cmd, "--min_policy_val_effective_relative_gain", args.min_policy_val_effective_relative_gain)
+        _append_arg(cmd, "--min_policy_val_effective_ssim_gain", args.min_policy_val_effective_ssim_gain)
+        _append_arg(cmd, "--min_policy_val_effective_l1_gain", args.min_policy_val_effective_l1_gain)
+        _append_arg(cmd, "--min_policy_val_effective_ssim_cvar20_gain", args.min_policy_val_effective_ssim_cvar20_gain)
+        _append_arg(cmd, "--min_policy_val_effective_l1_cvar20_gain", args.min_policy_val_effective_l1_cvar20_gain)
+        if bool(args.enable_policy_val_image_lpips_gate):
+            _append_arg(cmd, "--min_policy_val_effective_lpips_gain", args.min_policy_val_effective_lpips_gain)
+            _append_arg(cmd, "--min_policy_val_effective_lpips_cvar20_gain", args.min_policy_val_effective_lpips_cvar20_gain)
+    if bool(args.enable_policy_val_image_lpips_gate):
         cmd.extend(
             [
-                "--enable_policy_val_effective_margin_gate",
-                "--min_policy_val_effective_relative_gain",
-                str(args.min_policy_val_effective_relative_gain),
-                "--min_policy_val_effective_ssim_gain",
-                str(args.min_policy_val_effective_ssim_gain),
-                "--min_policy_val_effective_l1_gain",
-                str(args.min_policy_val_effective_l1_gain),
-                "--min_policy_val_effective_ssim_cvar20_gain",
-                str(args.min_policy_val_effective_ssim_cvar20_gain),
-                "--min_policy_val_effective_l1_cvar20_gain",
-                str(args.min_policy_val_effective_l1_cvar20_gain),
+                "--enable_policy_val_image_lpips_gate",
+                "--policy_val_lpips_max_size",
+                str(args.policy_val_lpips_max_size),
+                "--min_policy_val_lpips_mean_gain",
+                str(args.min_policy_val_lpips_mean_gain),
+                "--min_policy_val_lpips_positive_view_fraction",
+                str(args.min_policy_val_lpips_positive_view_fraction),
+                f"--min_policy_val_lpips_min_view_gain={args.min_policy_val_lpips_min_view_gain}",
             ]
         )
+        _append_arg(cmd, "--min_policy_val_lpips_cvar20_view_gain", args.min_policy_val_lpips_cvar20_view_gain)
     if bool(args.no_policy_val_bin_uncertainty_shrink):
         cmd = [token for token in cmd if token != "--enable_policy_val_bin_uncertainty_shrink"]
     if bool(args.enable_policy_val_structure_aware_shrink):
@@ -400,7 +473,7 @@ def _texture_cmd(
                 str(args.parent_edge_apply_shrink_min_multiplier),
             ]
         )
-    return cmd
+    return _normalize_negative_numeric_args(cmd)
 
 
 def _eval_cmd(args: argparse.Namespace, output_model: Path, results_path: Path, per_view_path: Path) -> list[str]:
@@ -523,6 +596,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no_mask_teacher_target", action="store_true")
     parser.add_argument("--texture_size", type=int, default=16)
     parser.add_argument("--texture_size_candidates", default="8,16")
+    parser.add_argument("--enable_adaptive_texture_size_ladder", action="store_true")
+    parser.add_argument("--adaptive_texture_size_ladder_max_size", type=int, default=32)
+    parser.add_argument("--adaptive_texture_size_ladder_min_fit_samples_per_face", type=float, default=512.0)
+    parser.add_argument("--adaptive_texture_size_ladder_min_samples_per_current_bin", type=float, default=2.0)
+    parser.add_argument("--adaptive_texture_size_ladder_min_mean_l1", type=float, default=0.002)
     parser.add_argument("--support_expansion_mode", choices=("none", "fit_residual_topk", "target_footprint_residual_debt"), default="target_footprint_residual_debt")
     parser.add_argument("--support_expansion_max_extra_faces_candidates", default="2048,4096")
     parser.add_argument("--support_expansion_min_face_samples", type=int, default=64)
@@ -550,7 +628,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--enable_policy_val_alpha_frontier_selection", action="store_true")
     parser.add_argument(
         "--policy_val_alpha_frontier_mode",
-        choices=("smallest_effective", "best_score", "knee"),
+        choices=("smallest_effective", "best_score", "knee", "tail_knee"),
         default="smallest_effective",
     )
     parser.add_argument("--policy_val_alpha_frontier_min_relative_fraction", type=float, default=0.75)
@@ -559,6 +637,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--policy_val_alpha_frontier_alpha_penalty", type=float, default=0.25)
     parser.add_argument("--policy_val_alpha_frontier_knee_min_score_fraction", type=float, default=0.55)
     parser.add_argument("--policy_val_alpha_frontier_knee_slope_drop_fraction", type=float, default=0.85)
+    parser.add_argument("--policy_val_alpha_frontier_tail_knee_min_score_fraction", type=float, default=0.70)
+    parser.add_argument("--policy_val_alpha_frontier_tail_knee_min_regression_count", type=int, default=3)
+    parser.add_argument("--policy_val_alpha_frontier_tail_knee_eps", type=float, default=1.0e-10)
     parser.add_argument("--no_preacceptance_policy_val_guard_repair", action="store_true")
     parser.add_argument("--min_l1", type=float, default=0.0)
     parser.add_argument("--min_alpha", type=float, default=0.03)
@@ -584,6 +665,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_policy_val_l1_mean_gain", type=float, default=0.0)
     parser.add_argument("--min_policy_val_l1_positive_view_fraction", type=float, default=0.55)
     parser.add_argument("--min_policy_val_l1_min_view_gain", type=float, default=-1.0e-6)
+    parser.add_argument("--enable_policy_val_image_lpips_gate", action="store_true")
+    parser.add_argument("--policy_val_lpips_max_size", type=int, default=512)
+    parser.add_argument("--min_policy_val_lpips_mean_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_lpips_positive_view_fraction", type=float, default=0.0)
+    parser.add_argument("--min_policy_val_lpips_min_view_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_lpips_cvar20_view_gain", type=float, default=-1.0)
     parser.add_argument(
         "--enable_policy_val_effective_margin_gate",
         action="store_true",
@@ -597,7 +684,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_policy_val_effective_l1_gain", type=float, default=-1.0)
     parser.add_argument("--min_policy_val_effective_ssim_cvar20_gain", type=float, default=-1.0)
     parser.add_argument("--min_policy_val_effective_l1_cvar20_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_effective_lpips_gain", type=float, default=-1.0)
+    parser.add_argument("--min_policy_val_effective_lpips_cvar20_gain", type=float, default=-1.0)
     parser.add_argument("--face_gain_guard_min_positive_view_fraction", type=float, default=0.5)
+    parser.add_argument("--enable_policy_val_sparse_residual_materialization", action="store_true")
+    parser.add_argument("--sparse_materialization_seed_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--sparse_materialization_min_bin_samples", type=int, default=16)
+    parser.add_argument("--sparse_materialization_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--sparse_materialization_min_positive_view_fraction", type=float, default=0.5)
+    parser.add_argument("--sparse_materialization_max_mean_variance", type=float, default=-1.0)
+    parser.add_argument("--sparse_materialization_min_mean_sign_consistency", type=float, default=0.0)
     parser.add_argument("--no_policy_val_bin_uncertainty_guard", action="store_true")
     parser.add_argument("--bin_uncertainty_guard_min_bin_samples", type=int, default=16)
     parser.add_argument("--bin_uncertainty_guard_min_positive_view_fraction", type=float, default=0.5)
@@ -638,7 +734,7 @@ def parse_args() -> argparse.Namespace:
             "source parent renders and target GT are known to share the same frame contract."
         ),
     )
-    args = parser.parse_args()
+    args = parser.parse_args(_normalize_negative_numeric_args(sys.argv[1:]))
     if bool(args.enable_policy_val_structure_aware_shrink) and bool(args.no_policy_val_bin_uncertainty_shrink):
         parser.error("--enable_policy_val_structure_aware_shrink requires bin uncertainty shrink to stay enabled")
     if float(args.structure_shrink_l1_weight) < 0.0:
@@ -657,18 +753,42 @@ def parse_args() -> argparse.Namespace:
         parser.error("--parent_edge_apply_shrink_tau must be >= 0")
     if not 0.0 <= float(args.parent_edge_apply_shrink_min_multiplier) <= 1.0:
         parser.error("--parent_edge_apply_shrink_min_multiplier must be in [0, 1]")
+    if int(args.sparse_materialization_min_bin_samples) < 1:
+        parser.error("--sparse_materialization_min_bin_samples must be >= 1")
+    if not 0.0 <= float(args.sparse_materialization_min_positive_view_fraction) <= 1.0:
+        parser.error("--sparse_materialization_min_positive_view_fraction must be in [0, 1]")
+    if float(args.sparse_materialization_min_mean_sign_consistency) < 0.0:
+        parser.error("--sparse_materialization_min_mean_sign_consistency must be >= 0")
+    if not bool(args.enable_policy_val_image_lpips_gate) and (
+        float(args.min_policy_val_effective_lpips_gain) > -1.0
+        or float(args.min_policy_val_effective_lpips_cvar20_gain) > -1.0
+    ):
+        parser.error("LPIPS effective thresholds require --enable_policy_val_image_lpips_gate")
+    if int(args.adaptive_texture_size_ladder_max_size) <= 0:
+        parser.error("--adaptive_texture_size_ladder_max_size must be > 0")
+    if float(args.adaptive_texture_size_ladder_min_fit_samples_per_face) < 0.0:
+        parser.error("--adaptive_texture_size_ladder_min_fit_samples_per_face must be >= 0")
+    if float(args.adaptive_texture_size_ladder_min_samples_per_current_bin) < 0.0:
+        parser.error("--adaptive_texture_size_ladder_min_samples_per_current_bin must be >= 0")
+    if float(args.adaptive_texture_size_ladder_min_mean_l1) < 0.0:
+        parser.error("--adaptive_texture_size_ladder_min_mean_l1 must be >= 0")
     for frontier_fraction_name in (
         "policy_val_alpha_frontier_min_relative_fraction",
         "policy_val_alpha_frontier_min_ssim_fraction",
         "policy_val_alpha_frontier_min_l1_fraction",
         "policy_val_alpha_frontier_knee_min_score_fraction",
         "policy_val_alpha_frontier_knee_slope_drop_fraction",
+        "policy_val_alpha_frontier_tail_knee_min_score_fraction",
     ):
         frontier_fraction = float(getattr(args, frontier_fraction_name))
         if not 0.0 <= frontier_fraction <= 1.0:
             parser.error(f"--{frontier_fraction_name} must be in [0, 1]")
     if float(args.policy_val_alpha_frontier_alpha_penalty) < 0.0:
         parser.error("--policy_val_alpha_frontier_alpha_penalty must be >= 0")
+    if int(args.policy_val_alpha_frontier_tail_knee_min_regression_count) < 1:
+        parser.error("--policy_val_alpha_frontier_tail_knee_min_regression_count must be >= 1")
+    if float(args.policy_val_alpha_frontier_tail_knee_eps) < 0.0:
+        parser.error("--policy_val_alpha_frontier_tail_knee_eps must be >= 0")
     return args
 
 
