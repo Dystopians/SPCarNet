@@ -347,8 +347,12 @@ def rank_target_footprint_residual_debt_faces(
     max_samples_per_view: int,
     texture_size: int,
     target_footprint_max_views: int,
+    target_footprint_match_level: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Rank support faces by train residual debt weighted by GT-free target footprint."""
+    match_level = str(target_footprint_match_level)
+    if match_level not in {"bin", "face"}:
+        raise ValueError(f"unsupported target_footprint_match_level: {target_footprint_match_level}")
     bins_per_face = int(texture_size) * int(texture_size)
     bin_counts: dict[int, int] = {}
     bin_view_counts: dict[int, int] = {}
@@ -482,6 +486,83 @@ def rank_target_footprint_residual_debt_faces(
         max_views=int(target_footprint_max_views),
     )
     target_views_examined = int(target_summary.get("views_examined", 0) or len(target_view_paths))
+
+    if match_level == "face":
+        face_target_pixels: dict[int, int] = {}
+        face_target_views: dict[int, int] = {}
+        for key, pixels in target_samples_by_bin.items():
+            face = int(int(key) // int(bins_per_face))
+            face_target_pixels[face] = face_target_pixels.get(face, 0) + int(pixels)
+            face_target_views[face] = max(face_target_views.get(face, 0), int(target_views_by_bin.get(int(key), 0)))
+
+        face_train_debt: dict[int, float] = {}
+        face_train_samples: dict[int, int] = {}
+        face_train_l1_weighted: dict[int, float] = {}
+        face_top_bin: dict[int, dict[str, Any]] = {}
+        for debt_row in bin_debt_rows.values():
+            face = int(debt_row["face_id"])
+            samples = int(debt_row["samples"])
+            debt = float(debt_row["debt"])
+            face_train_debt[face] = face_train_debt.get(face, 0.0) + debt
+            face_train_samples[face] = face_train_samples.get(face, 0) + samples
+            face_train_l1_weighted[face] = face_train_l1_weighted.get(face, 0.0) + float(debt_row["mean_l1"]) * samples
+            top_bin = dict(face_top_bin.get(face, {}))
+            if not top_bin or debt > float(top_bin.get("debt", -1.0)):
+                face_top_bin[face] = dict(debt_row)
+
+        rows: list[dict[str, Any]] = []
+        for face, train_debt in face_train_debt.items():
+            target_pixels = int(face_target_pixels.get(int(face), 0))
+            if target_pixels <= 0:
+                continue
+            target_views = int(face_target_views.get(int(face), 0))
+            target_view_fraction = float(target_views / max(1, int(target_views_examined)))
+            score = float(train_debt) * math.log1p(float(target_pixels)) * max(0.05, float(target_view_fraction))
+            samples = int(face_train_samples.get(int(face), 0))
+            top_bin = dict(face_top_bin.get(int(face), {}))
+            top_bin["target_pixels"] = int(target_pixels)
+            top_bin["target_views"] = int(target_views)
+            top_bin["target_view_fraction"] = float(target_view_fraction)
+            top_bin["score"] = float(score)
+            rows.append(
+                {
+                    "face_id": int(face),
+                    "samples": int(samples),
+                    "mean_l1": float(face_train_l1_weighted.get(int(face), 0.0) / max(1, samples)),
+                    "target_pixels": int(target_pixels),
+                    "target_views": int(target_views),
+                    "target_view_fraction": float(target_view_fraction),
+                    "score": float(score),
+                    "top_bin": top_bin,
+                }
+            )
+        rows.sort(
+            key=lambda row: (
+                float(row["score"]),
+                int(row["target_pixels"]),
+                float(row["mean_l1"]),
+                int(row["samples"]),
+            ),
+            reverse=True,
+        )
+        return rows, {
+            "enabled": True,
+            "mode": "target_footprint_residual_debt",
+            "match_level": str(match_level),
+            "base_faces": int(len(base_faces)),
+            "eligible_extra_faces": int(len(rows)),
+            "train_debt_bins": int(len(bin_debt_rows)),
+            "train_debt_faces": int(len(train_candidate_faces)),
+            "fit_view_count": int(fit_view_count),
+            "skipped_policy_val_views": int(skipped_policy_val_views),
+            "target_footprint": dict(target_summary),
+            "target_covered_faces": int(len(face_target_pixels)),
+            "min_face_samples": int(min_face_samples),
+            "min_mean_l1": float(min_mean_l1),
+            "texture_size": int(texture_size),
+            "rank_preview": rows[:20],
+        }
+
     face_scores: dict[int, float] = {}
     face_target_pixels: dict[int, int] = {}
     face_target_views: dict[int, int] = {}
@@ -542,6 +623,7 @@ def rank_target_footprint_residual_debt_faces(
     return rows, {
         "enabled": True,
         "mode": "target_footprint_residual_debt",
+        "match_level": str(match_level),
         "base_faces": int(len(base_faces)),
         "eligible_extra_faces": int(len(rows)),
         "train_debt_bins": int(len(bin_debt_rows)),
@@ -578,7 +660,7 @@ def expanded_candidate_faces_from_ranked_rows(
     selected = ranked_rows[: int(max_extra_faces)]
     expanded = set(base_faces)
     expanded.update(int(row["face_id"]) for row in selected)
-    return expanded, {
+    summary = {
         "enabled": True,
         "mode": mode,
         "base_faces": int(len(base_faces)),
@@ -595,6 +677,10 @@ def expanded_candidate_faces_from_ranked_rows(
         "max_extra_faces": int(max_extra_faces),
         "preview": selected[:20],
     }
+    for key in ("match_level", "target_covered_faces", "texture_size"):
+        if key in rank_summary:
+            summary[key] = rank_summary[key]
+    return expanded, summary
 
 
 def expand_candidate_faces_from_fit_residuals(
@@ -5250,6 +5336,14 @@ def save_image_chw(path: Path, image: np.ndarray) -> None:
     Image.fromarray(arr_u8).save(path)
 
 
+def png_quantized_change_mask(before: np.ndarray, after: np.ndarray) -> np.ndarray:
+    before_hwc = np.clip(np.moveaxis(np.asarray(before, dtype=np.float32), 0, -1), 0.0, 1.0)
+    after_hwc = np.clip(np.moveaxis(np.asarray(after, dtype=np.float32), 0, -1), 0.0, 1.0)
+    before_u8 = np.clip(np.round(before_hwc * 255.0), 0, 255).astype(np.uint8)
+    after_u8 = np.clip(np.round(after_hwc * 255.0), 0, 255).astype(np.uint8)
+    return np.any(before_u8 != after_u8, axis=-1)
+
+
 def image_ssim_chw(render: np.ndarray, gt: np.ndarray, max_size: int) -> float:
     render_t = torch.from_numpy(np.asarray(render, dtype=np.float32)).unsqueeze(0)
     gt_t = torch.from_numpy(np.asarray(gt, dtype=np.float32)).unsqueeze(0)
@@ -5317,6 +5411,7 @@ def apply_to_target(
     render_dir.mkdir(parents=True, exist_ok=True)
     gt_dir.mkdir(parents=True, exist_ok=True)
     changed_pixels = 0
+    png_quantized_changed_pixels = 0
     total_pixels = 0
     written = 0
     for path in tqdm(target_views, desc=f"apply atlas {split}"):
@@ -5349,6 +5444,7 @@ def apply_to_target(
             delta = np.clip(delta, -float(max_abs_delta_rgb), float(max_abs_delta_rgb))
         changed_mask = np.any(np.abs(delta) > 1.0e-8, axis=0)
         adapted = np.clip(rgb + delta, 0.0, 1.0)
+        png_changed_mask = png_quantized_change_mask(rgb, adapted)
         name = f"{path.stem}.png"
         save_image_chw(render_dir / name, adapted)
         if "rgb_gt" in z:
@@ -5356,6 +5452,7 @@ def apply_to_target(
         else:
             save_image_chw(gt_dir / name, rgb)
         changed_pixels += int(changed_mask.sum())
+        png_quantized_changed_pixels += int(png_changed_mask.sum())
         total_pixels += int(valid.size)
         written += 1
     return {
@@ -5363,8 +5460,10 @@ def apply_to_target(
         "method_name": method_name,
         "written_views": int(written),
         "changed_pixels": int(changed_pixels),
+        "png_quantized_changed_pixels": int(png_quantized_changed_pixels),
         "total_pixels": int(total_pixels),
         "changed_fraction": float(changed_pixels / max(1, total_pixels)),
+        "png_quantized_changed_fraction": float(png_quantized_changed_pixels / max(1, total_pixels)),
         "render_dir": str(render_dir),
         "gt_dir": str(gt_dir),
     }
@@ -5401,6 +5500,7 @@ def evaluate_target_support_profile(
         disabled["reason"] = "no_target_views_or_empty_atlas_or_zero_alpha"
         return disabled
     changed_pixels = 0
+    png_quantized_changed_pixels = 0
     valid_pixels = 0
     total_pixels = 0
     abs_delta_sum = 0.0
@@ -5435,12 +5535,16 @@ def evaluate_target_support_profile(
         if float(max_abs_delta_rgb) > 0.0:
             delta = np.clip(delta, -float(max_abs_delta_rgb), float(max_abs_delta_rgb))
         changed_mask = np.any(np.abs(delta) > 1.0e-8, axis=0)
+        adapted = np.clip(np.asarray(z["rgb_render"], dtype=np.float32) + delta, 0.0, 1.0)
+        png_changed_mask = png_quantized_change_mask(np.asarray(z["rgb_render"], dtype=np.float32), adapted)
         changed = int(changed_mask.sum())
+        png_changed = int(png_changed_mask.sum())
         valid_count = int(np.asarray(valid, dtype=bool).sum())
         total = int(valid.size)
         abs_delta = float(np.sum(np.abs(delta)))
         active_abs_delta = float(np.sum(np.abs(delta[:, changed_mask]))) if changed > 0 else 0.0
         changed_pixels += changed
+        png_quantized_changed_pixels += png_changed
         valid_pixels += valid_count
         total_pixels += total
         abs_delta_sum += abs_delta
@@ -5450,15 +5554,18 @@ def evaluate_target_support_profile(
             {
                 "view": str(path.name),
                 "changed_pixels": int(changed),
+                "png_quantized_changed_pixels": int(png_changed),
                 "valid_pixels": int(valid_count),
                 "total_pixels": int(total),
                 "changed_fraction": float(changed / max(1, total)),
+                "png_quantized_changed_fraction": float(png_changed / max(1, total)),
                 "valid_fraction": float(valid_count / max(1, total)),
                 "mean_abs_delta": float(abs_delta / max(1, total * 3)),
                 "active_mean_abs_delta": float(active_abs_delta / max(1, changed * 3)),
             }
         )
     changed_fracs = sorted(float(row["changed_fraction"]) for row in view_rows)
+    png_changed_fracs = sorted(float(row["png_quantized_changed_fraction"]) for row in view_rows)
     valid_fracs = sorted(float(row["valid_fraction"]) for row in view_rows)
 
     def lower_cvar(values: list[float], fraction: float = 0.2) -> float:
@@ -5472,12 +5579,16 @@ def evaluate_target_support_profile(
         "mode": "target_support_candidate_selection",
         "view_count": int(len(view_rows)),
         "changed_pixels": int(changed_pixels),
+        "png_quantized_changed_pixels": int(png_quantized_changed_pixels),
         "valid_pixels": int(valid_pixels),
         "total_pixels": int(total_pixels),
         "changed_fraction": float(changed_pixels / max(1, total_pixels)),
+        "png_quantized_changed_fraction": float(png_quantized_changed_pixels / max(1, total_pixels)),
         "valid_fraction": float(valid_pixels / max(1, total_pixels)),
         "min_view_changed_fraction": float(changed_fracs[0] if changed_fracs else 0.0),
         "cvar20_view_changed_fraction": lower_cvar(changed_fracs, 0.2),
+        "min_view_png_quantized_changed_fraction": float(png_changed_fracs[0] if png_changed_fracs else 0.0),
+        "cvar20_view_png_quantized_changed_fraction": lower_cvar(png_changed_fracs, 0.2),
         "min_view_valid_fraction": float(valid_fracs[0] if valid_fracs else 0.0),
         "cvar20_view_valid_fraction": lower_cvar(valid_fracs, 0.2),
         "mean_abs_delta": float(abs_delta_sum / max(1, total_pixels * 3)),
@@ -6218,6 +6329,15 @@ def main() -> int:
         type=float,
         default=0.0,
         help="Minimum mean residual L1 required for an expanded face.",
+    )
+    parser.add_argument(
+        "--target_footprint_residual_debt_match_level",
+        choices=("bin", "face"),
+        default="bin",
+        help=(
+            "For target_footprint_residual_debt expansion, require target footprint to hit the same "
+            "face/UV bin as train residual debt, or allow train-certified debt to transfer within the same face."
+        ),
     )
     parser.add_argument("--policy_val_stride", type=int, default=4)
     parser.add_argument("--alpha_grid", default="0,0.25,0.5,0.75,1.0")
@@ -6991,6 +7111,15 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--enable_target_visible_energy_score",
+        action="store_true",
+        help=(
+            "When target-support candidate selection is enabled, rank train-policy-safe candidates by "
+            "GT-free target-visible residual energy before raw changed-area coverage. This favors candidates "
+            "that are both visible on the target trajectory and large enough to affect rendered appearance."
+        ),
+    )
+    parser.add_argument(
         "--target_support_prerank_top_k",
         type=int,
         default=0,
@@ -7372,6 +7501,7 @@ def main() -> int:
                 max_samples_per_view=int(args.max_samples_per_view),
                 texture_size=int(probe_texture_size),
                 target_footprint_max_views=int(args.target_footprint_max_views),
+                target_footprint_match_level=str(args.target_footprint_residual_debt_match_level),
             )
         else:
             ranked_extra_faces, rank_summary = rank_fit_residual_extra_faces(
@@ -8600,28 +8730,106 @@ def main() -> int:
             -float(candidate.get("max_abs_delta_rgb", args.max_abs_delta_rgb)),
         )
 
-    def target_support_score(candidate: dict[str, Any]) -> tuple[float, float, float, float, float]:
+    def target_support_energy_score(profile: dict[str, Any]) -> float:
+        changed_fraction = float(
+            profile.get("png_quantized_changed_fraction", profile.get("changed_fraction", 0.0)) or 0.0
+        )
+        active_mean_abs_delta = float(profile.get("active_mean_abs_delta", 0.0) or 0.0)
+        mean_abs_delta = float(profile.get("mean_abs_delta", 0.0) or 0.0)
+        if active_mean_abs_delta > 0.0:
+            return float(changed_fraction * active_mean_abs_delta)
+        return float(mean_abs_delta)
+
+    def target_support_cvar20_energy_score(profile: dict[str, Any]) -> float:
+        active_mean_abs_delta = float(profile.get("active_mean_abs_delta", 0.0) or 0.0)
+        mean_abs_delta = float(profile.get("mean_abs_delta", 0.0) or 0.0)
+        scale = active_mean_abs_delta if active_mean_abs_delta > 0.0 else mean_abs_delta
+        changed_fraction = float(
+            profile.get(
+                "cvar20_view_png_quantized_changed_fraction",
+                profile.get("cvar20_view_changed_fraction", 0.0),
+            )
+            or 0.0
+        )
+        return float(changed_fraction * scale)
+
+    def target_support_min_view_energy_score(profile: dict[str, Any]) -> float:
+        active_mean_abs_delta = float(profile.get("active_mean_abs_delta", 0.0) or 0.0)
+        mean_abs_delta = float(profile.get("mean_abs_delta", 0.0) or 0.0)
+        scale = active_mean_abs_delta if active_mean_abs_delta > 0.0 else mean_abs_delta
+        changed_fraction = float(
+            profile.get(
+                "min_view_png_quantized_changed_fraction",
+                profile.get("min_view_changed_fraction", 0.0),
+            )
+            or 0.0
+        )
+        return float(changed_fraction * scale)
+
+    def target_support_score(candidate: dict[str, Any]) -> tuple[float, ...]:
         profile = dict(candidate.get("target_support_profile") or {})
         if not bool(profile.get("enabled", False)):
-            return (0.0, 0.0, 0.0, 0.0, 0.0)
-        return (
-            float(profile.get("changed_fraction", 0.0)),
-            float(profile.get("cvar20_view_changed_fraction", 0.0)),
-            float(profile.get("min_view_changed_fraction", 0.0)),
-            float(profile.get("valid_fraction", 0.0)),
-            float(profile.get("mean_abs_delta", 0.0)),
+            return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0) if bool(
+                args.enable_target_visible_energy_score
+            ) else (0.0, 0.0, 0.0, 0.0, 0.0)
+        changed_fraction = float(profile.get("changed_fraction", 0.0) or 0.0)
+        png_changed_fraction = float(profile.get("png_quantized_changed_fraction", changed_fraction) or 0.0)
+        cvar20_changed = float(profile.get("cvar20_view_changed_fraction", 0.0) or 0.0)
+        cvar20_png_changed = float(
+            profile.get("cvar20_view_png_quantized_changed_fraction", cvar20_changed) or 0.0
         )
+        min_changed = float(profile.get("min_view_changed_fraction", 0.0) or 0.0)
+        min_png_changed = float(profile.get("min_view_png_quantized_changed_fraction", min_changed) or 0.0)
+        valid_fraction = float(profile.get("valid_fraction", 0.0) or 0.0)
+        mean_abs_delta = float(profile.get("mean_abs_delta", 0.0) or 0.0)
+        active_mean_abs_delta = float(profile.get("active_mean_abs_delta", 0.0) or 0.0)
+        if bool(args.enable_target_visible_energy_score):
+            return (
+                target_support_energy_score(profile),
+                target_support_cvar20_energy_score(profile),
+                target_support_min_view_energy_score(profile),
+                png_changed_fraction,
+                cvar20_png_changed,
+                min_png_changed,
+                changed_fraction,
+                cvar20_changed,
+                min_changed,
+                valid_fraction,
+                mean_abs_delta,
+            )
+        return (changed_fraction, cvar20_changed, min_changed, valid_fraction, mean_abs_delta)
 
     def target_support_score_dict(candidate: dict[str, Any]) -> dict[str, float]:
         profile = dict(candidate.get("target_support_profile") or {})
         return {
+            "energy_score": target_support_energy_score(profile),
+            "cvar20_view_energy_score": target_support_cvar20_energy_score(profile),
+            "min_view_energy_score": target_support_min_view_energy_score(profile),
             "changed_fraction": float(profile.get("changed_fraction", 0.0) or 0.0),
+            "png_quantized_changed_fraction": float(
+                profile.get("png_quantized_changed_fraction", profile.get("changed_fraction", 0.0)) or 0.0
+            ),
             "cvar20_view_changed_fraction": float(
                 profile.get("cvar20_view_changed_fraction", 0.0) or 0.0
             ),
+            "cvar20_view_png_quantized_changed_fraction": float(
+                profile.get(
+                    "cvar20_view_png_quantized_changed_fraction",
+                    profile.get("cvar20_view_changed_fraction", 0.0),
+                )
+                or 0.0
+            ),
             "min_view_changed_fraction": float(profile.get("min_view_changed_fraction", 0.0) or 0.0),
+            "min_view_png_quantized_changed_fraction": float(
+                profile.get(
+                    "min_view_png_quantized_changed_fraction",
+                    profile.get("min_view_changed_fraction", 0.0),
+                )
+                or 0.0
+            ),
             "valid_fraction": float(profile.get("valid_fraction", 0.0) or 0.0),
             "mean_abs_delta": float(profile.get("mean_abs_delta", 0.0) or 0.0),
+            "active_mean_abs_delta": float(profile.get("active_mean_abs_delta", 0.0) or 0.0),
         }
 
     def target_support_certificate(candidate: dict[str, Any]) -> dict[str, Any]:
@@ -9199,6 +9407,10 @@ def main() -> int:
         }
     else:
         selected_candidate = candidate_runs[0]
+        if target_support_candidate_selection_enabled:
+            if not target_support_views:
+                raise FileNotFoundError(f"no target npz views found in {target_evidence}")
+            attach_target_support_profile(selected_candidate)
         fill_mode_selection = {
             "mode": "fixed",
             "selected_fill_mode": str(selected_candidate.get("fill_mode", "")),
@@ -9308,6 +9520,12 @@ def main() -> int:
     )
     fit_summary["target_support_candidate_selection"] = {
         "enabled": bool(target_support_candidate_selection_enabled),
+        "target_visible_energy_score_enabled": bool(args.enable_target_visible_energy_score),
+        "ranking_primary": (
+            "target_visible_residual_energy"
+            if bool(args.enable_target_visible_energy_score)
+            else "target_changed_fraction"
+        ),
         "selected_profile": dict(target_support_profile),
         "selected_certificate": target_support_certificate(selected_candidate),
         "selected_score": target_support_score_dict(selected_candidate),

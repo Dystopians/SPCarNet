@@ -85,6 +85,8 @@ def _teacher_cache_cmd(args: argparse.Namespace, teacher_cache_dir: Path) -> lis
         cmd.extend(["--parent_render_dir", str(args.parent_render_dir)])
     if args.no_mask_teacher_target:
         cmd.append("--no-mask_target")
+    if bool(args.reparent_allow_resize):
+        cmd.append("--allow_resize")
     return cmd
 
 
@@ -183,6 +185,8 @@ def _texture_cmd(
         str(args.support_expansion_max_extra_faces_candidates),
         "--support_expansion_min_face_samples",
         str(args.support_expansion_min_face_samples),
+        "--target_footprint_residual_debt_match_level",
+        str(args.target_footprint_residual_debt_match_level),
         "--policy_val_stride",
         str(args.policy_val_stride),
         "--alpha_grid",
@@ -280,6 +284,8 @@ def _texture_cmd(
         str(args.noop_fallback_source),
         "--force",
     ]
+    if not bool(args.no_target_visible_energy_score):
+        cmd.append("--enable_target_visible_energy_score")
     if bool(args.no_policy_val_ssim_alpha_refinement):
         cmd = [token for token in cmd if token != "--enable_policy_val_ssim_alpha_refinement"]
     if bool(args.no_preacceptance_policy_val_guard_repair):
@@ -466,6 +472,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--support_expansion_mode", choices=("none", "fit_residual_topk", "target_footprint_residual_debt"), default="target_footprint_residual_debt")
     parser.add_argument("--support_expansion_max_extra_faces_candidates", default="2048,4096")
     parser.add_argument("--support_expansion_min_face_samples", type=int, default=64)
+    parser.add_argument("--target_footprint_residual_debt_match_level", choices=("bin", "face"), default="bin")
     parser.add_argument("--policy_val_stride", type=int, default=4)
     parser.add_argument("--alpha_grid", default="0,0.125,0.25,0.5")
     parser.add_argument("--no_policy_val_ssim_alpha_refinement", action="store_true")
@@ -529,6 +536,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--parent_edge_apply_shrink_weight", type=float, default=0.0)
     parser.add_argument("--parent_edge_apply_shrink_tau", type=float, default=0.05)
     parser.add_argument("--parent_edge_apply_shrink_min_multiplier", type=float, default=0.25)
+    parser.add_argument(
+        "--no_target_visible_energy_score",
+        action="store_true",
+        help=(
+            "Disable the v116 target-visible residual-energy score. By default vNext ranks "
+            "train-policy-safe candidates by GT-free target-visible residual energy before raw coverage."
+        ),
+    )
     parser.add_argument("--target_footprint_tail_risk_min_positive_view_fraction", type=float, default=0.75)
     parser.add_argument("--target_footprint_tail_risk_min_min_view_gain", type=float, default=-1.0e-8)
     parser.add_argument("--target_footprint_tail_risk_min_cvar20_view_gain", type=float, default=0.0)
