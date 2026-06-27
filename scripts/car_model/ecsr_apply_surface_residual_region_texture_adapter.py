@@ -115,6 +115,36 @@ def refine_alpha_grid_for_policy_val_ssim(
     }
 
 
+def augment_alpha_grid_with_midpoints(
+    base_alpha_grid: list[float],
+    *,
+    enabled: bool,
+) -> tuple[list[float], dict[str, Any]]:
+    base = sorted(set(float(x) for x in base_alpha_grid))
+    if not bool(enabled):
+        return base, {"enabled": False, "alpha_grid": base}
+    generated: set[float] = set(base)
+    inserted: list[float] = []
+    for lo, hi in zip(base[:-1], base[1:]):
+        lo = float(lo)
+        hi = float(hi)
+        if hi <= 0.0 or hi <= lo:
+            continue
+        midpoint = round(float(0.5 * (lo + hi)), 12)
+        if midpoint <= 0.0 or midpoint in generated:
+            continue
+        generated.add(midpoint)
+        inserted.append(midpoint)
+    combined = sorted(generated)
+    return combined, {
+        "enabled": True,
+        "base_alpha_grid": base,
+        "inserted_alpha_count": int(len(inserted)),
+        "inserted_alpha_grid": sorted(inserted),
+        "alpha_grid": combined,
+    }
+
+
 def parse_int_candidates(text: str, default_value: int) -> list[int]:
     values: list[int] = []
     for item in str(text or "").split(","):
@@ -6567,6 +6597,197 @@ def policy_val_risk_reasons(row: dict[str, Any], args: argparse.Namespace) -> li
     return reasons
 
 
+def select_policy_val_frontier_row(
+    safe_rows: list[dict[str, Any]],
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    best_by_relative = max(safe_rows, key=lambda row: float(row.get("relative_gain", -1.0)))
+    if not bool(getattr(args, "enable_policy_val_alpha_frontier_selection", False)):
+        return best_by_relative, {
+            "frontier_enabled": False,
+            "frontier_reason": "disabled",
+            "best_by_relative_alpha": float(best_by_relative.get("alpha", 0.0)),
+        }
+
+    best_relative_gain = float(best_by_relative.get("relative_gain", 0.0))
+    best_ssim_gain = max(float(row.get("ssim_gain", 0.0)) for row in safe_rows)
+    best_l1_gain = max(float(row.get("image_l1_gain", 0.0)) for row in safe_rows)
+    relative_threshold = float(args.min_policy_val_relative_gain)
+    if best_relative_gain > relative_threshold:
+        relative_threshold = max(
+            relative_threshold,
+            float(args.policy_val_alpha_frontier_min_relative_fraction) * best_relative_gain,
+        )
+    ssim_threshold = -math.inf
+    if best_ssim_gain > 0.0:
+        ssim_threshold = float(args.policy_val_alpha_frontier_min_ssim_fraction) * best_ssim_gain
+    l1_threshold = -math.inf
+    if best_l1_gain > 0.0:
+        l1_threshold = float(args.policy_val_alpha_frontier_min_l1_fraction) * best_l1_gain
+
+    eligible = [
+        dict(row)
+        for row in safe_rows
+        if float(row.get("relative_gain", -1.0)) >= relative_threshold
+        and float(row.get("ssim_gain", 0.0)) >= ssim_threshold
+        and float(row.get("image_l1_gain", 0.0)) >= l1_threshold
+    ]
+    if not eligible:
+        return best_by_relative, {
+            "frontier_enabled": True,
+            "frontier_reason": "no_frontier_eligible_rows",
+            "best_by_relative_alpha": float(best_by_relative.get("alpha", 0.0)),
+            "selected_alpha": float(best_by_relative.get("alpha", 0.0)),
+            "eligible_alpha_count": 0,
+            "thresholds": {
+                "relative_gain": float(relative_threshold),
+                "ssim_gain": None if not math.isfinite(ssim_threshold) else float(ssim_threshold),
+                "image_l1_gain": None if not math.isfinite(l1_threshold) else float(l1_threshold),
+            },
+        }
+
+    mode = str(getattr(args, "policy_val_alpha_frontier_mode", "smallest_effective"))
+    if mode == "knee":
+        best_axis_gains = {
+            "relative_gain": float(best_relative_gain),
+            "ssim_gain": float(best_ssim_gain),
+            "image_l1_gain": float(best_l1_gain),
+        }
+        active_axes = [axis for axis, best_gain in best_axis_gains.items() if float(best_gain) > 0.0]
+
+        def normalized_score(row: dict[str, Any]) -> float:
+            if not active_axes:
+                return float(row.get("relative_gain", 0.0))
+            score_terms = []
+            for axis in active_axes:
+                best_gain = max(float(best_axis_gains[axis]), 1.0e-12)
+                score_terms.append(max(0.0, min(1.0, float(row.get(axis, 0.0)) / best_gain)))
+            return float(sum(score_terms) / max(len(score_terms), 1))
+
+        sorted_safe = sorted(safe_rows, key=lambda row: float(row.get("alpha", 0.0)))
+        knee_profiles: list[dict[str, Any]] = []
+        prev_alpha = 0.0
+        prev_score = 0.0
+        for row in sorted_safe:
+            alpha = float(row.get("alpha", 0.0))
+            score_value = normalized_score(row)
+            delta_alpha = max(alpha - prev_alpha, 1.0e-12)
+            marginal_slope = max(0.0, score_value - prev_score) / delta_alpha
+            knee_profiles.append(
+                {
+                    "alpha": alpha,
+                    "score": float(score_value),
+                    "marginal_slope": float(marginal_slope),
+                    "relative_gain": float(row.get("relative_gain", 0.0)),
+                    "ssim_gain": float(row.get("ssim_gain", 0.0)),
+                    "image_l1_gain": float(row.get("image_l1_gain", 0.0)),
+                }
+            )
+            prev_alpha = alpha
+            prev_score = score_value
+
+        min_score = float(getattr(args, "policy_val_alpha_frontier_knee_min_score_fraction", 0.55))
+        slope_drop = float(getattr(args, "policy_val_alpha_frontier_knee_slope_drop_fraction", 0.85))
+        selected = None
+        frontier_reason = "knee_not_found_fallback_to_smallest_effective"
+        best_prior_slope = 0.0
+        for idx, row in enumerate(sorted_safe[:-1]):
+            profile = knee_profiles[idx]
+            best_prior_slope = max(best_prior_slope, float(profile["marginal_slope"]))
+            next_slope = float(knee_profiles[idx + 1]["marginal_slope"])
+            slope_ratio = next_slope / max(best_prior_slope, 1.0e-12)
+            profile["next_marginal_slope"] = float(next_slope)
+            profile["next_slope_ratio"] = float(slope_ratio)
+            if float(profile["score"]) >= min_score and slope_ratio <= slope_drop:
+                selected = row
+                frontier_reason = "selected_knee_before_diminishing_returns"
+                break
+        if selected is None:
+            selected = min(
+                eligible,
+                key=lambda row: (
+                    float(row.get("alpha", 0.0)),
+                    -float(row.get("relative_gain", 0.0)),
+                    -float(row.get("ssim_gain", 0.0)),
+                    -float(row.get("image_l1_gain", 0.0)),
+                ),
+            )
+    elif mode == "best_score":
+        max_alpha = max(float(row.get("alpha", 0.0)) for row in safe_rows)
+        max_alpha = max(max_alpha, 1.0e-12)
+
+        def score(row: dict[str, Any]) -> tuple[float, float]:
+            rel_norm = float(row.get("relative_gain", 0.0)) / max(best_relative_gain, 1.0e-12)
+            ssim_norm = (
+                float(row.get("ssim_gain", 0.0)) / max(best_ssim_gain, 1.0e-12)
+                if best_ssim_gain > 0.0
+                else 0.0
+            )
+            l1_norm = (
+                float(row.get("image_l1_gain", 0.0)) / max(best_l1_gain, 1.0e-12)
+                if best_l1_gain > 0.0
+                else 0.0
+            )
+            alpha_penalty = float(args.policy_val_alpha_frontier_alpha_penalty) * (
+                float(row.get("alpha", 0.0)) / max_alpha
+            )
+            return (rel_norm + ssim_norm + l1_norm - alpha_penalty, -float(row.get("alpha", 0.0)))
+
+        selected = max(eligible, key=score)
+    elif mode == "smallest_effective":
+        selected = min(
+            eligible,
+            key=lambda row: (
+                float(row.get("alpha", 0.0)),
+                -float(row.get("relative_gain", 0.0)),
+                -float(row.get("ssim_gain", 0.0)),
+                -float(row.get("image_l1_gain", 0.0)),
+            ),
+        )
+    else:
+        raise ValueError(f"unsupported policy_val_alpha_frontier_mode: {mode}")
+
+    frontier_preview = sorted(
+        eligible,
+        key=lambda row: float(row.get("alpha", 0.0)),
+    )[:16]
+    selection_payload = {
+        "frontier_enabled": True,
+        "frontier_reason": (
+            frontier_reason
+            if mode == "knee"
+            else "selected_smallest_effective_alpha"
+            if mode == "smallest_effective"
+            else "selected_best_score"
+        ),
+        "frontier_mode": mode,
+        "best_by_relative_alpha": float(best_by_relative.get("alpha", 0.0)),
+        "best_by_relative_gain": float(best_relative_gain),
+        "selected_alpha": float(selected.get("alpha", 0.0)),
+        "selected_relative_gain": float(selected.get("relative_gain", 0.0)),
+        "eligible_alpha_count": int(len(eligible)),
+        "thresholds": {
+            "relative_gain": float(relative_threshold),
+            "ssim_gain": None if not math.isfinite(ssim_threshold) else float(ssim_threshold),
+            "image_l1_gain": None if not math.isfinite(l1_threshold) else float(l1_threshold),
+        },
+        "best_axis_gains": {
+            "relative_gain": float(best_relative_gain),
+            "ssim_gain": float(best_ssim_gain),
+            "image_l1_gain": float(best_l1_gain),
+        },
+        "frontier_preview": frontier_preview,
+    }
+    if mode == "knee":
+        selection_payload["knee"] = {
+            "min_score_fraction": float(args.policy_val_alpha_frontier_knee_min_score_fraction),
+            "slope_drop_fraction": float(args.policy_val_alpha_frontier_knee_slope_drop_fraction),
+            "active_axes": list(active_axes),
+            "profiles": knee_profiles[:16],
+        }
+    return selected, selection_payload
+
+
 def select_policy_val_payload_by_risk_gate(
     policy_payload: dict[str, Any],
     args: argparse.Namespace,
@@ -6585,19 +6806,31 @@ def select_policy_val_payload_by_risk_gate(
                 continue
             safe_rows.append(dict(row))
         if safe_rows:
-            best_row = max(safe_rows, key=lambda row: float(row.get("relative_gain", -1.0)))
+            best_row, frontier_selection = select_policy_val_frontier_row(safe_rows, args)
             policy_payload["best"] = best_row
             selection_mode = "risk_gate"
             refinement = policy_payload.get("ssim_alpha_refinement") or {}
+            midpoint = policy_payload.get("alpha_midpoint_refinement") or {}
             if bool(refinement.get("enabled", False)) and float(best_row.get("alpha", 0.0)) in {
                 float(x) for x in refinement.get("inserted_alpha_grid", []) or []
             }:
                 selection_mode = "risk_gate_ssim_alpha_refined"
+            if bool(midpoint.get("enabled", False)) and float(best_row.get("alpha", 0.0)) in {
+                float(x) for x in midpoint.get("inserted_alpha_grid", []) or []
+            }:
+                selection_mode = "risk_gate_alpha_midpoint"
+            if bool(frontier_selection.get("frontier_enabled", False)):
+                selection_mode = f"{selection_mode}_frontier"
             policy_payload["selection"] = {
                 "mode": selection_mode,
                 "safe_alpha_count": int(len(safe_rows)),
                 "selected_alpha": float(best_row.get("alpha", 0.0)),
                 "selected_from_refinement": selection_mode == "risk_gate_ssim_alpha_refined",
+                "selected_from_midpoint": bool(
+                    midpoint.get("enabled", False)
+                    and float(best_row.get("alpha", 0.0)) in {float(x) for x in midpoint.get("inserted_alpha_grid", []) or []}
+                ),
+                "alpha_frontier": dict(frontier_selection),
             }
         else:
             selected_alpha_override = 0.0
@@ -6606,6 +6839,11 @@ def select_policy_val_payload_by_risk_gate(
                 "safe_alpha_count": 0,
                 "selected_alpha": 0.0,
                 "selected_from_refinement": False,
+                "selected_from_midpoint": False,
+                "alpha_frontier": {
+                    "frontier_enabled": bool(getattr(args, "enable_policy_val_alpha_frontier_selection", False)),
+                    "frontier_reason": "no_safe_rows",
+                },
             }
     selected_alpha = (
         float(selected_alpha_override)
@@ -7185,6 +7423,57 @@ def main() -> int:
         help=(
             "Augment the policy-val alpha line search with deterministic half-step low-alpha candidates. "
             "This keeps the same SSIM/L1 risk gates and only changes the certified candidate set."
+        ),
+    )
+    parser.add_argument(
+        "--enable_policy_val_alpha_midpoint_refinement",
+        action="store_true",
+        help=(
+            "Augment the policy-val alpha line search with deterministic midpoints between adjacent "
+            "candidate alphas. This makes intermediate strengths such as 0.1875 train-policy-selectable "
+            "without hand-writing them into --alpha_grid."
+        ),
+    )
+    parser.add_argument(
+        "--enable_policy_val_alpha_frontier_selection",
+        action="store_true",
+        help=(
+            "After normal policy-val risk gates, select the smallest alpha that preserves a configured "
+            "fraction of the best train-policy-val relative/SSIM/L1 gains instead of always selecting "
+            "the max-relative-gain alpha."
+        ),
+    )
+    parser.add_argument(
+        "--policy_val_alpha_frontier_mode",
+        choices=("smallest_effective", "best_score", "knee"),
+        default="smallest_effective",
+        help="Frontier selection mode used by --enable_policy_val_alpha_frontier_selection.",
+    )
+    parser.add_argument("--policy_val_alpha_frontier_min_relative_fraction", type=float, default=0.75)
+    parser.add_argument("--policy_val_alpha_frontier_min_ssim_fraction", type=float, default=0.75)
+    parser.add_argument("--policy_val_alpha_frontier_min_l1_fraction", type=float, default=0.75)
+    parser.add_argument(
+        "--policy_val_alpha_frontier_alpha_penalty",
+        type=float,
+        default=0.25,
+        help="Alpha-size penalty used only by --policy_val_alpha_frontier_mode best_score.",
+    )
+    parser.add_argument(
+        "--policy_val_alpha_frontier_knee_min_score_fraction",
+        type=float,
+        default=0.55,
+        help=(
+            "For --policy_val_alpha_frontier_mode knee, require the selected alpha to reach this "
+            "normalized policy-val gain score before it can be considered a conservative knee."
+        ),
+    )
+    parser.add_argument(
+        "--policy_val_alpha_frontier_knee_slope_drop_fraction",
+        type=float,
+        default=0.85,
+        help=(
+            "For --policy_val_alpha_frontier_mode knee, stop before the next alpha when its marginal "
+            "normalized gain slope drops below this fraction of the best prior slope."
         ),
     )
     parser.add_argument(
@@ -7826,6 +8115,18 @@ def main() -> int:
         parser.error("--parent_edge_apply_shrink_tau must be >= 0")
     if not 0.0 <= float(args.parent_edge_apply_shrink_min_multiplier) <= 1.0:
         parser.error("--parent_edge_apply_shrink_min_multiplier must be in [0, 1]")
+    for frontier_fraction_name in (
+        "policy_val_alpha_frontier_min_relative_fraction",
+        "policy_val_alpha_frontier_min_ssim_fraction",
+        "policy_val_alpha_frontier_min_l1_fraction",
+        "policy_val_alpha_frontier_knee_min_score_fraction",
+        "policy_val_alpha_frontier_knee_slope_drop_fraction",
+    ):
+        frontier_fraction = float(getattr(args, frontier_fraction_name))
+        if not 0.0 <= frontier_fraction <= 1.0:
+            parser.error(f"--{frontier_fraction_name} must be in [0, 1]")
+    if float(args.policy_val_alpha_frontier_alpha_penalty) < 0.0:
+        parser.error("--policy_val_alpha_frontier_alpha_penalty must be >= 0")
     local_alpha_modes = [
         bool(args.enable_policy_val_local_alpha_calibration),
         bool(args.enable_policy_val_face_alpha_calibration),
@@ -8580,8 +8881,13 @@ def main() -> int:
             steps=int(args.policy_val_ssim_alpha_refinement_steps),
             min_alpha=float(args.policy_val_ssim_alpha_refinement_min_alpha),
         )
+        alpha_candidates, alpha_midpoint_refinement_summary = augment_alpha_grid_with_midpoints(
+            alpha_candidates,
+            enabled=bool(args.enable_policy_val_alpha_midpoint_refinement),
+        )
         cand_fit_summary["local_alpha_calibration"] = dict(local_alpha_profile)
         cand_fit_summary["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
+        cand_fit_summary["alpha_midpoint_refinement"] = dict(alpha_midpoint_refinement_summary)
         cand_policy_val = evaluate_policy_val(
             cand_val_views,
             cand_atlas,
@@ -8614,6 +8920,7 @@ def main() -> int:
         cand_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
         cand_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
         cand_policy_val["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
+        cand_policy_val["alpha_midpoint_refinement"] = dict(alpha_midpoint_refinement_summary)
 
         def select_policy_val_payload(
             policy_payload: dict[str, Any],
@@ -8667,6 +8974,7 @@ def main() -> int:
             legacy_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
             legacy_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
             legacy_policy_val["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
+            legacy_policy_val["alpha_midpoint_refinement"] = dict(alpha_midpoint_refinement_summary)
             legacy_policy_val, legacy_best, legacy_selected_alpha, legacy_risk_reasons, legacy_accepted = (
                 select_policy_val_payload(legacy_policy_val)
             )
@@ -8763,6 +9071,7 @@ def main() -> int:
             legacy_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
             legacy_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
             legacy_policy_val["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
+            legacy_policy_val["alpha_midpoint_refinement"] = dict(alpha_midpoint_refinement_summary)
             legacy_policy_val, legacy_best, legacy_selected_alpha, legacy_risk_reasons, legacy_accepted = (
                 select_policy_val_payload(legacy_policy_val)
             )
@@ -8907,6 +9216,7 @@ def main() -> int:
                     guarded_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
                     guarded_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
                     guarded_policy_val["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
+                    guarded_policy_val["alpha_midpoint_refinement"] = dict(alpha_midpoint_refinement_summary)
                     (
                         guarded_policy_val,
                         guarded_best,
@@ -9018,6 +9328,7 @@ def main() -> int:
                     guarded_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
                     guarded_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
                     guarded_policy_val["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
+                    guarded_policy_val["alpha_midpoint_refinement"] = dict(alpha_midpoint_refinement_summary)
                     (
                         guarded_policy_val,
                         guarded_best,
@@ -9698,6 +10009,9 @@ def main() -> int:
                 hybrid_policy_val["ssim_alpha_refinement"] = dict(
                     (source_candidate.get("policy_val") or {}).get("ssim_alpha_refinement", {})
                 )
+                hybrid_policy_val["alpha_midpoint_refinement"] = dict(
+                    (source_candidate.get("policy_val") or {}).get("alpha_midpoint_refinement", {})
+                )
                 (
                     hybrid_policy_val,
                     hybrid_best,
@@ -9709,6 +10023,9 @@ def main() -> int:
                 hybrid_fit_summary["candidate_label"] = str(hybrid_label)
                 hybrid_fit_summary["ssim_alpha_refinement"] = dict(
                     (source_candidate.get("fit_summary") or {}).get("ssim_alpha_refinement", {})
+                )
+                hybrid_fit_summary["alpha_midpoint_refinement"] = dict(
+                    (source_candidate.get("fit_summary") or {}).get("alpha_midpoint_refinement", {})
                 )
                 hybrid_fit_summary["policy_val_prior_bin_gain_hybrid"] = dict(hybrid_profile)
                 hybrid_fit_summary["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)

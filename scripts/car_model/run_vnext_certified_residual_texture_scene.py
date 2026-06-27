@@ -284,6 +284,28 @@ def _texture_cmd(
         str(args.noop_fallback_source),
         "--force",
     ]
+    if bool(args.enable_policy_val_alpha_midpoint_refinement):
+        cmd.append("--enable_policy_val_alpha_midpoint_refinement")
+    if bool(args.enable_policy_val_alpha_frontier_selection):
+        cmd.extend(
+            [
+                "--enable_policy_val_alpha_frontier_selection",
+                "--policy_val_alpha_frontier_mode",
+                str(args.policy_val_alpha_frontier_mode),
+                "--policy_val_alpha_frontier_min_relative_fraction",
+                str(args.policy_val_alpha_frontier_min_relative_fraction),
+                "--policy_val_alpha_frontier_min_ssim_fraction",
+                str(args.policy_val_alpha_frontier_min_ssim_fraction),
+                "--policy_val_alpha_frontier_min_l1_fraction",
+                str(args.policy_val_alpha_frontier_min_l1_fraction),
+                "--policy_val_alpha_frontier_alpha_penalty",
+                str(args.policy_val_alpha_frontier_alpha_penalty),
+                "--policy_val_alpha_frontier_knee_min_score_fraction",
+                str(args.policy_val_alpha_frontier_knee_min_score_fraction),
+                "--policy_val_alpha_frontier_knee_slope_drop_fraction",
+                str(args.policy_val_alpha_frontier_knee_slope_drop_fraction),
+            ]
+        )
     if not bool(args.no_target_visible_energy_score):
         cmd.append("--enable_target_visible_energy_score")
     if bool(args.enable_coview_face_residual_transfer):
@@ -524,6 +546,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no_policy_val_ssim_alpha_refinement", action="store_true")
     parser.add_argument("--policy_val_ssim_alpha_refinement_steps", type=int, default=7)
     parser.add_argument("--policy_val_ssim_alpha_refinement_min_alpha", type=float, default=0.001)
+    parser.add_argument("--enable_policy_val_alpha_midpoint_refinement", action="store_true")
+    parser.add_argument("--enable_policy_val_alpha_frontier_selection", action="store_true")
+    parser.add_argument(
+        "--policy_val_alpha_frontier_mode",
+        choices=("smallest_effective", "best_score", "knee"),
+        default="smallest_effective",
+    )
+    parser.add_argument("--policy_val_alpha_frontier_min_relative_fraction", type=float, default=0.75)
+    parser.add_argument("--policy_val_alpha_frontier_min_ssim_fraction", type=float, default=0.75)
+    parser.add_argument("--policy_val_alpha_frontier_min_l1_fraction", type=float, default=0.75)
+    parser.add_argument("--policy_val_alpha_frontier_alpha_penalty", type=float, default=0.25)
+    parser.add_argument("--policy_val_alpha_frontier_knee_min_score_fraction", type=float, default=0.55)
+    parser.add_argument("--policy_val_alpha_frontier_knee_slope_drop_fraction", type=float, default=0.85)
     parser.add_argument("--no_preacceptance_policy_val_guard_repair", action="store_true")
     parser.add_argument("--min_l1", type=float, default=0.0)
     parser.add_argument("--min_alpha", type=float, default=0.03)
@@ -622,6 +657,18 @@ def parse_args() -> argparse.Namespace:
         parser.error("--parent_edge_apply_shrink_tau must be >= 0")
     if not 0.0 <= float(args.parent_edge_apply_shrink_min_multiplier) <= 1.0:
         parser.error("--parent_edge_apply_shrink_min_multiplier must be in [0, 1]")
+    for frontier_fraction_name in (
+        "policy_val_alpha_frontier_min_relative_fraction",
+        "policy_val_alpha_frontier_min_ssim_fraction",
+        "policy_val_alpha_frontier_min_l1_fraction",
+        "policy_val_alpha_frontier_knee_min_score_fraction",
+        "policy_val_alpha_frontier_knee_slope_drop_fraction",
+    ):
+        frontier_fraction = float(getattr(args, frontier_fraction_name))
+        if not 0.0 <= frontier_fraction <= 1.0:
+            parser.error(f"--{frontier_fraction_name} must be in [0, 1]")
+    if float(args.policy_val_alpha_frontier_alpha_penalty) < 0.0:
+        parser.error("--policy_val_alpha_frontier_alpha_penalty must be >= 0")
     return args
 
 
