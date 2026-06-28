@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import math
@@ -62,6 +63,15 @@ class FaceAtlas:
     teacher_basis_ood_min_std: float = 1.0e-3
     teacher_basis_apply_mode: str = "replace_supported"
     teacher_basis_blend: float = 1.0
+    expert_textures: np.ndarray | None = None
+    expert_counts: np.ndarray | None = None
+    expert_variance: np.ndarray | None = None
+    expert_sign_consistency: np.ndarray | None = None
+    expert_samples: np.ndarray | None = None
+    expert_centers: np.ndarray | None = None
+    expert_feature_mode: str = "none"
+    expert_min_bin_samples: int = 1
+    expert_fallback_mode: str = "global"
 
 
 def parse_alpha_grid(text: str) -> list[float]:
@@ -932,8 +942,25 @@ def copy_model_shell(source_model: Path, output_model: Path, force: bool) -> Non
     def ignore(_dir: str, names: list[str]) -> set[str]:
         return {name for name in names if name in IGNORE_COPY_NAMES}
 
+    def copy_or_link_large_model_file(src: str, dst: str) -> str:
+        src_path = Path(src)
+        dst_path = Path(dst)
+        size = src_path.stat().st_size
+        if src_path.suffix in {".pt", ".pth"} and size >= 256 * 1024 * 1024:
+            dst_path.symlink_to(src_path.resolve())
+            return str(dst_path)
+        try:
+            return shutil.copy2(src, dst)
+        except OSError as exc:
+            if exc.errno != 122 or src_path.suffix not in {".pt", ".pth"}:
+                raise
+            if dst_path.exists() or dst_path.is_symlink():
+                dst_path.unlink()
+            dst_path.symlink_to(src_path.resolve())
+            return str(dst_path)
+
     output_model.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(source_model, output_model, ignore=ignore)
+    shutil.copytree(source_model, output_model, ignore=ignore, copy_function=copy_or_link_large_model_file)
 
 
 def _valid_sample_mask(
@@ -1493,6 +1520,147 @@ def _normalized_camera_center(z: np.lib.npyio.NpzFile) -> np.ndarray | None:
     return direction.astype(np.float32)
 
 
+def _view_cluster_feature_for_npz(
+    z: np.lib.npyio.NpzFile,
+    mode: str,
+) -> np.ndarray | None:
+    mode = str(mode)
+    if mode == "none":
+        return None
+    if mode == "camera_center":
+        return _normalized_camera_center(z)
+    raise ValueError(f"unsupported view-cluster feature mode: {mode}")
+
+
+def _view_cluster_feature_for_path(path: Path, mode: str) -> np.ndarray | None:
+    try:
+        with np.load(path) as z:
+            return _view_cluster_feature_for_npz(z, mode)
+    except Exception:
+        return None
+
+
+def _fit_view_cluster_profile(
+    view_paths: list[Path],
+    *,
+    expert_count: int,
+    feature_mode: str,
+    min_views: int,
+    iterations: int = 16,
+) -> dict[str, Any]:
+    feature_mode_s = str(feature_mode)
+    k = max(1, int(expert_count))
+    disabled = {
+        "enabled": False,
+        "feature_mode": feature_mode_s,
+        "requested_expert_count": int(expert_count),
+        "expert_count": 1,
+        "min_views": int(min_views),
+        "fit_view_count": int(len(view_paths)),
+        "feature_view_count": 0,
+        "reason": "",
+    }
+    if k <= 1 or feature_mode_s == "none":
+        disabled["reason"] = "expert_count_le_1_or_feature_disabled"
+        return disabled
+    features: list[np.ndarray] = []
+    used_paths: list[str] = []
+    for path in view_paths:
+        feature = _view_cluster_feature_for_path(path, feature_mode_s)
+        if feature is None:
+            continue
+        feature = np.asarray(feature, dtype=np.float32).reshape(-1)
+        if feature.size != 3 or not bool(np.all(np.isfinite(feature))):
+            continue
+        norm = float(np.linalg.norm(feature))
+        if norm > 1.0e-8:
+            feature = feature / norm
+        features.append(feature.astype(np.float32))
+        used_paths.append(str(path))
+    if len(features) < max(k, int(min_views)):
+        disabled["reason"] = "insufficient_views_with_cluster_features"
+        disabled["feature_view_count"] = int(len(features))
+        return disabled
+    x = np.stack(features, axis=0).astype(np.float32)
+    centers: list[np.ndarray] = [x[0]]
+    while len(centers) < k:
+        center_arr = np.stack(centers, axis=0).astype(np.float32)
+        sims = x @ center_arr.T
+        farthest = int(np.argmin(np.max(sims, axis=1)))
+        centers.append(x[farthest])
+    center_arr = np.stack(centers, axis=0).astype(np.float32)
+    assignments = np.zeros((int(x.shape[0]),), dtype=np.int64)
+    for _ in range(max(1, int(iterations))):
+        assignments = np.argmax(x @ center_arr.T, axis=1).astype(np.int64)
+        next_centers = np.array(center_arr, copy=True)
+        for idx in range(k):
+            local = x[assignments == idx]
+            if local.size == 0:
+                continue
+            center = np.mean(local, axis=0).astype(np.float32)
+            norm = float(np.linalg.norm(center))
+            next_centers[idx] = center / norm if norm > 1.0e-8 else center_arr[idx]
+        if np.allclose(next_centers, center_arr, atol=1.0e-6):
+            center_arr = next_centers
+            break
+        center_arr = next_centers
+    assignments = np.argmax(x @ center_arr.T, axis=1).astype(np.int64)
+    counts = np.bincount(assignments, minlength=k).astype(np.int64)
+    valid_clusters = counts >= max(1, int(min_views))
+    return {
+        "enabled": True,
+        "feature_mode": feature_mode_s,
+        "requested_expert_count": int(expert_count),
+        "expert_count": int(k),
+        "min_views": int(min_views),
+        "fit_view_count": int(len(view_paths)),
+        "feature_view_count": int(len(features)),
+        "centers": center_arr.astype(np.float32),
+        "cluster_view_counts": [int(x) for x in counts.tolist()],
+        "valid_clusters": [bool(x) for x in valid_clusters.tolist()],
+        "valid_cluster_count": int(np.sum(valid_clusters)),
+        "used_path_preview": used_paths[:16],
+    }
+
+
+def _assign_view_cluster_for_npz(
+    z: np.lib.npyio.NpzFile,
+    *,
+    centers: np.ndarray | None,
+    feature_mode: str,
+) -> int | None:
+    if centers is None:
+        return None
+    center_arr = np.asarray(centers, dtype=np.float32)
+    if center_arr.ndim != 2 or center_arr.shape[0] <= 0:
+        return None
+    feature = _view_cluster_feature_for_npz(z, feature_mode)
+    if feature is None:
+        return None
+    feature = np.asarray(feature, dtype=np.float32).reshape(-1)
+    if feature.size != center_arr.shape[1] or not bool(np.all(np.isfinite(feature))):
+        return None
+    norm = float(np.linalg.norm(feature))
+    if norm > 1.0e-8:
+        feature = feature / norm
+    sims = center_arr @ feature.astype(np.float32)
+    return int(np.argmax(sims))
+
+
+def _view_cluster_profile_from_atlas(
+    atlas: dict[int, FaceAtlas],
+) -> tuple[np.ndarray | None, str]:
+    for face_atlas in atlas.values():
+        if (
+            face_atlas.expert_centers is not None
+            and str(face_atlas.expert_feature_mode) != "none"
+        ):
+            centers = np.asarray(face_atlas.expert_centers, dtype=np.float32)
+            if centers.ndim == 2 and centers.shape[0] > 0:
+                return centers, str(face_atlas.expert_feature_mode)
+    return None, "none"
+
+
 def _view_condition_feature_dim(mode: str) -> int:
     mode = str(mode)
     if mode == "none":
@@ -1543,6 +1711,499 @@ def _view_condition_features_for_mask(
             axis=1,
         )
     raise ValueError(f"unsupported view-conditioned basis mode: {mode}")
+
+
+def _view_confidence_feature_for_npz(z: np.lib.npyio.NpzFile) -> np.ndarray | None:
+    direction = _normalized_camera_center(z)
+    if direction is None:
+        return None
+    return direction.astype(np.float32)
+
+
+def _policy_val_rows_for_alpha(policy_val: dict[str, Any], alpha: float) -> list[dict[str, Any]]:
+    per_view = policy_val.get("per_view_by_alpha", {})
+    if not isinstance(per_view, dict):
+        return []
+    target_alpha = float(alpha)
+    best_rows: list[dict[str, Any]] = []
+    best_delta = float("inf")
+    for key, rows in per_view.items():
+        try:
+            key_alpha = float(key)
+        except (TypeError, ValueError):
+            continue
+        delta = abs(key_alpha - target_alpha)
+        if delta < best_delta:
+            best_delta = delta
+            best_rows = list(rows or [])
+    if math.isfinite(best_delta) and best_delta <= 1.0e-8:
+        return best_rows
+    return []
+
+
+def _metric_passes_optional_threshold(value: Any, threshold: float) -> bool:
+    threshold = float(threshold)
+    if threshold <= -0.999:
+        return True
+    if value is None:
+        return False
+    try:
+        return float(value) >= threshold
+    except (TypeError, ValueError):
+        return False
+
+
+def sanitize_view_confidence_profile(profile: dict[str, Any] | None) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in dict(profile or {}).items()
+        if key not in {"positive_features", "negative_features"}
+    }
+
+
+def sanitize_view_alpha_cap_profile(profile: dict[str, Any] | None) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in dict(profile or {}).items()
+        if key not in {"anchor_features", "anchor_alpha_caps", "anchor_weights"}
+    }
+
+
+def build_policy_val_view_confidence_profile(
+    val_views: list[Path],
+    policy_val: dict[str, Any],
+    alpha: float,
+    *,
+    enabled: bool,
+    min_relative_gain: float,
+    min_ssim_gain: float,
+    min_l1_gain: float,
+    min_lpips_gain: float,
+    kernel_sigma: float,
+    min_confidence: float,
+) -> dict[str, Any]:
+    profile: dict[str, Any] = {
+        "enabled": False,
+        "mode": "policy_val_view_consistency_confidence",
+        "decision": "not_requested",
+    }
+    if not bool(enabled):
+        return profile
+    profile.update(
+        {
+            "decision": "disabled",
+            "alpha": float(alpha),
+            "min_relative_gain": float(min_relative_gain),
+            "min_ssim_gain": float(min_ssim_gain),
+            "min_l1_gain": float(min_l1_gain),
+            "min_lpips_gain": float(min_lpips_gain),
+            "kernel_sigma": float(kernel_sigma),
+            "min_confidence": float(min_confidence),
+            "uses_policy_val_gt": True,
+            "uses_target_gt": False,
+            "feature": "normalized_camera_center",
+        }
+    )
+    if not bool(policy_val.get("enabled", False)):
+        profile["reason"] = "policy_val_disabled"
+        return profile
+    if float(alpha) <= 0.0:
+        profile["reason"] = "zero_or_negative_alpha"
+        return profile
+    rows = _policy_val_rows_for_alpha(policy_val, float(alpha))
+    if not rows:
+        profile["reason"] = "no_policy_val_rows_for_selected_alpha"
+        return profile
+    view_by_stem = {path.stem: path for path in val_views}
+    positive_features: list[np.ndarray] = []
+    positive_weights: list[float] = []
+    negative_features: list[np.ndarray] = []
+    negative_weights: list[float] = []
+    selected_rows: list[dict[str, Any]] = []
+    rejected_rows: list[dict[str, Any]] = []
+    missing_feature_count = 0
+    for row in rows:
+        view_name = str(row.get("view", ""))
+        view_path = view_by_stem.get(view_name)
+        if view_path is None:
+            rejected = {"view": view_name, "reason": "view_npz_not_found"}
+            rejected_rows.append(rejected)
+            continue
+        try:
+            z = np.load(view_path)
+            feature = _view_confidence_feature_for_npz(z)
+        except Exception as exc:  # pragma: no cover - audit path for corrupt evidence.
+            feature = None
+            rejected_rows.append({"view": view_name, "reason": f"feature_load_failed:{type(exc).__name__}"})
+        if feature is None:
+            missing_feature_count += 1
+            continue
+        reasons: list[str] = []
+        rel_gain = float(row.get("relative_gain", 0.0) or 0.0)
+        if rel_gain < float(min_relative_gain):
+            reasons.append(
+                f"relative_gain {rel_gain:.8g} < min_relative_gain {float(min_relative_gain):.8g}"
+            )
+        if not _metric_passes_optional_threshold(row.get("ssim_gain"), float(min_ssim_gain)):
+            reasons.append("ssim_gain_below_threshold_or_missing")
+        if not _metric_passes_optional_threshold(row.get("image_l1_gain"), float(min_l1_gain)):
+            reasons.append("image_l1_gain_below_threshold_or_missing")
+        if not _metric_passes_optional_threshold(row.get("lpips_gain"), float(min_lpips_gain)):
+            reasons.append("lpips_gain_below_threshold_or_missing")
+        if reasons:
+            negative_features.append(feature.astype(np.float32))
+            negative_weight = max(1.0e-4, -rel_gain)
+            if row.get("image_l1_gain") is not None:
+                negative_weight += max(-float(row.get("image_l1_gain", 0.0) or 0.0) * 10.0, 0.0)
+            if row.get("ssim_gain") is not None:
+                negative_weight += max(-float(row.get("ssim_gain", 0.0) or 0.0) * 100.0, 0.0)
+            if row.get("lpips_gain") is not None:
+                negative_weight += max(-float(row.get("lpips_gain", 0.0) or 0.0), 0.0)
+            negative_weights.append(float(negative_weight))
+            rejected_rows.append(
+                {
+                    "view": view_name,
+                    "relative_gain": rel_gain,
+                    "ssim_gain": row.get("ssim_gain"),
+                    "image_l1_gain": row.get("image_l1_gain"),
+                    "lpips_gain": row.get("lpips_gain"),
+                    "weight": float(negative_weight),
+                    "feature": [float(x) for x in feature.tolist()],
+                    "reasons": reasons,
+                }
+            )
+            continue
+        positive_features.append(feature.astype(np.float32))
+        weight = max(rel_gain, 1.0e-4)
+        if row.get("image_l1_gain") is not None:
+            weight += max(float(row.get("image_l1_gain", 0.0) or 0.0) * 10.0, 0.0)
+        if row.get("ssim_gain") is not None:
+            weight += max(float(row.get("ssim_gain", 0.0) or 0.0) * 100.0, 0.0)
+        if row.get("lpips_gain") is not None:
+            weight += max(float(row.get("lpips_gain", 0.0) or 0.0), 0.0)
+        positive_weights.append(float(weight))
+        selected_rows.append(
+            {
+                "view": view_name,
+                "relative_gain": rel_gain,
+                "ssim_gain": row.get("ssim_gain"),
+                "image_l1_gain": row.get("image_l1_gain"),
+                "lpips_gain": row.get("lpips_gain"),
+                "weight": float(weight),
+                "feature": [float(x) for x in feature.tolist()],
+            }
+        )
+    if not positive_features:
+        profile.update(
+            {
+                "reason": "no_policy_val_views_pass_view_confidence_thresholds",
+                "policy_val_view_count": int(len(rows)),
+                "missing_feature_count": int(missing_feature_count),
+                "rejected_view_count": int(len(rejected_rows)),
+                "rejected_preview": rejected_rows[:32],
+            }
+        )
+        return profile
+    sigma = float(kernel_sigma)
+    if sigma <= 0.0:
+        sigma = 0.35
+    min_conf = float(np.clip(min_confidence, 0.0, 1.0))
+    weight_arr = np.asarray(positive_weights, dtype=np.float32)
+    weight_arr = weight_arr / max(float(np.max(weight_arr)), 1.0e-8)
+    negative_weight_arr = np.asarray(negative_weights, dtype=np.float32)
+    if negative_weight_arr.size:
+        negative_weight_arr = negative_weight_arr / max(float(np.max(negative_weight_arr)), 1.0e-8)
+    profile.update(
+        {
+            "enabled": True,
+            "decision": "keep_view_confidence_profile",
+            "synthesis_mode": "positive_negative_kernel_confidence",
+            "policy_val_view_count": int(len(rows)),
+            "positive_view_count": int(len(positive_features)),
+            "positive_view_fraction": float(len(positive_features) / max(1, len(rows))),
+            "negative_view_count": int(len(negative_features)),
+            "negative_view_fraction": float(len(negative_features) / max(1, len(rows))),
+            "missing_feature_count": int(missing_feature_count),
+            "rejected_view_count": int(len(rejected_rows)),
+            "positive_features": [[float(x) for x in feature.tolist()] for feature in positive_features],
+            "positive_weights": [float(x) for x in weight_arr.tolist()],
+            "negative_features": [[float(x) for x in feature.tolist()] for feature in negative_features],
+            "negative_weights": [float(x) for x in negative_weight_arr.tolist()],
+            "selected_rows": selected_rows[:64],
+            "rejected_preview": rejected_rows[:32],
+            "kernel_sigma": float(sigma),
+            "min_confidence": float(min_conf),
+        }
+    )
+    return profile
+
+
+def build_policy_val_view_alpha_cap_profile(
+    val_views: list[Path],
+    policy_val: dict[str, Any],
+    *,
+    enabled: bool,
+    selection_mode: str,
+    min_relative_gain: float,
+    min_ssim_gain: float,
+    min_l1_gain: float,
+    min_lpips_gain: float,
+    kernel_sigma: float,
+    min_confidence: float,
+    fallback_alpha: float,
+) -> dict[str, Any]:
+    profile: dict[str, Any] = {
+        "enabled": False,
+        "mode": "policy_val_view_alpha_cap",
+        "decision": "not_requested",
+    }
+    if not bool(enabled):
+        return profile
+    selection_mode_s = str(selection_mode)
+    if selection_mode_s not in {"smallest_safe", "best_safe"}:
+        selection_mode_s = "best_safe"
+    fallback_alpha_f = max(0.0, float(fallback_alpha))
+    profile.update(
+        {
+            "decision": "disabled",
+            "selection_mode": selection_mode_s,
+            "min_relative_gain": float(min_relative_gain),
+            "min_ssim_gain": float(min_ssim_gain),
+            "min_l1_gain": float(min_l1_gain),
+            "min_lpips_gain": float(min_lpips_gain),
+            "kernel_sigma": float(kernel_sigma),
+            "min_confidence": float(min_confidence),
+            "fallback_alpha": float(fallback_alpha_f),
+            "uses_policy_val_gt": True,
+            "uses_target_or_test_gt": False,
+            "certification_independent": False,
+            "apply_alpha_mode": "cap_global_alpha_by_camera_policy_val_alpha",
+            "feature": "normalized_camera_center",
+            "cap_interpolation_mode": "nearest_rbf_anchor",
+        }
+    )
+    if not bool(policy_val.get("enabled", False)):
+        profile["reason"] = "policy_val_disabled"
+        return profile
+    per_view = policy_val.get("per_view_by_alpha", {})
+    if not isinstance(per_view, dict) or not per_view:
+        profile["reason"] = "no_policy_val_per_view_rows"
+        return profile
+    rows_by_view: dict[str, list[dict[str, Any]]] = {}
+    for alpha_key, rows in per_view.items():
+        try:
+            alpha_f = float(alpha_key)
+        except (TypeError, ValueError):
+            continue
+        for row in rows or []:
+            view_name = str(row.get("view", ""))
+            if not view_name:
+                continue
+            enriched = dict(row)
+            enriched["alpha"] = float(alpha_f)
+            rows_by_view.setdefault(view_name, []).append(enriched)
+    view_by_stem = {path.stem: path for path in val_views}
+    anchor_features: list[np.ndarray] = []
+    anchor_alpha_caps: list[float] = []
+    anchor_weights: list[float] = []
+    anchor_rows: list[dict[str, Any]] = []
+    rejected_rows: list[dict[str, Any]] = []
+    missing_feature_count = 0
+    for view_name, view_path in view_by_stem.items():
+        rows = rows_by_view.get(view_name, [])
+        try:
+            z = np.load(view_path)
+            feature = _view_confidence_feature_for_npz(z)
+        except Exception as exc:  # pragma: no cover - audit path for corrupt evidence.
+            feature = None
+            rejected_rows.append({"view": view_name, "reason": f"feature_load_failed:{type(exc).__name__}"})
+        if feature is None:
+            missing_feature_count += 1
+            continue
+        safe_rows: list[dict[str, Any]] = []
+        unsafe_preview: list[dict[str, Any]] = []
+        for row in rows:
+            alpha_f = float(row.get("alpha", 0.0) or 0.0)
+            if alpha_f <= 0.0:
+                continue
+            reasons: list[str] = []
+            rel_gain = float(row.get("relative_gain", 0.0) or 0.0)
+            if rel_gain < float(min_relative_gain):
+                reasons.append(
+                    f"relative_gain {rel_gain:.8g} < min_relative_gain {float(min_relative_gain):.8g}"
+                )
+            if not _metric_passes_optional_threshold(row.get("ssim_gain"), float(min_ssim_gain)):
+                reasons.append("ssim_gain_below_threshold_or_missing")
+            if not _metric_passes_optional_threshold(row.get("image_l1_gain"), float(min_l1_gain)):
+                reasons.append("image_l1_gain_below_threshold_or_missing")
+            if not _metric_passes_optional_threshold(row.get("lpips_gain"), float(min_lpips_gain)):
+                reasons.append("lpips_gain_below_threshold_or_missing")
+            score = rel_gain
+            if row.get("image_l1_gain") is not None:
+                score += max(float(row.get("image_l1_gain", 0.0) or 0.0) * 10.0, 0.0)
+            if row.get("ssim_gain") is not None:
+                score += max(float(row.get("ssim_gain", 0.0) or 0.0) * 100.0, 0.0)
+            if row.get("lpips_gain") is not None:
+                score += max(float(row.get("lpips_gain", 0.0) or 0.0), 0.0)
+            compact = {
+                "alpha": float(alpha_f),
+                "relative_gain": rel_gain,
+                "ssim_gain": row.get("ssim_gain"),
+                "image_l1_gain": row.get("image_l1_gain"),
+                "lpips_gain": row.get("lpips_gain"),
+                "score": float(score),
+            }
+            if reasons:
+                if len(unsafe_preview) < 8:
+                    unsafe = dict(compact)
+                    unsafe["reasons"] = reasons
+                    unsafe_preview.append(unsafe)
+                continue
+            safe_rows.append(compact)
+        if safe_rows:
+            if selection_mode_s == "smallest_safe":
+                selected = sorted(safe_rows, key=lambda item: (float(item["alpha"]), -float(item["score"])))[0]
+            else:
+                selected = sorted(safe_rows, key=lambda item: (float(item["score"]), float(item["alpha"])))[-1]
+            alpha_cap = max(0.0, float(selected["alpha"]))
+            weight = max(float(selected.get("score", 0.0) or 0.0), 1.0e-4)
+            decision = "selected_safe_alpha"
+        else:
+            selected = {
+                "alpha": float(fallback_alpha_f),
+                "relative_gain": 0.0,
+                "ssim_gain": None,
+                "image_l1_gain": None,
+                "lpips_gain": None,
+                "score": 0.0,
+            }
+            alpha_cap = float(fallback_alpha_f)
+            weight = 1.0e-4 if alpha_cap > 0.0 else 1.0
+            decision = "fallback_alpha_no_safe_nonzero_policy_val_alpha"
+        anchor_features.append(feature.astype(np.float32))
+        anchor_alpha_caps.append(float(alpha_cap))
+        anchor_weights.append(float(weight))
+        anchor_rows.append(
+            {
+                "view": view_name,
+                "alpha_cap": float(alpha_cap),
+                "decision": decision,
+                "selected": selected,
+                "safe_alpha_count": int(len(safe_rows)),
+                "unsafe_preview": unsafe_preview,
+                "feature": [float(x) for x in feature.tolist()],
+            }
+        )
+    if not anchor_features:
+        profile.update(
+            {
+                "reason": "no_policy_val_views_with_camera_features",
+                "policy_val_view_count": int(len(view_by_stem)),
+                "missing_feature_count": int(missing_feature_count),
+                "rejected_preview": rejected_rows[:32],
+            }
+        )
+        return profile
+    sigma = float(kernel_sigma)
+    if sigma <= 0.0:
+        sigma = 0.35
+    min_conf = float(np.clip(min_confidence, 0.0, 1.0))
+    weight_arr = np.asarray(anchor_weights, dtype=np.float32)
+    weight_arr = weight_arr / max(float(np.max(weight_arr)), 1.0e-8)
+    cap_arr = np.asarray(anchor_alpha_caps, dtype=np.float32)
+    positive_caps = cap_arr[cap_arr > 0.0]
+    profile.update(
+        {
+            "enabled": True,
+            "decision": "keep_view_alpha_cap_profile",
+            "policy_val_view_count": int(len(view_by_stem)),
+            "anchor_view_count": int(len(anchor_features)),
+            "selected_view_count": int(np.count_nonzero(cap_arr > 0.0)),
+            "fallback_view_count": int(np.count_nonzero(cap_arr <= 0.0)),
+            "selected_positive_view_fraction": float(np.mean(cap_arr > 0.0)) if cap_arr.size else 0.0,
+            "missing_feature_count": int(missing_feature_count),
+            "rejected_preview": rejected_rows[:32],
+            "anchor_features": [[float(x) for x in feature.tolist()] for feature in anchor_features],
+            "anchor_alpha_caps": [float(x) for x in cap_arr.tolist()],
+            "anchor_weights": [float(x) for x in weight_arr.tolist()],
+            "anchor_rows": anchor_rows[:64],
+            "alpha_cap_min": float(np.min(cap_arr)) if cap_arr.size else 0.0,
+            "alpha_cap_mean": float(np.mean(cap_arr)) if cap_arr.size else 0.0,
+            "alpha_cap_max": float(np.max(cap_arr)) if cap_arr.size else 0.0,
+            "positive_alpha_cap_min": float(np.min(positive_caps)) if positive_caps.size else 0.0,
+            "positive_alpha_cap_mean": float(np.mean(positive_caps)) if positive_caps.size else 0.0,
+            "positive_alpha_cap_max": float(np.max(positive_caps)) if positive_caps.size else 0.0,
+            "kernel_sigma": float(sigma),
+            "min_confidence": float(min_conf),
+        }
+    )
+    return profile
+
+
+def view_alpha_cap_for_npz(
+    z: np.lib.npyio.NpzFile,
+    profile: dict[str, Any] | None,
+) -> float:
+    if not profile or not bool(profile.get("enabled", False)):
+        return float("inf")
+    feature = _view_confidence_feature_for_npz(z)
+    if feature is None:
+        return max(0.0, float(profile.get("fallback_alpha", 0.0) or 0.0))
+    anchors = np.asarray(profile.get("anchor_features", []), dtype=np.float32)
+    if anchors.ndim != 2 or anchors.shape[0] <= 0 or anchors.shape[1] != int(feature.size):
+        return max(0.0, float(profile.get("fallback_alpha", 0.0) or 0.0))
+    alpha_caps = np.asarray(profile.get("anchor_alpha_caps", []), dtype=np.float32)
+    if alpha_caps.shape[0] != anchors.shape[0]:
+        return max(0.0, float(profile.get("fallback_alpha", 0.0) or 0.0))
+    weights = np.asarray(profile.get("anchor_weights", []), dtype=np.float32)
+    if weights.shape[0] != anchors.shape[0]:
+        weights = np.ones((anchors.shape[0],), dtype=np.float32)
+    sigma = max(float(profile.get("kernel_sigma", 0.35) or 0.35), 1.0e-6)
+    dist2 = np.sum((anchors - feature[None, :]) ** 2, axis=1)
+    scores = np.exp(-dist2 / (2.0 * sigma * sigma)) * np.clip(weights, 0.0, 1.0)
+    if scores.size <= 0:
+        return max(0.0, float(profile.get("fallback_alpha", 0.0) or 0.0))
+    best_idx = int(np.argmax(scores))
+    if float(scores[best_idx]) < float(profile.get("min_confidence", 0.0) or 0.0):
+        return max(0.0, float(profile.get("fallback_alpha", 0.0) or 0.0))
+    return max(0.0, float(alpha_caps[best_idx]))
+
+
+def view_confidence_for_npz(
+    z: np.lib.npyio.NpzFile,
+    profile: dict[str, Any] | None,
+) -> float:
+    if not profile or not bool(profile.get("enabled", False)):
+        return 1.0
+    feature = _view_confidence_feature_for_npz(z)
+    if feature is None:
+        return 0.0
+    positive = np.asarray(profile.get("positive_features", []), dtype=np.float32)
+    if positive.ndim != 2 or positive.shape[0] <= 0 or positive.shape[1] != int(feature.size):
+        return 0.0
+    weights = np.asarray(profile.get("positive_weights", []), dtype=np.float32)
+    if weights.shape[0] != positive.shape[0]:
+        weights = np.ones((positive.shape[0],), dtype=np.float32)
+    sigma = max(float(profile.get("kernel_sigma", 0.35) or 0.35), 1.0e-6)
+    dist2 = np.sum((positive - feature[None, :]) ** 2, axis=1)
+    positive_score = float(np.max(np.exp(-dist2 / (2.0 * sigma * sigma)) * np.clip(weights, 0.0, 1.0)))
+    negative = np.asarray(profile.get("negative_features", []), dtype=np.float32)
+    negative_score = 0.0
+    if negative.ndim == 2 and negative.shape[0] > 0 and negative.shape[1] == int(feature.size):
+        negative_weights = np.asarray(profile.get("negative_weights", []), dtype=np.float32)
+        if negative_weights.shape[0] != negative.shape[0]:
+            negative_weights = np.ones((negative.shape[0],), dtype=np.float32)
+        negative_dist2 = np.sum((negative - feature[None, :]) ** 2, axis=1)
+        negative_score = float(
+            np.max(np.exp(-negative_dist2 / (2.0 * sigma * sigma)) * np.clip(negative_weights, 0.0, 1.0))
+        )
+    if negative_score > 0.0:
+        confidence = positive_score * (positive_score / (positive_score + negative_score + 1.0e-8))
+    else:
+        confidence = positive_score
+    if confidence < float(profile.get("min_confidence", 0.0) or 0.0):
+        return 0.0
+    return float(np.clip(confidence, 0.0, 1.0))
 
 
 def _teacher_distilled_basis_feature_dim(mode: str) -> int:
@@ -1645,6 +2306,15 @@ def disable_view_conditioned_basis(atlas: dict[int, FaceAtlas]) -> dict[int, Fac
             teacher_basis_ood_min_std=float(face_atlas.teacher_basis_ood_min_std),
             teacher_basis_apply_mode=str(face_atlas.teacher_basis_apply_mode),
             teacher_basis_blend=float(face_atlas.teacher_basis_blend),
+            expert_textures=face_atlas.expert_textures,
+            expert_counts=face_atlas.expert_counts,
+            expert_variance=face_atlas.expert_variance,
+            expert_sign_consistency=face_atlas.expert_sign_consistency,
+            expert_samples=face_atlas.expert_samples,
+            expert_centers=face_atlas.expert_centers,
+            expert_feature_mode=str(face_atlas.expert_feature_mode),
+            expert_min_bin_samples=int(face_atlas.expert_min_bin_samples),
+            expert_fallback_mode=str(face_atlas.expert_fallback_mode),
         )
         for face, face_atlas in atlas.items()
     }
@@ -1675,6 +2345,15 @@ def disable_teacher_distilled_basis(atlas: dict[int, FaceAtlas]) -> dict[int, Fa
             teacher_basis_ood_min_std=1.0e-3,
             teacher_basis_apply_mode="replace_supported",
             teacher_basis_blend=1.0,
+            expert_textures=face_atlas.expert_textures,
+            expert_counts=face_atlas.expert_counts,
+            expert_variance=face_atlas.expert_variance,
+            expert_sign_consistency=face_atlas.expert_sign_consistency,
+            expert_samples=face_atlas.expert_samples,
+            expert_centers=face_atlas.expert_centers,
+            expert_feature_mode=str(face_atlas.expert_feature_mode),
+            expert_min_bin_samples=int(face_atlas.expert_min_bin_samples),
+            expert_fallback_mode=str(face_atlas.expert_fallback_mode),
         )
         for face, face_atlas in atlas.items()
     }
@@ -1710,6 +2389,15 @@ def clone_face_atlas(face_atlas: FaceAtlas) -> FaceAtlas:
         teacher_basis_ood_min_std=float(face_atlas.teacher_basis_ood_min_std),
         teacher_basis_apply_mode=str(face_atlas.teacher_basis_apply_mode),
         teacher_basis_blend=float(face_atlas.teacher_basis_blend),
+        expert_textures=_copy_array_or_none(face_atlas.expert_textures),
+        expert_counts=_copy_array_or_none(face_atlas.expert_counts),
+        expert_variance=_copy_array_or_none(face_atlas.expert_variance),
+        expert_sign_consistency=_copy_array_or_none(face_atlas.expert_sign_consistency),
+        expert_samples=_copy_array_or_none(face_atlas.expert_samples),
+        expert_centers=_copy_array_or_none(face_atlas.expert_centers),
+        expert_feature_mode=str(face_atlas.expert_feature_mode),
+        expert_min_bin_samples=int(face_atlas.expert_min_bin_samples),
+        expert_fallback_mode=str(face_atlas.expert_fallback_mode),
     )
 
 
@@ -1746,6 +2434,30 @@ def _copy_face_atlas_bin(dst: FaceAtlas, src: FaceAtlas, v: int, u: int) -> None
         and dst.view_basis_feature_std.shape == src.view_basis_feature_std.shape
     ):
         dst.view_basis_feature_std[v, u] = src.view_basis_feature_std[v, u]
+    if (
+        dst.expert_textures is not None
+        and src.expert_textures is not None
+        and dst.expert_textures.shape == src.expert_textures.shape
+    ):
+        dst.expert_textures[:, v, u] = src.expert_textures[:, v, u]
+    if (
+        dst.expert_counts is not None
+        and src.expert_counts is not None
+        and dst.expert_counts.shape == src.expert_counts.shape
+    ):
+        dst.expert_counts[:, v, u] = src.expert_counts[:, v, u]
+    if (
+        dst.expert_variance is not None
+        and src.expert_variance is not None
+        and dst.expert_variance.shape == src.expert_variance.shape
+    ):
+        dst.expert_variance[:, v, u] = src.expert_variance[:, v, u]
+    if (
+        dst.expert_sign_consistency is not None
+        and src.expert_sign_consistency is not None
+        and dst.expert_sign_consistency.shape == src.expert_sign_consistency.shape
+    ):
+        dst.expert_sign_consistency[:, v, u] = src.expert_sign_consistency[:, v, u]
 
 
 def _blend_face_atlas_bin(dst: FaceAtlas, src: FaceAtlas, v: int, u: int, weight: float) -> None:
@@ -1763,6 +2475,41 @@ def _blend_face_atlas_bin(dst: FaceAtlas, src: FaceAtlas, v: int, u: int, weight
         0.0,
         1.0,
     )
+    if (
+        dst.expert_textures is not None
+        and src.expert_textures is not None
+        and dst.expert_textures.shape == src.expert_textures.shape
+    ):
+        dst.expert_textures[:, v, u] = (
+            (1.0 - weight) * dst.expert_textures[:, v, u]
+            + weight * src.expert_textures[:, v, u]
+        )
+    if (
+        dst.expert_counts is not None
+        and src.expert_counts is not None
+        and dst.expert_counts.shape == src.expert_counts.shape
+    ):
+        dst.expert_counts[:, v, u] = np.maximum(dst.expert_counts[:, v, u], src.expert_counts[:, v, u])
+    if (
+        dst.expert_variance is not None
+        and src.expert_variance is not None
+        and dst.expert_variance.shape == src.expert_variance.shape
+    ):
+        dst.expert_variance[:, v, u] = (
+            (1.0 - weight) * dst.expert_variance[:, v, u]
+            + weight * src.expert_variance[:, v, u]
+        )
+    if (
+        dst.expert_sign_consistency is not None
+        and src.expert_sign_consistency is not None
+        and dst.expert_sign_consistency.shape == src.expert_sign_consistency.shape
+    ):
+        dst.expert_sign_consistency[:, v, u] = np.clip(
+            (1.0 - weight) * dst.expert_sign_consistency[:, v, u]
+            + weight * src.expert_sign_consistency[:, v, u],
+            0.0,
+            1.0,
+        )
 
 
 
@@ -1771,6 +2518,7 @@ def _local_alpha_for_samples(
     profile: dict[str, Any] | None,
     face_ids: np.ndarray | None = None,
     bin_ids: np.ndarray | None = None,
+    view_cluster_id: int | None = None,
 ) -> np.ndarray:
     if not profile or not bool(profile.get("enabled", False)):
         return np.ones((int(samples.shape[0]),), dtype=np.float32)
@@ -1852,8 +2600,20 @@ def _local_alpha_for_samples(
     if mode == "policy_val_hybrid_bin_source_alpha":
         baseline_profile = profile.get("baseline_profile", {"enabled": False})
         prior_profile = profile.get("prior_profile", {"enabled": False})
-        baseline_alpha = _local_alpha_for_samples(samples, baseline_profile, face_ids=face_ids, bin_ids=bin_ids)
-        prior_alpha = _local_alpha_for_samples(samples, prior_profile, face_ids=face_ids, bin_ids=bin_ids)
+        baseline_alpha = _local_alpha_for_samples(
+            samples,
+            baseline_profile,
+            face_ids=face_ids,
+            bin_ids=bin_ids,
+            view_cluster_id=view_cluster_id,
+        )
+        prior_alpha = _local_alpha_for_samples(
+            samples,
+            prior_profile,
+            face_ids=face_ids,
+            bin_ids=bin_ids,
+            view_cluster_id=view_cluster_id,
+        )
         sample_count = int(samples.shape[0])
         valid_shapes = {(sample_count,), (sample_count, 3)}
         if tuple(baseline_alpha.shape) not in valid_shapes or tuple(prior_alpha.shape) not in valid_shapes:
@@ -1906,6 +2666,12 @@ def _local_alpha_for_samples(
         if face_ids is None or bin_ids is None:
             return np.clip(alpha, 0.0, float(profile.get("max_shrink", np.max(alpha) if alpha.size else 1.0)))
         raw_by_face = profile.get("bin_shrinks_by_face", {}) or {}
+        if bool(profile.get("view_cluster_local_shrink", False)):
+            cluster_profiles = profile.get("cluster_bin_shrinks_by_cluster_face", {}) or {}
+            cluster_key = str(int(view_cluster_id)) if view_cluster_id is not None else ""
+            raw_by_face = cluster_profiles.get(cluster_key, {}) if isinstance(cluster_profiles, dict) else {}
+            if not raw_by_face and bool(profile.get("view_cluster_local_global_fallback", False)):
+                raw_by_face = profile.get("bin_shrinks_by_face", {}) or {}
         if not isinstance(raw_by_face, dict):
             return np.clip(alpha, 0.0, float(profile.get("max_shrink", np.max(alpha) if alpha.size else 1.0)))
         local_faces = np.asarray(face_ids, dtype=np.int64)
@@ -1959,6 +2725,212 @@ def _luminance_gradient_magnitude_chw(image: np.ndarray) -> np.ndarray | None:
     dx[:, :-1] = lum[:, 1:] - lum[:, :-1]
     dy[:-1, :] = lum[1:, :] - lum[:-1, :]
     return np.sqrt(dx * dx + dy * dy).astype(np.float32)
+
+
+def _image_linear_generator_feature_names(feature_mode: str) -> list[str]:
+    mode = str(feature_mode)
+    names = ["bias", "base_r", "base_g", "base_b", "base_l1"]
+    if mode in {"base_rgb", "base_rgb_bary_view"}:
+        names.extend(["render_r", "render_g", "render_b", "render_luma"])
+    if mode == "base_rgb_bary_view":
+        names.extend(["bary0", "bary1", "bary2", "view_x", "view_y", "view_z"])
+    if mode not in {"base", "base_rgb", "base_rgb_bary_view"}:
+        raise ValueError(f"unsupported image-linear generator feature mode: {mode}")
+    return names
+
+
+def _image_linear_generator_features_for_samples(
+    z: np.lib.npyio.NpzFile,
+    *,
+    base_pixels: np.ndarray,
+    ys: np.ndarray,
+    xs: np.ndarray,
+    bary: np.ndarray,
+    feature_mode: str,
+    feature_cache: dict[str, Any] | None = None,
+) -> np.ndarray:
+    mode = str(feature_mode)
+    _image_linear_generator_feature_names(mode)
+    cache = feature_cache if feature_cache is not None else {}
+    base = np.asarray(base_pixels, dtype=np.float32).reshape(-1, 3)
+    n = int(base.shape[0])
+    columns: list[np.ndarray] = [
+        np.ones((n, 1), dtype=np.float32),
+        base,
+        np.mean(np.abs(base), axis=1, keepdims=True).astype(np.float32),
+    ]
+    if mode in {"base_rgb", "base_rgb_bary_view"}:
+        render = cache.get("rgb_render_chw")
+        if "rgb_render_chw" not in cache:
+            render = _as_rgb_chw(np.asarray(z["rgb_render"])) if "rgb_render" in z else None
+            if render is not None and render.dtype != np.float32:
+                render = render.astype(np.float32, copy=False)
+            cache["rgb_render_chw"] = render
+        if render is None:
+            rgb = np.zeros((n, 3), dtype=np.float32)
+        else:
+            rgb = np.stack(
+                [render[0][ys, xs], render[1][ys, xs], render[2][ys, xs]],
+                axis=1,
+            ).astype(np.float32)
+        render_luma = cache.get("rgb_render_luma")
+        if "rgb_render_luma" not in cache:
+            if render is None:
+                render_luma = None
+            else:
+                render_luma = (0.299 * render[0] + 0.587 * render[1] + 0.114 * render[2]).astype(np.float32)
+            cache["rgb_render_luma"] = render_luma
+        if render_luma is None:
+            luma = (0.299 * rgb[:, 0:1] + 0.587 * rgb[:, 1:2] + 0.114 * rgb[:, 2:3]).astype(np.float32)
+        else:
+            luma = render_luma[ys, xs].reshape(-1, 1).astype(np.float32)
+        columns.extend([rgb, luma])
+    if mode == "base_rgb_bary_view":
+        bary_samples = np.stack(
+            [bary[0][ys, xs], bary[1][ys, xs], bary[2][ys, xs]],
+            axis=1,
+        ).astype(np.float32)
+        view = cache.get("normalized_camera_center")
+        if "normalized_camera_center" not in cache:
+            view = _normalized_camera_center(z)
+            cache["normalized_camera_center"] = view
+        if view is None:
+            view = np.zeros((3,), dtype=np.float32)
+        view_arr = np.repeat(np.asarray(view, dtype=np.float32).reshape(1, 3), n, axis=0)
+        columns.extend([bary_samples, view_arr])
+    return np.concatenate(columns, axis=1).astype(np.float32)
+
+
+def _apply_image_linear_generator_to_samples(
+    z: np.lib.npyio.NpzFile,
+    profile: dict[str, Any] | None,
+    *,
+    base_pixels: np.ndarray,
+    ys: np.ndarray,
+    xs: np.ndarray,
+    bary: np.ndarray,
+    current_alpha: float = 1.0,
+    feature_cache: dict[str, Any] | None = None,
+) -> np.ndarray:
+    if not profile or not bool(profile.get("enabled", False)):
+        return base_pixels
+    if str(profile.get("mode", "")) != "policy_val_image_linear_generator":
+        return base_pixels
+    weights = np.asarray(profile.get("weights", []), dtype=np.float32)
+    if weights.ndim != 2 or weights.shape[1] != 3:
+        return base_pixels
+    expert_index: int | None = None
+    reliability_group_index: int | None = None
+    expert_weights = np.asarray(profile.get("expert_weights", []), dtype=np.float32)
+    expert_enabled = np.asarray(profile.get("expert_enabled", []), dtype=bool)
+    expert_centers = np.asarray(profile.get("expert_centers", []), dtype=np.float32)
+    expert_feature_mode = str(profile.get("expert_feature_mode", "none"))
+    if (
+        expert_weights.ndim == 3
+        and expert_weights.shape[1:] == weights.shape
+        and expert_enabled.ndim == 1
+        and expert_enabled.shape[0] == expert_weights.shape[0]
+        and expert_centers.ndim == 2
+        and expert_centers.shape[0] == expert_weights.shape[0]
+        and expert_feature_mode != "none"
+    ):
+        assigned_expert_index = _assign_view_cluster_for_npz(
+            z,
+            centers=expert_centers,
+            feature_mode=expert_feature_mode,
+        )
+        if assigned_expert_index is not None and 0 <= int(assigned_expert_index) < int(expert_weights.shape[0]):
+            reliability_group_index = int(assigned_expert_index)
+            if bool(expert_enabled[int(assigned_expert_index)]):
+                expert_index = int(assigned_expert_index)
+                weights = expert_weights[int(expert_index)]
+    feature_mode = str(profile.get("feature_mode", "base"))
+    features = _image_linear_generator_features_for_samples(
+        z,
+        base_pixels=base_pixels,
+        ys=ys,
+        xs=xs,
+        bary=bary,
+        feature_mode=feature_mode,
+        feature_cache=feature_cache,
+    )
+    if features.shape[1] != weights.shape[0]:
+        return base_pixels
+    generated = features @ weights
+    output_cap = float(profile.get("generator_output_cap", 0.0) or 0.0)
+    if output_cap > 0.0:
+        generated = np.clip(generated, -output_cap, output_cap)
+    face_reliability_profile = profile.get("face_reliability_profile")
+    if isinstance(face_reliability_profile, dict) and bool(face_reliability_profile.get("enabled", False)):
+        reliability_mode = str(face_reliability_profile.get("mode", "none"))
+        if reliability_mode in {"global", "view_cluster"} and "face_id" in z:
+            group_id = -1
+            if reliability_mode == "view_cluster":
+                group_id = int(reliability_group_index) if reliability_group_index is not None else -1
+            fallback_multiplier = float(face_reliability_profile.get("fallback_multiplier", 0.0) or 0.0)
+            fallback_multiplier = float(np.clip(fallback_multiplier, 0.0, 1.0))
+            multipliers_by_face: dict[int, float] = {}
+            selected_alpha_by_face: dict[int, float] = {}
+            entries_by_group = face_reliability_profile.get("entries_by_group", {})
+            if isinstance(entries_by_group, dict):
+                raw_group_entries = entries_by_group.get(str(int(group_id)), {})
+                if isinstance(raw_group_entries, dict):
+                    for face_key, value in raw_group_entries.items():
+                        try:
+                            face_i = int(face_key)
+                        except (TypeError, ValueError):
+                            continue
+                        if isinstance(value, dict):
+                            try:
+                                multipliers_by_face[face_i] = float(np.clip(float(value.get("multiplier", 0.0)), 0.0, 1.0))
+                            except (TypeError, ValueError):
+                                continue
+                            try:
+                                selected_alpha = float(value.get("selected_alpha", float("nan")))
+                            except (TypeError, ValueError):
+                                selected_alpha = float("nan")
+                            if math.isfinite(selected_alpha) and selected_alpha >= 0.0:
+                                selected_alpha_by_face[face_i] = float(selected_alpha)
+                        else:
+                            try:
+                                multipliers_by_face[face_i] = float(np.clip(float(value), 0.0, 1.0))
+                            except (TypeError, ValueError):
+                                continue
+            if not multipliers_by_face:
+                entries = face_reliability_profile.get("entries", [])
+                if isinstance(entries, list):
+                    for entry in entries:
+                        if not isinstance(entry, dict):
+                            continue
+                        try:
+                            entry_group = int(entry.get("group_id", -1))
+                            entry_face = int(entry.get("face_id"))
+                            entry_multiplier = float(entry.get("multiplier", 0.0))
+                        except (TypeError, ValueError):
+                            continue
+                        if entry_group == int(group_id):
+                            multipliers_by_face[entry_face] = float(np.clip(entry_multiplier, 0.0, 1.0))
+                            try:
+                                selected_alpha = float(entry.get("selected_alpha", float("nan")))
+                            except (TypeError, ValueError):
+                                selected_alpha = float("nan")
+                            if math.isfinite(selected_alpha) and selected_alpha >= 0.0:
+                                selected_alpha_by_face[entry_face] = float(selected_alpha)
+            if multipliers_by_face or fallback_multiplier < 1.0:
+                face_img = np.asarray(z["face_id"], dtype=np.int64)
+                face_samples = face_img[ys, xs].reshape(-1)
+                multipliers = np.full((int(face_samples.size),), fallback_multiplier, dtype=np.float32)
+                alpha_denominator = max(float(current_alpha), 1.0e-12)
+                for face in np.unique(face_samples):
+                    face_i = int(face)
+                    if face_i in multipliers_by_face:
+                        multiplier = float(multipliers_by_face[face_i])
+                        selected_alpha = selected_alpha_by_face.get(face_i)
+                        if selected_alpha is not None:
+                            multiplier *= float(np.clip(float(selected_alpha) / alpha_denominator, 0.0, 1.0))
+                        multipliers[face_samples == face_i] = float(np.clip(multiplier, 0.0, 1.0))
+                generated = generated * multipliers.reshape(-1, 1)
+    return generated.astype(np.float32)
 
 
 def make_parent_edge_apply_profile(
@@ -2481,6 +3453,11 @@ def fit_atlas(
     view_conditioned_basis_ood_mode: str,
     view_conditioned_basis_ood_max_z: float,
     view_conditioned_basis_ood_min_std: float,
+    view_cluster_expert_count: int,
+    view_cluster_feature_mode: str,
+    view_cluster_min_views: int,
+    view_cluster_min_bin_samples: int,
+    view_cluster_fallback_mode: str,
     teacher_distilled_basis_mode: str,
     teacher_distilled_basis_min_face_samples: int,
     teacher_distilled_basis_ridge: float,
@@ -2488,6 +3465,10 @@ def fit_atlas(
     teacher_distilled_basis_ood_min_std: float,
     teacher_distilled_basis_apply_mode: str,
     teacher_distilled_basis_blend: float,
+    enable_adaptive_low_support_teacher_basis: bool,
+    adaptive_teacher_basis_min_face_samples_floor: int,
+    adaptive_teacher_basis_support_quantile: float,
+    adaptive_teacher_basis_low_support_ridge_scale: float,
 ) -> tuple[dict[int, FaceAtlas], dict[str, Any], list[Path], list[Path]]:
     sums: dict[int, np.ndarray] = {}
     sq_sums: dict[int, np.ndarray] = {}
@@ -2500,6 +3481,11 @@ def fit_atlas(
     view_feature_counts: dict[int, np.ndarray] = {}
     view_feature_sums: dict[int, np.ndarray] = {}
     view_feature_sq_sums: dict[int, np.ndarray] = {}
+    expert_sums: dict[int, np.ndarray] = {}
+    expert_sq_sums: dict[int, np.ndarray] = {}
+    expert_sign_sums: dict[int, np.ndarray] = {}
+    expert_counts: dict[int, np.ndarray] = {}
+    expert_sample_counts: dict[int, np.ndarray] = {}
     teacher_basis_xtx_sums: dict[int, np.ndarray] = {}
     teacher_basis_xty_sums: dict[int, np.ndarray] = {}
     teacher_basis_feature_sums: dict[int, np.ndarray] = {}
@@ -2533,6 +3519,12 @@ def fit_atlas(
     if view_basis_ood_mode not in {"none", "diag_z"}:
         raise ValueError(f"unsupported view-conditioned basis OOD mode: {view_basis_ood_mode}")
     view_basis_feature_dim = _view_condition_feature_dim(view_basis_mode)
+    view_cluster_feature_mode_s = str(view_cluster_feature_mode)
+    if view_cluster_feature_mode_s not in {"none", "camera_center"}:
+        raise ValueError(f"unsupported view-cluster feature mode: {view_cluster_feature_mode_s}")
+    view_cluster_fallback_mode_s = str(view_cluster_fallback_mode)
+    if view_cluster_fallback_mode_s not in {"global"}:
+        raise ValueError(f"unsupported view-cluster fallback mode: {view_cluster_fallback_mode_s}")
     teacher_basis_mode = str(teacher_distilled_basis_mode)
     teacher_basis_feature_dim = _teacher_distilled_basis_feature_dim(teacher_basis_mode)
     teacher_basis_apply_mode = str(teacher_distilled_basis_apply_mode)
@@ -2540,9 +3532,35 @@ def fit_atlas(
         raise ValueError(f"unsupported teacher-distilled basis apply mode: {teacher_basis_apply_mode}")
     teacher_basis_views = 0
     teacher_basis_samples = 0
+    teacher_basis_base_min_face_samples = max(1, int(teacher_distilled_basis_min_face_samples))
     rng = np.random.default_rng(7)
 
     stride = max(0, int(policy_val_stride))
+    planned_fit_view_paths = [
+        path
+        for view_index, path in enumerate(view_paths)
+        if not (stride > 1 and view_index % stride == 0)
+    ]
+    view_cluster_profile = _fit_view_cluster_profile(
+        planned_fit_view_paths,
+        expert_count=int(view_cluster_expert_count),
+        feature_mode=view_cluster_feature_mode_s,
+        min_views=int(view_cluster_min_views),
+    )
+    view_cluster_enabled = bool(view_cluster_profile.get("enabled", False))
+    view_cluster_centers = (
+        np.asarray(view_cluster_profile.get("centers"), dtype=np.float32)
+        if view_cluster_enabled
+        else None
+    )
+    view_cluster_count = int(view_cluster_profile.get("expert_count", 1)) if view_cluster_enabled else 1
+    view_cluster_valid = (
+        np.asarray(view_cluster_profile.get("valid_clusters", []), dtype=bool)
+        if view_cluster_enabled
+        else np.zeros((0,), dtype=bool)
+    )
+    view_cluster_views_with_features = 0
+    view_cluster_samples = 0
     for view_index, path in enumerate(tqdm(view_paths, desc="fit atlas")):
         if stride > 1 and view_index % stride == 0:
             val_views.append(path)
@@ -2571,6 +3589,25 @@ def fit_atlas(
         if view_features is not None:
             view_basis_views += 1
             total_view_basis_samples += int(face_ids.size)
+        view_cluster_index = None
+        if view_cluster_enabled:
+            view_cluster_index = _assign_view_cluster_for_npz(
+                z,
+                centers=view_cluster_centers,
+                feature_mode=view_cluster_feature_mode_s,
+            )
+            if (
+                view_cluster_index is not None
+                and 0 <= int(view_cluster_index) < int(view_cluster_count)
+                and (
+                    view_cluster_valid.size <= int(view_cluster_index)
+                    or bool(view_cluster_valid[int(view_cluster_index)])
+                )
+            ):
+                view_cluster_views_with_features += 1
+                view_cluster_samples += int(face_ids.size)
+            else:
+                view_cluster_index = None
         teacher_basis_features = _teacher_distilled_basis_features_for_mask(z, teacher_basis_mode, mask)
         if teacher_basis_features is not None:
             teacher_basis_views += 1
@@ -2595,6 +3632,12 @@ def fit_atlas(
                     view_feature_counts[face] = np.zeros((size, size), dtype=np.int64)
                     view_feature_sums[face] = np.zeros((size, size, view_basis_feature_dim), dtype=np.float64)
                     view_feature_sq_sums[face] = np.zeros((size, size, view_basis_feature_dim), dtype=np.float64)
+                if view_cluster_enabled:
+                    expert_sums[face] = np.zeros((view_cluster_count, size, size, 3), dtype=np.float64)
+                    expert_sq_sums[face] = np.zeros((view_cluster_count, size, size, 3), dtype=np.float64)
+                    expert_sign_sums[face] = np.zeros((view_cluster_count, size, size, 3), dtype=np.float64)
+                    expert_counts[face] = np.zeros((view_cluster_count, size, size), dtype=np.int64)
+                    expert_sample_counts[face] = np.zeros((view_cluster_count,), dtype=np.int64)
                 if teacher_basis_feature_dim > 0:
                     teacher_basis_xtx_sums[face] = np.zeros(
                         (teacher_basis_feature_dim, teacher_basis_feature_dim),
@@ -2610,6 +3653,21 @@ def fit_atlas(
             np.add.at(counts[face], (vbin[fm], ubin[fm]), 1)
             mean_sums[face] += residual_samples[fm].sum(axis=0)
             mean_counts[face] += int(fm.sum())
+            if view_cluster_index is not None and face in expert_sums:
+                ci = int(view_cluster_index)
+                np.add.at(expert_sums[face][ci], (vbin[fm], ubin[fm]), residual_samples[fm].astype(np.float64))
+                np.add.at(
+                    expert_sq_sums[face][ci],
+                    (vbin[fm], ubin[fm]),
+                    np.square(residual_samples[fm]).astype(np.float64),
+                )
+                np.add.at(
+                    expert_sign_sums[face][ci],
+                    (vbin[fm], ubin[fm]),
+                    np.sign(residual_samples[fm]).astype(np.float64),
+                )
+                np.add.at(expert_counts[face][ci], (vbin[fm], ubin[fm]), 1)
+                expert_sample_counts[face][ci] += int(fm.sum())
             if view_features is not None and face in view_xtx_sums:
                 face_features = view_features[fm].astype(np.float64)
                 np.add.at(view_feature_counts[face], (vbin[fm], ubin[fm]), 1)
@@ -2647,10 +3705,110 @@ def fit_atlas(
                 teacher_basis_counts[face] = teacher_basis_counts.get(face, 0) + int(face_features.shape[0])
 
     atlas: dict[int, FaceAtlas] = {}
+    view_cluster_expert_faces = 0
+    view_cluster_expert_supported_bins = 0
+    view_cluster_expert_total_bins = 0
     view_basis_supported_bins_total = 0
     view_basis_bins_total = 0
     teacher_basis_supported_faces = 0
     teacher_basis_candidate_faces = 0
+    teacher_basis_base_threshold_supported_faces = 0
+    teacher_basis_low_support_supported_faces = 0
+    teacher_basis_ridge_multiplier_sum = 0.0
+    teacher_basis_ridge_multiplier_max = 1.0
+    teacher_basis_effective_min_face_samples = int(teacher_basis_base_min_face_samples)
+    teacher_basis_requested_adaptive_floor = max(1, int(adaptive_teacher_basis_min_face_samples_floor))
+    teacher_basis_effective_adaptive_floor = min(
+        int(teacher_basis_base_min_face_samples),
+        int(teacher_basis_requested_adaptive_floor),
+    )
+    adaptive_teacher_basis_count_stats: dict[str, Any] = {
+        "counted_faces": 0,
+        "min": 0,
+        "p25": 0.0,
+        "median": 0.0,
+        "p75": 0.0,
+        "max": 0,
+    }
+    adaptive_teacher_basis_summary: dict[str, Any] = {
+        "enabled": bool(enable_adaptive_low_support_teacher_basis),
+        "base_min_face_samples": int(teacher_basis_base_min_face_samples),
+        "effective_min_face_samples": int(teacher_basis_effective_min_face_samples),
+        "floor": int(teacher_basis_effective_adaptive_floor),
+        "requested_floor": int(teacher_basis_requested_adaptive_floor),
+        "support_quantile": float(adaptive_teacher_basis_support_quantile),
+        "low_support_ridge_scale": float(adaptive_teacher_basis_low_support_ridge_scale),
+        "max_low_support_ridge_multiplier": 16.0,
+        "reason": "not_requested",
+        "support_count_stats": dict(adaptive_teacher_basis_count_stats),
+        "threshold_candidate_faces_at_base_min": 0,
+        "threshold_candidate_faces_at_effective_min": 0,
+        "threshold_newly_candidate_faces": 0,
+        "supported_faces_at_base_min": 0,
+        "supported_faces_at_effective_min": 0,
+        "newly_supported_faces": 0,
+        "low_support_supported_faces": 0,
+        "mean_ridge_multiplier": 0.0,
+        "max_ridge_multiplier": 1.0,
+    }
+    if teacher_basis_feature_dim > 0 and teacher_basis_counts:
+        teacher_count_values = np.asarray(
+            [int(count) for count in teacher_basis_counts.values() if int(count) > 0],
+            dtype=np.int64,
+        )
+        if teacher_count_values.size:
+            q25, median, q75 = np.quantile(teacher_count_values.astype(np.float64), [0.25, 0.5, 0.75])
+            adaptive_teacher_basis_count_stats = {
+                "counted_faces": int(teacher_count_values.size),
+                "min": int(np.min(teacher_count_values)),
+                "p25": float(q25),
+                "median": float(median),
+                "p75": float(q75),
+                "max": int(np.max(teacher_count_values)),
+            }
+            base_supported = int(np.sum(teacher_count_values >= int(teacher_basis_base_min_face_samples)))
+            teacher_basis_effective_min_face_samples = int(teacher_basis_base_min_face_samples)
+            adaptive_reason = "disabled"
+            if bool(enable_adaptive_low_support_teacher_basis):
+                support_quantile = float(np.clip(float(adaptive_teacher_basis_support_quantile), 0.0, 1.0))
+                quantile_count = int(math.ceil(float(np.quantile(teacher_count_values.astype(np.float64), support_quantile))))
+                teacher_basis_effective_min_face_samples = int(
+                    min(
+                        int(teacher_basis_base_min_face_samples),
+                        max(1, int(teacher_basis_effective_adaptive_floor), quantile_count),
+                    )
+                )
+                adaptive_reason = (
+                    "lowered_by_fit_support_quantile"
+                    if teacher_basis_effective_min_face_samples < int(teacher_basis_base_min_face_samples)
+                    else "support_distribution_kept_base_threshold"
+                )
+            effective_supported = int(np.sum(teacher_count_values >= int(teacher_basis_effective_min_face_samples)))
+            adaptive_teacher_basis_summary = {
+                "enabled": bool(enable_adaptive_low_support_teacher_basis),
+                "base_min_face_samples": int(teacher_basis_base_min_face_samples),
+                "effective_min_face_samples": int(teacher_basis_effective_min_face_samples),
+                "floor": int(teacher_basis_effective_adaptive_floor),
+                "requested_floor": int(teacher_basis_requested_adaptive_floor),
+                "support_quantile": float(adaptive_teacher_basis_support_quantile),
+                "low_support_ridge_scale": float(adaptive_teacher_basis_low_support_ridge_scale),
+                "max_low_support_ridge_multiplier": 16.0,
+                "reason": str(adaptive_reason if bool(enable_adaptive_low_support_teacher_basis) else "not_requested"),
+                "support_count_stats": dict(adaptive_teacher_basis_count_stats),
+                "threshold_candidate_faces_at_base_min": int(base_supported),
+                "threshold_candidate_faces_at_effective_min": int(effective_supported),
+                "threshold_newly_candidate_faces": int(max(0, effective_supported - base_supported)),
+                "supported_faces_at_base_min": 0,
+                "supported_faces_at_effective_min": 0,
+                "newly_supported_faces": 0,
+                "low_support_supported_faces": 0,
+                "mean_ridge_multiplier": 0.0,
+                "max_ridge_multiplier": 1.0,
+            }
+        elif bool(enable_adaptive_low_support_teacher_basis):
+            adaptive_teacher_basis_summary["reason"] = "no_positive_teacher_basis_counts"
+    elif bool(enable_adaptive_low_support_teacher_basis):
+        adaptive_teacher_basis_summary["reason"] = "teacher_basis_disabled_or_no_candidates"
     for face, sum_grid in sums.items():
         count_grid = counts[face]
         mean_rgb = mean_sums[face] / max(1, int(mean_counts[face]))
@@ -2726,6 +3884,50 @@ def fit_atlas(
         view_basis_support = None
         view_basis_feature_mean = None
         view_basis_feature_std = None
+        expert_textures = None
+        expert_count_grid = None
+        expert_variance_grid = None
+        expert_sign_grid = None
+        expert_samples = None
+        if view_cluster_enabled and face in expert_sums:
+            min_expert_bin_samples = max(1, int(view_cluster_min_bin_samples))
+            expert_count_grid = expert_counts[face].astype(np.int32)
+            expert_textures = np.repeat(texture[None, ...], view_cluster_count, axis=0).astype(np.float32)
+            expert_variance_grid = np.repeat(variance[None, ...], view_cluster_count, axis=0).astype(np.float32)
+            expert_sign_grid = np.repeat(sign_consistency[None, ...], view_cluster_count, axis=0).astype(np.float32)
+            expert_samples = expert_sample_counts[face].astype(np.int64)
+            for expert_idx in range(view_cluster_count):
+                local_counts = expert_counts[face][expert_idx]
+                local_nonzero = local_counts > 0
+                if not bool(np.any(local_nonzero)):
+                    continue
+                local_mean = np.zeros_like(texture, dtype=np.float32)
+                local_mean[local_nonzero] = (
+                    expert_sums[face][expert_idx][local_nonzero] / local_counts[local_nonzero, None]
+                ).astype(np.float32)
+                local_mean_sq = np.zeros_like(texture, dtype=np.float64)
+                local_mean_sq[local_nonzero] = (
+                    expert_sq_sums[face][expert_idx][local_nonzero]
+                    / local_counts[local_nonzero, None]
+                )
+                local_variance = np.zeros_like(texture, dtype=np.float32)
+                local_variance[local_nonzero] = np.maximum(
+                    local_mean_sq[local_nonzero] - np.square(local_mean[local_nonzero].astype(np.float64)),
+                    0.0,
+                ).astype(np.float32)
+                local_sign = np.zeros_like(texture, dtype=np.float32)
+                local_sign[local_nonzero] = (
+                    np.abs(expert_sign_sums[face][expert_idx][local_nonzero])
+                    / np.maximum(local_counts[local_nonzero, None].astype(np.float64), 1.0)
+                ).astype(np.float32)
+                supported = local_counts >= int(min_expert_bin_samples)
+                if bool(np.any(supported)):
+                    expert_textures[expert_idx][supported] = local_mean[supported]
+                    expert_variance_grid[expert_idx][supported] = local_variance[supported]
+                    expert_sign_grid[expert_idx][supported] = local_sign[supported]
+                    view_cluster_expert_supported_bins += int(np.sum(supported))
+            view_cluster_expert_faces += 1
+            view_cluster_expert_total_bins += int(view_cluster_count * size * size)
         if view_basis_feature_dim > 0 and face in view_xtx_sums:
             feature_count_grid = view_feature_counts[face]
             support = feature_count_grid >= max(1, int(view_conditioned_basis_min_bin_samples))
@@ -2758,8 +3960,16 @@ def fit_atlas(
         if teacher_basis_feature_dim > 0 and face in teacher_basis_xtx_sums:
             teacher_basis_candidate_faces += 1
             teacher_count = int(teacher_basis_counts.get(face, 0))
-            if teacher_count >= max(1, int(teacher_distilled_basis_min_face_samples)):
+            if teacher_count >= max(1, int(teacher_basis_effective_min_face_samples)):
                 ridge = max(0.0, float(teacher_distilled_basis_ridge))
+                ridge_multiplier = 1.0
+                if bool(enable_adaptive_low_support_teacher_basis) and teacher_count < int(teacher_basis_base_min_face_samples):
+                    ratio = float(teacher_basis_base_min_face_samples) / max(1.0, float(teacher_count))
+                    ridge_multiplier = min(
+                        16.0,
+                        1.0 + max(0.0, float(adaptive_teacher_basis_low_support_ridge_scale)) * max(0.0, ratio - 1.0),
+                    )
+                    ridge *= float(ridge_multiplier)
                 eye = np.eye(teacher_basis_feature_dim, dtype=np.float64)
                 xtx = teacher_basis_xtx_sums[face] + ridge * eye
                 xty = teacher_basis_xty_sums[face]
@@ -2775,6 +3985,15 @@ def fit_atlas(
                     )
                     teacher_basis_feature_std = np.sqrt(np.maximum(feature_var, 0.0)).astype(np.float32)
                     teacher_basis_supported_faces += 1
+                    if teacher_count < int(teacher_basis_base_min_face_samples):
+                        teacher_basis_low_support_supported_faces += 1
+                    else:
+                        teacher_basis_base_threshold_supported_faces += 1
+                    teacher_basis_ridge_multiplier_sum += float(ridge_multiplier)
+                    teacher_basis_ridge_multiplier_max = max(
+                        float(teacher_basis_ridge_multiplier_max),
+                        float(ridge_multiplier),
+                    )
                 except np.linalg.LinAlgError:
                     teacher_basis_coefficients = None
         atlas[face] = FaceAtlas(
@@ -2800,6 +4019,15 @@ def fit_atlas(
             teacher_basis_ood_min_std=float(teacher_distilled_basis_ood_min_std),
             teacher_basis_apply_mode=str(teacher_basis_apply_mode),
             teacher_basis_blend=float(teacher_distilled_basis_blend),
+            expert_textures=expert_textures,
+            expert_counts=expert_count_grid,
+            expert_variance=expert_variance_grid,
+            expert_sign_consistency=expert_sign_grid,
+            expert_samples=expert_samples,
+            expert_centers=view_cluster_centers.copy() if view_cluster_enabled and view_cluster_centers is not None else None,
+            expert_feature_mode=view_cluster_feature_mode_s if view_cluster_enabled else "none",
+            expert_min_bin_samples=max(1, int(view_cluster_min_bin_samples)),
+            expert_fallback_mode=view_cluster_fallback_mode_s,
         )
 
     summary = {
@@ -2858,12 +4086,44 @@ def fit_atlas(
             "total_bins": int(view_basis_bins_total),
             "supported_bin_fraction": float(view_basis_supported_bins_total / max(1, view_basis_bins_total)),
         },
+        "view_cluster_experts": {
+            "enabled": bool(view_cluster_enabled),
+            "feature_mode": str(view_cluster_feature_mode_s),
+            "requested_expert_count": int(view_cluster_expert_count),
+            "expert_count": int(view_cluster_count),
+            "min_views": int(view_cluster_min_views),
+            "min_bin_samples": int(view_cluster_min_bin_samples),
+            "fallback_mode": str(view_cluster_fallback_mode_s),
+            "fit_views_with_features": int(view_cluster_views_with_features),
+            "fit_samples_with_features": int(view_cluster_samples),
+            "faces": int(view_cluster_expert_faces),
+            "supported_bins": int(view_cluster_expert_supported_bins),
+            "total_bins": int(view_cluster_expert_total_bins),
+            "supported_bin_fraction": float(view_cluster_expert_supported_bins / max(1, view_cluster_expert_total_bins)),
+            "profile": {
+                key: (
+                    value.tolist()
+                    if isinstance(value, np.ndarray)
+                    else value
+                )
+                for key, value in view_cluster_profile.items()
+                if key != "centers"
+            }
+            | {
+                "centers": (
+                    view_cluster_centers.astype(float).tolist()
+                    if view_cluster_enabled and view_cluster_centers is not None
+                    else []
+                )
+            },
+        },
         "teacher_distilled_basis": {
             "mode": str(teacher_basis_mode),
             "feature_dim": int(teacher_basis_feature_dim),
             "fit_views_with_features": int(teacher_basis_views),
             "fit_samples_with_features": int(teacher_basis_samples),
-            "min_face_samples": int(teacher_distilled_basis_min_face_samples),
+            "min_face_samples": int(teacher_basis_base_min_face_samples),
+            "effective_min_face_samples": int(teacher_basis_effective_min_face_samples),
             "ridge": float(teacher_distilled_basis_ridge),
             "ood_max_z": float(teacher_distilled_basis_ood_max_z),
             "ood_min_std": float(teacher_distilled_basis_ood_min_std),
@@ -2872,6 +4132,19 @@ def fit_atlas(
             "candidate_faces": int(teacher_basis_candidate_faces),
             "supported_faces": int(teacher_basis_supported_faces),
             "supported_face_fraction": float(teacher_basis_supported_faces / max(1, teacher_basis_candidate_faces)),
+            "adaptive_low_support": dict(
+                adaptive_teacher_basis_summary
+                | {
+                    "low_support_supported_faces": int(teacher_basis_low_support_supported_faces),
+                    "supported_faces_at_base_min": int(teacher_basis_base_threshold_supported_faces),
+                    "supported_faces_at_effective_min": int(teacher_basis_supported_faces),
+                    "newly_supported_faces": int(teacher_basis_low_support_supported_faces),
+                    "mean_ridge_multiplier": float(
+                        teacher_basis_ridge_multiplier_sum / max(1, teacher_basis_supported_faces)
+                    ),
+                    "max_ridge_multiplier": float(teacher_basis_ridge_multiplier_max),
+                }
+            ),
         },
     }
     return atlas, summary, fit_views, val_views
@@ -2897,11 +4170,21 @@ def predict_delta_for_npz(
     face_gain_guard_profile: dict[str, Any] | None = None,
     bin_uncertainty_guard_profile: dict[str, Any] | None = None,
     parent_edge_apply_profile: dict[str, Any] | None = None,
+    view_confidence_profile: dict[str, Any] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     face_id = np.asarray(z["face_id"], dtype=np.int64)
     h, w = face_id.shape
     delta = np.zeros((3, h, w), dtype=np.float32)
     valid = face_id >= 0
+    view_confidence = view_confidence_for_npz(z, view_confidence_profile)
+    if view_confidence <= 0.0:
+        return delta, np.zeros_like(valid, dtype=bool)
+    view_alpha_cap = view_alpha_cap_for_npz(
+        z,
+        dict(local_alpha_profile.get("view_alpha_cap_profile", {}))
+        if isinstance(local_alpha_profile, dict)
+        else None,
+    )
     if "barycentric" not in z:
         return delta, np.zeros_like(valid, dtype=bool)
     if "barycentric_valid" in z:
@@ -2953,6 +4236,24 @@ def predict_delta_for_npz(
     faces = face_id[valid]
     view_feature_cache: dict[str, np.ndarray | None] = {}
     teacher_basis_feature_cache: dict[str, np.ndarray | None] = {}
+    image_linear_feature_cache: dict[str, Any] | None = (
+        {}
+        if (
+            local_alpha_profile
+            and bool(local_alpha_profile.get("enabled", False))
+            and str(local_alpha_profile.get("mode", "")) == "policy_val_image_linear_generator"
+        )
+        else None
+    )
+    local_alpha_view_cluster_index = None
+    if local_alpha_profile and bool(local_alpha_profile.get("view_cluster_local_shrink", False)):
+        cluster_centers, cluster_feature_mode = _view_cluster_profile_from_atlas(atlas)
+        if cluster_centers is not None and str(cluster_feature_mode) != "none":
+            local_alpha_view_cluster_index = _assign_view_cluster_for_npz(
+                z,
+                centers=cluster_centers,
+                feature_mode=str(cluster_feature_mode),
+            )
     for face in np.unique(faces):
         fm = faces == face
         face_atlas = atlas[int(face)]
@@ -3005,6 +4306,36 @@ def predict_delta_for_npz(
             continue
         confident_indices = face_valid_indices[confident]
         base_pixels = tex[vbin[confident_indices], ubin[confident_indices]] * confidence[confident, None]
+        if (
+            face_atlas.expert_textures is not None
+            and face_atlas.expert_counts is not None
+            and face_atlas.expert_centers is not None
+            and str(face_atlas.expert_feature_mode) != "none"
+        ):
+            expert_index = _assign_view_cluster_for_npz(
+                z,
+                centers=face_atlas.expert_centers,
+                feature_mode=str(face_atlas.expert_feature_mode),
+            )
+            if (
+                expert_index is not None
+                and 0 <= int(expert_index) < int(face_atlas.expert_textures.shape[0])
+                and int(expert_index) < int(face_atlas.expert_counts.shape[0])
+            ):
+                local_expert_counts = face_atlas.expert_counts[int(expert_index)][
+                    vbin[confident_indices],
+                    ubin[confident_indices],
+                ]
+                expert_supported = local_expert_counts >= max(1, int(face_atlas.expert_min_bin_samples))
+                if bool(np.any(expert_supported)):
+                    expert_pixels = face_atlas.expert_textures[int(expert_index)][
+                        vbin[confident_indices][expert_supported],
+                        ubin[confident_indices][expert_supported],
+                    ]
+                    base_pixels[expert_supported] = (
+                        expert_pixels.astype(np.float32)
+                        * confidence[confident][expert_supported, None]
+                    )
         if (
             face_atlas.view_basis_coefficients is not None
             and face_atlas.view_basis_support is not None
@@ -3107,6 +4438,21 @@ def predict_delta_for_npz(
                         )
                     else:
                         base_pixels[teacher_support] = teacher_pixels
+        if (
+            local_alpha_profile
+            and bool(local_alpha_profile.get("enabled", False))
+            and str(local_alpha_profile.get("mode", "")) == "policy_val_image_linear_generator"
+        ):
+            base_pixels = _apply_image_linear_generator_to_samples(
+                z,
+                local_alpha_profile,
+                base_pixels=base_pixels,
+                ys=ys[confident_indices],
+                xs=xs[confident_indices],
+                bary=bary,
+                current_alpha=float(alpha),
+                feature_cache=image_linear_feature_cache,
+            )
         local_faces = faces[confident_indices]
         local_bin_ids = (
             vbin[confident_indices].astype(np.int64) * int(tex.shape[0])
@@ -3116,6 +4462,7 @@ def predict_delta_for_npz(
             local_alpha_profile,
             face_ids=local_faces,
             bin_ids=local_bin_ids,
+            view_cluster_id=local_alpha_view_cluster_index,
         )
         if local_alpha_profile and bool(local_alpha_profile.get("enabled", False)):
             mode = str(local_alpha_profile.get("mode", ""))
@@ -3182,8 +4529,12 @@ def predict_delta_for_npz(
         channel = delta[c]
         if bool(np.any(support_valid)):
             values = float(alpha) * out_pixels[support_valid, c]
+            if math.isfinite(view_alpha_cap) and float(alpha) > 0.0:
+                values = values * float(np.clip(view_alpha_cap / float(alpha), 0.0, 1.0))
             if parent_edge_multiplier is not None:
                 values = values * parent_edge_multiplier[ys[support_valid], xs[support_valid]]
+            if view_confidence < 1.0:
+                values = values * float(view_confidence)
             channel[ys[support_valid], xs[support_valid]] = values
     return delta, valid
 
@@ -3219,6 +4570,7 @@ def evaluate_policy_val(
     face_gain_guard_profile: dict[str, Any] | None = None,
     bin_uncertainty_guard_profile: dict[str, Any] | None = None,
     parent_edge_apply_profile: dict[str, Any] | None = None,
+    view_confidence_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not val_views:
         return {"enabled": False, "reason": "no_policy_val_views"}
@@ -3236,6 +4588,38 @@ def evaluate_policy_val(
     lpips_before_by_alpha: dict[float, list[float]] = {float(alpha): [] for alpha in alpha_grid}
     lpips_after_by_alpha: dict[float, list[float]] = {float(alpha): [] for alpha in alpha_grid}
     lpips_model = build_lpips_model() if bool(enable_policy_val_image_lpips) else None
+    selective_view_confidence = bool(view_confidence_profile and view_confidence_profile.get("enabled", False))
+    view_alpha_cap_profile = (
+        dict(local_alpha_profile.get("view_alpha_cap_profile", {}))
+        if isinstance(local_alpha_profile, dict)
+        else {}
+    )
+    selective_view_alpha_cap = bool(view_alpha_cap_profile and view_alpha_cap_profile.get("enabled", False))
+    selective_view_policy = bool(selective_view_confidence or selective_view_alpha_cap)
+
+    def metric_active_mask(metric_rows: list[dict[str, Any]]) -> np.ndarray:
+        if not metric_rows:
+            return np.zeros((0,), dtype=bool)
+        confidences = np.asarray(
+            [float(row.get("view_confidence", 1.0) or 0.0) for row in metric_rows],
+            dtype=np.float64,
+        )
+        active = confidences > 0.0
+        if selective_view_alpha_cap:
+            caps = np.asarray(
+                [
+                    (
+                        float(row.get("view_alpha_cap", 0.0) or 0.0)
+                        if row.get("view_alpha_cap") is not None
+                        else float("inf")
+                    )
+                    for row in metric_rows
+                ],
+                dtype=np.float64,
+            )
+            active &= np.isinf(caps) | (caps > 0.0)
+        return active
+
     face_count = set()
     for path in tqdm(val_views, desc="policy-val atlas"):
         z = np.load(path)
@@ -3278,6 +4662,16 @@ def evaluate_policy_val(
                 int(policy_val_lpips_max_size),
                 lpips_model,
             )
+        view_confidence_scalar = (
+            view_confidence_for_npz(z, view_confidence_profile)
+            if selective_view_confidence
+            else 1.0
+        )
+        view_alpha_cap_scalar = (
+            view_alpha_cap_for_npz(z, view_alpha_cap_profile)
+            if selective_view_alpha_cap
+            else float("inf")
+        )
         for alpha in alpha_grid:
             pred, _valid = predict_delta_for_npz(
                 z,
@@ -3299,6 +4693,7 @@ def evaluate_policy_val(
                 face_gain_guard_profile=face_gain_guard_profile,
                 bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
                 parent_edge_apply_profile=parent_edge_apply_profile,
+                view_confidence_profile=view_confidence_profile,
             )
             pred = clip_delta_rgb(pred, float(max_abs_delta_rgb))
             pred_samples = np.stack([pred[0][mask], pred[1][mask], pred[2][mask]], axis=1)
@@ -3362,6 +4757,15 @@ def evaluate_policy_val(
                     "lpips_before": view_lpips_before,
                     "lpips_after": view_lpips_after,
                     "lpips_gain": view_lpips_gain,
+                    "view_confidence": float(view_confidence_scalar),
+                    "view_confidence_active": bool(view_confidence_scalar > 0.0),
+                    "view_alpha_cap": (
+                        None if not math.isfinite(view_alpha_cap_scalar) else float(view_alpha_cap_scalar)
+                    ),
+                    "view_alpha_cap_active": bool(
+                        (not selective_view_alpha_cap)
+                        or (math.isfinite(view_alpha_cap_scalar) and float(view_alpha_cap_scalar) > 0.0)
+                    ),
                 }
             )
     if not residual_chunks:
@@ -3388,6 +4792,43 @@ def evaluate_policy_val(
                 "p10_view_relative_gain": float(np.quantile(view_gains, 0.10)),
                 "cvar20_view_relative_gain": float(np.mean(sorted_gains[:cvar_count])),
             }
+            if selective_view_policy:
+                view_confidences = np.asarray(
+                    [float(row.get("view_confidence", 1.0) or 0.0) for row in view_rows],
+                    dtype=np.float64,
+                )
+                view_alpha_caps = np.asarray(
+                    [
+                        (
+                            float(row.get("view_alpha_cap", 0.0) or 0.0)
+                            if row.get("view_alpha_cap") is not None
+                            else float("inf")
+                        )
+                        for row in view_rows
+                    ],
+                    dtype=np.float64,
+                )
+                alpha_cap_active = np.isinf(view_alpha_caps) | (view_alpha_caps > 0.0)
+                active = metric_active_mask(view_rows)
+                eps = 1.0e-12
+                view_stats.update(
+                    {
+                        "view_confidence_selective": bool(selective_view_confidence),
+                        "view_alpha_cap_selective": bool(selective_view_alpha_cap),
+                        "view_confidence_active_view_fraction": float(np.mean(active)),
+                        "view_confidence_mean": float(np.mean(view_confidences)),
+                        "view_alpha_cap_active_view_fraction": float(np.mean(alpha_cap_active)),
+                        "view_alpha_cap_mean": (
+                            float(np.mean(view_alpha_caps[np.isfinite(view_alpha_caps)]))
+                            if bool(np.any(np.isfinite(view_alpha_caps)))
+                            else 0.0
+                        ),
+                        "nonnegative_view_fraction": float(np.mean(view_gains >= -eps)),
+                        "active_positive_view_fraction": (
+                            float(np.mean(view_gains[active] > 0.0)) if bool(np.any(active)) else 0.0
+                        ),
+                    }
+                )
         else:
             view_stats = {
                 "view_count": 0,
@@ -3396,6 +4837,19 @@ def evaluate_policy_val(
                 "p10_view_relative_gain": 0.0,
                 "cvar20_view_relative_gain": 0.0,
             }
+            if selective_view_policy:
+                view_stats.update(
+                    {
+                        "view_confidence_selective": bool(selective_view_confidence),
+                        "view_alpha_cap_selective": bool(selective_view_alpha_cap),
+                        "view_confidence_active_view_fraction": 0.0,
+                        "view_confidence_mean": 0.0,
+                        "view_alpha_cap_active_view_fraction": 0.0,
+                        "view_alpha_cap_mean": 0.0,
+                        "nonnegative_view_fraction": 0.0,
+                        "active_positive_view_fraction": 0.0,
+                    }
+                )
         ssim_gains = np.asarray(ssim_gains_by_alpha.get(float(alpha), []), dtype=np.float64)
         if ssim_gains.size:
             sorted_ssim_gains = np.sort(ssim_gains)
@@ -3409,6 +4863,23 @@ def evaluate_policy_val(
                 "ssim_min_view_gain": float(np.min(ssim_gains)),
                 "ssim_cvar20_view_gain": float(np.mean(sorted_ssim_gains[:cvar_count])),
             }
+            if selective_view_policy:
+                metric_rows = [row for row in view_rows if row.get("ssim_gain") is not None]
+                metric_values = np.asarray([float(row["ssim_gain"]) for row in metric_rows], dtype=np.float64)
+                metric_conf = np.asarray(
+                    [float(row.get("view_confidence", 1.0) or 0.0) for row in metric_rows],
+                    dtype=np.float64,
+                )
+                active = metric_active_mask(metric_rows)
+                eps = 1.0e-12
+                ssim_stats.update(
+                    {
+                        "ssim_nonnegative_view_fraction": float(np.mean(metric_values >= -eps)),
+                        "ssim_active_positive_view_fraction": (
+                            float(np.mean(metric_values[active] > 0.0)) if bool(np.any(active)) else 0.0
+                        ),
+                    }
+                )
         else:
             ssim_stats = {
                 "ssim_view_count": 0,
@@ -3419,6 +4890,13 @@ def evaluate_policy_val(
                 "ssim_min_view_gain": 0.0,
                 "ssim_cvar20_view_gain": 0.0,
             }
+            if selective_view_policy:
+                ssim_stats.update(
+                    {
+                        "ssim_nonnegative_view_fraction": 0.0,
+                        "ssim_active_positive_view_fraction": 0.0,
+                    }
+                )
         l1_gains = np.asarray(l1_gains_by_alpha.get(float(alpha), []), dtype=np.float64)
         if l1_gains.size:
             sorted_l1_gains = np.sort(l1_gains)
@@ -3432,6 +4910,23 @@ def evaluate_policy_val(
                 "image_l1_min_view_gain": float(np.min(l1_gains)),
                 "image_l1_cvar20_view_gain": float(np.mean(sorted_l1_gains[:cvar_count])),
             }
+            if selective_view_policy:
+                metric_rows = [row for row in view_rows if row.get("image_l1_gain") is not None]
+                metric_values = np.asarray([float(row["image_l1_gain"]) for row in metric_rows], dtype=np.float64)
+                metric_conf = np.asarray(
+                    [float(row.get("view_confidence", 1.0) or 0.0) for row in metric_rows],
+                    dtype=np.float64,
+                )
+                active = metric_active_mask(metric_rows)
+                eps = 1.0e-12
+                l1_stats.update(
+                    {
+                        "image_l1_nonnegative_view_fraction": float(np.mean(metric_values >= -eps)),
+                        "image_l1_active_positive_view_fraction": (
+                            float(np.mean(metric_values[active] > 0.0)) if bool(np.any(active)) else 0.0
+                        ),
+                    }
+                )
         else:
             l1_stats = {
                 "image_l1_view_count": 0,
@@ -3442,6 +4937,13 @@ def evaluate_policy_val(
                 "image_l1_min_view_gain": 0.0,
                 "image_l1_cvar20_view_gain": 0.0,
             }
+            if selective_view_policy:
+                l1_stats.update(
+                    {
+                        "image_l1_nonnegative_view_fraction": 0.0,
+                        "image_l1_active_positive_view_fraction": 0.0,
+                    }
+                )
         lpips_gains = np.asarray(lpips_gains_by_alpha.get(float(alpha), []), dtype=np.float64)
         if lpips_gains.size:
             sorted_lpips_gains = np.sort(lpips_gains)
@@ -3455,6 +4957,23 @@ def evaluate_policy_val(
                 "lpips_min_view_gain": float(np.min(lpips_gains)),
                 "lpips_cvar20_view_gain": float(np.mean(sorted_lpips_gains[:cvar_count])),
             }
+            if selective_view_policy:
+                metric_rows = [row for row in view_rows if row.get("lpips_gain") is not None]
+                metric_values = np.asarray([float(row["lpips_gain"]) for row in metric_rows], dtype=np.float64)
+                metric_conf = np.asarray(
+                    [float(row.get("view_confidence", 1.0) or 0.0) for row in metric_rows],
+                    dtype=np.float64,
+                )
+                active = metric_active_mask(metric_rows)
+                eps = 1.0e-12
+                lpips_stats.update(
+                    {
+                        "lpips_nonnegative_view_fraction": float(np.mean(metric_values >= -eps)),
+                        "lpips_active_positive_view_fraction": (
+                            float(np.mean(metric_values[active] > 0.0)) if bool(np.any(active)) else 0.0
+                        ),
+                    }
+                )
         else:
             lpips_stats = {
                 "lpips_view_count": 0,
@@ -3465,6 +4984,13 @@ def evaluate_policy_val(
                 "lpips_min_view_gain": 0.0,
                 "lpips_cvar20_view_gain": 0.0,
             }
+            if selective_view_policy:
+                lpips_stats.update(
+                    {
+                        "lpips_nonnegative_view_fraction": 0.0,
+                        "lpips_active_positive_view_fraction": 0.0,
+                    }
+                )
         row = {
             "alpha": float(alpha),
             "mse_before": mse_before,
@@ -3488,6 +5014,91 @@ def evaluate_policy_val(
         "per_view_by_alpha": {str(alpha): rows for alpha, rows in per_view_by_alpha.items()},
         "best": best or {},
     }
+
+
+def annotate_sparse_materialization_selective_policy_val(
+    policy_payload: dict[str, Any],
+    sparse_profile: dict[str, Any] | None,
+    *,
+    eps: float = 1.0e-12,
+) -> dict[str, Any]:
+    """Mark sparse materialization policy-val rows as selective non-regressive rows.
+
+    Sparse materialization intentionally edits only a small face/bin footprint.
+    Views with no affected footprint should be treated as zero-gain safety
+    evidence, not as failures to produce strictly positive gain.
+    """
+    if not isinstance(policy_payload, dict) or not bool(policy_payload.get("enabled", False)):
+        return policy_payload
+    if not isinstance(sparse_profile, dict) or not bool(sparse_profile.get("enabled", False)):
+        return policy_payload
+    if int(sparse_profile.get("allowed_bin_count", 0) or 0) <= 0:
+        return policy_payload
+    payload = dict(policy_payload)
+    per_view_by_alpha = payload.get("per_view_by_alpha", {}) or {}
+    if not isinstance(per_view_by_alpha, dict):
+        return payload
+
+    def rows_for_alpha(alpha: float) -> list[dict[str, Any]]:
+        exact_key = str(float(alpha))
+        rows = per_view_by_alpha.get(exact_key)
+        if rows is not None:
+            return list(rows or [])
+        best_rows: list[dict[str, Any]] = []
+        best_delta = float("inf")
+        for key, value in per_view_by_alpha.items():
+            try:
+                key_alpha = float(key)
+            except (TypeError, ValueError):
+                continue
+            delta = abs(key_alpha - float(alpha))
+            if delta < best_delta:
+                best_delta = delta
+                best_rows = list(value or [])
+        return best_rows if best_delta <= 1.0e-8 else []
+
+    annotated_rows: list[dict[str, Any]] = []
+    for row_in in payload.get("rows", []) or []:
+        row = dict(row_in)
+        row["sparse_materialization_selective"] = True
+        row["sparse_materialization_allowed_bin_count"] = int(
+            sparse_profile.get("allowed_bin_count", 0) or 0
+        )
+        row["sparse_materialization_allowed_sample_fraction"] = float(
+            sparse_profile.get("allowed_sample_fraction", 0.0) or 0.0
+        )
+        view_rows = rows_for_alpha(float(row.get("alpha", 0.0)))
+        rel = np.asarray([float(x.get("relative_gain", 0.0)) for x in view_rows], dtype=np.float64)
+        if rel.size:
+            row["nonnegative_view_fraction"] = float(np.mean(rel >= -float(eps)))
+        for metric_key, output_key in (
+            ("ssim_gain", "ssim_nonnegative_view_fraction"),
+            ("image_l1_gain", "image_l1_nonnegative_view_fraction"),
+            ("lpips_gain", "lpips_nonnegative_view_fraction"),
+        ):
+            vals = [
+                float(x[metric_key])
+                for x in view_rows
+                if x.get(metric_key) is not None
+            ]
+            if vals:
+                arr = np.asarray(vals, dtype=np.float64)
+                row[output_key] = float(np.mean(arr >= -float(eps)))
+        annotated_rows.append(row)
+    payload["rows"] = annotated_rows
+    best_alpha = float((payload.get("best") or {}).get("alpha", float("nan")))
+    if math.isfinite(best_alpha):
+        for row in annotated_rows:
+            if abs(float(row.get("alpha", 0.0)) - best_alpha) <= 1.0e-8:
+                payload["best"] = dict(row)
+                break
+    payload["sparse_materialization_selective"] = {
+        "enabled": True,
+        "allowed_bin_count": int(sparse_profile.get("allowed_bin_count", 0) or 0),
+        "allowed_sample_fraction": float(sparse_profile.get("allowed_sample_fraction", 0.0) or 0.0),
+        "risk_semantics": "nonnegative_views_are_safe_for_sparse_noop_footprint",
+    }
+    return payload
 
 
 def build_policy_val_prior_bin_gain_hybrid_atlas(
@@ -4320,10 +5931,16 @@ def build_policy_val_bin_uncertainty_guard_profile(
     local_alpha_profile: dict[str, Any] | None,
     face_gain_guard_profile: dict[str, Any] | None,
     min_bin_samples: int,
-    min_relative_gain: float,
-    min_positive_view_fraction: float,
-    max_mean_variance: float,
-    min_mean_sign_consistency: float,
+    min_bin_views: int = 1,
+    min_relative_gain: float = 0.0,
+    min_view_relative_gain: float = -float("inf"),
+    min_positive_view_fraction: float = 0.5,
+    max_mean_variance: float = -1.0,
+    min_mean_sign_consistency: float = 0.0,
+    adaptive_frontier_on_empty: bool = False,
+    adaptive_frontier_min_positive_view_fraction: float = 0.55,
+    adaptive_frontier_min_risk_adjusted_gain: float = 0.0,
+    adaptive_frontier_min_sample_quantile: float = 0.75,
 ) -> dict[str, Any]:
     """Build a train-policy-val face/UV-bin allowlist with uncertainty filters."""
     disabled = {
@@ -4340,6 +5957,7 @@ def build_policy_val_bin_uncertainty_guard_profile(
     samples_by_key: dict[tuple[int, int], int] = {}
     view_count_by_key: dict[tuple[int, int], int] = {}
     positive_view_count_by_key: dict[tuple[int, int], int] = {}
+    min_view_gain_by_key: dict[tuple[int, int], float] = {}
     variance_sum_by_key: dict[tuple[int, int], float] = {}
     sign_sum_by_key: dict[tuple[int, int], float] = {}
     total_active_samples = 0
@@ -4416,6 +6034,7 @@ def build_policy_val_bin_uncertainty_guard_profile(
                 samples_by_key[key] = samples_by_key.get(key, 0) + local_count
                 view_count_by_key[key] = view_count_by_key.get(key, 0) + 1
                 gain = (local_before - local_after) / max(local_before, 1.0e-12)
+                min_view_gain_by_key[key] = min(float(min_view_gain_by_key.get(key, gain)), float(gain))
                 if gain > 0.0:
                     positive_view_count_by_key[key] = positive_view_count_by_key.get(key, 0) + 1
                 ybin = int(bin_id) // texture_size
@@ -4441,16 +6060,25 @@ def build_policy_val_bin_uncertainty_guard_profile(
         samples = int(samples_by_key.get(key, 0))
         views = int(view_count_by_key.get(key, 0))
         positive_views = int(positive_view_count_by_key.get(key, 0))
+        min_view_gain = float(min_view_gain_by_key.get(key, 0.0))
         relative_gain = (before - after) / max(before, 1.0e-12)
         positive_fraction = float(positive_views / max(1, views))
         mean_variance = float(variance_sum_by_key.get(key, 0.0) / max(1, samples))
         mean_sign = float(sign_sum_by_key.get(key, 0.0) / max(1, samples))
         variance_ok = float(max_mean_variance) < 0.0 or mean_variance <= float(max_mean_variance)
         sign_ok = float(min_mean_sign_consistency) <= 0.0 or mean_sign >= float(min_mean_sign_consistency)
+        min_view_ok = min_view_gain >= float(min_view_relative_gain)
+        sample_ok = samples >= int(min_bin_samples)
+        view_ok = views >= int(min_bin_views)
+        relative_ok = relative_gain >= float(min_relative_gain)
+        positive_ok = positive_fraction >= float(min_positive_view_fraction)
+        risk_adjusted_gain = relative_gain + min(0.0, min_view_gain)
         keep = bool(
-            samples >= int(min_bin_samples)
-            and relative_gain >= float(min_relative_gain)
-            and positive_fraction >= float(min_positive_view_fraction)
+            sample_ok
+            and view_ok
+            and relative_ok
+            and min_view_ok
+            and positive_ok
             and variance_ok
             and sign_ok
         )
@@ -4467,21 +6095,111 @@ def build_policy_val_bin_uncertainty_guard_profile(
                 "view_count": int(views),
                 "positive_view_count": int(positive_views),
                 "positive_view_fraction": float(positive_fraction),
+                "min_view_relative_gain": float(min_view_gain),
                 "mse_before_sum": float(before),
                 "mse_after_sum": float(after),
                 "relative_gain": float(relative_gain),
+                "risk_adjusted_relative_gain": float(risk_adjusted_gain),
                 "mean_variance": float(mean_variance),
                 "mean_sign_consistency": float(mean_sign),
+                "sample_ok": bool(sample_ok),
+                "view_ok": bool(view_ok),
+                "relative_ok": bool(relative_ok),
+                "positive_fraction_ok": bool(positive_ok),
                 "variance_ok": bool(variance_ok),
                 "sign_ok": bool(sign_ok),
+                "min_view_ok": bool(min_view_ok),
                 "keep": bool(keep),
             }
         )
+    adaptive_frontier: dict[str, Any] = {
+        "enabled": bool(adaptive_frontier_on_empty),
+        "activated": False,
+        "reason": "strict_certificate_nonempty" if allowed_bins_by_face else "not_requested",
+        "min_positive_view_fraction": float(adaptive_frontier_min_positive_view_fraction),
+        "min_risk_adjusted_gain": float(adaptive_frontier_min_risk_adjusted_gain),
+        "min_sample_quantile": float(adaptive_frontier_min_sample_quantile),
+        "requested_min_bin_samples": int(min_bin_samples),
+        "effective_min_bin_samples": int(min_bin_samples),
+    }
+    if bool(adaptive_frontier_on_empty) and not allowed_bins_by_face:
+        allowed_bins_by_face = {}
+        allowed_samples = 0
+        frontier_positive_fraction = min(
+            float(min_positive_view_fraction),
+            max(0.0, float(adaptive_frontier_min_positive_view_fraction)),
+        )
+        core_rows = [
+            row
+            for row in rows
+            if (
+                int(row["view_count"]) >= int(min_bin_views)
+                and float(row["relative_gain"]) >= float(min_relative_gain)
+                and float(row["risk_adjusted_relative_gain"]) >= float(adaptive_frontier_min_risk_adjusted_gain)
+                and float(row["positive_view_fraction"]) >= float(frontier_positive_fraction)
+                and bool(row["variance_ok"])
+                and bool(row["sign_ok"])
+            )
+        ]
+        effective_min_bin_samples = int(min_bin_samples)
+        sample_quantiles: dict[str, float] = {}
+        if core_rows:
+            core_samples = np.asarray([int(row["samples"]) for row in core_rows], dtype=np.float64)
+            q = float(np.clip(float(adaptive_frontier_min_sample_quantile), 0.0, 1.0))
+            effective_min_bin_samples = min(
+                int(min_bin_samples),
+                max(1, int(np.floor(float(np.quantile(core_samples, q))))),
+            )
+            sample_quantiles = {
+                "0.25": float(np.quantile(core_samples, 0.25)),
+                "0.50": float(np.quantile(core_samples, 0.50)),
+                "0.75": float(np.quantile(core_samples, 0.75)),
+                "0.90": float(np.quantile(core_samples, 0.90)),
+                "1.00": float(np.max(core_samples)),
+            }
+        for row in rows:
+            frontier_sample_ok = int(row["samples"]) >= int(effective_min_bin_samples)
+            frontier_keep = bool(
+                frontier_sample_ok
+                and int(row["view_count"]) >= int(min_bin_views)
+                and float(row["relative_gain"]) >= float(min_relative_gain)
+                and float(row["risk_adjusted_relative_gain"]) >= float(adaptive_frontier_min_risk_adjusted_gain)
+                and float(row["positive_view_fraction"]) >= float(frontier_positive_fraction)
+                and bool(row["variance_ok"])
+                and bool(row["sign_ok"])
+            )
+            row["frontier_sample_ok"] = bool(frontier_sample_ok)
+            row["frontier_keep"] = bool(frontier_keep)
+            if frontier_keep:
+                allowed_bins_by_face.setdefault(str(int(row["face_id"])), []).append(int(row["bin_id"]))
+                allowed_samples += int(row["samples"])
+        adaptive_frontier["activated"] = True
+        adaptive_frontier["reason"] = (
+            "frontier_selected_bins" if allowed_bins_by_face else "frontier_empty"
+        )
+        adaptive_frontier["effective_min_positive_view_fraction"] = float(frontier_positive_fraction)
+        adaptive_frontier["core_candidate_count"] = int(len(core_rows))
+        adaptive_frontier["sample_quantiles"] = dict(sample_quantiles)
+        adaptive_frontier["effective_min_bin_samples"] = int(effective_min_bin_samples)
+        adaptive_frontier["selected_bin_count"] = int(sum(len(v) for v in allowed_bins_by_face.values()))
+    else:
+        for row in rows:
+            row["frontier_sample_ok"] = False
+            row["frontier_keep"] = False
     for bins in allowed_bins_by_face.values():
         bins.sort()
     rows_by_gain = sorted(rows, key=lambda row: float(row["relative_gain"]))
     rows_by_samples = sorted(rows, key=lambda row: int(row["samples"]), reverse=True)
     allowed_bin_count = int(sum(len(v) for v in allowed_bins_by_face.values()))
+    failure_counts = {
+        "sample": int(sum(1 for row in rows if not bool(row.get("sample_ok", False)))),
+        "view": int(sum(1 for row in rows if not bool(row.get("view_ok", False)))),
+        "relative": int(sum(1 for row in rows if not bool(row.get("relative_ok", False)))),
+        "min_view": int(sum(1 for row in rows if not bool(row.get("min_view_ok", False)))),
+        "positive_fraction": int(sum(1 for row in rows if not bool(row.get("positive_fraction_ok", False)))),
+        "variance": int(sum(1 for row in rows if not bool(row.get("variance_ok", False)))),
+        "sign": int(sum(1 for row in rows if not bool(row.get("sign_ok", False)))),
+    }
     return {
         "enabled": True,
         "mode": "policy_val_bin_uncertainty_guard",
@@ -4490,10 +6208,14 @@ def build_policy_val_bin_uncertainty_guard_profile(
         "samples": int(total_active_samples),
         "texture_size": int(texture_size),
         "min_bin_samples": int(min_bin_samples),
+        "min_bin_views": int(min_bin_views),
         "min_relative_gain": float(min_relative_gain),
+        "min_view_relative_gain": float(min_view_relative_gain),
         "min_positive_view_fraction": float(min_positive_view_fraction),
         "max_mean_variance": float(max_mean_variance),
         "min_mean_sign_consistency": float(min_mean_sign_consistency),
+        "adaptive_frontier": dict(adaptive_frontier),
+        "strict_failure_counts": dict(failure_counts),
         "candidate_bin_count": int(len(rows)),
         "allowed_bin_count": int(allowed_bin_count),
         "rejected_bin_count": int(len(rows) - allowed_bin_count),
@@ -4501,6 +6223,7 @@ def build_policy_val_bin_uncertainty_guard_profile(
         "allowed_sample_fraction": float(allowed_samples / max(1, total_active_samples)),
         "allowed_bins_by_face": allowed_bins_by_face,
         "worst_bins": rows_by_gain[:32],
+        "best_gain_bins": list(reversed(rows_by_gain[-32:])),
         "best_sampled_bins": rows_by_samples[:32],
     }
 
@@ -4602,10 +6325,16 @@ def policy_val_sparse_materialization_profile(
     face_gain_guard_profile: dict[str, Any] | None,
     seed_min_relative_gain: float,
     min_bin_samples: int,
+    min_bin_views: int,
     min_relative_gain: float,
+    min_view_relative_gain: float,
     min_positive_view_fraction: float,
     max_mean_variance: float,
     min_mean_sign_consistency: float,
+    adaptive_frontier_on_empty: bool,
+    adaptive_frontier_min_positive_view_fraction: float,
+    adaptive_frontier_min_risk_adjusted_gain: float,
+    adaptive_frontier_min_sample_quantile: float,
 ) -> dict[str, Any]:
     seed = select_sparse_materialization_seed(
         policy_payload,
@@ -4642,10 +6371,16 @@ def policy_val_sparse_materialization_profile(
         local_alpha_profile=local_alpha_profile,
         face_gain_guard_profile=face_gain_guard_profile,
         min_bin_samples=int(min_bin_samples),
+        min_bin_views=int(min_bin_views),
         min_relative_gain=float(min_relative_gain),
+        min_view_relative_gain=float(min_view_relative_gain),
         min_positive_view_fraction=float(min_positive_view_fraction),
         max_mean_variance=float(max_mean_variance),
         min_mean_sign_consistency=float(min_mean_sign_consistency),
+        adaptive_frontier_on_empty=bool(adaptive_frontier_on_empty),
+        adaptive_frontier_min_positive_view_fraction=float(adaptive_frontier_min_positive_view_fraction),
+        adaptive_frontier_min_risk_adjusted_gain=float(adaptive_frontier_min_risk_adjusted_gain),
+        adaptive_frontier_min_sample_quantile=float(adaptive_frontier_min_sample_quantile),
     )
     profile["mode"] = "policy_val_sparse_residual_materialization"
     profile["compatible_predict_mode"] = "policy_val_bin_uncertainty_guard"
@@ -4676,6 +6411,7 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
     atlas_confidence_face_sample_scale: float,
     min_atlas_confidence: float,
     min_bin_samples: int,
+    min_bin_views: int,
     min_relative_gain: float,
     min_positive_view_fraction: float,
     max_mean_variance: float,
@@ -4695,6 +6431,23 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
     structure_shrink_edge_weight: float = 0.0,
     structure_shrink_risk_tau: float = 0.002,
     structure_shrink_max_penalty: float = 1.0,
+    enable_view_cluster_local_shrink: bool = False,
+    view_cluster_local_global_fallback: bool = False,
+    enable_image_l1_bin_certificate: bool = False,
+    image_l1_certificate_mode: str = "and",
+    image_l1_certificate_min_relative_gain: float = 0.0,
+    image_l1_certificate_min_positive_view_fraction: float = 0.55,
+    image_l1_certificate_gain_tau: float = 0.01,
+    image_l1_certificate_max_abs_delta_rgb: float = -1.0,
+    image_l1_certificate_pool_radius: int = 0,
+    enable_image_l1_region_expansion: bool = False,
+    image_l1_region_expansion_radius: int = 1,
+    image_l1_region_expansion_max_bins_per_seed: int = 8,
+    image_l1_region_expansion_min_neighbor_samples: int = 1,
+    image_l1_region_expansion_min_neighbor_views: int = 1,
+    image_l1_region_expansion_max_negative_relative_gain: float = 0.02,
+    image_l1_region_expansion_max_negative_image_l1_gain: float = 0.02,
+    image_l1_region_expansion_shrink_decay: float = 0.5,
 ) -> tuple[list[float], dict[str, Any]]:
     """Build a train-policy-val uncertainty-aware residual shrink field.
 
@@ -4706,7 +6459,9 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
     sparse_positive mode: unknown bins fall back to the configured shrink.
     v68 can use keep_with_downweight mode: unknown bins keep the fallback
     residual strength, while bins with explicit negative/weak evidence are
-    locally attenuated.
+    locally attenuated. positive_consensus is stricter: unknown bins are zero
+    and only bins with enough multi-view positive policy-val evidence are
+    materialized.
     """
     base = sorted(set(float(x) for x in base_alpha_grid))
     disabled = {
@@ -4719,17 +6474,22 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
         disabled["reason"] = "no_policy_val_views_or_empty_atlas"
         return base, disabled
     rng = np.random.default_rng(67)
-    before_by_key: dict[tuple[int, int], float] = {}
-    after_by_key: dict[tuple[int, int], float] = {}
-    samples_by_key: dict[tuple[int, int], int] = {}
-    view_count_by_key: dict[tuple[int, int], int] = {}
-    positive_view_count_by_key: dict[tuple[int, int], int] = {}
-    variance_sum_by_key: dict[tuple[int, int], float] = {}
-    sign_sum_by_key: dict[tuple[int, int], float] = {}
-    structure_l1_bad_sum_by_key: dict[tuple[int, int], float] = {}
-    structure_gradient_bad_sum_by_key: dict[tuple[int, int], float] = {}
-    structure_edge_sum_by_key: dict[tuple[int, int], float] = {}
-    structure_bad_view_count_by_key: dict[tuple[int, int], int] = {}
+    before_by_key: dict[tuple[int, ...], float] = {}
+    after_by_key: dict[tuple[int, ...], float] = {}
+    samples_by_key: dict[tuple[int, ...], int] = {}
+    view_count_by_key: dict[tuple[int, ...], int] = {}
+    positive_view_count_by_key: dict[tuple[int, ...], int] = {}
+    variance_sum_by_key: dict[tuple[int, ...], float] = {}
+    sign_sum_by_key: dict[tuple[int, ...], float] = {}
+    structure_l1_bad_sum_by_key: dict[tuple[int, ...], float] = {}
+    structure_gradient_bad_sum_by_key: dict[tuple[int, ...], float] = {}
+    structure_edge_sum_by_key: dict[tuple[int, ...], float] = {}
+    structure_bad_view_count_by_key: dict[tuple[int, ...], int] = {}
+    image_l1_before_by_key: dict[tuple[int, ...], float] = {}
+    image_l1_after_by_key: dict[tuple[int, ...], float] = {}
+    image_l1_samples_by_key: dict[tuple[int, ...], int] = {}
+    image_l1_view_count_by_key: dict[tuple[int, ...], int] = {}
+    image_l1_positive_view_count_by_key: dict[tuple[int, ...], int] = {}
     total_active_samples = 0
     view_count = 0
     structure_view_count = 0
@@ -4739,11 +6499,53 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
         or float(structure_shrink_gradient_weight) > 0.0
         or float(structure_shrink_edge_weight) > 0.0
     )
+    image_l1_certificate_mode_s = str(image_l1_certificate_mode)
+    if image_l1_certificate_mode_s not in {"and", "or", "replace"}:
+        image_l1_certificate_mode_s = "and"
+    image_l1_certificate_enabled = bool(enable_image_l1_bin_certificate)
+    image_l1_certificate_pool_radius_i = max(0, int(image_l1_certificate_pool_radius))
+    image_l1_region_expansion_enabled = bool(enable_image_l1_region_expansion) and image_l1_certificate_enabled
+    image_l1_region_expansion_radius_i = max(0, int(image_l1_region_expansion_radius))
+    image_l1_region_expansion_max_bins_per_seed_i = max(0, int(image_l1_region_expansion_max_bins_per_seed))
+    image_l1_region_expansion_min_neighbor_samples_i = max(1, int(image_l1_region_expansion_min_neighbor_samples))
+    image_l1_region_expansion_min_neighbor_views_i = max(1, int(image_l1_region_expansion_min_neighbor_views))
+    image_l1_region_expansion_max_negative_relative_gain_f = max(
+        0.0,
+        float(image_l1_region_expansion_max_negative_relative_gain),
+    )
+    image_l1_region_expansion_max_negative_image_l1_gain_f = max(
+        0.0,
+        float(image_l1_region_expansion_max_negative_image_l1_gain),
+    )
+    image_l1_region_expansion_shrink_decay_f = float(
+        np.clip(float(image_l1_region_expansion_shrink_decay), 0.0, 1.0)
+    )
+    image_l1_certificate_view_count = 0
+    image_l1_certificate_missing_view_count = 0
     texture_size = int(next(iter(atlas.values())).texture.shape[0])
+    cluster_centers, cluster_feature_mode = _view_cluster_profile_from_atlas(atlas)
+    view_cluster_local_enabled = bool(enable_view_cluster_local_shrink) and (
+        cluster_centers is not None and str(cluster_feature_mode) != "none"
+    )
+    view_cluster_policy_views_used = 0
+    view_cluster_missing_policy_views = 0
+    view_cluster_counts: dict[int, int] = {}
     for path in tqdm(val_views, desc="calibrate bin uncertainty shrink"):
         z = np.load(path)
         if residual_rgb_key not in z or "barycentric" not in z:
             continue
+        view_cluster_index = None
+        if view_cluster_local_enabled:
+            view_cluster_index = _assign_view_cluster_for_npz(
+                z,
+                centers=cluster_centers,
+                feature_mode=str(cluster_feature_mode),
+            )
+            if view_cluster_index is None:
+                view_cluster_missing_policy_views += 1
+                continue
+            view_cluster_policy_views_used += 1
+            view_cluster_counts[int(view_cluster_index)] = view_cluster_counts.get(int(view_cluster_index), 0) + 1
         mask = _valid_sample_mask(z, set(atlas.keys()), residual_l1_key, min_l1, min_alpha)
         ys, xs = np.nonzero(mask)
         if ys.size == 0:
@@ -4790,6 +6592,25 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
         before = np.sum(target * target, axis=1)
         err = target - pred_samples
         after = np.sum(err * err, axis=1)
+        image_l1_before_samples = None
+        image_l1_after_samples = None
+        if image_l1_certificate_enabled:
+            render_chw = _as_rgb_chw(np.asarray(z["rgb_render"], dtype=np.float32)) if "rgb_render" in z else None
+            gt_chw = _as_rgb_chw(np.asarray(z["rgb_gt"], dtype=np.float32)) if "rgb_gt" in z else None
+            if render_chw is not None and gt_chw is not None and tuple(render_chw.shape) == tuple(gt_chw.shape):
+                pred_for_image_l1 = (
+                    clip_delta_rgb(pred, float(image_l1_certificate_max_abs_delta_rgb))
+                    if float(image_l1_certificate_max_abs_delta_rgb) >= 0.0
+                    else pred
+                )
+                adapted = np.clip(render_chw + pred_for_image_l1.astype(np.float32), 0.0, 1.0)
+                image_l1_before_map = np.mean(np.abs(render_chw - gt_chw), axis=0)
+                image_l1_after_map = np.mean(np.abs(adapted - gt_chw), axis=0)
+                image_l1_before_samples = image_l1_before_map[sample_ys, sample_xs].astype(np.float64)
+                image_l1_after_samples = image_l1_after_map[sample_ys, sample_xs].astype(np.float64)
+                image_l1_certificate_view_count += 1
+            else:
+                image_l1_certificate_missing_view_count += 1
         l1_bad_samples = None
         gradient_bad_samples = None
         edge_samples = None
@@ -4828,7 +6649,11 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
             face_mask = face_samples == face_i
             face_atlas = atlas[face_i]
             for bin_id in np.unique(bin_ids[face_mask]):
-                key = (face_i, int(bin_id))
+                key = (
+                    (int(view_cluster_index), face_i, int(bin_id))
+                    if view_cluster_local_enabled
+                    else (face_i, int(bin_id))
+                )
                 bm = face_mask & (bin_ids == int(bin_id))
                 local_before = float(np.sum(before[bm]))
                 local_after = float(np.sum(after[bm]))
@@ -4861,6 +6686,28 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
                         + structure_edge * max(0.0, float(structure_shrink_edge_weight))
                     ) > 0.0:
                         structure_bad_view_count_by_key[key] = structure_bad_view_count_by_key.get(key, 0) + 1
+                if image_l1_before_samples is not None and image_l1_after_samples is not None:
+                    if image_l1_certificate_pool_radius_i > 0:
+                        center_u = int(bin_id) % texture_size
+                        center_v = int(bin_id) // texture_size
+                        patch_mask = face_mask & (
+                            np.abs(uv_u.astype(np.int64) - center_u) <= image_l1_certificate_pool_radius_i
+                        ) & (
+                            np.abs(uv_v.astype(np.int64) - center_v) <= image_l1_certificate_pool_radius_i
+                        )
+                    else:
+                        patch_mask = bm
+                    image_l1_before = float(np.sum(image_l1_before_samples[patch_mask]))
+                    image_l1_after = float(np.sum(image_l1_after_samples[patch_mask]))
+                    image_l1_count = int(np.sum(patch_mask))
+                    image_l1_before_by_key[key] = image_l1_before_by_key.get(key, 0.0) + image_l1_before
+                    image_l1_after_by_key[key] = image_l1_after_by_key.get(key, 0.0) + image_l1_after
+                    image_l1_samples_by_key[key] = image_l1_samples_by_key.get(key, 0) + image_l1_count
+                    image_l1_view_count_by_key[key] = image_l1_view_count_by_key.get(key, 0) + 1
+                    if image_l1_before - image_l1_after > 0.0:
+                        image_l1_positive_view_count_by_key[key] = (
+                            image_l1_positive_view_count_by_key.get(key, 0) + 1
+                        )
 
     if not before_by_key:
         disabled["reason"] = "no_active_policy_val_predictions"
@@ -4873,10 +6720,18 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
     fallback_bin_count = 0
     min_shrink_f = float(min_shrink)
     max_shrink_f = float(max_shrink)
-    fallback_shrink_f = float(np.clip(fallback_shrink, min_shrink_f, max_shrink_f))
     policy_mode_s = str(policy_mode)
+    requested_min_bin_views = max(1, int(min_bin_views))
+    effective_min_bin_views = max(2, requested_min_bin_views) if policy_mode_s == "positive_consensus" else requested_min_bin_views
+    fallback_shrink_f = float(np.clip(fallback_shrink, min_shrink_f, max_shrink_f))
+    if policy_mode_s == "positive_consensus":
+        fallback_shrink_f = 0.0
     for key in sorted(before_by_key):
-        face, bin_id = key
+        if view_cluster_local_enabled:
+            cluster_id, face, bin_id = key
+        else:
+            cluster_id = None
+            face, bin_id = key
         before = float(before_by_key[key])
         after = float(after_by_key.get(key, 0.0))
         samples = int(samples_by_key.get(key, 0))
@@ -4889,6 +6744,25 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
         mean_structure_l1_bad = float(structure_l1_bad_sum_by_key.get(key, 0.0) / max(1, samples))
         mean_structure_gradient_bad = float(structure_gradient_bad_sum_by_key.get(key, 0.0) / max(1, samples))
         mean_structure_edge = float(structure_edge_sum_by_key.get(key, 0.0) / max(1, samples))
+        image_l1_before = float(image_l1_before_by_key.get(key, 0.0))
+        image_l1_after = float(image_l1_after_by_key.get(key, 0.0))
+        image_l1_samples = int(image_l1_samples_by_key.get(key, 0))
+        image_l1_views = int(image_l1_view_count_by_key.get(key, 0))
+        image_l1_positive_views = int(image_l1_positive_view_count_by_key.get(key, 0))
+        image_l1_relative_gain = (
+            (image_l1_before - image_l1_after) / max(image_l1_before, 1.0e-12)
+            if image_l1_samples > 0
+            else 0.0
+        )
+        image_l1_positive_fraction = float(image_l1_positive_views / max(1, image_l1_views))
+        image_l1_view_support_ok = image_l1_views >= int(effective_min_bin_views)
+        image_l1_evidence_ok = bool(
+            image_l1_certificate_enabled
+            and image_l1_samples >= int(min_bin_samples)
+            and image_l1_view_support_ok
+            and image_l1_relative_gain >= float(image_l1_certificate_min_relative_gain)
+            and image_l1_positive_fraction >= float(image_l1_certificate_min_positive_view_fraction)
+        )
         structure_raw_risk = float(
             max(0.0, float(structure_shrink_l1_weight)) * mean_structure_l1_bad
             + max(0.0, float(structure_shrink_gradient_weight)) * mean_structure_gradient_bad
@@ -4906,13 +6780,23 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
             structure_risk_conf = 0.0
         variance_ok = float(max_mean_variance) < 0.0 or mean_variance <= float(max_mean_variance)
         sign_ok = float(min_mean_sign_consistency) <= 0.0 or mean_sign >= float(min_mean_sign_consistency)
+        view_support_ok = views >= int(effective_min_bin_views)
         evidence_ok = bool(
             samples >= int(min_bin_samples)
+            and view_support_ok
             and relative_gain >= float(min_relative_gain)
             and positive_fraction >= float(min_positive_view_fraction)
             and variance_ok
             and sign_ok
         )
+        residual_evidence_ok = bool(evidence_ok)
+        if image_l1_certificate_enabled:
+            if image_l1_certificate_mode_s == "replace":
+                evidence_ok = bool(image_l1_evidence_ok and variance_ok and sign_ok)
+            elif image_l1_certificate_mode_s == "or":
+                evidence_ok = bool((residual_evidence_ok or image_l1_evidence_ok) and variance_ok and sign_ok)
+            else:
+                evidence_ok = bool(residual_evidence_ok and image_l1_evidence_ok)
         count_conf = (
             float(samples) / (float(samples) + float(count_tau))
             if float(count_tau) > 0.0
@@ -4924,6 +6808,26 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
             if float(gain_tau) > 0.0
             else (1.0 if gain_excess > 0.0 or relative_gain >= float(min_relative_gain) else 0.0)
         )
+        image_l1_gain_excess = max(0.0, image_l1_relative_gain - float(image_l1_certificate_min_relative_gain))
+        image_l1_gain_conf = (
+            image_l1_gain_excess / (image_l1_gain_excess + float(image_l1_certificate_gain_tau))
+            if float(image_l1_certificate_gain_tau) > 0.0
+            else (
+                1.0
+                if image_l1_gain_excess > 0.0
+                or image_l1_relative_gain >= float(image_l1_certificate_min_relative_gain)
+                else 0.0
+            )
+        )
+        if image_l1_certificate_enabled and image_l1_certificate_mode_s == "replace":
+            gain_conf_for_shrink = image_l1_gain_conf
+            positive_fraction_for_shrink = image_l1_positive_fraction
+        elif image_l1_certificate_enabled and image_l1_certificate_mode_s == "or":
+            gain_conf_for_shrink = max(gain_conf, image_l1_gain_conf)
+            positive_fraction_for_shrink = max(positive_fraction, image_l1_positive_fraction)
+        else:
+            gain_conf_for_shrink = gain_conf
+            positive_fraction_for_shrink = positive_fraction
         variance_conf = (
             1.0 / (1.0 + max(0.0, mean_variance) / float(variance_scale))
             if float(variance_scale) > 0.0
@@ -4936,7 +6840,12 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
         )
         positive_shrink = float(
             np.clip(
-                max_shrink_f * count_conf * gain_conf * positive_fraction * variance_conf * sign_conf,
+                max_shrink_f
+                * count_conf
+                * gain_conf_for_shrink
+                * positive_fraction_for_shrink
+                * variance_conf
+                * sign_conf,
                 min_shrink_f,
                 max_shrink_f,
             )
@@ -4998,6 +6907,16 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
                 else:
                     shrink = float(np.clip(max(shrink, fallback_shrink_f, positive_shrink), min_shrink_f, max_shrink_f))
             profile_row = abs(shrink - fallback_shrink_f) > 1.0e-8
+        elif policy_mode_s == "positive_consensus":
+            risk_conf = 0.0
+            negative_gain_conf = 0.0
+            positive_deficit = 0.0
+            variance_penalty = 0.0
+            sign_penalty = 0.0
+            shrink = float(positive_shrink if evidence_ok else 0.0)
+            if structure_enabled and evidence_ok and structure_risk_conf > 0.0:
+                shrink = float(np.clip(shrink * (1.0 - structure_risk_conf), min_shrink_f, max_shrink_f))
+            profile_row = bool(evidence_ok and abs(shrink) > 1.0e-8)
         else:
             risk_conf = 0.0
             negative_gain_conf = 0.0
@@ -5012,6 +6931,7 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
                 shrink = float(np.clip(min(shrink, structure_limited_fallback), min_shrink_f, max_shrink_f))
             profile_row = bool(evidence_ok)
         row = {
+            "view_cluster_index": int(cluster_id) if cluster_id is not None else None,
             "face_id": int(face),
             "bin_id": int(bin_id),
             "u": int(bin_id) % texture_size,
@@ -5020,9 +6940,28 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
             "view_count": int(views),
             "positive_view_count": int(positive_views),
             "positive_view_fraction": float(positive_fraction),
+            "view_support_ok": bool(view_support_ok),
             "mse_before_sum": float(before),
             "mse_after_sum": float(after),
             "relative_gain": float(relative_gain),
+            "residual_evidence_ok": bool(residual_evidence_ok),
+            "image_l1_certificate_enabled": bool(image_l1_certificate_enabled),
+            "image_l1_certificate_mode": str(image_l1_certificate_mode_s),
+            "image_l1_view_count": int(image_l1_views),
+            "image_l1_positive_view_count": int(image_l1_positive_views),
+            "image_l1_positive_view_fraction": float(image_l1_positive_fraction),
+            "image_l1_view_support_ok": bool(image_l1_view_support_ok),
+            "image_l1_before_sum": float(image_l1_before),
+            "image_l1_after_sum": float(image_l1_after),
+            "image_l1_relative_gain": float(image_l1_relative_gain),
+            "image_l1_evidence_ok": bool(image_l1_evidence_ok),
+            "image_l1_gain_confidence": float(image_l1_gain_conf),
+            "image_l1_region_expanded": False,
+            "image_l1_region_seed_face_id": None,
+            "image_l1_region_seed_bin_id": None,
+            "image_l1_region_seed_view_cluster_index": None,
+            "image_l1_region_seed_distance": 0,
+            "image_l1_region_expansion_score": 0.0,
             "mean_variance": float(mean_variance),
             "mean_sign_consistency": float(mean_sign),
             "variance_ok": bool(variance_ok),
@@ -5052,6 +6991,186 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
         else:
             fallback_bin_count += 1
 
+    def _profile_row_key(row: dict[str, Any]) -> tuple[int | None, int, int]:
+        cluster_value = row.get("view_cluster_index")
+        cluster_key = None if cluster_value is None else int(cluster_value)
+        return (cluster_key, int(row["face_id"]), int(row["bin_id"]))
+
+    region_expansion_summary: dict[str, Any] = {
+        "enabled": bool(image_l1_region_expansion_enabled),
+        "uses_policy_val_gt": bool(image_l1_region_expansion_enabled),
+        "uses_target_or_test_gt": False,
+        "radius": int(image_l1_region_expansion_radius_i),
+        "max_bins_per_seed": int(image_l1_region_expansion_max_bins_per_seed_i),
+        "min_neighbor_samples": int(image_l1_region_expansion_min_neighbor_samples_i),
+        "min_neighbor_views": int(image_l1_region_expansion_min_neighbor_views_i),
+        "max_negative_relative_gain": float(image_l1_region_expansion_max_negative_relative_gain_f),
+        "max_negative_image_l1_gain": float(image_l1_region_expansion_max_negative_image_l1_gain_f),
+        "shrink_decay": float(image_l1_region_expansion_shrink_decay_f),
+        "seed_bin_count": 0,
+        "candidate_neighbor_count": 0,
+        "expanded_bin_count_pre_trunc": 0,
+        "selected_expanded_bin_count": 0,
+        "mean_expanded_shrink_pre_trunc": 0.0,
+        "top_expanded_bins": [],
+    }
+    if (
+        bool(image_l1_region_expansion_enabled)
+        and int(image_l1_region_expansion_radius_i) > 0
+        and selected_rows
+    ):
+        seed_rows = [
+            row
+            for row in selected_rows
+            if bool(row.get("image_l1_evidence_ok", False))
+            and float(row.get("shrink", 0.0)) > 1.0e-8
+        ]
+        selected_key_set = {_profile_row_key(row) for row in selected_rows}
+        candidate_rows_by_scope: dict[tuple[int | None, int], list[dict[str, Any]]] = {}
+        for row in rows:
+            row_key = _profile_row_key(row)
+            if row_key in selected_key_set:
+                continue
+            if int(row.get("samples", 0)) < int(image_l1_region_expansion_min_neighbor_samples_i):
+                continue
+            if int(row.get("view_count", 0)) < int(image_l1_region_expansion_min_neighbor_views_i):
+                continue
+            if not bool(row.get("variance_ok", False)) or not bool(row.get("sign_ok", False)):
+                continue
+            if float(row.get("relative_gain", 0.0)) < -float(image_l1_region_expansion_max_negative_relative_gain_f):
+                continue
+            if (
+                int(row.get("image_l1_view_count", 0)) > 0
+                and float(row.get("image_l1_relative_gain", 0.0))
+                < -float(image_l1_region_expansion_max_negative_image_l1_gain_f)
+            ):
+                continue
+            scope = (row_key[0], row_key[1])
+            candidate_rows_by_scope.setdefault(scope, []).append(row)
+
+        expanded_by_key: dict[tuple[int | None, int, int], dict[str, Any]] = {}
+        for seed in seed_rows:
+            seed_key = _profile_row_key(seed)
+            seed_scope = (seed_key[0], seed_key[1])
+            seed_u = int(seed.get("u", 0))
+            seed_v = int(seed.get("v", 0))
+            scored_neighbors: list[tuple[float, dict[str, Any], int, float, float]] = []
+            for candidate in candidate_rows_by_scope.get(seed_scope, []):
+                candidate_key = _profile_row_key(candidate)
+                if candidate_key in selected_key_set:
+                    continue
+                du = abs(int(candidate.get("u", 0)) - seed_u)
+                dv = abs(int(candidate.get("v", 0)) - seed_v)
+                distance = max(int(du), int(dv))
+                if distance <= 0 or distance > int(image_l1_region_expansion_radius_i):
+                    continue
+                support_conf = min(
+                    1.0,
+                    float(candidate.get("samples", 0)) / max(1.0, float(min_bin_samples)),
+                )
+                support_conf *= min(
+                    1.0,
+                    float(candidate.get("view_count", 0)) / max(1.0, float(effective_min_bin_views)),
+                )
+                residual_risk = (
+                    max(0.0, -float(candidate.get("relative_gain", 0.0)))
+                    / max(float(image_l1_region_expansion_max_negative_relative_gain_f), 1.0e-12)
+                    if float(image_l1_region_expansion_max_negative_relative_gain_f) > 0.0
+                    else (1.0 if float(candidate.get("relative_gain", 0.0)) < 0.0 else 0.0)
+                )
+                image_risk = 0.0
+                if int(candidate.get("image_l1_view_count", 0)) > 0:
+                    image_risk = (
+                        max(0.0, -float(candidate.get("image_l1_relative_gain", 0.0)))
+                        / max(float(image_l1_region_expansion_max_negative_image_l1_gain_f), 1.0e-12)
+                        if float(image_l1_region_expansion_max_negative_image_l1_gain_f) > 0.0
+                        else (1.0 if float(candidate.get("image_l1_relative_gain", 0.0)) < 0.0 else 0.0)
+                    )
+                nonnegative_conf = float(np.clip(1.0 - max(residual_risk, image_risk), 0.0, 1.0))
+                distance_conf = float(image_l1_region_expansion_shrink_decay_f) ** float(distance)
+                score = (
+                    max(0.0, float(seed.get("image_l1_relative_gain", 0.0)))
+                    * support_conf
+                    * nonnegative_conf
+                    * distance_conf
+                )
+                if score <= 0.0:
+                    continue
+                scored_neighbors.append(
+                    (
+                        float(score),
+                        candidate,
+                        int(distance),
+                        float(support_conf),
+                        float(nonnegative_conf),
+                    )
+                )
+            scored_neighbors.sort(
+                key=lambda item: (
+                    float(item[0]),
+                    int(item[1].get("samples", 0)),
+                    float(item[1].get("image_l1_relative_gain", 0.0)),
+                ),
+                reverse=True,
+            )
+            if int(image_l1_region_expansion_max_bins_per_seed_i) > 0:
+                scored_neighbors = scored_neighbors[: int(image_l1_region_expansion_max_bins_per_seed_i)]
+            for score, candidate, distance, support_conf, nonnegative_conf in scored_neighbors:
+                candidate_key = _profile_row_key(candidate)
+                inherited_shrink = float(seed.get("shrink", 0.0)) * support_conf * nonnegative_conf
+                inherited_shrink *= float(image_l1_region_expansion_shrink_decay_f) ** float(distance)
+                inherited_shrink = float(np.clip(inherited_shrink, min_shrink_f, max_shrink_f))
+                if inherited_shrink <= 1.0e-8:
+                    continue
+                current = expanded_by_key.get(candidate_key)
+                if current is not None and float(current.get("image_l1_region_expansion_score", 0.0)) >= float(score):
+                    continue
+                expanded = dict(candidate)
+                expanded.update(
+                    {
+                        "evidence_ok": True,
+                        "image_l1_region_expanded": True,
+                        "image_l1_region_seed_face_id": int(seed.get("face_id", -1)),
+                        "image_l1_region_seed_bin_id": int(seed.get("bin_id", -1)),
+                        "image_l1_region_seed_view_cluster_index": seed.get("view_cluster_index"),
+                        "image_l1_region_seed_distance": int(distance),
+                        "image_l1_region_seed_shrink": float(seed.get("shrink", 0.0)),
+                        "image_l1_region_expansion_support_confidence": float(support_conf),
+                        "image_l1_region_expansion_nonnegative_confidence": float(nonnegative_conf),
+                        "image_l1_region_expansion_score": float(score),
+                        "shrink": float(inherited_shrink),
+                    }
+                )
+                expanded_by_key[candidate_key] = expanded
+
+        expanded_rows = sorted(
+            expanded_by_key.values(),
+            key=lambda row: (
+                float(row.get("image_l1_region_expansion_score", 0.0)),
+                float(row.get("shrink", 0.0)),
+                int(row.get("samples", 0)),
+            ),
+            reverse=True,
+        )
+        if expanded_rows:
+            selected_rows.extend(expanded_rows)
+            fallback_bin_count = max(0, int(fallback_bin_count) - int(len(expanded_rows)))
+        region_expansion_summary.update(
+            {
+                "seed_bin_count": int(len(seed_rows)),
+                "candidate_neighbor_count": int(
+                    sum(len(value) for value in candidate_rows_by_scope.values())
+                ),
+                "expanded_bin_count_pre_trunc": int(len(expanded_rows)),
+                "mean_expanded_shrink_pre_trunc": float(
+                    np.mean([float(row.get("shrink", 0.0)) for row in expanded_rows])
+                )
+                if expanded_rows
+                else 0.0,
+                "top_expanded_bins": expanded_rows[:32],
+            }
+        )
+
     if policy_mode_s == "keep_with_downweight":
         selected_rows = sorted(
             selected_rows,
@@ -5075,12 +7194,35 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
     if int(max_profile_bins) > 0 and len(selected_rows) > int(max_profile_bins):
         fallback_bin_count += len(selected_rows) - int(max_profile_bins)
         selected_rows = selected_rows[: int(max_profile_bins)]
+    if bool(region_expansion_summary.get("enabled", False)):
+        selected_expanded_rows = [
+            row for row in selected_rows if bool(row.get("image_l1_region_expanded", False))
+        ]
+        region_expansion_summary["selected_expanded_bin_count"] = int(len(selected_expanded_rows))
+        region_expansion_summary["mean_selected_expanded_shrink"] = (
+            float(np.mean([float(row.get("shrink", 0.0)) for row in selected_expanded_rows]))
+            if selected_expanded_rows
+            else 0.0
+        )
 
     bin_shrinks_by_face: dict[str, dict[str, float]] = {}
+    cluster_bin_shrinks_by_cluster_face: dict[str, dict[str, dict[str, float]]] = {}
     for row in selected_rows:
         face_key = str(int(row["face_id"]))
-        bin_shrinks_by_face.setdefault(face_key, {})[str(int(row["bin_id"]))] = float(row["shrink"])
+        bin_key = str(int(row["bin_id"]))
+        if view_cluster_local_enabled:
+            cluster_key = str(int(row["view_cluster_index"]))
+            cluster_bin_shrinks_by_cluster_face.setdefault(cluster_key, {}).setdefault(face_key, {})[
+                bin_key
+            ] = float(row["shrink"])
+        else:
+            bin_shrinks_by_face.setdefault(face_key, {})[bin_key] = float(row["shrink"])
+    if view_cluster_local_enabled and bool(view_cluster_local_global_fallback):
+        for cluster_profile in cluster_bin_shrinks_by_cluster_face.values():
+            for face_key, face_profile in cluster_profile.items():
+                bin_shrinks_by_face.setdefault(face_key, {}).update(face_profile)
     shrinks = [float(row["shrink"]) for row in selected_rows]
+    selected_cluster_count = len(cluster_bin_shrinks_by_cluster_face)
     profile = {
         "enabled": True,
         "mode": "policy_val_bin_uncertainty_shrink",
@@ -5090,6 +7232,8 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
         "samples": int(total_active_samples),
         "texture_size": int(texture_size),
         "min_bin_samples": int(min_bin_samples),
+        "min_bin_views": int(effective_min_bin_views),
+        "requested_min_bin_views": int(requested_min_bin_views),
         "min_relative_gain": float(min_relative_gain),
         "min_positive_view_fraction": float(min_positive_view_fraction),
         "max_mean_variance": float(max_mean_variance),
@@ -5101,6 +7245,16 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
         "min_shrink": float(min_shrink_f),
         "max_shrink": float(max_shrink_f),
         "fallback_shrink": float(fallback_shrink_f),
+        "view_cluster_local_shrink": bool(view_cluster_local_enabled),
+        "requested_view_cluster_local_shrink": bool(enable_view_cluster_local_shrink),
+        "view_cluster_local_global_fallback": bool(view_cluster_local_global_fallback),
+        "view_cluster_feature_mode": str(cluster_feature_mode) if view_cluster_local_enabled else "none",
+        "view_cluster_policy_val_views_used": int(view_cluster_policy_views_used),
+        "view_cluster_policy_val_views_missing_feature": int(view_cluster_missing_policy_views),
+        "view_cluster_policy_val_view_counts": {
+            str(int(key)): int(value) for key, value in sorted(view_cluster_counts.items())
+        },
+        "view_cluster_selected_cluster_count": int(selected_cluster_count),
         "structure_aware_shrink": {
             "enabled": bool(structure_enabled),
             "uses_policy_val_gt": bool(structure_enabled),
@@ -5126,10 +7280,61 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
                 )
             ),
         },
+        "image_l1_bin_certificate": {
+            "enabled": bool(image_l1_certificate_enabled),
+            "mode": str(image_l1_certificate_mode_s),
+            "uses_policy_val_gt": bool(image_l1_certificate_enabled),
+            "uses_target_or_test_gt": False,
+            "policy_val_views_with_image_l1": int(image_l1_certificate_view_count),
+            "policy_val_views_missing_image_l1": int(image_l1_certificate_missing_view_count),
+            "min_relative_gain": float(image_l1_certificate_min_relative_gain),
+            "min_positive_view_fraction": float(image_l1_certificate_min_positive_view_fraction),
+            "gain_tau": float(image_l1_certificate_gain_tau),
+            "max_abs_delta_rgb": float(image_l1_certificate_max_abs_delta_rgb),
+            "pool_radius": int(image_l1_certificate_pool_radius_i),
+            "region_expansion": dict(region_expansion_summary),
+            "candidate_evidence_ok_count": int(
+                sum(1 for row in rows if bool(row.get("image_l1_evidence_ok", False)))
+            ),
+            "selected_evidence_ok_count": int(
+                sum(1 for row in selected_rows if bool(row.get("image_l1_evidence_ok", False)))
+            ),
+            "mean_selected_relative_gain": float(
+                np.mean([float(row.get("image_l1_relative_gain", 0.0)) for row in selected_rows])
+            )
+            if selected_rows
+            else 0.0,
+            "mean_selected_positive_view_fraction": float(
+                np.mean([float(row.get("image_l1_positive_view_fraction", 0.0)) for row in selected_rows])
+            )
+            if selected_rows
+            else 0.0,
+            "top_candidate_bins": sorted(
+                [
+                    row
+                    for row in rows
+                    if int(row.get("image_l1_view_count", 0) or 0) > 0
+                ],
+                key=lambda row: (
+                    float(row.get("image_l1_relative_gain", 0.0)),
+                    float(row.get("image_l1_positive_view_fraction", 0.0)),
+                    int(row.get("image_l1_view_count", 0)),
+                    int(row.get("samples", 0)),
+                ),
+                reverse=True,
+            )[:32],
+        },
         "candidate_bin_count": int(len(rows)),
         "bin_uncertainty_shrink_count": int(len(selected_rows)),
         "fallback_bin_count": int(fallback_bin_count),
-        "selected_face_count": int(len(bin_shrinks_by_face)),
+        "selected_face_count": int(
+            len(
+                {
+                    str(int(row["face_id"]))
+                    for row in selected_rows
+                }
+            )
+        ),
         "mean_selected_shrink": float(np.mean(shrinks)) if shrinks else 0.0,
         "min_selected_shrink": float(np.min(shrinks)) if shrinks else 0.0,
         "max_selected_shrink": float(np.max(shrinks)) if shrinks else 0.0,
@@ -5147,6 +7352,7 @@ def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
         "bin_uncertainty_shrink_preview": selected_rows[:32],
         "worst_bins": sorted(rows, key=lambda row: float(row["relative_gain"]))[:32],
         "bin_shrinks_by_face": bin_shrinks_by_face,
+        "cluster_bin_shrinks_by_cluster_face": cluster_bin_shrinks_by_cluster_face,
     }
     return base, profile
 
@@ -5887,6 +8093,1029 @@ def calibrated_bin_alpha_profile_from_policy_val(
     return combined, profile
 
 
+def calibrated_image_l1_bin_alpha_profile_from_policy_val(
+    val_views: list[Path],
+    atlas: dict[int, FaceAtlas],
+    base_alpha_grid: list[float],
+    residual_l1_key: str,
+    min_l1: float,
+    min_alpha: float,
+    max_samples_per_view: int,
+    min_atlas_bin_count: int,
+    min_atlas_face_samples: int,
+    max_atlas_bin_rgb_variance: float,
+    min_atlas_bin_sign_consistency: float,
+    atlas_confidence_mode: str,
+    atlas_confidence_count_scale: float,
+    atlas_confidence_empty_bin: float,
+    atlas_confidence_variance_scale: float,
+    atlas_confidence_sign_power: float,
+    atlas_confidence_face_sample_scale: float,
+    min_atlas_confidence: float,
+    local_alpha_grid: list[float],
+    max_alpha: float,
+    min_bin_samples: int,
+    min_relative_gain: float,
+    min_positive_view_fraction: float,
+    count_tau: float,
+    fallback_mode: str,
+    max_profile_bins: int,
+) -> tuple[list[float], dict[str, Any]]:
+    """Fit per-bin alpha by directly minimizing held-out train image L1.
+
+    The older bin-alpha calibration optimizes residual-vector MSE.  This profile
+    instead evaluates the actual clipped image-space adaptation
+    ``clip(rgb_render + alpha * predicted_delta)`` on policy-val views and stores
+    only bins that improve image L1.  Target/test GT is never read by this step.
+    """
+    base = sorted(set(float(x) for x in base_alpha_grid))
+    disabled = {
+        "enabled": False,
+        "mode": "policy_val_bin_alpha",
+        "optimizer": "policy_val_image_l1_grid",
+        "reason": "",
+        "alpha_grid": base,
+    }
+    if not val_views or not atlas:
+        disabled["reason"] = "no_policy_val_views_or_empty_atlas"
+        return base, disabled
+
+    max_alpha_f = max(0.0, float(max_alpha))
+    local_grid = sorted(
+        set(
+            round(float(x), 8)
+            for x in local_alpha_grid
+            if 0.0 <= float(x) <= max_alpha_f
+        )
+    )
+    if 0.0 not in local_grid:
+        local_grid.insert(0, 0.0)
+    if not local_grid:
+        disabled["reason"] = "empty_local_alpha_grid"
+        return base, disabled
+    fallback_mode_s = str(fallback_mode)
+    if fallback_mode_s not in {"zero", "global_best"}:
+        raise ValueError(f"unsupported image-L1 bin alpha fallback mode: {fallback_mode_s}")
+
+    rng = np.random.default_rng(141)
+    texture_size = int(next(iter(atlas.values())).texture.shape[0])
+    alpha_values = np.asarray(local_grid, dtype=np.float32)
+    before_by_key: dict[tuple[int, int], float] = {}
+    after_by_key: dict[tuple[int, int], np.ndarray] = {}
+    samples_by_key: dict[tuple[int, int], int] = {}
+    view_stats_by_key: dict[tuple[int, int], list[tuple[float, np.ndarray]]] = {}
+    before_all = 0.0
+    after_all = np.zeros((int(alpha_values.size),), dtype=np.float64)
+    sample_count = 0
+    view_count = 0
+    skipped_missing_image_gt = 0
+    skipped_no_valid_delta = 0
+
+    for path in tqdm(val_views, desc="calibrate image-L1 bin alpha"):
+        z = np.load(path)
+        if "rgb_render" not in z or "rgb_gt" not in z or "barycentric" not in z:
+            skipped_missing_image_gt += 1
+            continue
+        mask = _valid_sample_mask(z, set(atlas.keys()), residual_l1_key, min_l1, min_alpha)
+        ys, xs = np.nonzero(mask)
+        if ys.size == 0:
+            continue
+        if max_samples_per_view > 0 and ys.size > int(max_samples_per_view):
+            take = rng.choice(ys.size, size=int(max_samples_per_view), replace=False)
+            ys = ys[take]
+            xs = xs[take]
+            mask = np.zeros_like(mask, dtype=bool)
+            mask[ys, xs] = True
+        pred, _valid = predict_delta_for_npz(
+            z,
+            atlas,
+            1.0,
+            min_alpha,
+            min_atlas_bin_count=int(min_atlas_bin_count),
+            min_atlas_face_samples=int(min_atlas_face_samples),
+            max_atlas_bin_rgb_variance=float(max_atlas_bin_rgb_variance),
+            min_atlas_bin_sign_consistency=float(min_atlas_bin_sign_consistency),
+            atlas_confidence_mode=str(atlas_confidence_mode),
+            atlas_confidence_count_scale=float(atlas_confidence_count_scale),
+            atlas_confidence_empty_bin=float(atlas_confidence_empty_bin),
+            atlas_confidence_variance_scale=float(atlas_confidence_variance_scale),
+            atlas_confidence_sign_power=float(atlas_confidence_sign_power),
+            atlas_confidence_face_sample_scale=float(atlas_confidence_face_sample_scale),
+            min_atlas_confidence=float(min_atlas_confidence),
+        )
+        pred_samples = np.stack([pred[0][mask], pred[1][mask], pred[2][mask]], axis=1).astype(np.float32)
+        nonzero = np.linalg.norm(pred_samples, axis=1) > 0.0
+        if not bool(np.any(nonzero)):
+            skipped_no_valid_delta += 1
+            continue
+        render = np.asarray(z["rgb_render"], dtype=np.float32)
+        gt = np.asarray(z["rgb_gt"], dtype=np.float32)
+        render_samples = np.stack([render[0][mask], render[1][mask], render[2][mask]], axis=1).astype(np.float32)
+        gt_samples = np.stack([gt[0][mask], gt[1][mask], gt[2][mask]], axis=1).astype(np.float32)
+        render_samples = render_samples[nonzero]
+        gt_samples = gt_samples[nonzero]
+        pred_samples = pred_samples[nonzero]
+        before_sample = np.sum(np.abs(render_samples - gt_samples), axis=1).astype(np.float64)
+        adapted = np.clip(
+            render_samples[None, :, :] + alpha_values[:, None, None] * pred_samples[None, :, :],
+            0.0,
+            1.0,
+        )
+        after_sample_by_alpha = np.sum(np.abs(adapted - gt_samples[None, :, :]), axis=2).astype(np.float64)
+        face_samples = np.asarray(z["face_id"], dtype=np.int64)[mask][nonzero]
+        uv_u, uv_v = _uv_bins(np.asarray(z["barycentric"], dtype=np.float32), mask, texture_size)
+        bin_samples = ((uv_v.astype(np.int64) * texture_size) + uv_u.astype(np.int64))[nonzero]
+
+        sample_count += int(pred_samples.shape[0])
+        view_count += 1
+        before_all += float(np.sum(before_sample))
+        after_all += np.sum(after_sample_by_alpha, axis=1)
+
+        for face in np.unique(face_samples):
+            face_i = int(face)
+            fm = face_samples == face_i
+            for bin_id in np.unique(bin_samples[fm]):
+                key = (face_i, int(bin_id))
+                bm = fm & (bin_samples == int(bin_id))
+                before = float(np.sum(before_sample[bm]))
+                after_vec = np.sum(after_sample_by_alpha[:, bm], axis=1).astype(np.float64)
+                count = int(np.sum(bm))
+                before_by_key[key] = before_by_key.get(key, 0.0) + before
+                if key not in after_by_key:
+                    after_by_key[key] = np.zeros_like(after_vec, dtype=np.float64)
+                after_by_key[key] += after_vec
+                samples_by_key[key] = samples_by_key.get(key, 0) + count
+                view_stats_by_key.setdefault(key, []).append((before, after_vec))
+
+    if sample_count <= 0 or before_all <= 1.0e-12:
+        disabled["reason"] = "no_policy_val_image_l1_samples"
+        disabled["samples"] = int(sample_count)
+        disabled["policy_val_views_used"] = int(view_count)
+        disabled["policy_val_views_missing_image_gt"] = int(skipped_missing_image_gt)
+        disabled["policy_val_views_without_valid_delta"] = int(skipped_no_valid_delta)
+        return base, disabled
+
+    global_best_index = int(np.argmin(after_all))
+    global_best_alpha = float(alpha_values[global_best_index])
+    global_best_after = float(after_all[global_best_index])
+    global_relative_gain = float((before_all - global_best_after) / max(before_all, 1.0e-12))
+    fallback_alpha = 0.0 if fallback_mode_s == "zero" else global_best_alpha
+
+    candidate_rows: list[dict[str, Any]] = []
+    rejected_low_support = 0
+    rejected_nonpositive = 0
+    rejected_view_consistency = 0
+    for key, before in before_by_key.items():
+        face_i, bin_id = key
+        count = int(samples_by_key.get(key, 0))
+        if count < int(min_bin_samples):
+            rejected_low_support += 1
+            continue
+        after_vec = after_by_key[key]
+        best_index = int(np.argmin(after_vec))
+        alpha = float(alpha_values[best_index])
+        after = float(after_vec[best_index])
+        relative_gain = float((float(before) - after) / max(float(before), 1.0e-12))
+        if alpha <= 0.0 or relative_gain < float(min_relative_gain) or relative_gain <= 0.0:
+            rejected_nonpositive += 1
+            continue
+        view_rows = view_stats_by_key.get(key, [])
+        positive_views = 0
+        view_gain_sum = 0.0
+        for view_before, view_after_vec in view_rows:
+            view_after = float(view_after_vec[best_index])
+            view_gain = float((float(view_before) - view_after) / max(float(view_before), 1.0e-12))
+            view_gain_sum += view_gain
+            if view_gain > 0.0:
+                positive_views += 1
+        positive_fraction = float(positive_views / max(1, len(view_rows)))
+        if positive_fraction < float(min_positive_view_fraction):
+            rejected_view_consistency += 1
+            continue
+        reliability = 1.0
+        if float(count_tau) > 0.0:
+            reliability = float(count) / (float(count) + float(count_tau))
+        score = float(relative_gain * reliability)
+        candidate_rows.append(
+            {
+                "face_id": int(face_i),
+                "bin_id": int(bin_id),
+                "u": int(bin_id) % texture_size,
+                "v": int(bin_id) // texture_size,
+                "samples": int(count),
+                "view_count": int(len(view_rows)),
+                "positive_view_count": int(positive_views),
+                "positive_view_fraction": float(positive_fraction),
+                "mean_view_relative_gain": float(view_gain_sum / max(1, len(view_rows))),
+                "image_l1_before_sum": float(before),
+                "image_l1_after_sum": float(after),
+                "alpha": float(alpha),
+                "relative_gain": float(relative_gain),
+                "score": float(score),
+                "count_reliability": float(reliability),
+            }
+        )
+
+    candidate_rows.sort(
+        key=lambda row: (
+            float(row["score"]),
+            float(row["relative_gain"]),
+            float(row["positive_view_fraction"]),
+            int(row["samples"]),
+        ),
+        reverse=True,
+    )
+    selected_rows = candidate_rows[: int(max_profile_bins)] if int(max_profile_bins) > 0 else candidate_rows
+    bin_alphas_by_face: dict[str, dict[str, float]] = {}
+    for row in selected_rows:
+        bin_alphas_by_face.setdefault(str(int(row["face_id"])), {})[str(int(row["bin_id"]))] = float(row["alpha"])
+
+    combined = sorted(set(round(float(x), 8) for x in [*base, 0.0, 0.5, 1.0]))
+    selected_gain_sum = float(sum(float(row["relative_gain"]) for row in selected_rows))
+    profile = {
+        "enabled": True,
+        "mode": "policy_val_bin_alpha",
+        "optimizer": "policy_val_image_l1_grid",
+        "uses_policy_val_gt": True,
+        "uses_target_or_test_gt": False,
+        "policy_val_views_used": int(view_count),
+        "policy_val_views_missing_image_gt": int(skipped_missing_image_gt),
+        "policy_val_views_without_valid_delta": int(skipped_no_valid_delta),
+        "samples": int(sample_count),
+        "texture_size": int(texture_size),
+        "candidate_bin_count": int(len(candidate_rows)),
+        "bin_alpha_count": int(len(selected_rows)),
+        "fallback_bin_count": int(
+            max(0, len(before_by_key) - len(candidate_rows))
+            + max(0, len(candidate_rows) - len(selected_rows))
+        ),
+        "fallback_alpha": float(fallback_alpha),
+        "fallback_mode": str(fallback_mode_s),
+        "max_alpha": float(max_alpha_f),
+        "min_alpha": 0.0,
+        "min_bin_samples": int(min_bin_samples),
+        "min_relative_gain": float(min_relative_gain),
+        "min_positive_view_fraction": float(min_positive_view_fraction),
+        "count_tau": float(count_tau),
+        "max_profile_bins": int(max_profile_bins),
+        "local_alpha_grid": [float(x) for x in alpha_values.tolist()],
+        "global_best_alpha": float(global_best_alpha),
+        "global_image_l1_before_sum": float(before_all),
+        "global_image_l1_after_sum": float(global_best_after),
+        "global_relative_gain": float(global_relative_gain),
+        "mean_selected_relative_gain": (
+            float(selected_gain_sum / max(1, len(selected_rows))) if selected_rows else 0.0
+        ),
+        "rejected_low_support_bins": int(rejected_low_support),
+        "rejected_nonpositive_bins": int(rejected_nonpositive),
+        "rejected_view_consistency_bins": int(rejected_view_consistency),
+        "alpha_grid": combined,
+        "bin_alpha_preview": selected_rows[:32],
+        "bin_alphas_by_face": bin_alphas_by_face,
+    }
+    return combined, profile
+
+
+def calibrated_image_linear_generator_profile_from_policy_val(
+    val_views: list[Path],
+    atlas: dict[int, FaceAtlas],
+    base_alpha_grid: list[float],
+    residual_l1_key: str,
+    min_l1: float,
+    min_alpha: float,
+    max_samples_per_view: int,
+    min_atlas_bin_count: int,
+    min_atlas_face_samples: int,
+    max_atlas_bin_rgb_variance: float,
+    min_atlas_bin_sign_consistency: float,
+    atlas_confidence_mode: str,
+    atlas_confidence_count_scale: float,
+    atlas_confidence_empty_bin: float,
+    atlas_confidence_variance_scale: float,
+    atlas_confidence_sign_power: float,
+    atlas_confidence_face_sample_scale: float,
+    min_atlas_confidence: float,
+    feature_mode: str,
+    ridge: float,
+    train_max_samples_per_view: int,
+    max_train_samples: int,
+    generator_output_cap: float,
+    alpha_grid: list[float],
+    require_base_valid: bool,
+    loss_mode: str,
+    irls_iterations: int,
+    huber_delta: float,
+    training_sample_policy: str,
+    min_descent_margin: float,
+    min_training_samples: int,
+    expert_mode: str = "none",
+    expert_min_training_samples: int = 2048,
+    expert_shrink_tau: float = 8192.0,
+    face_reliability_mode: str = "none",
+    face_reliability_min_face_samples: int = 256,
+    face_reliability_min_relative_gain: float = 0.0,
+    face_reliability_min_positive_view_fraction: float = 0.5,
+    face_reliability_fallback_multiplier: float = 0.0,
+) -> tuple[list[float], dict[str, Any]]:
+    """Fit a policy-val ridge generator for image-space residuals.
+
+    The fitted model predicts ``rgb_gt - rgb_render`` from target-available
+    features: atlas residual, parent render color, barycentric coordinates, and
+    optional camera direction.  It can be applied to target/test views without
+    reading their GT; the normal policy-val risk gate still decides whether any
+    nonzero global alpha is safe.
+    """
+    base = sorted(set(float(x) for x in base_alpha_grid))
+    feature_mode_s = str(feature_mode)
+    feature_names = _image_linear_generator_feature_names(feature_mode_s)
+    disabled = {
+        "enabled": False,
+        "mode": "policy_val_image_linear_generator",
+        "optimizer": "ridge_image_residual",
+        "reason": "",
+        "uses_policy_val_gt": True,
+        "uses_target_or_test_gt": False,
+        "feature_mode": feature_mode_s,
+        "feature_names": list(feature_names),
+        "ridge": float(ridge),
+        "loss_mode": str(loss_mode),
+        "training_sample_policy": str(training_sample_policy),
+        "expert_mode": str(expert_mode),
+        "face_reliability_mode": str(face_reliability_mode),
+        "alpha_grid": base,
+    }
+    if not val_views or not atlas:
+        disabled["reason"] = "no_policy_val_views_or_empty_atlas"
+        return base, disabled
+    if float(ridge) < 0.0:
+        raise ValueError("image linear generator ridge must be >= 0")
+    loss_mode_s = str(loss_mode)
+    if loss_mode_s not in {"mse", "huber_irls", "l1_irls"}:
+        raise ValueError(f"unsupported image linear generator loss mode: {loss_mode_s}")
+    training_policy_s = str(training_sample_policy)
+    if training_policy_s not in {"all", "base_l1_descent", "view_balanced", "view_balanced_base_l1_descent"}:
+        raise ValueError(f"unsupported image linear generator training sample policy: {training_policy_s}")
+    descent_filter_enabled = training_policy_s in {"base_l1_descent", "view_balanced_base_l1_descent"}
+    view_balance_enabled = training_policy_s in {"view_balanced", "view_balanced_base_l1_descent"}
+    expert_mode_s = str(expert_mode)
+    if expert_mode_s not in {"none", "view_cluster"}:
+        raise ValueError(f"unsupported image linear generator expert mode: {expert_mode_s}")
+    face_reliability_mode_s = str(face_reliability_mode)
+    if face_reliability_mode_s not in {"none", "global", "view_cluster"}:
+        raise ValueError(f"unsupported image linear generator face reliability mode: {face_reliability_mode_s}")
+    if face_reliability_mode_s == "view_cluster" and expert_mode_s != "view_cluster":
+        raise ValueError("view-cluster face reliability requires view-cluster image-linear generator experts")
+    face_reliability_min_face_samples_i = max(1, int(face_reliability_min_face_samples))
+    face_reliability_min_relative_gain_f = float(face_reliability_min_relative_gain)
+    face_reliability_min_positive_view_fraction_f = float(
+        np.clip(face_reliability_min_positive_view_fraction, 0.0, 1.0)
+    )
+    face_reliability_fallback_multiplier_f = float(
+        np.clip(face_reliability_fallback_multiplier, 0.0, 1.0)
+    )
+    expert_min_training_samples_i = max(1, int(expert_min_training_samples))
+    expert_shrink_tau_f = max(0.0, float(expert_shrink_tau))
+    expert_centers: np.ndarray | None = None
+    expert_feature_mode = "none"
+    if expert_mode_s == "view_cluster":
+        expert_centers, expert_feature_mode = _view_cluster_profile_from_atlas(atlas)
+        if expert_centers is None or str(expert_feature_mode) == "none":
+            expert_mode_s = "none"
+
+    requested_grid = sorted(set(round(float(x), 8) for x in alpha_grid if float(x) >= 0.0))
+    combined = sorted(set(round(float(x), 8) for x in [*base, *requested_grid, 0.0]))
+    rng = np.random.default_rng(144)
+    feature_dim = int(len(feature_names))
+    x_chunks: list[np.ndarray] = []
+    target_chunks: list[np.ndarray] = []
+    base_chunks: list[np.ndarray] = []
+    face_id_chunks: list[np.ndarray] = []
+    view_id_chunks: list[np.ndarray] = []
+    cluster_id_chunks: list[np.ndarray] = []
+    sample_count = 0
+    raw_sample_count = 0
+    rejected_by_training_policy = 0
+    view_count = 0
+    skipped_missing_image_gt = 0
+    skipped_missing_base_support = 0
+    capped_by_global_sample_limit = False
+    per_view_cap = int(train_max_samples_per_view)
+    global_cap = int(max_train_samples)
+
+    for path in tqdm(val_views, desc="fit image-linear residual generator"):
+        if global_cap > 0 and sample_count >= global_cap:
+            capped_by_global_sample_limit = True
+            break
+        with np.load(path) as z:
+            if "rgb_render" not in z or "rgb_gt" not in z or "barycentric" not in z:
+                skipped_missing_image_gt += 1
+                continue
+            render = _as_rgb_chw(np.asarray(z["rgb_render"], dtype=np.float32))
+            gt = _as_rgb_chw(np.asarray(z["rgb_gt"], dtype=np.float32))
+            if render is None or gt is None:
+                skipped_missing_image_gt += 1
+                continue
+            mask = _valid_sample_mask(z, set(atlas.keys()), residual_l1_key, min_l1, min_alpha)
+            ys, xs = np.nonzero(mask)
+            if ys.size == 0:
+                skipped_missing_base_support += 1
+                continue
+            if per_view_cap > 0 and ys.size > per_view_cap:
+                take = rng.choice(ys.size, size=per_view_cap, replace=False)
+                ys = ys[take]
+                xs = xs[take]
+                mask = np.zeros_like(mask, dtype=bool)
+                mask[ys, xs] = True
+            pred, valid = predict_delta_for_npz(
+                z,
+                atlas,
+                1.0,
+                min_alpha,
+                min_atlas_bin_count=int(min_atlas_bin_count),
+                min_atlas_face_samples=int(min_atlas_face_samples),
+                max_atlas_bin_rgb_variance=float(max_atlas_bin_rgb_variance),
+                min_atlas_bin_sign_consistency=float(min_atlas_bin_sign_consistency),
+                atlas_confidence_mode=str(atlas_confidence_mode),
+                atlas_confidence_count_scale=float(atlas_confidence_count_scale),
+                atlas_confidence_empty_bin=float(atlas_confidence_empty_bin),
+                atlas_confidence_variance_scale=float(atlas_confidence_variance_scale),
+                atlas_confidence_sign_power=float(atlas_confidence_sign_power),
+                atlas_confidence_face_sample_scale=float(atlas_confidence_face_sample_scale),
+                min_atlas_confidence=float(min_atlas_confidence),
+            )
+            if bool(require_base_valid):
+                mask = mask & np.asarray(valid, dtype=bool)
+                ys, xs = np.nonzero(mask)
+            if ys.size == 0:
+                skipped_missing_base_support += 1
+                continue
+            if global_cap > 0 and sample_count + int(ys.size) > global_cap:
+                remaining = max(0, global_cap - sample_count)
+                if remaining <= 0:
+                    capped_by_global_sample_limit = True
+                    break
+                take = rng.choice(ys.size, size=remaining, replace=False)
+                ys = ys[take]
+                xs = xs[take]
+                mask = np.zeros_like(mask, dtype=bool)
+                mask[ys, xs] = True
+                capped_by_global_sample_limit = True
+            base_pixels = np.stack([pred[0][mask], pred[1][mask], pred[2][mask]], axis=1).astype(np.float32)
+            face_samples = np.asarray(z["face_id"], dtype=np.int64)[mask].reshape(-1)
+            bary = np.asarray(z["barycentric"], dtype=np.float32)
+            feature_cache: dict[str, Any] = {}
+            features = _image_linear_generator_features_for_samples(
+                z,
+                base_pixels=base_pixels,
+                ys=ys,
+                xs=xs,
+                bary=bary,
+                feature_mode=feature_mode_s,
+                feature_cache=feature_cache,
+            )
+            target = np.stack(
+                [
+                    gt[0][ys, xs] - render[0][ys, xs],
+                    gt[1][ys, xs] - render[1][ys, xs],
+                    gt[2][ys, xs] - render[2][ys, xs],
+                ],
+                axis=1,
+            ).astype(np.float32)
+            if features.shape[0] == 0 or features.shape[1] != feature_dim:
+                continue
+            raw_sample_count += int(features.shape[0])
+            if descent_filter_enabled:
+                zero_l1_sample = np.sum(np.abs(target), axis=1)
+                base_l1_sample = np.sum(np.abs(target - base_pixels), axis=1)
+                keep = base_l1_sample + float(min_descent_margin) < zero_l1_sample
+                rejected_by_training_policy += int(np.sum(~keep))
+                if not bool(np.any(keep)):
+                    continue
+                features = features[keep]
+                target = target[keep]
+                base_pixels = base_pixels[keep]
+                face_samples = face_samples[keep]
+            current_view_id = int(view_count)
+            cluster_id = -1
+            if expert_mode_s == "view_cluster" and expert_centers is not None and str(expert_feature_mode) != "none":
+                assigned = _assign_view_cluster_for_npz(
+                    z,
+                    centers=expert_centers,
+                    feature_mode=str(expert_feature_mode),
+                )
+                cluster_id = int(assigned) if assigned is not None else -1
+            x_chunks.append(features.astype(np.float32))
+            target_chunks.append(target.astype(np.float32))
+            base_chunks.append(base_pixels.astype(np.float32))
+            face_id_chunks.append(face_samples.astype(np.int64))
+            view_id_chunks.append(
+                np.full((int(features.shape[0]),), current_view_id, dtype=np.int32)
+            )
+            cluster_id_chunks.append(
+                np.full((int(features.shape[0]),), int(cluster_id), dtype=np.int32)
+            )
+            sample_count += int(features.shape[0])
+            view_count += 1
+
+    if sample_count <= 0 or not x_chunks:
+        disabled["reason"] = "no_policy_val_generator_samples"
+        disabled["samples"] = int(sample_count)
+        disabled["raw_samples_before_training_policy"] = int(raw_sample_count)
+        disabled["rejected_by_training_policy"] = int(rejected_by_training_policy)
+        disabled["policy_val_views_used"] = int(view_count)
+        disabled["policy_val_views_missing_image_gt"] = int(skipped_missing_image_gt)
+        disabled["policy_val_views_without_base_support"] = int(skipped_missing_base_support)
+        return combined, disabled
+    if sample_count < int(min_training_samples):
+        disabled["reason"] = "insufficient_policy_val_generator_samples_after_training_policy"
+        disabled["samples"] = int(sample_count)
+        disabled["raw_samples_before_training_policy"] = int(raw_sample_count)
+        disabled["rejected_by_training_policy"] = int(rejected_by_training_policy)
+        disabled["min_training_samples"] = int(min_training_samples)
+        disabled["policy_val_views_used"] = int(view_count)
+        return combined, disabled
+
+    x_eval = np.concatenate(x_chunks, axis=0).astype(np.float32)
+    target_eval = np.concatenate(target_chunks, axis=0).astype(np.float32)
+    base_eval = np.concatenate(base_chunks, axis=0).astype(np.float32)
+    face_ids_eval = np.concatenate(face_id_chunks, axis=0).astype(np.int64)
+    view_ids_eval = np.concatenate(view_id_chunks, axis=0).astype(np.int32)
+    cluster_ids_eval = np.concatenate(cluster_id_chunks, axis=0).astype(np.int32)
+    x64 = x_eval.astype(np.float64)
+    y64 = target_eval.astype(np.float64)
+    reg = float(ridge) * np.eye(feature_dim, dtype=np.float64)
+    if feature_dim > 0:
+        reg[0, 0] = 0.0
+
+    iterations = 1 if loss_mode_s == "mse" else max(1, int(irls_iterations))
+    robust_delta = max(float(huber_delta), 1.0e-8)
+
+    def solve_generator_weights(
+        x_train64: np.ndarray,
+        y_train64: np.ndarray,
+        base_weights_1d: np.ndarray,
+    ) -> tuple[np.ndarray, str, list[dict[str, float]]]:
+        def solve_weighted(sample_weights: np.ndarray) -> tuple[np.ndarray, str]:
+            weights_1d = np.asarray(sample_weights, dtype=np.float64).reshape(-1)
+            weights_1d = np.maximum(weights_1d, 1.0e-8)
+            xtw = x_train64.T * weights_1d.reshape(1, -1)
+            lhs = xtw @ x_train64 + reg
+            rhs = xtw @ y_train64
+            try:
+                return np.linalg.solve(lhs, rhs), "solve"
+            except np.linalg.LinAlgError:
+                return np.linalg.pinv(lhs) @ rhs, "pinv"
+
+        local_base_weights = np.asarray(base_weights_1d, dtype=np.float64).reshape(-1)
+        if local_base_weights.size != int(x_train64.shape[0]):
+            local_base_weights = np.ones((int(x_train64.shape[0]),), dtype=np.float64)
+        local_base_weights = np.maximum(local_base_weights, 1.0e-8)
+        local_base_weights = local_base_weights / max(float(np.mean(local_base_weights)), 1.0e-12)
+        sample_weights = local_base_weights.astype(np.float64, copy=True)
+        local_solver = "solve"
+        local_history: list[dict[str, float]] = []
+        local_weights = np.zeros((feature_dim, 3), dtype=np.float64)
+        for iteration in range(iterations):
+            local_weights, local_solver = solve_weighted(sample_weights)
+            generated_iter = x_train64 @ local_weights
+            residual = y_train64 - generated_iter
+            sample_error = np.sqrt(np.mean(np.square(residual), axis=1))
+            local_history.append(
+                {
+                    "iteration": float(iteration),
+                    "mean_sample_error": float(np.mean(sample_error)),
+                    "median_sample_error": float(np.median(sample_error)),
+                    "mean_weight": float(np.mean(sample_weights)),
+                    "min_weight": float(np.min(sample_weights)),
+                    "max_weight": float(np.max(sample_weights)),
+                }
+            )
+            if loss_mode_s == "mse":
+                break
+            if loss_mode_s == "huber_irls":
+                robust_weights = np.minimum(1.0, robust_delta / np.maximum(sample_error, robust_delta))
+            else:
+                robust_weights = 1.0 / np.maximum(sample_error, robust_delta)
+                robust_weights = robust_weights / max(float(np.mean(robust_weights)), 1.0e-8)
+                robust_weights = np.clip(robust_weights, 0.05, 20.0)
+            sample_weights = (local_base_weights * robust_weights).astype(np.float64)
+            sample_weights = sample_weights / max(float(np.mean(sample_weights)), 1.0e-12)
+        return local_weights, local_solver, local_history
+
+    base_sample_weights = np.ones((int(x64.shape[0]),), dtype=np.float64)
+    view_weight_profile: dict[str, Any] = {
+        "enabled": bool(view_balance_enabled),
+        "view_count": int(view_count),
+        "sample_count": int(sample_count),
+    }
+    if view_balance_enabled and view_ids_eval.size > 0:
+        view_counts = np.bincount(view_ids_eval, minlength=max(1, int(view_count))).astype(np.float64)
+        nonzero = view_counts > 0.0
+        per_view_weight = np.zeros_like(view_counts, dtype=np.float64)
+        per_view_weight[nonzero] = 1.0 / view_counts[nonzero]
+        base_sample_weights = per_view_weight[view_ids_eval]
+        base_sample_weights = base_sample_weights / max(float(np.mean(base_sample_weights)), 1.0e-12)
+        view_weight_profile.update(
+            {
+                "view_sample_counts": [int(x) for x in view_counts.astype(np.int64).tolist()],
+                "min_sample_weight": float(np.min(base_sample_weights)),
+                "max_sample_weight": float(np.max(base_sample_weights)),
+                "mean_sample_weight": float(np.mean(base_sample_weights)),
+            }
+        )
+    output_cap = float(generator_output_cap)
+    weights, solver, irls_history = solve_generator_weights(x64, y64, base_sample_weights)
+    generated = x64 @ weights
+    expert_profile: dict[str, Any] = {
+        "enabled": False,
+        "mode": str(expert_mode_s),
+        "feature_mode": str(expert_feature_mode),
+        "expert_count": 0,
+        "expert_min_training_samples": int(expert_min_training_samples_i),
+        "expert_shrink_tau": float(expert_shrink_tau_f),
+        "rows": [],
+    }
+    expert_weights_arr: np.ndarray | None = None
+    expert_enabled_arr: np.ndarray | None = None
+    if expert_mode_s == "view_cluster" and expert_centers is not None and str(expert_feature_mode) != "none":
+        expert_count = int(np.asarray(expert_centers).shape[0])
+        expert_weights_arr = np.repeat(weights[None, ...], expert_count, axis=0).astype(np.float64)
+        expert_enabled_arr = np.zeros((expert_count,), dtype=bool)
+        expert_rows: list[dict[str, Any]] = []
+        for cluster_id in range(expert_count):
+            cluster_mask = cluster_ids_eval == int(cluster_id)
+            cluster_samples = int(np.sum(cluster_mask))
+            row: dict[str, Any] = {
+                "cluster_id": int(cluster_id),
+                "samples": int(cluster_samples),
+                "enabled": False,
+                "reason": "",
+            }
+            if cluster_samples < int(expert_min_training_samples_i):
+                row["reason"] = "insufficient_cluster_samples"
+                expert_rows.append(row)
+                continue
+            local_weights, local_solver, local_history = solve_generator_weights(
+                x64[cluster_mask],
+                y64[cluster_mask],
+                base_sample_weights[cluster_mask],
+            )
+            shrink = 1.0
+            if expert_shrink_tau_f > 0.0:
+                shrink = float(cluster_samples / max(cluster_samples + expert_shrink_tau_f, 1.0e-12))
+            shrink = float(np.clip(shrink, 0.0, 1.0))
+            routed_weights = ((1.0 - shrink) * weights + shrink * local_weights).astype(np.float64)
+            expert_weights_arr[int(cluster_id)] = routed_weights
+            expert_enabled_arr[int(cluster_id)] = True
+            global_pred = x64[cluster_mask] @ weights
+            local_pred = x64[cluster_mask] @ local_weights
+            routed_pred = x64[cluster_mask] @ routed_weights
+            row.update(
+                {
+                    "enabled": True,
+                    "solver": str(local_solver),
+                    "shrink_to_expert": float(shrink),
+                    "global_mse": float(np.mean(np.square(y64[cluster_mask] - global_pred))),
+                    "expert_raw_mse": float(np.mean(np.square(y64[cluster_mask] - local_pred))),
+                    "expert_shrunk_mse": float(np.mean(np.square(y64[cluster_mask] - routed_pred))),
+                    "global_l1": float(np.mean(np.abs(y64[cluster_mask] - global_pred))),
+                    "expert_raw_l1": float(np.mean(np.abs(y64[cluster_mask] - local_pred))),
+                    "expert_shrunk_l1": float(np.mean(np.abs(y64[cluster_mask] - routed_pred))),
+                    "irls_history": local_history,
+                }
+            )
+            generated[cluster_mask] = routed_pred
+            expert_rows.append(row)
+        expert_profile = {
+            "enabled": bool(np.any(expert_enabled_arr)),
+            "mode": "view_cluster",
+            "feature_mode": str(expert_feature_mode),
+            "expert_count": int(expert_count),
+            "enabled_expert_count": int(np.sum(expert_enabled_arr)),
+            "expert_min_training_samples": int(expert_min_training_samples_i),
+            "expert_shrink_tau": float(expert_shrink_tau_f),
+            "rows": expert_rows,
+        }
+    if output_cap > 0.0:
+        generated = np.clip(generated, -output_cap, output_cap)
+    generated = generated.astype(np.float32)
+    face_reliability_profile: dict[str, Any] = {
+        "enabled": False,
+        "mode": str(face_reliability_mode_s),
+        "reason": "not_requested" if face_reliability_mode_s == "none" else "",
+        "uses_policy_val_gt": bool(face_reliability_mode_s != "none"),
+        "uses_target_or_test_gt": False,
+        "min_face_samples": int(face_reliability_min_face_samples_i),
+        "min_relative_gain": float(face_reliability_min_relative_gain_f),
+        "min_positive_view_fraction": float(face_reliability_min_positive_view_fraction_f),
+        "fallback_multiplier": float(face_reliability_fallback_multiplier_f),
+        "entries": [],
+        "groups": [],
+    }
+    generated_before_face_reliability = generated.astype(np.float32, copy=True)
+    if face_reliability_mode_s != "none":
+        if face_reliability_mode_s == "view_cluster" and not (
+            expert_profile.get("enabled", False) and np.any(cluster_ids_eval >= 0)
+        ):
+            face_reliability_profile["reason"] = "view_cluster_reliability_requested_without_enabled_experts"
+        else:
+            group_ids_eval = (
+                cluster_ids_eval.astype(np.int32)
+                if face_reliability_mode_s == "view_cluster"
+                else np.full_like(view_ids_eval, -1, dtype=np.int32)
+            )
+            alpha_eval_grid = sorted(
+                set(
+                    float(x)
+                    for x in combined
+                    if float(x) > 0.0 and math.isfinite(float(x))
+                )
+            )
+            if not alpha_eval_grid:
+                alpha_eval_grid = [1.0]
+            before_by_key: dict[tuple[int, int], float] = {}
+            after_by_alpha_key: dict[tuple[float, int, int], float] = {}
+            samples_by_key: dict[tuple[int, int], int] = {}
+            before_by_view_key: dict[tuple[int, int, int], float] = {}
+            after_by_alpha_view_key: dict[tuple[float, int, int, int], float] = {}
+            before_samples = np.sum(np.square(target_eval.astype(np.float64)), axis=1)
+            after_samples_by_alpha = {
+                float(alpha): np.sum(
+                    np.square(target_eval.astype(np.float64) - float(alpha) * generated.astype(np.float64)),
+                    axis=1,
+                )
+                for alpha in alpha_eval_grid
+            }
+            for idx in range(int(face_ids_eval.shape[0])):
+                group_id = int(group_ids_eval[idx])
+                face = int(face_ids_eval[idx])
+                view_id = int(view_ids_eval[idx])
+                key = (group_id, face)
+                view_key = (group_id, face, view_id)
+                before_val = float(before_samples[idx])
+                before_by_key[key] = before_by_key.get(key, 0.0) + before_val
+                samples_by_key[key] = samples_by_key.get(key, 0) + 1
+                before_by_view_key[view_key] = before_by_view_key.get(view_key, 0.0) + before_val
+                for alpha, after_samples in after_samples_by_alpha.items():
+                    after_val = float(after_samples[idx])
+                    after_by_alpha_key[(float(alpha), group_id, face)] = (
+                        after_by_alpha_key.get((float(alpha), group_id, face), 0.0) + after_val
+                    )
+                    after_by_alpha_view_key[(float(alpha), group_id, face, view_id)] = (
+                        after_by_alpha_view_key.get((float(alpha), group_id, face, view_id), 0.0) + after_val
+                    )
+
+            rows: list[dict[str, Any]] = []
+            entries: list[dict[str, Any]] = []
+            entries_by_group: dict[str, dict[str, float]] = {}
+            groups: dict[int, dict[str, Any]] = {}
+            kept_sample_count = 0
+            for key in sorted(before_by_key):
+                group_id, face = int(key[0]), int(key[1])
+                before_val = float(before_by_key[key])
+                samples = int(samples_by_key.get(key, 0))
+                best_alpha = float(alpha_eval_grid[0])
+                best_after = float(after_by_alpha_key.get((best_alpha, group_id, face), float("inf")))
+                best_relative_gain = (before_val - best_after) / max(before_val, 1.0e-12)
+                for alpha in alpha_eval_grid[1:]:
+                    candidate_after = float(after_by_alpha_key.get((float(alpha), group_id, face), float("inf")))
+                    candidate_gain = (before_val - candidate_after) / max(before_val, 1.0e-12)
+                    if candidate_gain > best_relative_gain:
+                        best_alpha = float(alpha)
+                        best_after = candidate_after
+                        best_relative_gain = candidate_gain
+                views = 0
+                positive_views = 0
+                for (view_group_id, view_face, view_id), view_before in before_by_view_key.items():
+                    if int(view_group_id) != int(group_id) or int(view_face) != int(face):
+                        continue
+                    views += 1
+                    view_after = float(after_by_alpha_view_key.get((best_alpha, group_id, face, int(view_id)), 0.0))
+                    view_gain = (float(view_before) - view_after) / max(float(view_before), 1.0e-12)
+                    if view_gain > 0.0:
+                        positive_views += 1
+                relative_gain = float(best_relative_gain)
+                positive_fraction = float(positive_views / max(1, views))
+                keep = bool(
+                    samples >= int(face_reliability_min_face_samples_i)
+                    and relative_gain >= float(face_reliability_min_relative_gain_f)
+                    and positive_fraction >= float(face_reliability_min_positive_view_fraction_f)
+                )
+                multiplier = 1.0 if keep else float(face_reliability_fallback_multiplier_f)
+                if keep:
+                    kept_sample_count += int(samples)
+                row = {
+                    "group_id": int(group_id),
+                    "face_id": int(face),
+                    "samples": int(samples),
+                    "view_count": int(views),
+                    "positive_view_count": int(positive_views),
+                    "positive_view_fraction": float(positive_fraction),
+                    "mse_before_sum": float(before_val),
+                    "mse_after_sum": float(best_after),
+                    "relative_gain": float(relative_gain),
+                    "selected_alpha": float(best_alpha),
+                    "multiplier": float(multiplier),
+                    "keep": bool(keep),
+                }
+                rows.append(row)
+                group = groups.setdefault(
+                    int(group_id),
+                    {
+                        "group_id": int(group_id),
+                        "candidate_face_count": 0,
+                        "kept_face_count": 0,
+                        "candidate_sample_count": 0,
+                        "kept_sample_count": 0,
+                    },
+                )
+                group["candidate_face_count"] = int(group["candidate_face_count"]) + 1
+                group["candidate_sample_count"] = int(group["candidate_sample_count"]) + int(samples)
+                if keep:
+                    group["kept_face_count"] = int(group["kept_face_count"]) + 1
+                    group["kept_sample_count"] = int(group["kept_sample_count"]) + int(samples)
+                if multiplier != float(face_reliability_fallback_multiplier_f):
+                    entries.append(
+                        {
+                            "group_id": int(group_id),
+                            "face_id": int(face),
+                            "multiplier": float(multiplier),
+                            "selected_alpha": float(best_alpha),
+                        }
+                    )
+                    entries_by_group.setdefault(str(int(group_id)), {})[str(int(face))] = {
+                        "multiplier": float(multiplier),
+                        "selected_alpha": float(best_alpha),
+                    }
+            if entries or float(face_reliability_fallback_multiplier_f) < 1.0:
+                multiplier_by_key = {
+                    (int(entry["group_id"]), int(entry["face_id"])): float(entry["multiplier"])
+                    for entry in entries
+                }
+                sample_multipliers = np.full(
+                    (int(face_ids_eval.shape[0]),),
+                    float(face_reliability_fallback_multiplier_f),
+                    dtype=np.float32,
+                )
+                for idx in range(int(face_ids_eval.shape[0])):
+                    key = (int(group_ids_eval[idx]), int(face_ids_eval[idx]))
+                    if key in multiplier_by_key:
+                        sample_multipliers[idx] = float(multiplier_by_key[key])
+                generated = (generated * sample_multipliers.reshape(-1, 1)).astype(np.float32)
+            group_rows: list[dict[str, Any]] = []
+            for group in sorted(groups.values(), key=lambda row: int(row["group_id"])):
+                candidate_samples = int(group.get("candidate_sample_count", 0))
+                kept_samples = int(group.get("kept_sample_count", 0))
+                candidate_faces = int(group.get("candidate_face_count", 0))
+                kept_faces = int(group.get("kept_face_count", 0))
+                group_rows.append(
+                    dict(group)
+                    | {
+                        "kept_sample_fraction": float(kept_samples / max(1, candidate_samples)),
+                        "kept_face_fraction": float(kept_faces / max(1, candidate_faces)),
+                    }
+                )
+            rows_by_gain = sorted(rows, key=lambda row: float(row["relative_gain"]))
+            rows_by_samples = sorted(rows, key=lambda row: int(row["samples"]), reverse=True)
+            face_reliability_profile = {
+                "enabled": True,
+                "mode": str(face_reliability_mode_s),
+                "uses_policy_val_gt": True,
+                "uses_target_or_test_gt": False,
+                "min_face_samples": int(face_reliability_min_face_samples_i),
+                "min_relative_gain": float(face_reliability_min_relative_gain_f),
+                "min_positive_view_fraction": float(face_reliability_min_positive_view_fraction_f),
+                "fallback_multiplier": float(face_reliability_fallback_multiplier_f),
+                "certification_independent": False,
+                "certification_note": (
+                    "face reliability is fit on train policy-val evidence and must be checked by a held-out "
+                    "run before being used as a final certified claim"
+                ),
+                "alpha_selection_mode": "per_face_group_best_alpha_grid",
+                "apply_alpha_mode": "cap_generator_by_selected_alpha_over_current_alpha",
+                "alpha_eval_grid": [float(x) for x in alpha_eval_grid],
+                "candidate_face_group_count": int(len(rows)),
+                "kept_face_group_count": int(len(entries)),
+                "kept_sample_fraction": float(kept_sample_count / max(1, int(face_ids_eval.shape[0]))),
+                "entries": entries,
+                "entries_by_group": entries_by_group,
+                "groups": group_rows,
+                "worst_rows": rows_by_gain[:32],
+                "best_sampled_rows": rows_by_samples[:32],
+            }
+    zero_mse = float(np.mean(np.square(target_eval)))
+    base_mse = float(np.mean(np.square(target_eval - base_eval)))
+    generator_mse = float(np.mean(np.square(target_eval - generated)))
+    zero_l1 = float(np.mean(np.abs(target_eval)))
+    base_l1 = float(np.mean(np.abs(target_eval - base_eval)))
+    generator_l1 = float(np.mean(np.abs(target_eval - generated)))
+    per_view_rows: list[dict[str, Any]] = []
+    for view_id in sorted(set(int(x) for x in view_ids_eval.tolist())):
+        mask = view_ids_eval == int(view_id)
+        if not bool(np.any(mask)):
+            continue
+        view_base_mse = float(np.mean(np.square(target_eval[mask] - base_eval[mask])))
+        view_generator_mse = float(np.mean(np.square(target_eval[mask] - generated[mask])))
+        view_base_l1 = float(np.mean(np.abs(target_eval[mask] - base_eval[mask])))
+        view_generator_l1 = float(np.mean(np.abs(target_eval[mask] - generated[mask])))
+        per_view_rows.append(
+            {
+                "view_id": int(view_id),
+                "samples": int(np.sum(mask)),
+                "base_mse": float(view_base_mse),
+                "generator_mse": float(view_generator_mse),
+                "generator_relative_gain_vs_base_mse": float(
+                    (view_base_mse - view_generator_mse) / max(view_base_mse, 1.0e-12)
+                ),
+                "base_l1": float(view_base_l1),
+                "generator_l1": float(view_generator_l1),
+                "generator_relative_gain_vs_base_l1": float(
+                    (view_base_l1 - view_generator_l1) / max(view_base_l1, 1.0e-12)
+                ),
+            }
+        )
+    per_view_mse_gain_fraction = float(
+        np.mean([float(row["generator_relative_gain_vs_base_mse"]) > 0.0 for row in per_view_rows])
+    ) if per_view_rows else 0.0
+    per_view_l1_gain_fraction = float(
+        np.mean([float(row["generator_relative_gain_vs_base_l1"]) > 0.0 for row in per_view_rows])
+    ) if per_view_rows else 0.0
+    profile = {
+        "enabled": True,
+        "mode": "policy_val_image_linear_generator",
+        "optimizer": "ridge_image_residual",
+        "uses_policy_val_gt": True,
+        "uses_target_or_test_gt": False,
+        "feature_mode": feature_mode_s,
+        "feature_names": list(feature_names),
+        "weights": weights.astype(float).tolist(),
+        "expert_mode": str(expert_mode_s),
+        "expert_profile": dict(expert_profile),
+        "expert_weights": (
+            expert_weights_arr.astype(float).tolist()
+            if expert_weights_arr is not None and bool((expert_profile or {}).get("enabled", False))
+            else []
+        ),
+        "expert_enabled": (
+            expert_enabled_arr.astype(bool).tolist()
+            if expert_enabled_arr is not None and bool((expert_profile or {}).get("enabled", False))
+            else []
+        ),
+        "expert_centers": (
+            np.asarray(expert_centers, dtype=np.float32).astype(float).tolist()
+            if expert_centers is not None and bool((expert_profile or {}).get("enabled", False))
+            else []
+        ),
+        "expert_feature_mode": str(expert_feature_mode if bool((expert_profile or {}).get("enabled", False)) else "none"),
+        "face_reliability_mode": str(face_reliability_mode_s),
+        "face_reliability_profile": dict(face_reliability_profile),
+        "ridge": float(ridge),
+        "loss_mode": str(loss_mode_s),
+        "irls_iterations": int(iterations),
+        "huber_delta": float(robust_delta),
+        "irls_history": irls_history,
+        "training_sample_policy": str(training_policy_s),
+        "min_descent_margin": float(min_descent_margin),
+        "min_training_samples": int(min_training_samples),
+        "solver": str(solver),
+        "generator_output_cap": float(output_cap),
+        "require_base_valid": bool(require_base_valid),
+        "policy_val_views_used": int(view_count),
+        "policy_val_views_missing_image_gt": int(skipped_missing_image_gt),
+        "policy_val_views_without_base_support": int(skipped_missing_base_support),
+        "samples": int(sample_count),
+        "raw_samples_before_training_policy": int(raw_sample_count),
+        "rejected_by_training_policy": int(rejected_by_training_policy),
+        "training_policy_keep_fraction": float(sample_count / max(1, raw_sample_count)),
+        "view_balanced_training": dict(view_weight_profile),
+        "max_samples_per_view": int(max_samples_per_view),
+        "train_max_samples_per_view": int(train_max_samples_per_view),
+        "max_train_samples": int(max_train_samples),
+        "capped_by_global_sample_limit": bool(capped_by_global_sample_limit),
+        "zero_mse": float(zero_mse),
+        "base_mse": float(base_mse),
+        "generator_pre_face_reliability_mse": float(
+            np.mean(np.square(target_eval - generated_before_face_reliability))
+        ),
+        "generator_mse": float(generator_mse),
+        "generator_relative_gain_vs_base_mse": float((base_mse - generator_mse) / max(base_mse, 1.0e-12)),
+        "generator_relative_gain_vs_zero_mse": float((zero_mse - generator_mse) / max(zero_mse, 1.0e-12)),
+        "zero_l1": float(zero_l1),
+        "base_l1": float(base_l1),
+        "generator_pre_face_reliability_l1": float(
+            np.mean(np.abs(target_eval - generated_before_face_reliability))
+        ),
+        "generator_l1": float(generator_l1),
+        "generator_relative_gain_vs_base_l1": float((base_l1 - generator_l1) / max(base_l1, 1.0e-12)),
+        "generator_relative_gain_vs_zero_l1": float((zero_l1 - generator_l1) / max(zero_l1, 1.0e-12)),
+        "per_view_training_mse_gain_fraction": float(per_view_mse_gain_fraction),
+        "per_view_training_l1_gain_fraction": float(per_view_l1_gain_fraction),
+        "per_view_training_rows_preview": per_view_rows[:32],
+        "alpha_grid": combined,
+    }
+    return combined, profile
+
+
 def calibrated_bin_rgb_alpha_profile_from_policy_val(
     val_views: list[Path],
     atlas: dict[int, FaceAtlas],
@@ -6243,6 +9472,7 @@ def apply_to_target(
     face_gain_guard_profile: dict[str, Any] | None = None,
     bin_uncertainty_guard_profile: dict[str, Any] | None = None,
     parent_edge_apply_profile: dict[str, Any] | None = None,
+    view_confidence_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     method_dir = output_model / split / method_name
     render_dir = method_dir / "renders"
@@ -6282,6 +9512,7 @@ def apply_to_target(
             face_gain_guard_profile=face_gain_guard_profile,
             bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
             parent_edge_apply_profile=parent_edge_apply_profile,
+            view_confidence_profile=view_confidence_profile,
         )
         if float(max_abs_delta_rgb) > 0.0:
             delta = np.clip(delta, -float(max_abs_delta_rgb), float(max_abs_delta_rgb))
@@ -6333,6 +9564,7 @@ def evaluate_target_support_profile(
     face_gain_guard_profile: dict[str, Any] | None = None,
     bin_uncertainty_guard_profile: dict[str, Any] | None = None,
     parent_edge_apply_profile: dict[str, Any] | None = None,
+    view_confidence_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     disabled = {
         "enabled": False,
@@ -6374,6 +9606,7 @@ def evaluate_target_support_profile(
             face_gain_guard_profile=face_gain_guard_profile,
             bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
             parent_edge_apply_profile=parent_edge_apply_profile,
+            view_confidence_profile=view_confidence_profile,
         )
         if float(max_abs_delta_rgb) > 0.0:
             delta = np.clip(delta, -float(max_abs_delta_rgb), float(max_abs_delta_rgb))
@@ -6702,6 +9935,84 @@ def save_atlas_npz(path: Path, atlas: dict[int, FaceAtlas]) -> None:
         payload["view_basis_ood_mode"] = np.asarray(ood_modes)
         payload["view_basis_ood_max_z"] = np.asarray(ood_max_z, dtype=np.float32)
         payload["view_basis_ood_min_std"] = np.asarray(ood_min_std, dtype=np.float32)
+    expert_enabled = bool(
+        faces.size
+        and any(atlas[int(face)].expert_textures is not None for face in faces)
+    )
+    if expert_enabled:
+        first_expert = next(
+            atlas[int(face)].expert_textures
+            for face in faces
+            if atlas[int(face)].expert_textures is not None
+        )
+        assert first_expert is not None
+        expert_count, h, w, _channels = first_expert.shape
+        expert_textures = []
+        expert_counts = []
+        expert_variance = []
+        expert_sign = []
+        expert_samples = []
+        expert_modes = []
+        expert_min_bins = []
+        expert_fallback_modes = []
+        centers = []
+        for face in faces:
+            face_atlas = atlas[int(face)]
+            if face_atlas.expert_textures is None:
+                expert_textures.append(
+                    np.repeat(face_atlas.texture[None, ...], expert_count, axis=0).astype(np.float32)
+                )
+                expert_counts.append(np.zeros((expert_count, h, w), dtype=np.int32))
+                expert_variance.append(
+                    np.repeat(face_atlas.variance[None, ...], expert_count, axis=0).astype(np.float32)
+                )
+                expert_sign.append(
+                    np.repeat(face_atlas.sign_consistency[None, ...], expert_count, axis=0).astype(np.float32)
+                )
+                expert_samples.append(np.zeros((expert_count,), dtype=np.int64))
+                expert_modes.append("none")
+                centers.append(np.zeros((expert_count, 3), dtype=np.float32))
+                expert_min_bins.append(1)
+                expert_fallback_modes.append("global")
+            else:
+                expert_textures.append(face_atlas.expert_textures.astype(np.float32))
+                expert_counts.append(
+                    face_atlas.expert_counts.astype(np.int32)
+                    if face_atlas.expert_counts is not None
+                    else np.zeros((expert_count, h, w), dtype=np.int32)
+                )
+                expert_variance.append(
+                    face_atlas.expert_variance.astype(np.float32)
+                    if face_atlas.expert_variance is not None
+                    else np.repeat(face_atlas.variance[None, ...], expert_count, axis=0).astype(np.float32)
+                )
+                expert_sign.append(
+                    face_atlas.expert_sign_consistency.astype(np.float32)
+                    if face_atlas.expert_sign_consistency is not None
+                    else np.repeat(face_atlas.sign_consistency[None, ...], expert_count, axis=0).astype(np.float32)
+                )
+                expert_samples.append(
+                    face_atlas.expert_samples.astype(np.int64)
+                    if face_atlas.expert_samples is not None
+                    else np.zeros((expert_count,), dtype=np.int64)
+                )
+                expert_modes.append(str(face_atlas.expert_feature_mode))
+                centers.append(
+                    face_atlas.expert_centers.astype(np.float32)
+                    if face_atlas.expert_centers is not None
+                    else np.zeros((expert_count, 3), dtype=np.float32)
+                )
+                expert_min_bins.append(int(face_atlas.expert_min_bin_samples))
+                expert_fallback_modes.append(str(face_atlas.expert_fallback_mode))
+        payload["expert_texture"] = np.stack(expert_textures, axis=0)
+        payload["expert_counts"] = np.stack(expert_counts, axis=0)
+        payload["expert_variance"] = np.stack(expert_variance, axis=0)
+        payload["expert_sign_consistency"] = np.stack(expert_sign, axis=0)
+        payload["expert_samples"] = np.stack(expert_samples, axis=0)
+        payload["expert_feature_mode"] = np.asarray(expert_modes)
+        payload["expert_centers"] = np.stack(centers, axis=0)
+        payload["expert_min_bin_samples"] = np.asarray(expert_min_bins, dtype=np.int32)
+        payload["expert_fallback_mode"] = np.asarray(expert_fallback_modes)
     teacher_basis_enabled = bool(
         faces.size
         and any(atlas[int(face)].teacher_basis_coefficients is not None for face in faces)
@@ -6767,6 +10078,8 @@ def write_report(path: Path, audit: dict[str, Any]) -> None:
     local_alpha = audit.get("local_alpha_profile", {})
     face_gain = audit.get("face_gain_guard_profile", {})
     bin_uncertainty = audit.get("bin_uncertainty_guard_profile", {})
+    view_confidence = audit.get("view_confidence_profile", {})
+    view_alpha_cap = audit.get("view_alpha_cap_profile", {})
     multiscale_prior = audit.get("fit_summary", {}).get("surface_multiscale_prior", {})
     teacher_basis = audit.get("fit_summary", {}).get("teacher_distilled_basis", {})
     policy_candidate_control = audit.get("fit_summary", {}).get("policy_candidate_control", {})
@@ -6836,9 +10149,20 @@ def write_report(path: Path, audit: dict[str, Any]) -> None:
         f"- view-conditioned basis OOD mode: `{audit.get('fit_summary', {}).get('view_conditioned_basis', {}).get('ood_mode', 'none')}`",
         f"- view-conditioned basis OOD max-z: `{audit.get('fit_summary', {}).get('view_conditioned_basis', {}).get('ood_max_z', 0.0)}`",
         f"- view-conditioned basis OOD min-std: `{audit.get('fit_summary', {}).get('view_conditioned_basis', {}).get('ood_min_std', 0.0)}`",
+        f"- view-cluster experts enabled: `{audit.get('fit_summary', {}).get('view_cluster_experts', {}).get('enabled', False)}`",
+        f"- view-cluster expert count: `{audit.get('fit_summary', {}).get('view_cluster_experts', {}).get('expert_count', 1)}`",
+        f"- view-cluster expert supported bins: `{audit.get('fit_summary', {}).get('view_cluster_experts', {}).get('supported_bins', 0)}`",
+        f"- view-cluster expert supported-bin fraction: `{audit.get('fit_summary', {}).get('view_cluster_experts', {}).get('supported_bin_fraction', 0.0):.6f}`",
         f"- teacher-distilled basis mode: `{teacher_basis.get('mode', 'none')}`",
         f"- teacher-distilled basis effective mode: `{teacher_basis.get('effective_mode', teacher_basis.get('mode', 'none'))}`",
         f"- teacher-distilled basis guard decision: `{teacher_basis.get('guard', {}).get('decision', 'not_requested')}`",
+        f"- teacher-distilled basis requested min-face samples: `{teacher_basis.get('min_face_samples', 0)}`",
+        f"- teacher-distilled basis effective min-face samples: `{teacher_basis.get('effective_min_face_samples', teacher_basis.get('min_face_samples', 0))}`",
+        f"- adaptive low-support teacher basis enabled: `{teacher_basis.get('adaptive_low_support', {}).get('enabled', False)}`",
+        f"- adaptive low-support teacher basis reason: `{teacher_basis.get('adaptive_low_support', {}).get('reason', 'not_requested')}`",
+        f"- adaptive low-support teacher basis newly supported faces: `{teacher_basis.get('adaptive_low_support', {}).get('newly_supported_faces', 0)}`",
+        f"- adaptive low-support teacher basis low-support solved faces: `{teacher_basis.get('adaptive_low_support', {}).get('low_support_supported_faces', 0)}`",
+        f"- adaptive low-support teacher basis max ridge multiplier: `{float(teacher_basis.get('adaptive_low_support', {}).get('max_ridge_multiplier', 1.0) or 1.0):.6f}`",
         f"- teacher-distilled basis supported faces: `{teacher_basis.get('supported_faces', 0)}`",
         f"- teacher-distilled basis supported-face fraction: `{teacher_basis.get('supported_face_fraction', 0.0):.6f}`",
         f"- teacher-distilled basis apply mode: `{teacher_basis.get('apply_mode', '')}`",
@@ -6848,12 +10172,31 @@ def write_report(path: Path, audit: dict[str, Any]) -> None:
         f"- selected alpha: `{audit.get('selected_alpha', 0.0)}`",
         f"- local alpha calibration: `{audit.get('fit_summary', {}).get('local_alpha_calibration', {}).get('enabled', False)}`",
         f"- local alpha mode: `{local_alpha.get('mode', 'disabled')}`",
+        f"- local alpha optimizer: `{local_alpha.get('optimizer', 'n/a')}`",
         f"- local alpha fallback alpha: `{fallback_alpha_text}`",
+        f"- local alpha fallback mode: `{local_alpha.get('fallback_mode', 'n/a')}`",
         f"- local alpha face count: `{local_alpha.get('face_alpha_count', 0)}`",
         f"- local alpha bin count: `{local_alpha.get('bin_alpha_count', 0)}`",
         f"- local alpha bin RGB count: `{local_alpha.get('bin_rgb_alpha_count', 0)}`",
+        f"- local alpha image-L1 optimizer uses target/test GT: `{local_alpha.get('uses_target_or_test_gt', 'n/a')}`",
+        f"- local alpha image-L1 optimizer global rel gain: `{float(local_alpha.get('global_relative_gain', 0.0) or 0.0):.9f}`",
+        f"- local alpha image-L1 optimizer mean selected rel gain: `{float(local_alpha.get('mean_selected_relative_gain', 0.0) or 0.0):.9f}`",
         f"- local alpha uncertainty-shrink bin count: `{local_alpha.get('bin_uncertainty_shrink_count', 0)}`",
         f"- local alpha uncertainty-shrink policy mode: `{local_alpha.get('uncertainty_shrink_policy_mode', 'n/a')}`",
+        f"- local alpha view-cluster local shrink: `{local_alpha.get('view_cluster_local_shrink', False)}`",
+        f"- local alpha view-cluster selected clusters: `{local_alpha.get('view_cluster_selected_cluster_count', 0)}`",
+        f"- local alpha view-cluster policy-val view counts: `{local_alpha.get('view_cluster_policy_val_view_counts', {})}`",
+        f"- local alpha image-L1 bin certificate enabled: `{local_alpha.get('image_l1_bin_certificate', {}).get('enabled', False)}`",
+        f"- local alpha image-L1 bin certificate mode: `{local_alpha.get('image_l1_bin_certificate', {}).get('mode', 'n/a')}`",
+        f"- local alpha image-L1 bin certificate pool radius: `{local_alpha.get('image_l1_bin_certificate', {}).get('pool_radius', 0)}`",
+        f"- local alpha image-L1 bin certificate candidate ok bins: `{local_alpha.get('image_l1_bin_certificate', {}).get('candidate_evidence_ok_count', 0)}`",
+        f"- local alpha image-L1 bin certificate selected ok bins: `{local_alpha.get('image_l1_bin_certificate', {}).get('selected_evidence_ok_count', 0)}`",
+        f"- local alpha image-L1 bin certificate mean selected rel gain: `{float(local_alpha.get('image_l1_bin_certificate', {}).get('mean_selected_relative_gain', 0.0) or 0.0):.9f}`",
+        f"- local alpha image-L1 region expansion enabled: `{local_alpha.get('image_l1_bin_certificate', {}).get('region_expansion', {}).get('enabled', False)}`",
+        f"- local alpha image-L1 region expansion seeds: `{local_alpha.get('image_l1_bin_certificate', {}).get('region_expansion', {}).get('seed_bin_count', 0)}`",
+        f"- local alpha image-L1 region expansion pre-trunc bins: `{local_alpha.get('image_l1_bin_certificate', {}).get('region_expansion', {}).get('expanded_bin_count_pre_trunc', 0)}`",
+        f"- local alpha image-L1 region expansion selected bins: `{local_alpha.get('image_l1_bin_certificate', {}).get('region_expansion', {}).get('selected_expanded_bin_count', 0)}`",
+        f"- local alpha uncertainty-shrink min bin views: `{local_alpha.get('min_bin_views', 0)}`",
         f"- local alpha uncertainty-shrink mean: `{float(local_alpha.get('mean_selected_shrink', 0.0) or 0.0):.6f}`",
         f"- local alpha uncertainty-shrink downweighted bins: `{local_alpha.get('downweighted_bin_count', 0)}`",
         f"- local alpha uncertainty-shrink upweighted bins: `{local_alpha.get('upweighted_bin_count', 0)}`",
@@ -6870,6 +10213,19 @@ def write_report(path: Path, audit: dict[str, Any]) -> None:
         f"- bin uncertainty guard rejected bins: `{bin_uncertainty.get('rejected_bin_count', 0)}`",
         f"- bin uncertainty guard allowed faces: `{bin_uncertainty.get('allowed_face_count', 0)}`",
         f"- bin uncertainty guard allowed sample fraction: `{float(bin_uncertainty.get('allowed_sample_fraction', 0.0) or 0.0):.6f}`",
+        f"- view consistency confidence enabled: `{view_confidence.get('enabled', False)}`",
+        f"- view consistency confidence decision: `{view_confidence.get('decision', 'not_requested')}`",
+        f"- view consistency confidence positive views: `{view_confidence.get('positive_view_count', 0)}`",
+        f"- view consistency confidence positive-view fraction: `{float(view_confidence.get('positive_view_fraction', 0.0) or 0.0):.6f}`",
+        f"- view consistency confidence kernel sigma: `{float(view_confidence.get('kernel_sigma', 0.0) or 0.0):.6f}`",
+        f"- view consistency confidence min confidence: `{float(view_confidence.get('min_confidence', 0.0) or 0.0):.6f}`",
+        f"- view consistency confidence post accepted: `{view_confidence.get('post_confidence_accepted', False)}`",
+        f"- view alpha cap enabled: `{view_alpha_cap.get('enabled', False)}`",
+        f"- view alpha cap decision: `{view_alpha_cap.get('decision', 'not_requested')}`",
+        f"- view alpha cap selected views: `{view_alpha_cap.get('selected_view_count', 0)}`",
+        f"- view alpha cap fallback views: `{view_alpha_cap.get('fallback_view_count', 0)}`",
+        f"- view alpha cap post accepted: `{view_alpha_cap.get('post_cap_accepted', False)}`",
+        f"- view alpha cap post selected alpha: `{float(view_alpha_cap.get('post_cap_selected_alpha', 0.0) or 0.0):.6f}`",
         f"- policy-val relative gain: `{val.get('best', {}).get('relative_gain', 0.0):.6f}`",
         f"- policy-val positive-view fraction: `{val.get('best', {}).get('positive_view_fraction', 0.0):.6f}`",
         f"- policy-val CVaR20 view relative gain: `{val.get('best', {}).get('cvar20_view_relative_gain', 0.0):.6f}`",
@@ -6917,11 +10273,16 @@ def write_report(path: Path, audit: dict[str, Any]) -> None:
 
 def policy_val_risk_reasons(row: dict[str, Any], args: argparse.Namespace) -> list[str]:
     reasons: list[str] = []
-    pos_frac = float(row.get("positive_view_fraction", 0.0))
+    selective_view_policy = bool(
+        row.get("view_confidence_selective", False) or row.get("view_alpha_cap_selective", False)
+        or row.get("sparse_materialization_selective", False)
+    )
+    pos_frac_key = "nonnegative_view_fraction" if selective_view_policy else "positive_view_fraction"
+    pos_frac = float(row.get(pos_frac_key, row.get("positive_view_fraction", 0.0)) or 0.0)
     min_pos_frac = float(args.min_policy_val_positive_view_fraction)
     if min_pos_frac > 0.0 and pos_frac < min_pos_frac:
         reasons.append(
-            f"positive_view_fraction {pos_frac:.6f} < min_policy_val_positive_view_fraction {min_pos_frac:.6f}"
+            f"{pos_frac_key} {pos_frac:.6f} < min_policy_val_positive_view_fraction {min_pos_frac:.6f}"
         )
     cvar20 = float(row.get("cvar20_view_relative_gain", 0.0))
     min_cvar20 = float(args.min_policy_val_cvar20_relative_gain)
@@ -6942,11 +10303,14 @@ def policy_val_risk_reasons(row: dict[str, Any], args: argparse.Namespace) -> li
             reasons.append(
                 f"ssim_gain {ssim_mean_gain:.9f} < min_policy_val_ssim_mean_gain {min_ssim_mean_gain:.9f}"
             )
-        ssim_pos_frac = float(row.get("ssim_positive_view_fraction", 0.0))
+        ssim_pos_frac_key = (
+            "ssim_nonnegative_view_fraction" if selective_view_policy else "ssim_positive_view_fraction"
+        )
+        ssim_pos_frac = float(row.get(ssim_pos_frac_key, row.get("ssim_positive_view_fraction", 0.0)) or 0.0)
         min_ssim_pos_frac = float(args.min_policy_val_ssim_positive_view_fraction)
         if min_ssim_pos_frac > 0.0 and ssim_pos_frac < min_ssim_pos_frac:
             reasons.append(
-                f"ssim_positive_view_fraction {ssim_pos_frac:.6f} < "
+                f"{ssim_pos_frac_key} {ssim_pos_frac:.6f} < "
                 f"min_policy_val_ssim_positive_view_fraction {min_ssim_pos_frac:.6f}"
             )
         ssim_min_gain = float(row.get("ssim_min_view_gain", 0.0))
@@ -6963,11 +10327,16 @@ def policy_val_risk_reasons(row: dict[str, Any], args: argparse.Namespace) -> li
             reasons.append(
                 f"image_l1_gain {l1_mean_gain:.9f} < min_policy_val_l1_mean_gain {min_l1_mean_gain:.9f}"
             )
-        l1_pos_frac = float(row.get("image_l1_positive_view_fraction", 0.0))
+        l1_pos_frac_key = (
+            "image_l1_nonnegative_view_fraction"
+            if selective_view_policy
+            else "image_l1_positive_view_fraction"
+        )
+        l1_pos_frac = float(row.get(l1_pos_frac_key, row.get("image_l1_positive_view_fraction", 0.0)) or 0.0)
         min_l1_pos_frac = float(args.min_policy_val_l1_positive_view_fraction)
         if min_l1_pos_frac > 0.0 and l1_pos_frac < min_l1_pos_frac:
             reasons.append(
-                f"image_l1_positive_view_fraction {l1_pos_frac:.6f} < "
+                f"{l1_pos_frac_key} {l1_pos_frac:.6f} < "
                 f"min_policy_val_l1_positive_view_fraction {min_l1_pos_frac:.6f}"
             )
         l1_min_gain = float(row.get("image_l1_min_view_gain", 0.0))
@@ -6991,11 +10360,14 @@ def policy_val_risk_reasons(row: dict[str, Any], args: argparse.Namespace) -> li
             reasons.append(
                 f"lpips_gain {lpips_mean_gain:.9f} < min_policy_val_lpips_mean_gain {min_lpips_mean_gain:.9f}"
             )
-        lpips_pos_frac = float(row.get("lpips_positive_view_fraction", 0.0))
+        lpips_pos_frac_key = (
+            "lpips_nonnegative_view_fraction" if selective_view_policy else "lpips_positive_view_fraction"
+        )
+        lpips_pos_frac = float(row.get(lpips_pos_frac_key, row.get("lpips_positive_view_fraction", 0.0)) or 0.0)
         min_lpips_pos_frac = float(args.min_policy_val_lpips_positive_view_fraction)
         if min_lpips_pos_frac > 0.0 and lpips_pos_frac < min_lpips_pos_frac:
             reasons.append(
-                f"lpips_positive_view_fraction {lpips_pos_frac:.6f} < "
+                f"{lpips_pos_frac_key} {lpips_pos_frac:.6f} < "
                 f"min_policy_val_lpips_positive_view_fraction {min_lpips_pos_frac:.6f}"
             )
         lpips_min_gain = float(row.get("lpips_min_view_gain", 0.0))
@@ -7851,6 +11223,39 @@ def main() -> int:
         help="Minimum feature standard deviation used by the diagonal z-score OOD guard.",
     )
     parser.add_argument(
+        "--view_cluster_expert_count",
+        type=int,
+        default=1,
+        help=(
+            "Optional v135 GT-free view-clustered residual experts. Values >1 fit "
+            "separate local surface residual atlases for camera-center clusters."
+        ),
+    )
+    parser.add_argument(
+        "--view_cluster_feature_mode",
+        choices=("none", "camera_center"),
+        default="camera_center",
+        help="Target-safe feature used to route a view to a residual expert.",
+    )
+    parser.add_argument(
+        "--view_cluster_min_views",
+        type=int,
+        default=2,
+        help="Minimum fit views required for a view cluster to become active.",
+    )
+    parser.add_argument(
+        "--view_cluster_min_bin_samples",
+        type=int,
+        default=4,
+        help="Minimum per-expert face/UV-bin samples before replacing the global residual.",
+    )
+    parser.add_argument(
+        "--view_cluster_fallback_mode",
+        choices=("global",),
+        default="global",
+        help="Fallback for bins unsupported by the routed expert.",
+    )
+    parser.add_argument(
         "--teacher_distilled_basis_mode",
         choices=("none", "face_uv_normal_camera_ridge", "face_uv_patch_mixture_ridge"),
         default="none",
@@ -7880,6 +11285,33 @@ def main() -> int:
         default="blend",
     )
     parser.add_argument("--teacher_distilled_basis_blend", type=float, default=0.5)
+    parser.add_argument(
+        "--enable_adaptive_low_support_teacher_basis",
+        action="store_true",
+        help=(
+            "Lower the teacher-distilled per-face solve threshold from the requested ceiling "
+            "using only fit-evidence face support statistics, then increase ridge on newly "
+            "enabled low-support faces. This expands representation capacity without reading target/test GT."
+        ),
+    )
+    parser.add_argument(
+        "--adaptive_teacher_basis_min_face_samples_floor",
+        type=int,
+        default=128,
+        help="Minimum allowed effective face-sample threshold for adaptive low-support teacher basis.",
+    )
+    parser.add_argument(
+        "--adaptive_teacher_basis_support_quantile",
+        type=float,
+        default=0.25,
+        help="Fit-evidence support quantile used to choose the adaptive teacher-basis threshold.",
+    )
+    parser.add_argument(
+        "--adaptive_teacher_basis_low_support_ridge_scale",
+        type=float,
+        default=0.5,
+        help="Extra ridge multiplier scale for faces enabled below the requested teacher-basis threshold.",
+    )
     parser.add_argument(
         "--atlas_empty_bin_fill_mode",
         choices=("zero", "face_mean", "nearest_observed", "auto_policy"),
@@ -8248,15 +11680,18 @@ def main() -> int:
             "Build a train-policy-val uncertainty-aware local shrink profile. "
             "sparse_positive is the v67 behavior; keep_with_downweight is the v68 "
             "behavior that keeps fallback residual strength and only stores explicit "
-            "downweights/upweights for evidenced bins."
+            "downweights/upweights for evidenced bins. positive_consensus is a stricter "
+            "view-consistent mode that defaults unknown bins to zero and materializes "
+            "only multi-view positive train-policy-val bins."
         ),
     )
     parser.add_argument(
         "--bin_uncertainty_shrink_policy_mode",
-        choices=("sparse_positive", "keep_with_downweight"),
+        choices=("sparse_positive", "keep_with_downweight", "positive_consensus"),
         default="sparse_positive",
     )
     parser.add_argument("--bin_uncertainty_shrink_min_bin_samples", type=int, default=64)
+    parser.add_argument("--bin_uncertainty_shrink_min_bin_views", type=int, default=1)
     parser.add_argument("--bin_uncertainty_shrink_min_relative_gain", type=float, default=0.0)
     parser.add_argument("--bin_uncertainty_shrink_min_positive_view_fraction", type=float, default=0.75)
     parser.add_argument("--bin_uncertainty_shrink_max_mean_variance", type=float, default=-1.0)
@@ -8273,6 +11708,180 @@ def main() -> int:
         type=int,
         default=8192,
         help="Maximum number of uncertainty-shrink face/UV bins stored in the profile. <=0 stores all fitted bins.",
+    )
+    parser.add_argument(
+        "--enable_view_cluster_local_shrink",
+        "--enable_policy_val_cluster_local_shrink",
+        dest="enable_view_cluster_local_shrink",
+        action="store_true",
+        help=(
+            "When view-cluster experts are enabled, calibrate uncertainty shrink per "
+            "train-policy-val view cluster instead of globally per face/UV bin."
+        ),
+    )
+    parser.add_argument(
+        "--view_cluster_local_shrink_global_fallback",
+        action="store_true",
+        help=(
+            "Also expose selected cluster-local bins through the legacy global shrink "
+            "table. Disabled by default so unknown clusters remain explicit no-op."
+        ),
+    )
+    parser.add_argument(
+        "--enable_policy_val_image_l1_bin_certificate",
+        action="store_true",
+        help=(
+            "Use local train-policy-val image-L1 before/after evidence as a bin-level certificate "
+            "for uncertainty shrink. This can replace or augment the residual-MSE proxy while "
+            "still keeping target/test GT out of apply-time decisions."
+        ),
+    )
+    parser.add_argument(
+        "--image_l1_bin_certificate_mode",
+        choices=("and", "or", "replace"),
+        default="and",
+        help=(
+            "How the image-L1 bin certificate combines with residual-MSE evidence: "
+            "and=require both, or=allow either, replace=use image-L1 as the bin acceptance signal."
+        ),
+    )
+    parser.add_argument("--image_l1_bin_certificate_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--image_l1_bin_certificate_min_positive_view_fraction", type=float, default=0.55)
+    parser.add_argument("--image_l1_bin_certificate_gain_tau", type=float, default=0.01)
+    parser.add_argument(
+        "--image_l1_bin_certificate_pool_radius",
+        type=int,
+        default=0,
+        help=(
+            "UV-bin radius used to pool same-face policy-val image-L1 evidence for each certified bin. "
+            "0 is exact-bin evidence; >0 is a patch-level certificate for sparse outdoor coverage."
+        ),
+    )
+    parser.add_argument(
+        "--enable_policy_val_image_l1_region_expansion",
+        action="store_true",
+        help=(
+            "Expand image-L1-certified seed bins to same-face neighboring bins with policy-val support and no "
+            "strong negative evidence. This increases coverage without target/test GT."
+        ),
+    )
+    parser.add_argument("--image_l1_region_expansion_radius", type=int, default=1)
+    parser.add_argument("--image_l1_region_expansion_max_bins_per_seed", type=int, default=8)
+    parser.add_argument("--image_l1_region_expansion_min_neighbor_samples", type=int, default=1)
+    parser.add_argument("--image_l1_region_expansion_min_neighbor_views", type=int, default=1)
+    parser.add_argument("--image_l1_region_expansion_max_negative_relative_gain", type=float, default=0.02)
+    parser.add_argument("--image_l1_region_expansion_max_negative_image_l1_gain", type=float, default=0.02)
+    parser.add_argument("--image_l1_region_expansion_shrink_decay", type=float, default=0.5)
+    parser.add_argument(
+        "--enable_policy_val_image_l1_bin_alpha_optimization",
+        action="store_true",
+        help=(
+            "Fit a per-face/UV-bin local alpha by directly minimizing policy-val image L1 "
+            "of clip(rgb_render + alpha * residual_delta). This is GT-free at target/test apply time."
+        ),
+    )
+    parser.add_argument(
+        "--image_l1_bin_alpha_grid",
+        default="0,0.0625,0.125,0.25,0.5,0.75,1.0",
+        help="Local alpha candidates for policy-val image-L1 bin optimization.",
+    )
+    parser.add_argument("--image_l1_bin_alpha_max_alpha", type=float, default=1.0)
+    parser.add_argument("--image_l1_bin_alpha_min_bin_samples", type=int, default=8)
+    parser.add_argument("--image_l1_bin_alpha_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--image_l1_bin_alpha_min_positive_view_fraction", type=float, default=0.55)
+    parser.add_argument("--image_l1_bin_alpha_count_tau", type=float, default=64.0)
+    parser.add_argument(
+        "--image_l1_bin_alpha_fallback_mode",
+        choices=("zero", "global_best"),
+        default="zero",
+        help="Fallback local alpha for bins not certified by image-L1 optimization.",
+    )
+    parser.add_argument(
+        "--image_l1_bin_alpha_max_profile_bins",
+        type=int,
+        default=8192,
+        help="Maximum image-L1 optimized bins stored in the local alpha profile. <=0 stores all bins.",
+    )
+    parser.add_argument(
+        "--enable_policy_val_image_linear_residual_generator",
+        action="store_true",
+        help=(
+            "Fit a policy-val ridge linear generator for image-space residuals and apply it target/test-GT-free "
+            "through the normal certified residual texture path."
+        ),
+    )
+    parser.add_argument(
+        "--image_linear_generator_feature_mode",
+        choices=("base", "base_rgb", "base_rgb_bary_view"),
+        default="base_rgb",
+    )
+    parser.add_argument("--image_linear_generator_ridge", type=float, default=1.0e-2)
+    parser.add_argument("--image_linear_generator_train_max_samples_per_view", type=int, default=100000)
+    parser.add_argument("--image_linear_generator_max_train_samples", type=int, default=1000000)
+    parser.add_argument("--image_linear_generator_output_cap", type=float, default=0.12)
+    parser.add_argument(
+        "--image_linear_generator_loss_mode",
+        choices=("mse", "huber_irls", "l1_irls"),
+        default="mse",
+        help="Policy-val generator objective. v144 used mse; v145 can use robust IRLS losses.",
+    )
+    parser.add_argument("--image_linear_generator_irls_iterations", type=int, default=4)
+    parser.add_argument("--image_linear_generator_huber_delta", type=float, default=0.02)
+    parser.add_argument(
+        "--image_linear_generator_training_sample_policy",
+        choices=("all", "base_l1_descent", "view_balanced", "view_balanced_base_l1_descent"),
+        default="all",
+        help=(
+            "Samples used to train the image-linear generator. base_l1_descent keeps only policy-val pixels "
+            "where the base atlas residual improves image L1 over no residual; view_balanced gives each "
+            "policy-val view equal regression weight to improve cross-view gain coverage."
+        ),
+    )
+    parser.add_argument("--image_linear_generator_min_descent_margin", type=float, default=0.0)
+    parser.add_argument("--image_linear_generator_min_training_samples", type=int, default=512)
+    parser.add_argument(
+        "--image_linear_generator_alpha_grid",
+        default="0,0.03125,0.0625,0.125,0.25,0.5,0.75,1.0",
+        help="Global alpha candidates evaluated after fitting the policy-val image-linear residual generator.",
+    )
+    parser.add_argument(
+        "--image_linear_generator_expert_mode",
+        choices=("none", "view_cluster"),
+        default="none",
+        help="Optional mixture-of-experts routing for the image-linear generator.",
+    )
+    parser.add_argument(
+        "--image_linear_generator_expert_min_training_samples",
+        type=int,
+        default=2048,
+        help="Minimum policy-val samples required to fit one image-linear expert.",
+    )
+    parser.add_argument(
+        "--image_linear_generator_expert_shrink_tau",
+        type=float,
+        default=8192.0,
+        help="Sample-count shrinkage tau for blending each expert back to the global generator.",
+    )
+    parser.add_argument(
+        "--image_linear_generator_face_reliability_mode",
+        choices=("none", "global", "view_cluster"),
+        default="none",
+        help=(
+            "Use train-policy-val face reliability to suppress image-linear generator outputs before the "
+            "final policy-val gate. view_cluster computes a separate face allowlist for each routed expert."
+        ),
+    )
+    parser.add_argument("--image_linear_generator_face_reliability_min_face_samples", type=int, default=256)
+    parser.add_argument("--image_linear_generator_face_reliability_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--image_linear_generator_face_reliability_min_positive_view_fraction", type=float, default=0.5)
+    parser.add_argument("--image_linear_generator_face_reliability_fallback_multiplier", type=float, default=0.0)
+    parser.add_argument(
+        "--image_linear_generator_allow_unvalidated_base_pixels",
+        action="store_true",
+        help=(
+            "Allow fitting/applying generator samples before the normal atlas-valid mask. Disabled by default; "
+            "the default keeps v144 inside the same certified surface support as the parent residual atlas."
+        ),
     )
     parser.add_argument(
         "--enable_policy_val_structure_aware_shrink",
@@ -8306,6 +11915,51 @@ def main() -> int:
     parser.add_argument("--parent_edge_apply_shrink_tau", type=float, default=0.05)
     parser.add_argument("--parent_edge_apply_shrink_min_multiplier", type=float, default=0.25)
     parser.add_argument(
+        "--enable_policy_val_view_consistency_confidence",
+        action="store_true",
+        help=(
+            "Fit a train-policy-val camera-direction confidence profile from views where the residual "
+            "candidate actually improves held-out train views. At apply time this is target-GT-free: "
+            "it only compares the target camera direction to the certified positive policy-val views."
+        ),
+    )
+    parser.add_argument("--view_confidence_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--view_confidence_min_ssim_gain", type=float, default=-1.0)
+    parser.add_argument("--view_confidence_min_l1_gain", type=float, default=-1.0)
+    parser.add_argument("--view_confidence_min_lpips_gain", type=float, default=-1.0)
+    parser.add_argument("--view_confidence_kernel_sigma", type=float, default=0.35)
+    parser.add_argument("--view_confidence_min_confidence", type=float, default=0.05)
+    parser.add_argument(
+        "--enable_policy_val_view_alpha_cap",
+        action="store_true",
+        help=(
+            "Fit a train-policy-val camera-direction alpha-cap profile. Target/test apply stays GT-free: "
+            "each view receives at most the nearest certified policy-val residual strength."
+        ),
+    )
+    parser.add_argument(
+        "--view_alpha_cap_selection_mode",
+        choices=("smallest_safe", "best_safe"),
+        default="smallest_safe",
+    )
+    parser.add_argument("--view_alpha_cap_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--view_alpha_cap_min_ssim_gain", type=float, default=-1.0e-5)
+    parser.add_argument("--view_alpha_cap_min_l1_gain", type=float, default=-1.0e-6)
+    parser.add_argument("--view_alpha_cap_min_lpips_gain", type=float, default=-1.0)
+    parser.add_argument("--view_alpha_cap_kernel_sigma", type=float, default=0.35)
+    parser.add_argument("--view_alpha_cap_min_confidence", type=float, default=0.05)
+    parser.add_argument("--view_alpha_cap_fallback_alpha", type=float, default=0.0)
+    parser.add_argument(
+        "--view_alpha_cap_seed_stage",
+        choices=("pre_guard", "post_view_confidence"),
+        default="pre_guard",
+        help=(
+            "Choose which train-policy-val evidence seeds the view alpha-cap profile. pre_guard freezes "
+            "the candidate after basis guards but before sparse/face/bin/view-confidence guards can replace "
+            "it with a no-op; final acceptance still uses the fully guarded policy-val evaluation."
+        ),
+    )
+    parser.add_argument(
         "--enable_policy_val_face_gain_guard",
         action="store_true",
         help=(
@@ -8333,14 +11987,37 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--enable_policy_val_sparse_materialization_frontier",
+        action="store_true",
+        help=(
+            "If the strict sparse materialization certificate selects no bins, use a policy-val "
+            "risk-adjusted local frontier instead of falling back to a no-op candidate."
+        ),
+    )
+    parser.add_argument(
         "--sparse_materialization_seed_min_relative_gain",
         type=float,
         default=0.0,
         help="Minimum nonzero policy-val relative gain required to seed sparse residual materialization.",
     )
     parser.add_argument("--sparse_materialization_min_bin_samples", type=int, default=16)
+    parser.add_argument(
+        "--sparse_materialization_min_bin_views",
+        type=int,
+        default=1,
+        help="Minimum number of train policy-val views that must observe a face/UV bin before sparse materialization can keep it.",
+    )
     parser.add_argument("--sparse_materialization_min_relative_gain", type=float, default=0.0)
+    parser.add_argument(
+        "--sparse_materialization_min_view_relative_gain",
+        type=float,
+        default=-float("inf"),
+        help="Minimum per-view relative gain required for a sparse materialization bin; use near zero for no-tail-regression local certificates.",
+    )
     parser.add_argument("--sparse_materialization_min_positive_view_fraction", type=float, default=0.5)
+    parser.add_argument("--sparse_materialization_frontier_min_positive_view_fraction", type=float, default=0.55)
+    parser.add_argument("--sparse_materialization_frontier_min_risk_adjusted_gain", type=float, default=0.0)
+    parser.add_argument("--sparse_materialization_frontier_min_sample_quantile", type=float, default=0.75)
     parser.add_argument(
         "--sparse_materialization_max_mean_variance",
         type=float,
@@ -8649,8 +12326,22 @@ def main() -> int:
             parser.error("--view_conditioned_basis_ood_max_z must be > 0 when OOD mode is enabled")
         if float(args.view_conditioned_basis_ood_min_std) <= 0.0:
             parser.error("--view_conditioned_basis_ood_min_std must be > 0 when OOD mode is enabled")
+    if int(args.view_cluster_expert_count) < 1:
+        parser.error("--view_cluster_expert_count must be >= 1")
+    if int(args.view_cluster_min_views) < 1:
+        parser.error("--view_cluster_min_views must be >= 1")
+    if int(args.view_cluster_min_bin_samples) < 1:
+        parser.error("--view_cluster_min_bin_samples must be >= 1")
+    if bool(args.enable_view_cluster_local_shrink) and int(args.view_cluster_expert_count) <= 1:
+        parser.error("--enable_view_cluster_local_shrink requires --view_cluster_expert_count > 1")
     if int(args.teacher_distilled_basis_min_face_samples) <= 0:
         parser.error("--teacher_distilled_basis_min_face_samples must be > 0")
+    if int(args.adaptive_teacher_basis_min_face_samples_floor) <= 0:
+        parser.error("--adaptive_teacher_basis_min_face_samples_floor must be > 0")
+    if not 0.0 <= float(args.adaptive_teacher_basis_support_quantile) <= 1.0:
+        parser.error("--adaptive_teacher_basis_support_quantile must be in [0, 1]")
+    if float(args.adaptive_teacher_basis_low_support_ridge_scale) < 0.0:
+        parser.error("--adaptive_teacher_basis_low_support_ridge_scale must be >= 0")
     if float(args.teacher_distilled_basis_ridge) < 0.0:
         parser.error("--teacher_distilled_basis_ridge must be >= 0")
     if float(args.teacher_distilled_basis_ood_max_z) <= 0.0:
@@ -8681,6 +12372,8 @@ def main() -> int:
         parser.error("enable either scalar bin alpha or RGB bin alpha calibration, not both")
     if int(args.bin_uncertainty_shrink_min_bin_samples) <= 0:
         parser.error("--bin_uncertainty_shrink_min_bin_samples must be > 0")
+    if int(args.bin_uncertainty_shrink_min_bin_views) <= 0:
+        parser.error("--bin_uncertainty_shrink_min_bin_views must be > 0")
     if not 0.0 <= float(args.bin_uncertainty_shrink_min_positive_view_fraction) <= 1.0:
         parser.error("--bin_uncertainty_shrink_min_positive_view_fraction must be in [0, 1]")
     if not 0.0 <= float(args.bin_uncertainty_shrink_min_mean_sign_consistency) <= 1.0:
@@ -8695,8 +12388,90 @@ def main() -> int:
         parser.error("--bin_uncertainty_shrink_sign_power must be >= 0")
     if float(args.bin_uncertainty_shrink_max_shrink) < float(args.bin_uncertainty_shrink_min_shrink):
         parser.error("--bin_uncertainty_shrink_max_shrink must be >= --bin_uncertainty_shrink_min_shrink")
+    if bool(args.enable_policy_val_image_l1_bin_certificate) and not bool(
+        args.enable_policy_val_bin_uncertainty_shrink
+    ):
+        parser.error("--enable_policy_val_image_l1_bin_certificate requires --enable_policy_val_bin_uncertainty_shrink")
+    if float(args.image_l1_bin_certificate_min_relative_gain) < 0.0:
+        parser.error("--image_l1_bin_certificate_min_relative_gain must be >= 0")
+    if not 0.0 <= float(args.image_l1_bin_certificate_min_positive_view_fraction) <= 1.0:
+        parser.error("--image_l1_bin_certificate_min_positive_view_fraction must be in [0, 1]")
+    if float(args.image_l1_bin_certificate_gain_tau) < 0.0:
+        parser.error("--image_l1_bin_certificate_gain_tau must be >= 0")
+    if int(args.image_l1_bin_certificate_pool_radius) < 0:
+        parser.error("--image_l1_bin_certificate_pool_radius must be >= 0")
+    if bool(args.enable_policy_val_image_l1_region_expansion) and not bool(
+        args.enable_policy_val_image_l1_bin_certificate
+    ):
+        parser.error("--enable_policy_val_image_l1_region_expansion requires --enable_policy_val_image_l1_bin_certificate")
+    if int(args.image_l1_region_expansion_radius) < 0:
+        parser.error("--image_l1_region_expansion_radius must be >= 0")
+    if int(args.image_l1_region_expansion_max_bins_per_seed) < 0:
+        parser.error("--image_l1_region_expansion_max_bins_per_seed must be >= 0")
+    if int(args.image_l1_region_expansion_min_neighbor_samples) < 1:
+        parser.error("--image_l1_region_expansion_min_neighbor_samples must be >= 1")
+    if int(args.image_l1_region_expansion_min_neighbor_views) < 1:
+        parser.error("--image_l1_region_expansion_min_neighbor_views must be >= 1")
+    if float(args.image_l1_region_expansion_max_negative_relative_gain) < 0.0:
+        parser.error("--image_l1_region_expansion_max_negative_relative_gain must be >= 0")
+    if float(args.image_l1_region_expansion_max_negative_image_l1_gain) < 0.0:
+        parser.error("--image_l1_region_expansion_max_negative_image_l1_gain must be >= 0")
+    if not 0.0 <= float(args.image_l1_region_expansion_shrink_decay) <= 1.0:
+        parser.error("--image_l1_region_expansion_shrink_decay must be in [0, 1]")
+    if float(args.image_l1_bin_alpha_max_alpha) < 0.0:
+        parser.error("--image_l1_bin_alpha_max_alpha must be >= 0")
+    if int(args.image_l1_bin_alpha_min_bin_samples) < 1:
+        parser.error("--image_l1_bin_alpha_min_bin_samples must be >= 1")
+    if float(args.image_l1_bin_alpha_min_relative_gain) < 0.0:
+        parser.error("--image_l1_bin_alpha_min_relative_gain must be >= 0")
+    if not 0.0 <= float(args.image_l1_bin_alpha_min_positive_view_fraction) <= 1.0:
+        parser.error("--image_l1_bin_alpha_min_positive_view_fraction must be in [0, 1]")
+    if float(args.image_l1_bin_alpha_count_tau) < 0.0:
+        parser.error("--image_l1_bin_alpha_count_tau must be >= 0")
+    if int(args.image_l1_bin_alpha_max_profile_bins) < 0:
+        parser.error("--image_l1_bin_alpha_max_profile_bins must be >= 0")
+    if float(args.image_linear_generator_ridge) < 0.0:
+        parser.error("--image_linear_generator_ridge must be >= 0")
+    if int(args.image_linear_generator_train_max_samples_per_view) < 1:
+        parser.error("--image_linear_generator_train_max_samples_per_view must be >= 1")
+    if int(args.image_linear_generator_max_train_samples) < 1:
+        parser.error("--image_linear_generator_max_train_samples must be >= 1")
+    if float(args.image_linear_generator_output_cap) < 0.0:
+        parser.error("--image_linear_generator_output_cap must be >= 0")
+    if int(args.image_linear_generator_irls_iterations) < 1:
+        parser.error("--image_linear_generator_irls_iterations must be >= 1")
+    if float(args.image_linear_generator_huber_delta) <= 0.0:
+        parser.error("--image_linear_generator_huber_delta must be > 0")
+    if float(args.image_linear_generator_min_descent_margin) < 0.0:
+        parser.error("--image_linear_generator_min_descent_margin must be >= 0")
+    if int(args.image_linear_generator_min_training_samples) < 1:
+        parser.error("--image_linear_generator_min_training_samples must be >= 1")
+    if int(args.image_linear_generator_expert_min_training_samples) < 1:
+        parser.error("--image_linear_generator_expert_min_training_samples must be >= 1")
+    if float(args.image_linear_generator_expert_shrink_tau) < 0.0:
+        parser.error("--image_linear_generator_expert_shrink_tau must be >= 0")
+    if int(args.image_linear_generator_face_reliability_min_face_samples) < 1:
+        parser.error("--image_linear_generator_face_reliability_min_face_samples must be >= 1")
+    if not 0.0 <= float(args.image_linear_generator_face_reliability_min_positive_view_fraction) <= 1.0:
+        parser.error("--image_linear_generator_face_reliability_min_positive_view_fraction must be in [0, 1]")
+    if not 0.0 <= float(args.image_linear_generator_face_reliability_fallback_multiplier) <= 1.0:
+        parser.error("--image_linear_generator_face_reliability_fallback_multiplier must be in [0, 1]")
     if bool(args.enable_policy_val_structure_aware_shrink) and not bool(args.enable_policy_val_bin_uncertainty_shrink):
         parser.error("--enable_policy_val_structure_aware_shrink requires --enable_policy_val_bin_uncertainty_shrink")
+    if int(args.sparse_materialization_min_bin_samples) < 1:
+        parser.error("--sparse_materialization_min_bin_samples must be >= 1")
+    if int(args.sparse_materialization_min_bin_views) < 1:
+        parser.error("--sparse_materialization_min_bin_views must be >= 1")
+    if float(args.sparse_materialization_min_relative_gain) < 0.0:
+        parser.error("--sparse_materialization_min_relative_gain must be >= 0")
+    if not 0.0 <= float(args.sparse_materialization_min_positive_view_fraction) <= 1.0:
+        parser.error("--sparse_materialization_min_positive_view_fraction must be in [0, 1]")
+    if not 0.0 <= float(args.sparse_materialization_frontier_min_positive_view_fraction) <= 1.0:
+        parser.error("--sparse_materialization_frontier_min_positive_view_fraction must be in [0, 1]")
+    if not 0.0 <= float(args.sparse_materialization_frontier_min_sample_quantile) <= 1.0:
+        parser.error("--sparse_materialization_frontier_min_sample_quantile must be in [0, 1]")
+    if float(args.sparse_materialization_min_mean_sign_consistency) < 0.0:
+        parser.error("--sparse_materialization_min_mean_sign_consistency must be >= 0")
     if float(args.structure_shrink_l1_weight) < 0.0:
         parser.error("--structure_shrink_l1_weight must be >= 0")
     if float(args.structure_shrink_gradient_weight) < 0.0:
@@ -8713,6 +12488,16 @@ def main() -> int:
         parser.error("--parent_edge_apply_shrink_tau must be >= 0")
     if not 0.0 <= float(args.parent_edge_apply_shrink_min_multiplier) <= 1.0:
         parser.error("--parent_edge_apply_shrink_min_multiplier must be in [0, 1]")
+    if float(args.view_confidence_kernel_sigma) <= 0.0:
+        parser.error("--view_confidence_kernel_sigma must be > 0")
+    if not 0.0 <= float(args.view_confidence_min_confidence) <= 1.0:
+        parser.error("--view_confidence_min_confidence must be in [0, 1]")
+    if float(args.view_alpha_cap_kernel_sigma) <= 0.0:
+        parser.error("--view_alpha_cap_kernel_sigma must be > 0")
+    if not 0.0 <= float(args.view_alpha_cap_min_confidence) <= 1.0:
+        parser.error("--view_alpha_cap_min_confidence must be in [0, 1]")
+    if float(args.view_alpha_cap_fallback_alpha) < 0.0:
+        parser.error("--view_alpha_cap_fallback_alpha must be >= 0")
     for frontier_fraction_name in (
         "policy_val_alpha_frontier_min_relative_fraction",
         "policy_val_alpha_frontier_min_ssim_fraction",
@@ -8736,10 +12521,13 @@ def main() -> int:
         bool(args.enable_policy_val_bin_alpha_calibration),
         bool(args.enable_policy_val_bin_rgb_alpha_calibration),
         bool(args.enable_policy_val_bin_uncertainty_shrink),
+        bool(args.enable_policy_val_image_l1_bin_alpha_optimization),
+        bool(args.enable_policy_val_image_linear_residual_generator),
     ]
     if sum(int(flag) for flag in local_alpha_modes) > 1:
         parser.error(
-            "enable at most one local alpha calibration mode: bucket, face, scalar bin, RGB bin, or uncertainty shrink"
+            "enable at most one local alpha calibration mode: bucket, face, scalar bin, RGB bin, "
+            "uncertainty shrink, image-L1 bin alpha, or image-linear generator"
         )
     if int(args.bin_rgb_alpha_calibration_min_bin_samples) <= 0:
         parser.error("--bin_rgb_alpha_calibration_min_bin_samples must be > 0")
@@ -9247,6 +13035,11 @@ def main() -> int:
             view_conditioned_basis_ood_mode=str(args.view_conditioned_basis_ood_mode),
             view_conditioned_basis_ood_max_z=float(args.view_conditioned_basis_ood_max_z),
             view_conditioned_basis_ood_min_std=float(args.view_conditioned_basis_ood_min_std),
+            view_cluster_expert_count=int(args.view_cluster_expert_count),
+            view_cluster_feature_mode=str(args.view_cluster_feature_mode),
+            view_cluster_min_views=int(args.view_cluster_min_views),
+            view_cluster_min_bin_samples=int(args.view_cluster_min_bin_samples),
+            view_cluster_fallback_mode=str(args.view_cluster_fallback_mode),
             teacher_distilled_basis_mode=str(args.teacher_distilled_basis_mode),
             teacher_distilled_basis_min_face_samples=int(args.teacher_distilled_basis_min_face_samples),
             teacher_distilled_basis_ridge=float(args.teacher_distilled_basis_ridge),
@@ -9254,6 +13047,10 @@ def main() -> int:
             teacher_distilled_basis_ood_min_std=float(args.teacher_distilled_basis_ood_min_std),
             teacher_distilled_basis_apply_mode=str(args.teacher_distilled_basis_apply_mode),
             teacher_distilled_basis_blend=float(args.teacher_distilled_basis_blend),
+            enable_adaptive_low_support_teacher_basis=bool(args.enable_adaptive_low_support_teacher_basis),
+            adaptive_teacher_basis_min_face_samples_floor=int(args.adaptive_teacher_basis_min_face_samples_floor),
+            adaptive_teacher_basis_support_quantile=float(args.adaptive_teacher_basis_support_quantile),
+            adaptive_teacher_basis_low_support_ridge_scale=float(args.adaptive_teacher_basis_low_support_ridge_scale),
         )
         cand_fit_summary["support_mode"] = str(support_mode)
         cand_fit_summary["candidate_index"] = int(candidate_index)
@@ -9490,6 +13287,7 @@ def main() -> int:
                 atlas_confidence_face_sample_scale=float(args.atlas_confidence_face_sample_scale),
                 min_atlas_confidence=float(args.min_atlas_confidence),
                 min_bin_samples=int(args.bin_uncertainty_shrink_min_bin_samples),
+                min_bin_views=int(args.bin_uncertainty_shrink_min_bin_views),
                 min_relative_gain=float(args.bin_uncertainty_shrink_min_relative_gain),
                 min_positive_view_fraction=float(args.bin_uncertainty_shrink_min_positive_view_fraction),
                 max_mean_variance=float(args.bin_uncertainty_shrink_max_mean_variance),
@@ -9509,6 +13307,118 @@ def main() -> int:
                 structure_shrink_edge_weight=float(args.structure_shrink_edge_weight),
                 structure_shrink_risk_tau=float(args.structure_shrink_risk_tau),
                 structure_shrink_max_penalty=float(args.structure_shrink_max_penalty),
+                enable_view_cluster_local_shrink=bool(args.enable_view_cluster_local_shrink),
+                view_cluster_local_global_fallback=bool(args.view_cluster_local_shrink_global_fallback),
+                enable_image_l1_bin_certificate=bool(args.enable_policy_val_image_l1_bin_certificate),
+                image_l1_certificate_mode=str(args.image_l1_bin_certificate_mode),
+                image_l1_certificate_min_relative_gain=float(args.image_l1_bin_certificate_min_relative_gain),
+                image_l1_certificate_min_positive_view_fraction=float(
+                    args.image_l1_bin_certificate_min_positive_view_fraction
+                ),
+                image_l1_certificate_gain_tau=float(args.image_l1_bin_certificate_gain_tau),
+                image_l1_certificate_max_abs_delta_rgb=float(max_abs_delta_rgb_candidate),
+                image_l1_certificate_pool_radius=int(args.image_l1_bin_certificate_pool_radius),
+                enable_image_l1_region_expansion=bool(args.enable_policy_val_image_l1_region_expansion),
+                image_l1_region_expansion_radius=int(args.image_l1_region_expansion_radius),
+                image_l1_region_expansion_max_bins_per_seed=int(args.image_l1_region_expansion_max_bins_per_seed),
+                image_l1_region_expansion_min_neighbor_samples=int(
+                    args.image_l1_region_expansion_min_neighbor_samples
+                ),
+                image_l1_region_expansion_min_neighbor_views=int(args.image_l1_region_expansion_min_neighbor_views),
+                image_l1_region_expansion_max_negative_relative_gain=float(
+                    args.image_l1_region_expansion_max_negative_relative_gain
+                ),
+                image_l1_region_expansion_max_negative_image_l1_gain=float(
+                    args.image_l1_region_expansion_max_negative_image_l1_gain
+                ),
+                image_l1_region_expansion_shrink_decay=float(args.image_l1_region_expansion_shrink_decay),
+            )
+        if bool(args.enable_policy_val_image_l1_bin_alpha_optimization):
+            try:
+                image_l1_bin_alpha_grid = parse_float_candidates(str(args.image_l1_bin_alpha_grid))
+            except ValueError as exc:
+                parser.error(f"invalid image-L1 bin alpha grid: {exc}")
+            alpha_candidates, local_alpha_profile = calibrated_image_l1_bin_alpha_profile_from_policy_val(
+                cand_val_views,
+                cand_atlas,
+                base_alpha_grid=alpha_candidates,
+                residual_l1_key=str(args.residual_l1_key),
+                min_l1=float(args.min_l1),
+                min_alpha=float(args.min_alpha),
+                max_samples_per_view=int(args.max_samples_per_view),
+                min_atlas_bin_count=int(args.min_atlas_bin_count),
+                min_atlas_face_samples=int(args.min_atlas_face_samples),
+                max_atlas_bin_rgb_variance=float(args.max_atlas_bin_rgb_variance),
+                min_atlas_bin_sign_consistency=float(args.min_atlas_bin_sign_consistency),
+                atlas_confidence_mode=str(args.atlas_confidence_mode),
+                atlas_confidence_count_scale=float(args.atlas_confidence_count_scale),
+                atlas_confidence_empty_bin=float(args.atlas_confidence_empty_bin),
+                atlas_confidence_variance_scale=float(args.atlas_confidence_variance_scale),
+                atlas_confidence_sign_power=float(args.atlas_confidence_sign_power),
+                atlas_confidence_face_sample_scale=float(args.atlas_confidence_face_sample_scale),
+                min_atlas_confidence=float(args.min_atlas_confidence),
+                local_alpha_grid=image_l1_bin_alpha_grid,
+                max_alpha=float(args.image_l1_bin_alpha_max_alpha),
+                min_bin_samples=int(args.image_l1_bin_alpha_min_bin_samples),
+                min_relative_gain=float(args.image_l1_bin_alpha_min_relative_gain),
+                min_positive_view_fraction=float(args.image_l1_bin_alpha_min_positive_view_fraction),
+                count_tau=float(args.image_l1_bin_alpha_count_tau),
+                fallback_mode=str(args.image_l1_bin_alpha_fallback_mode),
+                max_profile_bins=int(args.image_l1_bin_alpha_max_profile_bins),
+            )
+        if bool(args.enable_policy_val_image_linear_residual_generator):
+            try:
+                image_linear_alpha_grid = parse_float_candidates(str(args.image_linear_generator_alpha_grid))
+            except ValueError as exc:
+                parser.error(f"invalid image-linear generator alpha grid: {exc}")
+            alpha_candidates, local_alpha_profile = calibrated_image_linear_generator_profile_from_policy_val(
+                cand_val_views,
+                cand_atlas,
+                base_alpha_grid=alpha_candidates,
+                residual_l1_key=str(args.residual_l1_key),
+                min_l1=float(args.min_l1),
+                min_alpha=float(args.min_alpha),
+                max_samples_per_view=int(args.max_samples_per_view),
+                min_atlas_bin_count=int(args.min_atlas_bin_count),
+                min_atlas_face_samples=int(args.min_atlas_face_samples),
+                max_atlas_bin_rgb_variance=float(args.max_atlas_bin_rgb_variance),
+                min_atlas_bin_sign_consistency=float(args.min_atlas_bin_sign_consistency),
+                atlas_confidence_mode=str(args.atlas_confidence_mode),
+                atlas_confidence_count_scale=float(args.atlas_confidence_count_scale),
+                atlas_confidence_empty_bin=float(args.atlas_confidence_empty_bin),
+                atlas_confidence_variance_scale=float(args.atlas_confidence_variance_scale),
+                atlas_confidence_sign_power=float(args.atlas_confidence_sign_power),
+                atlas_confidence_face_sample_scale=float(args.atlas_confidence_face_sample_scale),
+                min_atlas_confidence=float(args.min_atlas_confidence),
+                feature_mode=str(args.image_linear_generator_feature_mode),
+                ridge=float(args.image_linear_generator_ridge),
+                train_max_samples_per_view=int(args.image_linear_generator_train_max_samples_per_view),
+                max_train_samples=int(args.image_linear_generator_max_train_samples),
+                generator_output_cap=float(args.image_linear_generator_output_cap),
+                alpha_grid=image_linear_alpha_grid,
+                require_base_valid=not bool(args.image_linear_generator_allow_unvalidated_base_pixels),
+                loss_mode=str(args.image_linear_generator_loss_mode),
+                irls_iterations=int(args.image_linear_generator_irls_iterations),
+                huber_delta=float(args.image_linear_generator_huber_delta),
+                training_sample_policy=str(args.image_linear_generator_training_sample_policy),
+                min_descent_margin=float(args.image_linear_generator_min_descent_margin),
+                min_training_samples=int(args.image_linear_generator_min_training_samples),
+                expert_mode=str(args.image_linear_generator_expert_mode),
+                expert_min_training_samples=int(args.image_linear_generator_expert_min_training_samples),
+                expert_shrink_tau=float(args.image_linear_generator_expert_shrink_tau),
+                face_reliability_mode=str(args.image_linear_generator_face_reliability_mode),
+                face_reliability_min_face_samples=int(
+                    args.image_linear_generator_face_reliability_min_face_samples
+                ),
+                face_reliability_min_relative_gain=float(
+                    args.image_linear_generator_face_reliability_min_relative_gain
+                ),
+                face_reliability_min_positive_view_fraction=float(
+                    args.image_linear_generator_face_reliability_min_positive_view_fraction
+                ),
+                face_reliability_fallback_multiplier=float(
+                    args.image_linear_generator_face_reliability_fallback_multiplier
+                ),
             )
         alpha_candidates, ssim_alpha_refinement_summary = refine_alpha_grid_for_policy_val_ssim(
             alpha_candidates,
@@ -9786,6 +13696,11 @@ def main() -> int:
                 )
         if "teacher_distilled_basis" in cand_fit_summary:
             cand_fit_summary["teacher_distilled_basis"]["guard"] = dict(teacher_basis_guard)
+        view_alpha_cap_pre_guard_policy_val = copy.deepcopy(cand_policy_val)
+        view_alpha_cap_pre_guard_best = copy.deepcopy(cand_best)
+        view_alpha_cap_pre_guard_selected_alpha = float(cand_selected_alpha)
+        view_alpha_cap_pre_guard_risk_reasons = list(cand_risk_reasons)
+        view_alpha_cap_pre_guard_accepted = bool(cand_accepted)
         guard_repair_seed_row: dict[str, Any] | None = None
         guard_repair_seed_reasons: list[str] = []
         guard_repair_seed_alpha = float(cand_selected_alpha)
@@ -9839,10 +13754,22 @@ def main() -> int:
                 face_gain_guard_profile=None,
                 seed_min_relative_gain=float(args.sparse_materialization_seed_min_relative_gain),
                 min_bin_samples=int(args.sparse_materialization_min_bin_samples),
+                min_bin_views=int(args.sparse_materialization_min_bin_views),
                 min_relative_gain=float(args.sparse_materialization_min_relative_gain),
+                min_view_relative_gain=float(args.sparse_materialization_min_view_relative_gain),
                 min_positive_view_fraction=float(args.sparse_materialization_min_positive_view_fraction),
                 max_mean_variance=float(args.sparse_materialization_max_mean_variance),
                 min_mean_sign_consistency=float(args.sparse_materialization_min_mean_sign_consistency),
+                adaptive_frontier_on_empty=bool(args.enable_policy_val_sparse_materialization_frontier),
+                adaptive_frontier_min_positive_view_fraction=float(
+                    args.sparse_materialization_frontier_min_positive_view_fraction
+                ),
+                adaptive_frontier_min_risk_adjusted_gain=float(
+                    args.sparse_materialization_frontier_min_risk_adjusted_gain
+                ),
+                adaptive_frontier_min_sample_quantile=float(
+                    args.sparse_materialization_frontier_min_sample_quantile
+                ),
             )
             if bool(sparse_materialization_profile.get("enabled", False)) and int(
                 sparse_materialization_profile.get("allowed_bin_count", 0) or 0
@@ -9877,6 +13804,10 @@ def main() -> int:
                     local_alpha_profile=local_alpha_profile,
                     bin_uncertainty_guard_profile=sparse_materialization_profile,
                     parent_edge_apply_profile=parent_edge_apply_profile,
+                )
+                sparse_policy_val = annotate_sparse_materialization_selective_policy_val(
+                    sparse_policy_val,
+                    sparse_materialization_profile,
                 )
                 sparse_policy_val["alpha_calibration"] = dict(alpha_calibration_summary)
                 sparse_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
@@ -9917,7 +13848,30 @@ def main() -> int:
             "decision": "not_requested",
         }
         if bool(args.enable_policy_val_face_gain_guard):
-            if (cand_accepted or guard_repair_seed_row) and float(guard_repair_seed_alpha) > 0.0:
+            sparse_selective_candidate = bool(
+                cand_accepted
+                and selected_sparse_materialization_profile.get("enabled", False)
+                and cand_best.get("sparse_materialization_selective", False)
+            )
+            if sparse_selective_candidate:
+                face_gain_guard_profile = {
+                    "enabled": False,
+                    "mode": "policy_val_face_gain_guard",
+                    "decision": "skipped_sparse_materialization_already_bin_certified",
+                    "reason": (
+                        "sparse materialization uses a bin-level selective non-regression "
+                        "certificate; applying a face-level positive-view guard would "
+                        "downcast sparse no-op views into failures"
+                    ),
+                    "sparse_materialization_allowed_bin_count": int(
+                        selected_sparse_materialization_profile.get("allowed_bin_count", 0) or 0
+                    ),
+                    "sparse_materialization_allowed_face_count": int(
+                        selected_sparse_materialization_profile.get("allowed_face_count", 0) or 0
+                    ),
+                }
+                guard_repair_seed_alpha = float(cand_selected_alpha)
+            elif (cand_accepted or guard_repair_seed_row) and float(guard_repair_seed_alpha) > 0.0:
                 face_gain_guard_profile = build_policy_val_face_gain_guard_profile(
                     cand_val_views,
                     cand_atlas,
@@ -10148,9 +14102,255 @@ def main() -> int:
                     "decision": "skipped_candidate_not_accepted",
                     "reason": "candidate_not_accepted_or_zero_alpha",
                 }
+        view_confidence_profile: dict[str, Any] = {
+            "enabled": False,
+            "mode": "policy_val_view_consistency_confidence",
+            "decision": "not_requested",
+        }
+        if bool(args.enable_policy_val_view_consistency_confidence):
+            confidence_seed_alpha = float(guard_repair_seed_alpha)
+            confidence_seed_source = "preacceptance_guard_repair"
+            if confidence_seed_alpha <= 0.0:
+                confidence_seed_alpha = float(cand_selected_alpha)
+                confidence_seed_source = "selected_alpha"
+            if confidence_seed_alpha <= 0.0 and cand_best:
+                confidence_seed_alpha = float(cand_best.get("alpha", 0.0) or 0.0)
+                confidence_seed_source = "policy_val_best_alpha"
+            view_confidence_profile = build_policy_val_view_confidence_profile(
+                cand_val_views,
+                cand_policy_val,
+                confidence_seed_alpha,
+                enabled=True,
+                min_relative_gain=float(args.view_confidence_min_relative_gain),
+                min_ssim_gain=float(args.view_confidence_min_ssim_gain),
+                min_l1_gain=float(args.view_confidence_min_l1_gain),
+                min_lpips_gain=float(args.view_confidence_min_lpips_gain),
+                kernel_sigma=float(args.view_confidence_kernel_sigma),
+                min_confidence=float(args.view_confidence_min_confidence),
+            )
+            view_confidence_profile["seed_source"] = str(confidence_seed_source)
+            if bool(view_confidence_profile.get("enabled", False)):
+                confidence_policy_val = evaluate_policy_val(
+                    cand_val_views,
+                    cand_atlas,
+                    residual_rgb_key=str(args.residual_rgb_key),
+                    residual_l1_key=str(args.residual_l1_key),
+                    alpha_grid=alpha_candidates,
+                    min_l1=float(args.min_l1),
+                    min_alpha=float(args.min_alpha),
+                    max_abs_delta_rgb=float(max_abs_delta_rgb_candidate),
+                    max_samples_per_view=int(args.max_samples_per_view),
+                    min_atlas_bin_count=int(args.min_atlas_bin_count),
+                    min_atlas_face_samples=int(args.min_atlas_face_samples),
+                    max_atlas_bin_rgb_variance=float(args.max_atlas_bin_rgb_variance),
+                    min_atlas_bin_sign_consistency=float(args.min_atlas_bin_sign_consistency),
+                    atlas_confidence_mode=str(args.atlas_confidence_mode),
+                    atlas_confidence_count_scale=float(args.atlas_confidence_count_scale),
+                    atlas_confidence_empty_bin=float(args.atlas_confidence_empty_bin),
+                    atlas_confidence_variance_scale=float(args.atlas_confidence_variance_scale),
+                    atlas_confidence_sign_power=float(args.atlas_confidence_sign_power),
+                    atlas_confidence_face_sample_scale=float(args.atlas_confidence_face_sample_scale),
+                    min_atlas_confidence=float(args.min_atlas_confidence),
+                    enable_policy_val_image_ssim=bool(args.enable_policy_val_image_ssim_gate),
+                    policy_val_ssim_max_size=int(args.policy_val_ssim_max_size),
+                    enable_policy_val_image_l1=bool(args.enable_policy_val_image_l1_gate),
+                    policy_val_l1_max_size=int(args.policy_val_l1_max_size),
+                    enable_policy_val_image_lpips=bool(args.enable_policy_val_image_lpips_gate),
+                    policy_val_lpips_max_size=int(args.policy_val_lpips_max_size),
+                    local_alpha_profile=local_alpha_profile,
+                    face_gain_guard_profile=face_gain_guard_profile,
+                    bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
+                    parent_edge_apply_profile=parent_edge_apply_profile,
+                    view_confidence_profile=view_confidence_profile,
+                )
+                confidence_policy_val["alpha_calibration"] = dict(alpha_calibration_summary)
+                confidence_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
+                confidence_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
+                confidence_policy_val["view_consistency_confidence"] = sanitize_view_confidence_profile(
+                    view_confidence_profile
+                )
+                confidence_policy_val["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
+                confidence_policy_val["alpha_midpoint_refinement"] = dict(alpha_midpoint_refinement_summary)
+                (
+                    confidence_policy_val,
+                    confidence_best,
+                    confidence_selected_alpha,
+                    confidence_risk_reasons,
+                    confidence_accepted,
+                ) = select_policy_val_payload(confidence_policy_val)
+                view_confidence_profile["post_confidence_accepted"] = bool(confidence_accepted)
+                view_confidence_profile["post_confidence_selected_alpha"] = float(confidence_selected_alpha)
+                view_confidence_profile["post_confidence_best"] = dict(confidence_best)
+                view_confidence_profile["post_confidence_risk_reasons"] = list(confidence_risk_reasons)
+                current_rel = float((cand_best or {}).get("relative_gain", -1.0))
+                confidence_rel = float((confidence_best or {}).get("relative_gain", -1.0))
+                current_cvar = float((cand_best or {}).get("cvar20_view_relative_gain", -1.0))
+                confidence_cvar = float((confidence_best or {}).get("cvar20_view_relative_gain", -1.0))
+                replace_with_confidence = bool(
+                    confidence_accepted
+                    and (
+                        not cand_accepted
+                        or confidence_rel >= current_rel
+                        or (confidence_cvar > current_cvar and confidence_rel >= 0.90 * max(current_rel, 1.0e-12))
+                    )
+                )
+                view_confidence_profile["decision"] = (
+                    "replace_candidate_policy_val" if replace_with_confidence else "original_candidate_kept"
+                )
+                if replace_with_confidence:
+                    cand_policy_val = confidence_policy_val
+                    cand_best = confidence_best
+                    cand_selected_alpha = float(confidence_selected_alpha)
+                    cand_risk_reasons = confidence_risk_reasons
+                    cand_accepted = bool(confidence_accepted)
+                    guard_repair_seed_alpha = float(cand_selected_alpha)
+                elif not cand_accepted:
+                    view_confidence_profile["decision"] = "reject_candidate_after_view_confidence"
+                    cand_policy_val = confidence_policy_val
+                    cand_best = confidence_best
+                    cand_selected_alpha = float(confidence_selected_alpha)
+                    cand_risk_reasons = confidence_risk_reasons
+                    cand_accepted = False
+            else:
+                view_confidence_profile["decision"] = "disabled_no_certified_positive_views"
+        view_alpha_cap_profile: dict[str, Any] = {
+            "enabled": False,
+            "mode": "policy_val_view_alpha_cap",
+            "decision": "not_requested",
+        }
+        if bool(args.enable_policy_val_view_alpha_cap):
+            view_alpha_cap_seed_stage = str(args.view_alpha_cap_seed_stage)
+            if view_alpha_cap_seed_stage == "pre_guard":
+                view_alpha_cap_seed_policy_val = view_alpha_cap_pre_guard_policy_val
+                view_alpha_cap_seed_best = view_alpha_cap_pre_guard_best
+                view_alpha_cap_seed_selected_alpha = float(view_alpha_cap_pre_guard_selected_alpha)
+                view_alpha_cap_seed_risk_reasons = list(view_alpha_cap_pre_guard_risk_reasons)
+                view_alpha_cap_seed_accepted = bool(view_alpha_cap_pre_guard_accepted)
+            else:
+                view_alpha_cap_seed_policy_val = cand_policy_val
+                view_alpha_cap_seed_best = cand_best
+                view_alpha_cap_seed_selected_alpha = float(cand_selected_alpha)
+                view_alpha_cap_seed_risk_reasons = list(cand_risk_reasons)
+                view_alpha_cap_seed_accepted = bool(cand_accepted)
+            view_alpha_cap_profile = build_policy_val_view_alpha_cap_profile(
+                cand_val_views,
+                view_alpha_cap_seed_policy_val,
+                enabled=True,
+                selection_mode=str(args.view_alpha_cap_selection_mode),
+                min_relative_gain=float(args.view_alpha_cap_min_relative_gain),
+                min_ssim_gain=float(args.view_alpha_cap_min_ssim_gain),
+                min_l1_gain=float(args.view_alpha_cap_min_l1_gain),
+                min_lpips_gain=float(args.view_alpha_cap_min_lpips_gain),
+                kernel_sigma=float(args.view_alpha_cap_kernel_sigma),
+                min_confidence=float(args.view_alpha_cap_min_confidence),
+                fallback_alpha=float(args.view_alpha_cap_fallback_alpha),
+            )
+            view_alpha_cap_profile["seed_source"] = f"{view_alpha_cap_seed_stage}_policy_val"
+            view_alpha_cap_profile["seed_stage"] = str(view_alpha_cap_seed_stage)
+            view_alpha_cap_profile["seed_selected_alpha"] = float(view_alpha_cap_seed_selected_alpha)
+            view_alpha_cap_profile["seed_best"] = dict(view_alpha_cap_seed_best)
+            view_alpha_cap_profile["seed_risk_reasons"] = list(view_alpha_cap_seed_risk_reasons)
+            view_alpha_cap_profile["seed_accepted"] = bool(view_alpha_cap_seed_accepted)
+            view_alpha_cap_profile["pre_cap_selected_alpha"] = float(cand_selected_alpha)
+            view_alpha_cap_profile["pre_cap_best"] = dict(cand_best)
+            view_alpha_cap_profile["pre_cap_risk_reasons"] = list(cand_risk_reasons)
+            if bool(view_alpha_cap_profile.get("enabled", False)):
+                capped_local_alpha_profile = dict(local_alpha_profile)
+                capped_local_alpha_profile["view_alpha_cap_profile"] = dict(view_alpha_cap_profile)
+                capped_policy_val = evaluate_policy_val(
+                    cand_val_views,
+                    cand_atlas,
+                    residual_rgb_key=str(args.residual_rgb_key),
+                    residual_l1_key=str(args.residual_l1_key),
+                    alpha_grid=alpha_candidates,
+                    min_l1=float(args.min_l1),
+                    min_alpha=float(args.min_alpha),
+                    max_abs_delta_rgb=float(max_abs_delta_rgb_candidate),
+                    max_samples_per_view=int(args.max_samples_per_view),
+                    min_atlas_bin_count=int(args.min_atlas_bin_count),
+                    min_atlas_face_samples=int(args.min_atlas_face_samples),
+                    max_atlas_bin_rgb_variance=float(args.max_atlas_bin_rgb_variance),
+                    min_atlas_bin_sign_consistency=float(args.min_atlas_bin_sign_consistency),
+                    atlas_confidence_mode=str(args.atlas_confidence_mode),
+                    atlas_confidence_count_scale=float(args.atlas_confidence_count_scale),
+                    atlas_confidence_empty_bin=float(args.atlas_confidence_empty_bin),
+                    atlas_confidence_variance_scale=float(args.atlas_confidence_variance_scale),
+                    atlas_confidence_sign_power=float(args.atlas_confidence_sign_power),
+                    atlas_confidence_face_sample_scale=float(args.atlas_confidence_face_sample_scale),
+                    min_atlas_confidence=float(args.min_atlas_confidence),
+                    enable_policy_val_image_ssim=bool(args.enable_policy_val_image_ssim_gate),
+                    policy_val_ssim_max_size=int(args.policy_val_ssim_max_size),
+                    enable_policy_val_image_l1=bool(args.enable_policy_val_image_l1_gate),
+                    policy_val_l1_max_size=int(args.policy_val_l1_max_size),
+                    enable_policy_val_image_lpips=bool(args.enable_policy_val_image_lpips_gate),
+                    policy_val_lpips_max_size=int(args.policy_val_lpips_max_size),
+                    local_alpha_profile=capped_local_alpha_profile,
+                    face_gain_guard_profile=face_gain_guard_profile,
+                    bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
+                    parent_edge_apply_profile=parent_edge_apply_profile,
+                    view_confidence_profile=view_confidence_profile,
+                )
+                capped_policy_val["alpha_calibration"] = dict(alpha_calibration_summary)
+                capped_policy_val["local_alpha_calibration"] = dict(capped_local_alpha_profile)
+                capped_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
+                capped_policy_val["view_consistency_confidence"] = sanitize_view_confidence_profile(
+                    view_confidence_profile
+                )
+                capped_policy_val["view_alpha_cap"] = sanitize_view_alpha_cap_profile(view_alpha_cap_profile)
+                capped_policy_val["ssim_alpha_refinement"] = dict(ssim_alpha_refinement_summary)
+                capped_policy_val["alpha_midpoint_refinement"] = dict(alpha_midpoint_refinement_summary)
+                (
+                    capped_policy_val,
+                    capped_best,
+                    capped_selected_alpha,
+                    capped_risk_reasons,
+                    capped_accepted,
+                ) = select_policy_val_payload(capped_policy_val)
+                view_alpha_cap_profile["post_cap_accepted"] = bool(capped_accepted)
+                view_alpha_cap_profile["post_cap_selected_alpha"] = float(capped_selected_alpha)
+                view_alpha_cap_profile["post_cap_best"] = dict(capped_best)
+                view_alpha_cap_profile["post_cap_risk_reasons"] = list(capped_risk_reasons)
+                current_rel = float((cand_best or {}).get("relative_gain", -1.0))
+                capped_rel = float((capped_best or {}).get("relative_gain", -1.0))
+                current_reason_count = len(cand_risk_reasons)
+                capped_reason_count = len(capped_risk_reasons)
+                replace_with_cap = bool(
+                    capped_accepted
+                    or (
+                        not cand_accepted
+                        and (
+                            capped_reason_count < current_reason_count
+                            or (
+                                capped_reason_count == current_reason_count
+                                and capped_rel >= current_rel
+                            )
+                        )
+                    )
+                )
+                view_alpha_cap_profile["decision"] = (
+                    "replace_candidate_policy_val" if replace_with_cap else "original_candidate_kept"
+                )
+                if replace_with_cap:
+                    local_alpha_profile = capped_local_alpha_profile
+                    cand_policy_val = capped_policy_val
+                    cand_best = capped_best
+                    cand_selected_alpha = float(capped_selected_alpha)
+                    cand_risk_reasons = capped_risk_reasons
+                    cand_accepted = bool(capped_accepted)
+                    guard_repair_seed_alpha = float(cand_selected_alpha)
+                elif not cand_accepted:
+                    view_alpha_cap_profile["decision"] = "reject_candidate_after_view_alpha_cap"
+            else:
+                view_alpha_cap_profile["decision"] = "disabled_no_safe_policy_val_view_alpha_caps"
         cand_fit_summary["face_gain_guard"] = dict(face_gain_guard_profile)
         cand_fit_summary["bin_uncertainty_guard"] = dict(bin_uncertainty_guard_profile)
         cand_fit_summary["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)
+        cand_fit_summary["view_consistency_confidence"] = {
+            **sanitize_view_confidence_profile(view_confidence_profile)
+        }
+        cand_fit_summary["view_alpha_cap"] = {
+            **sanitize_view_alpha_cap_profile(view_alpha_cap_profile)
+        }
         print(
             "[policy-candidate] done "
             f"{candidate_label} "
@@ -10181,6 +14381,8 @@ def main() -> int:
             "local_alpha_profile": dict(local_alpha_profile),
             "face_gain_guard_profile": dict(face_gain_guard_profile),
             "bin_uncertainty_guard_profile": dict(bin_uncertainty_guard_profile),
+            "view_confidence_profile": dict(view_confidence_profile),
+            "view_alpha_cap_profile": dict(view_alpha_cap_profile),
             "risk_gate_reasons": cand_risk_reasons,
             "accepted": bool(cand_accepted),
         }
@@ -10346,6 +14548,12 @@ def main() -> int:
                 )
             ),
             parent_edge_apply_profile=dict(parent_edge_apply_profile),
+            view_confidence_profile=dict(
+                candidate.get(
+                    "view_confidence_profile",
+                    {"enabled": False, "mode": "policy_val_view_consistency_confidence"},
+                )
+            ),
         )
 
     def select_policy_val_payload_for_candidate(
@@ -11118,6 +15326,21 @@ def main() -> int:
             {"enabled": False, "mode": "policy_val_bin_uncertainty_guard"},
         )
     )
+    view_confidence_profile = dict(
+        selected_candidate.get(
+            "view_confidence_profile",
+            {"enabled": False, "mode": "policy_val_view_consistency_confidence"},
+        )
+    )
+    view_alpha_cap_profile = dict(
+        selected_candidate.get(
+            "view_alpha_cap_profile",
+            (local_alpha_profile or {}).get(
+                "view_alpha_cap_profile",
+                {"enabled": False, "mode": "policy_val_view_alpha_cap"},
+            ),
+        )
+    )
     best = dict(selected_candidate["best"])
     selected_alpha = float(selected_candidate["selected_alpha"])
     risk_gate_reasons = list(selected_candidate["risk_gate_reasons"])
@@ -11300,10 +15523,13 @@ def main() -> int:
             face_gain_guard_profile=face_gain_guard_profile,
             bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
             parent_edge_apply_profile=parent_edge_apply_profile,
+            view_confidence_profile=view_confidence_profile,
         )
         target_change_floor_enabled = bool(
             args.enable_policy_val_sparse_residual_materialization
             or args.enable_target_support_candidate_selection
+            or args.enable_policy_val_view_consistency_confidence
+            or args.enable_policy_val_view_alpha_cap
         )
         min_changed = float(args.min_target_changed_fraction)
         if min_changed <= 0.0 and target_change_floor_enabled:
@@ -11381,6 +15607,12 @@ def main() -> int:
                     for key, value in dict(candidate.get("bin_uncertainty_guard_profile", {})).items()
                     if key != "allowed_bins_by_face"
                 },
+                "view_consistency_confidence": {
+                    **sanitize_view_confidence_profile(candidate.get("view_confidence_profile", {}))
+                },
+                "view_alpha_cap": {
+                    **sanitize_view_alpha_cap_profile(candidate.get("view_alpha_cap_profile", {}))
+                },
                 "risk_gate_reasons": list(candidate.get("risk_gate_reasons", [])),
                 "fit_summary": dict(candidate.get("fit_summary", {})),
                 "policy_val_best": dict(candidate.get("best", {})),
@@ -11394,6 +15626,12 @@ def main() -> int:
         "parent_edge_apply_profile": parent_edge_apply_profile,
         "face_gain_guard_profile": face_gain_guard_profile,
         "bin_uncertainty_guard_profile": bin_uncertainty_guard_profile,
+        "view_confidence_profile": {
+            **sanitize_view_confidence_profile(view_confidence_profile)
+        },
+        "view_alpha_cap_profile": {
+            **sanitize_view_alpha_cap_profile(view_alpha_cap_profile)
+        },
         "policy_val_risk_gate": {
             "passed": bool(not risk_gate_reasons),
             "reasons": risk_gate_reasons,
@@ -11453,18 +15691,36 @@ def main() -> int:
             "prior_bin_gain_hybrid_min_l1_cvar20_view_gain": float(
                 args.prior_bin_gain_hybrid_min_l1_cvar20_view_gain
             ),
+            "selected_sparse_materialization_selective": bool(
+                best.get("sparse_materialization_selective", False)
+            ),
             "selected_positive_view_fraction": float(best.get("positive_view_fraction", 0.0)),
+            "selected_nonnegative_view_fraction": float(
+                best.get("nonnegative_view_fraction", best.get("positive_view_fraction", 0.0))
+            ),
             "selected_cvar20_view_relative_gain": float(best.get("cvar20_view_relative_gain", 0.0)),
             "selected_min_view_relative_gain": float(best.get("min_view_relative_gain", 0.0)),
             "selected_ssim_gain": float(best.get("ssim_gain", 0.0)),
             "selected_ssim_positive_view_fraction": float(best.get("ssim_positive_view_fraction", 0.0)),
+            "selected_ssim_nonnegative_view_fraction": float(
+                best.get("ssim_nonnegative_view_fraction", best.get("ssim_positive_view_fraction", 0.0))
+            ),
             "selected_ssim_min_view_gain": float(best.get("ssim_min_view_gain", 0.0)),
             "selected_image_l1_gain": float(best.get("image_l1_gain", 0.0)),
             "selected_image_l1_positive_view_fraction": float(best.get("image_l1_positive_view_fraction", 0.0)),
+            "selected_image_l1_nonnegative_view_fraction": float(
+                best.get(
+                    "image_l1_nonnegative_view_fraction",
+                    best.get("image_l1_positive_view_fraction", 0.0),
+                )
+            ),
             "selected_image_l1_min_view_gain": float(best.get("image_l1_min_view_gain", 0.0)),
             "selected_image_l1_cvar20_view_gain": float(best.get("image_l1_cvar20_view_gain", 0.0)),
             "selected_lpips_gain": float(best.get("lpips_gain", 0.0)),
             "selected_lpips_positive_view_fraction": float(best.get("lpips_positive_view_fraction", 0.0)),
+            "selected_lpips_nonnegative_view_fraction": float(
+                best.get("lpips_nonnegative_view_fraction", best.get("lpips_positive_view_fraction", 0.0))
+            ),
             "selected_lpips_min_view_gain": float(best.get("lpips_min_view_gain", 0.0)),
             "selected_lpips_cvar20_view_gain": float(best.get("lpips_cvar20_view_gain", 0.0)),
         },

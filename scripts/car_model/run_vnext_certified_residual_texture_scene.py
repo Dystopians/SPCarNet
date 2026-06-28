@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -26,6 +28,17 @@ from scripts.car_model.ecsr_vnext_protocol import (  # noqa: E402
 
 METHOD = "vNext_certified_residual_surface_texture"
 DEFAULT_METHOD_NAME = "ours_26000_vnext_certified_residual_surface_texture"
+TARGET_APPLY_FORBIDDEN_KEYS = {
+    "rgb_gt",
+    "residual_rgb",
+    "residual_l1",
+    "teacher_residual_rgb",
+    "teacher_residual_l1",
+    "teacher_residual_rgb_raw",
+    "teacher_better_mask",
+    "teacher_gain_l1",
+    "teacher_parent_delta_l1",
+}
 
 
 def _python() -> str:
@@ -57,6 +70,139 @@ def _run_step(record: dict[str, Any], *, env: dict[str, str], dry_run: bool) -> 
     record["returncode"] = int(proc.returncode)
     record["elapsed_sec"] = float(time.time() - start)
     return record
+
+
+def _evidence_views(evidence_dir: Path) -> list[Path]:
+    views_dir = Path(evidence_dir) / "views"
+    if views_dir.is_dir():
+        return sorted(views_dir.glob("*.npz"))
+    return sorted(Path(evidence_dir).glob("*.npz"))
+
+
+def _verify_target_apply_forbidden_keys(evidence_dir: Path) -> dict[str, Any]:
+    paths = _evidence_views(evidence_dir)
+    audit: dict[str, Any] = {
+        "enabled": True,
+        "mode": "strict_no_target_gt_apply_forbidden_key_preflight",
+        "evidence_dir": str(evidence_dir),
+        "view_count": int(len(paths)),
+        "forbidden_keys": sorted(TARGET_APPLY_FORBIDDEN_KEYS),
+        "bad_view_count": 0,
+        "bad_views": [],
+        "sample_keys": [],
+        "target_gt_visible_to_apply": False,
+        "target_residual_visible_to_apply": False,
+        "passed": False,
+    }
+    if not paths:
+        audit["reason"] = "no_target_evidence_views"
+        return audit
+    bad_views: list[dict[str, Any]] = []
+    sample_keys: list[dict[str, Any]] = []
+    for idx, path in enumerate(paths):
+        with np.load(path, allow_pickle=False) as z:
+            keys = sorted(str(key) for key in z.files)
+        forbidden_present = sorted(set(keys) & TARGET_APPLY_FORBIDDEN_KEYS)
+        if idx < 4:
+            sample_keys.append({"path": str(path), "keys": keys})
+        if forbidden_present:
+            bad_views.append({"path": str(path), "forbidden_keys": forbidden_present})
+    audit["bad_view_count"] = int(len(bad_views))
+    audit["bad_views"] = bad_views[:32]
+    audit["sample_keys"] = sample_keys
+    audit["passed"] = not bad_views
+    if bad_views:
+        audit["target_gt_visible_to_apply"] = any(
+            "rgb_gt" in set(row.get("forbidden_keys", [])) for row in bad_views
+        )
+        audit["target_residual_visible_to_apply"] = any(
+            bool((set(row.get("forbidden_keys", [])) - {"rgb_gt"})) for row in bad_views
+        )
+    return audit
+
+
+def _compute_adaptive_residual_activity_threshold(
+    evidence_dir: Path,
+    *,
+    residual_l1_key: str,
+    min_alpha: float,
+    base_min_l1: float,
+    quantile: float,
+    floor: float,
+    max_samples_per_view: int,
+) -> tuple[float, dict[str, Any]]:
+    summary: dict[str, Any] = {
+        "enabled": True,
+        "mode": "train_only_adaptive_residual_activity_threshold",
+        "evidence_dir": str(evidence_dir),
+        "residual_l1_key": str(residual_l1_key),
+        "base_min_l1": float(base_min_l1),
+        "quantile": float(quantile),
+        "floor": float(floor),
+        "max_samples_per_view": int(max_samples_per_view),
+        "uses_target_or_test_gt": False,
+    }
+    paths = _evidence_views(evidence_dir)
+    if not paths:
+        summary["reason"] = "no_fit_evidence_views"
+        return float(base_min_l1), summary
+    samples: list[np.ndarray] = []
+    valid_view_count = 0
+    total_valid_samples = 0
+    zero_sample_count = 0
+    for path in paths:
+        try:
+            with np.load(path) as z:
+                if residual_l1_key not in z or "face_id" not in z or "barycentric" not in z:
+                    continue
+                mask = np.asarray(z["face_id"], dtype=np.int64) >= 0
+                if "barycentric_valid" in z:
+                    mask &= np.asarray(z["barycentric_valid"]).astype(bool)
+                if "alpha" in z:
+                    mask &= np.asarray(z["alpha"], dtype=np.float32) >= float(min_alpha)
+                bary = np.asarray(z["barycentric"], dtype=np.float32)
+                mask &= np.all(np.isfinite(bary), axis=0)
+                mask &= np.all(bary >= -0.05, axis=0)
+                mask &= np.all(bary <= 1.05, axis=0)
+                values = np.asarray(z[residual_l1_key], dtype=np.float32)[mask].reshape(-1)
+        except Exception as exc:
+            summary.setdefault("skipped_views", []).append({"path": str(path), "error": str(exc)})
+            continue
+        if values.size == 0:
+            continue
+        valid_view_count += 1
+        total_valid_samples += int(values.size)
+        zero_sample_count += int(np.sum(values <= 1.0e-8))
+        if int(max_samples_per_view) > 0 and values.size > int(max_samples_per_view):
+            take = np.linspace(0, values.size - 1, int(max_samples_per_view), dtype=np.int64)
+            values = values[take]
+        samples.append(values.astype(np.float32, copy=False))
+    if not samples:
+        summary["reason"] = "no_valid_residual_l1_samples"
+        summary["fit_view_count"] = int(len(paths))
+        return float(base_min_l1), summary
+    merged = np.concatenate(samples, axis=0)
+    q = float(np.clip(quantile, 0.0, 1.0))
+    threshold = float(np.quantile(merged, q))
+    threshold = max(float(base_min_l1), float(floor), threshold)
+    summary.update(
+        {
+            "fit_view_count": int(len(paths)),
+            "valid_view_count": int(valid_view_count),
+            "total_valid_samples": int(total_valid_samples),
+            "sampled_values": int(merged.size),
+            "zero_fraction": float(zero_sample_count / max(1, total_valid_samples)),
+            "selected_min_l1": float(threshold),
+            "sample_quantiles": {
+                "0.50": float(np.quantile(merged, 0.50)),
+                "0.75": float(np.quantile(merged, 0.75)),
+                "0.90": float(np.quantile(merged, 0.90)),
+                "0.95": float(np.quantile(merged, 0.95)),
+                "0.99": float(np.quantile(merged, 0.99)),
+            },
+        }
+    )
+    return float(threshold), summary
 
 
 def _teacher_cache_cmd(args: argparse.Namespace, teacher_cache_dir: Path) -> list[str]:
@@ -229,7 +375,7 @@ def _texture_cmd(
         "--alpha_grid",
         str(args.alpha_grid),
         "--min_l1",
-        str(args.min_l1),
+        str(getattr(args, "_effective_min_l1", args.min_l1)),
         "--min_alpha",
         str(args.min_alpha),
         "--max_abs_delta_rgb",
@@ -256,6 +402,16 @@ def _texture_cmd(
         "policy_val_nonregressive",
         "--view_conditioned_basis_ood_mode",
         "diag_z",
+        "--view_cluster_expert_count",
+        str(args.view_cluster_expert_count),
+        "--view_cluster_feature_mode",
+        str(args.view_cluster_feature_mode),
+        "--view_cluster_min_views",
+        str(args.view_cluster_min_views),
+        "--view_cluster_min_bin_samples",
+        str(args.view_cluster_min_bin_samples),
+        "--view_cluster_fallback_mode",
+        str(args.view_cluster_fallback_mode),
         "--teacher_distilled_basis_mode",
         str(args.teacher_distilled_basis_mode),
         "--teacher_distilled_basis_guard_mode",
@@ -264,6 +420,8 @@ def _texture_cmd(
         "blend",
         "--teacher_distilled_basis_blend",
         str(args.teacher_distilled_basis_blend),
+        "--teacher_distilled_basis_min_face_samples",
+        str(args.teacher_distilled_basis_min_face_samples),
         "--select_alpha_by_risk_gate",
         "--enable_policy_val_ssim_alpha_refinement",
         "--policy_val_ssim_alpha_refinement_steps",
@@ -299,6 +457,8 @@ def _texture_cmd(
         str(args.bin_uncertainty_shrink_policy_mode),
         "--bin_uncertainty_shrink_min_bin_samples",
         str(args.bin_uncertainty_shrink_min_bin_samples),
+        "--bin_uncertainty_shrink_min_bin_views",
+        str(args.bin_uncertainty_shrink_min_bin_views),
         f"--bin_uncertainty_shrink_min_relative_gain={args.bin_uncertainty_shrink_min_relative_gain}",
         "--bin_uncertainty_shrink_min_positive_view_fraction",
         str(args.bin_uncertainty_shrink_min_positive_view_fraction),
@@ -306,21 +466,136 @@ def _texture_cmd(
         str(args.bin_uncertainty_shrink_fallback_shrink),
         "--enable_target_support_candidate_selection",
         "--enable_policy_candidate_dominance_pruning",
-        "--enable_policy_val_prior_bin_gain_hybrid",
-        "--enable_prior_bin_gain_hybrid_l1_proxy_gate",
-        "--enable_policy_val_source_mixture",
-        "--enable_target_footprint_bin_certificate",
-        "--enable_target_footprint_tail_risk_certificate",
-        "--target_footprint_tail_risk_min_positive_view_fraction",
-        str(args.target_footprint_tail_risk_min_positive_view_fraction),
-        f"--target_footprint_tail_risk_min_min_view_gain={args.target_footprint_tail_risk_min_min_view_gain}",
-        "--target_footprint_tail_risk_min_cvar20_view_gain",
-        str(args.target_footprint_tail_risk_min_cvar20_view_gain),
         "--write_noop_on_reject",
         "--noop_fallback_source",
         str(args.noop_fallback_source),
         "--force",
     ]
+    if not bool(args.no_policy_val_prior_bin_gain_hybrid):
+        cmd.extend(
+            [
+                "--enable_policy_val_prior_bin_gain_hybrid",
+                "--enable_prior_bin_gain_hybrid_l1_proxy_gate",
+                "--enable_policy_val_source_mixture",
+                "--enable_target_footprint_bin_certificate",
+                "--enable_target_footprint_tail_risk_certificate",
+                "--target_footprint_tail_risk_min_positive_view_fraction",
+                str(args.target_footprint_tail_risk_min_positive_view_fraction),
+                f"--target_footprint_tail_risk_min_min_view_gain={args.target_footprint_tail_risk_min_min_view_gain}",
+                "--target_footprint_tail_risk_min_cvar20_view_gain",
+                str(args.target_footprint_tail_risk_min_cvar20_view_gain),
+            ]
+        )
+    if bool(args.enable_view_cluster_local_shrink):
+        cmd.append("--enable_view_cluster_local_shrink")
+    if bool(args.view_cluster_local_shrink_global_fallback):
+        cmd.append("--view_cluster_local_shrink_global_fallback")
+    if bool(args.enable_policy_val_image_l1_bin_certificate):
+        cmd.extend(
+            [
+                "--enable_policy_val_image_l1_bin_certificate",
+                "--image_l1_bin_certificate_mode",
+                str(args.image_l1_bin_certificate_mode),
+                "--image_l1_bin_certificate_min_relative_gain",
+                str(args.image_l1_bin_certificate_min_relative_gain),
+                "--image_l1_bin_certificate_min_positive_view_fraction",
+                str(args.image_l1_bin_certificate_min_positive_view_fraction),
+                "--image_l1_bin_certificate_gain_tau",
+                str(args.image_l1_bin_certificate_gain_tau),
+                "--image_l1_bin_certificate_pool_radius",
+                str(args.image_l1_bin_certificate_pool_radius),
+            ]
+        )
+        if bool(args.enable_policy_val_image_l1_region_expansion):
+            cmd.extend(
+                [
+                    "--enable_policy_val_image_l1_region_expansion",
+                    "--image_l1_region_expansion_radius",
+                    str(args.image_l1_region_expansion_radius),
+                    "--image_l1_region_expansion_max_bins_per_seed",
+                    str(args.image_l1_region_expansion_max_bins_per_seed),
+                    "--image_l1_region_expansion_min_neighbor_samples",
+                    str(args.image_l1_region_expansion_min_neighbor_samples),
+                    "--image_l1_region_expansion_min_neighbor_views",
+                    str(args.image_l1_region_expansion_min_neighbor_views),
+                    "--image_l1_region_expansion_max_negative_relative_gain",
+                    str(args.image_l1_region_expansion_max_negative_relative_gain),
+                    "--image_l1_region_expansion_max_negative_image_l1_gain",
+                    str(args.image_l1_region_expansion_max_negative_image_l1_gain),
+                    "--image_l1_region_expansion_shrink_decay",
+                    str(args.image_l1_region_expansion_shrink_decay),
+                ]
+            )
+    if bool(args.enable_policy_val_image_l1_bin_alpha_optimization):
+        cmd.extend(
+            [
+                "--enable_policy_val_image_l1_bin_alpha_optimization",
+                "--image_l1_bin_alpha_grid",
+                str(args.image_l1_bin_alpha_grid),
+                "--image_l1_bin_alpha_max_alpha",
+                str(args.image_l1_bin_alpha_max_alpha),
+                "--image_l1_bin_alpha_min_bin_samples",
+                str(args.image_l1_bin_alpha_min_bin_samples),
+                "--image_l1_bin_alpha_min_relative_gain",
+                str(args.image_l1_bin_alpha_min_relative_gain),
+                "--image_l1_bin_alpha_min_positive_view_fraction",
+                str(args.image_l1_bin_alpha_min_positive_view_fraction),
+                "--image_l1_bin_alpha_count_tau",
+                str(args.image_l1_bin_alpha_count_tau),
+                "--image_l1_bin_alpha_fallback_mode",
+                str(args.image_l1_bin_alpha_fallback_mode),
+                "--image_l1_bin_alpha_max_profile_bins",
+                str(args.image_l1_bin_alpha_max_profile_bins),
+            ]
+        )
+    if bool(args.enable_policy_val_image_linear_residual_generator):
+        cmd.extend(
+            [
+                "--enable_policy_val_image_linear_residual_generator",
+                "--image_linear_generator_feature_mode",
+                str(args.image_linear_generator_feature_mode),
+                "--image_linear_generator_ridge",
+                str(args.image_linear_generator_ridge),
+                "--image_linear_generator_train_max_samples_per_view",
+                str(args.image_linear_generator_train_max_samples_per_view),
+                "--image_linear_generator_max_train_samples",
+                str(args.image_linear_generator_max_train_samples),
+                "--image_linear_generator_output_cap",
+                str(args.image_linear_generator_output_cap),
+                "--image_linear_generator_loss_mode",
+                str(args.image_linear_generator_loss_mode),
+                "--image_linear_generator_irls_iterations",
+                str(args.image_linear_generator_irls_iterations),
+                "--image_linear_generator_huber_delta",
+                str(args.image_linear_generator_huber_delta),
+                "--image_linear_generator_training_sample_policy",
+                str(args.image_linear_generator_training_sample_policy),
+                "--image_linear_generator_min_descent_margin",
+                str(args.image_linear_generator_min_descent_margin),
+                "--image_linear_generator_min_training_samples",
+                str(args.image_linear_generator_min_training_samples),
+                "--image_linear_generator_alpha_grid",
+                str(args.image_linear_generator_alpha_grid),
+                "--image_linear_generator_expert_mode",
+                str(args.image_linear_generator_expert_mode),
+                "--image_linear_generator_expert_min_training_samples",
+                str(args.image_linear_generator_expert_min_training_samples),
+                "--image_linear_generator_expert_shrink_tau",
+                str(args.image_linear_generator_expert_shrink_tau),
+                "--image_linear_generator_face_reliability_mode",
+                str(args.image_linear_generator_face_reliability_mode),
+                "--image_linear_generator_face_reliability_min_face_samples",
+                str(args.image_linear_generator_face_reliability_min_face_samples),
+                "--image_linear_generator_face_reliability_min_relative_gain",
+                str(args.image_linear_generator_face_reliability_min_relative_gain),
+                "--image_linear_generator_face_reliability_min_positive_view_fraction",
+                str(args.image_linear_generator_face_reliability_min_positive_view_fraction),
+                "--image_linear_generator_face_reliability_fallback_multiplier",
+                str(args.image_linear_generator_face_reliability_fallback_multiplier),
+            ]
+        )
+        if bool(args.image_linear_generator_allow_unvalidated_base_pixels):
+            cmd.append("--image_linear_generator_allow_unvalidated_base_pixels")
     if bool(args.enable_adaptive_texture_size_ladder):
         cmd.extend(
             [
@@ -403,10 +678,29 @@ def _texture_cmd(
         cmd = [token for token in cmd if token != "--enable_preacceptance_policy_val_guard_repair"]
     if bool(args.enable_policy_val_sparse_residual_materialization):
         cmd.append("--enable_policy_val_sparse_residual_materialization")
+        if bool(args.enable_policy_val_sparse_materialization_frontier):
+            cmd.append("--enable_policy_val_sparse_materialization_frontier")
         _append_arg(cmd, "--sparse_materialization_seed_min_relative_gain", args.sparse_materialization_seed_min_relative_gain)
         _append_arg(cmd, "--sparse_materialization_min_bin_samples", args.sparse_materialization_min_bin_samples)
+        _append_arg(cmd, "--sparse_materialization_min_bin_views", args.sparse_materialization_min_bin_views)
         _append_arg(cmd, "--sparse_materialization_min_relative_gain", args.sparse_materialization_min_relative_gain)
+        _append_arg(cmd, "--sparse_materialization_min_view_relative_gain", args.sparse_materialization_min_view_relative_gain)
         _append_arg(cmd, "--sparse_materialization_min_positive_view_fraction", args.sparse_materialization_min_positive_view_fraction)
+        _append_arg(
+            cmd,
+            "--sparse_materialization_frontier_min_positive_view_fraction",
+            args.sparse_materialization_frontier_min_positive_view_fraction,
+        )
+        _append_arg(
+            cmd,
+            "--sparse_materialization_frontier_min_risk_adjusted_gain",
+            args.sparse_materialization_frontier_min_risk_adjusted_gain,
+        )
+        _append_arg(
+            cmd,
+            "--sparse_materialization_frontier_min_sample_quantile",
+            args.sparse_materialization_frontier_min_sample_quantile,
+        )
         _append_arg(cmd, "--sparse_materialization_max_mean_variance", args.sparse_materialization_max_mean_variance)
         _append_arg(cmd, "--sparse_materialization_min_mean_sign_consistency", args.sparse_materialization_min_mean_sign_consistency)
     if not bool(args.no_policy_val_bin_uncertainty_guard):
@@ -443,7 +737,52 @@ def _texture_cmd(
             ]
         )
         _append_arg(cmd, "--min_policy_val_lpips_cvar20_view_gain", args.min_policy_val_lpips_cvar20_view_gain)
-    if bool(args.no_policy_val_bin_uncertainty_shrink):
+    if bool(args.enable_policy_val_view_consistency_confidence):
+        cmd.append("--enable_policy_val_view_consistency_confidence")
+    if bool(args.enable_policy_val_view_alpha_cap):
+        cmd.append("--enable_policy_val_view_alpha_cap")
+    if bool(args.enable_adaptive_low_support_teacher_basis):
+        cmd.append("--enable_adaptive_low_support_teacher_basis")
+        _append_arg(
+            cmd,
+            "--adaptive_teacher_basis_min_face_samples_floor",
+            args.adaptive_teacher_basis_min_face_samples_floor,
+        )
+        _append_arg(
+            cmd,
+            "--adaptive_teacher_basis_support_quantile",
+            args.adaptive_teacher_basis_support_quantile,
+        )
+        _append_arg(
+            cmd,
+            "--adaptive_teacher_basis_low_support_ridge_scale",
+            args.adaptive_teacher_basis_low_support_ridge_scale,
+        )
+    for attr in (
+        "view_confidence_min_relative_gain",
+        "view_confidence_min_ssim_gain",
+        "view_confidence_min_l1_gain",
+        "view_confidence_min_lpips_gain",
+        "view_confidence_kernel_sigma",
+        "view_confidence_min_confidence",
+        "view_alpha_cap_selection_mode",
+        "view_alpha_cap_min_relative_gain",
+        "view_alpha_cap_min_ssim_gain",
+        "view_alpha_cap_min_l1_gain",
+        "view_alpha_cap_min_lpips_gain",
+        "view_alpha_cap_kernel_sigma",
+        "view_alpha_cap_min_confidence",
+        "view_alpha_cap_fallback_alpha",
+        "view_alpha_cap_seed_stage",
+    ):
+        value = getattr(args, attr)
+        if value is not None:
+            _append_arg(cmd, f"--{attr}", value)
+    if (
+        bool(args.no_policy_val_bin_uncertainty_shrink)
+        or bool(args.enable_policy_val_image_l1_bin_alpha_optimization)
+        or bool(args.enable_policy_val_image_linear_residual_generator)
+    ):
         cmd = [token for token in cmd if token != "--enable_policy_val_bin_uncertainty_shrink"]
     if bool(args.enable_policy_val_structure_aware_shrink):
         cmd.extend(
@@ -583,6 +922,16 @@ def parse_args() -> argparse.Namespace:
             "Final GT images are populated only after target apply, immediately before evaluation."
         ),
     )
+    parser.add_argument(
+        "--prestripped_target_evidence_dir",
+        type=Path,
+        default=None,
+        help=(
+            "Reuse an existing target evidence directory that has already been stripped of GT/residual keys. "
+            "Requires --strict_no_target_gt_apply and skips the strip step; useful for quota-constrained "
+            "repeat runs while keeping target apply GT-free."
+        ),
+    )
     parser.add_argument("--wandb_mode", default=os.environ.get("WANDB_MODE", "offline"))
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb_project", default=os.environ.get("WANDB_PROJECT", "spcarnet_meshprior"))
@@ -642,6 +991,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--policy_val_alpha_frontier_tail_knee_eps", type=float, default=1.0e-10)
     parser.add_argument("--no_preacceptance_policy_val_guard_repair", action="store_true")
     parser.add_argument("--min_l1", type=float, default=0.0)
+    parser.add_argument(
+        "--enable_adaptive_residual_activity_threshold",
+        action="store_true",
+        help=(
+            "Estimate a train-only residual-active L1 threshold from fit evidence and "
+            "use it as the adapter --min_l1. This prevents zero-teacher-residual regions "
+            "from dominating persistent residual-surface fitting/certification."
+        ),
+    )
+    parser.add_argument("--adaptive_residual_activity_quantile", type=float, default=0.90)
+    parser.add_argument("--adaptive_residual_activity_floor", type=float, default=0.0)
+    parser.add_argument("--adaptive_residual_activity_max_samples_per_view", type=int, default=200000)
     parser.add_argument("--min_alpha", type=float, default=0.03)
     parser.add_argument("--max_abs_delta_rgb", type=float, default=0.12)
     parser.add_argument("--max_abs_delta_rgb_candidates", default="0.08,0.12")
@@ -652,8 +1013,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--surface_multiscale_prior_min_sign_consistency", type=float, default=0.5)
     parser.add_argument("--surface_multiscale_prior_min_cosine", type=float, default=0.0)
     parser.add_argument("--view_conditioned_basis_mode", choices=("none", "camera_center_linear", "normal_camera_linear"), default="normal_camera_linear")
+    parser.add_argument("--view_cluster_expert_count", type=int, default=1)
+    parser.add_argument("--view_cluster_feature_mode", choices=("none", "camera_center"), default="camera_center")
+    parser.add_argument("--view_cluster_min_views", type=int, default=2)
+    parser.add_argument("--view_cluster_min_bin_samples", type=int, default=4)
+    parser.add_argument("--view_cluster_fallback_mode", choices=("global",), default="global")
     parser.add_argument("--teacher_distilled_basis_mode", choices=("none", "face_uv_normal_camera_ridge", "face_uv_patch_mixture_ridge"), default="face_uv_patch_mixture_ridge")
     parser.add_argument("--teacher_distilled_basis_blend", type=float, default=0.5)
+    parser.add_argument("--teacher_distilled_basis_min_face_samples", type=int, default=1024)
+    parser.add_argument("--enable_adaptive_low_support_teacher_basis", action="store_true")
+    parser.add_argument("--adaptive_teacher_basis_min_face_samples_floor", type=int, default=128)
+    parser.add_argument("--adaptive_teacher_basis_support_quantile", type=float, default=0.25)
+    parser.add_argument("--adaptive_teacher_basis_low_support_ridge_scale", type=float, default=0.5)
     parser.add_argument("--min_policy_val_samples", type=int, default=1024)
     parser.add_argument("--min_policy_val_relative_gain", type=float, default=0.0)
     parser.add_argument("--min_policy_val_positive_view_fraction", type=float, default=0.55)
@@ -671,6 +1042,31 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_policy_val_lpips_positive_view_fraction", type=float, default=0.0)
     parser.add_argument("--min_policy_val_lpips_min_view_gain", type=float, default=-1.0)
     parser.add_argument("--min_policy_val_lpips_cvar20_view_gain", type=float, default=-1.0)
+    parser.add_argument("--enable_policy_val_view_consistency_confidence", action="store_true")
+    parser.add_argument("--view_confidence_min_relative_gain", type=float, default=None)
+    parser.add_argument("--view_confidence_min_ssim_gain", type=float, default=None)
+    parser.add_argument("--view_confidence_min_l1_gain", type=float, default=None)
+    parser.add_argument("--view_confidence_min_lpips_gain", type=float, default=None)
+    parser.add_argument("--view_confidence_kernel_sigma", type=float, default=None)
+    parser.add_argument("--view_confidence_min_confidence", type=float, default=None)
+    parser.add_argument("--enable_policy_val_view_alpha_cap", action="store_true")
+    parser.add_argument(
+        "--view_alpha_cap_selection_mode",
+        choices=("smallest_safe", "best_safe"),
+        default=None,
+    )
+    parser.add_argument("--view_alpha_cap_min_relative_gain", type=float, default=None)
+    parser.add_argument("--view_alpha_cap_min_ssim_gain", type=float, default=None)
+    parser.add_argument("--view_alpha_cap_min_l1_gain", type=float, default=None)
+    parser.add_argument("--view_alpha_cap_min_lpips_gain", type=float, default=None)
+    parser.add_argument("--view_alpha_cap_kernel_sigma", type=float, default=None)
+    parser.add_argument("--view_alpha_cap_min_confidence", type=float, default=None)
+    parser.add_argument("--view_alpha_cap_fallback_alpha", type=float, default=None)
+    parser.add_argument(
+        "--view_alpha_cap_seed_stage",
+        choices=("pre_guard", "post_view_confidence"),
+        default=None,
+    )
     parser.add_argument(
         "--enable_policy_val_effective_margin_gate",
         action="store_true",
@@ -688,21 +1084,123 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_policy_val_effective_lpips_cvar20_gain", type=float, default=-1.0)
     parser.add_argument("--face_gain_guard_min_positive_view_fraction", type=float, default=0.5)
     parser.add_argument("--enable_policy_val_sparse_residual_materialization", action="store_true")
+    parser.add_argument("--enable_policy_val_sparse_materialization_frontier", action="store_true")
     parser.add_argument("--sparse_materialization_seed_min_relative_gain", type=float, default=0.0)
     parser.add_argument("--sparse_materialization_min_bin_samples", type=int, default=16)
+    parser.add_argument("--sparse_materialization_min_bin_views", type=int, default=1)
     parser.add_argument("--sparse_materialization_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--sparse_materialization_min_view_relative_gain", type=float, default=-float("inf"))
     parser.add_argument("--sparse_materialization_min_positive_view_fraction", type=float, default=0.5)
+    parser.add_argument("--sparse_materialization_frontier_min_positive_view_fraction", type=float, default=0.55)
+    parser.add_argument("--sparse_materialization_frontier_min_risk_adjusted_gain", type=float, default=0.0)
+    parser.add_argument("--sparse_materialization_frontier_min_sample_quantile", type=float, default=0.75)
     parser.add_argument("--sparse_materialization_max_mean_variance", type=float, default=-1.0)
     parser.add_argument("--sparse_materialization_min_mean_sign_consistency", type=float, default=0.0)
     parser.add_argument("--no_policy_val_bin_uncertainty_guard", action="store_true")
     parser.add_argument("--bin_uncertainty_guard_min_bin_samples", type=int, default=16)
     parser.add_argument("--bin_uncertainty_guard_min_positive_view_fraction", type=float, default=0.5)
     parser.add_argument("--no_policy_val_bin_uncertainty_shrink", action="store_true")
-    parser.add_argument("--bin_uncertainty_shrink_policy_mode", choices=("sparse_positive", "keep_with_downweight"), default="keep_with_downweight")
+    parser.add_argument(
+        "--bin_uncertainty_shrink_policy_mode",
+        choices=("sparse_positive", "keep_with_downweight", "positive_consensus"),
+        default="keep_with_downweight",
+    )
     parser.add_argument("--bin_uncertainty_shrink_min_bin_samples", type=int, default=16)
+    parser.add_argument("--bin_uncertainty_shrink_min_bin_views", type=int, default=1)
     parser.add_argument("--bin_uncertainty_shrink_min_relative_gain", type=float, default=0.0)
     parser.add_argument("--bin_uncertainty_shrink_min_positive_view_fraction", type=float, default=0.5)
     parser.add_argument("--bin_uncertainty_shrink_fallback_shrink", type=float, default=1.0)
+    parser.add_argument("--enable_policy_val_image_l1_bin_certificate", action="store_true")
+    parser.add_argument(
+        "--image_l1_bin_certificate_mode",
+        choices=("and", "or", "replace"),
+        default="and",
+    )
+    parser.add_argument("--image_l1_bin_certificate_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--image_l1_bin_certificate_min_positive_view_fraction", type=float, default=0.55)
+    parser.add_argument("--image_l1_bin_certificate_gain_tau", type=float, default=0.01)
+    parser.add_argument("--image_l1_bin_certificate_pool_radius", type=int, default=0)
+    parser.add_argument("--enable_policy_val_image_l1_region_expansion", action="store_true")
+    parser.add_argument("--image_l1_region_expansion_radius", type=int, default=1)
+    parser.add_argument("--image_l1_region_expansion_max_bins_per_seed", type=int, default=8)
+    parser.add_argument("--image_l1_region_expansion_min_neighbor_samples", type=int, default=1)
+    parser.add_argument("--image_l1_region_expansion_min_neighbor_views", type=int, default=1)
+    parser.add_argument("--image_l1_region_expansion_max_negative_relative_gain", type=float, default=0.02)
+    parser.add_argument("--image_l1_region_expansion_max_negative_image_l1_gain", type=float, default=0.02)
+    parser.add_argument("--image_l1_region_expansion_shrink_decay", type=float, default=0.5)
+    parser.add_argument("--enable_policy_val_image_l1_bin_alpha_optimization", action="store_true")
+    parser.add_argument("--image_l1_bin_alpha_grid", default="0,0.0625,0.125,0.25,0.5,0.75,1.0")
+    parser.add_argument("--image_l1_bin_alpha_max_alpha", type=float, default=1.0)
+    parser.add_argument("--image_l1_bin_alpha_min_bin_samples", type=int, default=8)
+    parser.add_argument("--image_l1_bin_alpha_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--image_l1_bin_alpha_min_positive_view_fraction", type=float, default=0.55)
+    parser.add_argument("--image_l1_bin_alpha_count_tau", type=float, default=64.0)
+    parser.add_argument(
+        "--image_l1_bin_alpha_fallback_mode",
+        choices=("zero", "global_best"),
+        default="zero",
+    )
+    parser.add_argument("--image_l1_bin_alpha_max_profile_bins", type=int, default=8192)
+    parser.add_argument("--enable_policy_val_image_linear_residual_generator", action="store_true")
+    parser.add_argument(
+        "--image_linear_generator_feature_mode",
+        choices=("base", "base_rgb", "base_rgb_bary_view"),
+        default="base_rgb",
+    )
+    parser.add_argument("--image_linear_generator_ridge", type=float, default=1.0e-2)
+    parser.add_argument("--image_linear_generator_train_max_samples_per_view", type=int, default=100000)
+    parser.add_argument("--image_linear_generator_max_train_samples", type=int, default=1000000)
+    parser.add_argument("--image_linear_generator_output_cap", type=float, default=0.12)
+    parser.add_argument(
+        "--image_linear_generator_loss_mode",
+        choices=("mse", "huber_irls", "l1_irls"),
+        default="mse",
+    )
+    parser.add_argument("--image_linear_generator_irls_iterations", type=int, default=4)
+    parser.add_argument("--image_linear_generator_huber_delta", type=float, default=0.02)
+    parser.add_argument(
+        "--image_linear_generator_training_sample_policy",
+        choices=("all", "base_l1_descent", "view_balanced", "view_balanced_base_l1_descent"),
+        default="all",
+    )
+    parser.add_argument("--image_linear_generator_min_descent_margin", type=float, default=0.0)
+    parser.add_argument("--image_linear_generator_min_training_samples", type=int, default=512)
+    parser.add_argument(
+        "--image_linear_generator_alpha_grid",
+        default="0,0.03125,0.0625,0.125,0.25,0.5,0.75,1.0",
+    )
+    parser.add_argument(
+        "--image_linear_generator_expert_mode",
+        choices=("none", "view_cluster"),
+        default="none",
+    )
+    parser.add_argument("--image_linear_generator_expert_min_training_samples", type=int, default=2048)
+    parser.add_argument("--image_linear_generator_expert_shrink_tau", type=float, default=8192.0)
+    parser.add_argument(
+        "--image_linear_generator_face_reliability_mode",
+        choices=("none", "global", "view_cluster"),
+        default="none",
+    )
+    parser.add_argument("--image_linear_generator_face_reliability_min_face_samples", type=int, default=256)
+    parser.add_argument("--image_linear_generator_face_reliability_min_relative_gain", type=float, default=0.0)
+    parser.add_argument("--image_linear_generator_face_reliability_min_positive_view_fraction", type=float, default=0.5)
+    parser.add_argument("--image_linear_generator_face_reliability_fallback_multiplier", type=float, default=0.0)
+    parser.add_argument("--image_linear_generator_allow_unvalidated_base_pixels", action="store_true")
+    parser.add_argument(
+        "--enable_view_cluster_local_shrink",
+        "--enable_policy_val_cluster_local_shrink",
+        dest="enable_view_cluster_local_shrink",
+        action="store_true",
+        help=(
+            "When --view_cluster_expert_count > 1, certify bin uncertainty shrink "
+            "inside each GT-free camera-center cluster instead of globally."
+        ),
+    )
+    parser.add_argument(
+        "--view_cluster_local_shrink_global_fallback",
+        action="store_true",
+        help="Expose cluster-local selected bins through the legacy global shrink table as a fallback.",
+    )
     parser.add_argument("--enable_policy_val_structure_aware_shrink", action="store_true")
     parser.add_argument("--structure_shrink_l1_weight", type=float, default=0.0)
     parser.add_argument("--structure_shrink_gradient_weight", type=float, default=0.0)
@@ -719,6 +1217,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Disable the v116 target-visible residual-energy score. By default vNext ranks "
             "train-policy-safe candidates by GT-free target-visible residual energy before raw coverage."
+        ),
+    )
+    parser.add_argument(
+        "--no_policy_val_prior_bin_gain_hybrid",
+        action="store_true",
+        help=(
+            "Skip the expensive prior-bin-gain/source-mixture hybrid search branch. "
+            "This keeps the primary certified atlas candidate and target-support ranking, "
+            "but avoids extra policy-val passes for fast ablations."
         ),
     )
     parser.add_argument("--target_footprint_tail_risk_min_positive_view_fraction", type=float, default=0.75)
@@ -745,6 +1252,132 @@ def parse_args() -> argparse.Namespace:
         parser.error("--structure_shrink_edge_weight must be >= 0")
     if float(args.structure_shrink_risk_tau) < 0.0:
         parser.error("--structure_shrink_risk_tau must be >= 0")
+    if int(args.teacher_distilled_basis_min_face_samples) <= 0:
+        parser.error("--teacher_distilled_basis_min_face_samples must be > 0")
+    if int(args.adaptive_teacher_basis_min_face_samples_floor) <= 0:
+        parser.error("--adaptive_teacher_basis_min_face_samples_floor must be > 0")
+    if not 0.0 <= float(args.adaptive_teacher_basis_support_quantile) <= 1.0:
+        parser.error("--adaptive_teacher_basis_support_quantile must be in [0, 1]")
+    if float(args.adaptive_teacher_basis_low_support_ridge_scale) < 0.0:
+        parser.error("--adaptive_teacher_basis_low_support_ridge_scale must be >= 0")
+    if int(args.view_cluster_expert_count) < 1:
+        parser.error("--view_cluster_expert_count must be >= 1")
+    if int(args.view_cluster_min_views) < 1:
+        parser.error("--view_cluster_min_views must be >= 1")
+    if int(args.view_cluster_min_bin_samples) < 1:
+        parser.error("--view_cluster_min_bin_samples must be >= 1")
+    if bool(args.enable_view_cluster_local_shrink) and int(args.view_cluster_expert_count) <= 1:
+        parser.error("--enable_view_cluster_local_shrink requires --view_cluster_expert_count > 1")
+    if bool(args.enable_policy_val_image_l1_bin_certificate) and bool(args.no_policy_val_bin_uncertainty_shrink):
+        parser.error("--enable_policy_val_image_l1_bin_certificate requires bin uncertainty shrink to stay enabled")
+    if float(args.image_l1_bin_certificate_min_relative_gain) < 0.0:
+        parser.error("--image_l1_bin_certificate_min_relative_gain must be >= 0")
+    if not 0.0 <= float(args.image_l1_bin_certificate_min_positive_view_fraction) <= 1.0:
+        parser.error("--image_l1_bin_certificate_min_positive_view_fraction must be in [0, 1]")
+    if float(args.image_l1_bin_certificate_gain_tau) < 0.0:
+        parser.error("--image_l1_bin_certificate_gain_tau must be >= 0")
+    if int(args.image_l1_bin_certificate_pool_radius) < 0:
+        parser.error("--image_l1_bin_certificate_pool_radius must be >= 0")
+    if bool(args.enable_policy_val_image_l1_region_expansion) and not bool(
+        args.enable_policy_val_image_l1_bin_certificate
+    ):
+        parser.error("--enable_policy_val_image_l1_region_expansion requires --enable_policy_val_image_l1_bin_certificate")
+    if int(args.image_l1_region_expansion_radius) < 0:
+        parser.error("--image_l1_region_expansion_radius must be >= 0")
+    if int(args.image_l1_region_expansion_max_bins_per_seed) < 0:
+        parser.error("--image_l1_region_expansion_max_bins_per_seed must be >= 0")
+    if int(args.image_l1_region_expansion_min_neighbor_samples) < 1:
+        parser.error("--image_l1_region_expansion_min_neighbor_samples must be >= 1")
+    if int(args.image_l1_region_expansion_min_neighbor_views) < 1:
+        parser.error("--image_l1_region_expansion_min_neighbor_views must be >= 1")
+    if float(args.image_l1_region_expansion_max_negative_relative_gain) < 0.0:
+        parser.error("--image_l1_region_expansion_max_negative_relative_gain must be >= 0")
+    if float(args.image_l1_region_expansion_max_negative_image_l1_gain) < 0.0:
+        parser.error("--image_l1_region_expansion_max_negative_image_l1_gain must be >= 0")
+    if not 0.0 <= float(args.image_l1_region_expansion_shrink_decay) <= 1.0:
+        parser.error("--image_l1_region_expansion_shrink_decay must be in [0, 1]")
+    if bool(args.enable_policy_val_image_l1_bin_alpha_optimization) and bool(
+        args.enable_policy_val_image_l1_bin_certificate
+    ):
+        parser.error(
+            "--enable_policy_val_image_l1_bin_alpha_optimization is a replacement local-alpha mode; "
+            "do not combine it with --enable_policy_val_image_l1_bin_certificate"
+        )
+    if bool(args.enable_policy_val_image_l1_bin_alpha_optimization) and bool(
+        args.enable_policy_val_structure_aware_shrink
+    ):
+        parser.error(
+            "--enable_policy_val_image_l1_bin_alpha_optimization is a replacement local-alpha mode; "
+            "do not combine it with --enable_policy_val_structure_aware_shrink"
+        )
+    if bool(args.enable_policy_val_image_linear_residual_generator) and bool(
+        args.enable_policy_val_image_l1_bin_alpha_optimization
+    ):
+        parser.error(
+            "--enable_policy_val_image_linear_residual_generator is a replacement generator mode; "
+            "do not combine it with --enable_policy_val_image_l1_bin_alpha_optimization"
+        )
+    if bool(args.enable_policy_val_image_linear_residual_generator) and bool(
+        args.enable_policy_val_image_l1_bin_certificate
+    ):
+        parser.error(
+            "--enable_policy_val_image_linear_residual_generator is a replacement generator mode; "
+            "do not combine it with --enable_policy_val_image_l1_bin_certificate"
+        )
+    if (
+        bool(args.enable_policy_val_image_linear_residual_generator)
+        and str(args.image_linear_generator_face_reliability_mode) == "view_cluster"
+        and str(args.image_linear_generator_expert_mode) != "view_cluster"
+    ):
+        parser.error(
+            "--image_linear_generator_face_reliability_mode view_cluster requires "
+            "--image_linear_generator_expert_mode view_cluster"
+        )
+    if bool(args.enable_policy_val_image_linear_residual_generator) and bool(
+        args.enable_policy_val_structure_aware_shrink
+    ):
+        parser.error(
+            "--enable_policy_val_image_linear_residual_generator is a replacement generator mode; "
+            "do not combine it with --enable_policy_val_structure_aware_shrink"
+        )
+    if float(args.image_l1_bin_alpha_max_alpha) < 0.0:
+        parser.error("--image_l1_bin_alpha_max_alpha must be >= 0")
+    if int(args.image_l1_bin_alpha_min_bin_samples) < 1:
+        parser.error("--image_l1_bin_alpha_min_bin_samples must be >= 1")
+    if float(args.image_l1_bin_alpha_min_relative_gain) < 0.0:
+        parser.error("--image_l1_bin_alpha_min_relative_gain must be >= 0")
+    if not 0.0 <= float(args.image_l1_bin_alpha_min_positive_view_fraction) <= 1.0:
+        parser.error("--image_l1_bin_alpha_min_positive_view_fraction must be in [0, 1]")
+    if float(args.image_l1_bin_alpha_count_tau) < 0.0:
+        parser.error("--image_l1_bin_alpha_count_tau must be >= 0")
+    if int(args.image_l1_bin_alpha_max_profile_bins) < 0:
+        parser.error("--image_l1_bin_alpha_max_profile_bins must be >= 0")
+    if float(args.image_linear_generator_ridge) < 0.0:
+        parser.error("--image_linear_generator_ridge must be >= 0")
+    if int(args.image_linear_generator_train_max_samples_per_view) < 1:
+        parser.error("--image_linear_generator_train_max_samples_per_view must be >= 1")
+    if int(args.image_linear_generator_max_train_samples) < 1:
+        parser.error("--image_linear_generator_max_train_samples must be >= 1")
+    if float(args.image_linear_generator_output_cap) < 0.0:
+        parser.error("--image_linear_generator_output_cap must be >= 0")
+    if int(args.image_linear_generator_irls_iterations) < 1:
+        parser.error("--image_linear_generator_irls_iterations must be >= 1")
+    if float(args.image_linear_generator_huber_delta) <= 0.0:
+        parser.error("--image_linear_generator_huber_delta must be > 0")
+    if float(args.image_linear_generator_min_descent_margin) < 0.0:
+        parser.error("--image_linear_generator_min_descent_margin must be >= 0")
+    if int(args.image_linear_generator_min_training_samples) < 1:
+        parser.error("--image_linear_generator_min_training_samples must be >= 1")
+    if int(args.image_linear_generator_expert_min_training_samples) < 1:
+        parser.error("--image_linear_generator_expert_min_training_samples must be >= 1")
+    if float(args.image_linear_generator_expert_shrink_tau) < 0.0:
+        parser.error("--image_linear_generator_expert_shrink_tau must be >= 0")
+    if int(args.image_linear_generator_face_reliability_min_face_samples) < 1:
+        parser.error("--image_linear_generator_face_reliability_min_face_samples must be >= 1")
+    if not 0.0 <= float(args.image_linear_generator_face_reliability_min_positive_view_fraction) <= 1.0:
+        parser.error("--image_linear_generator_face_reliability_min_positive_view_fraction must be in [0, 1]")
+    if not 0.0 <= float(args.image_linear_generator_face_reliability_fallback_multiplier) <= 1.0:
+        parser.error("--image_linear_generator_face_reliability_fallback_multiplier must be in [0, 1]")
     if not 0.0 <= float(args.structure_shrink_max_penalty) <= 1.0:
         parser.error("--structure_shrink_max_penalty must be in [0, 1]")
     if float(args.parent_edge_apply_shrink_weight) < 0.0:
@@ -755,8 +1388,18 @@ def parse_args() -> argparse.Namespace:
         parser.error("--parent_edge_apply_shrink_min_multiplier must be in [0, 1]")
     if int(args.sparse_materialization_min_bin_samples) < 1:
         parser.error("--sparse_materialization_min_bin_samples must be >= 1")
+    if int(args.sparse_materialization_min_bin_views) < 1:
+        parser.error("--sparse_materialization_min_bin_views must be >= 1")
+    if float(args.sparse_materialization_min_relative_gain) < 0.0:
+        parser.error("--sparse_materialization_min_relative_gain must be >= 0")
+    if int(args.bin_uncertainty_shrink_min_bin_views) < 1:
+        parser.error("--bin_uncertainty_shrink_min_bin_views must be >= 1")
     if not 0.0 <= float(args.sparse_materialization_min_positive_view_fraction) <= 1.0:
         parser.error("--sparse_materialization_min_positive_view_fraction must be in [0, 1]")
+    if not 0.0 <= float(args.sparse_materialization_frontier_min_positive_view_fraction) <= 1.0:
+        parser.error("--sparse_materialization_frontier_min_positive_view_fraction must be in [0, 1]")
+    if not 0.0 <= float(args.sparse_materialization_frontier_min_sample_quantile) <= 1.0:
+        parser.error("--sparse_materialization_frontier_min_sample_quantile must be in [0, 1]")
     if float(args.sparse_materialization_min_mean_sign_consistency) < 0.0:
         parser.error("--sparse_materialization_min_mean_sign_consistency must be >= 0")
     if not bool(args.enable_policy_val_image_lpips_gate) and (
@@ -764,6 +1407,20 @@ def parse_args() -> argparse.Namespace:
         or float(args.min_policy_val_effective_lpips_cvar20_gain) > -1.0
     ):
         parser.error("LPIPS effective thresholds require --enable_policy_val_image_lpips_gate")
+    if args.prestripped_target_evidence_dir is not None and not bool(args.strict_no_target_gt_apply):
+        parser.error("--prestripped_target_evidence_dir requires --strict_no_target_gt_apply")
+    if args.prestripped_target_evidence_dir is not None and not Path(args.prestripped_target_evidence_dir).exists():
+        parser.error("--prestripped_target_evidence_dir does not exist")
+    if args.view_confidence_kernel_sigma is not None and float(args.view_confidence_kernel_sigma) <= 0.0:
+        parser.error("--view_confidence_kernel_sigma must be > 0")
+    if args.view_confidence_min_confidence is not None and not 0.0 <= float(args.view_confidence_min_confidence) <= 1.0:
+        parser.error("--view_confidence_min_confidence must be in [0, 1]")
+    if args.view_alpha_cap_kernel_sigma is not None and float(args.view_alpha_cap_kernel_sigma) <= 0.0:
+        parser.error("--view_alpha_cap_kernel_sigma must be > 0")
+    if args.view_alpha_cap_min_confidence is not None and not 0.0 <= float(args.view_alpha_cap_min_confidence) <= 1.0:
+        parser.error("--view_alpha_cap_min_confidence must be in [0, 1]")
+    if args.view_alpha_cap_fallback_alpha is not None and float(args.view_alpha_cap_fallback_alpha) < 0.0:
+        parser.error("--view_alpha_cap_fallback_alpha must be >= 0")
     if int(args.adaptive_texture_size_ladder_max_size) <= 0:
         parser.error("--adaptive_texture_size_ladder_max_size must be > 0")
     if float(args.adaptive_texture_size_ladder_min_fit_samples_per_face) < 0.0:
@@ -789,6 +1446,12 @@ def parse_args() -> argparse.Namespace:
         parser.error("--policy_val_alpha_frontier_tail_knee_min_regression_count must be >= 1")
     if float(args.policy_val_alpha_frontier_tail_knee_eps) < 0.0:
         parser.error("--policy_val_alpha_frontier_tail_knee_eps must be >= 0")
+    if not 0.0 <= float(args.adaptive_residual_activity_quantile) <= 1.0:
+        parser.error("--adaptive_residual_activity_quantile must be in [0, 1]")
+    if float(args.adaptive_residual_activity_floor) < 0.0:
+        parser.error("--adaptive_residual_activity_floor must be >= 0")
+    if int(args.adaptive_residual_activity_max_samples_per_view) < 1:
+        parser.error("--adaptive_residual_activity_max_samples_per_view must be >= 1")
     return args
 
 
@@ -830,11 +1493,60 @@ def main() -> int:
     )
 
     texture_fit_evidence_dir = Path(args._effective_fit_evidence_dir) if args.skip_teacher_cache else teacher_cache_dir
-    adapter_target_evidence_dir = (
-        stripped_target_evidence_dir
-        if bool(args.strict_no_target_gt_apply)
-        else Path(args._effective_target_evidence_dir)
-    )
+    if bool(args.strict_no_target_gt_apply) and args.prestripped_target_evidence_dir is not None:
+        adapter_target_evidence_dir = Path(args.prestripped_target_evidence_dir)
+    else:
+        adapter_target_evidence_dir = (
+            stripped_target_evidence_dir
+            if bool(args.strict_no_target_gt_apply)
+            else Path(args._effective_target_evidence_dir)
+        )
+    args._target_apply_forbidden_key_preflight = {
+        "enabled": bool(args.strict_no_target_gt_apply),
+        "mode": "strict_no_target_gt_apply_forbidden_key_preflight",
+        "reason": "strict_no_target_gt_apply_disabled"
+        if not bool(args.strict_no_target_gt_apply)
+        else "deferred_to_strip_target_evidence_step",
+        "passed": True,
+    }
+    if bool(args.strict_no_target_gt_apply) and args.prestripped_target_evidence_dir is not None:
+        forbidden_key_audit = _verify_target_apply_forbidden_keys(adapter_target_evidence_dir)
+        args._target_apply_forbidden_key_preflight = forbidden_key_audit
+        if not bool(forbidden_key_audit.get("passed", False)):
+            reason = str(forbidden_key_audit.get("reason", "forbidden_target_apply_keys_present"))
+            bad_preview = forbidden_key_audit.get("bad_views", [])[:3]
+            parser.error(
+                "strict target apply preflight failed for "
+                f"{adapter_target_evidence_dir}: {reason}; bad_views={bad_preview}"
+            )
+    args._effective_min_l1 = float(args.min_l1)
+    args._adaptive_residual_activity_threshold = {
+        "enabled": False,
+        "mode": "train_only_adaptive_residual_activity_threshold",
+        "selected_min_l1": float(args._effective_min_l1),
+        "reason": "not_requested",
+    }
+    if bool(args.enable_adaptive_residual_activity_threshold):
+        if texture_fit_evidence_dir.exists():
+            effective_min_l1, activity_summary = _compute_adaptive_residual_activity_threshold(
+                texture_fit_evidence_dir,
+                residual_l1_key="teacher_residual_l1",
+                min_alpha=float(args.min_alpha),
+                base_min_l1=float(args.min_l1),
+                quantile=float(args.adaptive_residual_activity_quantile),
+                floor=float(args.adaptive_residual_activity_floor),
+                max_samples_per_view=int(args.adaptive_residual_activity_max_samples_per_view),
+            )
+            args._effective_min_l1 = float(effective_min_l1)
+            args._adaptive_residual_activity_threshold = dict(activity_summary)
+        else:
+            args._adaptive_residual_activity_threshold = {
+                "enabled": False,
+                "mode": "train_only_adaptive_residual_activity_threshold",
+                "selected_min_l1": float(args._effective_min_l1),
+                "reason": "fit_evidence_dir_not_available_before_texture_step",
+                "evidence_dir": str(texture_fit_evidence_dir),
+            }
 
     commands: list[dict[str, Any]] = []
     if args.reparent_fit_parent_render_dir is not None and (
@@ -869,7 +1581,11 @@ def main() -> int:
         )
     if not args.skip_teacher_cache:
         commands.append(command_record("build_teacher_surface_evidence", _teacher_cache_cmd(args, teacher_cache_dir), log_path=logs_dir / "01_teacher_cache.log"))
-    if bool(args.strict_no_target_gt_apply) and not args.skip_texture:
+    if (
+        bool(args.strict_no_target_gt_apply)
+        and args.prestripped_target_evidence_dir is None
+        and not args.skip_texture
+    ):
         commands.append(
             command_record(
                 "strip_target_evidence_no_gt",
@@ -929,6 +1645,9 @@ def main() -> int:
         "parent_render_dir": path_record(args.parent_render_dir) if args.parent_render_dir else None,
         "texture_fit_evidence_dir": path_record(texture_fit_evidence_dir),
         "stripped_target_evidence_dir": path_record(stripped_target_evidence_dir),
+        "prestripped_target_evidence_dir": path_record(args.prestripped_target_evidence_dir)
+        if args.prestripped_target_evidence_dir
+        else None,
     }
     settings = {key: value for key, value in vars(args).items() if key not in {"source_model", "fit_evidence_dir", "target_evidence_dir", "region_carrier_json", "teacher_render_dir", "parent_render_dir"}}
     manifest = make_run_manifest(
