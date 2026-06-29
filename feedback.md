@@ -701,3 +701,38 @@ Current verdict:
 ```text
 Final status: NOT COMPLETE.
 ```
+
+# 2026-06-29 Residual Projection Audit Addendum
+
+New tool:
+
+```text
+scripts/car_model/audit_surface_checkpoint_residual_projection.py
+```
+
+Compact artifacts:
+
+```text
+docs/car_model/6-29-v191-v199-ResidualProjectionAudit-Summary.md
+docs/car_model/results/v191_v199_residual_projection_summary.json
+```
+
+Key result:
+
+| Run | Policy retention | Policy cosine | Target retention | Target cosine |
+| --- | ---: | ---: | ---: | ---: |
+| v191 image-space U-Net calibration | 9.916031 | 0.279888 | 0.253365 | 0.393485 |
+| v195 surface texture MLP | 0.068206 | 0.112638 | 0.002863 | 0.133734 |
+| v196 GT-assisted surface MLP diagnostic | 1.427611 | 0.138419 | 0.029127 | 0.199612 |
+| v199 support-aware low-rank | 0.015229 | 0.039391 | 0.000847 | 0.028702 |
+
+Main lesson for the next model: the surface carrier is not simply losing at
+official target evaluation; it fails to project/aligned the teacher residual
+already on held-out policy-val evidence. A future method should require a
+source-view projection gate before full target runs:
+
+```text
+policy residual cosine >= 0.25
+target-free policy residual energy retention in [0.25, 4.0]
+policy PSNR/SSIM vs teacher does not degrade materially
+```

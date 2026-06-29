@@ -234,6 +234,10 @@ views under this low-rank surface representation.
    for Phase-J.
 7. The policy-val certificate is too weak for this prompt: it can approve a
    candidate that improves over the parent while remaining far below Phase-J.
+8. A follow-up residual projection audit confirms the failure is already visible
+   before target promotion. v199 retains only `0.015229` of policy-val teacher
+   residual energy with cosine `0.039391`; v195 retains `0.068206` with cosine
+   `0.112638`; even v196 GT-assisted has cosine only `0.138419`.
 
 ## Next Research Direction
 
@@ -263,3 +267,10 @@ A stronger follow-up should:
 - only run full9 after flowers exact beats Phase-J on PSNR, SSIM, and LPIPS.
 
 Final status for this batch: NOT COMPLETE.
+
+Follow-up projection audit:
+
+```text
+docs/car_model/6-29-v191-v199-ResidualProjectionAudit-Summary.md
+docs/car_model/results/v191_v199_residual_projection_summary.json
+```

@@ -462,6 +462,29 @@ docs/car_model/results/v195_v199_surface_texture_lowrank_summary.json
 
 No v195-v199 result should be promoted to full9 or paper-ready status.
 
+### 2026-06-29 Residual Projection Audit
+
+A new audit tool was added:
+
+```text
+scripts/car_model/audit_surface_checkpoint_residual_projection.py
+```
+
+It compares checkpoint-predicted residuals with `teacher_residual_rgb` on
+policy-val views, and compares final target residuals with target GT residuals
+after no-GT apply. The compact result is:
+
+| Run | Policy retention | Policy cosine | Target retention | Target cosine |
+| --- | ---: | ---: | ---: | ---: |
+| v191 image-space U-Net calibration | 9.916031 | 0.279888 | 0.253365 | 0.393485 |
+| v195 surface texture MLP | 0.068206 | 0.112638 | 0.002863 | 0.133734 |
+| v196 GT-assisted surface MLP diagnostic | 1.427611 | 0.138419 | 0.029127 | 0.199612 |
+| v199 support-aware low-rank | 0.015229 | 0.039391 | 0.000847 | 0.028702 |
+
+Conclusion: the surface/low-rank family fails at residual projection and
+alignment before target promotion. Future candidates need an explicit
+source-view projection gate before any exact target/full9 run.
+
 ## 2026-06-28 Update: v168 Low-Copy Direct-Teacher Patch
 
 `feedback.md` is the current handoff file in the repository root:

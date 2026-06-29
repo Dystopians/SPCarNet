@@ -1,0 +1,88 @@
+{
+  "schema": "spcarnet_v191_v199_residual_projection_summary_v1",
+  "date": "2026-06-29",
+  "phase_j_flowers_gate": {
+    "PSNR": 20.304358,
+    "SSIM": 0.55777,
+    "LPIPS": 0.329222
+  },
+  "runs": {
+    "v191": {
+      "role": "image-space U-Net calibration, GT-assisted",
+      "clean_claim": false,
+      "official_flowers": {
+        "PSNR": 20.606058,
+        "SSIM": 0.578882,
+        "LPIPS": 0.323687
+      },
+      "policy_projection": {
+        "energy_retention": 9.91603132223012,
+        "residual_cosine": 0.2798881394455799,
+        "changed_fraction": 0.9892724630155616
+      },
+      "target_projection": {
+        "energy_retention": 0.25336499113142763,
+        "residual_cosine": 0.3934847157408201,
+        "changed_fraction": 0.9822799933047097
+      }
+    },
+    "v195": {
+      "role": "surface texture MLP, teacher-only",
+      "clean_claim": true,
+      "official_flowers": {
+        "PSNR": 19.878032684326172,
+        "SSIM": 0.5090197920799255,
+        "LPIPS": 0.4029979407787323
+      },
+      "policy_projection": {
+        "energy_retention": 0.0682060240059074,
+        "residual_cosine": 0.11263805263224434,
+        "changed_fraction": 0.47692827692006423
+      },
+      "target_projection": {
+        "energy_retention": 0.0028627723554525237,
+        "residual_cosine": 0.13373396889954636,
+        "changed_fraction": 0.5668900031051192
+      }
+    },
+    "v196": {
+      "role": "surface texture MLP, GT-assisted diagnostic",
+      "clean_claim": false,
+      "official_flowers": {
+        "PSNR": 20.084991455078125,
+        "SSIM": 0.5239293575286865,
+        "LPIPS": 0.3852022886276245
+      },
+      "policy_projection": {
+        "energy_retention": 1.4276110268240174,
+        "residual_cosine": 0.13841885028386802,
+        "changed_fraction": 0.8693938321752931
+      },
+      "target_projection": {
+        "energy_retention": 0.02912739675327887,
+        "residual_cosine": 0.1996116333705558,
+        "changed_fraction": 0.8390565340265786
+      }
+    },
+    "v199": {
+      "role": "support-aware low-rank with no-GT target-visible capacity, teacher-only",
+      "clean_claim": true,
+      "official_flowers": {
+        "PSNR": 19.835336685180664,
+        "SSIM": 0.5058013796806335,
+        "LPIPS": 0.40419405698776245
+      },
+      "policy_projection": {
+        "energy_retention": 0.015229448558524967,
+        "residual_cosine": 0.0393906288113862,
+        "changed_fraction": 0.04931186288675085
+      },
+      "target_projection": {
+        "energy_retention": 0.0008465381627050384,
+        "residual_cosine": 0.02870173933461244,
+        "changed_fraction": 0.07113560232404792
+      }
+    }
+  },
+  "verdict": "The surface carrier fails at residual projection/alignment before target promotion; future candidates need an explicit source-view projection gate."
+}
