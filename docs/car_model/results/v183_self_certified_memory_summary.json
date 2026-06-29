@@ -1,0 +1,50 @@
+{
+  "schema": "spcarnet_v183_summary_v1",
+  "date": "2026-06-29",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "method": "cross-view self-certified surface residual memory",
+  "code": [
+    "scripts/car_model/probe_self_certified_surface_residual_memory.py",
+    "scripts/car_model/train_perceptual_surface_residual_decoder.py"
+  ],
+  "phasej_flowers_gate": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "v168_flowers_exact": {
+    "psnr": 19.83203125,
+    "ssim": 0.5057787895202637,
+    "lpips": 0.4059058129787445,
+    "no_gt_verify_passed": true
+  },
+  "v183_policy_val_best_all_axis": {
+    "alpha": 0.125,
+    "psnr_gain": 0.00004941750007544007,
+    "ssim_gain": 0.0000004569689432779948,
+    "lpips_gain": 0.0000004805624485015869,
+    "psnr_positive_view_fraction": 0.9166666666666666,
+    "ssim_positive_view_fraction": 0.5833333333333334,
+    "lpips_positive_view_fraction": 0.6666666666666666
+  },
+  "v183_flowers_exact_official": {
+    "psnr": 19.832029342651367,
+    "ssim": 0.5057790875434875,
+    "lpips": 0.4059065878391266,
+    "pass_phasej_gate": false
+  },
+  "v183_vs_v168_delta": {
+    "psnr": -0.000001907348633,
+    "ssim": 0.000000298023224,
+    "lpips": 0.000000774860382
+  },
+  "artifact_paths": {
+    "v183_policy_val_json": "/dev/shm/peilincai_spcarnet_v183_self_certified_memory/v183_self_certified_memory_probe.json",
+    "v183_exact_json": "/dev/shm/peilincai_spcarnet_v183_self_certified_memory_exact/v183_self_certified_memory_probe.json",
+    "v183_official_results": "/dev/shm/peilincai_spcarnet_v183_self_certified_memory_exact/v183_official_test_results.json",
+    "v183_alpha_probe": "/dev/shm/peilincai_spcarnet_v183_self_certified_memory_exact/alpha_rescale_probe/alpha_rescale_probe.json",
+    "v183_wandb_policy_val": "/dev/shm/peilincai_spcarnet_v183_self_certified_memory/wandb/offline-run-20260628_233025-wexc95sq",
+    "v183_wandb_exact": "/dev/shm/peilincai_spcarnet_v183_self_certified_memory_exact/wandb/offline-run-20260628_233434-n9ic6snj"
+  },
+  "verdict": "NOT COMPLETE: policy-val tiny all-axis pass did not generalize to flowers exact; do not run full9."
+}
