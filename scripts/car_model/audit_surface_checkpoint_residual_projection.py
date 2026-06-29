@@ -30,6 +30,13 @@ from scripts.car_model.train_surface_conditioned_residual_unet import (  # noqa:
     _predict_delta_tiled,
     _to_chw,
 )
+from scripts.car_model.train_perceptual_surface_residual_decoder import (  # noqa: E402
+    SurfaceResidualDecoder as PerceptualSurfaceResidualDecoder,
+    _face_indices as _decoder_face_indices,
+    _feature_dim as _decoder_feature_dim,
+    _load_feature_rows as _decoder_load_feature_rows,
+    _valid_mask as _decoder_valid_mask,
+)
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -223,18 +230,80 @@ def _policy_val_paths(evidence_dir: Path, stride: int, max_views: int) -> list[P
     return selected
 
 
+def _build_perceptual_decoder(checkpoint: dict[str, Any], device: torch.device) -> tuple[torch.nn.Module, np.ndarray]:
+    args = dict(checkpoint.get("args") or {})
+    candidate_faces = np.asarray(checkpoint["candidate_faces"], dtype=np.int64)
+    feature_mode = str(args.get("feature_mode", "basic"))
+    model = PerceptualSurfaceResidualDecoder(
+        int(candidate_faces.size),
+        feature_dim=_decoder_feature_dim(feature_mode),
+        embedding_dim=int(args.get("embedding_dim", 12)),
+        hidden_dim=int(args.get("hidden_dim", 96)),
+        layers=int(args.get("layers", 3)),
+        max_delta=float(args.get("max_delta", 0.20)),
+    )
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.to(device).eval()
+    return model, candidate_faces
+
+
+def _predict_perceptual_delta_image(
+    model: torch.nn.Module,
+    z: np.lib.npyio.NpzFile,
+    candidate_faces: np.ndarray,
+    *,
+    residual_l1_key: str,
+    min_l1: float,
+    min_alpha: float,
+    feature_mode: str,
+    chunk_size: int,
+    device: torch.device,
+) -> np.ndarray:
+    parent = np.asarray(z["rgb_render"], dtype=np.float32)
+    delta = np.zeros_like(parent, dtype=np.float32)
+    mask = _decoder_valid_mask(
+        z,
+        candidate_faces,
+        residual_l1_key=str(residual_l1_key),
+        min_l1=float(min_l1),
+        min_alpha=float(min_alpha),
+    )
+    ys, xs = np.nonzero(mask)
+    if ys.size == 0:
+        return delta
+    faces = np.asarray(z["face_id"], dtype=np.int64)[ys, xs]
+    face_idx, ok = _decoder_face_indices(faces, candidate_faces)
+    ys, xs, face_idx = ys[ok], xs[ok], face_idx[ok]
+    with torch.no_grad():
+        for start in range(0, int(ys.size), int(chunk_size)):
+            end = min(int(ys.size), start + int(chunk_size))
+            feat = torch.from_numpy(
+                _decoder_load_feature_rows(z, ys[start:end], xs[start:end], feature_mode=str(feature_mode))
+            ).to(device)
+            face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
+            pred = model(face_t, feat).detach().cpu().numpy().astype(np.float32)
+            delta[:, ys[start:end], xs[start:end]] = pred.T
+    return delta
+
+
 def _audit_policy_val(
     *,
     model: torch.nn.Module,
     face_lut: np.ndarray | None,
+    model_kind: str,
+    candidate_faces: np.ndarray | None,
     evidence_dir: Path,
     residual_rgb_key: str,
+    residual_l1_key: str,
     alpha: float,
     stride: int,
     max_views: int,
     min_alpha: float,
+    min_l1: float,
+    feature_mode: str,
     eval_tile: int,
     eval_overlap: int,
+    eval_chunk_size: int,
     ssim_max_side: int,
     lpips_max_side: int,
     lpips_model: Any,
@@ -242,29 +311,56 @@ def _audit_policy_val(
     device: torch.device,
 ) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
+    active_rows: list[dict[str, Any]] = []
     region_rows: list[dict[str, Any]] = []
     for path in tqdm(_policy_val_paths(evidence_dir, stride, max_views), desc="policy-val checkpoint projection"):
         with np.load(path, allow_pickle=False) as z:
-            features = torch.from_numpy(_load_input_chw(z))
-            face_ids = _load_face_ids_tensor(z, face_lut, max_side=-1)
             parent = np.clip(_to_chw(z["rgb_render"])[:3], 0.0, 1.0).astype(np.float32)
             raw_delta = np.asarray(z[residual_rgb_key], dtype=np.float32)[:3]
             teacher = np.clip(parent + raw_delta, 0.0, 1.0)
-            pred_delta = (
-                float(alpha)
-                * _predict_delta_tiled(
-                    model,
-                    features,
-                    face_ids=face_ids,
-                    device=device,
-                    tile=int(eval_tile),
-                    overlap=int(eval_overlap),
+            active_mask = _valid_mask(z, float(min_alpha))
+            if model_kind == "perceptual_surface_decoder":
+                if candidate_faces is None:
+                    raise RuntimeError("perceptual decoder audit requires candidate faces")
+                active_mask = _decoder_valid_mask(
+                    z,
+                    candidate_faces,
+                    residual_l1_key=str(residual_l1_key),
+                    min_l1=float(min_l1),
+                    min_alpha=float(min_alpha),
                 )
-                .numpy()
-            )
+                pred_delta = float(alpha) * _predict_perceptual_delta_image(
+                    model,
+                    z,
+                    candidate_faces,
+                    residual_l1_key=str(residual_l1_key),
+                    min_l1=float(min_l1),
+                    min_alpha=float(min_alpha),
+                    feature_mode=str(feature_mode),
+                    chunk_size=int(eval_chunk_size),
+                    device=device,
+                )
+                support = {}
+            else:
+                features = torch.from_numpy(_load_input_chw(z))
+                face_ids = _load_face_ids_tensor(z, face_lut, max_side=-1)
+                pred_delta = (
+                    float(alpha)
+                    * _predict_delta_tiled(
+                        model,
+                        features,
+                        face_ids=face_ids,
+                        device=device,
+                        tile=int(eval_tile),
+                        overlap=int(eval_overlap),
+                    )
+                    .numpy()
+                )
+                support = _support_summary(model, features, face_ids, _valid_mask(z, float(min_alpha)))
             candidate = np.clip(parent + pred_delta, 0.0, 1.0)
             valid = _valid_mask(z, float(min_alpha))
             residual = _residual_stats(pred_delta, raw_delta, valid)
+            active_residual = _residual_stats(pred_delta, raw_delta, active_mask)
             parent_lp = image_lpips_chw(parent, teacher, int(lpips_max_side), lpips_model) if lpips_model else None
             cand_lp = image_lpips_chw(candidate, teacher, int(lpips_max_side), lpips_model) if lpips_model else None
             row = {
@@ -276,17 +372,20 @@ def _audit_policy_val(
                 "parent_lpips": parent_lp,
                 "candidate_lpips": cand_lp,
                 **residual,
-                **_support_summary(model, features, face_ids, valid),
+                **support,
             }
             rows.append(row)
+            active_rows.append({"view": path.stem, **active_residual})
             for region in _region_rows(pred_delta, raw_delta, valid, int(region_grid)):
                 region_rows.append({"view": path.stem, **region})
     return {
         "scope": "policy_val_teacher_residual",
         "image_summary": _summarize_image_rows(rows),
         "residual_summary": _summarize_residual_rows(rows),
+        "active_residual_summary": _summarize_residual_rows(active_rows),
         "region_summary": _summarize_residual_rows(region_rows),
         "rows": rows,
+        "active_rows": active_rows,
         "region_rows": region_rows,
     }
 
@@ -368,6 +467,7 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
     ]
     ps = policy["image_summary"]
     rs = policy["residual_summary"]
+    ars = policy.get("active_residual_summary", {})
     lines.append(
         "| policy-val vs teacher | {parent_psnr:.6f} | {cand_psnr:.6f} | {psnr_gain:+.6f} | {parent_ssim:.6f} | {cand_ssim:.6f} | {ssim_gain:+.6f} | {ret:.6f} | {cos:.6f} | {chg:.6f} |".format(
             parent_psnr=float(ps["parent_psnr"]),
@@ -381,6 +481,20 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
             chg=float(rs["changed_fraction"]),
         )
     )
+    if ars:
+        lines.append(
+            "| selected-active residual only | {parent_psnr:.6f} | {cand_psnr:.6f} | {psnr_gain:+.6f} | {parent_ssim:.6f} | {cand_ssim:.6f} | {ssim_gain:+.6f} | {ret:.6f} | {cos:.6f} | {chg:.6f} |".format(
+                parent_psnr=float(ps["parent_psnr"]),
+                cand_psnr=float(ps["candidate_psnr"]),
+                psnr_gain=float(ps["psnr_gain"]),
+                parent_ssim=float(ps["parent_ssim"]),
+                cand_ssim=float(ps["candidate_ssim"]),
+                ssim_gain=float(ps["ssim_gain"]),
+                ret=float(ars["energy_retention"]),
+                cos=float(ars["cosine"]),
+                chg=float(ars["changed_fraction"]),
+            )
+        )
     if target is not None:
         ts = target["image_summary"]
         trs = target["residual_summary"]
@@ -425,17 +539,21 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Audit how a trained surface checkpoint projects teacher residuals.")
     parser.add_argument("--run_name", required=True)
     parser.add_argument("--checkpoint", required=True)
+    parser.add_argument("--checkpoint_type", choices=["surface_conditioned", "perceptual_surface_decoder"], default="surface_conditioned")
     parser.add_argument("--fit_evidence_dir", required=True)
     parser.add_argument("--target_eval_evidence_dir", default="")
     parser.add_argument("--target_render_dir", default="")
     parser.add_argument("--residual_rgb_key", default="teacher_residual_rgb")
+    parser.add_argument("--residual_l1_key", default="teacher_residual_l1")
     parser.add_argument("--alpha", type=float, default=1.0)
     parser.add_argument("--policy_val_stride", type=int, default=4)
     parser.add_argument("--max_policy_views", type=int, default=0)
     parser.add_argument("--max_target_views", type=int, default=0)
     parser.add_argument("--min_alpha", type=float, default=0.03)
+    parser.add_argument("--min_l1", type=float, default=0.0)
     parser.add_argument("--eval_tile", type=int, default=512)
     parser.add_argument("--eval_overlap", type=int, default=32)
+    parser.add_argument("--eval_chunk_size", type=int, default=65536)
     parser.add_argument("--ssim_max_side", type=int, default=512)
     parser.add_argument("--lpips_max_side", type=int, default=256)
     parser.add_argument("--compute_lpips", action="store_true")
@@ -448,20 +566,33 @@ def main() -> int:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     checkpoint = torch.load(str(args.checkpoint), map_location="cpu", weights_only=False)
-    model, face_lut = _build_model(checkpoint, device)
+    checkpoint_args = dict(checkpoint.get("args") or {})
+    perceptual_feature_mode = str(checkpoint_args.get("feature_mode", "basic"))
+    candidate_faces = None
+    if str(args.checkpoint_type) == "perceptual_surface_decoder":
+        model, candidate_faces = _build_perceptual_decoder(checkpoint, device)
+        face_lut = None
+    else:
+        model, face_lut = _build_model(checkpoint, device)
     lpips_model = build_lpips_model() if bool(args.compute_lpips) else None
 
     policy = _audit_policy_val(
         model=model,
         face_lut=face_lut,
+        model_kind=str(args.checkpoint_type),
+        candidate_faces=candidate_faces,
         evidence_dir=Path(args.fit_evidence_dir),
         residual_rgb_key=str(args.residual_rgb_key),
+        residual_l1_key=str(args.residual_l1_key),
         alpha=float(args.alpha),
         stride=int(args.policy_val_stride),
         max_views=int(args.max_policy_views),
         min_alpha=float(args.min_alpha),
+        min_l1=float(args.min_l1),
+        feature_mode=perceptual_feature_mode,
         eval_tile=int(args.eval_tile),
         eval_overlap=int(args.eval_overlap),
+        eval_chunk_size=int(args.eval_chunk_size),
         ssim_max_side=int(args.ssim_max_side),
         lpips_max_side=int(args.lpips_max_side),
         lpips_model=lpips_model,
@@ -512,13 +643,17 @@ def main() -> int:
         "run_name": str(args.run_name),
         "inputs": {
             "checkpoint": str(args.checkpoint),
+            "checkpoint_type": str(args.checkpoint_type),
             "fit_evidence_dir": str(args.fit_evidence_dir),
             "target_eval_evidence_dir": str(args.target_eval_evidence_dir),
             "target_render_dir": str(args.target_render_dir),
             "residual_rgb_key": str(args.residual_rgb_key),
+            "residual_l1_key": str(args.residual_l1_key),
+            "perceptual_feature_mode": str(perceptual_feature_mode),
             "alpha": float(args.alpha),
             "policy_val_stride": int(args.policy_val_stride),
             "min_alpha": float(args.min_alpha),
+            "min_l1": float(args.min_l1),
             "region_grid": int(args.region_grid),
         },
         "checkpoint_args": checkpoint.get("args", {}),

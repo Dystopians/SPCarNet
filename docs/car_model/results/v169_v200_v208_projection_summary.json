@@ -1,0 +1,127 @@
+{
+  "created_at": "2026-06-29",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "phase_j_flowers_gate": {
+    "psnr_gt": 20.304358,
+    "ssim_gt": 0.55777,
+    "lpips_lt": 0.329222
+  },
+  "source_projection_gate_target": {
+    "policy_cosine_min": 0.25,
+    "policy_energy_retention_min": 0.25,
+    "requires_projection_ssim_lpips_not_degraded": true
+  },
+  "best_previous_baked_reference": {
+    "run": "v204_coverage_direction_decoder",
+    "policy_val_best_all_axis": {
+      "alpha": 0.25,
+      "psnr_gain": 0.012003148669090061,
+      "ssim_gain": 0.00008991857369740804,
+      "lpips_gain": 0.00022929906845092773
+    },
+    "projection_alpha_025": {
+      "policy_cosine": 0.0895072264430013,
+      "policy_energy_retention": 0.02186011351564506,
+      "projection_ssim_gain": -0.00010629494984944661
+    }
+  },
+  "new_runs": {
+    "v205_fourier_direction_decoder": {
+      "method_delta": "fourier_v1 barycentric/local features, direction and energy losses",
+      "wandb_offline": "/dev/shm/peilincai_spcarnet_v205_fourier_direction_decoder/wandb/offline-run-20260629_044217-dk276qgy",
+      "audit_json": "/dev/shm/peilincai_spcarnet_v205_fourier_direction_decoder/v180_perceptual_surface_decoder_audit.json",
+      "projection_json": "/dev/shm/peilincai_spcarnet_v205_fourier_direction_decoder/v205_projection_audit_alpha025.json",
+      "candidate_faces": 32768,
+      "policy_val_best_all_axis": {
+        "alpha": 0.25,
+        "psnr_gain": 0.012107369793427303,
+        "ssim_gain": 0.00006440281867980957,
+        "lpips_gain": 0.00025013772149880725
+      },
+      "projection_alpha_025": {
+        "psnr_gain_vs_teacher": 0.003516047605509165,
+        "ssim_gain_vs_teacher": -0.0002447466055552165,
+        "lpips_gain_vs_teacher": 0.000016162249570091564,
+        "full_cosine": 0.08301302500912112,
+        "full_energy_retention": 0.025752118589758562,
+        "active_cosine": 0.15008860033664742,
+        "active_energy_retention": 0.08536800863667075
+      }
+    },
+    "v206_fourier_image_decoder": {
+      "method_delta": "fourier_v1 features plus image proxy structure loss",
+      "wandb_offline": "/dev/shm/peilincai_spcarnet_v206_fourier_image_decoder/wandb/offline-run-20260629_044217-otbl77dr",
+      "audit_json": "/dev/shm/peilincai_spcarnet_v206_fourier_image_decoder/v180_perceptual_surface_decoder_audit.json",
+      "projection_json": "/dev/shm/peilincai_spcarnet_v206_fourier_image_decoder/v206_projection_audit_alpha025.json",
+      "candidate_faces": 32768,
+      "policy_val_best_all_axis": {
+        "alpha": 0.25,
+        "psnr_gain": 0.012631310057611422,
+        "ssim_gain": 0.00006187458833058675,
+        "lpips_gain": 0.0002544994155565898
+      },
+      "projection_alpha_025": {
+        "psnr_gain_vs_teacher": -0.005857676210443567,
+        "ssim_gain_vs_teacher": -0.00028098126252492267,
+        "lpips_gain_vs_teacher": 0.00004114327020943165,
+        "full_cosine": 0.08203239899774149,
+        "full_energy_retention": 0.03010484406276,
+        "active_cosine": 0.14723392761018486,
+        "active_energy_retention": 0.0994961029788242
+      }
+    },
+    "v207_fourier_energycoverage_decoder": {
+      "method_delta": "fourier_v1 features plus residual-energy coverage face policy",
+      "wandb_offline": "/dev/shm/peilincai_spcarnet_v207_fourier_energycoverage_decoder/wandb/offline-run-20260629_044748-jl9vyy36",
+      "audit_json": "/dev/shm/peilincai_spcarnet_v207_fourier_energycoverage_decoder/v180_perceptual_surface_decoder_audit.json",
+      "projection_json": "/dev/shm/peilincai_spcarnet_v207_fourier_energycoverage_decoder/v207_projection_audit_alpha025.json",
+      "candidate_faces": 65536,
+      "selected_score_coverage": 0.6338176502452808,
+      "policy_val_best_all_axis": {
+        "alpha": 0.25,
+        "psnr_gain": 0.014937591142840509,
+        "ssim_gain": 0.00004864732424418131,
+        "lpips_gain": 0.00013707329829533896
+      },
+      "projection_alpha_025": {
+        "psnr_gain_vs_teacher": 0.016412456212288856,
+        "ssim_gain_vs_teacher": -0.00012869139512379965,
+        "lpips_gain_vs_teacher": 0.00007668083223203818,
+        "full_cosine": 0.09470484832312469,
+        "full_energy_retention": 0.026670368277731848,
+        "active_cosine": 0.14964282576671242,
+        "active_energy_retention": 0.066415289605034
+      }
+    },
+    "v208_highcoverage_fourier_decoder": {
+      "method_delta": "fourier_v1 features plus 131k-face high residual-energy coverage policy",
+      "wandb_offline": "/dev/shm/peilincai_spcarnet_v208_highcoverage_fourier_decoder/wandb/offline-run-20260629_045640-qoa3cgys",
+      "audit_json": "/dev/shm/peilincai_spcarnet_v208_highcoverage_fourier_decoder/v180_perceptual_surface_decoder_audit.json",
+      "projection_json": "/dev/shm/peilincai_spcarnet_v208_highcoverage_fourier_decoder/v208_projection_audit_alpha025.json",
+      "candidate_faces": 131072,
+      "selected_score_coverage": 0.7937932049022939,
+      "policy_val_best_all_axis": {
+        "alpha": 0.25,
+        "psnr_gain": 0.01780246143704674,
+        "ssim_gain": 0.00011787315209706624,
+        "lpips_gain": 0.0002096711347500483,
+        "balanced_score": 0.024353347173989032
+      },
+      "projection_alpha_025": {
+        "psnr_gain_vs_teacher": 0.026535710467698575,
+        "ssim_gain_vs_teacher": -0.00009984274705251057,
+        "lpips_gain_vs_teacher": 0.00009324207591513793,
+        "full_cosine": 0.10014943230483368,
+        "full_energy_retention": 0.024962943208037058,
+        "active_cosine": 0.1382919108874233,
+        "active_energy_retention": 0.04758997859143246
+      }
+    }
+  },
+  "decision": {
+    "v169_exact_full9_permitted": false,
+    "best_proxy_run": "v208_highcoverage_fourier_decoder",
+    "best_projection_run": "v208_highcoverage_fourier_decoder",
+    "reason": "Policy-val proxy improved, but source projection cosine and energy retention remain below the v169 gate and projection SSIM vs teacher is still negative."
+  }
+}

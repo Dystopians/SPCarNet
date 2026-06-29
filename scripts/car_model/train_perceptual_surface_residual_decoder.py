@@ -37,7 +37,21 @@ def _psnr(a: np.ndarray, b: np.ndarray) -> float:
     return float("inf") if mse <= 1.0e-12 else float(-10.0 * math.log10(mse))
 
 
-def _load_feature_rows(z: np.lib.npyio.NpzFile, ys: np.ndarray, xs: np.ndarray) -> np.ndarray:
+def _feature_dim(feature_mode: str) -> int:
+    if str(feature_mode) == "basic":
+        return 18
+    if str(feature_mode) == "fourier_v1":
+        return 49
+    raise ValueError(f"unknown feature_mode={feature_mode}")
+
+
+def _load_feature_rows(
+    z: np.lib.npyio.NpzFile,
+    ys: np.ndarray,
+    xs: np.ndarray,
+    *,
+    feature_mode: str = "basic",
+) -> np.ndarray:
     bary = np.asarray(z["barycentric"], dtype=np.float32)
     normal = np.asarray(z["normal"], dtype=np.float32)
     render = np.asarray(z["rgb_render"], dtype=np.float32)
@@ -57,7 +71,7 @@ def _load_feature_rows(z: np.lib.npyio.NpzFile, ys: np.ndarray, xs: np.ndarray) 
     parent = np.clip(np.nan_to_num(parent, nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0).astype(np.float32)
     inv_depth = (1.0 / (1.0 + np.maximum(depth[ys, xs].reshape(-1, 1), 0.0))).astype(np.float32)
     a = np.clip(np.nan_to_num(alpha[ys, xs].reshape(-1, 1), nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0)
-    return np.concatenate(
+    base = np.concatenate(
         [
             np.ones((int(ys.size), 1), dtype=np.float32),
             u,
@@ -74,6 +88,28 @@ def _load_feature_rows(z: np.lib.npyio.NpzFile, ys: np.ndarray, xs: np.ndarray) 
         ],
         axis=1,
     ).astype(np.float32)
+    if str(feature_mode) == "basic":
+        return base
+    if str(feature_mode) != "fourier_v1":
+        raise ValueError(f"unknown feature_mode={feature_mode}")
+
+    w = np.clip(bary[0, ys, xs], 0.0, 1.0).reshape(-1, 1)
+    coords = np.concatenate([w, u, v], axis=1).astype(np.float32)
+    extra: list[np.ndarray] = [w.astype(np.float32)]
+    for freq in (1.0, 2.0, 4.0, 8.0):
+        angle = coords * float(2.0 * math.pi * freq)
+        extra.append(np.sin(angle).astype(np.float32))
+        extra.append(np.cos(angle).astype(np.float32))
+    luma = (0.299 * parent[:, 0] + 0.587 * parent[:, 1] + 0.114 * parent[:, 2]).reshape(-1, 1)
+    extra.extend(
+        [
+            (n * cam).astype(np.float32),
+            np.abs(ndot).astype(np.float32),
+            np.square(ndot).astype(np.float32),
+            luma.astype(np.float32),
+        ]
+    )
+    return np.concatenate([base, *extra], axis=1).astype(np.float32)
 
 
 def _face_indices(faces: np.ndarray, candidate_faces: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -122,17 +158,20 @@ def _policy_split(paths: list[Path], stride: int) -> tuple[list[Path], list[Path
 def _rank_candidate_faces(
     fit_paths: list[Path],
     *,
+    residual_rgb_key: str,
     residual_l1_key: str,
     min_l1: float,
     min_alpha: float,
     max_faces: int,
     max_samples_per_view: int,
+    target_energy_coverage: float,
     seed: int,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     rng = np.random.default_rng(int(seed))
     sums: dict[int, float] = {}
     counts: dict[int, int] = {}
     total_samples = 0
+    total_score = 0.0
     for path in tqdm(fit_paths, desc="rank train-fit faces"):
         z = np.load(path)
         mask = _valid_mask(z, None, residual_l1_key=residual_l1_key, min_l1=min_l1, min_alpha=min_alpha)
@@ -143,21 +182,44 @@ def _rank_candidate_faces(
             take = rng.choice(ys.size, size=int(max_samples_per_view), replace=False)
             ys, xs = ys[take], xs[take]
         faces = np.asarray(z["face_id"], dtype=np.int64)[ys, xs]
-        l1 = np.asarray(z[residual_l1_key], dtype=np.float32)[ys, xs]
+        if residual_rgb_key in z:
+            residual = np.asarray(z[residual_rgb_key], dtype=np.float32)[:3]
+            score = np.sum(np.square(residual[:, ys, xs]), axis=0).astype(np.float64)
+        else:
+            score = np.asarray(z[residual_l1_key], dtype=np.float32)[ys, xs].astype(np.float64)
+        score = np.clip(np.nan_to_num(score, nan=0.0, posinf=0.0, neginf=0.0), 0.0, None)
+        total_score += float(np.sum(score))
         total_samples += int(faces.size)
         for face in np.unique(faces):
             fm = faces == int(face)
-            sums[int(face)] = sums.get(int(face), 0.0) + float(np.sum(l1[fm]))
+            sums[int(face)] = sums.get(int(face), 0.0) + float(np.sum(score[fm]))
             counts[int(face)] = counts.get(int(face), 0) + int(np.count_nonzero(fm))
     ranked = sorted(sums, key=lambda f: sums[f], reverse=True)
-    if int(max_faces) > 0:
+    coverage_target = float(target_energy_coverage)
+    selected_score = float(sum(sums[f] for f in ranked))
+    if 0.0 < coverage_target < 1.0 and total_score > 0.0:
+        selected: list[int] = []
+        running = 0.0
+        for face in ranked:
+            selected.append(int(face))
+            running += float(sums[face])
+            if running / max(total_score, 1.0e-12) >= coverage_target:
+                break
+        ranked = selected
+        selected_score = running
+    if int(max_faces) > 0 and len(ranked) > int(max_faces):
         ranked = ranked[: int(max_faces)]
+        selected_score = float(sum(sums[f] for f in ranked))
     faces = np.asarray(sorted(ranked), dtype=np.int64)
     return faces, {
         "ranked_faces": int(len(sums)),
         "selected_faces": int(faces.size),
         "total_sampled_pixels": int(total_samples),
+        "total_rank_score": float(total_score),
+        "selected_rank_score": float(selected_score),
+        "selected_score_coverage": float(selected_score / max(total_score, 1.0e-12)),
         "max_faces": int(max_faces),
+        "target_energy_coverage": float(target_energy_coverage),
     }
 
 
@@ -188,23 +250,49 @@ def _sample_batch(
     min_alpha: float,
     batch_size: int,
     seed: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    sample_weight_gamma: float,
+    sample_weight_clip: float,
+    feature_mode: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     rng = np.random.default_rng(int(seed))
     z = np.load(path)
     mask = _valid_mask(z, candidate_faces, residual_l1_key=residual_l1_key, min_l1=min_l1, min_alpha=min_alpha)
     ys, xs = np.nonzero(mask)
     if ys.size == 0:
         raise RuntimeError(f"no valid train samples in {path}")
+    residual_score = None
+    if residual_l1_key in z:
+        residual_score = np.asarray(z[residual_l1_key], dtype=np.float32)[ys, xs]
+        residual_score = np.clip(np.nan_to_num(residual_score, nan=0.0, posinf=0.0, neginf=0.0), 0.0, None)
     if ys.size > int(batch_size):
-        take = rng.choice(ys.size, size=int(batch_size), replace=False)
+        probs = None
+        if residual_score is not None and float(sample_weight_gamma) > 0.0:
+            score = np.power(residual_score.astype(np.float64) + 1.0e-6, float(sample_weight_gamma))
+            score = np.nan_to_num(score, nan=0.0, posinf=0.0, neginf=0.0)
+            total = float(np.sum(score))
+            if total > 0.0 and np.isfinite(total):
+                probs = score / total
+                probs = probs / max(float(np.sum(probs)), 1.0e-12)
+        take = rng.choice(ys.size, size=int(batch_size), replace=False, p=probs)
         ys, xs = ys[take], xs[take]
+        if residual_score is not None:
+            residual_score = residual_score[take]
     faces = np.asarray(z["face_id"], dtype=np.int64)[ys, xs]
     face_idx, ok = _face_indices(faces, candidate_faces)
     ys, xs, face_idx = ys[ok], xs[ok], face_idx[ok]
-    features = _load_feature_rows(z, ys, xs)
+    if residual_score is not None:
+        residual_score = residual_score[ok]
+    features = _load_feature_rows(z, ys, xs, feature_mode=str(feature_mode))
     residual = np.asarray(z[residual_rgb_key], dtype=np.float32)
     target = np.stack([residual[0, ys, xs], residual[1, ys, xs], residual[2, ys, xs]], axis=1).astype(np.float32)
-    return face_idx.astype(np.int64), features.astype(np.float32), target
+    if residual_score is None:
+        residual_score = np.mean(np.abs(target), axis=1).astype(np.float32)
+    denom = max(float(np.mean(residual_score)), 1.0e-6)
+    weights = np.power((residual_score / denom) + 1.0e-6, max(float(sample_weight_gamma), 0.0)).astype(np.float32)
+    if float(sample_weight_clip) > 0.0:
+        weights = np.clip(weights, 1.0 / float(sample_weight_clip), float(sample_weight_clip))
+    weights = weights / max(float(np.mean(weights)), 1.0e-6)
+    return face_idx.astype(np.int64), features.astype(np.float32), target, weights.astype(np.float32)
 
 
 def _image_proxy_loss(
@@ -217,6 +305,7 @@ def _image_proxy_loss(
     min_l1: float,
     min_alpha: float,
     stride: int,
+    feature_mode: str,
     device: torch.device,
 ) -> torch.Tensor:
     z = np.load(path)
@@ -232,7 +321,7 @@ def _image_proxy_loss(
     if not np.any(ok):
         return torch.zeros((), device=device)
     ys_lr, xs_lr, ys, xs, face_idx = ys_lr[ok], xs_lr[ok], ys[ok], xs[ok], face_idx[ok]
-    features = torch.from_numpy(_load_feature_rows(z, ys, xs)).to(device)
+    features = torch.from_numpy(_load_feature_rows(z, ys, xs, feature_mode=str(feature_mode))).to(device)
     face_t = torch.from_numpy(face_idx.astype(np.int64)).to(device)
     pred = model(face_t, features)
 
@@ -264,6 +353,7 @@ def _evaluate(
     residual_l1_key: str,
     min_l1: float,
     min_alpha: float,
+    feature_mode: str,
     alpha_grid: list[float],
     chunk_size: int,
     ssim_max_side: int,
@@ -292,7 +382,9 @@ def _evaluate(
                 ys, xs, face_idx = ys[ok], xs[ok], face_idx[ok]
                 for start in range(0, int(ys.size), int(chunk_size)):
                     end = min(int(ys.size), start + int(chunk_size))
-                    feat = torch.from_numpy(_load_feature_rows(z, ys[start:end], xs[start:end])).to(device)
+                    feat = torch.from_numpy(
+                        _load_feature_rows(z, ys[start:end], xs[start:end], feature_mode=str(feature_mode))
+                    ).to(device)
                     face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
                     pred = model(face_t, feat).detach().cpu().numpy().astype(np.float32)
                     delta[:, ys[start:end], xs[start:end]] = pred.T
@@ -393,7 +485,9 @@ def _evaluate(
                     ys, xs, face_idx = ys[ok], xs[ok], face_idx[ok]
                     for start in range(0, int(ys.size), int(chunk_size)):
                         end = min(int(ys.size), start + int(chunk_size))
-                        feat = torch.from_numpy(_load_feature_rows(z, ys[start:end], xs[start:end])).to(device)
+                        feat = torch.from_numpy(
+                            _load_feature_rows(z, ys[start:end], xs[start:end], feature_mode=str(feature_mode))
+                        ).to(device)
                         face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
                         pred = model(face_t, feat).detach().cpu().numpy().astype(np.float32)
                         delta[:, ys[start:end], xs[start:end]] = pred.T
@@ -455,6 +549,7 @@ def main() -> int:
     parser.add_argument("--min_alpha", type=float, default=0.02)
     parser.add_argument("--max_candidate_faces", type=int, default=128)
     parser.add_argument("--max_candidate_face_samples_per_view", type=int, default=4096)
+    parser.add_argument("--candidate_target_energy_coverage", type=float, default=0.0)
     parser.add_argument("--batch_size", type=int, default=32768)
     parser.add_argument("--steps", type=int, default=600)
     parser.add_argument("--lr", type=float, default=2.0e-3)
@@ -462,9 +557,14 @@ def main() -> int:
     parser.add_argument("--hidden_dim", type=int, default=96)
     parser.add_argument("--layers", type=int, default=3)
     parser.add_argument("--max_delta", type=float, default=0.20)
+    parser.add_argument("--feature_mode", choices=["basic", "fourier_v1"], default="basic")
     parser.add_argument("--image_loss_every", type=int, default=4)
     parser.add_argument("--image_loss_stride", type=int, default=12)
     parser.add_argument("--image_loss_weight", type=float, default=0.35)
+    parser.add_argument("--sample_weight_gamma", type=float, default=0.0)
+    parser.add_argument("--sample_weight_clip", type=float, default=8.0)
+    parser.add_argument("--cosine_loss_weight", type=float, default=0.0)
+    parser.add_argument("--energy_match_weight", type=float, default=0.0)
     parser.add_argument("--mag_reg", type=float, default=1.0e-4)
     parser.add_argument("--alpha_grid", default="0,0.0625,0.125,0.25,0.5,0.75,1")
     parser.add_argument("--eval_chunk_size", type=int, default=65536)
@@ -504,18 +604,20 @@ def main() -> int:
     fit_paths, val_paths = _policy_split(paths, int(args.policy_val_stride))
     candidate_faces, face_summary = _rank_candidate_faces(
         fit_paths,
+        residual_rgb_key=str(args.residual_rgb_key),
         residual_l1_key=str(args.residual_l1_key),
         min_l1=float(args.min_l1),
         min_alpha=float(args.min_alpha),
         max_faces=int(args.max_candidate_faces),
         max_samples_per_view=int(args.max_candidate_face_samples_per_view),
+        target_energy_coverage=float(args.candidate_target_energy_coverage),
         seed=int(args.seed),
     )
     if candidate_faces.size <= 0:
         raise RuntimeError("no candidate faces selected")
     model = SurfaceResidualDecoder(
         int(candidate_faces.size),
-        feature_dim=18,
+        feature_dim=_feature_dim(str(args.feature_mode)),
         embedding_dim=int(args.embedding_dim),
         hidden_dim=int(args.hidden_dim),
         layers=int(args.layers),
@@ -540,21 +642,37 @@ def main() -> int:
                     min_alpha=float(args.min_alpha),
                     batch_size=int(args.batch_size),
                     seed=int(args.seed) + step + attempt * 1009,
+                    sample_weight_gamma=float(args.sample_weight_gamma),
+                    sample_weight_clip=float(args.sample_weight_clip),
+                    feature_mode=str(args.feature_mode),
                 )
                 break
             except RuntimeError:
                 continue
         if sampled is None:
             raise RuntimeError("no train-fit view contains the selected candidate faces")
-        face_idx, features, target = sampled
+        face_idx, features, target, sample_weights = sampled
         face_t = torch.from_numpy(face_idx).to(device)
         feat_t = torch.from_numpy(features).to(device)
         target_t = torch.from_numpy(target).to(device)
+        weight_t = torch.from_numpy(sample_weights).to(device).reshape(-1)
+        weight_t = weight_t / torch.clamp(torch.mean(weight_t), min=1.0e-6)
         pred = model(face_t, feat_t)
-        rgb_loss = torch.sqrt(torch.square(pred - target_t) + 1.0e-6).mean()
+        rgb_per = torch.sqrt(torch.square(pred - target_t) + 1.0e-6).mean(dim=1)
+        rgb_loss = torch.sum(weight_t * rgb_per) / torch.clamp(torch.sum(weight_t), min=1.0e-6)
         luma_pred = 0.299 * pred[:, 0] + 0.587 * pred[:, 1] + 0.114 * pred[:, 2]
         luma_target = 0.299 * target_t[:, 0] + 0.587 * target_t[:, 1] + 0.114 * target_t[:, 2]
-        luma_loss = torch.sqrt(torch.square(luma_pred - luma_target) + 1.0e-6).mean()
+        luma_per = torch.sqrt(torch.square(luma_pred - luma_target) + 1.0e-6)
+        luma_loss = torch.sum(weight_t * luma_per) / torch.clamp(torch.sum(weight_t), min=1.0e-6)
+        cosine = F.cosine_similarity(pred, target_t, dim=1, eps=1.0e-6)
+        target_mag = torch.mean(torch.abs(target_t), dim=1)
+        pred_mag = torch.mean(torch.abs(pred), dim=1)
+        direction_weight = weight_t * (target_mag > 1.0e-5).float()
+        cosine_loss = torch.sum(direction_weight * (1.0 - cosine)) / torch.clamp(torch.sum(direction_weight), min=1.0e-6)
+        energy_loss = torch.sum(weight_t * torch.sqrt(torch.square(pred_mag - target_mag) + 1.0e-6)) / torch.clamp(
+            torch.sum(weight_t),
+            min=1.0e-6,
+        )
         img_loss = torch.zeros((), device=device)
         if int(args.image_loss_every) > 0 and step % int(args.image_loss_every) == 0:
             img_path = train_rng.choice(fit_cycle)
@@ -567,10 +685,18 @@ def main() -> int:
                 min_l1=float(args.min_l1),
                 min_alpha=float(args.min_alpha),
                 stride=int(args.image_loss_stride),
+                feature_mode=str(args.feature_mode),
                 device=device,
             )
         mag = torch.mean(torch.square(pred))
-        loss = rgb_loss + 0.35 * luma_loss + float(args.image_loss_weight) * img_loss + float(args.mag_reg) * mag
+        loss = (
+            rgb_loss
+            + 0.35 * luma_loss
+            + float(args.cosine_loss_weight) * cosine_loss
+            + float(args.energy_match_weight) * energy_loss
+            + float(args.image_loss_weight) * img_loss
+            + float(args.mag_reg) * mag
+        )
         opt.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -581,8 +707,13 @@ def main() -> int:
                 "loss": float(loss.detach().cpu()),
                 "rgb_loss": float(rgb_loss.detach().cpu()),
                 "luma_loss": float(luma_loss.detach().cpu()),
+                "cosine_loss": float(cosine_loss.detach().cpu()),
+                "energy_loss": float(energy_loss.detach().cpu()),
                 "image_proxy_loss": float(img_loss.detach().cpu()),
                 "mean_abs_pred": float(torch.mean(torch.abs(pred)).detach().cpu()),
+                "mean_abs_target": float(torch.mean(torch.abs(target_t)).detach().cpu()),
+                "weighted_mean_abs_target": float((torch.sum(weight_t * target_mag) / torch.clamp(torch.sum(weight_t), min=1.0e-6)).detach().cpu()),
+                "batch_cosine": float(torch.mean(cosine).detach().cpu()),
             }
             train_rows.append(row)
             if wandb_run is not None:
@@ -597,6 +728,7 @@ def main() -> int:
         residual_l1_key=str(args.residual_l1_key),
         min_l1=float(args.min_l1),
         min_alpha=float(args.min_alpha),
+        feature_mode=str(args.feature_mode),
         alpha_grid=alpha_grid,
         chunk_size=int(args.eval_chunk_size),
         ssim_max_side=int(args.policy_val_ssim_max_side),
@@ -627,9 +759,15 @@ def main() -> int:
             "embedding_dim": int(args.embedding_dim),
             "hidden_dim": int(args.hidden_dim),
             "layers": int(args.layers),
+            "feature_mode": str(args.feature_mode),
+            "feature_dim": int(_feature_dim(str(args.feature_mode))),
             "image_loss_every": int(args.image_loss_every),
             "image_loss_stride": int(args.image_loss_stride),
             "image_loss_weight": float(args.image_loss_weight),
+            "sample_weight_gamma": float(args.sample_weight_gamma),
+            "sample_weight_clip": float(args.sample_weight_clip),
+            "cosine_loss_weight": float(args.cosine_loss_weight),
+            "energy_match_weight": float(args.energy_match_weight),
             "rows": train_rows,
         },
         "teacher_signal_pass": True,
