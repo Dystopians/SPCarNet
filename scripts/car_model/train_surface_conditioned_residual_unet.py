@@ -311,6 +311,217 @@ def _collect_train_face_lut(paths: list[Path], max_unique: int) -> np.ndarray:
     return merged
 
 
+def _collect_residual_top_face_lut(
+    paths: list[Path],
+    *,
+    residual_l1_key: str,
+    max_unique: int,
+    min_alpha: float,
+    min_residual_l1: float,
+    priority_face_counts: dict[int, int] | None = None,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    scores: dict[int, float] = {}
+    counts: dict[int, int] = {}
+    views_used = 0
+    for path in tqdm(paths, desc="collect residual top face ids"):
+        z = np.load(path)
+        if "face_id" not in z or residual_l1_key not in z:
+            continue
+        face_id = np.asarray(z["face_id"], dtype=np.int64)
+        mask = face_id >= 0
+        if "barycentric_valid" in z:
+            mask &= np.asarray(z["barycentric_valid"]).astype(bool)
+        if "alpha" in z:
+            mask &= np.asarray(z["alpha"], dtype=np.float32) >= float(min_alpha)
+        residual_l1 = np.asarray(z[residual_l1_key], dtype=np.float32)
+        mask &= residual_l1 >= float(min_residual_l1)
+        if not np.any(mask):
+            continue
+        views_used += 1
+        faces, inverse = np.unique(face_id[mask], return_inverse=True)
+        residual_values = residual_l1[mask].astype(np.float64)
+        sums = np.bincount(inverse, weights=residual_values)
+        nums = np.bincount(inverse)
+        for face, score, count in zip(faces, sums, nums, strict=False):
+            face_i = int(face)
+            if face_i < 0:
+                continue
+            scores[face_i] = scores.get(face_i, 0.0) + float(score)
+            counts[face_i] = counts.get(face_i, 0) + int(count)
+    priority_face_counts = priority_face_counts or {}
+    ranked = sorted(
+        scores,
+        key=lambda face: (
+            1 if face in priority_face_counts else 0,
+            priority_face_counts.get(face, 0),
+            scores[face],
+            counts.get(face, 0),
+        ),
+        reverse=True,
+    )
+    if int(max_unique) > 0:
+        ranked = ranked[: int(max_unique)]
+    face_lut = np.asarray(sorted(ranked), dtype=np.int64)
+    summary = {
+        "schema": "spcarnet_residual_top_face_lut_v1",
+        "views_requested": int(len(paths)),
+        "views_used": int(views_used),
+        "residual_l1_key": str(residual_l1_key),
+        "min_alpha": float(min_alpha),
+        "min_residual_l1": float(min_residual_l1),
+        "max_unique": int(max_unique),
+        "selected_faces": int(face_lut.size),
+        "total_scored_faces": int(len(scores)),
+        "priority_face_count": int(len(priority_face_counts)),
+        "selected_priority_faces": int(sum(1 for face in ranked if face in priority_face_counts)),
+        "top_faces": [
+            {
+                "face_id": int(face),
+                "score": float(scores[face]),
+                "samples": int(counts.get(face, 0)),
+                "priority_samples": int(priority_face_counts.get(face, 0)),
+            }
+            for face in ranked[:32]
+        ],
+        "target_or_test_gt_used": False,
+    }
+    return face_lut, summary
+
+
+def _collect_visible_face_counts(
+    evidence_dir: Path,
+    *,
+    min_alpha: float,
+) -> tuple[dict[int, int], dict[str, Any]]:
+    counts: dict[int, int] = {}
+    paths = evidence_views(evidence_dir)
+    views_used = 0
+    for path in tqdm(paths, desc="collect target-visible face ids"):
+        z = np.load(path)
+        if "face_id" not in z:
+            continue
+        face_id = np.asarray(z["face_id"], dtype=np.int64)
+        mask = face_id >= 0
+        if "barycentric_valid" in z:
+            mask &= np.asarray(z["barycentric_valid"]).astype(bool)
+        if "alpha" in z:
+            mask &= np.asarray(z["alpha"], dtype=np.float32) >= float(min_alpha)
+        if not np.any(mask):
+            continue
+        views_used += 1
+        faces, nums = np.unique(face_id[mask], return_counts=True)
+        for face, count in zip(faces, nums, strict=False):
+            face_i = int(face)
+            if face_i >= 0:
+                counts[face_i] = counts.get(face_i, 0) + int(count)
+    summary = {
+        "schema": "spcarnet_target_visible_face_counts_v1",
+        "evidence_dir": str(evidence_dir),
+        "view_count": int(len(paths)),
+        "views_used": int(views_used),
+        "min_alpha": float(min_alpha),
+        "visible_faces": int(len(counts)),
+        "top_faces": [
+            {"face_id": int(face), "samples": int(count)}
+            for face, count in sorted(counts.items(), key=lambda item: item[1], reverse=True)[:32]
+        ],
+        "target_or_test_gt_used": False,
+    }
+    return counts, summary
+
+
+def _texture_row_indices_np(
+    face_id: np.ndarray,
+    barycentric: np.ndarray,
+    face_lut: np.ndarray,
+    texture_size: int,
+) -> np.ndarray:
+    compact = _compact_face_ids(np.asarray(face_id, dtype=np.int64), face_lut)
+    bary = np.asarray(barycentric, dtype=np.float32)
+    if bary.shape[0] != 3:
+        return np.zeros(compact.shape, dtype=np.int64)
+    u = np.clip(bary[1], 0.0, 0.999999)
+    v = np.clip(bary[2], 0.0, 0.999999)
+    ubin = np.clip((u * float(texture_size)).astype(np.int64), 0, int(texture_size) - 1)
+    vbin = np.clip((v * float(texture_size)).astype(np.int64), 0, int(texture_size) - 1)
+    bin_id = vbin * int(texture_size) + ubin
+    rows_per_face = int(texture_size) * int(texture_size)
+    valid = compact > 0
+    out = np.zeros(compact.shape, dtype=np.int64)
+    out[valid] = (compact[valid] - 1) * rows_per_face + bin_id[valid] + 1
+    return out
+
+
+def _collect_surface_texture_support_stats(
+    paths: list[Path],
+    *,
+    face_lut: np.ndarray,
+    residual_l1_key: str,
+    texture_size: int,
+    min_alpha: float,
+    min_residual_l1: float,
+    min_bin_support: int,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    rows_per_face = int(texture_size) * int(texture_size)
+    rows = int(face_lut.size) * rows_per_face + 1
+    support = np.zeros((rows,), dtype=np.int64)
+    residual_sum = np.zeros((rows,), dtype=np.float64)
+    views_used = 0
+    for path in tqdm(paths, desc="collect low-rank surface support"):
+        z = np.load(path)
+        if "face_id" not in z or "barycentric" not in z or residual_l1_key not in z:
+            continue
+        row_id = _texture_row_indices_np(z["face_id"], z["barycentric"], face_lut, int(texture_size))
+        mask = row_id > 0
+        if "barycentric_valid" in z:
+            mask &= np.asarray(z["barycentric_valid"]).astype(bool)
+        if "alpha" in z:
+            mask &= np.asarray(z["alpha"], dtype=np.float32) >= float(min_alpha)
+        residual_l1 = np.asarray(z[residual_l1_key], dtype=np.float32)
+        mask &= residual_l1 >= float(min_residual_l1)
+        if not np.any(mask):
+            continue
+        views_used += 1
+        ids = row_id[mask].reshape(-1)
+        weights = residual_l1[mask].astype(np.float64).reshape(-1)
+        support += np.bincount(ids, minlength=rows).astype(np.int64)
+        residual_sum += np.bincount(ids, weights=weights, minlength=rows)
+    mean_l1 = np.divide(
+        residual_sum,
+        np.maximum(support, 1),
+        out=np.zeros_like(residual_sum, dtype=np.float64),
+        where=support > 0,
+    )
+    max_support = int(max(1, int(support.max()) if support.size else 0))
+    max_mean_l1 = float(max(1.0e-8, float(mean_l1.max()) if mean_l1.size else 0.0))
+    log_support = np.log1p(support.astype(np.float64)) / math.log1p(float(max_support))
+    mean_l1_norm = mean_l1 / max_mean_l1
+    active = (support >= int(min_bin_support)).astype(np.float32)
+    stats = np.stack([log_support, mean_l1_norm, active], axis=1).astype(np.float32)
+    stats[0] = 0.0
+    active_rows = int(np.sum(active))
+    summary = {
+        "schema": "spcarnet_lowrank_surface_support_stats_v1",
+        "views_requested": int(len(paths)),
+        "views_used": int(views_used),
+        "residual_l1_key": str(residual_l1_key),
+        "texture_size": int(texture_size),
+        "rows": int(rows),
+        "rows_per_face": int(rows_per_face),
+        "selected_faces": int(face_lut.size),
+        "min_alpha": float(min_alpha),
+        "min_residual_l1": float(min_residual_l1),
+        "min_bin_support": int(min_bin_support),
+        "active_rows": int(active_rows),
+        "active_row_fraction": float(active_rows / max(1, rows - 1)),
+        "max_support": int(max_support),
+        "mean_support_active": float(np.mean(support[active > 0])) if active_rows else 0.0,
+        "mean_residual_l1_active": float(np.mean(mean_l1[active > 0])) if active_rows else 0.0,
+        "target_or_test_gt_used": False,
+    }
+    return stats, summary
+
+
 def _compact_face_ids(raw_face_id: np.ndarray, face_lut: np.ndarray) -> np.ndarray:
     face_id = np.asarray(raw_face_id, dtype=np.int64)
     out = np.zeros(face_id.shape, dtype=np.int64)
@@ -378,6 +589,187 @@ class SurfaceConditionedFaceEmbeddingUNet(torch.nn.Module):
             raise ValueError("face_ids are required for SurfaceConditionedFaceEmbeddingUNet")
         emb = self.face_embedding(face_ids.long()).permute(0, 3, 1, 2)
         return self.unet(torch.cat([x, emb], dim=1))
+
+
+class SurfaceTextureResidualMLP(torch.nn.Module):
+    """Surface-attached neural texture plus a compact per-pixel decoder.
+
+    Each train-fit face owns a small UV-bin feature texture.  At render time the
+    model indexes that texture by compact face id and barycentric bin, then
+    decodes residual RGB from the surface feature and local view/render buffers.
+    Unknown target faces/bins map to a zero padding feature.
+    """
+
+    def __init__(
+        self,
+        in_ch: int,
+        hidden_ch: int,
+        max_delta: float,
+        num_faces: int,
+        texture_size: int,
+        feature_dim: int,
+        layers: int,
+        *,
+        confidence_mode: str = "none",
+        confidence_bias: float = 2.0,
+        confidence_min: float = 0.0,
+        confidence_max: float = 1.0,
+    ):
+        super().__init__()
+        confidence_mode = str(confidence_mode)
+        if confidence_mode not in {"none", "sigmoid"}:
+            raise ValueError(f"unknown confidence_mode: {confidence_mode}")
+        self.texture_size = int(texture_size)
+        self.bins_per_face = int(texture_size) * int(texture_size)
+        self.num_faces = int(num_faces)
+        self.feature_dim = int(feature_dim)
+        self.max_delta = float(max_delta)
+        self.confidence_mode = confidence_mode
+        self.confidence_min = float(confidence_min)
+        self.confidence_max = float(confidence_max)
+        rows = int(num_faces) * self.bins_per_face + 1
+        self.surface_texture = torch.nn.Embedding(rows, int(feature_dim), padding_idx=0)
+        torch.nn.init.normal_(self.surface_texture.weight, mean=0.0, std=0.01)
+        with torch.no_grad():
+            self.surface_texture.weight[0].zero_()
+        decoder_layers: list[torch.nn.Module] = []
+        ch = int(in_ch) + int(feature_dim)
+        for _ in range(max(1, int(layers) - 1)):
+            decoder_layers.extend(
+                [
+                    torch.nn.Conv2d(ch, int(hidden_ch), 1),
+                    torch.nn.GroupNorm(max(1, min(8, int(hidden_ch) // 4)), int(hidden_ch)),
+                    torch.nn.SiLU(inplace=True),
+                ]
+            )
+            ch = int(hidden_ch)
+        out_ch = 4 if confidence_mode == "sigmoid" else 3
+        decoder_layers.append(torch.nn.Conv2d(ch, out_ch, 1))
+        self.decoder = torch.nn.Sequential(*decoder_layers)
+        if confidence_mode == "sigmoid":
+            last = self.decoder[-1]
+            if isinstance(last, torch.nn.Conv2d):
+                torch.nn.init.constant_(last.bias[3], float(confidence_bias))
+
+    def _texture_indices(self, x: torch.Tensor, face_ids: torch.Tensor) -> torch.Tensor:
+        if x.shape[1] < 11:
+            raise ValueError("surface texture model expects barycentric channels in input features")
+        bary = x[:, 8:11]
+        u = torch.clamp(bary[:, 1], 0.0, 0.999999)
+        v = torch.clamp(bary[:, 2], 0.0, 0.999999)
+        ubin = torch.clamp((u * float(self.texture_size)).long(), 0, self.texture_size - 1)
+        vbin = torch.clamp((v * float(self.texture_size)).long(), 0, self.texture_size - 1)
+        bin_id = vbin * int(self.texture_size) + ubin
+        compact_face = face_ids.long()
+        valid = compact_face > 0
+        index = (compact_face - 1) * int(self.bins_per_face) + bin_id + 1
+        return torch.where(valid, index, torch.zeros_like(index))
+
+    def forward(self, x: torch.Tensor, face_ids: torch.Tensor | None = None) -> torch.Tensor:
+        if face_ids is None:
+            raise ValueError("face_ids are required for SurfaceTextureResidualMLP")
+        tex = self.surface_texture(self._texture_indices(x, face_ids)).permute(0, 3, 1, 2)
+        raw = self.decoder(torch.cat([x, tex], dim=1))
+        delta = torch.tanh(raw[:, :3]) * self.max_delta
+        if self.confidence_mode == "sigmoid":
+            conf = torch.sigmoid(raw[:, 3:4])
+            conf = self.confidence_min + (self.confidence_max - self.confidence_min) * conf
+            return delta * conf
+        return delta
+
+
+class SupportAwareLowRankSurfaceTexture(torch.nn.Module):
+    """Low-rank teacher residual texture with hard support-aware no-op gating.
+
+    The texture stores K signed residual bases per selected face/UV bin.  A
+    tiny view-conditioned decoder predicts only mixture weights and confidence.
+    Unknown or low-support rows are deterministically gated to zero.
+    """
+
+    def __init__(
+        self,
+        in_ch: int,
+        hidden_ch: int,
+        max_delta: float,
+        num_faces: int,
+        texture_size: int,
+        rank: int,
+        layers: int,
+        support_stats: np.ndarray | torch.Tensor,
+        *,
+        basis_init_std: float = 0.01,
+        confidence_bias: float = 0.0,
+        confidence_min: float = 0.0,
+        confidence_max: float = 1.0,
+    ):
+        super().__init__()
+        self.texture_size = int(texture_size)
+        self.bins_per_face = int(texture_size) * int(texture_size)
+        self.num_faces = int(num_faces)
+        self.rank = int(rank)
+        self.max_delta = float(max_delta)
+        self.confidence_min = float(confidence_min)
+        self.confidence_max = float(confidence_max)
+        rows = int(num_faces) * self.bins_per_face + 1
+        stats = torch.as_tensor(support_stats, dtype=torch.float32)
+        if stats.ndim != 2 or stats.shape[0] != rows:
+            raise ValueError(f"support_stats shape {tuple(stats.shape)} does not match rows={rows}")
+        self.register_buffer("surface_support_stats", stats, persistent=True)
+        self.surface_basis = torch.nn.Embedding(rows, int(rank) * 3, padding_idx=0)
+        torch.nn.init.normal_(self.surface_basis.weight, mean=0.0, std=float(basis_init_std))
+        with torch.no_grad():
+            self.surface_basis.weight[0].zero_()
+        decoder_layers: list[torch.nn.Module] = []
+        ch = int(in_ch) + int(stats.shape[1])
+        for _ in range(max(1, int(layers) - 1)):
+            decoder_layers.extend(
+                [
+                    torch.nn.Conv2d(ch, int(hidden_ch), 1),
+                    torch.nn.GroupNorm(max(1, min(8, int(hidden_ch) // 4)), int(hidden_ch)),
+                    torch.nn.SiLU(inplace=True),
+                ]
+            )
+            ch = int(hidden_ch)
+        decoder_layers.append(torch.nn.Conv2d(ch, int(rank) + 1, 1))
+        self.decoder = torch.nn.Sequential(*decoder_layers)
+        last = self.decoder[-1]
+        if isinstance(last, torch.nn.Conv2d):
+            torch.nn.init.constant_(last.bias[int(rank)], float(confidence_bias))
+
+    def _texture_indices(self, x: torch.Tensor, face_ids: torch.Tensor) -> torch.Tensor:
+        if x.shape[1] < 11:
+            raise ValueError("low-rank surface texture model expects barycentric channels in input features")
+        bary = x[:, 8:11]
+        u = torch.clamp(bary[:, 1], 0.0, 0.999999)
+        v = torch.clamp(bary[:, 2], 0.0, 0.999999)
+        ubin = torch.clamp((u * float(self.texture_size)).long(), 0, self.texture_size - 1)
+        vbin = torch.clamp((v * float(self.texture_size)).long(), 0, self.texture_size - 1)
+        bin_id = vbin * int(self.texture_size) + ubin
+        compact_face = face_ids.long()
+        valid = compact_face > 0
+        index = (compact_face - 1) * int(self.bins_per_face) + bin_id + 1
+        return torch.where(valid, index, torch.zeros_like(index))
+
+    def support_mask(self, x: torch.Tensor, face_ids: torch.Tensor | None = None) -> torch.Tensor:
+        if face_ids is None:
+            raise ValueError("face_ids are required for SupportAwareLowRankSurfaceTexture")
+        idx = self._texture_indices(x, face_ids)
+        return self.surface_support_stats[idx][..., 2].unsqueeze(1)
+
+    def forward(self, x: torch.Tensor, face_ids: torch.Tensor | None = None) -> torch.Tensor:
+        if face_ids is None:
+            raise ValueError("face_ids are required for SupportAwareLowRankSurfaceTexture")
+        idx = self._texture_indices(x, face_ids)
+        stats = self.surface_support_stats[idx].permute(0, 3, 1, 2)
+        raw = self.decoder(torch.cat([x, stats], dim=1))
+        weights = torch.softmax(raw[:, : self.rank], dim=1)
+        conf = torch.sigmoid(raw[:, self.rank : self.rank + 1])
+        conf = self.confidence_min + (self.confidence_max - self.confidence_min) * conf
+        basis = torch.tanh(self.surface_basis(idx)).view(*idx.shape, self.rank, 3) * self.max_delta
+        delta = torch.sum(weights.permute(0, 2, 3, 1).unsqueeze(-1) * basis, dim=3)
+        delta = delta.permute(0, 3, 1, 2)
+        gate = stats[:, 2:3]
+        return delta * conf * gate
 
 
 def _sample_patch(example: dict[str, Any], patch_size: int, rng: random.Random) -> TrainBatch:
@@ -602,10 +994,36 @@ def apply_target(
         cand = np.clip(parent + float(alpha) * delta, 0.0, 1.0)
         save_image_chw(render_dir / f"{path.stem}.png", cand)
         save_image_chw(parent_dir / f"{path.stem}.png", parent)
+        changed = np.any(np.abs(float(alpha) * delta) > (0.5 / 255.0), axis=0)
         row: dict[str, Any] = {
             "view": path.stem,
-            "changed_fraction": float(np.mean(np.any(np.abs(float(alpha) * delta) > (0.5 / 255.0), axis=0))),
+            "changed_fraction": float(np.mean(changed)),
         }
+        valid_mask = features[15].numpy() > 0.5 if features.shape[0] > 15 else np.ones(changed.shape, dtype=bool)
+        valid_count = max(1, int(np.sum(valid_mask)))
+        if face_ids is not None:
+            known = face_ids.numpy() > 0
+            row["known_face_fraction"] = float(np.sum(known & valid_mask) / valid_count)
+        if face_ids is not None and hasattr(model, "support_mask"):
+            with torch.no_grad():
+                support = (
+                    model.support_mask(features.unsqueeze(0).to(device), face_ids.unsqueeze(0).to(device))
+                    .squeeze(0)
+                    .squeeze(0)
+                    .detach()
+                    .cpu()
+                    .numpy()
+                    > 0.5
+                )
+            active = support & valid_mask
+            inactive = (~support) & valid_mask
+            row["active_support_fraction"] = float(np.sum(active) / valid_count)
+            row["active_support_changed_fraction"] = (
+                float(np.sum(changed & active) / max(1, int(np.sum(active)))) if np.any(active) else 0.0
+            )
+            row["inactive_support_changed_fraction"] = (
+                float(np.sum(changed & inactive) / max(1, int(np.sum(inactive)))) if np.any(inactive) else 0.0
+            )
         rows.append(row)
     summary: dict[str, Any] = {
         "method_name": str(method_name),
@@ -617,6 +1035,18 @@ def apply_target(
         "parent_dir": str(parent_dir),
         "view_count": int(len(rows)),
         "mean_changed_fraction": float(np.mean([r.get("changed_fraction", 0.0) for r in rows])) if rows else 0.0,
+        "mean_known_face_fraction": float(np.mean([r.get("known_face_fraction", 0.0) for r in rows])) if rows else 0.0,
+        "mean_active_support_fraction": float(np.mean([r.get("active_support_fraction", 0.0) for r in rows])) if rows else 0.0,
+        "mean_active_support_changed_fraction": float(
+            np.mean([r.get("active_support_changed_fraction", 0.0) for r in rows])
+        )
+        if rows
+        else 0.0,
+        "mean_inactive_support_changed_fraction": float(
+            np.mean([r.get("inactive_support_changed_fraction", 0.0) for r in rows])
+        )
+        if rows
+        else 0.0,
         "per_view": rows,
     }
     return summary
@@ -627,15 +1057,19 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
     best_all = payload["policy_val"].get("best_all_axis")
     target = payload.get("target_apply") or {}
     leakage = payload.get("gt_usage_audit", {})
+    audit = payload.get("audit_notes", {})
     lines = [
-        "# v184 Surface-Conditioned Residual U-Net Audit",
+        f"# {payload.get('artifact_prefix', 'surface_conditioned_residual')} Audit",
         "",
         f"- policy-val all-axis pass: `{payload['policy_val_all_axis_pass']}`",
+        f"- policy-val gate scope: `{audit.get('policy_val_gate_scope')}`",
+        f"- Phase-J gate enforced by this script: `{audit.get('phasej_gate_enforced_by_script')}`",
         f"- target exact run: `{bool(target)}`",
         f"- target no-GT verifier: `{target.get('no_gt_verify', {}).get('passed')}`",
         f"- uses train-fit GT: `{leakage.get('uses_train_fit_gt')}`",
         f"- uses policy-val GT: `{leakage.get('uses_policy_val_gt')}`",
         f"- uses target/test GT during apply: `{leakage.get('uses_target_or_test_gt_during_apply')}`",
+        f"- uses target-view geometry for capacity: `{leakage.get('uses_target_view_geometry_for_capacity')}`",
         "",
         "## Policy-Val",
         "",
@@ -666,7 +1100,7 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Train a surface-conditioned residual U-Net for Phase-J teacher baking.")
+    parser = argparse.ArgumentParser(description="Train a surface-conditioned residual model for Phase-J teacher baking.")
     parser.add_argument("--fit_evidence_dir", default=DEFAULT_FIT_EVIDENCE)
     parser.add_argument("--target_evidence_dir", default="")
     parser.add_argument("--target_eval_evidence_dir", default="")
@@ -676,6 +1110,7 @@ def main() -> int:
     parser.add_argument("--patch_size", type=int, default=256)
     parser.add_argument("--steps", type=int, default=1200)
     parser.add_argument("--lr", type=float, default=1.0e-3)
+    parser.add_argument("--model_type", choices=["unet", "surface_texture_mlp", "lowrank_surface_texture"], default="unet")
     parser.add_argument("--base_channels", type=int, default=24)
     parser.add_argument("--max_delta", type=float, default=0.20)
     parser.add_argument(
@@ -694,6 +1129,21 @@ def main() -> int:
         default=0,
         help="Optional deterministic cap for train-fit face ids. 0 keeps all train-fit faces.",
     )
+    parser.add_argument("--surface_texture_size", type=int, default=8)
+    parser.add_argument("--surface_feature_dim", type=int, default=8)
+    parser.add_argument("--surface_decoder_hidden", type=int, default=64)
+    parser.add_argument("--surface_decoder_layers", type=int, default=3)
+    parser.add_argument("--surface_face_max_unique", type=int, default=8192)
+    parser.add_argument("--surface_face_min_alpha", type=float, default=0.03)
+    parser.add_argument("--surface_face_min_residual_l1", type=float, default=0.0)
+    parser.add_argument(
+        "--surface_target_visible_evidence_dir",
+        default="",
+        help="Optional no-GT target evidence used only to prioritize target-visible faces in the surface capacity budget.",
+    )
+    parser.add_argument("--lowrank_rank", type=int, default=4)
+    parser.add_argument("--lowrank_min_bin_support", type=int, default=16)
+    parser.add_argument("--lowrank_basis_init_std", type=float, default=0.01)
     parser.add_argument("--teacher_l1_weight", type=float, default=1.0)
     parser.add_argument("--teacher_ssim_weight", type=float, default=0.20)
     parser.add_argument("--teacher_lpips_weight", type=float, default=0.0)
@@ -716,6 +1166,11 @@ def main() -> int:
     parser.add_argument("--compute_lpips", action="store_true")
     parser.add_argument("--skip_policy_val_renders", action="store_true")
     parser.add_argument("--output_dir", default="/dev/shm/peilincai_spcarnet_v184_surface_conditioned_unet")
+    parser.add_argument(
+        "--artifact_prefix",
+        default="v184_surface_conditioned_unet",
+        help="Filename prefix for checkpoint/report artifacts. Use a run-specific prefix to avoid stale v184 names.",
+    )
     parser.add_argument("--enable_wandb", action="store_true")
     parser.add_argument("--wandb_project", default="spcarnet_meshprior")
     parser.add_argument("--wandb_run_name", default="")
@@ -728,6 +1183,14 @@ def main() -> int:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_prefix = "".join(
+        ch if ch.isalnum() or ch in {"_", "-", "."} else "_" for ch in str(args.artifact_prefix).strip()
+    )
+    if not artifact_prefix:
+        artifact_prefix = "surface_conditioned_residual"
+    checkpoint_path = output_dir / f"{artifact_prefix}.pt"
+    report_json_path = output_dir / f"{artifact_prefix}_report.json"
+    report_md_path = output_dir / f"{artifact_prefix}_report.md"
     wandb_run = None
     if bool(args.enable_wandb):
         try:
@@ -747,7 +1210,70 @@ def main() -> int:
         raise FileNotFoundError(args.fit_evidence_dir)
     fit_paths, val_paths = _policy_split(paths, int(args.policy_val_stride))
     face_lut = None
-    if int(args.face_embedding_dim) > 0:
+    surface_support_stats = None
+    surface_model_types = {"surface_texture_mlp", "lowrank_surface_texture"}
+    residual_l1_key = (
+        str(args.residual_rgb_key).replace("_rgb", "_l1")
+        if str(args.residual_rgb_key).endswith("_rgb")
+        else "teacher_residual_l1"
+    )
+    if str(args.model_type) in surface_model_types and int(args.face_embedding_dim) > 0:
+        raise ValueError("--face_embedding_dim is only supported for --model_type unet")
+    if str(args.model_type) in surface_model_types:
+        priority_face_counts = None
+        target_visible_summary = None
+        if str(args.surface_target_visible_evidence_dir):
+            target_visible_dir = Path(str(args.surface_target_visible_evidence_dir))
+            target_visible_no_gt = verify_target_no_gt(target_visible_dir)
+            if not bool(target_visible_no_gt.get("passed")):
+                raise RuntimeError(f"target-visible evidence must be no-GT: {target_visible_no_gt}")
+            priority_face_counts, target_visible_summary = _collect_visible_face_counts(
+                target_visible_dir,
+                min_alpha=float(args.surface_face_min_alpha),
+            )
+            target_visible_summary["no_gt_verify"] = target_visible_no_gt
+        face_lut, face_lut_summary = _collect_residual_top_face_lut(
+            fit_paths,
+            residual_l1_key=residual_l1_key,
+            max_unique=int(args.surface_face_max_unique),
+            min_alpha=float(args.surface_face_min_alpha),
+            min_residual_l1=float(args.surface_face_min_residual_l1),
+            priority_face_counts=priority_face_counts,
+        )
+        if face_lut.size == 0:
+            raise RuntimeError("surface texture model requested but no residual top faces were collected")
+        texture_rows = int(face_lut.size) * int(args.surface_texture_size) * int(args.surface_texture_size) + 1
+        support_summary = None
+        if str(args.model_type) == "lowrank_surface_texture":
+            surface_support_stats, support_summary = _collect_surface_texture_support_stats(
+                fit_paths,
+                face_lut=face_lut,
+                residual_l1_key=residual_l1_key,
+                texture_size=int(args.surface_texture_size),
+                min_alpha=float(args.surface_face_min_alpha),
+                min_residual_l1=float(args.surface_face_min_residual_l1),
+                min_bin_support=int(args.lowrank_min_bin_support),
+            )
+        _write_json(
+            output_dir / "surface_texture_lut_summary.json",
+            {
+                **face_lut_summary,
+                "texture_size": int(args.surface_texture_size),
+                "feature_dim": int(args.surface_feature_dim),
+                "embedding_rows": int(texture_rows),
+                "estimated_parameter_count": int(
+                    texture_rows
+                    * (
+                        int(args.surface_feature_dim)
+                        if str(args.model_type) == "surface_texture_mlp"
+                        else int(args.lowrank_rank) * 3
+                    )
+                ),
+                "lowrank_support_summary": support_summary,
+                "target_visible_priority_summary": target_visible_summary,
+            },
+        )
+    elif int(args.face_embedding_dim) > 0:
         face_lut = _collect_train_face_lut(fit_paths, int(args.face_embedding_max_unique))
         _write_json(
             output_dir / "face_lut_summary.json",
@@ -765,7 +1291,40 @@ def main() -> int:
         for p in tqdm(fit_paths, desc="preload train-fit")
     ]
     in_ch = int(train_examples[0]["features"].shape[0])
-    if int(args.face_embedding_dim) > 0:
+    if str(args.model_type) == "surface_texture_mlp":
+        if face_lut is None or face_lut.size == 0:
+            raise RuntimeError("surface texture model requested but no train-fit face ids were collected")
+        model = SurfaceTextureResidualMLP(
+            in_ch,
+            int(args.surface_decoder_hidden),
+            float(args.max_delta),
+            int(face_lut.size),
+            int(args.surface_texture_size),
+            int(args.surface_feature_dim),
+            int(args.surface_decoder_layers),
+            confidence_mode=str(args.confidence_mode),
+            confidence_bias=float(args.confidence_bias),
+            confidence_min=float(args.confidence_min),
+            confidence_max=float(args.confidence_max),
+        ).to(device)
+    elif str(args.model_type) == "lowrank_surface_texture":
+        if face_lut is None or face_lut.size == 0 or surface_support_stats is None:
+            raise RuntimeError("low-rank surface texture requested but no support stats were collected")
+        model = SupportAwareLowRankSurfaceTexture(
+            in_ch,
+            int(args.surface_decoder_hidden),
+            float(args.max_delta),
+            int(face_lut.size),
+            int(args.surface_texture_size),
+            int(args.lowrank_rank),
+            int(args.surface_decoder_layers),
+            surface_support_stats,
+            basis_init_std=float(args.lowrank_basis_init_std),
+            confidence_bias=float(args.confidence_bias),
+            confidence_min=float(args.confidence_min),
+            confidence_max=float(args.confidence_max),
+        ).to(device)
+    elif int(args.face_embedding_dim) > 0:
         if face_lut is None or face_lut.size == 0:
             raise RuntimeError("face embedding requested but no train-fit face ids were collected")
         model = SurfaceConditionedFaceEmbeddingUNet(
@@ -794,7 +1353,7 @@ def main() -> int:
     if float(args.teacher_lpips_weight) > 0.0 or float(args.gt_lpips_weight) > 0.0:
         train_lpips_model = build_lpips_model().to(device).eval()
     rng = random.Random(int(args.seed))
-    for step in tqdm(range(1, int(args.steps) + 1), desc="train v184 surface U-Net"):
+    for step in tqdm(range(1, int(args.steps) + 1), desc=f"train {artifact_prefix}"):
         model.train()
         ex = rng.choice(train_examples)
         batch = _sample_patch(ex, int(args.patch_size), rng)
@@ -878,9 +1437,15 @@ def main() -> int:
             "args": vars(args),
             "input_channels": int(in_ch),
             "face_lut": None if face_lut is None else face_lut,
+            "surface_support_stats": surface_support_stats,
             "face_embedding_rows": int(0 if face_lut is None else face_lut.size + 1),
+            "surface_texture_rows": int(
+                0
+                if face_lut is None or str(args.model_type) not in surface_model_types
+                else face_lut.size * int(args.surface_texture_size) * int(args.surface_texture_size) + 1
+            ),
         },
-        output_dir / "v184_surface_conditioned_unet.pt",
+        checkpoint_path,
     )
     policy_val = evaluate_policy_val(
         model,
@@ -934,6 +1499,12 @@ def main() -> int:
         "policy_val_gt_purpose": "candidate certification and alpha selection only",
         "uses_target_or_test_gt_during_apply": False,
         "target_or_test_gt_after_apply_purpose": "final evaluation only, if separately populated",
+        "uses_target_view_geometry_for_capacity": bool(str(args.surface_target_visible_evidence_dir)),
+        "target_view_geometry_capacity_purpose": (
+            "transductive no-RGB-GT face-capacity allocation only"
+            if str(args.surface_target_visible_evidence_dir)
+            else ""
+        ),
         "target_no_gt_verifier_passed": bool((target_apply or {}).get("no_gt_verify", {}).get("passed", False)),
         "target_gt_visible_to_apply": bool(
             (target_apply or {}).get("no_gt_verify", {}).get("target_gt_visible_to_apply", False)
@@ -943,7 +1514,8 @@ def main() -> int:
         ),
     }
     payload = {
-        "schema": "spcarnet_v184_surface_conditioned_residual_unet_v1",
+        "schema": "spcarnet_surface_conditioned_residual_model_v2",
+        "artifact_prefix": artifact_prefix,
         "args": vars(args),
         "splits": {
             "all_views": int(len(paths)),
@@ -952,6 +1524,7 @@ def main() -> int:
             "policy_val_view_names": [p.stem for p in val_paths],
         },
         "model": {
+            "model_type": str(args.model_type),
             "input_channels": int(in_ch),
             "base_channels": int(args.base_channels),
             "max_delta": float(args.max_delta),
@@ -962,20 +1535,46 @@ def main() -> int:
             "face_embedding_dim": int(args.face_embedding_dim),
             "face_embedding_rows": int(0 if face_lut is None else face_lut.size + 1),
             "face_embedding_train_fit_unique_faces": int(0 if face_lut is None else face_lut.size),
-            "checkpoint": str(output_dir / "v184_surface_conditioned_unet.pt"),
+            "surface_texture_size": int(args.surface_texture_size),
+            "surface_feature_dim": int(args.surface_feature_dim),
+            "surface_decoder_hidden": int(args.surface_decoder_hidden),
+            "surface_decoder_layers": int(args.surface_decoder_layers),
+            "surface_target_visible_evidence_dir": str(args.surface_target_visible_evidence_dir),
+            "surface_texture_rows": int(
+                0
+                if face_lut is None or str(args.model_type) not in surface_model_types
+                else face_lut.size * int(args.surface_texture_size) * int(args.surface_texture_size) + 1
+            ),
+            "lowrank_rank": int(args.lowrank_rank),
+            "lowrank_min_bin_support": int(args.lowrank_min_bin_support),
+            "lowrank_basis_init_std": float(args.lowrank_basis_init_std),
+            "lowrank_active_support_rows": int(
+                0 if surface_support_stats is None else np.sum(np.asarray(surface_support_stats)[:, 2] > 0.0)
+            ),
+            "checkpoint": str(checkpoint_path),
         },
         "policy_val": policy_val,
         "policy_val_all_axis_pass": bool(all_axis),
         "target_apply": target_apply,
         "gt_usage_audit": gt_usage_audit,
+        "audit_notes": {
+            "policy_val_gate_scope": "candidate improvement over parent on held-out fit/policy-val views",
+            "phasej_gate_enforced_by_script": False,
+            "phasej_gate_must_be_checked_by_official_eval": True,
+            "target_alpha_selection": "manual_target_alpha" if args.target_alpha is not None else "policy_val_selected",
+            "target_eval_evidence_dir_integrated": False,
+            "target_eval_evidence_dir_note": (
+                "--target_eval_evidence_dir is recorded in args only; run official eval scripts after no-GT apply"
+            ),
+        },
         "references": {
             "phasej_flowers_gate": "20.304358 / 0.557770 / 0.329222",
             "v183_flowers_exact": "19.832029 / 0.505779 / 0.405907",
         },
     }
-    payload["output_json"] = str(output_dir / "v184_surface_conditioned_unet_report.json")
-    _write_json(output_dir / "v184_surface_conditioned_unet_report.json", payload)
-    _write_md(output_dir / "v184_surface_conditioned_unet_report.md", payload)
+    payload["output_json"] = str(report_json_path)
+    _write_json(report_json_path, payload)
+    _write_md(report_md_path, payload)
     if wandb_run is not None:
         best = policy_val["best"]
         wandb_run.log(
@@ -989,7 +1588,7 @@ def main() -> int:
         if target_apply and "mean_changed_fraction" in target_apply:
             wandb_run.log({"target/mean_changed_fraction": float(target_apply.get("mean_changed_fraction", 0.0))})
         wandb_run.finish()
-    print("OUT", output_dir / "v184_surface_conditioned_unet_report.json", flush=True)
+    print("OUT", report_json_path, flush=True)
     print("BEST", json.dumps(policy_val["best"], indent=2, sort_keys=True), flush=True)
     print("BEST_ALL_AXIS", json.dumps(policy_val.get("best_all_axis"), indent=2, sort_keys=True), flush=True)
     if target_apply is not None:

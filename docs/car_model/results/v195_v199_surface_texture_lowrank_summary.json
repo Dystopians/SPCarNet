@@ -1,0 +1,123 @@
+{
+  "schema": "spcarnet_v195_v199_surface_texture_lowrank_summary_v1",
+  "date": "2026-06-29",
+  "phase_j_flowers_gate": {
+    "PSNR": 20.304358,
+    "SSIM": 0.55777,
+    "LPIPS": 0.329222
+  },
+  "runs": {
+    "v195": {
+      "model": "surface_texture_mlp",
+      "train_fit_gt_weight_sum": 0.0,
+      "output_root": "/dev/shm/peilincai_spcarnet_v195_flowers_surface_texture_teacheronly",
+      "official": {
+        "PSNR": 19.878032684326172,
+        "SSIM": 0.5090197920799255,
+        "LPIPS": 0.4029979407787323
+      },
+      "policy_val_best_all_axis": {
+        "psnr_gain": 0.05323150874762236,
+        "ssim_gain": 0.0038746347030003867,
+        "lpips_gain": 0.0009351583818594614,
+        "mean_changed_fraction": 0.47707364800759017
+      },
+      "verdict": "fails Phase-J flowers gate on all official axes"
+    },
+    "v196": {
+      "model": "surface_texture_mlp",
+      "train_fit_gt_weight_sum": 0.66,
+      "output_root": "/dev/shm/peilincai_spcarnet_v196_flowers_surface_texture_gtassist",
+      "official": {
+        "PSNR": 20.084991455078125,
+        "SSIM": 0.5239293575286865,
+        "LPIPS": 0.3852022886276245
+      },
+      "policy_val_best_all_axis": {
+        "psnr_gain": 0.35569406206994775,
+        "ssim_gain": 0.02950150767962138,
+        "lpips_gain": 0.0158907746275266,
+        "mean_changed_fraction": 0.8690546430265655
+      },
+      "verdict": "best in this batch but GT-assisted diagnostic and still fails Phase-J"
+    },
+    "v197": {
+      "model": "lowrank_surface_texture",
+      "train_fit_gt_weight_sum": 0.0,
+      "output_root": "/dev/shm/peilincai_spcarnet_v197_flowers_lowrank_teacheronly",
+      "official": {
+        "PSNR": 19.834993362426758,
+        "SSIM": 0.5058345198631287,
+        "LPIPS": 0.40508291125297546
+      },
+      "policy_val_best_all_axis": {
+        "psnr_gain": 0.0028633072526019396,
+        "ssim_gain": 0.00009926656881968181,
+        "lpips_gain": 0.00018557471533616385,
+        "mean_changed_fraction": 0.0217905004743833
+      },
+      "target_support": {
+        "mean_known_face_fraction": 0.05010371781106959,
+        "mean_active_support_fraction": 0.029397279072216696,
+        "mean_changed_fraction": 0.021686944755908228,
+        "mean_inactive_support_changed_fraction": 0.0
+      },
+      "verdict": "safe but too conservative"
+    },
+    "v198": {
+      "model": "lowrank_surface_texture",
+      "train_fit_gt_weight_sum": 0.66,
+      "output_root": "/dev/shm/peilincai_spcarnet_v198_flowers_lowrank_gtassist",
+      "official": {
+        "PSNR": 19.833417892456055,
+        "SSIM": 0.5057488679885864,
+        "LPIPS": 0.40455111861228943
+      },
+      "policy_val_best_all_axis": {
+        "psnr_gain": 0.00019259200444447325,
+        "ssim_gain": 0.00010628998279571533,
+        "lpips_gain": 0.0007556031147638956,
+        "mean_changed_fraction": 0.02781773798228969
+      },
+      "target_support": {
+        "mean_known_face_fraction": 0.05010371781106959,
+        "mean_active_support_fraction": 0.029397279072216696,
+        "mean_changed_fraction": 0.02652177311540452,
+        "mean_inactive_support_changed_fraction": 0.0
+      },
+      "verdict": "GT-assisted diagnostic, still support-starved and fails Phase-J"
+    },
+    "v199": {
+      "model": "lowrank_surface_texture_with_target_visible_capacity",
+      "train_fit_gt_weight_sum": 0.0,
+      "output_root": "/dev/shm/peilincai_spcarnet_v199_flowers_targetvisible_lowrank_teacheronly",
+      "official": {
+        "PSNR": 19.835336685180664,
+        "SSIM": 0.5058013796806335,
+        "LPIPS": 0.40419405698776245
+      },
+      "policy_val_best_all_axis": {
+        "psnr_gain": 0.002386162701466077,
+        "ssim_gain": 0.0000745852788289388,
+        "lpips_gain": 0.00013220620652039847,
+        "mean_changed_fraction": 0.046046904648956354
+      },
+      "target_support": {
+        "mean_known_face_fraction": 0.1677151126538103,
+        "mean_active_support_fraction": 0.10591602917750936,
+        "mean_changed_fraction": 0.06690400207003622,
+        "mean_inactive_support_changed_fraction": 0.0
+      },
+      "verdict": "target-visible capacity works mechanically but still fails Phase-J"
+    }
+  },
+  "overall_verdict": "NOT COMPLETE: v195-v199 do not beat Phase-J flowers exact; do not promote to full9 or paper-ready status."
+  ,
+  "subagent_review_notes": {
+    "policy_val_gate_scope": "parent-improvement on held-out fit/policy-val views, not Phase-J-improvement",
+    "target_visible_capacity_disclosure": "uses target/test-view geometry and visibility without RGB GT or residuals; disclose as transductive no-GT capacity allocation",
+    "default_gt_loss_warning": "teacher-only claims require all GT loss weights explicitly set to zero",
+    "manual_target_alpha_warning": "target alpha should be policy-val-selected or predeclared, not selected after official metrics",
+    "next_audit": "per-view/per-region teacher-residual projection audit before more low-rank sweeps"
+  }
+}

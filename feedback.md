@@ -623,3 +623,81 @@ Minimum first experiment after that patch:
 ```text
 Run v168 Phase-J-distilled flowers exact, not full9. Full9 is justified only after the flowers all-axis gate beats Phase-J.
 ```
+# 2026-06-29 v195-v199 Surface-Texture / Low-Rank Feedback Addendum
+
+This addendum records the latest attempt based on
+`docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md`.
+
+Main files:
+
+- Implementation:
+  `scripts/car_model/train_surface_conditioned_residual_unet.py`
+- Standalone apply:
+  `scripts/car_model/apply_surface_conditioned_residual_unet_checkpoint.py`
+- Detailed log:
+  `docs/car_model/6-29-v195-v199-SurfaceTexture-LowRank-Diagnostics.md`
+- Machine-readable summary:
+  `docs/car_model/results/v195_v199_surface_texture_lowrank_summary.json`
+
+New method pieces implemented:
+
+- `surface_texture_mlp`: trainable per-face/per-UV-bin surface feature texture
+  with a compact decoder.
+- `lowrank_surface_texture`: support-aware rank-K residual basis with a hard
+  inactive-support no-op gate.
+- `--surface_target_visible_evidence_dir`: no-GT target-visible face priority,
+  used only for capacity allocation.
+- `--artifact_prefix`: future checkpoint/report artifacts can avoid stale
+  `v184_*` filenames.
+
+Hard gate:
+
+| Reference | PSNR | SSIM | LPIPS |
+| --- | ---: | ---: | ---: |
+| Phase-J flowers | 20.304358 | 0.557770 | 0.329222 |
+
+Official flowers exact results:
+
+| Run | Method | Train GT | PSNR | SSIM | LPIPS | Verdict |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| v195 | surface texture MLP | no | 19.878033 | 0.509020 | 0.402998 | fail all axes |
+| v196 | surface texture MLP | yes | 20.084991 | 0.523929 | 0.385202 | fail all axes; diagnostic only |
+| v197 | support-aware low-rank | no | 19.834993 | 0.505835 | 0.405083 | fail all axes |
+| v198 | support-aware low-rank | yes | 19.833418 | 0.505749 | 0.404551 | fail all axes; diagnostic only |
+| v199 | low-rank + target-visible capacity | no | 19.835337 | 0.505801 | 0.404194 | fail all axes |
+
+Key lessons for the next model:
+
+1. The surface texture MLP can pass policy-val, but official target transfer
+   collapses. This is likely policy-val/source-view overfitting.
+2. The support-aware low-rank gate prevents unsafe writes: inactive-support
+   changed fraction is exactly `0.0` in v197-v199.
+3. The same gate is too conservative unless target-visible capacity is added.
+   v199 raises known target face fraction to `0.167715` and active support to
+   `0.105916`, but official metrics still stay near v197/v198.
+4. Therefore the current blocker is not just face capacity or memory size. The
+   blocker is cross-view residual generalization under the current surface
+   representation.
+5. The next serious route should keep the no-GT target-visible allocator and
+   inactive-support no-op guarantee, but replace static per-row residual storage
+   with a stronger view-conditioned residual field validated on held-out source
+   views before any target apply.
+6. Before building another carrier, run a teacher-residual projection audit:
+   compare raw `Phase-J - parent` residual, projected carrier residual, and final
+   applied residual per view/per region. If projection loses energy or structure,
+   the carrier is the bottleneck. If projection is healthy but target apply
+   fails, debug masking/confidence/clipping/target-transfer dilution.
+7. Important fairness nuance: `--surface_target_visible_evidence_dir` uses
+   target-view geometry/visibility for capacity allocation. It does not use
+   target RGB GT or residuals, but it is transductive and must be disclosed.
+8. Policy-val all-axis pass only means improvement over the parent render on
+   held-out fit/policy-val views. It is not the Phase-J gate and did not predict
+   official target success in v195-v199.
+9. The script defaults still include nonzero train-fit GT loss. Teacher-only
+   claims require explicitly setting all GT weights to zero.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```

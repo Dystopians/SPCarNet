@@ -430,6 +430,38 @@ v166 exact run 完成状态：
 
 Final status: NOT COMPLETE.
 
+## 2026-06-29 Update: v195-v199 Surface-Texture / Low-Rank Attempt
+
+The new `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md` route has now been implemented and tested on flowers exact, but it did **not** pass the required Phase-J flowers gate.
+
+New code paths:
+
+- `surface_texture_mlp`: trainable per-face/per-UV surface feature texture plus tiny decoder.
+- `lowrank_surface_texture`: support-aware rank-K residual basis with inactive-support no-op guarantee.
+- `--surface_target_visible_evidence_dir`: no-GT target-visible face priority for capacity allocation.
+
+Official flowers exact results:
+
+| Run | Method | PSNR | SSIM | LPIPS | Verdict |
+| --- | --- | ---: | ---: | ---: | --- |
+| Phase-J gate | reference | 20.304358 | 0.557770 | 0.329222 | target |
+| v195 | surface texture MLP, teacher-only | 19.878033 | 0.509020 | 0.402998 | fail all axes |
+| v196 | surface texture MLP, GT-assisted diagnostic | 20.084991 | 0.523929 | 0.385202 | fail all axes |
+| v197 | support-aware low-rank, teacher-only | 19.834993 | 0.505835 | 0.405083 | fail all axes |
+| v198 | support-aware low-rank, GT-assisted diagnostic | 19.833418 | 0.505749 | 0.404551 | fail all axes |
+| v199 | low-rank + no-GT target-visible capacity | 19.835337 | 0.505801 | 0.404194 | fail all axes |
+
+Important lesson: v199 increased target known-face support from about `0.0501` to `0.1677` and active support from about `0.0294` to `0.1059`, with inactive-support changed fraction staying `0.0`. That confirms the support allocator and safety gate work mechanically. The official metric failure means the remaining bottleneck is cross-view residual generalization: the train/support residual field still does not transfer well enough to target views.
+
+Detailed log:
+
+```text
+docs/car_model/6-29-v195-v199-SurfaceTexture-LowRank-Diagnostics.md
+docs/car_model/results/v195_v199_surface_texture_lowrank_summary.json
+```
+
+No v195-v199 result should be promoted to full9 or paper-ready status.
+
 ## 2026-06-28 Update: v168 Low-Copy Direct-Teacher Patch
 
 `feedback.md` is the current handoff file in the repository root:

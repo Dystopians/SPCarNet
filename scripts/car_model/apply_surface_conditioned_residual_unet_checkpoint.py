@@ -22,6 +22,8 @@ from scripts.car_model.ecsr_apply_surface_residual_region_texture_adapter import
 from scripts.car_model.train_surface_conditioned_residual_unet import (  # noqa: E402
     SurfaceConditionedFaceEmbeddingUNet,
     SurfaceConditionedResidualUNet,
+    SurfaceTextureResidualMLP,
+    SupportAwareLowRankSurfaceTexture,
     _load_face_ids_tensor,
     _load_input_chw,
     _predict_delta_tiled,
@@ -44,11 +46,59 @@ def _build_model(checkpoint: dict[str, Any], device: torch.device) -> tuple[torc
     confidence_bias = float(ckpt_args.get("confidence_bias", 2.0))
     confidence_min = float(ckpt_args.get("confidence_min", 0.0))
     confidence_max = float(ckpt_args.get("confidence_max", 1.0))
+    state_dict = checkpoint.get("state_dict", {})
+    state_keys = set(state_dict.keys())
+    if "model_type" in ckpt_args:
+        model_type = str(ckpt_args.get("model_type", "unet"))
+    elif "surface_basis.weight" in state_keys:
+        model_type = "lowrank_surface_texture"
+    elif "surface_features.weight" in state_keys:
+        model_type = "surface_texture_mlp"
+    else:
+        model_type = "unet"
     face_lut = checkpoint.get("face_lut", None)
     if face_lut is not None:
         face_lut = np.asarray(face_lut, dtype=np.int64)
     embedding_dim = int(ckpt_args.get("face_embedding_dim", 0))
-    if embedding_dim > 0:
+    if model_type == "lowrank_surface_texture":
+        if face_lut is None or face_lut.size == 0:
+            raise RuntimeError("checkpoint requests low-rank surface texture model but has no face_lut")
+        support_stats = checkpoint.get("surface_support_stats", None)
+        if support_stats is None:
+            support_stats = checkpoint.get("state_dict", {}).get("surface_support_stats", None)
+        if support_stats is None:
+            raise RuntimeError("checkpoint requests low-rank surface texture model but has no support stats")
+        model = SupportAwareLowRankSurfaceTexture(
+            in_ch,
+            int(ckpt_args.get("surface_decoder_hidden", 64)),
+            max_delta,
+            int(face_lut.size),
+            int(ckpt_args.get("surface_texture_size", 8)),
+            int(ckpt_args.get("lowrank_rank", 4)),
+            int(ckpt_args.get("surface_decoder_layers", 3)),
+            support_stats,
+            basis_init_std=float(ckpt_args.get("lowrank_basis_init_std", 0.01)),
+            confidence_bias=confidence_bias,
+            confidence_min=confidence_min,
+            confidence_max=confidence_max,
+        )
+    elif model_type == "surface_texture_mlp":
+        if face_lut is None or face_lut.size == 0:
+            raise RuntimeError("checkpoint requests surface texture model but has no face_lut")
+        model = SurfaceTextureResidualMLP(
+            in_ch,
+            int(ckpt_args.get("surface_decoder_hidden", 64)),
+            max_delta,
+            int(face_lut.size),
+            int(ckpt_args.get("surface_texture_size", 8)),
+            int(ckpt_args.get("surface_feature_dim", 8)),
+            int(ckpt_args.get("surface_decoder_layers", 3)),
+            confidence_mode=confidence_mode,
+            confidence_bias=confidence_bias,
+            confidence_min=confidence_min,
+            confidence_max=confidence_max,
+        )
+    elif embedding_dim > 0:
         if face_lut is None or face_lut.size == 0:
             raise RuntimeError("checkpoint requests face embeddings but has no face_lut")
         model = SurfaceConditionedFaceEmbeddingUNet(
@@ -122,12 +172,37 @@ def main() -> int:
         adapted = np.clip(parent + float(args.alpha) * delta, 0.0, 1.0)
         save_image_chw(render_dir / f"{path.stem}.png", adapted)
         save_image_chw(parent_dir / f"{path.stem}.png", parent)
-        rows.append(
-            {
-                "view": path.stem,
-                "changed_fraction": float(np.mean(np.any(np.abs(float(args.alpha) * delta) > (0.5 / 255.0), axis=0))),
-            }
-        )
+        changed = np.any(np.abs(float(args.alpha) * delta) > (0.5 / 255.0), axis=0)
+        valid_mask = features[15].numpy() > 0.5 if features.shape[0] > 15 else np.ones(changed.shape, dtype=bool)
+        valid_count = max(1, int(np.sum(valid_mask)))
+        row: dict[str, Any] = {
+            "view": path.stem,
+            "changed_fraction": float(np.mean(changed)),
+        }
+        if face_ids is not None:
+            known = face_ids.numpy() > 0
+            row["known_face_fraction"] = float(np.sum(known & valid_mask) / valid_count)
+        if face_ids is not None and hasattr(model, "support_mask"):
+            with torch.no_grad():
+                support = (
+                    model.support_mask(features.unsqueeze(0).to(device), face_ids.unsqueeze(0).to(device))
+                    .squeeze(0)
+                    .squeeze(0)
+                    .detach()
+                    .cpu()
+                    .numpy()
+                    > 0.5
+                )
+            active = support & valid_mask
+            inactive = (~support) & valid_mask
+            row["active_support_fraction"] = float(np.sum(active) / valid_count)
+            row["active_support_changed_fraction"] = (
+                float(np.sum(changed & active) / max(1, int(np.sum(active)))) if np.any(active) else 0.0
+            )
+            row["inactive_support_changed_fraction"] = (
+                float(np.sum(changed & inactive) / max(1, int(np.sum(inactive)))) if np.any(inactive) else 0.0
+            )
+        rows.append(row)
     payload = {
         "schema": "spcarnet_surface_conditioned_unet_checkpoint_apply_v1",
         "checkpoint": str(args.checkpoint),
@@ -139,6 +214,18 @@ def main() -> int:
         "no_gt_verify": no_gt,
         "view_count": int(len(rows)),
         "mean_changed_fraction": float(np.mean([r["changed_fraction"] for r in rows])) if rows else 0.0,
+        "mean_known_face_fraction": float(np.mean([r.get("known_face_fraction", 0.0) for r in rows])) if rows else 0.0,
+        "mean_active_support_fraction": float(np.mean([r.get("active_support_fraction", 0.0) for r in rows])) if rows else 0.0,
+        "mean_active_support_changed_fraction": float(
+            np.mean([r.get("active_support_changed_fraction", 0.0) for r in rows])
+        )
+        if rows
+        else 0.0,
+        "mean_inactive_support_changed_fraction": float(
+            np.mean([r.get("inactive_support_changed_fraction", 0.0) for r in rows])
+        )
+        if rows
+        else 0.0,
         "per_view": rows,
         "gt_usage_audit": {
             "uses_train_fit_gt": bool(
