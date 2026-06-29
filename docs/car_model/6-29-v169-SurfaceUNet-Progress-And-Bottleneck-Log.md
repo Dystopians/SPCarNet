@@ -160,6 +160,42 @@ uses_target_or_test_gt_during_apply = false
 
 This must be disclosed in slides/paper notes. A stricter teacher-only ablation is still needed before making a pure teacher-distillation claim.
 
+## Teacher-Only Ablation
+
+After the initial milestone, a stricter flowers teacher-only ablation was run with all train-fit GT losses disabled:
+
+```text
+gt_l1_weight = 0
+gt_ssim_weight = 0
+gt_lpips_weight = 0
+gt_grad_weight = 0
+```
+
+It still used policy-val GT for certification, and target/test GT remained stripped before apply.
+
+Artifacts:
+
+- W&B: `/dev/shm/peilincai_spcarnet_v194_flowers_teacheronly/wandb/offline-run-20260629_020318-mlysap3o`
+- report: `/dev/shm/peilincai_spcarnet_v194_flowers_teacheronly/v184_surface_conditioned_unet_report.json`
+- eval GT audit: `/dev/shm/peilincai_spcarnet_v194_flowers_teacheronly/v194_eval_gt_population_audit.json`
+- official test results: `/dev/shm/peilincai_spcarnet_v194_flowers_teacheronly/v194_official_test_results.json`
+
+Policy-val was all-axis positive but weak:
+
+| run | PSNR gain | SSIM gain | LPIPS gain | changed fraction |
+|---|---:|---:|---:|---:|
+| v194 teacher-only flowers policy-val | +0.094612 | +0.004956 | +0.001564 | 0.320225 |
+
+Official flowers test:
+
+| method | PSNR | SSIM | LPIPS | verdict |
+|---|---:|---:|---:|---|
+| Phase-J flowers gate | 20.304358 | 0.557770 | 0.329222 | reference |
+| v191 flowers, GT-assisted | 20.606058 | 0.578882 | 0.323687 | pass |
+| v194 flowers, teacher-only | 19.903099 | 0.510229 | 0.404076 | fail |
+
+Conclusion: the current successful v191 result is not supported by teacher-only distillation. Train-fit GT supervision is carrying a large part of the gain. This does not imply target/test leakage, but it means the paper story must not claim pure Phase-J teacher distillation yet.
+
 ## Commands And Artifact Index
 
 Representative commands:
@@ -234,6 +270,7 @@ Completed:
 - W&B-logged medium runs;
 - v191 flowers exact pass;
 - v191/v192/v193 counter official evaluations;
+- v194 teacher-only ablation, which failed and exposed train-fit GT dependence;
 - no-GT apply audits;
 - checkpoint apply interface;
 - diagnostic evidence that simple alpha calibration cannot close counter.

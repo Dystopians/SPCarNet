@@ -6,7 +6,7 @@ Date: 2026-06-28
 
 新增日志：`docs/car_model/6-29-v169-SurfaceUNet-Progress-And-Bottleneck-Log.md`。
 
-更新后的结论是：v191 surface-conditioned residual U-Net 已经在 flowers exact 上通过 v169 固定 Phase-J all-axis gate（`20.606058 / 0.578882 / 0.323687` vs `20.304358 / 0.557770 / 0.329222`），但 counter 仍未全面超过 Phase-J。当前最好的 baked U-Net counter 是 v192：`28.097420 / 0.891432 / 0.184687`，它 LPIPS 优于 Phase-J counter `0.186472`，但 PSNR/SSIM 仍低于 Phase-J `28.449171 / 0.893731`。因此总体状态仍是 `NOT COMPLETE`，但 6-29 已经从“flowers 未过 Phase-J”推进到“flowers 过硬门槛，counter 成为主要瓶颈”。
+更新后的结论是：v191 surface-conditioned residual U-Net 已经在 flowers exact 上通过 v169 固定 Phase-J all-axis gate（`20.606058 / 0.578882 / 0.323687` vs `20.304358 / 0.557770 / 0.329222`），但 counter 仍未全面超过 Phase-J。当前最好的 baked U-Net counter 是 v192：`28.097420 / 0.891432 / 0.184687`，它 LPIPS 优于 Phase-J counter `0.186472`，但 PSNR/SSIM 仍低于 Phase-J `28.449171 / 0.893731`。新增 v194 teacher-only ablation 为 `19.903099 / 0.510229 / 0.404076`，说明 v191 成功明显依赖 train-fit GT loss，不能包装成纯 teacher-only distillation。因此总体状态仍是 `NOT COMPLETE`，但 6-29 已经从“flowers 未过 Phase-J”推进到“flowers 过硬门槛，counter 与 teacher-only 消融成为主要瓶颈”。
 
 ## 直接回答：比 Phase-J 更弱，最新思路未成功达标
 
