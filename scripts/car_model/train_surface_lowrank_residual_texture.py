@@ -22,6 +22,7 @@ from scripts.car_model.ecsr_apply_surface_residual_region_texture_adapter import
     image_lpips_chw,
     image_ssim_chw,
     save_image_chw,
+    transform_residual_samples_for_fit,
 )
 from scripts.car_model.train_perceptual_surface_residual_decoder import (  # noqa: E402
     DEFAULT_EVIDENCE,
@@ -89,6 +90,42 @@ def _basis_rows(z: np.lib.npyio.NpzFile, ys: np.ndarray, xs: np.ndarray, basis_m
     return out
 
 
+def _luma_gradient_weight_map(chw: np.ndarray, *, strength: float, percentile: float, max_weight: float) -> tuple[np.ndarray | None, dict[str, float]]:
+    if float(strength) <= 0.0:
+        return None, {
+            "enabled": False,
+            "strength": float(strength),
+            "percentile": float(percentile),
+            "max_weight": float(max_weight),
+        }
+    arr = np.asarray(chw, dtype=np.float32)[:3]
+    luma = 0.299 * arr[0] + 0.587 * arr[1] + 0.114 * arr[2]
+    gx = np.zeros_like(luma, dtype=np.float32)
+    gy = np.zeros_like(luma, dtype=np.float32)
+    gx[:, 1:-1] = 0.5 * (luma[:, 2:] - luma[:, :-2])
+    gx[:, 0] = luma[:, 1] - luma[:, 0] if luma.shape[1] > 1 else 0.0
+    gx[:, -1] = luma[:, -1] - luma[:, -2] if luma.shape[1] > 1 else 0.0
+    gy[1:-1, :] = 0.5 * (luma[2:, :] - luma[:-2, :])
+    gy[0, :] = luma[1, :] - luma[0, :] if luma.shape[0] > 1 else 0.0
+    gy[-1, :] = luma[-1, :] - luma[-2, :] if luma.shape[0] > 1 else 0.0
+    mag = np.sqrt(gx * gx + gy * gy).astype(np.float32)
+    positive = mag[mag > 0.0]
+    scale = float(np.percentile(positive.astype(np.float64), float(np.clip(percentile, 1.0, 99.9)))) if positive.size else 1.0
+    scale = max(scale, 1.0e-8)
+    weight = 1.0 + float(strength) * np.clip(mag / scale, 0.0, float(max_weight))
+    weight = np.nan_to_num(weight, nan=1.0, posinf=1.0 + float(strength) * float(max_weight), neginf=1.0).astype(np.float32)
+    return weight, {
+        "enabled": True,
+        "strength": float(strength),
+        "percentile": float(percentile),
+        "max_weight": float(max_weight),
+        "scale": float(scale),
+        "mean_weight": float(np.mean(weight)),
+        "p90_weight": float(np.percentile(weight.astype(np.float64), 90.0)),
+        "max_observed_weight": float(np.max(weight)),
+    }
+
+
 def _fit_lowrank_texture(
     fit_paths: list[Path],
     candidate_faces: np.ndarray,
@@ -101,15 +138,26 @@ def _fit_lowrank_texture(
     basis_mode: str,
     ridge_count: float,
     solve_chunk_slots: int,
-) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    fit_gradient_weight: float,
+    fit_gradient_weight_percentile: float,
+    fit_gradient_weight_max: float,
+    teacher_residual_target_mode: str,
+    teacher_residual_target_luma_mix: float,
+    teacher_residual_target_edge_boost: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     bins = int(grid) * int(grid)
     basis_dim = _basis_dim(str(basis_mode))
     slot_count = int(candidate_faces.size) * bins
     ata = np.zeros((slot_count, basis_dim, basis_dim), dtype=np.float32)
     atb = np.zeros((slot_count, basis_dim, 3), dtype=np.float32)
+    feature_sum = np.zeros((slot_count, basis_dim), dtype=np.float32)
+    feature_sumsq = np.zeros((slot_count, basis_dim), dtype=np.float32)
     counts = np.zeros(slot_count, dtype=np.float32)
+    weight_sums = np.zeros(slot_count, dtype=np.float32)
     active_pixels = 0
     used_pixels = 0
+    gradient_weight_stats: list[dict[str, float]] = []
+    residual_target_stats: list[dict[str, Any]] = []
     for path in tqdm(fit_paths, desc="fit low-rank UV residual texture"):
         with np.load(path, allow_pickle=False) as z:
             mask = _valid_mask(
@@ -132,9 +180,35 @@ def _fit_lowrank_texture(
             slots = face_idx.astype(np.int64) * bins + bin_id.astype(np.int64)
             phi = _basis_rows(z, ys, xs, str(basis_mode)).astype(np.float32)
             residual = np.asarray(z[residual_rgb_key], dtype=np.float32)[:3, ys, xs].T.astype(np.float32)
+            local_mask = np.zeros(mask.shape, dtype=bool)
+            local_mask[ys, xs] = True
+            residual, residual_target_summary = transform_residual_samples_for_fit(
+                z,
+                local_mask,
+                residual,
+                str(teacher_residual_target_mode),
+                float(teacher_residual_target_luma_mix),
+                float(teacher_residual_target_edge_boost),
+            )
+            residual_target_stats.append(residual_target_summary)
+            grad_weight_map, grad_stats = _luma_gradient_weight_map(
+                np.asarray(z[residual_rgb_key], dtype=np.float32),
+                strength=float(fit_gradient_weight),
+                percentile=float(fit_gradient_weight_percentile),
+                max_weight=float(fit_gradient_weight_max),
+            )
+            gradient_weight_stats.append(grad_stats)
+            if grad_weight_map is None:
+                weights = np.ones((int(ys.size),), dtype=np.float32)
+            else:
+                weights = grad_weight_map[ys, xs].astype(np.float32)
             np.add.at(counts, slots, 1.0)
-            np.add.at(ata, slots, phi[:, :, None] * phi[:, None, :])
-            np.add.at(atb, slots, phi[:, :, None] * residual[:, None, :])
+            np.add.at(weight_sums, slots, weights)
+            np.add.at(feature_sum, slots, phi)
+            np.add.at(feature_sumsq, slots, phi * phi)
+            weighted_phi = phi * weights[:, None]
+            np.add.at(ata, slots, weighted_phi[:, :, None] * phi[:, None, :])
+            np.add.at(atb, slots, weighted_phi[:, :, None] * residual[:, None, :])
             used_pixels += int(ys.size)
 
     nonempty = np.flatnonzero(counts > 0.0)
@@ -155,7 +229,13 @@ def _fit_lowrank_texture(
 
     coeff = coeff.reshape(int(candidate_faces.size), bins, basis_dim, 3)
     counts_2d = counts.reshape(int(candidate_faces.size), bins)
-    return coeff, counts_2d.astype(np.float32), {
+    denom = np.maximum(counts[:, None], 1.0)
+    feature_mean = feature_sum / denom
+    feature_var = np.maximum(feature_sumsq / denom - feature_mean * feature_mean, 0.0)
+    feature_std = np.sqrt(feature_var).astype(np.float32)
+    feature_mean = feature_mean.reshape(int(candidate_faces.size), bins, basis_dim)
+    feature_std = feature_std.reshape(int(candidate_faces.size), bins, basis_dim)
+    return coeff, counts_2d.astype(np.float32), feature_mean.astype(np.float32), feature_std.astype(np.float32), {
         "fit_active_pixels": int(active_pixels),
         "fit_used_pixels": int(used_pixels),
         "basis_mode": str(basis_mode),
@@ -163,8 +243,87 @@ def _fit_lowrank_texture(
         "nonempty_bins": int(np.count_nonzero(counts > 0.0)),
         "nonempty_bin_fraction": float(np.mean(counts > 0.0)),
         "mean_nonempty_count": float(np.mean(counts[counts > 0.0])) if np.any(counts > 0.0) else 0.0,
+        "mean_nonempty_weight_sum": float(np.mean(weight_sums[counts > 0.0])) if np.any(counts > 0.0) else 0.0,
+        "mean_sample_weight": float(np.sum(weight_sums) / max(float(np.sum(counts)), 1.0)),
+        "gradient_weight": {
+            "enabled": bool(float(fit_gradient_weight) > 0.0),
+            "strength": float(fit_gradient_weight),
+            "percentile": float(fit_gradient_weight_percentile),
+            "max_weight": float(fit_gradient_weight_max),
+            "mean_weight": _mean([float(s.get("mean_weight", 1.0)) for s in gradient_weight_stats if s.get("enabled")]),
+            "p90_weight": _mean([float(s.get("p90_weight", 1.0)) for s in gradient_weight_stats if s.get("enabled")]),
+            "max_observed_weight": max([float(s.get("max_observed_weight", 1.0)) for s in gradient_weight_stats if s.get("enabled")] or [1.0]),
+        },
+        "teacher_residual_target": {
+            "mode": str(teacher_residual_target_mode),
+            "luma_mix": float(teacher_residual_target_luma_mix),
+            "edge_boost": float(teacher_residual_target_edge_boost),
+            "mean_luma_mix": _mean([float(s.get("mean_luma_mix", 0.0)) for s in residual_target_stats if s.get("mode") != "raw_rgb"]),
+            "energy_ratio_after_before": _mean(
+                [float(s.get("energy_ratio_after_before", 1.0)) for s in residual_target_stats if s.get("mode") != "raw_rgb"]
+            ),
+        },
         "ridge_count": float(ridge_count),
         "solve_failures": int(failures),
+    }
+
+
+def _support_confidence(
+    phi: np.ndarray,
+    face_idx: np.ndarray,
+    bin_id: np.ndarray,
+    counts: np.ndarray,
+    feature_mean: np.ndarray | None,
+    feature_std: np.ndarray | None,
+    *,
+    min_bin_count: float,
+    enable_support_confidence: bool,
+    support_full_count: float,
+    support_count_power: float,
+    support_ood_free_z: float,
+    support_ood_max_z: float,
+    support_std_floor: float,
+    support_min_confidence: float,
+) -> tuple[np.ndarray, dict[str, float]]:
+    n = int(phi.shape[0])
+    if n == 0:
+        return np.zeros((0,), dtype=np.float32), {
+            "mean": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "count_mean": 0.0,
+            "ood_z_mean": 0.0,
+        }
+    if not bool(enable_support_confidence) or feature_mean is None or feature_std is None:
+        return np.ones((n,), dtype=np.float32), {
+            "mean": 1.0,
+            "min": 1.0,
+            "max": 1.0,
+            "count_mean": float(np.mean(counts[face_idx, bin_id])) if n else 0.0,
+            "ood_z_mean": 0.0,
+        }
+    local_counts = counts[face_idx, bin_id].astype(np.float32)
+    full = max(float(support_full_count), float(min_bin_count), 1.0)
+    count_conf = np.clip(local_counts / full, 0.0, 1.0)
+    count_conf = np.power(count_conf, max(float(support_count_power), 0.0)).astype(np.float32)
+
+    mean = feature_mean[face_idx, bin_id].astype(np.float32)
+    std = feature_std[face_idx, bin_id].astype(np.float32)
+    valid_dim = std > float(support_std_floor)
+    z_abs = np.zeros_like(phi, dtype=np.float32)
+    z_abs[valid_dim] = np.abs((phi[valid_dim] - mean[valid_dim]) / np.maximum(std[valid_dim], float(support_std_floor)))
+    denom = np.maximum(np.sum(valid_dim, axis=1), 1).astype(np.float32)
+    z_rms = np.sqrt(np.sum(z_abs * z_abs, axis=1) / denom).astype(np.float32)
+    free_z = max(float(support_ood_free_z), 0.0)
+    max_z = max(float(support_ood_max_z), free_z + 1.0e-6)
+    ood_conf = np.clip((max_z - z_rms) / max(max_z - free_z, 1.0e-6), 0.0, 1.0).astype(np.float32)
+    conf = np.maximum(float(support_min_confidence), count_conf * ood_conf).astype(np.float32)
+    return conf, {
+        "mean": float(np.mean(conf)),
+        "min": float(np.min(conf)),
+        "max": float(np.max(conf)),
+        "count_mean": float(np.mean(local_counts)),
+        "ood_z_mean": float(np.mean(z_rms)),
     }
 
 
@@ -173,6 +332,9 @@ def _predict_delta(
     candidate_faces: np.ndarray,
     coeff: np.ndarray,
     counts: np.ndarray,
+    feature_mean: np.ndarray | None = None,
+    feature_std: np.ndarray | None = None,
+    slot_reliability: np.ndarray | None = None,
     *,
     residual_l1_key: str,
     min_l1: float,
@@ -181,9 +343,20 @@ def _predict_delta(
     grid: int,
     basis_mode: str,
     max_abs_delta: float,
-) -> tuple[np.ndarray, np.ndarray]:
+    enable_support_confidence: bool = False,
+    support_full_count: float = 16.0,
+    support_count_power: float = 0.5,
+    support_ood_free_z: float = 1.5,
+    support_ood_max_z: float = 4.0,
+    support_std_floor: float = 0.02,
+    support_min_confidence: float = 0.0,
+    enable_slot_reliability_confidence: bool = False,
+    slot_reliability_power: float = 1.0,
+    return_confidence: bool = False,
+) -> tuple[np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, float]]:
     parent = np.asarray(z["rgb_render"], dtype=np.float32)
     delta = np.zeros_like(parent, dtype=np.float32)
+    confidence_map = np.zeros(parent.shape[1:], dtype=np.float32)
     active = _valid_mask(
         z,
         candidate_faces,
@@ -193,24 +366,184 @@ def _predict_delta(
     )
     ys, xs = np.nonzero(active)
     if ys.size == 0:
+        if return_confidence:
+            return delta, active, confidence_map, {"mean": 0.0, "min": 0.0, "max": 0.0, "count_mean": 0.0, "ood_z_mean": 0.0}
         return delta, active
     faces = np.asarray(z["face_id"], dtype=np.int64)[ys, xs]
     face_idx, ok = _face_indices(faces, candidate_faces)
     ys, xs, face_idx = ys[ok], xs[ok], face_idx[ok]
     if ys.size == 0:
+        if return_confidence:
+            return delta, active, confidence_map, {"mean": 0.0, "min": 0.0, "max": 0.0, "count_mean": 0.0, "ood_z_mean": 0.0}
         return delta, active
     bin_id = _bin_ids(z, ys, xs, int(grid))
     good = counts[face_idx, bin_id] >= float(min_bin_count)
     ys, xs, face_idx, bin_id = ys[good], xs[good], face_idx[good], bin_id[good]
     if ys.size == 0:
+        if return_confidence:
+            return delta, active, confidence_map, {"mean": 0.0, "min": 0.0, "max": 0.0, "count_mean": 0.0, "ood_z_mean": 0.0}
         return delta, active
     phi = _basis_rows(z, ys, xs, str(basis_mode)).astype(np.float32)
     local = coeff[face_idx, bin_id]
     pred = np.einsum("nk,nkc->nc", phi, local, optimize=True).astype(np.float32)
+    conf, conf_stats = _support_confidence(
+        phi,
+        face_idx,
+        bin_id,
+        counts,
+        feature_mean,
+        feature_std,
+        min_bin_count=float(min_bin_count),
+        enable_support_confidence=bool(enable_support_confidence),
+        support_full_count=float(support_full_count),
+        support_count_power=float(support_count_power),
+        support_ood_free_z=float(support_ood_free_z),
+        support_ood_max_z=float(support_ood_max_z),
+        support_std_floor=float(support_std_floor),
+        support_min_confidence=float(support_min_confidence),
+    )
+    if bool(enable_slot_reliability_confidence) and slot_reliability is not None:
+        rel = np.clip(slot_reliability[face_idx, bin_id].astype(np.float32), 0.0, 1.0)
+        conf *= np.power(rel, max(float(slot_reliability_power), 0.0)).astype(np.float32)
+        conf_stats["slot_reliability_mean"] = float(np.mean(rel)) if rel.size else 0.0
+    pred *= conf[:, None]
     if float(max_abs_delta) > 0.0:
         pred = np.clip(pred, -float(max_abs_delta), float(max_abs_delta))
     delta[:, ys, xs] = pred.T
+    confidence_map[ys, xs] = conf
+    if return_confidence:
+        return delta, active, confidence_map, conf_stats
     return delta, active
+
+
+def _calibrate_slot_reliability(
+    fit_paths: list[Path],
+    candidate_faces: np.ndarray,
+    coeff: np.ndarray,
+    counts: np.ndarray,
+    feature_mean: np.ndarray | None,
+    feature_std: np.ndarray | None,
+    *,
+    residual_l1_key: str,
+    min_l1: float,
+    min_alpha: float,
+    min_bin_count: float,
+    grid: int,
+    basis_mode: str,
+    max_abs_delta: float,
+    calibration_alpha: float,
+    max_samples_per_view: int,
+    tau_quantile: float,
+    full_count: float,
+    min_positive_fraction: float,
+    enable_support_confidence: bool,
+    support_full_count: float,
+    support_count_power: float,
+    support_ood_free_z: float,
+    support_ood_max_z: float,
+    support_std_floor: float,
+    support_min_confidence: float,
+    seed: int,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    rng = np.random.default_rng(int(seed))
+    bins = int(grid) * int(grid)
+    slot_count = int(candidate_faces.size) * bins
+    gain_sum = np.zeros(slot_count, dtype=np.float64)
+    sample_count = np.zeros(slot_count, dtype=np.float32)
+    positive_count = np.zeros(slot_count, dtype=np.float32)
+    used_pixels = 0
+    active_pixels = 0
+    for path in tqdm(fit_paths, desc="calibrate slot reliability"):
+        with np.load(path, allow_pickle=False) as z:
+            mask = _valid_mask(
+                z,
+                candidate_faces,
+                residual_l1_key=str(residual_l1_key),
+                min_l1=float(min_l1),
+                min_alpha=float(min_alpha),
+            )
+            ys, xs = np.nonzero(mask)
+            active_pixels += int(ys.size)
+            if ys.size == 0:
+                continue
+            if int(max_samples_per_view) > 0 and ys.size > int(max_samples_per_view):
+                take = rng.choice(ys.size, size=int(max_samples_per_view), replace=False)
+                ys, xs = ys[take], xs[take]
+            faces = np.asarray(z["face_id"], dtype=np.int64)[ys, xs]
+            face_idx, ok = _face_indices(faces, candidate_faces)
+            if not np.any(ok):
+                continue
+            ys, xs, face_idx = ys[ok], xs[ok], face_idx[ok]
+            bin_id = _bin_ids(z, ys, xs, int(grid))
+            good = counts[face_idx, bin_id] >= float(min_bin_count)
+            ys, xs, face_idx, bin_id = ys[good], xs[good], face_idx[good], bin_id[good]
+            if ys.size == 0:
+                continue
+            phi = _basis_rows(z, ys, xs, str(basis_mode)).astype(np.float32)
+            local = coeff[face_idx, bin_id]
+            pred = np.einsum("nk,nkc->nc", phi, local, optimize=True).astype(np.float32)
+            conf, _ = _support_confidence(
+                phi,
+                face_idx,
+                bin_id,
+                counts,
+                feature_mean,
+                feature_std,
+                min_bin_count=float(min_bin_count),
+                enable_support_confidence=bool(enable_support_confidence),
+                support_full_count=float(support_full_count),
+                support_count_power=float(support_count_power),
+                support_ood_free_z=float(support_ood_free_z),
+                support_ood_max_z=float(support_ood_max_z),
+                support_std_floor=float(support_std_floor),
+                support_min_confidence=float(support_min_confidence),
+            )
+            pred *= conf[:, None]
+            if float(max_abs_delta) > 0.0:
+                pred = np.clip(pred, -float(max_abs_delta), float(max_abs_delta))
+            parent = np.asarray(z["rgb_render"], dtype=np.float32)[:3, ys, xs].T.astype(np.float32)
+            gt = np.asarray(z["rgb_gt"], dtype=np.float32)[:3, ys, xs].T.astype(np.float32)
+            adapted = np.clip(parent + float(calibration_alpha) * pred, 0.0, 1.0)
+            parent_err = np.sum(np.square(parent - gt), axis=1)
+            cand_err = np.sum(np.square(adapted - gt), axis=1)
+            gain = (parent_err - cand_err).astype(np.float64)
+            slots = face_idx.astype(np.int64) * bins + bin_id.astype(np.int64)
+            np.add.at(gain_sum, slots, gain)
+            np.add.at(sample_count, slots, 1.0)
+            np.add.at(positive_count, slots, (gain > 0.0).astype(np.float32))
+            used_pixels += int(ys.size)
+
+    valid = sample_count > 0.0
+    mean_gain = np.zeros(slot_count, dtype=np.float32)
+    mean_gain[valid] = (gain_sum[valid] / np.maximum(sample_count[valid], 1.0)).astype(np.float32)
+    positive_mean = mean_gain[mean_gain > 0.0]
+    tau = float(np.quantile(positive_mean.astype(np.float64), float(np.clip(tau_quantile, 0.0, 1.0)))) if positive_mean.size else 1.0
+    tau = max(tau, 1.0e-10)
+    gain_conf = np.clip(mean_gain / tau, 0.0, 1.0)
+    count_conf = np.clip(sample_count / max(float(full_count), 1.0), 0.0, 1.0)
+    pos_frac = np.divide(positive_count, np.maximum(sample_count, 1.0), out=np.zeros_like(positive_count), where=sample_count > 0)
+    min_pos = float(np.clip(min_positive_fraction, 0.0, 0.99))
+    pos_conf = np.clip((pos_frac - min_pos) / max(1.0 - min_pos, 1.0e-6), 0.0, 1.0)
+    reliability = (gain_conf * count_conf * pos_conf).astype(np.float32)
+    rel_2d = reliability.reshape(int(candidate_faces.size), bins)
+    usable = reliability[valid]
+    return rel_2d, {
+        "enabled": True,
+        "fit_view_count": int(len(fit_paths)),
+        "active_pixels": int(active_pixels),
+        "used_pixels": int(used_pixels),
+        "valid_slots": int(np.count_nonzero(valid)),
+        "positive_mean_gain_slots": int(positive_mean.size),
+        "tau": float(tau),
+        "mean_reliability": float(np.mean(usable)) if usable.size else 0.0,
+        "nonzero_reliability_fraction": float(np.mean(reliability > 0.0)),
+        "positive_fraction_mean": float(np.mean(pos_frac[valid])) if np.any(valid) else 0.0,
+        "calibration_alpha": float(calibration_alpha),
+        "max_samples_per_view": int(max_samples_per_view),
+        "tau_quantile": float(tau_quantile),
+        "full_count": float(full_count),
+        "min_positive_fraction": float(min_positive_fraction),
+    }
 
 
 def _evaluate(
@@ -218,6 +551,9 @@ def _evaluate(
     candidate_faces: np.ndarray,
     coeff: np.ndarray,
     counts: np.ndarray,
+    feature_mean: np.ndarray | None,
+    feature_std: np.ndarray | None,
+    slot_reliability: np.ndarray | None,
     *,
     residual_rgb_key: str,
     residual_l1_key: str,
@@ -234,6 +570,15 @@ def _evaluate(
     min_best_positive_view_fraction: float,
     min_best_ssim_positive_view_fraction: float,
     min_best_lpips_positive_view_fraction: float,
+    enable_support_confidence: bool,
+    support_full_count: float,
+    support_count_power: float,
+    support_ood_free_z: float,
+    support_ood_max_z: float,
+    support_std_floor: float,
+    support_min_confidence: float,
+    enable_slot_reliability_confidence: bool,
+    slot_reliability_power: float,
     output_dir: Path,
 ) -> dict[str, Any]:
     lpips_model = build_lpips_model() if compute_lpips else None
@@ -252,6 +597,9 @@ def _evaluate(
                 candidate_faces,
                 coeff,
                 counts,
+                feature_mean,
+                feature_std,
+                slot_reliability,
                 residual_l1_key=str(residual_l1_key),
                 min_l1=float(min_l1),
                 min_alpha=float(min_alpha),
@@ -259,6 +607,15 @@ def _evaluate(
                 grid=int(grid),
                 basis_mode=str(basis_mode),
                 max_abs_delta=float(max_abs_delta),
+                enable_support_confidence=bool(enable_support_confidence),
+                support_full_count=float(support_full_count),
+                support_count_power=float(support_count_power),
+                support_ood_free_z=float(support_ood_free_z),
+                support_ood_max_z=float(support_ood_max_z),
+                support_std_floor=float(support_std_floor),
+                support_min_confidence=float(support_min_confidence),
+                enable_slot_reliability_confidence=bool(enable_slot_reliability_confidence),
+                slot_reliability_power=float(slot_reliability_power),
             )
             full_mask = np.asarray(z["face_id"], dtype=np.int64) >= 0
             if "barycentric_valid" in z:
@@ -396,6 +753,9 @@ def _evaluate(
                 candidate_faces,
                 coeff,
                 counts,
+                feature_mean,
+                feature_std,
+                slot_reliability,
                 residual_l1_key=str(residual_l1_key),
                 min_l1=float(min_l1),
                 min_alpha=float(min_alpha),
@@ -403,6 +763,15 @@ def _evaluate(
                 grid=int(grid),
                 basis_mode=str(basis_mode),
                 max_abs_delta=float(max_abs_delta),
+                enable_support_confidence=bool(enable_support_confidence),
+                support_full_count=float(support_full_count),
+                support_count_power=float(support_count_power),
+                support_ood_free_z=float(support_ood_free_z),
+                support_ood_max_z=float(support_ood_max_z),
+                support_std_floor=float(support_std_floor),
+                support_min_confidence=float(support_min_confidence),
+                enable_slot_reliability_confidence=bool(enable_slot_reliability_confidence),
+                slot_reliability_power=float(slot_reliability_power),
             )
             save_image_chw(render_dir / f"{path.stem}.png", np.clip(parent + best_alpha * delta, 0.0, 1.0))
             save_image_chw(render_dir / f"{path.stem}_gt.png", gt)
@@ -430,6 +799,8 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- grid: `{payload['fit']['grid']}`",
         f"- basis mode: `{payload['fit']['basis_mode']}`",
         f"- basis dim: `{payload['fit']['basis_dim']}`",
+        f"- gradient-aware fit weight: `{payload['fit'].get('gradient_weight', {})}`",
+        f"- teacher residual target: `{payload['fit'].get('teacher_residual_target', {})}`",
         f"- best all-axis: `{best_all}`",
         "",
         "## Projection At Selected Alpha",
@@ -484,6 +855,12 @@ def main() -> int:
     parser.add_argument("--min_bin_count", type=float, default=3.0)
     parser.add_argument("--solve_chunk_slots", type=int, default=65536)
     parser.add_argument("--max_abs_delta", type=float, default=0.25)
+    parser.add_argument("--fit_gradient_weight", type=float, default=0.0)
+    parser.add_argument("--fit_gradient_weight_percentile", type=float, default=95.0)
+    parser.add_argument("--fit_gradient_weight_max", type=float, default=4.0)
+    parser.add_argument("--teacher_residual_target_mode", default="raw_rgb", choices=["raw_rgb", "luma_only", "edge_luma_mix"])
+    parser.add_argument("--teacher_residual_target_luma_mix", type=float, default=0.75)
+    parser.add_argument("--teacher_residual_target_edge_boost", type=float, default=0.25)
     parser.add_argument("--alpha_grid", default="0,0.03125,0.0625,0.125,0.25,0.5,0.75,1")
     parser.add_argument("--compute_lpips", action="store_true")
     parser.add_argument("--policy_val_ssim_max_side", type=int, default=512)
@@ -491,6 +868,20 @@ def main() -> int:
     parser.add_argument("--min_best_positive_view_fraction", type=float, default=1.0)
     parser.add_argument("--min_best_ssim_positive_view_fraction", type=float, default=1.0)
     parser.add_argument("--min_best_lpips_positive_view_fraction", type=float, default=1.0)
+    parser.add_argument("--enable_support_confidence", action="store_true")
+    parser.add_argument("--support_full_count", type=float, default=16.0)
+    parser.add_argument("--support_count_power", type=float, default=0.5)
+    parser.add_argument("--support_ood_free_z", type=float, default=1.5)
+    parser.add_argument("--support_ood_max_z", type=float, default=4.0)
+    parser.add_argument("--support_std_floor", type=float, default=0.02)
+    parser.add_argument("--support_min_confidence", type=float, default=0.0)
+    parser.add_argument("--enable_slot_reliability_confidence", action="store_true")
+    parser.add_argument("--slot_reliability_alpha", type=float, default=1.0)
+    parser.add_argument("--slot_reliability_max_samples_per_view", type=int, default=131072)
+    parser.add_argument("--slot_reliability_tau_quantile", type=float, default=0.75)
+    parser.add_argument("--slot_reliability_full_count", type=float, default=8.0)
+    parser.add_argument("--slot_reliability_min_positive_fraction", type=float, default=0.5)
+    parser.add_argument("--slot_reliability_power", type=float, default=1.0)
     parser.add_argument("--output_dir", default="/tmp/peilincai_spcarnet_v212_lowrank_residual_texture")
     parser.add_argument("--enable_wandb", action="store_true")
     parser.add_argument("--wandb_project", default="spcarnet-v212-lowrank-residual-texture")
@@ -532,7 +923,7 @@ def main() -> int:
         target_energy_coverage=float(args.candidate_target_energy_coverage),
         seed=int(args.seed),
     )
-    coeff, counts, fit_summary = _fit_lowrank_texture(
+    coeff, counts, feature_mean, feature_std, fit_summary = _fit_lowrank_texture(
         fit_paths,
         candidate_faces,
         residual_rgb_key=str(args.residual_rgb_key),
@@ -543,13 +934,53 @@ def main() -> int:
         basis_mode=str(args.basis_mode),
         ridge_count=float(args.ridge_count),
         solve_chunk_slots=int(args.solve_chunk_slots),
+        fit_gradient_weight=float(args.fit_gradient_weight),
+        fit_gradient_weight_percentile=float(args.fit_gradient_weight_percentile),
+        fit_gradient_weight_max=float(args.fit_gradient_weight_max),
+        teacher_residual_target_mode=str(args.teacher_residual_target_mode),
+        teacher_residual_target_luma_mix=float(args.teacher_residual_target_luma_mix),
+        teacher_residual_target_edge_boost=float(args.teacher_residual_target_edge_boost),
     )
+    slot_reliability = None
+    reliability_summary: dict[str, Any] = {"enabled": False}
+    if bool(args.enable_slot_reliability_confidence):
+        slot_reliability, reliability_summary = _calibrate_slot_reliability(
+            fit_paths,
+            candidate_faces,
+            coeff,
+            counts,
+            feature_mean,
+            feature_std,
+            residual_l1_key=str(args.residual_l1_key),
+            min_l1=float(args.min_l1),
+            min_alpha=float(args.min_alpha),
+            min_bin_count=float(args.min_bin_count),
+            grid=int(args.grid),
+            basis_mode=str(args.basis_mode),
+            max_abs_delta=float(args.max_abs_delta),
+            calibration_alpha=float(args.slot_reliability_alpha),
+            max_samples_per_view=int(args.slot_reliability_max_samples_per_view),
+            tau_quantile=float(args.slot_reliability_tau_quantile),
+            full_count=float(args.slot_reliability_full_count),
+            min_positive_fraction=float(args.slot_reliability_min_positive_fraction),
+            enable_support_confidence=bool(args.enable_support_confidence),
+            support_full_count=float(args.support_full_count),
+            support_count_power=float(args.support_count_power),
+            support_ood_free_z=float(args.support_ood_free_z),
+            support_ood_max_z=float(args.support_ood_max_z),
+            support_std_floor=float(args.support_std_floor),
+            support_min_confidence=float(args.support_min_confidence),
+            seed=int(args.seed) + 1009,
+        )
     alpha_grid = sorted({float(x) for x in str(args.alpha_grid).split(",") if x.strip()})
     policy_val = _evaluate(
         val_paths,
         candidate_faces,
         coeff,
         counts,
+        feature_mean,
+        feature_std,
+        slot_reliability,
         residual_rgb_key=str(args.residual_rgb_key),
         residual_l1_key=str(args.residual_l1_key),
         min_l1=float(args.min_l1),
@@ -565,6 +996,15 @@ def main() -> int:
         min_best_positive_view_fraction=float(args.min_best_positive_view_fraction),
         min_best_ssim_positive_view_fraction=float(args.min_best_ssim_positive_view_fraction),
         min_best_lpips_positive_view_fraction=float(args.min_best_lpips_positive_view_fraction),
+        enable_support_confidence=bool(args.enable_support_confidence),
+        support_full_count=float(args.support_full_count),
+        support_count_power=float(args.support_count_power),
+        support_ood_free_z=float(args.support_ood_free_z),
+        support_ood_max_z=float(args.support_ood_max_z),
+        support_std_floor=float(args.support_std_floor),
+        support_min_confidence=float(args.support_min_confidence),
+        enable_slot_reliability_confidence=bool(args.enable_slot_reliability_confidence),
+        slot_reliability_power=float(args.slot_reliability_power),
         output_dir=output_dir,
     )
     all_axis = policy_val.get("best_all_axis") is not None
@@ -573,8 +1013,12 @@ def main() -> int:
         "candidate_faces": candidate_faces,
         "coeff": coeff.astype(np.float16),
         "counts": counts.astype(np.float16),
+        "feature_mean": feature_mean.astype(np.float16),
+        "feature_std": feature_std.astype(np.float16),
         "args_json": json.dumps(vars(args), sort_keys=True),
     }
+    if slot_reliability is not None:
+        checkpoint["slot_reliability"] = slot_reliability.astype(np.float16)
     checkpoint_path = output_dir / "v212_lowrank_uv_residual_texture.npz"
     np.savez_compressed(checkpoint_path, **checkpoint)
     payload: dict[str, Any] = {
@@ -593,6 +1037,21 @@ def main() -> int:
             "min_best_positive_view_fraction": float(args.min_best_positive_view_fraction),
             "min_best_ssim_positive_view_fraction": float(args.min_best_ssim_positive_view_fraction),
             "min_best_lpips_positive_view_fraction": float(args.min_best_lpips_positive_view_fraction),
+            "enable_support_confidence": bool(args.enable_support_confidence),
+            "support_full_count": float(args.support_full_count),
+            "support_count_power": float(args.support_count_power),
+            "support_ood_free_z": float(args.support_ood_free_z),
+            "support_ood_max_z": float(args.support_ood_max_z),
+            "support_std_floor": float(args.support_std_floor),
+            "support_min_confidence": float(args.support_min_confidence),
+            "enable_slot_reliability_confidence": bool(args.enable_slot_reliability_confidence),
+            "slot_reliability_alpha": float(args.slot_reliability_alpha),
+            "slot_reliability_max_samples_per_view": int(args.slot_reliability_max_samples_per_view),
+            "slot_reliability_tau_quantile": float(args.slot_reliability_tau_quantile),
+            "slot_reliability_full_count": float(args.slot_reliability_full_count),
+            "slot_reliability_min_positive_fraction": float(args.slot_reliability_min_positive_fraction),
+            "slot_reliability_power": float(args.slot_reliability_power),
+            "slot_reliability_summary": reliability_summary,
         },
         "policy_val_all_axis_pass": bool(all_axis),
         "policy_val": policy_val,

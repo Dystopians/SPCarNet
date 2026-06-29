@@ -132,6 +132,15 @@ def main() -> int:
     parser.add_argument("--phasej_flowers_psnr", type=float, default=20.304358)
     parser.add_argument("--phasej_flowers_ssim", type=float, default=0.557770)
     parser.add_argument("--phasej_flowers_lpips", type=float, default=0.329222)
+    parser.add_argument("--enable_support_confidence", action="store_true")
+    parser.add_argument("--support_full_count", type=float, default=-1.0)
+    parser.add_argument("--support_count_power", type=float, default=-1.0)
+    parser.add_argument("--support_ood_free_z", type=float, default=-1.0)
+    parser.add_argument("--support_ood_max_z", type=float, default=-1.0)
+    parser.add_argument("--support_std_floor", type=float, default=-1.0)
+    parser.add_argument("--support_min_confidence", type=float, default=-1.0)
+    parser.add_argument("--enable_slot_reliability_confidence", action="store_true")
+    parser.add_argument("--slot_reliability_power", type=float, default=-1.0)
     parser.add_argument("--enable_wandb", action="store_true")
     parser.add_argument("--wandb_project", default="spcarnet-lowrank-target-apply")
     parser.add_argument("--wandb_run_name", default="")
@@ -161,6 +170,9 @@ def main() -> int:
         candidate_faces = np.asarray(ckpt["candidate_faces"], dtype=np.int64)
         coeff = np.asarray(ckpt["coeff"], dtype=np.float32)
         counts = np.asarray(ckpt["counts"], dtype=np.float32)
+        feature_mean = np.asarray(ckpt["feature_mean"], dtype=np.float32) if "feature_mean" in ckpt else None
+        feature_std = np.asarray(ckpt["feature_std"], dtype=np.float32) if "feature_std" in ckpt else None
+        slot_reliability = np.asarray(ckpt["slot_reliability"], dtype=np.float32) if "slot_reliability" in ckpt else None
 
     grid = int(args.grid) if int(args.grid) > 0 else int(ckpt_args.get("grid", 4))
     basis_mode = str(args.basis_mode or ckpt_args.get("basis_mode", "dir_uv_v1"))
@@ -174,6 +186,47 @@ def main() -> int:
     alpha = float(args.alpha)
     if alpha < 0.0:
         alpha = 1.0
+    ckpt_support_enabled = bool(ckpt_args.get("enable_support_confidence", False))
+    enable_support_confidence = bool(args.enable_support_confidence or ckpt_support_enabled)
+    support_full_count = (
+        float(args.support_full_count) if float(args.support_full_count) > 0.0 else float(ckpt_args.get("support_full_count", 16.0))
+    )
+    support_count_power = (
+        float(args.support_count_power)
+        if float(args.support_count_power) >= 0.0
+        else float(ckpt_args.get("support_count_power", 0.5))
+    )
+    support_ood_free_z = (
+        float(args.support_ood_free_z)
+        if float(args.support_ood_free_z) >= 0.0
+        else float(ckpt_args.get("support_ood_free_z", 1.5))
+    )
+    support_ood_max_z = (
+        float(args.support_ood_max_z)
+        if float(args.support_ood_max_z) >= 0.0
+        else float(ckpt_args.get("support_ood_max_z", 4.0))
+    )
+    support_std_floor = (
+        float(args.support_std_floor)
+        if float(args.support_std_floor) >= 0.0
+        else float(ckpt_args.get("support_std_floor", 0.02))
+    )
+    support_min_confidence = (
+        float(args.support_min_confidence)
+        if float(args.support_min_confidence) >= 0.0
+        else float(ckpt_args.get("support_min_confidence", 0.0))
+    )
+    if enable_support_confidence and (feature_mean is None or feature_std is None):
+        raise SystemExit("support confidence requested but checkpoint lacks feature_mean/feature_std")
+    ckpt_reliability_enabled = bool(ckpt_args.get("enable_slot_reliability_confidence", False))
+    enable_slot_reliability_confidence = bool(args.enable_slot_reliability_confidence or ckpt_reliability_enabled)
+    slot_reliability_power = (
+        float(args.slot_reliability_power)
+        if float(args.slot_reliability_power) >= 0.0
+        else float(ckpt_args.get("slot_reliability_power", 1.0))
+    )
+    if enable_slot_reliability_confidence and slot_reliability is None:
+        raise SystemExit("slot reliability confidence requested but checkpoint lacks slot_reliability")
 
     eval_dir = Path(args.eval_gt_evidence_dir) if str(args.eval_gt_evidence_dir) else None
     eval_index = {p.stem: p for p in evidence_views(eval_dir)} if eval_dir is not None else {}
@@ -182,15 +235,23 @@ def main() -> int:
     changed_pixels = 0
     total_pixels = 0
     active_pixels = 0
+    effective_confidence_pixels = 0
+    confidence_samples: list[np.ndarray] = []
+    confidence_means: list[float] = []
+    confidence_ood_z_means: list[float] = []
+    confidence_count_means: list[float] = []
     target_paths = evidence_views(Path(args.target_evidence_dir))
     for path in tqdm(target_paths, desc="apply low-rank residual target"):
         with np.load(path, allow_pickle=False) as z:
             parent = np.asarray(z["rgb_render"], dtype=np.float32)
-            delta, active = _predict_delta(
+            delta, active, confidence_map, confidence_stats = _predict_delta(
                 z,
                 candidate_faces,
                 coeff,
                 counts,
+                feature_mean,
+                feature_std,
+                slot_reliability,
                 residual_l1_key=str(args.residual_l1_key),
                 min_l1=0.0,
                 min_alpha=float(min_alpha),
@@ -198,17 +259,41 @@ def main() -> int:
                 grid=int(grid),
                 basis_mode=str(basis_mode),
                 max_abs_delta=float(max_abs_delta),
+                enable_support_confidence=bool(enable_support_confidence),
+                support_full_count=float(support_full_count),
+                support_count_power=float(support_count_power),
+                support_ood_free_z=float(support_ood_free_z),
+                support_ood_max_z=float(support_ood_max_z),
+                support_std_floor=float(support_std_floor),
+                support_min_confidence=float(support_min_confidence),
+                enable_slot_reliability_confidence=bool(enable_slot_reliability_confidence),
+                slot_reliability_power=float(slot_reliability_power),
+                return_confidence=True,
             )
             adapted = np.clip(parent + float(alpha) * delta, 0.0, 1.0)
         changed = np.any(np.abs(adapted - parent) > (0.5 / 255.0), axis=0)
         changed_pixels += int(np.count_nonzero(changed))
         total_pixels += int(changed.size)
         active_pixels += int(np.count_nonzero(active))
+        effective = confidence_map > 0.0
+        effective_confidence_pixels += int(np.count_nonzero(effective))
+        if np.any(effective):
+            vals = confidence_map[effective].astype(np.float32)
+            if vals.size > 8192:
+                vals = vals[np.linspace(0, vals.size - 1, 8192, dtype=np.int64)]
+            confidence_samples.append(vals)
+        confidence_means.append(float(confidence_stats.get("mean", 0.0)))
+        confidence_ood_z_means.append(float(confidence_stats.get("ood_z_mean", 0.0)))
+        confidence_count_means.append(float(confidence_stats.get("count_mean", 0.0)))
         save_image_chw(renders_dir / f"{path.stem}.png", adapted)
         row: dict[str, Any] = {
             "view": path.stem,
             "changed_fraction": float(np.mean(changed)),
             "active_fraction": float(np.mean(active)),
+            "effective_confidence_fraction": float(np.mean(effective)),
+            "confidence_mean": float(confidence_stats.get("mean", 0.0)),
+            "confidence_ood_z_mean": float(confidence_stats.get("ood_z_mean", 0.0)),
+            "confidence_count_mean": float(confidence_stats.get("count_mean", 0.0)),
         }
         if path.stem in eval_index:
             with np.load(eval_index[path.stem], allow_pickle=False) as gt_z:
@@ -291,6 +376,7 @@ def main() -> int:
                 {
                     "apply/changed_fraction": float(changed_pixels / max(1, total_pixels)),
                     "apply/active_fraction": float(active_pixels / max(1, total_pixels)),
+                    "apply/effective_confidence_fraction": float(effective_confidence_pixels / max(1, total_pixels)),
                     "metrics/candidate_psnr": float(metrics.get("candidate_psnr", 0.0)),
                     "metrics/candidate_ssim": float(metrics.get("candidate_ssim", 0.0)),
                     "metrics/candidate_lpips": float(metrics.get("candidate_lpips", 0.0)),
@@ -317,6 +403,28 @@ def main() -> int:
         "min_alpha": float(min_alpha),
         "min_bin_count": float(min_bin_count),
         "max_abs_delta": float(max_abs_delta),
+        "support_confidence": {
+            "enabled": bool(enable_support_confidence),
+            "has_feature_stats": bool(feature_mean is not None and feature_std is not None),
+            "support_full_count": float(support_full_count),
+            "support_count_power": float(support_count_power),
+            "support_ood_free_z": float(support_ood_free_z),
+            "support_ood_max_z": float(support_ood_max_z),
+            "support_std_floor": float(support_std_floor),
+            "support_min_confidence": float(support_min_confidence),
+            "mean_confidence": _mean(confidence_means),
+            "mean_ood_z": _mean(confidence_ood_z_means),
+            "mean_support_count": _mean(confidence_count_means),
+            "sample_quantiles": _quantiles(np.concatenate(confidence_samples).astype(float).tolist())
+            if confidence_samples
+            else _quantiles([]),
+        },
+        "slot_reliability_confidence": {
+            "enabled": bool(enable_slot_reliability_confidence),
+            "has_slot_reliability": bool(slot_reliability is not None),
+            "slot_reliability_power": float(slot_reliability_power),
+            "checkpoint_summary": ckpt_args.get("slot_reliability_summary", {}),
+        },
         "no_gt_preflight": no_gt,
         "target_apply": {
             "view_count": int(len(target_paths)),
@@ -325,6 +433,8 @@ def main() -> int:
             "changed_fraction": float(changed_pixels / max(1, total_pixels)),
             "active_pixels": int(active_pixels),
             "active_fraction": float(active_pixels / max(1, total_pixels)),
+            "effective_confidence_pixels": int(effective_confidence_pixels),
+            "effective_confidence_fraction": float(effective_confidence_pixels / max(1, total_pixels)),
         },
         "metrics": metrics,
         "per_view": rows,

@@ -1,0 +1,159 @@
+{
+  "schema": "spcarnet_v216_v219_lowrank_objective_transfer_v1",
+  "created_at": "2026-06-29",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "phasej_flowers_reference": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "policy_val": [
+    {
+      "run_id": "v217",
+      "change": "support confidence plus train-fit slot reliability",
+      "root": "/dev/shm/peilincai_spcarnet_v217_lowrank_support_slotrel_cov97",
+      "alpha": 2.0,
+      "psnr_gain": 0.03429536185764833,
+      "ssim_gain": 0.0012059460083643596,
+      "lpips_gain": 0.0009953776995340984,
+      "positive_view_fraction": 1.0,
+      "ssim_positive_view_fraction": 1.0,
+      "lpips_positive_view_fraction": 1.0,
+      "full_residual_cosine": 0.18493688509138673,
+      "full_energy_retention": 0.068548705585749,
+      "active_residual_cosine": 0.21590196046112942,
+      "active_energy_retention": 0.0945258204924921,
+      "audit_json": "/dev/shm/peilincai_spcarnet_v217_lowrank_support_slotrel_cov97/v212_lowrank_uv_residual_texture_audit.json"
+    },
+    {
+      "run_id": "v218",
+      "change": "gradient-weighted raw teacher residual fitting",
+      "root": "/dev/shm/peilincai_spcarnet_v218_lowrank_gradfit_support_cov97",
+      "alpha": 1.5,
+      "psnr_gain": 0.09093542131989422,
+      "ssim_gain": 0.0034954100847244263,
+      "lpips_gain": 0.0026242627451817193,
+      "positive_view_fraction": 1.0,
+      "ssim_positive_view_fraction": 1.0,
+      "lpips_positive_view_fraction": 1.0,
+      "full_residual_cosine": 0.2822133916610183,
+      "full_energy_retention": 0.3282571488993808,
+      "active_residual_cosine": 0.329780971502391,
+      "active_energy_retention": 0.45216340652143067,
+      "audit_json": "/dev/shm/peilincai_spcarnet_v218_lowrank_gradfit_support_cov97/v212_lowrank_uv_residual_texture_audit.json"
+    },
+    {
+      "run_id": "v219",
+      "change": "edge_luma_mix teacher residual target",
+      "root": "/dev/shm/peilincai_spcarnet_v219_edge_luma_lowrank_support_smoke",
+      "alpha": 1.25,
+      "psnr_gain": 0.05944727485303769,
+      "ssim_gain": 0.0020941694577534995,
+      "lpips_gain": 0.0013445510218540828,
+      "positive_view_fraction": 1.0,
+      "ssim_positive_view_fraction": 1.0,
+      "lpips_positive_view_fraction": 1.0,
+      "full_residual_cosine": 0.24060539773988365,
+      "full_energy_retention": 0.137082131440613,
+      "active_residual_cosine": 0.32951927528468167,
+      "active_energy_retention": 0.2606643638716763,
+      "audit_json": "/dev/shm/peilincai_spcarnet_v219_edge_luma_lowrank_support_smoke/v212_lowrank_uv_residual_texture_audit.json"
+    }
+  ],
+  "flowers_exact": [
+    {
+      "run_id": "v216_alpha1p5",
+      "change": "support confidence",
+      "alpha": 1.5,
+      "candidate_psnr": 19.88410301022976,
+      "candidate_ssim": 0.6207118183374405,
+      "candidate_lpips": 0.17924611236561427,
+      "psnr_gain": 0.05204913178229295,
+      "ssim_gain": 0.0008014074780724266,
+      "lpips_gain": 0.0010887536812912333,
+      "changed_fraction": 0.3097286850957392,
+      "phasej_gate_pass": false,
+      "audit_json": "/dev/shm/peilincai_spcarnet_v216_lowrank_support_conf_cov97/flowers_exact_apply_alpha1p5/lowrank_target_apply_audit.json"
+    },
+    {
+      "run_id": "v216_alpha2",
+      "change": "support confidence",
+      "alpha": 2.0,
+      "candidate_psnr": 19.87284619642538,
+      "candidate_ssim": 0.6195133057507601,
+      "candidate_lpips": 0.17879680171608925,
+      "psnr_gain": 0.04079231797791636,
+      "ssim_gain": -0.00039710510860789907,
+      "lpips_gain": 0.001538064330816269,
+      "changed_fraction": 0.3174972776867345,
+      "phasej_gate_pass": false,
+      "audit_json": "/dev/shm/peilincai_spcarnet_v216_lowrank_support_conf_cov97/flowers_exact_apply_alpha2/lowrank_target_apply_audit.json"
+    },
+    {
+      "run_id": "v217_alpha2",
+      "change": "support confidence plus slot reliability",
+      "alpha": 2.0,
+      "candidate_psnr": 19.85414016232906,
+      "candidate_ssim": 0.6202574331652034,
+      "candidate_lpips": 0.1798877946355126,
+      "psnr_gain": 0.02208628388159378,
+      "ssim_gain": 0.0003470223058353771,
+      "lpips_gain": 0.0004470714113929055,
+      "changed_fraction": 0.09525042586682766,
+      "phasej_gate_pass": false,
+      "audit_json": "/dev/shm/peilincai_spcarnet_v217_lowrank_support_slotrel_cov97/flowers_exact_apply_alpha2/lowrank_target_apply_audit.json"
+    },
+    {
+      "run_id": "v218_alpha1",
+      "change": "gradient-weighted raw teacher residual fitting",
+      "alpha": 1.0,
+      "candidate_psnr": 19.885164854836656,
+      "candidate_ssim": 0.6211795915256847,
+      "candidate_lpips": 0.17953340709209442,
+      "psnr_gain": 0.05311097638919129,
+      "ssim_gain": 0.0012691806663166392,
+      "lpips_gain": 0.0008014589548110962,
+      "changed_fraction": 0.30034306537864414,
+      "phasej_gate_pass": false,
+      "audit_json": "/dev/shm/peilincai_spcarnet_v218_lowrank_gradfit_support_cov97/flowers_exact_apply_alpha1/lowrank_target_apply_audit.json"
+    },
+    {
+      "run_id": "v218_alpha1p5",
+      "change": "gradient-weighted raw teacher residual fitting",
+      "alpha": 1.5,
+      "candidate_psnr": 19.88186493779395,
+      "candidate_ssim": 0.6202697469429537,
+      "candidate_lpips": 0.1789674498140812,
+      "psnr_gain": 0.049811059346481716,
+      "ssim_gain": 0.00035933608358556575,
+      "lpips_gain": 0.0013674162328243256,
+      "changed_fraction": 0.3143197720803864,
+      "phasej_gate_pass": false,
+      "audit_json": "/dev/shm/peilincai_spcarnet_v218_lowrank_gradfit_support_cov97/flowers_exact_apply_alpha1p5/lowrank_target_apply_audit.json"
+    },
+    {
+      "run_id": "v219_alpha1p25",
+      "change": "edge_luma_mix teacher residual target",
+      "alpha": 1.25,
+      "candidate_psnr": 19.871386204581885,
+      "candidate_ssim": 0.6204534565860574,
+      "candidate_lpips": 0.1798216507516124,
+      "psnr_gain": 0.0393323261344217,
+      "ssim_gain": 0.0005430457266894254,
+      "lpips_gain": 0.0005132152952931144,
+      "changed_fraction": 0.17190332823011903,
+      "phasej_gate_pass": false,
+      "audit_json": "/dev/shm/peilincai_spcarnet_v219_edge_luma_lowrank_support_smoke/flowers_exact_apply_alpha1p25/lowrank_target_apply_audit.json"
+    }
+  ],
+  "best_exact_tradeoff": {
+    "run_id": "v218_alpha1",
+    "reason": "best exact PSNR and SSIM among v216-v219 parsed artifacts while preserving positive LPIPS gain"
+  },
+  "final_verdict": {
+    "status": "NOT_COMPLETE",
+    "full9_allowed": false,
+    "main_bottleneck": "target exact PSNR remains about 0.419 dB below the fixed Phase-J flowers gate despite positive SSIM/LPIPS and no-GT apply",
+    "next_required_step": "use v218 as the low-rank objective baseline, then test stronger multiresolution or surface-feature capacity before full9"
+  }
+}
