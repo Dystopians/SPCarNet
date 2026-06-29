@@ -48,6 +48,7 @@ is read only after candidate images are written, for metric evaluation.
 | v217 | support + slot reliability | 2.0 | +0.034295 | +0.001206 | +0.000995 | 1.00 / 1.00 / 1.00 | 0.184937 | 0.068549 |
 | v218 | gradient-weighted raw residual fit | 1.5 | +0.090935 | +0.003495 | +0.002624 | 1.00 / 1.00 / 1.00 | 0.282213 | 0.328257 |
 | v219 | edge-luma residual target | 1.25 | +0.059447 | +0.002094 | +0.001345 | 1.00 / 1.00 / 1.00 | 0.240605 | 0.137082 |
+| v220 | grid-8 gradient-weighted fit, face cap 131k | 2.0 | +0.063413 | +0.002703 | +0.002096 | 1.00 / 1.00 / 1.00 | 0.239664 | 0.242432 |
 
 Policy-val conclusion:
 
@@ -56,6 +57,9 @@ Policy-val conclusion:
   teacher residual energy.
 - v219 confirms that edge/luma target transform is not better than weighted raw
   residual fitting under this low-rank carrier.
+- v220 shows that simply increasing UV grid resolution is not enough when the
+  face cap lowers global residual coverage. It improves active-bin retention but
+  does not beat v218 policy-val, so no exact run was launched.
 
 ## Flowers Exact Evidence
 
@@ -90,6 +94,7 @@ Exact audits:
 - v218 alpha 1.0: `/dev/shm/peilincai_spcarnet_v218_lowrank_gradfit_support_cov97/flowers_exact_apply_alpha1/lowrank_target_apply_audit.json`
 - v218 alpha 1.5: `/dev/shm/peilincai_spcarnet_v218_lowrank_gradfit_support_cov97/flowers_exact_apply_alpha1p5/lowrank_target_apply_audit.json`
 - v219 alpha 1.25: `/dev/shm/peilincai_spcarnet_v219_edge_luma_lowrank_support_smoke/flowers_exact_apply_alpha1p25/lowrank_target_apply_audit.json`
+- v220 policy-only grid8 audit: `/dev/shm/peilincai_spcarnet_v220_grid8_gradfit_support_cov90/v212_lowrank_uv_residual_texture_audit.json`
 
 W&B mode: all new medium/exact runs used `WANDB_MODE=offline`.
 
@@ -104,8 +109,10 @@ gate while preserving exact SSIM/LPIPS.
 Next required step:
 
 - keep v218 gradient-aware fitting as the current low-rank baseline;
-- test a representation with stronger target-visible capacity than grid-4
-  per-face bins, for example multiresolution UV slots or a small surface feature
-  decoder with a hard no-op support prior;
+- do not rely on grid-size alone; v220 shows grid8 with lower face coverage is
+  weaker than v218;
+- test a representation that increases capacity without losing global residual
+  coverage, for example a multiresolution residual residual-on-residual fit or a
+  small surface feature decoder with a hard no-op support prior;
 - do not launch full9 until flowers exact PSNR exceeds `20.304358` under the
   same no-GT protocol.

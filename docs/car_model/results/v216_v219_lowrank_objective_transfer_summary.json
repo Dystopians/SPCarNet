@@ -58,6 +58,27 @@
       "active_residual_cosine": 0.32951927528468167,
       "active_energy_retention": 0.2606643638716763,
       "audit_json": "/dev/shm/peilincai_spcarnet_v219_edge_luma_lowrank_support_smoke/v212_lowrank_uv_residual_texture_audit.json"
+    },
+    {
+      "run_id": "v220",
+      "change": "grid8 gradient-weighted fit with reduced face cap",
+      "root": "/dev/shm/peilincai_spcarnet_v220_grid8_gradfit_support_cov90",
+      "alpha": 2.0,
+      "psnr_gain": 0.06341283859721732,
+      "ssim_gain": 0.002703458070755005,
+      "lpips_gain": 0.0020962810764710107,
+      "positive_view_fraction": 1.0,
+      "ssim_positive_view_fraction": 1.0,
+      "lpips_positive_view_fraction": 1.0,
+      "full_residual_cosine": 0.239663644193847,
+      "full_energy_retention": 0.24243160396731023,
+      "active_residual_cosine": 0.3284759236817162,
+      "active_energy_retention": 0.4592074530371726,
+      "selected_faces": 131072,
+      "selected_score_coverage": 0.7936608604669797,
+      "audit_json": "/dev/shm/peilincai_spcarnet_v220_grid8_gradfit_support_cov90/v212_lowrank_uv_residual_texture_audit.json",
+      "exact_launched": false,
+      "exact_skip_reason": "policy-val is weaker than v218 and global residual coverage is lower due to reduced face cap"
     }
   ],
   "flowers_exact": [
@@ -154,6 +175,6 @@
     "status": "NOT_COMPLETE",
     "full9_allowed": false,
     "main_bottleneck": "target exact PSNR remains about 0.419 dB below the fixed Phase-J flowers gate despite positive SSIM/LPIPS and no-GT apply",
-    "next_required_step": "use v218 as the low-rank objective baseline, then test stronger multiresolution or surface-feature capacity before full9"
+    "next_required_step": "use v218 as the low-rank objective baseline, avoid grid-only capacity increases that reduce face coverage, then test multiresolution residual-on-residual or surface-feature capacity before full9"
   }
 }
