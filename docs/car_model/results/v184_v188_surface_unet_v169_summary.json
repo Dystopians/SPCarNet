@@ -1,0 +1,83 @@
+{
+  "schema": "spcarnet_v169_surface_feature_distill_summary_v1",
+  "date": "2026-06-29",
+  "phasej_flowers_gate": {
+    "PSNR": 20.304358,
+    "SSIM": 0.55777,
+    "LPIPS": 0.329222
+  },
+  "storage_preflight": {
+    "data_free": "about 2.7M",
+    "dev_shm_free": "about 15-17G during runs",
+    "tmp_policy": "avoid because user quota is near 100G"
+  },
+  "runs": {
+    "v185_gtanchored_unet": {
+      "policy_val_all_axis_pass": true,
+      "policy_val_best_alpha": 1.0,
+      "policy_val_gains": {
+        "psnr": 0.7254987352277302,
+        "ssim": 0.04935839275519053,
+        "lpips": 0.023701068634788196
+      },
+      "flowers_exact": {
+        "PSNR": 20.225370407104492,
+        "SSIM": 0.5429420471191406,
+        "LPIPS": 0.3683153986930847
+      },
+      "wandb_offline": "/dev/shm/peilincai_spcarnet_v185_gtanchored_unet/wandb/offline-run-20260628_235848-k43opgdu",
+      "verdict": "fails Phase-J flowers all-axis"
+    },
+    "v186_face_embedding_unet": {
+      "policy_val_all_axis_pass": false,
+      "policy_val_best_alpha": 0.5,
+      "policy_val_gains": {
+        "psnr": 0.012218111777383042,
+        "ssim": -0.0013725956281026204,
+        "lpips": 0.008280587072173754
+      },
+      "flowers_exact": null,
+      "wandb_offline": "/dev/shm/peilincai_spcarnet_v186_faceembed_unet/wandb/offline-run-20260629_002154-7diokm9e",
+      "verdict": "policy-val rejected, target apply skipped"
+    },
+    "v187_lpips005_unet": {
+      "policy_val_all_axis_pass": true,
+      "policy_val_best_alpha": 1.25,
+      "policy_val_gains": {
+        "psnr": 0.6257926483662333,
+        "ssim": 0.051720703641573586,
+        "lpips": 0.029317429289221764
+      },
+      "flowers_exact": {
+        "PSNR": 20.179889678955078,
+        "SSIM": 0.5453486442565918,
+        "LPIPS": 0.3602391481399536
+      },
+      "wandb_offline": "/dev/shm/peilincai_spcarnet_v187_lpips005_unet/wandb/offline-run-20260629_002916-5isdbh6n",
+      "verdict": "best exact SSIM and LPIPS in this batch, but fails Phase-J flowers all-axis"
+    },
+    "v188_lpips010_unet": {
+      "policy_val_all_axis_pass": true,
+      "policy_val_best_alpha": 1.25,
+      "policy_val_gains": {
+        "psnr": 0.7211208599858748,
+        "ssim": 0.05159458518028259,
+        "lpips": 0.03335605375468731
+      },
+      "flowers_exact": {
+        "PSNR": 20.214744567871094,
+        "SSIM": 0.5436936020851135,
+        "LPIPS": 0.3610052168369293
+      },
+      "wandb_offline": "/dev/shm/peilincai_spcarnet_v188_lpips010_unet/wandb/offline-run-20260629_002917-ucrkbc32",
+      "verdict": "LPIPS policy-val strongest, exact still fails Phase-J flowers all-axis"
+    }
+  },
+  "no_gt_audit": {
+    "target_apply_uses_target_or_test_gt": false,
+    "v187_external_verify": "/dev/shm/peilincai_spcarnet_v187_lpips005_unet/target_apply_no_gt_verify.json",
+    "v188_external_verify": "/dev/shm/peilincai_spcarnet_v188_lpips010_unet/target_apply_no_gt_verify.json"
+  },
+  "final_status": "NOT COMPLETE",
+  "reason": "flowers exact does not beat Phase-J on PSNR, SSIM, and LPIPS; full9 remains blocked by the v169 prompt"
+}
