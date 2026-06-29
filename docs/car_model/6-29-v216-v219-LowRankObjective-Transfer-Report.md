@@ -49,6 +49,7 @@ is read only after candidate images are written, for metric evaluation.
 | v218 | gradient-weighted raw residual fit | 1.5 | +0.090935 | +0.003495 | +0.002624 | 1.00 / 1.00 / 1.00 | 0.282213 | 0.328257 |
 | v219 | edge-luma residual target | 1.25 | +0.059447 | +0.002094 | +0.001345 | 1.00 / 1.00 / 1.00 | 0.240605 | 0.137082 |
 | v220 | grid-8 gradient-weighted fit, face cap 131k | 2.0 | +0.063413 | +0.002703 | +0.002096 | 1.00 / 1.00 / 1.00 | 0.239664 | 0.242432 |
+| v221 | two-stage residual-on-residual boost | 1.25 | +0.094700 | +0.003735 | +0.002437 | 1.00 / 1.00 / 1.00 | 0.293464 | 0.298072 |
 
 Policy-val conclusion:
 
@@ -60,6 +61,10 @@ Policy-val conclusion:
 - v220 shows that simply increasing UV grid resolution is not enough when the
   face cap lowers global residual coverage. It improves active-bin retention but
   does not beat v218 policy-val, so no exact run was launched.
+- v221 tests a real capacity upgrade without lowering face coverage: a second
+  low-rank stage fits the train-fit residual left by the first stage. It gives
+  the best policy-val PSNR/SSIM in this group, but its full energy retention is
+  still below v218 and exact transfer remains far below Phase-J.
 
 ## Flowers Exact Evidence
 
@@ -71,11 +76,13 @@ Policy-val conclusion:
 | v218 gradient-weighted fit | 1.0 | 19.885165 | 0.621180 | 0.179533 | +0.053111 | +0.001269 | +0.000801 | 0.300343 | FAIL |
 | v218 gradient-weighted fit | 1.5 | 19.881865 | 0.620270 | 0.178967 | +0.049811 | +0.000359 | +0.001367 | 0.314320 | FAIL |
 | v219 edge-luma target | 1.25 | 19.871386 | 0.620453 | 0.179822 | +0.039332 | +0.000543 | +0.000513 | 0.171903 | FAIL |
+| v221 two-stage boost | 1.25 | 19.888073 | 0.620841 | 0.179075 | +0.056020 | +0.000931 | +0.001259 | 0.316153 | FAIL |
 
 Best exact interpretation:
 
-- v218 alpha 1.0 is the best exact PSNR/SSIM point in this group and improves
+- v221 alpha 1.25 is the best exact PSNR point in this group and improves
   parent on all three metrics.
+- v218 alpha 1.0 remains the best exact SSIM point in this group.
 - v218 alpha 1.5 and v216 alpha 2.0 give better LPIPS, but lose PSNR/SSIM tradeoff.
 - None reaches the required PSNR `20.304358`; the closest current exact result
   is still about `0.419` dB below the Phase-J PSNR gate.
@@ -95,6 +102,8 @@ Exact audits:
 - v218 alpha 1.5: `/dev/shm/peilincai_spcarnet_v218_lowrank_gradfit_support_cov97/flowers_exact_apply_alpha1p5/lowrank_target_apply_audit.json`
 - v219 alpha 1.25: `/dev/shm/peilincai_spcarnet_v219_edge_luma_lowrank_support_smoke/flowers_exact_apply_alpha1p25/lowrank_target_apply_audit.json`
 - v220 policy-only grid8 audit: `/dev/shm/peilincai_spcarnet_v220_grid8_gradfit_support_cov90/v212_lowrank_uv_residual_texture_audit.json`
+- v221 two-stage boost policy audit: `/dev/shm/peilincai_spcarnet_v221_boost2_gradfit_support_cov97/v212_lowrank_uv_residual_texture_audit.json`
+- v221 two-stage boost exact alpha 1.25: `/dev/shm/peilincai_spcarnet_v221_boost2_gradfit_support_cov97/flowers_exact_apply_alpha1p25/lowrank_target_apply_audit.json`
 
 W&B mode: all new medium/exact runs used `WANDB_MODE=offline`.
 
@@ -111,8 +120,10 @@ Next required step:
 - keep v218 gradient-aware fitting as the current low-rank baseline;
 - do not rely on grid-size alone; v220 shows grid8 with lower face coverage is
   weaker than v218;
-- test a representation that increases capacity without losing global residual
-  coverage, for example a multiresolution residual residual-on-residual fit or a
-  small surface feature decoder with a hard no-op support prior;
+- two-stage residual-on-residual boosting helps policy-val and exact PSNR only
+  marginally; the next representation must change the carrier class, not only
+  add another low-rank stage;
+- test a small surface feature decoder with a hard no-op support prior or a
+  target-visible multiresolution carrier that keeps the 0.97 coverage of v218;
 - do not launch full9 until flowers exact PSNR exceeds `20.304358` under the
   same no-GT protocol.

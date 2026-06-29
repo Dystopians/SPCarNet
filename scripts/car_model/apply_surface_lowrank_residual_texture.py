@@ -186,6 +186,8 @@ def main() -> int:
     alpha = float(args.alpha)
     if alpha < 0.0:
         alpha = 1.0
+    coeff_shape = [int(x) for x in coeff.shape]
+    boost_stages = int(coeff.shape[0]) if coeff.ndim == 5 else 1
     ckpt_support_enabled = bool(ckpt_args.get("enable_support_confidence", False))
     enable_support_confidence = bool(args.enable_support_confidence or ckpt_support_enabled)
     support_full_count = (
@@ -400,6 +402,8 @@ def main() -> int:
         "selected_alpha": float(alpha),
         "grid": int(grid),
         "basis_mode": str(basis_mode),
+        "coeff_shape": coeff_shape,
+        "boost_stages": int(boost_stages),
         "min_alpha": float(min_alpha),
         "min_bin_count": float(min_bin_count),
         "max_abs_delta": float(max_abs_delta),

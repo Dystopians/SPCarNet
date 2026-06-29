@@ -90,6 +90,20 @@ def _basis_rows(z: np.lib.npyio.NpzFile, ys: np.ndarray, xs: np.ndarray, basis_m
     return out
 
 
+def _predict_samples_from_coeff(coeff: np.ndarray, phi: np.ndarray, face_idx: np.ndarray, bin_id: np.ndarray) -> np.ndarray:
+    coeff_arr = np.asarray(coeff, dtype=np.float32)
+    if coeff_arr.ndim == 4:
+        local = coeff_arr[face_idx, bin_id]
+        return np.einsum("nk,nkc->nc", phi, local, optimize=True).astype(np.float32)
+    if coeff_arr.ndim == 5:
+        pred = np.zeros((int(phi.shape[0]), 3), dtype=np.float32)
+        for stage in range(int(coeff_arr.shape[0])):
+            local = coeff_arr[stage, face_idx, bin_id]
+            pred += np.einsum("nk,nkc->nc", phi, local, optimize=True).astype(np.float32)
+        return pred
+    raise ValueError(f"unsupported coeff shape: {coeff_arr.shape}")
+
+
 def _luma_gradient_weight_map(chw: np.ndarray, *, strength: float, percentile: float, max_weight: float) -> tuple[np.ndarray | None, dict[str, float]]:
     if float(strength) <= 0.0:
         return None, {
@@ -144,6 +158,8 @@ def _fit_lowrank_texture(
     teacher_residual_target_mode: str,
     teacher_residual_target_luma_mix: float,
     teacher_residual_target_edge_boost: float,
+    previous_coeffs: np.ndarray | None = None,
+    stage_index: int = 0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     bins = int(grid) * int(grid)
     basis_dim = _basis_dim(str(basis_mode))
@@ -190,6 +206,17 @@ def _fit_lowrank_texture(
                 float(teacher_residual_target_luma_mix),
                 float(teacher_residual_target_edge_boost),
             )
+            if previous_coeffs is not None:
+                previous_pred = _predict_samples_from_coeff(previous_coeffs, phi, face_idx, bin_id)
+                residual = (residual - previous_pred).astype(np.float32)
+                residual_target_summary = {
+                    **residual_target_summary,
+                    "boosted_residual_stage": int(stage_index),
+                    "previous_stage_count": int(np.asarray(previous_coeffs).shape[0])
+                    if np.asarray(previous_coeffs).ndim == 5
+                    else 1,
+                    "mean_abs_after_previous": float(np.mean(np.abs(residual))) if residual.size else 0.0,
+                }
             residual_target_stats.append(residual_target_summary)
             grad_weight_map, grad_stats = _luma_gradient_weight_map(
                 np.asarray(z[residual_rgb_key], dtype=np.float32),
@@ -238,6 +265,8 @@ def _fit_lowrank_texture(
     return coeff, counts_2d.astype(np.float32), feature_mean.astype(np.float32), feature_std.astype(np.float32), {
         "fit_active_pixels": int(active_pixels),
         "fit_used_pixels": int(used_pixels),
+        "stage_index": int(stage_index),
+        "uses_previous_stage_residual": bool(previous_coeffs is not None),
         "basis_mode": str(basis_mode),
         "basis_dim": int(basis_dim),
         "nonempty_bins": int(np.count_nonzero(counts > 0.0)),
@@ -384,8 +413,7 @@ def _predict_delta(
             return delta, active, confidence_map, {"mean": 0.0, "min": 0.0, "max": 0.0, "count_mean": 0.0, "ood_z_mean": 0.0}
         return delta, active
     phi = _basis_rows(z, ys, xs, str(basis_mode)).astype(np.float32)
-    local = coeff[face_idx, bin_id]
-    pred = np.einsum("nk,nkc->nc", phi, local, optimize=True).astype(np.float32)
+    pred = _predict_samples_from_coeff(coeff, phi, face_idx, bin_id)
     conf, conf_stats = _support_confidence(
         phi,
         face_idx,
@@ -480,8 +508,7 @@ def _calibrate_slot_reliability(
             if ys.size == 0:
                 continue
             phi = _basis_rows(z, ys, xs, str(basis_mode)).astype(np.float32)
-            local = coeff[face_idx, bin_id]
-            pred = np.einsum("nk,nkc->nc", phi, local, optimize=True).astype(np.float32)
+            pred = _predict_samples_from_coeff(coeff, phi, face_idx, bin_id)
             conf, _ = _support_confidence(
                 phi,
                 face_idx,
@@ -799,6 +826,7 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- grid: `{payload['fit']['grid']}`",
         f"- basis mode: `{payload['fit']['basis_mode']}`",
         f"- basis dim: `{payload['fit']['basis_dim']}`",
+        f"- boost stages: `{payload['fit'].get('boost_stages', 1)}`",
         f"- gradient-aware fit weight: `{payload['fit'].get('gradient_weight', {})}`",
         f"- teacher residual target: `{payload['fit'].get('teacher_residual_target', {})}`",
         f"- best all-axis: `{best_all}`",
@@ -861,6 +889,7 @@ def main() -> int:
     parser.add_argument("--teacher_residual_target_mode", default="raw_rgb", choices=["raw_rgb", "luma_only", "edge_luma_mix"])
     parser.add_argument("--teacher_residual_target_luma_mix", type=float, default=0.75)
     parser.add_argument("--teacher_residual_target_edge_boost", type=float, default=0.25)
+    parser.add_argument("--boost_stages", type=int, default=1)
     parser.add_argument("--alpha_grid", default="0,0.03125,0.0625,0.125,0.25,0.5,0.75,1")
     parser.add_argument("--compute_lpips", action="store_true")
     parser.add_argument("--policy_val_ssim_max_side", type=int, default=512)
@@ -923,24 +952,47 @@ def main() -> int:
         target_energy_coverage=float(args.candidate_target_energy_coverage),
         seed=int(args.seed),
     )
-    coeff, counts, feature_mean, feature_std, fit_summary = _fit_lowrank_texture(
-        fit_paths,
-        candidate_faces,
-        residual_rgb_key=str(args.residual_rgb_key),
-        residual_l1_key=str(args.residual_l1_key),
-        min_l1=float(args.min_l1),
-        min_alpha=float(args.min_alpha),
-        grid=int(args.grid),
-        basis_mode=str(args.basis_mode),
-        ridge_count=float(args.ridge_count),
-        solve_chunk_slots=int(args.solve_chunk_slots),
-        fit_gradient_weight=float(args.fit_gradient_weight),
-        fit_gradient_weight_percentile=float(args.fit_gradient_weight_percentile),
-        fit_gradient_weight_max=float(args.fit_gradient_weight_max),
-        teacher_residual_target_mode=str(args.teacher_residual_target_mode),
-        teacher_residual_target_luma_mix=float(args.teacher_residual_target_luma_mix),
-        teacher_residual_target_edge_boost=float(args.teacher_residual_target_edge_boost),
-    )
+    boost_stages = max(int(args.boost_stages), 1)
+    coeff_stages: list[np.ndarray] = []
+    stage_summaries: list[dict[str, Any]] = []
+    counts = feature_mean = feature_std = None
+    for stage in range(boost_stages):
+        previous = None
+        if coeff_stages:
+            previous = np.stack(coeff_stages, axis=0).astype(np.float32)
+        stage_coeff, stage_counts, stage_feature_mean, stage_feature_std, stage_summary = _fit_lowrank_texture(
+            fit_paths,
+            candidate_faces,
+            residual_rgb_key=str(args.residual_rgb_key),
+            residual_l1_key=str(args.residual_l1_key),
+            min_l1=float(args.min_l1),
+            min_alpha=float(args.min_alpha),
+            grid=int(args.grid),
+            basis_mode=str(args.basis_mode),
+            ridge_count=float(args.ridge_count),
+            solve_chunk_slots=int(args.solve_chunk_slots),
+            fit_gradient_weight=float(args.fit_gradient_weight),
+            fit_gradient_weight_percentile=float(args.fit_gradient_weight_percentile),
+            fit_gradient_weight_max=float(args.fit_gradient_weight_max),
+            teacher_residual_target_mode=str(args.teacher_residual_target_mode),
+            teacher_residual_target_luma_mix=float(args.teacher_residual_target_luma_mix),
+            teacher_residual_target_edge_boost=float(args.teacher_residual_target_edge_boost),
+            previous_coeffs=previous,
+            stage_index=stage,
+        )
+        coeff_stages.append(stage_coeff)
+        stage_summaries.append(stage_summary)
+        counts = stage_counts
+        feature_mean = stage_feature_mean
+        feature_std = stage_feature_std
+    coeff = np.stack(coeff_stages, axis=0).astype(np.float32) if boost_stages > 1 else coeff_stages[0].astype(np.float32)
+    if counts is None or feature_mean is None or feature_std is None:
+        raise RuntimeError("low-rank fitting produced no stage statistics")
+    fit_summary = {
+        **stage_summaries[-1],
+        "boost_stages": int(boost_stages),
+        "stage_summaries": stage_summaries,
+    }
     slot_reliability = None
     reliability_summary: dict[str, Any] = {"enabled": False}
     if bool(args.enable_slot_reliability_confidence):
@@ -1032,6 +1084,7 @@ def main() -> int:
             **fit_summary,
             "grid": int(args.grid),
             "bins_per_face": int(args.grid) * int(args.grid),
+            "coeff_shape": [int(x) for x in coeff.shape],
             "min_bin_count": float(args.min_bin_count),
             "max_abs_delta": float(args.max_abs_delta),
             "min_best_positive_view_fraction": float(args.min_best_positive_view_fraction),

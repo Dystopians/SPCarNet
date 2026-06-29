@@ -79,6 +79,25 @@
       "audit_json": "/dev/shm/peilincai_spcarnet_v220_grid8_gradfit_support_cov90/v212_lowrank_uv_residual_texture_audit.json",
       "exact_launched": false,
       "exact_skip_reason": "policy-val is weaker than v218 and global residual coverage is lower due to reduced face cap"
+    },
+    {
+      "run_id": "v221",
+      "change": "two-stage residual-on-residual boosted gradient-weighted fit",
+      "root": "/dev/shm/peilincai_spcarnet_v221_boost2_gradfit_support_cov97",
+      "alpha": 1.25,
+      "psnr_gain": 0.09469999367429782,
+      "ssim_gain": 0.0037347227334976196,
+      "lpips_gain": 0.0024371432761351266,
+      "positive_view_fraction": 1.0,
+      "ssim_positive_view_fraction": 1.0,
+      "lpips_positive_view_fraction": 1.0,
+      "full_residual_cosine": 0.2934635942339401,
+      "full_energy_retention": 0.2980724514116156,
+      "active_residual_cosine": 0.3430243926288455,
+      "active_energy_retention": 0.4113289081631766,
+      "coeff_shape": [2, 371745, 16, 8, 3],
+      "boost_stages": 2,
+      "audit_json": "/dev/shm/peilincai_spcarnet_v221_boost2_gradfit_support_cov97/v212_lowrank_uv_residual_texture_audit.json"
     }
   ],
   "flowers_exact": [
@@ -165,16 +184,30 @@
       "changed_fraction": 0.17190332823011903,
       "phasej_gate_pass": false,
       "audit_json": "/dev/shm/peilincai_spcarnet_v219_edge_luma_lowrank_support_smoke/flowers_exact_apply_alpha1p25/lowrank_target_apply_audit.json"
+    },
+    {
+      "run_id": "v221_alpha1p25",
+      "change": "two-stage residual-on-residual boosted gradient-weighted fit",
+      "alpha": 1.25,
+      "candidate_psnr": 19.88807343884343,
+      "candidate_ssim": 0.6208412240852009,
+      "candidate_lpips": 0.1790753941644322,
+      "psnr_gain": 0.05601956039596103,
+      "ssim_gain": 0.0009308132258328525,
+      "lpips_gain": 0.0012594718824733388,
+      "changed_fraction": 0.3161531826806969,
+      "phasej_gate_pass": false,
+      "audit_json": "/dev/shm/peilincai_spcarnet_v221_boost2_gradfit_support_cov97/flowers_exact_apply_alpha1p25/lowrank_target_apply_audit.json"
     }
   ],
   "best_exact_tradeoff": {
-    "run_id": "v218_alpha1",
-    "reason": "best exact PSNR and SSIM among v216-v219 parsed artifacts while preserving positive LPIPS gain"
+    "run_id": "v221_alpha1p25",
+    "reason": "best exact PSNR among v216-v221 parsed artifacts while preserving positive SSIM and LPIPS gains"
   },
   "final_verdict": {
     "status": "NOT_COMPLETE",
     "full9_allowed": false,
-    "main_bottleneck": "target exact PSNR remains about 0.419 dB below the fixed Phase-J flowers gate despite positive SSIM/LPIPS and no-GT apply",
-    "next_required_step": "use v218 as the low-rank objective baseline, avoid grid-only capacity increases that reduce face coverage, then test multiresolution residual-on-residual or surface-feature capacity before full9"
+    "main_bottleneck": "target exact PSNR remains about 0.416 dB below the fixed Phase-J flowers gate despite positive SSIM/LPIPS and no-GT apply",
+    "next_required_step": "use v221 as the best low-rank PSNR point and v218 as the best low-rank SSIM point, then move to a stronger carrier class such as a hard-noop surface feature decoder before full9"
   }
 }
