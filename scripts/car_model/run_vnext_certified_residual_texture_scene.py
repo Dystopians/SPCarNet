@@ -444,6 +444,12 @@ def _texture_cmd(
         "teacher_residual_rgb",
         "--residual_l1_key",
         "teacher_residual_l1",
+        "--teacher_residual_target_mode",
+        str(args.teacher_residual_target_mode),
+        "--teacher_residual_target_luma_mix",
+        str(args.teacher_residual_target_luma_mix),
+        "--teacher_residual_target_edge_boost",
+        str(args.teacher_residual_target_edge_boost),
         "--texture_size",
         str(args.texture_size),
         "--texture_size_candidates",
@@ -1305,6 +1311,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no_preacceptance_policy_val_guard_repair", action="store_true")
     parser.add_argument("--min_l1", type=float, default=0.0)
     parser.add_argument(
+        "--teacher_residual_target_mode",
+        choices=("raw_rgb", "luma_only", "edge_luma_mix"),
+        default="raw_rgb",
+    )
+    parser.add_argument("--teacher_residual_target_luma_mix", type=float, default=0.75)
+    parser.add_argument("--teacher_residual_target_edge_boost", type=float, default=0.25)
+    parser.add_argument(
         "--enable_adaptive_residual_activity_threshold",
         action="store_true",
         help=(
@@ -1337,6 +1350,7 @@ def parse_args() -> argparse.Namespace:
             "none",
             "face_uv_normal_camera_ridge",
             "face_uv_patch_mixture_ridge",
+            "surface_feature_rff_ridge",
             "low_rank_view_texture_k4",
             "low_rank_view_texture",
             "low_rank_view_texture_rich_k4",

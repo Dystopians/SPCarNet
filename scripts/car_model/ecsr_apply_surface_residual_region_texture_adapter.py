@@ -190,6 +190,74 @@ def clip_delta_rgb(delta: np.ndarray, max_abs_delta_rgb: float) -> np.ndarray:
     return delta
 
 
+_LUMA_WEIGHTS = np.asarray([0.299, 0.587, 0.114], dtype=np.float32)
+
+
+def _luma_gradient_magnitude(rgb_chw: np.ndarray) -> np.ndarray:
+    rgb = np.asarray(rgb_chw, dtype=np.float32)
+    if rgb.ndim != 3 or rgb.shape[0] != 3:
+        return np.zeros((0, 0), dtype=np.float32)
+    luma = (
+        _LUMA_WEIGHTS[0] * rgb[0]
+        + _LUMA_WEIGHTS[1] * rgb[1]
+        + _LUMA_WEIGHTS[2] * rgb[2]
+    )
+    grad_x = np.zeros_like(luma, dtype=np.float32)
+    grad_y = np.zeros_like(luma, dtype=np.float32)
+    grad_x[:, 1:] = np.abs(luma[:, 1:] - luma[:, :-1])
+    grad_y[1:, :] = np.abs(luma[1:, :] - luma[:-1, :])
+    return np.maximum(grad_x, grad_y).astype(np.float32)
+
+
+def transform_residual_samples_for_fit(
+    z: np.lib.npyio.NpzFile,
+    mask: np.ndarray,
+    residual_samples: np.ndarray,
+    mode: str,
+    luma_mix: float,
+    edge_boost: float,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    mode_s = str(mode or "raw_rgb")
+    if mode_s == "raw_rgb":
+        return residual_samples, {"mode": "raw_rgb", "sample_count": int(residual_samples.shape[0])}
+    samples = np.asarray(residual_samples, dtype=np.float32)
+    if samples.size == 0:
+        return samples, {"mode": mode_s, "sample_count": 0}
+    luma = samples @ _LUMA_WEIGHTS.reshape(3, 1)
+    luma_rgb = np.repeat(luma.astype(np.float32), 3, axis=1)
+    if mode_s == "luma_only":
+        transformed = luma_rgb
+        mix_values = np.ones((samples.shape[0],), dtype=np.float32)
+    elif mode_s == "edge_luma_mix":
+        base_mix = float(np.clip(float(luma_mix), 0.0, 1.0))
+        edge_extra = float(np.clip(float(edge_boost), 0.0, 1.0))
+        edge_weight = np.zeros((samples.shape[0],), dtype=np.float32)
+        if "rgb_render" in z:
+            grad = _luma_gradient_magnitude(np.asarray(z["rgb_render"], dtype=np.float32))
+            if grad.size:
+                ys, xs = np.nonzero(mask)
+                values = grad[ys, xs].astype(np.float32)
+                hi = float(np.quantile(values.astype(np.float64), 0.95)) if values.size else 0.0
+                if hi > 1.0e-8:
+                    edge_weight = np.clip(values / hi, 0.0, 1.0).astype(np.float32)
+        mix_values = np.clip(base_mix + edge_extra * edge_weight, 0.0, 1.0).astype(np.float32)
+        transformed = (1.0 - mix_values[:, None]) * samples + mix_values[:, None] * luma_rgb
+    else:
+        raise ValueError(f"unsupported teacher residual target mode: {mode_s}")
+    before_energy = float(np.mean(np.sum(samples * samples, axis=1))) if samples.size else 0.0
+    after_energy = float(np.mean(np.sum(transformed * transformed, axis=1))) if transformed.size else 0.0
+    return transformed.astype(np.float32), {
+        "mode": mode_s,
+        "sample_count": int(samples.shape[0]),
+        "mean_luma_mix": float(np.mean(mix_values)) if mix_values.size else 0.0,
+        "min_luma_mix": float(np.min(mix_values)) if mix_values.size else 0.0,
+        "max_luma_mix": float(np.max(mix_values)) if mix_values.size else 0.0,
+        "mean_rgb_energy_before": before_energy,
+        "mean_rgb_energy_after": after_energy,
+        "energy_ratio_after_before": float(after_energy / before_energy) if before_energy > 1.0e-12 else 0.0,
+    }
+
+
 def json_safe(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(k): json_safe(v) for k, v in value.items()}
@@ -2234,6 +2302,10 @@ def _teacher_distilled_basis_feature_dim(mode: str) -> int:
         # [1, camera3, normal3, normal_dot_camera, u, v, u^2, v^2, u*v,
         #  parent_rgb3, inverse_depth, alpha].
         return 18
+    if mode == "surface_feature_rff_ridge":
+        # Rich base features plus deterministic UV Fourier features and
+        # first-frequency normal-view interactions: 18 + 24 + 8.
+        return 50
     raise ValueError(f"unsupported teacher-distilled basis mode: {mode}")
 
 
@@ -2263,6 +2335,25 @@ def _low_rank_teacher_texture_min_bin_samples(mode: str, feature_dim: int) -> in
     return max(int(feature_dim), 4)
 
 
+def _surface_feature_rff_tail(
+    u: np.ndarray,
+    v: np.ndarray,
+    normal_dot_camera: np.ndarray,
+) -> np.ndarray:
+    features: list[np.ndarray] = []
+    first_frequency: list[np.ndarray] = []
+    for freq in (1.0, 2.0, 4.0):
+        angle = np.float32(2.0 * math.pi * float(freq))
+        for value in (u, v, u + v, u - v):
+            sin_value = np.sin(angle * value).astype(np.float32)
+            cos_value = np.cos(angle * value).astype(np.float32)
+            features.extend([sin_value, cos_value])
+            if freq == 1.0:
+                first_frequency.extend([sin_value, cos_value])
+    interaction = [normal_dot_camera.astype(np.float32) * item for item in first_frequency]
+    return np.concatenate([*features, *interaction], axis=1).astype(np.float32)
+
+
 def _teacher_distilled_basis_features_for_mask(
     z: np.lib.npyio.NpzFile,
     mode: str,
@@ -2274,6 +2365,7 @@ def _teacher_distilled_basis_features_for_mask(
     if mode not in {
         "face_uv_normal_camera_ridge",
         "face_uv_patch_mixture_ridge",
+        "surface_feature_rff_ridge",
         "low_rank_view_texture_k4",
         "low_rank_view_texture",
         "low_rank_view_texture_rich_k4",
@@ -2309,7 +2401,7 @@ def _teacher_distilled_basis_features_for_mask(
             ],
             axis=1,
         )
-    if mode in {"low_rank_view_texture_rich_k4", "low_rank_view_texture_rich"}:
+    if mode in {"low_rank_view_texture_rich_k4", "low_rank_view_texture_rich", "surface_feature_rff_ridge"}:
         if "rgb_render" in z:
             render = np.asarray(z["rgb_render"], dtype=np.float32)
             if render.shape[0] >= 3:
@@ -2349,6 +2441,23 @@ def _teacher_distilled_basis_features_for_mask(
                 parent_rgb,
                 inverse_depth,
                 alpha,
+            ],
+            axis=1,
+        ) if mode != "surface_feature_rff_ridge" else np.concatenate(
+            [
+                np.ones((sample_count, 1), dtype=np.float32),
+                camera_features,
+                normal_samples,
+                normal_dot_camera,
+                u,
+                v,
+                u * u,
+                v * v,
+                u * v,
+                parent_rgb,
+                inverse_depth,
+                alpha,
+                _surface_feature_rff_tail(u, v, normal_dot_camera),
             ],
             axis=1,
         )
@@ -2396,6 +2505,7 @@ def _teacher_distilled_basis_features_from_uv_camera_normal(
     if mode not in {
         "face_uv_normal_camera_ridge",
         "face_uv_patch_mixture_ridge",
+        "surface_feature_rff_ridge",
         "low_rank_view_texture_k4",
         "low_rank_view_texture",
         "low_rank_view_texture_rich_k4",
@@ -2431,11 +2541,11 @@ def _teacher_distilled_basis_features_from_uv_camera_normal(
             ],
             axis=1,
         )
-    if mode in {"low_rank_view_texture_rich_k4", "low_rank_view_texture_rich"}:
+    if mode in {"low_rank_view_texture_rich_k4", "low_rank_view_texture_rich", "surface_feature_rff_ridge"}:
         parent_rgb = np.zeros((sample_count, 3), dtype=np.float32)
         inverse_depth = np.zeros((sample_count, 1), dtype=np.float32)
         alpha = np.ones((sample_count, 1), dtype=np.float32)
-        return np.concatenate(
+        rich_features = np.concatenate(
             [
                 np.ones((sample_count, 1), dtype=np.float32),
                 camera_arr.astype(np.float32),
@@ -2452,6 +2562,15 @@ def _teacher_distilled_basis_features_from_uv_camera_normal(
             ],
             axis=1,
         )
+        if mode == "surface_feature_rff_ridge":
+            return np.concatenate(
+                [
+                    rich_features,
+                    _surface_feature_rff_tail(u, v, normal_dot_camera),
+                ],
+                axis=1,
+            )
+        return rich_features
     base_features = [
         np.ones((sample_count, 1), dtype=np.float32),
         camera_arr.astype(np.float32),
@@ -3666,6 +3785,9 @@ def fit_atlas(
     view_cluster_min_views: int,
     view_cluster_min_bin_samples: int,
     view_cluster_fallback_mode: str,
+    teacher_residual_target_mode: str,
+    teacher_residual_target_luma_mix: float,
+    teacher_residual_target_edge_boost: float,
     teacher_distilled_basis_mode: str,
     teacher_distilled_basis_min_face_samples: int,
     teacher_distilled_basis_ridge: float,
@@ -3745,6 +3867,15 @@ def fit_atlas(
     teacher_basis_views = 0
     teacher_basis_samples = 0
     teacher_basis_base_min_face_samples = max(1, int(teacher_distilled_basis_min_face_samples))
+    residual_target_mode = str(teacher_residual_target_mode or "raw_rgb")
+    if residual_target_mode not in {"raw_rgb", "luma_only", "edge_luma_mix"}:
+        raise ValueError(f"unsupported teacher residual target mode: {residual_target_mode}")
+    residual_target_sample_count = 0
+    residual_target_mix_sum = 0.0
+    residual_target_mix_min = float("inf")
+    residual_target_mix_max = 0.0
+    residual_target_energy_before_sum = 0.0
+    residual_target_energy_after_sum = 0.0
     rng = np.random.default_rng(7)
 
     stride = max(0, int(policy_val_stride))
@@ -3795,6 +3926,37 @@ def fit_atlas(
         face_ids = np.asarray(z["face_id"], dtype=np.int64)[mask]
         residual = np.asarray(z[residual_rgb_key], dtype=np.float32)
         residual_samples = np.stack([residual[0][mask], residual[1][mask], residual[2][mask]], axis=1)
+        residual_samples, residual_target_summary = transform_residual_samples_for_fit(
+            z,
+            mask,
+            residual_samples,
+            residual_target_mode,
+            float(teacher_residual_target_luma_mix),
+            float(teacher_residual_target_edge_boost),
+        )
+        transformed_count = int(residual_target_summary.get("sample_count", residual_samples.shape[0]) or 0)
+        if transformed_count > 0:
+            residual_target_sample_count += int(transformed_count)
+            residual_target_mix_sum += (
+                float(residual_target_summary.get("mean_luma_mix", 0.0) or 0.0)
+                * float(transformed_count)
+            )
+            residual_target_mix_min = min(
+                residual_target_mix_min,
+                float(residual_target_summary.get("min_luma_mix", 0.0) or 0.0),
+            )
+            residual_target_mix_max = max(
+                residual_target_mix_max,
+                float(residual_target_summary.get("max_luma_mix", 0.0) or 0.0),
+            )
+            residual_target_energy_before_sum += (
+                float(residual_target_summary.get("mean_rgb_energy_before", 0.0) or 0.0)
+                * float(transformed_count)
+            )
+            residual_target_energy_after_sum += (
+                float(residual_target_summary.get("mean_rgb_energy_after", 0.0) or 0.0)
+                * float(transformed_count)
+            )
         ubin, vbin = _uv_bins(np.asarray(z["barycentric"], dtype=np.float32), mask, size)
         total_fit_samples += int(face_ids.size)
         view_features = _view_condition_features_for_mask(z, view_basis_mode, mask)
@@ -4348,6 +4510,16 @@ def fit_atlas(
             expert_fallback_mode=view_cluster_fallback_mode_s,
         )
 
+    residual_target_before = (
+        float(residual_target_energy_before_sum / max(1, residual_target_sample_count))
+        if residual_target_sample_count > 0
+        else 0.0
+    )
+    residual_target_after = (
+        float(residual_target_energy_after_sum / max(1, residual_target_sample_count))
+        if residual_target_sample_count > 0
+        else 0.0
+    )
     summary = {
         "input_views": int(len(view_paths)),
         "fit_views": int(len(fit_views)),
@@ -4355,6 +4527,30 @@ def fit_atlas(
         "candidate_faces": int(len(candidate_faces)),
         "atlas_faces": int(len(atlas)),
         "fit_samples": int(total_fit_samples),
+        "teacher_residual_target": {
+            "mode": str(residual_target_mode),
+            "luma_mix": float(teacher_residual_target_luma_mix),
+            "edge_boost": float(teacher_residual_target_edge_boost),
+            "sample_count": int(residual_target_sample_count),
+            "mean_luma_mix": (
+                float(residual_target_mix_sum / max(1, residual_target_sample_count))
+                if residual_target_sample_count > 0
+                else 0.0
+            ),
+            "min_luma_mix": (
+                float(residual_target_mix_min)
+                if residual_target_sample_count > 0 and math.isfinite(residual_target_mix_min)
+                else 0.0
+            ),
+            "max_luma_mix": float(residual_target_mix_max) if residual_target_sample_count > 0 else 0.0,
+            "mean_rgb_energy_before": residual_target_before,
+            "mean_rgb_energy_after": residual_target_after,
+            "energy_ratio_after_before": (
+                float(residual_target_after / residual_target_before)
+                if residual_target_before > 1.0e-12
+                else 0.0
+            ),
+        },
         "texture_size": int(size),
         "fill_empty_with_face_mean": bool(fill_empty_with_face_mean),
         "atlas_empty_bin_fill_mode": str(atlas_empty_bin_fill_mode),
@@ -12677,6 +12873,18 @@ def main() -> int:
     parser.add_argument("--method_name", default="ours_26000_teacher_region_texture_adapter")
     parser.add_argument("--residual_rgb_key", default="teacher_residual_rgb")
     parser.add_argument("--residual_l1_key", default="teacher_residual_l1")
+    parser.add_argument(
+        "--teacher_residual_target_mode",
+        choices=("raw_rgb", "luma_only", "edge_luma_mix"),
+        default="raw_rgb",
+        help=(
+            "Train-fit-only transform applied to teacher RGB residual samples before fitting "
+            "the surface atlas/decoder. edge_luma_mix suppresses chroma residual on parent "
+            "luma edges to target SSIM/LPIPS-oriented structure instead of raw RGB MSE."
+        ),
+    )
+    parser.add_argument("--teacher_residual_target_luma_mix", type=float, default=0.75)
+    parser.add_argument("--teacher_residual_target_edge_boost", type=float, default=0.25)
     parser.add_argument("--texture_size", type=int, default=16)
     parser.add_argument(
         "--texture_size_candidates",
@@ -13131,6 +13339,7 @@ def main() -> int:
             "none",
             "face_uv_normal_camera_ridge",
             "face_uv_patch_mixture_ridge",
+            "surface_feature_rff_ridge",
             "low_rank_view_texture_k4",
             "low_rank_view_texture",
             "low_rank_view_texture_rich_k4",
@@ -13142,6 +13351,7 @@ def main() -> int:
             "face_uv_normal_camera_ridge fits one ridge residual model per face using "
             "Phase-J teacher residuals and features [camera, normal, normal-dot-camera, UV polynomial]. "
             "face_uv_patch_mixture_ridge adds a 3x3 local UV RBF mixture and normal-view interactions. "
+            "surface_feature_rff_ridge fits a train-only per-face Fourier/RFF surface feature decoder. "
             "low_rank_view_texture_k4 fits four view/UV-aware mixture weights per face as a compact "
             "v169 teacher residual texture. low_rank_view_texture_rich_k4 keeps the same rank-4 "
             "surface factorization but adds UV, normal, parent RGB, depth, and alpha context. "
@@ -15190,6 +15400,9 @@ def main() -> int:
             view_cluster_min_views=int(args.view_cluster_min_views),
             view_cluster_min_bin_samples=int(args.view_cluster_min_bin_samples),
             view_cluster_fallback_mode=str(args.view_cluster_fallback_mode),
+            teacher_residual_target_mode=str(args.teacher_residual_target_mode),
+            teacher_residual_target_luma_mix=float(args.teacher_residual_target_luma_mix),
+            teacher_residual_target_edge_boost=float(args.teacher_residual_target_edge_boost),
             teacher_distilled_basis_mode=str(args.teacher_distilled_basis_mode),
             teacher_distilled_basis_min_face_samples=int(args.teacher_distilled_basis_min_face_samples),
             teacher_distilled_basis_ridge=float(args.teacher_distilled_basis_ridge),

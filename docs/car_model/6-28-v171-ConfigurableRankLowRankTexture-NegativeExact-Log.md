@@ -243,3 +243,72 @@ LPIPS < 0.329222
 ```
 
 Until that happens, the project status is **NOT COMPLETE** under the v169 improved prompt.
+
+## v172 Existing MoE Check
+
+After this v171 log was first written, I ran a narrow no-new-code check suggested by a subagent: combine the existing low-rank teacher residual texture with `view_cluster_expert_count=3` and `view_cluster_feature_mode=camera_center`. This was intended to test whether the existing train-fit-only view-cluster expert path could provide a stronger representation without writing a new decoder.
+
+Run root:
+
+```text
+/dev/shm/peilincai_spcarnet_20260629_v172_lowrank_moe_exact/flowers
+```
+
+W&B:
+
+```text
+mode: offline
+dir: /dev/shm/peilincai_wandb_v172_lowrank_moe_exact/wandb/offline-run-20260628_213455-onedghnj
+```
+
+Artifacts:
+
+- Manifest: `/dev/shm/peilincai_spcarnet_20260629_v172_lowrank_moe_exact/flowers/reports/flowers_vnext_certified_residual_texture_manifest.json`
+- Results: `/dev/shm/peilincai_spcarnet_20260629_v172_lowrank_moe_exact/flowers/reports/flowers_ours_26000_v172_lowrank_moe_flowers_test_results.json`
+- Per-view: `/dev/shm/peilincai_spcarnet_20260629_v172_lowrank_moe_exact/flowers/reports/flowers_ours_26000_v172_lowrank_moe_flowers_test_per_view.json`
+
+The run completed with strict protocol audit passing:
+
+```text
+status: COMPLETE
+errors: []
+protocol_audit.passed: true
+target_gt_visible_to_apply: false
+target_gt_visible_to_selection: false
+selection_uses_test_gt: false
+target_forbidden_keys_stripped: true
+```
+
+However, the MoE candidate was rejected by policy-val:
+
+```text
+accepted: false
+effective_policy: fallback_noop
+selected_alpha: 0.0
+changed_pixels: 0 / 37100800
+```
+
+Policy-val best row before rejection:
+
+```text
+relative_gain: +0.039999002
+SSIM gain: +0.000001371
+image L1 gain: +0.000000470
+LPIPS gain: +0.000002391
+LPIPS positive-view fraction: 0.416667
+LPIPS min-view gain: -0.000031874
+```
+
+The decisive failure was perceptual/tail safety: LPIPS positive-view fraction was below the gate and min-view LPIPS was slightly outside the allowed tail bound.
+
+Exact metrics:
+
+| method | PSNR | SSIM | LPIPS |
+|---|---:|---:|---:|
+| Phase-J flowers reference | 20.304358 | 0.557770 | 0.329222 |
+| v172 low-rank MoE no-op | 19.832010 | 0.505779 | 0.405904 |
+| v172 - Phase-J | -0.472348 | -0.051991 | +0.076682 |
+
+Interpretation:
+
+`v172` proves that the existing view-cluster MoE switch is not enough. It cleanly rejects the candidate and falls back to no-op, so this is not a full9 candidate. The next useful step must be a new representation implementation, not a recombination of existing low-rank/MoE/gate switches.

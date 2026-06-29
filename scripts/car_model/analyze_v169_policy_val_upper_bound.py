@@ -53,6 +53,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output_md", type=Path, required=True)
     parser.add_argument("--residual_rgb_key", default="teacher_residual_rgb")
     parser.add_argument("--residual_l1_key", default="teacher_residual_l1")
+    parser.add_argument(
+        "--teacher_residual_target_mode",
+        choices=("raw_rgb", "luma_only", "edge_luma_mix"),
+        default="raw_rgb",
+    )
+    parser.add_argument("--teacher_residual_target_luma_mix", type=float, default=0.75)
+    parser.add_argument("--teacher_residual_target_edge_boost", type=float, default=0.25)
     parser.add_argument("--texture_sizes", default="8,16")
     parser.add_argument("--alpha_grid", default="0,0.03125,0.0625,0.125,0.25,0.5")
     parser.add_argument("--policy_val_stride", type=int, default=4)
@@ -77,6 +84,7 @@ def parse_args() -> argparse.Namespace:
             "none",
             "face_uv_normal_camera_ridge",
             "face_uv_patch_mixture_ridge",
+            "surface_feature_rff_ridge",
             "low_rank_view_texture_k4",
             "low_rank_view_texture",
             "low_rank_view_texture_rich_k4",
@@ -238,6 +246,9 @@ def atlas_fit_kwargs(args: argparse.Namespace, texture_size: int) -> dict[str, A
         "view_cluster_min_views": 2,
         "view_cluster_min_bin_samples": 4,
         "view_cluster_fallback_mode": "global",
+        "teacher_residual_target_mode": str(args.teacher_residual_target_mode),
+        "teacher_residual_target_luma_mix": float(args.teacher_residual_target_luma_mix),
+        "teacher_residual_target_edge_boost": float(args.teacher_residual_target_edge_boost),
         "teacher_distilled_basis_mode": str(args.teacher_distilled_basis_mode),
         "teacher_distilled_basis_min_face_samples": int(args.teacher_distilled_basis_min_face_samples),
         "teacher_distilled_basis_ridge": float(args.teacher_distilled_basis_ridge),
@@ -462,6 +473,9 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                 "lpips_enabled": not bool(args.disable_lpips),
                 "policy_val_lpips_max_size": int(args.policy_val_lpips_max_size),
                 "full_image_psnr_rescan": bool(args.enable_full_image_psnr_rescan),
+                "teacher_residual_target_mode": str(args.teacher_residual_target_mode),
+                "teacher_residual_target_luma_mix": float(args.teacher_residual_target_luma_mix),
+                "teacher_residual_target_edge_boost": float(args.teacher_residual_target_edge_boost),
                 "teacher_distilled_basis_mode": str(args.teacher_distilled_basis_mode),
                 "teacher_distilled_basis_min_face_samples": int(args.teacher_distilled_basis_min_face_samples),
                 "teacher_distilled_basis_apply_mode": str(args.teacher_distilled_basis_apply_mode),
