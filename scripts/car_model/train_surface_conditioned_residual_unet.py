@@ -120,6 +120,21 @@ def _lpips_train_loss(
     return lpips_model(pred_in, target_in).mean()
 
 
+def _luma(x: torch.Tensor) -> torch.Tensor:
+    weights = torch.tensor([0.299, 0.587, 0.114], dtype=x.dtype, device=x.device).view(1, 3, 1, 1)
+    return torch.sum(x[:, :3] * weights, dim=1, keepdim=True)
+
+
+def _luma_gradient_loss(pred: torch.Tensor, target: torch.Tensor, max_side: int) -> torch.Tensor:
+    pred_luma = _luma(_resize_bchw_tensor(pred, int(max_side)))
+    target_luma = _luma(_resize_bchw_tensor(target, int(max_side)))
+    pred_dx = pred_luma[:, :, :, 1:] - pred_luma[:, :, :, :-1]
+    pred_dy = pred_luma[:, :, 1:, :] - pred_luma[:, :, :-1, :]
+    target_dx = target_luma[:, :, :, 1:] - target_luma[:, :, :, :-1]
+    target_dy = target_luma[:, :, 1:, :] - target_luma[:, :, :-1, :]
+    return torch.mean(torch.abs(pred_dx - target_dx)) + torch.mean(torch.abs(pred_dy - target_dy))
+
+
 def _camera_dir(z: np.lib.npyio.NpzFile, h: int, w: int) -> np.ndarray:
     cam = np.asarray(z["camera_center"], dtype=np.float32).reshape(3)
     cam = cam / max(float(np.linalg.norm(cam)), 1.0e-8)
@@ -220,15 +235,34 @@ class ConvBlock(torch.nn.Module):
 
 
 class SurfaceConditionedResidualUNet(torch.nn.Module):
-    def __init__(self, in_ch: int, base_ch: int, max_delta: float):
+    def __init__(
+        self,
+        in_ch: int,
+        base_ch: int,
+        max_delta: float,
+        *,
+        confidence_mode: str = "none",
+        confidence_bias: float = 2.0,
+        confidence_min: float = 0.0,
+        confidence_max: float = 1.0,
+    ):
         super().__init__()
+        confidence_mode = str(confidence_mode)
+        if confidence_mode not in {"none", "sigmoid"}:
+            raise ValueError(f"unknown confidence_mode: {confidence_mode}")
         self.enc1 = ConvBlock(in_ch, base_ch)
         self.enc2 = ConvBlock(base_ch, base_ch * 2)
         self.enc3 = ConvBlock(base_ch * 2, base_ch * 4)
         self.mid = ConvBlock(base_ch * 4, base_ch * 4)
         self.dec2 = ConvBlock(base_ch * 6, base_ch * 2)
         self.dec1 = ConvBlock(base_ch * 3, base_ch)
-        self.out = torch.nn.Conv2d(base_ch, 3, 1)
+        self.confidence_mode = confidence_mode
+        self.confidence_bias = float(confidence_bias)
+        self.confidence_min = float(confidence_min)
+        self.confidence_max = float(confidence_max)
+        self.out = torch.nn.Conv2d(base_ch, 4 if confidence_mode == "sigmoid" else 3, 1)
+        if confidence_mode == "sigmoid":
+            torch.nn.init.constant_(self.out.bias[3], float(confidence_bias))
         self.max_delta = float(max_delta)
 
     def forward(self, x: torch.Tensor, face_ids: torch.Tensor | None = None) -> torch.Tensor:
@@ -241,7 +275,13 @@ class SurfaceConditionedResidualUNet(torch.nn.Module):
         d2 = self.dec2(torch.cat([u2, e2], dim=1))
         u1 = F.interpolate(d2, size=e1.shape[-2:], mode="bilinear", align_corners=False)
         d1 = self.dec1(torch.cat([u1, e1], dim=1))
-        return torch.tanh(self.out(d1)) * self.max_delta
+        raw = self.out(d1)
+        delta = torch.tanh(raw[:, :3]) * self.max_delta
+        if self.confidence_mode == "sigmoid":
+            conf = torch.sigmoid(raw[:, 3:4])
+            conf = self.confidence_min + (self.confidence_max - self.confidence_min) * conf
+            return delta * conf
+        return delta
 
 
 @dataclass
@@ -307,11 +347,31 @@ def _load_face_ids_tensor(z: np.lib.npyio.NpzFile, face_lut: np.ndarray | None, 
 
 
 class SurfaceConditionedFaceEmbeddingUNet(torch.nn.Module):
-    def __init__(self, in_ch: int, base_ch: int, max_delta: float, num_faces: int, embedding_dim: int):
+    def __init__(
+        self,
+        in_ch: int,
+        base_ch: int,
+        max_delta: float,
+        num_faces: int,
+        embedding_dim: int,
+        *,
+        confidence_mode: str = "none",
+        confidence_bias: float = 2.0,
+        confidence_min: float = 0.0,
+        confidence_max: float = 1.0,
+    ):
         super().__init__()
         self.face_embedding = torch.nn.Embedding(int(num_faces), int(embedding_dim), padding_idx=0)
         torch.nn.init.zeros_(self.face_embedding.weight)
-        self.unet = SurfaceConditionedResidualUNet(in_ch + int(embedding_dim), base_ch, max_delta)
+        self.unet = SurfaceConditionedResidualUNet(
+            in_ch + int(embedding_dim),
+            base_ch,
+            max_delta,
+            confidence_mode=confidence_mode,
+            confidence_bias=confidence_bias,
+            confidence_min=confidence_min,
+            confidence_max=confidence_max,
+        )
 
     def forward(self, x: torch.Tensor, face_ids: torch.Tensor | None = None) -> torch.Tensor:
         if face_ids is None:
@@ -504,6 +564,7 @@ def apply_target(
     target_evidence_dir: Path,
     *,
     face_lut: np.ndarray | None,
+    scene_name: str,
     method_name: str,
     alpha: float,
     device: torch.device,
@@ -515,7 +576,10 @@ def apply_target(
     if not bool(no_gt.get("passed")):
         raise RuntimeError(f"target no-GT verification failed: {no_gt}")
     target_paths = evidence_views(target_evidence_dir)
-    out_root = output_dir / "flowers_exact_target_apply"
+    safe_scene = "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in str(scene_name).strip())
+    if not safe_scene:
+        safe_scene = "scene"
+    out_root = output_dir / f"{safe_scene}_exact_target_apply"
     render_dir = out_root / "test" / method_name / "renders"
     parent_dir = out_root / "test" / method_name / "parent"
     render_dir.mkdir(parents=True, exist_ok=True)
@@ -547,6 +611,8 @@ def apply_target(
         "method_name": str(method_name),
         "alpha": float(alpha),
         "no_gt_verify": no_gt,
+        "scene_name": safe_scene,
+        "output_model": str(out_root),
         "render_dir": str(render_dir),
         "parent_dir": str(parent_dir),
         "view_count": int(len(rows)),
@@ -560,12 +626,16 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
     best = payload["policy_val"]["best"]
     best_all = payload["policy_val"].get("best_all_axis")
     target = payload.get("target_apply") or {}
+    leakage = payload.get("gt_usage_audit", {})
     lines = [
         "# v184 Surface-Conditioned Residual U-Net Audit",
         "",
         f"- policy-val all-axis pass: `{payload['policy_val_all_axis_pass']}`",
         f"- target exact run: `{bool(target)}`",
         f"- target no-GT verifier: `{target.get('no_gt_verify', {}).get('passed')}`",
+        f"- uses train-fit GT: `{leakage.get('uses_train_fit_gt')}`",
+        f"- uses policy-val GT: `{leakage.get('uses_policy_val_gt')}`",
+        f"- uses target/test GT during apply: `{leakage.get('uses_target_or_test_gt_during_apply')}`",
         "",
         "## Policy-Val",
         "",
@@ -608,6 +678,15 @@ def main() -> int:
     parser.add_argument("--lr", type=float, default=1.0e-3)
     parser.add_argument("--base_channels", type=int, default=24)
     parser.add_argument("--max_delta", type=float, default=0.20)
+    parser.add_argument(
+        "--confidence_mode",
+        choices=["none", "sigmoid"],
+        default="none",
+        help="Optional learned residual confidence head. sigmoid predicts per-pixel residual strength from surface/view features.",
+    )
+    parser.add_argument("--confidence_bias", type=float, default=2.0)
+    parser.add_argument("--confidence_min", type=float, default=0.0)
+    parser.add_argument("--confidence_max", type=float, default=1.0)
     parser.add_argument("--face_embedding_dim", type=int, default=0)
     parser.add_argument(
         "--face_embedding_max_unique",
@@ -618,14 +697,18 @@ def main() -> int:
     parser.add_argument("--teacher_l1_weight", type=float, default=1.0)
     parser.add_argument("--teacher_ssim_weight", type=float, default=0.20)
     parser.add_argument("--teacher_lpips_weight", type=float, default=0.0)
+    parser.add_argument("--teacher_grad_weight", type=float, default=0.0)
     parser.add_argument("--gt_l1_weight", type=float, default=0.10)
     parser.add_argument("--gt_ssim_weight", type=float, default=0.0)
     parser.add_argument("--gt_lpips_weight", type=float, default=0.0)
+    parser.add_argument("--gt_grad_weight", type=float, default=0.0)
     parser.add_argument("--lpips_loss_max_side", type=int, default=128)
+    parser.add_argument("--grad_loss_max_side", type=int, default=256)
     parser.add_argument("--delta_l1_weight", type=float, default=1.0e-4)
     parser.add_argument("--alpha_grid", default="0,0.125,0.25,0.5,0.75,1")
     parser.add_argument("--target_alpha", type=float, default=None)
     parser.add_argument("--method_name", default="ours_26000_v184_surface_conditioned_unet_flowers")
+    parser.add_argument("--scene_name", default="flowers")
     parser.add_argument("--eval_tile", type=int, default=512)
     parser.add_argument("--eval_overlap", type=int, default=32)
     parser.add_argument("--ssim_max_side", type=int, default=-1)
@@ -691,9 +774,21 @@ def main() -> int:
             float(args.max_delta),
             int(face_lut.size + 1),
             int(args.face_embedding_dim),
+            confidence_mode=str(args.confidence_mode),
+            confidence_bias=float(args.confidence_bias),
+            confidence_min=float(args.confidence_min),
+            confidence_max=float(args.confidence_max),
         ).to(device)
     else:
-        model = SurfaceConditionedResidualUNet(in_ch, int(args.base_channels), float(args.max_delta)).to(device)
+        model = SurfaceConditionedResidualUNet(
+            in_ch,
+            int(args.base_channels),
+            float(args.max_delta),
+            confidence_mode=str(args.confidence_mode),
+            confidence_bias=float(args.confidence_bias),
+            confidence_min=float(args.confidence_min),
+            confidence_max=float(args.confidence_max),
+        ).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=float(args.lr), weight_decay=1.0e-5)
     train_lpips_model = None
     if float(args.teacher_lpips_weight) > 0.0 or float(args.gt_lpips_weight) > 0.0:
@@ -717,13 +812,20 @@ def main() -> int:
             teacher,
             int(args.lpips_loss_max_side),
         )
+        loss_teacher_grad = (
+            _luma_gradient_loss(adapted, teacher, int(args.grad_loss_max_side))
+            if float(args.teacher_grad_weight) > 0.0
+            else torch.zeros((), device=device)
+        )
         loss_gt = torch.zeros((), device=device)
         loss_gt_ssim = torch.zeros((), device=device)
         loss_gt_lpips = torch.zeros((), device=device)
+        loss_gt_grad = torch.zeros((), device=device)
         if batch.gt is not None and (
             float(args.gt_l1_weight) > 0.0
             or float(args.gt_ssim_weight) > 0.0
             or float(args.gt_lpips_weight) > 0.0
+            or float(args.gt_grad_weight) > 0.0
         ):
             gt = batch.gt.unsqueeze(0).to(device)
             loss_gt = torch.mean(torch.abs(adapted - gt))
@@ -736,14 +838,18 @@ def main() -> int:
                     gt,
                     int(args.lpips_loss_max_side),
                 )
+            if float(args.gt_grad_weight) > 0.0:
+                loss_gt_grad = _luma_gradient_loss(adapted, gt, int(args.grad_loss_max_side))
         loss_mag = torch.mean(torch.abs(pred_delta))
         loss = (
             float(args.teacher_l1_weight) * loss_teacher_l1
             + float(args.teacher_ssim_weight) * loss_teacher_ssim
             + float(args.teacher_lpips_weight) * loss_teacher_lpips
+            + float(args.teacher_grad_weight) * loss_teacher_grad
             + float(args.gt_l1_weight) * loss_gt
             + float(args.gt_ssim_weight) * loss_gt_ssim
             + float(args.gt_lpips_weight) * loss_gt_lpips
+            + float(args.gt_grad_weight) * loss_gt_grad
             + float(args.delta_l1_weight) * loss_mag
         )
         opt.zero_grad(set_to_none=True)
@@ -757,9 +863,11 @@ def main() -> int:
                     "train/teacher_l1": float(loss_teacher_l1.detach().cpu().item()),
                     "train/teacher_ssim_loss": float(loss_teacher_ssim.detach().cpu().item()),
                     "train/teacher_lpips_loss": float(loss_teacher_lpips.detach().cpu().item()),
+                    "train/teacher_grad_loss": float(loss_teacher_grad.detach().cpu().item()),
                     "train/gt_l1": float(loss_gt.detach().cpu().item()),
                     "train/gt_ssim_loss": float(loss_gt_ssim.detach().cpu().item()),
                     "train/gt_lpips_loss": float(loss_gt_lpips.detach().cpu().item()),
+                    "train/gt_grad_loss": float(loss_gt_grad.detach().cpu().item()),
                     "train/delta_l1": float(loss_mag.detach().cpu().item()),
                     "train/step": int(step),
                 }
@@ -800,6 +908,7 @@ def main() -> int:
             model,
             Path(str(args.target_evidence_dir)),
             face_lut=face_lut,
+            scene_name=str(args.scene_name),
             method_name=str(args.method_name),
             alpha=selected_alpha,
             device=device,
@@ -809,6 +918,30 @@ def main() -> int:
         )
     elif str(args.target_evidence_dir):
         target_apply = {"skipped": True, "reason": "policy-val all-axis gate failed"}
+    train_gt_weight_sum = (
+        float(args.gt_l1_weight)
+        + float(args.gt_ssim_weight)
+        + float(args.gt_lpips_weight)
+        + float(args.gt_grad_weight)
+    )
+    train_fit_gt_available = any("gt" in example for example in train_examples)
+    gt_usage_audit = {
+        "schema": "spcarnet_gt_usage_audit_v1",
+        "uses_train_fit_gt": bool(train_fit_gt_available and train_gt_weight_sum > 0.0),
+        "train_fit_gt_available": bool(train_fit_gt_available),
+        "train_fit_gt_weight_sum": float(train_gt_weight_sum),
+        "uses_policy_val_gt": True,
+        "policy_val_gt_purpose": "candidate certification and alpha selection only",
+        "uses_target_or_test_gt_during_apply": False,
+        "target_or_test_gt_after_apply_purpose": "final evaluation only, if separately populated",
+        "target_no_gt_verifier_passed": bool((target_apply or {}).get("no_gt_verify", {}).get("passed", False)),
+        "target_gt_visible_to_apply": bool(
+            (target_apply or {}).get("no_gt_verify", {}).get("target_gt_visible_to_apply", False)
+        ),
+        "target_residual_visible_to_apply": bool(
+            (target_apply or {}).get("no_gt_verify", {}).get("target_residual_visible_to_apply", False)
+        ),
+    }
     payload = {
         "schema": "spcarnet_v184_surface_conditioned_residual_unet_v1",
         "args": vars(args),
@@ -822,6 +955,10 @@ def main() -> int:
             "input_channels": int(in_ch),
             "base_channels": int(args.base_channels),
             "max_delta": float(args.max_delta),
+            "confidence_mode": str(args.confidence_mode),
+            "confidence_bias": float(args.confidence_bias),
+            "confidence_min": float(args.confidence_min),
+            "confidence_max": float(args.confidence_max),
             "face_embedding_dim": int(args.face_embedding_dim),
             "face_embedding_rows": int(0 if face_lut is None else face_lut.size + 1),
             "face_embedding_train_fit_unique_faces": int(0 if face_lut is None else face_lut.size),
@@ -830,6 +967,7 @@ def main() -> int:
         "policy_val": policy_val,
         "policy_val_all_axis_pass": bool(all_axis),
         "target_apply": target_apply,
+        "gt_usage_audit": gt_usage_audit,
         "references": {
             "phasej_flowers_gate": "20.304358 / 0.557770 / 0.329222",
             "v183_flowers_exact": "19.832029 / 0.505779 / 0.405907",
