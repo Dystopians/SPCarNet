@@ -2302,9 +2302,18 @@ def _teacher_distilled_basis_feature_dim(mode: str) -> int:
         # [1, camera3, normal3, normal_dot_camera, u, v, u^2, v^2, u*v,
         #  parent_rgb3, inverse_depth, alpha].
         return 18
+    if mode == "full_rank_view_texture_rich":
+        # Same rich feature vector as low_rank_view_texture_rich, but each
+        # face/UV bin stores the full linear decoder instead of an SVD rank-K
+        # factorization. This is the v169 capacity check for rank bottlenecks.
+        return 18
     if mode == "surface_feature_rff_ridge":
         # Rich base features plus deterministic UV Fourier features and
         # first-frequency normal-view interactions: 18 + 24 + 8.
+        return 50
+    if mode == "full_rank_surface_feature_rff_texture":
+        # Per-bin full linear decoder with the richer deterministic surface
+        # feature tail. This is intentionally heavier than full_rank_view_texture_rich.
         return 50
     raise ValueError(f"unsupported teacher-distilled basis mode: {mode}")
 
@@ -2318,6 +2327,17 @@ def _is_low_rank_teacher_texture_mode(mode: str) -> bool:
     }
 
 
+def _is_full_rank_teacher_texture_mode(mode: str) -> bool:
+    return str(mode) in {
+        "full_rank_view_texture_rich",
+        "full_rank_surface_feature_rff_texture",
+    }
+
+
+def _is_teacher_texture_decoder_mode(mode: str) -> bool:
+    return _is_low_rank_teacher_texture_mode(mode) or _is_full_rank_teacher_texture_mode(mode)
+
+
 def _low_rank_teacher_texture_requested_rank(mode: str, requested_rank: int | None = None) -> int:
     if not _is_low_rank_teacher_texture_mode(mode):
         return 0
@@ -2327,11 +2347,13 @@ def _low_rank_teacher_texture_requested_rank(mode: str, requested_rank: int | No
 
 
 def _low_rank_teacher_texture_min_bin_samples(mode: str, feature_dim: int) -> int:
-    if str(mode) in {"low_rank_view_texture_rich_k4", "low_rank_view_texture_rich"}:
+    if str(mode) in {"low_rank_view_texture_rich_k4", "low_rank_view_texture_rich", "full_rank_view_texture_rich"}:
         # The rich feature vector is ridge-regularized and deliberately allowed
         # to use sparse bins; requiring one sample per feature zeroes too much of
         # the target-visible surface before policy-val can judge the model.
         return 4
+    if str(mode) == "full_rank_surface_feature_rff_texture":
+        return 6
     return max(int(feature_dim), 4)
 
 
@@ -2366,6 +2388,8 @@ def _teacher_distilled_basis_features_for_mask(
         "face_uv_normal_camera_ridge",
         "face_uv_patch_mixture_ridge",
         "surface_feature_rff_ridge",
+        "full_rank_view_texture_rich",
+        "full_rank_surface_feature_rff_texture",
         "low_rank_view_texture_k4",
         "low_rank_view_texture",
         "low_rank_view_texture_rich_k4",
@@ -2401,7 +2425,13 @@ def _teacher_distilled_basis_features_for_mask(
             ],
             axis=1,
         )
-    if mode in {"low_rank_view_texture_rich_k4", "low_rank_view_texture_rich", "surface_feature_rff_ridge"}:
+    if mode in {
+        "low_rank_view_texture_rich_k4",
+        "low_rank_view_texture_rich",
+        "surface_feature_rff_ridge",
+        "full_rank_view_texture_rich",
+        "full_rank_surface_feature_rff_texture",
+    }:
         if "rgb_render" in z:
             render = np.asarray(z["rgb_render"], dtype=np.float32)
             if render.shape[0] >= 3:
@@ -2427,7 +2457,7 @@ def _teacher_distilled_basis_features_for_mask(
             alpha = np.clip(alpha, 0.0, 1.0).astype(np.float32)
         else:
             alpha = np.ones((sample_count, 1), dtype=np.float32)
-        return np.concatenate(
+        rich_features = np.concatenate(
             [
                 np.ones((sample_count, 1), dtype=np.float32),
                 camera_features,
@@ -2443,24 +2473,16 @@ def _teacher_distilled_basis_features_for_mask(
                 alpha,
             ],
             axis=1,
-        ) if mode != "surface_feature_rff_ridge" else np.concatenate(
+        )
+        if mode in {"surface_feature_rff_ridge", "full_rank_surface_feature_rff_texture"}:
+            return np.concatenate(
             [
-                np.ones((sample_count, 1), dtype=np.float32),
-                camera_features,
-                normal_samples,
-                normal_dot_camera,
-                u,
-                v,
-                u * u,
-                v * v,
-                u * v,
-                parent_rgb,
-                inverse_depth,
-                alpha,
+                rich_features,
                 _surface_feature_rff_tail(u, v, normal_dot_camera),
             ],
             axis=1,
         )
+        return rich_features
     base_features = [
         np.ones((sample_count, 1), dtype=np.float32),
         camera_features,
@@ -2506,6 +2528,8 @@ def _teacher_distilled_basis_features_from_uv_camera_normal(
         "face_uv_normal_camera_ridge",
         "face_uv_patch_mixture_ridge",
         "surface_feature_rff_ridge",
+        "full_rank_view_texture_rich",
+        "full_rank_surface_feature_rff_texture",
         "low_rank_view_texture_k4",
         "low_rank_view_texture",
         "low_rank_view_texture_rich_k4",
@@ -2541,7 +2565,13 @@ def _teacher_distilled_basis_features_from_uv_camera_normal(
             ],
             axis=1,
         )
-    if mode in {"low_rank_view_texture_rich_k4", "low_rank_view_texture_rich", "surface_feature_rff_ridge"}:
+    if mode in {
+        "low_rank_view_texture_rich_k4",
+        "low_rank_view_texture_rich",
+        "surface_feature_rff_ridge",
+        "full_rank_view_texture_rich",
+        "full_rank_surface_feature_rff_texture",
+    }:
         parent_rgb = np.zeros((sample_count, 3), dtype=np.float32)
         inverse_depth = np.zeros((sample_count, 1), dtype=np.float32)
         alpha = np.ones((sample_count, 1), dtype=np.float32)
@@ -2562,7 +2592,7 @@ def _teacher_distilled_basis_features_from_uv_camera_normal(
             ],
             axis=1,
         )
-        if mode == "surface_feature_rff_ridge":
+        if mode in {"surface_feature_rff_ridge", "full_rank_surface_feature_rff_texture"}:
             return np.concatenate(
                 [
                     rich_features,
@@ -4021,7 +4051,7 @@ def fit_atlas(
                     teacher_basis_feature_sums[face] = np.zeros((teacher_basis_feature_dim,), dtype=np.float64)
                     teacher_basis_feature_sq_sums[face] = np.zeros((teacher_basis_feature_dim,), dtype=np.float64)
                     teacher_basis_counts[face] = 0
-                    if _is_low_rank_teacher_texture_mode(teacher_basis_mode):
+                    if _is_teacher_texture_decoder_mode(teacher_basis_mode):
                         teacher_texture_xtx_sums[face] = np.zeros(
                             (size, size, teacher_basis_feature_dim, teacher_basis_feature_dim),
                             dtype=np.float64,
@@ -4085,7 +4115,7 @@ def fit_atlas(
                 teacher_basis_feature_sums[face] += np.sum(face_features, axis=0)
                 teacher_basis_feature_sq_sums[face] += np.sum(face_features * face_features, axis=0)
                 teacher_basis_counts[face] = teacher_basis_counts.get(face, 0) + int(face_features.shape[0])
-                if _is_low_rank_teacher_texture_mode(teacher_basis_mode) and face in teacher_texture_xtx_sums:
+                if _is_teacher_texture_decoder_mode(teacher_basis_mode) and face in teacher_texture_xtx_sums:
                     np.add.at(teacher_texture_counts[face], (vbin[fm], ubin[fm]), 1)
                     for i in range(teacher_basis_feature_dim):
                         for j in range(teacher_basis_feature_dim):
@@ -4391,7 +4421,7 @@ def fit_atlas(
                     )
                     teacher_basis_feature_std = np.sqrt(np.maximum(feature_var, 0.0)).astype(np.float32)
                     if (
-                        _is_low_rank_teacher_texture_mode(teacher_basis_mode)
+                        _is_teacher_texture_decoder_mode(teacher_basis_mode)
                         and face in teacher_texture_xtx_sums
                         and face in teacher_texture_xty_sums
                         and face in teacher_texture_counts
@@ -4413,41 +4443,60 @@ def fit_atlas(
                         ys_lr, xs_lr = np.nonzero(support)
                         if ys_lr.size <= 0:
                             raise np.linalg.LinAlgError("low_rank_view_texture_k4_no_supported_bins")
-                        matrix = coeff_field[ys_lr, xs_lr].transpose(1, 0, 2).reshape(
-                            teacher_basis_feature_dim,
-                            int(ys_lr.size) * 3,
-                        )
-                        u_svd, singular_values, vt_svd = np.linalg.svd(
-                            matrix.astype(np.float64),
-                            full_matrices=False,
-                        )
-                        requested_rank = _low_rank_teacher_texture_requested_rank(
-                            teacher_basis_mode,
-                            int(teacher_distilled_low_rank_texture_rank),
-                        )
-                        rank = min(
-                            int(requested_rank),
-                            int(teacher_basis_feature_dim),
-                            int(singular_values.size),
-                        )
-                        if rank <= 0:
-                            raise np.linalg.LinAlgError("low_rank_view_texture_k4_empty_svd")
-                        sqrt_s = np.sqrt(np.maximum(singular_values[:rank], 0.0))
-                        teacher_basis_coefficients = (u_svd[:, :rank] * sqrt_s[None, :]).astype(np.float32)
-                        basis_flat = (sqrt_s[:, None] * vt_svd[:rank]).astype(np.float32)
-                        teacher_texture_basis = np.zeros((rank, size, size, 3), dtype=np.float32)
-                        basis_values = basis_flat.reshape(rank, int(ys_lr.size), 3)
-                        for idx, (y, x) in enumerate(zip(ys_lr, xs_lr, strict=False)):
-                            teacher_texture_basis[:, int(y), int(x), :] = basis_values[:, idx, :]
-                        teacher_texture_support = support.astype(bool)
-                        total_energy = float(np.sum(singular_values * singular_values))
-                        if total_energy > 0.0:
-                            cumulative = np.cumsum(singular_values[:rank] * singular_values[:rank]) / total_energy
-                            teacher_texture_energy = cumulative.astype(np.float32)
-                            teacher_texture_energy_sum += float(cumulative[-1])
-                            teacher_texture_energy_count += 1
+                        if _is_full_rank_teacher_texture_mode(teacher_basis_mode):
+                            rank = int(teacher_basis_feature_dim)
+                            teacher_basis_coefficients = np.eye(rank, dtype=np.float32)
+                            teacher_texture_basis = coeff_field.transpose(2, 0, 1, 3).astype(np.float32)
+                            teacher_texture_support = support.astype(bool)
+                            component_energy = np.sum(
+                                np.square(teacher_texture_basis[:, teacher_texture_support, :].astype(np.float64)),
+                                axis=(1, 2),
+                            )
+                            total_energy = float(np.sum(component_energy))
+                            if total_energy > 0.0:
+                                teacher_texture_energy = (
+                                    np.cumsum(component_energy) / total_energy
+                                ).astype(np.float32)
+                                teacher_texture_energy_sum += 1.0
+                                teacher_texture_energy_count += 1
+                            else:
+                                teacher_texture_energy = np.zeros((rank,), dtype=np.float32)
                         else:
-                            teacher_texture_energy = np.zeros((rank,), dtype=np.float32)
+                            matrix = coeff_field[ys_lr, xs_lr].transpose(1, 0, 2).reshape(
+                                teacher_basis_feature_dim,
+                                int(ys_lr.size) * 3,
+                            )
+                            u_svd, singular_values, vt_svd = np.linalg.svd(
+                                matrix.astype(np.float64),
+                                full_matrices=False,
+                            )
+                            requested_rank = _low_rank_teacher_texture_requested_rank(
+                                teacher_basis_mode,
+                                int(teacher_distilled_low_rank_texture_rank),
+                            )
+                            rank = min(
+                                int(requested_rank),
+                                int(teacher_basis_feature_dim),
+                                int(singular_values.size),
+                            )
+                            if rank <= 0:
+                                raise np.linalg.LinAlgError("low_rank_view_texture_k4_empty_svd")
+                            sqrt_s = np.sqrt(np.maximum(singular_values[:rank], 0.0))
+                            teacher_basis_coefficients = (u_svd[:, :rank] * sqrt_s[None, :]).astype(np.float32)
+                            basis_flat = (sqrt_s[:, None] * vt_svd[:rank]).astype(np.float32)
+                            teacher_texture_basis = np.zeros((rank, size, size, 3), dtype=np.float32)
+                            basis_values = basis_flat.reshape(rank, int(ys_lr.size), 3)
+                            for idx, (y, x) in enumerate(zip(ys_lr, xs_lr, strict=False)):
+                                teacher_texture_basis[:, int(y), int(x), :] = basis_values[:, idx, :]
+                            teacher_texture_support = support.astype(bool)
+                            total_energy = float(np.sum(singular_values * singular_values))
+                            if total_energy > 0.0:
+                                cumulative = np.cumsum(singular_values[:rank] * singular_values[:rank]) / total_energy
+                                teacher_texture_energy = cumulative.astype(np.float32)
+                                teacher_texture_energy_sum += float(cumulative[-1])
+                                teacher_texture_energy_count += 1
+                            else:
+                                teacher_texture_energy = np.zeros((rank,), dtype=np.float32)
                         teacher_texture_supported_faces += 1
                         teacher_texture_supported_bins += int(np.sum(teacher_texture_support))
                         teacher_texture_total_bins += int(teacher_texture_support.size)
@@ -4646,6 +4695,52 @@ def fit_atlas(
             "candidate_faces": int(teacher_basis_candidate_faces),
             "supported_faces": int(teacher_basis_supported_faces),
             "supported_face_fraction": float(teacher_basis_supported_faces / max(1, teacher_basis_candidate_faces)),
+            "texture_decoder": {
+                "enabled": bool(_is_teacher_texture_decoder_mode(teacher_basis_mode)),
+                "decoder_type": (
+                    "full_rank"
+                    if _is_full_rank_teacher_texture_mode(teacher_basis_mode)
+                    else "low_rank"
+                    if _is_low_rank_teacher_texture_mode(teacher_basis_mode)
+                    else "none"
+                ),
+                "requested_rank": int(
+                    int(teacher_basis_feature_dim)
+                    if _is_full_rank_teacher_texture_mode(teacher_basis_mode)
+                    else _low_rank_teacher_texture_requested_rank(
+                        teacher_basis_mode,
+                        int(teacher_distilled_low_rank_texture_rank),
+                    )
+                ),
+                "effective_rank_cap": int(
+                    int(teacher_basis_feature_dim)
+                    if _is_full_rank_teacher_texture_mode(teacher_basis_mode)
+                    else min(
+                        _low_rank_teacher_texture_requested_rank(
+                            teacher_basis_mode,
+                            int(teacher_distilled_low_rank_texture_rank),
+                        ),
+                        int(teacher_basis_feature_dim),
+                    )
+                    if _is_low_rank_teacher_texture_mode(teacher_basis_mode)
+                    else 0
+                ),
+                "min_bin_samples": int(
+                    _low_rank_teacher_texture_min_bin_samples(
+                        teacher_basis_mode,
+                        teacher_basis_feature_dim,
+                    )
+                    if _is_teacher_texture_decoder_mode(teacher_basis_mode)
+                    else 0
+                ),
+                "rank": int(teacher_texture_rank_max),
+                "mean_rank": float(teacher_texture_rank_sum / max(1, teacher_texture_supported_faces)),
+                "supported_faces": int(teacher_texture_supported_faces),
+                "supported_bins": int(teacher_texture_supported_bins),
+                "total_bins": int(teacher_texture_total_bins),
+                "supported_bin_fraction": float(teacher_texture_supported_bins / max(1, teacher_texture_total_bins)),
+                "mean_retained_energy": float(teacher_texture_energy_sum / max(1, teacher_texture_energy_count)),
+            },
             "low_rank_texture": {
                 "enabled": bool(_is_low_rank_teacher_texture_mode(teacher_basis_mode)),
                 "requested_rank": int(
@@ -4974,7 +5069,7 @@ def predict_delta_for_npz(
                 if bool(np.any(teacher_support)):
                     teacher_pixels = None
                     if (
-                        _is_low_rank_teacher_texture_mode(teacher_basis_mode)
+                        _is_teacher_texture_decoder_mode(teacher_basis_mode)
                         and face_atlas.teacher_texture_basis is not None
                         and face_atlas.teacher_texture_support is not None
                     ):
@@ -4986,7 +5081,7 @@ def predict_delta_for_npz(
                     if (
                         bool(np.any(teacher_support))
                         and
-                        _is_low_rank_teacher_texture_mode(teacher_basis_mode)
+                        _is_teacher_texture_decoder_mode(teacher_basis_mode)
                         and face_atlas.teacher_texture_basis is not None
                     ):
                         weights = np.matmul(
@@ -13344,6 +13439,8 @@ def main() -> int:
             "low_rank_view_texture",
             "low_rank_view_texture_rich_k4",
             "low_rank_view_texture_rich",
+            "full_rank_view_texture_rich",
+            "full_rank_surface_feature_rff_texture",
         ),
         default="none",
         help=(
@@ -13355,7 +13452,9 @@ def main() -> int:
             "low_rank_view_texture_k4 fits four view/UV-aware mixture weights per face as a compact "
             "v169 teacher residual texture. low_rank_view_texture_rich_k4 keeps the same rank-4 "
             "surface factorization but adds UV, normal, parent RGB, depth, and alpha context. "
-            "The low_rank_view_texture and low_rank_view_texture_rich aliases expose configurable rank."
+            "The low_rank_view_texture and low_rank_view_texture_rich aliases expose configurable rank. "
+            "full_rank_view_texture_rich stores the complete per-bin rich-feature decoder without SVD compression; "
+            "full_rank_surface_feature_rff_texture adds the deterministic surface Fourier tail."
         ),
     )
     parser.add_argument(
