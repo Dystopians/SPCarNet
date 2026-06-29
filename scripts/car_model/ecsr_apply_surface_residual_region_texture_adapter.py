@@ -228,6 +228,9 @@ def candidate_spec_audit_row(
         "candidate_count": int(candidate_count),
         "fill_mode": str(spec.get("fill_mode", "")),
         "texture_size": int(spec.get("texture_size", 0)),
+        "teacher_distilled_low_rank_texture_rank": int(
+            spec.get("teacher_distilled_low_rank_texture_rank", 0)
+        ),
         "surface_multiscale_prior_blend": float(spec.get("surface_multiscale_prior_blend", 0.0)),
         "max_abs_delta_rgb": float(spec.get("max_abs_delta_rgb", 0.0)),
         "support_mode": str(spec.get("support_mode", "")),
@@ -237,10 +240,11 @@ def candidate_spec_audit_row(
     }
 
 
-def policy_candidate_spec_key(spec: dict[str, Any]) -> tuple[str, int, float, float, str]:
+def policy_candidate_spec_key(spec: dict[str, Any]) -> tuple[str, int, int, float, float, str]:
     return (
         str(spec.get("fill_mode", "")),
         int(spec.get("texture_size", 0)),
+        int(spec.get("teacher_distilled_low_rank_texture_rank", 0)),
         round(float(spec.get("surface_multiscale_prior_blend", 0.0)), 8),
         round(float(spec.get("max_abs_delta_rgb", 0.0)), 8),
         str(spec.get("support_faces_sha1", "")),
@@ -2221,12 +2225,12 @@ def _teacher_distilled_basis_feature_dim(mode: str) -> int:
         # normal-view interaction. This keeps the teacher field per-face, but
         # gives it local surface capacity instead of one global smooth face fit.
         return 31
-    if mode == "low_rank_view_texture_k4":
+    if mode in {"low_rank_view_texture_k4", "low_rank_view_texture"}:
         # View-weight features for a rank-4 texture basis:
         # [1, camera_x, camera_y, camera_z, normal_dot_camera].
         return 5
-    if mode == "low_rank_view_texture_rich_k4":
-        # Rich view-weight features for a rank-4 texture basis:
+    if mode in {"low_rank_view_texture_rich_k4", "low_rank_view_texture_rich"}:
+        # Rich view-weight features for a low-rank texture basis:
         # [1, camera3, normal3, normal_dot_camera, u, v, u^2, v^2, u*v,
         #  parent_rgb3, inverse_depth, alpha].
         return 18
@@ -2234,15 +2238,24 @@ def _teacher_distilled_basis_feature_dim(mode: str) -> int:
 
 
 def _is_low_rank_teacher_texture_mode(mode: str) -> bool:
-    return str(mode) in {"low_rank_view_texture_k4", "low_rank_view_texture_rich_k4"}
+    return str(mode) in {
+        "low_rank_view_texture_k4",
+        "low_rank_view_texture",
+        "low_rank_view_texture_rich_k4",
+        "low_rank_view_texture_rich",
+    }
 
 
-def _low_rank_teacher_texture_requested_rank(mode: str) -> int:
-    return 4 if _is_low_rank_teacher_texture_mode(mode) else 0
+def _low_rank_teacher_texture_requested_rank(mode: str, requested_rank: int | None = None) -> int:
+    if not _is_low_rank_teacher_texture_mode(mode):
+        return 0
+    if requested_rank is None:
+        return 4
+    return max(1, int(requested_rank))
 
 
 def _low_rank_teacher_texture_min_bin_samples(mode: str, feature_dim: int) -> int:
-    if str(mode) == "low_rank_view_texture_rich_k4":
+    if str(mode) in {"low_rank_view_texture_rich_k4", "low_rank_view_texture_rich"}:
         # The rich feature vector is ridge-regularized and deliberately allowed
         # to use sparse bins; requiring one sample per feature zeroes too much of
         # the target-visible surface before policy-val can judge the model.
@@ -2262,7 +2275,9 @@ def _teacher_distilled_basis_features_for_mask(
         "face_uv_normal_camera_ridge",
         "face_uv_patch_mixture_ridge",
         "low_rank_view_texture_k4",
+        "low_rank_view_texture",
         "low_rank_view_texture_rich_k4",
+        "low_rank_view_texture_rich",
     }:
         raise ValueError(f"unsupported teacher-distilled basis mode: {mode}")
     if "normal" not in z or "barycentric" not in z:
@@ -2285,7 +2300,7 @@ def _teacher_distilled_basis_features_for_mask(
     normal_dot_camera = np.sum(normal_samples * camera_features, axis=1, keepdims=True).astype(np.float32)
     u = np.clip(bary[1][mask], 0.0, 1.0).astype(np.float32)[:, None]
     v = np.clip(bary[2][mask], 0.0, 1.0).astype(np.float32)[:, None]
-    if mode == "low_rank_view_texture_k4":
+    if mode in {"low_rank_view_texture_k4", "low_rank_view_texture"}:
         return np.concatenate(
             [
                 np.ones((sample_count, 1), dtype=np.float32),
@@ -2294,7 +2309,7 @@ def _teacher_distilled_basis_features_for_mask(
             ],
             axis=1,
         )
-    if mode == "low_rank_view_texture_rich_k4":
+    if mode in {"low_rank_view_texture_rich_k4", "low_rank_view_texture_rich"}:
         if "rgb_render" in z:
             render = np.asarray(z["rgb_render"], dtype=np.float32)
             if render.shape[0] >= 3:
@@ -2382,7 +2397,9 @@ def _teacher_distilled_basis_features_from_uv_camera_normal(
         "face_uv_normal_camera_ridge",
         "face_uv_patch_mixture_ridge",
         "low_rank_view_texture_k4",
+        "low_rank_view_texture",
         "low_rank_view_texture_rich_k4",
+        "low_rank_view_texture_rich",
     }:
         raise ValueError(f"unsupported teacher-distilled basis mode: {mode}")
     u_arr = np.asarray(u_values, dtype=np.float32).reshape(-1, 1)
@@ -2405,7 +2422,7 @@ def _teacher_distilled_basis_features_from_uv_camera_normal(
     normal_dot_camera = np.sum(normal_arr * camera_arr, axis=1, keepdims=True).astype(np.float32)
     u = np.clip(u_arr, 0.0, 1.0).astype(np.float32)
     v = np.clip(v_arr, 0.0, 1.0).astype(np.float32)
-    if mode == "low_rank_view_texture_k4":
+    if mode in {"low_rank_view_texture_k4", "low_rank_view_texture"}:
         return np.concatenate(
             [
                 np.ones((sample_count, 1), dtype=np.float32),
@@ -2414,7 +2431,7 @@ def _teacher_distilled_basis_features_from_uv_camera_normal(
             ],
             axis=1,
         )
-    if mode == "low_rank_view_texture_rich_k4":
+    if mode in {"low_rank_view_texture_rich_k4", "low_rank_view_texture_rich"}:
         parent_rgb = np.zeros((sample_count, 3), dtype=np.float32)
         inverse_depth = np.zeros((sample_count, 1), dtype=np.float32)
         alpha = np.ones((sample_count, 1), dtype=np.float32)
@@ -3656,6 +3673,7 @@ def fit_atlas(
     teacher_distilled_basis_ood_min_std: float,
     teacher_distilled_basis_apply_mode: str,
     teacher_distilled_basis_blend: float,
+    teacher_distilled_low_rank_texture_rank: int,
     enable_adaptive_low_support_teacher_basis: bool,
     adaptive_teacher_basis_min_face_samples_floor: int,
     adaptive_teacher_basis_support_quantile: float,
@@ -4241,7 +4259,15 @@ def fit_atlas(
                             matrix.astype(np.float64),
                             full_matrices=False,
                         )
-                        rank = min(_low_rank_teacher_texture_requested_rank(teacher_basis_mode), int(singular_values.size))
+                        requested_rank = _low_rank_teacher_texture_requested_rank(
+                            teacher_basis_mode,
+                            int(teacher_distilled_low_rank_texture_rank),
+                        )
+                        rank = min(
+                            int(requested_rank),
+                            int(teacher_basis_feature_dim),
+                            int(singular_values.size),
+                        )
                         if rank <= 0:
                             raise np.linalg.LinAlgError("low_rank_view_texture_k4_empty_svd")
                         sqrt_s = np.sqrt(np.maximum(singular_values[:rank], 0.0))
@@ -4426,7 +4452,23 @@ def fit_atlas(
             "supported_face_fraction": float(teacher_basis_supported_faces / max(1, teacher_basis_candidate_faces)),
             "low_rank_texture": {
                 "enabled": bool(_is_low_rank_teacher_texture_mode(teacher_basis_mode)),
-                "requested_rank": int(_low_rank_teacher_texture_requested_rank(teacher_basis_mode)),
+                "requested_rank": int(
+                    _low_rank_teacher_texture_requested_rank(
+                        teacher_basis_mode,
+                        int(teacher_distilled_low_rank_texture_rank),
+                    )
+                ),
+                "effective_rank_cap": int(
+                    min(
+                        _low_rank_teacher_texture_requested_rank(
+                            teacher_basis_mode,
+                            int(teacher_distilled_low_rank_texture_rank),
+                        ),
+                        int(teacher_basis_feature_dim),
+                    )
+                    if _is_low_rank_teacher_texture_mode(teacher_basis_mode)
+                    else 0
+                ),
                 "min_bin_samples": int(
                     _low_rank_teacher_texture_min_bin_samples(
                         teacher_basis_mode,
@@ -11924,6 +11966,8 @@ def write_report(path: Path, audit: dict[str, Any]) -> None:
         f"- selected support mode: `{audit.get('fit_summary', {}).get('selected_support_mode', '')}`",
         f"- selected support added faces: `{audit.get('fit_summary', {}).get('selected_support_added_faces', 0)}`",
         f"- selected texture size: `{audit.get('fit_summary', {}).get('selected_texture_size', audit.get('fit_summary', {}).get('texture_size', 0))}`",
+        f"- selected teacher low-rank texture rank: `{audit.get('fit_summary', {}).get('selected_teacher_distilled_low_rank_texture_rank', 0)}`",
+        f"- teacher low-rank texture rank candidates: `{audit.get('fit_summary', {}).get('teacher_distilled_low_rank_texture_rank_candidates', [])}`",
         f"- selected fill mode: `{audit.get('fit_summary', {}).get('selected_atlas_empty_bin_fill_mode', audit.get('fit_summary', {}).get('atlas_empty_bin_fill_mode', ''))}`",
         f"- selected max abs delta RGB: `{float(audit.get('fit_summary', {}).get('selected_max_abs_delta_rgb', audit.get('fit_summary', {}).get('requested_max_abs_delta_rgb', 0.0)) or 0.0):.6f}`",
         f"- max abs delta RGB candidates: `{audit.get('fit_summary', {}).get('max_abs_delta_rgb_candidates', [audit.get('fit_summary', {}).get('requested_max_abs_delta_rgb', 0.0)])}`",
@@ -13088,7 +13132,9 @@ def main() -> int:
             "face_uv_normal_camera_ridge",
             "face_uv_patch_mixture_ridge",
             "low_rank_view_texture_k4",
+            "low_rank_view_texture",
             "low_rank_view_texture_rich_k4",
+            "low_rank_view_texture_rich",
         ),
         default="none",
         help=(
@@ -13098,7 +13144,8 @@ def main() -> int:
             "face_uv_patch_mixture_ridge adds a 3x3 local UV RBF mixture and normal-view interactions. "
             "low_rank_view_texture_k4 fits four view/UV-aware mixture weights per face as a compact "
             "v169 teacher residual texture. low_rank_view_texture_rich_k4 keeps the same rank-4 "
-            "surface factorization but adds UV, normal, parent RGB, depth, and alpha context."
+            "surface factorization but adds UV, normal, parent RGB, depth, and alpha context. "
+            "The low_rank_view_texture and low_rank_view_texture_rich aliases expose configurable rank."
         ),
     )
     parser.add_argument(
@@ -13120,6 +13167,20 @@ def main() -> int:
         default="blend",
     )
     parser.add_argument("--teacher_distilled_basis_blend", type=float, default=0.5)
+    parser.add_argument(
+        "--teacher_distilled_low_rank_texture_rank",
+        type=int,
+        default=4,
+        help="Requested rank for low_rank_view_texture* teacher residual texture modes.",
+    )
+    parser.add_argument(
+        "--teacher_distilled_low_rank_texture_rank_candidates",
+        default="",
+        help=(
+            "Optional comma-separated rank ladder for low-rank teacher residual textures. "
+            "Selection uses train policy-val only; empty keeps --teacher_distilled_low_rank_texture_rank."
+        ),
+    )
     parser.add_argument(
         "--enable_adaptive_low_support_teacher_basis",
         action="store_true",
@@ -14330,6 +14391,19 @@ def main() -> int:
         parser.error("--teacher_distilled_basis_ood_min_std must be > 0")
     if not 0.0 <= float(args.teacher_distilled_basis_blend) <= 1.0:
         parser.error("--teacher_distilled_basis_blend must be in [0, 1]")
+    if int(args.teacher_distilled_low_rank_texture_rank) <= 0:
+        parser.error("--teacher_distilled_low_rank_texture_rank must be > 0")
+    try:
+        teacher_low_rank_texture_rank_candidates = (
+            parse_int_candidates(
+                str(args.teacher_distilled_low_rank_texture_rank_candidates),
+                int(args.teacher_distilled_low_rank_texture_rank),
+            )
+            if _is_low_rank_teacher_texture_mode(str(args.teacher_distilled_basis_mode))
+            else [0]
+        )
+    except ValueError as exc:
+        parser.error(f"invalid --teacher_distilled_low_rank_texture_rank_candidates: {exc}")
     if int(args.face_gain_guard_min_face_samples) <= 0:
         parser.error("--face_gain_guard_min_face_samples must be > 0")
     if not 0.0 <= float(args.face_gain_guard_min_positive_view_fraction) <= 1.0:
@@ -15057,6 +15131,7 @@ def main() -> int:
     def build_policy_candidate(
         fill_mode: str,
         texture_size: int,
+        teacher_low_rank_texture_rank: int,
         surface_multiscale_prior_blend: float,
         max_abs_delta_rgb_candidate: float,
         support_mode: str,
@@ -15071,6 +15146,7 @@ def main() -> int:
             f"added={int(support_summary.get('added_faces', 0))} "
             f"faces={len(support_faces)} "
             f"texture={int(texture_size)} "
+            f"rank={int(teacher_low_rank_texture_rank)} "
             f"fill={fill_mode} "
             f"prior_blend={float(surface_multiscale_prior_blend):.6g} "
             f"cap={float(max_abs_delta_rgb_candidate):.6g}"
@@ -15121,6 +15197,7 @@ def main() -> int:
             teacher_distilled_basis_ood_min_std=float(args.teacher_distilled_basis_ood_min_std),
             teacher_distilled_basis_apply_mode=str(args.teacher_distilled_basis_apply_mode),
             teacher_distilled_basis_blend=float(args.teacher_distilled_basis_blend),
+            teacher_distilled_low_rank_texture_rank=int(teacher_low_rank_texture_rank),
             enable_adaptive_low_support_teacher_basis=bool(args.enable_adaptive_low_support_teacher_basis),
             adaptive_teacher_basis_min_face_samples_floor=int(args.adaptive_teacher_basis_min_face_samples_floor),
             adaptive_teacher_basis_support_quantile=float(args.adaptive_teacher_basis_support_quantile),
@@ -15130,6 +15207,10 @@ def main() -> int:
         cand_fit_summary["candidate_index"] = int(candidate_index)
         cand_fit_summary["candidate_count"] = int(candidate_count)
         cand_fit_summary["candidate_label"] = str(candidate_label)
+        cand_fit_summary["teacher_distilled_low_rank_texture_rank_candidate"] = int(teacher_low_rank_texture_rank)
+        cand_fit_summary["teacher_distilled_low_rank_texture_rank_candidates"] = [
+            int(x) for x in teacher_low_rank_texture_rank_candidates
+        ]
         cand_fit_summary["support_base_faces"] = int(support_summary.get("base_faces", len(base_candidate_faces)))
         cand_fit_summary["support_added_faces"] = int(support_summary.get("added_faces", 0))
         cand_fit_summary["support_candidate_faces"] = int(len(support_faces))
@@ -16579,6 +16660,7 @@ def main() -> int:
             "candidate_label": str(candidate_label),
             "fill_mode": str(fill_mode),
             "texture_size": int(texture_size),
+            "teacher_distilled_low_rank_texture_rank": int(teacher_low_rank_texture_rank),
             "surface_multiscale_prior_blend": float(surface_multiscale_prior_blend),
             "max_abs_delta_rgb": float(max_abs_delta_rgb_candidate),
             "support_mode": str(support_mode),
@@ -16608,25 +16690,27 @@ def main() -> int:
         support_faces = set(int(face) for face in support_candidate["faces"])
         support_faces_digest = face_set_sha1(support_faces)
         for texture_size in texture_size_candidates:
-            for mode in fill_mode_candidates:
-                for surface_multiscale_prior_blend in surface_multiscale_prior_blend_candidates:
-                    for max_abs_delta_rgb_candidate in max_abs_delta_rgb_candidates:
-                        support_summary = dict(support_candidate["summary"])
-                        support_summary.setdefault("support_faces_sha1", support_faces_digest)
-                        candidate_specs.append(
-                            {
-                                "fill_mode": str(mode),
-                                "texture_size": int(texture_size),
-                                "surface_multiscale_prior_blend": float(surface_multiscale_prior_blend),
-                                "max_abs_delta_rgb": float(max_abs_delta_rgb_candidate),
-                                "support_mode": str(support_candidate["support_mode"]),
-                                "support_faces": set(support_faces),
-                                "support_faces_sha1": str(support_faces_digest),
-                                "support_summary": support_summary,
-                                "support_added_faces": int(support_summary.get("added_faces", 0)),
-                                "support_candidate_faces": int(len(support_faces)),
-                            }
-                        )
+            for teacher_low_rank_texture_rank in teacher_low_rank_texture_rank_candidates:
+                for mode in fill_mode_candidates:
+                    for surface_multiscale_prior_blend in surface_multiscale_prior_blend_candidates:
+                        for max_abs_delta_rgb_candidate in max_abs_delta_rgb_candidates:
+                            support_summary = dict(support_candidate["summary"])
+                            support_summary.setdefault("support_faces_sha1", support_faces_digest)
+                            candidate_specs.append(
+                                {
+                                    "fill_mode": str(mode),
+                                    "texture_size": int(texture_size),
+                                    "teacher_distilled_low_rank_texture_rank": int(teacher_low_rank_texture_rank),
+                                    "surface_multiscale_prior_blend": float(surface_multiscale_prior_blend),
+                                    "max_abs_delta_rgb": float(max_abs_delta_rgb_candidate),
+                                    "support_mode": str(support_candidate["support_mode"]),
+                                    "support_faces": set(support_faces),
+                                    "support_faces_sha1": str(support_faces_digest),
+                                    "support_summary": support_summary,
+                                    "support_added_faces": int(support_summary.get("added_faces", 0)),
+                                    "support_candidate_faces": int(len(support_faces)),
+                                }
+                            )
     policy_candidate_control["planned_candidate_count_before_pruning"] = int(len(candidate_specs))
     if bool(args.enable_policy_candidate_dominance_pruning):
         seen_specs: dict[tuple[str, int, float, float, str], dict[str, Any]] = {}
@@ -16676,6 +16760,7 @@ def main() -> int:
         candidate = build_policy_candidate(
             str(spec["fill_mode"]),
             int(spec["texture_size"]),
+            int(spec.get("teacher_distilled_low_rank_texture_rank", 0)),
             float(spec["surface_multiscale_prior_blend"]),
             float(spec["max_abs_delta_rgb"]),
             str(spec["support_mode"]),
@@ -16930,6 +17015,7 @@ def main() -> int:
     policy_auto_enabled = (
         requested_fill_mode == "auto_policy"
         or len(texture_size_candidates) > 1
+        or len(teacher_low_rank_texture_rank_candidates) > 1
         or len(support_candidate_sets) > 1
         or len(surface_multiscale_prior_blend_candidates) > 1
         or len(max_abs_delta_rgb_candidates) > 1
@@ -17367,6 +17453,9 @@ def main() -> int:
             "mode": "auto_policy",
             "selected_fill_mode": str(selected_candidate.get("fill_mode", "")),
             "selected_texture_size": int(selected_candidate.get("texture_size", 0)),
+            "selected_teacher_distilled_low_rank_texture_rank": int(
+                selected_candidate.get("teacher_distilled_low_rank_texture_rank", 0)
+            ),
             "selected_surface_multiscale_prior_blend": float(
                 selected_candidate.get("surface_multiscale_prior_blend", 0.0)
             ),
@@ -17383,6 +17472,9 @@ def main() -> int:
             "selectable_candidate_count": int(len(selectable)),
             "all_candidate_count": int(len(candidate_runs)),
             "texture_size_candidates": [int(x) for x in texture_size_candidates],
+            "teacher_distilled_low_rank_texture_rank_candidates": [
+                int(x) for x in teacher_low_rank_texture_rank_candidates
+            ],
             "surface_multiscale_prior_blend_candidates": [
                 float(x) for x in surface_multiscale_prior_blend_candidates
             ],
@@ -17394,6 +17486,9 @@ def main() -> int:
                     "fill_mode": str(candidate.get("fill_mode", "")),
                     "candidate_label": str(candidate.get("candidate_label", "")),
                     "texture_size": int(candidate.get("texture_size", 0)),
+                    "teacher_distilled_low_rank_texture_rank": int(
+                        candidate.get("teacher_distilled_low_rank_texture_rank", 0)
+                    ),
                     "surface_multiscale_prior_blend": float(
                         candidate.get("surface_multiscale_prior_blend", 0.0)
                     ),
@@ -17465,6 +17560,9 @@ def main() -> int:
                     "fill_mode": str(candidate.get("fill_mode", "")),
                     "candidate_label": str(candidate.get("candidate_label", "")),
                     "texture_size": int(candidate.get("texture_size", 0)),
+                    "teacher_distilled_low_rank_texture_rank": int(
+                        candidate.get("teacher_distilled_low_rank_texture_rank", 0)
+                    ),
                     "surface_multiscale_prior_blend": float(
                         candidate.get("surface_multiscale_prior_blend", 0.0)
                     ),
@@ -17496,6 +17594,9 @@ def main() -> int:
             "mode": "fixed",
             "selected_fill_mode": str(selected_candidate.get("fill_mode", "")),
             "selected_texture_size": int(selected_candidate.get("texture_size", 0)),
+            "selected_teacher_distilled_low_rank_texture_rank": int(
+                selected_candidate.get("teacher_distilled_low_rank_texture_rank", 0)
+            ),
             "selected_surface_multiscale_prior_blend": float(
                 selected_candidate.get("surface_multiscale_prior_blend", 0.0)
             ),
@@ -17504,6 +17605,9 @@ def main() -> int:
             ),
             "selected_support_mode": str(selected_candidate.get("support_mode", "")),
             "accepted_candidate_count": int(bool(selected_candidate.get("accepted", False))),
+            "teacher_distilled_low_rank_texture_rank_candidates": [
+                int(x) for x in teacher_low_rank_texture_rank_candidates
+            ],
             "surface_multiscale_prior_blend_candidates": [
                 float(x) for x in surface_multiscale_prior_blend_candidates
             ],
@@ -17589,6 +17693,20 @@ def main() -> int:
     fit_summary["requested_texture_size"] = int(args.texture_size)
     fit_summary["texture_size_candidates"] = [int(x) for x in texture_size_candidates]
     fit_summary["selected_texture_size"] = int(selected_candidate.get("texture_size", int(args.texture_size)))
+    fit_summary["requested_teacher_distilled_low_rank_texture_rank"] = int(
+        args.teacher_distilled_low_rank_texture_rank
+    )
+    fit_summary["teacher_distilled_low_rank_texture_rank_candidates"] = [
+        int(x) for x in teacher_low_rank_texture_rank_candidates
+    ]
+    fit_summary["selected_teacher_distilled_low_rank_texture_rank"] = int(
+        selected_candidate.get(
+            "teacher_distilled_low_rank_texture_rank",
+            int(args.teacher_distilled_low_rank_texture_rank)
+            if _is_low_rank_teacher_texture_mode(str(args.teacher_distilled_basis_mode))
+            else 0,
+        )
+    )
     fit_summary["requested_surface_multiscale_prior_blend"] = float(args.surface_multiscale_prior_blend)
     fit_summary["surface_multiscale_prior_blend_candidates"] = [
         float(x) for x in surface_multiscale_prior_blend_candidates

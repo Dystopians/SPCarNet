@@ -508,6 +508,12 @@ def _texture_cmd(
         str(args.teacher_distilled_basis_blend),
         "--teacher_distilled_basis_min_face_samples",
         str(args.teacher_distilled_basis_min_face_samples),
+        "--teacher_distilled_basis_ridge",
+        str(args.teacher_distilled_basis_ridge),
+        "--teacher_distilled_low_rank_texture_rank",
+        str(args.teacher_distilled_low_rank_texture_rank),
+        "--teacher_distilled_low_rank_texture_rank_candidates",
+        str(args.teacher_distilled_low_rank_texture_rank_candidates),
         "--select_alpha_by_risk_gate",
         "--enable_policy_val_ssim_alpha_refinement",
         "--policy_val_ssim_alpha_refinement_steps",
@@ -1332,12 +1338,17 @@ def parse_args() -> argparse.Namespace:
             "face_uv_normal_camera_ridge",
             "face_uv_patch_mixture_ridge",
             "low_rank_view_texture_k4",
+            "low_rank_view_texture",
             "low_rank_view_texture_rich_k4",
+            "low_rank_view_texture_rich",
         ),
         default="face_uv_patch_mixture_ridge",
     )
     parser.add_argument("--teacher_distilled_basis_blend", type=float, default=0.5)
     parser.add_argument("--teacher_distilled_basis_min_face_samples", type=int, default=1024)
+    parser.add_argument("--teacher_distilled_basis_ridge", type=float, default=1.0e-2)
+    parser.add_argument("--teacher_distilled_low_rank_texture_rank", type=int, default=4)
+    parser.add_argument("--teacher_distilled_low_rank_texture_rank_candidates", default="")
     parser.add_argument("--enable_adaptive_low_support_teacher_basis", action="store_true")
     parser.add_argument("--adaptive_teacher_basis_min_face_samples_floor", type=int, default=128)
     parser.add_argument("--adaptive_teacher_basis_support_quantile", type=float, default=0.25)
@@ -1936,6 +1947,14 @@ def parse_args() -> argparse.Namespace:
         parser.error("--view_alpha_cap_min_confidence must be in [0, 1]")
     if args.view_alpha_cap_fallback_alpha is not None and float(args.view_alpha_cap_fallback_alpha) < 0.0:
         parser.error("--view_alpha_cap_fallback_alpha must be >= 0")
+    if float(args.teacher_distilled_basis_ridge) < 0.0:
+        parser.error("--teacher_distilled_basis_ridge must be >= 0")
+    if int(args.teacher_distilled_low_rank_texture_rank) <= 0:
+        parser.error("--teacher_distilled_low_rank_texture_rank must be > 0")
+    for item in str(args.teacher_distilled_low_rank_texture_rank_candidates or "").split(","):
+        item = item.strip()
+        if item and int(item) <= 0:
+            parser.error("--teacher_distilled_low_rank_texture_rank_candidates values must be > 0")
     if int(args.adaptive_texture_size_ladder_max_size) <= 0:
         parser.error("--adaptive_texture_size_ladder_max_size must be > 0")
     if float(args.adaptive_texture_size_ladder_min_fit_samples_per_face) < 0.0:

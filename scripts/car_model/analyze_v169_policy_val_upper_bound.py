@@ -78,7 +78,9 @@ def parse_args() -> argparse.Namespace:
             "face_uv_normal_camera_ridge",
             "face_uv_patch_mixture_ridge",
             "low_rank_view_texture_k4",
+            "low_rank_view_texture",
             "low_rank_view_texture_rich_k4",
+            "low_rank_view_texture_rich",
         ),
         default="none",
     )
@@ -86,6 +88,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--teacher_distilled_basis_ridge", type=float, default=1.0e-2)
     parser.add_argument("--teacher_distilled_basis_apply_mode", choices=("replace_supported", "blend", "fill_empty_only"), default="blend")
     parser.add_argument("--teacher_distilled_basis_blend", type=float, default=0.5)
+    parser.add_argument("--teacher_distilled_low_rank_texture_rank", type=int, default=4)
+    parser.add_argument(
+        "--teacher_distilled_low_rank_texture_ranks",
+        default="",
+        help="Comma-separated rank ladder for low-rank teacher residual texture diagnostics.",
+    )
     parser.add_argument("--enable_adaptive_low_support_teacher_basis", action="store_true")
     parser.add_argument("--adaptive_teacher_basis_min_face_samples_floor", type=int, default=128)
     parser.add_argument("--adaptive_teacher_basis_support_quantile", type=float, default=0.25)
@@ -237,6 +245,7 @@ def atlas_fit_kwargs(args: argparse.Namespace, texture_size: int) -> dict[str, A
         "teacher_distilled_basis_ood_min_std": 5.0e-2,
         "teacher_distilled_basis_apply_mode": str(args.teacher_distilled_basis_apply_mode),
         "teacher_distilled_basis_blend": float(args.teacher_distilled_basis_blend),
+        "teacher_distilled_low_rank_texture_rank": int(args._current_teacher_low_rank_texture_rank),
         "enable_adaptive_low_support_teacher_basis": bool(args.enable_adaptive_low_support_teacher_basis),
         "adaptive_teacher_basis_min_face_samples_floor": int(args.adaptive_teacher_basis_min_face_samples_floor),
         "adaptive_teacher_basis_support_quantile": float(args.adaptive_teacher_basis_support_quantile),
@@ -345,62 +354,81 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
     texture_sizes = parse_csv_ints(args.texture_sizes)
     if not texture_sizes:
         raise ValueError("--texture_sizes produced no positive sizes")
+    if int(args.teacher_distilled_low_rank_texture_rank) <= 0:
+        raise ValueError("--teacher_distilled_low_rank_texture_rank must be > 0")
+    rank_candidates = (
+        parse_csv_ints(str(args.teacher_distilled_low_rank_texture_ranks))
+        if adapter._is_low_rank_teacher_texture_mode(str(args.teacher_distilled_basis_mode))
+        and str(args.teacher_distilled_low_rank_texture_ranks).strip()
+        else [int(args.teacher_distilled_low_rank_texture_rank)]
+    )
+    if adapter._is_low_rank_teacher_texture_mode(str(args.teacher_distilled_basis_mode)):
+        rank_candidates = sorted(set(int(x) for x in rank_candidates))
+        for rank in rank_candidates:
+            if int(rank) <= 0:
+                raise ValueError("--teacher_distilled_low_rank_texture_ranks values must be > 0")
+    else:
+        rank_candidates = [0]
 
     candidate_reports = []
     best_overall = None
     for texture_size in texture_sizes:
-        atlas, fit_summary, fit_views, val_views = adapter.fit_atlas(
-            view_paths,
-            set(candidate_faces),
-            **atlas_fit_kwargs(args, texture_size),
-        )
-        policy = adapter.evaluate_policy_val(
-            list(val_views),
-            atlas,
-            alpha_grid=alpha_grid,
-            local_alpha_profile=None,
-            face_gain_guard_profile=None,
-            bin_uncertainty_guard_profile=None,
-            parent_edge_apply_profile=None,
-            view_confidence_profile=None,
-            **evaluate_kwargs(args),
-        )
-        psnr = (
-            image_psnr_rows(list(val_views), atlas, alpha_grid, args)
-            if bool(args.enable_full_image_psnr_rescan)
-            else {
-                "summary_by_alpha": {},
-                "per_view_by_alpha": {},
-                "source": "disabled_policy_val_residual_sample_proxy_used_in_rows",
+        for rank in rank_candidates:
+            args._current_teacher_low_rank_texture_rank = int(rank)
+            atlas, fit_summary, fit_views, val_views = adapter.fit_atlas(
+                view_paths,
+                set(candidate_faces),
+                **atlas_fit_kwargs(args, texture_size),
+            )
+            policy = adapter.evaluate_policy_val(
+                list(val_views),
+                atlas,
+                alpha_grid=alpha_grid,
+                local_alpha_profile=None,
+                face_gain_guard_profile=None,
+                bin_uncertainty_guard_profile=None,
+                parent_edge_apply_profile=None,
+                view_confidence_profile=None,
+                **evaluate_kwargs(args),
+            )
+            psnr = (
+                image_psnr_rows(list(val_views), atlas, alpha_grid, args)
+                if bool(args.enable_full_image_psnr_rescan)
+                else {
+                    "summary_by_alpha": {},
+                    "per_view_by_alpha": {},
+                    "source": "disabled_policy_val_residual_sample_proxy_used_in_rows",
+                }
+            )
+            rows = [row_with_psnr(row, psnr.get("summary_by_alpha", {})) for row in list(policy.get("rows", []))]
+            selections = select_rows(rows)
+            report = {
+                "texture_size": int(texture_size),
+                "teacher_distilled_low_rank_texture_rank": int(rank),
+                "fit_summary": fit_summary,
+                "fit_view_count": int(len(fit_views)),
+                "policy_val_view_count": int(len(val_views)),
+                "policy_val_rows": rows,
+                "policy_val_per_view_by_alpha": policy.get("per_view_by_alpha", {}),
+                "policy_val_psnr": psnr,
+                "selection": selections,
             }
-        )
-        rows = [row_with_psnr(row, psnr.get("summary_by_alpha", {})) for row in list(policy.get("rows", []))]
-        selections = select_rows(rows)
-        report = {
-            "texture_size": int(texture_size),
-            "fit_summary": fit_summary,
-            "fit_view_count": int(len(fit_views)),
-            "policy_val_view_count": int(len(val_views)),
-            "policy_val_rows": rows,
-            "policy_val_per_view_by_alpha": policy.get("per_view_by_alpha", {}),
-            "policy_val_psnr": psnr,
-            "selection": selections,
-        }
-        candidate_reports.append(report)
-        selected = selections.get("best_all_axis")
-        if selected is not None:
-            selected_with_size = dict(selected)
-            selected_with_size["texture_size"] = int(texture_size)
-            if best_overall is None or (
-                float(selected_with_size.get("ssim_gain", 0.0)),
-                float(selected_with_size.get("lpips_gain", 0.0)),
-                float(selected_with_size.get("relative_gain", 0.0)),
-            ) > (
-                float(best_overall.get("ssim_gain", 0.0)),
-                float(best_overall.get("lpips_gain", 0.0)),
-                float(best_overall.get("relative_gain", 0.0)),
-            ):
-                best_overall = selected_with_size
+            candidate_reports.append(report)
+            selected = selections.get("best_all_axis")
+            if selected is not None:
+                selected_with_size = dict(selected)
+                selected_with_size["texture_size"] = int(texture_size)
+                selected_with_size["teacher_distilled_low_rank_texture_rank"] = int(rank)
+                if best_overall is None or (
+                    float(selected_with_size.get("ssim_gain", 0.0)),
+                    float(selected_with_size.get("lpips_gain", 0.0)),
+                    float(selected_with_size.get("relative_gain", 0.0)),
+                ) > (
+                    float(best_overall.get("ssim_gain", 0.0)),
+                    float(best_overall.get("lpips_gain", 0.0)),
+                    float(best_overall.get("relative_gain", 0.0)),
+                ):
+                    best_overall = selected_with_size
 
     verdict = {
         "policy_val_upper_bound_pass": bool(best_overall is not None),
@@ -426,6 +454,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                 "residual_rgb_key": str(args.residual_rgb_key),
                 "residual_l1_key": str(args.residual_l1_key),
                 "texture_sizes": texture_sizes,
+                "teacher_distilled_low_rank_texture_rank_candidates": rank_candidates,
                 "alpha_grid": alpha_grid,
                 "policy_val_stride": int(args.policy_val_stride),
                 "max_samples_per_view": int(args.max_samples_per_view),
@@ -481,6 +510,7 @@ def render_markdown(result: dict[str, Any]) -> str:
         lines.extend(
             [
                 f"- texture size: `{best.get('texture_size')}`",
+                f"- teacher low-rank texture rank: `{best.get('teacher_distilled_low_rank_texture_rank')}`",
                 f"- alpha: `{fmt(best.get('alpha'))}`",
                 f"- relative gain: `{fmt(best.get('relative_gain'), signed=True)}`",
                 f"- PSNR gain: `{fmt(best.get('psnr_gain'), signed=True)}`",
@@ -490,7 +520,7 @@ def render_markdown(result: dict[str, Any]) -> str:
         )
     else:
         lines.append("- no nonzero alpha improves relative residual error, PSNR, SSIM, and LPIPS simultaneously.")
-    lines.extend(["", "## Candidate Rows", "", "| texture | alpha | rel gain | PSNR gain | SSIM gain | LPIPS gain | all-axis |", "| ---: | ---: | ---: | ---: | ---: | ---: | --- |"])
+    lines.extend(["", "## Candidate Rows", "", "| texture | rank | alpha | rel gain | PSNR gain | SSIM gain | LPIPS gain | all-axis |", "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |"])
     for candidate in result.get("candidates", []):
         all_axis_alpha = None
         selected = candidate.get("selection", {}).get("best_all_axis")
@@ -504,6 +534,7 @@ def render_markdown(result: dict[str, Any]) -> str:
                 + " | ".join(
                     [
                         fmt(candidate.get("texture_size")),
+                        fmt(candidate.get("teacher_distilled_low_rank_texture_rank")),
                         fmt(alpha),
                         fmt(row.get("relative_gain"), signed=True),
                         fmt(row.get("psnr_gain"), signed=True),
