@@ -2,6 +2,24 @@
 
 Date: 2026-06-28
 
+## 2026-06-29 v169 Teacher-Signal / Carrier Upper-Bound Update
+
+新增诊断日志：`docs/car_model/6-29-v169-TeacherSignal-CarrierUpperBound-Diagnostics.md`。
+
+这轮按 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md` 补齐了两个关键缺口：
+
+- 新增 `scripts/car_model/analyze_v169_teacher_signal_audit.py`，正式审计 teacher-parent residual 是否非零、mask/clip 稀释、active coverage、policy-val PSNR/L1 gain，并显式记录 `target_or_test_gt_usage = none`。
+- 修复 `scripts/car_model/train_surface_conditioned_residual_unet.py` 中 `_sample_patch` no-crop fallback 少传 `face_ids` 的接口 bug。
+
+核心结果：
+
+| scene | teacher signal | carrier upper-bound verdict |
+|---|---|---|
+| flowers | policy-val masked teacher PSNR gain `+0.841581`，mask L1 retention `0.574638` | full-image PSNR rescan 只有噪声级 all-axis 正数：`+0.000168 PSNR / +0.000000402 SSIM / +0.00000244 LPIPS`，robust gate 失败 |
+| counter | policy-val masked teacher PSNR gain `+2.651850`，mask L1 retention `0.632333` | policy-val proxy robust 正：`+0.076027 PSNR / +0.00005296 SSIM / +0.00005631 LPIPS`，但这不能推翻 v192 target exact 仍未在 PSNR/SSIM 超 Phase-J |
+
+结论：Phase-J teacher residual 确实存在，问题不是 teacher 没信号；真正短板是表示载体和泛化证书。flowers 当前 carrier 只在极小 alpha 下给出近似噪声级正数，不能据此启动 full9 promotion；counter policy-val 有信号，但 held-out target/test 对 Phase-J 的 all-axis 超越仍未闭环。因此状态仍是 `NOT COMPLETE`，下一步必须做 surface-attached feature texture / view-dependent low-rank basis 级别的表示升级，而不是继续 alpha、footprint 或 scalar atlas 微调。
+
 ## 2026-06-29 v169 更新
 
 新增日志：`docs/car_model/6-29-v169-SurfaceUNet-Progress-And-Bottleneck-Log.md`。

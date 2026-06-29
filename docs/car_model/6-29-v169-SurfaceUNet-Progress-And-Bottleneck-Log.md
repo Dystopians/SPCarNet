@@ -196,6 +196,52 @@ Official flowers test:
 
 Conclusion: the current successful v191 result is not supported by teacher-only distillation. Train-fit GT supervision is carrying a large part of the gain. This does not imply target/test leakage, but it means the paper story must not claim pure Phase-J teacher distillation yet.
 
+## v169 Teacher-Signal And Carrier Upper-Bound Diagnostics
+
+Dedicated diagnostic log:
+
+`docs/car_model/6-29-v169-TeacherSignal-CarrierUpperBound-Diagnostics.md`
+
+New diagnostic script:
+
+`scripts/car_model/analyze_v169_teacher_signal_audit.py`
+
+Additional reliability fix:
+
+- `_sample_patch` in `scripts/car_model/train_surface_conditioned_residual_unet.py`
+  now preserves `face_ids` in the no-crop fallback branch.
+
+Storage preflight:
+
+- `/data` was effectively full, with only about `800K-860K` free.
+- `/dev/shm` had about `13G` free and was used for all diagnostic outputs.
+- `/tmp` had about `6.1T` free.
+
+Teacher signal audit:
+
+| scene | policy-val views | masked teacher PSNR gain | mask L1 retention | active valid fraction | active face fraction | target/test GT usage |
+|---|---:|---:|---:|---:|---:|---|
+| flowers | 12 | +0.841581 | 0.574638 | 0.329769 | 0.540518 | none |
+| counter | 12 | +2.651850 | 0.632333 | 0.295403 | 0.521092 | none |
+
+Carrier upper-bound audit:
+
+| scene | PSNR source | best/robust alpha | PSNR gain | SSIM gain | LPIPS gain | robust verdict |
+|---|---|---:|---:|---:|---:|---|
+| flowers | full-image rescan | 0.03125 | +0.000168 | +0.000000402 | +0.00000244 | fail |
+| counter | policy-val residual-sample proxy | 0.0625 | +0.076027 | +0.00005296 | +0.00005631 | pass |
+
+Interpretation:
+
+- The teacher residual is real on both flowers and counter.
+- Flowers exposes the central bottleneck: the current low-rank surface carrier can
+  only produce noise-scale all-axis gains and fails tail robustness, so it should
+  not be promoted to exact/full9 as a paper claim.
+- Counter policy-val projection is stronger, but v192 target exact still does
+  not beat Phase-J on PSNR/SSIM. This means the remaining gap is policy-val to
+  held-out transfer and structural alignment, not lack of teacher signal.
+- The next method must be a representation upgrade, not alpha/footprint tuning.
+
 ## Commands And Artifact Index
 
 Representative commands:

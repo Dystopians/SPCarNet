@@ -388,7 +388,7 @@ def _sample_patch(example: dict[str, Any], patch_size: int, rng: random.Random) 
     gt = example.get("gt")
     _, h, w = parent.shape
     if int(patch_size) <= 0 or h <= int(patch_size) or w <= int(patch_size):
-        return TrainBatch(features, parent, teacher, gt)
+        return TrainBatch(features, face_ids, parent, teacher, gt)
     ph = pw = int(patch_size)
     y = rng.randint(0, h - ph)
     x = rng.randint(0, w - pw)
