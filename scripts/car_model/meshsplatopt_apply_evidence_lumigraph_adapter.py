@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 
 from utils.evidence_lumigraph_adapter import (
     BenefitCalibrator,
+    FrameRecord,
     FrameLoader,
     adapt_frame,
     calibrate_alpha,
@@ -144,6 +145,11 @@ def _fit_optional_alpha(args: argparse.Namespace, train_frames, policy: dict, de
         view_tail_cvar_fraction=args.alpha_view_tail_cvar_fraction,
         view_tail_min_gain=args.alpha_view_tail_min_gain,
         view_tail_max_negative_fraction=args.alpha_view_tail_max_negative_fraction,
+        view_tail_objective=args.alpha_view_tail_objective,
+        view_tail_ssim_weight=args.alpha_view_tail_ssim_weight,
+        view_tail_lpips_weight=args.alpha_view_tail_lpips_weight,
+        view_tail_compute_lpips=args.alpha_view_tail_compute_lpips,
+        view_tail_metric_max_side=args.alpha_view_tail_metric_max_side,
         **_local_trust_kwargs(args),
         device=device,
     )
@@ -383,6 +389,17 @@ def _copy_gt(target_frames, out_gt: Path) -> None:
             shutil.copy2(frame.gt_path, dst)
 
 
+def _strip_target_gt_for_apply(frame: FrameRecord) -> FrameRecord:
+    return FrameRecord(
+        idx=int(frame.idx),
+        name=str(frame.name),
+        render_path=frame.render_path,
+        gt_path=Path("__target_gt_forbidden_during_apply__"),
+        depth_path=frame.depth_path,
+        camera=frame.camera,
+    )
+
+
 def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
     if not args.wandb:
         return
@@ -432,6 +449,13 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
             "local_trust_min_confidence": args.local_trust_min_confidence,
             "local_trust_mode": args.local_trust_mode,
             "local_trust_min_weight": args.local_trust_min_weight,
+            "min_confidence": args.min_confidence,
+            "evidence_max_side": args.evidence_max_side,
+            "alpha_view_tail_objective": args.alpha_view_tail_objective,
+            "alpha_view_tail_ssim_weight": args.alpha_view_tail_ssim_weight,
+            "alpha_view_tail_lpips_weight": args.alpha_view_tail_lpips_weight,
+            "alpha_view_tail_compute_lpips": args.alpha_view_tail_compute_lpips,
+            "alpha_view_tail_metric_max_side": args.alpha_view_tail_metric_max_side,
             "fd_weight": args.fd_weight,
             "fd_backbone": args.fd_backbone,
             "fd_pool": args.fd_pool,
@@ -468,6 +492,8 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
         ),
         "ela/mean_alpha": float(report.get("mean_alpha", 0.0)),
         "ela/mean_alpha_active_fraction": float(report.get("mean_alpha_active_fraction", 0.0)),
+        "ela/evidence_max_side": int(report.get("evidence_max_side", 0) or 0),
+        "ela/mean_evidence_scaled": float(report.get("mean_evidence_scaled", 0.0) or 0.0),
     }
     calibration = report.get("calibration") or {}
     calibration_rows = calibration.get("rows") or []
@@ -525,6 +551,12 @@ def _maybe_wandb(args: argparse.Namespace, report: dict) -> None:
                 "ela/alpha_view_tail_cvar_gain": _wandb_float(alpha_calibrator.get("view_tail_cvar_gain")),
                 "ela/alpha_view_tail_negative_fraction": _wandb_float(
                     alpha_calibrator.get("view_tail_negative_fraction")
+                ),
+                "ela/alpha_view_tail_balanced_objective": int(
+                    str(alpha_calibrator.get("view_tail_objective", "mse")) == "balanced"
+                ),
+                "ela/alpha_view_tail_lpips_enabled": int(
+                    bool(alpha_calibrator.get("view_tail_compute_lpips", False))
                 ),
             }
         )
@@ -593,13 +625,17 @@ def run(args: argparse.Namespace) -> dict:
     out_render = out_method / "renders"
     out_gt = out_method / "gt"
     out_render.mkdir(parents=True, exist_ok=True)
-    _copy_gt(target_frames, out_gt)
+    copied_gt_before_apply = False
+    if not bool(args.strict_no_target_gt_apply):
+        _copy_gt(target_frames, out_gt)
+        copied_gt_before_apply = True
 
     loader = FrameLoader(device=device)
     infos = []
     for target in tqdm(target_frames, desc=f"ELA {args.target_split}"):
+        apply_target = _strip_target_gt_for_apply(target) if bool(args.strict_no_target_gt_apply) else target
         adapted, info = adapt_frame(
-            target,
+            apply_target,
             adapt_support_frames,
             k=int(policy["k"]),
             alpha=alpha,
@@ -616,11 +652,16 @@ def run(args: argparse.Namespace) -> dict:
             edge_gate_min=float(policy.get("edge_gate_min", 0.0)),
             edge_gate_dilate=int(policy.get("edge_gate_dilate", 0)),
             **_local_trust_kwargs(args),
+            evidence_max_side=int(args.evidence_max_side),
             loader=loader,
             device=device,
         )
         save_image_tensor(adapted, out_render / target.render_path.name)
         infos.append({"frame": target.name, **info})
+    copied_gt_after_apply = False
+    if bool(args.strict_no_target_gt_apply):
+        _copy_gt(target_frames, out_gt)
+        copied_gt_after_apply = True
 
     report = {
         "method": "Evidence Lumigraph Adapter",
@@ -629,6 +670,15 @@ def run(args: argparse.Namespace) -> dict:
         "base_method": base_method,
         "method_name": method_name,
         "target_split": args.target_split,
+        "strict_no_target_gt_apply": bool(args.strict_no_target_gt_apply),
+        "target_gt_visible_to_apply": not bool(args.strict_no_target_gt_apply),
+        "target_gt_copied_before_apply": bool(copied_gt_before_apply),
+        "target_gt_copied_after_apply": bool(copied_gt_after_apply),
+        "target_gt_usage": (
+            "eval_only_after_apply"
+            if bool(args.strict_no_target_gt_apply)
+            else "copied_before_apply_but_adapt_frame_does_not_read_target_gt"
+        ),
         "target_frames": len(target_frames),
         "train_support_frames": len(train_frames),
         "adapt_support_scope": (
@@ -669,6 +719,11 @@ def run(args: argparse.Namespace) -> dict:
         "alpha_view_tail_cvar_fraction": float(args.alpha_view_tail_cvar_fraction),
         "alpha_view_tail_min_gain": float(args.alpha_view_tail_min_gain),
         "alpha_view_tail_max_negative_fraction": float(args.alpha_view_tail_max_negative_fraction),
+        "alpha_view_tail_objective": str(args.alpha_view_tail_objective),
+        "alpha_view_tail_ssim_weight": float(args.alpha_view_tail_ssim_weight),
+        "alpha_view_tail_lpips_weight": float(args.alpha_view_tail_lpips_weight),
+        "alpha_view_tail_compute_lpips": bool(args.alpha_view_tail_compute_lpips),
+        "alpha_view_tail_metric_max_side": int(args.alpha_view_tail_metric_max_side),
         "benefit_feature_mode": str(policy.get("benefit_feature_mode", args.benefit_feature_mode)),
         "requested_benefit_feature_mode": str(args.benefit_feature_mode),
         "policy_holdout_fraction": float(args.policy_holdout_fraction),
@@ -688,6 +743,11 @@ def run(args: argparse.Namespace) -> dict:
         "local_trust_min_confidence": float(args.local_trust_min_confidence),
         "local_trust_mode": str(args.local_trust_mode),
         "local_trust_min_weight": float(args.local_trust_min_weight),
+        "min_confidence": float(args.min_confidence),
+        "evidence_max_side": int(args.evidence_max_side),
+        "mean_evidence_scaled": float(
+            sum(1.0 if bool(x.get("evidence_scaled", False)) else 0.0 for x in infos) / max(len(infos), 1)
+        ),
         "mode": str(policy["mode"]),
         "k": int(policy["k"]),
         "residual_clip": float(policy["residual_clip"]),
@@ -744,6 +804,14 @@ def main() -> int:
     parser.add_argument("--base_method_name", default="")
     parser.add_argument("--target_split", choices=("train", "test"), default="test")
     parser.add_argument("--method_name", default="")
+    parser.add_argument(
+        "--strict_no_target_gt_apply",
+        action="store_true",
+        help=(
+            "Do not place target/test GT in the output method directory until after adapted renders "
+            "have been written. The apply-time FrameRecord is also stripped to a sentinel GT path."
+        ),
+    )
     parser.add_argument("--k", default=4, type=int)
     parser.add_argument("--mode", choices=("residual", "color"), default="residual")
     parser.add_argument("--auto_policy", action="store_true")
@@ -829,6 +897,11 @@ def main() -> int:
     parser.add_argument("--alpha_view_tail_cvar_fraction", default=0.25, type=float)
     parser.add_argument("--alpha_view_tail_min_gain", default=-math.inf, type=float)
     parser.add_argument("--alpha_view_tail_max_negative_fraction", default=1.0, type=float)
+    parser.add_argument("--alpha_view_tail_objective", choices=("mse", "balanced"), default="mse")
+    parser.add_argument("--alpha_view_tail_ssim_weight", default=20.0, type=float)
+    parser.add_argument("--alpha_view_tail_lpips_weight", default=20.0, type=float)
+    parser.add_argument("--alpha_view_tail_compute_lpips", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--alpha_view_tail_metric_max_side", default=512, type=int)
     parser.add_argument(
         "--alpha_feature_mode",
         choices=("confidence_magnitude", "confidence_magnitude_edge"),
@@ -863,6 +936,15 @@ def main() -> int:
     parser.add_argument("--depth_abs_tol", default=0.02, type=float)
     parser.add_argument("--depth_rel_tol", default=0.03, type=float)
     parser.add_argument("--direction_weight", default=0.35, type=float)
+    parser.add_argument(
+        "--evidence_max_side",
+        default=0,
+        type=int,
+        help=(
+            "Optional fast adapter path. When >0, compute support evidence warps at this "
+            "maximum image side and upsample the residual/confidence maps before the usual gates."
+        ),
+    )
     parser.add_argument("--device", default="cuda")
     parser.add_argument(
         "--fd_weight",
@@ -928,6 +1010,8 @@ def main() -> int:
         parser.error("--local_trust_min_confidence must be >= 0")
     if float(args.local_trust_min_weight) < 0.0:
         parser.error("--local_trust_min_weight must be >= 0")
+    if int(args.evidence_max_side) < 0:
+        parser.error("--evidence_max_side must be >= 0")
     run(args)
     return 0
 
