@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--allow_resize", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--max_views", type=int, default=0)
+    parser.add_argument(
+        "--copy_mode",
+        choices=("copy", "hardlink", "symlink", "auto_link"),
+        default="copy",
+        help=(
+            "How to prepare --out_dir from --base_evidence_dir before rewriting view NPZ files. "
+            "`copy` preserves the historical full copy behavior. `hardlink`/`symlink` avoid duplicating "
+            "unchanged files; rewritten NPZ/text outputs are atomically replaced so the base cache is not modified. "
+            "`auto_link` tries hardlinks first and falls back to symlinks across filesystems."
+        ),
+    )
     parser.add_argument("--parent_label", default="reparented_parent")
     parser.add_argument("--rgb_render_key", default="rgb_render")
     parser.add_argument("--rgb_gt_key", default="rgb_gt")
@@ -50,7 +62,28 @@ def _sha1_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def _copy_cache(base: Path, out: Path, *, force: bool) -> None:
+def _link_or_copy(src: Path, dst: Path, *, copy_mode: str) -> str:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if copy_mode == "copy":
+        shutil.copy2(src, dst)
+        return "copy"
+    if copy_mode == "symlink":
+        dst.symlink_to(src.resolve())
+        return "symlink"
+    if copy_mode == "hardlink":
+        os.link(src, dst)
+        return "hardlink"
+    if copy_mode == "auto_link":
+        try:
+            os.link(src, dst)
+            return "hardlink"
+        except OSError:
+            dst.symlink_to(src.resolve())
+            return "symlink"
+    raise ValueError(f"unknown copy_mode: {copy_mode}")
+
+
+def _copy_cache(base: Path, out: Path, *, force: bool, copy_mode: str) -> dict[str, Any]:
     if not base.is_dir():
         raise FileNotFoundError(f"missing base evidence dir: {base}")
     if out.resolve() == base.resolve():
@@ -59,7 +92,23 @@ def _copy_cache(base: Path, out: Path, *, force: bool) -> None:
         if not force:
             raise FileExistsError(f"output exists; pass --force to replace: {out}")
         shutil.rmtree(out)
-    shutil.copytree(base, out)
+    mode = str(copy_mode)
+    if mode == "copy":
+        shutil.copytree(base, out)
+        return {"copy_mode": mode, "prepared_files": None, "link_counts": {"copy": None}}
+    out.mkdir(parents=True, exist_ok=True)
+    counts: dict[str, int] = {"copy": 0, "hardlink": 0, "symlink": 0}
+    prepared = 0
+    for src in sorted(base.rglob("*")):
+        rel = src.relative_to(base)
+        dst = out / rel
+        if src.is_dir():
+            dst.mkdir(parents=True, exist_ok=True)
+            continue
+        method = _link_or_copy(src, dst, copy_mode=mode)
+        counts[method] = counts.get(method, 0) + 1
+        prepared += 1
+    return {"copy_mode": mode, "prepared_files": int(prepared), "link_counts": counts}
 
 
 def _per_view_dir(cache_dir: Path) -> Path:
@@ -113,6 +162,12 @@ def _write_npz(path: Path, payload: dict[str, np.ndarray]) -> None:
     tmp.replace(path)
 
 
+def _write_text_atomic(path: Path, text: str) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
 def _as_rgb_chw(value: np.ndarray, *, key: str, path: Path) -> np.ndarray:
     arr = np.asarray(value, dtype=np.float32)
     if arr.ndim != 3 or arr.shape[0] != 3:
@@ -153,14 +208,19 @@ def _update_summary(summary_path: Path, *, audit: dict[str, Any], args: argparse
         "processed_views": int(audit.get("processed_views", 0)),
         "residuals_recomputed": int(audit.get("residual_recomputed_views", 0)),
     }
-    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _write_text_atomic(summary_path, json.dumps(summary, indent=2, sort_keys=True) + "\n")
 
 
 def main() -> int:
     args = parse_args()
     if int(args.max_views) < 0:
         raise SystemExit("--max_views must be >= 0")
-    _copy_cache(args.base_evidence_dir, args.out_dir, force=bool(args.force))
+    prepare_summary = _copy_cache(
+        args.base_evidence_dir,
+        args.out_dir,
+        force=bool(args.force),
+        copy_mode=str(args.copy_mode),
+    )
     view_dir = _per_view_dir(args.out_dir)
     view_paths = sorted(view_dir.glob("*.npz"))
     if int(args.max_views) > 0:
@@ -220,6 +280,8 @@ def main() -> int:
         "parent_render_dir": str(args.parent_render_dir),
         "parent_label": str(args.parent_label),
         "allow_resize": bool(args.allow_resize),
+        "copy_mode": str(args.copy_mode),
+        "cache_prepare": prepare_summary,
         "view_dir": str(view_dir),
         "candidate_views": int(len(view_paths)),
         "processed_views": int(len(rows)),
@@ -229,7 +291,7 @@ def main() -> int:
         "rows": rows,
         "skipped": skipped,
     }
-    audit_path.write_text(json.dumps(audit, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _write_text_atomic(audit_path, json.dumps(audit, indent=2, sort_keys=True) + "\n")
     _update_summary(args.out_dir / "surface_evidence_summary.json", audit=audit, args=args)
     print(json.dumps(audit, indent=2, sort_keys=True))
     return 0 if not skipped else 2

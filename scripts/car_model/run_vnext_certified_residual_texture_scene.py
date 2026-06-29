@@ -229,10 +229,14 @@ def _teacher_cache_cmd(args: argparse.Namespace, teacher_cache_dir: Path) -> lis
     ]
     if args.parent_render_dir:
         cmd.extend(["--parent_render_dir", str(args.parent_render_dir)])
+    if bool(args.teacher_cache_rewrite_rgb_render_to_parent):
+        cmd.append("--rewrite_rgb_render_to_parent")
     if args.no_mask_teacher_target:
         cmd.append("--no-mask_target")
     if bool(args.reparent_allow_resize):
         cmd.append("--allow_resize")
+    if str(args.teacher_cache_copy_mode) != "copy":
+        cmd.extend(["--copy_mode", str(args.teacher_cache_copy_mode)])
     return cmd
 
 
@@ -259,6 +263,8 @@ def _reparent_evidence_cmd(
     ]
     if bool(args.reparent_allow_resize):
         cmd.append("--allow_resize")
+    if str(args.reparent_copy_mode) != "copy":
+        cmd.extend(["--copy_mode", str(args.reparent_copy_mode)])
     return cmd
 
 
@@ -274,12 +280,23 @@ def _strip_target_evidence_cmd(args: argparse.Namespace, stripped_target_evidenc
     ]
 
 
+def _verify_target_evidence_no_gt_cmd(target_evidence_dir: Path, audit_path: Path) -> list[str]:
+    return [
+        _python(),
+        "scripts/car_model/ecsr_verify_target_evidence_no_gt.py",
+        "--target_evidence_dir",
+        str(target_evidence_dir),
+        "--audit_path",
+        str(audit_path),
+    ]
+
+
 def _populate_eval_gt_cmd(args: argparse.Namespace, output_model: Path, audit_path: Path) -> list[str]:
     return [
         _python(),
         "scripts/car_model/ecsr_populate_eval_gt_from_target_evidence.py",
         "--target_evidence_dir",
-        str(args._effective_target_evidence_dir),
+        str(args._effective_eval_gt_evidence_dir),
         "--output_model",
         str(output_model),
         "--split",
@@ -327,6 +344,75 @@ def _normalize_negative_numeric_args(cmd: list[str]) -> list[str]:
         normalized.append(token)
         index += 1
     return normalized
+
+
+def _resolved_same_path(a: Path | None, b: Path | None) -> bool:
+    if a is None or b is None:
+        return False
+    try:
+        return Path(a).resolve() == Path(b).resolve()
+    except OSError:
+        return Path(a).absolute() == Path(b).absolute()
+
+
+def _apply_distillation_profile(args: argparse.Namespace) -> None:
+    profile = str(getattr(args, "distillation_profile", "none"))
+    if profile == "none":
+        args._distillation_profile_audit = {
+            "enabled": False,
+            "profile": "none",
+        }
+        return
+    if profile != "teacher_to_reparented_parent":
+        raise ValueError(f"unknown distillation profile: {profile}")
+    if args.teacher_render_dir is None:
+        raise SystemExit("--distillation_profile teacher_to_reparented_parent requires --teacher_render_dir")
+    parent_render_dir = args.parent_render_dir or args.reparent_fit_parent_render_dir
+    if parent_render_dir is None:
+        raise SystemExit(
+            "--distillation_profile teacher_to_reparented_parent requires "
+            "--parent_render_dir or --reparent_fit_parent_render_dir"
+        )
+    if args.parent_render_dir is not None and args.reparent_fit_parent_render_dir is not None and not _resolved_same_path(
+        Path(args.parent_render_dir), Path(args.reparent_fit_parent_render_dir)
+    ):
+        raise SystemExit(
+            "--distillation_profile teacher_to_reparented_parent requires --parent_render_dir and "
+            "--reparent_fit_parent_render_dir to match when both are provided"
+        )
+    if _resolved_same_path(Path(args.teacher_render_dir), Path(parent_render_dir)):
+        raise SystemExit(
+            "--distillation_profile teacher_to_reparented_parent requires distinct teacher and parent renders; "
+            "using the same path would create a near-zero teacher residual target"
+        )
+    target_parent_defaulted = args.reparent_target_parent_render_dir is None
+    if target_parent_defaulted and str(args.target_split) != "train":
+        raise SystemExit(
+            "--distillation_profile teacher_to_reparented_parent requires --reparent_target_parent_render_dir "
+            "for non-train target splits; the fit parent render directory usually contains train frames only"
+        )
+    if args.parent_render_dir is None:
+        args.parent_render_dir = Path(parent_render_dir)
+    if args.reparent_fit_parent_render_dir is None:
+        args.reparent_fit_parent_render_dir = Path(parent_render_dir)
+    if target_parent_defaulted:
+        args.reparent_target_parent_render_dir = Path(parent_render_dir)
+    if not str(args.reparent_parent_label):
+        args.reparent_parent_label = "distill_parent"
+    args.strict_no_target_gt_apply = True
+    args._distillation_profile_audit = {
+        "enabled": True,
+        "profile": profile,
+        "intent": "fit teacher residuals as teacher_render - parent_render, then apply the baked residual on a GT-free target footprint",
+        "teacher_render_dir": str(args.teacher_render_dir),
+        "parent_render_dir": str(args.parent_render_dir),
+        "reparent_fit_parent_render_dir": str(args.reparent_fit_parent_render_dir),
+        "reparent_target_parent_render_dir": str(args.reparent_target_parent_render_dir),
+        "target_parent_defaulted_from_fit_parent": bool(target_parent_defaulted),
+        "strict_no_target_gt_apply_forced": True,
+        "zero_residual_guard": "teacher_render_dir must differ from parent_render_dir",
+        "target_or_test_gt_visible_to_apply": False,
+    }
 
 
 def _texture_cmd(
@@ -703,6 +789,158 @@ def _texture_cmd(
         )
         _append_arg(cmd, "--sparse_materialization_max_mean_variance", args.sparse_materialization_max_mean_variance)
         _append_arg(cmd, "--sparse_materialization_min_mean_sign_consistency", args.sparse_materialization_min_mean_sign_consistency)
+        if bool(args.enable_sparse_materialization_target_visible_expansion):
+            cmd.append("--enable_sparse_materialization_target_visible_expansion")
+            _append_arg(
+                cmd,
+                "--sparse_materialization_target_visible_min_pixels",
+                args.sparse_materialization_target_visible_min_pixels,
+            )
+            _append_arg(
+                cmd,
+                "--sparse_materialization_target_visible_min_views",
+                args.sparse_materialization_target_visible_min_views,
+            )
+            _append_arg(
+                cmd,
+                "--sparse_materialization_target_visible_min_policy_samples",
+                args.sparse_materialization_target_visible_min_policy_samples,
+            )
+            _append_arg(
+                cmd,
+                "--sparse_materialization_target_visible_min_positive_view_fraction",
+                args.sparse_materialization_target_visible_min_positive_view_fraction,
+            )
+            _append_arg(
+                cmd,
+                "--sparse_materialization_target_visible_max_extra_bins",
+                args.sparse_materialization_target_visible_max_extra_bins,
+            )
+        if bool(args.enable_train_only_target_impact_residual_basis):
+            cmd.append("--enable_train_only_target_impact_residual_basis")
+            _append_arg(cmd, "--target_impact_min_pixels", args.target_impact_min_pixels)
+            _append_arg(cmd, "--target_impact_min_views", args.target_impact_min_views)
+            _append_arg(
+                cmd,
+                "--target_impact_min_policy_samples",
+                args.target_impact_min_policy_samples,
+            )
+            _append_arg(cmd, "--target_impact_max_extra_bins", args.target_impact_max_extra_bins)
+            _append_arg(cmd, "--target_impact_max_views", args.target_impact_max_views)
+            _append_arg(cmd, "--target_impact_carrier_fill_mode", args.target_impact_carrier_fill_mode)
+            _append_arg(cmd, "--target_impact_carrier_fill_blend", args.target_impact_carrier_fill_blend)
+            _append_arg(
+                cmd,
+                "--target_impact_carrier_fill_min_face_samples",
+                args.target_impact_carrier_fill_min_face_samples,
+            )
+            _append_arg(cmd, "--target_impact_carrier_fill_min_norm", args.target_impact_carrier_fill_min_norm)
+            _append_arg(
+                cmd,
+                "--target_impact_carrier_fill_synthetic_count",
+                args.target_impact_carrier_fill_synthetic_count,
+            )
+            _append_arg(cmd, "--target_impact_multisample_fill_mode", args.target_impact_multisample_fill_mode)
+            _append_arg(cmd, "--target_impact_multisample_fill_radius", args.target_impact_multisample_fill_radius)
+            _append_arg(
+                cmd,
+                "--target_impact_multisample_fill_min_samples",
+                args.target_impact_multisample_fill_min_samples,
+            )
+            _append_arg(
+                cmd,
+                "--target_impact_multisample_fill_max_samples_per_bin",
+                args.target_impact_multisample_fill_max_samples_per_bin,
+            )
+            _append_arg(
+                cmd,
+                "--target_impact_multisample_fill_max_views",
+                args.target_impact_multisample_fill_max_views,
+            )
+            _append_arg(cmd, "--target_impact_multisample_fill_blend", args.target_impact_multisample_fill_blend)
+            _append_arg(
+                cmd,
+                "--target_impact_multisample_fill_kernel_sigma",
+                args.target_impact_multisample_fill_kernel_sigma,
+            )
+            _append_arg(cmd, "--target_impact_multisample_fill_min_norm", args.target_impact_multisample_fill_min_norm)
+            _append_arg(
+                cmd,
+                "--target_impact_multisample_fill_synthetic_count",
+                args.target_impact_multisample_fill_synthetic_count,
+            )
+            _append_arg(cmd, "--target_impact_affine_fill_mode", args.target_impact_affine_fill_mode)
+            _append_arg(
+                cmd,
+                "--target_impact_affine_fill_feature_mode",
+                args.target_impact_affine_fill_feature_mode,
+            )
+            _append_arg(
+                cmd,
+                "--target_impact_affine_fill_min_samples",
+                args.target_impact_affine_fill_min_samples,
+            )
+            _append_arg(
+                cmd,
+                "--target_impact_affine_fill_max_samples_per_face",
+                args.target_impact_affine_fill_max_samples_per_face,
+            )
+            _append_arg(cmd, "--target_impact_affine_fill_max_views", args.target_impact_affine_fill_max_views)
+            _append_arg(cmd, "--target_impact_affine_fill_blend", args.target_impact_affine_fill_blend)
+            _append_arg(cmd, "--target_impact_affine_fill_ridge", args.target_impact_affine_fill_ridge)
+            _append_arg(
+                cmd,
+                "--target_impact_affine_fill_max_condition",
+                args.target_impact_affine_fill_max_condition,
+            )
+            _append_arg(cmd, "--target_impact_affine_fill_min_norm", args.target_impact_affine_fill_min_norm)
+            _append_arg(
+                cmd,
+                "--target_impact_affine_fill_synthetic_count",
+                args.target_impact_affine_fill_synthetic_count,
+            )
+        if bool(args.enable_sparse_materialization_target_connected_region_growth):
+            cmd.append("--enable_sparse_materialization_target_connected_region_growth")
+            _append_arg(
+                cmd,
+                "--sparse_materialization_target_connected_radius",
+                args.sparse_materialization_target_connected_radius,
+            )
+            _append_arg(
+                cmd,
+                "--sparse_materialization_target_connected_min_pixels",
+                args.sparse_materialization_target_connected_min_pixels,
+            )
+            _append_arg(
+                cmd,
+                "--sparse_materialization_target_connected_min_views",
+                args.sparse_materialization_target_connected_min_views,
+            )
+            _append_arg(
+                cmd,
+                "--sparse_materialization_target_connected_min_policy_samples",
+                args.sparse_materialization_target_connected_min_policy_samples,
+            )
+            _append_arg(
+                cmd,
+                "--sparse_materialization_target_connected_min_positive_view_fraction",
+                args.sparse_materialization_target_connected_min_positive_view_fraction,
+            )
+            _append_arg(
+                cmd,
+                "--sparse_materialization_target_connected_max_negative_relative_gain",
+                args.sparse_materialization_target_connected_max_negative_relative_gain,
+            )
+            _append_arg(
+                cmd,
+                "--sparse_materialization_target_connected_max_negative_min_view_gain",
+                args.sparse_materialization_target_connected_max_negative_min_view_gain,
+            )
+            _append_arg(
+                cmd,
+                "--sparse_materialization_target_connected_max_extra_bins",
+                args.sparse_materialization_target_connected_max_extra_bins,
+            )
     if not bool(args.no_policy_val_bin_uncertainty_guard):
         cmd.extend(
             [
@@ -711,6 +949,8 @@ def _texture_cmd(
                 str(args.bin_uncertainty_guard_min_bin_samples),
                 "--bin_uncertainty_guard_min_positive_view_fraction",
                 str(args.bin_uncertainty_guard_min_positive_view_fraction),
+                "--bin_uncertainty_guard_empty_intersection_policy",
+                str(args.bin_uncertainty_guard_empty_intersection_policy),
             ]
         )
     if bool(args.enable_policy_val_effective_margin_gate):
@@ -882,9 +1122,31 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source_model", type=Path, required=True)
     parser.add_argument("--fit_evidence_dir", type=Path, required=True)
     parser.add_argument("--target_evidence_dir", type=Path, required=True)
+    parser.add_argument(
+        "--eval_gt_evidence_dir",
+        type=Path,
+        default=None,
+        help=(
+            "Optional GT-bearing target evidence used only after apply for final evaluation. "
+            "This lets --target_evidence_dir/--prestripped_target_evidence_dir stay GT-free for apply."
+        ),
+    )
     parser.add_argument("--region_carrier_json", type=Path, required=True)
     parser.add_argument("--teacher_render_dir", type=Path, default=None)
     parser.add_argument("--parent_render_dir", type=Path, default=None)
+    parser.add_argument(
+        "--distillation_profile",
+        choices=("none", "teacher_to_reparented_parent"),
+        default="none",
+        help=(
+            "Explicit teacher-distillation contract. teacher_to_reparented_parent treats "
+            "--teacher_render_dir as the strong teacher, uses --parent_render_dir or "
+            "--reparent_fit_parent_render_dir as the fit/train parent to bake residuals against, "
+            "auto-reparents fit evidence, requires a split-matched --reparent_target_parent_render_dir "
+            "for non-train target splits, forces strict no-target-GT apply, and rejects "
+            "teacher==parent configurations that would create zero residuals."
+        ),
+    )
     parser.add_argument(
         "--reparent_fit_parent_render_dir",
         type=Path,
@@ -905,6 +1167,40 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--reparent_parent_label", default="")
     parser.add_argument("--reparent_allow_resize", action="store_true")
+    parser.add_argument(
+        "--reparent_copy_mode",
+        choices=("copy", "hardlink", "symlink", "auto_link"),
+        default="copy",
+        help=(
+            "Copy/link mode for evidence reparenting. Use auto_link in storage-constrained runs to avoid "
+            "duplicating unchanged cache files before rewritten NPZ outputs are materialized."
+        ),
+    )
+    parser.add_argument(
+        "--teacher_cache_copy_mode",
+        choices=("copy", "hardlink", "symlink", "auto_link"),
+        default="copy",
+        help=(
+            "Copy/link mode for teacher surface evidence cache construction. Use auto_link in storage-constrained "
+            "distillation runs; rewritten NPZ/text files are atomically replaced."
+        ),
+    )
+    parser.add_argument(
+        "--teacher_cache_rewrite_rgb_render_to_parent",
+        action="store_true",
+        help=(
+            "When teacher cache uses --parent_render_dir, rewrite output rgb_render/residual fields to that parent. "
+            "This fuses fit-evidence reparenting with teacher-cache construction."
+        ),
+    )
+    parser.add_argument(
+        "--skip_reparent_fit_evidence_for_teacher_cache",
+        action="store_true",
+        help=(
+            "Do not create fit_evidence_reparented when a teacher cache will be built with "
+            "--teacher_cache_rewrite_rgb_render_to_parent. This saves one full fit-evidence cache."
+        ),
+    )
     parser.add_argument("--output_root", type=Path, required=True)
     parser.add_argument("--target_split", choices=("train", "test"), default="test")
     parser.add_argument("--base_method_name", default="ours_26000_phasef_extra_compact_base")
@@ -1096,9 +1392,97 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sparse_materialization_frontier_min_sample_quantile", type=float, default=0.75)
     parser.add_argument("--sparse_materialization_max_mean_variance", type=float, default=-1.0)
     parser.add_argument("--sparse_materialization_min_mean_sign_consistency", type=float, default=0.0)
+    parser.add_argument("--enable_sparse_materialization_target_visible_expansion", action="store_true")
+    parser.add_argument("--sparse_materialization_target_visible_min_pixels", type=int, default=1)
+    parser.add_argument("--sparse_materialization_target_visible_min_views", type=int, default=1)
+    parser.add_argument("--sparse_materialization_target_visible_min_policy_samples", type=int, default=1)
+    parser.add_argument(
+        "--sparse_materialization_target_visible_min_positive_view_fraction",
+        type=float,
+        default=-1.0,
+    )
+    parser.add_argument("--sparse_materialization_target_visible_max_extra_bins", type=int, default=0)
+    parser.add_argument("--enable_train_only_target_impact_residual_basis", action="store_true")
+    parser.add_argument("--target_impact_min_pixels", type=int, default=1)
+    parser.add_argument("--target_impact_min_views", type=int, default=1)
+    parser.add_argument("--target_impact_min_policy_samples", type=int, default=0)
+    parser.add_argument("--target_impact_max_extra_bins", type=int, default=0)
+    parser.add_argument("--target_impact_max_views", type=int, default=0)
+    parser.add_argument(
+        "--target_impact_carrier_fill_mode",
+        choices=("off", "no_policy_rows", "all_added"),
+        default="off",
+    )
+    parser.add_argument("--target_impact_carrier_fill_blend", type=float, default=0.5)
+    parser.add_argument("--target_impact_carrier_fill_min_face_samples", type=int, default=128)
+    parser.add_argument("--target_impact_carrier_fill_min_norm", type=float, default=1.0e-4)
+    parser.add_argument("--target_impact_carrier_fill_synthetic_count", type=int, default=1)
+    parser.add_argument(
+        "--target_impact_multisample_fill_mode",
+        choices=("off", "no_policy_rows", "all_added"),
+        default="off",
+    )
+    parser.add_argument("--target_impact_multisample_fill_radius", type=int, default=1)
+    parser.add_argument("--target_impact_multisample_fill_min_samples", type=int, default=4)
+    parser.add_argument("--target_impact_multisample_fill_max_samples_per_bin", type=int, default=128)
+    parser.add_argument("--target_impact_multisample_fill_max_views", type=int, default=0)
+    parser.add_argument("--target_impact_multisample_fill_blend", type=float, default=1.0)
+    parser.add_argument("--target_impact_multisample_fill_kernel_sigma", type=float, default=1.0)
+    parser.add_argument("--target_impact_multisample_fill_min_norm", type=float, default=1.0e-4)
+    parser.add_argument("--target_impact_multisample_fill_synthetic_count", type=int, default=2)
+    parser.add_argument(
+        "--target_impact_affine_fill_mode",
+        choices=("off", "no_policy_rows", "all_added"),
+        default="off",
+    )
+    parser.add_argument(
+        "--target_impact_affine_fill_feature_mode",
+        choices=("face_uv_normal_camera_ridge", "face_uv_patch_mixture_ridge"),
+        default="face_uv_patch_mixture_ridge",
+    )
+    parser.add_argument("--target_impact_affine_fill_min_samples", type=int, default=64)
+    parser.add_argument("--target_impact_affine_fill_max_samples_per_face", type=int, default=4096)
+    parser.add_argument("--target_impact_affine_fill_max_views", type=int, default=0)
+    parser.add_argument("--target_impact_affine_fill_blend", type=float, default=1.0)
+    parser.add_argument("--target_impact_affine_fill_ridge", type=float, default=1.0e-2)
+    parser.add_argument("--target_impact_affine_fill_max_condition", type=float, default=1.0e7)
+    parser.add_argument("--target_impact_affine_fill_min_norm", type=float, default=1.0e-4)
+    parser.add_argument("--target_impact_affine_fill_synthetic_count", type=int, default=4)
+    parser.add_argument("--enable_sparse_materialization_target_connected_region_growth", action="store_true")
+    parser.add_argument("--sparse_materialization_target_connected_radius", type=int, default=1)
+    parser.add_argument("--sparse_materialization_target_connected_min_pixels", type=int, default=1)
+    parser.add_argument("--sparse_materialization_target_connected_min_views", type=int, default=1)
+    parser.add_argument("--sparse_materialization_target_connected_min_policy_samples", type=int, default=1)
+    parser.add_argument(
+        "--sparse_materialization_target_connected_min_positive_view_fraction",
+        type=float,
+        default=0.5,
+    )
+    parser.add_argument(
+        "--sparse_materialization_target_connected_max_negative_relative_gain",
+        type=float,
+        default=0.02,
+    )
+    parser.add_argument(
+        "--sparse_materialization_target_connected_max_negative_min_view_gain",
+        type=float,
+        default=0.05,
+    )
+    parser.add_argument("--sparse_materialization_target_connected_max_extra_bins", type=int, default=0)
     parser.add_argument("--no_policy_val_bin_uncertainty_guard", action="store_true")
     parser.add_argument("--bin_uncertainty_guard_min_bin_samples", type=int, default=16)
     parser.add_argument("--bin_uncertainty_guard_min_positive_view_fraction", type=float, default=0.5)
+    parser.add_argument(
+        "--bin_uncertainty_guard_empty_intersection_policy",
+        choices=("reject", "sparse_if_post_accepted"),
+        default="sparse_if_post_accepted",
+        help=(
+            "How vNext handles an empty intersection between sparse-certified bins and "
+            "the later raw bin-uncertainty guard. The runner defaults to preserving a "
+            "sparse profile only after its own post-gate accepted it; standalone adapter "
+            "calls can still use reject for the strict control."
+        ),
+    )
     parser.add_argument("--no_policy_val_bin_uncertainty_shrink", action="store_true")
     parser.add_argument(
         "--bin_uncertainty_shrink_policy_mode",
@@ -1242,6 +1626,7 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     args = parser.parse_args(_normalize_negative_numeric_args(sys.argv[1:]))
+    _apply_distillation_profile(args)
     if bool(args.enable_policy_val_structure_aware_shrink) and bool(args.no_policy_val_bin_uncertainty_shrink):
         parser.error("--enable_policy_val_structure_aware_shrink requires bin uncertainty shrink to stay enabled")
     if float(args.structure_shrink_l1_weight) < 0.0:
@@ -1402,6 +1787,100 @@ def parse_args() -> argparse.Namespace:
         parser.error("--sparse_materialization_frontier_min_sample_quantile must be in [0, 1]")
     if float(args.sparse_materialization_min_mean_sign_consistency) < 0.0:
         parser.error("--sparse_materialization_min_mean_sign_consistency must be >= 0")
+    if int(args.sparse_materialization_target_visible_min_pixels) < 1:
+        parser.error("--sparse_materialization_target_visible_min_pixels must be >= 1")
+    if int(args.sparse_materialization_target_visible_min_views) < 1:
+        parser.error("--sparse_materialization_target_visible_min_views must be >= 1")
+    if int(args.sparse_materialization_target_visible_min_policy_samples) < 1:
+        parser.error("--sparse_materialization_target_visible_min_policy_samples must be >= 1")
+    if int(args.sparse_materialization_target_visible_max_extra_bins) < 0:
+        parser.error("--sparse_materialization_target_visible_max_extra_bins must be >= 0")
+    if (
+        float(args.sparse_materialization_target_visible_min_positive_view_fraction) >= 0.0
+        and not 0.0 <= float(args.sparse_materialization_target_visible_min_positive_view_fraction) <= 1.0
+    ):
+        parser.error("--sparse_materialization_target_visible_min_positive_view_fraction must be <0 or in [0, 1]")
+    if int(args.target_impact_min_pixels) < 1:
+        parser.error("--target_impact_min_pixels must be >= 1")
+    if int(args.target_impact_min_views) < 1:
+        parser.error("--target_impact_min_views must be >= 1")
+    if int(args.target_impact_min_policy_samples) < 0:
+        parser.error("--target_impact_min_policy_samples must be >= 0")
+    if int(args.target_impact_max_extra_bins) < 0:
+        parser.error("--target_impact_max_extra_bins must be >= 0")
+    if int(args.target_impact_max_views) < 0:
+        parser.error("--target_impact_max_views must be >= 0")
+    if not 0.0 <= float(args.target_impact_carrier_fill_blend) <= 1.0:
+        parser.error("--target_impact_carrier_fill_blend must be in [0, 1]")
+    if int(args.target_impact_carrier_fill_min_face_samples) < 0:
+        parser.error("--target_impact_carrier_fill_min_face_samples must be >= 0")
+    if float(args.target_impact_carrier_fill_min_norm) < 0.0:
+        parser.error("--target_impact_carrier_fill_min_norm must be >= 0")
+    if int(args.target_impact_carrier_fill_synthetic_count) < 0:
+        parser.error("--target_impact_carrier_fill_synthetic_count must be >= 0")
+    if (
+        str(args.target_impact_carrier_fill_mode) != "off"
+        and not bool(args.enable_train_only_target_impact_residual_basis)
+    ):
+        parser.error("--target_impact_carrier_fill_mode requires --enable_train_only_target_impact_residual_basis")
+    if int(args.target_impact_multisample_fill_radius) < 0:
+        parser.error("--target_impact_multisample_fill_radius must be >= 0")
+    if int(args.target_impact_multisample_fill_min_samples) < 1:
+        parser.error("--target_impact_multisample_fill_min_samples must be >= 1")
+    if int(args.target_impact_multisample_fill_max_samples_per_bin) < 0:
+        parser.error("--target_impact_multisample_fill_max_samples_per_bin must be >= 0")
+    if int(args.target_impact_multisample_fill_max_views) < 0:
+        parser.error("--target_impact_multisample_fill_max_views must be >= 0")
+    if not 0.0 <= float(args.target_impact_multisample_fill_blend) <= 1.0:
+        parser.error("--target_impact_multisample_fill_blend must be in [0, 1]")
+    if float(args.target_impact_multisample_fill_kernel_sigma) <= 0.0:
+        parser.error("--target_impact_multisample_fill_kernel_sigma must be > 0")
+    if float(args.target_impact_multisample_fill_min_norm) < 0.0:
+        parser.error("--target_impact_multisample_fill_min_norm must be >= 0")
+    if int(args.target_impact_multisample_fill_synthetic_count) < 0:
+        parser.error("--target_impact_multisample_fill_synthetic_count must be >= 0")
+    if (
+        str(args.target_impact_multisample_fill_mode) != "off"
+        and not bool(args.enable_train_only_target_impact_residual_basis)
+    ):
+        parser.error("--target_impact_multisample_fill_mode requires --enable_train_only_target_impact_residual_basis")
+    if int(args.target_impact_affine_fill_min_samples) < 1:
+        parser.error("--target_impact_affine_fill_min_samples must be >= 1")
+    if int(args.target_impact_affine_fill_max_samples_per_face) < 0:
+        parser.error("--target_impact_affine_fill_max_samples_per_face must be >= 0")
+    if int(args.target_impact_affine_fill_max_views) < 0:
+        parser.error("--target_impact_affine_fill_max_views must be >= 0")
+    if not 0.0 <= float(args.target_impact_affine_fill_blend) <= 1.0:
+        parser.error("--target_impact_affine_fill_blend must be in [0, 1]")
+    if float(args.target_impact_affine_fill_ridge) <= 0.0:
+        parser.error("--target_impact_affine_fill_ridge must be > 0")
+    if float(args.target_impact_affine_fill_max_condition) <= 1.0:
+        parser.error("--target_impact_affine_fill_max_condition must be > 1")
+    if float(args.target_impact_affine_fill_min_norm) < 0.0:
+        parser.error("--target_impact_affine_fill_min_norm must be >= 0")
+    if int(args.target_impact_affine_fill_synthetic_count) < 0:
+        parser.error("--target_impact_affine_fill_synthetic_count must be >= 0")
+    if (
+        str(args.target_impact_affine_fill_mode) != "off"
+        and not bool(args.enable_train_only_target_impact_residual_basis)
+    ):
+        parser.error("--target_impact_affine_fill_mode requires --enable_train_only_target_impact_residual_basis")
+    if int(args.sparse_materialization_target_connected_radius) < 0:
+        parser.error("--sparse_materialization_target_connected_radius must be >= 0")
+    if int(args.sparse_materialization_target_connected_min_pixels) < 1:
+        parser.error("--sparse_materialization_target_connected_min_pixels must be >= 1")
+    if int(args.sparse_materialization_target_connected_min_views) < 1:
+        parser.error("--sparse_materialization_target_connected_min_views must be >= 1")
+    if int(args.sparse_materialization_target_connected_min_policy_samples) < 1:
+        parser.error("--sparse_materialization_target_connected_min_policy_samples must be >= 1")
+    if not 0.0 <= float(args.sparse_materialization_target_connected_min_positive_view_fraction) <= 1.0:
+        parser.error("--sparse_materialization_target_connected_min_positive_view_fraction must be in [0, 1]")
+    if float(args.sparse_materialization_target_connected_max_negative_relative_gain) < 0.0:
+        parser.error("--sparse_materialization_target_connected_max_negative_relative_gain must be >= 0")
+    if float(args.sparse_materialization_target_connected_max_negative_min_view_gain) < 0.0:
+        parser.error("--sparse_materialization_target_connected_max_negative_min_view_gain must be >= 0")
+    if int(args.sparse_materialization_target_connected_max_extra_bins) < 0:
+        parser.error("--sparse_materialization_target_connected_max_extra_bins must be >= 0")
     if not bool(args.enable_policy_val_image_lpips_gate) and (
         float(args.min_policy_val_effective_lpips_gain) > -1.0
         or float(args.min_policy_val_effective_lpips_cvar20_gain) > -1.0
@@ -1409,8 +1888,20 @@ def parse_args() -> argparse.Namespace:
         parser.error("LPIPS effective thresholds require --enable_policy_val_image_lpips_gate")
     if args.prestripped_target_evidence_dir is not None and not bool(args.strict_no_target_gt_apply):
         parser.error("--prestripped_target_evidence_dir requires --strict_no_target_gt_apply")
+    target_footprint_apply_enabled = (
+        bool(args.enable_train_only_target_impact_residual_basis)
+        or bool(args.enable_sparse_materialization_target_visible_expansion)
+        or bool(args.enable_sparse_materialization_target_connected_region_growth)
+    )
+    if target_footprint_apply_enabled and not bool(args.strict_no_target_gt_apply):
+        parser.error(
+            "target-footprint apply paths require --strict_no_target_gt_apply "
+            "to keep target/test GT out of the adapter"
+        )
     if args.prestripped_target_evidence_dir is not None and not Path(args.prestripped_target_evidence_dir).exists():
         parser.error("--prestripped_target_evidence_dir does not exist")
+    if args.eval_gt_evidence_dir is not None and not Path(args.eval_gt_evidence_dir).exists():
+        parser.error("--eval_gt_evidence_dir does not exist")
     if args.view_confidence_kernel_sigma is not None and float(args.view_confidence_kernel_sigma) <= 0.0:
         parser.error("--view_confidence_kernel_sigma must be > 0")
     if args.view_confidence_min_confidence is not None and not 0.0 <= float(args.view_confidence_min_confidence) <= 1.0:
@@ -1452,6 +1943,18 @@ def parse_args() -> argparse.Namespace:
         parser.error("--adaptive_residual_activity_floor must be >= 0")
     if int(args.adaptive_residual_activity_max_samples_per_view) < 1:
         parser.error("--adaptive_residual_activity_max_samples_per_view must be >= 1")
+    if bool(args.skip_reparent_fit_evidence_for_teacher_cache):
+        if bool(args.skip_teacher_cache):
+            parser.error("--skip_reparent_fit_evidence_for_teacher_cache requires teacher cache construction")
+        if args.reparent_fit_parent_render_dir is None:
+            parser.error("--skip_reparent_fit_evidence_for_teacher_cache requires --reparent_fit_parent_render_dir")
+        if args.parent_render_dir is None:
+            parser.error("--skip_reparent_fit_evidence_for_teacher_cache requires --parent_render_dir")
+        if not bool(args.teacher_cache_rewrite_rgb_render_to_parent):
+            parser.error(
+                "--skip_reparent_fit_evidence_for_teacher_cache requires "
+                "--teacher_cache_rewrite_rgb_render_to_parent"
+            )
     return args
 
 
@@ -1470,6 +1973,9 @@ def main() -> int:
     manifest_path = reports_dir / f"{args.scene}_vnext_certified_residual_texture_manifest.json"
     report_path = reports_dir / f"{args.scene}_vnext_certified_residual_texture_report.md"
     eval_gt_audit_path = reports_dir / f"{args.scene}_{args.method_name}_{args.target_split}_eval_gt_population_audit.json"
+    target_apply_no_gt_audit_path = reports_dir / (
+        f"{args.scene}_{args.method_name}_{args.target_split}_target_apply_no_gt_verify.json"
+    )
     reports_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1481,15 +1987,34 @@ def main() -> int:
     if not args.skip_teacher_cache and args.teacher_render_dir is None:
         raise SystemExit("--teacher_render_dir is required unless --skip_teacher_cache is set")
 
+    skip_fit_reparent_for_teacher_cache = bool(args.skip_reparent_fit_evidence_for_teacher_cache) and not bool(
+        args.skip_teacher_cache
+    )
+    args._fit_reparent_execution = {
+        "enabled": bool(args.reparent_fit_parent_render_dir is not None),
+        "skipped_for_teacher_cache": bool(skip_fit_reparent_for_teacher_cache),
+        "reason": "teacher_cache_rewrites_rgb_render_to_parent"
+        if skip_fit_reparent_for_teacher_cache
+        else "standard_reparent_path",
+    }
     args._effective_fit_evidence_dir = (
-        reparented_fit_evidence_dir
-        if args.reparent_fit_parent_render_dir is not None
-        else Path(args.fit_evidence_dir)
+        Path(args.fit_evidence_dir)
+        if skip_fit_reparent_for_teacher_cache
+        else (
+            reparented_fit_evidence_dir
+            if args.reparent_fit_parent_render_dir is not None
+            else Path(args.fit_evidence_dir)
+        )
     )
     args._effective_target_evidence_dir = (
         reparented_target_evidence_dir
         if args.reparent_target_parent_render_dir is not None
         else Path(args.target_evidence_dir)
+    )
+    args._effective_eval_gt_evidence_dir = (
+        Path(args.eval_gt_evidence_dir)
+        if args.eval_gt_evidence_dir is not None
+        else Path(args._effective_target_evidence_dir)
     )
 
     texture_fit_evidence_dir = Path(args._effective_fit_evidence_dir) if args.skip_teacher_cache else teacher_cache_dir
@@ -1549,7 +2074,7 @@ def main() -> int:
             }
 
     commands: list[dict[str, Any]] = []
-    if args.reparent_fit_parent_render_dir is not None and (
+    if args.reparent_fit_parent_render_dir is not None and not skip_fit_reparent_for_teacher_cache and (
         not args.skip_texture or not args.skip_teacher_cache
     ):
         commands.append(
@@ -1593,6 +2118,13 @@ def main() -> int:
                 log_path=logs_dir / "01b_strip_target_evidence_no_gt.log",
             )
         )
+        commands.append(
+            command_record(
+                "verify_stripped_target_evidence_no_gt",
+                _verify_target_evidence_no_gt_cmd(stripped_target_evidence_dir, target_apply_no_gt_audit_path),
+                log_path=logs_dir / "01c_verify_stripped_target_evidence_no_gt.log",
+            )
+        )
     if not args.skip_texture:
         commands.append(
             command_record(
@@ -1629,8 +2161,12 @@ def main() -> int:
         "source_model": path_record(args.source_model),
         "fit_evidence_dir": path_record(args.fit_evidence_dir),
         "target_evidence_dir": path_record(args.target_evidence_dir),
+        "eval_gt_evidence_dir": path_record(args.eval_gt_evidence_dir)
+        if args.eval_gt_evidence_dir
+        else None,
         "effective_fit_evidence_dir": path_record(args._effective_fit_evidence_dir),
         "effective_target_evidence_dir": path_record(args._effective_target_evidence_dir),
+        "effective_eval_gt_evidence_dir": path_record(args._effective_eval_gt_evidence_dir),
         "adapter_target_evidence_dir": path_record(adapter_target_evidence_dir),
         "reparented_fit_evidence_dir": path_record(reparented_fit_evidence_dir),
         "reparented_target_evidence_dir": path_record(reparented_target_evidence_dir),
@@ -1649,7 +2185,7 @@ def main() -> int:
         if args.prestripped_target_evidence_dir
         else None,
     }
-    settings = {key: value for key, value in vars(args).items() if key not in {"source_model", "fit_evidence_dir", "target_evidence_dir", "region_carrier_json", "teacher_render_dir", "parent_render_dir"}}
+    settings = {key: value for key, value in vars(args).items() if key not in {"source_model", "fit_evidence_dir", "target_evidence_dir", "eval_gt_evidence_dir", "region_carrier_json", "teacher_render_dir", "parent_render_dir"}}
     manifest = make_run_manifest(
         method=METHOD,
         scene=str(args.scene),

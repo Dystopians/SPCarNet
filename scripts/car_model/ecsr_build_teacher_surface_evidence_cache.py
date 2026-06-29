@@ -14,6 +14,7 @@ import argparse
 import csv
 import json
 import math
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--allow_resize", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--max_views", type=int, default=0)
+    parser.add_argument(
+        "--copy_mode",
+        choices=("copy", "hardlink", "symlink", "auto_link"),
+        default="copy",
+        help=(
+            "How to prepare --out_dir from --base_evidence_dir before adding teacher fields. "
+            "`copy` preserves historical behavior. Link modes avoid duplicating unchanged files; "
+            "rewritten outputs are atomically replaced so the base evidence cache is not modified."
+        ),
+    )
     parser.add_argument("--teacher_render_error_margin", type=float, default=0.0)
     parser.add_argument("--teacher_parent_delta_min", type=float, default=0.0)
     parser.add_argument(
@@ -62,6 +73,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--teacher_better_mask_key", default="teacher_better_mask")
     parser.add_argument("--teacher_gain_l1_key", default="teacher_gain_l1")
     parser.add_argument("--teacher_parent_delta_l1_key", default="teacher_parent_delta_l1")
+    parser.add_argument(
+        "--rewrite_rgb_render_to_parent",
+        action="store_true",
+        help=(
+            "When --parent_render_dir is supplied, also replace the output NPZ rgb_render with that parent render "
+            "and recompute residual_rgb/residual_l1 against rgb_gt when available. This fuses evidence reparenting "
+            "with teacher-cache construction and avoids a separate full reparented fit-evidence cache."
+        ),
+    )
+    parser.add_argument("--rgb_render_key", default="rgb_render")
+    parser.add_argument("--rgb_gt_key", default="rgb_gt")
+    parser.add_argument("--parent_residual_rgb_key", default="residual_rgb")
+    parser.add_argument("--parent_residual_l1_key", default="residual_l1")
     parser.add_argument("--rebuild_top_supports", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--top_support_min_alpha", type=float, default=0.0)
     parser.add_argument(
@@ -73,7 +97,28 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _copy_cache(base: Path, out: Path, *, force: bool) -> None:
+def _link_or_copy(src: Path, dst: Path, *, copy_mode: str) -> str:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if copy_mode == "copy":
+        shutil.copy2(src, dst)
+        return "copy"
+    if copy_mode == "symlink":
+        dst.symlink_to(src.resolve())
+        return "symlink"
+    if copy_mode == "hardlink":
+        os.link(src, dst)
+        return "hardlink"
+    if copy_mode == "auto_link":
+        try:
+            os.link(src, dst)
+            return "hardlink"
+        except OSError:
+            dst.symlink_to(src.resolve())
+            return "symlink"
+    raise ValueError(f"unknown copy_mode: {copy_mode}")
+
+
+def _copy_cache(base: Path, out: Path, *, force: bool, copy_mode: str) -> dict[str, Any]:
     if not base.is_dir():
         raise FileNotFoundError(f"missing base evidence dir: {base}")
     if out.resolve() == base.resolve():
@@ -82,7 +127,23 @@ def _copy_cache(base: Path, out: Path, *, force: bool) -> None:
         if not force:
             raise FileExistsError(f"output exists; pass --force to replace: {out}")
         shutil.rmtree(out)
-    shutil.copytree(base, out)
+    mode = str(copy_mode)
+    if mode == "copy":
+        shutil.copytree(base, out)
+        return {"copy_mode": mode, "prepared_files": None, "link_counts": {"copy": None}}
+    out.mkdir(parents=True, exist_ok=True)
+    counts: dict[str, int] = {"copy": 0, "hardlink": 0, "symlink": 0}
+    prepared = 0
+    for src in sorted(base.rglob("*")):
+        rel = src.relative_to(base)
+        dst = out / rel
+        if src.is_dir():
+            dst.mkdir(parents=True, exist_ok=True)
+            continue
+        method = _link_or_copy(src, dst, copy_mode=mode)
+        counts[method] = counts.get(method, 0) + 1
+        prepared += 1
+    return {"copy_mode": mode, "prepared_files": int(prepared), "link_counts": counts}
 
 
 def _per_view_dir(cache_dir: Path) -> Path:
@@ -125,6 +186,12 @@ def _write_npz(path: Path, payload: dict[str, np.ndarray]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     with tmp.open("wb") as f:
         np.savez_compressed(f, **payload)
+    tmp.replace(path)
+
+
+def _write_text_atomic(path: Path, text: str) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
     tmp.replace(path)
 
 
@@ -176,15 +243,17 @@ def _augment_one(
 ) -> dict[str, Any]:
     payload = _safe_npz_payload(path)
     rgb_shape = _rgb_shape_from_payload(payload, path=path)
-    if "rgb_render" not in payload and parent_image is None:
-        raise KeyError(f"{path} needs rgb_render when --parent_render_dir is not supplied")
+    rgb_render_key = str(args.rgb_render_key)
+    rgb_gt_key = str(args.rgb_gt_key)
+    if rgb_render_key not in payload and parent_image is None:
+        raise KeyError(f"{path} needs {rgb_render_key} when --parent_render_dir is not supplied")
     parent_rgb = (
         _load_rgb(parent_image, shape_chw=rgb_shape, allow_resize=bool(args.allow_resize))
         if parent_image is not None
-        else _as_float_chw(payload["rgb_render"], key="rgb_render", path=path)
+        else _as_float_chw(payload[rgb_render_key], key=rgb_render_key, path=path)
     )
     teacher_rgb = _load_rgb(teacher_image, shape_chw=parent_rgb.shape, allow_resize=bool(args.allow_resize))
-    gt_rgb = _as_float_chw(payload["rgb_gt"], key="rgb_gt", path=path) if "rgb_gt" in payload else None
+    gt_rgb = _as_float_chw(payload[rgb_gt_key], key=rgb_gt_key, path=path) if rgb_gt_key in payload else None
 
     raw_residual = (teacher_rgb - parent_rgb).astype(np.float32)
     better_mask, gain_l1, parent_delta_l1 = _teacher_mask(
@@ -213,6 +282,18 @@ def _augment_one(
     payload[str(args.teacher_better_mask_key)] = better_mask.astype(np.uint8)
     payload[str(args.teacher_gain_l1_key)] = gain_l1.astype(np.float16)
     payload[str(args.teacher_parent_delta_l1_key)] = parent_delta_l1.astype(np.float16)
+    parent_rgb_rewritten = False
+    parent_residual_recomputed = False
+    if bool(args.rewrite_rgb_render_to_parent):
+        if parent_image is None:
+            raise ValueError("--rewrite_rgb_render_to_parent requires --parent_render_dir")
+        payload[rgb_render_key] = parent_rgb.astype(np.float16)
+        parent_rgb_rewritten = True
+        if gt_rgb is not None:
+            parent_residual = (gt_rgb - parent_rgb).astype(np.float32)
+            payload[str(args.parent_residual_rgb_key)] = parent_residual.astype(np.float16)
+            payload[str(args.parent_residual_l1_key)] = np.mean(np.abs(parent_residual), axis=0).astype(np.float16)
+            parent_residual_recomputed = True
     _write_npz(path, payload)
 
     return {
@@ -224,6 +305,8 @@ def _augment_one(
         "mean_target_l1": float(np.mean(target_l1)),
         "mean_raw_parent_delta_l1": float(np.mean(parent_delta_l1)),
         "mean_positive_teacher_gain_l1": float(np.mean(np.maximum(gain_l1, 0.0))) if gt_rgb is not None else None,
+        "parent_rgb_render_rewritten": bool(parent_rgb_rewritten),
+        "parent_residual_recomputed": bool(parent_residual_recomputed),
     }
 
 
@@ -334,11 +417,13 @@ def _rebuild_top_supports(
         "mean_residual_g",
         "mean_residual_b",
     ]
-    with csv_path.open("w", encoding="utf-8", newline="") as f:
+    tmp_csv_path = csv_path.with_suffix(csv_path.suffix + ".tmp")
+    with tmp_csv_path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for rank, row in enumerate(rows, start=1):
             writer.writerow({"rank": rank, **row})
+    tmp_csv_path.replace(csv_path)
     return {
         "top_residual_supports_csv": str(csv_path),
         "parent_top_residual_supports_csv": str(parent_csv) if parent_csv.exists() else None,
@@ -360,7 +445,7 @@ def _update_summary(out_dir: Path, payload: dict[str, Any]) -> None:
             fields.append(key)
     summary["per_view_npz_fields"] = fields
     summary["teacher_surface_evidence_augmentation"] = payload
-    summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    _write_text_atomic(summary_path, json.dumps(summary, indent=2) + "\n")
 
 
 def _write_report(out_dir: Path, summary: dict[str, Any]) -> None:
@@ -393,12 +478,17 @@ def _write_report(out_dir: Path, summary: dict[str, Any]) -> None:
                 f"- parent csv: `{top.get('parent_top_residual_supports_csv')}`",
             ]
         )
-    (out_dir / "teacher_surface_evidence_report.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+    _write_text_atomic(out_dir / "teacher_surface_evidence_report.md", "\n".join(md) + "\n")
 
 
 def main() -> int:
     args = parse_args()
-    _copy_cache(args.base_evidence_dir, args.out_dir, force=bool(args.force))
+    prepare_summary = _copy_cache(
+        args.base_evidence_dir,
+        args.out_dir,
+        force=bool(args.force),
+        copy_mode=str(args.copy_mode),
+    )
     view_dir = _per_view_dir(args.out_dir)
     view_paths = sorted(view_dir.glob("*.npz"))
     if int(args.max_views) > 0:
@@ -441,6 +531,10 @@ def main() -> int:
         str(args.teacher_gain_l1_key),
         str(args.teacher_parent_delta_l1_key),
     ]
+    if bool(args.rewrite_rgb_render_to_parent):
+        fields_written.append(str(args.rgb_render_key))
+        if any(row.get("parent_residual_recomputed") for row in view_summaries):
+            fields_written.extend([str(args.parent_residual_rgb_key), str(args.parent_residual_l1_key)])
     summary = {
         "operator": "ecsr_build_teacher_surface_evidence_cache",
         "test_usage": "none",
@@ -449,6 +543,8 @@ def main() -> int:
         "parent_render_dir": str(args.parent_render_dir) if args.parent_render_dir else None,
         "parent_source": "parent_render_dir" if args.parent_render_dir else "npz:rgb_render",
         "out_dir": str(args.out_dir),
+        "copy_mode": str(args.copy_mode),
+        "cache_prepare": prepare_summary,
         "processed_views": int(len(view_summaries)),
         "skipped_views": int(len(skipped)),
         "skipped": skipped[:50],
@@ -456,6 +552,13 @@ def main() -> int:
         "mask_target": bool(args.mask_target),
         "teacher_render_error_margin": float(args.teacher_render_error_margin),
         "teacher_parent_delta_min": float(args.teacher_parent_delta_min),
+        "rewrite_rgb_render_to_parent": bool(args.rewrite_rgb_render_to_parent),
+        "parent_rgb_rewritten_views": int(
+            sum(1 for row in view_summaries if bool(row.get("parent_rgb_render_rewritten", False)))
+        ),
+        "parent_residual_recomputed_views": int(
+            sum(1 for row in view_summaries if bool(row.get("parent_residual_recomputed", False)))
+        ),
         "fields_written": fields_written,
         "mean_active_fraction": float(np.mean([row["active_fraction"] for row in view_summaries])),
         "mean_target_l1": float(np.mean([row["mean_target_l1"] for row in view_summaries])),
@@ -468,10 +571,7 @@ def main() -> int:
         "view_summaries": view_summaries,
         "top_support_rebuild": top_support_rebuild,
     }
-    (args.out_dir / "teacher_surface_evidence_summary.json").write_text(
-        json.dumps(summary, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    _write_text_atomic(args.out_dir / "teacher_surface_evidence_summary.json", json.dumps(summary, indent=2) + "\n")
     _update_summary(args.out_dir, summary)
     _write_report(args.out_dir, summary)
     print(json.dumps(summary, indent=2))
