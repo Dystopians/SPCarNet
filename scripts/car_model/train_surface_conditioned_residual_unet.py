@@ -125,14 +125,108 @@ def _luma(x: torch.Tensor) -> torch.Tensor:
     return torch.sum(x[:, :3] * weights, dim=1, keepdim=True)
 
 
-def _luma_gradient_loss(pred: torch.Tensor, target: torch.Tensor, max_side: int) -> torch.Tensor:
+def _resize_mask_bchw(mask: torch.Tensor, size: tuple[int, int]) -> torch.Tensor:
+    if mask.shape[-2:] == size:
+        return mask
+    return F.interpolate(mask.float(), size=size, mode="nearest").to(dtype=mask.dtype)
+
+
+def _masked_l1_loss(pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor | None) -> torch.Tensor:
+    if mask is None:
+        return torch.mean(torch.abs(pred - target))
+    mask = _resize_mask_bchw(mask.to(device=pred.device, dtype=pred.dtype), pred.shape[-2:])
+    denom = torch.clamp(mask.sum() * pred.shape[1], min=1.0)
+    return torch.sum(torch.abs(pred - target) * mask) / denom
+
+
+def _fill_inactive_with_target(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    mask: torch.Tensor | None,
+) -> torch.Tensor:
+    if mask is None:
+        return pred
+    mask = _resize_mask_bchw(mask.to(device=pred.device, dtype=pred.dtype), pred.shape[-2:])
+    return pred * mask + target * (1.0 - mask)
+
+
+def _masked_ssim_loss(pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor | None) -> torch.Tensor:
+    if mask is None:
+        return 1.0 - ssim(pred, target)
+    masked_pred = _fill_inactive_with_target(pred, target, mask)
+    return 1.0 - ssim(masked_pred, target)
+
+
+def _luma_gradient_loss(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    max_side: int,
+    mask: torch.Tensor | None = None,
+) -> torch.Tensor:
     pred_luma = _luma(_resize_bchw_tensor(pred, int(max_side)))
     target_luma = _luma(_resize_bchw_tensor(target, int(max_side)))
     pred_dx = pred_luma[:, :, :, 1:] - pred_luma[:, :, :, :-1]
     pred_dy = pred_luma[:, :, 1:, :] - pred_luma[:, :, :-1, :]
     target_dx = target_luma[:, :, :, 1:] - target_luma[:, :, :, :-1]
     target_dy = target_luma[:, :, 1:, :] - target_luma[:, :, :-1, :]
-    return torch.mean(torch.abs(pred_dx - target_dx)) + torch.mean(torch.abs(pred_dy - target_dy))
+    diff_dx = torch.abs(pred_dx - target_dx)
+    diff_dy = torch.abs(pred_dy - target_dy)
+    if mask is None:
+        return torch.mean(diff_dx) + torch.mean(diff_dy)
+    mask_r = _resize_mask_bchw(mask.to(device=pred.device, dtype=pred.dtype), pred_luma.shape[-2:])
+    mask_dx = torch.maximum(mask_r[:, :, :, 1:], mask_r[:, :, :, :-1])
+    mask_dy = torch.maximum(mask_r[:, :, 1:, :], mask_r[:, :, :-1, :])
+    denom_dx = torch.clamp(mask_dx.sum(), min=1.0)
+    denom_dy = torch.clamp(mask_dy.sum(), min=1.0)
+    return torch.sum(diff_dx * mask_dx) / denom_dx + torch.sum(diff_dy * mask_dy) / denom_dy
+
+
+def _local_high_frequency(x: torch.Tensor) -> torch.Tensor:
+    padded = F.pad(x, (1, 1, 1, 1), mode="reflect")
+    low = F.avg_pool2d(padded, kernel_size=3, stride=1)
+    return x - low
+
+
+def _multiscale_highfreq_loss(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    max_side: int,
+    levels: int,
+    mask: torch.Tensor | None = None,
+) -> torch.Tensor:
+    if int(levels) <= 0:
+        return torch.zeros((), dtype=pred.dtype, device=pred.device)
+    pred_s = _resize_bchw_tensor(pred, int(max_side))
+    target_s = _resize_bchw_tensor(target, int(max_side))
+    mask_s = (
+        _resize_mask_bchw(mask.to(device=pred.device, dtype=pred.dtype), pred_s.shape[-2:])
+        if mask is not None
+        else None
+    )
+    total = torch.zeros((), dtype=pred.dtype, device=pred.device)
+    weight_sum = 0.0
+    cur_pred = pred_s
+    cur_target = target_s
+    cur_mask = mask_s
+    for level in range(int(levels)):
+        if cur_pred.shape[-2] < 4 or cur_pred.shape[-1] < 4:
+            break
+        weight = 1.0 / float(2**level)
+        total = total + float(weight) * _masked_l1_loss(
+            _local_high_frequency(cur_pred),
+            _local_high_frequency(cur_target),
+            cur_mask,
+        )
+        weight_sum += float(weight)
+        if level == int(levels) - 1:
+            break
+        cur_pred = F.avg_pool2d(cur_pred, kernel_size=2, stride=2)
+        cur_target = F.avg_pool2d(cur_target, kernel_size=2, stride=2)
+        if cur_mask is not None:
+            cur_mask = (F.avg_pool2d(cur_mask, kernel_size=2, stride=2) > 0.25).to(dtype=cur_pred.dtype)
+    if weight_sum <= 0.0:
+        return torch.zeros((), dtype=pred.dtype, device=pred.device)
+    return total / float(weight_sum)
 
 
 def _camera_dir(z: np.lib.npyio.NpzFile, h: int, w: int) -> np.ndarray:
@@ -163,6 +257,16 @@ def _load_input_chw(z: np.lib.npyio.NpzFile) -> np.ndarray:
     if "barycentric_valid" in z:
         valid *= np.asarray(z["barycentric_valid"]).reshape(1, h, w).astype(np.float32)
     return np.concatenate([parent, normal, inv_depth, alpha, bary, texture, cam, valid], axis=0).astype(np.float32)
+
+
+def _append_alpha_channel_chw(features: torch.Tensor, alpha: float) -> torch.Tensor:
+    alpha_ch = torch.full(
+        (1, features.shape[-2], features.shape[-1]),
+        float(alpha),
+        dtype=features.dtype,
+        device=features.device,
+    )
+    return torch.cat([features, alpha_ch], dim=0)
 
 
 def _load_example(
@@ -311,10 +415,26 @@ def _collect_train_face_lut(paths: list[Path], max_unique: int) -> np.ndarray:
     return merged
 
 
+def _load_residual_l1_npz(
+    z: np.lib.npyio.NpzFile,
+    *,
+    residual_l1_key: str,
+    residual_rgb_key: str,
+) -> np.ndarray | None:
+    if residual_l1_key in z:
+        return np.asarray(z[residual_l1_key], dtype=np.float32)
+    if residual_rgb_key in z:
+        residual = np.asarray(z[residual_rgb_key], dtype=np.float32)
+        if residual.ndim == 3:
+            return np.mean(np.abs(residual[:3]), axis=0).astype(np.float32)
+    return None
+
+
 def _collect_residual_top_face_lut(
     paths: list[Path],
     *,
     residual_l1_key: str,
+    residual_rgb_key: str,
     max_unique: int,
     min_alpha: float,
     min_residual_l1: float,
@@ -325,7 +445,14 @@ def _collect_residual_top_face_lut(
     views_used = 0
     for path in tqdm(paths, desc="collect residual top face ids"):
         z = np.load(path)
-        if "face_id" not in z or residual_l1_key not in z:
+        if "face_id" not in z:
+            continue
+        residual_l1 = _load_residual_l1_npz(
+            z,
+            residual_l1_key=residual_l1_key,
+            residual_rgb_key=residual_rgb_key,
+        )
+        if residual_l1 is None:
             continue
         face_id = np.asarray(z["face_id"], dtype=np.int64)
         mask = face_id >= 0
@@ -333,7 +460,6 @@ def _collect_residual_top_face_lut(
             mask &= np.asarray(z["barycentric_valid"]).astype(bool)
         if "alpha" in z:
             mask &= np.asarray(z["alpha"], dtype=np.float32) >= float(min_alpha)
-        residual_l1 = np.asarray(z[residual_l1_key], dtype=np.float32)
         mask &= residual_l1 >= float(min_residual_l1)
         if not np.any(mask):
             continue
@@ -457,6 +583,7 @@ def _collect_surface_texture_support_stats(
     *,
     face_lut: np.ndarray,
     residual_l1_key: str,
+    residual_rgb_key: str,
     texture_size: int,
     min_alpha: float,
     min_residual_l1: float,
@@ -469,7 +596,14 @@ def _collect_surface_texture_support_stats(
     views_used = 0
     for path in tqdm(paths, desc="collect low-rank surface support"):
         z = np.load(path)
-        if "face_id" not in z or "barycentric" not in z or residual_l1_key not in z:
+        if "face_id" not in z or "barycentric" not in z:
+            continue
+        residual_l1 = _load_residual_l1_npz(
+            z,
+            residual_l1_key=residual_l1_key,
+            residual_rgb_key=residual_rgb_key,
+        )
+        if residual_l1 is None:
             continue
         row_id = _texture_row_indices_np(z["face_id"], z["barycentric"], face_lut, int(texture_size))
         mask = row_id > 0
@@ -477,7 +611,6 @@ def _collect_surface_texture_support_stats(
             mask &= np.asarray(z["barycentric_valid"]).astype(bool)
         if "alpha" in z:
             mask &= np.asarray(z["alpha"], dtype=np.float32) >= float(min_alpha)
-        residual_l1 = np.asarray(z[residual_l1_key], dtype=np.float32)
         mask &= residual_l1 >= float(min_residual_l1)
         if not np.any(mask):
             continue
@@ -678,6 +811,96 @@ class SurfaceTextureResidualMLP(torch.nn.Module):
         return delta
 
 
+class SurfaceTextureConditionedUNet(torch.nn.Module):
+    """Surface neural texture rasterized into an image-context residual U-Net.
+
+    Compared with SurfaceTextureResidualMLP, the per-face/UV feature texture is
+    not decoded pointwise.  The feature map is concatenated with parent render,
+    surface buffers, and camera channels, then decoded by a compact U-Net.  This
+    gives the baked residual carrier local 2D context while keeping unknown
+    target faces as deterministic zero-feature no-ops.
+    """
+
+    def __init__(
+        self,
+        in_ch: int,
+        base_ch: int,
+        max_delta: float,
+        num_faces: int,
+        texture_size: int,
+        feature_dim: int,
+        support_stats: np.ndarray | torch.Tensor | None = None,
+        *,
+        confidence_mode: str = "none",
+        confidence_bias: float = 2.0,
+        confidence_min: float = 0.0,
+        confidence_max: float = 1.0,
+    ):
+        super().__init__()
+        self.texture_size = int(texture_size)
+        self.bins_per_face = int(texture_size) * int(texture_size)
+        self.num_faces = int(num_faces)
+        self.feature_dim = int(feature_dim)
+        rows = int(num_faces) * self.bins_per_face + 1
+        if support_stats is not None:
+            stats = torch.as_tensor(support_stats, dtype=torch.float32)
+            if stats.ndim != 2 or stats.shape[0] != rows:
+                raise ValueError(f"support_stats shape {tuple(stats.shape)} does not match rows={rows}")
+        else:
+            stats = None
+        self.register_buffer("surface_support_stats", stats, persistent=True)
+        self.surface_texture = torch.nn.Embedding(rows, int(feature_dim), padding_idx=0)
+        torch.nn.init.normal_(self.surface_texture.weight, mean=0.0, std=0.01)
+        with torch.no_grad():
+            self.surface_texture.weight[0].zero_()
+        self.unet = SurfaceConditionedResidualUNet(
+            int(in_ch) + int(feature_dim),
+            int(base_ch),
+            float(max_delta),
+            confidence_mode=confidence_mode,
+            confidence_bias=confidence_bias,
+            confidence_min=confidence_min,
+            confidence_max=confidence_max,
+        )
+
+    def _texture_indices(self, x: torch.Tensor, face_ids: torch.Tensor) -> torch.Tensor:
+        if x.shape[1] < 11:
+            raise ValueError("surface texture U-Net expects barycentric channels in input features")
+        bary = x[:, 8:11]
+        u = torch.clamp(bary[:, 1], 0.0, 0.999999)
+        v = torch.clamp(bary[:, 2], 0.0, 0.999999)
+        ubin = torch.clamp((u * float(self.texture_size)).long(), 0, self.texture_size - 1)
+        vbin = torch.clamp((v * float(self.texture_size)).long(), 0, self.texture_size - 1)
+        bin_id = vbin * int(self.texture_size) + ubin
+        compact_face = face_ids.long()
+        valid = compact_face > 0
+        index = (compact_face - 1) * int(self.bins_per_face) + bin_id + 1
+        return torch.where(valid, index, torch.zeros_like(index))
+
+    def forward(self, x: torch.Tensor, face_ids: torch.Tensor | None = None) -> torch.Tensor:
+        if face_ids is None:
+            raise ValueError("face_ids are required for SurfaceTextureConditionedUNet")
+        idx = self._texture_indices(x, face_ids)
+        tex = self.surface_texture(idx)
+        gate = None
+        if self.surface_support_stats is not None:
+            gate = self.surface_support_stats[idx][..., 2].unsqueeze(1)
+            tex = tex * gate.permute(0, 2, 3, 1)
+        tex = tex.permute(0, 3, 1, 2)
+        delta = self.unet(torch.cat([x, tex], dim=1))
+        if gate is not None:
+            delta = delta * gate
+        return delta
+
+    def support_mask(self, x: torch.Tensor, face_ids: torch.Tensor | None = None) -> torch.Tensor:
+        if face_ids is None:
+            raise ValueError("face_ids are required for SurfaceTextureConditionedUNet")
+        if self.surface_support_stats is None:
+            return torch.ones((x.shape[0], 1, x.shape[2], x.shape[3]), dtype=x.dtype, device=x.device)
+        idx = self._texture_indices(x, face_ids)
+        return self.surface_support_stats[idx][..., 2].unsqueeze(1)
+
+
 class SupportAwareLowRankSurfaceTexture(torch.nn.Module):
     """Low-rank teacher residual texture with hard support-aware no-op gating.
 
@@ -838,6 +1061,15 @@ def evaluate_policy_val(
     residual_key: str,
     face_lut: np.ndarray | None,
     alpha_grid: list[float],
+    alpha_conditioned_residual: bool,
+    policy_select_mode: str,
+    policy_tail_fraction: float,
+    policy_min_psnr_gain: float,
+    policy_min_ssim_gain: float,
+    policy_min_lpips_gain: float,
+    policy_cvar_psnr_gain: float,
+    policy_cvar_ssim_gain: float,
+    policy_cvar_lpips_gain: float,
     device: torch.device,
     eval_tile: int,
     eval_overlap: int,
@@ -848,7 +1080,7 @@ def evaluate_policy_val(
 ) -> dict[str, Any]:
     lpips_model = build_lpips_model() if compute_lpips else None
     rows_by_alpha: dict[float, list[dict[str, Any]]] = {float(a): [] for a in alpha_grid}
-    cache: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+    cache: dict[str, tuple[dict[float, np.ndarray], np.ndarray, np.ndarray]] = {}
     model.eval()
     for path in tqdm(val_paths, desc="policy-val v184"):
         z = np.load(path)
@@ -856,20 +1088,40 @@ def evaluate_policy_val(
         face_ids = _load_face_ids_tensor(z, face_lut, max_side=-1)
         parent = np.clip(_to_chw(z["rgb_render"])[:3], 0.0, 1.0).astype(np.float32)
         gt = np.clip(_to_chw(z["rgb_gt"])[:3], 0.0, 1.0).astype(np.float32)
-        delta = _predict_delta_tiled(
-            model,
-            features,
-            face_ids=face_ids,
-            device=device,
-            tile=eval_tile,
-            overlap=eval_overlap,
-        ).numpy()
-        cache[path.stem] = (delta, parent, gt)
+        shared_delta: np.ndarray | None = None
+        if not bool(alpha_conditioned_residual):
+            shared_delta = _predict_delta_tiled(
+                model,
+                features,
+                face_ids=face_ids,
+                device=device,
+                tile=eval_tile,
+                overlap=eval_overlap,
+            ).numpy()
+        delta_by_alpha: dict[float, np.ndarray] = {}
         p_psnr = _psnr(parent, gt)
         p_ssim = image_ssim_chw(parent, gt, int(ssim_max_side))
         p_lpips = image_lpips_chw(parent, gt, int(lpips_max_side), lpips_model) if compute_lpips else None
         for alpha in alpha_grid:
-            cand = np.clip(parent + float(alpha) * delta, 0.0, 1.0)
+            alpha_f = float(alpha)
+            if bool(alpha_conditioned_residual):
+                if alpha_f == 0.0:
+                    delta = np.zeros_like(parent, dtype=np.float32)
+                else:
+                    delta = _predict_delta_tiled(
+                        model,
+                        _append_alpha_channel_chw(features, alpha_f),
+                        face_ids=face_ids,
+                        device=device,
+                        tile=eval_tile,
+                        overlap=eval_overlap,
+                    ).numpy()
+                cand = np.clip(parent + delta, 0.0, 1.0)
+            else:
+                assert shared_delta is not None
+                delta = shared_delta
+                cand = np.clip(parent + alpha_f * delta, 0.0, 1.0)
+            delta_by_alpha[alpha_f] = delta
             row = {
                 "view": path.stem,
                 "parent_psnr": float(p_psnr),
@@ -879,13 +1131,45 @@ def evaluate_policy_val(
             }
             row["psnr_gain"] = row["candidate_psnr"] - row["parent_psnr"]
             row["ssim_gain"] = row["candidate_ssim"] - row["parent_ssim"]
-            row["changed_fraction"] = float(np.mean(np.any(np.abs(float(alpha) * delta) > (0.5 / 255.0), axis=0)))
+            applied_delta = delta if bool(alpha_conditioned_residual) else alpha_f * delta
+            row["changed_fraction"] = float(np.mean(np.any(np.abs(applied_delta) > (0.5 / 255.0), axis=0)))
             if compute_lpips:
                 c_lpips = image_lpips_chw(cand, gt, int(lpips_max_side), lpips_model)
                 row["parent_lpips"] = float(p_lpips)
                 row["candidate_lpips"] = float(c_lpips)
                 row["lpips_gain"] = float(p_lpips - c_lpips)
-            rows_by_alpha[float(alpha)].append(row)
+            rows_by_alpha[alpha_f].append(row)
+        cache[path.stem] = (delta_by_alpha, parent, gt)
+
+    def _tail_mean(values: list[float], fraction: float) -> float:
+        arr = np.asarray(values, dtype=np.float64)
+        if arr.size == 0:
+            return 0.0
+        k = max(1, int(math.ceil(float(fraction) * int(arr.size))))
+        k = min(k, int(arr.size))
+        return float(np.mean(np.sort(arr)[:k]))
+
+    def _mean_score(row: dict[str, Any]) -> float:
+        return (
+            float(row.get("psnr_gain", 0.0))
+            + 20.0 * float(row.get("ssim_gain", 0.0))
+            + 20.0 * float(row.get("lpips_gain", 0.0))
+        )
+
+    def _tail_score(row: dict[str, Any]) -> float:
+        return (
+            _mean_score(row)
+            + 0.25 * float(row.get("psnr_cvar_gain", 0.0))
+            + 10.0 * float(row.get("ssim_cvar_gain", 0.0))
+            + 30.0 * float(row.get("lpips_cvar_gain", 0.0))
+            + 0.10 * float(row.get("psnr_min_gain", 0.0))
+            + 5.0 * float(row.get("ssim_min_gain", 0.0))
+            + 15.0 * float(row.get("lpips_min_gain", 0.0))
+        )
+
+    select_mode = str(policy_select_mode)
+    if select_mode not in {"mean", "tail_guard"}:
+        raise ValueError(f"unknown policy_select_mode: {select_mode}")
     summaries: list[dict[str, Any]] = []
     for alpha, rows in rows_by_alpha.items():
         psnr_gain = [float(r["psnr_gain"]) for r in rows]
@@ -901,6 +1185,10 @@ def evaluate_policy_val(
             "positive_view_fraction": float(np.mean(np.asarray(psnr_gain) > 0.0)),
             "ssim_positive_view_fraction": float(np.mean(np.asarray(ssim_gain) > 0.0)),
             "mean_changed_fraction": float(np.mean([r["changed_fraction"] for r in rows])),
+            "psnr_min_gain": float(np.min(psnr_gain)) if psnr_gain else 0.0,
+            "ssim_min_gain": float(np.min(ssim_gain)) if ssim_gain else 0.0,
+            "psnr_cvar_gain": _tail_mean(psnr_gain, float(policy_tail_fraction)),
+            "ssim_cvar_gain": _tail_mean(ssim_gain, float(policy_tail_fraction)),
         }
         if compute_lpips:
             lpips_gain = [float(r["lpips_gain"]) for r in rows]
@@ -908,15 +1196,14 @@ def evaluate_policy_val(
             summary["candidate_lpips"] = float(np.mean([r["candidate_lpips"] for r in rows]))
             summary["lpips_gain"] = float(np.mean(lpips_gain))
             summary["lpips_positive_view_fraction"] = float(np.mean(np.asarray(lpips_gain) > 0.0))
+            summary["lpips_min_gain"] = float(np.min(lpips_gain)) if lpips_gain else 0.0
+            summary["lpips_cvar_gain"] = _tail_mean(lpips_gain, float(policy_tail_fraction))
+        summary["mean_score"] = _mean_score(summary)
+        summary["tail_score"] = _tail_score(summary)
         summaries.append(summary)
-    best = max(
-        summaries,
-        key=lambda row: (
-            float(row.get("psnr_gain", 0.0))
-            + 20.0 * float(row.get("ssim_gain", 0.0))
-            + 20.0 * float(row.get("lpips_gain", 0.0))
-        ),
-    )
+    best_mean = max(summaries, key=_mean_score)
+    best_tail = max(summaries, key=_tail_score)
+    best = best_tail if select_mode == "tail_guard" else best_mean
     pass_rows = [
         row
         for row in summaries
@@ -924,28 +1211,49 @@ def evaluate_policy_val(
         and float(row.get("ssim_gain", 0.0)) > 0.0
         and (not compute_lpips or float(row.get("lpips_gain", 0.0)) > 0.0)
     ]
+    if select_mode == "tail_guard":
+        pass_rows = [
+            row
+            for row in pass_rows
+            if float(row.get("psnr_min_gain", 0.0)) >= float(policy_min_psnr_gain)
+            and float(row.get("ssim_min_gain", 0.0)) >= float(policy_min_ssim_gain)
+            and (not compute_lpips or float(row.get("lpips_min_gain", 0.0)) >= float(policy_min_lpips_gain))
+            and float(row.get("psnr_cvar_gain", 0.0)) >= float(policy_cvar_psnr_gain)
+            and float(row.get("ssim_cvar_gain", 0.0)) >= float(policy_cvar_ssim_gain)
+            and (not compute_lpips or float(row.get("lpips_cvar_gain", 0.0)) >= float(policy_cvar_lpips_gain))
+        ]
     best_all_axis = None
     if pass_rows:
         best_all_axis = max(
             pass_rows,
-            key=lambda row: (
-                float(row.get("psnr_gain", 0.0))
-                + 20.0 * float(row.get("ssim_gain", 0.0))
-                + 20.0 * float(row.get("lpips_gain", 0.0))
-            ),
+            key=_tail_score if select_mode == "tail_guard" else _mean_score,
         )
     if output_dir is not None:
         alpha = float((best_all_axis or best)["alpha"])
         (output_dir / "renders").mkdir(parents=True, exist_ok=True)
         (output_dir / "parent").mkdir(parents=True, exist_ok=True)
         (output_dir / "gt").mkdir(parents=True, exist_ok=True)
-        for stem, (delta, parent, gt) in cache.items():
-            save_image_chw(output_dir / "renders" / f"{stem}.png", np.clip(parent + alpha * delta, 0.0, 1.0))
+        for stem, (delta_by_alpha, parent, gt) in cache.items():
+            delta = delta_by_alpha[alpha]
+            applied_delta = delta if bool(alpha_conditioned_residual) else alpha * delta
+            save_image_chw(output_dir / "renders" / f"{stem}.png", np.clip(parent + applied_delta, 0.0, 1.0))
             save_image_chw(output_dir / "parent" / f"{stem}.png", parent)
             save_image_chw(output_dir / "gt" / f"{stem}.png", gt)
     return {
         "best": best,
+        "best_mean": best_mean,
+        "best_tail": best_tail,
         "best_all_axis": best_all_axis,
+        "selection": {
+            "mode": select_mode,
+            "tail_fraction": float(policy_tail_fraction),
+            "min_psnr_gain": float(policy_min_psnr_gain),
+            "min_ssim_gain": float(policy_min_ssim_gain),
+            "min_lpips_gain": float(policy_min_lpips_gain),
+            "cvar_psnr_gain": float(policy_cvar_psnr_gain),
+            "cvar_ssim_gain": float(policy_cvar_ssim_gain),
+            "cvar_lpips_gain": float(policy_cvar_lpips_gain),
+        },
         "rows": summaries,
         "per_view_by_alpha": {str(k): v for k, v in rows_by_alpha.items()},
     }
@@ -959,6 +1267,7 @@ def apply_target(
     scene_name: str,
     method_name: str,
     alpha: float,
+    alpha_conditioned_residual: bool,
     device: torch.device,
     eval_tile: int,
     eval_overlap: int,
@@ -983,18 +1292,25 @@ def apply_target(
         features = torch.from_numpy(_load_input_chw(z))
         face_ids = _load_face_ids_tensor(z, face_lut, max_side=-1)
         parent = np.clip(_to_chw(z["rgb_render"])[:3], 0.0, 1.0).astype(np.float32)
-        delta = _predict_delta_tiled(
-            model,
-            features,
-            face_ids=face_ids,
-            device=device,
-            tile=eval_tile,
-            overlap=eval_overlap,
-        ).numpy()
-        cand = np.clip(parent + float(alpha) * delta, 0.0, 1.0)
+        if bool(alpha_conditioned_residual) and float(alpha) == 0.0:
+            delta = np.zeros_like(parent, dtype=np.float32)
+        else:
+            model_features = (
+                _append_alpha_channel_chw(features, float(alpha)) if bool(alpha_conditioned_residual) else features
+            )
+            delta = _predict_delta_tiled(
+                model,
+                model_features,
+                face_ids=face_ids,
+                device=device,
+                tile=eval_tile,
+                overlap=eval_overlap,
+            ).numpy()
+        applied_delta = delta if bool(alpha_conditioned_residual) else float(alpha) * delta
+        cand = np.clip(parent + applied_delta, 0.0, 1.0)
         save_image_chw(render_dir / f"{path.stem}.png", cand)
         save_image_chw(parent_dir / f"{path.stem}.png", parent)
-        changed = np.any(np.abs(float(alpha) * delta) > (0.5 / 255.0), axis=0)
+        changed = np.any(np.abs(applied_delta) > (0.5 / 255.0), axis=0)
         row: dict[str, Any] = {
             "view": path.stem,
             "changed_fraction": float(np.mean(changed)),
@@ -1055,6 +1371,7 @@ def apply_target(
 def _write_md(path: Path, payload: dict[str, Any]) -> None:
     best = payload["policy_val"]["best"]
     best_all = payload["policy_val"].get("best_all_axis")
+    selection = payload["policy_val"].get("selection", {})
     target = payload.get("target_apply") or {}
     leakage = payload.get("gt_usage_audit", {})
     audit = payload.get("audit_notes", {})
@@ -1064,6 +1381,8 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- policy-val all-axis pass: `{payload['policy_val_all_axis_pass']}`",
         f"- policy-val gate scope: `{audit.get('policy_val_gate_scope')}`",
         f"- Phase-J gate enforced by this script: `{audit.get('phasej_gate_enforced_by_script')}`",
+        f"- alpha contract: `{audit.get('alpha_contract')}`",
+        f"- alpha contract warning: `{audit.get('alpha_contract_warning')}`",
         f"- target exact run: `{bool(target)}`",
         f"- target no-GT verifier: `{target.get('no_gt_verify', {}).get('passed')}`",
         f"- uses train-fit GT: `{leakage.get('uses_train_fit_gt')}`",
@@ -1073,11 +1392,17 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         "",
         "## Policy-Val",
         "",
-        "| alpha | PSNR gain | SSIM gain | LPIPS gain | changed fraction |",
-        "|---:|---:|---:|---:|---:|",
+        f"- selection mode: `{selection.get('mode', 'mean')}`",
+        f"- tail fraction: `{selection.get('tail_fraction', 0.2)}`",
+        "",
+        "| alpha | PSNR gain | SSIM gain | LPIPS gain | PSNR min | SSIM min | LPIPS min | PSNR CVaR | SSIM CVaR | LPIPS CVaR | changed fraction |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         (
             f"| {best.get('alpha', 0.0):.6f} | {best.get('psnr_gain', 0.0):+.9f} | "
             f"{best.get('ssim_gain', 0.0):+.9f} | {best.get('lpips_gain', 0.0):+.9f} | "
+            f"{best.get('psnr_min_gain', 0.0):+.9f} | {best.get('ssim_min_gain', 0.0):+.9f} | "
+            f"{best.get('lpips_min_gain', 0.0):+.9f} | {best.get('psnr_cvar_gain', 0.0):+.9f} | "
+            f"{best.get('ssim_cvar_gain', 0.0):+.9f} | {best.get('lpips_cvar_gain', 0.0):+.9f} | "
             f"{best.get('mean_changed_fraction', 0.0):.6f} |"
         ),
         "",
@@ -1110,7 +1435,11 @@ def main() -> int:
     parser.add_argument("--patch_size", type=int, default=256)
     parser.add_argument("--steps", type=int, default=1200)
     parser.add_argument("--lr", type=float, default=1.0e-3)
-    parser.add_argument("--model_type", choices=["unet", "surface_texture_mlp", "lowrank_surface_texture"], default="unet")
+    parser.add_argument(
+        "--model_type",
+        choices=["unet", "surface_texture_mlp", "surface_texture_unet", "lowrank_surface_texture"],
+        default="unet",
+    )
     parser.add_argument("--base_channels", type=int, default=24)
     parser.add_argument("--max_delta", type=float, default=0.20)
     parser.add_argument(
@@ -1137,6 +1466,11 @@ def main() -> int:
     parser.add_argument("--surface_face_min_alpha", type=float, default=0.03)
     parser.add_argument("--surface_face_min_residual_l1", type=float, default=0.0)
     parser.add_argument(
+        "--enable_surface_support_gate",
+        action="store_true",
+        help="For surface neural texture models, zero UV rows with insufficient train-fit residual support.",
+    )
+    parser.add_argument(
         "--surface_target_visible_evidence_dir",
         default="",
         help="Optional no-GT target evidence used only to prioritize target-visible faces in the surface capacity budget.",
@@ -1148,14 +1482,60 @@ def main() -> int:
     parser.add_argument("--teacher_ssim_weight", type=float, default=0.20)
     parser.add_argument("--teacher_lpips_weight", type=float, default=0.0)
     parser.add_argument("--teacher_grad_weight", type=float, default=0.0)
+    parser.add_argument("--teacher_highfreq_weight", type=float, default=0.0)
     parser.add_argument("--gt_l1_weight", type=float, default=0.10)
     parser.add_argument("--gt_ssim_weight", type=float, default=0.0)
     parser.add_argument("--gt_lpips_weight", type=float, default=0.0)
     parser.add_argument("--gt_grad_weight", type=float, default=0.0)
+    parser.add_argument("--gt_highfreq_weight", type=float, default=0.0)
+    parser.add_argument(
+        "--support_loss_mask",
+        choices=["none", "active"],
+        default="none",
+        help=(
+            "When active, normalize train losses over bins writable by the surface support gate. "
+            "This keeps hard no-op pixels from diluting teacher/GT supervision."
+        ),
+    )
+    parser.add_argument(
+        "--support_patch_resample_attempts",
+        type=int,
+        default=1,
+        help="If support_loss_mask=active, resample train patches up to this many times to find writable support.",
+    )
+    parser.add_argument(
+        "--support_patch_min_active_fraction",
+        type=float,
+        default=0.0,
+        help="Minimum active support fraction accepted by support_patch_resample_attempts.",
+    )
     parser.add_argument("--lpips_loss_max_side", type=int, default=128)
     parser.add_argument("--grad_loss_max_side", type=int, default=256)
+    parser.add_argument("--highfreq_loss_max_side", type=int, default=256)
+    parser.add_argument("--highfreq_loss_levels", type=int, default=3)
     parser.add_argument("--delta_l1_weight", type=float, default=1.0e-4)
     parser.add_argument("--alpha_grid", default="0,0.125,0.25,0.5,0.75,1")
+    parser.add_argument(
+        "--policy_select_mode",
+        choices=["mean", "tail_guard"],
+        default="mean",
+        help="mean preserves the legacy average-gain selector; tail_guard also enforces min/CVaR gain thresholds.",
+    )
+    parser.add_argument("--policy_tail_fraction", type=float, default=0.20)
+    parser.add_argument("--policy_min_psnr_gain", type=float, default=-1.0e9)
+    parser.add_argument("--policy_min_ssim_gain", type=float, default=-1.0e9)
+    parser.add_argument("--policy_min_lpips_gain", type=float, default=-1.0e9)
+    parser.add_argument("--policy_cvar_psnr_gain", type=float, default=-1.0e9)
+    parser.add_argument("--policy_cvar_ssim_gain", type=float, default=-1.0e9)
+    parser.add_argument("--policy_cvar_lpips_gain", type=float, default=-1.0e9)
+    parser.add_argument(
+        "--alpha_conditioned_residual",
+        action="store_true",
+        help=(
+            "Append the selected alpha as an input channel and train the model to emit the final delta for that alpha. "
+            "This avoids selecting an untrained post-hoc alpha multiplier at policy-val/apply time."
+        ),
+    )
     parser.add_argument("--target_alpha", type=float, default=None)
     parser.add_argument("--method_name", default="ours_26000_v184_surface_conditioned_unet_flowers")
     parser.add_argument("--scene_name", default="flowers")
@@ -1211,7 +1591,7 @@ def main() -> int:
     fit_paths, val_paths = _policy_split(paths, int(args.policy_val_stride))
     face_lut = None
     surface_support_stats = None
-    surface_model_types = {"surface_texture_mlp", "lowrank_surface_texture"}
+    surface_model_types = {"surface_texture_mlp", "surface_texture_unet", "lowrank_surface_texture"}
     residual_l1_key = (
         str(args.residual_rgb_key).replace("_rgb", "_l1")
         if str(args.residual_rgb_key).endswith("_rgb")
@@ -1235,6 +1615,7 @@ def main() -> int:
         face_lut, face_lut_summary = _collect_residual_top_face_lut(
             fit_paths,
             residual_l1_key=residual_l1_key,
+            residual_rgb_key=str(args.residual_rgb_key),
             max_unique=int(args.surface_face_max_unique),
             min_alpha=float(args.surface_face_min_alpha),
             min_residual_l1=float(args.surface_face_min_residual_l1),
@@ -1244,11 +1625,12 @@ def main() -> int:
             raise RuntimeError("surface texture model requested but no residual top faces were collected")
         texture_rows = int(face_lut.size) * int(args.surface_texture_size) * int(args.surface_texture_size) + 1
         support_summary = None
-        if str(args.model_type) == "lowrank_surface_texture":
+        if str(args.model_type) == "lowrank_surface_texture" or bool(args.enable_surface_support_gate):
             surface_support_stats, support_summary = _collect_surface_texture_support_stats(
                 fit_paths,
                 face_lut=face_lut,
                 residual_l1_key=residual_l1_key,
+                residual_rgb_key=str(args.residual_rgb_key),
                 texture_size=int(args.surface_texture_size),
                 min_alpha=float(args.surface_face_min_alpha),
                 min_residual_l1=float(args.surface_face_min_residual_l1),
@@ -1263,11 +1645,7 @@ def main() -> int:
                 "embedding_rows": int(texture_rows),
                 "estimated_parameter_count": int(
                     texture_rows
-                    * (
-                        int(args.surface_feature_dim)
-                        if str(args.model_type) == "surface_texture_mlp"
-                        else int(args.lowrank_rank) * 3
-                    )
+                    * (int(args.lowrank_rank) * 3 if str(args.model_type) == "lowrank_surface_texture" else int(args.surface_feature_dim))
                 ),
                 "lowrank_support_summary": support_summary,
                 "target_visible_priority_summary": target_visible_summary,
@@ -1290,7 +1668,11 @@ def main() -> int:
         _load_example(p, str(args.residual_rgb_key), int(args.train_max_side), include_gt=True, face_lut=face_lut)
         for p in tqdm(fit_paths, desc="preload train-fit")
     ]
-    in_ch = int(train_examples[0]["features"].shape[0])
+    alpha_grid = _parse_float_grid(str(args.alpha_grid))
+    train_alpha_grid = [float(a) for a in alpha_grid if float(a) > 0.0]
+    if not train_alpha_grid:
+        train_alpha_grid = [1.0]
+    in_ch = int(train_examples[0]["features"].shape[0]) + (1 if bool(args.alpha_conditioned_residual) else 0)
     if str(args.model_type) == "surface_texture_mlp":
         if face_lut is None or face_lut.size == 0:
             raise RuntimeError("surface texture model requested but no train-fit face ids were collected")
@@ -1302,6 +1684,22 @@ def main() -> int:
             int(args.surface_texture_size),
             int(args.surface_feature_dim),
             int(args.surface_decoder_layers),
+            confidence_mode=str(args.confidence_mode),
+            confidence_bias=float(args.confidence_bias),
+            confidence_min=float(args.confidence_min),
+            confidence_max=float(args.confidence_max),
+        ).to(device)
+    elif str(args.model_type) == "surface_texture_unet":
+        if face_lut is None or face_lut.size == 0:
+            raise RuntimeError("surface texture U-Net requested but no train-fit face ids were collected")
+        model = SurfaceTextureConditionedUNet(
+            in_ch,
+            int(args.base_channels),
+            float(args.max_delta),
+            int(face_lut.size),
+            int(args.surface_texture_size),
+            int(args.surface_feature_dim),
+            surface_support_stats if bool(args.enable_surface_support_gate) else None,
             confidence_mode=str(args.confidence_mode),
             confidence_bias=float(args.confidence_bias),
             confidence_min=float(args.confidence_min),
@@ -1355,60 +1753,118 @@ def main() -> int:
     rng = random.Random(int(args.seed))
     for step in tqdm(range(1, int(args.steps) + 1), desc=f"train {artifact_prefix}"):
         model.train()
-        ex = rng.choice(train_examples)
-        batch = _sample_patch(ex, int(args.patch_size), rng)
-        feat = batch.features.unsqueeze(0).to(device)
-        face_batch = None if batch.face_ids is None else batch.face_ids.unsqueeze(0).to(device)
-        parent = batch.parent.unsqueeze(0).to(device)
-        teacher = batch.teacher.unsqueeze(0).to(device)
+        loss_mask = None
+        loss_mask_active_fraction = torch.ones((), device=device)
+        support_attempts = max(1, int(args.support_patch_resample_attempts))
+        for attempt in range(support_attempts):
+            ex = rng.choice(train_examples)
+            batch = _sample_patch(ex, int(args.patch_size), rng)
+            train_alpha = float(rng.choice(train_alpha_grid)) if bool(args.alpha_conditioned_residual) else 1.0
+            feat_base = batch.features
+            if bool(args.alpha_conditioned_residual):
+                feat_base = _append_alpha_channel_chw(feat_base, train_alpha)
+            feat = feat_base.unsqueeze(0).to(device)
+            face_batch = None if batch.face_ids is None else batch.face_ids.unsqueeze(0).to(device)
+            parent = batch.parent.unsqueeze(0).to(device)
+            raw_teacher = batch.teacher.unsqueeze(0).to(device)
+            if bool(args.alpha_conditioned_residual):
+                alpha_blend = min(max(train_alpha, 0.0), 1.0)
+                teacher = torch.clamp(parent + float(alpha_blend) * (raw_teacher - parent), 0.0, 1.0)
+            else:
+                teacher = raw_teacher
+            if str(args.support_loss_mask) == "active" and face_batch is not None and hasattr(model, "support_mask"):
+                with torch.no_grad():
+                    loss_mask = model.support_mask(feat, face_batch).to(device=device, dtype=feat.dtype)
+                loss_mask_active_fraction = torch.mean((loss_mask > 0.0).float())
+                if (
+                    float(loss_mask_active_fraction.detach().cpu().item())
+                    >= float(args.support_patch_min_active_fraction)
+                    or attempt == support_attempts - 1
+                ):
+                    break
+            else:
+                break
         pred_delta = model(feat, face_batch)
         adapted = torch.clamp(parent + pred_delta, 0.0, 1.0)
-        loss_teacher_l1 = torch.mean(torch.abs(adapted - teacher))
-        loss_teacher_ssim = 1.0 - ssim(adapted, teacher)
+        if loss_mask is not None:
+            loss_mask = loss_mask.to(dtype=adapted.dtype)
+        loss_mask_active_fraction = (
+            torch.mean((loss_mask > 0.0).float()) if loss_mask is not None else torch.ones((), device=device)
+        )
+        loss_teacher_l1 = _masked_l1_loss(adapted, teacher, loss_mask)
+        loss_teacher_ssim = _masked_ssim_loss(adapted, teacher, loss_mask)
         loss_teacher_lpips = _lpips_train_loss(
             train_lpips_model,
-            adapted,
+            _fill_inactive_with_target(adapted, teacher, loss_mask),
             teacher,
             int(args.lpips_loss_max_side),
         )
         loss_teacher_grad = (
-            _luma_gradient_loss(adapted, teacher, int(args.grad_loss_max_side))
+            _luma_gradient_loss(adapted, teacher, int(args.grad_loss_max_side), loss_mask)
             if float(args.teacher_grad_weight) > 0.0
+            else torch.zeros((), device=device)
+        )
+        loss_teacher_highfreq = (
+            _multiscale_highfreq_loss(
+                adapted,
+                teacher,
+                int(args.highfreq_loss_max_side),
+                int(args.highfreq_loss_levels),
+                loss_mask,
+            )
+            if float(args.teacher_highfreq_weight) > 0.0
             else torch.zeros((), device=device)
         )
         loss_gt = torch.zeros((), device=device)
         loss_gt_ssim = torch.zeros((), device=device)
         loss_gt_lpips = torch.zeros((), device=device)
         loss_gt_grad = torch.zeros((), device=device)
+        loss_gt_highfreq = torch.zeros((), device=device)
         if batch.gt is not None and (
             float(args.gt_l1_weight) > 0.0
             or float(args.gt_ssim_weight) > 0.0
             or float(args.gt_lpips_weight) > 0.0
             or float(args.gt_grad_weight) > 0.0
+            or float(args.gt_highfreq_weight) > 0.0
         ):
-            gt = batch.gt.unsqueeze(0).to(device)
-            loss_gt = torch.mean(torch.abs(adapted - gt))
+            raw_gt = batch.gt.unsqueeze(0).to(device)
+            if bool(args.alpha_conditioned_residual):
+                alpha_blend = min(max(train_alpha, 0.0), 1.0)
+                gt = torch.clamp(parent + float(alpha_blend) * (raw_gt - parent), 0.0, 1.0)
+            else:
+                gt = raw_gt
+            loss_gt = _masked_l1_loss(adapted, gt, loss_mask)
             if float(args.gt_ssim_weight) > 0.0:
-                loss_gt_ssim = 1.0 - ssim(adapted, gt)
+                loss_gt_ssim = _masked_ssim_loss(adapted, gt, loss_mask)
             if float(args.gt_lpips_weight) > 0.0:
                 loss_gt_lpips = _lpips_train_loss(
                     train_lpips_model,
-                    adapted,
+                    _fill_inactive_with_target(adapted, gt, loss_mask),
                     gt,
                     int(args.lpips_loss_max_side),
                 )
             if float(args.gt_grad_weight) > 0.0:
-                loss_gt_grad = _luma_gradient_loss(adapted, gt, int(args.grad_loss_max_side))
+                loss_gt_grad = _luma_gradient_loss(adapted, gt, int(args.grad_loss_max_side), loss_mask)
+            if float(args.gt_highfreq_weight) > 0.0:
+                loss_gt_highfreq = _multiscale_highfreq_loss(
+                    adapted,
+                    gt,
+                    int(args.highfreq_loss_max_side),
+                    int(args.highfreq_loss_levels),
+                    loss_mask,
+                )
         loss_mag = torch.mean(torch.abs(pred_delta))
         loss = (
             float(args.teacher_l1_weight) * loss_teacher_l1
             + float(args.teacher_ssim_weight) * loss_teacher_ssim
             + float(args.teacher_lpips_weight) * loss_teacher_lpips
             + float(args.teacher_grad_weight) * loss_teacher_grad
+            + float(args.teacher_highfreq_weight) * loss_teacher_highfreq
             + float(args.gt_l1_weight) * loss_gt
             + float(args.gt_ssim_weight) * loss_gt_ssim
             + float(args.gt_lpips_weight) * loss_gt_lpips
             + float(args.gt_grad_weight) * loss_gt_grad
+            + float(args.gt_highfreq_weight) * loss_gt_highfreq
             + float(args.delta_l1_weight) * loss_mag
         )
         opt.zero_grad(set_to_none=True)
@@ -1423,11 +1879,15 @@ def main() -> int:
                     "train/teacher_ssim_loss": float(loss_teacher_ssim.detach().cpu().item()),
                     "train/teacher_lpips_loss": float(loss_teacher_lpips.detach().cpu().item()),
                     "train/teacher_grad_loss": float(loss_teacher_grad.detach().cpu().item()),
+                    "train/teacher_highfreq_loss": float(loss_teacher_highfreq.detach().cpu().item()),
                     "train/gt_l1": float(loss_gt.detach().cpu().item()),
                     "train/gt_ssim_loss": float(loss_gt_ssim.detach().cpu().item()),
                     "train/gt_lpips_loss": float(loss_gt_lpips.detach().cpu().item()),
                     "train/gt_grad_loss": float(loss_gt_grad.detach().cpu().item()),
+                    "train/gt_highfreq_loss": float(loss_gt_highfreq.detach().cpu().item()),
                     "train/delta_l1": float(loss_mag.detach().cpu().item()),
+                    "train/support_loss_active_fraction": float(loss_mask_active_fraction.detach().cpu().item()),
+                    "train/alpha": float(train_alpha),
                     "train/step": int(step),
                 }
             )
@@ -1452,7 +1912,16 @@ def main() -> int:
         val_paths,
         residual_key=str(args.residual_rgb_key),
         face_lut=face_lut,
-        alpha_grid=_parse_float_grid(str(args.alpha_grid)),
+        alpha_grid=alpha_grid,
+        alpha_conditioned_residual=bool(args.alpha_conditioned_residual),
+        policy_select_mode=str(args.policy_select_mode),
+        policy_tail_fraction=float(args.policy_tail_fraction),
+        policy_min_psnr_gain=float(args.policy_min_psnr_gain),
+        policy_min_ssim_gain=float(args.policy_min_ssim_gain),
+        policy_min_lpips_gain=float(args.policy_min_lpips_gain),
+        policy_cvar_psnr_gain=float(args.policy_cvar_psnr_gain),
+        policy_cvar_ssim_gain=float(args.policy_cvar_ssim_gain),
+        policy_cvar_lpips_gain=float(args.policy_cvar_lpips_gain),
         device=device,
         eval_tile=int(args.eval_tile),
         eval_overlap=int(args.eval_overlap),
@@ -1476,6 +1945,7 @@ def main() -> int:
             scene_name=str(args.scene_name),
             method_name=str(args.method_name),
             alpha=selected_alpha,
+            alpha_conditioned_residual=bool(args.alpha_conditioned_residual),
             device=device,
             eval_tile=int(args.eval_tile),
             eval_overlap=int(args.eval_overlap),
@@ -1488,6 +1958,7 @@ def main() -> int:
         + float(args.gt_ssim_weight)
         + float(args.gt_lpips_weight)
         + float(args.gt_grad_weight)
+        + float(args.gt_highfreq_weight)
     )
     train_fit_gt_available = any("gt" in example for example in train_examples)
     gt_usage_audit = {
@@ -1526,6 +1997,7 @@ def main() -> int:
         "model": {
             "model_type": str(args.model_type),
             "input_channels": int(in_ch),
+            "alpha_conditioned_residual": bool(args.alpha_conditioned_residual),
             "base_channels": int(args.base_channels),
             "max_delta": float(args.max_delta),
             "confidence_mode": str(args.confidence_mode),
@@ -1562,6 +2034,17 @@ def main() -> int:
             "phasej_gate_enforced_by_script": False,
             "phasej_gate_must_be_checked_by_official_eval": True,
             "target_alpha_selection": "manual_target_alpha" if args.target_alpha is not None else "policy_val_selected",
+            "alpha_contract": (
+                "model_outputs_final_delta_for_selected_alpha"
+                if bool(args.alpha_conditioned_residual)
+                else "posthoc_policy_val_alpha_multiplier"
+            ),
+            "alpha_conditioned_train_grid": train_alpha_grid if bool(args.alpha_conditioned_residual) else [],
+            "alpha_contract_warning": (
+                ""
+                if bool(args.alpha_conditioned_residual)
+                else "policy-val may select an alpha multiplier that was not part of the training objective"
+            ),
             "target_eval_evidence_dir_integrated": False,
             "target_eval_evidence_dir_note": (
                 "--target_eval_evidence_dir is recorded in args only; run official eval scripts after no-GT apply"
