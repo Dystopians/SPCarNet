@@ -1,0 +1,64 @@
+{
+  "schema": "spcarnet_v169_native1256_diagnostic_summary_v1",
+  "date": "2026-06-29",
+  "scene": "flowers",
+  "verdict": "fail_phasej_hard_gate",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "report": "docs/car_model/6-29-v169-Native1256-TeacherResidual-Diagnostic.md",
+  "hard_gate": {
+    "phasej_threshold_psnr": 20.304358,
+    "phasej_threshold_ssim": 0.55777,
+    "phasej_threshold_lpips": 0.329222
+  },
+  "exact_metrics": {
+    "phasef_parent_native1256": {
+      "PSNR": 19.6686954498291,
+      "SSIM": 0.5116779804229736,
+      "LPIPS": 0.39478757977485657
+    },
+    "v169_native1256_teacher_only": {
+      "PSNR": 19.670961380004883,
+      "SSIM": 0.5118137001991272,
+      "LPIPS": 0.39443060755729675
+    },
+    "phasej_reference_native1256": {
+      "PSNR": 20.300607681274414,
+      "SSIM": 0.5574578046798706,
+      "LPIPS": 0.32950547337532043
+    }
+  },
+  "policy_val_best_all_axis": {
+    "alpha": 0.25,
+    "psnr_gain": 0.0024172293777432094,
+    "ssim_gain": 0.00011738638083140056,
+    "lpips_gain": 0.00010131734112898509,
+    "mean_changed_fraction": 0.01780832038421695
+  },
+  "target_apply": {
+    "no_gt_verify_passed": true,
+    "mean_changed_fraction": 0.02389977383919505,
+    "mean_known_face_fraction": 0.11201011150983355,
+    "mean_active_support_fraction": 0.06290111306912766
+  },
+  "teacher_signal": {
+    "processed_views": 46,
+    "mean_active_fraction": 0.33487922120011715,
+    "mean_target_l1": 0.009554377584920629,
+    "mean_raw_parent_delta_l1": 0.01688920562762929,
+    "mean_positive_teacher_gain_l1": 0.008468200391887323
+  },
+  "exact_delta_recovery": {
+    "mean_v169_parent_l1": 0.00013726010067991658,
+    "mean_phasej_parent_l1": 0.019999266305769033,
+    "mean_v169_phasej_l1": 0.020009217445145954,
+    "mean_delta_l1_recovery_fraction": 0.0070013612862114835
+  },
+  "key_artifacts": {
+    "run_root": "/tmp/peilincai_spcarnet_v169_native1256_flowers_20260629",
+    "train_apply_report": "/tmp/peilincai_spcarnet_v169_native1256_flowers_20260629/v169_phasej_to_phasef_surface_texture_unet_teacheronly_native1256/v169_native1256_phasej_to_phasef_surface_texture_unet_teacheronly_flowers_report.json",
+    "exact_results": "/tmp/peilincai_spcarnet_v169_native1256_flowers_20260629/v169_native1256_flowers_exact_results.json",
+    "exact_per_view": "/tmp/peilincai_spcarnet_v169_native1256_flowers_20260629/v169_native1256_flowers_exact_per_view.json",
+    "exact_delta_summary": "/tmp/peilincai_spcarnet_v169_native1256_flowers_20260629/v169_native1256_flowers_exact_delta_summary.json",
+    "wandb_offline": "/tmp/peilincai_spcarnet_v169_native1256_flowers_20260629/v169_phasej_to_phasef_surface_texture_unet_teacheronly_native1256/wandb/offline-run-20260629_155935-vd406zb4"
+  }
+}

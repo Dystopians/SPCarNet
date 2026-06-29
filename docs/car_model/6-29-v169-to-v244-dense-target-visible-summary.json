@@ -1,0 +1,185 @@
+{
+  "schema": "spcarnet_v169_to_v244_summary_v1",
+  "date": "2026-06-29",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "status": "NOT_COMPLETE",
+  "hard_gate": {
+    "scene": "flowers",
+    "required_psnr_gt": 20.304358,
+    "required_ssim_gt": 0.557770,
+    "required_lpips_lt": 0.329222,
+    "full9_allowed": false,
+    "reason": "v244 improves Phase-F parent but does not beat Phase-J flowers exact all-axis."
+  },
+  "references": {
+    "phasef_parent_native1256": {
+      "PSNR": 19.6686954498291,
+      "SSIM": 0.5116779804229736,
+      "LPIPS": 0.39478757977485657
+    },
+    "phasej_reference_native1256": {
+      "PSNR": 20.300607681274414,
+      "SSIM": 0.5574578046798706,
+      "LPIPS": 0.32950547337532043
+    }
+  },
+  "experiments": [
+    {
+      "name": "v169_native1256_teacher_only",
+      "uses_train_fit_gt": false,
+      "surface_rows": 524289,
+      "target_changed_fraction": 0.0239,
+      "policy_val_gain": {
+        "PSNR": 0.002417,
+        "SSIM": 0.000117,
+        "LPIPS": 0.000101
+      },
+      "exact": {
+        "PSNR": 19.670961380004883,
+        "SSIM": 0.5118137001991272,
+        "LPIPS": 0.39443060755729675
+      },
+      "delta_vs_phasef_parent": {
+        "PSNR": 0.00226593017578125,
+        "SSIM": 0.00013571977615356445,
+        "LPIPS": -0.00035697221755981445
+      },
+      "delta_vs_phasej_reference": {
+        "PSNR": -0.6296463012695312,
+        "SSIM": -0.04564410448074341,
+        "LPIPS": 0.06492513418197632
+      }
+    },
+    {
+      "name": "v241_dense_teacher_only",
+      "uses_train_fit_gt": false,
+      "surface_rows": 4194305,
+      "support_gate_floor": 0.18,
+      "support_unknown_gate_floor": 0.06,
+      "target_changed_fraction": 0.15025051470115167,
+      "target_no_gt_verifier_passed": true,
+      "policy_val_gain": {
+        "PSNR": 0.027757133462212202,
+        "SSIM": 0.0017390350500742595,
+        "LPIPS": 0.000763469065229098
+      },
+      "exact": {
+        "PSNR": 19.69414520263672,
+        "SSIM": 0.5134281516075134,
+        "LPIPS": 0.3917170464992523
+      },
+      "delta_vs_phasef_parent": {
+        "PSNR": 0.025449752807617188,
+        "SSIM": 0.001750171184539795,
+        "LPIPS": -0.003070533275604248
+      },
+      "delta_vs_phasej_reference": {
+        "PSNR": -0.6064624786376953,
+        "SSIM": -0.04402965307235718,
+        "LPIPS": 0.062211573123931885
+      }
+    },
+    {
+      "name": "v242_raw_dense_teacher_only",
+      "uses_train_fit_gt": false,
+      "surface_rows": 4194305,
+      "support_gate_floor": 0.18,
+      "support_unknown_gate_floor": 0.06,
+      "target_changed_fraction": 0.189338168447141,
+      "target_no_gt_verifier_passed": true,
+      "policy_val_gain": {
+        "PSNR": 0.028423880805700758,
+        "SSIM": 0.0010638833045959473,
+        "LPIPS": 0.0005870858828226725
+      },
+      "exact": {
+        "PSNR": 19.692447662353516,
+        "SSIM": 0.5124089121818542,
+        "LPIPS": 0.39107176661491394
+      },
+      "delta_vs_phasef_parent": {
+        "PSNR": 0.023752212524414062,
+        "SSIM": 0.0007309317588806152,
+        "LPIPS": -0.003715813159942627
+      },
+      "delta_vs_phasej_reference": {
+        "PSNR": -0.6081600189208984,
+        "SSIM": -0.04504889249801636,
+        "LPIPS": 0.061566293239593506
+      }
+    },
+    {
+      "name": "v243_raw_dense_gt_assisted",
+      "uses_train_fit_gt": true,
+      "train_fit_gt_weight_sum": 0.7399999999999999,
+      "surface_rows": 4194305,
+      "support_gate_floor": 0.18,
+      "support_unknown_gate_floor": 0.06,
+      "target_changed_fraction": 0.30522608737611506,
+      "target_no_gt_verifier_passed": true,
+      "policy_val_gain": {
+        "PSNR": 0.06733293353061794,
+        "SSIM": 0.006434604525566101,
+        "LPIPS": 0.0039048666755358377
+      },
+      "exact": {
+        "PSNR": 19.72413444519043,
+        "SSIM": 0.5187891125679016,
+        "LPIPS": 0.37721166014671326
+      },
+      "delta_vs_phasef_parent": {
+        "PSNR": 0.055438995361328125,
+        "SSIM": 0.0071111321449279785,
+        "LPIPS": -0.01757591962814331
+      },
+      "delta_vs_phasej_reference": {
+        "PSNR": -0.5764732360839844,
+        "SSIM": -0.038668692111968994,
+        "LPIPS": 0.04770618677139282
+      }
+    },
+    {
+      "name": "v244_dense_high_gt_assisted",
+      "uses_train_fit_gt": true,
+      "train_fit_gt_weight_sum": 0.8799999999999999,
+      "surface_rows": 8388609,
+      "support_gate_floor": 0.25,
+      "support_unknown_gate_floor": 0.08,
+      "target_changed_fraction": 0.4820581017877474,
+      "target_no_gt_verifier_passed": true,
+      "policy_val_gain": {
+        "PSNR": 0.1476094184171591,
+        "SSIM": 0.012007574240366617,
+        "LPIPS": 0.008731517319877943
+      },
+      "exact": {
+        "PSNR": 19.80323028564453,
+        "SSIM": 0.526760458946228,
+        "LPIPS": 0.36171072721481323
+      },
+      "delta_vs_phasef_parent": {
+        "PSNR": 0.1345348358154297,
+        "SSIM": 0.015082478523254395,
+        "LPIPS": -0.033076852560043335
+      },
+      "delta_vs_phasej_reference": {
+        "PSNR": -0.4973773956298828,
+        "SSIM": -0.030697345733642578,
+        "LPIPS": 0.0322052538394928
+      },
+      "phasej_gap_recovery_fraction": {
+        "PSNR": 0.2129,
+        "SSIM": 0.3294,
+        "LPIPS": 0.5066
+      }
+    }
+  ],
+  "artifacts": {
+    "markdown_report": "docs/car_model/6-29-v169-to-v244-DenseTargetVisible-Upgrade-Report.md",
+    "v241_root": "/tmp/peilincai_spcarnet_v241_dense_flowers_20260629/v241_dense_native1256",
+    "v242_root": "/tmp/peilincai_spcarnet_v242_raw_dense_flowers_20260629/v242_raw_dense_native1256",
+    "v243_root": "/tmp/peilincai_spcarnet_v243_gtassist_dense_flowers_20260629/v243_gtassist_dense_native1256",
+    "v244_root": "/tmp/peilincai_spcarnet_v244_gtassist_densehi_flowers_20260629/v244_gtassist_densehi_native1256"
+  },
+  "next_required_prompt": "Continue from docs/car_model/6-29-v169-to-v244-DenseTargetVisible-Upgrade-Report.md. Implement v245 with a real view-conditioned multi-source residual predictor: combine surface texture with nearest train-view evidence aggregation over target-visible faces, train with teacher+train GT, add policy-val exact-gap recovery metric, then rerun flowers native1256 exact against Phase-J. Do not run full9 until flowers exact beats Phase-J all-axis."
+}

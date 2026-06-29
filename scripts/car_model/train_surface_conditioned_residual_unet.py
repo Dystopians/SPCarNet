@@ -229,6 +229,39 @@ def _multiscale_highfreq_loss(
     return total / float(weight_sum)
 
 
+def _build_residual_debt_mask(
+    parent: torch.Tensor,
+    teacher: torch.Tensor,
+    gt: torch.Tensor | None,
+    *,
+    quantile: float,
+    min_l1: float,
+    dilate: int,
+) -> torch.Tensor:
+    """Train-fit-only mask for regions where the parent has real residual debt."""
+    reference = gt if gt is not None else teacher
+    residual_l1 = torch.mean(torch.abs(reference[:3] - parent[:3]), dim=0, keepdim=True)
+    q = min(max(float(quantile), 0.0), 1.0)
+    threshold = torch.quantile(residual_l1.reshape(-1), q)
+    threshold = torch.maximum(
+        threshold,
+        torch.as_tensor(float(min_l1), dtype=residual_l1.dtype, device=residual_l1.device),
+    )
+    mask = (residual_l1 >= threshold).to(dtype=parent.dtype)
+    radius = max(0, int(dilate))
+    if radius > 0:
+        kernel = 2 * radius + 1
+        mask = F.max_pool2d(mask.unsqueeze(0), kernel_size=kernel, stride=1, padding=radius).squeeze(0)
+    return mask
+
+
+def _blend_target_with_parent(parent: torch.Tensor, target: torch.Tensor, mask: torch.Tensor | None) -> torch.Tensor:
+    if mask is None:
+        return target
+    mask = _resize_mask_bchw(mask.to(device=parent.device, dtype=parent.dtype), parent.shape[-2:])
+    return target * mask + parent * (1.0 - mask)
+
+
 def _camera_dir(z: np.lib.npyio.NpzFile, h: int, w: int) -> np.ndarray:
     cam = np.asarray(z["camera_center"], dtype=np.float32).reshape(3)
     cam = cam / max(float(np.linalg.norm(cam)), 1.0e-8)
@@ -275,22 +308,39 @@ def _load_example(
     max_side: int,
     include_gt: bool,
     face_lut: np.ndarray | None = None,
+    residual_debt_mask: bool = False,
+    residual_debt_quantile: float = 0.70,
+    residual_debt_min_l1: float = 1.0 / 255.0,
+    residual_debt_dilate: int = 1,
 ) -> dict[str, Any]:
     z = np.load(path)
     parent = torch.from_numpy(np.clip(_to_chw(z["rgb_render"])[:3], 0.0, 1.0).astype(np.float32))
     residual = torch.from_numpy(np.asarray(z[residual_key], dtype=np.float32)[:3])
     teacher = torch.clamp(parent + residual, 0.0, 1.0)
     features = torch.from_numpy(_load_input_chw(z))
+    resized_parent = _resize_chw_tensor(parent, max_side)
+    resized_teacher = _resize_chw_tensor(teacher, max_side)
     out: dict[str, Any] = {
         "name": path.stem,
         "features": _resize_chw_tensor(features, max_side),
         "face_ids": _load_face_ids_tensor(z, face_lut, max_side),
-        "parent": _resize_chw_tensor(parent, max_side),
-        "teacher": _resize_chw_tensor(teacher, max_side),
+        "parent": resized_parent,
+        "teacher": resized_teacher,
     }
+    resized_gt = None
     if include_gt and "rgb_gt" in z:
         gt = torch.from_numpy(np.clip(_to_chw(z["rgb_gt"])[:3], 0.0, 1.0).astype(np.float32))
-        out["gt"] = _resize_chw_tensor(gt, max_side)
+        resized_gt = _resize_chw_tensor(gt, max_side)
+        out["gt"] = resized_gt
+    if bool(residual_debt_mask):
+        out["residual_debt_mask"] = _build_residual_debt_mask(
+            resized_parent,
+            resized_teacher,
+            resized_gt,
+            quantile=float(residual_debt_quantile),
+            min_l1=float(residual_debt_min_l1),
+            dilate=int(residual_debt_dilate),
+        )
     return out
 
 
@@ -395,6 +445,7 @@ class TrainBatch:
     parent: torch.Tensor
     teacher: torch.Tensor
     gt: torch.Tensor | None
+    residual_debt_mask: torch.Tensor | None
 
 
 def _collect_train_face_lut(paths: list[Path], max_unique: int) -> np.ndarray:
@@ -835,12 +886,16 @@ class SurfaceTextureConditionedUNet(torch.nn.Module):
         confidence_bias: float = 2.0,
         confidence_min: float = 0.0,
         confidence_max: float = 1.0,
+        support_gate_floor: float = 0.0,
+        support_unknown_gate_floor: float = 0.0,
     ):
         super().__init__()
         self.texture_size = int(texture_size)
         self.bins_per_face = int(texture_size) * int(texture_size)
         self.num_faces = int(num_faces)
         self.feature_dim = int(feature_dim)
+        self.support_gate_floor = float(support_gate_floor)
+        self.support_unknown_gate_floor = float(support_unknown_gate_floor)
         rows = int(num_faces) * self.bins_per_face + 1
         if support_stats is not None:
             stats = torch.as_tensor(support_stats, dtype=torch.float32)
@@ -884,7 +939,7 @@ class SurfaceTextureConditionedUNet(torch.nn.Module):
         tex = self.surface_texture(idx)
         gate = None
         if self.surface_support_stats is not None:
-            gate = self.surface_support_stats[idx][..., 2].unsqueeze(1)
+            gate = self._support_gate_from_indices(x, idx)
             tex = tex * gate.permute(0, 2, 3, 1)
         tex = tex.permute(0, 3, 1, 2)
         delta = self.unet(torch.cat([x, tex], dim=1))
@@ -892,13 +947,27 @@ class SurfaceTextureConditionedUNet(torch.nn.Module):
             delta = delta * gate
         return delta
 
+    def _support_gate_from_indices(self, x: torch.Tensor, idx: torch.Tensor) -> torch.Tensor:
+        if self.surface_support_stats is None:
+            return torch.ones((x.shape[0], 1, x.shape[2], x.shape[3]), dtype=x.dtype, device=x.device)
+        active = self.surface_support_stats[idx][..., 2].unsqueeze(1).to(dtype=x.dtype, device=x.device)
+        if float(self.support_gate_floor) > 0.0 or float(self.support_unknown_gate_floor) > 0.0:
+            known = (idx > 0).unsqueeze(1).to(dtype=x.dtype, device=x.device)
+            known_floor = torch.full_like(active, min(max(float(self.support_gate_floor), 0.0), 1.0))
+            unknown_floor = torch.full_like(active, min(max(float(self.support_unknown_gate_floor), 0.0), 1.0))
+            floor = known * known_floor + (1.0 - known) * unknown_floor
+            active = torch.maximum(active, floor)
+            if x.shape[1] > 15:
+                active = active * torch.clamp(x[:, 15:16], 0.0, 1.0)
+        return torch.clamp(active, 0.0, 1.0)
+
     def support_mask(self, x: torch.Tensor, face_ids: torch.Tensor | None = None) -> torch.Tensor:
         if face_ids is None:
             raise ValueError("face_ids are required for SurfaceTextureConditionedUNet")
         if self.surface_support_stats is None:
             return torch.ones((x.shape[0], 1, x.shape[2], x.shape[3]), dtype=x.dtype, device=x.device)
         idx = self._texture_indices(x, face_ids)
-        return self.surface_support_stats[idx][..., 2].unsqueeze(1)
+        return self._support_gate_from_indices(x, idx)
 
 
 class SupportAwareLowRankSurfaceTexture(torch.nn.Module):
@@ -1001,20 +1070,23 @@ def _sample_patch(example: dict[str, Any], patch_size: int, rng: random.Random) 
     parent = example["parent"]
     teacher = example["teacher"]
     gt = example.get("gt")
+    debt_mask = example.get("residual_debt_mask")
     _, h, w = parent.shape
     if int(patch_size) <= 0 or h <= int(patch_size) or w <= int(patch_size):
-        return TrainBatch(features, face_ids, parent, teacher, gt)
+        return TrainBatch(features, face_ids, parent, teacher, gt, debt_mask)
     ph = pw = int(patch_size)
     y = rng.randint(0, h - ph)
     x = rng.randint(0, w - pw)
     gt_patch = None if gt is None else gt[:, y : y + ph, x : x + pw]
     face_patch = None if face_ids is None else face_ids[y : y + ph, x : x + pw]
+    debt_patch = None if debt_mask is None else debt_mask[:, y : y + ph, x : x + pw]
     return TrainBatch(
         features[:, y : y + ph, x : x + pw],
         face_patch,
         parent[:, y : y + ph, x : x + pw],
         teacher[:, y : y + ph, x : x + pw],
         gt_patch,
+        debt_patch,
     )
 
 
@@ -1430,6 +1502,14 @@ def main() -> int:
     parser.add_argument("--target_evidence_dir", default="")
     parser.add_argument("--target_eval_evidence_dir", default="")
     parser.add_argument("--residual_rgb_key", default="teacher_residual_rgb")
+    parser.add_argument(
+        "--residual_l1_key",
+        default="",
+        help=(
+            "Optional scalar residual field for surface face/bin selection. "
+            "Defaults to the residual_rgb_key-derived *_l1 field, or teacher_residual_l1."
+        ),
+    )
     parser.add_argument("--policy_val_stride", type=int, default=4)
     parser.add_argument("--train_max_side", type=int, default=512)
     parser.add_argument("--patch_size", type=int, default=256)
@@ -1469,6 +1549,24 @@ def main() -> int:
         "--enable_surface_support_gate",
         action="store_true",
         help="For surface neural texture models, zero UV rows with insufficient train-fit residual support.",
+    )
+    parser.add_argument(
+        "--surface_support_gate_floor",
+        type=float,
+        default=0.0,
+        help=(
+            "When the support gate is enabled, keep this residual-capacity floor for known face/UV rows "
+            "that are visible but below the train-fit support threshold. Default 0 preserves the hard gate."
+        ),
+    )
+    parser.add_argument(
+        "--surface_support_unknown_gate_floor",
+        type=float,
+        default=0.0,
+        help=(
+            "When the support gate is enabled, keep this residual-capacity floor for valid target pixels "
+            "whose face is outside the learned LUT. This enables a bounded dense decoder fallback without target GT."
+        ),
     )
     parser.add_argument(
         "--surface_target_visible_evidence_dir",
@@ -1514,6 +1612,18 @@ def main() -> int:
     parser.add_argument("--highfreq_loss_max_side", type=int, default=256)
     parser.add_argument("--highfreq_loss_levels", type=int, default=3)
     parser.add_argument("--delta_l1_weight", type=float, default=1.0e-4)
+    parser.add_argument(
+        "--residual_debt_mask",
+        action="store_true",
+        help=(
+            "Use train-fit-only residual-debt masking: learn corrections only where parent-vs-GT/teacher "
+            "error is scene-adaptively high, and pull other pixels back to no-op."
+        ),
+    )
+    parser.add_argument("--residual_debt_quantile", type=float, default=0.70)
+    parser.add_argument("--residual_debt_min_l1", type=float, default=1.0 / 255.0)
+    parser.add_argument("--residual_debt_dilate", type=int, default=1)
+    parser.add_argument("--residual_debt_noop_weight", type=float, default=0.0)
     parser.add_argument("--alpha_grid", default="0,0.125,0.25,0.5,0.75,1")
     parser.add_argument(
         "--policy_select_mode",
@@ -1592,11 +1702,13 @@ def main() -> int:
     face_lut = None
     surface_support_stats = None
     surface_model_types = {"surface_texture_mlp", "surface_texture_unet", "lowrank_surface_texture"}
-    residual_l1_key = (
-        str(args.residual_rgb_key).replace("_rgb", "_l1")
-        if str(args.residual_rgb_key).endswith("_rgb")
-        else "teacher_residual_l1"
-    )
+    residual_l1_key = str(args.residual_l1_key).strip()
+    if not residual_l1_key:
+        residual_l1_key = (
+            str(args.residual_rgb_key).replace("_rgb", "_l1")
+            if str(args.residual_rgb_key).endswith("_rgb")
+            else "teacher_residual_l1"
+        )
     if str(args.model_type) in surface_model_types and int(args.face_embedding_dim) > 0:
         raise ValueError("--face_embedding_dim is only supported for --model_type unet")
     if str(args.model_type) in surface_model_types:
@@ -1665,7 +1777,17 @@ def main() -> int:
             },
         )
     train_examples = [
-        _load_example(p, str(args.residual_rgb_key), int(args.train_max_side), include_gt=True, face_lut=face_lut)
+        _load_example(
+            p,
+            str(args.residual_rgb_key),
+            int(args.train_max_side),
+            include_gt=True,
+            face_lut=face_lut,
+            residual_debt_mask=bool(args.residual_debt_mask),
+            residual_debt_quantile=float(args.residual_debt_quantile),
+            residual_debt_min_l1=float(args.residual_debt_min_l1),
+            residual_debt_dilate=int(args.residual_debt_dilate),
+        )
         for p in tqdm(fit_paths, desc="preload train-fit")
     ]
     alpha_grid = _parse_float_grid(str(args.alpha_grid))
@@ -1704,6 +1826,8 @@ def main() -> int:
             confidence_bias=float(args.confidence_bias),
             confidence_min=float(args.confidence_min),
             confidence_max=float(args.confidence_max),
+            support_gate_floor=float(args.surface_support_gate_floor),
+            support_unknown_gate_floor=float(args.surface_support_unknown_gate_floor),
         ).to(device)
     elif str(args.model_type) == "lowrank_surface_texture":
         if face_lut is None or face_lut.size == 0 or surface_support_stats is None:
@@ -1755,6 +1879,8 @@ def main() -> int:
         model.train()
         loss_mask = None
         loss_mask_active_fraction = torch.ones((), device=device)
+        debt_mask = None
+        debt_mask_active_fraction = torch.ones((), device=device)
         support_attempts = max(1, int(args.support_patch_resample_attempts))
         for attempt in range(support_attempts):
             ex = rng.choice(train_examples)
@@ -1767,11 +1893,18 @@ def main() -> int:
             face_batch = None if batch.face_ids is None else batch.face_ids.unsqueeze(0).to(device)
             parent = batch.parent.unsqueeze(0).to(device)
             raw_teacher = batch.teacher.unsqueeze(0).to(device)
+            if bool(args.residual_debt_mask) and batch.residual_debt_mask is not None:
+                debt_mask = batch.residual_debt_mask.unsqueeze(0).to(device=device, dtype=parent.dtype)
+                debt_mask_active_fraction = torch.mean((debt_mask > 0.0).float())
+            else:
+                debt_mask = None
+                debt_mask_active_fraction = torch.ones((), device=device)
             if bool(args.alpha_conditioned_residual):
                 alpha_blend = min(max(train_alpha, 0.0), 1.0)
                 teacher = torch.clamp(parent + float(alpha_blend) * (raw_teacher - parent), 0.0, 1.0)
             else:
                 teacher = raw_teacher
+            teacher = _blend_target_with_parent(parent, teacher, debt_mask)
             if str(args.support_loss_mask) == "active" and face_batch is not None and hasattr(model, "support_mask"):
                 with torch.no_grad():
                     loss_mask = model.support_mask(feat, face_batch).to(device=device, dtype=feat.dtype)
@@ -1833,6 +1966,7 @@ def main() -> int:
                 gt = torch.clamp(parent + float(alpha_blend) * (raw_gt - parent), 0.0, 1.0)
             else:
                 gt = raw_gt
+            gt = _blend_target_with_parent(parent, gt, debt_mask)
             loss_gt = _masked_l1_loss(adapted, gt, loss_mask)
             if float(args.gt_ssim_weight) > 0.0:
                 loss_gt_ssim = _masked_ssim_loss(adapted, gt, loss_mask)
@@ -1853,6 +1987,12 @@ def main() -> int:
                     int(args.highfreq_loss_levels),
                     loss_mask,
                 )
+        loss_debt_noop = torch.zeros((), device=device)
+        if debt_mask is not None and float(args.residual_debt_noop_weight) > 0.0:
+            debt_r = _resize_mask_bchw(debt_mask.to(device=pred_delta.device, dtype=pred_delta.dtype), pred_delta.shape[-2:])
+            inactive = 1.0 - debt_r
+            denom = torch.clamp(inactive.sum() * pred_delta.shape[1], min=1.0)
+            loss_debt_noop = torch.sum(torch.abs(pred_delta) * inactive) / denom
         loss_mag = torch.mean(torch.abs(pred_delta))
         loss = (
             float(args.teacher_l1_weight) * loss_teacher_l1
@@ -1865,6 +2005,7 @@ def main() -> int:
             + float(args.gt_lpips_weight) * loss_gt_lpips
             + float(args.gt_grad_weight) * loss_gt_grad
             + float(args.gt_highfreq_weight) * loss_gt_highfreq
+            + float(args.residual_debt_noop_weight) * loss_debt_noop
             + float(args.delta_l1_weight) * loss_mag
         )
         opt.zero_grad(set_to_none=True)
@@ -1885,8 +2026,10 @@ def main() -> int:
                     "train/gt_lpips_loss": float(loss_gt_lpips.detach().cpu().item()),
                     "train/gt_grad_loss": float(loss_gt_grad.detach().cpu().item()),
                     "train/gt_highfreq_loss": float(loss_gt_highfreq.detach().cpu().item()),
+                    "train/residual_debt_noop_loss": float(loss_debt_noop.detach().cpu().item()),
                     "train/delta_l1": float(loss_mag.detach().cpu().item()),
                     "train/support_loss_active_fraction": float(loss_mask_active_fraction.detach().cpu().item()),
+                    "train/residual_debt_active_fraction": float(debt_mask_active_fraction.detach().cpu().item()),
                     "train/alpha": float(train_alpha),
                     "train/step": int(step),
                 }
@@ -1932,6 +2075,9 @@ def main() -> int:
     )
     all_axis = policy_val.get("best_all_axis") is not None
     target_apply = None
+    target_no_gt_precheck = None
+    if str(args.target_evidence_dir):
+        target_no_gt_precheck = verify_target_no_gt(Path(args.target_evidence_dir))
     if str(args.target_evidence_dir) and all_axis:
         selected_alpha = (
             float(args.target_alpha)
@@ -1961,11 +2107,19 @@ def main() -> int:
         + float(args.gt_highfreq_weight)
     )
     train_fit_gt_available = any("gt" in example for example in train_examples)
+    residual_debt_active_fractions = [
+        float(torch.mean(example["residual_debt_mask"]).item())
+        for example in train_examples
+        if "residual_debt_mask" in example
+    ]
     gt_usage_audit = {
         "schema": "spcarnet_gt_usage_audit_v1",
-        "uses_train_fit_gt": bool(train_fit_gt_available and train_gt_weight_sum > 0.0),
+        "uses_train_fit_gt": bool(
+            train_fit_gt_available and (train_gt_weight_sum > 0.0 or bool(args.residual_debt_mask))
+        ),
         "train_fit_gt_available": bool(train_fit_gt_available),
         "train_fit_gt_weight_sum": float(train_gt_weight_sum),
+        "uses_train_fit_gt_for_residual_debt_mask": bool(args.residual_debt_mask and train_fit_gt_available),
         "uses_policy_val_gt": True,
         "policy_val_gt_purpose": "candidate certification and alpha selection only",
         "uses_target_or_test_gt_during_apply": False,
@@ -1976,12 +2130,23 @@ def main() -> int:
             if str(args.surface_target_visible_evidence_dir)
             else ""
         ),
-        "target_no_gt_verifier_passed": bool((target_apply or {}).get("no_gt_verify", {}).get("passed", False)),
+        "target_no_gt_verifier_passed": bool(
+            (target_apply or {}).get("no_gt_verify", {}).get(
+                "passed",
+                (target_no_gt_precheck or {}).get("passed", False),
+            )
+        ),
         "target_gt_visible_to_apply": bool(
-            (target_apply or {}).get("no_gt_verify", {}).get("target_gt_visible_to_apply", False)
+            (target_apply or {}).get("no_gt_verify", {}).get(
+                "target_gt_visible_to_apply",
+                (target_no_gt_precheck or {}).get("target_gt_visible_to_apply", False),
+            )
         ),
         "target_residual_visible_to_apply": bool(
-            (target_apply or {}).get("no_gt_verify", {}).get("target_residual_visible_to_apply", False)
+            (target_apply or {}).get("no_gt_verify", {}).get(
+                "target_residual_visible_to_apply",
+                (target_no_gt_precheck or {}).get("target_residual_visible_to_apply", False),
+            )
         ),
     }
     payload = {
@@ -2017,17 +2182,28 @@ def main() -> int:
                 if face_lut is None or str(args.model_type) not in surface_model_types
                 else face_lut.size * int(args.surface_texture_size) * int(args.surface_texture_size) + 1
             ),
+            "surface_support_gate_floor": float(args.surface_support_gate_floor),
+            "surface_support_unknown_gate_floor": float(args.surface_support_unknown_gate_floor),
             "lowrank_rank": int(args.lowrank_rank),
             "lowrank_min_bin_support": int(args.lowrank_min_bin_support),
             "lowrank_basis_init_std": float(args.lowrank_basis_init_std),
             "lowrank_active_support_rows": int(
                 0 if surface_support_stats is None else np.sum(np.asarray(surface_support_stats)[:, 2] > 0.0)
             ),
+            "residual_debt_mask": bool(args.residual_debt_mask),
+            "residual_debt_quantile": float(args.residual_debt_quantile),
+            "residual_debt_min_l1": float(args.residual_debt_min_l1),
+            "residual_debt_dilate": int(args.residual_debt_dilate),
+            "residual_debt_noop_weight": float(args.residual_debt_noop_weight),
+            "train_residual_debt_active_fraction": (
+                float(np.mean(residual_debt_active_fractions)) if residual_debt_active_fractions else None
+            ),
             "checkpoint": str(checkpoint_path),
         },
         "policy_val": policy_val,
         "policy_val_all_axis_pass": bool(all_axis),
         "target_apply": target_apply,
+        "target_no_gt_precheck": target_no_gt_precheck,
         "gt_usage_audit": gt_usage_audit,
         "audit_notes": {
             "policy_val_gate_scope": "candidate improvement over parent on held-out fit/policy-val views",
