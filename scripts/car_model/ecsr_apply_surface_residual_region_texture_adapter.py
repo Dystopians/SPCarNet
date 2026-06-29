@@ -63,6 +63,9 @@ class FaceAtlas:
     teacher_basis_ood_min_std: float = 1.0e-3
     teacher_basis_apply_mode: str = "replace_supported"
     teacher_basis_blend: float = 1.0
+    teacher_texture_basis: np.ndarray | None = None
+    teacher_texture_support: np.ndarray | None = None
+    teacher_texture_energy: np.ndarray | None = None
     expert_textures: np.ndarray | None = None
     expert_counts: np.ndarray | None = None
     expert_variance: np.ndarray | None = None
@@ -2218,7 +2221,33 @@ def _teacher_distilled_basis_feature_dim(mode: str) -> int:
         # normal-view interaction. This keeps the teacher field per-face, but
         # gives it local surface capacity instead of one global smooth face fit.
         return 31
+    if mode == "low_rank_view_texture_k4":
+        # View-weight features for a rank-4 texture basis:
+        # [1, camera_x, camera_y, camera_z, normal_dot_camera].
+        return 5
+    if mode == "low_rank_view_texture_rich_k4":
+        # Rich view-weight features for a rank-4 texture basis:
+        # [1, camera3, normal3, normal_dot_camera, u, v, u^2, v^2, u*v,
+        #  parent_rgb3, inverse_depth, alpha].
+        return 18
     raise ValueError(f"unsupported teacher-distilled basis mode: {mode}")
+
+
+def _is_low_rank_teacher_texture_mode(mode: str) -> bool:
+    return str(mode) in {"low_rank_view_texture_k4", "low_rank_view_texture_rich_k4"}
+
+
+def _low_rank_teacher_texture_requested_rank(mode: str) -> int:
+    return 4 if _is_low_rank_teacher_texture_mode(mode) else 0
+
+
+def _low_rank_teacher_texture_min_bin_samples(mode: str, feature_dim: int) -> int:
+    if str(mode) == "low_rank_view_texture_rich_k4":
+        # The rich feature vector is ridge-regularized and deliberately allowed
+        # to use sparse bins; requiring one sample per feature zeroes too much of
+        # the target-visible surface before policy-val can judge the model.
+        return 4
+    return max(int(feature_dim), 4)
 
 
 def _teacher_distilled_basis_features_for_mask(
@@ -2229,7 +2258,12 @@ def _teacher_distilled_basis_features_for_mask(
     mode = str(mode)
     if mode == "none":
         return None
-    if mode not in {"face_uv_normal_camera_ridge", "face_uv_patch_mixture_ridge"}:
+    if mode not in {
+        "face_uv_normal_camera_ridge",
+        "face_uv_patch_mixture_ridge",
+        "low_rank_view_texture_k4",
+        "low_rank_view_texture_rich_k4",
+    }:
         raise ValueError(f"unsupported teacher-distilled basis mode: {mode}")
     if "normal" not in z or "barycentric" not in z:
         return None
@@ -2251,6 +2285,58 @@ def _teacher_distilled_basis_features_for_mask(
     normal_dot_camera = np.sum(normal_samples * camera_features, axis=1, keepdims=True).astype(np.float32)
     u = np.clip(bary[1][mask], 0.0, 1.0).astype(np.float32)[:, None]
     v = np.clip(bary[2][mask], 0.0, 1.0).astype(np.float32)[:, None]
+    if mode == "low_rank_view_texture_k4":
+        return np.concatenate(
+            [
+                np.ones((sample_count, 1), dtype=np.float32),
+                camera_features,
+                normal_dot_camera,
+            ],
+            axis=1,
+        )
+    if mode == "low_rank_view_texture_rich_k4":
+        if "rgb_render" in z:
+            render = np.asarray(z["rgb_render"], dtype=np.float32)
+            if render.shape[0] >= 3:
+                parent_rgb = np.stack(
+                    [render[0][mask], render[1][mask], render[2][mask]],
+                    axis=1,
+                ).astype(np.float32)
+            else:
+                parent_rgb = np.zeros((sample_count, 3), dtype=np.float32)
+        else:
+            parent_rgb = np.zeros((sample_count, 3), dtype=np.float32)
+        parent_rgb = np.nan_to_num(parent_rgb, nan=0.0, posinf=1.0, neginf=0.0)
+        parent_rgb = np.clip(parent_rgb, 0.0, 1.0).astype(np.float32)
+        if "depth" in z:
+            depth = np.asarray(z["depth"], dtype=np.float32)[mask].reshape(-1, 1)
+            depth = np.nan_to_num(depth, nan=0.0, posinf=0.0, neginf=0.0)
+            inverse_depth = (1.0 / (1.0 + np.maximum(depth, 0.0))).astype(np.float32)
+        else:
+            inverse_depth = np.zeros((sample_count, 1), dtype=np.float32)
+        if "alpha" in z:
+            alpha = np.asarray(z["alpha"], dtype=np.float32)[mask].reshape(-1, 1)
+            alpha = np.nan_to_num(alpha, nan=0.0, posinf=1.0, neginf=0.0)
+            alpha = np.clip(alpha, 0.0, 1.0).astype(np.float32)
+        else:
+            alpha = np.ones((sample_count, 1), dtype=np.float32)
+        return np.concatenate(
+            [
+                np.ones((sample_count, 1), dtype=np.float32),
+                camera_features,
+                normal_samples,
+                normal_dot_camera,
+                u,
+                v,
+                u * u,
+                v * v,
+                u * v,
+                parent_rgb,
+                inverse_depth,
+                alpha,
+            ],
+            axis=1,
+        )
     base_features = [
         np.ones((sample_count, 1), dtype=np.float32),
         camera_features,
@@ -2274,6 +2360,102 @@ def _teacher_distilled_basis_features_for_mask(
     for cy in centers:
         for cx in centers:
             dist2 = (uu - float(cx)) * (uu - float(cx)) + (vv - float(cy)) * (vv - float(cy))
+            patch_weights.append(np.exp(-dist2 / denom).astype(np.float32))
+    patch = np.concatenate(patch_weights, axis=1)
+    patch /= np.maximum(np.sum(patch, axis=1, keepdims=True), 1.0e-8)
+    patch_view = patch * normal_dot_camera.astype(np.float32)
+    return np.concatenate([*base_features, patch, patch_view], axis=1)
+
+
+def _teacher_distilled_basis_features_from_uv_camera_normal(
+    mode: str,
+    u_values: np.ndarray,
+    v_values: np.ndarray,
+    camera_features: np.ndarray,
+    normal_vector: np.ndarray,
+) -> np.ndarray | None:
+    """Build teacher-basis rows for synthetic train-only target-impact bins."""
+    mode = str(mode)
+    if mode == "none":
+        return None
+    if mode not in {
+        "face_uv_normal_camera_ridge",
+        "face_uv_patch_mixture_ridge",
+        "low_rank_view_texture_k4",
+        "low_rank_view_texture_rich_k4",
+    }:
+        raise ValueError(f"unsupported teacher-distilled basis mode: {mode}")
+    u_arr = np.asarray(u_values, dtype=np.float32).reshape(-1, 1)
+    v_arr = np.asarray(v_values, dtype=np.float32).reshape(-1, 1)
+    sample_count = int(u_arr.shape[0])
+    if sample_count <= 0 or v_arr.shape[0] != sample_count:
+        return None
+    camera_arr = np.asarray(camera_features, dtype=np.float32)
+    if camera_arr.ndim == 1:
+        camera_arr = np.repeat(camera_arr.reshape(1, 3), sample_count, axis=0)
+    if camera_arr.shape != (sample_count, 3):
+        return None
+    camera_norm = np.linalg.norm(camera_arr, axis=1, keepdims=True)
+    camera_arr = camera_arr / np.maximum(camera_norm, 1.0e-8)
+    normal_arr = np.asarray(normal_vector, dtype=np.float32).reshape(1, 3)
+    normal_arr = np.repeat(normal_arr, sample_count, axis=0)
+    normal_arr = np.nan_to_num(normal_arr, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+    normal_norm = np.linalg.norm(normal_arr, axis=1, keepdims=True)
+    normal_arr = normal_arr / np.maximum(normal_norm, 1.0e-8)
+    normal_dot_camera = np.sum(normal_arr * camera_arr, axis=1, keepdims=True).astype(np.float32)
+    u = np.clip(u_arr, 0.0, 1.0).astype(np.float32)
+    v = np.clip(v_arr, 0.0, 1.0).astype(np.float32)
+    if mode == "low_rank_view_texture_k4":
+        return np.concatenate(
+            [
+                np.ones((sample_count, 1), dtype=np.float32),
+                camera_arr.astype(np.float32),
+                normal_dot_camera,
+            ],
+            axis=1,
+        )
+    if mode == "low_rank_view_texture_rich_k4":
+        parent_rgb = np.zeros((sample_count, 3), dtype=np.float32)
+        inverse_depth = np.zeros((sample_count, 1), dtype=np.float32)
+        alpha = np.ones((sample_count, 1), dtype=np.float32)
+        return np.concatenate(
+            [
+                np.ones((sample_count, 1), dtype=np.float32),
+                camera_arr.astype(np.float32),
+                normal_arr.astype(np.float32),
+                normal_dot_camera,
+                u,
+                v,
+                u * u,
+                v * v,
+                u * v,
+                parent_rgb,
+                inverse_depth,
+                alpha,
+            ],
+            axis=1,
+        )
+    base_features = [
+        np.ones((sample_count, 1), dtype=np.float32),
+        camera_arr.astype(np.float32),
+        normal_arr.astype(np.float32),
+        normal_dot_camera,
+        u,
+        v,
+        u * u,
+        v * v,
+        u * v,
+    ]
+    if mode == "face_uv_normal_camera_ridge":
+        return np.concatenate(base_features, axis=1)
+
+    centers = np.asarray([0.0, 0.5, 1.0], dtype=np.float32)
+    patch_weights: list[np.ndarray] = []
+    sigma = 0.38
+    denom = 2.0 * sigma * sigma
+    for cy in centers:
+        for cx in centers:
+            dist2 = (u - float(cx)) * (u - float(cx)) + (v - float(cy)) * (v - float(cy))
             patch_weights.append(np.exp(-dist2 / denom).astype(np.float32))
     patch = np.concatenate(patch_weights, axis=1)
     patch /= np.maximum(np.sum(patch, axis=1, keepdims=True), 1.0e-8)
@@ -2306,6 +2488,9 @@ def disable_view_conditioned_basis(atlas: dict[int, FaceAtlas]) -> dict[int, Fac
             teacher_basis_ood_min_std=float(face_atlas.teacher_basis_ood_min_std),
             teacher_basis_apply_mode=str(face_atlas.teacher_basis_apply_mode),
             teacher_basis_blend=float(face_atlas.teacher_basis_blend),
+            teacher_texture_basis=face_atlas.teacher_texture_basis,
+            teacher_texture_support=face_atlas.teacher_texture_support,
+            teacher_texture_energy=face_atlas.teacher_texture_energy,
             expert_textures=face_atlas.expert_textures,
             expert_counts=face_atlas.expert_counts,
             expert_variance=face_atlas.expert_variance,
@@ -2345,6 +2530,9 @@ def disable_teacher_distilled_basis(atlas: dict[int, FaceAtlas]) -> dict[int, Fa
             teacher_basis_ood_min_std=1.0e-3,
             teacher_basis_apply_mode="replace_supported",
             teacher_basis_blend=1.0,
+            teacher_texture_basis=None,
+            teacher_texture_support=None,
+            teacher_texture_energy=None,
             expert_textures=face_atlas.expert_textures,
             expert_counts=face_atlas.expert_counts,
             expert_variance=face_atlas.expert_variance,
@@ -2389,6 +2577,9 @@ def clone_face_atlas(face_atlas: FaceAtlas) -> FaceAtlas:
         teacher_basis_ood_min_std=float(face_atlas.teacher_basis_ood_min_std),
         teacher_basis_apply_mode=str(face_atlas.teacher_basis_apply_mode),
         teacher_basis_blend=float(face_atlas.teacher_basis_blend),
+        teacher_texture_basis=_copy_array_or_none(face_atlas.teacher_texture_basis),
+        teacher_texture_support=_copy_array_or_none(face_atlas.teacher_texture_support),
+        teacher_texture_energy=_copy_array_or_none(face_atlas.teacher_texture_energy),
         expert_textures=_copy_array_or_none(face_atlas.expert_textures),
         expert_counts=_copy_array_or_none(face_atlas.expert_counts),
         expert_variance=_copy_array_or_none(face_atlas.expert_variance),
@@ -3491,6 +3682,9 @@ def fit_atlas(
     teacher_basis_feature_sums: dict[int, np.ndarray] = {}
     teacher_basis_feature_sq_sums: dict[int, np.ndarray] = {}
     teacher_basis_counts: dict[int, int] = {}
+    teacher_texture_xtx_sums: dict[int, np.ndarray] = {}
+    teacher_texture_xty_sums: dict[int, np.ndarray] = {}
+    teacher_texture_counts: dict[int, np.ndarray] = {}
     size = int(texture_size)
     fit_views: list[Path] = []
     val_views: list[Path] = []
@@ -3647,6 +3841,16 @@ def fit_atlas(
                     teacher_basis_feature_sums[face] = np.zeros((teacher_basis_feature_dim,), dtype=np.float64)
                     teacher_basis_feature_sq_sums[face] = np.zeros((teacher_basis_feature_dim,), dtype=np.float64)
                     teacher_basis_counts[face] = 0
+                    if _is_low_rank_teacher_texture_mode(teacher_basis_mode):
+                        teacher_texture_xtx_sums[face] = np.zeros(
+                            (size, size, teacher_basis_feature_dim, teacher_basis_feature_dim),
+                            dtype=np.float64,
+                        )
+                        teacher_texture_xty_sums[face] = np.zeros(
+                            (size, size, teacher_basis_feature_dim, 3),
+                            dtype=np.float64,
+                        )
+                        teacher_texture_counts[face] = np.zeros((size, size), dtype=np.int64)
             np.add.at(sums[face], (vbin[fm], ubin[fm]), residual_samples[fm].astype(np.float64))
             np.add.at(sq_sums[face], (vbin[fm], ubin[fm]), np.square(residual_samples[fm]).astype(np.float64))
             np.add.at(sign_sums[face], (vbin[fm], ubin[fm]), np.sign(residual_samples[fm]).astype(np.float64))
@@ -3698,11 +3902,27 @@ def fit_atlas(
             if teacher_basis_features is not None and face in teacher_basis_xtx_sums:
                 face_features = teacher_basis_features[fm].astype(np.float64)
                 face_targets = residual_samples[fm].astype(np.float64)
-                teacher_basis_xtx_sums[face] += face_features.T @ face_features
-                teacher_basis_xty_sums[face] += face_features.T @ face_targets
                 teacher_basis_feature_sums[face] += np.sum(face_features, axis=0)
                 teacher_basis_feature_sq_sums[face] += np.sum(face_features * face_features, axis=0)
                 teacher_basis_counts[face] = teacher_basis_counts.get(face, 0) + int(face_features.shape[0])
+                if _is_low_rank_teacher_texture_mode(teacher_basis_mode) and face in teacher_texture_xtx_sums:
+                    np.add.at(teacher_texture_counts[face], (vbin[fm], ubin[fm]), 1)
+                    for i in range(teacher_basis_feature_dim):
+                        for j in range(teacher_basis_feature_dim):
+                            np.add.at(
+                                teacher_texture_xtx_sums[face][..., i, j],
+                                (vbin[fm], ubin[fm]),
+                                face_features[:, i] * face_features[:, j],
+                            )
+                        for c in range(3):
+                            np.add.at(
+                                teacher_texture_xty_sums[face][..., i, c],
+                                (vbin[fm], ubin[fm]),
+                                face_features[:, i] * face_targets[:, c],
+                            )
+                else:
+                    teacher_basis_xtx_sums[face] += face_features.T @ face_features
+                    teacher_basis_xty_sums[face] += face_features.T @ face_targets
 
     atlas: dict[int, FaceAtlas] = {}
     view_cluster_expert_faces = 0
@@ -3716,6 +3936,13 @@ def fit_atlas(
     teacher_basis_low_support_supported_faces = 0
     teacher_basis_ridge_multiplier_sum = 0.0
     teacher_basis_ridge_multiplier_max = 1.0
+    teacher_texture_supported_faces = 0
+    teacher_texture_supported_bins = 0
+    teacher_texture_total_bins = 0
+    teacher_texture_energy_sum = 0.0
+    teacher_texture_energy_count = 0
+    teacher_texture_rank_sum = 0
+    teacher_texture_rank_max = 0
     teacher_basis_effective_min_face_samples = int(teacher_basis_base_min_face_samples)
     teacher_basis_requested_adaptive_floor = max(1, int(adaptive_teacher_basis_min_face_samples_floor))
     teacher_basis_effective_adaptive_floor = min(
@@ -3957,6 +4184,9 @@ def fit_atlas(
         teacher_basis_coefficients = None
         teacher_basis_feature_mean = None
         teacher_basis_feature_std = None
+        teacher_texture_basis = None
+        teacher_texture_support = None
+        teacher_texture_energy = None
         if teacher_basis_feature_dim > 0 and face in teacher_basis_xtx_sums:
             teacher_basis_candidate_faces += 1
             teacher_count = int(teacher_basis_counts.get(face, 0))
@@ -3970,11 +4200,7 @@ def fit_atlas(
                         1.0 + max(0.0, float(adaptive_teacher_basis_low_support_ridge_scale)) * max(0.0, ratio - 1.0),
                     )
                     ridge *= float(ridge_multiplier)
-                eye = np.eye(teacher_basis_feature_dim, dtype=np.float64)
-                xtx = teacher_basis_xtx_sums[face] + ridge * eye
-                xty = teacher_basis_xty_sums[face]
                 try:
-                    teacher_basis_coefficients = np.linalg.solve(xtx, xty).astype(np.float32)
                     denom = max(1, int(teacher_count))
                     teacher_basis_feature_mean = (
                         teacher_basis_feature_sums[face] / float(denom)
@@ -3984,6 +4210,66 @@ def fit_atlas(
                         - np.square(teacher_basis_feature_mean.astype(np.float64))
                     )
                     teacher_basis_feature_std = np.sqrt(np.maximum(feature_var, 0.0)).astype(np.float32)
+                    if (
+                        _is_low_rank_teacher_texture_mode(teacher_basis_mode)
+                        and face in teacher_texture_xtx_sums
+                        and face in teacher_texture_xty_sums
+                        and face in teacher_texture_counts
+                    ):
+                        eye = np.eye(teacher_basis_feature_dim, dtype=np.float64)
+                        support = teacher_texture_counts[face] >= _low_rank_teacher_texture_min_bin_samples(
+                            teacher_basis_mode,
+                            teacher_basis_feature_dim,
+                        )
+                        coeff_field = np.zeros((size, size, teacher_basis_feature_dim, 3), dtype=np.float32)
+                        ys_lr, xs_lr = np.nonzero(support)
+                        for y, x in zip(ys_lr, xs_lr, strict=False):
+                            xtx = teacher_texture_xtx_sums[face][int(y), int(x)] + ridge * eye
+                            xty = teacher_texture_xty_sums[face][int(y), int(x)]
+                            try:
+                                coeff_field[int(y), int(x)] = np.linalg.solve(xtx, xty).astype(np.float32)
+                            except np.linalg.LinAlgError:
+                                support[int(y), int(x)] = False
+                        ys_lr, xs_lr = np.nonzero(support)
+                        if ys_lr.size <= 0:
+                            raise np.linalg.LinAlgError("low_rank_view_texture_k4_no_supported_bins")
+                        matrix = coeff_field[ys_lr, xs_lr].transpose(1, 0, 2).reshape(
+                            teacher_basis_feature_dim,
+                            int(ys_lr.size) * 3,
+                        )
+                        u_svd, singular_values, vt_svd = np.linalg.svd(
+                            matrix.astype(np.float64),
+                            full_matrices=False,
+                        )
+                        rank = min(_low_rank_teacher_texture_requested_rank(teacher_basis_mode), int(singular_values.size))
+                        if rank <= 0:
+                            raise np.linalg.LinAlgError("low_rank_view_texture_k4_empty_svd")
+                        sqrt_s = np.sqrt(np.maximum(singular_values[:rank], 0.0))
+                        teacher_basis_coefficients = (u_svd[:, :rank] * sqrt_s[None, :]).astype(np.float32)
+                        basis_flat = (sqrt_s[:, None] * vt_svd[:rank]).astype(np.float32)
+                        teacher_texture_basis = np.zeros((rank, size, size, 3), dtype=np.float32)
+                        basis_values = basis_flat.reshape(rank, int(ys_lr.size), 3)
+                        for idx, (y, x) in enumerate(zip(ys_lr, xs_lr, strict=False)):
+                            teacher_texture_basis[:, int(y), int(x), :] = basis_values[:, idx, :]
+                        teacher_texture_support = support.astype(bool)
+                        total_energy = float(np.sum(singular_values * singular_values))
+                        if total_energy > 0.0:
+                            cumulative = np.cumsum(singular_values[:rank] * singular_values[:rank]) / total_energy
+                            teacher_texture_energy = cumulative.astype(np.float32)
+                            teacher_texture_energy_sum += float(cumulative[-1])
+                            teacher_texture_energy_count += 1
+                        else:
+                            teacher_texture_energy = np.zeros((rank,), dtype=np.float32)
+                        teacher_texture_supported_faces += 1
+                        teacher_texture_supported_bins += int(np.sum(teacher_texture_support))
+                        teacher_texture_total_bins += int(teacher_texture_support.size)
+                        teacher_texture_rank_sum += int(rank)
+                        teacher_texture_rank_max = max(int(teacher_texture_rank_max), int(rank))
+                    else:
+                        eye = np.eye(teacher_basis_feature_dim, dtype=np.float64)
+                        xtx = teacher_basis_xtx_sums[face] + ridge * eye
+                        xty = teacher_basis_xty_sums[face]
+                        teacher_basis_coefficients = np.linalg.solve(xtx, xty).astype(np.float32)
                     teacher_basis_supported_faces += 1
                     if teacher_count < int(teacher_basis_base_min_face_samples):
                         teacher_basis_low_support_supported_faces += 1
@@ -3996,6 +4282,9 @@ def fit_atlas(
                     )
                 except np.linalg.LinAlgError:
                     teacher_basis_coefficients = None
+                    teacher_texture_basis = None
+                    teacher_texture_support = None
+                    teacher_texture_energy = None
         atlas[face] = FaceAtlas(
             texture=texture.astype(np.float32),
             counts=count_grid.astype(np.int32),
@@ -4019,6 +4308,9 @@ def fit_atlas(
             teacher_basis_ood_min_std=float(teacher_distilled_basis_ood_min_std),
             teacher_basis_apply_mode=str(teacher_basis_apply_mode),
             teacher_basis_blend=float(teacher_distilled_basis_blend),
+            teacher_texture_basis=teacher_texture_basis,
+            teacher_texture_support=teacher_texture_support,
+            teacher_texture_energy=teacher_texture_energy,
             expert_textures=expert_textures,
             expert_counts=expert_count_grid,
             expert_variance=expert_variance_grid,
@@ -4132,6 +4424,25 @@ def fit_atlas(
             "candidate_faces": int(teacher_basis_candidate_faces),
             "supported_faces": int(teacher_basis_supported_faces),
             "supported_face_fraction": float(teacher_basis_supported_faces / max(1, teacher_basis_candidate_faces)),
+            "low_rank_texture": {
+                "enabled": bool(_is_low_rank_teacher_texture_mode(teacher_basis_mode)),
+                "requested_rank": int(_low_rank_teacher_texture_requested_rank(teacher_basis_mode)),
+                "min_bin_samples": int(
+                    _low_rank_teacher_texture_min_bin_samples(
+                        teacher_basis_mode,
+                        teacher_basis_feature_dim,
+                    )
+                    if _is_low_rank_teacher_texture_mode(teacher_basis_mode)
+                    else 0
+                ),
+                "rank": int(teacher_texture_rank_max),
+                "mean_rank": float(teacher_texture_rank_sum / max(1, teacher_texture_supported_faces)),
+                "supported_faces": int(teacher_texture_supported_faces),
+                "supported_bins": int(teacher_texture_supported_bins),
+                "total_bins": int(teacher_texture_total_bins),
+                "supported_bin_fraction": float(teacher_texture_supported_bins / max(1, teacher_texture_total_bins)),
+                "mean_retained_energy": float(teacher_texture_energy_sum / max(1, teacher_texture_energy_count)),
+            },
             "adaptive_low_support": dict(
                 adaptive_teacher_basis_summary
                 | {
@@ -4423,21 +4734,51 @@ def predict_delta_for_npz(
                     local_counts = face_atlas.counts[vbin[confident_indices], ubin[confident_indices]]
                     teacher_support &= local_counts <= 0
                 if bool(np.any(teacher_support)):
-                    teacher_pixels = np.einsum(
-                        "nd,dc->nc",
-                        feature_samples[teacher_support].astype(np.float32),
-                        face_atlas.teacher_basis_coefficients.astype(np.float32),
-                    )
-                    local_confidence = confidence[confident][teacher_support]
-                    teacher_pixels = teacher_pixels * local_confidence[:, None]
-                    if apply_mode == "blend":
-                        blend = float(np.clip(face_atlas.teacher_basis_blend, 0.0, 1.0))
-                        base_pixels[teacher_support] = (
-                            (1.0 - blend) * base_pixels[teacher_support]
-                            + blend * teacher_pixels
+                    teacher_pixels = None
+                    if (
+                        _is_low_rank_teacher_texture_mode(teacher_basis_mode)
+                        and face_atlas.teacher_texture_basis is not None
+                        and face_atlas.teacher_texture_support is not None
+                    ):
+                        texture_support = face_atlas.teacher_texture_support[
+                            vbin[confident_indices],
+                            ubin[confident_indices],
+                        ].astype(bool)
+                        teacher_support &= texture_support
+                    if (
+                        bool(np.any(teacher_support))
+                        and
+                        _is_low_rank_teacher_texture_mode(teacher_basis_mode)
+                        and face_atlas.teacher_texture_basis is not None
+                    ):
+                        weights = np.matmul(
+                            feature_samples[teacher_support].astype(np.float32),
+                            face_atlas.teacher_basis_coefficients.astype(np.float32),
                         )
-                    else:
-                        base_pixels[teacher_support] = teacher_pixels
+                        basis = face_atlas.teacher_texture_basis[
+                            :,
+                            vbin[confident_indices][teacher_support],
+                            ubin[confident_indices][teacher_support],
+                            :,
+                        ].transpose(1, 0, 2)
+                        teacher_pixels = np.einsum("nk,nkc->nc", weights, basis.astype(np.float32))
+                    elif bool(np.any(teacher_support)):
+                        teacher_pixels = np.einsum(
+                            "nd,dc->nc",
+                            feature_samples[teacher_support].astype(np.float32),
+                            face_atlas.teacher_basis_coefficients.astype(np.float32),
+                        )
+                    if teacher_pixels is not None:
+                        local_confidence = confidence[confident][teacher_support]
+                        teacher_pixels = teacher_pixels * local_confidence[:, None]
+                        if apply_mode == "blend":
+                            blend = float(np.clip(face_atlas.teacher_basis_blend, 0.0, 1.0))
+                            base_pixels[teacher_support] = (
+                                (1.0 - blend) * base_pixels[teacher_support]
+                                + blend * teacher_pixels
+                            )
+                        else:
+                            base_pixels[teacher_support] = teacher_pixels
         if (
             local_alpha_profile
             and bool(local_alpha_profile.get("enabled", False))
@@ -5941,6 +6282,30 @@ def build_policy_val_bin_uncertainty_guard_profile(
     adaptive_frontier_min_positive_view_fraction: float = 0.55,
     adaptive_frontier_min_risk_adjusted_gain: float = 0.0,
     adaptive_frontier_min_sample_quantile: float = 0.75,
+    target_footprint_views: list[Path] | None = None,
+    enable_target_visible_expansion: bool = False,
+    target_visible_min_pixels: int = 1,
+    target_visible_min_views: int = 1,
+    target_visible_min_policy_samples: int = 1,
+    target_visible_min_positive_view_fraction: float = -1.0,
+    target_visible_max_extra_bins: int = 0,
+    target_visible_max_views: int = 0,
+    enable_train_only_target_impact_residual_basis: bool = False,
+    target_impact_min_pixels: int = 1,
+    target_impact_min_views: int = 1,
+    target_impact_min_policy_samples: int = 0,
+    target_impact_max_extra_bins: int = 0,
+    target_impact_max_views: int = 0,
+    enable_target_connected_region_growth: bool = False,
+    target_connected_radius: int = 1,
+    target_connected_min_pixels: int = 1,
+    target_connected_min_views: int = 1,
+    target_connected_min_policy_samples: int = 1,
+    target_connected_min_positive_view_fraction: float = 0.5,
+    target_connected_max_negative_relative_gain: float = 0.02,
+    target_connected_max_negative_min_view_gain: float = 0.05,
+    target_connected_max_extra_bins: int = 0,
+    target_connected_max_views: int = 0,
 ) -> dict[str, Any]:
     """Build a train-policy-val face/UV-bin allowlist with uncertainty filters."""
     disabled = {
@@ -6186,11 +6551,551 @@ def build_policy_val_bin_uncertainty_guard_profile(
         for row in rows:
             row["frontier_sample_ok"] = False
             row["frontier_keep"] = False
+
+    target_samples_by_bin: dict[int, int] = {}
+    target_views_by_bin: dict[int, int] = {}
+    target_summary: dict[str, Any] = {}
+    bins_per_face = int(texture_size) * int(texture_size)
+    target_visible_expansion: dict[str, Any] = {
+        "enabled": bool(enable_target_visible_expansion),
+        "mode": "sparse_materialization_target_visible_expansion",
+        "uses_target_or_test_gt": False,
+        "reason": "not_requested",
+        "min_pixels": int(target_visible_min_pixels),
+        "min_views": int(target_visible_min_views),
+        "min_policy_samples": int(target_visible_min_policy_samples),
+        "min_positive_view_fraction": float(target_visible_min_positive_view_fraction),
+        "max_extra_bins": int(target_visible_max_extra_bins),
+        "max_views": int(target_visible_max_views),
+        "original_allowed_bin_count": int(sum(len(v) for v in allowed_bins_by_face.values())),
+        "original_allowed_face_count": int(len(allowed_bins_by_face)),
+    }
+    for row in rows:
+        row["target_visible_pixels"] = 0
+        row["target_visible_view_count"] = 0
+        row["target_visible_expansion_candidate"] = False
+        row["target_visible_expansion_added"] = False
+    seed_allowed_keys_for_connected = {
+        (int(face), int(bin_id))
+        for face, bins in allowed_bins_by_face.items()
+        for bin_id in bins
+    }
+    if bool(enable_target_visible_expansion):
+        footprint_views = list(target_footprint_views or [])
+        if not footprint_views:
+            target_visible_expansion["reason"] = "no_target_footprint_views"
+        else:
+            candidate_faces_for_target = {int(row["face_id"]) for row in rows}
+            target_samples_by_bin, target_views_by_bin, target_summary = build_target_bin_footprint_stats(
+                footprint_views,
+                candidate_faces_for_target,
+                int(texture_size),
+                float(min_alpha),
+                max_views=int(target_visible_max_views),
+            )
+            target_visible_expansion["target_footprint"] = dict(target_summary)
+            min_target_positive_fraction = (
+                float(target_visible_min_positive_view_fraction)
+                if float(target_visible_min_positive_view_fraction) >= 0.0
+                else float(adaptive_frontier_min_positive_view_fraction)
+            )
+            target_visible_expansion["effective_min_positive_view_fraction"] = float(
+                min_target_positive_fraction
+            )
+            allowed_keys = {
+                (int(face), int(bin_id))
+                for face, bins in allowed_bins_by_face.items()
+                for bin_id in bins
+            }
+            expansion_candidates: list[dict[str, Any]] = []
+            for row in rows:
+                face_i = int(row["face_id"])
+                bin_i = int(row["bin_id"])
+                target_key = int(face_i) * bins_per_face + int(bin_i)
+                target_pixels = int(target_samples_by_bin.get(target_key, 0))
+                target_views = int(target_views_by_bin.get(target_key, 0))
+                row["target_visible_pixels"] = int(target_pixels)
+                row["target_visible_view_count"] = int(target_views)
+                core_ok = bool(
+                    (face_i, bin_i) not in allowed_keys
+                    and int(row["samples"]) >= int(target_visible_min_policy_samples)
+                    and int(row["view_count"]) >= int(min_bin_views)
+                    and float(row["relative_gain"]) >= float(min_relative_gain)
+                    and float(row["risk_adjusted_relative_gain"])
+                    >= float(adaptive_frontier_min_risk_adjusted_gain)
+                    and float(row["positive_view_fraction"]) >= float(min_target_positive_fraction)
+                    and bool(row["min_view_ok"])
+                    and bool(row["variance_ok"])
+                    and bool(row["sign_ok"])
+                    and target_pixels >= int(target_visible_min_pixels)
+                    and target_views >= int(target_visible_min_views)
+                )
+                row["target_visible_expansion_candidate"] = bool(core_ok)
+                if core_ok:
+                    expansion_candidates.append(row)
+            expansion_candidates.sort(
+                key=lambda row: (
+                    int(row["target_visible_pixels"]),
+                    int(row["target_visible_view_count"]),
+                    float(row["risk_adjusted_relative_gain"]),
+                    float(row["relative_gain"]),
+                    int(row["samples"]),
+                ),
+                reverse=True,
+            )
+            if int(target_visible_max_extra_bins) > 0:
+                selected_expansion_rows = expansion_candidates[: int(target_visible_max_extra_bins)]
+            else:
+                selected_expansion_rows = expansion_candidates
+            added_samples = 0
+            added_target_pixels = 0
+            added_target_views_total = 0
+            for row in selected_expansion_rows:
+                face_i = int(row["face_id"])
+                bin_i = int(row["bin_id"])
+                if (face_i, bin_i) in allowed_keys:
+                    continue
+                allowed_bins_by_face.setdefault(str(face_i), []).append(int(bin_i))
+                allowed_keys.add((face_i, bin_i))
+                allowed_samples += int(row["samples"])
+                added_samples += int(row["samples"])
+                added_target_pixels += int(row["target_visible_pixels"])
+                added_target_views_total += int(row["target_visible_view_count"])
+                row["target_visible_expansion_added"] = True
+            target_visible_expansion.update(
+                {
+                    "enabled": True,
+                    "reason": "expanded" if selected_expansion_rows else "no_eligible_target_visible_bins",
+                    "candidate_bin_count": int(len(expansion_candidates)),
+                    "added_bin_count": int(
+                        sum(1 for row in rows if bool(row.get("target_visible_expansion_added", False)))
+                    ),
+                    "added_sample_count": int(added_samples),
+                    "added_target_pixels": int(added_target_pixels),
+                    "added_target_view_hits": int(added_target_views_total),
+                    "final_allowed_bin_count": int(sum(len(v) for v in allowed_bins_by_face.values())),
+                    "final_allowed_face_count": int(len(allowed_bins_by_face)),
+                    "top_added_bins": [
+                        {
+                            "face_id": int(row["face_id"]),
+                            "bin_id": int(row["bin_id"]),
+                            "samples": int(row["samples"]),
+                            "view_count": int(row["view_count"]),
+                            "positive_view_fraction": float(row["positive_view_fraction"]),
+                            "min_view_relative_gain": float(row["min_view_relative_gain"]),
+                            "relative_gain": float(row["relative_gain"]),
+                            "risk_adjusted_relative_gain": float(row["risk_adjusted_relative_gain"]),
+                            "target_pixels": int(row["target_visible_pixels"]),
+                            "target_views": int(row["target_visible_view_count"]),
+                        }
+                        for row in selected_expansion_rows[:128]
+                        if bool(row.get("target_visible_expansion_added", False))
+                    ],
+                    "top_candidate_bins": [
+                        {
+                            "face_id": int(row["face_id"]),
+                            "bin_id": int(row["bin_id"]),
+                            "samples": int(row["samples"]),
+                            "view_count": int(row["view_count"]),
+                            "positive_view_fraction": float(row["positive_view_fraction"]),
+                            "min_view_relative_gain": float(row["min_view_relative_gain"]),
+                            "relative_gain": float(row["relative_gain"]),
+                            "risk_adjusted_relative_gain": float(row["risk_adjusted_relative_gain"]),
+                            "target_pixels": int(row["target_visible_pixels"]),
+                            "target_views": int(row["target_visible_view_count"]),
+                        }
+                        for row in expansion_candidates[:128]
+                    ],
+                }
+            )
+    target_impact_residual_basis: dict[str, Any] = {
+        "enabled": bool(enable_train_only_target_impact_residual_basis),
+        "mode": "train_only_target_impact_residual_basis",
+        "uses_policy_val_gt": True,
+        "uses_target_or_test_gt": False,
+        "reason": "not_requested",
+        "min_pixels": int(target_impact_min_pixels),
+        "min_views": int(target_impact_min_views),
+        "min_policy_samples": int(target_impact_min_policy_samples),
+        "max_extra_bins": int(target_impact_max_extra_bins),
+        "max_views": int(target_impact_max_views),
+        "original_allowed_bin_count": int(sum(len(v) for v in allowed_bins_by_face.values())),
+        "original_allowed_face_count": int(len(allowed_bins_by_face)),
+    }
+    if bool(enable_train_only_target_impact_residual_basis):
+        footprint_views = list(target_footprint_views or [])
+        if not footprint_views:
+            target_impact_residual_basis["reason"] = "no_target_footprint_views"
+        else:
+            candidate_faces_for_target = {int(row["face_id"]) for row in rows}
+            if not candidate_faces_for_target:
+                target_impact_residual_basis["reason"] = "no_candidate_faces"
+            else:
+                impact_target_samples_by_bin, impact_target_views_by_bin, impact_target_summary = (
+                    build_target_bin_footprint_stats(
+                        footprint_views,
+                        candidate_faces_for_target,
+                        int(texture_size),
+                        float(min_alpha),
+                        max_views=int(target_impact_max_views),
+                    )
+                )
+                target_impact_residual_basis["target_footprint"] = dict(impact_target_summary)
+                row_by_key = {(int(row["face_id"]), int(row["bin_id"])): row for row in rows}
+                allowed_keys = {
+                    (int(face), int(bin_id))
+                    for face, bins in allowed_bins_by_face.items()
+                    for bin_id in bins
+                }
+                impact_candidates: list[dict[str, Any]] = []
+                for packed_key, target_pixels in impact_target_samples_by_bin.items():
+                    face_i = int(packed_key) // int(bins_per_face)
+                    bin_i = int(packed_key) % int(bins_per_face)
+                    if (face_i, bin_i) in allowed_keys:
+                        continue
+                    if face_i not in candidate_faces_for_target:
+                        continue
+                    target_pixels_i = int(target_pixels)
+                    target_views_i = int(impact_target_views_by_bin.get(int(packed_key), 0))
+                    if target_pixels_i < int(target_impact_min_pixels):
+                        continue
+                    if target_views_i < int(target_impact_min_views):
+                        continue
+                    row = row_by_key.get((face_i, bin_i))
+                    policy_samples = int(row.get("samples", 0)) if row else 0
+                    if policy_samples < int(target_impact_min_policy_samples):
+                        continue
+                    relative_gain = float(row.get("relative_gain", 0.0)) if row else 0.0
+                    impact_score = (
+                        float(target_pixels_i)
+                        * math.log1p(float(target_views_i))
+                        * (1.0 + max(0.0, float(relative_gain)))
+                    )
+                    impact_candidates.append(
+                        {
+                            "face_id": int(face_i),
+                            "bin_id": int(bin_i),
+                            "target_pixels": int(target_pixels_i),
+                            "target_views": int(target_views_i),
+                            "policy_samples": int(policy_samples),
+                            "has_policy_row": bool(row is not None),
+                            "relative_gain": float(relative_gain),
+                            "positive_view_fraction": (
+                                float(row.get("positive_view_fraction", 0.0)) if row else 0.0
+                            ),
+                            "min_view_relative_gain": (
+                                float(row.get("min_view_relative_gain", 0.0)) if row else 0.0
+                            ),
+                            "score": float(impact_score),
+                        }
+                    )
+                impact_candidates.sort(
+                    key=lambda row: (
+                        float(row["score"]),
+                        int(row["target_pixels"]),
+                        int(row["target_views"]),
+                        int(row["policy_samples"]),
+                    ),
+                    reverse=True,
+                )
+                selected_impact_rows = (
+                    impact_candidates[: int(target_impact_max_extra_bins)]
+                    if int(target_impact_max_extra_bins) > 0
+                    else impact_candidates
+                )
+                added_target_pixels = 0
+                added_target_views_total = 0
+                added_samples = 0
+                added_policy_rows = 0
+                added_without_policy_rows = 0
+                added_bins_by_face: dict[str, list[int]] = {}
+                added_policy_bins_by_face: dict[str, list[int]] = {}
+                added_no_policy_bins_by_face: dict[str, list[int]] = {}
+                actually_added_rows: list[dict[str, Any]] = []
+                for row in selected_impact_rows:
+                    face_i = int(row["face_id"])
+                    bin_i = int(row["bin_id"])
+                    if (face_i, bin_i) in allowed_keys:
+                        continue
+                    allowed_bins_by_face.setdefault(str(face_i), []).append(int(bin_i))
+                    allowed_keys.add((face_i, bin_i))
+                    added_target_pixels += int(row["target_pixels"])
+                    added_target_views_total += int(row["target_views"])
+                    if bool(row.get("has_policy_row", False)):
+                        added_policy_rows += 1
+                        allowed_samples += int(row.get("policy_samples", 0))
+                        added_samples += int(row.get("policy_samples", 0))
+                        added_policy_bins_by_face.setdefault(str(face_i), []).append(int(bin_i))
+                    else:
+                        added_without_policy_rows += 1
+                        added_no_policy_bins_by_face.setdefault(str(face_i), []).append(int(bin_i))
+                    added_bins_by_face.setdefault(str(face_i), []).append(int(bin_i))
+                    actually_added_rows.append(row)
+                for bins_by_face in (
+                    added_bins_by_face,
+                    added_policy_bins_by_face,
+                    added_no_policy_bins_by_face,
+                ):
+                    for bins in bins_by_face.values():
+                        bins.sort()
+                target_impact_residual_basis.update(
+                    {
+                        "reason": "expanded" if actually_added_rows else "no_eligible_target_impact_bins",
+                        "candidate_bin_count": int(len(impact_candidates)),
+                        "added_bin_count": int(len(actually_added_rows)),
+                        "added_sample_count": int(added_samples),
+                        "added_policy_row_bin_count": int(added_policy_rows),
+                        "added_without_policy_row_bin_count": int(added_without_policy_rows),
+                        "added_target_pixels": int(added_target_pixels),
+                        "added_target_view_hits": int(added_target_views_total),
+                        "final_allowed_bin_count": int(sum(len(v) for v in allowed_bins_by_face.values())),
+                        "final_allowed_face_count": int(len(allowed_bins_by_face)),
+                        "added_bins_by_face": added_bins_by_face,
+                        "added_policy_bins_by_face": added_policy_bins_by_face,
+                        "added_no_policy_bins_by_face": added_no_policy_bins_by_face,
+                        "top_added_bins": actually_added_rows[:128],
+                        "top_candidate_bins": impact_candidates[:128],
+                    }
+                )
+    target_connected_region_growth: dict[str, Any] = {
+        "enabled": bool(enable_target_connected_region_growth),
+        "mode": "sparse_materialization_target_visible_connected_region_growth",
+        "uses_target_or_test_gt": False,
+        "reason": "not_requested",
+        "radius": int(target_connected_radius),
+        "min_pixels": int(target_connected_min_pixels),
+        "min_views": int(target_connected_min_views),
+        "min_policy_samples": int(target_connected_min_policy_samples),
+        "min_positive_view_fraction": float(target_connected_min_positive_view_fraction),
+        "max_negative_relative_gain": float(target_connected_max_negative_relative_gain),
+        "max_negative_min_view_gain": float(target_connected_max_negative_min_view_gain),
+        "max_extra_bins": int(target_connected_max_extra_bins),
+        "max_views": int(target_connected_max_views),
+        "seed_allowed_bin_count": int(sum(len(v) for v in allowed_bins_by_face.values())),
+        "seed_allowed_face_count": int(len(allowed_bins_by_face)),
+    }
+    for row in rows:
+        row["target_connected_candidate"] = False
+        row["target_connected_added"] = False
+        row["target_connected_seed_face_id"] = None
+        row["target_connected_seed_bin_id"] = None
+        row["target_connected_seed_distance"] = 0
+        row["target_connected_score"] = 0.0
+    if bool(enable_target_connected_region_growth):
+        footprint_views = list(target_footprint_views or [])
+        if int(target_connected_radius) <= 0:
+            target_connected_region_growth["reason"] = "nonpositive_radius"
+        elif not footprint_views:
+            target_connected_region_growth["reason"] = "no_target_footprint_views"
+        elif not allowed_bins_by_face:
+            target_connected_region_growth["reason"] = "no_seed_allowed_bins"
+        else:
+            candidate_faces_for_target = {int(row["face_id"]) for row in rows}
+            connected_target_samples_by_bin, connected_target_views_by_bin, connected_target_summary = (
+                build_target_bin_footprint_stats(
+                    footprint_views,
+                    candidate_faces_for_target,
+                    int(texture_size),
+                    float(min_alpha),
+                    max_views=int(target_connected_max_views),
+                )
+            )
+            target_connected_region_growth["target_footprint"] = dict(connected_target_summary)
+            row_by_key = {(int(row["face_id"]), int(row["bin_id"])): row for row in rows}
+            allowed_keys = {
+                (int(face), int(bin_id))
+                for face, bins in allowed_bins_by_face.items()
+                for bin_id in bins
+            }
+            seed_bins_by_face: dict[int, list[int]] = {}
+            for face, bin_id in seed_allowed_keys_for_connected:
+                seed_bins_by_face.setdefault(int(face), []).append(int(bin_id))
+            target_connected_region_growth["seed_allowed_bin_count"] = int(
+                len(seed_allowed_keys_for_connected)
+            )
+            target_connected_region_growth["seed_allowed_face_count"] = int(len(seed_bins_by_face))
+            connected_candidates: list[dict[str, Any]] = []
+            max_negative_relative = max(0.0, float(target_connected_max_negative_relative_gain))
+            max_negative_min_view = max(0.0, float(target_connected_max_negative_min_view_gain))
+            min_positive_fraction_connected = float(
+                np.clip(float(target_connected_min_positive_view_fraction), 0.0, 1.0)
+            )
+            for row in rows:
+                face_i = int(row["face_id"])
+                bin_i = int(row["bin_id"])
+                if (face_i, bin_i) in allowed_keys:
+                    continue
+                target_key = int(face_i) * bins_per_face + int(bin_i)
+                target_pixels = int(connected_target_samples_by_bin.get(target_key, 0))
+                target_views = int(connected_target_views_by_bin.get(target_key, 0))
+                row["target_visible_pixels"] = int(target_pixels)
+                row["target_visible_view_count"] = int(target_views)
+                if target_pixels < int(target_connected_min_pixels):
+                    continue
+                if target_views < int(target_connected_min_views):
+                    continue
+                if int(row["samples"]) < int(target_connected_min_policy_samples):
+                    continue
+                if int(row["view_count"]) < int(min_bin_views):
+                    continue
+                if float(row["positive_view_fraction"]) < float(min_positive_fraction_connected):
+                    continue
+                if float(row["relative_gain"]) < -float(max_negative_relative):
+                    continue
+                if float(row["min_view_relative_gain"]) < -float(max_negative_min_view):
+                    continue
+                if not bool(row["variance_ok"]) or not bool(row["sign_ok"]):
+                    continue
+                seed_bins = seed_bins_by_face.get(face_i, [])
+                if not seed_bins:
+                    continue
+                u_i = int(row["u"])
+                v_i = int(row["v"])
+                best_seed: tuple[float, int, int] | None = None
+                for seed_bin in seed_bins:
+                    seed_u = int(seed_bin) % int(texture_size)
+                    seed_v = int(seed_bin) // int(texture_size)
+                    distance = max(abs(int(seed_u) - u_i), abs(int(seed_v) - v_i))
+                    if distance <= 0 or distance > int(target_connected_radius):
+                        continue
+                    seed_row = row_by_key.get((face_i, int(seed_bin)), {})
+                    seed_gain = max(0.0, float(seed_row.get("relative_gain", 0.0)))
+                    seed_pixels = float(seed_row.get("target_visible_pixels", 0))
+                    seed_score = (
+                        (1.0 + seed_gain)
+                        * (1.0 + np.log1p(max(0.0, seed_pixels)))
+                        / float(distance + 1)
+                    )
+                    if best_seed is None or float(seed_score) > float(best_seed[0]):
+                        best_seed = (float(seed_score), int(seed_bin), int(distance))
+                if best_seed is None:
+                    continue
+                support_score = np.log1p(max(0, int(row["samples"]))) * max(
+                    0.05,
+                    float(row["positive_view_fraction"]),
+                )
+                gain_score = 1.0 + max(0.0, float(row["relative_gain"]))
+                target_score = np.log1p(max(0, target_pixels)) * max(1, target_views)
+                score = float(best_seed[0]) * float(support_score) * float(gain_score) * float(target_score)
+                row["target_connected_candidate"] = True
+                row["target_connected_seed_face_id"] = int(face_i)
+                row["target_connected_seed_bin_id"] = int(best_seed[1])
+                row["target_connected_seed_distance"] = int(best_seed[2])
+                row["target_connected_score"] = float(score)
+                connected_candidates.append(row)
+            connected_candidates.sort(
+                key=lambda row: (
+                    float(row.get("target_connected_score", 0.0)),
+                    int(row.get("target_visible_pixels", 0)),
+                    float(row.get("positive_view_fraction", 0.0)),
+                    float(row.get("relative_gain", 0.0)),
+                    int(row.get("samples", 0)),
+                ),
+                reverse=True,
+            )
+            if int(target_connected_max_extra_bins) > 0:
+                selected_connected_rows = connected_candidates[: int(target_connected_max_extra_bins)]
+            else:
+                selected_connected_rows = connected_candidates
+            added_samples = 0
+            added_target_pixels = 0
+            added_target_views_total = 0
+            for row in selected_connected_rows:
+                face_i = int(row["face_id"])
+                bin_i = int(row["bin_id"])
+                if (face_i, bin_i) in allowed_keys:
+                    continue
+                allowed_bins_by_face.setdefault(str(face_i), []).append(int(bin_i))
+                allowed_keys.add((face_i, bin_i))
+                allowed_samples += int(row["samples"])
+                added_samples += int(row["samples"])
+                added_target_pixels += int(row["target_visible_pixels"])
+                added_target_views_total += int(row["target_visible_view_count"])
+                row["target_connected_added"] = True
+            target_connected_region_growth.update(
+                {
+                    "enabled": True,
+                    "reason": "expanded" if selected_connected_rows else "no_eligible_connected_bins",
+                    "candidate_bin_count": int(len(connected_candidates)),
+                    "added_bin_count": int(
+                        sum(1 for row in rows if bool(row.get("target_connected_added", False)))
+                    ),
+                    "added_sample_count": int(added_samples),
+                    "added_target_pixels": int(added_target_pixels),
+                    "added_target_view_hits": int(added_target_views_total),
+                    "final_allowed_bin_count": int(sum(len(v) for v in allowed_bins_by_face.values())),
+                    "final_allowed_face_count": int(len(allowed_bins_by_face)),
+                    "top_added_bins": [
+                        {
+                            "face_id": int(row["face_id"]),
+                            "bin_id": int(row["bin_id"]),
+                            "u": int(row["u"]),
+                            "v": int(row["v"]),
+                            "seed_bin_id": int(row.get("target_connected_seed_bin_id", -1)),
+                            "seed_distance": int(row.get("target_connected_seed_distance", 0)),
+                            "samples": int(row["samples"]),
+                            "view_count": int(row["view_count"]),
+                            "positive_view_fraction": float(row["positive_view_fraction"]),
+                            "min_view_relative_gain": float(row["min_view_relative_gain"]),
+                            "relative_gain": float(row["relative_gain"]),
+                            "target_pixels": int(row["target_visible_pixels"]),
+                            "target_views": int(row["target_visible_view_count"]),
+                            "score": float(row.get("target_connected_score", 0.0)),
+                        }
+                        for row in selected_connected_rows[:128]
+                        if bool(row.get("target_connected_added", False))
+                    ],
+                    "top_candidate_bins": [
+                        {
+                            "face_id": int(row["face_id"]),
+                            "bin_id": int(row["bin_id"]),
+                            "u": int(row["u"]),
+                            "v": int(row["v"]),
+                            "seed_bin_id": int(row.get("target_connected_seed_bin_id", -1)),
+                            "seed_distance": int(row.get("target_connected_seed_distance", 0)),
+                            "samples": int(row["samples"]),
+                            "view_count": int(row["view_count"]),
+                            "positive_view_fraction": float(row["positive_view_fraction"]),
+                            "min_view_relative_gain": float(row["min_view_relative_gain"]),
+                            "relative_gain": float(row["relative_gain"]),
+                            "target_pixels": int(row["target_visible_pixels"]),
+                            "target_views": int(row["target_visible_view_count"]),
+                            "score": float(row.get("target_connected_score", 0.0)),
+                        }
+                        for row in connected_candidates[:128]
+                    ],
+                }
+            )
     for bins in allowed_bins_by_face.values():
         bins.sort()
     rows_by_gain = sorted(rows, key=lambda row: float(row["relative_gain"]))
     rows_by_samples = sorted(rows, key=lambda row: int(row["samples"]), reverse=True)
     allowed_bin_count = int(sum(len(v) for v in allowed_bins_by_face.values()))
+    target_visible_expansion.setdefault("final_allowed_bin_count", int(allowed_bin_count))
+    target_visible_expansion.setdefault("final_allowed_face_count", int(len(allowed_bins_by_face)))
+    target_visible_expansion.setdefault("candidate_bin_count", 0)
+    target_visible_expansion.setdefault("added_bin_count", 0)
+    target_visible_expansion.setdefault("added_sample_count", 0)
+    target_visible_expansion.setdefault("added_target_pixels", 0)
+    target_impact_residual_basis.setdefault("final_allowed_bin_count", int(allowed_bin_count))
+    target_impact_residual_basis.setdefault("final_allowed_face_count", int(len(allowed_bins_by_face)))
+    target_impact_residual_basis.setdefault("candidate_bin_count", 0)
+    target_impact_residual_basis.setdefault("added_bin_count", 0)
+    target_impact_residual_basis.setdefault("added_sample_count", 0)
+    target_impact_residual_basis.setdefault("added_policy_row_bin_count", 0)
+    target_impact_residual_basis.setdefault("added_without_policy_row_bin_count", 0)
+    target_impact_residual_basis.setdefault("added_target_pixels", 0)
+    target_impact_residual_basis.setdefault("added_bins_by_face", {})
+    target_impact_residual_basis.setdefault("added_policy_bins_by_face", {})
+    target_impact_residual_basis.setdefault("added_no_policy_bins_by_face", {})
+    target_connected_region_growth.setdefault("final_allowed_bin_count", int(allowed_bin_count))
+    target_connected_region_growth.setdefault("final_allowed_face_count", int(len(allowed_bins_by_face)))
+    target_connected_region_growth.setdefault("candidate_bin_count", 0)
+    target_connected_region_growth.setdefault("added_bin_count", 0)
+    target_connected_region_growth.setdefault("added_sample_count", 0)
+    target_connected_region_growth.setdefault("added_target_pixels", 0)
+    target_visible_expansion["target_impact_residual_basis"] = dict(target_impact_residual_basis)
+    target_visible_expansion["connected_region_growth"] = dict(target_connected_region_growth)
     failure_counts = {
         "sample": int(sum(1 for row in rows if not bool(row.get("sample_ok", False)))),
         "view": int(sum(1 for row in rows if not bool(row.get("view_ok", False)))),
@@ -6215,6 +7120,9 @@ def build_policy_val_bin_uncertainty_guard_profile(
         "max_mean_variance": float(max_mean_variance),
         "min_mean_sign_consistency": float(min_mean_sign_consistency),
         "adaptive_frontier": dict(adaptive_frontier),
+        "target_visible_expansion": dict(target_visible_expansion),
+        "target_impact_residual_basis": dict(target_impact_residual_basis),
+        "target_connected_region_growth": dict(target_connected_region_growth),
         "strict_failure_counts": dict(failure_counts),
         "candidate_bin_count": int(len(rows)),
         "allowed_bin_count": int(allowed_bin_count),
@@ -6265,6 +7173,8 @@ def select_sparse_materialization_seed(
 def intersect_bin_guard_profiles(
     sparse_profile: dict[str, Any],
     bin_guard_profile: dict[str, Any],
+    *,
+    empty_intersection_policy: str = "reject",
 ) -> dict[str, Any]:
     sparse_bins = _allowed_bins_from_uncertainty_guard(sparse_profile)
     guard_bins = _allowed_bins_from_uncertainty_guard(bin_guard_profile)
@@ -6292,8 +7202,34 @@ def intersect_bin_guard_profiles(
         "sparse_allowed_bin_count": int(sparse_profile.get("allowed_bin_count", 0) or 0),
         "bin_guard_allowed_bin_count": int(bin_guard_profile.get("allowed_bin_count", 0) or 0),
         "intersection_allowed_bin_count": int(allowed_count),
+        "empty_intersection_policy": str(empty_intersection_policy),
     }
     if allowed_count <= 0:
+        sparse_allowed_count = int(sparse_profile.get("allowed_bin_count", 0) or 0)
+        sparse_post_accepted = bool(sparse_profile.get("post_materialization_accepted", False))
+        if (
+            str(empty_intersection_policy) == "sparse_if_post_accepted"
+            and bool(sparse_profile.get("enabled", False))
+            and sparse_allowed_count > 0
+            and sparse_post_accepted
+        ):
+            bridged = dict(sparse_profile)
+            bridged["enabled"] = True
+            bridged["mode"] = "policy_val_sparse_residual_materialization_and_bin_uncertainty_guard"
+            bridged["decision"] = "bridge_sparse_after_empty_bin_guard_intersection"
+            bridged["reason"] = "sparse_materialization_post_gate_accepted_bin_guard_empty"
+            bridged["bin_uncertainty_guard_profile"] = dict(bin_guard_profile)
+            bridged["sparse_materialization_intersection"] = dict(
+                merged["sparse_materialization_intersection"]
+            )
+            bridged["sparse_materialization_intersection"].update(
+                {
+                    "bridge_activated": True,
+                    "bridge_allowed_bin_count": int(sparse_allowed_count),
+                    "bridge_reason": "bin_guard_empty_but_sparse_post_gate_accepted",
+                }
+            )
+            return bridged
         merged["decision"] = "disabled_no_sparse_bin_guard_intersection"
         merged["reason"] = "sparse_materialization_and_bin_uncertainty_guard_intersection_empty"
     return merged
@@ -6335,6 +7271,30 @@ def policy_val_sparse_materialization_profile(
     adaptive_frontier_min_positive_view_fraction: float,
     adaptive_frontier_min_risk_adjusted_gain: float,
     adaptive_frontier_min_sample_quantile: float,
+    target_footprint_views: list[Path] | None = None,
+    enable_target_visible_expansion: bool = False,
+    target_visible_min_pixels: int = 1,
+    target_visible_min_views: int = 1,
+    target_visible_min_policy_samples: int = 1,
+    target_visible_min_positive_view_fraction: float = -1.0,
+    target_visible_max_extra_bins: int = 0,
+    target_visible_max_views: int = 0,
+    enable_train_only_target_impact_residual_basis: bool = False,
+    target_impact_min_pixels: int = 1,
+    target_impact_min_views: int = 1,
+    target_impact_min_policy_samples: int = 0,
+    target_impact_max_extra_bins: int = 0,
+    target_impact_max_views: int = 0,
+    enable_target_connected_region_growth: bool = False,
+    target_connected_radius: int = 1,
+    target_connected_min_pixels: int = 1,
+    target_connected_min_views: int = 1,
+    target_connected_min_policy_samples: int = 1,
+    target_connected_min_positive_view_fraction: float = 0.5,
+    target_connected_max_negative_relative_gain: float = 0.02,
+    target_connected_max_negative_min_view_gain: float = 0.05,
+    target_connected_max_extra_bins: int = 0,
+    target_connected_max_views: int = 0,
 ) -> dict[str, Any]:
     seed = select_sparse_materialization_seed(
         policy_payload,
@@ -6381,6 +7341,32 @@ def policy_val_sparse_materialization_profile(
         adaptive_frontier_min_positive_view_fraction=float(adaptive_frontier_min_positive_view_fraction),
         adaptive_frontier_min_risk_adjusted_gain=float(adaptive_frontier_min_risk_adjusted_gain),
         adaptive_frontier_min_sample_quantile=float(adaptive_frontier_min_sample_quantile),
+        target_footprint_views=target_footprint_views,
+        enable_target_visible_expansion=bool(enable_target_visible_expansion),
+        target_visible_min_pixels=int(target_visible_min_pixels),
+        target_visible_min_views=int(target_visible_min_views),
+        target_visible_min_policy_samples=int(target_visible_min_policy_samples),
+        target_visible_min_positive_view_fraction=float(target_visible_min_positive_view_fraction),
+        target_visible_max_extra_bins=int(target_visible_max_extra_bins),
+        target_visible_max_views=int(target_visible_max_views),
+        enable_train_only_target_impact_residual_basis=bool(
+            enable_train_only_target_impact_residual_basis
+        ),
+        target_impact_min_pixels=int(target_impact_min_pixels),
+        target_impact_min_views=int(target_impact_min_views),
+        target_impact_min_policy_samples=int(target_impact_min_policy_samples),
+        target_impact_max_extra_bins=int(target_impact_max_extra_bins),
+        target_impact_max_views=int(target_impact_max_views),
+        enable_target_connected_region_growth=bool(enable_target_connected_region_growth),
+        target_connected_radius=int(target_connected_radius),
+        target_connected_min_pixels=int(target_connected_min_pixels),
+        target_connected_min_views=int(target_connected_min_views),
+        target_connected_min_policy_samples=int(target_connected_min_policy_samples),
+        target_connected_min_positive_view_fraction=float(target_connected_min_positive_view_fraction),
+        target_connected_max_negative_relative_gain=float(target_connected_max_negative_relative_gain),
+        target_connected_max_negative_min_view_gain=float(target_connected_max_negative_min_view_gain),
+        target_connected_max_extra_bins=int(target_connected_max_extra_bins),
+        target_connected_max_views=int(target_connected_max_views),
     )
     profile["mode"] = "policy_val_sparse_residual_materialization"
     profile["compatible_predict_mode"] = "policy_val_bin_uncertainty_guard"
@@ -6388,6 +7374,751 @@ def policy_val_sparse_materialization_profile(
     profile["seed_alpha"] = float(seed.get("alpha", 0.0))
     profile["seed_min_relative_gain"] = float(seed_min_relative_gain)
     return profile
+
+
+def apply_target_impact_carrier_fill(
+    atlas: dict[int, FaceAtlas],
+    sparse_profile: dict[str, Any] | None,
+    *,
+    mode: str,
+    blend: float,
+    min_face_samples: int,
+    min_carrier_norm: float,
+    max_abs_delta_rgb: float,
+    synthetic_count: int,
+) -> dict[str, Any]:
+    """Fill target-impact-expanded bins with a train-only face residual carrier."""
+    mode_s = str(mode)
+    summary: dict[str, Any] = {
+        "enabled": mode_s != "off",
+        "mode": "target_impact_train_only_carrier_fill",
+        "fill_mode": mode_s,
+        "uses_policy_val_gt": False,
+        "uses_train_fit_gt": True,
+        "uses_target_or_test_gt": False,
+        "blend": float(blend),
+        "min_face_samples": int(min_face_samples),
+        "min_carrier_norm": float(min_carrier_norm),
+        "max_abs_delta_rgb": float(max_abs_delta_rgb),
+        "synthetic_count": int(synthetic_count),
+        "eligible_bin_count": 0,
+        "filled_bin_count": 0,
+        "skipped_missing_face_count": 0,
+        "skipped_low_face_support_count": 0,
+        "skipped_low_carrier_norm_count": 0,
+        "mean_carrier_norm": 0.0,
+        "max_carrier_norm": 0.0,
+        "filled_bins_by_face": {},
+        "top_filled_bins": [],
+    }
+    if mode_s == "off":
+        summary["reason"] = "not_requested"
+        return summary
+    if mode_s not in {"no_policy_rows", "all_added"}:
+        raise ValueError(f"unsupported target-impact carrier fill mode: {mode_s}")
+    profile = dict(sparse_profile or {})
+    impact = dict(profile.get("target_impact_residual_basis") or {})
+    if not impact or not bool(impact.get("enabled", False)):
+        summary["reason"] = "target_impact_residual_basis_disabled"
+        return summary
+    key_name = (
+        "added_no_policy_bins_by_face"
+        if mode_s == "no_policy_rows"
+        else "added_bins_by_face"
+    )
+    raw_bins_by_face = impact.get(key_name, {}) or {}
+    if not isinstance(raw_bins_by_face, dict) or not raw_bins_by_face:
+        summary["reason"] = f"no_{key_name}"
+        return summary
+    blend_f = float(np.clip(float(blend), 0.0, 1.0))
+    max_abs = max(0.0, float(max_abs_delta_rgb))
+    min_norm = max(0.0, float(min_carrier_norm))
+    min_samples = max(0, int(min_face_samples))
+    synthetic_count_i = max(0, int(synthetic_count))
+    filled_rows: list[dict[str, Any]] = []
+    filled_bins_by_face: dict[str, list[int]] = {}
+    carrier_norms: list[float] = []
+    eligible = 0
+    skipped_missing_face = 0
+    skipped_low_support = 0
+    skipped_low_norm = 0
+    for face_key, raw_bins in raw_bins_by_face.items():
+        try:
+            face = int(face_key)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(raw_bins, (list, tuple, set)):
+            continue
+        unique_bins = sorted({int(bin_id) for bin_id in raw_bins})
+        eligible += int(len(unique_bins))
+        face_atlas = atlas.get(int(face))
+        if face_atlas is None:
+            skipped_missing_face += int(len(unique_bins))
+            continue
+        if int(face_atlas.samples) < int(min_samples):
+            skipped_low_support += int(len(unique_bins))
+            continue
+        carrier = clip_delta_rgb(
+            np.asarray(face_atlas.mean_rgb, dtype=np.float32).reshape(1, 3),
+            max_abs,
+        ).reshape(3)
+        carrier_norm = float(np.linalg.norm(carrier.astype(np.float32)))
+        if carrier_norm < min_norm:
+            skipped_low_norm += int(len(unique_bins))
+            continue
+        texture_size = int(face_atlas.texture.shape[0])
+        for bin_id in unique_bins:
+            if int(bin_id) < 0 or int(bin_id) >= texture_size * texture_size:
+                continue
+            v = int(bin_id) // texture_size
+            u = int(bin_id) % texture_size
+            old_value = np.asarray(face_atlas.texture[v, u], dtype=np.float32)
+            new_value = ((1.0 - blend_f) * old_value + blend_f * carrier).astype(np.float32)
+            new_value = clip_delta_rgb(new_value.reshape(1, 3), max_abs).reshape(3)
+            face_atlas.texture[v, u] = new_value
+            if synthetic_count_i > 0:
+                face_atlas.counts[v, u] = max(int(face_atlas.counts[v, u]), synthetic_count_i)
+            face_atlas.sign_consistency[v, u] = np.maximum(
+                face_atlas.sign_consistency[v, u],
+                (np.abs(np.sign(new_value)) > 0).astype(np.float32),
+            )
+            filled_bins_by_face.setdefault(str(face), []).append(int(bin_id))
+            carrier_norms.append(float(carrier_norm))
+            filled_rows.append(
+                {
+                    "face_id": int(face),
+                    "bin_id": int(bin_id),
+                    "u": int(u),
+                    "v": int(v),
+                    "face_samples": int(face_atlas.samples),
+                    "carrier_norm": float(carrier_norm),
+                    "old_norm": float(np.linalg.norm(old_value.astype(np.float32))),
+                    "new_norm": float(np.linalg.norm(new_value.astype(np.float32))),
+                }
+            )
+    summary.update(
+        {
+            "reason": "filled" if filled_rows else "no_bins_filled",
+            "eligible_bin_count": int(eligible),
+            "filled_bin_count": int(len(filled_rows)),
+            "skipped_missing_face_count": int(skipped_missing_face),
+            "skipped_low_face_support_count": int(skipped_low_support),
+            "skipped_low_carrier_norm_count": int(skipped_low_norm),
+            "mean_carrier_norm": float(np.mean(carrier_norms)) if carrier_norms else 0.0,
+            "max_carrier_norm": float(np.max(carrier_norms)) if carrier_norms else 0.0,
+            "filled_bins_by_face": filled_bins_by_face,
+            "top_filled_bins": sorted(
+                filled_rows,
+                key=lambda row: (float(row["carrier_norm"]), int(row["face_samples"])),
+                reverse=True,
+            )[:128],
+        }
+    )
+    return summary
+
+
+def apply_target_impact_multisample_residual_fill(
+    atlas: dict[int, FaceAtlas],
+    train_fit_views: list[Path],
+    sparse_profile: dict[str, Any] | None,
+    *,
+    residual_rgb_key: str,
+    residual_l1_key: str,
+    min_l1: float,
+    min_alpha: float,
+    max_abs_delta_rgb: float,
+    max_samples_per_view: int,
+    mode: str,
+    radius: int,
+    min_samples: int,
+    max_samples_per_bin: int,
+    max_views: int,
+    blend: float,
+    kernel_sigma: float,
+    min_norm: float,
+    synthetic_count: int,
+) -> dict[str, Any]:
+    """Materialize target-impact bins from nearby train-fit residual samples."""
+    mode_s = str(mode)
+    summary: dict[str, Any] = {
+        "enabled": mode_s != "off",
+        "mode": "target_impact_train_only_multisample_residual_fill",
+        "fill_mode": mode_s,
+        "uses_policy_val_gt": False,
+        "uses_train_fit_gt": True,
+        "uses_target_or_test_gt": False,
+        "radius": int(radius),
+        "min_samples": int(min_samples),
+        "max_samples_per_bin": int(max_samples_per_bin),
+        "max_views": int(max_views),
+        "blend": float(blend),
+        "kernel_sigma": float(kernel_sigma),
+        "min_norm": float(min_norm),
+        "max_abs_delta_rgb": float(max_abs_delta_rgb),
+        "synthetic_count": int(synthetic_count),
+        "eligible_bin_count": 0,
+        "filled_bin_count": 0,
+        "train_fit_view_count": 0,
+        "train_fit_views_used": 0,
+        "sample_event_count": 0,
+        "skipped_missing_face_count": 0,
+        "skipped_low_sample_count": 0,
+        "skipped_low_norm_count": 0,
+        "filled_bins_by_face": {},
+        "top_filled_bins": [],
+    }
+    if mode_s == "off":
+        summary["reason"] = "not_requested"
+        return summary
+    if mode_s not in {"no_policy_rows", "all_added"}:
+        raise ValueError(f"unsupported target-impact multisample fill mode: {mode_s}")
+    if not train_fit_views:
+        summary["reason"] = "no_train_fit_views"
+        return summary
+    profile = dict(sparse_profile or {})
+    impact = dict(profile.get("target_impact_residual_basis") or {})
+    if not impact or not bool(impact.get("enabled", False)):
+        summary["reason"] = "target_impact_residual_basis_disabled"
+        return summary
+    key_name = (
+        "added_no_policy_bins_by_face"
+        if mode_s == "no_policy_rows"
+        else "added_bins_by_face"
+    )
+    raw_bins_by_face = impact.get(key_name, {}) or {}
+    if not isinstance(raw_bins_by_face, dict) or not raw_bins_by_face:
+        summary["reason"] = f"no_{key_name}"
+        return summary
+
+    target_bins_by_face: dict[int, list[int]] = {}
+    skipped_missing_face = 0
+    for face_key, raw_bins in raw_bins_by_face.items():
+        try:
+            face = int(face_key)
+        except (TypeError, ValueError):
+            continue
+        face_atlas = atlas.get(face)
+        if face_atlas is None:
+            try:
+                skipped_missing_face += len(raw_bins)
+            except TypeError:
+                skipped_missing_face += 1
+            continue
+        if not isinstance(raw_bins, (list, tuple, set)):
+            continue
+        texture_size = int(face_atlas.texture.shape[0])
+        clean_bins: list[int] = []
+        for raw_bin in raw_bins:
+            try:
+                bin_id = int(raw_bin)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= bin_id < texture_size * texture_size:
+                clean_bins.append(bin_id)
+        if clean_bins:
+            target_bins_by_face[face] = sorted(set(clean_bins))
+    eligible_keys = {
+        (int(face), int(bin_id))
+        for face, bins in target_bins_by_face.items()
+        for bin_id in bins
+    }
+    summary["eligible_bin_count"] = int(len(eligible_keys))
+    summary["skipped_missing_face_count"] = int(skipped_missing_face)
+    if not eligible_keys:
+        summary["reason"] = "no_valid_target_impact_bins"
+        return summary
+
+    radius_i = max(0, int(radius))
+    sigma = max(1.0e-6, float(kernel_sigma))
+    blend_f = float(np.clip(float(blend), 0.0, 1.0))
+    min_samples_i = max(1, int(min_samples))
+    max_samples_i = max(0, int(max_samples_per_bin))
+    synthetic_count_i = max(0, int(synthetic_count))
+    max_abs = max(0.0, float(max_abs_delta_rgb))
+    min_norm_f = max(0.0, float(min_norm))
+    first_atlas = next(iter(atlas.values()))
+    texture_size = int(first_atlas.texture.shape[0])
+    neighbor_maps: dict[int, dict[int, list[tuple[int, float]]]] = {}
+    for face, target_bins in target_bins_by_face.items():
+        face_atlas = atlas.get(face)
+        if face_atlas is None:
+            continue
+        size = int(face_atlas.texture.shape[0])
+        face_neighbors: dict[int, list[tuple[int, float]]] = {}
+        for target_bin in target_bins:
+            target_u = int(target_bin) % size
+            target_v = int(target_bin) // size
+            for dv in range(-radius_i, radius_i + 1):
+                source_v = target_v + dv
+                if source_v < 0 or source_v >= size:
+                    continue
+                for du in range(-radius_i, radius_i + 1):
+                    source_u = target_u + du
+                    if source_u < 0 or source_u >= size:
+                        continue
+                    dist2 = float(du * du + dv * dv)
+                    if dist2 > float(radius_i * radius_i):
+                        continue
+                    weight = float(math.exp(-0.5 * dist2 / (sigma * sigma)))
+                    source_bin = int(source_v * size + source_u)
+                    face_neighbors.setdefault(source_bin, []).append((int(target_bin), weight))
+        neighbor_maps[int(face)] = face_neighbors
+
+    sum_by_key = {key: np.zeros((3,), dtype=np.float64) for key in eligible_keys}
+    sq_by_key = {key: np.zeros((3,), dtype=np.float64) for key in eligible_keys}
+    sign_by_key = {key: np.zeros((3,), dtype=np.float64) for key in eligible_keys}
+    weight_by_key = {key: 0.0 for key in eligible_keys}
+    count_by_key = {key: 0 for key in eligible_keys}
+    rng = np.random.default_rng(17)
+    view_paths = list(train_fit_views)
+    if int(max_views) > 0:
+        view_paths = view_paths[: int(max_views)]
+    summary["train_fit_view_count"] = int(len(train_fit_views))
+    summary["train_fit_views_used"] = int(len(view_paths))
+    candidate_faces = set(int(face) for face in target_bins_by_face)
+    sample_events = 0
+    for path in tqdm(view_paths, desc="target-impact multisample fill"):
+        z = np.load(path)
+        if residual_rgb_key not in z or "barycentric" not in z or "face_id" not in z:
+            continue
+        mask = _valid_sample_mask(
+            z,
+            candidate_faces,
+            residual_l1_key=residual_l1_key,
+            min_l1=float(min_l1),
+            min_alpha=float(min_alpha),
+        )
+        ys, xs = np.nonzero(mask)
+        if ys.size == 0:
+            continue
+        if int(max_samples_per_view) > 0 and ys.size > int(max_samples_per_view):
+            take = rng.choice(ys.size, size=int(max_samples_per_view), replace=False)
+            ys = ys[take]
+            xs = xs[take]
+            local_mask = np.zeros_like(mask, dtype=bool)
+            local_mask[ys, xs] = True
+            mask = local_mask
+        face_ids = np.asarray(z["face_id"], dtype=np.int64)[mask]
+        residual = np.asarray(z[residual_rgb_key], dtype=np.float32)
+        residual_samples = np.stack(
+            [residual[0][mask], residual[1][mask], residual[2][mask]],
+            axis=1,
+        ).astype(np.float32)
+        ubin, vbin = _uv_bins(np.asarray(z["barycentric"], dtype=np.float32), mask, texture_size)
+        source_bins = (vbin.astype(np.int64) * int(texture_size) + ubin.astype(np.int64)).astype(np.int64)
+        for face_raw, source_bin_raw, residual_rgb in zip(face_ids, source_bins, residual_samples, strict=False):
+            face = int(face_raw)
+            face_neighbors = neighbor_maps.get(face)
+            if not face_neighbors:
+                continue
+            target_rows = face_neighbors.get(int(source_bin_raw))
+            if not target_rows:
+                continue
+            for target_bin, weight in target_rows:
+                key = (face, int(target_bin))
+                if max_samples_i > 0 and int(count_by_key[key]) >= max_samples_i:
+                    continue
+                w = float(weight)
+                rgb64 = residual_rgb.astype(np.float64)
+                sum_by_key[key] += rgb64 * w
+                sq_by_key[key] += np.square(rgb64) * w
+                sign_by_key[key] += np.sign(rgb64) * w
+                weight_by_key[key] += w
+                count_by_key[key] += 1
+                sample_events += 1
+
+    filled_rows: list[dict[str, Any]] = []
+    filled_bins_by_face: dict[str, list[int]] = {}
+    skipped_low_sample = 0
+    skipped_low_norm = 0
+    for key in sorted(eligible_keys):
+        face, bin_id = key
+        count = int(count_by_key[key])
+        if count < min_samples_i or float(weight_by_key[key]) <= 0.0:
+            skipped_low_sample += 1
+            continue
+        estimate = (sum_by_key[key] / max(float(weight_by_key[key]), 1.0e-12)).astype(np.float32)
+        estimate = clip_delta_rgb(estimate.reshape(1, 3), max_abs).reshape(3)
+        estimate_norm = float(np.linalg.norm(estimate.astype(np.float32)))
+        if estimate_norm < min_norm_f:
+            skipped_low_norm += 1
+            continue
+        face_atlas = atlas.get(face)
+        if face_atlas is None:
+            continue
+        size = int(face_atlas.texture.shape[0])
+        v = int(bin_id) // size
+        u = int(bin_id) % size
+        old_value = np.asarray(face_atlas.texture[v, u], dtype=np.float32)
+        new_value = ((1.0 - blend_f) * old_value + blend_f * estimate).astype(np.float32)
+        new_value = clip_delta_rgb(new_value.reshape(1, 3), max_abs).reshape(3)
+        face_atlas.texture[v, u] = new_value
+        effective_count = max(synthetic_count_i, count)
+        if effective_count > 0:
+            face_atlas.counts[v, u] = max(int(face_atlas.counts[v, u]), int(effective_count))
+        mean_sq = sq_by_key[key] / max(float(weight_by_key[key]), 1.0e-12)
+        face_atlas.variance[v, u] = np.maximum(mean_sq - np.square(estimate.astype(np.float64)), 0.0).astype(np.float32)
+        face_atlas.sign_consistency[v, u] = np.maximum(
+            face_atlas.sign_consistency[v, u],
+            np.clip(np.abs(sign_by_key[key]) / max(float(weight_by_key[key]), 1.0e-12), 0.0, 1.0).astype(np.float32),
+        )
+        filled_bins_by_face.setdefault(str(face), []).append(int(bin_id))
+        filled_rows.append(
+            {
+                "face_id": int(face),
+                "bin_id": int(bin_id),
+                "u": int(u),
+                "v": int(v),
+                "sample_count": int(count),
+                "weight_sum": float(weight_by_key[key]),
+                "estimate_norm": float(estimate_norm),
+                "old_norm": float(np.linalg.norm(old_value.astype(np.float32))),
+                "new_norm": float(np.linalg.norm(new_value.astype(np.float32))),
+            }
+        )
+    for bins in filled_bins_by_face.values():
+        bins.sort()
+    summary.update(
+        {
+            "reason": "filled" if filled_rows else "no_bins_filled",
+            "filled_bin_count": int(len(filled_rows)),
+            "sample_event_count": int(sample_events),
+            "skipped_low_sample_count": int(skipped_low_sample),
+            "skipped_low_norm_count": int(skipped_low_norm),
+            "filled_bins_by_face": filled_bins_by_face,
+            "top_filled_bins": sorted(
+                filled_rows,
+                key=lambda row: (int(row["sample_count"]), float(row["estimate_norm"])),
+                reverse=True,
+            )[:128],
+        }
+    )
+    return summary
+
+
+def apply_target_impact_affine_residual_fill(
+    atlas: dict[int, FaceAtlas],
+    train_fit_views: list[Path],
+    sparse_profile: dict[str, Any] | None,
+    *,
+    residual_rgb_key: str,
+    residual_l1_key: str,
+    min_l1: float,
+    min_alpha: float,
+    max_abs_delta_rgb: float,
+    max_samples_per_view: int,
+    mode: str,
+    feature_mode: str,
+    min_samples: int,
+    max_samples_per_face: int,
+    max_views: int,
+    blend: float,
+    ridge: float,
+    max_condition: float,
+    min_norm: float,
+    synthetic_count: int,
+) -> dict[str, Any]:
+    """Fit face-local train-only residual fields and materialize target-impact bins."""
+    mode_s = str(mode)
+    feature_mode_s = str(feature_mode)
+    summary: dict[str, Any] = {
+        "enabled": mode_s != "off",
+        "mode": "target_impact_train_only_affine_residual_fill",
+        "fill_mode": mode_s,
+        "feature_mode": feature_mode_s,
+        "uses_policy_val_gt": False,
+        "uses_train_fit_gt": True,
+        "uses_target_or_test_gt": False,
+        "min_samples": int(min_samples),
+        "max_samples_per_face": int(max_samples_per_face),
+        "max_views": int(max_views),
+        "blend": float(blend),
+        "ridge": float(ridge),
+        "max_condition": float(max_condition),
+        "min_norm": float(min_norm),
+        "max_abs_delta_rgb": float(max_abs_delta_rgb),
+        "synthetic_count": int(synthetic_count),
+        "eligible_bin_count": 0,
+        "filled_bin_count": 0,
+        "train_fit_view_count": 0,
+        "train_fit_views_used": 0,
+        "sample_event_count": 0,
+        "fit_face_count": 0,
+        "skipped_missing_face_count": 0,
+        "skipped_low_sample_face_count": 0,
+        "skipped_bad_condition_face_count": 0,
+        "skipped_low_norm_count": 0,
+        "filled_bins_by_face": {},
+        "top_filled_bins": [],
+    }
+    if mode_s == "off":
+        summary["reason"] = "not_requested"
+        return summary
+    if mode_s not in {"no_policy_rows", "all_added"}:
+        raise ValueError(f"unsupported target-impact affine fill mode: {mode_s}")
+    if feature_mode_s not in {"face_uv_normal_camera_ridge", "face_uv_patch_mixture_ridge"}:
+        raise ValueError(f"unsupported target-impact affine feature mode: {feature_mode_s}")
+    if not train_fit_views:
+        summary["reason"] = "no_train_fit_views"
+        return summary
+    profile = dict(sparse_profile or {})
+    impact = dict(profile.get("target_impact_residual_basis") or {})
+    if not impact or not bool(impact.get("enabled", False)):
+        summary["reason"] = "target_impact_residual_basis_disabled"
+        return summary
+    key_name = "added_no_policy_bins_by_face" if mode_s == "no_policy_rows" else "added_bins_by_face"
+    raw_bins_by_face = impact.get(key_name, {}) or {}
+    if not isinstance(raw_bins_by_face, dict) or not raw_bins_by_face:
+        summary["reason"] = f"no_{key_name}"
+        return summary
+
+    target_bins_by_face: dict[int, list[int]] = {}
+    skipped_missing_face = 0
+    for face_key, raw_bins in raw_bins_by_face.items():
+        try:
+            face = int(face_key)
+        except (TypeError, ValueError):
+            continue
+        face_atlas = atlas.get(face)
+        if face_atlas is None:
+            try:
+                skipped_missing_face += len(raw_bins)
+            except TypeError:
+                skipped_missing_face += 1
+            continue
+        if not isinstance(raw_bins, (list, tuple, set)):
+            continue
+        size = int(face_atlas.texture.shape[0])
+        clean_bins = []
+        for raw_bin in raw_bins:
+            try:
+                bin_id = int(raw_bin)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= bin_id < size * size:
+                clean_bins.append(bin_id)
+        if clean_bins:
+            target_bins_by_face[face] = sorted(set(clean_bins))
+    eligible_keys = {
+        (int(face), int(bin_id))
+        for face, bins in target_bins_by_face.items()
+        for bin_id in bins
+    }
+    summary["eligible_bin_count"] = int(len(eligible_keys))
+    summary["skipped_missing_face_count"] = int(skipped_missing_face)
+    if not eligible_keys:
+        summary["reason"] = "no_valid_target_impact_bins"
+        return summary
+
+    feature_dim = _teacher_distilled_basis_feature_dim(feature_mode_s)
+    min_samples_i = max(int(min_samples), feature_dim + 1)
+    max_samples_face_i = max(0, int(max_samples_per_face))
+    max_abs = max(0.0, float(max_abs_delta_rgb))
+    blend_f = float(np.clip(float(blend), 0.0, 1.0))
+    ridge_f = max(float(ridge), 1.0e-12)
+    max_condition_f = max(float(max_condition), 1.0)
+    min_norm_f = max(0.0, float(min_norm))
+    synthetic_count_i = max(0, int(synthetic_count))
+    first_atlas = next(iter(atlas.values()))
+    texture_size = int(first_atlas.texture.shape[0])
+
+    face_xtx: dict[int, np.ndarray] = {}
+    face_xty: dict[int, np.ndarray] = {}
+    face_samples: dict[int, int] = {}
+    face_normal_sum: dict[int, np.ndarray] = {}
+    face_normal_count: dict[int, int] = {}
+    face_camera_dirs: dict[int, list[np.ndarray]] = {}
+    candidate_faces = set(int(face) for face in target_bins_by_face)
+    rng = np.random.default_rng(23)
+    view_paths = list(train_fit_views)
+    if int(max_views) > 0:
+        view_paths = view_paths[: int(max_views)]
+    summary["train_fit_view_count"] = int(len(train_fit_views))
+    summary["train_fit_views_used"] = int(len(view_paths))
+
+    sample_events = 0
+    for path in tqdm(view_paths, desc="target-impact affine fill fit"):
+        z = np.load(path)
+        if residual_rgb_key not in z or "normal" not in z or "barycentric" not in z or "face_id" not in z:
+            continue
+        mask = _valid_sample_mask(
+            z,
+            candidate_faces,
+            residual_l1_key=residual_l1_key,
+            min_l1=float(min_l1),
+            min_alpha=float(min_alpha),
+        )
+        ys, xs = np.nonzero(mask)
+        if ys.size == 0:
+            continue
+        if int(max_samples_per_view) > 0 and ys.size > int(max_samples_per_view):
+            take = rng.choice(ys.size, size=int(max_samples_per_view), replace=False)
+            ys = ys[take]
+            xs = xs[take]
+            local_mask = np.zeros_like(mask, dtype=bool)
+            local_mask[ys, xs] = True
+            mask = local_mask
+        features = _teacher_distilled_basis_features_for_mask(z, feature_mode_s, mask)
+        if features is None or features.shape[1] != feature_dim:
+            continue
+        face_ids = np.asarray(z["face_id"], dtype=np.int64)[mask]
+        residual = np.asarray(z[residual_rgb_key], dtype=np.float32)
+        residual_samples = np.stack(
+            [residual[0][mask], residual[1][mask], residual[2][mask]],
+            axis=1,
+        ).astype(np.float32)
+        normal = np.asarray(z["normal"], dtype=np.float32)
+        normal_samples = np.stack([normal[0][mask], normal[1][mask], normal[2][mask]], axis=1)
+        normal_samples = np.nan_to_num(normal_samples, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+        normal_samples /= np.maximum(np.linalg.norm(normal_samples, axis=1, keepdims=True), 1.0e-8)
+        direction = _normalized_camera_center(z)
+        for face_raw in np.unique(face_ids):
+            face = int(face_raw)
+            if face not in target_bins_by_face:
+                continue
+            idx = np.flatnonzero(face_ids == face)
+            if idx.size == 0:
+                continue
+            if max_samples_face_i > 0:
+                remaining = int(max_samples_face_i) - int(face_samples.get(face, 0))
+                if remaining <= 0:
+                    continue
+                if idx.size > remaining:
+                    idx = idx[:remaining]
+            x = np.asarray(features[idx], dtype=np.float64)
+            y = np.asarray(residual_samples[idx], dtype=np.float64)
+            face_xtx.setdefault(face, np.zeros((feature_dim, feature_dim), dtype=np.float64))
+            face_xty.setdefault(face, np.zeros((feature_dim, 3), dtype=np.float64))
+            face_xtx[face] += x.T @ x
+            face_xty[face] += x.T @ y
+            face_samples[face] = int(face_samples.get(face, 0)) + int(idx.size)
+            face_normal_sum[face] = face_normal_sum.get(face, np.zeros((3,), dtype=np.float64)) + np.sum(
+                np.asarray(normal_samples[idx], dtype=np.float64),
+                axis=0,
+            )
+            face_normal_count[face] = int(face_normal_count.get(face, 0)) + int(idx.size)
+            if direction is not None:
+                dirs = face_camera_dirs.setdefault(face, [])
+                if int(max_views) <= 0 or len(dirs) < int(max_views):
+                    dirs.append(np.asarray(direction, dtype=np.float32))
+            sample_events += int(idx.size)
+
+    filled_rows: list[dict[str, Any]] = []
+    filled_bins_by_face: dict[str, list[int]] = {}
+    fit_faces = 0
+    skipped_low_sample_face = 0
+    skipped_bad_condition_face = 0
+    skipped_low_norm = 0
+    fit_stats: list[dict[str, Any]] = []
+    identity = np.eye(feature_dim, dtype=np.float64)
+    for face, target_bins in sorted(target_bins_by_face.items()):
+        samples = int(face_samples.get(face, 0))
+        if samples < min_samples_i:
+            skipped_low_sample_face += 1
+            continue
+        mat = face_xtx[face] + ridge_f * identity
+        try:
+            condition = float(np.linalg.cond(mat))
+        except np.linalg.LinAlgError:
+            condition = float("inf")
+        if not np.isfinite(condition) or condition > max_condition_f:
+            skipped_bad_condition_face += 1
+            continue
+        try:
+            coeff = np.linalg.solve(mat, face_xty[face])
+        except np.linalg.LinAlgError:
+            skipped_bad_condition_face += 1
+            continue
+        normal_count = max(int(face_normal_count.get(face, 0)), 1)
+        normal_vec = (face_normal_sum[face] / float(normal_count)).astype(np.float32)
+        normal_norm = float(np.linalg.norm(normal_vec))
+        if normal_norm <= 1.0e-8:
+            skipped_bad_condition_face += 1
+            continue
+        normal_vec = normal_vec / normal_norm
+        dirs = face_camera_dirs.get(face, [])
+        if not dirs:
+            skipped_bad_condition_face += 1
+            continue
+        camera_arr = np.asarray(dirs, dtype=np.float32)
+        face_atlas = atlas.get(face)
+        if face_atlas is None:
+            continue
+        size = int(face_atlas.texture.shape[0])
+        fit_faces += 1
+        fit_stats.append({"face_id": int(face), "samples": int(samples), "condition": condition})
+        for bin_id in target_bins:
+            v = int(bin_id) // size
+            u = int(bin_id) % size
+            u_center = np.full((camera_arr.shape[0],), (float(u) + 0.5) / float(size), dtype=np.float32)
+            v_center = np.full((camera_arr.shape[0],), (float(v) + 0.5) / float(size), dtype=np.float32)
+            pred_features = _teacher_distilled_basis_features_from_uv_camera_normal(
+                feature_mode_s,
+                u_center,
+                v_center,
+                camera_arr,
+                normal_vec,
+            )
+            if pred_features is None:
+                continue
+            preds = np.asarray(pred_features, dtype=np.float64) @ coeff
+            estimate = np.mean(preds, axis=0).astype(np.float32)
+            estimate = clip_delta_rgb(estimate.reshape(1, 3), max_abs).reshape(3)
+            estimate_norm = float(np.linalg.norm(estimate.astype(np.float32)))
+            if estimate_norm < min_norm_f:
+                skipped_low_norm += 1
+                continue
+            old_value = np.asarray(face_atlas.texture[v, u], dtype=np.float32)
+            new_value = ((1.0 - blend_f) * old_value + blend_f * estimate).astype(np.float32)
+            new_value = clip_delta_rgb(new_value.reshape(1, 3), max_abs).reshape(3)
+            face_atlas.texture[v, u] = new_value
+            effective_count = max(synthetic_count_i, int(samples))
+            if effective_count > 0:
+                face_atlas.counts[v, u] = max(int(face_atlas.counts[v, u]), int(effective_count))
+            pred_var = np.var(preds, axis=0).astype(np.float32) if preds.shape[0] > 1 else np.zeros((3,), dtype=np.float32)
+            face_atlas.variance[v, u] = np.maximum(face_atlas.variance[v, u], pred_var)
+            sign_consistency = np.abs(np.mean(np.sign(preds), axis=0)).astype(np.float32)
+            face_atlas.sign_consistency[v, u] = np.maximum(
+                face_atlas.sign_consistency[v, u],
+                np.clip(sign_consistency, 0.0, 1.0),
+            )
+            filled_bins_by_face.setdefault(str(face), []).append(int(bin_id))
+            filled_rows.append(
+                {
+                    "face_id": int(face),
+                    "bin_id": int(bin_id),
+                    "u": int(u),
+                    "v": int(v),
+                    "face_samples": int(samples),
+                    "prediction_view_count": int(camera_arr.shape[0]),
+                    "condition": condition,
+                    "estimate_norm": float(estimate_norm),
+                    "old_norm": float(np.linalg.norm(old_value.astype(np.float32))),
+                    "new_norm": float(np.linalg.norm(new_value.astype(np.float32))),
+                }
+            )
+    for bins in filled_bins_by_face.values():
+        bins.sort()
+    summary.update(
+        {
+            "reason": "filled" if filled_rows else "no_bins_filled",
+            "filled_bin_count": int(len(filled_rows)),
+            "train_fit_views_used": int(len(view_paths)),
+            "sample_event_count": int(sample_events),
+            "fit_face_count": int(fit_faces),
+            "skipped_low_sample_face_count": int(skipped_low_sample_face),
+            "skipped_bad_condition_face_count": int(skipped_bad_condition_face),
+            "skipped_low_norm_count": int(skipped_low_norm),
+            "filled_bins_by_face": filled_bins_by_face,
+            "fit_stats": sorted(fit_stats, key=lambda row: int(row["samples"]), reverse=True)[:128],
+            "top_filled_bins": sorted(
+                filled_rows,
+                key=lambda row: (int(row["face_samples"]), float(row["estimate_norm"])),
+                reverse=True,
+            )[:128],
+        }
+    )
+    return summary
 
 
 def calibrated_bin_uncertainty_shrink_profile_from_policy_val(
@@ -10018,14 +11749,15 @@ def save_atlas_npz(path: Path, atlas: dict[int, FaceAtlas]) -> None:
         and any(atlas[int(face)].teacher_basis_coefficients is not None for face in faces)
     )
     if teacher_basis_enabled:
-        first_teacher = next(
-            atlas[int(face)].teacher_basis_coefficients
+        teacher_shapes = [
+            atlas[int(face)].teacher_basis_coefficients.shape
             for face in faces
             if atlas[int(face)].teacher_basis_coefficients is not None
-        )
-        assert first_teacher is not None
-        teacher_dim, teacher_channels = first_teacher.shape
+        ]
+        teacher_dim = max(int(shape[0]) for shape in teacher_shapes)
+        teacher_channels = max(int(shape[1]) for shape in teacher_shapes)
         teacher_coeffs = []
+        teacher_output_channels = []
         teacher_modes = []
         teacher_feature_means = []
         teacher_feature_stds = []
@@ -10037,27 +11769,45 @@ def save_atlas_npz(path: Path, atlas: dict[int, FaceAtlas]) -> None:
             face_atlas = atlas[int(face)]
             if face_atlas.teacher_basis_coefficients is None:
                 teacher_coeffs.append(np.zeros((teacher_dim, teacher_channels), dtype=np.float32))
+                teacher_output_channels.append(0)
                 teacher_modes.append("none")
                 teacher_feature_means.append(np.zeros((teacher_dim,), dtype=np.float32))
                 teacher_feature_stds.append(np.ones((teacher_dim,), dtype=np.float32))
             else:
-                teacher_coeffs.append(face_atlas.teacher_basis_coefficients.astype(np.float32))
+                local_coeffs = face_atlas.teacher_basis_coefficients.astype(np.float32)
+                coeffs_padded = np.zeros((teacher_dim, teacher_channels), dtype=np.float32)
+                local_dim = min(teacher_dim, int(local_coeffs.shape[0]))
+                local_channels = min(teacher_channels, int(local_coeffs.shape[1]))
+                coeffs_padded[:local_dim, :local_channels] = local_coeffs[:local_dim, :local_channels]
+                teacher_coeffs.append(coeffs_padded)
+                teacher_output_channels.append(int(local_coeffs.shape[1]))
                 teacher_modes.append(str(face_atlas.teacher_basis_mode))
-                teacher_feature_means.append(
+                local_mean = (
                     face_atlas.teacher_basis_feature_mean.astype(np.float32)
                     if face_atlas.teacher_basis_feature_mean is not None
-                    else np.zeros((teacher_dim,), dtype=np.float32)
+                    else np.zeros((0,), dtype=np.float32)
                 )
-                teacher_feature_stds.append(
+                mean_padded = np.zeros((teacher_dim,), dtype=np.float32)
+                mean_count = min(teacher_dim, int(local_mean.shape[0]))
+                if mean_count > 0:
+                    mean_padded[:mean_count] = local_mean[:mean_count]
+                teacher_feature_means.append(mean_padded)
+                local_std = (
                     face_atlas.teacher_basis_feature_std.astype(np.float32)
                     if face_atlas.teacher_basis_feature_std is not None
-                    else np.ones((teacher_dim,), dtype=np.float32)
+                    else np.ones((0,), dtype=np.float32)
                 )
+                std_padded = np.ones((teacher_dim,), dtype=np.float32)
+                std_count = min(teacher_dim, int(local_std.shape[0]))
+                if std_count > 0:
+                    std_padded[:std_count] = local_std[:std_count]
+                teacher_feature_stds.append(std_padded)
             teacher_ood_max_z.append(float(face_atlas.teacher_basis_ood_max_z))
             teacher_ood_min_std.append(float(face_atlas.teacher_basis_ood_min_std))
             teacher_apply_modes.append(str(face_atlas.teacher_basis_apply_mode))
             teacher_blends.append(float(face_atlas.teacher_basis_blend))
         payload["teacher_basis_coefficients"] = np.stack(teacher_coeffs, axis=0)
+        payload["teacher_basis_output_channels"] = np.asarray(teacher_output_channels, dtype=np.int32)
         payload["teacher_basis_mode"] = np.asarray(teacher_modes)
         payload["teacher_basis_feature_mean"] = np.stack(teacher_feature_means, axis=0)
         payload["teacher_basis_feature_std"] = np.stack(teacher_feature_stds, axis=0)
@@ -10065,6 +11815,72 @@ def save_atlas_npz(path: Path, atlas: dict[int, FaceAtlas]) -> None:
         payload["teacher_basis_ood_min_std"] = np.asarray(teacher_ood_min_std, dtype=np.float32)
         payload["teacher_basis_apply_mode"] = np.asarray(teacher_apply_modes)
         payload["teacher_basis_blend"] = np.asarray(teacher_blends, dtype=np.float32)
+    teacher_texture_enabled = bool(
+        faces.size
+        and any(atlas[int(face)].teacher_texture_basis is not None for face in faces)
+    )
+    if teacher_texture_enabled:
+        first_texture_basis = next(
+            atlas[int(face)].teacher_texture_basis
+            for face in faces
+            if atlas[int(face)].teacher_texture_basis is not None
+        )
+        assert first_texture_basis is not None
+        _first_rank, h, w, _channels = first_texture_basis.shape
+        rank = max(
+            int(atlas[int(face)].teacher_texture_basis.shape[0])
+            for face in faces
+            if atlas[int(face)].teacher_texture_basis is not None
+        )
+        texture_basis_rows = []
+        texture_support_rows = []
+        texture_rank_rows = []
+        texture_energy_rows = []
+        for face in faces:
+            face_atlas = atlas[int(face)]
+            if face_atlas.teacher_texture_basis is None:
+                texture_basis_rows.append(np.zeros((rank, h, w, 3), dtype=np.float32))
+                texture_support_rows.append(np.zeros((h, w), dtype=np.uint8))
+                texture_rank_rows.append(0)
+                texture_energy_rows.append(np.zeros((rank,), dtype=np.float32))
+            else:
+                local_basis = face_atlas.teacher_texture_basis.astype(np.float32)
+                local_rank = min(rank, int(local_basis.shape[0]))
+                padded = np.zeros((rank, h, w, 3), dtype=np.float32)
+                copy_h = min(h, int(local_basis.shape[1]))
+                copy_w = min(w, int(local_basis.shape[2]))
+                if local_rank > 0 and copy_h > 0 and copy_w > 0:
+                    padded[:local_rank, :copy_h, :copy_w, :] = local_basis[
+                        :local_rank,
+                        :copy_h,
+                        :copy_w,
+                        :,
+                    ]
+                local_basis = padded
+                texture_basis_rows.append(local_basis)
+                support_padded = np.zeros((h, w), dtype=np.uint8)
+                if face_atlas.teacher_texture_support is not None:
+                    local_support = face_atlas.teacher_texture_support.astype(np.uint8)
+                    support_h = min(h, int(local_support.shape[0]))
+                    support_w = min(w, int(local_support.shape[1]))
+                    if support_h > 0 and support_w > 0:
+                        support_padded[:support_h, :support_w] = local_support[:support_h, :support_w]
+                texture_support_rows.append(support_padded)
+                texture_rank_rows.append(int(local_rank))
+                local_energy = (
+                    face_atlas.teacher_texture_energy.astype(np.float32)
+                    if face_atlas.teacher_texture_energy is not None
+                    else np.zeros((0,), dtype=np.float32)
+                )
+                energy_padded = np.zeros((rank,), dtype=np.float32)
+                local_energy_count = min(rank, int(local_energy.shape[0]))
+                if local_energy_count > 0:
+                    energy_padded[:local_energy_count] = local_energy[:local_energy_count]
+                texture_energy_rows.append(energy_padded)
+        payload["teacher_texture_basis"] = np.stack(texture_basis_rows, axis=0)
+        payload["teacher_texture_support"] = np.stack(texture_support_rows, axis=0).astype(np.uint8)
+        payload["teacher_texture_rank"] = np.asarray(texture_rank_rows, dtype=np.int32)
+        payload["teacher_texture_energy"] = np.stack(texture_energy_rows, axis=0)
     path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(path, **payload)
 
@@ -10213,6 +12029,16 @@ def write_report(path: Path, audit: dict[str, Any]) -> None:
         f"- bin uncertainty guard rejected bins: `{bin_uncertainty.get('rejected_bin_count', 0)}`",
         f"- bin uncertainty guard allowed faces: `{bin_uncertainty.get('allowed_face_count', 0)}`",
         f"- bin uncertainty guard allowed sample fraction: `{float(bin_uncertainty.get('allowed_sample_fraction', 0.0) or 0.0):.6f}`",
+        f"- train-only target-impact residual basis enabled: `{bin_uncertainty.get('target_impact_residual_basis', {}).get('enabled', False)}`",
+        f"- train-only target-impact residual basis candidates: `{bin_uncertainty.get('target_impact_residual_basis', {}).get('candidate_bin_count', 0)}`",
+        f"- train-only target-impact residual basis added bins: `{bin_uncertainty.get('target_impact_residual_basis', {}).get('added_bin_count', 0)}`",
+        f"- train-only target-impact residual basis added no-policy-row bins: `{bin_uncertainty.get('target_impact_residual_basis', {}).get('added_without_policy_row_bin_count', 0)}`",
+        f"- train-only target-impact residual basis added target pixels: `{bin_uncertainty.get('target_impact_residual_basis', {}).get('added_target_pixels', 0)}`",
+        f"- sparse target-connected growth enabled: `{bin_uncertainty.get('target_connected_region_growth', {}).get('enabled', False)}`",
+        f"- sparse target-connected growth seeds: `{bin_uncertainty.get('target_connected_region_growth', {}).get('seed_allowed_bin_count', 0)}`",
+        f"- sparse target-connected growth candidates: `{bin_uncertainty.get('target_connected_region_growth', {}).get('candidate_bin_count', 0)}`",
+        f"- sparse target-connected growth added bins: `{bin_uncertainty.get('target_connected_region_growth', {}).get('added_bin_count', 0)}`",
+        f"- sparse target-connected growth added target pixels: `{bin_uncertainty.get('target_connected_region_growth', {}).get('added_target_pixels', 0)}`",
         f"- view consistency confidence enabled: `{view_confidence.get('enabled', False)}`",
         f"- view consistency confidence decision: `{view_confidence.get('decision', 'not_requested')}`",
         f"- view consistency confidence positive views: `{view_confidence.get('positive_view_count', 0)}`",
@@ -11257,13 +13083,22 @@ def main() -> int:
     )
     parser.add_argument(
         "--teacher_distilled_basis_mode",
-        choices=("none", "face_uv_normal_camera_ridge", "face_uv_patch_mixture_ridge"),
+        choices=(
+            "none",
+            "face_uv_normal_camera_ridge",
+            "face_uv_patch_mixture_ridge",
+            "low_rank_view_texture_k4",
+            "low_rank_view_texture_rich_k4",
+        ),
         default="none",
         help=(
             "Optional v65 teacher-distilled shared residual field. "
             "face_uv_normal_camera_ridge fits one ridge residual model per face using "
             "Phase-J teacher residuals and features [camera, normal, normal-dot-camera, UV polynomial]. "
-            "face_uv_patch_mixture_ridge adds a 3x3 local UV RBF mixture and normal-view interactions."
+            "face_uv_patch_mixture_ridge adds a 3x3 local UV RBF mixture and normal-view interactions. "
+            "low_rank_view_texture_k4 fits four view/UV-aware mixture weights per face as a compact "
+            "v169 teacher residual texture. low_rank_view_texture_rich_k4 keeps the same rank-4 "
+            "surface factorization but adds UV, normal, parent RGB, depth, and alpha context."
         ),
     )
     parser.add_argument(
@@ -12030,9 +13865,154 @@ def main() -> int:
         default=0.0,
         help="If >0, reject sparse materialization bins below this mean sign-consistency.",
     )
+    parser.add_argument(
+        "--enable_sparse_materialization_target_visible_expansion",
+        action="store_true",
+        help=(
+            "After train-policy-val sparse certification, add extra locally safe bins that are visible "
+            "on GT-free target evidence. This expands target footprint without reading target/test GT."
+        ),
+    )
+    parser.add_argument("--sparse_materialization_target_visible_min_pixels", type=int, default=1)
+    parser.add_argument("--sparse_materialization_target_visible_min_views", type=int, default=1)
+    parser.add_argument("--sparse_materialization_target_visible_min_policy_samples", type=int, default=1)
+    parser.add_argument(
+        "--sparse_materialization_target_visible_min_positive_view_fraction",
+        type=float,
+        default=-1.0,
+        help=(
+            "Minimum train-policy-val positive-view fraction for target-visible sparse expansion; "
+            "<0 reuses sparse_materialization_frontier_min_positive_view_fraction."
+        ),
+    )
+    parser.add_argument(
+        "--sparse_materialization_target_visible_max_extra_bins",
+        type=int,
+        default=0,
+        help="Maximum extra target-visible bins to add after sparse certification; 0 means no cap.",
+    )
+    parser.add_argument(
+        "--enable_train_only_target_impact_residual_basis",
+        action="store_true",
+        help=(
+            "Allow sparse materialization to cover high-footprint target-visible bins using only "
+            "train/policy-val residual evidence, even when a target-visible bin has no policy-val row. "
+            "This records added-without-policy-row bins separately and never reads target/test GT."
+        ),
+    )
+    parser.add_argument("--target_impact_min_pixels", type=int, default=1)
+    parser.add_argument("--target_impact_min_views", type=int, default=1)
+    parser.add_argument(
+        "--target_impact_min_policy_samples",
+        type=int,
+        default=0,
+        help="Minimum policy-val samples required for target-impact basis bins; 0 permits atlas-only bins.",
+    )
+    parser.add_argument(
+        "--target_impact_max_extra_bins",
+        type=int,
+        default=0,
+        help="Maximum extra target-impact bins to add after sparse certification; 0 means no cap.",
+    )
+    parser.add_argument(
+        "--target_impact_max_views",
+        type=int,
+        default=0,
+        help="Optional max target footprint views used by target-impact basis; 0 uses all available views.",
+    )
+    parser.add_argument(
+        "--target_impact_carrier_fill_mode",
+        choices=("off", "no_policy_rows", "all_added"),
+        default="off",
+        help=(
+            "After target-impact sparse expansion, fill selected bins with a train-fit face residual carrier. "
+            "This is target/test-GT-free and is intended to increase residual capacity, not footprint alone."
+        ),
+    )
+    parser.add_argument("--target_impact_carrier_fill_blend", type=float, default=0.5)
+    parser.add_argument("--target_impact_carrier_fill_min_face_samples", type=int, default=128)
+    parser.add_argument("--target_impact_carrier_fill_min_norm", type=float, default=1.0e-4)
+    parser.add_argument("--target_impact_carrier_fill_synthetic_count", type=int, default=1)
+    parser.add_argument(
+        "--target_impact_multisample_fill_mode",
+        choices=("off", "no_policy_rows", "all_added"),
+        default="off",
+        help=(
+            "After target-impact sparse expansion, fill selected bins from nearby train-fit residual samples. "
+            "This reads no target/test RGB GT and is re-evaluated by the policy-val gate."
+        ),
+    )
+    parser.add_argument("--target_impact_multisample_fill_radius", type=int, default=1)
+    parser.add_argument("--target_impact_multisample_fill_min_samples", type=int, default=4)
+    parser.add_argument("--target_impact_multisample_fill_max_samples_per_bin", type=int, default=128)
+    parser.add_argument("--target_impact_multisample_fill_max_views", type=int, default=0)
+    parser.add_argument("--target_impact_multisample_fill_blend", type=float, default=1.0)
+    parser.add_argument("--target_impact_multisample_fill_kernel_sigma", type=float, default=1.0)
+    parser.add_argument("--target_impact_multisample_fill_min_norm", type=float, default=1.0e-4)
+    parser.add_argument("--target_impact_multisample_fill_synthetic_count", type=int, default=2)
+    parser.add_argument(
+        "--target_impact_affine_fill_mode",
+        choices=("off", "no_policy_rows", "all_added"),
+        default="off",
+        help=(
+            "After target-impact sparse expansion, fit train-only face-local residual fields "
+            "and materialize selected target-impact bins before policy-val recertification."
+        ),
+    )
+    parser.add_argument(
+        "--target_impact_affine_fill_feature_mode",
+        choices=("face_uv_normal_camera_ridge", "face_uv_patch_mixture_ridge"),
+        default="face_uv_patch_mixture_ridge",
+    )
+    parser.add_argument("--target_impact_affine_fill_min_samples", type=int, default=64)
+    parser.add_argument("--target_impact_affine_fill_max_samples_per_face", type=int, default=4096)
+    parser.add_argument("--target_impact_affine_fill_max_views", type=int, default=0)
+    parser.add_argument("--target_impact_affine_fill_blend", type=float, default=1.0)
+    parser.add_argument("--target_impact_affine_fill_ridge", type=float, default=1.0e-2)
+    parser.add_argument("--target_impact_affine_fill_max_condition", type=float, default=1.0e7)
+    parser.add_argument("--target_impact_affine_fill_min_norm", type=float, default=1.0e-4)
+    parser.add_argument("--target_impact_affine_fill_synthetic_count", type=int, default=4)
+    parser.add_argument(
+        "--enable_sparse_materialization_target_connected_region_growth",
+        action="store_true",
+        help=(
+            "Grow extra target-visible bins only when they are same-face UV neighbors of "
+            "pre-expansion sparse-certified bins and policy-val evidence has no strong regression."
+        ),
+    )
+    parser.add_argument("--sparse_materialization_target_connected_radius", type=int, default=1)
+    parser.add_argument("--sparse_materialization_target_connected_min_pixels", type=int, default=1)
+    parser.add_argument("--sparse_materialization_target_connected_min_views", type=int, default=1)
+    parser.add_argument("--sparse_materialization_target_connected_min_policy_samples", type=int, default=1)
+    parser.add_argument(
+        "--sparse_materialization_target_connected_min_positive_view_fraction",
+        type=float,
+        default=0.5,
+    )
+    parser.add_argument(
+        "--sparse_materialization_target_connected_max_negative_relative_gain",
+        type=float,
+        default=0.02,
+    )
+    parser.add_argument(
+        "--sparse_materialization_target_connected_max_negative_min_view_gain",
+        type=float,
+        default=0.05,
+    )
+    parser.add_argument("--sparse_materialization_target_connected_max_extra_bins", type=int, default=0)
     parser.add_argument("--bin_uncertainty_guard_min_bin_samples", type=int, default=64)
     parser.add_argument("--bin_uncertainty_guard_min_relative_gain", type=float, default=0.0)
     parser.add_argument("--bin_uncertainty_guard_min_positive_view_fraction", type=float, default=0.75)
+    parser.add_argument(
+        "--bin_uncertainty_guard_empty_intersection_policy",
+        choices=["reject", "sparse_if_post_accepted"],
+        default="reject",
+        help=(
+            "Policy when sparse materialization bins pass their post gate but the later bin-uncertainty "
+            "guard has an empty intersection. The bridge option keeps sparse-certified bins and records "
+            "the fallback explicitly instead of forcing a no-op."
+        ),
+    )
     parser.add_argument(
         "--bin_uncertainty_guard_max_mean_variance",
         type=float,
@@ -12472,6 +14452,100 @@ def main() -> int:
         parser.error("--sparse_materialization_frontier_min_sample_quantile must be in [0, 1]")
     if float(args.sparse_materialization_min_mean_sign_consistency) < 0.0:
         parser.error("--sparse_materialization_min_mean_sign_consistency must be >= 0")
+    if int(args.sparse_materialization_target_visible_min_pixels) < 1:
+        parser.error("--sparse_materialization_target_visible_min_pixels must be >= 1")
+    if int(args.sparse_materialization_target_visible_min_views) < 1:
+        parser.error("--sparse_materialization_target_visible_min_views must be >= 1")
+    if int(args.sparse_materialization_target_visible_min_policy_samples) < 1:
+        parser.error("--sparse_materialization_target_visible_min_policy_samples must be >= 1")
+    if int(args.sparse_materialization_target_visible_max_extra_bins) < 0:
+        parser.error("--sparse_materialization_target_visible_max_extra_bins must be >= 0")
+    if (
+        float(args.sparse_materialization_target_visible_min_positive_view_fraction) >= 0.0
+        and not 0.0 <= float(args.sparse_materialization_target_visible_min_positive_view_fraction) <= 1.0
+    ):
+        parser.error("--sparse_materialization_target_visible_min_positive_view_fraction must be <0 or in [0, 1]")
+    if int(args.target_impact_min_pixels) < 1:
+        parser.error("--target_impact_min_pixels must be >= 1")
+    if int(args.target_impact_min_views) < 1:
+        parser.error("--target_impact_min_views must be >= 1")
+    if int(args.target_impact_min_policy_samples) < 0:
+        parser.error("--target_impact_min_policy_samples must be >= 0")
+    if int(args.target_impact_max_extra_bins) < 0:
+        parser.error("--target_impact_max_extra_bins must be >= 0")
+    if int(args.target_impact_max_views) < 0:
+        parser.error("--target_impact_max_views must be >= 0")
+    if not 0.0 <= float(args.target_impact_carrier_fill_blend) <= 1.0:
+        parser.error("--target_impact_carrier_fill_blend must be in [0, 1]")
+    if int(args.target_impact_carrier_fill_min_face_samples) < 0:
+        parser.error("--target_impact_carrier_fill_min_face_samples must be >= 0")
+    if float(args.target_impact_carrier_fill_min_norm) < 0.0:
+        parser.error("--target_impact_carrier_fill_min_norm must be >= 0")
+    if int(args.target_impact_carrier_fill_synthetic_count) < 0:
+        parser.error("--target_impact_carrier_fill_synthetic_count must be >= 0")
+    if (
+        str(args.target_impact_carrier_fill_mode) != "off"
+        and not bool(args.enable_train_only_target_impact_residual_basis)
+    ):
+        parser.error("--target_impact_carrier_fill_mode requires --enable_train_only_target_impact_residual_basis")
+    if int(args.target_impact_multisample_fill_radius) < 0:
+        parser.error("--target_impact_multisample_fill_radius must be >= 0")
+    if int(args.target_impact_multisample_fill_min_samples) < 1:
+        parser.error("--target_impact_multisample_fill_min_samples must be >= 1")
+    if int(args.target_impact_multisample_fill_max_samples_per_bin) < 0:
+        parser.error("--target_impact_multisample_fill_max_samples_per_bin must be >= 0")
+    if int(args.target_impact_multisample_fill_max_views) < 0:
+        parser.error("--target_impact_multisample_fill_max_views must be >= 0")
+    if not 0.0 <= float(args.target_impact_multisample_fill_blend) <= 1.0:
+        parser.error("--target_impact_multisample_fill_blend must be in [0, 1]")
+    if float(args.target_impact_multisample_fill_kernel_sigma) <= 0.0:
+        parser.error("--target_impact_multisample_fill_kernel_sigma must be > 0")
+    if float(args.target_impact_multisample_fill_min_norm) < 0.0:
+        parser.error("--target_impact_multisample_fill_min_norm must be >= 0")
+    if int(args.target_impact_multisample_fill_synthetic_count) < 0:
+        parser.error("--target_impact_multisample_fill_synthetic_count must be >= 0")
+    if (
+        str(args.target_impact_multisample_fill_mode) != "off"
+        and not bool(args.enable_train_only_target_impact_residual_basis)
+    ):
+        parser.error("--target_impact_multisample_fill_mode requires --enable_train_only_target_impact_residual_basis")
+    if int(args.target_impact_affine_fill_min_samples) < 1:
+        parser.error("--target_impact_affine_fill_min_samples must be >= 1")
+    if int(args.target_impact_affine_fill_max_samples_per_face) < 0:
+        parser.error("--target_impact_affine_fill_max_samples_per_face must be >= 0")
+    if int(args.target_impact_affine_fill_max_views) < 0:
+        parser.error("--target_impact_affine_fill_max_views must be >= 0")
+    if not 0.0 <= float(args.target_impact_affine_fill_blend) <= 1.0:
+        parser.error("--target_impact_affine_fill_blend must be in [0, 1]")
+    if float(args.target_impact_affine_fill_ridge) <= 0.0:
+        parser.error("--target_impact_affine_fill_ridge must be > 0")
+    if float(args.target_impact_affine_fill_max_condition) <= 1.0:
+        parser.error("--target_impact_affine_fill_max_condition must be > 1")
+    if float(args.target_impact_affine_fill_min_norm) < 0.0:
+        parser.error("--target_impact_affine_fill_min_norm must be >= 0")
+    if int(args.target_impact_affine_fill_synthetic_count) < 0:
+        parser.error("--target_impact_affine_fill_synthetic_count must be >= 0")
+    if (
+        str(args.target_impact_affine_fill_mode) != "off"
+        and not bool(args.enable_train_only_target_impact_residual_basis)
+    ):
+        parser.error("--target_impact_affine_fill_mode requires --enable_train_only_target_impact_residual_basis")
+    if int(args.sparse_materialization_target_connected_radius) < 0:
+        parser.error("--sparse_materialization_target_connected_radius must be >= 0")
+    if int(args.sparse_materialization_target_connected_min_pixels) < 1:
+        parser.error("--sparse_materialization_target_connected_min_pixels must be >= 1")
+    if int(args.sparse_materialization_target_connected_min_views) < 1:
+        parser.error("--sparse_materialization_target_connected_min_views must be >= 1")
+    if int(args.sparse_materialization_target_connected_min_policy_samples) < 1:
+        parser.error("--sparse_materialization_target_connected_min_policy_samples must be >= 1")
+    if not 0.0 <= float(args.sparse_materialization_target_connected_min_positive_view_fraction) <= 1.0:
+        parser.error("--sparse_materialization_target_connected_min_positive_view_fraction must be in [0, 1]")
+    if float(args.sparse_materialization_target_connected_max_negative_relative_gain) < 0.0:
+        parser.error("--sparse_materialization_target_connected_max_negative_relative_gain must be >= 0")
+    if float(args.sparse_materialization_target_connected_max_negative_min_view_gain) < 0.0:
+        parser.error("--sparse_materialization_target_connected_max_negative_min_view_gain must be >= 0")
+    if int(args.sparse_materialization_target_connected_max_extra_bins) < 0:
+        parser.error("--sparse_materialization_target_connected_max_extra_bins must be >= 0")
     if float(args.structure_shrink_l1_weight) < 0.0:
         parser.error("--structure_shrink_l1_weight must be >= 0")
     if float(args.structure_shrink_gradient_weight) < 0.0:
@@ -13002,7 +15076,7 @@ def main() -> int:
             f"cap={float(max_abs_delta_rgb_candidate):.6g}"
         )
         print(f"[policy-candidate] start {candidate_label}", flush=True)
-        cand_atlas, cand_fit_summary, _fit_views, cand_val_views = fit_atlas(
+        cand_atlas, cand_fit_summary, cand_fit_views, cand_val_views = fit_atlas(
             fit_views_all,
             candidate_faces=support_faces,
             residual_rgb_key=str(args.residual_rgb_key),
@@ -13770,7 +15844,122 @@ def main() -> int:
                 adaptive_frontier_min_sample_quantile=float(
                     args.sparse_materialization_frontier_min_sample_quantile
                 ),
+                target_footprint_views=(
+                    evidence_views(target_evidence)
+                    if (
+                        bool(args.enable_sparse_materialization_target_visible_expansion)
+                        or bool(args.enable_train_only_target_impact_residual_basis)
+                        or bool(args.enable_sparse_materialization_target_connected_region_growth)
+                    )
+                    else None
+                ),
+                enable_target_visible_expansion=bool(
+                    args.enable_sparse_materialization_target_visible_expansion
+                ),
+                target_visible_min_pixels=int(args.sparse_materialization_target_visible_min_pixels),
+                target_visible_min_views=int(args.sparse_materialization_target_visible_min_views),
+                target_visible_min_policy_samples=int(
+                    args.sparse_materialization_target_visible_min_policy_samples
+                ),
+                target_visible_min_positive_view_fraction=float(
+                    args.sparse_materialization_target_visible_min_positive_view_fraction
+                ),
+                target_visible_max_extra_bins=int(args.sparse_materialization_target_visible_max_extra_bins),
+                target_visible_max_views=int(args.target_footprint_max_views),
+                enable_train_only_target_impact_residual_basis=bool(
+                    args.enable_train_only_target_impact_residual_basis
+                ),
+                target_impact_min_pixels=int(args.target_impact_min_pixels),
+                target_impact_min_views=int(args.target_impact_min_views),
+                target_impact_min_policy_samples=int(args.target_impact_min_policy_samples),
+                target_impact_max_extra_bins=int(args.target_impact_max_extra_bins),
+                target_impact_max_views=int(args.target_impact_max_views),
+                enable_target_connected_region_growth=bool(
+                    args.enable_sparse_materialization_target_connected_region_growth
+                ),
+                target_connected_radius=int(args.sparse_materialization_target_connected_radius),
+                target_connected_min_pixels=int(args.sparse_materialization_target_connected_min_pixels),
+                target_connected_min_views=int(args.sparse_materialization_target_connected_min_views),
+                target_connected_min_policy_samples=int(
+                    args.sparse_materialization_target_connected_min_policy_samples
+                ),
+                target_connected_min_positive_view_fraction=float(
+                    args.sparse_materialization_target_connected_min_positive_view_fraction
+                ),
+                target_connected_max_negative_relative_gain=float(
+                    args.sparse_materialization_target_connected_max_negative_relative_gain
+                ),
+                target_connected_max_negative_min_view_gain=float(
+                    args.sparse_materialization_target_connected_max_negative_min_view_gain
+                ),
+                target_connected_max_extra_bins=int(
+                    args.sparse_materialization_target_connected_max_extra_bins
+                ),
+                target_connected_max_views=int(args.target_footprint_max_views),
             )
+            target_impact_carrier_fill = apply_target_impact_carrier_fill(
+                cand_atlas,
+                sparse_materialization_profile,
+                mode=str(args.target_impact_carrier_fill_mode),
+                blend=float(args.target_impact_carrier_fill_blend),
+                min_face_samples=int(args.target_impact_carrier_fill_min_face_samples),
+                min_carrier_norm=float(args.target_impact_carrier_fill_min_norm),
+                max_abs_delta_rgb=float(max_abs_delta_rgb_candidate),
+                synthetic_count=int(args.target_impact_carrier_fill_synthetic_count),
+            )
+            sparse_materialization_profile["target_impact_carrier_fill"] = dict(
+                target_impact_carrier_fill
+            )
+            cand_fit_summary["target_impact_carrier_fill"] = dict(target_impact_carrier_fill)
+            target_impact_multisample_fill = apply_target_impact_multisample_residual_fill(
+                cand_atlas,
+                cand_fit_views,
+                sparse_materialization_profile,
+                residual_rgb_key=str(args.residual_rgb_key),
+                residual_l1_key=str(args.residual_l1_key),
+                min_l1=float(args.min_l1),
+                min_alpha=float(args.min_alpha),
+                max_abs_delta_rgb=float(max_abs_delta_rgb_candidate),
+                max_samples_per_view=int(args.max_samples_per_view),
+                mode=str(args.target_impact_multisample_fill_mode),
+                radius=int(args.target_impact_multisample_fill_radius),
+                min_samples=int(args.target_impact_multisample_fill_min_samples),
+                max_samples_per_bin=int(args.target_impact_multisample_fill_max_samples_per_bin),
+                max_views=int(args.target_impact_multisample_fill_max_views),
+                blend=float(args.target_impact_multisample_fill_blend),
+                kernel_sigma=float(args.target_impact_multisample_fill_kernel_sigma),
+                min_norm=float(args.target_impact_multisample_fill_min_norm),
+                synthetic_count=int(args.target_impact_multisample_fill_synthetic_count),
+            )
+            sparse_materialization_profile["target_impact_multisample_fill"] = dict(
+                target_impact_multisample_fill
+            )
+            cand_fit_summary["target_impact_multisample_fill"] = dict(target_impact_multisample_fill)
+            target_impact_affine_fill = apply_target_impact_affine_residual_fill(
+                cand_atlas,
+                cand_fit_views,
+                sparse_materialization_profile,
+                residual_rgb_key=str(args.residual_rgb_key),
+                residual_l1_key=str(args.residual_l1_key),
+                min_l1=float(args.min_l1),
+                min_alpha=float(args.min_alpha),
+                max_abs_delta_rgb=float(max_abs_delta_rgb_candidate),
+                max_samples_per_view=int(args.max_samples_per_view),
+                mode=str(args.target_impact_affine_fill_mode),
+                feature_mode=str(args.target_impact_affine_fill_feature_mode),
+                min_samples=int(args.target_impact_affine_fill_min_samples),
+                max_samples_per_face=int(args.target_impact_affine_fill_max_samples_per_face),
+                max_views=int(args.target_impact_affine_fill_max_views),
+                blend=float(args.target_impact_affine_fill_blend),
+                ridge=float(args.target_impact_affine_fill_ridge),
+                max_condition=float(args.target_impact_affine_fill_max_condition),
+                min_norm=float(args.target_impact_affine_fill_min_norm),
+                synthetic_count=int(args.target_impact_affine_fill_synthetic_count),
+            )
+            sparse_materialization_profile["target_impact_affine_fill"] = dict(
+                target_impact_affine_fill
+            )
+            cand_fit_summary["target_impact_affine_fill"] = dict(target_impact_affine_fill)
             if bool(sparse_materialization_profile.get("enabled", False)) and int(
                 sparse_materialization_profile.get("allowed_bin_count", 0) or 0
             ) > 0:
@@ -14019,6 +16208,9 @@ def main() -> int:
                     bin_uncertainty_guard_profile = intersect_bin_guard_profiles(
                         selected_sparse_materialization_profile,
                         raw_bin_uncertainty_guard_profile,
+                        empty_intersection_policy=str(
+                            args.bin_uncertainty_guard_empty_intersection_policy
+                        ),
                     )
                 else:
                     bin_uncertainty_guard_profile = raw_bin_uncertainty_guard_profile
@@ -14058,6 +16250,26 @@ def main() -> int:
                         bin_uncertainty_guard_profile=bin_uncertainty_guard_profile,
                         parent_edge_apply_profile=parent_edge_apply_profile,
                     )
+                    if bool(selected_sparse_materialization_profile.get("enabled", False)) and int(
+                        bin_uncertainty_guard_profile.get("allowed_bin_count", 0) or 0
+                    ) > 0:
+                        guarded_policy_val = annotate_sparse_materialization_selective_policy_val(
+                            guarded_policy_val,
+                            bin_uncertainty_guard_profile,
+                        )
+                        bin_uncertainty_guard_profile["sparse_selective_annotation"] = {
+                            "enabled": True,
+                            "reason": (
+                                "preserve sparse selective non-regression semantics after "
+                                "bin-guard intersection or bridge"
+                            ),
+                            "source_sparse_allowed_bin_count": int(
+                                selected_sparse_materialization_profile.get("allowed_bin_count", 0) or 0
+                            ),
+                            "guard_allowed_bin_count": int(
+                                bin_uncertainty_guard_profile.get("allowed_bin_count", 0) or 0
+                            ),
+                        }
                     guarded_policy_val["alpha_calibration"] = dict(alpha_calibration_summary)
                     guarded_policy_val["local_alpha_calibration"] = dict(local_alpha_profile)
                     guarded_policy_val["parent_edge_apply_shrink"] = dict(parent_edge_apply_profile)

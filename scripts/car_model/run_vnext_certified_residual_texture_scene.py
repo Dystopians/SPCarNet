@@ -535,28 +535,39 @@ def _texture_cmd(
         "--min_policy_val_l1_positive_view_fraction",
         str(args.min_policy_val_l1_positive_view_fraction),
         f"--min_policy_val_l1_min_view_gain={args.min_policy_val_l1_min_view_gain}",
-        "--enable_policy_val_face_gain_guard",
-        "--face_gain_guard_min_positive_view_fraction",
-        str(args.face_gain_guard_min_positive_view_fraction),
-        "--enable_policy_val_bin_uncertainty_shrink",
-        "--bin_uncertainty_shrink_policy_mode",
-        str(args.bin_uncertainty_shrink_policy_mode),
-        "--bin_uncertainty_shrink_min_bin_samples",
-        str(args.bin_uncertainty_shrink_min_bin_samples),
-        "--bin_uncertainty_shrink_min_bin_views",
-        str(args.bin_uncertainty_shrink_min_bin_views),
-        f"--bin_uncertainty_shrink_min_relative_gain={args.bin_uncertainty_shrink_min_relative_gain}",
-        "--bin_uncertainty_shrink_min_positive_view_fraction",
-        str(args.bin_uncertainty_shrink_min_positive_view_fraction),
-        "--bin_uncertainty_shrink_fallback_shrink",
-        str(args.bin_uncertainty_shrink_fallback_shrink),
-        "--enable_target_support_candidate_selection",
-        "--enable_policy_candidate_dominance_pruning",
-        "--write_noop_on_reject",
-        "--noop_fallback_source",
-        str(args.noop_fallback_source),
-        "--force",
     ]
+    if not bool(args.no_policy_val_face_gain_guard):
+        cmd.extend(
+            [
+                "--enable_policy_val_face_gain_guard",
+                "--face_gain_guard_min_positive_view_fraction",
+                str(args.face_gain_guard_min_positive_view_fraction),
+            ]
+        )
+    cmd.extend(
+        [
+            "--enable_policy_val_bin_uncertainty_shrink",
+            "--bin_uncertainty_shrink_policy_mode",
+            str(args.bin_uncertainty_shrink_policy_mode),
+            "--bin_uncertainty_shrink_min_bin_samples",
+            str(args.bin_uncertainty_shrink_min_bin_samples),
+            "--bin_uncertainty_shrink_min_bin_views",
+            str(args.bin_uncertainty_shrink_min_bin_views),
+            f"--bin_uncertainty_shrink_min_relative_gain={args.bin_uncertainty_shrink_min_relative_gain}",
+            "--bin_uncertainty_shrink_min_positive_view_fraction",
+            str(args.bin_uncertainty_shrink_min_positive_view_fraction),
+            "--bin_uncertainty_shrink_fallback_shrink",
+            str(args.bin_uncertainty_shrink_fallback_shrink),
+            "--write_noop_on_reject",
+            "--noop_fallback_source",
+            str(args.noop_fallback_source),
+            "--force",
+        ]
+    )
+    if not bool(args.no_target_support_candidate_selection):
+        cmd.append("--enable_target_support_candidate_selection")
+    if not bool(args.no_policy_candidate_dominance_pruning):
+        cmd.append("--enable_policy_candidate_dominance_pruning")
     if not bool(args.no_policy_val_prior_bin_gain_hybrid):
         cmd.extend(
             [
@@ -1314,7 +1325,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--view_cluster_min_views", type=int, default=2)
     parser.add_argument("--view_cluster_min_bin_samples", type=int, default=4)
     parser.add_argument("--view_cluster_fallback_mode", choices=("global",), default="global")
-    parser.add_argument("--teacher_distilled_basis_mode", choices=("none", "face_uv_normal_camera_ridge", "face_uv_patch_mixture_ridge"), default="face_uv_patch_mixture_ridge")
+    parser.add_argument(
+        "--teacher_distilled_basis_mode",
+        choices=(
+            "none",
+            "face_uv_normal_camera_ridge",
+            "face_uv_patch_mixture_ridge",
+            "low_rank_view_texture_k4",
+            "low_rank_view_texture_rich_k4",
+        ),
+        default="face_uv_patch_mixture_ridge",
+    )
     parser.add_argument("--teacher_distilled_basis_blend", type=float, default=0.5)
     parser.add_argument("--teacher_distilled_basis_min_face_samples", type=int, default=1024)
     parser.add_argument("--enable_adaptive_low_support_teacher_basis", action="store_true")
@@ -1338,6 +1359,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min_policy_val_lpips_positive_view_fraction", type=float, default=0.0)
     parser.add_argument("--min_policy_val_lpips_min_view_gain", type=float, default=-1.0)
     parser.add_argument("--min_policy_val_lpips_cvar20_view_gain", type=float, default=-1.0)
+    parser.add_argument("--no_policy_val_face_gain_guard", action="store_true")
     parser.add_argument("--enable_policy_val_view_consistency_confidence", action="store_true")
     parser.add_argument("--view_confidence_min_relative_gain", type=float, default=None)
     parser.add_argument("--view_confidence_min_ssim_gain", type=float, default=None)
@@ -1470,6 +1492,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--sparse_materialization_target_connected_max_extra_bins", type=int, default=0)
     parser.add_argument("--no_policy_val_bin_uncertainty_guard", action="store_true")
+    parser.add_argument("--no_target_support_candidate_selection", action="store_true")
+    parser.add_argument("--no_policy_candidate_dominance_pruning", action="store_true")
     parser.add_argument("--bin_uncertainty_guard_min_bin_samples", type=int, default=16)
     parser.add_argument("--bin_uncertainty_guard_min_positive_view_fraction", type=float, default=0.5)
     parser.add_argument(
