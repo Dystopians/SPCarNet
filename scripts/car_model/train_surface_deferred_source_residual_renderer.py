@@ -48,6 +48,17 @@ DEFAULT_TARGET_EVAL = (
 
 PHASEJ_FLOWERS = {"psnr": 20.304358, "ssim": 0.557770, "lpips": 0.329222}
 LUMA_WEIGHTS = np.asarray([0.299, 0.587, 0.114], dtype=np.float32)
+LEARNED_OOD_FEATURE_NAMES = [
+    "gain_boost",
+    "policy_reliability",
+    "policy_tail_risk",
+    "view_gap",
+    "variance_ratio",
+    "parent_mismatch",
+    "effective_count_risk",
+    "source_agreement_proxy",
+    "max_view_cos",
+]
 
 FORBIDDEN_TARGET_KEYS = {
     "rgb_gt",
@@ -136,6 +147,68 @@ def _box_mean2d(values: np.ndarray, radius: int) -> np.ndarray:
     k = 2 * radius_i + 1
     total = integral[k:, k:] - integral[:-k, k:] - integral[k:, :-k] + integral[:-k, :-k]
     return (total / float(k * k)).astype(np.float32)
+
+
+def _sigmoid(values: np.ndarray) -> np.ndarray:
+    arr = np.clip(np.asarray(values, dtype=np.float64), -50.0, 50.0)
+    return (1.0 / (1.0 + np.exp(-arr))).astype(np.float32)
+
+
+def _stack_learned_ood_features(
+    *,
+    gain_boost: np.ndarray,
+    policy_reliability: np.ndarray,
+    policy_tail_risk: np.ndarray,
+    view_gap: np.ndarray,
+    variance_ratio: np.ndarray,
+    parent_mismatch: np.ndarray,
+    effective_count_risk: np.ndarray,
+    max_view_cos: np.ndarray,
+) -> np.ndarray:
+    source_agreement_proxy = np.exp(-0.25 * np.clip(np.asarray(variance_ratio, dtype=np.float32), 0.0, 4.0))
+    return np.stack(
+        [
+            np.asarray(gain_boost, dtype=np.float32),
+            np.asarray(policy_reliability, dtype=np.float32),
+            np.asarray(policy_tail_risk, dtype=np.float32),
+            np.clip(np.asarray(view_gap, dtype=np.float32), 0.0, 2.0),
+            np.clip(np.asarray(variance_ratio, dtype=np.float32), 0.0, 4.0),
+            np.clip(np.asarray(parent_mismatch, dtype=np.float32), 0.0, 1.0),
+            np.clip(np.asarray(effective_count_risk, dtype=np.float32), 0.0, 1.0),
+            source_agreement_proxy.astype(np.float32),
+            np.clip(np.asarray(max_view_cos, dtype=np.float32), -1.0, 1.0),
+        ],
+        axis=1,
+    ).astype(np.float32)
+
+
+def _apply_learned_ood_head(bank: dict[str, np.ndarray], features: np.ndarray) -> np.ndarray:
+    required = {"learned_ood_head_coef", "learned_ood_head_bias", "learned_ood_head_mean", "learned_ood_head_scale"}
+    missing = sorted(required - set(bank))
+    if missing:
+        raise RuntimeError(f"learned OOD head requested but checkpoint/bank is missing: {missing}")
+    coef = np.asarray(bank["learned_ood_head_coef"], dtype=np.float32)
+    bias = float(np.asarray(bank["learned_ood_head_bias"], dtype=np.float32).reshape(-1)[0])
+    mean = np.asarray(bank["learned_ood_head_mean"], dtype=np.float32)
+    scale = np.maximum(np.asarray(bank["learned_ood_head_scale"], dtype=np.float32), 1.0e-6)
+    floor = float(np.asarray(bank.get("learned_ood_head_floor", np.asarray([0.0], dtype=np.float32))).reshape(-1)[0])
+    standardized = (np.asarray(features, dtype=np.float32) - mean.reshape(1, -1)) / scale.reshape(1, -1)
+    pred = bias + np.sum(standardized * coef.reshape(1, -1), axis=1)
+    confidence = np.clip(pred, floor, 1.0).astype(np.float32)
+    return confidence
+
+
+def _feature_rows_to_arrays(feature_rows: list[dict[str, np.ndarray]]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    if not feature_rows:
+        return (
+            np.zeros((0,), dtype=np.int64),
+            np.zeros((0,), dtype=np.int64),
+            np.zeros((0, len(LEARNED_OOD_FEATURE_NAMES)), dtype=np.float32),
+        )
+    ys = np.concatenate([np.asarray(row["ys"], dtype=np.int64) for row in feature_rows])
+    xs = np.concatenate([np.asarray(row["xs"], dtype=np.int64) for row in feature_rows])
+    features = np.concatenate([np.asarray(row["features"], dtype=np.float32) for row in feature_rows], axis=0)
+    return ys, xs, features
 
 
 def _bin_ids(z: np.lib.npyio.NpzFile, ys: np.ndarray, xs: np.ndarray, grid: int) -> np.ndarray:
@@ -399,6 +472,15 @@ def _load_source_bank(path: Path) -> tuple[np.ndarray, dict[str, np.ndarray], di
             bank["policy_gain"] = np.asarray(z["policy_gain"], dtype=np.float32)
         if "policy_tail_risk" in z:
             bank["policy_tail_risk"] = np.asarray(z["policy_tail_risk"], dtype=np.float32)
+        for key in (
+            "learned_ood_head_coef",
+            "learned_ood_head_bias",
+            "learned_ood_head_mean",
+            "learned_ood_head_scale",
+            "learned_ood_head_floor",
+        ):
+            if key in z:
+                bank[key] = np.asarray(z[key], dtype=np.float32)
         args_json = str(np.asarray(z["args_json"]).item()) if "args_json" in z else "{}"
     valid = bank["counts"] > 0.0
     bins = int(bank["counts"].shape[1]) if bank["counts"].ndim >= 2 else 0
@@ -414,6 +496,69 @@ def _load_source_bank(path: Path) -> tuple[np.ndarray, dict[str, np.ndarray], di
         "nonempty_source_slots": int(np.count_nonzero(valid)),
         "mean_source_count_nonempty": float(np.mean(bank["counts"][valid])) if np.any(valid) else 0.0,
         "source_count_quantiles": _quantiles([float(x) for x in bank["counts"][valid].reshape(-1)]) if np.any(valid) else _quantiles([]),
+    }
+
+
+def _rank_target_visible_faces(
+    target_dir: Path,
+    *,
+    min_alpha: float,
+    quota: int,
+    max_samples_per_view: int,
+    seed: int,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    paths = evidence_views(target_dir)
+    if int(quota) <= 0 or not paths:
+        return np.zeros((0,), dtype=np.int64), {"enabled": False, "reason": "empty quota or target dir"}
+    rng = np.random.default_rng(int(seed) + 263)
+    counts: dict[int, int] = {}
+    total_samples = 0
+    bad: list[dict[str, Any]] = []
+    for path in tqdm(paths, desc="rank target-visible faces"):
+        with np.load(path, allow_pickle=False) as z:
+            leaked = sorted(set(z.files) & FORBIDDEN_TARGET_KEYS)
+            if leaked:
+                bad.append({"view": path.stem, "forbidden_keys": leaked})
+                continue
+            face_id = np.asarray(z["face_id"], dtype=np.int64)
+            valid = face_id >= 0
+            if "barycentric_valid" in z:
+                valid &= np.asarray(z["barycentric_valid"]).astype(bool)
+            if "alpha" in z:
+                valid &= np.asarray(z["alpha"], dtype=np.float32) >= float(min_alpha)
+            if "barycentric" in z:
+                bary = np.asarray(z["barycentric"], dtype=np.float32)
+                valid &= np.all(np.isfinite(bary), axis=0)
+                valid &= np.all(bary >= -0.05, axis=0)
+                valid &= np.all(bary <= 1.05, axis=0)
+            ys, xs = np.nonzero(valid)
+            if ys.size == 0:
+                continue
+            if int(max_samples_per_view) > 0 and ys.size > int(max_samples_per_view):
+                take = rng.choice(ys.size, size=int(max_samples_per_view), replace=False)
+                ys, xs = ys[take], xs[take]
+            faces = face_id[ys, xs]
+            total_samples += int(faces.size)
+            unique, unique_counts = np.unique(faces, return_counts=True)
+            for face, count in zip(unique.tolist(), unique_counts.tolist(), strict=True):
+                counts[int(face)] = counts.get(int(face), 0) + int(count)
+    if bad:
+        raise RuntimeError(f"target-visible expansion received forbidden target keys: {bad[:4]}")
+    ranked = sorted(counts, key=lambda f: counts[f], reverse=True)
+    selected = np.asarray(sorted(ranked[: int(quota)]), dtype=np.int64)
+    selected_count = int(sum(counts[int(face)] for face in selected.tolist())) if selected.size else 0
+    return selected, {
+        "enabled": True,
+        "target_evidence_dir": str(target_dir),
+        "target_views": int(len(paths)),
+        "quota": int(quota),
+        "ranked_faces": int(len(ranked)),
+        "selected_faces": int(selected.size),
+        "total_sampled_pixels": int(total_samples),
+        "selected_visible_samples": int(selected_count),
+        "selected_visible_fraction": float(selected_count / max(total_samples, 1)),
+        "max_samples_per_view": int(max_samples_per_view),
+        "uses_target_or_test_gt": False,
     }
 
 
@@ -485,6 +630,11 @@ def _calibrate_policy_reliability(
     policy_gain_mode: str,
     policy_gain_max: float,
     policy_gain_scale: float,
+    residual_decoder_mode: str = "weighted_average",
+    local_linear_l2: float = 0.05,
+    local_linear_blend: float = 1.0,
+    local_linear_min_sources: int = 3,
+    local_linear_residual_clip: float = 0.12,
 ) -> dict[str, Any]:
     bins = int(grid) * int(grid)
     counts = np.zeros((int(candidate_faces.size), bins), dtype=np.float64)
@@ -517,6 +667,11 @@ def _calibrate_policy_reliability(
                 source_agreement_mode=str(source_agreement_mode),
                 source_agreement_beta=float(source_agreement_beta),
                 source_agreement_min_confidence=float(source_agreement_min_confidence),
+                residual_decoder_mode=str(residual_decoder_mode),
+                local_linear_l2=float(local_linear_l2),
+                local_linear_blend=float(local_linear_blend),
+                local_linear_min_sources=int(local_linear_min_sources),
+                local_linear_residual_clip=float(local_linear_residual_clip),
             )
             ys, xs = np.nonzero(active)
             if ys.size == 0:
@@ -660,6 +815,159 @@ def _calibrate_policy_reliability(
     }
 
 
+def _fit_learned_ood_head(
+    val_paths: list[Path],
+    candidate_faces: np.ndarray,
+    bank: dict[str, np.ndarray],
+    *,
+    grid: int,
+    alpha: float,
+    min_alpha: float,
+    min_source_count: float,
+    chunk_size: int,
+    view_beta: float,
+    normal_beta: float,
+    parent_beta: float,
+    count_gamma: float,
+    gain_beta: float,
+    confidence_tau: float,
+    source_agreement_mode: str,
+    source_agreement_beta: float,
+    source_agreement_min_confidence: float,
+    l2: float,
+    gain_scale: float,
+    floor: float,
+    min_gain: float,
+    max_samples: int,
+    seed: int,
+    residual_decoder_mode: str = "weighted_average",
+    local_linear_l2: float = 0.05,
+    local_linear_blend: float = 1.0,
+    local_linear_min_sources: int = 3,
+    local_linear_residual_clip: float = 0.12,
+) -> dict[str, Any]:
+    if not val_paths:
+        raise RuntimeError("learned OOD head requested but no policy-val views are available")
+    rng = np.random.default_rng(int(seed) + 260)
+    feature_parts: list[np.ndarray] = []
+    label_parts: list[np.ndarray] = []
+    gain_parts: list[np.ndarray] = []
+    view_rows: list[dict[str, Any]] = []
+    max_samples_i = max(1, int(max_samples))
+    per_view_cap = max(2048, int(math.ceil(2.0 * max_samples_i / max(len(val_paths), 1))))
+    for path in tqdm(val_paths, desc="fit learned OOD/gain head"):
+        with np.load(path, allow_pickle=False) as z:
+            parent = np.asarray(z["rgb_render"], dtype=np.float32)[:3]
+            gt = np.asarray(z["rgb_gt"], dtype=np.float32)[:3]
+            feature_rows: list[dict[str, np.ndarray]] = []
+            delta, _active, support_stats = _predict_delta(
+                z,
+                candidate_faces,
+                bank,
+                grid=int(grid),
+                min_alpha=float(min_alpha),
+                min_source_count=float(min_source_count),
+                chunk_size=int(chunk_size),
+                view_beta=float(view_beta),
+                normal_beta=float(normal_beta),
+                parent_beta=float(parent_beta),
+                count_gamma=float(count_gamma),
+                gain_beta=float(gain_beta),
+                confidence_tau=float(confidence_tau),
+                source_agreement_mode=str(source_agreement_mode),
+                source_agreement_beta=float(source_agreement_beta),
+                source_agreement_min_confidence=float(source_agreement_min_confidence),
+                residual_decoder_mode=str(residual_decoder_mode),
+                local_linear_l2=float(local_linear_l2),
+                local_linear_blend=float(local_linear_blend),
+                local_linear_min_sources=int(local_linear_min_sources),
+                local_linear_residual_clip=float(local_linear_residual_clip),
+                ood_gain_mode="off",
+                feature_rows=feature_rows,
+            )
+            ys, xs, features = _feature_rows_to_arrays(feature_rows)
+            if features.shape[0] == 0:
+                view_rows.append({"view": path.stem, "sample_count": 0, **support_stats})
+                continue
+            if features.shape[0] > per_view_cap:
+                take = rng.choice(features.shape[0], size=per_view_cap, replace=False)
+                ys = ys[take]
+                xs = xs[take]
+                features = features[take]
+            candidate = np.clip(parent + float(alpha) * delta, 0.0, 1.0)
+            parent_l1 = np.mean(np.abs(parent[:, ys, xs] - gt[:, ys, xs]), axis=0).astype(np.float32)
+            candidate_l1 = np.mean(np.abs(candidate[:, ys, xs] - gt[:, ys, xs]), axis=0).astype(np.float32)
+            local_gain = (parent_l1 - candidate_l1).astype(np.float32)
+            labels = _sigmoid((local_gain - float(min_gain)) / max(float(gain_scale), 1.0e-8))
+            labels = np.clip(labels, float(floor), 1.0).astype(np.float32)
+            feature_parts.append(features.astype(np.float32))
+            label_parts.append(labels)
+            gain_parts.append(local_gain)
+            view_rows.append(
+                {
+                    "view": path.stem,
+                    "sample_count": int(features.shape[0]),
+                    "mean_local_gain": float(np.mean(local_gain)) if local_gain.size else 0.0,
+                    "positive_local_gain_fraction": float(np.mean(local_gain > 0.0)) if local_gain.size else 0.0,
+                    **support_stats,
+                }
+            )
+    if not feature_parts:
+        raise RuntimeError("learned OOD head requested but no feature samples were collected")
+    features_all = np.concatenate(feature_parts, axis=0).astype(np.float32)
+    labels_all = np.concatenate(label_parts, axis=0).astype(np.float32)
+    gains_all = np.concatenate(gain_parts, axis=0).astype(np.float32)
+    if features_all.shape[0] > max_samples_i:
+        take = rng.choice(features_all.shape[0], size=max_samples_i, replace=False)
+        features_all = features_all[take]
+        labels_all = labels_all[take]
+        gains_all = gains_all[take]
+    min_required = max(32, len(LEARNED_OOD_FEATURE_NAMES) * 4)
+    if features_all.shape[0] < min_required:
+        raise RuntimeError(f"learned OOD head has too few samples: {features_all.shape[0]} < {min_required}")
+    mean = np.mean(features_all, axis=0).astype(np.float32)
+    scale = np.maximum(np.std(features_all, axis=0).astype(np.float32), 1.0e-6)
+    x = (features_all - mean.reshape(1, -1)) / scale.reshape(1, -1)
+    y_mean = float(np.mean(labels_all))
+    y = (labels_all - y_mean).astype(np.float32)
+    xtx = (x.T @ x).astype(np.float64) / float(x.shape[0])
+    xty = (x.T @ y).astype(np.float64) / float(x.shape[0])
+    ridge = max(float(l2), 0.0)
+    coef = np.linalg.solve(xtx + ridge * np.eye(xtx.shape[0], dtype=np.float64), xty).astype(np.float32)
+    pred_train = np.clip(y_mean + np.sum(x * coef.reshape(1, -1), axis=1), float(floor), 1.0).astype(np.float32)
+    bank["learned_ood_head_coef"] = coef
+    bank["learned_ood_head_bias"] = np.asarray([y_mean], dtype=np.float32)
+    bank["learned_ood_head_mean"] = mean.astype(np.float32)
+    bank["learned_ood_head_scale"] = scale.astype(np.float32)
+    bank["learned_ood_head_floor"] = np.asarray([float(floor)], dtype=np.float32)
+    corr = 0.0
+    if float(np.std(pred_train)) > 1.0e-8 and float(np.std(labels_all)) > 1.0e-8:
+        corr = float(np.corrcoef(pred_train, labels_all)[0, 1])
+    return {
+        "mode": "learned_linear",
+        "feature_names": list(LEARNED_OOD_FEATURE_NAMES),
+        "alpha": float(alpha),
+        "l2": float(l2),
+        "gain_scale": float(gain_scale),
+        "min_gain": float(min_gain),
+        "floor": float(floor),
+        "sample_count": int(features_all.shape[0]),
+        "view_count": int(len(val_paths)),
+        "label_mean": float(np.mean(labels_all)),
+        "label_quantiles": _quantiles([float(x) for x in labels_all.reshape(-1)]),
+        "local_gain_mean": float(np.mean(gains_all)),
+        "local_gain_quantiles": _quantiles([float(x) for x in gains_all.reshape(-1)]),
+        "positive_local_gain_fraction": float(np.mean(gains_all > 0.0)),
+        "predicted_confidence_mean": float(np.mean(pred_train)),
+        "predicted_confidence_quantiles": _quantiles([float(x) for x in pred_train.reshape(-1)]),
+        "label_prediction_correlation": corr,
+        "coefficients": {
+            name: float(value) for name, value in zip(LEARNED_OOD_FEATURE_NAMES, coef.tolist(), strict=True)
+        },
+        "views_preview": view_rows[:8],
+    }
+
+
 def _predict_delta(
     z: np.lib.npyio.NpzFile,
     candidate_faces: np.ndarray,
@@ -678,12 +986,18 @@ def _predict_delta(
     source_agreement_mode: str,
     source_agreement_beta: float,
     source_agreement_min_confidence: float,
+    residual_decoder_mode: str = "weighted_average",
+    local_linear_l2: float = 0.05,
+    local_linear_blend: float = 1.0,
+    local_linear_min_sources: int = 3,
+    local_linear_residual_clip: float = 0.12,
     ood_gain_mode: str = "off",
     ood_gain_beta: float = 1.0,
     ood_gain_view_weight: float = 1.0,
     ood_gain_variance_weight: float = 1.0,
     ood_gain_parent_weight: float = 1.0,
     ood_gain_effective_count_weight: float = 0.5,
+    feature_rows: list[dict[str, np.ndarray]] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, float]]:
     parent = np.asarray(z["rgb_render"], dtype=np.float32)[:3]
     delta = np.zeros_like(parent, dtype=np.float32)
@@ -743,9 +1057,52 @@ def _predict_delta(
         if not np.any(ok_rows):
             continue
         pred = np.sum(weights[:, :, None] * src_residual, axis=1) / np.maximum(denom[:, None], 1.0e-12)
+        decoder_mode_s = str(residual_decoder_mode or "weighted_average")
+        if decoder_mode_s == "local_linear":
+            valid_float = valid_src.astype(np.float32)
+            valid_count = np.sum(valid_float, axis=1)
+            enough_sources = (valid_count >= int(local_linear_min_sources)) & ok_rows
+            if np.any(enough_sources):
+                idx = np.nonzero(enough_sources)[0]
+                src_feat = np.concatenate(
+                    [
+                        np.ones((idx.size, src_camera.shape[1], 1), dtype=np.float32),
+                        src_camera[idx].astype(np.float32),
+                        src_parent[idx].astype(np.float32),
+                    ],
+                    axis=2,
+                )
+                tgt_feat = np.concatenate(
+                    [
+                        np.ones((idx.size, 1), dtype=np.float32),
+                        np.repeat(target_cam.reshape(1, 3), idx.size, axis=0).astype(np.float32),
+                        tgt_parent[idx].astype(np.float32),
+                    ],
+                    axis=1,
+                )
+                row_weights = weights[idx].astype(np.float32)
+                xw = src_feat * np.sqrt(np.maximum(row_weights, 0.0))[:, :, None]
+                yw = src_residual[idx].astype(np.float32) * np.sqrt(np.maximum(row_weights, 0.0))[:, :, None]
+                xtx = np.einsum("nkd,nke->nde", xw, xw, optimize=True).astype(np.float64)
+                diag = np.arange(xtx.shape[1])
+                xtx[:, diag, diag] += max(float(local_linear_l2), 1.0e-8)
+                xty = np.einsum("nkd,nkc->ndc", xw, yw, optimize=True).astype(np.float64)
+                coef = np.linalg.solve(xtx, xty).astype(np.float32)
+                linear_pred = np.einsum("nd,ndc->nc", tgt_feat.astype(np.float32), coef, optimize=True)
+                clip_v = float(local_linear_residual_clip)
+                if clip_v > 0.0:
+                    linear_pred = np.clip(linear_pred, -clip_v, clip_v)
+                blend = float(np.clip(float(local_linear_blend), 0.0, 1.0))
+                pred[idx] = ((1.0 - blend) * pred[idx] + blend * linear_pred).astype(np.float32)
+        elif decoder_mode_s != "weighted_average":
+            raise ValueError(f"unsupported residual_decoder_mode={residual_decoder_mode}")
         variance_ratio = np.zeros_like(denom, dtype=np.float32)
         source_agreement = np.ones_like(denom, dtype=np.float32)
-        needs_variance = str(source_agreement_mode) != "off" or str(ood_gain_mode) != "off"
+        needs_variance = (
+            str(source_agreement_mode) != "off"
+            or str(ood_gain_mode) != "off"
+            or feature_rows is not None
+        )
         if needs_variance:
             diff = src_residual - pred[:, None, :]
             variance = np.sum(weights * np.sum(diff * diff, axis=2), axis=1) / np.maximum(denom, 1.0e-12)
@@ -778,7 +1135,8 @@ def _predict_delta(
         ood_confidence = np.ones_like(confidence, dtype=np.float32)
         ood_score = np.zeros_like(confidence, dtype=np.float32)
         policy_tail_risk = np.zeros_like(confidence, dtype=np.float32)
-        if str(ood_gain_mode) == "boosted_soft":
+        ood_features: np.ndarray | None = None
+        if str(ood_gain_mode) in {"boosted_soft", "learned_linear"} or feature_rows is not None:
             valid_float = valid_src.astype(np.float32)
             valid_count = np.maximum(np.sum(valid_float, axis=1), 1.0)
             max_view_cos = np.max(np.where(valid_src, view_cos, -1.0), axis=1).astype(np.float32)
@@ -792,16 +1150,35 @@ def _predict_delta(
                 tail_map = np.asarray(bank["policy_tail_risk"], dtype=np.float32)
                 policy_tail_risk = np.clip(tail_map[face_idx, bin_id], 0.0, 1.0).astype(np.float32)
             gain_boost = np.maximum(policy_gain - 1.0, 0.0)
+            ood_features = _stack_learned_ood_features(
+                gain_boost=gain_boost,
+                policy_reliability=policy_reliability,
+                policy_tail_risk=policy_tail_risk,
+                view_gap=view_gap,
+                variance_ratio=variance_ratio,
+                parent_mismatch=parent_mismatch,
+                effective_count_risk=effective_count_risk,
+                max_view_cos=max_view_cos,
+            )
             ood_score = (
                 float(ood_gain_view_weight) * view_gap
                 + float(ood_gain_variance_weight) * np.clip(variance_ratio, 0.0, 4.0)
                 + float(ood_gain_parent_weight) * np.clip(parent_mismatch, 0.0, 1.0)
                 + float(ood_gain_effective_count_weight) * effective_count_risk
             ).astype(np.float32)
+        if str(ood_gain_mode) == "boosted_soft":
+            if ood_features is None:
+                raise RuntimeError("internal error: boosted_soft has no OOD features")
             risk_multiplier = 0.5 + policy_tail_risk
+            gain_boost = np.maximum(policy_gain - 1.0, 0.0)
             ood_confidence = np.exp(
                 np.clip(-float(ood_gain_beta) * gain_boost * risk_multiplier * ood_score, -30.0, 0.0)
             ).astype(np.float32)
+            confidence = confidence * ood_confidence
+        elif str(ood_gain_mode) == "learned_linear":
+            if ood_features is None:
+                raise RuntimeError("internal error: learned_linear has no OOD features")
+            ood_confidence = _apply_learned_ood_head(bank, ood_features)
             confidence = confidence * ood_confidence
         elif str(ood_gain_mode) != "off":
             raise ValueError(f"unsupported ood_gain_mode={ood_gain_mode}")
@@ -809,6 +1186,16 @@ def _predict_delta(
         yy, xx = ys[ok_rows], xs[ok_rows]
         delta[:, yy, xx] = pred[ok_rows].T
         active[yy, xx] = True
+        if feature_rows is not None:
+            if ood_features is None:
+                raise RuntimeError("internal error: requested feature rows without OOD features")
+            feature_rows.append(
+                {
+                    "ys": yy.astype(np.int64),
+                    "xs": xx.astype(np.int64),
+                    "features": ood_features[ok_rows].astype(np.float32),
+                }
+            )
         active_count += int(np.count_nonzero(ok_rows))
         confidences.append(confidence[ok_rows].astype(np.float32))
         agreement_confidences.append(source_agreement[ok_rows].astype(np.float32))
@@ -934,6 +1321,11 @@ def _evaluate_policy_val(
     source_agreement_mode: str,
     source_agreement_beta: float,
     source_agreement_min_confidence: float,
+    residual_decoder_mode: str,
+    local_linear_l2: float,
+    local_linear_blend: float,
+    local_linear_min_sources: int,
+    local_linear_residual_clip: float,
     ood_gain_mode: str,
     ood_gain_beta: float,
     ood_gain_view_weight: float,
@@ -973,6 +1365,11 @@ def _evaluate_policy_val(
                 source_agreement_mode=str(source_agreement_mode),
                 source_agreement_beta=float(source_agreement_beta),
                 source_agreement_min_confidence=float(source_agreement_min_confidence),
+                residual_decoder_mode=str(residual_decoder_mode),
+                local_linear_l2=float(local_linear_l2),
+                local_linear_blend=float(local_linear_blend),
+                local_linear_min_sources=int(local_linear_min_sources),
+                local_linear_residual_clip=float(local_linear_residual_clip),
                 ood_gain_mode=str(ood_gain_mode),
                 ood_gain_beta=float(ood_gain_beta),
                 ood_gain_view_weight=float(ood_gain_view_weight),
@@ -1123,6 +1520,11 @@ def _target_no_gt_preview(
     source_agreement_mode: str,
     source_agreement_beta: float,
     source_agreement_min_confidence: float,
+    residual_decoder_mode: str,
+    local_linear_l2: float,
+    local_linear_blend: float,
+    local_linear_min_sources: int,
+    local_linear_residual_clip: float,
     ood_gain_mode: str,
     ood_gain_beta: float,
     ood_gain_view_weight: float,
@@ -1159,6 +1561,11 @@ def _target_no_gt_preview(
                 source_agreement_mode=str(source_agreement_mode),
                 source_agreement_beta=float(source_agreement_beta),
                 source_agreement_min_confidence=float(source_agreement_min_confidence),
+                residual_decoder_mode=str(residual_decoder_mode),
+                local_linear_l2=float(local_linear_l2),
+                local_linear_blend=float(local_linear_blend),
+                local_linear_min_sources=int(local_linear_min_sources),
+                local_linear_residual_clip=float(local_linear_residual_clip),
                 ood_gain_mode=str(ood_gain_mode),
                 ood_gain_beta=float(ood_gain_beta),
                 ood_gain_view_weight=float(ood_gain_view_weight),
@@ -1206,6 +1613,11 @@ def _target_exact_eval(
     source_agreement_mode: str,
     source_agreement_beta: float,
     source_agreement_min_confidence: float,
+    residual_decoder_mode: str,
+    local_linear_l2: float,
+    local_linear_blend: float,
+    local_linear_min_sources: int,
+    local_linear_residual_clip: float,
     ood_gain_mode: str,
     ood_gain_beta: float,
     ood_gain_view_weight: float,
@@ -1248,6 +1660,11 @@ def _target_exact_eval(
                 source_agreement_mode=str(source_agreement_mode),
                 source_agreement_beta=float(source_agreement_beta),
                 source_agreement_min_confidence=float(source_agreement_min_confidence),
+                residual_decoder_mode=str(residual_decoder_mode),
+                local_linear_l2=float(local_linear_l2),
+                local_linear_blend=float(local_linear_blend),
+                local_linear_min_sources=int(local_linear_min_sources),
+                local_linear_residual_clip=float(local_linear_residual_clip),
                 ood_gain_mode=str(ood_gain_mode),
                 ood_gain_beta=float(ood_gain_beta),
                 ood_gain_view_weight=float(ood_gain_view_weight),
@@ -1354,6 +1771,14 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
             "teacher-gain confidence. This changes the representation carrier rather than tuning an alpha gate."
         ),
         "",
+        "## Residual Decoder",
+        "",
+        f"- mode: `{payload.get('residual_decoder', {}).get('mode', 'weighted_average')}`",
+        f"- local-linear ridge: `{payload.get('residual_decoder', {}).get('local_linear_l2', 0.0):.6f}`",
+        f"- local-linear blend: `{payload.get('residual_decoder', {}).get('local_linear_blend', 0.0):.6f}`",
+        f"- local-linear min sources: `{payload.get('residual_decoder', {}).get('local_linear_min_sources', 0)}`",
+        f"- local-linear residual clip: `{payload.get('residual_decoder', {}).get('local_linear_residual_clip', 0.0):.6f}`",
+        "",
         "## Policy-Val Metrics",
         "",
         "| row | alpha | PSNR gain | SSIM gain | LPIPS gain | PSNR tail CVaR | SSIM tail CVaR | LPIPS tail CVaR | active/support |",
@@ -1425,6 +1850,14 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- mean valid tail risk: `{payload.get('policy_reliability', {}).get('mean_tail_risk_valid', 0.0):.6f}`",
         f"- OOD gain mode: `{payload.get('ood_gain', {}).get('mode', 'off')}`",
         "",
+        "## Learned OOD/Gain Head",
+        "",
+        f"- mode: `{payload.get('learned_ood_head', {}).get('mode', 'off')}`",
+        f"- sample count: `{payload.get('learned_ood_head', {}).get('sample_count', 0)}`",
+        f"- label mean: `{payload.get('learned_ood_head', {}).get('label_mean', 0.0):.6f}`",
+        f"- predicted confidence mean: `{payload.get('learned_ood_head', {}).get('predicted_confidence_mean', 0.0):.6f}`",
+        f"- label/prediction correlation: `{payload.get('learned_ood_head', {}).get('label_prediction_correlation', 0.0):.6f}`",
+        "",
         "## Artifacts",
         "",
         f"- JSON: `{payload['output_json']}`",
@@ -1478,6 +1911,8 @@ def main() -> int:
     parser.add_argument("--max_candidate_faces", type=int, default=8192)
     parser.add_argument("--candidate_target_energy_coverage", type=float, default=0.95)
     parser.add_argument("--max_candidate_face_samples_per_view", type=int, default=120000)
+    parser.add_argument("--target_visible_face_quota", type=int, default=0)
+    parser.add_argument("--max_target_visible_face_samples_per_view", type=int, default=240000)
     parser.add_argument("--grid", type=int, default=4)
     parser.add_argument("--source_top_k", type=int, default=6)
     parser.add_argument("--max_source_samples_per_view", type=int, default=180000)
@@ -1489,6 +1924,11 @@ def main() -> int:
     parser.add_argument("--count_gamma", type=float, default=0.25)
     parser.add_argument("--gain_beta", type=float, default=1.0)
     parser.add_argument("--confidence_tau", type=float, default=0.0)
+    parser.add_argument("--residual_decoder_mode", choices=["weighted_average", "local_linear"], default="weighted_average")
+    parser.add_argument("--local_linear_l2", type=float, default=0.05)
+    parser.add_argument("--local_linear_blend", type=float, default=1.0)
+    parser.add_argument("--local_linear_min_sources", type=int, default=3)
+    parser.add_argument("--local_linear_residual_clip", type=float, default=0.12)
     parser.add_argument("--source_agreement_mode", choices=["off", "soft", "hard"], default="off")
     parser.add_argument("--source_agreement_beta", type=float, default=0.0)
     parser.add_argument("--source_agreement_min_confidence", type=float, default=0.25)
@@ -1505,12 +1945,18 @@ def main() -> int:
     parser.add_argument("--policy_gain_mode", choices=["off", "positive_soft"], default="off")
     parser.add_argument("--policy_gain_max", type=float, default=2.0)
     parser.add_argument("--policy_gain_scale", type=float, default=0.000025)
-    parser.add_argument("--ood_gain_mode", choices=["off", "boosted_soft"], default="off")
+    parser.add_argument("--ood_gain_mode", choices=["off", "boosted_soft", "learned_linear"], default="off")
     parser.add_argument("--ood_gain_beta", type=float, default=1.0)
     parser.add_argument("--ood_gain_view_weight", type=float, default=1.0)
     parser.add_argument("--ood_gain_variance_weight", type=float, default=1.0)
     parser.add_argument("--ood_gain_parent_weight", type=float, default=1.0)
     parser.add_argument("--ood_gain_effective_count_weight", type=float, default=0.5)
+    parser.add_argument("--learned_ood_head_alpha", type=float, default=1.0)
+    parser.add_argument("--learned_ood_head_l2", type=float, default=0.01)
+    parser.add_argument("--learned_ood_head_gain_scale", type=float, default=0.0002)
+    parser.add_argument("--learned_ood_head_floor", type=float, default=0.35)
+    parser.add_argument("--learned_ood_head_min_gain", type=float, default=0.0)
+    parser.add_argument("--learned_ood_head_max_samples", type=int, default=200000)
     parser.add_argument("--bank_residual_transform_mode", choices=["raw_rgb", "luma_only", "chroma_shrink"], default="raw_rgb")
     parser.add_argument("--bank_residual_chroma_shrink", type=float, default=0.25)
     parser.add_argument("--alpha_grid", default="0,0.03125,0.0625,0.09375,0.125,0.1875,0.25,0.375,0.5,0.75,1")
@@ -1571,6 +2017,26 @@ def main() -> int:
             target_energy_coverage=float(args.candidate_target_energy_coverage),
             seed=int(args.seed),
         )
+        target_visible_summary: dict[str, Any] = {"enabled": False}
+        if int(args.target_visible_face_quota) > 0:
+            target_visible_faces, target_visible_summary = _rank_target_visible_faces(
+                Path(args.target_evidence_dir),
+                min_alpha=float(args.min_alpha),
+                quota=int(args.target_visible_face_quota),
+                max_samples_per_view=int(args.max_target_visible_face_samples_per_view),
+                seed=int(args.seed),
+            )
+            before_faces = int(candidate_faces.size)
+            if target_visible_faces.size > 0:
+                candidate_faces = np.asarray(
+                    sorted(set(candidate_faces.astype(np.int64).tolist()) | set(target_visible_faces.tolist())),
+                    dtype=np.int64,
+                )
+            target_visible_summary["candidate_faces_before_union"] = before_faces
+            target_visible_summary["candidate_faces_after_union"] = int(candidate_faces.size)
+            target_visible_summary["added_faces"] = int(candidate_faces.size - before_faces)
+            face_summary["target_visible_face_expansion"] = target_visible_summary
+            face_summary["selected_faces"] = int(candidate_faces.size)
         if candidate_faces.size <= 0:
             raise RuntimeError("no candidate faces selected")
         bank, bank_summary = _fit_source_bank(
@@ -1623,6 +2089,43 @@ def main() -> int:
             policy_gain_mode=str(args.policy_gain_mode),
             policy_gain_max=float(args.policy_gain_max),
             policy_gain_scale=float(args.policy_gain_scale),
+            residual_decoder_mode=str(args.residual_decoder_mode),
+            local_linear_l2=float(args.local_linear_l2),
+            local_linear_blend=float(args.local_linear_blend),
+            local_linear_min_sources=int(args.local_linear_min_sources),
+            local_linear_residual_clip=float(args.local_linear_residual_clip),
+        )
+    learned_ood_head_summary: dict[str, Any] = {"mode": "off"}
+    if str(args.ood_gain_mode) == "learned_linear":
+        learned_ood_head_summary = _fit_learned_ood_head(
+            val_paths,
+            candidate_faces,
+            bank,
+            grid=int(args.grid),
+            alpha=float(args.learned_ood_head_alpha),
+            min_alpha=float(args.min_alpha),
+            min_source_count=float(args.min_source_count),
+            chunk_size=int(args.eval_chunk_size),
+            view_beta=float(args.view_beta),
+            normal_beta=float(args.normal_beta),
+            parent_beta=float(args.parent_beta),
+            count_gamma=float(args.count_gamma),
+            gain_beta=float(args.gain_beta),
+            confidence_tau=float(args.confidence_tau),
+            source_agreement_mode=str(args.source_agreement_mode),
+            source_agreement_beta=float(args.source_agreement_beta),
+            source_agreement_min_confidence=float(args.source_agreement_min_confidence),
+            l2=float(args.learned_ood_head_l2),
+            gain_scale=float(args.learned_ood_head_gain_scale),
+            floor=float(args.learned_ood_head_floor),
+            min_gain=float(args.learned_ood_head_min_gain),
+            max_samples=int(args.learned_ood_head_max_samples),
+            seed=int(args.seed),
+            residual_decoder_mode=str(args.residual_decoder_mode),
+            local_linear_l2=float(args.local_linear_l2),
+            local_linear_blend=float(args.local_linear_blend),
+            local_linear_min_sources=int(args.local_linear_min_sources),
+            local_linear_residual_clip=float(args.local_linear_residual_clip),
         )
     alpha_grid = sorted({float(item) for item in str(args.alpha_grid).split(",") if item.strip()})
     if 0.0 not in alpha_grid:
@@ -1645,6 +2148,11 @@ def main() -> int:
         source_agreement_mode=str(args.source_agreement_mode),
         source_agreement_beta=float(args.source_agreement_beta),
         source_agreement_min_confidence=float(args.source_agreement_min_confidence),
+        residual_decoder_mode=str(args.residual_decoder_mode),
+        local_linear_l2=float(args.local_linear_l2),
+        local_linear_blend=float(args.local_linear_blend),
+        local_linear_min_sources=int(args.local_linear_min_sources),
+        local_linear_residual_clip=float(args.local_linear_residual_clip),
         ood_gain_mode=str(args.ood_gain_mode),
         ood_gain_beta=float(args.ood_gain_beta),
         ood_gain_view_weight=float(args.ood_gain_view_weight),
@@ -1679,6 +2187,11 @@ def main() -> int:
             source_agreement_mode=str(args.source_agreement_mode),
             source_agreement_beta=float(args.source_agreement_beta),
             source_agreement_min_confidence=float(args.source_agreement_min_confidence),
+            residual_decoder_mode=str(args.residual_decoder_mode),
+            local_linear_l2=float(args.local_linear_l2),
+            local_linear_blend=float(args.local_linear_blend),
+            local_linear_min_sources=int(args.local_linear_min_sources),
+            local_linear_residual_clip=float(args.local_linear_residual_clip),
             ood_gain_mode=str(args.ood_gain_mode),
             ood_gain_beta=float(args.ood_gain_beta),
             ood_gain_view_weight=float(args.ood_gain_view_weight),
@@ -1712,6 +2225,11 @@ def main() -> int:
             source_agreement_mode=str(args.source_agreement_mode),
             source_agreement_beta=float(args.source_agreement_beta),
             source_agreement_min_confidence=float(args.source_agreement_min_confidence),
+            residual_decoder_mode=str(args.residual_decoder_mode),
+            local_linear_l2=float(args.local_linear_l2),
+            local_linear_blend=float(args.local_linear_blend),
+            local_linear_min_sources=int(args.local_linear_min_sources),
+            local_linear_residual_clip=float(args.local_linear_residual_clip),
             ood_gain_mode=str(args.ood_gain_mode),
             ood_gain_beta=float(args.ood_gain_beta),
             ood_gain_view_weight=float(args.ood_gain_view_weight),
@@ -1750,6 +2268,19 @@ def main() -> int:
         checkpoint_payload["policy_gain"] = bank["policy_gain"].astype(np.float16)
     if "policy_tail_risk" in bank:
         checkpoint_payload["policy_tail_risk"] = bank["policy_tail_risk"].astype(np.float16)
+    for key in (
+        "learned_ood_head_coef",
+        "learned_ood_head_bias",
+        "learned_ood_head_mean",
+        "learned_ood_head_scale",
+        "learned_ood_head_floor",
+    ):
+        if key in bank:
+            checkpoint_payload[key] = bank[key].astype(np.float32)
+    if "learned_ood_head_coef" in bank:
+        checkpoint_payload["learned_ood_head_feature_names_json"] = np.asarray(
+            json.dumps(LEARNED_OOD_FEATURE_NAMES, sort_keys=True)
+        )
     np.savez_compressed(checkpoint_path, **checkpoint_payload)
     verdict = (
         "PASS_POLICY_VAL_PROMOTE_TO_FLOWERS_EXACT"
@@ -1769,7 +2300,15 @@ def main() -> int:
         "candidate_face_summary": face_summary,
         "fit_source_bank": bank_summary,
         "bank_residual_transform": residual_transform_summary,
+        "residual_decoder": {
+            "mode": str(args.residual_decoder_mode),
+            "local_linear_l2": float(args.local_linear_l2),
+            "local_linear_blend": float(args.local_linear_blend),
+            "local_linear_min_sources": int(args.local_linear_min_sources),
+            "local_linear_residual_clip": float(args.local_linear_residual_clip),
+        },
         "policy_reliability": policy_reliability_summary,
+        "learned_ood_head": learned_ood_head_summary,
         "ood_gain": {
             "mode": str(args.ood_gain_mode),
             "beta": float(args.ood_gain_beta),
@@ -1777,6 +2316,7 @@ def main() -> int:
             "variance_weight": float(args.ood_gain_variance_weight),
             "parent_weight": float(args.ood_gain_parent_weight),
             "effective_count_weight": float(args.ood_gain_effective_count_weight),
+            "learned_head_enabled": bool(str(args.ood_gain_mode) == "learned_linear"),
         },
         "policy_val_all_axis_pass": bool(all_axis),
         "policy_val": policy_val,
@@ -1807,6 +2347,11 @@ def main() -> int:
                 "policy_val/best_lpips_gain": float(best.get("lpips_gain", 0.0)),
                 "policy_val/best_alpha": float(best.get("alpha", 0.0)),
                 "policy_val/best_all_axis_alpha": float(best_all.get("alpha", 0.0)),
+                "residual_decoder/is_local_linear": float(str(args.residual_decoder_mode) == "local_linear"),
+                "residual_decoder/local_linear_l2": float(args.local_linear_l2),
+                "residual_decoder/local_linear_blend": float(args.local_linear_blend),
+                "residual_decoder/local_linear_min_sources": float(args.local_linear_min_sources),
+                "residual_decoder/local_linear_residual_clip": float(args.local_linear_residual_clip),
                 "source_bank/nonempty_source_slots": float(bank_summary.get("nonempty_source_slots", 0)),
                 "source_bank/residual_energy_ratio_after_transform": float(
                     residual_transform_summary.get("energy_ratio_after_before", 1.0)
@@ -1819,6 +2364,14 @@ def main() -> int:
                 "policy_reliability/max_policy_gain": float(policy_reliability_summary.get("max_policy_gain", 1.0)),
                 "policy_reliability/mean_tail_risk_valid": float(
                     policy_reliability_summary.get("mean_tail_risk_valid", 0.0)
+                ),
+                "learned_ood_head/sample_count": float(learned_ood_head_summary.get("sample_count", 0.0)),
+                "learned_ood_head/label_mean": float(learned_ood_head_summary.get("label_mean", 0.0)),
+                "learned_ood_head/predicted_confidence_mean": float(
+                    learned_ood_head_summary.get("predicted_confidence_mean", 0.0)
+                ),
+                "learned_ood_head/label_prediction_correlation": float(
+                    learned_ood_head_summary.get("label_prediction_correlation", 0.0)
                 ),
                 "target_no_gt/pass": float(bool(target_no_gt_audit.get("pass", False))),
                 "target_eval/pass_vs_parent_all_axis": float(bool(target_eval.get("pass_vs_parent_all_axis", False))),

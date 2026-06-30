@@ -2,6 +2,26 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-29, v260-v263:
+
+The newest branch is **local-linear deferred source residual decoding with no-GT target-visible face expansion** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:
+
+- `docs/car_model/6-29-v260-v263-LocalLinearTargetVisible-Log.md`
+- `docs/car_model/results/v260_v263_local_linear_target_visible_summary.json`
+
+Important new facts:
+
+- v260 added `--ood_gain_mode learned_linear`, a policy-val-supervised OOD/gain head over target-free support features. It learned a nontrivial signal, but it is only an auxiliary guard and did not improve target exact over v259/v258.
+- v261 added the real representation change: `--residual_decoder_mode local_linear`, replacing convex source residual averaging with a per-face/UV local ridge decoder from source camera/parent RGB to residual, evaluated at target camera/parent RGB.
+- v262 rebuilt a 32k-face source bank; v263 added `--target_visible_face_quota`, using only stripped target geometry/alpha/face visibility to expand the carrier. No target/test RGB GT or target residual keys are read during apply.
+- v263a is the best result in this line: `19.844512 / 0.620224 / 0.179968`, gains `+0.012458 / +0.000314 / +0.000367`, changed fraction `0.040890`, target active fraction `0.199257`.
+- v263a still fails the Phase-J flowers gate because PSNR is `0.459846` below Phase-J flowers `20.304358`. Full9 remains blocked.
+- v263b extended alpha to `3.0`; policy-val selected `alpha=1.5`, but target exact degraded to `19.839942 / 0.619739 / 0.179855`, with SSIM gain `-0.000172` and PSNR tail CVaR `-0.013618`. Therefore simple alpha amplification is not the solution.
+
+Current direct verdict:
+
+> v263a is meaningful representation-level progress and the best v260-v263 flowers target exact result, but it is still **NOT COMPLETE**. The bottleneck is now target-visible useful changed fraction and cross-view/OOD generalization, not just source residual energy or scalar confidence. The next model should not repeat learned OOD-head-only, alpha amplification, or fixed beta scans; it should build a stronger patch/edge-aware or learned source-feature surface decoder that can safely affect more target-visible pixels.
+
 Latest update on 2026-06-29, v259:
 
 The newest branch is **target-support / OOD-aware gain** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`.  New files:

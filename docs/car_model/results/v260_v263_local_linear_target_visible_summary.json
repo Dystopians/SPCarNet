@@ -1,0 +1,760 @@
+{
+  "best_run_verdict": "v263a is best mean target PSNR/SSIM/LPIPS in this v260-v263 line, but it still fails Phase-J PSNR by about 0.459846.",
+  "best_target_psnr_run": "v263a_local_linear_32k_targetvisible",
+  "phasej_flowers_reference": {
+    "lpips": 0.329222,
+    "psnr": 20.304358,
+    "ssim": 0.55777
+  },
+  "runs": {
+    "v260a_learned_ood_head": {
+      "candidate_faces": 8192,
+      "no_gt": {
+        "bad_view_count": 0,
+        "bad_views_preview": [],
+        "checked": true,
+        "forbidden_key_set": [
+          "residual_l1",
+          "residual_rgb",
+          "rgb_gt",
+          "teacher_better_mask",
+          "teacher_gain_l1",
+          "teacher_parent_delta_l1",
+          "teacher_residual_l1",
+          "teacher_residual_rgb",
+          "teacher_residual_rgb_raw"
+        ],
+        "pass": true,
+        "rows_preview": [
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00000"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00001"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00002"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00003"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00004"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00005"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00006"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00007"
+          }
+        ],
+        "target_evidence_dir": "/dev/shm/peilincai_spcarnet_20260629_v168_direct_teacher_lowcopy_exact/flowers/target_evidence_no_gt",
+        "view_count": 22
+      },
+      "nonempty_source_slots": 287282,
+      "ood_gain": {
+        "beta": 1.0,
+        "effective_count_weight": 0.5,
+        "learned_head_enabled": true,
+        "mode": "learned_linear",
+        "parent_weight": 1.0,
+        "variance_weight": 1.0,
+        "view_weight": 1.0
+      },
+      "output_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v260a_learned_ood_head_targetexact/v253_deferred_source_renderer_audit.json",
+      "output_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v260a_learned_ood_head_targetexact/v253_deferred_source_renderer_audit.md",
+      "phasej_comparison": {
+        "beats_phasej_all_axis": false,
+        "candidate_psnr_minus_phasej": -0.4666549725784037,
+        "candidate_ssim_minus_phasej": 0.062240015639391855,
+        "phasej_lpips_minus_candidate": 0.1490010367359465
+      },
+      "policy_val": {
+        "alpha": 1.0,
+        "candidate_lpips": 0.15291117814679941,
+        "candidate_psnr": 20.634595244357136,
+        "candidate_ssim": 0.7184026738007864,
+        "lpips_gain": 0.0004052414248387019,
+        "psnr_gain": 0.028158341103189894,
+        "ssim_gain": 0.0008765409390131632,
+        "support_active_fraction": 0.03685360333649589,
+        "support_active_over_support_fraction": 0.9735719445794362
+      },
+      "projection": {
+        "changed_fraction": 0.3208867744002874,
+        "cosine": 0.32750380548225133,
+        "energy_retention": 0.40336842370641723
+      },
+      "residual_decoder": {},
+      "target_exact": {
+        "candidate_lpips": 0.1802209632640535,
+        "candidate_psnr": 19.837703027421597,
+        "candidate_ssim": 0.6200100156393918,
+        "lpips_gain": 0.00011390278285199946,
+        "lpips_positive_view_fraction": 0.6363636363636364,
+        "lpips_tail_cvar": -0.00036405523618062335,
+        "mean_changed_fraction": 0.00923405964291875,
+        "positive_view_fraction": 0.8636363636363636,
+        "psnr_gain": 0.005649148974132278,
+        "psnr_tail_cvar": -0.0017694329320114832,
+        "ssim_gain": 9.960478002374822e-05,
+        "ssim_positive_view_fraction": 0.6363636363636364,
+        "ssim_tail_cvar": -0.0002511143684387207,
+        "support_active_fraction": 0.03338332327065724
+      },
+      "target_visible_face_expansion": null,
+      "wandb_mode": "offline"
+    },
+    "v261a_local_linear_8k": {
+      "candidate_faces": 8192,
+      "no_gt": {
+        "bad_view_count": 0,
+        "bad_views_preview": [],
+        "checked": true,
+        "forbidden_key_set": [
+          "residual_l1",
+          "residual_rgb",
+          "rgb_gt",
+          "teacher_better_mask",
+          "teacher_gain_l1",
+          "teacher_parent_delta_l1",
+          "teacher_residual_l1",
+          "teacher_residual_rgb",
+          "teacher_residual_rgb_raw"
+        ],
+        "pass": true,
+        "rows_preview": [
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00000"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00001"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00002"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00003"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00004"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00005"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00006"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00007"
+          }
+        ],
+        "target_evidence_dir": "/dev/shm/peilincai_spcarnet_20260629_v168_direct_teacher_lowcopy_exact/flowers/target_evidence_no_gt",
+        "view_count": 22
+      },
+      "nonempty_source_slots": 287282,
+      "ood_gain": {
+        "beta": 1.0,
+        "effective_count_weight": 0.5,
+        "learned_head_enabled": false,
+        "mode": "off",
+        "parent_weight": 1.0,
+        "variance_weight": 1.0,
+        "view_weight": 1.0
+      },
+      "output_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v261a_local_linear_decoder_targetexact/v253_deferred_source_renderer_audit.json",
+      "output_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v261a_local_linear_decoder_targetexact/v253_deferred_source_renderer_audit.md",
+      "phasej_comparison": {
+        "beats_phasej_all_axis": false,
+        "candidate_psnr_minus_phasej": -0.4642406923241609,
+        "candidate_ssim_minus_phasej": 0.06229316808137031,
+        "phasej_lpips_minus_candidate": 0.1490975430904302
+      },
+      "policy_val": {
+        "alpha": 1.0,
+        "candidate_lpips": 0.15272433310747147,
+        "candidate_psnr": 20.644663767088314,
+        "candidate_ssim": 0.718680148323377,
+        "lpips_gain": 0.0005920864641666412,
+        "psnr_gain": 0.038226863834367165,
+        "ssim_gain": 0.0011540154616038005,
+        "support_active_fraction": 0.03685360333649589,
+        "support_active_over_support_fraction": 0.9735719445794362
+      },
+      "projection": {
+        "changed_fraction": 0.40339036115146043,
+        "cosine": 0.3783819085294464,
+        "energy_retention": 0.6634107186602073
+      },
+      "residual_decoder": {
+        "local_linear_blend": 1.0,
+        "local_linear_l2": 0.05,
+        "local_linear_min_sources": 3,
+        "local_linear_residual_clip": 0.12,
+        "mode": "local_linear"
+      },
+      "target_exact": {
+        "candidate_lpips": 0.18012445690956982,
+        "candidate_psnr": 19.84011730767584,
+        "candidate_ssim": 0.6200631680813703,
+        "lpips_gain": 0.0002104091373356906,
+        "lpips_positive_view_fraction": 0.7272727272727273,
+        "lpips_tail_cvar": -0.00022652745246887207,
+        "mean_changed_fraction": 0.011306629506641366,
+        "positive_view_fraction": 0.8636363636363636,
+        "psnr_gain": 0.008063429228369142,
+        "psnr_tail_cvar": -0.0017420754193070802,
+        "ssim_gain": 0.0001527572220022028,
+        "ssim_positive_view_fraction": 0.6363636363636364,
+        "ssim_tail_cvar": -0.00013236204783121744,
+        "support_active_fraction": 0.03338332327065724
+      },
+      "target_visible_face_expansion": null,
+      "wandb_mode": "offline"
+    },
+    "v261b_local_linear_lowridge_8k": {
+      "candidate_faces": 8192,
+      "no_gt": {
+        "bad_view_count": 0,
+        "bad_views_preview": [],
+        "checked": true,
+        "forbidden_key_set": [
+          "residual_l1",
+          "residual_rgb",
+          "rgb_gt",
+          "teacher_better_mask",
+          "teacher_gain_l1",
+          "teacher_parent_delta_l1",
+          "teacher_residual_l1",
+          "teacher_residual_rgb",
+          "teacher_residual_rgb_raw"
+        ],
+        "pass": true,
+        "rows_preview": [
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00000"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00001"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00002"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00003"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00004"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00005"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00006"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00007"
+          }
+        ],
+        "target_evidence_dir": "/dev/shm/peilincai_spcarnet_20260629_v168_direct_teacher_lowcopy_exact/flowers/target_evidence_no_gt",
+        "view_count": 22
+      },
+      "nonempty_source_slots": 287282,
+      "ood_gain": {
+        "beta": 1.0,
+        "effective_count_weight": 0.5,
+        "learned_head_enabled": false,
+        "mode": "off",
+        "parent_weight": 1.0,
+        "variance_weight": 1.0,
+        "view_weight": 1.0
+      },
+      "output_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v261b_local_linear_lowridge_targetexact/v253_deferred_source_renderer_audit.json",
+      "output_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v261b_local_linear_lowridge_targetexact/v253_deferred_source_renderer_audit.md",
+      "phasej_comparison": {
+        "beats_phasej_all_axis": false,
+        "candidate_psnr_minus_phasej": -0.4651605078056207,
+        "candidate_ssim_minus_phasej": 0.06224797692342243,
+        "phasej_lpips_minus_candidate": 0.14909970240415227
+      },
+      "policy_val": {
+        "alpha": 1.0,
+        "candidate_lpips": 0.1526671970884005,
+        "candidate_psnr": 20.646375212468964,
+        "candidate_ssim": 0.7187281250953674,
+        "lpips_gain": 0.0006492224832375845,
+        "psnr_gain": 0.03993830921501947,
+        "ssim_gain": 0.0012019922335942586,
+        "support_active_fraction": 0.03685360333649589,
+        "support_active_over_support_fraction": 0.9735719445794362
+      },
+      "projection": {
+        "changed_fraction": 0.42839690009609205,
+        "cosine": 0.359915469884142,
+        "energy_retention": 0.9806171656240661
+      },
+      "residual_decoder": {
+        "local_linear_blend": 1.0,
+        "local_linear_l2": 0.005,
+        "local_linear_min_sources": 3,
+        "local_linear_residual_clip": 0.2,
+        "mode": "local_linear"
+      },
+      "target_exact": {
+        "candidate_lpips": 0.18012229759584775,
+        "candidate_psnr": 19.83919749219438,
+        "candidate_ssim": 0.6200179769234224,
+        "lpips_gain": 0.00021256845105778086,
+        "lpips_positive_view_fraction": 0.7272727272727273,
+        "lpips_tail_cvar": -0.0003108779589335124,
+        "mean_changed_fraction": 0.011966049249611867,
+        "positive_view_fraction": 0.6818181818181818,
+        "psnr_gain": 0.007143613746916925,
+        "psnr_tail_cvar": -0.0036973822719149987,
+        "ssim_gain": 0.00010756606405431575,
+        "ssim_positive_view_fraction": 0.6363636363636364,
+        "ssim_tail_cvar": -0.0001700123151143392,
+        "support_active_fraction": 0.03338332327065724
+      },
+      "target_visible_face_expansion": null,
+      "wandb_mode": "offline"
+    },
+    "v262a_local_linear_32k": {
+      "candidate_faces": 32768,
+      "no_gt": {
+        "bad_view_count": 0,
+        "bad_views_preview": [],
+        "checked": true,
+        "forbidden_key_set": [
+          "residual_l1",
+          "residual_rgb",
+          "rgb_gt",
+          "teacher_better_mask",
+          "teacher_gain_l1",
+          "teacher_parent_delta_l1",
+          "teacher_residual_l1",
+          "teacher_residual_rgb",
+          "teacher_residual_rgb_raw"
+        ],
+        "pass": true,
+        "rows_preview": [
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00000"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00001"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00002"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00003"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00004"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00005"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00006"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00007"
+          }
+        ],
+        "target_evidence_dir": "/dev/shm/peilincai_spcarnet_20260629_v168_direct_teacher_lowcopy_exact/flowers/target_evidence_no_gt",
+        "view_count": 22
+      },
+      "nonempty_source_slots": 942622,
+      "ood_gain": {
+        "beta": 1.0,
+        "effective_count_weight": 0.5,
+        "learned_head_enabled": false,
+        "mode": "off",
+        "parent_weight": 1.0,
+        "variance_weight": 1.0,
+        "view_weight": 1.0
+      },
+      "output_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v262a_local_linear_32kbank_targetexact/v253_deferred_source_renderer_audit.json",
+      "output_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v262a_local_linear_32kbank_targetexact/v253_deferred_source_renderer_audit.md",
+      "phasej_comparison": {
+        "beats_phasej_all_axis": false,
+        "candidate_psnr_minus_phasej": -0.46084888250504363,
+        "candidate_ssim_minus_phasej": 0.06244670287305665,
+        "phasej_lpips_minus_candidate": 0.1491727756666704
+      },
+      "policy_val": {
+        "alpha": 1.0,
+        "candidate_lpips": 0.15230303071439266,
+        "candidate_psnr": 20.669377090528272,
+        "candidate_ssim": 0.7197410861651102,
+        "lpips_gain": 0.0010133888572454453,
+        "psnr_gain": 0.06294018727432871,
+        "ssim_gain": 0.002214953303337097,
+        "support_active_fraction": 0.09704711219165085,
+        "support_active_over_support_fraction": 0.9524446683813118
+      },
+      "projection": {
+        "changed_fraction": 0.3380943752658157,
+        "cosine": 0.3322063556522067,
+        "energy_retention": 0.5065531182359894
+      },
+      "residual_decoder": {
+        "local_linear_blend": 1.0,
+        "local_linear_l2": 0.05,
+        "local_linear_min_sources": 3,
+        "local_linear_residual_clip": 0.12,
+        "mode": "local_linear"
+      },
+      "target_exact": {
+        "candidate_lpips": 0.18004922433332962,
+        "candidate_psnr": 19.843509117494957,
+        "candidate_ssim": 0.6202167028730566,
+        "lpips_gain": 0.00028564171357588333,
+        "lpips_positive_view_fraction": 0.7727272727272727,
+        "lpips_tail_cvar": -0.0004664013783137004,
+        "mean_changed_fraction": 0.024958114110746932,
+        "positive_view_fraction": 0.8636363636363636,
+        "psnr_gain": 0.011455239047488646,
+        "psnr_tail_cvar": -0.0028802878122190143,
+        "ssim_gain": 0.00030629201368852097,
+        "ssim_positive_view_fraction": 0.7727272727272727,
+        "ssim_tail_cvar": -0.00014328956604003906,
+        "support_active_fraction": 0.09118296640503708
+      },
+      "target_visible_face_expansion": null,
+      "wandb_mode": "offline"
+    },
+    "v263a_local_linear_32k_targetvisible": {
+      "candidate_faces": 58047,
+      "no_gt": {
+        "bad_view_count": 0,
+        "bad_views_preview": [],
+        "checked": true,
+        "forbidden_key_set": [
+          "residual_l1",
+          "residual_rgb",
+          "rgb_gt",
+          "teacher_better_mask",
+          "teacher_gain_l1",
+          "teacher_parent_delta_l1",
+          "teacher_residual_l1",
+          "teacher_residual_rgb",
+          "teacher_residual_rgb_raw"
+        ],
+        "pass": true,
+        "rows_preview": [
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00000"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00001"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00002"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00003"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00004"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00005"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00006"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00007"
+          }
+        ],
+        "target_evidence_dir": "/dev/shm/peilincai_spcarnet_20260629_v168_direct_teacher_lowcopy_exact/flowers/target_evidence_no_gt",
+        "view_count": 22
+      },
+      "nonempty_source_slots": 1309192,
+      "ood_gain": {
+        "beta": 1.0,
+        "effective_count_weight": 0.5,
+        "learned_head_enabled": false,
+        "mode": "off",
+        "parent_weight": 1.0,
+        "variance_weight": 1.0,
+        "view_weight": 1.0
+      },
+      "output_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v263a_local_linear_targetvisible_32k_targetexact/v253_deferred_source_renderer_audit.json",
+      "output_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v263a_local_linear_targetvisible_32k_targetexact/v253_deferred_source_renderer_audit.md",
+      "phasej_comparison": {
+        "beats_phasej_all_axis": false,
+        "candidate_psnr_minus_phasej": -0.45984606889117075,
+        "candidate_ssim_minus_phasej": 0.06245418731992891,
+        "phasej_lpips_minus_candidate": 0.14925440456635303
+      },
+      "policy_val": {
+        "alpha": 1.0,
+        "candidate_lpips": 0.15203622976938883,
+        "candidate_psnr": 20.67560185579649,
+        "candidate_ssim": 0.7202972173690796,
+        "lpips_gain": 0.0012801898022492726,
+        "psnr_gain": 0.06916495254254447,
+        "ssim_gain": 0.002771084507306417,
+        "support_active_fraction": 0.16170812579063884,
+        "support_active_over_support_fraction": 0.8503461373425494
+      },
+      "projection": {
+        "changed_fraction": 0.2649381967031795,
+        "cosine": 0.320375252100987,
+        "energy_retention": 0.46917466906263616
+      },
+      "residual_decoder": {
+        "local_linear_blend": 1.0,
+        "local_linear_l2": 0.05,
+        "local_linear_min_sources": 3,
+        "local_linear_residual_clip": 0.12,
+        "mode": "local_linear"
+      },
+      "target_exact": {
+        "candidate_lpips": 0.179967595433647,
+        "candidate_psnr": 19.84451193110883,
+        "candidate_ssim": 0.6202241873199289,
+        "lpips_gain": 0.0003672706132585352,
+        "lpips_positive_view_fraction": 0.6818181818181818,
+        "lpips_tail_cvar": -0.00044328471024831134,
+        "mean_changed_fraction": 0.04088995385544248,
+        "positive_view_fraction": 0.8636363636363636,
+        "psnr_gain": 0.012458052661364117,
+        "psnr_tail_cvar": -0.002673329080959519,
+        "ssim_gain": 0.00031377646056088537,
+        "ssim_positive_view_fraction": 0.6818181818181818,
+        "ssim_tail_cvar": -0.00023629268010457358,
+        "support_active_fraction": 0.19925656589615315
+      },
+      "target_visible_face_expansion": {
+        "added_faces": 25279,
+        "candidate_faces_after_union": 58047,
+        "candidate_faces_before_union": 32768,
+        "enabled": true,
+        "max_samples_per_view": 240000,
+        "quota": 32768,
+        "ranked_faces": 1074935,
+        "selected_faces": 32768,
+        "selected_visible_fraction": 0.26332935606060603,
+        "selected_visible_samples": 1390379,
+        "target_evidence_dir": "/dev/shm/peilincai_spcarnet_20260629_v168_direct_teacher_lowcopy_exact/flowers/target_evidence_no_gt",
+        "target_views": 22,
+        "total_sampled_pixels": 5280000,
+        "uses_target_or_test_gt": false
+      },
+      "wandb_mode": "offline"
+    },
+    "v263b_targetvisible_alpha3": {
+      "candidate_faces": 58047,
+      "no_gt": {
+        "bad_view_count": 0,
+        "bad_views_preview": [],
+        "checked": true,
+        "forbidden_key_set": [
+          "residual_l1",
+          "residual_rgb",
+          "rgb_gt",
+          "teacher_better_mask",
+          "teacher_gain_l1",
+          "teacher_parent_delta_l1",
+          "teacher_residual_l1",
+          "teacher_residual_rgb",
+          "teacher_residual_rgb_raw"
+        ],
+        "pass": true,
+        "rows_preview": [
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00000"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00001"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00002"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00003"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00004"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00005"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00006"
+          },
+          {
+            "forbidden_keys": [],
+            "key_count": 9,
+            "view": "00007"
+          }
+        ],
+        "target_evidence_dir": "/dev/shm/peilincai_spcarnet_20260629_v168_direct_teacher_lowcopy_exact/flowers/target_evidence_no_gt",
+        "view_count": 22
+      },
+      "nonempty_source_slots": 1309192,
+      "ood_gain": {
+        "beta": 1.0,
+        "effective_count_weight": 0.5,
+        "learned_head_enabled": false,
+        "mode": "off",
+        "parent_weight": 1.0,
+        "variance_weight": 1.0,
+        "view_weight": 1.0
+      },
+      "output_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v263b_targetvisible_32k_alpha3_targetexact/v253_deferred_source_renderer_audit.json",
+      "output_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v263b_targetvisible_32k_alpha3_targetexact/v253_deferred_source_renderer_audit.md",
+      "phasej_comparison": {
+        "beats_phasej_all_axis": false,
+        "candidate_psnr_minus_phasej": -0.46441593810647674,
+        "candidate_ssim_minus_phasej": 0.06196875490101905,
+        "phasej_lpips_minus_candidate": 0.14936732590454277
+      },
+      "policy_val": {
+        "alpha": 1.5,
+        "candidate_lpips": 0.15186016944547495,
+        "candidate_psnr": 20.675812976836006,
+        "candidate_ssim": 0.7199141134818395,
+        "lpips_gain": 0.0014562501261631648,
+        "psnr_gain": 0.06937607358206203,
+        "ssim_gain": 0.0023879806200663247,
+        "support_active_fraction": 0.16170812579063884,
+        "support_active_over_support_fraction": 0.8503461373425494
+      },
+      "projection": {
+        "changed_fraction": 0.40019991086150225,
+        "cosine": 0.3097626191450434,
+        "energy_retention": 1.1836047148833833
+      },
+      "residual_decoder": {
+        "local_linear_blend": 1.0,
+        "local_linear_l2": 0.05,
+        "local_linear_min_sources": 3,
+        "local_linear_residual_clip": 0.12,
+        "mode": "local_linear"
+      },
+      "target_exact": {
+        "candidate_lpips": 0.17985467409545725,
+        "candidate_psnr": 19.839942061893524,
+        "candidate_ssim": 0.619738754901019,
+        "lpips_gain": 0.00048019195144826716,
+        "lpips_positive_view_fraction": 0.6818181818181818,
+        "lpips_tail_cvar": -0.0006479124228159586,
+        "mean_changed_fraction": 0.06101073292220114,
+        "positive_view_fraction": 0.5909090909090909,
+        "psnr_gain": 0.007888183446058765,
+        "psnr_tail_cvar": -0.01361758834235142,
+        "ssim_gain": -0.00017165595834905451,
+        "ssim_positive_view_fraction": 0.22727272727272727,
+        "ssim_tail_cvar": -0.0007948080698649088,
+        "support_active_fraction": 0.19925656589615315
+      },
+      "target_visible_face_expansion": null,
+      "wandb_mode": "offline"
+    }
+  },
+  "schema": "spcarnet_v260_v263_summary_v1",
+  "verdict": "NOT_COMPLETE"
+}

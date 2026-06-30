@@ -2,6 +2,32 @@
 
 Date: 2026-06-28
 
+## 2026-06-29 v260-v263 Local-Linear / Target-Visible Update
+
+新增日志：`docs/car_model/6-29-v260-v263-LocalLinearTargetVisible-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v260_v263_local_linear_target_visible_summary.json`。
+
+这轮参考 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md` 后继续只跑 flowers policy-val + target exact；未过 Phase-J flowers all-axis gate 前仍不启动 full9。
+
+代码层面新增了真实 train/eval pipeline 方法改动：
+
+- v260 新增 `--ood_gain_mode learned_linear`，从 policy-val 学一个 target-free OOD/gain confidence head。结论：它可作为辅助 guard，但不是 v169 要求的主表示创新。
+- v261 新增 `--residual_decoder_mode local_linear`，把原来的 source residual 加权平均升级为 face/UV bin 内的局部 ridge residual decoder，使用 source camera / source parent RGB 预测 target camera / target parent RGB 下的 residual。
+- v263 新增 `--target_visible_face_quota`，只用 stripped target evidence 的 geometry/alpha/face visibility 扩展 candidate faces；no-target-GT verifier 仍通过，target/test RGB GT 只在 apply 后用于评估。
+
+关键结果：
+
+| run | method | target PSNR | SSIM | LPIPS | target gains | changed | Phase-J gate |
+|---|---|---:|---:|---:|---|---:|---|
+| v260a | learned OOD head | 19.837703 | 0.620010 | 0.180221 | +0.005649 / +0.000100 / +0.000114 | 0.009234 | fail PSNR |
+| v261a | local-linear decoder, 8k bank | 19.840117 | 0.620063 | 0.180124 | +0.008063 / +0.000153 / +0.000210 | 0.011307 | fail PSNR |
+| v262a | local-linear, 32k bank | 19.843509 | 0.620217 | 0.180049 | +0.011455 / +0.000306 / +0.000286 | 0.024958 | fail PSNR |
+| v263a | local-linear + target-visible faces | 19.844512 | 0.620224 | 0.179968 | +0.012458 / +0.000314 / +0.000367 | 0.040890 | fail PSNR |
+| v263b | v263a bank, alpha up to 3 | 19.839942 | 0.619739 | 0.179855 | +0.007888 / -0.000172 / +0.000480 | 0.061011 | fail PSNR/SSIM |
+
+结论：v261/v263 是真实表示与 no-GT target-support 机制进展。v263a 是 v260-v263 中当前最好的 flowers target exact 结果，并把 target active fraction 提升到约 `0.199257`，但仍低 Phase-J `0.459846` PSNR。因此状态仍是 `NOT COMPLETE`，full9 继续被阻塞。v263b 说明单纯增大 alpha 会伤害 PSNR/SSIM 和 tail，下一步必须提升 target-visible useful changed fraction 与跨视角泛化，而不是继续 alpha 放大。
+
 ## 2026-06-29 v259 Target-Support / OOD-Aware Gain Update
 
 新增日志：`docs/car_model/6-29-v259-TargetSupportOODGain-Log.md`。
