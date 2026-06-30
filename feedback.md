@@ -884,6 +884,50 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-06-30 v278 Structure/Perceptual Target Feedback Addendum
+
+Detailed log and machine-readable summary:
+
+```text
+docs/car_model/6-30-v278-StructurePerceptualTarget-Negative-Log.md
+docs/car_model/results/v278_structure_perceptual_target_summary.json
+```
+
+Main implementation:
+
+```text
+scripts/car_model/train_perceptual_surface_residual_decoder.py
+```
+
+What changed:
+
+- Added train-time residual target transforms:
+  `raw`, `gain_soft`, `structure_safe`, and `structure_gain`.
+- v278a trained against a `structure_gain` target using train-fit
+  `teacher_gain_l1`, parent/residual luma-gradient support, and chroma shrink.
+- This changed the actual supervised residual target used by pixel and image
+  proxy losses; it was not an apply-only threshold.
+
+Result:
+
+| run | policy PSNR/SSIM/LPIPS gain | target PSNR/SSIM/LPIPS gain | lesson |
+| --- | --- | --- | --- |
+| v278a | +0.016578 / +0.000043 / +0.000299 | +0.008341 / -0.001218 / -0.000904 | stronger policy-val, worse target exact |
+
+Lesson:
+
+The simple scalar structure/gain target transform is not the missing ingredient.
+It makes policy-val look more convincing but worsens target SSIM and LPIPS. The
+next route should learn target-safety from multi-view agreement or a calibration
+split with held-out-view structure/perceptual gains, then certify on a separate
+policy-val split before target exact.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-06-30 v275-v277 Learned Surface Decoder Feedback Addendum
 
 This addendum records the latest work based on:

@@ -178,6 +178,76 @@ def _apply_delta(
     return adapted, applied_delta, gate_summary
 
 
+def _chroma_shrink_residual(residual: np.ndarray, chroma_scale: float) -> np.ndarray:
+    chroma_scale = float(chroma_scale)
+    if chroma_scale >= 0.999:
+        return np.asarray(residual, dtype=np.float32)
+    luma = _luma(np.asarray(residual, dtype=np.float32)).reshape(1, residual.shape[1], residual.shape[2])
+    return (luma + chroma_scale * (np.asarray(residual, dtype=np.float32) - luma)).astype(np.float32)
+
+
+def _transformed_residual_target(
+    z: np.lib.npyio.NpzFile,
+    *,
+    residual_rgb_key: str,
+    residual_target_mode: str,
+    residual_target_gain_floor: float,
+    residual_target_gain_scale: float,
+    residual_target_structure_strength: float,
+    residual_target_structure_floor: float,
+    residual_target_structure_eps: float,
+    residual_target_chroma_scale: float,
+) -> tuple[np.ndarray, np.ndarray, dict[str, float | str | bool]]:
+    residual = np.asarray(z[residual_rgb_key], dtype=np.float32)[:3]
+    mode = str(residual_target_mode)
+    if mode == "raw":
+        target = _chroma_shrink_residual(residual, float(residual_target_chroma_scale))
+        return target, np.ones(residual.shape[1:], dtype=np.float32), {
+            "mode": mode,
+            "enabled": False,
+            "mean_scale": 1.0,
+        }
+    if mode not in {"gain_soft", "structure_safe", "structure_gain"}:
+        raise ValueError(f"unknown residual_target_mode={mode}")
+
+    scale = np.ones(residual.shape[1:], dtype=np.float32)
+    if mode in {"gain_soft", "structure_gain"} and "teacher_gain_l1" in z:
+        gain = np.asarray(z["teacher_gain_l1"], dtype=np.float32)
+        gain_scale = np.clip(
+            (gain - float(residual_target_gain_floor)) / max(float(residual_target_gain_scale), 1.0e-6),
+            0.0,
+            1.0,
+        ).astype(np.float32)
+        scale *= gain_scale
+
+    if mode in {"structure_safe", "structure_gain"}:
+        parent = np.asarray(z["rgb_render"], dtype=np.float32)[:3]
+        parent_edge = _gradient_magnitude_2d(_luma(parent))
+        residual_edge = _gradient_magnitude_2d(_luma(residual))
+        denom = np.maximum(parent_edge + float(residual_target_structure_eps), float(residual_target_structure_eps))
+        risk = np.clip(np.nan_to_num(residual_edge / denom, nan=0.0, posinf=1.0e6, neginf=0.0), 0.0, 1.0e6)
+        structure_gate = float(residual_target_structure_floor) + (1.0 - float(residual_target_structure_floor)) * np.exp(
+            -float(residual_target_structure_strength) * risk
+        )
+        scale *= np.clip(structure_gate, float(residual_target_structure_floor), 1.0).astype(np.float32)
+
+    scale = np.clip(np.nan_to_num(scale, nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0).astype(np.float32)
+    target = residual * scale.reshape(1, scale.shape[0], scale.shape[1])
+    target = _chroma_shrink_residual(target.astype(np.float32), float(residual_target_chroma_scale))
+    active = scale[scale > 0.0]
+    return target.astype(np.float32), scale, {
+        "mode": mode,
+        "enabled": True,
+        "mean_scale": float(np.mean(scale)),
+        "positive_scale_fraction": float(np.mean(scale > 0.0)),
+        "active_mean_scale": float(np.mean(active)) if active.size else 0.0,
+        "p10_scale": float(np.quantile(scale, 0.10)),
+        "p50_scale": float(np.quantile(scale, 0.50)),
+        "p90_scale": float(np.quantile(scale, 0.90)),
+        "chroma_scale": float(residual_target_chroma_scale),
+    }
+
+
 def _verify_target_no_gt(target_dir: Path) -> dict[str, Any]:
     paths = evidence_views(target_dir)
     leaked: dict[str, list[str]] = {}
@@ -441,6 +511,13 @@ def _sample_batch(
     confidence_gain_floor: float,
     confidence_gain_scale: float,
     sample_weight_confidence_power: float,
+    residual_target_mode: str,
+    residual_target_gain_floor: float,
+    residual_target_gain_scale: float,
+    residual_target_structure_strength: float,
+    residual_target_structure_floor: float,
+    residual_target_structure_eps: float,
+    residual_target_chroma_scale: float,
     feature_mode: str,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     rng = np.random.default_rng(int(seed))
@@ -472,7 +549,17 @@ def _sample_batch(
     if residual_score is not None:
         residual_score = residual_score[ok]
     features = _load_feature_rows(z, ys, xs, feature_mode=str(feature_mode))
-    residual = np.asarray(z[residual_rgb_key], dtype=np.float32)
+    residual, target_scale, _target_summary = _transformed_residual_target(
+        z,
+        residual_rgb_key=str(residual_rgb_key),
+        residual_target_mode=str(residual_target_mode),
+        residual_target_gain_floor=float(residual_target_gain_floor),
+        residual_target_gain_scale=float(residual_target_gain_scale),
+        residual_target_structure_strength=float(residual_target_structure_strength),
+        residual_target_structure_floor=float(residual_target_structure_floor),
+        residual_target_structure_eps=float(residual_target_structure_eps),
+        residual_target_chroma_scale=float(residual_target_chroma_scale),
+    )
     target = np.stack([residual[0, ys, xs], residual[1, ys, xs], residual[2, ys, xs]], axis=1).astype(np.float32)
     confidence_mode = str(confidence_target_mode)
     if confidence_mode == "gain_soft" and "teacher_gain_l1" in z:
@@ -504,6 +591,9 @@ def _sample_batch(
             float(sample_weight_confidence_power),
         ).astype(np.float32)
         weights = weights * confidence_weight
+    if str(residual_target_mode) != "raw":
+        target_scale_rows = np.clip(target_scale[ys, xs].astype(np.float32), 0.02, 1.0)
+        weights = weights * np.sqrt(target_scale_rows)
     weights = weights / max(float(np.mean(weights)), 1.0e-6)
     return (
         face_idx.astype(np.int64),
@@ -525,6 +615,13 @@ def _image_proxy_loss(
     min_alpha: float,
     stride: int,
     feature_mode: str,
+    residual_target_mode: str,
+    residual_target_gain_floor: float,
+    residual_target_gain_scale: float,
+    residual_target_structure_strength: float,
+    residual_target_structure_floor: float,
+    residual_target_structure_eps: float,
+    residual_target_chroma_scale: float,
     device: torch.device,
 ) -> torch.Tensor:
     z = np.load(path)
@@ -545,7 +642,18 @@ def _image_proxy_loss(
     pred = model(face_t, features)
 
     parent_np = np.asarray(z["rgb_render"], dtype=np.float32)[:, :: int(stride), :: int(stride)]
-    residual_np = np.asarray(z[residual_rgb_key], dtype=np.float32)[:, :: int(stride), :: int(stride)]
+    residual_np, _target_scale, _target_summary = _transformed_residual_target(
+        z,
+        residual_rgb_key=str(residual_rgb_key),
+        residual_target_mode=str(residual_target_mode),
+        residual_target_gain_floor=float(residual_target_gain_floor),
+        residual_target_gain_scale=float(residual_target_gain_scale),
+        residual_target_structure_strength=float(residual_target_structure_strength),
+        residual_target_structure_floor=float(residual_target_structure_floor),
+        residual_target_structure_eps=float(residual_target_structure_eps),
+        residual_target_chroma_scale=float(residual_target_chroma_scale),
+    )
+    residual_np = residual_np[:, :: int(stride), :: int(stride)]
     parent = torch.from_numpy(parent_np).to(device)
     target_img = torch.clamp(parent + torch.from_numpy(residual_np).to(device), 0.0, 1.0)
     adapted = parent.clone()
@@ -997,6 +1105,7 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- Phase-J flowers reference: `{PHASEJ_FLOWERS}`",
         f"- selected faces: `{payload['candidate_face_summary']['selected_faces']}`",
         f"- train steps: `{payload['train']['steps']}`",
+        f"- residual target mode: `{payload['train'].get('residual_target_mode')}`",
         f"- confidence head: `{payload['train'].get('confidence_head', False)}`",
         f"- confidence target: `{payload['train'].get('confidence_target_mode')}`",
         f"- apply confidence thresholds: `{payload['train'].get('apply_confidence_threshold_grid')}`",
@@ -1081,6 +1190,17 @@ def main() -> int:
     parser.add_argument("--policy_val_stride", type=int, default=4)
     parser.add_argument("--residual_rgb_key", default="teacher_residual_rgb")
     parser.add_argument("--residual_l1_key", default="teacher_residual_l1")
+    parser.add_argument(
+        "--residual_target_mode",
+        choices=["raw", "gain_soft", "structure_safe", "structure_gain"],
+        default="raw",
+    )
+    parser.add_argument("--residual_target_gain_floor", type=float, default=0.003)
+    parser.add_argument("--residual_target_gain_scale", type=float, default=0.04)
+    parser.add_argument("--residual_target_structure_strength", type=float, default=1.0)
+    parser.add_argument("--residual_target_structure_floor", type=float, default=0.0)
+    parser.add_argument("--residual_target_structure_eps", type=float, default=0.02)
+    parser.add_argument("--residual_target_chroma_scale", type=float, default=1.0)
     parser.add_argument("--min_l1", type=float, default=0.0)
     parser.add_argument("--min_alpha", type=float, default=0.02)
     parser.add_argument("--max_candidate_faces", type=int, default=128)
@@ -1213,6 +1333,13 @@ def main() -> int:
                     confidence_gain_floor=float(args.confidence_gain_floor),
                     confidence_gain_scale=float(args.confidence_gain_scale),
                     sample_weight_confidence_power=float(args.sample_weight_confidence_power),
+                    residual_target_mode=str(args.residual_target_mode),
+                    residual_target_gain_floor=float(args.residual_target_gain_floor),
+                    residual_target_gain_scale=float(args.residual_target_gain_scale),
+                    residual_target_structure_strength=float(args.residual_target_structure_strength),
+                    residual_target_structure_floor=float(args.residual_target_structure_floor),
+                    residual_target_structure_eps=float(args.residual_target_structure_eps),
+                    residual_target_chroma_scale=float(args.residual_target_chroma_scale),
                     feature_mode=str(args.feature_mode),
                 )
                 break
@@ -1264,6 +1391,13 @@ def main() -> int:
                 min_alpha=float(args.min_alpha),
                 stride=int(args.image_loss_stride),
                 feature_mode=str(args.feature_mode),
+                residual_target_mode=str(args.residual_target_mode),
+                residual_target_gain_floor=float(args.residual_target_gain_floor),
+                residual_target_gain_scale=float(args.residual_target_gain_scale),
+                residual_target_structure_strength=float(args.residual_target_structure_strength),
+                residual_target_structure_floor=float(args.residual_target_structure_floor),
+                residual_target_structure_eps=float(args.residual_target_structure_eps),
+                residual_target_chroma_scale=float(args.residual_target_chroma_scale),
                 device=device,
             )
         mag = torch.mean(torch.square(pred))
@@ -1412,6 +1546,13 @@ def main() -> int:
             "init_checkpoint": str(args.init_checkpoint),
             "batch_size": int(args.batch_size),
             "lr": float(args.lr),
+            "residual_target_mode": str(args.residual_target_mode),
+            "residual_target_gain_floor": float(args.residual_target_gain_floor),
+            "residual_target_gain_scale": float(args.residual_target_gain_scale),
+            "residual_target_structure_strength": float(args.residual_target_structure_strength),
+            "residual_target_structure_floor": float(args.residual_target_structure_floor),
+            "residual_target_structure_eps": float(args.residual_target_structure_eps),
+            "residual_target_chroma_scale": float(args.residual_target_chroma_scale),
             "embedding_dim": int(args.embedding_dim),
             "hidden_dim": int(args.hidden_dim),
             "layers": int(args.layers),

@@ -837,6 +837,57 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-06-30 Update: v278 Structure/Perceptual Target Transform
+
+Implemented a true training-target change in:
+
+```text
+scripts/car_model/train_perceptual_surface_residual_decoder.py
+```
+
+New target modes:
+
+```text
+raw
+gain_soft
+structure_safe
+structure_gain
+```
+
+v278a trained the surface decoder on a transformed teacher residual target:
+
+```text
+residual_target_mode=structure_gain
+teacher_gain_l1 soft scale + parent/residual luma-gradient support + chroma shrink
+```
+
+Flowers result:
+
+| run | policy PSNR gain | policy SSIM gain | policy LPIPS gain | target PSNR gain | target SSIM gain | target LPIPS gain | verdict |
+|---|---:|---:|---:|---:|---:|---:|---|
+| v278a | +0.016578 | +0.000043 | +0.000299 | +0.008341 | -0.001218 | -0.000904 | fail |
+
+Interpretation:
+
+- v278a improves policy-val more than v277, but target exact gets worse.
+- This is evidence that a simple scalar train-fit structure/gain target can
+  create a stronger policy-val false positive.
+- Full9 remains blocked.
+
+Artifacts:
+
+```text
+docs/car_model/6-30-v278-StructurePerceptualTarget-Negative-Log.md
+docs/car_model/results/v278_structure_perceptual_target_summary.json
+outputs/carnet/spcarnet_v278_structure_perceptual_target_20260630/v278a_mid_structure_gain_targetexact/v180_perceptual_surface_decoder_audit.json
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-06-30 Update: v275-v277 Learned Surface Decoder, Structure Gate, and Gain-Soft Confidence
 
 This update follows the hard gate in:
