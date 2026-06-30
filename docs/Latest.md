@@ -2,6 +2,26 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 v283-v284 View-Feature Ridge Texture Update
+
+新增日志：`docs/car_model/6-30-v283-v284-ViewFeatureRidgeTexture-v169-Gate-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v283_v284_view_feature_ridge_texture_summary.json`。
+
+这轮严格参考 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md`。v283 新增 `--residual_decoder_mode view_feature_ridge_texture`：在 MeshSplatting 表面 face/UV 邻域中聚合 train-fit Phase-J teacher residual source slots，用 view/normal/parent RGB/edge/teacher-support/source-gain/count/relative-UV 等特征直接做 weighted ridge RGB residual decoder，绕开 v282 的 PCA low-rank coefficient bottleneck。v284 进一步新增 target-free self-error shrink：用同一 ridge decoder 在源 residual 上的自重建误差收缩不可靠 row blend。另新增 `--drop_checkpoint_policy_fields` 作为审计开关，删除 loaded checkpoint 中的 `policy_reliability/policy_gain/policy_tail_risk`。
+
+关键结果：
+
+| run | stage | candidate | gains vs parent | Phase-J PSNR gap | verdict |
+|---|---|---:|---:|---:|---|
+| v283 policy | policy-val | 20.664684 / 0.719834 / 0.152349 | +0.058247 / +0.002308 / +0.000967 | n/a | promote exact |
+| v283b | target exact | 19.842806 / 0.620127 / 0.180020 | +0.010752 / +0.000217 / +0.000315 | -0.461552 | fail |
+| v284 policy | policy-val | 20.664695 / 0.719835 / 0.152348 | +0.058258 / +0.002309 / +0.000968 | n/a | promote exact |
+| v284b | target exact | 19.842785 / 0.620127 / 0.180019 | +0.010731 / +0.000216 / +0.000316 | -0.461573 | fail |
+| v284c drop policy fields | policy-val | 20.615103 / 0.713699 / 0.155407 | +0.008666 / -0.003828 / -0.002090 | n/a | fail |
+
+v283/v284 的 target no-GT audit 均通过；所有中程/精确验证使用 W&B offline，GPU1。结论：这是一次真实的 coherent view-dependent surface texture decoder 改动，但不是突破。它把 v282 的质量权衡推向更高 SSIM/LPIPS，却损失 PSNR，仍比 Phase-J flowers PSNR 低约 `0.462 dB`。v284c 证明收益还依赖 loaded v265 bank 中继承的 policy reliability/gain 先验；剥离后 policy-val 不再 all-axis。状态仍为 `NOT COMPLETE`，full9 继续阻塞。下一步应转向更强的 learned view-dependent surface decoder、source-heldout calibration 或 patch/perceptual teacher objectives，而不是继续 lowrank/alpha/threshold variants。
+
 ## 2026-06-30 v281-v282 Low-Rank Teacher Residual Texture Update
 
 新增日志：`docs/car_model/6-30-v281-v282-LowRankTexture-v169-Gate-Log.md`。

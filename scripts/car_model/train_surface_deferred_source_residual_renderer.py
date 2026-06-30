@@ -933,6 +933,8 @@ def _calibrate_policy_reliability(
     lowrank_basis_blend: float = 1.0,
     lowrank_basis_residual_clip: float = 0.12,
     lowrank_basis_disagreement_beta: float = 0.0,
+    view_feature_ridge_self_error_beta: float = 0.0,
+    view_feature_ridge_self_error_floor: float = 0.35,
     patch_coherent_radius: int = 1,
     patch_coherent_bin_sigma: float = 0.75,
     patch_coherent_blend: float = 0.25,
@@ -987,6 +989,8 @@ def _calibrate_policy_reliability(
                 lowrank_basis_blend=float(lowrank_basis_blend),
                 lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                view_feature_ridge_self_error_beta=float(view_feature_ridge_self_error_beta),
+                view_feature_ridge_self_error_floor=float(view_feature_ridge_self_error_floor),
                 patch_coherent_radius=int(patch_coherent_radius),
                 patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
                 patch_coherent_blend=float(patch_coherent_blend),
@@ -1178,6 +1182,8 @@ def _fit_learned_ood_head(
     lowrank_basis_blend: float = 1.0,
     lowrank_basis_residual_clip: float = 0.12,
     lowrank_basis_disagreement_beta: float = 0.0,
+    view_feature_ridge_self_error_beta: float = 0.0,
+    view_feature_ridge_self_error_floor: float = 0.35,
     patch_coherent_radius: int = 1,
     patch_coherent_bin_sigma: float = 0.75,
     patch_coherent_blend: float = 0.25,
@@ -1232,6 +1238,8 @@ def _fit_learned_ood_head(
                 lowrank_basis_blend=float(lowrank_basis_blend),
                 lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                view_feature_ridge_self_error_beta=float(view_feature_ridge_self_error_beta),
+                view_feature_ridge_self_error_floor=float(view_feature_ridge_self_error_floor),
                 patch_coherent_radius=int(patch_coherent_radius),
                 patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
                 patch_coherent_blend=float(patch_coherent_blend),
@@ -1364,6 +1372,8 @@ def _predict_delta(
     lowrank_basis_blend: float = 1.0,
     lowrank_basis_residual_clip: float = 0.12,
     lowrank_basis_disagreement_beta: float = 0.0,
+    view_feature_ridge_self_error_beta: float = 0.0,
+    view_feature_ridge_self_error_floor: float = 0.35,
     patch_coherent_radius: int = 1,
     patch_coherent_bin_sigma: float = 0.75,
     patch_coherent_blend: float = 0.25,
@@ -1410,6 +1420,8 @@ def _predict_delta(
     texture_structure_gates: list[float] = []
     texture_edge_matches: list[float] = []
     texture_teacher_supports: list[float] = []
+    texture_self_confidences: list[float] = []
+    texture_self_error_ratios: list[float] = []
     source_consistency_reliabilities: list[float] = []
     source_consistency_amplitudes: list[float] = []
     has_source_consistency = "source_consistency_reliability" in bank
@@ -1447,6 +1459,7 @@ def _predict_delta(
             "face_texture_lowrank",
             "hybrid_edge_texture_lowrank",
             "structure_safe_texture_lowrank",
+            "view_feature_ridge_texture",
         }
         if not np.any(valid_src) and not neighbor_carrier_mode:
             continue
@@ -1521,6 +1534,7 @@ def _predict_delta(
             "face_texture_lowrank",
             "hybrid_edge_texture_lowrank",
             "structure_safe_texture_lowrank",
+            "view_feature_ridge_texture",
         }
         if decoder_mode_s not in allowed_decoder_modes:
             raise ValueError(f"unsupported residual_decoder_mode={residual_decoder_mode}")
@@ -1639,7 +1653,12 @@ def _predict_delta(
                     pred[idx] = ((1.0 - row_blend[:, None]) * pred[idx] + row_blend[:, None] * lowrank_pred).astype(np.float32)
                 else:
                     pred[idx] = ((1.0 - blend) * pred[idx] + blend * lowrank_pred).astype(np.float32)
-        if decoder_mode_s in {"face_texture_lowrank", "hybrid_edge_texture_lowrank", "structure_safe_texture_lowrank"}:
+        if decoder_mode_s in {
+            "face_texture_lowrank",
+            "hybrid_edge_texture_lowrank",
+            "structure_safe_texture_lowrank",
+            "view_feature_ridge_texture",
+        }:
             radius = max(0, int(patch_coherent_radius))
             grid_i = int(grid)
             u0 = (bin_id // grid_i).astype(np.int64)
@@ -1789,27 +1808,33 @@ def _predict_delta(
                 pre_texture_edge_match = np.ones_like(tex_denom, dtype=np.float32)
                 pre_texture_residual_edge_support = np.ones_like(tex_denom, dtype=np.float32)
                 pre_texture_teacher_support = np.ones_like(tex_denom, dtype=np.float32)
+                pre_texture_gain = np.zeros_like(tex_denom, dtype=np.float32)
+                pre_texture_count_feature = np.zeros_like(tex_denom, dtype=np.float32)
+                pre_norm_weights = tex_weights / np.maximum(tex_denom[:, None], 1.0e-12)
+                pre_texture_edge_match = np.sum(
+                    pre_norm_weights
+                    * np.exp(
+                        np.clip(
+                            -float(patch_coherent_edge_beta) * np.abs(tex_edge - tgt_parent_edge[:, None]),
+                            -30.0,
+                            0.0,
+                        )
+                    ).astype(np.float32),
+                    axis=1,
+                ).astype(np.float32)
+                pre_texture_residual_edge_support = np.sum(
+                    pre_norm_weights * np.clip(tex_residual_edge / 0.04, 0.0, 1.0).astype(np.float32),
+                    axis=1,
+                ).astype(np.float32)
+                pre_texture_teacher_support = np.sum(
+                    pre_norm_weights * np.clip(tex_teacher_better, 0.0, 1.0).astype(np.float32),
+                    axis=1,
+                ).astype(np.float32)
+                pre_texture_gain = np.sum(pre_norm_weights * np.clip(tex_gain, 0.0, None), axis=1).astype(np.float32)
+                pre_texture_count_feature = (
+                    np.sum(pre_norm_weights * np.log1p(np.maximum(tex_counts, 0.0)), axis=1) / 4.0
+                ).astype(np.float32)
                 if decoder_mode_s == "structure_safe_texture_lowrank":
-                    pre_norm_weights = tex_weights / np.maximum(tex_denom[:, None], 1.0e-12)
-                    pre_texture_edge_match = np.sum(
-                        pre_norm_weights
-                        * np.exp(
-                            np.clip(
-                                -float(patch_coherent_edge_beta) * np.abs(tex_edge - tgt_parent_edge[:, None]),
-                                -30.0,
-                                0.0,
-                            )
-                        ).astype(np.float32),
-                        axis=1,
-                    ).astype(np.float32)
-                    pre_texture_residual_edge_support = np.sum(
-                        pre_norm_weights * np.clip(tex_residual_edge / 0.04, 0.0, 1.0).astype(np.float32),
-                        axis=1,
-                    ).astype(np.float32)
-                    pre_texture_teacher_support = np.sum(
-                        pre_norm_weights * np.clip(tex_teacher_better, 0.0, 1.0).astype(np.float32),
-                        axis=1,
-                    ).astype(np.float32)
                     pre_unique_view_gate = np.clip(
                         tex_unique_view_count / max(float(lowrank_basis_min_unique_views), 1.0),
                         0.0,
@@ -1829,8 +1854,108 @@ def _predict_delta(
                     ).astype(np.float32)
                     pre_texture_structure_gate = np.clip(pre_texture_structure_gate, 0.0, 1.0)
                     tex_ok &= pre_texture_structure_gate >= 0.12
+                if decoder_mode_s == "view_feature_ridge_texture" and np.any(tex_ok):
+                    idx = np.nonzero(tex_ok)[0]
+                    row_weights = tex_weights[idx].astype(np.float32)
+                    src_count_feature = (np.log1p(np.maximum(tex_counts[idx], 0.0)) / 4.0).astype(np.float32)
+                    src_feat = np.concatenate(
+                        [
+                            np.ones((idx.size, tex_camera.shape[1], 1), dtype=np.float32),
+                            tex_camera[idx].astype(np.float32),
+                            tex_parent[idx].astype(np.float32),
+                            tex_normal[idx].astype(np.float32),
+                            np.clip(tex_edge[idx], 0.0, 0.25).astype(np.float32)[:, :, None],
+                            np.clip(tex_residual_edge[idx], 0.0, 0.25).astype(np.float32)[:, :, None],
+                            np.clip(tex_teacher_better[idx], 0.0, 1.0).astype(np.float32)[:, :, None],
+                            tex_offset[idx].astype(np.float32),
+                            np.clip(tex_gain[idx], 0.0, 1.0).astype(np.float32)[:, :, None],
+                            src_count_feature[:, :, None],
+                            np.clip(tex_view_cos[idx], -1.0, 1.0).astype(np.float32)[:, :, None],
+                            np.clip(tex_normal_cos[idx], -1.0, 1.0).astype(np.float32)[:, :, None],
+                            np.sqrt(np.maximum(tex_parent_dist[idx], 0.0)).astype(np.float32)[:, :, None],
+                            np.clip(tex_edge_dist[idx], 0.0, 0.25).astype(np.float32)[:, :, None],
+                        ],
+                        axis=2,
+                    )
+                    tgt_feat = np.concatenate(
+                        [
+                            np.ones((idx.size, 1), dtype=np.float32),
+                            np.repeat(target_cam.reshape(1, 3), idx.size, axis=0).astype(np.float32),
+                            tgt_parent[idx].astype(np.float32),
+                            tgt_normal[idx].astype(np.float32),
+                            np.clip(tgt_parent_edge[idx], 0.0, 0.25).astype(np.float32)[:, None],
+                            np.clip(tgt_parent_edge[idx], 0.0, 0.25).astype(np.float32)[:, None],
+                            np.clip(pre_texture_teacher_support[idx], 0.0, 1.0).astype(np.float32)[:, None],
+                            np.zeros((idx.size, 2), dtype=np.float32),
+                            np.clip(pre_texture_gain[idx], 0.0, 1.0).astype(np.float32)[:, None],
+                            pre_texture_count_feature[idx].astype(np.float32)[:, None],
+                            np.ones((idx.size, 1), dtype=np.float32),
+                            np.ones((idx.size, 1), dtype=np.float32),
+                            np.zeros((idx.size, 1), dtype=np.float32),
+                            np.zeros((idx.size, 1), dtype=np.float32),
+                        ],
+                        axis=1,
+                    )
+                    xw = src_feat * np.sqrt(np.maximum(row_weights, 0.0))[:, :, None]
+                    yw = tex_residual[idx].astype(np.float32) * np.sqrt(np.maximum(row_weights, 0.0))[:, :, None]
+                    xtx = np.einsum("nkd,nke->nde", xw, xw, optimize=True).astype(np.float64)
+                    diag = np.arange(xtx.shape[1])
+                    xtx[:, diag, diag] += max(float(lowrank_basis_l2), 1.0e-8)
+                    xty = np.einsum("nkd,nkc->ndc", xw, yw, optimize=True).astype(np.float64)
+                    coef = np.linalg.solve(xtx, xty).astype(np.float32)
+                    texture_pred = np.einsum("nd,ndc->nc", tgt_feat.astype(np.float32), coef, optimize=True)
+                    clip_v = float(lowrank_basis_residual_clip)
+                    if clip_v > 0.0:
+                        texture_pred = np.clip(texture_pred, -clip_v, clip_v)
+                    blend = float(np.clip(float(lowrank_basis_blend), 0.0, 1.0))
+                    pred_norm = np.maximum(np.linalg.norm(pred[idx], axis=1), 1.0e-6)
+                    disagreement = np.linalg.norm(texture_pred - pred[idx], axis=1) / pred_norm
+                    if float(lowrank_basis_disagreement_beta) > 0.0:
+                        row_blend = blend * np.exp(
+                            np.clip(-float(lowrank_basis_disagreement_beta) * disagreement, -30.0, 0.0)
+                        ).astype(np.float32)
+                    else:
+                        row_blend = np.full((idx.size,), blend, dtype=np.float32)
+                    if float(view_feature_ridge_self_error_beta) > 0.0:
+                        train_pred = np.einsum("nkd,ndc->nkc", src_feat.astype(np.float32), coef, optimize=True)
+                        train_err = (
+                            np.sum(
+                                row_weights * np.sum(np.square(train_pred - tex_residual[idx].astype(np.float32)), axis=2),
+                                axis=1,
+                            )
+                            / np.maximum(np.sum(row_weights, axis=1), 1.0e-12)
+                        ).astype(np.float32)
+                        train_energy = (
+                            np.sum(
+                                row_weights * np.sum(np.square(tex_residual[idx].astype(np.float32)), axis=2),
+                                axis=1,
+                            )
+                            / np.maximum(np.sum(row_weights, axis=1), 1.0e-12)
+                        ).astype(np.float32)
+                        self_error_ratio = (train_err / np.maximum(train_energy, 1.0e-8)).astype(np.float32)
+                        floor = float(np.clip(float(view_feature_ridge_self_error_floor), 0.0, 1.0))
+                        self_confidence = (
+                            floor
+                            + (1.0 - floor)
+                            * np.exp(
+                                np.clip(-float(view_feature_ridge_self_error_beta) * self_error_ratio, -30.0, 0.0)
+                            ).astype(np.float32)
+                        ).astype(np.float32)
+                        row_blend = (row_blend * self_confidence).astype(np.float32)
+                        texture_self_confidences.append(self_confidence.astype(np.float32))
+                        texture_self_error_ratios.append(self_error_ratio.astype(np.float32))
+                    row_blend = np.where(ok_rows[idx], row_blend, blend).astype(np.float32)
+                    pred[idx] = (
+                        (1.0 - row_blend[:, None]) * pred[idx] + row_blend[:, None] * texture_pred
+                    ).astype(np.float32)
+                    ok_rows[idx] = True
+                    denom[idx] = np.maximum(denom[idx], tex_denom[idx].astype(np.float32))
+                    texture_active_count += int(idx.size)
+                    texture_blends.append(row_blend.astype(np.float32))
+                    texture_edge_matches.append(pre_texture_edge_match[idx].astype(np.float32))
+                    texture_teacher_supports.append(pre_texture_teacher_support[idx].astype(np.float32))
                 basis_rank = max(1, min(3, int(lowrank_basis_rank)))
-                if np.any(tex_ok):
+                if decoder_mode_s != "view_feature_ridge_texture" and np.any(tex_ok):
                     idx = np.nonzero(tex_ok)[0]
                     row_weights = tex_weights[idx].astype(np.float32)
                     norm_weights = row_weights / np.maximum(np.sum(row_weights, axis=1, keepdims=True), 1.0e-12)
@@ -2177,6 +2302,12 @@ def _predict_delta(
     texture_teacher_support_arr = (
         np.concatenate(texture_teacher_supports) if texture_teacher_supports else np.zeros((0,), dtype=np.float32)
     )
+    texture_self_conf_arr = (
+        np.concatenate(texture_self_confidences) if texture_self_confidences else np.ones((0,), dtype=np.float32)
+    )
+    texture_self_error_arr = (
+        np.concatenate(texture_self_error_ratios) if texture_self_error_ratios else np.zeros((0,), dtype=np.float32)
+    )
     source_consistency_rel_arr = (
         np.concatenate(source_consistency_reliabilities)
         if source_consistency_reliabilities
@@ -2208,6 +2339,16 @@ def _predict_delta(
         "mean_texture_edge_match": float(np.mean(texture_edge_match_arr)) if texture_edge_match_arr.size else 1.0,
         "mean_texture_teacher_support": (
             float(np.mean(texture_teacher_support_arr)) if texture_teacher_support_arr.size else 1.0
+        ),
+        "mean_texture_self_confidence": float(np.mean(texture_self_conf_arr)) if texture_self_conf_arr.size else 1.0,
+        "p10_texture_self_confidence": (
+            float(np.quantile(texture_self_conf_arr, 0.10)) if texture_self_conf_arr.size else 1.0
+        ),
+        "mean_texture_self_error_ratio": (
+            float(np.mean(texture_self_error_arr)) if texture_self_error_arr.size else 0.0
+        ),
+        "p90_texture_self_error_ratio": (
+            float(np.quantile(texture_self_error_arr, 0.90)) if texture_self_error_arr.size else 0.0
         ),
         "mean_source_consistency_reliability": (
             float(np.mean(source_consistency_rel_arr)) if source_consistency_rel_arr.size else 1.0
@@ -2262,6 +2403,10 @@ def _summarize_rows(rows: list[dict[str, Any]], *, compute_lpips: bool) -> dict[
         "p10_texture_structure_gate": _mean([float(r.get("p10_texture_structure_gate", 1.0)) for r in rows]),
         "mean_texture_edge_match": _mean([float(r.get("mean_texture_edge_match", 1.0)) for r in rows]),
         "mean_texture_teacher_support": _mean([float(r.get("mean_texture_teacher_support", 1.0)) for r in rows]),
+        "mean_texture_self_confidence": _mean([float(r.get("mean_texture_self_confidence", 1.0)) for r in rows]),
+        "p10_texture_self_confidence": _mean([float(r.get("p10_texture_self_confidence", 1.0)) for r in rows]),
+        "mean_texture_self_error_ratio": _mean([float(r.get("mean_texture_self_error_ratio", 0.0)) for r in rows]),
+        "p90_texture_self_error_ratio": _mean([float(r.get("p90_texture_self_error_ratio", 0.0)) for r in rows]),
         "mean_source_consistency_reliability": _mean(
             [float(r.get("mean_source_consistency_reliability", 1.0)) for r in rows]
         ),
@@ -2355,6 +2500,8 @@ def _evaluate_policy_val(
     lowrank_basis_blend: float,
     lowrank_basis_residual_clip: float,
     lowrank_basis_disagreement_beta: float,
+    view_feature_ridge_self_error_beta: float,
+    view_feature_ridge_self_error_floor: float,
     patch_coherent_radius: int,
     patch_coherent_bin_sigma: float,
     patch_coherent_blend: float,
@@ -2416,6 +2563,8 @@ def _evaluate_policy_val(
                 lowrank_basis_blend=float(lowrank_basis_blend),
                 lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                view_feature_ridge_self_error_beta=float(view_feature_ridge_self_error_beta),
+                view_feature_ridge_self_error_floor=float(view_feature_ridge_self_error_floor),
                 patch_coherent_radius=int(patch_coherent_radius),
                 patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
                 patch_coherent_blend=float(patch_coherent_blend),
@@ -2588,6 +2737,8 @@ def _target_no_gt_preview(
     lowrank_basis_blend: float,
     lowrank_basis_residual_clip: float,
     lowrank_basis_disagreement_beta: float,
+    view_feature_ridge_self_error_beta: float,
+    view_feature_ridge_self_error_floor: float,
     patch_coherent_radius: int,
     patch_coherent_bin_sigma: float,
     patch_coherent_blend: float,
@@ -2646,6 +2797,8 @@ def _target_no_gt_preview(
                 lowrank_basis_blend=float(lowrank_basis_blend),
                 lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                view_feature_ridge_self_error_beta=float(view_feature_ridge_self_error_beta),
+                view_feature_ridge_self_error_floor=float(view_feature_ridge_self_error_floor),
                 patch_coherent_radius=int(patch_coherent_radius),
                 patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
                 patch_coherent_blend=float(patch_coherent_blend),
@@ -2715,6 +2868,8 @@ def _target_exact_eval(
     lowrank_basis_blend: float,
     lowrank_basis_residual_clip: float,
     lowrank_basis_disagreement_beta: float,
+    view_feature_ridge_self_error_beta: float,
+    view_feature_ridge_self_error_floor: float,
     patch_coherent_radius: int,
     patch_coherent_bin_sigma: float,
     patch_coherent_blend: float,
@@ -2779,6 +2934,8 @@ def _target_exact_eval(
                 lowrank_basis_blend=float(lowrank_basis_blend),
                 lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                view_feature_ridge_self_error_beta=float(view_feature_ridge_self_error_beta),
+                view_feature_ridge_self_error_floor=float(view_feature_ridge_self_error_floor),
                 patch_coherent_radius=int(patch_coherent_radius),
                 patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
                 patch_coherent_blend=float(patch_coherent_blend),
@@ -2903,6 +3060,14 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
             "surface-attached representation instead of another scalar residual atlas."
         ),
         "",
+        (
+            "`view_feature_ridge_texture` is a post-v282 carrier-capacity test: it keeps the same surface-attached "
+            "face/UV source texture, but replaces the PCA residual bottleneck with a tiny weighted ridge decoder "
+            "over view direction, normal, parent RGB, edge strength, teacher support, residual-edge support, source "
+            "gain, support count, and relative-UV features. The target feature vector uses only target no-GT evidence "
+            "plus train-fit source statistics, so it tests a stronger representation without target/test RGB leakage."
+        ),
+        "",
         "## Residual Decoder",
         "",
         f"- mode: `{payload.get('residual_decoder', {}).get('mode', 'weighted_average')}`",
@@ -2917,6 +3082,8 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- lowrank basis blend: `{payload.get('residual_decoder', {}).get('lowrank_basis_blend', 0.0):.6f}`",
         f"- lowrank basis residual clip: `{payload.get('residual_decoder', {}).get('lowrank_basis_residual_clip', 0.0):.6f}`",
         f"- lowrank basis disagreement beta: `{payload.get('residual_decoder', {}).get('lowrank_basis_disagreement_beta', 0.0):.6f}`",
+        f"- view-feature ridge self-error beta: `{payload.get('residual_decoder', {}).get('view_feature_ridge_self_error_beta', 0.0):.6f}`",
+        f"- view-feature ridge self-error floor: `{payload.get('residual_decoder', {}).get('view_feature_ridge_self_error_floor', 0.0):.6f}`",
         f"- patch/texture radius: `{payload.get('residual_decoder', {}).get('patch_coherent_radius', 0)}`",
         f"- patch/texture bin sigma: `{payload.get('residual_decoder', {}).get('patch_coherent_bin_sigma', 0.0):.6f}`",
         f"- patch coherent blend: `{payload.get('residual_decoder', {}).get('patch_coherent_blend', 0.0):.6f}`",
@@ -2937,7 +3104,9 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
             "edge-local-linear base and injects that coherent face-texture basis as a controlled residual carrier. "
             "`structure_safe_texture_lowrank` adds a v274 structure certificate: it stores residual-edge, luma "
             "residual magnitude, and teacher-better support in the bank, then injects texture bases only when "
-            "source/target edge evidence and multi-view support agree."
+            "source/target edge evidence and multi-view support agree. `view_feature_ridge_texture` removes the "
+            "low-rank coefficient bottleneck and directly decodes a view-dependent residual from the coherent "
+            "surface texture features."
         ),
         "",
         "## Source-View Consistency",
@@ -3083,6 +3252,7 @@ def main() -> int:
     parser.add_argument("--target_evidence_dir", default=DEFAULT_TARGET_NO_GT)
     parser.add_argument("--target_eval_evidence_dir", default=DEFAULT_TARGET_EVAL)
     parser.add_argument("--bank_checkpoint", default="")
+    parser.add_argument("--drop_checkpoint_policy_fields", action="store_true")
     parser.add_argument("--policy_val_stride", type=int, default=4)
     parser.add_argument("--residual_rgb_key", default="teacher_residual_rgb")
     parser.add_argument("--residual_l1_key", default="teacher_residual_l1")
@@ -3117,6 +3287,7 @@ def main() -> int:
             "face_texture_lowrank",
             "hybrid_edge_texture_lowrank",
             "structure_safe_texture_lowrank",
+            "view_feature_ridge_texture",
         ],
         default="weighted_average",
     )
@@ -3131,6 +3302,8 @@ def main() -> int:
     parser.add_argument("--lowrank_basis_blend", type=float, default=1.0)
     parser.add_argument("--lowrank_basis_residual_clip", type=float, default=0.12)
     parser.add_argument("--lowrank_basis_disagreement_beta", type=float, default=0.0)
+    parser.add_argument("--view_feature_ridge_self_error_beta", type=float, default=0.0)
+    parser.add_argument("--view_feature_ridge_self_error_floor", type=float, default=0.35)
     parser.add_argument("--patch_coherent_radius", type=int, default=1)
     parser.add_argument("--patch_coherent_bin_sigma", type=float, default=0.75)
     parser.add_argument("--patch_coherent_blend", type=float, default=0.25)
@@ -3224,10 +3397,17 @@ def main() -> int:
     fit_paths, val_paths = _policy_split(paths, int(args.policy_val_stride))
     if str(args.bank_checkpoint):
         candidate_faces, bank, bank_summary = _load_source_bank(Path(args.bank_checkpoint))
+        dropped_policy_fields: list[str] = []
+        if bool(args.drop_checkpoint_policy_fields):
+            for key in ("policy_reliability", "policy_gain", "policy_tail_risk"):
+                if key in bank:
+                    dropped_policy_fields.append(key)
+                    bank.pop(key, None)
         face_summary = {
             "selected_faces": int(candidate_faces.size),
             "selected_score_coverage": None,
             "loaded_from_checkpoint": str(args.bank_checkpoint),
+            "dropped_checkpoint_policy_fields": dropped_policy_fields,
         }
     else:
         candidate_faces, face_summary = _rank_candidate_faces(
@@ -3342,6 +3522,8 @@ def main() -> int:
             lowrank_basis_blend=float(args.lowrank_basis_blend),
             lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
             lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+            view_feature_ridge_self_error_beta=float(args.view_feature_ridge_self_error_beta),
+            view_feature_ridge_self_error_floor=float(args.view_feature_ridge_self_error_floor),
             patch_coherent_radius=int(args.patch_coherent_radius),
             patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
             patch_coherent_blend=float(args.patch_coherent_blend),
@@ -3392,6 +3574,8 @@ def main() -> int:
             lowrank_basis_blend=float(args.lowrank_basis_blend),
             lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
             lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+            view_feature_ridge_self_error_beta=float(args.view_feature_ridge_self_error_beta),
+            view_feature_ridge_self_error_floor=float(args.view_feature_ridge_self_error_floor),
             patch_coherent_radius=int(args.patch_coherent_radius),
             patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
             patch_coherent_blend=float(args.patch_coherent_blend),
@@ -3436,6 +3620,8 @@ def main() -> int:
         lowrank_basis_blend=float(args.lowrank_basis_blend),
         lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
         lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+        view_feature_ridge_self_error_beta=float(args.view_feature_ridge_self_error_beta),
+        view_feature_ridge_self_error_floor=float(args.view_feature_ridge_self_error_floor),
         patch_coherent_radius=int(args.patch_coherent_radius),
         patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
         patch_coherent_blend=float(args.patch_coherent_blend),
@@ -3492,6 +3678,8 @@ def main() -> int:
             lowrank_basis_blend=float(args.lowrank_basis_blend),
             lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
             lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+            view_feature_ridge_self_error_beta=float(args.view_feature_ridge_self_error_beta),
+            view_feature_ridge_self_error_floor=float(args.view_feature_ridge_self_error_floor),
             patch_coherent_radius=int(args.patch_coherent_radius),
             patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
             patch_coherent_blend=float(args.patch_coherent_blend),
@@ -3547,6 +3735,8 @@ def main() -> int:
             lowrank_basis_blend=float(args.lowrank_basis_blend),
             lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
             lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+            view_feature_ridge_self_error_beta=float(args.view_feature_ridge_self_error_beta),
+            view_feature_ridge_self_error_floor=float(args.view_feature_ridge_self_error_floor),
             patch_coherent_radius=int(args.patch_coherent_radius),
             patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
             patch_coherent_blend=float(args.patch_coherent_blend),
@@ -3665,6 +3855,8 @@ def main() -> int:
             "lowrank_basis_blend": float(args.lowrank_basis_blend),
             "lowrank_basis_residual_clip": float(args.lowrank_basis_residual_clip),
             "lowrank_basis_disagreement_beta": float(args.lowrank_basis_disagreement_beta),
+            "view_feature_ridge_self_error_beta": float(args.view_feature_ridge_self_error_beta),
+            "view_feature_ridge_self_error_floor": float(args.view_feature_ridge_self_error_floor),
             "patch_coherent_radius": int(args.patch_coherent_radius),
             "patch_coherent_bin_sigma": float(args.patch_coherent_bin_sigma),
             "patch_coherent_blend": float(args.patch_coherent_blend),
@@ -3737,6 +3929,9 @@ def main() -> int:
                 "residual_decoder/is_structure_safe_texture_lowrank": float(
                     str(args.residual_decoder_mode) == "structure_safe_texture_lowrank"
                 ),
+                "residual_decoder/is_view_feature_ridge_texture": float(
+                    str(args.residual_decoder_mode) == "view_feature_ridge_texture"
+                ),
                 "residual_decoder/local_linear_l2": float(args.local_linear_l2),
                 "residual_decoder/local_linear_blend": float(args.local_linear_blend),
                 "residual_decoder/local_linear_min_sources": float(args.local_linear_min_sources),
@@ -3748,6 +3943,12 @@ def main() -> int:
                 "residual_decoder/lowrank_basis_blend": float(args.lowrank_basis_blend),
                 "residual_decoder/lowrank_basis_residual_clip": float(args.lowrank_basis_residual_clip),
                 "residual_decoder/lowrank_basis_disagreement_beta": float(args.lowrank_basis_disagreement_beta),
+                "residual_decoder/view_feature_ridge_self_error_beta": float(
+                    args.view_feature_ridge_self_error_beta
+                ),
+                "residual_decoder/view_feature_ridge_self_error_floor": float(
+                    args.view_feature_ridge_self_error_floor
+                ),
                 "residual_decoder/patch_coherent_radius": float(args.patch_coherent_radius),
                 "residual_decoder/patch_coherent_bin_sigma": float(args.patch_coherent_bin_sigma),
                 "residual_decoder/patch_coherent_blend": float(args.patch_coherent_blend),

@@ -1,0 +1,148 @@
+{
+  "date": "2026-06-30",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "phasej_flowers_reference": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "method": {
+    "name": "view_feature_ridge_texture",
+    "script": "scripts/car_model/train_surface_deferred_source_residual_renderer.py",
+    "description": "A MeshSplatting-compatible deferred surface texture carrier that aggregates train-fit Phase-J teacher residual sources over a coherent face/UV neighborhood and directly predicts RGB residuals with a weighted ridge decoder over view, normal, parent RGB, edge, teacher-support, source-gain, count, source-target agreement, and relative-UV features.",
+    "v284_addition": "Target-free self-error shrink estimates weighted source residual reconstruction error from the same ridge decoder and shrinks unreliable row blends without reading target/test RGB.",
+    "target_apply_gt_policy": "Target/test apply reads only stripped target_evidence_no_gt; target_eval_evidence_reparented is opened only after apply for metrics."
+  },
+  "runs": {
+    "v283_policy_loadedbank": {
+      "output_dir": "outputs/carnet/v283_view_feature_ridge_texture_policy_loadedbank_20260630",
+      "wandb_mode": "offline",
+      "gpu": 1,
+      "policy_val_all_axis_pass": true,
+      "policy_val": {
+        "alpha": 1.0,
+        "candidate_psnr": 20.664683548397246,
+        "candidate_ssim": 0.7198336819807688,
+        "candidate_lpips": 0.15234940002361932,
+        "psnr_gain": 0.05824664514329747,
+        "ssim_gain": 0.0023075491189956665,
+        "lpips_gain": 0.0009670195480187734,
+        "positive_view_fraction": 1.0,
+        "ssim_positive_view_fraction": 1.0,
+        "lpips_positive_view_fraction": 1.0
+      }
+    },
+    "v283b_flowers_exact_alpha1": {
+      "output_dir": "outputs/carnet/v283b_view_feature_ridge_texture_flowers_exact_alpha1_20260630",
+      "wandb_mode": "offline",
+      "gpu": 1,
+      "no_gt_audit_pass": true,
+      "policy_val_all_axis_pass": true,
+      "target_exact": {
+        "candidate_psnr": 19.842805994253066,
+        "candidate_ssim": 0.6201273528012362,
+        "candidate_lpips": 0.1800195351243019,
+        "psnr_gain": 0.010752115805598417,
+        "ssim_gain": 0.00021694194186817515,
+        "lpips_gain": 0.0003153309226036072,
+        "positive_view_fraction": 0.8636363636363636,
+        "ssim_positive_view_fraction": 0.6818181818181818,
+        "lpips_positive_view_fraction": 0.6818181818181818,
+        "psnr_tail_cvar": -0.0027492723176637903,
+        "ssim_tail_cvar": -0.000304718812306722,
+        "lpips_tail_cvar": -0.00042123595873514813,
+        "phasej_psnr_gap": -0.46155200574693467,
+        "beats_phasej_all_axis": false
+      }
+    },
+    "v284_policy_self_error": {
+      "output_dir": "outputs/carnet/v284_view_feature_ridge_selferr_policy_loadedbank_20260630",
+      "wandb_mode": "offline",
+      "gpu": 1,
+      "policy_val_all_axis_pass": true,
+      "self_error_beta": 1.0,
+      "self_error_floor": 0.5,
+      "policy_val": {
+        "alpha": 1.0,
+        "candidate_psnr": 20.664695238410044,
+        "candidate_ssim": 0.7198353012402853,
+        "candidate_lpips": 0.15234827560683092,
+        "psnr_gain": 0.05825833515609583,
+        "ssim_gain": 0.0023091683785120645,
+        "lpips_gain": 0.0009681439648071924,
+        "mean_texture_self_confidence": 0.9124420086542765,
+        "mean_texture_self_error_ratio": 0.20388579368591309,
+        "p90_texture_self_error_ratio": 0.41987426082293194
+      }
+    },
+    "v284b_flowers_exact_alpha1": {
+      "output_dir": "outputs/carnet/v284b_view_feature_ridge_selferr_flowers_exact_alpha1_20260630",
+      "wandb_mode": "offline",
+      "gpu": 1,
+      "no_gt_audit_pass": true,
+      "policy_val_all_axis_pass": true,
+      "target_exact": {
+        "candidate_psnr": 19.842784803696922,
+        "candidate_ssim": 0.6201266239989888,
+        "candidate_lpips": 0.18001853742382742,
+        "psnr_gain": 0.01073092524945516,
+        "ssim_gain": 0.00021621313962069425,
+        "lpips_gain": 0.00031632862307808614,
+        "positive_view_fraction": 0.8636363636363636,
+        "ssim_positive_view_fraction": 0.6818181818181818,
+        "lpips_positive_view_fraction": 0.7272727272727273,
+        "psnr_tail_cvar": -0.002785927757072907,
+        "ssim_tail_cvar": -0.0003059506416320801,
+        "lpips_tail_cvar": -0.0004214743773142497,
+        "mean_texture_self_confidence": 0.9102846763350747,
+        "mean_texture_self_error_ratio": 0.21012101051482288,
+        "p90_texture_self_error_ratio": 0.4357155453075062,
+        "phasej_psnr_gap": -0.46157319630307825,
+        "beats_phasej_all_axis": false
+      }
+    },
+    "v284c_drop_policy_policy_val_ablation": {
+      "output_dir": "outputs/carnet/v284c_view_feature_ridge_selferr_drop_policy_policyval_20260630",
+      "wandb_mode": "offline",
+      "gpu": 1,
+      "drop_checkpoint_policy_fields": true,
+      "policy_val_all_axis_pass": false,
+      "policy_val": {
+        "alpha": 1.0,
+        "candidate_psnr": 20.615102564480853,
+        "candidate_ssim": 0.7136985659599304,
+        "candidate_lpips": 0.1554066048314174,
+        "psnr_gain": 0.008665661226905227,
+        "ssim_gain": -0.003827566901842753,
+        "lpips_gain": -0.0020901852597792945,
+        "positive_view_fraction": 0.6666666666666666,
+        "ssim_positive_view_fraction": 0.0,
+        "lpips_positive_view_fraction": 0.3333333333333333
+      }
+    }
+  },
+  "comparison_to_previous_best": {
+    "v282b_fixed_alpha_0_50_target": {
+      "candidate_psnr": 19.850666,
+      "candidate_ssim": 0.619745,
+      "candidate_lpips": 0.18062,
+      "phasej_psnr_gap": -0.453692
+    },
+    "v283b_vs_v282b_fixed_alpha_0_50": {
+      "psnr_delta": -0.00786000574693517,
+      "ssim_delta": 0.00038235280123619594,
+      "lpips_delta": 0.0006004648756981059
+    },
+    "v284b_vs_v282b_fixed_alpha_0_50": {
+      "psnr_delta": -0.007881196303079029,
+      "ssim_delta": 0.00038162399898877925,
+      "lpips_delta": 0.0006014625761725687
+    }
+  },
+  "verdict": {
+    "status": "NOT_COMPLETE",
+    "full9_allowed": false,
+    "reason": "Policy-val all-axis improvements do not transfer to target exact. v283/v284 improve target SSIM/LPIPS over v282 but lose PSNR and remain about 0.462 dB below the Phase-J flowers PSNR gate. Dropping checkpoint policy fields makes policy-val fail, so the stable gain still depends on the inherited policy reliability/gain prior.",
+    "next_recommendation": "Do not promote view_feature_ridge_texture to full9. The next route should train a stronger view-dependent surface feature decoder with explicit source-heldout calibration or patch/perceptual teacher objectives, rather than more low-rank/alpha/threshold variants."
+  }
+}

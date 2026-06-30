@@ -2,6 +2,34 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-30, v283-v284:
+
+The newest branch is **view-feature ridge texture deferred surface rendering** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:
+
+- `docs/car_model/6-30-v283-v284-ViewFeatureRidgeTexture-v169-Gate-Log.md`
+- `docs/car_model/results/v283_v284_view_feature_ridge_texture_summary.json`
+
+Important new facts:
+
+- v283 adds `--residual_decoder_mode view_feature_ridge_texture`, a MeshSplatting-compatible surface-attached view-dependent residual decoder.
+- It gathers same-face/UV-neighborhood train-fit Phase-J teacher residual source slots and directly fits weighted ridge RGB residuals from view, normal, parent RGB, edge, teacher support, source gain, support count, source-target similarity, and relative-UV features.
+- This deliberately removes the v282 PCA low-rank coefficient bottleneck.
+- v284 adds target-free self-error shrink with `--view_feature_ridge_self_error_beta` and `--view_feature_ridge_self_error_floor`.
+- A new audit switch `--drop_checkpoint_policy_fields` removes inherited `policy_reliability`, `policy_gain`, and `policy_tail_risk` from loaded source-bank checkpoints.
+- v283/v284 target exact no-GT audits passed. All medium/exact runs used W&B offline on GPU1.
+
+Effective results:
+
+- v283 policy-val: `20.664684 / 0.719834 / 0.152349`, gains `+0.058247 / +0.002308 / +0.000967`, all-axis tails positive.
+- v283b target exact: `19.842806 / 0.620127 / 0.180020`, gains `+0.010752 / +0.000217 / +0.000315`, Phase-J PSNR gap `-0.461552`.
+- v284 policy-val: `20.664695 / 0.719835 / 0.152348`, gains `+0.058258 / +0.002309 / +0.000968`; self-confidence mean `0.912442`.
+- v284b target exact: `19.842785 / 0.620127 / 0.180019`, gains `+0.010731 / +0.000216 / +0.000316`, Phase-J PSNR gap `-0.461573`.
+- v284c drop-policy-fields policy-val ablation: `20.615103 / 0.713699 / 0.155407`, gains `+0.008666 / -0.003828 / -0.002090`; all-axis fails.
+
+Current direct verdict:
+
+> v283-v284 is a real representation-level attempt and answers a useful bottleneck question: the v282 failure was not only the PCA low-rank bottleneck. Direct view-feature ridge decoding improves policy-val and shifts target quality toward better SSIM/LPIPS, but it loses PSNR relative to v282b fixed alpha 0.50 and remains about `0.462 dB` below the Phase-J flowers PSNR gate. The v284c ablation shows stable gains still depend on inherited policy reliability/gain fields from the loaded bank. Do not promote to full9. The next model should not continue alpha/threshold scans; it should build a stronger learned view-dependent surface decoder with source-heldout calibration or patch/perceptual teacher objectives that can carry substantially more correct RGB energy to target views.
+
 Latest update on 2026-06-30, v281-v282:
 
 The newest branch is **Phase-J low-rank teacher residual texture + coefficient decoder** in `scripts/car_model/train_perceptual_surface_residual_decoder.py`. New files:
