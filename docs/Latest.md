@@ -2,6 +2,33 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 v285-v286 Source-Heldout Calibration Update
+
+新增日志：`docs/car_model/6-30-v285-v286-HeldoutCalibration-v169-Gate-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v285_v286_holdout_calibration_summary.json`。
+
+v285 在 `view_feature_ridge_texture` 上新增 target-free source-heldout residual-direction calibration。它把 train-fit source slots 按 source-view/slot parity 切分，用一部分 source 拟合 ridge，用 heldout source 估计 residual error ratio 和 residual-direction cosine，再收缩 target residual blend。新增 CLI：
+
+- `--view_feature_ridge_holdout_beta`
+- `--view_feature_ridge_holdout_floor`
+- `--view_feature_ridge_holdout_min_sources`
+
+v286 进一步修复 v284c 暴露的旧 policy prior 依赖：使用 `--drop_checkpoint_policy_fields` 删除 loaded bank 中的旧 `policy_reliability/policy_gain/policy_tail_risk`，再用 `patch_perceptual_v1` 为当前 decoder 重新做 policy reliability/gain calibration。
+
+关键结果：
+
+| run | stage | candidate | gains vs parent | Phase-J PSNR gap | verdict |
+|---|---|---:|---:|---:|---|
+| v285a | policy-val | 20.664685 / 0.719837 / 0.152346 | +0.058248 / +0.002310 / +0.000970 | n/a | promote exact |
+| v285b | target exact | 19.842752 / 0.620126 / 0.180018 | +0.010698 / +0.000215 / +0.000317 | -0.461606 | fail |
+| v286a | recalibrated policy-val | 20.650730 / 0.719454 / 0.152572 | +0.044293 / +0.001928 / +0.000745 | n/a | promote exact |
+| v286b | recalibrated target exact | 19.840910 / 0.620183 / 0.180100 | +0.008856 / +0.000272 / +0.000235 | -0.463448 | fail |
+
+v285/v286 target no-GT audit 均通过，所有中程/精确验证使用 W&B offline，GPU1。v285 heldout stats 证明校准确实检测到不稳定方向：policy-val p10 holdout cosine 为 `-0.704934`。v286 证明当前 decoder 可以摆脱旧 checkpoint policy prior 并重新通过 policy-val，但 target exact 只是更保守：PSNR tail CVaR 从 v285b 的 `-0.002830` 改到 v286b 的 `-0.000542`，均值 PSNR 却降到 `19.840910`。
+
+直接结论：v285/v286 是有效诊断和校准机制，但不是 Phase-J gate 突破。它们降低 target tail 风险，却不能增加缺失的高保真 RGB correction energy。状态仍为 `NOT COMPLETE`，full9 继续阻塞。下一步必须超出 per-row local ridge，训练更强的 global/patch-aware view-dependent surface decoder，并引入 patch/perceptual teacher supervision 或更强 residual target。
+
 ## 2026-06-30 v283-v284 View-Feature Ridge Texture Update
 
 新增日志：`docs/car_model/6-30-v283-v284-ViewFeatureRidgeTexture-v169-Gate-Log.md`。

@@ -2,6 +2,35 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-30, v285-v286:
+
+The newest branch is **source-heldout calibration for view-feature ridge texture** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:
+
+- `docs/car_model/6-30-v285-v286-HeldoutCalibration-v169-Gate-Log.md`
+- `docs/car_model/results/v285_v286_holdout_calibration_summary.json`
+
+Important new facts:
+
+- v285 adds target-free source-heldout residual-direction calibration:
+  - `--view_feature_ridge_holdout_beta`
+  - `--view_feature_ridge_holdout_floor`
+  - `--view_feature_ridge_holdout_min_sources`
+- The method splits source slots by source-view/slot parity, fits ridge on one split, predicts heldout source residuals, and shrinks target row blend using heldout error ratio plus residual-direction cosine.
+- v286 removes inherited checkpoint policy fields with `--drop_checkpoint_policy_fields` and recalibrates `patch_perceptual_v1` reliability/gain for the current decoder.
+- v285/v286 exact runs used stripped target no-GT evidence for apply and loaded target/test GT only after apply for evaluation. W&B was offline on GPU1.
+
+Effective results:
+
+- v285a policy-val: `20.664685 / 0.719837 / 0.152346`, gains `+0.058248 / +0.002310 / +0.000970`.
+- v285b target exact: `19.842752 / 0.620126 / 0.180018`, gains `+0.010698 / +0.000215 / +0.000317`, Phase-J PSNR gap `-0.461606`.
+- v286a recalibrated policy-val: `20.650730 / 0.719454 / 0.152572`, gains `+0.044293 / +0.001928 / +0.000745`.
+- v286b recalibrated target exact: `19.840910 / 0.620183 / 0.180100`, gains `+0.008856 / +0.000272 / +0.000235`, Phase-J PSNR gap `-0.463448`.
+- v286b improves target PSNR tail CVaR versus v285b from `-0.002830` to `-0.000542`, but loses mean PSNR.
+
+Current direct verdict:
+
+> v285-v286 proves that target-free source-heldout calibration is useful as a diagnostic and can make target tails safer after current-decoder policy recalibration. It does not solve the paper blocker. The missing problem is not only uncertainty calibration; the local ridge carrier still cannot inject enough correct RGB energy to approach Phase-J. Do not run full9. The next model should implement a global or patch-aware learned view-dependent surface decoder with stronger patch/perceptual teacher supervision, not another alpha/threshold/holdout-strength scan.
+
 Latest update on 2026-06-30, v283-v284:
 
 The newest branch is **view-feature ridge texture deferred surface rendering** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:

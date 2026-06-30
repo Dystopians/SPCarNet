@@ -935,6 +935,9 @@ def _calibrate_policy_reliability(
     lowrank_basis_disagreement_beta: float = 0.0,
     view_feature_ridge_self_error_beta: float = 0.0,
     view_feature_ridge_self_error_floor: float = 0.35,
+    view_feature_ridge_holdout_beta: float = 0.0,
+    view_feature_ridge_holdout_floor: float = 0.50,
+    view_feature_ridge_holdout_min_sources: int = 2,
     patch_coherent_radius: int = 1,
     patch_coherent_bin_sigma: float = 0.75,
     patch_coherent_blend: float = 0.25,
@@ -991,6 +994,9 @@ def _calibrate_policy_reliability(
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
                 view_feature_ridge_self_error_beta=float(view_feature_ridge_self_error_beta),
                 view_feature_ridge_self_error_floor=float(view_feature_ridge_self_error_floor),
+                view_feature_ridge_holdout_beta=float(view_feature_ridge_holdout_beta),
+                view_feature_ridge_holdout_floor=float(view_feature_ridge_holdout_floor),
+                view_feature_ridge_holdout_min_sources=int(view_feature_ridge_holdout_min_sources),
                 patch_coherent_radius=int(patch_coherent_radius),
                 patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
                 patch_coherent_blend=float(patch_coherent_blend),
@@ -1184,6 +1190,9 @@ def _fit_learned_ood_head(
     lowrank_basis_disagreement_beta: float = 0.0,
     view_feature_ridge_self_error_beta: float = 0.0,
     view_feature_ridge_self_error_floor: float = 0.35,
+    view_feature_ridge_holdout_beta: float = 0.0,
+    view_feature_ridge_holdout_floor: float = 0.50,
+    view_feature_ridge_holdout_min_sources: int = 2,
     patch_coherent_radius: int = 1,
     patch_coherent_bin_sigma: float = 0.75,
     patch_coherent_blend: float = 0.25,
@@ -1240,6 +1249,9 @@ def _fit_learned_ood_head(
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
                 view_feature_ridge_self_error_beta=float(view_feature_ridge_self_error_beta),
                 view_feature_ridge_self_error_floor=float(view_feature_ridge_self_error_floor),
+                view_feature_ridge_holdout_beta=float(view_feature_ridge_holdout_beta),
+                view_feature_ridge_holdout_floor=float(view_feature_ridge_holdout_floor),
+                view_feature_ridge_holdout_min_sources=int(view_feature_ridge_holdout_min_sources),
                 patch_coherent_radius=int(patch_coherent_radius),
                 patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
                 patch_coherent_blend=float(patch_coherent_blend),
@@ -1374,6 +1386,9 @@ def _predict_delta(
     lowrank_basis_disagreement_beta: float = 0.0,
     view_feature_ridge_self_error_beta: float = 0.0,
     view_feature_ridge_self_error_floor: float = 0.35,
+    view_feature_ridge_holdout_beta: float = 0.0,
+    view_feature_ridge_holdout_floor: float = 0.50,
+    view_feature_ridge_holdout_min_sources: int = 2,
     patch_coherent_radius: int = 1,
     patch_coherent_bin_sigma: float = 0.75,
     patch_coherent_blend: float = 0.25,
@@ -1422,6 +1437,9 @@ def _predict_delta(
     texture_teacher_supports: list[float] = []
     texture_self_confidences: list[float] = []
     texture_self_error_ratios: list[float] = []
+    texture_holdout_confidences: list[float] = []
+    texture_holdout_error_ratios: list[float] = []
+    texture_holdout_cosines: list[float] = []
     source_consistency_reliabilities: list[float] = []
     source_consistency_amplitudes: list[float] = []
     has_source_consistency = "source_consistency_reliability" in bank
@@ -1944,6 +1962,82 @@ def _predict_delta(
                         row_blend = (row_blend * self_confidence).astype(np.float32)
                         texture_self_confidences.append(self_confidence.astype(np.float32))
                         texture_self_error_ratios.append(self_error_ratio.astype(np.float32))
+                    if float(view_feature_ridge_holdout_beta) > 0.0:
+                        slot_ids = np.arange(src_feat.shape[1], dtype=np.int64).reshape(1, -1)
+                        local_view_id = tex_view_id[idx].astype(np.int64)
+                        split_key = np.where(local_view_id >= 0, local_view_id & 1, slot_ids & 1)
+                        nonzero_weight = row_weights > 1.0e-12
+                        holdout_mask = (split_key == 1) & nonzero_weight
+                        train_mask = (split_key != 1) & nonzero_weight
+                        min_holdout = max(1, int(view_feature_ridge_holdout_min_sources))
+                        heldout_ok = (
+                            (np.sum(train_mask.astype(np.float32), axis=1) >= min_holdout)
+                            & (np.sum(holdout_mask.astype(np.float32), axis=1) >= min_holdout)
+                        )
+                        if np.any(heldout_ok):
+                            hidx = np.nonzero(heldout_ok)[0]
+                            train_weights = (row_weights[hidx] * train_mask[hidx].astype(np.float32)).astype(np.float32)
+                            holdout_weights = (
+                                row_weights[hidx] * holdout_mask[hidx].astype(np.float32)
+                            ).astype(np.float32)
+                            xw_hold = src_feat[hidx].astype(np.float32) * np.sqrt(
+                                np.maximum(train_weights, 0.0)
+                            )[:, :, None]
+                            yw_hold = tex_residual[idx][hidx].astype(np.float32) * np.sqrt(
+                                np.maximum(train_weights, 0.0)
+                            )[:, :, None]
+                            xtx_hold = np.einsum("nkd,nke->nde", xw_hold, xw_hold, optimize=True).astype(np.float64)
+                            xtx_hold[:, diag, diag] += max(float(lowrank_basis_l2), 1.0e-8)
+                            xty_hold = np.einsum("nkd,nkc->ndc", xw_hold, yw_hold, optimize=True).astype(np.float64)
+                            coef_hold = np.linalg.solve(xtx_hold, xty_hold).astype(np.float32)
+                            holdout_pred = np.einsum(
+                                "nkd,ndc->nkc", src_feat[hidx].astype(np.float32), coef_hold, optimize=True
+                            )
+                            holdout_target = tex_residual[idx][hidx].astype(np.float32)
+                            holdout_err = (
+                                np.sum(
+                                    holdout_weights * np.sum(np.square(holdout_pred - holdout_target), axis=2),
+                                    axis=1,
+                                )
+                                / np.maximum(np.sum(holdout_weights, axis=1), 1.0e-12)
+                            ).astype(np.float32)
+                            holdout_energy = (
+                                np.sum(holdout_weights * np.sum(np.square(holdout_target), axis=2), axis=1)
+                                / np.maximum(np.sum(holdout_weights, axis=1), 1.0e-12)
+                            ).astype(np.float32)
+                            holdout_pred_energy = (
+                                np.sum(holdout_weights * np.sum(np.square(holdout_pred), axis=2), axis=1)
+                                / np.maximum(np.sum(holdout_weights, axis=1), 1.0e-12)
+                            ).astype(np.float32)
+                            holdout_dot = (
+                                np.sum(holdout_weights * np.sum(holdout_pred * holdout_target, axis=2), axis=1)
+                                / np.maximum(np.sum(holdout_weights, axis=1), 1.0e-12)
+                            ).astype(np.float32)
+                            holdout_error_ratio = (holdout_err / np.maximum(holdout_energy, 1.0e-8)).astype(
+                                np.float32
+                            )
+                            holdout_cosine = (
+                                holdout_dot
+                                / np.maximum(np.sqrt(holdout_pred_energy * holdout_energy), 1.0e-8)
+                            ).astype(np.float32)
+                            direction_confidence = np.clip(0.5 + 0.5 * holdout_cosine, 0.0, 1.0).astype(np.float32)
+                            floor = float(np.clip(float(view_feature_ridge_holdout_floor), 0.0, 1.0))
+                            holdout_confidence = (
+                                floor
+                                + (1.0 - floor)
+                                * direction_confidence
+                                * np.exp(
+                                    np.clip(
+                                        -float(view_feature_ridge_holdout_beta) * holdout_error_ratio,
+                                        -30.0,
+                                        0.0,
+                                    )
+                                ).astype(np.float32)
+                            ).astype(np.float32)
+                            row_blend[hidx] = (row_blend[hidx] * holdout_confidence).astype(np.float32)
+                            texture_holdout_confidences.append(holdout_confidence.astype(np.float32))
+                            texture_holdout_error_ratios.append(holdout_error_ratio.astype(np.float32))
+                            texture_holdout_cosines.append(holdout_cosine.astype(np.float32))
                     row_blend = np.where(ok_rows[idx], row_blend, blend).astype(np.float32)
                     pred[idx] = (
                         (1.0 - row_blend[:, None]) * pred[idx] + row_blend[:, None] * texture_pred
@@ -2308,6 +2402,15 @@ def _predict_delta(
     texture_self_error_arr = (
         np.concatenate(texture_self_error_ratios) if texture_self_error_ratios else np.zeros((0,), dtype=np.float32)
     )
+    texture_holdout_conf_arr = (
+        np.concatenate(texture_holdout_confidences) if texture_holdout_confidences else np.ones((0,), dtype=np.float32)
+    )
+    texture_holdout_error_arr = (
+        np.concatenate(texture_holdout_error_ratios) if texture_holdout_error_ratios else np.zeros((0,), dtype=np.float32)
+    )
+    texture_holdout_cosine_arr = (
+        np.concatenate(texture_holdout_cosines) if texture_holdout_cosines else np.ones((0,), dtype=np.float32)
+    )
     source_consistency_rel_arr = (
         np.concatenate(source_consistency_reliabilities)
         if source_consistency_reliabilities
@@ -2349,6 +2452,24 @@ def _predict_delta(
         ),
         "p90_texture_self_error_ratio": (
             float(np.quantile(texture_self_error_arr, 0.90)) if texture_self_error_arr.size else 0.0
+        ),
+        "mean_texture_holdout_confidence": (
+            float(np.mean(texture_holdout_conf_arr)) if texture_holdout_conf_arr.size else 1.0
+        ),
+        "p10_texture_holdout_confidence": (
+            float(np.quantile(texture_holdout_conf_arr, 0.10)) if texture_holdout_conf_arr.size else 1.0
+        ),
+        "mean_texture_holdout_error_ratio": (
+            float(np.mean(texture_holdout_error_arr)) if texture_holdout_error_arr.size else 0.0
+        ),
+        "p90_texture_holdout_error_ratio": (
+            float(np.quantile(texture_holdout_error_arr, 0.90)) if texture_holdout_error_arr.size else 0.0
+        ),
+        "mean_texture_holdout_cosine": (
+            float(np.mean(texture_holdout_cosine_arr)) if texture_holdout_cosine_arr.size else 1.0
+        ),
+        "p10_texture_holdout_cosine": (
+            float(np.quantile(texture_holdout_cosine_arr, 0.10)) if texture_holdout_cosine_arr.size else 1.0
         ),
         "mean_source_consistency_reliability": (
             float(np.mean(source_consistency_rel_arr)) if source_consistency_rel_arr.size else 1.0
@@ -2407,6 +2528,20 @@ def _summarize_rows(rows: list[dict[str, Any]], *, compute_lpips: bool) -> dict[
         "p10_texture_self_confidence": _mean([float(r.get("p10_texture_self_confidence", 1.0)) for r in rows]),
         "mean_texture_self_error_ratio": _mean([float(r.get("mean_texture_self_error_ratio", 0.0)) for r in rows]),
         "p90_texture_self_error_ratio": _mean([float(r.get("p90_texture_self_error_ratio", 0.0)) for r in rows]),
+        "mean_texture_holdout_confidence": _mean(
+            [float(r.get("mean_texture_holdout_confidence", 1.0)) for r in rows]
+        ),
+        "p10_texture_holdout_confidence": _mean(
+            [float(r.get("p10_texture_holdout_confidence", 1.0)) for r in rows]
+        ),
+        "mean_texture_holdout_error_ratio": _mean(
+            [float(r.get("mean_texture_holdout_error_ratio", 0.0)) for r in rows]
+        ),
+        "p90_texture_holdout_error_ratio": _mean(
+            [float(r.get("p90_texture_holdout_error_ratio", 0.0)) for r in rows]
+        ),
+        "mean_texture_holdout_cosine": _mean([float(r.get("mean_texture_holdout_cosine", 1.0)) for r in rows]),
+        "p10_texture_holdout_cosine": _mean([float(r.get("p10_texture_holdout_cosine", 1.0)) for r in rows]),
         "mean_source_consistency_reliability": _mean(
             [float(r.get("mean_source_consistency_reliability", 1.0)) for r in rows]
         ),
@@ -2502,6 +2637,9 @@ def _evaluate_policy_val(
     lowrank_basis_disagreement_beta: float,
     view_feature_ridge_self_error_beta: float,
     view_feature_ridge_self_error_floor: float,
+    view_feature_ridge_holdout_beta: float,
+    view_feature_ridge_holdout_floor: float,
+    view_feature_ridge_holdout_min_sources: int,
     patch_coherent_radius: int,
     patch_coherent_bin_sigma: float,
     patch_coherent_blend: float,
@@ -2565,6 +2703,9 @@ def _evaluate_policy_val(
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
                 view_feature_ridge_self_error_beta=float(view_feature_ridge_self_error_beta),
                 view_feature_ridge_self_error_floor=float(view_feature_ridge_self_error_floor),
+                view_feature_ridge_holdout_beta=float(view_feature_ridge_holdout_beta),
+                view_feature_ridge_holdout_floor=float(view_feature_ridge_holdout_floor),
+                view_feature_ridge_holdout_min_sources=int(view_feature_ridge_holdout_min_sources),
                 patch_coherent_radius=int(patch_coherent_radius),
                 patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
                 patch_coherent_blend=float(patch_coherent_blend),
@@ -2739,6 +2880,9 @@ def _target_no_gt_preview(
     lowrank_basis_disagreement_beta: float,
     view_feature_ridge_self_error_beta: float,
     view_feature_ridge_self_error_floor: float,
+    view_feature_ridge_holdout_beta: float,
+    view_feature_ridge_holdout_floor: float,
+    view_feature_ridge_holdout_min_sources: int,
     patch_coherent_radius: int,
     patch_coherent_bin_sigma: float,
     patch_coherent_blend: float,
@@ -2799,6 +2943,9 @@ def _target_no_gt_preview(
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
                 view_feature_ridge_self_error_beta=float(view_feature_ridge_self_error_beta),
                 view_feature_ridge_self_error_floor=float(view_feature_ridge_self_error_floor),
+                view_feature_ridge_holdout_beta=float(view_feature_ridge_holdout_beta),
+                view_feature_ridge_holdout_floor=float(view_feature_ridge_holdout_floor),
+                view_feature_ridge_holdout_min_sources=int(view_feature_ridge_holdout_min_sources),
                 patch_coherent_radius=int(patch_coherent_radius),
                 patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
                 patch_coherent_blend=float(patch_coherent_blend),
@@ -2870,6 +3017,9 @@ def _target_exact_eval(
     lowrank_basis_disagreement_beta: float,
     view_feature_ridge_self_error_beta: float,
     view_feature_ridge_self_error_floor: float,
+    view_feature_ridge_holdout_beta: float,
+    view_feature_ridge_holdout_floor: float,
+    view_feature_ridge_holdout_min_sources: int,
     patch_coherent_radius: int,
     patch_coherent_bin_sigma: float,
     patch_coherent_blend: float,
@@ -2936,6 +3086,9 @@ def _target_exact_eval(
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
                 view_feature_ridge_self_error_beta=float(view_feature_ridge_self_error_beta),
                 view_feature_ridge_self_error_floor=float(view_feature_ridge_self_error_floor),
+                view_feature_ridge_holdout_beta=float(view_feature_ridge_holdout_beta),
+                view_feature_ridge_holdout_floor=float(view_feature_ridge_holdout_floor),
+                view_feature_ridge_holdout_min_sources=int(view_feature_ridge_holdout_min_sources),
                 patch_coherent_radius=int(patch_coherent_radius),
                 patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
                 patch_coherent_blend=float(patch_coherent_blend),
@@ -3084,6 +3237,9 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- lowrank basis disagreement beta: `{payload.get('residual_decoder', {}).get('lowrank_basis_disagreement_beta', 0.0):.6f}`",
         f"- view-feature ridge self-error beta: `{payload.get('residual_decoder', {}).get('view_feature_ridge_self_error_beta', 0.0):.6f}`",
         f"- view-feature ridge self-error floor: `{payload.get('residual_decoder', {}).get('view_feature_ridge_self_error_floor', 0.0):.6f}`",
+        f"- view-feature ridge holdout beta: `{payload.get('residual_decoder', {}).get('view_feature_ridge_holdout_beta', 0.0):.6f}`",
+        f"- view-feature ridge holdout floor: `{payload.get('residual_decoder', {}).get('view_feature_ridge_holdout_floor', 0.0):.6f}`",
+        f"- view-feature ridge holdout min sources: `{payload.get('residual_decoder', {}).get('view_feature_ridge_holdout_min_sources', 0)}`",
         f"- patch/texture radius: `{payload.get('residual_decoder', {}).get('patch_coherent_radius', 0)}`",
         f"- patch/texture bin sigma: `{payload.get('residual_decoder', {}).get('patch_coherent_bin_sigma', 0.0):.6f}`",
         f"- patch coherent blend: `{payload.get('residual_decoder', {}).get('patch_coherent_blend', 0.0):.6f}`",
@@ -3304,6 +3460,9 @@ def main() -> int:
     parser.add_argument("--lowrank_basis_disagreement_beta", type=float, default=0.0)
     parser.add_argument("--view_feature_ridge_self_error_beta", type=float, default=0.0)
     parser.add_argument("--view_feature_ridge_self_error_floor", type=float, default=0.35)
+    parser.add_argument("--view_feature_ridge_holdout_beta", type=float, default=0.0)
+    parser.add_argument("--view_feature_ridge_holdout_floor", type=float, default=0.50)
+    parser.add_argument("--view_feature_ridge_holdout_min_sources", type=int, default=2)
     parser.add_argument("--patch_coherent_radius", type=int, default=1)
     parser.add_argument("--patch_coherent_bin_sigma", type=float, default=0.75)
     parser.add_argument("--patch_coherent_blend", type=float, default=0.25)
@@ -3524,6 +3683,9 @@ def main() -> int:
             lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
             view_feature_ridge_self_error_beta=float(args.view_feature_ridge_self_error_beta),
             view_feature_ridge_self_error_floor=float(args.view_feature_ridge_self_error_floor),
+            view_feature_ridge_holdout_beta=float(args.view_feature_ridge_holdout_beta),
+            view_feature_ridge_holdout_floor=float(args.view_feature_ridge_holdout_floor),
+            view_feature_ridge_holdout_min_sources=int(args.view_feature_ridge_holdout_min_sources),
             patch_coherent_radius=int(args.patch_coherent_radius),
             patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
             patch_coherent_blend=float(args.patch_coherent_blend),
@@ -3576,6 +3738,9 @@ def main() -> int:
             lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
             view_feature_ridge_self_error_beta=float(args.view_feature_ridge_self_error_beta),
             view_feature_ridge_self_error_floor=float(args.view_feature_ridge_self_error_floor),
+            view_feature_ridge_holdout_beta=float(args.view_feature_ridge_holdout_beta),
+            view_feature_ridge_holdout_floor=float(args.view_feature_ridge_holdout_floor),
+            view_feature_ridge_holdout_min_sources=int(args.view_feature_ridge_holdout_min_sources),
             patch_coherent_radius=int(args.patch_coherent_radius),
             patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
             patch_coherent_blend=float(args.patch_coherent_blend),
@@ -3622,6 +3787,9 @@ def main() -> int:
         lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
         view_feature_ridge_self_error_beta=float(args.view_feature_ridge_self_error_beta),
         view_feature_ridge_self_error_floor=float(args.view_feature_ridge_self_error_floor),
+        view_feature_ridge_holdout_beta=float(args.view_feature_ridge_holdout_beta),
+        view_feature_ridge_holdout_floor=float(args.view_feature_ridge_holdout_floor),
+        view_feature_ridge_holdout_min_sources=int(args.view_feature_ridge_holdout_min_sources),
         patch_coherent_radius=int(args.patch_coherent_radius),
         patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
         patch_coherent_blend=float(args.patch_coherent_blend),
@@ -3680,6 +3848,9 @@ def main() -> int:
             lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
             view_feature_ridge_self_error_beta=float(args.view_feature_ridge_self_error_beta),
             view_feature_ridge_self_error_floor=float(args.view_feature_ridge_self_error_floor),
+            view_feature_ridge_holdout_beta=float(args.view_feature_ridge_holdout_beta),
+            view_feature_ridge_holdout_floor=float(args.view_feature_ridge_holdout_floor),
+            view_feature_ridge_holdout_min_sources=int(args.view_feature_ridge_holdout_min_sources),
             patch_coherent_radius=int(args.patch_coherent_radius),
             patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
             patch_coherent_blend=float(args.patch_coherent_blend),
@@ -3737,6 +3908,9 @@ def main() -> int:
             lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
             view_feature_ridge_self_error_beta=float(args.view_feature_ridge_self_error_beta),
             view_feature_ridge_self_error_floor=float(args.view_feature_ridge_self_error_floor),
+            view_feature_ridge_holdout_beta=float(args.view_feature_ridge_holdout_beta),
+            view_feature_ridge_holdout_floor=float(args.view_feature_ridge_holdout_floor),
+            view_feature_ridge_holdout_min_sources=int(args.view_feature_ridge_holdout_min_sources),
             patch_coherent_radius=int(args.patch_coherent_radius),
             patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
             patch_coherent_blend=float(args.patch_coherent_blend),
@@ -3857,6 +4031,9 @@ def main() -> int:
             "lowrank_basis_disagreement_beta": float(args.lowrank_basis_disagreement_beta),
             "view_feature_ridge_self_error_beta": float(args.view_feature_ridge_self_error_beta),
             "view_feature_ridge_self_error_floor": float(args.view_feature_ridge_self_error_floor),
+            "view_feature_ridge_holdout_beta": float(args.view_feature_ridge_holdout_beta),
+            "view_feature_ridge_holdout_floor": float(args.view_feature_ridge_holdout_floor),
+            "view_feature_ridge_holdout_min_sources": int(args.view_feature_ridge_holdout_min_sources),
             "patch_coherent_radius": int(args.patch_coherent_radius),
             "patch_coherent_bin_sigma": float(args.patch_coherent_bin_sigma),
             "patch_coherent_blend": float(args.patch_coherent_blend),
@@ -3948,6 +4125,11 @@ def main() -> int:
                 ),
                 "residual_decoder/view_feature_ridge_self_error_floor": float(
                     args.view_feature_ridge_self_error_floor
+                ),
+                "residual_decoder/view_feature_ridge_holdout_beta": float(args.view_feature_ridge_holdout_beta),
+                "residual_decoder/view_feature_ridge_holdout_floor": float(args.view_feature_ridge_holdout_floor),
+                "residual_decoder/view_feature_ridge_holdout_min_sources": float(
+                    args.view_feature_ridge_holdout_min_sources
                 ),
                 "residual_decoder/patch_coherent_radius": float(args.patch_coherent_radius),
                 "residual_decoder/patch_coherent_bin_sigma": float(args.patch_coherent_bin_sigma),

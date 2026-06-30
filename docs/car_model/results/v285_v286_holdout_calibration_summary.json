@@ -1,0 +1,156 @@
+{
+  "date": "2026-06-30",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "phasej_flowers_reference": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "method": {
+    "name": "view_feature_ridge_texture_with_source_holdout_calibration",
+    "script": "scripts/car_model/train_surface_deferred_source_residual_renderer.py",
+    "description": "Adds target-free source-heldout calibration to view_feature_ridge_texture. For each target row, source slots are split by source-view/slot parity; a ridge decoder is fitted on one split and validated on the heldout split. The heldout residual error and residual-direction cosine shrink the row blend before target apply.",
+    "new_cli": [
+      "--view_feature_ridge_holdout_beta",
+      "--view_feature_ridge_holdout_floor",
+      "--view_feature_ridge_holdout_min_sources"
+    ],
+    "target_apply_gt_policy": "Target/test apply reads only stripped target_evidence_no_gt; target_eval_evidence_reparented is opened only after apply for metrics."
+  },
+  "runs": {
+    "v285_smoke": {
+      "output_dir": "outputs/carnet/v285_holdout_smoke_20260630",
+      "policy_val_all_axis_pass": false,
+      "purpose": "Interface and real-evidence smoke for heldout split/solve/statistics.",
+      "policy_val": {
+        "candidate_psnr": 21.161608835267106,
+        "candidate_ssim": 0.743768056233724,
+        "psnr_gain": -0.00006386148238017124,
+        "ssim_gain": -0.00015032291412353516,
+        "mean_texture_holdout_confidence": 0.700468381245931,
+        "mean_texture_holdout_cosine": 0.3705153564612071,
+        "mean_texture_holdout_error_ratio": 1.5903874933719635
+      }
+    },
+    "v285a_policy_loadedbank": {
+      "output_dir": "outputs/carnet/v285a_holdout_policy_loadedbank_20260630",
+      "wandb_mode": "offline",
+      "gpu": 1,
+      "policy_val_all_axis_pass": true,
+      "policy_val": {
+        "alpha": 1.0,
+        "candidate_psnr": 20.66468493296544,
+        "candidate_ssim": 0.7198366274436315,
+        "candidate_lpips": 0.152346421033144,
+        "psnr_gain": 0.058248029711494155,
+        "ssim_gain": 0.002310494581858317,
+        "lpips_gain": 0.0009699985384941101,
+        "mean_texture_holdout_confidence": 0.8472173015276591,
+        "mean_texture_holdout_cosine": 0.22599286089340845,
+        "mean_texture_holdout_error_ratio": 2.2111032803853354
+      }
+    },
+    "v285b_flowers_exact_alpha1": {
+      "output_dir": "outputs/carnet/v285b_holdout_flowers_exact_alpha1_20260630",
+      "wandb_mode": "offline",
+      "gpu": 1,
+      "no_gt_audit_pass": true,
+      "policy_val_all_axis_pass": true,
+      "target_exact": {
+        "candidate_psnr": 19.842752319752517,
+        "candidate_ssim": 0.6201255389235236,
+        "candidate_lpips": 0.18001784993843598,
+        "psnr_gain": 0.010698441305053081,
+        "ssim_gain": 0.0002151280641555786,
+        "lpips_gain": 0.00031701610846952957,
+        "positive_view_fraction": 0.8636363636363636,
+        "ssim_positive_view_fraction": 0.6818181818181818,
+        "lpips_positive_view_fraction": 0.7272727272727273,
+        "psnr_tail_cvar": -0.00282958444864434,
+        "ssim_tail_cvar": -0.00030732154846191406,
+        "lpips_tail_cvar": -0.0004188120365142822,
+        "mean_texture_holdout_confidence": 0.845896000211889,
+        "mean_texture_holdout_cosine": 0.21467097984118896,
+        "mean_texture_holdout_error_ratio": 2.0781807357614692,
+        "phasej_psnr_gap": -0.4616056802474837,
+        "beats_phasej_all_axis": false
+      }
+    },
+    "v286a_recalibrated_policy": {
+      "output_dir": "outputs/carnet/v286a_holdout_recalibrated_policyval_20260630",
+      "wandb_mode": "offline",
+      "gpu": 1,
+      "drop_checkpoint_policy_fields": true,
+      "policy_reliability_mode": "patch_perceptual_v1",
+      "policy_val_all_axis_pass": true,
+      "policy_val": {
+        "alpha": 1.0,
+        "candidate_psnr": 20.6507301687498,
+        "candidate_ssim": 0.7194536576668421,
+        "candidate_lpips": 0.15257189298669496,
+        "psnr_gain": 0.044293265495851365,
+        "ssim_gain": 0.0019275248050689697,
+        "lpips_gain": 0.0007445265849431356,
+        "mean_policy_reliability": 0.12142011399070422,
+        "mean_policy_gain": 1.060570667187373,
+        "mean_texture_holdout_confidence": 0.8472173015276591
+      }
+    },
+    "v286b_recalibrated_flowers_exact_alpha1": {
+      "output_dir": "outputs/carnet/v286b_holdout_recalibrated_flowers_exact_alpha1_20260630",
+      "wandb_mode": "offline",
+      "gpu": 1,
+      "drop_checkpoint_policy_fields": true,
+      "policy_reliability_mode": "patch_perceptual_v1",
+      "no_gt_audit_pass": true,
+      "policy_val_all_axis_pass": true,
+      "target_exact": {
+        "candidate_psnr": 19.840909993765596,
+        "candidate_ssim": 0.6201827336441387,
+        "candidate_lpips": 0.18009987236423927,
+        "psnr_gain": 0.00885611531813007,
+        "ssim_gain": 0.0002723227847706188,
+        "lpips_gain": 0.00023499368266625837,
+        "positive_view_fraction": 0.8636363636363636,
+        "ssim_positive_view_fraction": 0.6818181818181818,
+        "lpips_positive_view_fraction": 0.7727272727272727,
+        "psnr_tail_cvar": -0.0005421020470777194,
+        "ssim_tail_cvar": -0.00020617246627807617,
+        "lpips_tail_cvar": -0.0002443815271059672,
+        "mean_policy_reliability": 0.08516592532396317,
+        "mean_policy_gain": 1.042481622912667,
+        "mean_texture_holdout_confidence": 0.845896000211889,
+        "mean_texture_holdout_cosine": 0.21467097984118896,
+        "mean_texture_holdout_error_ratio": 2.0781807357614692,
+        "phasej_psnr_gap": -0.46344800623440463,
+        "beats_phasej_all_axis": false
+      }
+    }
+  },
+  "comparison": {
+    "v284b_target": {
+      "candidate_psnr": 19.842784803696922,
+      "candidate_ssim": 0.6201266239989888,
+      "candidate_lpips": 0.18001853742382742,
+      "psnr_tail_cvar": -0.002785927757072907
+    },
+    "v285b_vs_v284b": {
+      "psnr_delta": -0.000032483944405027655,
+      "ssim_delta": -0.0000010850754652076326,
+      "lpips_delta": 0.0000006874853914404426,
+      "psnr_tail_cvar_delta": -0.00004365669157143292
+    },
+    "v286b_vs_v285b": {
+      "psnr_delta": -0.001842325986921291,
+      "ssim_delta": 0.00005719472061509281,
+      "lpips_delta": -0.00008202242580328823,
+      "psnr_tail_cvar_delta": 0.0022874824015666204
+    }
+  },
+  "verdict": {
+    "status": "NOT_COMPLETE",
+    "full9_allowed": false,
+    "reason": "Source-heldout residual-direction calibration detects unstable residual directions and v286 improves target tail risk after recalibration, but neither v285 nor v286 closes the Phase-J PSNR gap. v286 trades mean PSNR for safer tails and remains 0.463 dB below Phase-J on flowers.",
+    "next_recommendation": "Move beyond per-row local ridge calibration. The next route should train a global or patch-aware view-dependent surface decoder with a stronger residual target, because conservative target-free calibration can reduce tail harm but does not add the missing RGB energy needed to beat Phase-J."
+  }
+}
