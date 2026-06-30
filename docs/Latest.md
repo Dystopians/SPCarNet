@@ -2,6 +2,31 @@
 
 Date: 2026-06-28
 
+## 2026-06-29 v257-v258 Policy-Calibrated Deferred Gain Update
+
+新增日志：`docs/car_model/6-29-v257-v258-PolicyCalibratedGain-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v257_v258_policy_calibrated_gain_summary.json`。
+
+这轮继续严格参考 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md`：只跑 flowers policy-val + target exact；未过 Phase-J all-axis gate 前不启动 full9。
+
+代码层面新增了真实 train/eval pipeline 方法改动：
+
+- `scripts/car_model/train_surface_deferred_source_residual_renderer.py` 新增 `--policy_reliability_mode patch_perceptual_v1`，用 policy-val 的 RGB L1、luma patch、luma gradient 改善来学习 face/UV-bin reliability。
+- 新增 `--policy_gain_mode positive_soft`，让 policy-val 不只判断某个 residual bin 是否可信，也学习可信区域应该保留多少 teacher residual energy。
+- checkpoint 现在保存并加载 `policy_gain`，`_predict_delta` 在 policy-val、target no-GT preview、target exact 中统一应用 reliability 和 gain。
+
+关键结果：
+
+| run | target PSNR | SSIM | LPIPS | target gains | active teacher energy | Phase-J gate |
+|---|---:|---:|---:|---|---:|---|
+| v257a patch/perceptual reliability | 19.835336 | 0.620004 | 0.180285 | +0.003282 / +0.000093 / +0.000050 | 0.035923 | fail PSNR |
+| v258a policy gain max 2.0 | 19.838304 | 0.620019 | 0.180196 | +0.006250 / +0.000108 / +0.000139 | 0.467043 | fail PSNR |
+| v258b policy gain max 1.5 | 19.838286 | 0.620047 | 0.180217 | +0.006232 / +0.000137 / +0.000118 | 0.281217 | fail PSNR |
+| v258c gain max 1.5 + source agreement | 19.837588 | 0.620037 | 0.180235 | +0.005534 / +0.000126 / +0.000100 | 0.241122 | fail PSNR |
+
+结论：v258 是一个有效的表示/策略升级，说明此前 v256/v257 的核心瓶颈之一是 residual energy 被 policy reliability 压得过低。v258a 把 active teacher residual energy retention 从 v257a 的 `3.59%` 提升到 `46.70%`，target mean PSNR/SSIM/LPIPS 也全部提升。但 v258a/b/c 仍然没过 Phase-J flowers PSNR gate：最好 v258a 仍低 Phase-J `0.466054` PSNR；并且更强 residual energy 会带来 target tail CVaR 负值。当前状态仍是 `NOT COMPLETE`，但瓶颈已更具体：下一步需要 target-support/OOD-aware gain predictor，而不是 full9 promotion 或继续手动 gain cap。
+
 ## 2026-06-29 v249-v252 v169 Representation Gate Update
 
 新增日志：`docs/car_model/6-29-v249-v252-v169-RepresentationGate-Log.md`。

@@ -1,0 +1,290 @@
+{
+  "best_by_target_mean_all_axis": "v258a_policy_gain_max2 for PSNR/LPIPS mean; v258b_policy_gain_max1p5 for SSIM mean; none pass Phase-J all-axis.",
+  "date": "2026-06-29",
+  "gate_rule": "No full9 until flowers exact beats Phase-J on PSNR, SSIM, and LPIPS. All v257-v258 runs fail the Phase-J PSNR gate despite improving over their parent.",
+  "main_conclusion": "Policy-calibrated residual gain is a real representation/policy upgrade that increases active teacher-residual energy retention from 3.59% to 46.70% and improves target mean PSNR/SSIM/LPIPS over v257, but it exposes target-tail/OOD risk and remains about 0.466 PSNR below the Phase-J flowers reference. Full9 remains blocked by v169.",
+  "phasej_flowers_reference": {
+    "lpips": 0.329222,
+    "psnr": 20.304358,
+    "ssim": 0.55777
+  },
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "runs": {
+    "v256c_local_l1_reliability": {
+      "artifact_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256c_policy_l1_reliability_minpos048_targetexact/v253_deferred_source_renderer_audit.json",
+      "artifact_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256c_policy_l1_reliability_minpos048_targetexact/v253_deferred_source_renderer_audit.md",
+      "policy_reliability": {
+        "active_bins": 16542,
+        "max_policy_gain": null,
+        "mean_policy_gain_valid": null,
+        "mean_reliability": 0.04617001488804817,
+        "mean_reliability_valid": 0.20700541138648987,
+        "mode": "local_l1",
+        "policy_gain_mode": null
+      },
+      "policy_val": {
+        "alpha": 0.5,
+        "lpips_gain": 0.00014396756887435913,
+        "lpips_positive_view_fraction": 1.0,
+        "lpips_tail_cvar": 6.010383367538452e-05,
+        "mean_policy_gain": null,
+        "p90_policy_gain": null,
+        "positive_view_fraction": 1.0,
+        "psnr_gain": 0.010843740621999073,
+        "psnr_tail_cvar": 0.007958967730591127,
+        "ssim_gain": 0.00034345189730326336,
+        "ssim_positive_view_fraction": 1.0,
+        "ssim_tail_cvar": 0.0002506673336029053
+      },
+      "render_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256c_policy_l1_reliability_minpos048_targetexact/target_exact_fixed_policy",
+      "target_exact": {
+        "beats_phasej_all_axis": false,
+        "candidate_lpips": 0.1802853521975604,
+        "candidate_psnr": 19.835239182752343,
+        "candidate_ssim": 0.6200014393437993,
+        "lpips_gain": 4.951384934512052e-05,
+        "lpips_positive_view_fraction": 0.8181818181818182,
+        "lpips_tail_cvar": -5.555649598439535e-05,
+        "mean_changed_fraction": 0.007787864412627219,
+        "pass_vs_parent_all_axis": true,
+        "phasej_lpips_margin": 0.14893664780243962,
+        "phasej_psnr_gap": -0.4691188172476579,
+        "phasej_ssim_gap": 0.062231439343799266,
+        "positive_view_fraction": 1.0,
+        "psnr_gain": 0.0031853043048758163,
+        "psnr_tail_cvar": 0.00031298371804311387,
+        "ssim_gain": 9.102848443118009e-05,
+        "ssim_positive_view_fraction": 0.9545454545454546,
+        "ssim_tail_cvar": -5.086263020833333e-06
+      },
+      "teacher_projection_active": {
+        "changed_fraction": 0.2799143843060467,
+        "cosine": 0.35291340148294337,
+        "energy_retention": 0.03479922092379419,
+        "residual_psnr": 28.789632681383633
+      },
+      "wandb_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256c_policy_l1_reliability_minpos048_targetexact/wandb"
+    },
+    "v257a_patch_perceptual_reliability": {
+      "artifact_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v257a_patch_perceptual_reliability_targetexact/v253_deferred_source_renderer_audit.json",
+      "artifact_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v257a_patch_perceptual_reliability_targetexact/v253_deferred_source_renderer_audit.md",
+      "policy_reliability": {
+        "active_bins": 16841,
+        "max_policy_gain": null,
+        "mean_policy_gain_valid": null,
+        "mean_reliability": 0.049058325588703156,
+        "mean_reliability_valid": 0.21995526552200317,
+        "mode": "patch_perceptual_v1",
+        "policy_gain_mode": null
+      },
+      "policy_val": {
+        "alpha": 0.5,
+        "lpips_gain": 0.00015372969210147858,
+        "lpips_positive_view_fraction": 1.0,
+        "lpips_tail_cvar": 6.994977593421936e-05,
+        "mean_policy_gain": null,
+        "p90_policy_gain": null,
+        "positive_view_fraction": 1.0,
+        "psnr_gain": 0.011102100032052439,
+        "psnr_tail_cvar": 0.008089260360272021,
+        "ssim_gain": 0.0003512253363927205,
+        "ssim_positive_view_fraction": 1.0,
+        "ssim_tail_cvar": 0.000254899263381958
+      },
+      "render_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v257a_patch_perceptual_reliability_targetexact/target_exact_fixed_policy",
+      "target_exact": {
+        "beats_phasej_all_axis": false,
+        "candidate_lpips": 0.18028469688513063,
+        "candidate_psnr": 19.835336264124887,
+        "candidate_ssim": 0.6200038208202883,
+        "lpips_gain": 5.016916177489541e-05,
+        "lpips_positive_view_fraction": 0.7727272727272727,
+        "lpips_tail_cvar": -6.0364603996276855e-05,
+        "mean_changed_fraction": 0.008096321373124033,
+        "pass_vs_parent_all_axis": true,
+        "phasej_lpips_margin": 0.14893730311486938,
+        "phasej_psnr_gap": -0.4690217358751134,
+        "phasej_ssim_gap": 0.06223382082028828,
+        "positive_view_fraction": 1.0,
+        "psnr_gain": 0.0032823856774259626,
+        "psnr_tail_cvar": 0.00030914204338827744,
+        "ssim_gain": 9.340996092016047e-05,
+        "ssim_positive_view_fraction": 0.9545454545454546,
+        "ssim_tail_cvar": -6.099541982014974e-06
+      },
+      "teacher_projection_active": {
+        "changed_fraction": 0.29179379445377945,
+        "cosine": 0.35554020167294254,
+        "energy_retention": 0.03592318699860966,
+        "residual_psnr": 28.79925795472901
+      },
+      "wandb_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v257a_patch_perceptual_reliability_targetexact/wandb"
+    },
+    "v258a_policy_gain_max2": {
+      "artifact_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258a_policy_gain_patch_perceptual_targetexact/v253_deferred_source_renderer_audit.json",
+      "artifact_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258a_policy_gain_patch_perceptual_targetexact/v253_deferred_source_renderer_audit.md",
+      "policy_reliability": {
+        "active_bins": 16841,
+        "max_policy_gain": 2.0,
+        "mean_policy_gain_valid": 1.217036485671997,
+        "mean_reliability": 0.049058325588703156,
+        "mean_reliability_valid": 0.21995526552200317,
+        "mode": "patch_perceptual_v1",
+        "policy_gain_mode": "positive_soft"
+      },
+      "policy_val": {
+        "alpha": 1.0,
+        "lpips_gain": 0.0004503292342027028,
+        "lpips_positive_view_fraction": 1.0,
+        "lpips_tail_cvar": 8.895993232727051e-05,
+        "mean_policy_gain": 1.1696303486824036,
+        "p90_policy_gain": 1.605599731206894,
+        "positive_view_fraction": 1.0,
+        "psnr_gain": 0.030403920093269754,
+        "psnr_tail_cvar": 0.02233937280403353,
+        "ssim_gain": 0.0009415944417317709,
+        "ssim_positive_view_fraction": 1.0,
+        "ssim_tail_cvar": 0.0005620419979095459
+      },
+      "render_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258a_policy_gain_patch_perceptual_targetexact/target_exact_fixed_policy",
+      "target_exact": {
+        "beats_phasej_all_axis": false,
+        "candidate_lpips": 0.18019579486413437,
+        "candidate_psnr": 19.838304260034057,
+        "candidate_ssim": 0.6200187721035697,
+        "lpips_gain": 0.00013907118277116254,
+        "lpips_positive_view_fraction": 0.6363636363636364,
+        "lpips_tail_cvar": -0.00037965675195058185,
+        "mean_changed_fraction": 0.010295384466103159,
+        "pass_vs_parent_all_axis": true,
+        "phasej_lpips_margin": 0.14902620513586565,
+        "phasej_psnr_gap": -0.46605373996594324,
+        "phasej_ssim_gap": 0.062248772103569716,
+        "positive_view_fraction": 0.8636363636363636,
+        "psnr_gain": 0.00625038158659211,
+        "psnr_tail_cvar": -0.0020068008788278746,
+        "ssim_gain": 0.00010836124420166016,
+        "ssim_positive_view_fraction": 0.6363636363636364,
+        "ssim_tail_cvar": -0.00025786956151326496
+      },
+      "teacher_projection_active": {
+        "changed_fraction": 0.36784571287256135,
+        "cosine": 0.3431320762449646,
+        "energy_retention": 0.46704332296511875,
+        "residual_psnr": 28.350680334883535
+      },
+      "wandb_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258a_policy_gain_patch_perceptual_targetexact/wandb"
+    },
+    "v258b_policy_gain_max1p5": {
+      "artifact_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258b_policy_gain15_patch_perceptual_targetexact/v253_deferred_source_renderer_audit.json",
+      "artifact_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258b_policy_gain15_patch_perceptual_targetexact/v253_deferred_source_renderer_audit.md",
+      "policy_reliability": {
+        "active_bins": 16841,
+        "max_policy_gain": 1.5,
+        "mean_policy_gain_valid": 1.1085182428359985,
+        "mean_reliability": 0.049058325588703156,
+        "mean_reliability_valid": 0.21995526552200317,
+        "mode": "patch_perceptual_v1",
+        "policy_gain_mode": "positive_soft"
+      },
+      "policy_val": {
+        "alpha": 1.0,
+        "lpips_gain": 0.0003915044168631236,
+        "lpips_positive_view_fraction": 1.0,
+        "lpips_tail_cvar": 0.00012736022472381592,
+        "mean_policy_gain": 1.0848151743412018,
+        "p90_policy_gain": 1.3027998705705006,
+        "positive_view_fraction": 1.0,
+        "psnr_gain": 0.026002800936554788,
+        "psnr_tail_cvar": 0.019118859097932983,
+        "ssim_gain": 0.0008115420738855997,
+        "ssim_positive_view_fraction": 1.0,
+        "ssim_tail_cvar": 0.0005253851413726807
+      },
+      "render_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258b_policy_gain15_patch_perceptual_targetexact/target_exact_fixed_policy",
+      "target_exact": {
+        "beats_phasej_all_axis": false,
+        "candidate_lpips": 0.18021729317578403,
+        "candidate_psnr": 19.838286222286566,
+        "candidate_ssim": 0.6200469434261322,
+        "lpips_gain": 0.00011757287112149325,
+        "lpips_positive_view_fraction": 0.7272727272727273,
+        "lpips_tail_cvar": -0.0002451812227567037,
+        "mean_changed_fraction": 0.010148029153010177,
+        "pass_vs_parent_all_axis": true,
+        "phasej_lpips_margin": 0.149004706824216,
+        "phasej_psnr_gap": -0.46607177771343444,
+        "phasej_ssim_gap": 0.062276943426132214,
+        "positive_view_fraction": 0.8636363636363636,
+        "psnr_gain": 0.006232343839100419,
+        "psnr_tail_cvar": -0.00081608962759816,
+        "ssim_gain": 0.00013653256676413795,
+        "ssim_positive_view_fraction": 0.6818181818181818,
+        "ssim_tail_cvar": -0.0001509984334309896
+      },
+      "teacher_projection_active": {
+        "changed_fraction": 0.3625554103624889,
+        "cosine": 0.34817763908550486,
+        "energy_retention": 0.28121686993910944,
+        "residual_psnr": 28.732663369465115
+      },
+      "wandb_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258b_policy_gain15_patch_perceptual_targetexact/wandb"
+    },
+    "v258c_policy_gain_max1p5_source_agreement": {
+      "artifact_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258c_policy_gain15_source_agreement_targetexact/v253_deferred_source_renderer_audit.json",
+      "artifact_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258c_policy_gain15_source_agreement_targetexact/v253_deferred_source_renderer_audit.md",
+      "policy_reliability": {
+        "active_bins": 16948,
+        "max_policy_gain": 1.5,
+        "mean_policy_gain_valid": 1.103338360786438,
+        "mean_reliability": 0.04724810644984245,
+        "mean_reliability_valid": 0.21183909475803375,
+        "mode": "patch_perceptual_v1",
+        "policy_gain_mode": "positive_soft"
+      },
+      "policy_val": {
+        "alpha": 1.0,
+        "lpips_gain": 0.0003633474310239156,
+        "lpips_positive_view_fraction": 1.0,
+        "lpips_tail_cvar": 0.00010048598051071167,
+        "mean_policy_gain": 1.0800647735595703,
+        "p90_policy_gain": 1.2840474049250286,
+        "positive_view_fraction": 1.0,
+        "psnr_gain": 0.02256366759029582,
+        "psnr_tail_cvar": 0.01628809387593222,
+        "ssim_gain": 0.0006956160068511963,
+        "ssim_positive_view_fraction": 1.0,
+        "ssim_tail_cvar": 0.0004545152187347412
+      },
+      "render_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258c_policy_gain15_source_agreement_targetexact/target_exact_fixed_policy",
+      "target_exact": {
+        "beats_phasej_all_axis": false,
+        "candidate_lpips": 0.18023527853868224,
+        "candidate_psnr": 19.83758793559166,
+        "candidate_ssim": 0.6200368187644265,
+        "lpips_gain": 9.958750822327353e-05,
+        "lpips_positive_view_fraction": 0.7727272727272727,
+        "lpips_tail_cvar": -0.0002034356196721395,
+        "mean_changed_fraction": 0.00808858569087459,
+        "pass_vs_parent_all_axis": true,
+        "phasej_lpips_margin": 0.14898672146131778,
+        "phasej_psnr_gap": -0.46677006440834035,
+        "phasej_ssim_gap": 0.062266818764426524,
+        "positive_view_fraction": 0.9090909090909091,
+        "psnr_gain": 0.005534057144196777,
+        "psnr_tail_cvar": -0.0006739369293550604,
+        "ssim_gain": 0.0001264079050584273,
+        "ssim_positive_view_fraction": 0.6818181818181818,
+        "ssim_tail_cvar": -0.00013695160547892252
+      },
+      "teacher_projection_active": {
+        "changed_fraction": 0.29495500956384,
+        "cosine": 0.32845436092336927,
+        "energy_retention": 0.24112155980377392,
+        "residual_psnr": 28.70453120559846
+      },
+      "wandb_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258c_policy_gain15_source_agreement_targetexact/wandb"
+    }
+  },
+  "schema": "spcarnet_v257_v258_policy_calibrated_gain_summary_v1"
+}

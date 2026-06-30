@@ -111,6 +111,33 @@ def _normalize_rows(rows: np.ndarray) -> np.ndarray:
     return (rows / denom).astype(np.float32)
 
 
+def _luma(rgb_chw: np.ndarray) -> np.ndarray:
+    rgb = np.asarray(rgb_chw, dtype=np.float32)
+    return (LUMA_WEIGHTS[0] * rgb[0] + LUMA_WEIGHTS[1] * rgb[1] + LUMA_WEIGHTS[2] * rgb[2]).astype(np.float32)
+
+
+def _luma_gradient_magnitude(luma_hw: np.ndarray) -> np.ndarray:
+    luma = np.asarray(luma_hw, dtype=np.float32)
+    grad_x = np.zeros_like(luma, dtype=np.float32)
+    grad_y = np.zeros_like(luma, dtype=np.float32)
+    grad_x[:, 1:] = np.abs(luma[:, 1:] - luma[:, :-1])
+    grad_y[1:, :] = np.abs(luma[1:, :] - luma[:-1, :])
+    return np.maximum(grad_x, grad_y).astype(np.float32)
+
+
+def _box_mean2d(values: np.ndarray, radius: int) -> np.ndarray:
+    radius_i = max(0, int(radius))
+    arr = np.asarray(values, dtype=np.float32)
+    if radius_i <= 0:
+        return arr
+    pad = radius_i
+    padded = np.pad(arr, ((pad, pad), (pad, pad)), mode="edge")
+    integral = np.pad(np.cumsum(np.cumsum(padded, axis=0), axis=1), ((1, 0), (1, 0)), mode="constant")
+    k = 2 * radius_i + 1
+    total = integral[k:, k:] - integral[:-k, k:] - integral[k:, :-k] + integral[:-k, :-k]
+    return (total / float(k * k)).astype(np.float32)
+
+
 def _bin_ids(z: np.lib.npyio.NpzFile, ys: np.ndarray, xs: np.ndarray, grid: int) -> np.ndarray:
     bary = np.asarray(z["barycentric"], dtype=np.float32)
     u = np.clip(bary[1, ys, xs], 0.0, 1.0 - 1.0e-6)
@@ -368,6 +395,8 @@ def _load_source_bank(path: Path) -> tuple[np.ndarray, dict[str, np.ndarray], di
         }
         if "policy_reliability" in z:
             bank["policy_reliability"] = np.asarray(z["policy_reliability"], dtype=np.float32)
+        if "policy_gain" in z:
+            bank["policy_gain"] = np.asarray(z["policy_gain"], dtype=np.float32)
         args_json = str(np.asarray(z["args_json"]).item()) if "args_json" in z else "{}"
     valid = bank["counts"] > 0.0
     bins = int(bank["counts"].shape[1]) if bank["counts"].ndim >= 2 else 0
@@ -442,16 +471,27 @@ def _calibrate_policy_reliability(
     source_agreement_mode: str,
     source_agreement_beta: float,
     source_agreement_min_confidence: float,
+    mode: str,
     min_count: int,
     min_positive_fraction: float,
     min_mean_gain: float,
     gain_scale: float,
     floor: float,
+    patch_radius: int,
+    patch_gain_weight: float,
+    gradient_gain_weight: float,
+    policy_gain_mode: str,
+    policy_gain_max: float,
+    policy_gain_scale: float,
 ) -> dict[str, Any]:
     bins = int(grid) * int(grid)
     counts = np.zeros((int(candidate_faces.size), bins), dtype=np.float64)
     positive = np.zeros_like(counts)
     gain_sum = np.zeros_like(counts)
+    l1_gain_sum = np.zeros_like(counts)
+    patch_gain_sum = np.zeros_like(counts)
+    grad_gain_sum = np.zeros_like(counts)
+    mode_s = str(mode or "local_l1")
     for path in tqdm(val_paths, desc="calibrate policy reliability"):
         with np.load(path, allow_pickle=False) as z:
             parent = np.asarray(z["rgb_render"], dtype=np.float32)[:3]
@@ -486,11 +526,47 @@ def _calibrate_policy_reliability(
             candidate = np.clip(parent + float(alpha) * delta, 0.0, 1.0)
             parent_l1 = np.mean(np.abs(parent[:, ys, xs] - gt[:, ys, xs]), axis=0).astype(np.float64)
             candidate_l1 = np.mean(np.abs(candidate[:, ys, xs] - gt[:, ys, xs]), axis=0).astype(np.float64)
-            gain = parent_l1 - candidate_l1
+            l1_gain = parent_l1 - candidate_l1
+            gain = l1_gain.copy()
+            patch_gain = np.zeros_like(gain, dtype=np.float64)
+            grad_gain = np.zeros_like(gain, dtype=np.float64)
+            if mode_s == "patch_perceptual_v1":
+                parent_luma = _luma(parent)
+                candidate_luma = _luma(candidate)
+                gt_luma = _luma(gt)
+                parent_patch_error = _box_mean2d(np.abs(parent_luma - gt_luma), int(patch_radius))
+                candidate_patch_error = _box_mean2d(np.abs(candidate_luma - gt_luma), int(patch_radius))
+                patch_gain = (parent_patch_error[ys, xs] - candidate_patch_error[ys, xs]).astype(np.float64)
+                parent_grad_error = np.abs(_luma_gradient_magnitude(parent_luma) - _luma_gradient_magnitude(gt_luma))
+                candidate_grad_error = np.abs(_luma_gradient_magnitude(candidate_luma) - _luma_gradient_magnitude(gt_luma))
+                grad_gain = (parent_grad_error - candidate_grad_error)[ys, xs].astype(np.float64)
+                gain = (
+                    l1_gain
+                    + float(patch_gain_weight) * patch_gain
+                    + float(gradient_gain_weight) * grad_gain
+                )
+            elif mode_s != "local_l1":
+                raise ValueError(f"unsupported policy reliability mode for calibration: {mode_s}")
             np.add.at(counts, (face_idx, bin_id), 1.0)
             np.add.at(positive, (face_idx, bin_id), gain > 0.0)
             np.add.at(gain_sum, (face_idx, bin_id), gain)
+            np.add.at(l1_gain_sum, (face_idx, bin_id), l1_gain)
+            np.add.at(patch_gain_sum, (face_idx, bin_id), patch_gain)
+            np.add.at(grad_gain_sum, (face_idx, bin_id), grad_gain)
     mean_gain = np.divide(gain_sum, np.maximum(counts, 1.0), out=np.zeros_like(gain_sum), where=counts > 0.0)
+    mean_l1_gain = np.divide(l1_gain_sum, np.maximum(counts, 1.0), out=np.zeros_like(l1_gain_sum), where=counts > 0.0)
+    mean_patch_gain = np.divide(
+        patch_gain_sum,
+        np.maximum(counts, 1.0),
+        out=np.zeros_like(patch_gain_sum),
+        where=counts > 0.0,
+    )
+    mean_grad_gain = np.divide(
+        grad_gain_sum,
+        np.maximum(counts, 1.0),
+        out=np.zeros_like(grad_gain_sum),
+        where=counts > 0.0,
+    )
     positive_fraction = np.divide(positive, np.maximum(counts, 1.0), out=np.zeros_like(positive), where=counts > 0.0)
     min_pos = float(np.clip(float(min_positive_fraction), 0.0, 0.999))
     pos_score = np.clip((positive_fraction - min_pos) / max(1.0 - min_pos, 1.0e-6), 0.0, 1.0)
@@ -503,10 +579,19 @@ def _calibrate_policy_reliability(
     reliability = floor_v + (1.0 - floor_v) * reliability
     reliability = reliability.astype(np.float32)
     bank["policy_reliability"] = reliability
+    gain_mode_s = str(policy_gain_mode or "off")
+    policy_gain = np.ones_like(reliability, dtype=np.float32)
+    if gain_mode_s == "positive_soft":
+        max_gain = max(1.0, float(policy_gain_max))
+        gain_norm = np.clip(np.maximum(mean_gain - float(min_mean_gain), 0.0) / max(float(policy_gain_scale), 1.0e-8), 0.0, 1.0)
+        policy_gain = (1.0 + (max_gain - 1.0) * reliability.astype(np.float64) * gain_norm).astype(np.float32)
+        bank["policy_gain"] = policy_gain
+    elif gain_mode_s != "off":
+        raise ValueError(f"unsupported policy_gain_mode for calibration: {gain_mode_s}")
     valid = counts >= int(min_count)
     active = reliability > (floor_v + 1.0e-6)
     return {
-        "mode": "local_l1",
+        "mode": mode_s,
         "alpha": float(alpha),
         "policy_val_views": int(len(val_paths)),
         "min_count": int(min_count),
@@ -514,6 +599,9 @@ def _calibrate_policy_reliability(
         "min_mean_gain": float(min_mean_gain),
         "gain_scale": float(gain_scale),
         "floor": float(floor_v),
+        "patch_radius": int(patch_radius),
+        "patch_gain_weight": float(patch_gain_weight),
+        "gradient_gain_weight": float(gradient_gain_weight),
         "observed_bins": int(np.count_nonzero(counts > 0.0)),
         "valid_bins": int(np.count_nonzero(valid)),
         "active_bins": int(np.count_nonzero(active)),
@@ -522,6 +610,16 @@ def _calibrate_policy_reliability(
         "mean_reliability_valid": float(np.mean(reliability[valid])) if np.any(valid) else 0.0,
         "mean_positive_fraction_valid": float(np.mean(positive_fraction[valid])) if np.any(valid) else 0.0,
         "mean_gain_valid": float(np.mean(mean_gain[valid])) if np.any(valid) else 0.0,
+        "mean_l1_gain_valid": float(np.mean(mean_l1_gain[valid])) if np.any(valid) else 0.0,
+        "mean_patch_gain_valid": float(np.mean(mean_patch_gain[valid])) if np.any(valid) else 0.0,
+        "mean_gradient_gain_valid": float(np.mean(mean_grad_gain[valid])) if np.any(valid) else 0.0,
+        "policy_gain_mode": gain_mode_s,
+        "policy_gain_max": float(policy_gain_max),
+        "policy_gain_scale": float(policy_gain_scale),
+        "mean_policy_gain_valid": float(np.mean(policy_gain[valid])) if np.any(valid) else 1.0,
+        "max_policy_gain": float(np.max(policy_gain)) if policy_gain.size else 1.0,
+        "policy_gain_quantiles": _quantiles([float(x) for x in policy_gain.reshape(-1)]),
+        "valid_policy_gain_quantiles": _quantiles([float(x) for x in policy_gain[valid].reshape(-1)]) if np.any(valid) else _quantiles([]),
         "reliability_quantiles": _quantiles([float(x) for x in reliability.reshape(-1)]),
         "valid_reliability_quantiles": _quantiles([float(x) for x in reliability[valid].reshape(-1)]) if np.any(valid) else _quantiles([]),
     }
@@ -564,6 +662,7 @@ def _predict_delta(
     confidences: list[float] = []
     agreement_confidences: list[float] = []
     policy_reliabilities: list[float] = []
+    policy_gains: list[float] = []
     active_count = 0
     for start in range(0, int(ys_all.size), int(chunk_size)):
         end = min(int(ys_all.size), start + int(chunk_size))
@@ -623,6 +722,11 @@ def _predict_delta(
             policy_map = np.asarray(bank["policy_reliability"], dtype=np.float32)
             policy_reliability = np.clip(policy_map[face_idx, bin_id], 0.0, 1.0).astype(np.float32)
             confidence = confidence * policy_reliability
+        policy_gain = np.ones_like(confidence, dtype=np.float32)
+        if "policy_gain" in bank:
+            gain_map = np.asarray(bank["policy_gain"], dtype=np.float32)
+            policy_gain = np.clip(gain_map[face_idx, bin_id], 0.0, 8.0).astype(np.float32)
+            confidence = confidence * policy_gain
         pred = pred * confidence[:, None]
         yy, xx = ys[ok_rows], xs[ok_rows]
         delta[:, yy, xx] = pred[ok_rows].T
@@ -631,11 +735,13 @@ def _predict_delta(
         confidences.append(confidence[ok_rows].astype(np.float32))
         agreement_confidences.append(source_agreement[ok_rows].astype(np.float32))
         policy_reliabilities.append(policy_reliability[ok_rows].astype(np.float32))
+        policy_gains.append(policy_gain[ok_rows].astype(np.float32))
     conf = np.concatenate(confidences) if confidences else np.zeros((0,), dtype=np.float32)
     agreement_conf = (
         np.concatenate(agreement_confidences) if agreement_confidences else np.zeros((0,), dtype=np.float32)
     )
     policy_rel = np.concatenate(policy_reliabilities) if policy_reliabilities else np.zeros((0,), dtype=np.float32)
+    policy_gain_arr = np.concatenate(policy_gains) if policy_gains else np.zeros((0,), dtype=np.float32)
     return delta, active, {
         "surface_support_fraction": float(np.mean(support)),
         "active_fraction": float(active_count / max(int(support.size), 1)),
@@ -646,6 +752,8 @@ def _predict_delta(
         "p10_source_agreement_confidence": float(np.quantile(agreement_conf, 0.10)) if agreement_conf.size else 0.0,
         "mean_policy_reliability": float(np.mean(policy_rel)) if policy_rel.size else 0.0,
         "p10_policy_reliability": float(np.quantile(policy_rel, 0.10)) if policy_rel.size else 0.0,
+        "mean_policy_gain": float(np.mean(policy_gain_arr)) if policy_gain_arr.size else 1.0,
+        "p90_policy_gain": float(np.quantile(policy_gain_arr, 0.90)) if policy_gain_arr.size else 1.0,
     }
 
 
@@ -668,6 +776,8 @@ def _summarize_rows(rows: list[dict[str, Any]], *, compute_lpips: bool) -> dict[
         "support_active_over_support_fraction": _mean([float(r.get("active_over_support_fraction", 0.0)) for r in rows]),
         "mean_confidence": _mean([float(r.get("mean_confidence", 0.0)) for r in rows]),
         "mean_policy_reliability": _mean([float(r.get("mean_policy_reliability", 0.0)) for r in rows]),
+        "mean_policy_gain": _mean([float(r.get("mean_policy_gain", 1.0)) for r in rows]),
+        "p90_policy_gain": _mean([float(r.get("p90_policy_gain", 1.0)) for r in rows]),
         "mean_changed_fraction": _mean([float(r.get("changed_fraction", 0.0)) for r in rows]),
     }
     if compute_lpips:
@@ -1181,6 +1291,9 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- active bins: `{payload.get('policy_reliability', {}).get('active_bins', 0)}`",
         f"- mean reliability: `{payload.get('policy_reliability', {}).get('mean_reliability', 0.0):.6f}`",
         f"- mean valid reliability: `{payload.get('policy_reliability', {}).get('mean_reliability_valid', 0.0):.6f}`",
+        f"- policy gain mode: `{payload.get('policy_reliability', {}).get('policy_gain_mode', 'off')}`",
+        f"- mean valid policy gain: `{payload.get('policy_reliability', {}).get('mean_policy_gain_valid', 1.0):.6f}`",
+        f"- max policy gain: `{payload.get('policy_reliability', {}).get('max_policy_gain', 1.0):.6f}`",
         "",
         "## Artifacts",
         "",
@@ -1249,13 +1362,19 @@ def main() -> int:
     parser.add_argument("--source_agreement_mode", choices=["off", "soft", "hard"], default="off")
     parser.add_argument("--source_agreement_beta", type=float, default=0.0)
     parser.add_argument("--source_agreement_min_confidence", type=float, default=0.25)
-    parser.add_argument("--policy_reliability_mode", choices=["off", "local_l1"], default="off")
+    parser.add_argument("--policy_reliability_mode", choices=["off", "local_l1", "patch_perceptual_v1"], default="off")
     parser.add_argument("--policy_reliability_alpha", type=float, default=0.03125)
     parser.add_argument("--policy_reliability_min_count", type=int, default=8)
     parser.add_argument("--policy_reliability_min_positive_fraction", type=float, default=0.52)
     parser.add_argument("--policy_reliability_min_mean_gain", type=float, default=0.0)
     parser.add_argument("--policy_reliability_gain_scale", type=float, default=0.00025)
     parser.add_argument("--policy_reliability_floor", type=float, default=0.0)
+    parser.add_argument("--policy_reliability_patch_radius", type=int, default=3)
+    parser.add_argument("--policy_reliability_patch_gain_weight", type=float, default=0.5)
+    parser.add_argument("--policy_reliability_gradient_gain_weight", type=float, default=0.25)
+    parser.add_argument("--policy_gain_mode", choices=["off", "positive_soft"], default="off")
+    parser.add_argument("--policy_gain_max", type=float, default=2.0)
+    parser.add_argument("--policy_gain_scale", type=float, default=0.000025)
     parser.add_argument("--bank_residual_transform_mode", choices=["raw_rgb", "luma_only", "chroma_shrink"], default="raw_rgb")
     parser.add_argument("--bank_residual_chroma_shrink", type=float, default=0.25)
     parser.add_argument("--alpha_grid", default="0,0.03125,0.0625,0.09375,0.125,0.1875,0.25,0.375,0.5,0.75,1")
@@ -1337,7 +1456,7 @@ def main() -> int:
         float(args.bank_residual_chroma_shrink),
     )
     policy_reliability_summary: dict[str, Any] = {"mode": "off"}
-    if str(args.policy_reliability_mode) == "local_l1":
+    if str(args.policy_reliability_mode) in {"local_l1", "patch_perceptual_v1"}:
         policy_reliability_summary = _calibrate_policy_reliability(
             val_paths,
             candidate_faces,
@@ -1356,11 +1475,18 @@ def main() -> int:
             source_agreement_mode=str(args.source_agreement_mode),
             source_agreement_beta=float(args.source_agreement_beta),
             source_agreement_min_confidence=float(args.source_agreement_min_confidence),
+            mode=str(args.policy_reliability_mode),
             min_count=int(args.policy_reliability_min_count),
             min_positive_fraction=float(args.policy_reliability_min_positive_fraction),
             min_mean_gain=float(args.policy_reliability_min_mean_gain),
             gain_scale=float(args.policy_reliability_gain_scale),
             floor=float(args.policy_reliability_floor),
+            patch_radius=int(args.policy_reliability_patch_radius),
+            patch_gain_weight=float(args.policy_reliability_patch_gain_weight),
+            gradient_gain_weight=float(args.policy_reliability_gradient_gain_weight),
+            policy_gain_mode=str(args.policy_gain_mode),
+            policy_gain_max=float(args.policy_gain_max),
+            policy_gain_scale=float(args.policy_gain_scale),
         )
     alpha_grid = sorted({float(item) for item in str(args.alpha_grid).split(",") if item.strip()})
     if 0.0 not in alpha_grid:
@@ -1466,6 +1592,8 @@ def main() -> int:
     }
     if "policy_reliability" in bank:
         checkpoint_payload["policy_reliability"] = bank["policy_reliability"].astype(np.float16)
+    if "policy_gain" in bank:
+        checkpoint_payload["policy_gain"] = bank["policy_gain"].astype(np.float16)
     np.savez_compressed(checkpoint_path, **checkpoint_payload)
     verdict = (
         "PASS_POLICY_VAL_PROMOTE_TO_FLOWERS_EXACT"
@@ -1521,6 +1649,10 @@ def main() -> int:
                 ),
                 "policy_reliability/mean": float(policy_reliability_summary.get("mean_reliability", 0.0)),
                 "policy_reliability/active_bins": float(policy_reliability_summary.get("active_bins", 0.0)),
+                "policy_reliability/mean_policy_gain_valid": float(
+                    policy_reliability_summary.get("mean_policy_gain_valid", 1.0)
+                ),
+                "policy_reliability/max_policy_gain": float(policy_reliability_summary.get("max_policy_gain", 1.0)),
                 "target_no_gt/pass": float(bool(target_no_gt_audit.get("pass", False))),
                 "target_eval/pass_vs_parent_all_axis": float(bool(target_eval.get("pass_vs_parent_all_axis", False))),
                 "target_eval/psnr_gain": float(target_eval.get("summary", {}).get("psnr_gain", 0.0)),

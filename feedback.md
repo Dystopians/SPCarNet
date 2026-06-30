@@ -2,7 +2,29 @@
 
 Date: 2026-06-28
 
-Latest update on 2026-06-29:
+Latest update on 2026-06-29, v257-v258:
+
+The current newest branch is **policy-calibrated deferred residual gain** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`.  New files:
+
+- `docs/car_model/6-29-v257-v258-PolicyCalibratedGain-Log.md`
+- `docs/car_model/results/v257_v258_policy_calibrated_gain_summary.json`
+
+Important new facts:
+
+- v257 added `patch_perceptual_v1` reliability: policy-val reliability now uses local RGB L1, luma patch, and luma-gradient gains, not only scalar L1.
+- v258 added `positive_soft` policy gain: the bank now learns a per-face/UV-bin `policy_gain` in addition to `policy_reliability`, so trusted bins can retain more teacher residual energy.
+- This is a real train/eval pipeline change.  Checkpoints save/load `policy_gain`; target no-GT apply uses the same prediction path; target/test GT is loaded only after apply for exact evaluation.
+- v258a increased active teacher residual energy retention from v257a `0.035923` to `0.467043` and improved target exact mean gains to `+0.006250 PSNR / +0.000108 SSIM / +0.000139 LPIPS`.
+- v258b with lower max gain improved target SSIM slightly more: target exact `19.838286 / 0.620047 / 0.180217`, gains `+0.006232 / +0.000137 / +0.000118`.
+- v258c added source-agreement confidence; it reduced target tail damage relative to v258a/b, but also reduced mean gains.
+- No v257-v258 run passes the v169 Phase-J flowers gate.  Best PSNR remains about `0.466` below Phase-J flowers `20.304358`, so full9 remains blocked.
+- The new bottleneck is sharper: stronger residual energy helps means but creates target-tail/OOD risk.  The next model should build a train/policy-val target-support/OOD-aware gain predictor rather than manual gain caps, alpha scans, or full9 promotion.
+
+Current direct verdict:
+
+> v258 is meaningful method progress and the best deferred-source flowers target mean result in this line, but it is still **NOT COMPLETE** for paper-level all-axis success because Phase-J PSNR is not beaten and target tails are not safe enough.
+
+Previous update on 2026-06-29:
 
 The v169 prompt has now been executed through v249-v252 representation-gate experiments.  Treat the current status as **NOT COMPLETE for paper-level all-axis win**, but with a much clearer bottleneck diagnosis.  New files:
 
