@@ -2,7 +2,56 @@
 
 Date: 2026-06-28
 
-Latest update on 2026-06-30, v289:
+Latest update on 2026-06-30, v290-v292:
+
+The newest branch is **PatchViewMoE surface decoder with target-blind
+view-support gating** in `scripts/car_model/train_perceptual_surface_residual_decoder.py`.
+New files:
+
+- `docs/car_model/6-30-v290-v292-PatchViewMoE-ViewSupport-v169-Gate-Log.md`
+- `docs/car_model/results/v290_v292_patch_view_moe_view_support_summary.json`
+- `docs/car_model/assets/v292d_view_support_flowers_exact_panel.png`
+
+Important new facts:
+
+- v290 adds `--surface_texture_mode lowrank_view_v2`, storing low-rank teacher
+  residual bases plus source camera mean/concentration and target-source camera
+  cosine.
+- v290 adds `--decoder_output_mode patch_view_moe`, a low-rank plus
+  patch/view-conditioned direct expert residual decoder.
+- v291 adds strict policy-val tail-safety fields and makes automatic target
+  exact depend on tail safety.
+- v292 adds `--view_support_gate_mode lowrank_view_cos`, a target-blind gate
+  that suppresses residuals where source-view support is weak.
+- All v292 target exact runs used stripped target no-GT evidence first; target
+  GT was loaded only after apply for evaluation.
+
+Effective results:
+
+- v290a raw PatchViewMoE target exact: `19.850131 / 0.619529 / 0.180489`,
+  gains `+0.018077 / -0.000381 / -0.000155`.
+- v292b floor 0.25 target exact: `19.850320 / 0.620385 / 0.180131`,
+  gains `+0.018266 / +0.000474 / +0.000204`.
+- v292c floor 0.15 target exact: `19.848830 / 0.620398 / 0.180057`,
+  gains `+0.016777 / +0.000487 / +0.000278`.
+- v292d floor 0.35 target exact: `19.851452 / 0.620343 / 0.180212`,
+  gains `+0.019398 / +0.000432 / +0.000123`.
+- v292e floor 0.00 target exact: `19.845929 / 0.620358 / 0.180018`,
+  gains `+0.013875 / +0.000447 / +0.000317`.
+
+Current direct verdict:
+
+> v292 proves that target source-view support is a real missing safety signal:
+> the raw PatchViewMoE carrier had strong PSNR but damaged target SSIM/LPIPS,
+> while view-support gating turned it into an all-axis parent win. v292d is the
+> current frontier and beats v290a on all target axes. It still does not pass the
+> v169 Phase-J flowers gate because it is `-0.452906 dB` below the Phase-J PSNR
+> threshold. Do not run full9. The next model should keep the view-support gate
+> but replace the small PatchViewMoE carrier with a higher-capacity
+> surface-attached deferred feature field or neural texture that can carry more
+> teacher residual energy without losing the v292 SSIM/LPIPS repair.
+
+Previous update on 2026-06-30, v289:
 
 The newest branch is **target-compatible source aggregation for deferred source residual rendering** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:
 
@@ -1036,6 +1085,99 @@ Key lessons for the next model:
    official target success in v195-v199.
 9. The script defaults still include nonzero train-fit GT loss. Teacher-only
    claims require explicitly setting all GT weights to zero.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+# 2026-06-30 v290-v292 PatchViewMoE + View-Support Feedback Addendum
+
+This addendum records the latest attempt based on:
+
+```text
+docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md
+```
+
+Main implementation:
+
+```text
+scripts/car_model/train_perceptual_surface_residual_decoder.py
+```
+
+Detailed log and machine-readable summary:
+
+```text
+docs/car_model/6-30-v290-v292-PatchViewMoE-ViewSupport-v169-Gate-Log.md
+docs/car_model/results/v290_v292_patch_view_moe_view_support_summary.json
+```
+
+New qualitative panel:
+
+```text
+docs/car_model/assets/v292d_view_support_flowers_exact_panel.png
+```
+
+What changed:
+
+- v290 added a stronger surface feature carrier:
+  `lowrank_view_v2 + patch_view_moe`.
+- `lowrank_view_v2` keeps a low-rank teacher residual texture and source camera
+  support statistics on the surface.
+- `patch_view_moe` decodes residuals through low-rank coefficients plus a small
+  patch/view-conditioned expert mixture.
+- v291 added strict policy-val tail certificates.
+- v292 added a target-blind view-support gate based on source-target camera
+  cosine and source camera concentration.
+
+Important experimental result:
+
+| run | target PSNR | target SSIM | target LPIPS | PSNR gain | SSIM gain | LPIPS gain | target all-axis |
+|---|---:|---:|---:|---:|---:|---:|---|
+| v290a raw PatchViewMoE | 19.850131 | 0.619529 | 0.180489 | +0.018077 | -0.000381 | -0.000155 | fail |
+| v291b structure-gain tail-safe | 19.845900 | 0.619911 | 0.180715 | +0.013846 | +0.000000 | -0.000380 | fail |
+| v292b view-support floor 0.25 | 19.850320 | 0.620385 | 0.180131 | +0.018266 | +0.000474 | +0.000204 | pass |
+| v292c view-support floor 0.15 | 19.848830 | 0.620398 | 0.180057 | +0.016777 | +0.000487 | +0.000278 | pass |
+| **v292d view-support floor 0.35** | **19.851452** | **0.620343** | **0.180212** | **+0.019398** | **+0.000432** | **+0.000123** | **pass** |
+| v292e view-support floor 0.00 | 19.845929 | 0.620358 | 0.180018 | +0.013875 | +0.000447 | +0.000317 | pass |
+
+Main lesson:
+
+v290 proved that the new PatchViewMoE carrier can produce a meaningful residual,
+but target SSIM/LPIPS failed. v292 proved that target view support is a real
+failure mode: once the residual is attenuated by source-view support, v290a's
+SSIM/LPIPS regression turns into an all-axis target win versus the parent.
+
+Remaining hard bottleneck:
+
+The method still does not pass the v169 Phase-J flowers gate:
+
+```text
+Phase-J flowers reference: 20.304358 PSNR / 0.557770 SSIM / 0.329222 LPIPS
+v292d flowers exact:       19.851452 PSNR / 0.620343 SSIM / 0.180212 LPIPS
+```
+
+Under the prompt's reported metric scale, v292d clears SSIM and LPIPS but is
+still `-0.452906 dB` below the Phase-J PSNR threshold. Therefore full9 is still
+blocked.
+
+What the next model should not do:
+
+- Do not launch full9 before the flowers Phase-J PSNR gate passes.
+- Do not continue alpha/floor scans as the main research contribution.
+- Do not rely on mean policy-val only; tail safety and target support must be
+  checked because v291 showed mean/tail policy-val can fail to transfer.
+
+Most useful next direction:
+
+Build a carrier that closes the remaining `~0.45 dB` PSNR gap without sacrificing
+the v292 SSIM/LPIPS repair. The most direct next research step is a stronger
+surface-attached deferred feature field: keep the view-support gate, but replace
+the current small PatchViewMoE with a representation that can preserve more
+teacher residual energy in source-supported regions, such as a per-face-group
+neural texture with local UV features and explicit edge/high-frequency teacher
+targets.
 
 Current verdict:
 

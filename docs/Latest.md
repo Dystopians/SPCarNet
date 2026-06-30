@@ -2,6 +2,44 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 Topline: v292d PatchViewMoE + View-Support Frontier
+
+Current newest method log:
+
+```text
+docs/car_model/6-30-v290-v292-PatchViewMoE-ViewSupport-v169-Gate-Log.md
+docs/car_model/results/v290_v292_patch_view_moe_view_support_summary.json
+docs/car_model/assets/v292d_view_support_flowers_exact_panel.png
+```
+
+Current best v169 flowers exact candidate is `v292d`, implemented in:
+
+```text
+scripts/car_model/train_perceptual_surface_residual_decoder.py
+```
+
+It adds `lowrank_view_v2` surface texture, `patch_view_moe` residual decoding,
+policy-val tail certificates, and a target-blind `lowrank_view_cos`
+view-support gate.
+
+Key result:
+
+```text
+v292d target exact: 19.851452 PSNR / 0.620343 SSIM / 0.180212 LPIPS
+v292d gains:        +0.019398 / +0.000432 / +0.000123
+no-target-GT audit: pass
+```
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+This is a real method improvement over v290a because v290a had target SSIM and
+LPIPS regressions. However, v292d is still `-0.452906 dB` below the Phase-J
+flowers PSNR gate (`20.304358`), so full9 remains blocked.
+
 ## 2026-06-30 v289 Target-Compatible Source Aggregation Update
 
 新增日志：`docs/car_model/6-30-v289-TargetCompatibility-v169-Gate-Log.md`。
@@ -994,6 +1032,79 @@ Current verdict:
 ```text
 Final status: NOT COMPLETE.
 ```
+
+## 2026-06-30 Update: v290-v292 PatchViewMoE + View-Support v169 Gate
+
+This update follows the stricter v169 prompt:
+
+```text
+docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md
+```
+
+Implemented method changes:
+
+```text
+scripts/car_model/train_perceptual_surface_residual_decoder.py
+```
+
+New controls:
+
+```text
+--surface_texture_mode lowrank_view_v2
+--decoder_output_mode patch_view_moe
+--view_support_gate_mode lowrank_view_cos
+--policy_val_min_* tail gate controls
+```
+
+What changed:
+
+- `lowrank_view_v2` stores low-rank surface residual bases plus source camera
+  mean/concentration and target-source camera cosine.
+- `patch_view_moe` predicts residuals with low-rank coefficients plus
+  view/patch-conditioned direct experts.
+- Policy-val now records all-axis and tail-safe certificates.
+- `lowrank_view_cos` attenuates target residuals when source-view support is
+  weak, directly addressing the out-of-trajectory target LPIPS failure observed
+  in v290/v291.
+
+Latest flowers exact results:
+
+| run | target PSNR | target SSIM | target LPIPS | PSNR gain | SSIM gain | LPIPS gain | changed frac. | Phase-J gate |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| v290a raw PatchViewMoE | 19.850131 | 0.619529 | 0.180489 | +0.018077 | -0.000381 | -0.000155 | 0.119689 | fail |
+| v292b view-support floor 0.25 | 19.850320 | 0.620385 | 0.180131 | +0.018266 | +0.000474 | +0.000204 | 0.106106 | fail |
+| v292c view-support floor 0.15 | 19.848830 | 0.620398 | 0.180057 | +0.016777 | +0.000487 | +0.000278 | 0.092727 | fail |
+| **v292d view-support floor 0.35** | **19.851452** | **0.620343** | **0.180212** | **+0.019398** | **+0.000432** | **+0.000123** | **0.111852** | **fail** |
+| v292e view-support floor 0.00 | 19.845929 | 0.620358 | 0.180018 | +0.013875 | +0.000447 | +0.000317 | 0.049314 | fail |
+
+Interpretation:
+
+- v292d is the current frontier: it keeps v290a's PSNR strength while repairing
+  v290a's target SSIM/LPIPS regression.
+- v292c/v292e are more conservative and better for LPIPS, but give up PSNR.
+- All listed target exact runs passed the no-target-GT audit.
+- The Phase-J flowers gate still fails because v292d is `-0.452906 dB` below
+  the Phase-J PSNR threshold, even though it clears the SSIM and LPIPS
+  thresholds under the reported metric scale.
+
+Artifacts:
+
+```text
+docs/car_model/6-30-v290-v292-PatchViewMoE-ViewSupport-v169-Gate-Log.md
+docs/car_model/results/v290_v292_patch_view_moe_view_support_summary.json
+docs/car_model/assets/v292d_view_support_flowers_exact_panel.png
+outputs/carnet/spcarnet_v292_view_support_20260630/v292d_v290a_viewsupport_floor035_forced_exact_20260630/v180_perceptual_surface_decoder_audit.json
+outputs/carnet/spcarnet_v292_view_support_20260630/v292d_v290a_viewsupport_floor035_forced_exact_20260630/target_exact_fixed_policy
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+Full9 remains blocked by the v169 prompt until flowers exact beats Phase-J
+all-axis.
 
 ## 2026-06-30 Update: v278 Structure/Perceptual Target Transform
 

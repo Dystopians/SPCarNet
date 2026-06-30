@@ -1,0 +1,16 @@
+{
+  "source_run": "outputs/carnet/spcarnet_v292_view_support_20260630/v292d_v290a_viewsupport_floor035_forced_exact_20260630",
+  "views": [
+    "00012",
+    "00010",
+    "00000",
+    "00013"
+  ],
+  "columns": [
+    "Parent",
+    "SPCarNet v292d",
+    "|Delta| x8",
+    "GT"
+  ],
+  "note": "Target exact fixed-policy qualitative panel. Delta is absolute RGB difference between v292d and parent, multiplied by 8 for visibility."
+}

@@ -65,6 +65,13 @@ def _tail(values: list[float], fraction: float = 0.10) -> dict[str, float]:
     return {"min": float(arr[0]), "cvar": float(np.mean(arr[:count])), "p10": float(np.quantile(arr, fraction))}
 
 
+def _tail_value(row: dict[str, Any], metric: str, name: str, default: float = 0.0) -> float:
+    tail = row.get(f"{metric}_gain_tail", {})
+    if not isinstance(tail, dict):
+        return float(default)
+    return float(tail.get(name, default))
+
+
 def _parse_float_grid(text: str, fallback: float) -> list[float]:
     values = [float(x) for x in str(text or "").split(",") if str(x).strip()]
     if not values:
@@ -275,6 +282,10 @@ LOWRANK_TEXTURE_BASIS_OFFSET = SURFACE_TEXTURE_V2_DIM
 LOWRANK_TEXTURE_EIGEN_OFFSET = LOWRANK_TEXTURE_BASIS_OFFSET + 3 * LOWRANK_TEXTURE_BASIS_COUNT
 LOWRANK_TEXTURE_RELIABILITY_INDEX = LOWRANK_TEXTURE_EIGEN_OFFSET + 3
 SURFACE_TEXTURE_LOWRANK_V1_DIM = LOWRANK_TEXTURE_RELIABILITY_INDEX + 1
+LOWRANK_VIEW_CAMERA_OFFSET = SURFACE_TEXTURE_LOWRANK_V1_DIM
+LOWRANK_VIEW_CAMERA_CONCENTRATION_INDEX = LOWRANK_VIEW_CAMERA_OFFSET + 3
+LOWRANK_VIEW_TARGET_COS_INDEX = LOWRANK_VIEW_CAMERA_CONCENTRATION_INDEX + 1
+SURFACE_TEXTURE_LOWRANK_VIEW_V2_DIM = LOWRANK_VIEW_TARGET_COS_INDEX + 1
 
 
 def _base_feature_dim(feature_mode: str) -> int:
@@ -306,7 +317,7 @@ def _surface_texture_reliability_from_rows(
         return np.ones((int(features.shape[0]),), dtype=np.float32)
     tex = np.asarray(features[:, -texture_dim:], dtype=np.float32)
     mode = str(surface_feature_texture.get("mode", "v1"))
-    if mode == "lowrank_v1" and texture_dim >= SURFACE_TEXTURE_LOWRANK_V1_DIM:
+    if mode in {"lowrank_v1", "lowrank_view_v2"} and texture_dim >= SURFACE_TEXTURE_LOWRANK_V1_DIM:
         return np.clip(
             np.nan_to_num(tex[:, LOWRANK_TEXTURE_RELIABILITY_INDEX], nan=0.0, posinf=1.0, neginf=0.0),
             0.0,
@@ -318,6 +329,38 @@ def _surface_texture_reliability_from_rows(
     if texture_dim >= 10:
         return np.clip(tex[:, 1] * tex[:, 9], 0.0, 1.0).astype(np.float32)
     return np.ones((int(features.shape[0]),), dtype=np.float32)
+
+
+def _view_support_gate_from_rows(
+    features: np.ndarray,
+    surface_feature_texture: dict[str, Any] | None,
+    *,
+    mode: str,
+    min_cos: float,
+    min_concentration: float,
+    power: float,
+    floor: float,
+) -> np.ndarray:
+    if not surface_feature_texture or str(mode) == "none":
+        return np.ones((int(features.shape[0]),), dtype=np.float32)
+    texture_dim = _surface_texture_dim(surface_feature_texture)
+    if texture_dim <= 0 or int(features.shape[1]) < texture_dim:
+        return np.ones((int(features.shape[0]),), dtype=np.float32)
+    texture_mode = str(surface_feature_texture.get("mode", surface_feature_texture.get("summary", {}).get("mode", "v1")))
+    if str(mode) != "lowrank_view_cos" or texture_mode != "lowrank_view_v2" or texture_dim < SURFACE_TEXTURE_LOWRANK_VIEW_V2_DIM:
+        return np.ones((int(features.shape[0]),), dtype=np.float32)
+    tex = np.asarray(features[:, -texture_dim:], dtype=np.float32)
+    target_cos = np.clip(tex[:, LOWRANK_VIEW_TARGET_COS_INDEX], -1.0, 1.0)
+    concentration = np.clip(tex[:, LOWRANK_VIEW_CAMERA_CONCENTRATION_INDEX], 0.0, 1.0)
+    cos_gate = np.clip((target_cos - float(min_cos)) / max(1.0 - float(min_cos), 1.0e-6), 0.0, 1.0)
+    concentration_gate = np.clip(
+        (concentration - float(min_concentration)) / max(1.0 - float(min_concentration), 1.0e-6),
+        0.0,
+        1.0,
+    )
+    gate = np.power(np.clip(cos_gate * concentration_gate, 0.0, 1.0), max(float(power), 0.0))
+    gate = float(floor) + (1.0 - float(floor)) * gate
+    return np.clip(np.nan_to_num(gate, nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0).astype(np.float32)
 
 
 def _surface_uv_bin_ids(z: np.lib.npyio.NpzFile, ys: np.ndarray, xs: np.ndarray, uv_bins: int) -> np.ndarray:
@@ -444,6 +487,18 @@ def _lookup_surface_texture_rows(
     rows = np.zeros((int(ys.size), int(surface_feature_texture.get("feature_dim", features.shape[1]))), dtype=np.float32)
     valid = (flat_ids >= 0) & (flat_ids < int(features.shape[0]))
     rows[valid] = features[flat_ids[valid]]
+    mode = str(surface_feature_texture.get("mode", surface_feature_texture.get("summary", {}).get("mode", "v1")))
+    if mode == "lowrank_view_v2" and rows.shape[1] >= SURFACE_TEXTURE_LOWRANK_VIEW_V2_DIM:
+        target_camera = np.asarray(z["camera_center"], dtype=np.float32).reshape(3)
+        target_camera = target_camera / max(float(np.linalg.norm(target_camera)), 1.0e-8)
+        source_camera = rows[:, LOWRANK_VIEW_CAMERA_OFFSET:LOWRANK_VIEW_CAMERA_OFFSET + 3].astype(np.float32)
+        source_camera = source_camera / np.maximum(np.linalg.norm(source_camera, axis=1, keepdims=True), 1.0e-8)
+        target_cos = np.sum(source_camera * target_camera.reshape(1, 3), axis=1)
+        rows[:, LOWRANK_VIEW_TARGET_COS_INDEX] = np.clip(
+            np.nan_to_num(target_cos, nan=0.0, posinf=1.0, neginf=-1.0),
+            -1.0,
+            1.0,
+        ).astype(np.float32)
     return rows.astype(np.float32)
 
 
@@ -684,9 +739,11 @@ def _fit_surface_feature_texture(
     rng = np.random.default_rng(int(seed))
     bins = max(1, int(uv_bins))
     mode = str(mode)
-    if mode not in {"v1", "v2", "lowrank_v1"}:
+    if mode not in {"v1", "v2", "lowrank_v1", "lowrank_view_v2"}:
         raise ValueError(f"unknown surface texture mode={mode}")
-    if mode == "lowrank_v1":
+    if mode == "lowrank_view_v2":
+        feature_dim = SURFACE_TEXTURE_LOWRANK_VIEW_V2_DIM
+    elif mode == "lowrank_v1":
         feature_dim = SURFACE_TEXTURE_LOWRANK_V1_DIM
     elif mode == "v2":
         feature_dim = SURFACE_TEXTURE_V2_DIM
@@ -701,12 +758,14 @@ def _fit_surface_feature_texture(
     bin_res_norm_sum = np.zeros((total_bins,), dtype=np.float64)
     bin_luma_sign_sum = np.zeros((total_bins,), dtype=np.float64)
     bin_second_moment_sum = np.zeros((total_bins, 6), dtype=np.float64)
+    bin_camera_sum = np.zeros((total_bins, 3), dtype=np.float64)
     bin_counts = np.zeros((total_bins,), dtype=np.int64)
     face_sum = np.zeros((face_count, stat_dim), dtype=np.float64)
     face_l1_sq_sum = np.zeros((face_count,), dtype=np.float64)
     face_res_norm_sum = np.zeros((face_count,), dtype=np.float64)
     face_luma_sign_sum = np.zeros((face_count,), dtype=np.float64)
     face_second_moment_sum = np.zeros((face_count, 6), dtype=np.float64)
+    face_camera_sum = np.zeros((face_count, 3), dtype=np.float64)
     face_counts = np.zeros((face_count,), dtype=np.int64)
     rows: list[dict[str, Any]] = []
     sampled_pixels = 0
@@ -763,6 +822,7 @@ def _fit_surface_feature_texture(
         normal_rows = normal_rows / np.maximum(np.linalg.norm(normal_rows, axis=1, keepdims=True), 1.0e-8)
         camera = np.asarray(z["camera_center"], dtype=np.float32).reshape(3)
         camera = camera / max(float(np.linalg.norm(camera)), 1.0e-8)
+        camera_rows = np.repeat(camera.reshape(1, 3), int(ys.size), axis=0).astype(np.float32)
         ndot = np.sum(normal_rows * camera.reshape(1, 3), axis=1, keepdims=True).astype(np.float32)
         values = np.concatenate(
             [
@@ -800,6 +860,17 @@ def _fit_surface_feature_texture(
         for channel, term in enumerate(second_terms):
             bin_second_moment_sum[:, channel] += np.bincount(flat_ids, weights=term, minlength=total_bins)
             face_second_moment_sum[:, channel] += np.bincount(face_idx, weights=term, minlength=face_count)
+        for channel in range(3):
+            bin_camera_sum[:, channel] += np.bincount(
+                flat_ids,
+                weights=camera_rows[:, channel].astype(np.float64),
+                minlength=total_bins,
+            )
+            face_camera_sum[:, channel] += np.bincount(
+                face_idx,
+                weights=camera_rows[:, channel].astype(np.float64),
+                minlength=face_count,
+            )
         for channel in range(stat_dim):
             bin_sum[:, channel] += np.bincount(flat_ids, weights=values[:, channel], minlength=total_bins)
             face_sum[:, channel] += np.bincount(face_idx, weights=values[:, channel], minlength=face_count)
@@ -818,7 +889,7 @@ def _fit_surface_feature_texture(
         )
         face_ids = np.nonzero(face_nonzero)[0]
         face_lowrank_basis = face_lowrank_eigen = face_lowrank_reliability = None
-        if mode == "lowrank_v1":
+        if mode in {"lowrank_v1", "lowrank_view_v2"}:
             face_second = face_second_moment_sum[face_ids] / np.maximum(face_counts[face_ids, None], 1)
             face_lowrank_basis, face_lowrank_eigen, face_lowrank_reliability = _lowrank_residual_basis_batch(
                 face_mean[face_ids, 0:3],
@@ -841,7 +912,7 @@ def _fit_surface_feature_texture(
             features[start:end, 13] = float(face_mean[face, 10])
             features[start:end, 14] = float(face_mean[face, 11])
             features[start:end, 15:18] = face_mean[face, 12:15].astype(np.float32)
-            if mode in {"v2", "lowrank_v1"}:
+            if mode in {"v2", "lowrank_v1", "lowrank_view_v2"}:
                 face_mean_norm = face_res_norm_sum[face] / max(float(face_counts[face]), 1.0)
                 direction_agreement = float(np.linalg.norm(face_mean[face, 0:3]) / max(face_mean_norm, 1.0e-6))
                 luma_sign_consistency = float(abs(face_luma_sign_sum[face]) / max(float(face_counts[face]), 1.0))
@@ -851,7 +922,7 @@ def _fit_surface_feature_texture(
                 features[start:end, 19] = float(np.clip(luma_sign_consistency, 0.0, 1.0))
                 features[start:end, 20] = float(np.clip(relative_std, 0.0, 1.0))
                 features[start:end, 21] = float(np.clip(reliability, 0.0, 1.0))
-            if mode == "lowrank_v1" and face_lowrank_basis is not None:
+            if mode in {"lowrank_v1", "lowrank_view_v2"} and face_lowrank_basis is not None:
                 features[start:end, LOWRANK_TEXTURE_BASIS_OFFSET:LOWRANK_TEXTURE_EIGEN_OFFSET] = face_lowrank_basis[
                     local_face
                 ].reshape(-1)
@@ -859,6 +930,16 @@ def _fit_surface_feature_texture(
                     local_face
                 ]
                 features[start:end, LOWRANK_TEXTURE_RELIABILITY_INDEX] = face_lowrank_reliability[local_face]
+            if mode == "lowrank_view_v2":
+                camera_mean = face_camera_sum[face] / max(float(face_counts[face]), 1.0)
+                camera_concentration = float(np.linalg.norm(camera_mean))
+                camera_mean = camera_mean / max(camera_concentration, 1.0e-8)
+                features[start:end, LOWRANK_VIEW_CAMERA_OFFSET:LOWRANK_VIEW_CAMERA_OFFSET + 3] = camera_mean.astype(
+                    np.float32
+                )
+                features[start:end, LOWRANK_VIEW_CAMERA_CONCENTRATION_INDEX] = float(
+                    np.clip(camera_concentration, 0.0, 1.0)
+                )
     if np.any(bin_nonzero):
         bin_mean = bin_sum[bin_nonzero] / bin_counts[bin_nonzero, None]
         bin_var = np.maximum(
@@ -880,7 +961,7 @@ def _fit_surface_feature_texture(
         features[bin_nonzero, 13] = bin_mean[:, 10].astype(np.float32)
         features[bin_nonzero, 14] = bin_mean[:, 11].astype(np.float32)
         features[bin_nonzero, 15:18] = bin_mean[:, 12:15].astype(np.float32)
-        if mode in {"v2", "lowrank_v1"}:
+        if mode in {"v2", "lowrank_v1", "lowrank_view_v2"}:
             mean_norm = bin_res_norm_sum[bin_nonzero] / np.maximum(bin_counts[bin_nonzero], 1)
             direction_agreement = np.linalg.norm(bin_mean[:, 0:3], axis=1) / np.maximum(mean_norm, 1.0e-6)
             luma_sign_consistency = np.abs(bin_luma_sign_sum[bin_nonzero]) / np.maximum(bin_counts[bin_nonzero], 1)
@@ -890,7 +971,7 @@ def _fit_surface_feature_texture(
             features[bin_nonzero, 19] = np.clip(luma_sign_consistency, 0.0, 1.0).astype(np.float32)
             features[bin_nonzero, 20] = np.clip(relative_std, 0.0, 1.0).astype(np.float32)
             features[bin_nonzero, 21] = np.clip(reliability, 0.0, 1.0).astype(np.float32)
-        if mode == "lowrank_v1":
+        if mode in {"lowrank_v1", "lowrank_view_v2"}:
             nonzero_ids = np.nonzero(bin_nonzero)[0]
             bin_second = bin_second_moment_sum[bin_nonzero] / np.maximum(bin_counts[bin_nonzero, None], 1)
             basis, eigen_sqrt, lowrank_reliability = _lowrank_residual_basis_batch(
@@ -907,6 +988,18 @@ def _fit_surface_feature_texture(
             )
             features[nonzero_ids, LOWRANK_TEXTURE_EIGEN_OFFSET:LOWRANK_TEXTURE_RELIABILITY_INDEX] = eigen_sqrt
             features[nonzero_ids, LOWRANK_TEXTURE_RELIABILITY_INDEX] = lowrank_reliability
+            if mode == "lowrank_view_v2":
+                camera_mean = bin_camera_sum[bin_nonzero] / np.maximum(bin_counts[bin_nonzero, None], 1)
+                camera_concentration = np.linalg.norm(camera_mean, axis=1)
+                camera_dir = camera_mean / np.maximum(camera_concentration[:, None], 1.0e-8)
+                features[nonzero_ids, LOWRANK_VIEW_CAMERA_OFFSET:LOWRANK_VIEW_CAMERA_OFFSET + 3] = camera_dir.astype(
+                    np.float32
+                )
+                features[nonzero_ids, LOWRANK_VIEW_CAMERA_CONCENTRATION_INDEX] = np.clip(
+                    camera_concentration,
+                    0.0,
+                    1.0,
+                ).astype(np.float32)
     features = np.clip(np.nan_to_num(features, nan=0.0, posinf=1.0, neginf=-1.0), -1.0, 1.0).astype(np.float32)
     summary = {
         "enabled": True,
@@ -924,28 +1017,33 @@ def _fit_surface_feature_texture(
         "max_samples_per_view": int(max_samples_per_view),
         "mean_bin_count_on_covered": float(np.mean(bin_counts[bin_nonzero])) if np.any(bin_nonzero) else 0.0,
         "mean_direction_agreement_on_covered": (
-            float(np.mean(features[bin_nonzero, 18])) if mode in {"v2", "lowrank_v1"} and np.any(bin_nonzero) else None
+            float(np.mean(features[bin_nonzero, 18])) if mode in {"v2", "lowrank_v1", "lowrank_view_v2"} and np.any(bin_nonzero) else None
         ),
         "mean_luma_sign_consistency_on_covered": (
-            float(np.mean(features[bin_nonzero, 19])) if mode in {"v2", "lowrank_v1"} and np.any(bin_nonzero) else None
+            float(np.mean(features[bin_nonzero, 19])) if mode in {"v2", "lowrank_v1", "lowrank_view_v2"} and np.any(bin_nonzero) else None
         ),
         "mean_direction_reliability_on_covered": (
-            float(np.mean(features[bin_nonzero, 21])) if mode in {"v2", "lowrank_v1"} and np.any(bin_nonzero) else None
+            float(np.mean(features[bin_nonzero, 21])) if mode in {"v2", "lowrank_v1", "lowrank_view_v2"} and np.any(bin_nonzero) else None
         ),
-        "lowrank_basis_count": int(LOWRANK_TEXTURE_BASIS_COUNT) if mode == "lowrank_v1" else 0,
+        "lowrank_basis_count": int(LOWRANK_TEXTURE_BASIS_COUNT) if mode in {"lowrank_v1", "lowrank_view_v2"} else 0,
         "mean_lowrank_reliability_on_covered": (
             float(np.mean(features[bin_nonzero, LOWRANK_TEXTURE_RELIABILITY_INDEX]))
-            if mode == "lowrank_v1" and np.any(bin_nonzero)
+            if mode in {"lowrank_v1", "lowrank_view_v2"} and np.any(bin_nonzero)
             else None
         ),
         "mean_lowrank_basis0_l1_on_covered": (
             float(np.mean(np.mean(np.abs(features[bin_nonzero, LOWRANK_TEXTURE_BASIS_OFFSET:LOWRANK_TEXTURE_BASIS_OFFSET + 3]), axis=1)))
-            if mode == "lowrank_v1" and np.any(bin_nonzero)
+            if mode in {"lowrank_v1", "lowrank_view_v2"} and np.any(bin_nonzero)
             else None
         ),
         "mean_lowrank_pca_energy_on_covered": (
             float(np.mean(np.sum(np.square(features[bin_nonzero, LOWRANK_TEXTURE_EIGEN_OFFSET:LOWRANK_TEXTURE_RELIABILITY_INDEX]), axis=1)))
-            if mode == "lowrank_v1" and np.any(bin_nonzero)
+            if mode in {"lowrank_v1", "lowrank_view_v2"} and np.any(bin_nonzero)
+            else None
+        ),
+        "mean_source_camera_concentration_on_covered": (
+            float(np.mean(features[bin_nonzero, LOWRANK_VIEW_CAMERA_CONCENTRATION_INDEX]))
+            if mode == "lowrank_view_v2" and np.any(bin_nonzero)
             else None
         ),
         "rows": rows,
@@ -956,7 +1054,7 @@ def _fit_surface_feature_texture(
         "counts": bin_counts.astype(np.int64),
         "uv_bins": int(bins),
         "feature_dim": int(feature_dim),
-        "lowrank_basis_count": int(LOWRANK_TEXTURE_BASIS_COUNT) if mode == "lowrank_v1" else 0,
+        "lowrank_basis_count": int(LOWRANK_TEXTURE_BASIS_COUNT) if mode in {"lowrank_v1", "lowrank_view_v2"} else 0,
         "summary": summary,
     }
 
@@ -978,6 +1076,8 @@ class SurfaceResidualDecoder(torch.nn.Module):
         lowrank_basis_feature_offset: int = -1,
         lowrank_coeff_scale: float = 1.0,
         lowrank_direct_scale: float = 0.25,
+        moe_expert_count: int = 3,
+        moe_direct_scale: float = 0.35,
     ):
         super().__init__()
         self.face_embedding = torch.nn.Embedding(int(face_count), int(embedding_dim))
@@ -988,12 +1088,19 @@ class SurfaceResidualDecoder(torch.nn.Module):
         self.lowrank_basis_feature_offset = int(lowrank_basis_feature_offset)
         self.lowrank_coeff_scale = float(lowrank_coeff_scale)
         self.lowrank_direct_scale = float(lowrank_direct_scale)
-        if self.output_mode not in {"direct", "lowrank_texture", "lowrank_plus_direct"}:
+        self.moe_expert_count = max(1, int(moe_expert_count))
+        self.moe_direct_scale = float(moe_direct_scale)
+        if self.output_mode not in {"direct", "lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}:
             raise ValueError(f"unknown decoder output mode={self.output_mode}")
-        if self.output_mode in {"lowrank_texture", "lowrank_plus_direct"}:
+        if self.output_mode in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}:
             if self.lowrank_basis_count <= 0 or self.lowrank_basis_feature_offset < 0:
                 raise ValueError(f"{self.output_mode} output requires positive basis count and feature offset")
-            residual_out_dim = self.lowrank_basis_count + (3 if self.output_mode == "lowrank_plus_direct" else 0)
+            if self.output_mode == "lowrank_plus_direct":
+                residual_out_dim = self.lowrank_basis_count + 3
+            elif self.output_mode == "patch_view_moe":
+                residual_out_dim = self.lowrank_basis_count + 4 * self.moe_expert_count + 1
+            else:
+                residual_out_dim = self.lowrank_basis_count
         else:
             residual_out_dim = 3
         out_dim = residual_out_dim + (1 if self.predict_confidence else 0)
@@ -1008,7 +1115,7 @@ class SurfaceResidualDecoder(torch.nn.Module):
     def forward_with_confidence(self, face_idx: torch.Tensor, features: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         emb = self.face_embedding(face_idx)
         raw = self.net(torch.cat([features, emb], dim=1))
-        if self.output_mode in {"lowrank_texture", "lowrank_plus_direct"}:
+        if self.output_mode in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}:
             coeff = torch.tanh(raw[:, : self.lowrank_basis_count]) * self.lowrank_coeff_scale
             basis_start = int(self.lowrank_basis_feature_offset)
             basis_end = basis_start + 3 * int(self.lowrank_basis_count)
@@ -1019,8 +1126,28 @@ class SurfaceResidualDecoder(torch.nn.Module):
                 direct_end = direct_start + 3
                 direct = torch.tanh(raw[:, direct_start:direct_end]) * self.max_delta * self.lowrank_direct_scale
                 residual = residual + direct
+            elif self.output_mode == "patch_view_moe":
+                direct_start = int(self.lowrank_basis_count)
+                direct_end = direct_start + 3 * int(self.moe_expert_count)
+                expert_logits_start = direct_end
+                expert_logits_end = expert_logits_start + int(self.moe_expert_count)
+                direct_gate_index = expert_logits_end
+                experts = torch.tanh(raw[:, direct_start:direct_end]).reshape(
+                    -1,
+                    int(self.moe_expert_count),
+                    3,
+                )
+                expert_weights = torch.softmax(raw[:, expert_logits_start:expert_logits_end], dim=1)
+                direct = torch.sum(expert_weights[:, :, None] * experts, dim=1)
+                direct_gate = torch.sigmoid(raw[:, direct_gate_index]).reshape(-1, 1)
+                residual = residual + direct_gate * direct * self.max_delta * self.moe_direct_scale
             residual = torch.clamp(residual, -self.max_delta, self.max_delta)
-            confidence_index = self.lowrank_basis_count + (3 if self.output_mode == "lowrank_plus_direct" else 0)
+            if self.output_mode == "lowrank_plus_direct":
+                confidence_index = self.lowrank_basis_count + 3
+            elif self.output_mode == "patch_view_moe":
+                confidence_index = self.lowrank_basis_count + 4 * int(self.moe_expert_count) + 1
+            else:
+                confidence_index = self.lowrank_basis_count
         else:
             residual = torch.tanh(raw[:, :3]) * self.max_delta
             confidence_index = 3
@@ -1446,6 +1573,20 @@ def _evaluate(
     ssim_max_side: int,
     lpips_max_side: int,
     compute_lpips: bool,
+    min_positive_view_fraction: float,
+    min_ssim_positive_view_fraction: float,
+    min_lpips_positive_view_fraction: float,
+    min_psnr_cvar_gain: float,
+    min_ssim_cvar_gain: float,
+    min_lpips_cvar_gain: float,
+    min_psnr_min_gain: float,
+    min_ssim_min_gain: float,
+    min_lpips_min_gain: float,
+    view_support_gate_mode: str,
+    view_support_min_cos: float,
+    view_support_min_concentration: float,
+    view_support_power: float,
+    view_support_floor: float,
     output_dir: Path | None,
     device: torch.device,
 ) -> dict[str, Any]:
@@ -1479,20 +1620,28 @@ def _evaluate(
                 ys, xs, face_idx = ys[ok], xs[ok], face_idx[ok]
                 for start in range(0, int(ys.size), int(chunk_size)):
                     end = min(int(ys.size), start + int(chunk_size))
-                    feat = torch.from_numpy(
-                        _load_feature_rows(
-                            z,
-                            ys[start:end],
-                            xs[start:end],
-                            feature_mode=str(feature_mode),
-                            face_idx=face_idx[start:end],
-                            surface_feature_texture=surface_feature_texture,
-                        )
-                    ).to(device)
+                    features_np = _load_feature_rows(
+                        z,
+                        ys[start:end],
+                        xs[start:end],
+                        feature_mode=str(feature_mode),
+                        face_idx=face_idx[start:end],
+                        surface_feature_texture=surface_feature_texture,
+                    )
+                    view_gate = _view_support_gate_from_rows(
+                        features_np,
+                        surface_feature_texture,
+                        mode=str(view_support_gate_mode),
+                        min_cos=float(view_support_min_cos),
+                        min_concentration=float(view_support_min_concentration),
+                        power=float(view_support_power),
+                        floor=float(view_support_floor),
+                    )
+                    feat = torch.from_numpy(features_np).to(device)
                     face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
                     pred_t, conf_t = model.forward_with_confidence(face_t, feat)
-                    pred = pred_t.detach().cpu().numpy().astype(np.float32)
-                    conf = conf_t.detach().cpu().numpy().astype(np.float32)
+                    pred = pred_t.detach().cpu().numpy().astype(np.float32) * view_gate.reshape(-1, 1)
+                    conf = conf_t.detach().cpu().numpy().astype(np.float32) * view_gate
                     delta[:, ys[start:end], xs[start:end]] = pred.T
                     confidence[ys[start:end], xs[start:end]] = conf
             p_psnr = _psnr(parent, gt)
@@ -1616,21 +1765,41 @@ def _evaluate(
         ),
     )
     best_all_axis = None
+    best_tail_safe = None
     for row in summaries:
-        if (
+        score = (
+            float(row.get("psnr_gain", 0.0))
+            + 20.0 * float(row.get("ssim_gain", 0.0))
+            + 20.0 * float(row.get("lpips_gain", 0.0))
+        )
+        all_axis_pass = (
             float(row.get("psnr_gain", 0.0)) > 0.0
             and float(row.get("ssim_gain", 0.0)) > 0.0
             and (not compute_lpips or float(row.get("lpips_gain", 0.0)) > 0.0)
-        ):
-            score = (
-                float(row.get("psnr_gain", 0.0))
-                + 20.0 * float(row.get("ssim_gain", 0.0))
-                + 20.0 * float(row.get("lpips_gain", 0.0))
-            )
+        )
+        tail_safe_pass = (
+            all_axis_pass
+            and float(row.get("positive_view_fraction", 0.0)) >= float(min_positive_view_fraction)
+            and float(row.get("ssim_positive_view_fraction", 0.0)) >= float(min_ssim_positive_view_fraction)
+            and (not compute_lpips or float(row.get("lpips_positive_view_fraction", 0.0)) >= float(min_lpips_positive_view_fraction))
+            and _tail_value(row, "psnr", "cvar") >= float(min_psnr_cvar_gain)
+            and _tail_value(row, "ssim", "cvar") >= float(min_ssim_cvar_gain)
+            and (not compute_lpips or _tail_value(row, "lpips", "cvar") >= float(min_lpips_cvar_gain))
+            and _tail_value(row, "psnr", "min") >= float(min_psnr_min_gain)
+            and _tail_value(row, "ssim", "min") >= float(min_ssim_min_gain)
+            and (not compute_lpips or _tail_value(row, "lpips", "min") >= float(min_lpips_min_gain))
+        )
+        row["balanced_score"] = float(score)
+        row["all_axis_pass"] = bool(all_axis_pass)
+        row["tail_safe_pass"] = bool(tail_safe_pass)
+        if all_axis_pass:
             cand = {k: v for k, v in row.items() if k != "per_view"}
-            cand["balanced_score"] = float(score)
             if best_all_axis is None or score > float(best_all_axis.get("balanced_score", -1.0)):
                 best_all_axis = cand
+        if tail_safe_pass:
+            cand = {k: v for k, v in row.items() if k != "per_view"}
+            if best_tail_safe is None or score > float(best_tail_safe.get("balanced_score", -1.0)):
+                best_tail_safe = cand
     if output_dir is not None:
         best_alpha = float(best["alpha"])
         best_confidence_threshold = float(best.get("apply_confidence_threshold", apply_confidence_threshold_grid[0]))
@@ -1651,26 +1820,34 @@ def _evaluate(
                     ys, xs, face_idx = ys[ok], xs[ok], face_idx[ok]
                     for start in range(0, int(ys.size), int(chunk_size)):
                         end = min(int(ys.size), start + int(chunk_size))
-                        feat = torch.from_numpy(
-                            _load_feature_rows(
-                                z,
-                                ys[start:end],
-                                xs[start:end],
-                                feature_mode=str(feature_mode),
-                                face_idx=face_idx[start:end],
-                                surface_feature_texture=surface_feature_texture,
-                            )
-                        ).to(device)
+                        features_np = _load_feature_rows(
+                            z,
+                            ys[start:end],
+                            xs[start:end],
+                            feature_mode=str(feature_mode),
+                            face_idx=face_idx[start:end],
+                            surface_feature_texture=surface_feature_texture,
+                        )
+                        view_gate = _view_support_gate_from_rows(
+                            features_np,
+                            surface_feature_texture,
+                            mode=str(view_support_gate_mode),
+                            min_cos=float(view_support_min_cos),
+                            min_concentration=float(view_support_min_concentration),
+                            power=float(view_support_power),
+                            floor=float(view_support_floor),
+                        )
+                        feat = torch.from_numpy(features_np).to(device)
                         face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
                         pred_t, conf_t = model.forward_with_confidence(face_t, feat)
-                        pred = pred_t.detach().cpu().numpy().astype(np.float32)
+                        pred = pred_t.detach().cpu().numpy().astype(np.float32) * view_gate.reshape(-1, 1)
                         pred, face_keep = _apply_face_reliability(
                             pred,
                             face_idx[start:end],
                             face_reliability_scores,
                             best_face_reliability_threshold,
                         )
-                        conf = conf_t.detach().cpu().numpy().astype(np.float32)
+                        conf = conf_t.detach().cpu().numpy().astype(np.float32) * view_gate
                         delta[:, ys[start:end], xs[start:end]] = pred.T
                         confidence[ys[start:end], xs[start:end]] = conf * face_keep
                 adapted, _applied_delta, _gate_summary = _apply_delta(
@@ -1689,8 +1866,20 @@ def _evaluate(
     return {
         "best": {k: v for k, v in best.items() if k != "per_view"},
         "best_all_axis": best_all_axis,
+        "best_tail_safe": best_tail_safe,
         "rows": [{k: v for k, v in row.items() if k != "per_view"} for row in summaries],
         "per_view_by_policy": {str(k): v for k, v in rows_by_policy.items()},
+        "tail_gate": {
+            "min_positive_view_fraction": float(min_positive_view_fraction),
+            "min_ssim_positive_view_fraction": float(min_ssim_positive_view_fraction),
+            "min_lpips_positive_view_fraction": float(min_lpips_positive_view_fraction),
+            "min_psnr_cvar_gain": float(min_psnr_cvar_gain),
+            "min_ssim_cvar_gain": float(min_ssim_cvar_gain),
+            "min_lpips_cvar_gain": float(min_lpips_cvar_gain),
+            "min_psnr_min_gain": float(min_psnr_min_gain),
+            "min_ssim_min_gain": float(min_ssim_min_gain),
+            "min_lpips_min_gain": float(min_lpips_min_gain),
+        },
     }
 
 
@@ -1708,6 +1897,11 @@ def _predict_delta_image(
     device: torch.device,
     face_reliability_scores: np.ndarray | None = None,
     face_reliability_threshold: float = -1.0e9,
+    view_support_gate_mode: str = "none",
+    view_support_min_cos: float = -1.0,
+    view_support_min_concentration: float = 0.0,
+    view_support_power: float = 1.0,
+    view_support_floor: float = 0.0,
     return_confidence: bool = False,
 ) -> tuple[np.ndarray, float] | tuple[np.ndarray, float, np.ndarray]:
     parent = np.asarray(z["rgb_render"], dtype=np.float32)
@@ -1724,26 +1918,34 @@ def _predict_delta_image(
         with torch.no_grad():
             for start in range(0, int(ys.size), int(chunk_size)):
                 end = min(int(ys.size), start + int(chunk_size))
-                feat = torch.from_numpy(
-                    _load_feature_rows(
-                        z,
-                        ys[start:end],
-                        xs[start:end],
-                        feature_mode=str(feature_mode),
-                        face_idx=face_idx[start:end],
-                        surface_feature_texture=surface_feature_texture,
-                    )
-                ).to(device)
+                features_np = _load_feature_rows(
+                    z,
+                    ys[start:end],
+                    xs[start:end],
+                    feature_mode=str(feature_mode),
+                    face_idx=face_idx[start:end],
+                    surface_feature_texture=surface_feature_texture,
+                )
+                view_gate = _view_support_gate_from_rows(
+                    features_np,
+                    surface_feature_texture,
+                    mode=str(view_support_gate_mode),
+                    min_cos=float(view_support_min_cos),
+                    min_concentration=float(view_support_min_concentration),
+                    power=float(view_support_power),
+                    floor=float(view_support_floor),
+                )
+                feat = torch.from_numpy(features_np).to(device)
                 face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
                 pred_t, conf_t = model.forward_with_confidence(face_t, feat)
-                pred = pred_t.detach().cpu().numpy().astype(np.float32)
+                pred = pred_t.detach().cpu().numpy().astype(np.float32) * view_gate.reshape(-1, 1)
                 pred, face_keep = _apply_face_reliability(
                     pred,
                     face_idx[start:end],
                     face_reliability_scores,
                     float(face_reliability_threshold),
                 )
-                conf = conf_t.detach().cpu().numpy().astype(np.float32)
+                conf = conf_t.detach().cpu().numpy().astype(np.float32) * view_gate
                 delta[:, ys[start:end], xs[start:end]] = pred.T
                 confidence[ys[start:end], xs[start:end]] = conf * face_keep
     active_fraction = float(active_count / max(int(parent.shape[1] * parent.shape[2]), 1))
@@ -1771,6 +1973,11 @@ def _target_exact_eval(
     apply_gate_strength: float,
     apply_gate_floor: float,
     apply_gate_eps: float,
+    view_support_gate_mode: str,
+    view_support_min_cos: float,
+    view_support_min_concentration: float,
+    view_support_power: float,
+    view_support_floor: float,
     chunk_size: int,
     ssim_max_side: int,
     lpips_max_side: int,
@@ -1808,6 +2015,11 @@ def _target_exact_eval(
                 device=device,
                 face_reliability_scores=face_reliability_scores,
                 face_reliability_threshold=float(face_reliability_threshold),
+                view_support_gate_mode=str(view_support_gate_mode),
+                view_support_min_cos=float(view_support_min_cos),
+                view_support_min_concentration=float(view_support_min_concentration),
+                view_support_power=float(view_support_power),
+                view_support_floor=float(view_support_floor),
                 return_confidence=True,
             )
             adapted, applied_delta, gate_summary = _apply_delta(
@@ -1911,6 +2123,11 @@ def _target_exact_eval(
         "apply_gate_strength": float(apply_gate_strength),
         "apply_gate_floor": float(apply_gate_floor),
         "apply_gate_eps": float(apply_gate_eps),
+        "view_support_gate_mode": str(view_support_gate_mode),
+        "view_support_min_cos": float(view_support_min_cos),
+        "view_support_min_concentration": float(view_support_min_concentration),
+        "view_support_power": float(view_support_power),
+        "view_support_floor": float(view_support_floor),
         "target_evidence_dir": str(target_evidence_dir),
         "target_eval_evidence_dir": str(target_eval_evidence_dir),
         "render_dir": str(render_dir) if render_dir is not None else "",
@@ -1924,11 +2141,14 @@ def _target_exact_eval(
 def _write_md(path: Path, payload: dict[str, Any]) -> None:
     best = payload["policy_val"]["best"]
     best_all_axis = payload["policy_val"].get("best_all_axis")
+    best_tail_safe = payload["policy_val"].get("best_tail_safe")
+    tail_gate = payload["policy_val"].get("tail_gate", {})
     lines = [
         "# Learned Surface Feature Decoder Audit",
         "",
         f"- teacher signal pass: `{payload['teacher_signal_pass']}`",
         f"- policy-val all-axis pass: `{payload['policy_val_all_axis_pass']}`",
+        f"- policy-val tail-safe pass: `{payload.get('policy_val_tail_safe_pass')}`",
         f"- no-target-GT audit pass: `{payload.get('target_no_gt_audit', {}).get('pass')}`",
         f"- target exact fixed-policy pass vs parent: `{payload.get('target_exact_eval', {}).get('pass_vs_parent_all_axis')}`",
         f"- flowers exact Phase-J gate pass: `{payload.get('flowers_exact_phasej_gate_pass')}`",
@@ -1943,12 +2163,19 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"bin `{payload.get('surface_feature_texture', {}).get('covered_bin_fraction', 0.0):.6f}`",
         f"- decoder output mode: `{payload['train'].get('decoder_output_mode', 'direct')}` "
         f"basis `{payload['train'].get('lowrank_basis_count', 0)}`",
+        f"- MoE experts / direct scale: `{payload['train'].get('moe_expert_count', 0)}` / "
+        f"`{payload['train'].get('moe_direct_scale', 0.0):.6f}`",
         f"- calibration views: `{payload.get('calibration_views', 0)}`",
         f"- calibration face reliability: `{payload.get('calibration_face_reliability', {}).get('enabled', False)}`",
         f"- confidence head: `{payload['train'].get('confidence_head', False)}`",
         f"- confidence target: `{payload['train'].get('confidence_target_mode')}`",
         f"- apply confidence thresholds: `{payload['train'].get('apply_confidence_threshold_grid')}`",
+        f"- policy-val tail gate: `{tail_gate}`",
         f"- apply gate: `{payload['train'].get('apply_gate_mode')}` grid `{payload['train'].get('apply_gate_strength_grid')}`",
+        f"- view-support gate: `{payload['train'].get('view_support_gate_mode')}` "
+        f"min_cos `{payload['train'].get('view_support_min_cos')}` "
+        f"min_concentration `{payload['train'].get('view_support_min_concentration')}` "
+        f"power `{payload['train'].get('view_support_power')}` floor `{payload['train'].get('view_support_floor')}`",
         "",
         "## Best Policy-Val Row",
         "",
@@ -1969,6 +2196,7 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         ),
         "",
         f"- best all-axis row: `{best_all_axis}`",
+        f"- best tail-safe row: `{best_tail_safe}`",
         "",
     ]
     target_eval = payload.get("target_exact_eval") or {}
@@ -2072,16 +2300,22 @@ def main() -> int:
     parser.add_argument("--confidence_gain_floor", type=float, default=0.0)
     parser.add_argument("--confidence_gain_scale", type=float, default=0.03)
     parser.add_argument("--feature_mode", choices=["basic", "fourier_v1"], default="basic")
-    parser.add_argument("--surface_texture_mode", choices=["none", "v1", "v2", "lowrank_v1"], default="none")
+    parser.add_argument(
+        "--surface_texture_mode",
+        choices=["none", "v1", "v2", "lowrank_v1", "lowrank_view_v2"],
+        default="none",
+    )
     parser.add_argument("--surface_texture_uv_bins", type=int, default=4)
     parser.add_argument("--surface_texture_max_samples_per_view", type=int, default=250000)
     parser.add_argument(
         "--decoder_output_mode",
-        choices=["direct", "lowrank_texture", "lowrank_plus_direct"],
+        choices=["direct", "lowrank_texture", "lowrank_plus_direct", "patch_view_moe"],
         default="direct",
     )
     parser.add_argument("--lowrank_coeff_scale", type=float, default=1.0)
     parser.add_argument("--lowrank_direct_scale", type=float, default=0.25)
+    parser.add_argument("--moe_expert_count", type=int, default=3)
+    parser.add_argument("--moe_direct_scale", type=float, default=0.35)
     parser.add_argument("--image_loss_every", type=int, default=4)
     parser.add_argument("--image_loss_stride", type=int, default=12)
     parser.add_argument("--image_loss_weight", type=float, default=0.35)
@@ -2105,10 +2339,24 @@ def main() -> int:
     parser.add_argument("--apply_gate_strength_grid", default="")
     parser.add_argument("--apply_gate_floor", type=float, default=0.0)
     parser.add_argument("--apply_gate_eps", type=float, default=0.02)
+    parser.add_argument("--view_support_gate_mode", choices=["none", "lowrank_view_cos"], default="none")
+    parser.add_argument("--view_support_min_cos", type=float, default=-1.0)
+    parser.add_argument("--view_support_min_concentration", type=float, default=0.0)
+    parser.add_argument("--view_support_power", type=float, default=1.0)
+    parser.add_argument("--view_support_floor", type=float, default=0.0)
     parser.add_argument("--eval_chunk_size", type=int, default=65536)
     parser.add_argument("--compute_lpips", action="store_true")
     parser.add_argument("--policy_val_ssim_max_side", type=int, default=512)
     parser.add_argument("--policy_val_lpips_max_side", type=int, default=256)
+    parser.add_argument("--policy_val_min_positive_view_fraction", type=float, default=0.0)
+    parser.add_argument("--policy_val_min_ssim_positive_view_fraction", type=float, default=0.0)
+    parser.add_argument("--policy_val_min_lpips_positive_view_fraction", type=float, default=0.0)
+    parser.add_argument("--policy_val_min_psnr_cvar_gain", type=float, default=-1.0e9)
+    parser.add_argument("--policy_val_min_ssim_cvar_gain", type=float, default=-1.0e9)
+    parser.add_argument("--policy_val_min_lpips_cvar_gain", type=float, default=-1.0e9)
+    parser.add_argument("--policy_val_min_psnr_min_gain", type=float, default=-1.0e9)
+    parser.add_argument("--policy_val_min_ssim_min_gain", type=float, default=-1.0e9)
+    parser.add_argument("--policy_val_min_lpips_min_gain", type=float, default=-1.0e9)
     parser.add_argument("--output_dir", default="/tmp/peilincai_spcarnet_v180_perceptual_decoder")
     parser.add_argument("--enable_wandb", action="store_true")
     parser.add_argument("--wandb_project", default="spcarnet-v180-perceptual-decoder")
@@ -2169,7 +2417,7 @@ def main() -> int:
         raise RuntimeError("no candidate faces selected")
     surface_feature_texture: dict[str, Any] | None = None
     surface_texture_payload: dict[str, Any] = {"enabled": False, "mode": str(args.surface_texture_mode)}
-    if str(args.surface_texture_mode) in {"v1", "v2", "lowrank_v1"}:
+    if str(args.surface_texture_mode) in {"v1", "v2", "lowrank_v1", "lowrank_view_v2"}:
         if init_checkpoint is not None and init_checkpoint.get("surface_feature_texture") is not None:
             surface_feature_texture = init_checkpoint["surface_feature_texture"]
             loaded_mode = str(surface_feature_texture.get("mode", surface_feature_texture.get("summary", {}).get("mode", "v1")))
@@ -2219,16 +2467,24 @@ def main() -> int:
                 feature_dim=np.asarray([int(surface_feature_texture["feature_dim"])], dtype=np.int64),
                 mode=np.asarray([str(args.surface_texture_mode)]),
                 lowrank_basis_count=np.asarray(
-                    [LOWRANK_TEXTURE_BASIS_COUNT if str(args.surface_texture_mode) == "lowrank_v1" else 0],
+                    [
+                        LOWRANK_TEXTURE_BASIS_COUNT
+                        if str(args.surface_texture_mode) in {"lowrank_v1", "lowrank_view_v2"}
+                        else 0
+                    ],
                     dtype=np.int64,
                 ),
             )
-    if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct"} and str(args.surface_texture_mode) != "lowrank_v1":
-        raise ValueError(f"--decoder_output_mode {args.decoder_output_mode} requires --surface_texture_mode lowrank_v1")
+    if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"} and str(
+        args.surface_texture_mode
+    ) not in {"lowrank_v1", "lowrank_view_v2"}:
+        raise ValueError(
+            f"--decoder_output_mode {args.decoder_output_mode} requires --surface_texture_mode lowrank_v1 or lowrank_view_v2"
+        )
     feature_dim = _feature_dim(str(args.feature_mode), surface_feature_texture)
     lowrank_basis_feature_offset = (
         _base_feature_dim(str(args.feature_mode)) + LOWRANK_TEXTURE_BASIS_OFFSET
-        if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct"}
+        if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}
         else -1
     )
     model = SurfaceResidualDecoder(
@@ -2242,11 +2498,13 @@ def main() -> int:
         confidence_floor=float(args.confidence_floor),
         output_mode=str(args.decoder_output_mode),
         lowrank_basis_count=LOWRANK_TEXTURE_BASIS_COUNT
-        if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct"}
+        if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}
         else 0,
         lowrank_basis_feature_offset=int(lowrank_basis_feature_offset),
         lowrank_coeff_scale=float(args.lowrank_coeff_scale),
         lowrank_direct_scale=float(args.lowrank_direct_scale),
+        moe_expert_count=int(args.moe_expert_count),
+        moe_direct_scale=float(args.moe_direct_scale),
     ).to(device)
     if init_checkpoint is not None:
         model.load_state_dict(init_checkpoint["model_state_dict"], strict=True)
@@ -2458,12 +2716,27 @@ def main() -> int:
         ssim_max_side=int(args.policy_val_ssim_max_side),
         lpips_max_side=int(args.policy_val_lpips_max_side),
         compute_lpips=bool(args.compute_lpips),
+        min_positive_view_fraction=float(args.policy_val_min_positive_view_fraction),
+        min_ssim_positive_view_fraction=float(args.policy_val_min_ssim_positive_view_fraction),
+        min_lpips_positive_view_fraction=float(args.policy_val_min_lpips_positive_view_fraction),
+        min_psnr_cvar_gain=float(args.policy_val_min_psnr_cvar_gain),
+        min_ssim_cvar_gain=float(args.policy_val_min_ssim_cvar_gain),
+        min_lpips_cvar_gain=float(args.policy_val_min_lpips_cvar_gain),
+        min_psnr_min_gain=float(args.policy_val_min_psnr_min_gain),
+        min_ssim_min_gain=float(args.policy_val_min_ssim_min_gain),
+        min_lpips_min_gain=float(args.policy_val_min_lpips_min_gain),
+        view_support_gate_mode=str(args.view_support_gate_mode),
+        view_support_min_cos=float(args.view_support_min_cos),
+        view_support_min_concentration=float(args.view_support_min_concentration),
+        view_support_power=float(args.view_support_power),
+        view_support_floor=float(args.view_support_floor),
         output_dir=render_dir,
         device=device,
     )
     best = policy_val["best"]
     all_axis = policy_val.get("best_all_axis") is not None
-    selected_policy = policy_val.get("best_all_axis") or best
+    tail_safe = policy_val.get("best_tail_safe") is not None
+    selected_policy = policy_val.get("best_tail_safe") or policy_val.get("best_all_axis") or best
     selected_alpha = float(selected_policy["alpha"])
     selected_confidence_threshold = float(
         selected_policy.get("apply_confidence_threshold", apply_confidence_threshold_grid[0])
@@ -2479,7 +2752,7 @@ def main() -> int:
     )
     target_eval: dict[str, Any] = {}
     run_target_eval = str(args.target_eval_mode) == "always" or (
-        str(args.target_eval_mode) == "auto" and all_axis and bool(target_no_gt_audit.get("pass", False))
+        str(args.target_eval_mode) == "auto" and tail_safe and bool(target_no_gt_audit.get("pass", False))
     )
     if run_target_eval and str(args.target_eval_evidence_dir):
         target_eval = _target_exact_eval(
@@ -2500,6 +2773,11 @@ def main() -> int:
             apply_gate_strength=float(selected_gate_strength),
             apply_gate_floor=float(args.apply_gate_floor),
             apply_gate_eps=float(args.apply_gate_eps),
+            view_support_gate_mode=str(args.view_support_gate_mode),
+            view_support_min_cos=float(args.view_support_min_cos),
+            view_support_min_concentration=float(args.view_support_min_concentration),
+            view_support_power=float(args.view_support_power),
+            view_support_floor=float(args.view_support_floor),
             chunk_size=int(args.eval_chunk_size),
             ssim_max_side=int(args.policy_val_ssim_max_side),
             lpips_max_side=int(args.policy_val_lpips_max_side),
@@ -2520,6 +2798,12 @@ def main() -> int:
         interpretation = (
             "The learned surface-feature decoder passed policy-val and flowers exact Phase-J all-axis gates; "
             "the fixed policy is eligible for full9."
+        )
+    elif all_axis and not tail_safe:
+        interpretation = (
+            "The learned surface-feature decoder passed mean policy-val all-axis, but no candidate passed the "
+            "configured tail-safe policy-val gate. It must not be promoted automatically; exact evaluation is "
+            "only a forced diagnostic unless explicitly requested."
         )
     elif all_axis:
         interpretation = (
@@ -2579,11 +2863,13 @@ def main() -> int:
             "base_feature_dim": int(_base_feature_dim(str(args.feature_mode))),
             "decoder_output_mode": str(args.decoder_output_mode),
             "lowrank_basis_count": int(LOWRANK_TEXTURE_BASIS_COUNT)
-            if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct"}
+            if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}
             else 0,
             "lowrank_basis_feature_offset": int(lowrank_basis_feature_offset),
             "lowrank_coeff_scale": float(args.lowrank_coeff_scale),
             "lowrank_direct_scale": float(args.lowrank_direct_scale),
+            "moe_expert_count": int(args.moe_expert_count),
+            "moe_direct_scale": float(args.moe_direct_scale),
             "surface_texture_mode": str(args.surface_texture_mode),
             "surface_texture_uv_bins": int(args.surface_texture_uv_bins),
             "surface_texture_max_samples_per_view": int(args.surface_texture_max_samples_per_view),
@@ -2604,11 +2890,25 @@ def main() -> int:
             "energy_match_weight": float(args.energy_match_weight),
             "apply_confidence_threshold": float(args.apply_confidence_threshold),
             "apply_confidence_threshold_grid": [float(x) for x in apply_confidence_threshold_grid],
+            "policy_val_min_positive_view_fraction": float(args.policy_val_min_positive_view_fraction),
+            "policy_val_min_ssim_positive_view_fraction": float(args.policy_val_min_ssim_positive_view_fraction),
+            "policy_val_min_lpips_positive_view_fraction": float(args.policy_val_min_lpips_positive_view_fraction),
+            "policy_val_min_psnr_cvar_gain": float(args.policy_val_min_psnr_cvar_gain),
+            "policy_val_min_ssim_cvar_gain": float(args.policy_val_min_ssim_cvar_gain),
+            "policy_val_min_lpips_cvar_gain": float(args.policy_val_min_lpips_cvar_gain),
+            "policy_val_min_psnr_min_gain": float(args.policy_val_min_psnr_min_gain),
+            "policy_val_min_ssim_min_gain": float(args.policy_val_min_ssim_min_gain),
+            "policy_val_min_lpips_min_gain": float(args.policy_val_min_lpips_min_gain),
             "apply_gate_mode": str(args.apply_gate_mode),
             "apply_gate_strength": float(args.apply_gate_strength),
             "apply_gate_strength_grid": [float(x) for x in apply_gate_strength_grid],
             "apply_gate_floor": float(args.apply_gate_floor),
             "apply_gate_eps": float(args.apply_gate_eps),
+            "view_support_gate_mode": str(args.view_support_gate_mode),
+            "view_support_min_cos": float(args.view_support_min_cos),
+            "view_support_min_concentration": float(args.view_support_min_concentration),
+            "view_support_power": float(args.view_support_power),
+            "view_support_floor": float(args.view_support_floor),
             "rows": train_rows,
         },
         "teacher_signal_pass": True,
@@ -2619,6 +2919,7 @@ def main() -> int:
         "uses_target_or_test_gt": False,
         "uses_target_or_test_gt_after_apply_for_eval": bool(target_eval),
         "policy_val_all_axis_pass": all_axis,
+        "policy_val_tail_safe_pass": tail_safe,
         "policy_val": policy_val,
         "target_no_gt_audit": target_no_gt_audit,
         "surface_feature_texture": surface_texture_payload,
@@ -2650,6 +2951,7 @@ def main() -> int:
         wandb_run.log(
             {
                 "policy_val/all_axis_pass": float(all_axis),
+                "policy_val/tail_safe_pass": float(tail_safe),
                 "policy_val/best_psnr_gain": float(best.get("psnr_gain", 0.0)),
                 "policy_val/best_ssim_gain": float(best.get("ssim_gain", 0.0)),
                 "policy_val/best_lpips_gain": float(best.get("lpips_gain", 0.0)),
@@ -2695,6 +2997,7 @@ def main() -> int:
                 "output_json": payload["output_json"],
                 "output_md": str(output_dir / "v180_perceptual_surface_decoder_audit.md"),
                 "policy_val_all_axis_pass": all_axis,
+                "policy_val_tail_safe_pass": tail_safe,
                 "flowers_exact_phasej_gate_pass": payload["flowers_exact_phasej_gate_pass"],
                 "selected_alpha": selected_alpha,
                 "selected_apply_confidence_threshold": selected_confidence_threshold,

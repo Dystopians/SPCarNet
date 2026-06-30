@@ -1,0 +1,149 @@
+{
+  "date": "2026-06-30",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "script": "scripts/car_model/train_perceptual_surface_residual_decoder.py",
+  "phasej_flowers_gate": {
+    "psnr_gt": 20.304358,
+    "ssim_gt": 0.55777,
+    "lpips_lt": 0.329222
+  },
+  "storage_preflight": {
+    "data_available": "101G",
+    "dev_shm_available": "1.7G",
+    "tmp_available": "6.0T",
+    "user_quota_space": "99304M / 100G limit",
+    "note": "Exact runs reused the low-copy /dev/shm v168 flowers evidence and did not launch full9 because the flowers Phase-J gate did not pass."
+  },
+  "method_changes": [
+    "Added lowrank_view_v2 surface texture rows: low-rank residual bases plus source camera mean/concentration and target-source camera cosine.",
+    "Added patch_view_moe decoder output: low-rank basis coefficients plus view/patch-conditioned direct expert residual mixture.",
+    "Added policy-val tail-safe certificate fields and auto target-eval gating that requires tail-safe policy-val before automatic exact target apply.",
+    "Added lowrank_view_cos view-support gate to attenuate target pixels whose target camera has weak source-view support."
+  ],
+  "reference_runs": {
+    "v266c_old_best_lpips": {
+      "target_psnr": 19.845698,
+      "target_ssim": 0.620201,
+      "target_lpips": 0.179915,
+      "target_gains_vs_parent": [0.013644, 0.00029, 0.000419]
+    },
+    "v289c_target_compatible_source_weighting": {
+      "target_psnr": 19.841839,
+      "target_ssim": 0.620214,
+      "target_lpips": 0.18008,
+      "target_gains_vs_parent": [0.009785, 0.000303, 0.000255]
+    }
+  },
+  "runs": [
+    {
+      "name": "v290a_patch_view_moe_exact",
+      "output_dir": "outputs/carnet/spcarnet_v290_patch_view_moe_20260630/v290a_patch_view_moe_exact_20260630",
+      "policy_val_gains": [0.030720932880664503, 0.0008778919776280721, 0.0007078771789868673],
+      "target_metrics": [19.850131278548222, 0.619529352946715, 0.18048937381668526],
+      "target_gains_vs_parent": [0.01807740010075598, -0.00038105791265314275, -0.00015450776977972552],
+      "target_changed_fraction": 0.11968882072623774,
+      "no_target_gt_audit_pass": true,
+      "phasej_gate_pass": false,
+      "lesson": "Raw PatchViewMoE improved PSNR strongly, but structure/perceptual transfer was unsafe on target."
+    },
+    {
+      "name": "v291b_structure_gain_tail_policy_auto",
+      "output_dir": "outputs/carnet/spcarnet_v291_tail_safe_confidence_20260630/v291b_structure_gain_tail_policy_auto_20260630",
+      "policy_val_gains": [0.01914813779013051, 0.0005289216836293539, 0.000355476513504982],
+      "policy_val_tail_safe_pass": true,
+      "target_metrics": [19.845900166317772, 0.6199108159000223, 0.1807146996937015],
+      "target_gains_vs_parent": [0.013846287870305153, 0.00000040504065426913177, -0.0003798336467959664],
+      "target_changed_fraction": 0.10169937036398137,
+      "no_target_gt_audit_pass": true,
+      "phasej_gate_pass": false,
+      "lesson": "Policy-val tail safety did not transfer to target LPIPS; this exposed target-support mismatch."
+    },
+    {
+      "name": "v292b_v290a_raw_viewsupport_floor025",
+      "output_dir": "outputs/carnet/spcarnet_v292_view_support_20260630/v292b_v290a_raw_viewsupport_forced_exact_20260630",
+      "view_support_gate": {
+        "mode": "lowrank_view_cos",
+        "min_cos": 0.95,
+        "min_concentration": 0.15,
+        "power": 1.0,
+        "floor": 0.25
+      },
+      "policy_val_gains": [0.022467481277592977, 0.0007748107115427653, 0.00039686262607574463],
+      "target_metrics": [19.850319604994755, 0.6203847622329538, 0.1801310588013042],
+      "target_gains_vs_parent": [0.01826572654728748, 0.0004743513735857877, 0.00020380724560130727],
+      "target_changed_fraction": 0.10610590607210627,
+      "phasej_psnr_gap": -0.4540383950052451,
+      "no_target_gt_audit_pass": true,
+      "phasej_gate_pass": false
+    },
+    {
+      "name": "v292c_v290a_raw_viewsupport_floor015",
+      "output_dir": "outputs/carnet/spcarnet_v292_view_support_20260630/v292c_v290a_viewsupport_floor015_forced_exact_20260630",
+      "view_support_gate": {
+        "mode": "lowrank_view_cos",
+        "min_cos": 0.95,
+        "min_concentration": 0.15,
+        "power": 1.0,
+        "floor": 0.15
+      },
+      "target_metrics": [19.848830438931785, 0.6203978251327168, 0.18005723946473814],
+      "target_gains_vs_parent": [0.016776560484316697, 0.00048741427334872157, 0.0002776265821673653],
+      "target_changed_fraction": 0.09272735358806279,
+      "phasej_psnr_gap": -0.4555275610682159,
+      "no_target_gt_audit_pass": true,
+      "phasej_gate_pass": false,
+      "lesson": "Best perceptual trade-off among v292 variants, but not the best PSNR."
+    },
+    {
+      "name": "v292d_v290a_raw_viewsupport_floor035",
+      "output_dir": "outputs/carnet/spcarnet_v292_view_support_20260630/v292d_v290a_viewsupport_floor035_forced_exact_20260630",
+      "view_support_gate": {
+        "mode": "lowrank_view_cos",
+        "min_cos": 0.95,
+        "min_concentration": 0.15,
+        "power": 1.0,
+        "floor": 0.35
+      },
+      "policy_val_gains": [0.024337895289506584, 0.0008204331000645956, 0.0004293837894996007],
+      "target_metrics": [19.85145235125944, 0.6203426745804873, 0.18021195381879807],
+      "target_gains_vs_parent": [0.019398472811975962, 0.0004322637211192738, 0.0001229122281074524],
+      "target_changed_fraction": 0.11185206248921858,
+      "phasej_psnr_gap": -0.45290564874056116,
+      "no_target_gt_audit_pass": true,
+      "phasej_gate_pass": false,
+      "lesson": "Best v292 PSNR and strongest all-axis win over its parent; selected as the current frontier."
+    },
+    {
+      "name": "v292e_v290a_raw_viewsupport_floor000",
+      "output_dir": "outputs/carnet/spcarnet_v292_view_support_20260630/v292e_v290a_viewsupport_floor000_forced_exact_20260630",
+      "view_support_gate": {
+        "mode": "lowrank_view_cos",
+        "min_cos": 0.95,
+        "min_concentration": 0.15,
+        "power": 1.0,
+        "floor": 0.0
+      },
+      "target_metrics": [19.845929173211246, 0.6203578128056093, 0.18001810630614107],
+      "target_gains_vs_parent": [0.013875294763778195, 0.0004474019462412054, 0.00031675974076444453],
+      "target_changed_fraction": 0.049313599706744864,
+      "phasej_psnr_gap": -0.4584288267887544,
+      "no_target_gt_audit_pass": true,
+      "phasej_gate_pass": false,
+      "lesson": "Most conservative view-support gate; improves LPIPS but removes too much residual energy for PSNR."
+    }
+  ],
+  "qualitative_outputs": {
+    "panel": "docs/car_model/assets/v292d_view_support_flowers_exact_panel.png",
+    "panel_manifest": "docs/car_model/assets/v292d_view_support_flowers_exact_panel_manifest.json",
+    "target_exact_renders": "outputs/carnet/spcarnet_v292_view_support_20260630/v292d_v290a_viewsupport_floor035_forced_exact_20260630/target_exact_fixed_policy"
+  },
+  "verdict": {
+    "current_frontier": "v292d_v290a_raw_viewsupport_floor035",
+    "real_method_change": true,
+    "beats_parent_all_axis": true,
+    "beats_v290a_target_all_axis": true,
+    "beats_phasej_flowers_all_axis": false,
+    "full9_allowed_by_v169_prompt": false,
+    "final_status": "NOT COMPLETE"
+  }
+}
