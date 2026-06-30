@@ -2,6 +2,34 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 v264-v266 Edge / Low-Rank Hybrid Update
+
+新增日志：`docs/car_model/6-30-v264-v266-EdgeLowrankHybrid-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v264_v266_edge_lowrank_hybrid_summary.json`。
+
+这轮继续严格执行 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md`：只跑 flowers policy-val + target exact；未过 Phase-J flowers all-axis gate 前不启动 full9。
+
+代码层面新增真实 train/eval pipeline 方法改动：
+
+- v264 新增 `edge_local_linear`，把 parent-edge 特征加入 face/UV bin 内局部 ridge residual decoder。
+- v265 新增 `lowrank_source_basis`，在 train-fit source slots 内构建低秩 teacher residual basis，并在 checkpoint 中保存 `source_view_id` 来审计 source-view diversity。
+- v266 新增 `hybrid_edge_lowrank`，以 edge-local-linear 作为稳定基底，再用 disagreement-aware blend 注入低秩残差细节。
+
+关键结果：
+
+| run | method | target PSNR | SSIM | LPIPS | target gains | changed | Phase-J gate |
+|---|---|---:|---:|---:|---|---:|---|
+| v264a | edge-local-linear | 19.844520 | 0.620226 | 0.179971 | +0.012467 / +0.000315 / +0.000364 | 0.040927 | fail PSNR |
+| v264b | edge gain 0.25 | 19.845366 | 0.620176 | 0.179872 | +0.013312 / +0.000266 / +0.000463 | 0.057264 | fail PSNR |
+| v265a | low-rank rank 3 | 19.844019 | 0.620207 | 0.179931 | +0.011965 / +0.000296 / +0.000403 | 0.040368 | fail PSNR |
+| v265b | low-rank blended | 19.844584 | 0.620177 | 0.179939 | +0.012530 / +0.000266 / +0.000396 | 0.052283 | fail PSNR |
+| v266a | hybrid | 19.845654 | 0.620199 | 0.179918 | +0.013600 / +0.000288 / +0.000417 | 0.054203 | fail PSNR |
+| v266b | hybrid + edge gain 0.10 | 19.845553 | 0.620196 | 0.179897 | +0.013499 / +0.000286 / +0.000438 | 0.055207 | fail PSNR |
+| v266c | conservative hybrid | 19.845698 | 0.620201 | 0.179915 | +0.013644 / +0.000290 / +0.000419 | 0.054285 | fail PSNR |
+
+结论：v266c 给出 deferred-source 线当前最好 target PSNR 与 PSNR-tail，但仍不是 all-axis 最优；v264a 仍是 SSIM 最优，v264b 仍是 LPIPS 最优。最关键的是，最好 v266c 仍低 Phase-J flowers PSNR `0.458660`，所以状态仍是 `NOT COMPLETE`，full9 继续被阻塞。下一步不能继续把主线放在 source-slot RGB low-rank 或 edge confidence 微调，而应转向跨 UV bin coherent face/patch texture feature、patch/gradient residual supervision 和 target-free uncertainty/visibility model。
+
 ## 2026-06-29 v260-v263 Local-Linear / Target-Visible Update
 
 新增日志：`docs/car_model/6-29-v260-v263-LocalLinearTargetVisible-Log.md`。

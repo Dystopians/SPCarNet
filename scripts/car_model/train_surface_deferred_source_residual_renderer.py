@@ -301,10 +301,12 @@ def _insert_source_entry(
     count: float,
     residual: np.ndarray,
     parent: np.ndarray,
+    parent_edge: float,
     normal: np.ndarray,
     camera: np.ndarray,
     gain: float,
     alpha: float,
+    source_view_id: int,
 ) -> None:
     scores = bank["score"][face_idx, bin_id]
     slot = int(np.argmin(scores))
@@ -314,10 +316,12 @@ def _insert_source_entry(
     bank["counts"][face_idx, bin_id, slot] = float(count)
     bank["residual"][face_idx, bin_id, slot] = np.asarray(residual, dtype=np.float32)
     bank["parent_rgb"][face_idx, bin_id, slot] = np.asarray(parent, dtype=np.float32)
+    bank["parent_edge"][face_idx, bin_id, slot] = float(parent_edge)
     bank["normal"][face_idx, bin_id, slot] = np.asarray(normal, dtype=np.float32)
     bank["camera_dir"][face_idx, bin_id, slot] = np.asarray(camera, dtype=np.float32)
     bank["gain_l1"][face_idx, bin_id, slot] = float(gain)
     bank["alpha"][face_idx, bin_id, slot] = float(alpha)
+    bank["source_view_id"][face_idx, bin_id, slot] = int(source_view_id)
 
 
 def _fit_source_bank(
@@ -332,6 +336,7 @@ def _fit_source_bank(
     source_top_k: int,
     max_samples_per_view: int,
     score_gain_weight: float,
+    source_edge_score_weight: float,
     seed: int,
 ) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
     rng = np.random.default_rng(int(seed))
@@ -342,16 +347,18 @@ def _fit_source_bank(
         "counts": np.zeros(shape, dtype=np.float32),
         "residual": np.zeros((*shape, 3), dtype=np.float32),
         "parent_rgb": np.zeros((*shape, 3), dtype=np.float32),
+        "parent_edge": np.zeros(shape, dtype=np.float32),
         "normal": np.zeros((*shape, 3), dtype=np.float32),
         "camera_dir": np.zeros((*shape, 3), dtype=np.float32),
         "gain_l1": np.zeros(shape, dtype=np.float32),
         "alpha": np.zeros(shape, dtype=np.float32),
+        "source_view_id": np.full(shape, -1, dtype=np.int32),
     }
     active_pixels = 0
     sampled_pixels = 0
     inserted_entries = 0
     grouped_entries = 0
-    for path in tqdm(fit_paths, desc="fit deferred source bank"):
+    for view_i, path in enumerate(tqdm(fit_paths, desc="fit deferred source bank")):
         with np.load(path, allow_pickle=False) as z:
             mask = _valid_mask(
                 z,
@@ -386,6 +393,7 @@ def _fit_source_bank(
             counts = np.bincount(inv).astype(np.float64)
             residual = np.asarray(z[residual_rgb_key], dtype=np.float32)[:3]
             parent = np.asarray(z["rgb_render"], dtype=np.float32)[:3]
+            parent_edge = _luma_gradient_magnitude(_luma(parent))
             normal = np.asarray(z["normal"], dtype=np.float32)[:3]
             alpha_map = np.asarray(z["alpha"], dtype=np.float32) if "alpha" in z else np.ones_like(mask, dtype=np.float32)
             gain_map = (
@@ -404,15 +412,19 @@ def _fit_source_bank(
                 sums["normal"][:, c] = np.bincount(inv, weights=normal[c, ys, xs].astype(np.float64), minlength=unique.size)
             gain_sum = np.bincount(inv, weights=gain_map[ys, xs].astype(np.float64), minlength=unique.size)
             alpha_sum = np.bincount(inv, weights=alpha_map[ys, xs].astype(np.float64), minlength=unique.size)
+            edge_sum = np.bincount(inv, weights=parent_edge[ys, xs].astype(np.float64), minlength=unique.size)
             camera = _camera_dir(z)
             means_residual = (sums["residual"] / np.maximum(counts[:, None], 1.0)).astype(np.float32)
             means_parent = np.clip((sums["parent"] / np.maximum(counts[:, None], 1.0)).astype(np.float32), 0.0, 1.0)
             means_normal = _normalize_rows((sums["normal"] / np.maximum(counts[:, None], 1.0)).astype(np.float32))
             means_gain = (gain_sum / np.maximum(counts, 1.0)).astype(np.float32)
             means_alpha = (alpha_sum / np.maximum(counts, 1.0)).astype(np.float32)
+            means_edge = (edge_sum / np.maximum(counts, 1.0)).astype(np.float32)
             energy = np.sum(means_residual * means_residual, axis=1)
             source_score = counts.astype(np.float32) * energy * (
                 1.0 + float(score_gain_weight) * np.clip(means_gain, 0.0, None)
+            ) * (
+                1.0 + float(source_edge_score_weight) * np.clip(means_edge, 0.0, 0.25)
             )
             for i, packed in enumerate(unique):
                 fi = int(packed // bins)
@@ -426,10 +438,12 @@ def _fit_source_bank(
                     float(counts[i]),
                     means_residual[i],
                     means_parent[i],
+                    float(means_edge[i]),
                     means_normal[i],
                     camera,
                     float(means_gain[i]),
                     float(means_alpha[i]),
+                    int(view_i),
                 )
                 if float(np.min(bank["score"][fi, bi])) != before:
                     inserted_entries += 1
@@ -466,6 +480,14 @@ def _load_source_bank(path: Path) -> tuple[np.ndarray, dict[str, np.ndarray], di
             "gain_l1": np.asarray(z["gain_l1"], dtype=np.float32),
             "alpha": np.asarray(z["alpha"], dtype=np.float32),
         }
+        if "source_view_id" in z:
+            bank["source_view_id"] = np.asarray(z["source_view_id"], dtype=np.int32)
+        else:
+            bank["source_view_id"] = np.full_like(bank["counts"], -1, dtype=np.int32)
+        if "parent_edge" in z:
+            bank["parent_edge"] = np.asarray(z["parent_edge"], dtype=np.float32)
+        else:
+            bank["parent_edge"] = np.zeros_like(bank["counts"], dtype=np.float32)
         if "policy_reliability" in z:
             bank["policy_reliability"] = np.asarray(z["policy_reliability"], dtype=np.float32)
         if "policy_gain" in z:
@@ -635,6 +657,15 @@ def _calibrate_policy_reliability(
     local_linear_blend: float = 1.0,
     local_linear_min_sources: int = 3,
     local_linear_residual_clip: float = 0.12,
+    lowrank_basis_rank: int = 3,
+    lowrank_basis_min_sources: int = 4,
+    lowrank_basis_min_unique_views: int = 3,
+    lowrank_basis_l2: float = 0.05,
+    lowrank_basis_blend: float = 1.0,
+    lowrank_basis_residual_clip: float = 0.12,
+    lowrank_basis_disagreement_beta: float = 0.0,
+    target_edge_gain: float = 0.0,
+    target_edge_gain_clip: float = 1.5,
 ) -> dict[str, Any]:
     bins = int(grid) * int(grid)
     counts = np.zeros((int(candidate_faces.size), bins), dtype=np.float64)
@@ -672,6 +703,15 @@ def _calibrate_policy_reliability(
                 local_linear_blend=float(local_linear_blend),
                 local_linear_min_sources=int(local_linear_min_sources),
                 local_linear_residual_clip=float(local_linear_residual_clip),
+                lowrank_basis_rank=int(lowrank_basis_rank),
+                lowrank_basis_min_sources=int(lowrank_basis_min_sources),
+                lowrank_basis_min_unique_views=int(lowrank_basis_min_unique_views),
+                lowrank_basis_l2=float(lowrank_basis_l2),
+                lowrank_basis_blend=float(lowrank_basis_blend),
+                lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
+                lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                target_edge_gain=float(target_edge_gain),
+                target_edge_gain_clip=float(target_edge_gain_clip),
             )
             ys, xs = np.nonzero(active)
             if ys.size == 0:
@@ -845,6 +885,15 @@ def _fit_learned_ood_head(
     local_linear_blend: float = 1.0,
     local_linear_min_sources: int = 3,
     local_linear_residual_clip: float = 0.12,
+    lowrank_basis_rank: int = 3,
+    lowrank_basis_min_sources: int = 4,
+    lowrank_basis_min_unique_views: int = 3,
+    lowrank_basis_l2: float = 0.05,
+    lowrank_basis_blend: float = 1.0,
+    lowrank_basis_residual_clip: float = 0.12,
+    lowrank_basis_disagreement_beta: float = 0.0,
+    target_edge_gain: float = 0.0,
+    target_edge_gain_clip: float = 1.5,
 ) -> dict[str, Any]:
     if not val_paths:
         raise RuntimeError("learned OOD head requested but no policy-val views are available")
@@ -882,6 +931,15 @@ def _fit_learned_ood_head(
                 local_linear_blend=float(local_linear_blend),
                 local_linear_min_sources=int(local_linear_min_sources),
                 local_linear_residual_clip=float(local_linear_residual_clip),
+                lowrank_basis_rank=int(lowrank_basis_rank),
+                lowrank_basis_min_sources=int(lowrank_basis_min_sources),
+                lowrank_basis_min_unique_views=int(lowrank_basis_min_unique_views),
+                lowrank_basis_l2=float(lowrank_basis_l2),
+                lowrank_basis_blend=float(lowrank_basis_blend),
+                lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
+                lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                target_edge_gain=float(target_edge_gain),
+                target_edge_gain_clip=float(target_edge_gain_clip),
                 ood_gain_mode="off",
                 feature_rows=feature_rows,
             )
@@ -991,6 +1049,15 @@ def _predict_delta(
     local_linear_blend: float = 1.0,
     local_linear_min_sources: int = 3,
     local_linear_residual_clip: float = 0.12,
+    lowrank_basis_rank: int = 3,
+    lowrank_basis_min_sources: int = 4,
+    lowrank_basis_min_unique_views: int = 3,
+    lowrank_basis_l2: float = 0.05,
+    lowrank_basis_blend: float = 1.0,
+    lowrank_basis_residual_clip: float = 0.12,
+    lowrank_basis_disagreement_beta: float = 0.0,
+    target_edge_gain: float = 0.0,
+    target_edge_gain_clip: float = 1.5,
     ood_gain_mode: str = "off",
     ood_gain_beta: float = 1.0,
     ood_gain_view_weight: float = 1.0,
@@ -1014,6 +1081,7 @@ def _predict_delta(
     bin_all = _bin_ids(z, ys_all, xs_all, int(grid))
     target_cam = _camera_dir(z).reshape(1, 1, 3)
     normal_map = np.asarray(z["normal"], dtype=np.float32)[:3]
+    parent_edge_map = _luma_gradient_magnitude(_luma(parent))
     confidences: list[float] = []
     agreement_confidences: list[float] = []
     policy_reliabilities: list[float] = []
@@ -1033,10 +1101,13 @@ def _predict_delta(
             continue
         src_residual = bank["residual"][face_idx, bin_id]
         src_parent = bank["parent_rgb"][face_idx, bin_id]
+        src_parent_edge = np.asarray(bank.get("parent_edge", np.zeros_like(bank["counts"])), dtype=np.float32)[face_idx, bin_id]
         src_normal = bank["normal"][face_idx, bin_id]
         src_camera = bank["camera_dir"][face_idx, bin_id]
         src_gain = bank["gain_l1"][face_idx, bin_id]
+        src_view_id = np.asarray(bank.get("source_view_id", np.full_like(bank["counts"], -1)), dtype=np.int32)[face_idx, bin_id]
         tgt_parent = np.moveaxis(parent[:, ys, xs], 0, 1).astype(np.float32)
+        tgt_parent_edge = parent_edge_map[ys, xs].astype(np.float32)
         tgt_normal = _normalize_rows(np.moveaxis(normal_map[:, ys, xs], 0, 1))
         view_cos = np.sum(src_camera * target_cam, axis=2)
         normal_cos = np.sum(src_normal * tgt_normal[:, None, :], axis=2)
@@ -1058,28 +1129,30 @@ def _predict_delta(
             continue
         pred = np.sum(weights[:, :, None] * src_residual, axis=1) / np.maximum(denom[:, None], 1.0e-12)
         decoder_mode_s = str(residual_decoder_mode or "weighted_average")
-        if decoder_mode_s == "local_linear":
+        allowed_decoder_modes = {"weighted_average", "local_linear", "edge_local_linear", "lowrank_source_basis", "hybrid_edge_lowrank"}
+        if decoder_mode_s not in allowed_decoder_modes:
+            raise ValueError(f"unsupported residual_decoder_mode={residual_decoder_mode}")
+        if decoder_mode_s in {"local_linear", "edge_local_linear", "hybrid_edge_lowrank"}:
             valid_float = valid_src.astype(np.float32)
             valid_count = np.sum(valid_float, axis=1)
             enough_sources = (valid_count >= int(local_linear_min_sources)) & ok_rows
             if np.any(enough_sources):
                 idx = np.nonzero(enough_sources)[0]
-                src_feat = np.concatenate(
-                    [
-                        np.ones((idx.size, src_camera.shape[1], 1), dtype=np.float32),
-                        src_camera[idx].astype(np.float32),
-                        src_parent[idx].astype(np.float32),
-                    ],
-                    axis=2,
-                )
-                tgt_feat = np.concatenate(
-                    [
-                        np.ones((idx.size, 1), dtype=np.float32),
-                        np.repeat(target_cam.reshape(1, 3), idx.size, axis=0).astype(np.float32),
-                        tgt_parent[idx].astype(np.float32),
-                    ],
-                    axis=1,
-                )
+                source_features = [
+                    np.ones((idx.size, src_camera.shape[1], 1), dtype=np.float32),
+                    src_camera[idx].astype(np.float32),
+                    src_parent[idx].astype(np.float32),
+                ]
+                target_features = [
+                    np.ones((idx.size, 1), dtype=np.float32),
+                    np.repeat(target_cam.reshape(1, 3), idx.size, axis=0).astype(np.float32),
+                    tgt_parent[idx].astype(np.float32),
+                ]
+                if decoder_mode_s in {"edge_local_linear", "hybrid_edge_lowrank"}:
+                    source_features.append(np.clip(src_parent_edge[idx], 0.0, 0.25).astype(np.float32)[:, :, None])
+                    target_features.append(np.clip(tgt_parent_edge[idx], 0.0, 0.25).astype(np.float32)[:, None])
+                src_feat = np.concatenate(source_features, axis=2)
+                tgt_feat = np.concatenate(target_features, axis=1)
                 row_weights = weights[idx].astype(np.float32)
                 xw = src_feat * np.sqrt(np.maximum(row_weights, 0.0))[:, :, None]
                 yw = src_residual[idx].astype(np.float32) * np.sqrt(np.maximum(row_weights, 0.0))[:, :, None]
@@ -1094,8 +1167,74 @@ def _predict_delta(
                     linear_pred = np.clip(linear_pred, -clip_v, clip_v)
                 blend = float(np.clip(float(local_linear_blend), 0.0, 1.0))
                 pred[idx] = ((1.0 - blend) * pred[idx] + blend * linear_pred).astype(np.float32)
-        elif decoder_mode_s != "weighted_average":
-            raise ValueError(f"unsupported residual_decoder_mode={residual_decoder_mode}")
+        if decoder_mode_s in {"lowrank_source_basis", "hybrid_edge_lowrank"}:
+            valid_float = valid_src.astype(np.float32)
+            valid_count = np.sum(valid_float, axis=1)
+            valid_view_id = np.where(valid_src, src_view_id, -1)
+            unique_view_count = np.asarray(
+                [len(set(int(v) for v in row if int(v) >= 0)) for row in valid_view_id],
+                dtype=np.float32,
+            )
+            if np.max(unique_view_count, initial=0.0) <= 0.0:
+                unique_view_count = valid_count
+            enough_sources = (
+                (valid_count >= max(2, int(lowrank_basis_min_sources)))
+                & (unique_view_count >= max(1, int(lowrank_basis_min_unique_views)))
+                & ok_rows
+            )
+            basis_rank = max(1, min(3, int(lowrank_basis_rank)))
+            if np.any(enough_sources):
+                idx = np.nonzero(enough_sources)[0]
+                row_weights = weights[idx].astype(np.float32)
+                norm_weights = row_weights / np.maximum(np.sum(row_weights, axis=1, keepdims=True), 1.0e-12)
+                src_delta = src_residual[idx].astype(np.float32)
+                mean_delta = np.sum(norm_weights[:, :, None] * src_delta, axis=1).astype(np.float32)
+                centered = (src_delta - mean_delta[:, None, :]).astype(np.float32)
+                cov = np.einsum("nk,nkc,nkd->ncd", norm_weights, centered, centered, optimize=True).astype(np.float64)
+                eigvals, eigvecs = np.linalg.eigh(cov)
+                order = np.argsort(eigvals, axis=1)[:, -basis_rank:]
+                basis = np.take_along_axis(eigvecs, order[:, None, :], axis=2).astype(np.float32)
+                coeff = np.einsum("nkc,ncr->nkr", centered, basis, optimize=True).astype(np.float32)
+                src_feat = np.concatenate(
+                    [
+                        np.ones((idx.size, src_camera.shape[1], 1), dtype=np.float32),
+                        src_camera[idx].astype(np.float32),
+                        src_parent[idx].astype(np.float32),
+                        np.clip(src_parent_edge[idx], 0.0, 0.25).astype(np.float32)[:, :, None],
+                    ],
+                    axis=2,
+                )
+                tgt_feat = np.concatenate(
+                    [
+                        np.ones((idx.size, 1), dtype=np.float32),
+                        np.repeat(target_cam.reshape(1, 3), idx.size, axis=0).astype(np.float32),
+                        tgt_parent[idx].astype(np.float32),
+                        np.clip(tgt_parent_edge[idx], 0.0, 0.25).astype(np.float32)[:, None],
+                    ],
+                    axis=1,
+                )
+                xw = src_feat * np.sqrt(np.maximum(row_weights, 0.0))[:, :, None]
+                yw = coeff * np.sqrt(np.maximum(row_weights, 0.0))[:, :, None]
+                xtx = np.einsum("nkd,nke->nde", xw, xw, optimize=True).astype(np.float64)
+                diag = np.arange(xtx.shape[1])
+                xtx[:, diag, diag] += max(float(lowrank_basis_l2), 1.0e-8)
+                xty = np.einsum("nkd,nkr->ndr", xw, yw, optimize=True).astype(np.float64)
+                coef = np.linalg.solve(xtx, xty).astype(np.float32)
+                target_coeff = np.einsum("nd,ndr->nr", tgt_feat.astype(np.float32), coef, optimize=True)
+                lowrank_pred = mean_delta + np.einsum("nr,ncr->nc", target_coeff, basis, optimize=True)
+                clip_v = float(lowrank_basis_residual_clip)
+                if clip_v > 0.0:
+                    lowrank_pred = np.clip(lowrank_pred, -clip_v, clip_v)
+                blend = float(np.clip(float(lowrank_basis_blend), 0.0, 1.0))
+                if decoder_mode_s == "hybrid_edge_lowrank" and float(lowrank_basis_disagreement_beta) > 0.0:
+                    pred_norm = np.maximum(np.linalg.norm(pred[idx], axis=1), 1.0e-6)
+                    disagreement = np.linalg.norm(lowrank_pred - pred[idx], axis=1) / pred_norm
+                    row_blend = blend * np.exp(
+                        np.clip(-float(lowrank_basis_disagreement_beta) * disagreement, -30.0, 0.0)
+                    ).astype(np.float32)
+                    pred[idx] = ((1.0 - row_blend[:, None]) * pred[idx] + row_blend[:, None] * lowrank_pred).astype(np.float32)
+                else:
+                    pred[idx] = ((1.0 - blend) * pred[idx] + blend * lowrank_pred).astype(np.float32)
         variance_ratio = np.zeros_like(denom, dtype=np.float32)
         source_agreement = np.ones_like(denom, dtype=np.float32)
         needs_variance = (
@@ -1122,6 +1261,9 @@ def _predict_delta(
             confidence = np.ones_like(denom, dtype=np.float32)
         if str(source_agreement_mode) == "soft":
             confidence = confidence * source_agreement
+        if float(target_edge_gain) > 0.0:
+            edge_boost = 1.0 + float(target_edge_gain) * np.clip(tgt_parent_edge / 0.05, 0.0, 1.0)
+            confidence = confidence * np.clip(edge_boost, 1.0, max(float(target_edge_gain_clip), 1.0)).astype(np.float32)
         policy_reliability = np.ones_like(confidence, dtype=np.float32)
         if "policy_reliability" in bank:
             policy_map = np.asarray(bank["policy_reliability"], dtype=np.float32)
@@ -1326,6 +1468,15 @@ def _evaluate_policy_val(
     local_linear_blend: float,
     local_linear_min_sources: int,
     local_linear_residual_clip: float,
+    lowrank_basis_rank: int,
+    lowrank_basis_min_sources: int,
+    lowrank_basis_min_unique_views: int,
+    lowrank_basis_l2: float,
+    lowrank_basis_blend: float,
+    lowrank_basis_residual_clip: float,
+    lowrank_basis_disagreement_beta: float,
+    target_edge_gain: float,
+    target_edge_gain_clip: float,
     ood_gain_mode: str,
     ood_gain_beta: float,
     ood_gain_view_weight: float,
@@ -1370,6 +1521,15 @@ def _evaluate_policy_val(
                 local_linear_blend=float(local_linear_blend),
                 local_linear_min_sources=int(local_linear_min_sources),
                 local_linear_residual_clip=float(local_linear_residual_clip),
+                lowrank_basis_rank=int(lowrank_basis_rank),
+                lowrank_basis_min_sources=int(lowrank_basis_min_sources),
+                lowrank_basis_min_unique_views=int(lowrank_basis_min_unique_views),
+                lowrank_basis_l2=float(lowrank_basis_l2),
+                lowrank_basis_blend=float(lowrank_basis_blend),
+                lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
+                lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                target_edge_gain=float(target_edge_gain),
+                target_edge_gain_clip=float(target_edge_gain_clip),
                 ood_gain_mode=str(ood_gain_mode),
                 ood_gain_beta=float(ood_gain_beta),
                 ood_gain_view_weight=float(ood_gain_view_weight),
@@ -1525,6 +1685,15 @@ def _target_no_gt_preview(
     local_linear_blend: float,
     local_linear_min_sources: int,
     local_linear_residual_clip: float,
+    lowrank_basis_rank: int,
+    lowrank_basis_min_sources: int,
+    lowrank_basis_min_unique_views: int,
+    lowrank_basis_l2: float,
+    lowrank_basis_blend: float,
+    lowrank_basis_residual_clip: float,
+    lowrank_basis_disagreement_beta: float,
+    target_edge_gain: float,
+    target_edge_gain_clip: float,
     ood_gain_mode: str,
     ood_gain_beta: float,
     ood_gain_view_weight: float,
@@ -1566,6 +1735,15 @@ def _target_no_gt_preview(
                 local_linear_blend=float(local_linear_blend),
                 local_linear_min_sources=int(local_linear_min_sources),
                 local_linear_residual_clip=float(local_linear_residual_clip),
+                lowrank_basis_rank=int(lowrank_basis_rank),
+                lowrank_basis_min_sources=int(lowrank_basis_min_sources),
+                lowrank_basis_min_unique_views=int(lowrank_basis_min_unique_views),
+                lowrank_basis_l2=float(lowrank_basis_l2),
+                lowrank_basis_blend=float(lowrank_basis_blend),
+                lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
+                lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                target_edge_gain=float(target_edge_gain),
+                target_edge_gain_clip=float(target_edge_gain_clip),
                 ood_gain_mode=str(ood_gain_mode),
                 ood_gain_beta=float(ood_gain_beta),
                 ood_gain_view_weight=float(ood_gain_view_weight),
@@ -1618,6 +1796,15 @@ def _target_exact_eval(
     local_linear_blend: float,
     local_linear_min_sources: int,
     local_linear_residual_clip: float,
+    lowrank_basis_rank: int,
+    lowrank_basis_min_sources: int,
+    lowrank_basis_min_unique_views: int,
+    lowrank_basis_l2: float,
+    lowrank_basis_blend: float,
+    lowrank_basis_residual_clip: float,
+    lowrank_basis_disagreement_beta: float,
+    target_edge_gain: float,
+    target_edge_gain_clip: float,
     ood_gain_mode: str,
     ood_gain_beta: float,
     ood_gain_view_weight: float,
@@ -1665,6 +1852,15 @@ def _target_exact_eval(
                 local_linear_blend=float(local_linear_blend),
                 local_linear_min_sources=int(local_linear_min_sources),
                 local_linear_residual_clip=float(local_linear_residual_clip),
+                lowrank_basis_rank=int(lowrank_basis_rank),
+                lowrank_basis_min_sources=int(lowrank_basis_min_sources),
+                lowrank_basis_min_unique_views=int(lowrank_basis_min_unique_views),
+                lowrank_basis_l2=float(lowrank_basis_l2),
+                lowrank_basis_blend=float(lowrank_basis_blend),
+                lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
+                lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                target_edge_gain=float(target_edge_gain),
+                target_edge_gain_clip=float(target_edge_gain_clip),
                 ood_gain_mode=str(ood_gain_mode),
                 ood_gain_beta=float(ood_gain_beta),
                 ood_gain_view_weight=float(ood_gain_view_weight),
@@ -1778,6 +1974,22 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- local-linear blend: `{payload.get('residual_decoder', {}).get('local_linear_blend', 0.0):.6f}`",
         f"- local-linear min sources: `{payload.get('residual_decoder', {}).get('local_linear_min_sources', 0)}`",
         f"- local-linear residual clip: `{payload.get('residual_decoder', {}).get('local_linear_residual_clip', 0.0):.6f}`",
+        f"- lowrank basis rank: `{payload.get('residual_decoder', {}).get('lowrank_basis_rank', 0)}`",
+        f"- lowrank basis min sources: `{payload.get('residual_decoder', {}).get('lowrank_basis_min_sources', 0)}`",
+        f"- lowrank basis min unique views: `{payload.get('residual_decoder', {}).get('lowrank_basis_min_unique_views', 0)}`",
+        f"- lowrank basis ridge: `{payload.get('residual_decoder', {}).get('lowrank_basis_l2', 0.0):.6f}`",
+        f"- lowrank basis blend: `{payload.get('residual_decoder', {}).get('lowrank_basis_blend', 0.0):.6f}`",
+        f"- lowrank basis residual clip: `{payload.get('residual_decoder', {}).get('lowrank_basis_residual_clip', 0.0):.6f}`",
+        f"- lowrank basis disagreement beta: `{payload.get('residual_decoder', {}).get('lowrank_basis_disagreement_beta', 0.0):.6f}`",
+        f"- source edge score weight: `{payload.get('residual_decoder', {}).get('source_edge_score_weight', 0.0):.6f}`",
+        f"- target edge gain: `{payload.get('residual_decoder', {}).get('target_edge_gain', 0.0):.6f}`",
+        f"- target edge gain clip: `{payload.get('residual_decoder', {}).get('target_edge_gain_clip', 0.0):.6f}`",
+        "",
+        (
+            "`lowrank_source_basis` is a source-slot low-rank teacher-residual basis over the train-fit source bank. "
+            "It checks independent source-view support through `source_view_id`, but it is not yet a coherent "
+            "per-face texture sheet across UV bins."
+        ),
         "",
         "## Policy-Val Metrics",
         "",
@@ -1917,6 +2129,7 @@ def main() -> int:
     parser.add_argument("--source_top_k", type=int, default=6)
     parser.add_argument("--max_source_samples_per_view", type=int, default=180000)
     parser.add_argument("--score_gain_weight", type=float, default=2.0)
+    parser.add_argument("--source_edge_score_weight", type=float, default=0.0)
     parser.add_argument("--min_source_count", type=float, default=2.0)
     parser.add_argument("--view_beta", type=float, default=3.0)
     parser.add_argument("--normal_beta", type=float, default=1.0)
@@ -1924,11 +2137,24 @@ def main() -> int:
     parser.add_argument("--count_gamma", type=float, default=0.25)
     parser.add_argument("--gain_beta", type=float, default=1.0)
     parser.add_argument("--confidence_tau", type=float, default=0.0)
-    parser.add_argument("--residual_decoder_mode", choices=["weighted_average", "local_linear"], default="weighted_average")
+    parser.add_argument(
+        "--residual_decoder_mode",
+        choices=["weighted_average", "local_linear", "edge_local_linear", "lowrank_source_basis", "hybrid_edge_lowrank"],
+        default="weighted_average",
+    )
     parser.add_argument("--local_linear_l2", type=float, default=0.05)
     parser.add_argument("--local_linear_blend", type=float, default=1.0)
     parser.add_argument("--local_linear_min_sources", type=int, default=3)
     parser.add_argument("--local_linear_residual_clip", type=float, default=0.12)
+    parser.add_argument("--lowrank_basis_rank", type=int, default=3)
+    parser.add_argument("--lowrank_basis_min_sources", type=int, default=4)
+    parser.add_argument("--lowrank_basis_min_unique_views", type=int, default=3)
+    parser.add_argument("--lowrank_basis_l2", type=float, default=0.05)
+    parser.add_argument("--lowrank_basis_blend", type=float, default=1.0)
+    parser.add_argument("--lowrank_basis_residual_clip", type=float, default=0.12)
+    parser.add_argument("--lowrank_basis_disagreement_beta", type=float, default=0.0)
+    parser.add_argument("--target_edge_gain", type=float, default=0.0)
+    parser.add_argument("--target_edge_gain_clip", type=float, default=1.5)
     parser.add_argument("--source_agreement_mode", choices=["off", "soft", "hard"], default="off")
     parser.add_argument("--source_agreement_beta", type=float, default=0.0)
     parser.add_argument("--source_agreement_min_confidence", type=float, default=0.25)
@@ -2050,6 +2276,7 @@ def main() -> int:
             source_top_k=int(args.source_top_k),
             max_samples_per_view=int(args.max_source_samples_per_view),
             score_gain_weight=float(args.score_gain_weight),
+            source_edge_score_weight=float(args.source_edge_score_weight),
             seed=int(args.seed),
         )
     residual_transform_summary = _transform_bank_residuals(
@@ -2094,6 +2321,15 @@ def main() -> int:
             local_linear_blend=float(args.local_linear_blend),
             local_linear_min_sources=int(args.local_linear_min_sources),
             local_linear_residual_clip=float(args.local_linear_residual_clip),
+            lowrank_basis_rank=int(args.lowrank_basis_rank),
+            lowrank_basis_min_sources=int(args.lowrank_basis_min_sources),
+            lowrank_basis_min_unique_views=int(args.lowrank_basis_min_unique_views),
+            lowrank_basis_l2=float(args.lowrank_basis_l2),
+            lowrank_basis_blend=float(args.lowrank_basis_blend),
+            lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
+            lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+            target_edge_gain=float(args.target_edge_gain),
+            target_edge_gain_clip=float(args.target_edge_gain_clip),
         )
     learned_ood_head_summary: dict[str, Any] = {"mode": "off"}
     if str(args.ood_gain_mode) == "learned_linear":
@@ -2126,6 +2362,15 @@ def main() -> int:
             local_linear_blend=float(args.local_linear_blend),
             local_linear_min_sources=int(args.local_linear_min_sources),
             local_linear_residual_clip=float(args.local_linear_residual_clip),
+            lowrank_basis_rank=int(args.lowrank_basis_rank),
+            lowrank_basis_min_sources=int(args.lowrank_basis_min_sources),
+            lowrank_basis_min_unique_views=int(args.lowrank_basis_min_unique_views),
+            lowrank_basis_l2=float(args.lowrank_basis_l2),
+            lowrank_basis_blend=float(args.lowrank_basis_blend),
+            lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
+            lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+            target_edge_gain=float(args.target_edge_gain),
+            target_edge_gain_clip=float(args.target_edge_gain_clip),
         )
     alpha_grid = sorted({float(item) for item in str(args.alpha_grid).split(",") if item.strip()})
     if 0.0 not in alpha_grid:
@@ -2153,6 +2398,15 @@ def main() -> int:
         local_linear_blend=float(args.local_linear_blend),
         local_linear_min_sources=int(args.local_linear_min_sources),
         local_linear_residual_clip=float(args.local_linear_residual_clip),
+        lowrank_basis_rank=int(args.lowrank_basis_rank),
+        lowrank_basis_min_sources=int(args.lowrank_basis_min_sources),
+        lowrank_basis_min_unique_views=int(args.lowrank_basis_min_unique_views),
+        lowrank_basis_l2=float(args.lowrank_basis_l2),
+        lowrank_basis_blend=float(args.lowrank_basis_blend),
+        lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
+        lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+        target_edge_gain=float(args.target_edge_gain),
+        target_edge_gain_clip=float(args.target_edge_gain_clip),
         ood_gain_mode=str(args.ood_gain_mode),
         ood_gain_beta=float(args.ood_gain_beta),
         ood_gain_view_weight=float(args.ood_gain_view_weight),
@@ -2192,6 +2446,15 @@ def main() -> int:
             local_linear_blend=float(args.local_linear_blend),
             local_linear_min_sources=int(args.local_linear_min_sources),
             local_linear_residual_clip=float(args.local_linear_residual_clip),
+            lowrank_basis_rank=int(args.lowrank_basis_rank),
+            lowrank_basis_min_sources=int(args.lowrank_basis_min_sources),
+            lowrank_basis_min_unique_views=int(args.lowrank_basis_min_unique_views),
+            lowrank_basis_l2=float(args.lowrank_basis_l2),
+            lowrank_basis_blend=float(args.lowrank_basis_blend),
+            lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
+            lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+            target_edge_gain=float(args.target_edge_gain),
+            target_edge_gain_clip=float(args.target_edge_gain_clip),
             ood_gain_mode=str(args.ood_gain_mode),
             ood_gain_beta=float(args.ood_gain_beta),
             ood_gain_view_weight=float(args.ood_gain_view_weight),
@@ -2230,6 +2493,15 @@ def main() -> int:
             local_linear_blend=float(args.local_linear_blend),
             local_linear_min_sources=int(args.local_linear_min_sources),
             local_linear_residual_clip=float(args.local_linear_residual_clip),
+            lowrank_basis_rank=int(args.lowrank_basis_rank),
+            lowrank_basis_min_sources=int(args.lowrank_basis_min_sources),
+            lowrank_basis_min_unique_views=int(args.lowrank_basis_min_unique_views),
+            lowrank_basis_l2=float(args.lowrank_basis_l2),
+            lowrank_basis_blend=float(args.lowrank_basis_blend),
+            lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
+            lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+            target_edge_gain=float(args.target_edge_gain),
+            target_edge_gain_clip=float(args.target_edge_gain_clip),
             ood_gain_mode=str(args.ood_gain_mode),
             ood_gain_beta=float(args.ood_gain_beta),
             ood_gain_view_weight=float(args.ood_gain_view_weight),
@@ -2256,10 +2528,12 @@ def main() -> int:
         "counts": bank["counts"].astype(np.float16),
         "residual": bank["residual"].astype(np.float16),
         "parent_rgb": bank["parent_rgb"].astype(np.float16),
+        "parent_edge": bank["parent_edge"].astype(np.float16),
         "normal": bank["normal"].astype(np.float16),
         "camera_dir": bank["camera_dir"].astype(np.float16),
         "gain_l1": bank["gain_l1"].astype(np.float16),
         "alpha": bank["alpha"].astype(np.float16),
+        "source_view_id": bank["source_view_id"].astype(np.int32),
         "args_json": np.asarray(json.dumps(vars(args), sort_keys=True)),
     }
     if "policy_reliability" in bank:
@@ -2306,6 +2580,16 @@ def main() -> int:
             "local_linear_blend": float(args.local_linear_blend),
             "local_linear_min_sources": int(args.local_linear_min_sources),
             "local_linear_residual_clip": float(args.local_linear_residual_clip),
+            "lowrank_basis_rank": int(args.lowrank_basis_rank),
+            "lowrank_basis_min_sources": int(args.lowrank_basis_min_sources),
+            "lowrank_basis_min_unique_views": int(args.lowrank_basis_min_unique_views),
+            "lowrank_basis_l2": float(args.lowrank_basis_l2),
+            "lowrank_basis_blend": float(args.lowrank_basis_blend),
+            "lowrank_basis_residual_clip": float(args.lowrank_basis_residual_clip),
+            "lowrank_basis_disagreement_beta": float(args.lowrank_basis_disagreement_beta),
+            "source_edge_score_weight": float(args.source_edge_score_weight),
+            "target_edge_gain": float(args.target_edge_gain),
+            "target_edge_gain_clip": float(args.target_edge_gain_clip),
         },
         "policy_reliability": policy_reliability_summary,
         "learned_ood_head": learned_ood_head_summary,
@@ -2348,10 +2632,27 @@ def main() -> int:
                 "policy_val/best_alpha": float(best.get("alpha", 0.0)),
                 "policy_val/best_all_axis_alpha": float(best_all.get("alpha", 0.0)),
                 "residual_decoder/is_local_linear": float(str(args.residual_decoder_mode) == "local_linear"),
+                "residual_decoder/is_edge_local_linear": float(str(args.residual_decoder_mode) == "edge_local_linear"),
+                "residual_decoder/is_lowrank_source_basis": float(
+                    str(args.residual_decoder_mode) == "lowrank_source_basis"
+                ),
+                "residual_decoder/is_hybrid_edge_lowrank": float(
+                    str(args.residual_decoder_mode) == "hybrid_edge_lowrank"
+                ),
                 "residual_decoder/local_linear_l2": float(args.local_linear_l2),
                 "residual_decoder/local_linear_blend": float(args.local_linear_blend),
                 "residual_decoder/local_linear_min_sources": float(args.local_linear_min_sources),
                 "residual_decoder/local_linear_residual_clip": float(args.local_linear_residual_clip),
+                "residual_decoder/lowrank_basis_rank": float(args.lowrank_basis_rank),
+                "residual_decoder/lowrank_basis_min_sources": float(args.lowrank_basis_min_sources),
+                "residual_decoder/lowrank_basis_min_unique_views": float(args.lowrank_basis_min_unique_views),
+                "residual_decoder/lowrank_basis_l2": float(args.lowrank_basis_l2),
+                "residual_decoder/lowrank_basis_blend": float(args.lowrank_basis_blend),
+                "residual_decoder/lowrank_basis_residual_clip": float(args.lowrank_basis_residual_clip),
+                "residual_decoder/lowrank_basis_disagreement_beta": float(args.lowrank_basis_disagreement_beta),
+                "residual_decoder/source_edge_score_weight": float(args.source_edge_score_weight),
+                "residual_decoder/target_edge_gain": float(args.target_edge_gain),
+                "residual_decoder/target_edge_gain_clip": float(args.target_edge_gain_clip),
                 "source_bank/nonempty_source_slots": float(bank_summary.get("nonempty_source_slots", 0)),
                 "source_bank/residual_energy_ratio_after_transform": float(
                     residual_transform_summary.get("energy_ratio_after_before", 1.0)

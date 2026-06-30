@@ -1,0 +1,193 @@
+{
+  "schema": "spcarnet_v264_v266_edge_lowrank_hybrid_summary_v1",
+  "date": "2026-06-30",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "phasej_flowers_reference": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "verdict": "NOT_COMPLETE",
+  "full9_status": "blocked_until_flowers_exact_beats_phasej_all_axis",
+  "best_axis": {
+    "target_psnr": "v266c_hybrid_conservative",
+    "target_ssim": "v264a_edge_local_linear",
+    "target_lpips": "v264b_edge_gain025"
+  },
+  "runs": [
+    {
+      "id": "v263a_local_linear",
+      "role": "pre-v264 reference",
+      "audit_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v263a_local_linear_targetvisible_32k_targetexact/v253_deferred_source_renderer_audit.json",
+      "decoder": "local_linear",
+      "target_psnr": 19.844511931,
+      "target_ssim": 0.620224187,
+      "target_lpips": 0.179967595,
+      "target_gain": {
+        "psnr": 0.012458053,
+        "ssim": 0.000313776,
+        "lpips": 0.000367271
+      },
+      "target_tail_cvar": {
+        "psnr": -0.002673329,
+        "ssim": -0.000236293,
+        "lpips": -0.000443285
+      },
+      "mean_changed_fraction": 0.040889954,
+      "phasej_psnr_gap": -0.459846069
+    },
+    {
+      "id": "v264a_edge_local_linear",
+      "role": "edge-aware local-linear decoder",
+      "audit_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v264a_edge_local_linear_targetvisible_32k_targetexact/v253_deferred_source_renderer_audit.json",
+      "decoder": "edge_local_linear",
+      "target_psnr": 19.844520404,
+      "target_ssim": 0.620225642,
+      "target_lpips": 0.179971219,
+      "target_gain": {
+        "psnr": 0.012466526,
+        "ssim": 0.000315231,
+        "lpips": 0.000363647
+      },
+      "target_tail_cvar": {
+        "psnr": -0.002670364,
+        "ssim": -0.00023224,
+        "lpips": -0.000463357
+      },
+      "mean_changed_fraction": 0.040926826,
+      "phasej_psnr_gap": -0.459837596
+    },
+    {
+      "id": "v264b_edge_gain025",
+      "role": "edge confidence ablation",
+      "audit_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v264b_edge_local_linear_edgegain025_targetexact/v253_deferred_source_renderer_audit.json",
+      "decoder": "edge_local_linear",
+      "target_psnr": 19.845365508,
+      "target_ssim": 0.620175974,
+      "target_lpips": 0.179871977,
+      "target_gain": {
+        "psnr": 0.01331163,
+        "ssim": 0.000265563,
+        "lpips": 0.000462889
+      },
+      "target_tail_cvar": {
+        "psnr": -0.003920188,
+        "ssim": -0.000278572,
+        "lpips": -0.00047005
+      },
+      "mean_changed_fraction": 0.057264102,
+      "phasej_psnr_gap": -0.458992492
+    },
+    {
+      "id": "v265a_lowrank_rank3",
+      "role": "source-slot low-rank basis, full replacement",
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v265_lowrank_full_flowers_20260630/v265a_lowrank_source_basis_targetvisible_32k/v253_deferred_source_renderer_audit.json",
+      "decoder": "lowrank_source_basis",
+      "target_psnr": 19.84401923,
+      "target_ssim": 0.620206654,
+      "target_lpips": 0.179931425,
+      "target_gain": {
+        "psnr": 0.011965352,
+        "ssim": 0.000296243,
+        "lpips": 0.000403441
+      },
+      "target_tail_cvar": {
+        "psnr": -0.003270668,
+        "ssim": -0.000261744,
+        "lpips": -0.00045836
+      },
+      "mean_changed_fraction": 0.040368105,
+      "phasej_psnr_gap": -0.46033877
+    },
+    {
+      "id": "v265b_lowrank_blend",
+      "role": "source-slot low-rank basis, conservative blend",
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v265_lowrank_full_flowers_20260630/v265b_lowrank_rank2_blend05_loadedbank/v253_deferred_source_renderer_audit.json",
+      "decoder": "lowrank_source_basis",
+      "target_psnr": 19.84458355,
+      "target_ssim": 0.620176697,
+      "target_lpips": 0.17993926,
+      "target_gain": {
+        "psnr": 0.012529672,
+        "ssim": 0.000266286,
+        "lpips": 0.000395606
+      },
+      "target_tail_cvar": {
+        "psnr": -0.002389069,
+        "ssim": -0.000288586,
+        "lpips": -0.000458223
+      },
+      "mean_changed_fraction": 0.05228332,
+      "phasej_psnr_gap": -0.45977445
+    },
+    {
+      "id": "v266a_hybrid",
+      "role": "edge-local-linear base plus disagreement-aware low-rank injection",
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v266_hybrid_flowers_20260630/v266a_hybrid_edge_lowrank_loadedbank/v253_deferred_source_renderer_audit.json",
+      "decoder": "hybrid_edge_lowrank",
+      "target_psnr": 19.845653644,
+      "target_ssim": 0.620198697,
+      "target_lpips": 0.179917571,
+      "target_gain": {
+        "psnr": 0.013599766,
+        "ssim": 0.000288286,
+        "lpips": 0.000417295
+      },
+      "target_tail_cvar": {
+        "psnr": -0.002161315,
+        "ssim": -0.000243942,
+        "lpips": -0.000537915
+      },
+      "mean_changed_fraction": 0.054203117,
+      "phasej_psnr_gap": -0.458704356
+    },
+    {
+      "id": "v266b_hybrid_edgegain010",
+      "role": "hybrid plus light target edge confidence",
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v266_hybrid_flowers_20260630/v266b_hybrid_edgegain010_loadedbank/v253_deferred_source_renderer_audit.json",
+      "decoder": "hybrid_edge_lowrank",
+      "target_psnr": 19.845552842,
+      "target_ssim": 0.620196318,
+      "target_lpips": 0.17989669,
+      "target_gain": {
+        "psnr": 0.013498963,
+        "ssim": 0.000285907,
+        "lpips": 0.000438176
+      },
+      "target_tail_cvar": {
+        "psnr": -0.003084666,
+        "ssim": -0.000260293,
+        "lpips": -0.000512933
+      },
+      "mean_changed_fraction": 0.055207138,
+      "phasej_psnr_gap": -0.458805158
+    },
+    {
+      "id": "v266c_hybrid_conservative",
+      "role": "hybrid with conservative low-rank injection",
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v266_hybrid_flowers_20260630/v266c_hybrid_conservative_loadedbank/v253_deferred_source_renderer_audit.json",
+      "decoder": "hybrid_edge_lowrank",
+      "target_psnr": 19.84569812,
+      "target_ssim": 0.620200756,
+      "target_lpips": 0.179915376,
+      "target_gain": {
+        "psnr": 0.013644241,
+        "ssim": 0.000290345,
+        "lpips": 0.00041949
+      },
+      "target_tail_cvar": {
+        "psnr": -0.002039359,
+        "ssim": -0.000243763,
+        "lpips": -0.000543348
+      },
+      "mean_changed_fraction": 0.054285379,
+      "phasej_psnr_gap": -0.45865988
+    }
+  ],
+  "main_lessons": [
+    "Edge-aware local-linear decoding improves policy-val and target exact only marginally over local-linear.",
+    "Pure source-slot low-rank basis is not a solution; it improves some LPIPS/tail axes but lowers PSNR/SSIM relative to edge-local-linear.",
+    "Disagreement-aware hybrid edge-lowrank is a real mechanism improvement and gives the best deferred-source target PSNR and PSNR-tail so far.",
+    "No v264-v266 run beats Phase-J flowers PSNR, so full9 remains blocked under the v169 prompt."
+  ]
+}

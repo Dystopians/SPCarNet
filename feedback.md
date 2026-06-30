@@ -2,6 +2,26 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-30, v264-v266:
+
+The newest branch is **edge-aware / low-rank hybrid deferred source residual rendering** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:
+
+- `docs/car_model/6-30-v264-v266-EdgeLowrankHybrid-Log.md`
+- `docs/car_model/results/v264_v266_edge_lowrank_hybrid_summary.json`
+
+Important new facts:
+
+- v264 added `edge_local_linear`: parent-edge features are included in local face/UV ridge residual decoding. This is a real decoder change, not an alpha scan.
+- v265 added `lowrank_source_basis`: source-slot low-rank teacher residual bases are fit from train-fit evidence only. Checkpoints now save `source_view_id` so source-view diversity can be audited.
+- v266 added `hybrid_edge_lowrank`: edge-local-linear is used as the stable base, and low-rank detail is injected through a disagreement-aware blend. This directly responds to the v265 negative result where pure low-rank replacement hurt PSNR/SSIM.
+- v266c is the best deferred-source target PSNR so far: `19.845698 / 0.620201 / 0.179915`, gains `+0.013644 / +0.000290 / +0.000419`, changed fraction `0.054285`, PSNR tail CVaR `-0.002039`.
+- However, v266c is not all-axis best. v264a still has the best target SSIM `0.620226`; v264b still has the best target LPIPS `0.179872`.
+- Most importantly, v266c still fails the Phase-J flowers PSNR gate by `0.458660` PSNR. Full9 remains blocked.
+
+Current direct verdict:
+
+> v266 is a meaningful mechanism improvement over v263-v264 on PSNR and PSNR-tail, but it is still **NOT COMPLETE** for paper-level success. The source-slot low-rank representation is too local and not coherent enough across UV bins. The next model should not repeat low-rank slot blending, edge-gain nudges, or alpha scans. It should move to coherent face/patch texture features across UV bins, explicit patch/gradient residual supervision, and a target-free uncertainty/visibility model.
+
 Latest update on 2026-06-29, v260-v263:
 
 The newest branch is **local-linear deferred source residual decoding with no-GT target-visible face expansion** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:
