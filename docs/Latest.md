@@ -618,3 +618,39 @@ WANDB_MODE=offline CUDA_VISIBLE_DEVICES=<low_or_mid_load_gpu> \
 ```
 
 这条命令只能作为下一轮 patched-run 基础；真正需要新增的是更强的 train-only residual capacity，而不只是重复 v165 的 footprint expansion 或 v166 的 multisample fill。
+
+## 2026-06-29 Update: v253-v254 Deferred Source Renderer
+
+最新按 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md` 推进了一次真实表示层升级：
+
+- 新增 `scripts/car_model/train_surface_deferred_source_residual_renderer.py`。
+- v253 不再是静态 RGB atlas 或 alpha scan；它为每个 face/UV bin 存多个 train-fit Phase-J teacher residual source，并按目标视角方向、法线一致性、parent RGB 相似度、support count、teacher gain 做 deferred aggregation。
+- 目标 apply 使用 stripped no-GT evidence；target GT 只在 apply 后用于 evaluation。
+- 支持 `--bank_checkpoint`，因此后续 policy/eval ablation 可以固定表示、避免重建 bank。
+- v254 额外测试了 residual channel shaping：`luma_only` 和 `chroma_shrink`。
+
+关键结论：**v253 是有效的表示层里程碑，但不是论文闭环成功**。它首次在 policy-val 上产生非零 all-axis 小幅正增益，但固定策略 target exact 仍被 LPIPS 卡住，不能跑 full9。
+
+| run | selected alpha | policy PSNR gain | policy SSIM gain | policy LPIPS gain | target PSNR gain | target SSIM gain | target LPIPS gain | target all-axis |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| v253b raw RGB | 0.031250 | +0.001240 | +0.000015 | +0.000004 | +0.001063 | +0.000028 | -0.000002 | fail |
+| v253d conservative | 0.015625 | +0.000628 | +0.000008 | +0.000006 | +0.000537 | +0.000014 | -0.000001 | fail |
+| v254a luma only | 0.031250 | +0.001141 | +0.000012 | +0.000002 | +0.000985 | +0.000025 | -0.000005 | fail |
+| v254b chroma shrink | 0.031250 | +0.001166 | +0.000013 | +0.000003 | +0.001005 | +0.000025 | -0.000004 | fail |
+
+Artifacts:
+
+```text
+docs/car_model/6-29-v253-v254-DeferredSourceRenderer-Log.md
+docs/car_model/results/v253_v254_deferred_source_renderer_summary.json
+/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v253b_source_feature_deferred_targetexact/v253_deferred_source_renderer_audit.json
+/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v253b_source_feature_deferred_targetexact/target_exact_fixed_policy
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+The next step should not be another alpha grid. The residual bank needs a target-blind perceptual confidence/reliability predictor that suppresses source/bin residuals with weak multi-source agreement, high residual variance, or poor edge/teacher-gain consistency before target apply.

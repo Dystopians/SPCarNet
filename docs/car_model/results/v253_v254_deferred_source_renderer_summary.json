@@ -1,0 +1,161 @@
+{
+  "schema": "spcarnet_v253_v254_deferred_source_renderer_summary_v1",
+  "date": "2026-06-29",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "phasej_flowers_exact_gate": {
+    "psnr_gt": 20.304358,
+    "ssim_gt": 0.55777,
+    "lpips_lt": 0.329222
+  },
+  "method_change": {
+    "name": "v253 deferred source-feature residual renderer",
+    "script": "scripts/car_model/train_surface_deferred_source_residual_renderer.py",
+    "description": "Store multiple train-fit Phase-J teacher residual sources per face/UV bin and render by target-view deferred aggregation using view direction, normal agreement, parent-RGB similarity, support count, and teacher gain.",
+    "not_alpha_only": true,
+    "train_fit_teacher_only": true,
+    "policy_val_uses_gt_for_certification": true,
+    "target_apply_uses_gt": false,
+    "target_gt_loaded_after_apply_for_eval": true
+  },
+  "status": {
+    "policy_val_all_axis_achieved": true,
+    "target_exact_all_axis_vs_parent_achieved": false,
+    "flowers_exact_all_axis_vs_phasej": false,
+    "full9_allowed": false,
+    "verdict": "Representation-level progress, but not paper-ready. The deferred source renderer gives consistent PSNR/SSIM gains and tiny policy-val LPIPS gains, but fixed-policy target exact LPIPS remains slightly negative."
+  },
+  "artifacts": {
+    "v253b_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v253b_source_feature_deferred_targetexact/v253_deferred_source_renderer_audit.json",
+    "v253b_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v253b_source_feature_deferred_targetexact/v253_deferred_source_renderer_audit.md",
+    "v253b_checkpoint": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v253b_source_feature_deferred_targetexact/v253_deferred_source_renderer_bank.npz",
+    "v253b_target_renders": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v253b_source_feature_deferred_targetexact/target_exact_fixed_policy",
+    "v253b_wandb": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v253b_source_feature_deferred_targetexact/wandb/offline-run-20260629_194753-kac8i39s",
+    "v253c_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v253c_loadedbank_finealpha_targetexact/v253_deferred_source_renderer_audit.json",
+    "v253c_wandb": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v253c_loadedbank_finealpha_targetexact/wandb/offline-run-20260629_195325-80t6pncf",
+    "v253d_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v253d_loadedbank_conservative_alpha_targetexact/v253_deferred_source_renderer_audit.json",
+    "v253d_wandb": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v253d_loadedbank_conservative_alpha_targetexact/wandb/offline-run-20260629_195533-i4rnd0z2",
+    "v254a_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v254a_loadedbank_lumaonly_targetexact/v253_deferred_source_renderer_audit.json",
+    "v254a_wandb": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v254a_loadedbank_lumaonly_targetexact/wandb/offline-run-20260629_195825-facgdcze",
+    "v254b_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v254b_loadedbank_chromashrink_targetexact/v253_deferred_source_renderer_audit.json",
+    "v254b_wandb": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v254b_loadedbank_chromashrink_targetexact/wandb/offline-run-20260629_200035-ncgx2ahm"
+  },
+  "runs": [
+    {
+      "name": "v253b_source_feature_deferred_targetexact",
+      "mode": "raw_rgb",
+      "selected_alpha": 0.03125,
+      "policy_val": {
+        "psnr_gain": 0.0012397702897481249,
+        "ssim_gain": 0.000015010436375935873,
+        "lpips_gain": 0.000004492700099945068,
+        "ssim_tail_cvar": -0.0000005364418029785156,
+        "lpips_tail_cvar": -0.0000397413969039917
+      },
+      "target_exact": {
+        "candidate_psnr": 19.833116658816014,
+        "candidate_ssim": 0.6199379468506033,
+        "candidate_lpips": 0.18033673919060014,
+        "psnr_gain": 0.0010627803685425102,
+        "ssim_gain": 0.000027535991235212847,
+        "lpips_gain": -0.0000018731436946175315,
+        "changed_fraction": 0.004726420993617388,
+        "pass_vs_parent_all_axis": false
+      }
+    },
+    {
+      "name": "v253c_loadedbank_finealpha_targetexact",
+      "mode": "raw_rgb_fine_alpha",
+      "selected_alpha": 0.046875,
+      "policy_val": {
+        "psnr_gain": 0.0018368448215122513,
+        "ssim_gain": 0.00001971920331319173,
+        "lpips_gain": 0.000001020108660062154,
+        "ssim_tail_cvar": -0.000002086162567138672,
+        "lpips_tail_cvar": -0.00007150694727897644
+      },
+      "target_exact": {
+        "candidate_psnr": 19.8336326458618,
+        "candidate_ssim": 0.6199502308260311,
+        "candidate_lpips": 0.18034222010861745,
+        "psnr_gain": 0.001578767414337631,
+        "ssim_gain": 0.00003981996666301381,
+        "lpips_gain": -0.000007354061711918224,
+        "changed_fraction": 0.010119242711747455,
+        "pass_vs_parent_all_axis": false
+      }
+    },
+    {
+      "name": "v253d_loadedbank_conservative_alpha_targetexact",
+      "mode": "raw_rgb_conservative_alpha",
+      "selected_alpha": 0.015625,
+      "policy_val": {
+        "psnr_gain": 0.000627605111517345,
+        "ssim_gain": 0.00000832974910736084,
+        "lpips_gain": 0.000005973502993583679,
+        "ssim_tail_cvar": 0.00000011920928955078125,
+        "lpips_tail_cvar": -0.000012174248695373535
+      },
+      "target_exact": {
+        "candidate_psnr": 19.832590406947556,
+        "candidate_ssim": 0.619924625212496,
+        "candidate_lpips": 0.18033542077649722,
+        "psnr_gain": 0.0005365285000874823,
+        "ssim_gain": 0.000014214353127913041,
+        "lpips_gain": -0.0000005547295917164196,
+        "changed_fraction": 0.0003589680006900121,
+        "pass_vs_parent_all_axis": false
+      }
+    },
+    {
+      "name": "v254a_loadedbank_lumaonly_targetexact",
+      "mode": "luma_only",
+      "selected_alpha": 0.03125,
+      "policy_val": {
+        "psnr_gain": 0.0011406365058649708,
+        "ssim_gain": 0.000012010335922241211,
+        "lpips_gain": 0.000002469246586163839,
+        "ssim_tail_cvar": -0.00000286102294921875,
+        "lpips_tail_cvar": -0.00004303827881813049
+      },
+      "target_exact": {
+        "candidate_psnr": 19.833039109203057,
+        "candidate_ssim": 0.619935156269507,
+        "candidate_lpips": 0.1803398464213718,
+        "psnr_gain": 0.0009852307555895188,
+        "ssim_gain": 0.00002474541013891047,
+        "lpips_gain": -0.000004980374466289174,
+        "changed_fraction": 0.0033193354321200616,
+        "pass_vs_parent_all_axis": false
+      }
+    },
+    {
+      "name": "v254b_loadedbank_chromashrink_targetexact",
+      "mode": "chroma_shrink_0.25",
+      "selected_alpha": 0.03125,
+      "policy_val": {
+        "psnr_gain": 0.0011657327674334066,
+        "ssim_gain": 0.000012755393981933594,
+        "lpips_gain": 0.0000034930805365244546,
+        "ssim_tail_cvar": -0.000002294778823852539,
+        "lpips_tail_cvar": -0.0000416487455368042
+      },
+      "target_exact": {
+        "candidate_psnr": 19.83305867735356,
+        "candidate_ssim": 0.6199358582855606,
+        "candidate_lpips": 0.18033885075439002,
+        "psnr_gain": 0.0010047989060957073,
+        "ssim_gain": 0.00002544847401705655,
+        "lpips_gain": -0.0000039840286428278144,
+        "changed_fraction": 0.003555277790784424,
+        "pass_vs_parent_all_axis": false
+      }
+    }
+  ],
+  "lessons": [
+    "The v253 source-feature deferred renderer is the first v169 follow-up in this sequence to produce a nonzero policy-val all-axis pass without target/test GT leakage.",
+    "The gains are extremely small. Target exact PSNR and SSIM improve consistently, but LPIPS remains slightly negative for every fixed policy tested.",
+    "Conservative alpha reduces the LPIPS damage but also collapses visual change; it does not create a convincing qualitative improvement.",
+    "Luma-only and chroma-shrink residual shaping do not fix target LPIPS and should not be promoted as the main method.",
+    "The next serious step should learn or certify residual confidence/perceptual direction per source/bin, rather than relying on raw averaged teacher residual vectors."
+  ]
+}

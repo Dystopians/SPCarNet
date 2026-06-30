@@ -758,3 +758,80 @@ policy residual cosine >= 0.25
 target-free policy residual energy retention in [0.25, 4.0]
 policy PSNR/SSIM vs teacher does not degrade materially
 ```
+
+# 2026-06-29 v253-v254 Deferred Source Renderer Feedback Addendum
+
+This addendum records the latest attempt based on
+`docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md`.
+
+Main new implementation:
+
+```text
+scripts/car_model/train_surface_deferred_source_residual_renderer.py
+```
+
+Detailed log and machine-readable summary:
+
+```text
+docs/car_model/6-29-v253-v254-DeferredSourceRenderer-Log.md
+docs/car_model/results/v253_v254_deferred_source_renderer_summary.json
+```
+
+What changed:
+
+- v253 is a real representation change, not another alpha scan.
+- It builds a train-fit Phase-J teacher residual source bank over face/UV bins.
+- Each target pixel gathers source residuals by view direction, normal
+  agreement, parent-RGB similarity, support count, and teacher gain.
+- Target apply uses stripped no-GT evidence; target GT is loaded only after
+  apply for evaluation.
+- `--bank_checkpoint` allows fixed-bank policy/eval ablations without rebuilding
+  the representation.
+- v254 tested residual channel shaping (`luma_only`, `chroma_shrink`) as a
+  perceptual-transfer diagnostic.
+
+Key result:
+
+| run | selected alpha | policy PSNR gain | policy SSIM gain | policy LPIPS gain | target PSNR gain | target SSIM gain | target LPIPS gain | target all-axis |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| v253b raw RGB | 0.031250 | +0.001240 | +0.000015 | +0.000004 | +0.001063 | +0.000028 | -0.000002 | fail |
+| v253c fine alpha | 0.046875 | +0.001837 | +0.000020 | +0.000001 | +0.001579 | +0.000040 | -0.000007 | fail |
+| v253d conservative alpha | 0.015625 | +0.000628 | +0.000008 | +0.000006 | +0.000537 | +0.000014 | -0.000001 | fail |
+| v254a luma only | 0.031250 | +0.001141 | +0.000012 | +0.000002 | +0.000985 | +0.000025 | -0.000005 | fail |
+| v254b chroma shrink | 0.031250 | +0.001166 | +0.000013 | +0.000003 | +0.001005 | +0.000025 | -0.000004 | fail |
+
+Important lesson:
+
+v253 is the strongest representation-level step after v249-v252 because it
+produces consistent PSNR/SSIM target gains and a policy-val all-axis pass.
+However, it is still not enough. The fixed-policy target exact LPIPS gain is
+slightly negative in every variant. Conservative alpha reduces the damage but
+nearly collapses the visual change. Luma/chroma shaping does not fix it.
+
+Current bottleneck:
+
+The source bank can transfer a small MSE/SSIM-improving correction, but it cannot
+yet certify that the residual direction is perceptually correct out of source
+trajectory. Active projection cosine is around `0.279`, but selected-alpha
+energy retention is only about `0.00119`, so the method is still too weak to make
+visible or paper-level improvements.
+
+Next recommended prompt for a stronger model:
+
+```text
+Continue from v253/v254. Do not tune alpha first. Add a target-blind perceptual
+confidence/reliability predictor for source-bank residuals. It should use only
+train-fit and policy-val evidence to estimate whether a face/bin/source residual
+is safe: multi-source agreement, residual variance, source view diversity,
+normal/view consistency, edge support, teacher-gain stability, and parent-color
+consistency. Freeze the policy on policy-val, apply to stripped target no-GT
+evidence, and require target exact PSNR/SSIM/LPIPS all-axis vs parent before any
+full9. Compare against v253b/v253d and report no-GT audit, W&B offline path,
+commands, and qualitative target render triplets.
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
