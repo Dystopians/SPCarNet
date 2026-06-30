@@ -1,0 +1,101 @@
+{
+  "created_at": "2026-06-30",
+  "status": "NOT_COMPLETE",
+  "summary": "v273 implemented source-view consensus residual denoising as a target-free residual-bank modification. It ran flowers target exact for blends 0.50 and 0.15. Both improved policy-val over v266c but failed to improve target exact, indicating that simple source-slot denoising removes useful signal and is not the current bottleneck.",
+  "phasej_flowers_reference": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "runs": {
+    "v266c_reference": {
+      "policy": {
+        "psnr": 20.668308607980936,
+        "ssim": 0.7197893460591634,
+        "lpips": 0.15227354255815348
+      },
+      "target": {
+        "psnr": 19.84569811982831,
+        "ssim": 0.6202007559212771,
+        "lpips": 0.17991537634621968,
+        "psnr_gain": 0.013644241380842555,
+        "ssim_gain": 0.0002903450619090687,
+        "lpips_gain": 0.0004194897006858479
+      }
+    },
+    "v270d_reference": {
+      "policy": {
+        "psnr": 20.673377916443698,
+        "ssim": 0.7202436576286951,
+        "lpips": 0.15211169483760992
+      },
+      "target": {
+        "psnr": 19.844319672793553,
+        "ssim": 0.620225648988377,
+        "lpips": 0.17993430657820267,
+        "psnr_gain": 0.012265794346084618,
+        "ssim_gain": 0.00031523812900890005,
+        "lpips_gain": 0.00040055946870283646
+      }
+    },
+    "v273a_denoise050": {
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v273_consensus_denoise_flowers_20260630/v273a_denoise050_v266_fullflowers/v253_deferred_source_renderer_audit.json",
+      "policy": {
+        "psnr": 20.67210099962934,
+        "ssim": 0.7201391756534576,
+        "lpips": 0.15210902504622936,
+        "psnr_gain": 0.06566409637539354,
+        "ssim_gain": 0.0026130427916844687,
+        "lpips_gain": 0.0012073945254087448
+      },
+      "target": {
+        "psnr": 19.844212929878035,
+        "ssim": 0.6202070604671132,
+        "lpips": 0.17994474247097968,
+        "psnr_gain": 0.012159051430570823,
+        "ssim_gain": 0.00029664960774509466,
+        "lpips_gain": 0.0003901235759258436
+      },
+      "denoise": {
+        "blend_cap": 0.5,
+        "denoised_source_slots": 626926,
+        "denoised_source_slot_fraction": 0.6981008746777723,
+        "mean_abs_shift_denoised": 0.005536890588700771,
+        "mean_relative_shift_denoised": 0.08983577787876129,
+        "mean_cosine_original_denoised": 0.9986581206321716,
+        "residual_energy_ratio_after_before": 0.8973329535291099
+      },
+      "verdict": "target_fail"
+    },
+    "v273b_denoise015": {
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v273_consensus_denoise_flowers_20260630/v273b_denoise015_v266_fullflowers/v253_deferred_source_renderer_audit.json",
+      "policy": {
+        "psnr": 20.673606615782145,
+        "ssim": 0.720203106602033,
+        "lpips": 0.15209664218127728,
+        "psnr_gain": 0.06716971252819774,
+        "ssim_gain": 0.002676973740259806,
+        "lpips_gain": 0.0012197773903608322
+      },
+      "target": {
+        "psnr": 19.844259411799367,
+        "ssim": 0.6202052127231251,
+        "lpips": 0.1799335056407885,
+        "psnr_gain": 0.012205533351901755,
+        "ssim_gain": 0.00029480186375704676,
+        "lpips_gain": 0.00040136040611700577
+      },
+      "denoise": {
+        "blend_cap": 0.15,
+        "denoised_source_slots": 626926,
+        "denoised_source_slot_fraction": 0.6981008746777723,
+        "mean_abs_shift_denoised": 0.0016610673628747463,
+        "mean_relative_shift_denoised": 0.026950733736157417,
+        "mean_cosine_original_denoised": 0.9997071027755737,
+        "residual_energy_ratio_after_before": 0.9670045950398334
+      },
+      "verdict": "target_fail"
+    }
+  },
+  "next_recommendation": "Do not continue source-consensus denoise strength scans. The next method should increase coherent view-dependent/high-frequency carrier capacity rather than averaging source residual slots."
+}

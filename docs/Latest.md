@@ -2,6 +2,32 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 v273 Source-Consensus Residual Denoise Update
+
+新增日志：`docs/car_model/6-30-v273-ConsensusDenoise-Gate-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v273_consensus_denoise_summary.json`。
+
+v273 是在 v272 负结果后的下一步：不再增加 scalar confidence head，而是直接改变 residual bank。方法把每个 train-fit source residual 向其他 source views 可解释的 leave-one-out consensus residual 投影，作为 target-free residual denoise。
+
+代码层面新增真实 train/eval pipeline 改动：
+
+- 新增 `--source_consistency_mode denoise`。
+- 新增 `--source_consistency_denoise_blend`。
+- source-view consistency calibration 现在可以重写 `bank["residual"]`，并在 checkpoint 中保存 denoised residual bank。
+- JSON / Markdown / W&B 记录 denoised slot fraction、residual energy ratio、mean shift、relative shift、original-vs-denoised cosine。
+
+关键结果：
+
+| run | method | policy PSNR / SSIM / LPIPS | target PSNR / SSIM / LPIPS | target gains | energy ratio | verdict |
+|---|---|---:|---:|---:|---:|---|
+| v266c | conservative hybrid reference | 20.668309 / 0.719789 / 0.152274 | 19.845698 / 0.620201 / 0.179915 | +0.013644 / +0.000290 / +0.000419 | n/a | reference |
+| v270d | texture-lowrank reference | 20.673378 / 0.720244 / 0.152112 | 19.844320 / 0.620226 / 0.179934 | +0.012266 / +0.000315 / +0.000401 | n/a | reference |
+| v273a | denoise blend 0.50 | 20.672101 / 0.720139 / 0.152109 | 19.844213 / 0.620207 / 0.179945 | +0.012159 / +0.000297 / +0.000390 | 0.897333 | target fail |
+| v273b | denoise blend 0.15 | 20.673607 / 0.720203 / 0.152097 | 19.844259 / 0.620205 / 0.179934 | +0.012206 / +0.000295 / +0.000401 | 0.967005 | target fail |
+
+结论：v273 的机制实现成功，但质量失败。source-consensus denoise 能提升 policy-val，但 target exact 没有超过 v266c/v270d 前沿；blend 越小越接近原始 v266c，说明简单 source-slot denoise 不是当前瓶颈。当前状态仍是 `NOT COMPLETE`，full9 继续阻塞。下一步不应继续 denoise strength scan，而应提高 coherent view-dependent/high-frequency carrier capacity。
+
 ## 2026-06-30 v272 Learned Source-Consistency Head Update
 
 新增日志：`docs/car_model/6-30-v272-LearnedConsistencyHead-Gate-Log.md`。

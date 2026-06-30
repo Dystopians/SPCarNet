@@ -2,6 +2,31 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-30, v273:
+
+The newest branch is **source-consensus residual denoise** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:
+
+- `docs/car_model/6-30-v273-ConsensusDenoise-Gate-Log.md`
+- `docs/car_model/results/v273_consensus_denoise_summary.json`
+
+Important new facts:
+
+- v273 is not another scalar confidence head. It modifies the residual carrier by rewriting train-fit source residual slots toward leave-one-out source-view consensus residuals.
+- New CLI:
+  - `--source_consistency_mode denoise`
+  - `--source_consistency_denoise_blend`
+- v273a blend 0.50 denoised `626926` source slots, `69.81%` of valid slots, and reduced residual energy to `89.73%`.
+- v273b blend 0.15 preserved more residual energy, `96.70%`, but still did not beat v266c target exact.
+- v273 target exact:
+  - v266c reference: `19.845698 / 0.620201 / 0.179915`
+  - v270d reference: `19.844320 / 0.620226 / 0.179934`
+  - v273a: `19.844213 / 0.620207 / 0.179945`
+  - v273b: `19.844259 / 0.620205 / 0.179934`
+
+Current direct verdict:
+
+> v273 is a valid residual-bank/carrier modification but a quality failure. Source-consensus denoise improves policy-val but does not transfer to target exact. The current bottleneck is probably missing coherent view-dependent/high-frequency capacity, not source-slot residual noise. Do not continue denoise strength scans.
+
 Latest update on 2026-06-30, v272:
 
 The newest branch is **learned source-consistency feature head** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:

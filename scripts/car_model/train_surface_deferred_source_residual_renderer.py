@@ -664,10 +664,11 @@ def _calibrate_source_view_consistency(
     floor: float,
     amplitude_floor: float,
     amplitude_max: float,
+    denoise_blend: float,
     mode: str,
 ) -> dict[str, Any]:
     mode_s = str(mode or "off")
-    if mode_s not in {"feature_only", "weight", "weight_amplitude"}:
+    if mode_s not in {"feature_only", "weight", "weight_amplitude", "denoise"}:
         for key in (
             "source_consistency_reliability",
             "source_consistency_amplitude",
@@ -687,6 +688,10 @@ def _calibrate_source_view_consistency(
     gain = np.asarray(bank["gain_l1"], dtype=np.float32)
     source_view_id = np.asarray(bank.get("source_view_id", np.full_like(counts, -1)), dtype=np.int32)
     valid = (counts >= float(min_source_count)) & (source_view_id >= 0)
+    original_residual = residual.copy()
+    consensus_residual = residual.copy()
+    consensus_valid = np.zeros_like(counts, dtype=bool)
+    consensus_blend = np.zeros_like(counts, dtype=np.float32)
     reliability = np.zeros_like(counts, dtype=np.float32)
     amplitude = np.ones_like(counts, dtype=np.float32)
     relative_error = np.ones_like(counts, dtype=np.float32)
@@ -748,9 +753,60 @@ def _calibrate_source_view_consistency(
         amplitude[:, :, slot] = np.where(held_valid, slot_amplitude, amplitude[:, :, slot]).astype(np.float32)
         relative_error[:, :, slot] = np.where(held_valid, rel_err, relative_error[:, :, slot]).astype(np.float32)
         cosine_map[:, :, slot] = np.where(held_valid, cosine, cosine_map[:, :, slot]).astype(np.float32)
+        consensus_residual[:, :, slot, :] = np.where(
+            support_ok[:, :, None],
+            pred.astype(np.float32),
+            consensus_residual[:, :, slot, :],
+        ).astype(np.float32)
+        consensus_valid[:, :, slot] = consensus_valid[:, :, slot] | support_ok
+        consensus_blend[:, :, slot] = np.where(
+            support_ok,
+            np.clip(raw_reliability, 0.0, 1.0),
+            consensus_blend[:, :, slot],
+        ).astype(np.float32)
 
     if mode_s == "weight":
         amplitude = np.ones_like(amplitude, dtype=np.float32)
+    denoise_summary: dict[str, Any] = {"enabled": False}
+    if mode_s == "denoise":
+        denoise_base = consensus_valid & valid
+        blend_cap = float(np.clip(float(denoise_blend), 0.0, 1.0))
+        row_blend = (blend_cap * consensus_blend).astype(np.float32)
+        denoised = (
+            (1.0 - row_blend[:, :, :, None]) * original_residual
+            + row_blend[:, :, :, None] * consensus_residual
+        ).astype(np.float32)
+        bank["residual"] = np.where(denoise_base[:, :, :, None], denoised, original_residual).astype(np.float32)
+        after_residual = np.asarray(bank["residual"], dtype=np.float32)
+        before_energy = (
+            float(np.mean(np.sum(original_residual[valid] * original_residual[valid], axis=1))) if np.any(valid) else 0.0
+        )
+        after_energy = (
+            float(np.mean(np.sum(after_residual[valid] * after_residual[valid], axis=1))) if np.any(valid) else 0.0
+        )
+        shift = np.linalg.norm(after_residual - original_residual, axis=3)
+        before_norm = np.maximum(np.linalg.norm(original_residual, axis=3), 1.0e-8)
+        after_norm = np.maximum(np.linalg.norm(after_residual, axis=3), 1.0e-8)
+        residual_cos = np.sum(original_residual * after_residual, axis=3) / np.maximum(before_norm * after_norm, 1.0e-8)
+        denoise_summary = {
+            "enabled": True,
+            "blend_cap": float(blend_cap),
+            "denoised_source_slots": int(np.count_nonzero(denoise_base)),
+            "denoised_source_slot_fraction": float(np.mean(denoise_base[valid])) if np.any(valid) else 0.0,
+            "mean_raw_blend_denoised": float(np.mean(row_blend[denoise_base])) if np.any(denoise_base) else 0.0,
+            "mean_abs_shift_denoised": float(np.mean(shift[denoise_base])) if np.any(denoise_base) else 0.0,
+            "mean_relative_shift_denoised": (
+                float(np.mean(shift[denoise_base] / np.maximum(before_norm[denoise_base], 1.0e-8)))
+                if np.any(denoise_base)
+                else 0.0
+            ),
+            "mean_cosine_original_denoised": (
+                float(np.mean(residual_cos[denoise_base])) if np.any(denoise_base) else 1.0
+            ),
+            "residual_energy_before": before_energy,
+            "residual_energy_after": after_energy,
+            "residual_energy_ratio_after_before": float(after_energy / max(before_energy, 1.0e-12)),
+        }
     bank["source_consistency_reliability"] = reliability.astype(np.float32)
     bank["source_consistency_amplitude"] = amplitude.astype(np.float32)
     bank["source_consistency_relative_error"] = relative_error.astype(np.float32)
@@ -771,6 +827,7 @@ def _calibrate_source_view_consistency(
         "floor": float(floor_v),
         "amplitude_floor": float(amp_floor),
         "amplitude_max": float(amp_max),
+        "denoise": denoise_summary,
         "valid_source_slots": int(np.count_nonzero(valid)),
         "reliable_source_slots": int(np.count_nonzero(reliable_valid)),
         "reliable_source_slot_fraction": float(np.mean(reliable_valid[valid])) if np.any(valid) else 0.0,
@@ -2722,6 +2779,12 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- mean amplitude: `{payload.get('source_view_consistency', {}).get('mean_amplitude_valid', 1.0):.6f}`",
         f"- mean LOO relative error: `{payload.get('source_view_consistency', {}).get('mean_relative_error_valid', 0.0):.6f}`",
         f"- mean LOO cosine: `{payload.get('source_view_consistency', {}).get('mean_cosine_valid', 0.0):.6f}`",
+        (
+            "- denoise enabled / source-slot fraction / energy ratio: "
+            f"`{payload.get('source_view_consistency', {}).get('denoise', {}).get('enabled', False)}` / "
+            f"`{payload.get('source_view_consistency', {}).get('denoise', {}).get('denoised_source_slot_fraction', 0.0):.6f}` / "
+            f"`{payload.get('source_view_consistency', {}).get('denoise', {}).get('residual_energy_ratio_after_before', 1.0):.6f}`"
+        ),
         "",
         "## Policy-Val Metrics",
         "",
@@ -2911,7 +2974,7 @@ def main() -> int:
     parser.add_argument("--source_agreement_min_confidence", type=float, default=0.25)
     parser.add_argument(
         "--source_consistency_mode",
-        choices=["off", "feature_only", "weight", "weight_amplitude"],
+        choices=["off", "feature_only", "weight", "weight_amplitude", "denoise"],
         default="off",
     )
     parser.add_argument("--source_consistency_min_other_sources", type=int, default=2)
@@ -2919,6 +2982,7 @@ def main() -> int:
     parser.add_argument("--source_consistency_floor", type=float, default=0.35)
     parser.add_argument("--source_consistency_amplitude_floor", type=float, default=0.50)
     parser.add_argument("--source_consistency_amplitude_max", type=float, default=1.0)
+    parser.add_argument("--source_consistency_denoise_blend", type=float, default=0.50)
     parser.add_argument("--policy_reliability_mode", choices=["off", "local_l1", "patch_perceptual_v1"], default="off")
     parser.add_argument("--policy_reliability_alpha", type=float, default=0.03125)
     parser.add_argument("--policy_reliability_min_count", type=int, default=8)
@@ -3059,6 +3123,7 @@ def main() -> int:
         floor=float(args.source_consistency_floor),
         amplitude_floor=float(args.source_consistency_amplitude_floor),
         amplitude_max=float(args.source_consistency_amplitude_max),
+        denoise_blend=float(args.source_consistency_denoise_blend),
         mode=str(args.source_consistency_mode),
     )
     policy_reliability_summary: dict[str, Any] = {"mode": "off"}
@@ -3538,6 +3603,15 @@ def main() -> int:
                 ),
                 "source_consistency/mean_cosine_valid": float(
                     source_consistency_summary.get("mean_cosine_valid", 0.0)
+                ),
+                "source_consistency/denoise_enabled": float(
+                    bool(source_consistency_summary.get("denoise", {}).get("enabled", False))
+                ),
+                "source_consistency/denoise_slot_fraction": float(
+                    source_consistency_summary.get("denoise", {}).get("denoised_source_slot_fraction", 0.0)
+                ),
+                "source_consistency/denoise_energy_ratio": float(
+                    source_consistency_summary.get("denoise", {}).get("residual_energy_ratio_after_before", 1.0)
                 ),
                 "policy_reliability/mean": float(policy_reliability_summary.get("mean_reliability", 0.0)),
                 "policy_reliability/active_bins": float(policy_reliability_summary.get("active_bins", 0.0)),
