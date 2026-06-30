@@ -1,0 +1,140 @@
+{
+  "schema": "spcarnet_v274_structure_safe_texture_summary_v1",
+  "date": "2026-06-30",
+  "phasej_flowers_reference": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "implementation": {
+    "script": "scripts/car_model/train_surface_deferred_source_residual_renderer.py",
+    "new_decoder_mode": "structure_safe_texture_lowrank",
+    "new_bank_fields": [
+      "residual_edge",
+      "residual_luma_abs",
+      "teacher_better_fraction"
+    ],
+    "wandb_mode": "offline",
+    "validation": [
+      "py_compile passed",
+      "git diff --check passed",
+      "CLI help exposed structure_safe_texture_lowrank"
+    ]
+  },
+  "interrupted_runs": {
+    "v274a": "interrupted during policy reliability 4/12 because full alpha grid plus policy recalibration was an impractical multi-hour texture-lowrank scan",
+    "v274b": "interrupted in first policy-val view with eval_chunk_size 196608 because giant texture tensor construction was too slow",
+    "v274c": "interrupted in first policy-val view with eval_chunk_size 196608 after structure prefilter; large chunk concatenation remained too slow"
+  },
+  "runs": {
+    "v266c_reference": {
+      "mode": "hybrid_edge_lowrank",
+      "target": {
+        "psnr": 19.84569811982831,
+        "ssim": 0.6202007559212771,
+        "lpips": 0.17991537634621968,
+        "psnr_gain": 0.013644241380842555,
+        "ssim_gain": 0.0002903450619090687,
+        "lpips_gain": 0.0004194897006858479
+      }
+    },
+    "v270d_reference": {
+      "mode": "hybrid_edge_texture_lowrank",
+      "target": {
+        "psnr": 19.844319672793553,
+        "ssim": 0.620225648988377,
+        "lpips": 0.17993430657820267,
+        "psnr_gain": 0.012265794346084618,
+        "ssim_gain": 0.00031523812900890005,
+        "lpips_gain": 0.00040055946870283646
+      }
+    },
+    "v274d_loaded_v266_policy": {
+      "output_dir": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v274_structure_safe_texture_flowers_20260630/v274d_v266policy_structure_prefilter_chunk65536_flowers",
+      "policy": {
+        "psnr": 20.668286811259723,
+        "ssim": 0.7197877218325933,
+        "lpips": 0.15227283475299677,
+        "psnr_gain": 0.061849908005775646,
+        "ssim_gain": 0.002261588970820109,
+        "lpips_gain": 0.0010435848186413448
+      },
+      "target": {
+        "psnr": 19.845704116512252,
+        "ssim": 0.6202001111073927,
+        "lpips": 0.1799170249565081,
+        "psnr_gain": 0.013650238064784855,
+        "ssim_gain": 0.0002897002480246804,
+        "lpips_gain": 0.0004178410903974013,
+        "phasej_psnr_delta": -0.4586538834877487,
+        "phasej_ssim_delta": 0.062430111107392716,
+        "phasej_lpips_margin": 0.1493049750434919,
+        "mean_texture_blend": 0.015582008202644911,
+        "mean_texture_structure_gate": 0.5707680474628102
+      },
+      "verdict": "tiny target PSNR/tail improvement over v266c, but not all-axis and not meaningful"
+    },
+    "v274e_fresh_fit_structure_stats": {
+      "output_dir": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v274_structure_safe_texture_flowers_20260630/v274e_freshfit_structure_stats_fixedalpha_flowers",
+      "policy": {
+        "psnr": 20.675883727242336,
+        "ssim": 0.7203127841154734,
+        "lpips": 0.15199672554930052,
+        "psnr_gain": 0.06944682398839024,
+        "ssim_gain": 0.0027866512537002563,
+        "lpips_gain": 0.0013196940223375957
+      },
+      "target": {
+        "psnr": 19.844540296537126,
+        "ssim": 0.6202248958024112,
+        "lpips": 0.18001502752304076,
+        "psnr_gain": 0.01248641808965843,
+        "ssim_gain": 0.0003144849430429419,
+        "lpips_gain": 0.0003198385241175041,
+        "phasej_psnr_delta": -0.45981770346287476,
+        "phasej_ssim_delta": 0.06245489580241115,
+        "phasej_lpips_margin": 0.14920697247695924,
+        "mean_texture_blend": 0.015181632246822119,
+        "mean_texture_structure_gate": 0.5519340065392581
+      },
+      "bank_stats": {
+        "nonempty_source_slots": 1307249,
+        "mean_residual_edge_nonempty": 0.026359492912888527,
+        "mean_residual_luma_abs_nonempty": 0.03340320289134979,
+        "mean_teacher_better_fraction_nonempty": 1.0
+      },
+      "verdict": "policy-val improves but target PSNR/LPIPS fail, indicating policy-val overfit or target transfer gap"
+    },
+    "v274f_loaded_v270_policy": {
+      "output_dir": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v274_structure_safe_texture_flowers_20260630/v274f_v270policy_structure_prefilter_chunk65536_flowers",
+      "policy": {
+        "psnr": 20.673401511153724,
+        "ssim": 0.7202463299036026,
+        "lpips": 0.1521126925945282,
+        "psnr_gain": 0.06696460789977692,
+        "ssim_gain": 0.0027201970418294272,
+        "lpips_gain": 0.001203726977109909
+      },
+      "target": {
+        "psnr": 19.84428890322762,
+        "ssim": 0.6202242577617819,
+        "lpips": 0.1799331700259989,
+        "psnr_gain": 0.012235024780156227,
+        "ssim_gain": 0.00031384690241380173,
+        "lpips_gain": 0.00040169602090662175,
+        "phasej_psnr_delta": -0.4600690967723793,
+        "phasej_ssim_delta": 0.06245425776178193,
+        "phasej_lpips_margin": 0.1492888299740011,
+        "mean_texture_blend": 0.015582008202644911,
+        "mean_texture_structure_gate": 0.5707680474628102
+      },
+      "verdict": "does not improve v270 texture tradeoff"
+    }
+  },
+  "no_target_gt_audit": {
+    "v274d": "pass",
+    "v274e": "pass",
+    "v274f": "pass"
+  },
+  "overall_verdict": "NOT COMPLETE: v274 is a real representation-level implementation and exact flowers validation, but it fails Phase-J PSNR gate and does not meaningfully exceed the v266c/v270d target frontier."
+}

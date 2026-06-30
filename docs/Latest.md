@@ -2,6 +2,33 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 v274 Structure-Safe Texture Low-Rank Update
+
+新增日志：`docs/car_model/6-30-v274-StructureSafeTexture-Gate-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v274_structure_safe_texture_summary.json`。
+
+v274 是按 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md` 推进的一次表示层革新尝试：不再继续 scalar confidence / denoise，而是把 v270 的 face/UV texture low-rank carrier 加上结构安全证书。代码现在会在 source bank 中保存 `residual_edge`、`residual_luma_abs`、`teacher_better_fraction`，并新增 `--residual_decoder_mode structure_safe_texture_lowrank`，用源/目标 edge match、residual-edge support、teacher-better support、unique-view support 来门控 texture residual 注入。
+
+验证与实验：
+
+- `py_compile`、`git diff --check`、CLI help 均通过。
+- 使用 `CUDA_VISIBLE_DEVICES=5` 和 `WANDB_MODE=offline`。
+- v274a/b/c 因 full alpha grid 或 `eval_chunk_size=196608` 下 texture tensor 过慢而中断，不作为质量结果。
+- v274d/e/f 均完成 flowers policy-val + target exact，且 no-target-GT audit 通过。
+
+关键结果：
+
+| run | method | policy PSNR / SSIM / LPIPS | target PSNR / SSIM / LPIPS | target gains | verdict |
+|---|---|---:|---:|---:|---|
+| v266c ref | `hybrid_edge_lowrank` | 20.668309 / 0.719789 / 0.152274 | 19.845698 / 0.620201 / 0.179915 | +0.013644 / +0.000290 / +0.000419 | reference |
+| v270d ref | `hybrid_edge_texture_lowrank` | 20.673378 / 0.720244 / 0.152112 | 19.844320 / 0.620226 / 0.179934 | +0.012266 / +0.000315 / +0.000401 | texture reference |
+| v274d | v266c bank + structure-safe texture | 20.668287 / 0.719788 / 0.152273 | 19.845704 / 0.620200 / 0.179917 | +0.013650 / +0.000290 / +0.000418 | tiny PSNR win only |
+| v274e | fresh-fit v274 structure stats | 20.675884 / 0.720313 / 0.151997 | 19.844540 / 0.620225 / 0.180015 | +0.012486 / +0.000314 / +0.000320 | policy-val overfits target |
+| v274f | v270d bank + structure-safe texture | 20.673402 / 0.720246 / 0.152113 | 19.844289 / 0.620224 / 0.179933 | +0.012235 / +0.000314 / +0.000402 | no improvement over v270 |
+
+结论：v274 是真实的 representation-level 实现，但不是突破。v274d 只给出 `+0.000006` target PSNR 级别的微弱变化，同时 SSIM/LPIPS 没有全轴优于 v266c；v274e 说明 fresh 结构统计可以显著提高 policy-val，但不能外推到 target exact。Phase-J flowers PSNR gate 仍差约 `0.459`，所以状态仍是 `NOT COMPLETE`，full9 继续阻塞。下一步应转向真正学习的 view-dependent surface feature decoder / patch-level teacher residual carrier，而不是继续给现有 source-slot texture carrier 加安全门控。
+
 ## 2026-06-30 v273 Source-Consensus Residual Denoise Update
 
 新增日志：`docs/car_model/6-30-v273-ConsensusDenoise-Gate-Log.md`。

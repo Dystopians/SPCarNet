@@ -2,6 +2,33 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-30, v274:
+
+The newest branch is **structure-safe texture low-rank residual carrier** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:
+
+- `docs/car_model/6-30-v274-StructureSafeTexture-Gate-Log.md`
+- `docs/car_model/results/v274_structure_safe_texture_summary.json`
+
+Important new facts:
+
+- v274 adds a real decoder mode: `--residual_decoder_mode structure_safe_texture_lowrank`.
+- The source bank now saves `residual_edge`, `residual_luma_abs`, and `teacher_better_fraction`.
+- The texture low-rank branch now gates residual injection by source/target edge agreement, residual-edge support, teacher-better support, and unique-view support.
+- A structure prefilter was required before covariance/eigendecomposition; otherwise full-resolution texture-lowrank evaluation became too slow.
+- All effective v274 runs used W&B offline and completed flowers policy-val + target exact with target/test GT stripped before apply.
+
+Effective results:
+
+- v266c reference target: `19.845698 / 0.620201 / 0.179915`, gains `+0.013644 / +0.000290 / +0.000419`.
+- v270d reference target: `19.844320 / 0.620226 / 0.179934`, gains `+0.012266 / +0.000315 / +0.000401`.
+- v274d loaded-v266 bank target: `19.845704 / 0.620200 / 0.179917`, gains `+0.013650 / +0.000290 / +0.000418`.
+- v274e fresh-fit structure stats target: `19.844540 / 0.620225 / 0.180015`, gains `+0.012486 / +0.000314 / +0.000320`.
+- v274f loaded-v270 bank target: `19.844289 / 0.620224 / 0.179933`, gains `+0.012235 / +0.000314 / +0.000402`.
+
+Direct verdict:
+
+> v274 is a valid representation-level implementation and exact flowers validation, but not a paper-level win. It barely changes the v266c/v270d target frontier and remains about `0.459` PSNR below the Phase-J flowers gate. The fresh structure statistics improve policy-val but do not transfer to target exact. Do not run full9 from v274. The next model should move beyond local source-slot texture blending toward a learned view-dependent surface feature decoder or patch-level teacher residual carrier.
+
 Latest update on 2026-06-30, v273:
 
 The newest branch is **source-consensus residual denoise** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:

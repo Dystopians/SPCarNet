@@ -320,6 +320,9 @@ def _insert_source_entry(
     residual: np.ndarray,
     parent: np.ndarray,
     parent_edge: float,
+    residual_edge: float,
+    residual_luma_abs: float,
+    teacher_better_fraction: float,
     normal: np.ndarray,
     camera: np.ndarray,
     gain: float,
@@ -335,6 +338,9 @@ def _insert_source_entry(
     bank["residual"][face_idx, bin_id, slot] = np.asarray(residual, dtype=np.float32)
     bank["parent_rgb"][face_idx, bin_id, slot] = np.asarray(parent, dtype=np.float32)
     bank["parent_edge"][face_idx, bin_id, slot] = float(parent_edge)
+    bank["residual_edge"][face_idx, bin_id, slot] = float(residual_edge)
+    bank["residual_luma_abs"][face_idx, bin_id, slot] = float(residual_luma_abs)
+    bank["teacher_better_fraction"][face_idx, bin_id, slot] = float(teacher_better_fraction)
     bank["normal"][face_idx, bin_id, slot] = np.asarray(normal, dtype=np.float32)
     bank["camera_dir"][face_idx, bin_id, slot] = np.asarray(camera, dtype=np.float32)
     bank["gain_l1"][face_idx, bin_id, slot] = float(gain)
@@ -366,6 +372,9 @@ def _fit_source_bank(
         "residual": np.zeros((*shape, 3), dtype=np.float32),
         "parent_rgb": np.zeros((*shape, 3), dtype=np.float32),
         "parent_edge": np.zeros(shape, dtype=np.float32),
+        "residual_edge": np.zeros(shape, dtype=np.float32),
+        "residual_luma_abs": np.zeros(shape, dtype=np.float32),
+        "teacher_better_fraction": np.zeros(shape, dtype=np.float32),
         "normal": np.zeros((*shape, 3), dtype=np.float32),
         "camera_dir": np.zeros((*shape, 3), dtype=np.float32),
         "gain_l1": np.zeros(shape, dtype=np.float32),
@@ -410,6 +419,9 @@ def _fit_source_bank(
             unique, inv = np.unique(group, return_inverse=True)
             counts = np.bincount(inv).astype(np.float64)
             residual = np.asarray(z[residual_rgb_key], dtype=np.float32)[:3]
+            residual_luma = _luma(residual)
+            residual_edge = _luma_gradient_magnitude(residual_luma)
+            residual_luma_abs = np.abs(residual_luma)
             parent = np.asarray(z["rgb_render"], dtype=np.float32)[:3]
             parent_edge = _luma_gradient_magnitude(_luma(parent))
             normal = np.asarray(z["normal"], dtype=np.float32)[:3]
@@ -419,6 +431,10 @@ def _fit_source_bank(
                 if "teacher_gain_l1" in z
                 else np.asarray(z[residual_l1_key], dtype=np.float32)
             )
+            if "teacher_better_mask" in z:
+                teacher_better_map = np.asarray(z["teacher_better_mask"], dtype=np.float32)
+            else:
+                teacher_better_map = (gain_map > 0.0).astype(np.float32)
             sums = {
                 "residual": np.zeros((unique.size, 3), dtype=np.float64),
                 "parent": np.zeros((unique.size, 3), dtype=np.float64),
@@ -431,6 +447,15 @@ def _fit_source_bank(
             gain_sum = np.bincount(inv, weights=gain_map[ys, xs].astype(np.float64), minlength=unique.size)
             alpha_sum = np.bincount(inv, weights=alpha_map[ys, xs].astype(np.float64), minlength=unique.size)
             edge_sum = np.bincount(inv, weights=parent_edge[ys, xs].astype(np.float64), minlength=unique.size)
+            residual_edge_sum = np.bincount(
+                inv, weights=residual_edge[ys, xs].astype(np.float64), minlength=unique.size
+            )
+            residual_luma_abs_sum = np.bincount(
+                inv, weights=residual_luma_abs[ys, xs].astype(np.float64), minlength=unique.size
+            )
+            teacher_better_sum = np.bincount(
+                inv, weights=teacher_better_map[ys, xs].astype(np.float64), minlength=unique.size
+            )
             camera = _camera_dir(z)
             means_residual = (sums["residual"] / np.maximum(counts[:, None], 1.0)).astype(np.float32)
             means_parent = np.clip((sums["parent"] / np.maximum(counts[:, None], 1.0)).astype(np.float32), 0.0, 1.0)
@@ -438,6 +463,9 @@ def _fit_source_bank(
             means_gain = (gain_sum / np.maximum(counts, 1.0)).astype(np.float32)
             means_alpha = (alpha_sum / np.maximum(counts, 1.0)).astype(np.float32)
             means_edge = (edge_sum / np.maximum(counts, 1.0)).astype(np.float32)
+            means_residual_edge = (residual_edge_sum / np.maximum(counts, 1.0)).astype(np.float32)
+            means_residual_luma_abs = (residual_luma_abs_sum / np.maximum(counts, 1.0)).astype(np.float32)
+            means_teacher_better = (teacher_better_sum / np.maximum(counts, 1.0)).astype(np.float32)
             energy = np.sum(means_residual * means_residual, axis=1)
             source_score = counts.astype(np.float32) * energy * (
                 1.0 + float(score_gain_weight) * np.clip(means_gain, 0.0, None)
@@ -457,6 +485,9 @@ def _fit_source_bank(
                     means_residual[i],
                     means_parent[i],
                     float(means_edge[i]),
+                    float(means_residual_edge[i]),
+                    float(means_residual_luma_abs[i]),
+                    float(means_teacher_better[i]),
                     means_normal[i],
                     camera,
                     float(means_gain[i]),
@@ -481,6 +512,11 @@ def _fit_source_bank(
         "nonempty_face_bin_fraction": float(np.mean(np.any(valid, axis=2))),
         "nonempty_source_slots": int(np.count_nonzero(valid)),
         "mean_source_count_nonempty": float(np.mean(bank["counts"][valid])) if np.any(valid) else 0.0,
+        "mean_residual_edge_nonempty": float(np.mean(bank["residual_edge"][valid])) if np.any(valid) else 0.0,
+        "mean_residual_luma_abs_nonempty": float(np.mean(bank["residual_luma_abs"][valid])) if np.any(valid) else 0.0,
+        "mean_teacher_better_fraction_nonempty": (
+            float(np.mean(bank["teacher_better_fraction"][valid])) if np.any(valid) else 0.0
+        ),
         "source_count_quantiles": _quantiles([float(x) for x in bank["counts"][valid].reshape(-1)]) if np.any(valid) else _quantiles([]),
     }
 
@@ -506,6 +542,18 @@ def _load_source_bank(path: Path) -> tuple[np.ndarray, dict[str, np.ndarray], di
             bank["parent_edge"] = np.asarray(z["parent_edge"], dtype=np.float32)
         else:
             bank["parent_edge"] = np.zeros_like(bank["counts"], dtype=np.float32)
+        if "residual_edge" in z:
+            bank["residual_edge"] = np.asarray(z["residual_edge"], dtype=np.float32)
+        else:
+            bank["residual_edge"] = np.asarray(bank["parent_edge"], dtype=np.float32)
+        if "residual_luma_abs" in z:
+            bank["residual_luma_abs"] = np.asarray(z["residual_luma_abs"], dtype=np.float32)
+        else:
+            bank["residual_luma_abs"] = np.linalg.norm(bank["residual"], axis=-1).astype(np.float32)
+        if "teacher_better_fraction" in z:
+            bank["teacher_better_fraction"] = np.asarray(z["teacher_better_fraction"], dtype=np.float32)
+        else:
+            bank["teacher_better_fraction"] = np.where(bank["gain_l1"] > 0.0, 1.0, 0.5).astype(np.float32)
         if "policy_reliability" in z:
             bank["policy_reliability"] = np.asarray(z["policy_reliability"], dtype=np.float32)
         if "policy_gain" in z:
@@ -1359,6 +1407,9 @@ def _predict_delta(
     tail_risks: list[float] = []
     patch_blends: list[float] = []
     texture_blends: list[float] = []
+    texture_structure_gates: list[float] = []
+    texture_edge_matches: list[float] = []
+    texture_teacher_supports: list[float] = []
     source_consistency_reliabilities: list[float] = []
     source_consistency_amplitudes: list[float] = []
     has_source_consistency = "source_consistency_reliability" in bank
@@ -1395,6 +1446,7 @@ def _predict_delta(
             "patch_coherent_hybrid",
             "face_texture_lowrank",
             "hybrid_edge_texture_lowrank",
+            "structure_safe_texture_lowrank",
         }
         if not np.any(valid_src) and not neighbor_carrier_mode:
             continue
@@ -1468,6 +1520,7 @@ def _predict_delta(
             "patch_coherent_hybrid",
             "face_texture_lowrank",
             "hybrid_edge_texture_lowrank",
+            "structure_safe_texture_lowrank",
         }
         if decoder_mode_s not in allowed_decoder_modes:
             raise ValueError(f"unsupported residual_decoder_mode={residual_decoder_mode}")
@@ -1477,6 +1530,7 @@ def _predict_delta(
             "hybrid_edge_lowrank",
             "patch_coherent_hybrid",
             "hybrid_edge_texture_lowrank",
+            "structure_safe_texture_lowrank",
         }:
             valid_float = valid_src.astype(np.float32)
             valid_count = np.sum(valid_float, axis=1)
@@ -1585,7 +1639,7 @@ def _predict_delta(
                     pred[idx] = ((1.0 - row_blend[:, None]) * pred[idx] + row_blend[:, None] * lowrank_pred).astype(np.float32)
                 else:
                     pred[idx] = ((1.0 - blend) * pred[idx] + blend * lowrank_pred).astype(np.float32)
-        if decoder_mode_s in {"face_texture_lowrank", "hybrid_edge_texture_lowrank"}:
+        if decoder_mode_s in {"face_texture_lowrank", "hybrid_edge_texture_lowrank", "structure_safe_texture_lowrank"}:
             radius = max(0, int(patch_coherent_radius))
             grid_i = int(grid)
             u0 = (bin_id // grid_i).astype(np.int64)
@@ -1593,6 +1647,8 @@ def _predict_delta(
             tex_residual_parts: list[np.ndarray] = []
             tex_parent_parts: list[np.ndarray] = []
             tex_edge_parts: list[np.ndarray] = []
+            tex_residual_edge_parts: list[np.ndarray] = []
+            tex_teacher_better_parts: list[np.ndarray] = []
             tex_normal_parts: list[np.ndarray] = []
             tex_camera_parts: list[np.ndarray] = []
             tex_gain_parts: list[np.ndarray] = []
@@ -1623,6 +1679,18 @@ def _predict_delta(
                         np.asarray(bank.get("parent_edge", np.zeros_like(bank["counts"])), dtype=np.float32)[
                             face_idx, tex_bin
                         ]
+                    )
+                    tex_residual_edge_parts.append(
+                        np.asarray(
+                            bank.get("residual_edge", bank.get("parent_edge", np.zeros_like(bank["counts"]))),
+                            dtype=np.float32,
+                        )[face_idx, tex_bin]
+                    )
+                    tex_teacher_better_parts.append(
+                        np.asarray(
+                            bank.get("teacher_better_fraction", np.ones_like(bank["counts"])),
+                            dtype=np.float32,
+                        )[face_idx, tex_bin]
                     )
                     tex_normal_parts.append(bank["normal"][face_idx, tex_bin].astype(np.float32))
                     tex_camera_parts.append(bank["camera_dir"][face_idx, tex_bin].astype(np.float32))
@@ -1658,6 +1726,8 @@ def _predict_delta(
                     tex_residual = (tex_residual * tex_amplitude[:, :, None]).astype(np.float32)
                 tex_parent = np.concatenate(tex_parent_parts, axis=1)
                 tex_edge = np.concatenate(tex_edge_parts, axis=1)
+                tex_residual_edge = np.concatenate(tex_residual_edge_parts, axis=1)
+                tex_teacher_better = np.clip(np.concatenate(tex_teacher_better_parts, axis=1), 0.0, 1.0)
                 tex_normal = np.concatenate(tex_normal_parts, axis=1)
                 tex_camera = np.concatenate(tex_camera_parts, axis=1)
                 tex_gain = np.concatenate(tex_gain_parts, axis=1)
@@ -1672,6 +1742,12 @@ def _predict_delta(
                 tex_parent_dist = np.sum(np.square(tex_parent - tgt_parent[:, None, :]), axis=2)
                 tex_edge_dist = np.abs(tex_edge - tgt_parent_edge[:, None])
                 tex_weights = tex_valid.astype(np.float32) * tex_bin_weight
+                if decoder_mode_s == "structure_safe_texture_lowrank":
+                    residual_edge_gate = np.clip(tex_residual_edge / 0.04, 0.0, 1.0).astype(np.float32)
+                    teacher_support_gate = np.clip(tex_teacher_better, 0.0, 1.0).astype(np.float32)
+                    tex_weights *= (0.30 + 0.70 * np.maximum(residual_edge_gate, teacher_support_gate)).astype(
+                        np.float32
+                    )
                 if apply_source_consistency_weight:
                     tex_weights *= tex_consistency
                 if float(count_gamma) != 0.0:
@@ -1709,6 +1785,50 @@ def _predict_delta(
                     & (tex_valid_count >= max(2, int(lowrank_basis_min_sources)))
                     & (tex_unique_view_count >= max(1, int(lowrank_basis_min_unique_views)))
                 )
+                pre_texture_structure_gate = np.ones_like(tex_denom, dtype=np.float32)
+                pre_texture_edge_match = np.ones_like(tex_denom, dtype=np.float32)
+                pre_texture_residual_edge_support = np.ones_like(tex_denom, dtype=np.float32)
+                pre_texture_teacher_support = np.ones_like(tex_denom, dtype=np.float32)
+                if decoder_mode_s == "structure_safe_texture_lowrank":
+                    pre_norm_weights = tex_weights / np.maximum(tex_denom[:, None], 1.0e-12)
+                    pre_texture_edge_match = np.sum(
+                        pre_norm_weights
+                        * np.exp(
+                            np.clip(
+                                -float(patch_coherent_edge_beta) * np.abs(tex_edge - tgt_parent_edge[:, None]),
+                                -30.0,
+                                0.0,
+                            )
+                        ).astype(np.float32),
+                        axis=1,
+                    ).astype(np.float32)
+                    pre_texture_residual_edge_support = np.sum(
+                        pre_norm_weights * np.clip(tex_residual_edge / 0.04, 0.0, 1.0).astype(np.float32),
+                        axis=1,
+                    ).astype(np.float32)
+                    pre_texture_teacher_support = np.sum(
+                        pre_norm_weights * np.clip(tex_teacher_better, 0.0, 1.0).astype(np.float32),
+                        axis=1,
+                    ).astype(np.float32)
+                    pre_unique_view_gate = np.clip(
+                        tex_unique_view_count / max(float(lowrank_basis_min_unique_views), 1.0),
+                        0.0,
+                        1.0,
+                    ).astype(np.float32)
+                    pre_target_edge_gate = (0.35 + 0.65 * np.clip(tgt_parent_edge / 0.04, 0.0, 1.0)).astype(
+                        np.float32
+                    )
+                    pre_texture_structure_gate = (
+                        pre_target_edge_gate
+                        * pre_unique_view_gate
+                        * (
+                            0.40 * np.clip(pre_texture_edge_match, 0.0, 1.0)
+                            + 0.35 * np.clip(pre_texture_residual_edge_support, 0.0, 1.0)
+                            + 0.25 * np.clip(pre_texture_teacher_support, 0.0, 1.0)
+                        )
+                    ).astype(np.float32)
+                    pre_texture_structure_gate = np.clip(pre_texture_structure_gate, 0.0, 1.0)
+                    tex_ok &= pre_texture_structure_gate >= 0.12
                 basis_rank = max(1, min(3, int(lowrank_basis_rank)))
                 if np.any(tex_ok):
                     idx = np.nonzero(tex_ok)[0]
@@ -1731,6 +1851,14 @@ def _predict_delta(
                             tex_parent[idx].astype(np.float32),
                             np.clip(tex_edge[idx], 0.0, 0.25).astype(np.float32)[:, :, None],
                             tex_offset[idx].astype(np.float32),
+                            *(
+                                [
+                                    np.clip(tex_residual_edge[idx], 0.0, 0.25).astype(np.float32)[:, :, None],
+                                    np.clip(tex_teacher_better[idx], 0.0, 1.0).astype(np.float32)[:, :, None],
+                                ]
+                                if decoder_mode_s == "structure_safe_texture_lowrank"
+                                else []
+                            ),
                         ],
                         axis=2,
                     )
@@ -1741,6 +1869,14 @@ def _predict_delta(
                             tgt_parent[idx].astype(np.float32),
                             np.clip(tgt_parent_edge[idx], 0.0, 0.25).astype(np.float32)[:, None],
                             np.zeros((idx.size, 2), dtype=np.float32),
+                            *(
+                                [
+                                    np.clip(tgt_parent_edge[idx], 0.0, 0.25).astype(np.float32)[:, None],
+                                    np.ones((idx.size, 1), dtype=np.float32),
+                                ]
+                                if decoder_mode_s == "structure_safe_texture_lowrank"
+                                else []
+                            ),
                         ],
                         axis=1,
                     )
@@ -1765,7 +1901,16 @@ def _predict_delta(
                         ).astype(np.float32)
                     else:
                         row_blend = np.full((idx.size,), blend, dtype=np.float32)
-                    row_blend = np.where(ok_rows[idx], row_blend, blend).astype(np.float32)
+                    if decoder_mode_s == "structure_safe_texture_lowrank":
+                        edge_match = pre_texture_edge_match[idx].astype(np.float32)
+                        teacher_support = pre_texture_teacher_support[idx].astype(np.float32)
+                        structure_gate = pre_texture_structure_gate[idx].astype(np.float32)
+                        row_blend = (row_blend * structure_gate).astype(np.float32)
+                        texture_structure_gates.append(structure_gate.astype(np.float32))
+                        texture_edge_matches.append(edge_match.astype(np.float32))
+                        texture_teacher_supports.append(teacher_support.astype(np.float32))
+                    if decoder_mode_s != "structure_safe_texture_lowrank":
+                        row_blend = np.where(ok_rows[idx], row_blend, blend).astype(np.float32)
                     pred[idx] = (
                         (1.0 - row_blend[:, None]) * pred[idx] + row_blend[:, None] * texture_pred
                     ).astype(np.float32)
@@ -2023,6 +2168,15 @@ def _predict_delta(
     tail_risk_arr = np.concatenate(tail_risks) if tail_risks else np.zeros((0,), dtype=np.float32)
     patch_blend_arr = np.concatenate(patch_blends) if patch_blends else np.zeros((0,), dtype=np.float32)
     texture_blend_arr = np.concatenate(texture_blends) if texture_blends else np.zeros((0,), dtype=np.float32)
+    texture_structure_gate_arr = (
+        np.concatenate(texture_structure_gates) if texture_structure_gates else np.zeros((0,), dtype=np.float32)
+    )
+    texture_edge_match_arr = (
+        np.concatenate(texture_edge_matches) if texture_edge_matches else np.zeros((0,), dtype=np.float32)
+    )
+    texture_teacher_support_arr = (
+        np.concatenate(texture_teacher_supports) if texture_teacher_supports else np.zeros((0,), dtype=np.float32)
+    )
     source_consistency_rel_arr = (
         np.concatenate(source_consistency_reliabilities)
         if source_consistency_reliabilities
@@ -2045,6 +2199,16 @@ def _predict_delta(
         "texture_active_over_support_fraction": float(texture_active_count / max(int(np.count_nonzero(support)), 1)),
         "mean_texture_blend": float(np.mean(texture_blend_arr)) if texture_blend_arr.size else 0.0,
         "p90_texture_blend": float(np.quantile(texture_blend_arr, 0.90)) if texture_blend_arr.size else 0.0,
+        "mean_texture_structure_gate": (
+            float(np.mean(texture_structure_gate_arr)) if texture_structure_gate_arr.size else 1.0
+        ),
+        "p10_texture_structure_gate": (
+            float(np.quantile(texture_structure_gate_arr, 0.10)) if texture_structure_gate_arr.size else 1.0
+        ),
+        "mean_texture_edge_match": float(np.mean(texture_edge_match_arr)) if texture_edge_match_arr.size else 1.0,
+        "mean_texture_teacher_support": (
+            float(np.mean(texture_teacher_support_arr)) if texture_teacher_support_arr.size else 1.0
+        ),
         "mean_source_consistency_reliability": (
             float(np.mean(source_consistency_rel_arr)) if source_consistency_rel_arr.size else 1.0
         ),
@@ -2094,6 +2258,10 @@ def _summarize_rows(rows: list[dict[str, Any]], *, compute_lpips: bool) -> dict[
         "texture_active_over_support_fraction": _mean([float(r.get("texture_active_over_support_fraction", 0.0)) for r in rows]),
         "mean_texture_blend": _mean([float(r.get("mean_texture_blend", 0.0)) for r in rows]),
         "p90_texture_blend": _mean([float(r.get("p90_texture_blend", 0.0)) for r in rows]),
+        "mean_texture_structure_gate": _mean([float(r.get("mean_texture_structure_gate", 1.0)) for r in rows]),
+        "p10_texture_structure_gate": _mean([float(r.get("p10_texture_structure_gate", 1.0)) for r in rows]),
+        "mean_texture_edge_match": _mean([float(r.get("mean_texture_edge_match", 1.0)) for r in rows]),
+        "mean_texture_teacher_support": _mean([float(r.get("mean_texture_teacher_support", 1.0)) for r in rows]),
         "mean_source_consistency_reliability": _mean(
             [float(r.get("mean_source_consistency_reliability", 1.0)) for r in rows]
         ),
@@ -2766,7 +2934,10 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
             "It checks independent source-view support through `source_view_id`, but it is not yet a coherent "
             "per-face texture sheet across UV bins. `face_texture_lowrank` is the explicit coherent face-texture "
             "variant introduced for the v169 prompt gate. `hybrid_edge_texture_lowrank` keeps the stable "
-            "edge-local-linear base and injects that coherent face-texture basis as a controlled residual carrier."
+            "edge-local-linear base and injects that coherent face-texture basis as a controlled residual carrier. "
+            "`structure_safe_texture_lowrank` adds a v274 structure certificate: it stores residual-edge, luma "
+            "residual magnitude, and teacher-better support in the bank, then injects texture bases only when "
+            "source/target edge evidence and multi-view support agree."
         ),
         "",
         "## Source-View Consistency",
@@ -2945,6 +3116,7 @@ def main() -> int:
             "patch_coherent_hybrid",
             "face_texture_lowrank",
             "hybrid_edge_texture_lowrank",
+            "structure_safe_texture_lowrank",
         ],
         default="weighted_average",
     )
@@ -3412,6 +3584,9 @@ def main() -> int:
         "residual": bank["residual"].astype(np.float16),
         "parent_rgb": bank["parent_rgb"].astype(np.float16),
         "parent_edge": bank["parent_edge"].astype(np.float16),
+        "residual_edge": bank["residual_edge"].astype(np.float16),
+        "residual_luma_abs": bank["residual_luma_abs"].astype(np.float16),
+        "teacher_better_fraction": bank["teacher_better_fraction"].astype(np.float16),
         "normal": bank["normal"].astype(np.float16),
         "camera_dir": bank["camera_dir"].astype(np.float16),
         "gain_l1": bank["gain_l1"].astype(np.float16),
@@ -3558,6 +3733,9 @@ def main() -> int:
                 ),
                 "residual_decoder/is_hybrid_edge_texture_lowrank": float(
                     str(args.residual_decoder_mode) == "hybrid_edge_texture_lowrank"
+                ),
+                "residual_decoder/is_structure_safe_texture_lowrank": float(
+                    str(args.residual_decoder_mode) == "structure_safe_texture_lowrank"
                 ),
                 "residual_decoder/local_linear_l2": float(args.local_linear_l2),
                 "residual_decoder/local_linear_blend": float(args.local_linear_blend),
