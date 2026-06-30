@@ -495,6 +495,14 @@ def _load_source_bank(path: Path) -> tuple[np.ndarray, dict[str, np.ndarray], di
         if "policy_tail_risk" in z:
             bank["policy_tail_risk"] = np.asarray(z["policy_tail_risk"], dtype=np.float32)
         for key in (
+            "source_consistency_reliability",
+            "source_consistency_amplitude",
+            "source_consistency_relative_error",
+            "source_consistency_cosine",
+        ):
+            if key in z:
+                bank[key] = np.asarray(z[key], dtype=np.float32)
+        for key in (
             "learned_ood_head_coef",
             "learned_ood_head_bias",
             "learned_ood_head_mean",
@@ -618,6 +626,133 @@ def _transform_bank_residuals(bank: dict[str, np.ndarray], mode: str, chroma_shr
         "energy_ratio_after_before": float(after_energy / max(before_energy, 1.0e-12)),
         "mean_abs_before": float(np.mean(np.abs(before[valid]))) if np.any(valid) else 0.0,
         "mean_abs_after": float(np.mean(np.abs(after[valid]))) if np.any(valid) else 0.0,
+    }
+
+
+def _calibrate_source_view_consistency(
+    bank: dict[str, np.ndarray],
+    *,
+    min_source_count: float,
+    min_other_sources: int,
+    view_beta: float,
+    normal_beta: float,
+    parent_beta: float,
+    count_gamma: float,
+    gain_beta: float,
+    error_beta: float,
+    floor: float,
+    amplitude_floor: float,
+    amplitude_max: float,
+    mode: str,
+) -> dict[str, Any]:
+    mode_s = str(mode or "off")
+    if mode_s not in {"weight", "weight_amplitude"}:
+        for key in (
+            "source_consistency_reliability",
+            "source_consistency_amplitude",
+            "source_consistency_relative_error",
+            "source_consistency_cosine",
+        ):
+            bank.pop(key, None)
+        return {"mode": "off", "enabled": False}
+
+    counts = np.asarray(bank["counts"], dtype=np.float32)
+    residual = np.asarray(bank["residual"], dtype=np.float32)
+    parent = np.asarray(bank["parent_rgb"], dtype=np.float32)
+    normal = np.asarray(bank["normal"], dtype=np.float32)
+    camera = np.asarray(bank["camera_dir"], dtype=np.float32)
+    gain = np.asarray(bank["gain_l1"], dtype=np.float32)
+    source_view_id = np.asarray(bank.get("source_view_id", np.full_like(counts, -1)), dtype=np.int32)
+    valid = (counts >= float(min_source_count)) & (source_view_id >= 0)
+    reliability = np.zeros_like(counts, dtype=np.float32)
+    amplitude = np.ones_like(counts, dtype=np.float32)
+    relative_error = np.ones_like(counts, dtype=np.float32)
+    cosine_map = np.zeros_like(counts, dtype=np.float32)
+    min_other = max(1, int(min_other_sources))
+    floor_v = float(np.clip(float(floor), 0.0, 1.0))
+    amp_floor = float(np.clip(float(amplitude_floor), 0.0, 1.0))
+    amp_max = max(float(amplitude_max), amp_floor)
+    top_k = int(counts.shape[2])
+
+    for slot in range(top_k):
+        held_valid = valid[:, :, slot]
+        if not np.any(held_valid):
+            continue
+        other_valid = valid.copy()
+        other_valid[:, :, slot] = False
+        other_valid &= source_view_id != source_view_id[:, :, slot : slot + 1]
+        other_count = np.sum(other_valid.astype(np.float32), axis=2)
+        support_ok = held_valid & (other_count >= min_other)
+        if not np.any(support_ok):
+            reliability[:, :, slot] = np.where(held_valid, floor_v, reliability[:, :, slot])
+            amplitude[:, :, slot] = np.where(held_valid, amp_floor, amplitude[:, :, slot])
+            continue
+
+        held_camera = camera[:, :, slot : slot + 1, :]
+        held_normal = normal[:, :, slot : slot + 1, :]
+        held_parent = parent[:, :, slot : slot + 1, :]
+        view_cos = np.sum(camera * held_camera, axis=3)
+        normal_cos = np.sum(normal * held_normal, axis=3)
+        parent_dist = np.sum(np.square(parent - held_parent), axis=3)
+        weights = other_valid.astype(np.float32)
+        if float(count_gamma) != 0.0:
+            weights *= np.power(np.maximum(counts, 1.0), float(count_gamma)).astype(np.float32)
+        if float(view_beta) != 0.0:
+            weights *= np.exp(np.clip(float(view_beta) * (view_cos - 1.0), -30.0, 30.0)).astype(np.float32)
+        if float(normal_beta) != 0.0:
+            weights *= np.exp(np.clip(float(normal_beta) * (normal_cos - 1.0), -30.0, 30.0)).astype(np.float32)
+        if float(parent_beta) != 0.0:
+            weights *= np.exp(np.clip(-float(parent_beta) * parent_dist, -30.0, 30.0)).astype(np.float32)
+        if float(gain_beta) != 0.0:
+            weights *= np.clip(1.0 + float(gain_beta) * np.clip(gain, 0.0, None), 0.05, 10.0).astype(np.float32)
+        denom = np.sum(weights, axis=2)
+        pred = np.sum(weights[:, :, :, None] * residual, axis=2) / np.maximum(denom[:, :, None], 1.0e-12)
+        held = residual[:, :, slot, :]
+        held_norm = np.maximum(np.linalg.norm(held, axis=2), 1.0e-8)
+        pred_norm = np.maximum(np.linalg.norm(pred, axis=2), 1.0e-8)
+        dot = np.sum(pred * held, axis=2)
+        cosine = np.clip(dot / np.maximum(pred_norm * held_norm, 1.0e-8), -1.0, 1.0).astype(np.float32)
+        rel_err = (np.linalg.norm(pred - held, axis=2) / held_norm).astype(np.float32)
+        support_score = np.clip(other_count / float(min_other), 0.0, 1.0).astype(np.float32)
+        cosine_score = np.clip((cosine + 1.0) * 0.5, 0.0, 1.0).astype(np.float32)
+        error_score = np.exp(np.clip(-float(error_beta) * rel_err, -30.0, 0.0)).astype(np.float32)
+        raw_reliability = np.clip(support_score * cosine_score * error_score, 0.0, 1.0).astype(np.float32)
+        slot_reliability = floor_v + (1.0 - floor_v) * raw_reliability
+        explained = np.clip(dot / np.maximum(held_norm * held_norm, 1.0e-8), 0.0, amp_max).astype(np.float32)
+        slot_amplitude = amp_floor + (np.minimum(explained, amp_max) - amp_floor) * raw_reliability
+        slot_amplitude = np.clip(slot_amplitude, amp_floor, amp_max).astype(np.float32)
+        reliability[:, :, slot] = np.where(held_valid, slot_reliability, reliability[:, :, slot]).astype(np.float32)
+        amplitude[:, :, slot] = np.where(held_valid, slot_amplitude, amplitude[:, :, slot]).astype(np.float32)
+        relative_error[:, :, slot] = np.where(held_valid, rel_err, relative_error[:, :, slot]).astype(np.float32)
+        cosine_map[:, :, slot] = np.where(held_valid, cosine, cosine_map[:, :, slot]).astype(np.float32)
+
+    if mode_s == "weight":
+        amplitude = np.ones_like(amplitude, dtype=np.float32)
+    bank["source_consistency_reliability"] = reliability.astype(np.float32)
+    bank["source_consistency_amplitude"] = amplitude.astype(np.float32)
+    bank["source_consistency_relative_error"] = relative_error.astype(np.float32)
+    bank["source_consistency_cosine"] = cosine_map.astype(np.float32)
+    reliable_valid = valid & (reliability > floor_v + 1.0e-6)
+    return {
+        "mode": mode_s,
+        "enabled": True,
+        "min_source_count": float(min_source_count),
+        "min_other_sources": int(min_other),
+        "error_beta": float(error_beta),
+        "floor": float(floor_v),
+        "amplitude_floor": float(amp_floor),
+        "amplitude_max": float(amp_max),
+        "valid_source_slots": int(np.count_nonzero(valid)),
+        "reliable_source_slots": int(np.count_nonzero(reliable_valid)),
+        "reliable_source_slot_fraction": float(np.mean(reliable_valid[valid])) if np.any(valid) else 0.0,
+        "mean_reliability_valid": float(np.mean(reliability[valid])) if np.any(valid) else 0.0,
+        "mean_amplitude_valid": float(np.mean(amplitude[valid])) if np.any(valid) else 1.0,
+        "mean_relative_error_valid": float(np.mean(relative_error[valid])) if np.any(valid) else 0.0,
+        "mean_cosine_valid": float(np.mean(cosine_map[valid])) if np.any(valid) else 0.0,
+        "reliability_quantiles_valid": _quantiles([float(x) for x in reliability[valid].reshape(-1)]) if np.any(valid) else _quantiles([]),
+        "amplitude_quantiles_valid": _quantiles([float(x) for x in amplitude[valid].reshape(-1)]) if np.any(valid) else _quantiles([]),
+        "relative_error_quantiles_valid": _quantiles([float(x) for x in relative_error[valid].reshape(-1)]) if np.any(valid) else _quantiles([]),
+        "cosine_quantiles_valid": _quantiles([float(x) for x in cosine_map[valid].reshape(-1)]) if np.any(valid) else _quantiles([]),
     }
 
 
@@ -1131,6 +1266,8 @@ def _predict_delta(
     tail_risks: list[float] = []
     patch_blends: list[float] = []
     texture_blends: list[float] = []
+    source_consistency_reliabilities: list[float] = []
+    source_consistency_amplitudes: list[float] = []
     patch_active_count = 0
     texture_active_count = 0
     active_count = 0
@@ -1156,6 +1293,21 @@ def _predict_delta(
         src_camera = bank["camera_dir"][face_idx, bin_id]
         src_gain = bank["gain_l1"][face_idx, bin_id]
         src_view_id = np.asarray(bank.get("source_view_id", np.full_like(bank["counts"], -1)), dtype=np.int32)[face_idx, bin_id]
+        src_consistency = np.ones_like(counts, dtype=np.float32)
+        src_amplitude = np.ones_like(counts, dtype=np.float32)
+        if "source_consistency_reliability" in bank:
+            src_consistency = np.clip(
+                np.asarray(bank["source_consistency_reliability"], dtype=np.float32)[face_idx, bin_id],
+                0.0,
+                1.0,
+            ).astype(np.float32)
+        if "source_consistency_amplitude" in bank:
+            src_amplitude = np.clip(
+                np.asarray(bank["source_consistency_amplitude"], dtype=np.float32)[face_idx, bin_id],
+                0.0,
+                2.0,
+            ).astype(np.float32)
+            src_residual = (src_residual * src_amplitude[:, :, None]).astype(np.float32)
         tgt_parent = np.moveaxis(parent[:, ys, xs], 0, 1).astype(np.float32)
         tgt_parent_edge = parent_edge_map[ys, xs].astype(np.float32)
         tgt_normal = _normalize_rows(np.moveaxis(normal_map[:, ys, xs], 0, 1))
@@ -1173,7 +1325,10 @@ def _predict_delta(
             weights *= np.exp(np.clip(-float(parent_beta) * parent_dist, -30.0, 30.0)).astype(np.float32)
         if float(gain_beta) != 0.0:
             weights *= np.clip(1.0 + float(gain_beta) * np.clip(src_gain, 0.0, None), 0.05, 10.0).astype(np.float32)
+        if "source_consistency_reliability" in bank:
+            weights *= src_consistency
         denom = np.sum(weights, axis=1)
+        source_consistency_base_denom = denom.copy()
         ok_rows = denom > 1.0e-12
         patch_mode = decoder_mode_s == "patch_coherent_hybrid"
         if not np.any(ok_rows) and not neighbor_carrier_mode:
@@ -1321,6 +1476,8 @@ def _predict_delta(
             tex_valid_parts: list[np.ndarray] = []
             tex_bin_weight_parts: list[np.ndarray] = []
             tex_offset_parts: list[np.ndarray] = []
+            tex_consistency_parts: list[np.ndarray] = []
+            tex_amplitude_parts: list[np.ndarray] = []
             sigma = max(float(patch_coherent_bin_sigma), 1.0e-6)
             for du in range(-radius, radius + 1):
                 for dv in range(-radius, radius + 1):
@@ -1353,12 +1510,26 @@ def _predict_delta(
                     )
                     tex_valid_parts.append(valid_tex)
                     tex_bin_weight_parts.append(np.full_like(counts_tex, float(bin_weight), dtype=np.float32))
+                    if "source_consistency_reliability" in bank:
+                        tex_consistency_parts.append(
+                            np.asarray(bank["source_consistency_reliability"], dtype=np.float32)[face_idx, tex_bin]
+                        )
+                    else:
+                        tex_consistency_parts.append(np.ones_like(counts_tex, dtype=np.float32))
+                    if "source_consistency_amplitude" in bank:
+                        tex_amplitude_parts.append(
+                            np.asarray(bank["source_consistency_amplitude"], dtype=np.float32)[face_idx, tex_bin]
+                        )
+                    else:
+                        tex_amplitude_parts.append(np.ones_like(counts_tex, dtype=np.float32))
                     offsets = np.zeros((*counts_tex.shape, 2), dtype=np.float32)
                     offsets[..., 0] = float(du) / max(float(grid_i), 1.0)
                     offsets[..., 1] = float(dv) / max(float(grid_i), 1.0)
                     tex_offset_parts.append(offsets)
             if tex_residual_parts:
                 tex_residual = np.concatenate(tex_residual_parts, axis=1)
+                tex_amplitude = np.clip(np.concatenate(tex_amplitude_parts, axis=1), 0.0, 2.0)
+                tex_residual = (tex_residual * tex_amplitude[:, :, None]).astype(np.float32)
                 tex_parent = np.concatenate(tex_parent_parts, axis=1)
                 tex_edge = np.concatenate(tex_edge_parts, axis=1)
                 tex_normal = np.concatenate(tex_normal_parts, axis=1)
@@ -1369,11 +1540,14 @@ def _predict_delta(
                 tex_valid = np.concatenate(tex_valid_parts, axis=1)
                 tex_bin_weight = np.concatenate(tex_bin_weight_parts, axis=1)
                 tex_offset = np.concatenate(tex_offset_parts, axis=1)
+                tex_consistency = np.clip(np.concatenate(tex_consistency_parts, axis=1), 0.0, 1.0)
                 tex_view_cos = np.sum(tex_camera * target_cam, axis=2)
                 tex_normal_cos = np.sum(tex_normal * tgt_normal[:, None, :], axis=2)
                 tex_parent_dist = np.sum(np.square(tex_parent - tgt_parent[:, None, :]), axis=2)
                 tex_edge_dist = np.abs(tex_edge - tgt_parent_edge[:, None])
                 tex_weights = tex_valid.astype(np.float32) * tex_bin_weight
+                if "source_consistency_reliability" in bank:
+                    tex_weights *= tex_consistency
                 if float(count_gamma) != 0.0:
                     tex_weights *= np.power(np.maximum(tex_counts, 1.0), float(count_gamma)).astype(np.float32)
                 if float(view_beta) != 0.0:
@@ -1487,6 +1661,8 @@ def _predict_delta(
             nb_count_parts: list[np.ndarray] = []
             nb_valid_parts: list[np.ndarray] = []
             nb_bin_weight_parts: list[np.ndarray] = []
+            nb_consistency_parts: list[np.ndarray] = []
+            nb_amplitude_parts: list[np.ndarray] = []
             sigma = max(float(patch_coherent_bin_sigma), 1.0e-6)
             for du in range(-radius, radius + 1):
                 for dv in range(-radius, radius + 1):
@@ -1514,8 +1690,22 @@ def _predict_delta(
                     nb_count_parts.append(counts_nb)
                     nb_valid_parts.append(valid_nb)
                     nb_bin_weight_parts.append(np.full_like(counts_nb, float(bin_weight), dtype=np.float32))
+                    if "source_consistency_reliability" in bank:
+                        nb_consistency_parts.append(
+                            np.asarray(bank["source_consistency_reliability"], dtype=np.float32)[face_idx, nb_bin]
+                        )
+                    else:
+                        nb_consistency_parts.append(np.ones_like(counts_nb, dtype=np.float32))
+                    if "source_consistency_amplitude" in bank:
+                        nb_amplitude_parts.append(
+                            np.asarray(bank["source_consistency_amplitude"], dtype=np.float32)[face_idx, nb_bin]
+                        )
+                    else:
+                        nb_amplitude_parts.append(np.ones_like(counts_nb, dtype=np.float32))
             if nb_residual_parts:
                 nb_residual = np.concatenate(nb_residual_parts, axis=1)
+                nb_amplitude = np.clip(np.concatenate(nb_amplitude_parts, axis=1), 0.0, 2.0)
+                nb_residual = (nb_residual * nb_amplitude[:, :, None]).astype(np.float32)
                 nb_parent = np.concatenate(nb_parent_parts, axis=1)
                 nb_edge = np.concatenate(nb_edge_parts, axis=1)
                 nb_normal = np.concatenate(nb_normal_parts, axis=1)
@@ -1524,11 +1714,14 @@ def _predict_delta(
                 nb_counts = np.concatenate(nb_count_parts, axis=1)
                 nb_valid = np.concatenate(nb_valid_parts, axis=1)
                 nb_bin_weight = np.concatenate(nb_bin_weight_parts, axis=1)
+                nb_consistency = np.clip(np.concatenate(nb_consistency_parts, axis=1), 0.0, 1.0)
                 nb_view_cos = np.sum(nb_camera * target_cam, axis=2)
                 nb_normal_cos = np.sum(nb_normal * tgt_normal[:, None, :], axis=2)
                 nb_parent_dist = np.sum(np.square(nb_parent - tgt_parent[:, None, :]), axis=2)
                 nb_edge_dist = np.abs(nb_edge - tgt_parent_edge[:, None])
                 patch_weights = nb_valid.astype(np.float32) * nb_bin_weight
+                if "source_consistency_reliability" in bank:
+                    patch_weights *= nb_consistency
                 if float(count_gamma) != 0.0:
                     patch_weights *= np.power(np.maximum(nb_counts, 1.0), float(count_gamma)).astype(np.float32)
                 if float(view_beta) != 0.0:
@@ -1683,6 +1876,15 @@ def _predict_delta(
         ood_confidences.append(ood_confidence[ok_rows].astype(np.float32))
         ood_scores.append(ood_score[ok_rows].astype(np.float32))
         tail_risks.append(policy_tail_risk[ok_rows].astype(np.float32))
+        if "source_consistency_reliability" in bank:
+            row_reliability = np.sum(weights * src_consistency, axis=1) / np.maximum(
+                source_consistency_base_denom, 1.0e-12
+            )
+            row_amplitude = np.sum(weights * src_amplitude, axis=1) / np.maximum(
+                source_consistency_base_denom, 1.0e-12
+            )
+            source_consistency_reliabilities.append(row_reliability[ok_rows].astype(np.float32))
+            source_consistency_amplitudes.append(row_amplitude[ok_rows].astype(np.float32))
     conf = np.concatenate(confidences) if confidences else np.zeros((0,), dtype=np.float32)
     agreement_conf = (
         np.concatenate(agreement_confidences) if agreement_confidences else np.zeros((0,), dtype=np.float32)
@@ -1694,6 +1896,16 @@ def _predict_delta(
     tail_risk_arr = np.concatenate(tail_risks) if tail_risks else np.zeros((0,), dtype=np.float32)
     patch_blend_arr = np.concatenate(patch_blends) if patch_blends else np.zeros((0,), dtype=np.float32)
     texture_blend_arr = np.concatenate(texture_blends) if texture_blends else np.zeros((0,), dtype=np.float32)
+    source_consistency_rel_arr = (
+        np.concatenate(source_consistency_reliabilities)
+        if source_consistency_reliabilities
+        else np.zeros((0,), dtype=np.float32)
+    )
+    source_consistency_amp_arr = (
+        np.concatenate(source_consistency_amplitudes)
+        if source_consistency_amplitudes
+        else np.ones((0,), dtype=np.float32)
+    )
     return delta, active, {
         "surface_support_fraction": float(np.mean(support)),
         "active_fraction": float(active_count / max(int(support.size), 1)),
@@ -1706,6 +1918,15 @@ def _predict_delta(
         "texture_active_over_support_fraction": float(texture_active_count / max(int(np.count_nonzero(support)), 1)),
         "mean_texture_blend": float(np.mean(texture_blend_arr)) if texture_blend_arr.size else 0.0,
         "p90_texture_blend": float(np.quantile(texture_blend_arr, 0.90)) if texture_blend_arr.size else 0.0,
+        "mean_source_consistency_reliability": (
+            float(np.mean(source_consistency_rel_arr)) if source_consistency_rel_arr.size else 1.0
+        ),
+        "p10_source_consistency_reliability": (
+            float(np.quantile(source_consistency_rel_arr, 0.10)) if source_consistency_rel_arr.size else 1.0
+        ),
+        "mean_source_consistency_amplitude": (
+            float(np.mean(source_consistency_amp_arr)) if source_consistency_amp_arr.size else 1.0
+        ),
         "mean_confidence": float(np.mean(conf)) if conf.size else 0.0,
         "p10_confidence": float(np.quantile(conf, 0.10)) if conf.size else 0.0,
         "mean_source_agreement_confidence": float(np.mean(agreement_conf)) if agreement_conf.size else 0.0,
@@ -1746,6 +1967,15 @@ def _summarize_rows(rows: list[dict[str, Any]], *, compute_lpips: bool) -> dict[
         "texture_active_over_support_fraction": _mean([float(r.get("texture_active_over_support_fraction", 0.0)) for r in rows]),
         "mean_texture_blend": _mean([float(r.get("mean_texture_blend", 0.0)) for r in rows]),
         "p90_texture_blend": _mean([float(r.get("p90_texture_blend", 0.0)) for r in rows]),
+        "mean_source_consistency_reliability": _mean(
+            [float(r.get("mean_source_consistency_reliability", 1.0)) for r in rows]
+        ),
+        "p10_source_consistency_reliability": _mean(
+            [float(r.get("p10_source_consistency_reliability", 1.0)) for r in rows]
+        ),
+        "mean_source_consistency_amplitude": _mean(
+            [float(r.get("mean_source_consistency_amplitude", 1.0)) for r in rows]
+        ),
         "mean_confidence": _mean([float(r.get("mean_confidence", 0.0)) for r in rows]),
         "mean_policy_reliability": _mean([float(r.get("mean_policy_reliability", 0.0)) for r in rows]),
         "mean_policy_gain": _mean([float(r.get("mean_policy_gain", 1.0)) for r in rows]),
@@ -2412,6 +2642,17 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
             "edge-local-linear base and injects that coherent face-texture basis as a controlled residual carrier."
         ),
         "",
+        "## Source-View Consistency",
+        "",
+        f"- mode: `{payload.get('source_view_consistency', {}).get('mode', 'off')}`",
+        f"- valid source slots: `{payload.get('source_view_consistency', {}).get('valid_source_slots', 0)}`",
+        f"- reliable source slots: `{payload.get('source_view_consistency', {}).get('reliable_source_slots', 0)}`",
+        f"- reliable fraction: `{payload.get('source_view_consistency', {}).get('reliable_source_slot_fraction', 0.0):.6f}`",
+        f"- mean reliability: `{payload.get('source_view_consistency', {}).get('mean_reliability_valid', 1.0):.6f}`",
+        f"- mean amplitude: `{payload.get('source_view_consistency', {}).get('mean_amplitude_valid', 1.0):.6f}`",
+        f"- mean LOO relative error: `{payload.get('source_view_consistency', {}).get('mean_relative_error_valid', 0.0):.6f}`",
+        f"- mean LOO cosine: `{payload.get('source_view_consistency', {}).get('mean_cosine_valid', 0.0):.6f}`",
+        "",
         "## Policy-Val Metrics",
         "",
         "| row | alpha | PSNR gain | SSIM gain | LPIPS gain | PSNR tail CVaR | SSIM tail CVaR | LPIPS tail CVaR | active/support |",
@@ -2596,6 +2837,12 @@ def main() -> int:
     parser.add_argument("--source_agreement_mode", choices=["off", "soft", "hard"], default="off")
     parser.add_argument("--source_agreement_beta", type=float, default=0.0)
     parser.add_argument("--source_agreement_min_confidence", type=float, default=0.25)
+    parser.add_argument("--source_consistency_mode", choices=["off", "weight", "weight_amplitude"], default="off")
+    parser.add_argument("--source_consistency_min_other_sources", type=int, default=2)
+    parser.add_argument("--source_consistency_error_beta", type=float, default=1.0)
+    parser.add_argument("--source_consistency_floor", type=float, default=0.35)
+    parser.add_argument("--source_consistency_amplitude_floor", type=float, default=0.50)
+    parser.add_argument("--source_consistency_amplitude_max", type=float, default=1.0)
     parser.add_argument("--policy_reliability_mode", choices=["off", "local_l1", "patch_perceptual_v1"], default="off")
     parser.add_argument("--policy_reliability_alpha", type=float, default=0.03125)
     parser.add_argument("--policy_reliability_min_count", type=int, default=8)
@@ -2721,6 +2968,21 @@ def main() -> int:
         bank,
         str(args.bank_residual_transform_mode),
         float(args.bank_residual_chroma_shrink),
+    )
+    source_consistency_summary = _calibrate_source_view_consistency(
+        bank,
+        min_source_count=float(args.min_source_count),
+        min_other_sources=int(args.source_consistency_min_other_sources),
+        view_beta=float(args.view_beta),
+        normal_beta=float(args.normal_beta),
+        parent_beta=float(args.parent_beta),
+        count_gamma=float(args.count_gamma),
+        gain_beta=float(args.gain_beta),
+        error_beta=float(args.source_consistency_error_beta),
+        floor=float(args.source_consistency_floor),
+        amplitude_floor=float(args.source_consistency_amplitude_floor),
+        amplitude_max=float(args.source_consistency_amplitude_max),
+        mode=str(args.source_consistency_mode),
     )
     policy_reliability_summary: dict[str, Any] = {"mode": "off"}
     if str(args.policy_reliability_mode) in {"local_l1", "patch_perceptual_v1"}:
@@ -3021,6 +3283,21 @@ def main() -> int:
     if "policy_tail_risk" in bank:
         checkpoint_payload["policy_tail_risk"] = bank["policy_tail_risk"].astype(np.float16)
     for key in (
+        "source_consistency_reliability",
+        "source_consistency_amplitude",
+        "source_consistency_relative_error",
+        "source_consistency_cosine",
+    ):
+        if key in bank:
+            arr = np.nan_to_num(np.asarray(bank[key], dtype=np.float32), nan=0.0, posinf=1024.0, neginf=0.0)
+            if key == "source_consistency_relative_error":
+                arr = np.clip(arr, 0.0, 1024.0)
+            elif key == "source_consistency_cosine":
+                arr = np.clip(arr, -1.0, 1.0)
+            else:
+                arr = np.clip(arr, 0.0, 2.0)
+            checkpoint_payload[key] = arr.astype(np.float16)
+    for key in (
         "learned_ood_head_coef",
         "learned_ood_head_bias",
         "learned_ood_head_mean",
@@ -3052,6 +3329,7 @@ def main() -> int:
         "candidate_face_summary": face_summary,
         "fit_source_bank": bank_summary,
         "bank_residual_transform": residual_transform_summary,
+        "source_view_consistency": source_consistency_summary,
         "residual_decoder": {
             "mode": str(args.residual_decoder_mode),
             "local_linear_l2": float(args.local_linear_l2),
@@ -3159,6 +3437,25 @@ def main() -> int:
                 "source_bank/nonempty_source_slots": float(bank_summary.get("nonempty_source_slots", 0)),
                 "source_bank/residual_energy_ratio_after_transform": float(
                     residual_transform_summary.get("energy_ratio_after_before", 1.0)
+                ),
+                "source_consistency/enabled": float(bool(source_consistency_summary.get("enabled", False))),
+                "source_consistency/valid_source_slots": float(
+                    source_consistency_summary.get("valid_source_slots", 0.0)
+                ),
+                "source_consistency/reliable_source_slot_fraction": float(
+                    source_consistency_summary.get("reliable_source_slot_fraction", 0.0)
+                ),
+                "source_consistency/mean_reliability_valid": float(
+                    source_consistency_summary.get("mean_reliability_valid", 1.0)
+                ),
+                "source_consistency/mean_amplitude_valid": float(
+                    source_consistency_summary.get("mean_amplitude_valid", 1.0)
+                ),
+                "source_consistency/mean_relative_error_valid": float(
+                    source_consistency_summary.get("mean_relative_error_valid", 0.0)
+                ),
+                "source_consistency/mean_cosine_valid": float(
+                    source_consistency_summary.get("mean_cosine_valid", 0.0)
                 ),
                 "policy_reliability/mean": float(policy_reliability_summary.get("mean_reliability", 0.0)),
                 "policy_reliability/active_bins": float(policy_reliability_summary.get("active_bins", 0.0)),

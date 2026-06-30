@@ -806,6 +806,63 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-06-30 v271 Source-View Consistency Feedback Addendum
+
+New implementation:
+
+```text
+scripts/car_model/train_surface_deferred_source_residual_renderer.py
+```
+
+Detailed log and summary:
+
+```text
+docs/car_model/6-30-v271-SourceViewConsistency-Gate-Log.md
+docs/car_model/results/v271_source_view_consistency_summary.json
+```
+
+What changed:
+
+- Added source-view leave-one-out residual consistency calibration.
+- Each source residual slot is predicted from other source-view slots in the
+  same face/UV bin.
+- LOO cosine and relative error are converted into source-slot reliability.
+- The reliability map is frozen before policy-val and target no-GT apply.
+
+Key result:
+
+| run | exact PSNR | exact SSIM | exact LPIPS | lesson |
+|---|---:|---:|---:|---|
+| v266c | 19.845698 | 0.620201 | 0.179915 | previous best |
+| v271c | 19.845337 | 0.620191 | 0.179887 | LPIPS improves, PSNR/SSIM drop |
+| v271d | 19.845648 | 0.620200 | 0.179919 | almost recovers PSNR/SSIM, loses LPIPS |
+
+Lesson:
+
+LOO source consistency is a meaningful uncertainty signal, but directly
+multiplying source weights by it is too blunt. It removes some teacher residuals
+that are inconsistent across source views but still useful on the target
+trajectory. The result is an LPIPS/PSNR tradeoff, not an all-axis win.
+
+Next recommended direction:
+
+```text
+Continue from v271. Keep source_consistency_reliability, LOO cosine/error,
+policy reliability, tail risk, parent mismatch, view gap, source count, and
+residual variance as features. Train a compact policy-val confidence/amplitude
+head that predicts whether to apply, shrink, preserve, or slightly boost each
+surface residual. Do not use source consistency as a hard source-weight
+multiplier. The head must be frozen on policy-val and evaluated on stripped
+target no-GT evidence. Flowers exact must beat Phase-J PSNR 20.304358, SSIM
+0.557770, and LPIPS 0.329222 before any full9.
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-06-30 v269-v270 Face-Texture Low-Rank Feedback Addendum
 
 This addendum records the direct follow-up to:

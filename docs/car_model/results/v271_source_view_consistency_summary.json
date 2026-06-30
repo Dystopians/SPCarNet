@@ -1,0 +1,128 @@
+{
+  "schema": "spcarnet_v271_source_view_consistency_summary_v1",
+  "date": "2026-06-30",
+  "prompt_context": "Follow-up to v169/v270: held-out source-view residual reliability and amplitude calibration.",
+  "verdict": "NOT_COMPLETE",
+  "phasej_flowers_reference": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "implementation": {
+    "file": "scripts/car_model/train_surface_deferred_source_residual_renderer.py",
+    "new_controls": [
+      "--source_consistency_mode {off,weight,weight_amplitude}",
+      "--source_consistency_min_other_sources",
+      "--source_consistency_error_beta",
+      "--source_consistency_floor",
+      "--source_consistency_amplitude_floor",
+      "--source_consistency_amplitude_max"
+    ],
+    "method": "For each source residual slot, predict it from other source-view slots in the same face/bin using view, normal, parent-RGB, count, and teacher-gain weights; convert leave-one-out cosine/error into slot reliability; use reliability to reweight source residuals at render time."
+  },
+  "runs": [
+    {
+      "id": "v271a",
+      "role": "6-view smoke, hybrid_edge_texture_lowrank",
+      "status": "policy_val_pass_no_exact",
+      "source_consistency_mode": "weight",
+      "source_consistency_floor": 0.35,
+      "policy_val": {
+        "psnr_gain": 0.067632248,
+        "ssim_gain": 0.002548705,
+        "lpips_gain": 0.001247287,
+        "mean_source_consistency_reliability": 0.407764852
+      },
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v271_source_consistency_flowers_20260630/v271a_weight_smoke/v253_deferred_source_renderer_audit.json"
+    },
+    {
+      "id": "v271b",
+      "role": "full flowers, hybrid_edge_texture_lowrank + source consistency",
+      "status": "exact_negative_vs_v270d",
+      "source_consistency_mode": "weight",
+      "source_consistency_floor": 0.35,
+      "policy_val": {
+        "psnr_gain": 0.066104459,
+        "ssim_gain": 0.002687782,
+        "lpips_gain": 0.001170617,
+        "mean_source_consistency_reliability": 0.545285848
+      },
+      "target_exact": {
+        "psnr": 19.844153063,
+        "ssim": 0.620206561,
+        "lpips": 0.179937006,
+        "psnr_gain_vs_parent": 0.012099185,
+        "ssim_gain_vs_parent": 0.00029615,
+        "lpips_gain_vs_parent": 0.00039786,
+        "phasej_psnr_gap": -0.460204937
+      },
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v271_source_consistency_flowers_20260630/v271b_weight_fullflowers/v253_deferred_source_renderer_audit.json",
+      "wandb": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v271_source_consistency_flowers_20260630/v271b_weight_fullflowers/wandb/offline-run-20260630_000419-e9hbzinz"
+    },
+    {
+      "id": "v271c",
+      "role": "full flowers, v266c base + stronger source consistency",
+      "status": "lpips_improves_but_psnr_ssim_drop",
+      "source_consistency_mode": "weight",
+      "source_consistency_floor": 0.35,
+      "policy_val": {
+        "psnr_gain": 0.059943761,
+        "ssim_gain": 0.002244562,
+        "lpips_gain": 0.001024081,
+        "mean_source_consistency_reliability": 0.55059133
+      },
+      "target_exact": {
+        "psnr": 19.845337119,
+        "ssim": 0.620191399,
+        "lpips": 0.179886645,
+        "psnr_gain_vs_parent": 0.013283241,
+        "ssim_gain_vs_parent": 0.000280988,
+        "lpips_gain_vs_parent": 0.000448221,
+        "phasej_psnr_gap": -0.459020881
+      },
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v271_source_consistency_flowers_20260630/v271c_weight_v266base_fullflowers/v253_deferred_source_renderer_audit.json",
+      "wandb": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v271_source_consistency_flowers_20260630/v271c_weight_v266base_fullflowers/wandb/offline-run-20260630_001629-9ai4y8a9"
+    },
+    {
+      "id": "v271d",
+      "role": "full flowers, v266c base + mild source consistency",
+      "status": "near_v266c_but_no_new_best",
+      "source_consistency_mode": "weight",
+      "source_consistency_floor": 0.7,
+      "policy_val": {
+        "psnr_gain": 0.06139777,
+        "ssim_gain": 0.002253056,
+        "lpips_gain": 0.001013802,
+        "mean_source_consistency_reliability": 0.785876354
+      },
+      "target_exact": {
+        "psnr": 19.845647815,
+        "ssim": 0.620200382,
+        "lpips": 0.179919099,
+        "psnr_gain_vs_parent": 0.013593937,
+        "ssim_gain_vs_parent": 0.000289971,
+        "lpips_gain_vs_parent": 0.000415767,
+        "phasej_psnr_gap": -0.458710185
+      },
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v271_source_consistency_flowers_20260630/v271d_weight070_v266base_fullflowers/v253_deferred_source_renderer_audit.json",
+      "wandb": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v271_source_consistency_flowers_20260630/v271d_weight070_v266base_fullflowers/wandb/offline-run-20260630_002546-dhtithyt"
+    }
+  ],
+  "comparison": {
+    "v266c": {
+      "psnr": 19.84569812,
+      "ssim": 0.620200756,
+      "lpips": 0.179915376,
+      "psnr_gain_vs_parent": 0.013644241,
+      "ssim_gain_vs_parent": 0.000290345,
+      "lpips_gain_vs_parent": 0.00041949
+    },
+    "best_v271": "No v271 variant is a new all-axis best. v271c has the best v271 LPIPS, but loses PSNR/SSIM. v271d nearly matches v266c PSNR/SSIM, but loses LPIPS."
+  },
+  "lessons": [
+    "Leave-one-source-view consistency is a real diagnostic: it identifies many low-consistency slots and can move LPIPS.",
+    "Using LOO reliability as a direct source weight removes useful teacher signal and does not close the Phase-J PSNR gap.",
+    "The next step should use LOO consistency as a learned feature or uncertainty term, not as a hard multiplicative weight.",
+    "Full9 remains blocked because no flowers exact run beats Phase-J PSNR."
+  ]
+}

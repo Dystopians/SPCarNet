@@ -756,6 +756,66 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-06-30 Update: v271 Source-View Consistency
+
+v271 implements a held-out source-view residual consistency mechanism:
+
+- hold out each source residual slot inside a face/UV bin;
+- predict it from the other source-view slots;
+- convert leave-one-out cosine/error into source-slot reliability;
+- freeze that reliability before policy-val/target apply;
+- apply on stripped target no-GT evidence.
+
+Implementation:
+
+```text
+scripts/car_model/train_surface_deferred_source_residual_renderer.py
+```
+
+New controls:
+
+```text
+--source_consistency_mode {off,weight,weight_amplitude}
+--source_consistency_min_other_sources
+--source_consistency_error_beta
+--source_consistency_floor
+--source_consistency_amplitude_floor
+--source_consistency_amplitude_max
+```
+
+Flowers exact comparison:
+
+| run | base | consistency floor | PSNR | SSIM | LPIPS | PSNR gain | SSIM gain | LPIPS gain | verdict |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| v266c | hybrid_edge_lowrank | n/a | 19.845698 | 0.620201 | 0.179915 | +0.013644 | +0.000290 | +0.000419 | previous best |
+| v271b | v270d + consistency | 0.35 | 19.844153 | 0.620207 | 0.179937 | +0.012099 | +0.000296 | +0.000398 | worse |
+| v271c | v266c + consistency | 0.35 | 19.845337 | 0.620191 | 0.179887 | +0.013283 | +0.000281 | +0.000448 | LPIPS-only win |
+| v271d | v266c + mild consistency | 0.70 | 19.845648 | 0.620200 | 0.179919 | +0.013594 | +0.000290 | +0.000416 | near v266c, not better |
+
+Conclusion:
+
+- LOO consistency is a useful diagnostic and can improve LPIPS.
+- Directly multiplying source weights by it removes useful teacher signal and
+  does not produce an all-axis win.
+- It should become a feature for a learned confidence/amplitude head, not a hard
+  source-weight gate.
+- Phase-J PSNR gate is still not passed; full9 remains blocked.
+
+Artifacts:
+
+```text
+docs/car_model/6-30-v271-SourceViewConsistency-Gate-Log.md
+docs/car_model/results/v271_source_view_consistency_summary.json
+/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v271_source_consistency_flowers_20260630/v271c_weight_v266base_fullflowers/v253_deferred_source_renderer_audit.json
+/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v271_source_consistency_flowers_20260630/v271d_weight070_v266base_fullflowers/v253_deferred_source_renderer_audit.json
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 The next step should not be another alpha grid. The residual bank needs a target-blind perceptual confidence/reliability predictor that suppresses source/bin residuals with weak multi-source agreement, high residual variance, or poor edge/teacher-gain consistency before target apply.
 
 ## 2026-06-29 Update: v255 Source-Agreement Confidence
