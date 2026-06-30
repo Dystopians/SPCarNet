@@ -242,6 +242,8 @@ def _build_perceptual_decoder(checkpoint: dict[str, Any], device: torch.device) 
         hidden_dim=int(args.get("hidden_dim", 96)),
         layers=int(args.get("layers", 3)),
         max_delta=float(args.get("max_delta", 0.20)),
+        predict_confidence=bool(args.get("confidence_head", False)),
+        confidence_floor=float(args.get("confidence_floor", 0.0)),
     )
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device).eval()

@@ -1,0 +1,160 @@
+{
+  "schema": "spcarnet_v275_v277_learned_surface_decoder_summary_v1",
+  "created_at": "2026-06-30",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "phasej_flowers_reference": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "hard_gate": "No full9 until flowers exact beats Phase-J on PSNR, SSIM, and LPIPS.",
+  "storage_preflight": {
+    "data_available": "116G",
+    "dev_shm_available": "1.6G",
+    "tmp_available": "6.0T",
+    "quota_root_space": "99138M of 100G"
+  },
+  "implementation_files": [
+    "scripts/car_model/train_perceptual_surface_residual_decoder.py",
+    "scripts/car_model/audit_surface_checkpoint_residual_projection.py"
+  ],
+  "runs": [
+    {
+      "id": "v275b",
+      "description": "learned surface feature decoder with confidence head, Fourier features, target exact",
+      "audit_json": "outputs/carnet/spcarnet_v275_learned_surface_feature_decoder_20260630/v275b_mid_confidence_head_fourier_targetexact/v180_perceptual_surface_decoder_audit.json",
+      "wandb_offline_dir": "outputs/carnet/spcarnet_v275_learned_surface_feature_decoder_20260630/v275b_mid_confidence_head_fourier_targetexact/wandb",
+      "policy": {
+        "alpha": 0.25,
+        "all_axis": true,
+        "psnr_gain": 0.013021825944493415,
+        "ssim_gain": 0.000029221177101135254,
+        "lpips_gain": 0.000060574462016423546
+      },
+      "target_exact": {
+        "psnr": 19.84114463069758,
+        "ssim": 0.6191020269285549,
+        "lpips": 0.18105870349840683,
+        "psnr_gain": 0.009090752250118683,
+        "ssim_gain": -0.0008083839308131825,
+        "lpips_gain": -0.0007238374515013261,
+        "changed_fraction": 0.13936152320165604,
+        "pass_vs_parent_all_axis": false,
+        "phasej_gate_pass": false
+      }
+    },
+    {
+      "id": "v276a",
+      "description": "reused v275b checkpoint with target-blind parent-luma-gradient structure gate",
+      "audit_json": "outputs/carnet/spcarnet_v276_structure_safe_decoder_20260630/v276a_reuse_v275b_gate_scan_targetexact/v180_perceptual_surface_decoder_audit.json",
+      "wandb_offline_dir": "outputs/carnet/spcarnet_v276_structure_safe_decoder_20260630/v276a_reuse_v275b_gate_scan_targetexact/wandb",
+      "policy": {
+        "alpha": 0.75,
+        "apply_gate_strength": 2.0,
+        "all_axis": true,
+        "psnr_gain": 0.013741649730127333,
+        "ssim_gain": 0.000016311804453531902,
+        "lpips_gain": 0.0000550001859664917
+      },
+      "target_exact": {
+        "psnr": 19.841122723670637,
+        "ssim": 0.618873653086749,
+        "lpips": 0.18063900518146428,
+        "psnr_gain": 0.009068845223170157,
+        "ssim_gain": -0.001036757772619074,
+        "lpips_gain": -0.0003041391345587644,
+        "changed_fraction": 0.1393416853544937,
+        "mean_apply_gate_active": 0.563803802837025,
+        "pass_vs_parent_all_axis": false,
+        "phasej_gate_pass": false
+      }
+    },
+    {
+      "id": "v277a",
+      "description": "gain-soft confidence training, confidence-weighted samples, image proxy loss, structure gate",
+      "audit_json": "outputs/carnet/spcarnet_v277_gain_soft_confidence_20260630/v277a_mid_gainsoft_structure_gate_targetexact/v180_perceptual_surface_decoder_audit.json",
+      "wandb_offline_dir": "outputs/carnet/spcarnet_v277_gain_soft_confidence_20260630/v277a_mid_gainsoft_structure_gate_targetexact/wandb/offline-run-20260630_050007-ycfceevh",
+      "policy": {
+        "alpha": 0.5,
+        "apply_gate_strength": 1.0,
+        "all_axis": true,
+        "psnr_gain": 0.013926370549860975,
+        "ssim_gain": 0.00003660221894582113,
+        "lpips_gain": 0.00009049723545710246
+      },
+      "target_exact": {
+        "psnr": 19.842743879484377,
+        "ssim": 0.6189021996476434,
+        "lpips": 0.18079118938608604,
+        "psnr_gain": 0.010690001036912927,
+        "ssim_gain": -0.0010082112117247148,
+        "lpips_gain": -0.00045632333918051285,
+        "changed_fraction": 0.13910174443677767,
+        "pass_vs_parent_all_axis": false,
+        "phasej_gate_pass": false
+      }
+    },
+    {
+      "id": "v277c",
+      "description": "reused v277a checkpoint with confidence threshold policy-val scan",
+      "audit_json": "outputs/carnet/spcarnet_v277_gain_soft_confidence_20260630/v277c_reuse_v277a_conf_threshold_small_targetexact/v180_perceptual_surface_decoder_audit.json",
+      "wandb_offline_dir": "outputs/carnet/spcarnet_v277_gain_soft_confidence_20260630/v277c_reuse_v277a_conf_threshold_small_targetexact/wandb/offline-run-20260630_053906-wbayddh6",
+      "policy": {
+        "alpha": 0.5,
+        "apply_confidence_threshold": 0.7,
+        "apply_gate_strength": 1.0,
+        "all_axis": true,
+        "psnr_gain": 0.012669452947929353,
+        "ssim_gain": 0.000014200806617736816,
+        "lpips_gain": 0.000054617722829182945
+      },
+      "target_exact": {
+        "psnr": 19.84171067476626,
+        "ssim": 0.6190142983740027,
+        "lpips": 0.18082333965735,
+        "psnr_gain": 0.00965679631879352,
+        "ssim_gain": -0.0008961124853654342,
+        "lpips_gain": -0.0004884736104445024,
+        "changed_fraction": 0.13201615598585478,
+        "confidence_keep_fraction": 0.1323740188890805,
+        "pass_vs_parent_all_axis": false,
+        "phasej_gate_pass": false
+      }
+    },
+    {
+      "id": "v277d",
+      "description": "reused v277a checkpoint with forced conservative confidence threshold 0.85",
+      "audit_json": "outputs/carnet/spcarnet_v277_gain_soft_confidence_20260630/v277d_reuse_v277a_forced_conf085_targetexact/v180_perceptual_surface_decoder_audit.json",
+      "wandb_offline_dir": "outputs/carnet/spcarnet_v277_gain_soft_confidence_20260630/v277d_reuse_v277a_forced_conf085_targetexact/wandb/offline-run-20260630_055426-97w4ctfq",
+      "policy": {
+        "alpha": 0.5,
+        "apply_confidence_threshold": 0.85,
+        "apply_gate_strength": 1.0,
+        "all_axis": true,
+        "psnr_gain": 0.0026535805304064297,
+        "ssim_gain": 0.00001823405424753825,
+        "lpips_gain": 0.00001886424918969472
+      },
+      "target_exact": {
+        "psnr": 19.83299849111097,
+        "ssim": 0.6197724125602029,
+        "lpips": 0.1806193170222369,
+        "psnr_gain": 0.0009446126635016841,
+        "ssim_gain": -0.0001379982991652055,
+        "lpips_gain": -0.0002844509753313932,
+        "changed_fraction": 0.004060101129894773,
+        "confidence_keep_fraction": 0.004126595652923926,
+        "pass_vs_parent_all_axis": false,
+        "phasej_gate_pass": false
+      }
+    }
+  ],
+  "verdict": {
+    "status": "NOT COMPLETE",
+    "best_target_psnr_gain": "v277a",
+    "least_target_ssim_damage": "v277d",
+    "least_target_lpips_damage": "v277d",
+    "full9_allowed": false,
+    "main_bottleneck": "Policy-val all-axis gains do not transfer to target exact; target SSIM and LPIPS remain negative even after learned confidence and conservative target-blind gating."
+  }
+}

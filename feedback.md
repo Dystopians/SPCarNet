@@ -884,6 +884,78 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-06-30 v275-v277 Learned Surface Decoder Feedback Addendum
+
+This addendum records the latest work based on:
+
+```text
+docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md
+```
+
+Detailed log and machine-readable summary:
+
+```text
+docs/car_model/6-30-v275-v277-LearnedSurfaceDecoder-v169-Gate-Log.md
+docs/car_model/results/v275_v277_learned_surface_decoder_summary.json
+```
+
+Main implementation:
+
+```text
+scripts/car_model/train_perceptual_surface_residual_decoder.py
+scripts/car_model/audit_surface_checkpoint_residual_projection.py
+```
+
+What changed:
+
+- Added a learned surface-attached residual decoder path that trains on
+  Phase-J teacher-parent residuals and evaluates with target no-GT evidence.
+- Added strict target exact evaluation and Phase-J flowers gate reporting.
+- Added a parent-luma-gradient structure gate that uses only target-blind parent
+  render and predicted residual structure.
+- Added gain-soft confidence labels from train-fit `teacher_gain_l1`, replacing
+  the ineffective all-one confidence target observed in v275b.
+- Added deploy-time confidence thresholding selected only on policy-val.
+
+Important results:
+
+| run | target PSNR gain | target SSIM gain | target LPIPS gain | changed fraction | lesson |
+| --- | ---: | ---: | ---: | ---: | --- |
+| v275b | +0.009091 | -0.000808 | -0.000724 | 0.139362 | learned decoder improves PSNR only |
+| v276a | +0.009069 | -0.001037 | -0.000304 | 0.139342 | structure gate reduces LPIPS damage but worsens SSIM |
+| v277a | +0.010690 | -0.001008 | -0.000456 | 0.139102 | gain-soft confidence improves PSNR but not structure |
+| v277c | +0.009657 | -0.000896 | -0.000488 | 0.132016 | confidence threshold modestly reduces changed area |
+| v277d | +0.000945 | -0.000138 | -0.000284 | 0.004060 | conservative threshold almost no-ops and still fails |
+
+Key lesson:
+
+Policy-val all-axis success is not enough. The learned decoder can pass
+policy-val, but target exact still has negative SSIM and LPIPS. Confidence
+thresholding can make the failure smaller, but it does not turn the residual
+direction into a reliable positive correction. This is evidence that the current
+surface carrier and raw RGB teacher residual target remain underpowered for
+Phase-J distillation.
+
+Next recommended prompt for a stronger model:
+
+```text
+Continue from v275-v277. Do not tune alpha or thresholds first. Replace the raw
+RGB teacher-parent residual target with a structure/perceptual teacher target:
+for example, train a view-dependent surface representation that predicts a
+low-rank residual basis plus a learned reliability score supervised by
+held-out-view SSIM/LPIPS gains. The model must use train-fit evidence only,
+certify on policy-val, apply to stripped target no-GT evidence, and require
+flowers exact PSNR/SSIM/LPIPS all-axis vs parent and Phase-J before full9.
+Measure whether the new target improves the target SSIM/LPIPS sign, not only
+whether it preserves PSNR.
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-06-30 v271 Source-View Consistency Feedback Addendum
 
 New implementation:

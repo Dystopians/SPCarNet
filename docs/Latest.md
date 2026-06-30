@@ -837,6 +837,63 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-06-30 Update: v275-v277 Learned Surface Decoder, Structure Gate, and Gain-Soft Confidence
+
+This update follows the hard gate in:
+
+```text
+docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md
+```
+
+Implemented method changes:
+
+```text
+scripts/car_model/train_perceptual_surface_residual_decoder.py
+scripts/car_model/audit_surface_checkpoint_residual_projection.py
+```
+
+New capabilities:
+
+- learned surface-attached residual decoder with target exact no-GT audit;
+- parent-luma-gradient structure-safe apply gate;
+- gain-soft confidence target from train-fit `teacher_gain_l1`;
+- confidence-threshold deployment selected on policy-val only;
+- stricter `flowers_exact_phasej_gate_pass` reporting before any full9.
+
+Latest flowers exact results:
+
+| run | selected policy | target PSNR gain | target SSIM gain | target LPIPS gain | changed | verdict |
+|---|---|---:|---:|---:|---:|---|
+| v275b | alpha 0.25 | +0.009091 | -0.000808 | -0.000724 | 0.139362 | fail |
+| v276a | alpha 0.75, gate 2.0 | +0.009069 | -0.001037 | -0.000304 | 0.139342 | fail |
+| v277a | alpha 0.5, gate 1.0 | +0.010690 | -0.001008 | -0.000456 | 0.139102 | fail |
+| v277c | alpha 0.5, conf 0.7, gate 1.0 | +0.009657 | -0.000896 | -0.000488 | 0.132016 | fail |
+| v277d | alpha 0.5, conf 0.85, gate 1.0 | +0.000945 | -0.000138 | -0.000284 | 0.004060 | fail |
+
+Interpretation:
+
+- v277a gives the best target PSNR in this route, but SSIM/LPIPS remain negative.
+- v277d proves the learned confidence threshold can strongly reduce harm, but it
+  nearly collapses the useful correction and still does not make SSIM/LPIPS
+  positive.
+- The route is a real train/eval pipeline upgrade, but still fails the v169
+  flowers exact Phase-J gate. Full9 remains blocked.
+
+Artifacts:
+
+```text
+docs/car_model/6-30-v275-v277-LearnedSurfaceDecoder-v169-Gate-Log.md
+docs/car_model/results/v275_v277_learned_surface_decoder_summary.json
+outputs/carnet/spcarnet_v277_gain_soft_confidence_20260630/v277d_reuse_v277a_forced_conf085_targetexact/v180_perceptual_surface_decoder_audit.json
+outputs/carnet/spcarnet_v277_gain_soft_confidence_20260630/v277d_reuse_v277a_forced_conf085_targetexact/target_exact_fixed_policy
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-06-30 Update: v271 Source-View Consistency
 
 v271 implements a held-out source-view residual consistency mechanism:
