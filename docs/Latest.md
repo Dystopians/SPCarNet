@@ -2,6 +2,31 @@
 
 Date: 2026-06-28
 
+## 2026-06-29 v246-v247 Source Evidence Bank / Projection Loss Update
+
+新增日志：`docs/car_model/6-29-v246-v247-SourceEvidenceBank-ProjectionLoss-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v246_v247_sourcebank_projection_loss_summary.json`。
+
+这轮严格按 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md` 的早停逻辑推进：先做 flowers policy-val 和 residual projection audit，未过 all-axis gate 就不启动 full9。
+
+代码层面已经实现了真实方法改动：
+
+- `scripts/car_model/train_surface_conditioned_residual_unet.py` 新增 source-evidence-bank conditioning，以及 teacher residual cosine / energy projection losses，并把对应指标写入 W&B。
+- `scripts/car_model/apply_surface_conditioned_residual_unet_checkpoint.py` 补齐 `surface_texture_unet` evidence stats 加载和 no-GT apply 支持。
+
+但质量结论是负向的：
+
+| run | policy alpha | PSNR gain | SSIM gain | LPIPS gain | min SSIM | min LPIPS | projection energy | projection cosine | verdict |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| v246a source-bank no-prior | 0.5 | +0.052707 | +0.002253 | +0.001792 | +0.000603 | -0.000030 | 0.074658 | 0.124085 | weak; strict all-axis not certified |
+| v247a projection-loss GT-assisted | 0.5 | +0.037900 | +0.000707 | +0.001625 | -0.000346 | -0.001074 | 0.085702 | 0.121128 | failed tail/all-axis |
+| v247b teacher-only projection-loss | 0.0 | +0.000000 | +0.000000 | +0.000000 | +0.000000 | +0.000000 | 0.083270 | 0.115199 | selected no-op |
+
+Projection audit 显示 v247a 只保留约 `8.57%` Phase-J teacher residual energy，cosine 只有 `0.121`，且相对 teacher 的 image metrics 变差：`-0.054637 PSNR / -0.001954 SSIM / -0.000028 LPIPS gain`。v247b teacher-only ablation 同样失败。target no-GT precheck 通过，target/test GT 没有进入 apply；target apply 是因为 policy-val all-axis gate 失败而跳过。
+
+结论：v246-v247 证明了新的工程接口和 projection loss 可以运行，但没有解决表示载体弱的问题。当前状态仍是 `NOT COMPLETE`。不要从该分支启动 full9；下一步必须换更强的 surface-attached decoder / patch-structure-aware representation，而不是继续 source-bank top-k、alpha 或 scalar residual sweep。
+
 ## 2026-06-29 v169 Teacher-Signal / Carrier Upper-Bound Update
 
 新增诊断日志：`docs/car_model/6-29-v169-TeacherSignal-CarrierUpperBound-Diagnostics.md`。

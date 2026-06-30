@@ -1,0 +1,176 @@
+{
+  "schema": "spcarnet_v246_v247_sourcebank_projection_loss_summary_v1",
+  "date": "2026-06-29",
+  "authoritative_prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "flowers_phasej_exact_gate": {
+    "psnr_must_exceed": 20.304358,
+    "ssim_must_exceed": 0.55777,
+    "lpips_must_be_lower_than": 0.329222,
+    "status": "not_run_for_v246_v247_because_policy_val_all_axis_gate_failed"
+  },
+  "method_change": {
+    "train_pipeline": "scripts/car_model/train_surface_conditioned_residual_unet.py",
+    "eval_pipeline": "scripts/car_model/apply_surface_conditioned_residual_unet_checkpoint.py",
+    "implemented": [
+      "surface-source evidence bank conditioning for SurfaceTextureConditionedUNet",
+      "optional source-bank top-k view aggregation with view gating and residual prior",
+      "teacher residual projection cosine loss",
+      "teacher residual projection energy/RMS loss",
+      "W&B logging for projection-loss cosine, energy, active fraction, and loss values",
+      "eval-side support for surface_texture_unet checkpoints with evidence stats"
+    ],
+    "verdict": "real code change implemented, but the measured carrier remains too weak to pass the v169 flowers gate"
+  },
+  "storage_preflight": {
+    "quota_snapshot_after_runs": "/dev/nvme0n1p4 98430M used of 100G",
+    "tmp_artifact_sizes": {
+      "v246a": "1.2G",
+      "v247a": "1.3G",
+      "v247b": "1.3G"
+    },
+    "failure": {
+      "run": "v246b_source_bank_weak_prior",
+      "reason": "torch.save failed due root/user quota during checkpoint write",
+      "action": "corrupt partial checkpoint removed; no quality report available"
+    }
+  },
+  "runs": {
+    "v246a_source_bank_noprior_gtassist_flowers": {
+      "report_json": "/tmp/peilincai_spcarnet_v246a_source_bank_flowers_20260629/v246a_source_bank_native1256/v246a_source_bank_noprior_gtassist_flowers_report.json",
+      "projection_audit_json": "/tmp/peilincai_spcarnet_v246a_source_bank_flowers_20260629/v246a_projection_audit.json",
+      "wandb_offline_dir": "/tmp/peilincai_spcarnet_v246a_source_bank_flowers_20260629/v246a_source_bank_native1256/wandb/offline-run-20260629_173326-i9vpkf4q",
+      "policy_val": {
+        "best_alpha": 0.5,
+        "best_all_axis": null,
+        "psnr_gain": 0.052706980157849394,
+        "ssim_gain": 0.0022528270880381265,
+        "lpips_gain": 0.0017919378976027172,
+        "psnr_min_gain": 0.01650229732380737,
+        "ssim_min_gain": 0.0006029009819030762,
+        "lpips_min_gain": -0.0000298917293548584,
+        "ssim_cvar_gain": 0.0009332696596781412,
+        "lpips_cvar_gain": 0.0005878706773122152,
+        "changed_fraction": 0.24699317671312962
+      },
+      "projection_audit": {
+        "energy_retention": 0.07465795075512653,
+        "cosine": 0.12408534897209612,
+        "changed_fraction": 0.26578776011070177,
+        "sign_agreement": 0.5449627474939873,
+        "teacher_image_psnr_gain": -0.02043127867437396,
+        "teacher_image_ssim_gain": -0.001118799050649007,
+        "teacher_image_lpips_gain": 0.00025685752431551617
+      },
+      "status": "policy_val_tail_guard_not_strict_all_axis; target_exact_skipped"
+    },
+    "v247a_projection_sourcebank_gtassist_flowers": {
+      "report_json": "/tmp/peilincai_spcarnet_v247a_projection_loss_flowers_20260629/v247a_projection_sourcebank_gtassist_native1256/v247a_projection_sourcebank_gtassist_flowers_report.json",
+      "report_md": "/tmp/peilincai_spcarnet_v247a_projection_loss_flowers_20260629/v247a_projection_sourcebank_gtassist_native1256/v247a_projection_sourcebank_gtassist_flowers_report.md",
+      "checkpoint": "/tmp/peilincai_spcarnet_v247a_projection_loss_flowers_20260629/v247a_projection_sourcebank_gtassist_native1256/v247a_projection_sourcebank_gtassist_flowers.pt",
+      "projection_audit_json": "/tmp/peilincai_spcarnet_v247a_projection_loss_flowers_20260629/v247a_projection_audit.json",
+      "projection_audit_md": "/tmp/peilincai_spcarnet_v247a_projection_loss_flowers_20260629/v247a_projection_audit.md",
+      "wandb_offline_dir": "/tmp/peilincai_spcarnet_v247a_projection_loss_flowers_20260629/v247a_projection_sourcebank_gtassist_native1256/wandb/offline-run-20260629_174751-fah6w8ta",
+      "config_highlights": {
+        "model_type": "surface_texture_unet",
+        "base_channels": 32,
+        "surface_texture_size": 8,
+        "surface_feature_dim": 16,
+        "source_evidence_top_k": 4,
+        "surface_evidence_residual_prior_weight": 0.1,
+        "surface_evidence_view_gate_power": 1.0,
+        "teacher_residual_cosine_weight": 0.12,
+        "teacher_residual_energy_weight": 1.0,
+        "uses_train_fit_gt": true,
+        "uses_target_or_test_gt_during_apply": false
+      },
+      "policy_val": {
+        "best_alpha": 0.5,
+        "best_all_axis": null,
+        "psnr_gain": 0.0378998523417143,
+        "ssim_gain": 0.0007071544726689657,
+        "lpips_gain": 0.0016253838936487834,
+        "psnr_min_gain": 0.002806129660228862,
+        "ssim_min_gain": -0.0003458261489868164,
+        "lpips_min_gain": -0.0010738670825958252,
+        "psnr_cvar_gain": 0.01996872869900912,
+        "ssim_cvar_gain": -0.000051120917002360024,
+        "lpips_cvar_gain": -0.000045200188954671226,
+        "ssim_positive_view_fraction": 0.8333333333333334,
+        "lpips_positive_view_fraction": 0.9166666666666666,
+        "changed_fraction": 0.2736105021180139
+      },
+      "projection_audit": {
+        "energy_retention": 0.0857015037715752,
+        "cosine": 0.12112754785838904,
+        "changed_fraction": 0.29445101395875434,
+        "sign_agreement": 0.5528836532874867,
+        "teacher_image_psnr_gain": -0.054637018155632745,
+        "teacher_image_ssim_gain": -0.0019541879494984946,
+        "teacher_image_lpips_gain": -0.00002789249022801717
+      },
+      "target_no_gt_precheck": {
+        "passed": true,
+        "view_count": 22,
+        "target_gt_visible_to_apply": false,
+        "target_residual_visible_to_apply": false
+      },
+      "status": "failed_policy_val_all_axis; exact_target_apply_skipped"
+    },
+    "v247b_projection_sourcebank_teacheronly_flowers": {
+      "report_json": "/tmp/peilincai_spcarnet_v247b_projection_loss_flowers_20260629/v247b_projection_sourcebank_teacheronly_native1256/v247b_projection_sourcebank_teacheronly_flowers_report.json",
+      "report_md": "/tmp/peilincai_spcarnet_v247b_projection_loss_flowers_20260629/v247b_projection_sourcebank_teacheronly_native1256/v247b_projection_sourcebank_teacheronly_flowers_report.md",
+      "checkpoint": "/tmp/peilincai_spcarnet_v247b_projection_loss_flowers_20260629/v247b_projection_sourcebank_teacheronly_native1256/v247b_projection_sourcebank_teacheronly_flowers.pt",
+      "projection_audit_json": "/tmp/peilincai_spcarnet_v247b_projection_loss_flowers_20260629/v247b_projection_audit.json",
+      "projection_audit_md": "/tmp/peilincai_spcarnet_v247b_projection_loss_flowers_20260629/v247b_projection_audit.md",
+      "wandb_offline_dir": "/tmp/peilincai_spcarnet_v247b_projection_loss_flowers_20260629/v247b_projection_sourcebank_teacheronly_native1256/wandb/offline-run-20260629_174751-uq328sla",
+      "config_highlights": {
+        "model_type": "surface_texture_unet",
+        "base_channels": 32,
+        "surface_texture_size": 8,
+        "surface_feature_dim": 16,
+        "source_evidence_top_k": 4,
+        "surface_evidence_residual_prior_weight": 0.1,
+        "surface_evidence_view_gate_power": 1.0,
+        "teacher_residual_cosine_weight": 0.18,
+        "teacher_residual_energy_weight": 1.2,
+        "uses_train_fit_gt": false,
+        "uses_target_or_test_gt_during_apply": false
+      },
+      "policy_val": {
+        "selected_alpha": 0.0,
+        "best_all_axis": null,
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "selected_lpips_gain": 0.0,
+        "best_mean_alpha": 0.5,
+        "best_mean_psnr_gain": 0.02523268835078755,
+        "best_mean_ssim_gain": -0.0001248319943745931,
+        "best_mean_lpips_gain": 0.0010846927762031555,
+        "best_mean_ssim_min_gain": -0.0015090107917785645,
+        "best_mean_lpips_min_gain": -0.001120731234550476,
+        "best_mean_changed_fraction": 0.267700945285496
+      },
+      "projection_audit": {
+        "energy_retention": 0.08326984038884942,
+        "cosine": 0.11519889571117946,
+        "changed_fraction": 0.28806944346054125,
+        "sign_agreement": 0.5370974297103311,
+        "teacher_image_psnr_gain": -0.06283884925982768,
+        "teacher_image_ssim_gain": -0.0020092427730560303,
+        "teacher_image_lpips_gain": -0.0000389713483552138
+      },
+      "target_no_gt_precheck": {
+        "passed": true,
+        "view_count": 22,
+        "target_gt_visible_to_apply": false,
+        "target_residual_visible_to_apply": false
+      },
+      "status": "teacher_only_ablation_failed; selected_policy_is_noop"
+    }
+  },
+  "overall_verdict": {
+    "complete": false,
+    "summary": "v247 implements a real source-bank/projection-loss method change, but flowers policy-val and residual-projection audits show the carrier still underfits Phase-J residuals. Do not launch full9 from this branch.",
+    "next_recommended_route": "stop source-bank/low-rank scalar projection sweeps; build a representation that predicts final image-space correction with explicit cross-view held-out validation and stronger structure/perceptual supervision, or prove that Phase-J render-time residual cannot be baked into this surface carrier under current evidence."
+  }
+}

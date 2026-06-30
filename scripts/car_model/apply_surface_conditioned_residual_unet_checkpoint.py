@@ -22,8 +22,10 @@ from scripts.car_model.ecsr_apply_surface_residual_region_texture_adapter import
 from scripts.car_model.train_surface_conditioned_residual_unet import (  # noqa: E402
     SurfaceConditionedFaceEmbeddingUNet,
     SurfaceConditionedResidualUNet,
+    SurfaceTextureConditionedUNet,
     SurfaceTextureResidualMLP,
     SupportAwareLowRankSurfaceTexture,
+    _append_alpha_channel_chw,
     _load_face_ids_tensor,
     _load_input_chw,
     _predict_delta_tiled,
@@ -52,7 +54,7 @@ def _build_model(checkpoint: dict[str, Any], device: torch.device) -> tuple[torc
         model_type = str(ckpt_args.get("model_type", "unet"))
     elif "surface_basis.weight" in state_keys:
         model_type = "lowrank_surface_texture"
-    elif "surface_features.weight" in state_keys:
+    elif "surface_texture.weight" in state_keys:
         model_type = "surface_texture_mlp"
     else:
         model_type = "unet"
@@ -97,6 +99,42 @@ def _build_model(checkpoint: dict[str, Any], device: torch.device) -> tuple[torc
             confidence_bias=confidence_bias,
             confidence_min=confidence_min,
             confidence_max=confidence_max,
+        )
+    elif model_type == "surface_texture_unet":
+        if face_lut is None or face_lut.size == 0:
+            raise RuntimeError("checkpoint requests surface texture U-Net model but has no face_lut")
+        support_stats = checkpoint.get("surface_support_stats", None)
+        if support_stats is None:
+            support_stats = checkpoint.get("state_dict", {}).get("surface_support_stats", None)
+        evidence_stats = checkpoint.get("surface_evidence_stats", None)
+        if evidence_stats is None:
+            evidence_stats = checkpoint.get("state_dict", {}).get("surface_evidence_stats", None)
+        model = SurfaceTextureConditionedUNet(
+            in_ch,
+            base_ch,
+            max_delta,
+            int(face_lut.size),
+            int(ckpt_args.get("surface_texture_size", 8)),
+            int(ckpt_args.get("surface_feature_dim", 8)),
+            support_stats if bool(ckpt_args.get("enable_surface_support_gate", False)) else None,
+            confidence_mode=confidence_mode,
+            confidence_bias=confidence_bias,
+            confidence_min=confidence_min,
+            confidence_max=confidence_max,
+            support_gate_floor=float(ckpt_args.get("surface_support_gate_floor", 0.0)),
+            support_unknown_gate_floor=float(ckpt_args.get("surface_support_unknown_gate_floor", 0.0)),
+            evidence_stats=evidence_stats
+            if (
+                bool(ckpt_args.get("enable_surface_evidence_texture", False))
+                or bool(ckpt_args.get("enable_surface_source_evidence_bank", False))
+            )
+            else None,
+            evidence_residual_prior_weight=float(ckpt_args.get("surface_evidence_residual_prior_weight", 0.0)),
+            evidence_view_gate_power=float(ckpt_args.get("surface_evidence_view_gate_power", 0.0)),
+            evidence_source_bank_top_k=int(ckpt_args.get("surface_source_evidence_top_k", 0))
+            if bool(ckpt_args.get("enable_surface_source_evidence_bank", False))
+            else 0,
+            evidence_source_bank_channels_per_source=8,
         )
     elif embedding_dim > 0:
         if face_lut is None or face_lut.size == 0:
@@ -150,6 +188,8 @@ def main() -> int:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     checkpoint = torch.load(str(args.checkpoint), map_location="cpu", weights_only=False)
     model, face_lut = _build_model(checkpoint, device)
+    ckpt_args = dict(checkpoint.get("args") or {})
+    alpha_conditioned_residual = bool(ckpt_args.get("alpha_conditioned_residual", False))
     render_dir = output_model / str(args.split) / method_name / "renders"
     parent_dir = output_model / str(args.split) / method_name / "parent"
     render_dir.mkdir(parents=True, exist_ok=True)
@@ -161,18 +201,23 @@ def main() -> int:
         features = torch.from_numpy(_load_input_chw(z))
         face_ids = _load_face_ids_tensor(z, face_lut, max_side=-1)
         parent = np.clip(_to_chw(z["rgb_render"])[:3], 0.0, 1.0).astype(np.float32)
-        delta = _predict_delta_tiled(
-            model,
-            features,
-            face_ids=face_ids,
-            device=device,
-            tile=int(args.eval_tile),
-            overlap=int(args.eval_overlap),
-        ).numpy()
-        adapted = np.clip(parent + float(args.alpha) * delta, 0.0, 1.0)
+        if alpha_conditioned_residual and float(args.alpha) == 0.0:
+            delta = np.zeros_like(parent, dtype=np.float32)
+        else:
+            model_features = _append_alpha_channel_chw(features, float(args.alpha)) if alpha_conditioned_residual else features
+            delta = _predict_delta_tiled(
+                model,
+                model_features,
+                face_ids=face_ids,
+                device=device,
+                tile=int(args.eval_tile),
+                overlap=int(args.eval_overlap),
+            ).numpy()
+        applied_delta = delta if alpha_conditioned_residual else float(args.alpha) * delta
+        adapted = np.clip(parent + applied_delta, 0.0, 1.0)
         save_image_chw(render_dir / f"{path.stem}.png", adapted)
         save_image_chw(parent_dir / f"{path.stem}.png", parent)
-        changed = np.any(np.abs(float(args.alpha) * delta) > (0.5 / 255.0), axis=0)
+        changed = np.any(np.abs(applied_delta) > (0.5 / 255.0), axis=0)
         valid_mask = features[15].numpy() > 0.5 if features.shape[0] > 15 else np.ones(changed.shape, dtype=bool)
         valid_count = max(1, int(np.sum(valid_mask)))
         row: dict[str, Any] = {
@@ -211,6 +256,12 @@ def main() -> int:
         "method_name": method_name,
         "split": str(args.split),
         "alpha": float(args.alpha),
+        "alpha_conditioned_residual": bool(alpha_conditioned_residual),
+        "alpha_contract": (
+            "model_outputs_final_delta_for_selected_alpha"
+            if alpha_conditioned_residual
+            else "posthoc_policy_val_alpha_multiplier"
+        ),
         "no_gt_verify": no_gt,
         "view_count": int(len(rows)),
         "mean_changed_fraction": float(np.mean([r["changed_fraction"] for r in rows])) if rows else 0.0,

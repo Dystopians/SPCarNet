@@ -229,6 +229,38 @@ def _multiscale_highfreq_loss(
     return total / float(weight_sum)
 
 
+def _teacher_residual_projection_losses(
+    pred_delta: torch.Tensor,
+    target_delta: torch.Tensor,
+    mask: torch.Tensor | None,
+    min_l1: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    active = (torch.sum(torch.abs(target_delta), dim=1, keepdim=True) >= float(min_l1)).to(dtype=pred_delta.dtype)
+    if mask is not None:
+        active = active * _resize_mask_bchw(mask.to(device=pred_delta.device, dtype=pred_delta.dtype), pred_delta.shape[-2:])
+    active_count = torch.sum(active)
+    zero = torch.zeros((), dtype=pred_delta.dtype, device=pred_delta.device)
+    if float(active_count.detach().cpu().item()) <= 0.0:
+        return zero, zero, zero, zero
+
+    pred = pred_delta * active
+    target = target_delta * active
+    pred_sq = torch.sum(pred * pred)
+    target_sq = torch.sum(target * target)
+    active_fraction = active_count / float(max(1, target_delta.shape[0] * target_delta.shape[2] * target_delta.shape[3]))
+    if float(target_sq.detach().cpu().item()) <= 1.0e-12:
+        return zero, zero, zero, active_fraction.detach()
+
+    dot = torch.sum(pred * target)
+    cosine = dot / torch.sqrt(torch.clamp(pred_sq * target_sq, min=1.0e-12))
+    cosine_loss = 1.0 - torch.clamp(cosine, -1.0, 1.0)
+    denom = torch.clamp(active_count * float(pred_delta.shape[1]), min=1.0)
+    pred_rms = torch.sqrt(torch.clamp(pred_sq / denom, min=1.0e-12))
+    target_rms = torch.sqrt(torch.clamp(target_sq / denom, min=1.0e-12))
+    energy_loss = torch.abs(pred_rms - target_rms)
+    return cosine_loss, energy_loss, cosine.detach(), active_fraction.detach()
+
+
 def _build_residual_debt_mask(
     parent: torch.Tensor,
     teacher: torch.Tensor,
@@ -706,6 +738,272 @@ def _collect_surface_texture_support_stats(
     return stats, summary
 
 
+def _collect_surface_evidence_texture_stats(
+    paths: list[Path],
+    *,
+    face_lut: np.ndarray,
+    residual_rgb_key: str,
+    residual_l1_key: str,
+    texture_size: int,
+    min_alpha: float,
+    min_residual_l1: float,
+    min_bin_support: int,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    rows_per_face = int(texture_size) * int(texture_size)
+    rows = int(face_lut.size) * rows_per_face + 1
+    support = np.zeros((rows,), dtype=np.int64)
+    residual_sum = np.zeros((rows, 3), dtype=np.float64)
+    residual_sq_sum = np.zeros((rows, 3), dtype=np.float64)
+    residual_l1_sum = np.zeros((rows,), dtype=np.float64)
+    cam_sum = np.zeros((rows, 3), dtype=np.float64)
+    views_used = 0
+    for path in tqdm(paths, desc="collect surface evidence texture"):
+        z = np.load(path)
+        if "face_id" not in z or "barycentric" not in z or residual_rgb_key not in z:
+            continue
+        residual = np.asarray(z[residual_rgb_key], dtype=np.float32)[:3]
+        residual_l1 = _load_residual_l1_npz(
+            z,
+            residual_l1_key=residual_l1_key,
+            residual_rgb_key=residual_rgb_key,
+        )
+        if residual_l1 is None:
+            residual_l1 = np.mean(np.abs(residual), axis=0).astype(np.float32)
+        row_id = _texture_row_indices_np(z["face_id"], z["barycentric"], face_lut, int(texture_size))
+        mask = row_id > 0
+        if "barycentric_valid" in z:
+            mask &= np.asarray(z["barycentric_valid"]).astype(bool)
+        if "alpha" in z:
+            mask &= np.asarray(z["alpha"], dtype=np.float32) >= float(min_alpha)
+        mask &= np.asarray(residual_l1, dtype=np.float32) >= float(min_residual_l1)
+        if not np.any(mask):
+            continue
+        views_used += 1
+        ids = row_id[mask].reshape(-1)
+        counts = np.bincount(ids, minlength=rows)
+        support += counts.astype(np.int64)
+        residual_l1_sum += np.bincount(ids, weights=np.asarray(residual_l1, dtype=np.float32)[mask], minlength=rows)
+        for ch in range(3):
+            values = residual[ch][mask].astype(np.float64)
+            residual_sum[:, ch] += np.bincount(ids, weights=values, minlength=rows)
+            residual_sq_sum[:, ch] += np.bincount(ids, weights=values * values, minlength=rows)
+        cam = np.asarray(z["camera_center"], dtype=np.float64).reshape(3)
+        cam_norm = float(np.linalg.norm(cam))
+        if cam_norm > 1.0e-8:
+            cam = cam / cam_norm
+            counts_f = counts.astype(np.float64)
+            for ch in range(3):
+                cam_sum[:, ch] += counts_f * float(cam[ch])
+    denom = np.maximum(support.reshape(-1, 1), 1)
+    mean_rgb = residual_sum / denom
+    var_rgb = np.maximum(residual_sq_sum / denom - mean_rgb * mean_rgb, 0.0)
+    std_rgb = np.sqrt(var_rgb)
+    mean_l1 = residual_l1_sum / np.maximum(support, 1)
+    max_support = int(max(1, int(support.max()) if support.size else 0))
+    max_mean_l1 = float(max(1.0e-8, float(mean_l1.max()) if mean_l1.size else 0.0))
+    log_support = np.log1p(support.astype(np.float64)) / math.log1p(float(max_support))
+    mean_l1_norm = mean_l1 / max_mean_l1
+    active = (support >= int(min_bin_support)).astype(np.float32)
+    mean_cam = cam_sum / denom
+    cam_norm = np.linalg.norm(mean_cam, axis=1, keepdims=True)
+    mean_cam = np.divide(mean_cam, np.maximum(cam_norm, 1.0e-8), out=np.zeros_like(mean_cam), where=cam_norm > 0)
+    stats = np.concatenate(
+        [
+            mean_rgb,
+            std_rgb,
+            mean_l1_norm.reshape(-1, 1),
+            log_support.reshape(-1, 1),
+            active.reshape(-1, 1),
+            mean_cam,
+        ],
+        axis=1,
+    ).astype(np.float16)
+    stats[0] = 0.0
+    active_rows = int(np.sum(active))
+    summary = {
+        "schema": "spcarnet_surface_evidence_texture_stats_v1",
+        "views_requested": int(len(paths)),
+        "views_used": int(views_used),
+        "residual_rgb_key": str(residual_rgb_key),
+        "residual_l1_key": str(residual_l1_key),
+        "texture_size": int(texture_size),
+        "rows": int(rows),
+        "rows_per_face": int(rows_per_face),
+        "selected_faces": int(face_lut.size),
+        "channels": [
+            "mean_residual_r",
+            "mean_residual_g",
+            "mean_residual_b",
+            "std_residual_r",
+            "std_residual_g",
+            "std_residual_b",
+            "mean_residual_l1_norm",
+            "log_support",
+            "active_support",
+            "mean_source_cam_x",
+            "mean_source_cam_y",
+            "mean_source_cam_z",
+        ],
+        "min_alpha": float(min_alpha),
+        "min_residual_l1": float(min_residual_l1),
+        "min_bin_support": int(min_bin_support),
+        "active_rows": int(active_rows),
+        "active_row_fraction": float(active_rows / max(1, rows - 1)),
+        "max_support": int(max_support),
+        "mean_support_active": float(np.mean(support[active > 0])) if active_rows else 0.0,
+        "mean_residual_l1_active": float(np.mean(mean_l1[active > 0])) if active_rows else 0.0,
+        "mean_abs_residual_rgb_active": float(np.mean(np.abs(mean_rgb[active > 0]))) if active_rows else 0.0,
+        "target_or_test_gt_used": False,
+    }
+    return stats, summary
+
+
+def _collect_surface_source_evidence_bank_stats(
+    paths: list[Path],
+    *,
+    face_lut: np.ndarray,
+    residual_rgb_key: str,
+    residual_l1_key: str,
+    texture_size: int,
+    top_k: int,
+    min_alpha: float,
+    min_residual_l1: float,
+    min_bin_support: int,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    rows_per_face = int(texture_size) * int(texture_size)
+    rows = int(face_lut.size) * rows_per_face + 1
+    k = max(1, int(top_k))
+    channels_per_source = 8
+    slot_score = np.full((rows, k), -np.inf, dtype=np.float32)
+    slot_values = np.zeros((rows, k, channels_per_source), dtype=np.float16)
+    row_support_total = np.zeros((rows,), dtype=np.int64)
+    row_view_count = np.zeros((rows,), dtype=np.int32)
+    views_used = 0
+    source_observations = 0
+    for path in tqdm(paths, desc="collect source evidence bank"):
+        z = np.load(path)
+        if "face_id" not in z or "barycentric" not in z or residual_rgb_key not in z:
+            continue
+        residual = np.asarray(z[residual_rgb_key], dtype=np.float32)[:3]
+        residual_l1 = _load_residual_l1_npz(
+            z,
+            residual_l1_key=residual_l1_key,
+            residual_rgb_key=residual_rgb_key,
+        )
+        if residual_l1 is None:
+            residual_l1 = np.mean(np.abs(residual), axis=0).astype(np.float32)
+        row_id = _texture_row_indices_np(z["face_id"], z["barycentric"], face_lut, int(texture_size))
+        mask = row_id > 0
+        if "barycentric_valid" in z:
+            mask &= np.asarray(z["barycentric_valid"]).astype(bool)
+        if "alpha" in z:
+            mask &= np.asarray(z["alpha"], dtype=np.float32) >= float(min_alpha)
+        mask &= np.asarray(residual_l1, dtype=np.float32) >= float(min_residual_l1)
+        if not np.any(mask):
+            continue
+        ids = row_id[mask].reshape(-1)
+        counts = np.bincount(ids, minlength=rows).astype(np.int64)
+        active_rows = np.nonzero(counts >= int(min_bin_support))[0]
+        if active_rows.size == 0:
+            continue
+        views_used += 1
+        row_support_total[active_rows] += counts[active_rows]
+        row_view_count[active_rows] += 1
+        residual_l1_sum = np.bincount(
+            ids,
+            weights=np.asarray(residual_l1, dtype=np.float32)[mask].reshape(-1).astype(np.float64),
+            minlength=rows,
+        )
+        mean_l1 = residual_l1_sum[active_rows] / np.maximum(counts[active_rows], 1)
+        mean_rgb = np.zeros((active_rows.size, 3), dtype=np.float32)
+        for ch in range(3):
+            channel_sum = np.bincount(
+                ids,
+                weights=residual[ch][mask].reshape(-1).astype(np.float64),
+                minlength=rows,
+            )
+            mean_rgb[:, ch] = (channel_sum[active_rows] / np.maximum(counts[active_rows], 1)).astype(np.float32)
+        cam = np.asarray(z["camera_center"], dtype=np.float32).reshape(3)
+        cam_norm = float(np.linalg.norm(cam))
+        if cam_norm > 1.0e-8:
+            cam = cam / cam_norm
+        else:
+            cam = np.zeros((3,), dtype=np.float32)
+        score = (mean_l1.astype(np.float32) * np.log1p(counts[active_rows]).astype(np.float32)).astype(np.float32)
+        current = slot_score[active_rows]
+        replace_slot = np.argmin(current, axis=1)
+        replace_score = current[np.arange(active_rows.size), replace_slot]
+        replace = score > replace_score
+        if not np.any(replace):
+            continue
+        rows_replace = active_rows[replace]
+        slots_replace = replace_slot[replace]
+        slot_score[rows_replace, slots_replace] = score[replace]
+        values = np.zeros((rows_replace.size, channels_per_source), dtype=np.float32)
+        values[:, :3] = mean_rgb[replace]
+        values[:, 3:6] = cam.reshape(1, 3)
+        values[:, 6] = mean_l1[replace].astype(np.float32)
+        values[:, 7] = counts[rows_replace].astype(np.float32)
+        slot_values[rows_replace, slots_replace] = values.astype(np.float16)
+        source_observations += int(rows_replace.size)
+    valid_slot = np.isfinite(slot_score)
+    raw_l1 = slot_values[..., 6].astype(np.float32)
+    raw_support = slot_values[..., 7].astype(np.float32)
+    max_l1 = float(max(1.0e-8, float(raw_l1[valid_slot].max()) if np.any(valid_slot) else 0.0))
+    max_support = float(max(1.0, float(raw_support[valid_slot].max()) if np.any(valid_slot) else 1.0))
+    slot_values[..., 6] = np.where(valid_slot, raw_l1 / max_l1, 0.0).astype(np.float16)
+    slot_values[..., 7] = np.where(
+        valid_slot,
+        np.log1p(raw_support) / math.log1p(max_support),
+        0.0,
+    ).astype(np.float16)
+    stats = slot_values.reshape(rows, k * channels_per_source).astype(np.float16)
+    stats[0] = 0.0
+    active_rows = int(np.sum(np.any(valid_slot, axis=1)))
+    filled_slots = int(np.sum(valid_slot))
+    summary = {
+        "schema": "spcarnet_surface_source_evidence_bank_stats_v1",
+        "views_requested": int(len(paths)),
+        "views_used": int(views_used),
+        "residual_rgb_key": str(residual_rgb_key),
+        "residual_l1_key": str(residual_l1_key),
+        "texture_size": int(texture_size),
+        "rows": int(rows),
+        "rows_per_face": int(rows_per_face),
+        "selected_faces": int(face_lut.size),
+        "top_k": int(k),
+        "channels_per_source": int(channels_per_source),
+        "channels": [
+            "residual_r",
+            "residual_g",
+            "residual_b",
+            "source_cam_x",
+            "source_cam_y",
+            "source_cam_z",
+            "residual_l1_norm",
+            "log_source_pixel_support",
+        ],
+        "min_alpha": float(min_alpha),
+        "min_residual_l1": float(min_residual_l1),
+        "min_bin_support": int(min_bin_support),
+        "active_rows": int(active_rows),
+        "active_row_fraction": float(active_rows / max(1, rows - 1)),
+        "filled_slots": int(filled_slots),
+        "mean_filled_slots_active": float(filled_slots / max(1, active_rows)),
+        "source_observations_inserted": int(source_observations),
+        "max_source_pixel_support": float(max_support),
+        "max_source_residual_l1": float(max_l1),
+        "mean_support_active_row": float(np.mean(row_support_total[row_support_total > 0]))
+        if np.any(row_support_total > 0)
+        else 0.0,
+        "mean_source_views_active_row": float(np.mean(row_view_count[row_view_count > 0]))
+        if np.any(row_view_count > 0)
+        else 0.0,
+        "target_or_test_gt_used": False,
+    }
+    return stats, summary
+
+
 def _compact_face_ids(raw_face_id: np.ndarray, face_lut: np.ndarray) -> np.ndarray:
     face_id = np.asarray(raw_face_id, dtype=np.int64)
     out = np.zeros(face_id.shape, dtype=np.int64)
@@ -888,6 +1186,11 @@ class SurfaceTextureConditionedUNet(torch.nn.Module):
         confidence_max: float = 1.0,
         support_gate_floor: float = 0.0,
         support_unknown_gate_floor: float = 0.0,
+        evidence_stats: np.ndarray | torch.Tensor | None = None,
+        evidence_residual_prior_weight: float = 0.0,
+        evidence_view_gate_power: float = 0.0,
+        evidence_source_bank_top_k: int = 0,
+        evidence_source_bank_channels_per_source: int = 8,
     ):
         super().__init__()
         self.texture_size = int(texture_size)
@@ -896,6 +1199,10 @@ class SurfaceTextureConditionedUNet(torch.nn.Module):
         self.feature_dim = int(feature_dim)
         self.support_gate_floor = float(support_gate_floor)
         self.support_unknown_gate_floor = float(support_unknown_gate_floor)
+        self.evidence_residual_prior_weight = float(evidence_residual_prior_weight)
+        self.evidence_view_gate_power = float(evidence_view_gate_power)
+        self.evidence_source_bank_top_k = max(0, int(evidence_source_bank_top_k))
+        self.evidence_source_bank_channels_per_source = max(1, int(evidence_source_bank_channels_per_source))
         rows = int(num_faces) * self.bins_per_face + 1
         if support_stats is not None:
             stats = torch.as_tensor(support_stats, dtype=torch.float32)
@@ -904,12 +1211,21 @@ class SurfaceTextureConditionedUNet(torch.nn.Module):
         else:
             stats = None
         self.register_buffer("surface_support_stats", stats, persistent=True)
+        if evidence_stats is not None:
+            evidence = torch.as_tensor(evidence_stats)
+            if evidence.ndim != 2 or evidence.shape[0] != rows:
+                raise ValueError(f"evidence_stats shape {tuple(evidence.shape)} does not match rows={rows}")
+            evidence = evidence.to(dtype=torch.float16 if evidence.shape[1] >= 8 else torch.float32)
+        else:
+            evidence = None
+        self.register_buffer("surface_evidence_stats", evidence, persistent=True)
+        evidence_dim = 0 if evidence is None else int(evidence.shape[1])
         self.surface_texture = torch.nn.Embedding(rows, int(feature_dim), padding_idx=0)
         torch.nn.init.normal_(self.surface_texture.weight, mean=0.0, std=0.01)
         with torch.no_grad():
             self.surface_texture.weight[0].zero_()
         self.unet = SurfaceConditionedResidualUNet(
-            int(in_ch) + int(feature_dim),
+            int(in_ch) + int(feature_dim) + int(evidence_dim),
             int(base_ch),
             float(max_delta),
             confidence_mode=confidence_mode,
@@ -941,11 +1257,76 @@ class SurfaceTextureConditionedUNet(torch.nn.Module):
         if self.surface_support_stats is not None:
             gate = self._support_gate_from_indices(x, idx)
             tex = tex * gate.permute(0, 2, 3, 1)
+        evidence_chw = None
+        evidence_prior = None
+        if self.surface_evidence_stats is not None:
+            evidence = self.surface_evidence_stats[idx].to(dtype=x.dtype, device=x.device)
+            evidence = evidence.clone()
+            if self.evidence_source_bank_top_k > 0:
+                evidence, evidence_prior = self._surface_source_bank_condition(x, evidence)
+            elif evidence.shape[-1] >= 3:
+                view_gate = self._surface_evidence_view_gate(x, evidence)
+                evidence[..., :3] = evidence[..., :3] * view_gate.unsqueeze(-1)
+                evidence_prior = evidence[..., :3].permute(0, 3, 1, 2)
+            if gate is not None:
+                evidence = evidence * gate.permute(0, 2, 3, 1)
+            evidence_chw = evidence.permute(0, 3, 1, 2)
         tex = tex.permute(0, 3, 1, 2)
-        delta = self.unet(torch.cat([x, tex], dim=1))
+        parts = [x, tex]
+        if evidence_chw is not None:
+            parts.append(evidence_chw)
+        delta = self.unet(torch.cat(parts, dim=1))
+        if evidence_prior is not None and float(self.evidence_residual_prior_weight) != 0.0:
+            delta = delta + float(self.evidence_residual_prior_weight) * evidence_prior
         if gate is not None:
             delta = delta * gate
         return delta
+
+    def _surface_source_bank_condition(
+        self,
+        x: torch.Tensor,
+        evidence: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        k = int(self.evidence_source_bank_top_k)
+        c = int(self.evidence_source_bank_channels_per_source)
+        if k <= 0 or c < 8 or evidence.shape[-1] < k * c:
+            return evidence, None
+        bank = evidence[..., : k * c].reshape(*evidence.shape[:3], k, c)
+        raw_residual = bank[..., :3]
+        source_cam = F.normalize(bank[..., 3:6], dim=-1, eps=1.0e-6)
+        residual_conf = torch.clamp(bank[..., 6], 0.0, 1.0)
+        support_conf = torch.clamp(bank[..., 7], 0.0, 1.0)
+        score = residual_conf * support_conf
+        if x.shape[1] > 14 and float(self.evidence_view_gate_power) > 0.0:
+            target_cam = F.normalize(x[:, 12:15], dim=1, eps=1.0e-6).permute(0, 2, 3, 1).unsqueeze(-2)
+            cosine = torch.sum(target_cam * source_cam, dim=-1).clamp(-1.0, 1.0)
+            view_gate = torch.pow(
+                torch.clamp(0.5 * (cosine + 1.0), 0.0, 1.0),
+                float(self.evidence_view_gate_power),
+            )
+            score = score * view_gate
+        active = (torch.sum(torch.abs(raw_residual), dim=-1) > 1.0e-8).to(dtype=x.dtype)
+        score = score * active
+        denom = torch.sum(score, dim=-1, keepdim=True).clamp(min=1.0e-6)
+        weights = score / denom
+        prior = torch.sum(weights.unsqueeze(-1) * raw_residual, dim=-2)
+        prior = prior * torch.clamp(torch.sum(score, dim=-1, keepdim=True), 0.0, 1.0)
+        bank = bank.clone()
+        bank[..., :3] = raw_residual * score.unsqueeze(-1)
+        bank[..., 6] = score
+        evidence[..., : k * c] = bank.reshape(*evidence.shape[:3], k * c)
+        return evidence, prior.permute(0, 3, 1, 2)
+
+    def _surface_evidence_view_gate(self, x: torch.Tensor, evidence: torch.Tensor) -> torch.Tensor:
+        if evidence.shape[-1] < 12 or x.shape[1] <= 14:
+            return torch.ones((*evidence.shape[:3],), dtype=x.dtype, device=x.device)
+        power = float(self.evidence_view_gate_power)
+        if power <= 0.0:
+            return torch.ones((*evidence.shape[:3],), dtype=x.dtype, device=x.device)
+        cam = F.normalize(x[:, 12:15], dim=1, eps=1.0e-6).permute(0, 2, 3, 1)
+        mean_cam = F.normalize(evidence[..., 9:12].to(dtype=x.dtype), dim=-1, eps=1.0e-6)
+        cosine = torch.sum(cam * mean_cam, dim=-1).clamp(-1.0, 1.0)
+        return torch.pow(torch.clamp(0.5 * (cosine + 1.0), 0.0, 1.0), power)
 
     def _support_gate_from_indices(self, x: torch.Tensor, idx: torch.Tensor) -> torch.Tensor:
         if self.surface_support_stats is None:
@@ -1160,6 +1541,10 @@ def evaluate_policy_val(
         face_ids = _load_face_ids_tensor(z, face_lut, max_side=-1)
         parent = np.clip(_to_chw(z["rgb_render"])[:3], 0.0, 1.0).astype(np.float32)
         gt = np.clip(_to_chw(z["rgb_gt"])[:3], 0.0, 1.0).astype(np.float32)
+        teacher_ref = None
+        teacher_metrics: dict[str, float] = {}
+        if str(residual_key) in z:
+            teacher_ref = np.clip(parent + np.asarray(z[str(residual_key)], dtype=np.float32)[:3], 0.0, 1.0)
         shared_delta: np.ndarray | None = None
         if not bool(alpha_conditioned_residual):
             shared_delta = _predict_delta_tiled(
@@ -1174,6 +1559,15 @@ def evaluate_policy_val(
         p_psnr = _psnr(parent, gt)
         p_ssim = image_ssim_chw(parent, gt, int(ssim_max_side))
         p_lpips = image_lpips_chw(parent, gt, int(lpips_max_side), lpips_model) if compute_lpips else None
+        if teacher_ref is not None:
+            teacher_metrics["teacher_psnr"] = float(_psnr(teacher_ref, gt))
+            teacher_metrics["teacher_ssim"] = float(image_ssim_chw(teacher_ref, gt, int(ssim_max_side)))
+            teacher_metrics["teacher_psnr_gain"] = float(teacher_metrics["teacher_psnr"] - p_psnr)
+            teacher_metrics["teacher_ssim_gain"] = float(teacher_metrics["teacher_ssim"] - p_ssim)
+            if compute_lpips:
+                t_lpips = image_lpips_chw(teacher_ref, gt, int(lpips_max_side), lpips_model)
+                teacher_metrics["teacher_lpips"] = float(t_lpips)
+                teacher_metrics["teacher_lpips_gain"] = float(p_lpips - t_lpips)
         for alpha in alpha_grid:
             alpha_f = float(alpha)
             if bool(alpha_conditioned_residual):
@@ -1201,8 +1595,15 @@ def evaluate_policy_val(
                 "parent_ssim": float(p_ssim),
                 "candidate_ssim": float(image_ssim_chw(cand, gt, int(ssim_max_side))),
             }
+            row.update(teacher_metrics)
             row["psnr_gain"] = row["candidate_psnr"] - row["parent_psnr"]
             row["ssim_gain"] = row["candidate_ssim"] - row["parent_ssim"]
+            if "teacher_psnr_gain" in row:
+                denom = max(float(row["teacher_psnr_gain"]), 1.0e-8)
+                row["psnr_teacher_gap_recovery"] = float(row["psnr_gain"] / denom)
+            if "teacher_ssim_gain" in row:
+                denom = max(float(row["teacher_ssim_gain"]), 1.0e-8)
+                row["ssim_teacher_gap_recovery"] = float(row["ssim_gain"] / denom)
             applied_delta = delta if bool(alpha_conditioned_residual) else alpha_f * delta
             row["changed_fraction"] = float(np.mean(np.any(np.abs(applied_delta) > (0.5 / 255.0), axis=0)))
             if compute_lpips:
@@ -1210,6 +1611,9 @@ def evaluate_policy_val(
                 row["parent_lpips"] = float(p_lpips)
                 row["candidate_lpips"] = float(c_lpips)
                 row["lpips_gain"] = float(p_lpips - c_lpips)
+                if "teacher_lpips_gain" in row:
+                    denom = max(float(row["teacher_lpips_gain"]), 1.0e-8)
+                    row["lpips_teacher_gap_recovery"] = float(row["lpips_gain"] / denom)
             rows_by_alpha[alpha_f].append(row)
         cache[path.stem] = (delta_by_alpha, parent, gt)
 
@@ -1270,6 +1674,24 @@ def evaluate_policy_val(
             summary["lpips_positive_view_fraction"] = float(np.mean(np.asarray(lpips_gain) > 0.0))
             summary["lpips_min_gain"] = float(np.min(lpips_gain)) if lpips_gain else 0.0
             summary["lpips_cvar_gain"] = _tail_mean(lpips_gain, float(policy_tail_fraction))
+        teacher_rows = [r for r in rows if "teacher_psnr" in r]
+        if teacher_rows:
+            summary["teacher_psnr"] = float(np.mean([r["teacher_psnr"] for r in teacher_rows]))
+            summary["teacher_ssim"] = float(np.mean([r["teacher_ssim"] for r in teacher_rows]))
+            summary["teacher_psnr_gain"] = float(np.mean([r["teacher_psnr_gain"] for r in teacher_rows]))
+            summary["teacher_ssim_gain"] = float(np.mean([r["teacher_ssim_gain"] for r in teacher_rows]))
+            summary["psnr_teacher_gap_recovery"] = float(
+                np.mean([r.get("psnr_teacher_gap_recovery", 0.0) for r in teacher_rows])
+            )
+            summary["ssim_teacher_gap_recovery"] = float(
+                np.mean([r.get("ssim_teacher_gap_recovery", 0.0) for r in teacher_rows])
+            )
+            if compute_lpips and "teacher_lpips" in teacher_rows[0]:
+                summary["teacher_lpips"] = float(np.mean([r["teacher_lpips"] for r in teacher_rows]))
+                summary["teacher_lpips_gain"] = float(np.mean([r["teacher_lpips_gain"] for r in teacher_rows]))
+                summary["lpips_teacher_gap_recovery"] = float(
+                    np.mean([r.get("lpips_teacher_gap_recovery", 0.0) for r in teacher_rows])
+                )
         summary["mean_score"] = _mean_score(summary)
         summary["tail_score"] = _tail_score(summary)
         summaries.append(summary)
@@ -1573,6 +1995,51 @@ def main() -> int:
         default="",
         help="Optional no-GT target evidence used only to prioritize target-visible faces in the surface capacity budget.",
     )
+    parser.add_argument(
+        "--enable_surface_evidence_texture",
+        action="store_true",
+        help=(
+            "For surface_texture_unet, append a fixed train-fit teacher residual evidence texture "
+            "(mean residual, variance, support, and source camera direction) indexed by face/UV bin."
+        ),
+    )
+    parser.add_argument(
+        "--surface_evidence_residual_rgb_key",
+        default="",
+        help="Residual RGB key used to build the fixed surface evidence texture. Defaults to --residual_rgb_key.",
+    )
+    parser.add_argument(
+        "--surface_evidence_min_bin_support",
+        type=int,
+        default=1,
+        help="Minimum train-fit samples per face/UV bin for the evidence texture active channel.",
+    )
+    parser.add_argument(
+        "--surface_evidence_residual_prior_weight",
+        type=float,
+        default=0.0,
+        help="Directly inject this weight times the view-gated mean train-fit residual evidence into the predicted delta.",
+    )
+    parser.add_argument(
+        "--surface_evidence_view_gate_power",
+        type=float,
+        default=0.0,
+        help="Power for source-camera agreement gating of residual evidence. 0 disables view gating.",
+    )
+    parser.add_argument(
+        "--enable_surface_source_evidence_bank",
+        action="store_true",
+        help=(
+            "For surface_texture_unet, replace the mean evidence texture with a top-K per-face/UV source bank "
+            "containing source residuals and source camera directions."
+        ),
+    )
+    parser.add_argument(
+        "--surface_source_evidence_top_k",
+        type=int,
+        default=4,
+        help="Top-K source residual observations retained per face/UV bin when --enable_surface_source_evidence_bank is active.",
+    )
     parser.add_argument("--lowrank_rank", type=int, default=4)
     parser.add_argument("--lowrank_min_bin_support", type=int, default=16)
     parser.add_argument("--lowrank_basis_init_std", type=float, default=0.01)
@@ -1581,6 +2048,24 @@ def main() -> int:
     parser.add_argument("--teacher_lpips_weight", type=float, default=0.0)
     parser.add_argument("--teacher_grad_weight", type=float, default=0.0)
     parser.add_argument("--teacher_highfreq_weight", type=float, default=0.0)
+    parser.add_argument(
+        "--teacher_residual_cosine_weight",
+        type=float,
+        default=0.0,
+        help="Directly align predicted residual direction with the Phase-J teacher-parent residual.",
+    )
+    parser.add_argument(
+        "--teacher_residual_energy_weight",
+        type=float,
+        default=0.0,
+        help="Match the RMS energy of the predicted residual to the Phase-J teacher-parent residual.",
+    )
+    parser.add_argument(
+        "--teacher_residual_projection_min_l1",
+        type=float,
+        default=0.5 / 255.0,
+        help="Minimum per-pixel teacher residual L1 used by the residual projection losses.",
+    )
     parser.add_argument("--gt_l1_weight", type=float, default=0.10)
     parser.add_argument("--gt_ssim_weight", type=float, default=0.0)
     parser.add_argument("--gt_lpips_weight", type=float, default=0.0)
@@ -1701,6 +2186,8 @@ def main() -> int:
     fit_paths, val_paths = _policy_split(paths, int(args.policy_val_stride))
     face_lut = None
     surface_support_stats = None
+    surface_evidence_stats = None
+    surface_evidence_summary = None
     surface_model_types = {"surface_texture_mlp", "surface_texture_unet", "lowrank_surface_texture"}
     residual_l1_key = str(args.residual_l1_key).strip()
     if not residual_l1_key:
@@ -1748,6 +2235,37 @@ def main() -> int:
                 min_residual_l1=float(args.surface_face_min_residual_l1),
                 min_bin_support=int(args.lowrank_min_bin_support),
             )
+        if bool(args.enable_surface_evidence_texture) and bool(args.enable_surface_source_evidence_bank):
+            raise ValueError("use either --enable_surface_evidence_texture or --enable_surface_source_evidence_bank, not both")
+        if bool(args.enable_surface_evidence_texture):
+            if str(args.model_type) != "surface_texture_unet":
+                raise ValueError("--enable_surface_evidence_texture currently requires --model_type surface_texture_unet")
+            evidence_rgb_key = str(args.surface_evidence_residual_rgb_key).strip() or str(args.residual_rgb_key)
+            surface_evidence_stats, surface_evidence_summary = _collect_surface_evidence_texture_stats(
+                fit_paths,
+                face_lut=face_lut,
+                residual_rgb_key=evidence_rgb_key,
+                residual_l1_key=residual_l1_key,
+                texture_size=int(args.surface_texture_size),
+                min_alpha=float(args.surface_face_min_alpha),
+                min_residual_l1=float(args.surface_face_min_residual_l1),
+                min_bin_support=int(args.surface_evidence_min_bin_support),
+            )
+        if bool(args.enable_surface_source_evidence_bank):
+            if str(args.model_type) != "surface_texture_unet":
+                raise ValueError("--enable_surface_source_evidence_bank currently requires --model_type surface_texture_unet")
+            evidence_rgb_key = str(args.surface_evidence_residual_rgb_key).strip() or str(args.residual_rgb_key)
+            surface_evidence_stats, surface_evidence_summary = _collect_surface_source_evidence_bank_stats(
+                fit_paths,
+                face_lut=face_lut,
+                residual_rgb_key=evidence_rgb_key,
+                residual_l1_key=residual_l1_key,
+                texture_size=int(args.surface_texture_size),
+                top_k=int(args.surface_source_evidence_top_k),
+                min_alpha=float(args.surface_face_min_alpha),
+                min_residual_l1=float(args.surface_face_min_residual_l1),
+                min_bin_support=int(args.surface_evidence_min_bin_support),
+            )
         _write_json(
             output_dir / "surface_texture_lut_summary.json",
             {
@@ -1760,6 +2278,7 @@ def main() -> int:
                     * (int(args.lowrank_rank) * 3 if str(args.model_type) == "lowrank_surface_texture" else int(args.surface_feature_dim))
                 ),
                 "lowrank_support_summary": support_summary,
+                "surface_evidence_summary": surface_evidence_summary,
                 "target_visible_priority_summary": target_visible_summary,
             },
         )
@@ -1828,6 +2347,15 @@ def main() -> int:
             confidence_max=float(args.confidence_max),
             support_gate_floor=float(args.surface_support_gate_floor),
             support_unknown_gate_floor=float(args.surface_support_unknown_gate_floor),
+            evidence_stats=surface_evidence_stats
+            if (bool(args.enable_surface_evidence_texture) or bool(args.enable_surface_source_evidence_bank))
+            else None,
+            evidence_residual_prior_weight=float(args.surface_evidence_residual_prior_weight),
+            evidence_view_gate_power=float(args.surface_evidence_view_gate_power),
+            evidence_source_bank_top_k=(
+                int(args.surface_source_evidence_top_k) if bool(args.enable_surface_source_evidence_bank) else 0
+            ),
+            evidence_source_bank_channels_per_source=8,
         ).to(device)
     elif str(args.model_type) == "lowrank_surface_texture":
         if face_lut is None or face_lut.size == 0 or surface_support_stats is None:
@@ -1948,6 +2476,22 @@ def main() -> int:
             if float(args.teacher_highfreq_weight) > 0.0
             else torch.zeros((), device=device)
         )
+        loss_teacher_residual_cosine = torch.zeros((), device=device)
+        loss_teacher_residual_energy = torch.zeros((), device=device)
+        teacher_residual_cosine = torch.zeros((), device=device)
+        teacher_residual_projection_active_fraction = torch.zeros((), device=device)
+        if float(args.teacher_residual_cosine_weight) > 0.0 or float(args.teacher_residual_energy_weight) > 0.0:
+            (
+                loss_teacher_residual_cosine,
+                loss_teacher_residual_energy,
+                teacher_residual_cosine,
+                teacher_residual_projection_active_fraction,
+            ) = _teacher_residual_projection_losses(
+                pred_delta,
+                teacher - parent,
+                loss_mask,
+                float(args.teacher_residual_projection_min_l1),
+            )
         loss_gt = torch.zeros((), device=device)
         loss_gt_ssim = torch.zeros((), device=device)
         loss_gt_lpips = torch.zeros((), device=device)
@@ -2000,6 +2544,8 @@ def main() -> int:
             + float(args.teacher_lpips_weight) * loss_teacher_lpips
             + float(args.teacher_grad_weight) * loss_teacher_grad
             + float(args.teacher_highfreq_weight) * loss_teacher_highfreq
+            + float(args.teacher_residual_cosine_weight) * loss_teacher_residual_cosine
+            + float(args.teacher_residual_energy_weight) * loss_teacher_residual_energy
             + float(args.gt_l1_weight) * loss_gt
             + float(args.gt_ssim_weight) * loss_gt_ssim
             + float(args.gt_lpips_weight) * loss_gt_lpips
@@ -2021,6 +2567,16 @@ def main() -> int:
                     "train/teacher_lpips_loss": float(loss_teacher_lpips.detach().cpu().item()),
                     "train/teacher_grad_loss": float(loss_teacher_grad.detach().cpu().item()),
                     "train/teacher_highfreq_loss": float(loss_teacher_highfreq.detach().cpu().item()),
+                    "train/teacher_residual_cosine_loss": float(
+                        loss_teacher_residual_cosine.detach().cpu().item()
+                    ),
+                    "train/teacher_residual_energy_loss": float(
+                        loss_teacher_residual_energy.detach().cpu().item()
+                    ),
+                    "train/teacher_residual_cosine": float(teacher_residual_cosine.detach().cpu().item()),
+                    "train/teacher_residual_projection_active_fraction": float(
+                        teacher_residual_projection_active_fraction.detach().cpu().item()
+                    ),
                     "train/gt_l1": float(loss_gt.detach().cpu().item()),
                     "train/gt_ssim_loss": float(loss_gt_ssim.detach().cpu().item()),
                     "train/gt_lpips_loss": float(loss_gt_lpips.detach().cpu().item()),
@@ -2041,6 +2597,7 @@ def main() -> int:
             "input_channels": int(in_ch),
             "face_lut": None if face_lut is None else face_lut,
             "surface_support_stats": surface_support_stats,
+            "surface_evidence_summary": surface_evidence_summary,
             "face_embedding_rows": int(0 if face_lut is None else face_lut.size + 1),
             "surface_texture_rows": int(
                 0
@@ -2184,6 +2741,17 @@ def main() -> int:
             ),
             "surface_support_gate_floor": float(args.surface_support_gate_floor),
             "surface_support_unknown_gate_floor": float(args.surface_support_unknown_gate_floor),
+            "surface_evidence_texture_enabled": bool(args.enable_surface_evidence_texture),
+            "surface_source_evidence_bank_enabled": bool(args.enable_surface_source_evidence_bank),
+            "surface_source_evidence_top_k": int(args.surface_source_evidence_top_k),
+            "surface_evidence_channels": int(0 if surface_evidence_stats is None else surface_evidence_stats.shape[1]),
+            "surface_evidence_min_bin_support": int(args.surface_evidence_min_bin_support),
+            "surface_evidence_residual_rgb_key": str(args.surface_evidence_residual_rgb_key or args.residual_rgb_key),
+            "surface_evidence_residual_prior_weight": float(args.surface_evidence_residual_prior_weight),
+            "surface_evidence_view_gate_power": float(args.surface_evidence_view_gate_power),
+            "surface_evidence_active_rows": int(
+                0 if surface_evidence_summary is None else surface_evidence_summary.get("active_rows", 0)
+            ),
             "lowrank_rank": int(args.lowrank_rank),
             "lowrank_min_bin_support": int(args.lowrank_min_bin_support),
             "lowrank_basis_init_std": float(args.lowrank_basis_init_std),
