@@ -287,6 +287,44 @@ def _build_residual_debt_mask(
     return mask
 
 
+def _build_teacher_benefit_mask(
+    z: np.lib.npyio.NpzFile,
+    *,
+    mode: str,
+    min_gain_l1: float,
+    dilate: int,
+) -> torch.Tensor | None:
+    """Train-fit-only mask where the Phase-J teacher is certified better than parent."""
+    mode = str(mode)
+    if mode == "off":
+        return None
+    better = None
+    if "teacher_better_mask" in z:
+        better = np.asarray(z["teacher_better_mask"], dtype=np.float32) > 0.0
+    gain = None
+    if "teacher_gain_l1" in z:
+        gain = np.asarray(z["teacher_gain_l1"], dtype=np.float32)
+    if mode == "teacher_better":
+        mask_np = better
+    elif mode == "positive_gain":
+        mask_np = None if gain is None else gain > float(min_gain_l1)
+    elif mode == "better_and_positive_gain":
+        if better is None or gain is None:
+            mask_np = better if gain is None else gain > float(min_gain_l1)
+        else:
+            mask_np = better & (gain > float(min_gain_l1))
+    else:
+        raise ValueError(f"unknown teacher_benefit_mask_mode: {mode}")
+    if mask_np is None:
+        return None
+    mask = torch.from_numpy(mask_np.astype(np.float32)).reshape(1, *mask_np.shape[-2:])
+    radius = max(0, int(dilate))
+    if radius > 0:
+        kernel = 2 * radius + 1
+        mask = F.max_pool2d(mask.unsqueeze(0), kernel_size=kernel, stride=1, padding=radius).squeeze(0)
+    return torch.clamp(mask, 0.0, 1.0)
+
+
 def _blend_target_with_parent(parent: torch.Tensor, target: torch.Tensor, mask: torch.Tensor | None) -> torch.Tensor:
     if mask is None:
         return target
@@ -344,6 +382,9 @@ def _load_example(
     residual_debt_quantile: float = 0.70,
     residual_debt_min_l1: float = 1.0 / 255.0,
     residual_debt_dilate: int = 1,
+    teacher_benefit_mask_mode: str = "off",
+    teacher_benefit_min_gain_l1: float = 0.0,
+    teacher_benefit_dilate: int = 1,
 ) -> dict[str, Any]:
     z = np.load(path)
     parent = torch.from_numpy(np.clip(_to_chw(z["rgb_render"])[:3], 0.0, 1.0).astype(np.float32))
@@ -373,6 +414,14 @@ def _load_example(
             min_l1=float(residual_debt_min_l1),
             dilate=int(residual_debt_dilate),
         )
+    benefit_mask = _build_teacher_benefit_mask(
+        z,
+        mode=str(teacher_benefit_mask_mode),
+        min_gain_l1=float(teacher_benefit_min_gain_l1),
+        dilate=int(teacher_benefit_dilate),
+    )
+    if benefit_mask is not None:
+        out["teacher_benefit_mask"] = _resize_chw_tensor(benefit_mask, max_side)
     return out
 
 
@@ -478,6 +527,7 @@ class TrainBatch:
     teacher: torch.Tensor
     gt: torch.Tensor | None
     residual_debt_mask: torch.Tensor | None
+    teacher_benefit_mask: torch.Tensor | None
 
 
 def _collect_train_face_lut(paths: list[Path], max_unique: int) -> np.ndarray:
@@ -1452,15 +1502,17 @@ def _sample_patch(example: dict[str, Any], patch_size: int, rng: random.Random) 
     teacher = example["teacher"]
     gt = example.get("gt")
     debt_mask = example.get("residual_debt_mask")
+    benefit_mask = example.get("teacher_benefit_mask")
     _, h, w = parent.shape
     if int(patch_size) <= 0 or h <= int(patch_size) or w <= int(patch_size):
-        return TrainBatch(features, face_ids, parent, teacher, gt, debt_mask)
+        return TrainBatch(features, face_ids, parent, teacher, gt, debt_mask, benefit_mask)
     ph = pw = int(patch_size)
     y = rng.randint(0, h - ph)
     x = rng.randint(0, w - pw)
     gt_patch = None if gt is None else gt[:, y : y + ph, x : x + pw]
     face_patch = None if face_ids is None else face_ids[y : y + ph, x : x + pw]
     debt_patch = None if debt_mask is None else debt_mask[:, y : y + ph, x : x + pw]
+    benefit_patch = None if benefit_mask is None else benefit_mask[:, y : y + ph, x : x + pw]
     return TrainBatch(
         features[:, y : y + ph, x : x + pw],
         face_patch,
@@ -1468,6 +1520,7 @@ def _sample_patch(example: dict[str, Any], patch_size: int, rng: random.Random) 
         teacher[:, y : y + ph, x : x + pw],
         gt_patch,
         debt_patch,
+        benefit_patch,
     )
 
 
@@ -1515,6 +1568,7 @@ def evaluate_policy_val(
     face_lut: np.ndarray | None,
     alpha_grid: list[float],
     alpha_conditioned_residual: bool,
+    policy_allow_noop_alpha: bool,
     policy_select_mode: str,
     policy_tail_fraction: float,
     policy_min_psnr_gain: float,
@@ -1695,12 +1749,24 @@ def evaluate_policy_val(
         summary["mean_score"] = _mean_score(summary)
         summary["tail_score"] = _tail_score(summary)
         summaries.append(summary)
-    best_mean = max(summaries, key=_mean_score)
-    best_tail = max(summaries, key=_tail_score)
+    eligible_summaries = summaries
+    zero_alpha_excluded = False
+    if not bool(policy_allow_noop_alpha):
+        nonzero = [
+            row
+            for row in summaries
+            if abs(float(row.get("alpha", 0.0))) > 1.0e-12
+            and float(row.get("mean_changed_fraction", 0.0)) > 0.0
+        ]
+        if nonzero:
+            eligible_summaries = nonzero
+            zero_alpha_excluded = True
+    best_mean = max(eligible_summaries, key=_mean_score)
+    best_tail = max(eligible_summaries, key=_tail_score)
     best = best_tail if select_mode == "tail_guard" else best_mean
     pass_rows = [
         row
-        for row in summaries
+        for row in eligible_summaries
         if float(row.get("psnr_gain", 0.0)) > 0.0
         and float(row.get("ssim_gain", 0.0)) > 0.0
         and (not compute_lpips or float(row.get("lpips_gain", 0.0)) > 0.0)
@@ -1747,6 +1813,9 @@ def evaluate_policy_val(
             "cvar_psnr_gain": float(policy_cvar_psnr_gain),
             "cvar_ssim_gain": float(policy_cvar_ssim_gain),
             "cvar_lpips_gain": float(policy_cvar_lpips_gain),
+            "allow_noop_alpha": bool(policy_allow_noop_alpha),
+            "zero_alpha_excluded_from_best": bool(zero_alpha_excluded),
+            "eligible_alpha_count": int(len(eligible_summaries)),
         },
         "rows": summaries,
         "per_view_by_alpha": {str(k): v for k, v in rows_by_alpha.items()},
@@ -1869,17 +1938,24 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
     target = payload.get("target_apply") or {}
     leakage = payload.get("gt_usage_audit", {})
     audit = payload.get("audit_notes", {})
+    phasej_gate = payload.get("phasej_flowers_gate", {})
+    model = payload.get("model", {})
     lines = [
         f"# {payload.get('artifact_prefix', 'surface_conditioned_residual')} Audit",
         "",
         f"- policy-val all-axis pass: `{payload['policy_val_all_axis_pass']}`",
         f"- policy-val gate scope: `{audit.get('policy_val_gate_scope')}`",
-        f"- Phase-J gate enforced by this script: `{audit.get('phasej_gate_enforced_by_script')}`",
+        f"- Phase-J exact gate enforced by this script: `{audit.get('phasej_exact_gate_enforced_by_script')}`",
+        f"- Phase-J flowers gate: `{phasej_gate.get('psnr')} / {phasej_gate.get('ssim')} / {phasej_gate.get('lpips')}`",
+        f"- policy-val candidate numerically above Phase-J flowers reference: `{phasej_gate.get('policy_val_numeric_above_reference')}`",
         f"- alpha contract: `{audit.get('alpha_contract')}`",
         f"- alpha contract warning: `{audit.get('alpha_contract_warning')}`",
+        f"- teacher-benefit mask mode: `{model.get('teacher_benefit_mask_mode')}`",
+        f"- train teacher-benefit active fraction: `{model.get('train_teacher_benefit_active_fraction')}`",
         f"- target exact run: `{bool(target)}`",
         f"- target no-GT verifier: `{target.get('no_gt_verify', {}).get('passed')}`",
         f"- uses train-fit GT: `{leakage.get('uses_train_fit_gt')}`",
+        f"- uses train-fit GT for teacher-benefit mask: `{leakage.get('uses_train_fit_gt_for_teacher_benefit_mask')}`",
         f"- uses policy-val GT: `{leakage.get('uses_policy_val_gt')}`",
         f"- uses target/test GT during apply: `{leakage.get('uses_target_or_test_gt_during_apply')}`",
         f"- uses target-view geometry for capacity: `{leakage.get('uses_target_view_geometry_for_capacity')}`",
@@ -1888,6 +1964,8 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         "",
         f"- selection mode: `{selection.get('mode', 'mean')}`",
         f"- tail fraction: `{selection.get('tail_fraction', 0.2)}`",
+        f"- allow no-op alpha as best: `{selection.get('allow_noop_alpha')}`",
+        f"- zero alpha excluded from best: `{selection.get('zero_alpha_excluded_from_best')}`",
         "",
         "| alpha | PSNR gain | SSIM gain | LPIPS gain | PSNR min | SSIM min | LPIPS min | PSNR CVaR | SSIM CVaR | LPIPS CVaR | changed fraction |",
         "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
@@ -2046,6 +2124,16 @@ def main() -> int:
     parser.add_argument("--teacher_l1_weight", type=float, default=1.0)
     parser.add_argument("--teacher_ssim_weight", type=float, default=0.20)
     parser.add_argument("--teacher_lpips_weight", type=float, default=0.0)
+    parser.add_argument(
+        "--teacher_lpips_noharm_weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Perceptual safety loss: penalize train patches where the adapted image is worse than the "
+            "parent render under LPIPS to the teacher target."
+        ),
+    )
+    parser.add_argument("--teacher_lpips_noharm_margin", type=float, default=0.0)
     parser.add_argument("--teacher_grad_weight", type=float, default=0.0)
     parser.add_argument("--teacher_highfreq_weight", type=float, default=0.0)
     parser.add_argument(
@@ -2069,6 +2157,16 @@ def main() -> int:
     parser.add_argument("--gt_l1_weight", type=float, default=0.10)
     parser.add_argument("--gt_ssim_weight", type=float, default=0.0)
     parser.add_argument("--gt_lpips_weight", type=float, default=0.0)
+    parser.add_argument(
+        "--gt_lpips_noharm_weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Perceptual safety loss: penalize train patches where the adapted image is worse than the "
+            "parent render under LPIPS to the train-fit GT target."
+        ),
+    )
+    parser.add_argument("--gt_lpips_noharm_margin", type=float, default=0.0)
     parser.add_argument("--gt_grad_weight", type=float, default=0.0)
     parser.add_argument("--gt_highfreq_weight", type=float, default=0.0)
     parser.add_argument(
@@ -2109,6 +2207,17 @@ def main() -> int:
     parser.add_argument("--residual_debt_min_l1", type=float, default=1.0 / 255.0)
     parser.add_argument("--residual_debt_dilate", type=int, default=1)
     parser.add_argument("--residual_debt_noop_weight", type=float, default=0.0)
+    parser.add_argument(
+        "--teacher_benefit_mask_mode",
+        choices=["off", "teacher_better", "positive_gain", "better_and_positive_gain"],
+        default="off",
+        help=(
+            "Train-fit-only Phase-J benefit mask. When enabled, teacher supervision is kept only where "
+            "teacher evidence says Phase-J improves over the parent; elsewhere the target is parent/no-op."
+        ),
+    )
+    parser.add_argument("--teacher_benefit_min_gain_l1", type=float, default=0.0)
+    parser.add_argument("--teacher_benefit_dilate", type=int, default=1)
     parser.add_argument("--alpha_grid", default="0,0.125,0.25,0.5,0.75,1")
     parser.add_argument(
         "--policy_select_mode",
@@ -2124,6 +2233,11 @@ def main() -> int:
     parser.add_argument("--policy_cvar_ssim_gain", type=float, default=-1.0e9)
     parser.add_argument("--policy_cvar_lpips_gain", type=float, default=-1.0e9)
     parser.add_argument(
+        "--policy_allow_noop_alpha",
+        action="store_true",
+        help="Allow alpha=0/no-op to be selected as policy best. v169 runs should leave this disabled.",
+    )
+    parser.add_argument(
         "--alpha_conditioned_residual",
         action="store_true",
         help=(
@@ -2132,6 +2246,9 @@ def main() -> int:
         ),
     )
     parser.add_argument("--target_alpha", type=float, default=None)
+    parser.add_argument("--phasej_flowers_psnr", type=float, default=20.304358)
+    parser.add_argument("--phasej_flowers_ssim", type=float, default=0.557770)
+    parser.add_argument("--phasej_flowers_lpips", type=float, default=0.329222)
     parser.add_argument("--method_name", default="ours_26000_v184_surface_conditioned_unet_flowers")
     parser.add_argument("--scene_name", default="flowers")
     parser.add_argument("--eval_tile", type=int, default=512)
@@ -2306,6 +2423,9 @@ def main() -> int:
             residual_debt_quantile=float(args.residual_debt_quantile),
             residual_debt_min_l1=float(args.residual_debt_min_l1),
             residual_debt_dilate=int(args.residual_debt_dilate),
+            teacher_benefit_mask_mode=str(args.teacher_benefit_mask_mode),
+            teacher_benefit_min_gain_l1=float(args.teacher_benefit_min_gain_l1),
+            teacher_benefit_dilate=int(args.teacher_benefit_dilate),
         )
         for p in tqdm(fit_paths, desc="preload train-fit")
     ]
@@ -2400,7 +2520,12 @@ def main() -> int:
         ).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=float(args.lr), weight_decay=1.0e-5)
     train_lpips_model = None
-    if float(args.teacher_lpips_weight) > 0.0 or float(args.gt_lpips_weight) > 0.0:
+    if (
+        float(args.teacher_lpips_weight) > 0.0
+        or float(args.gt_lpips_weight) > 0.0
+        or float(args.teacher_lpips_noharm_weight) > 0.0
+        or float(args.gt_lpips_noharm_weight) > 0.0
+    ):
         train_lpips_model = build_lpips_model().to(device).eval()
     rng = random.Random(int(args.seed))
     for step in tqdm(range(1, int(args.steps) + 1), desc=f"train {artifact_prefix}"):
@@ -2409,6 +2534,8 @@ def main() -> int:
         loss_mask_active_fraction = torch.ones((), device=device)
         debt_mask = None
         debt_mask_active_fraction = torch.ones((), device=device)
+        benefit_mask = None
+        benefit_mask_active_fraction = torch.ones((), device=device)
         support_attempts = max(1, int(args.support_patch_resample_attempts))
         for attempt in range(support_attempts):
             ex = rng.choice(train_examples)
@@ -2427,11 +2554,18 @@ def main() -> int:
             else:
                 debt_mask = None
                 debt_mask_active_fraction = torch.ones((), device=device)
+            if batch.teacher_benefit_mask is not None:
+                benefit_mask = batch.teacher_benefit_mask.unsqueeze(0).to(device=device, dtype=parent.dtype)
+                benefit_mask_active_fraction = torch.mean((benefit_mask > 0.0).float())
+            else:
+                benefit_mask = None
+                benefit_mask_active_fraction = torch.ones((), device=device)
             if bool(args.alpha_conditioned_residual):
                 alpha_blend = min(max(train_alpha, 0.0), 1.0)
                 teacher = torch.clamp(parent + float(alpha_blend) * (raw_teacher - parent), 0.0, 1.0)
             else:
                 teacher = raw_teacher
+            teacher = _blend_target_with_parent(parent, teacher, benefit_mask)
             teacher = _blend_target_with_parent(parent, teacher, debt_mask)
             if str(args.support_loss_mask) == "active" and face_batch is not None and hasattr(model, "support_mask"):
                 with torch.no_grad():
@@ -2460,6 +2594,27 @@ def main() -> int:
             teacher,
             int(args.lpips_loss_max_side),
         )
+        loss_teacher_lpips_noharm = torch.zeros((), device=device)
+        if float(args.teacher_lpips_noharm_weight) > 0.0:
+            parent_teacher_lpips = _lpips_train_loss(
+                train_lpips_model,
+                _fill_inactive_with_target(parent, teacher, loss_mask),
+                teacher,
+                int(args.lpips_loss_max_side),
+            ).detach()
+            adapted_teacher_lpips = (
+                loss_teacher_lpips
+                if float(args.teacher_lpips_weight) > 0.0
+                else _lpips_train_loss(
+                    train_lpips_model,
+                    _fill_inactive_with_target(adapted, teacher, loss_mask),
+                    teacher,
+                    int(args.lpips_loss_max_side),
+                )
+            )
+            loss_teacher_lpips_noharm = torch.relu(
+                adapted_teacher_lpips - parent_teacher_lpips + float(args.teacher_lpips_noharm_margin)
+            )
         loss_teacher_grad = (
             _luma_gradient_loss(adapted, teacher, int(args.grad_loss_max_side), loss_mask)
             if float(args.teacher_grad_weight) > 0.0
@@ -2495,12 +2650,14 @@ def main() -> int:
         loss_gt = torch.zeros((), device=device)
         loss_gt_ssim = torch.zeros((), device=device)
         loss_gt_lpips = torch.zeros((), device=device)
+        loss_gt_lpips_noharm = torch.zeros((), device=device)
         loss_gt_grad = torch.zeros((), device=device)
         loss_gt_highfreq = torch.zeros((), device=device)
         if batch.gt is not None and (
             float(args.gt_l1_weight) > 0.0
             or float(args.gt_ssim_weight) > 0.0
             or float(args.gt_lpips_weight) > 0.0
+            or float(args.gt_lpips_noharm_weight) > 0.0
             or float(args.gt_grad_weight) > 0.0
             or float(args.gt_highfreq_weight) > 0.0
         ):
@@ -2510,6 +2667,7 @@ def main() -> int:
                 gt = torch.clamp(parent + float(alpha_blend) * (raw_gt - parent), 0.0, 1.0)
             else:
                 gt = raw_gt
+            gt = _blend_target_with_parent(parent, gt, benefit_mask)
             gt = _blend_target_with_parent(parent, gt, debt_mask)
             loss_gt = _masked_l1_loss(adapted, gt, loss_mask)
             if float(args.gt_ssim_weight) > 0.0:
@@ -2520,6 +2678,26 @@ def main() -> int:
                     _fill_inactive_with_target(adapted, gt, loss_mask),
                     gt,
                     int(args.lpips_loss_max_side),
+                )
+            if float(args.gt_lpips_noharm_weight) > 0.0:
+                parent_gt_lpips = _lpips_train_loss(
+                    train_lpips_model,
+                    _fill_inactive_with_target(parent, gt, loss_mask),
+                    gt,
+                    int(args.lpips_loss_max_side),
+                ).detach()
+                adapted_gt_lpips = (
+                    loss_gt_lpips
+                    if float(args.gt_lpips_weight) > 0.0
+                    else _lpips_train_loss(
+                        train_lpips_model,
+                        _fill_inactive_with_target(adapted, gt, loss_mask),
+                        gt,
+                        int(args.lpips_loss_max_side),
+                    )
+                )
+                loss_gt_lpips_noharm = torch.relu(
+                    adapted_gt_lpips - parent_gt_lpips + float(args.gt_lpips_noharm_margin)
                 )
             if float(args.gt_grad_weight) > 0.0:
                 loss_gt_grad = _luma_gradient_loss(adapted, gt, int(args.grad_loss_max_side), loss_mask)
@@ -2542,6 +2720,7 @@ def main() -> int:
             float(args.teacher_l1_weight) * loss_teacher_l1
             + float(args.teacher_ssim_weight) * loss_teacher_ssim
             + float(args.teacher_lpips_weight) * loss_teacher_lpips
+            + float(args.teacher_lpips_noharm_weight) * loss_teacher_lpips_noharm
             + float(args.teacher_grad_weight) * loss_teacher_grad
             + float(args.teacher_highfreq_weight) * loss_teacher_highfreq
             + float(args.teacher_residual_cosine_weight) * loss_teacher_residual_cosine
@@ -2549,6 +2728,7 @@ def main() -> int:
             + float(args.gt_l1_weight) * loss_gt
             + float(args.gt_ssim_weight) * loss_gt_ssim
             + float(args.gt_lpips_weight) * loss_gt_lpips
+            + float(args.gt_lpips_noharm_weight) * loss_gt_lpips_noharm
             + float(args.gt_grad_weight) * loss_gt_grad
             + float(args.gt_highfreq_weight) * loss_gt_highfreq
             + float(args.residual_debt_noop_weight) * loss_debt_noop
@@ -2565,6 +2745,9 @@ def main() -> int:
                     "train/teacher_l1": float(loss_teacher_l1.detach().cpu().item()),
                     "train/teacher_ssim_loss": float(loss_teacher_ssim.detach().cpu().item()),
                     "train/teacher_lpips_loss": float(loss_teacher_lpips.detach().cpu().item()),
+                    "train/teacher_lpips_noharm_loss": float(
+                        loss_teacher_lpips_noharm.detach().cpu().item()
+                    ),
                     "train/teacher_grad_loss": float(loss_teacher_grad.detach().cpu().item()),
                     "train/teacher_highfreq_loss": float(loss_teacher_highfreq.detach().cpu().item()),
                     "train/teacher_residual_cosine_loss": float(
@@ -2580,12 +2763,16 @@ def main() -> int:
                     "train/gt_l1": float(loss_gt.detach().cpu().item()),
                     "train/gt_ssim_loss": float(loss_gt_ssim.detach().cpu().item()),
                     "train/gt_lpips_loss": float(loss_gt_lpips.detach().cpu().item()),
+                    "train/gt_lpips_noharm_loss": float(loss_gt_lpips_noharm.detach().cpu().item()),
                     "train/gt_grad_loss": float(loss_gt_grad.detach().cpu().item()),
                     "train/gt_highfreq_loss": float(loss_gt_highfreq.detach().cpu().item()),
                     "train/residual_debt_noop_loss": float(loss_debt_noop.detach().cpu().item()),
                     "train/delta_l1": float(loss_mag.detach().cpu().item()),
                     "train/support_loss_active_fraction": float(loss_mask_active_fraction.detach().cpu().item()),
                     "train/residual_debt_active_fraction": float(debt_mask_active_fraction.detach().cpu().item()),
+                    "train/teacher_benefit_active_fraction": float(
+                        benefit_mask_active_fraction.detach().cpu().item()
+                    ),
                     "train/alpha": float(train_alpha),
                     "train/step": int(step),
                 }
@@ -2597,6 +2784,7 @@ def main() -> int:
             "input_channels": int(in_ch),
             "face_lut": None if face_lut is None else face_lut,
             "surface_support_stats": surface_support_stats,
+            "surface_evidence_stats": surface_evidence_stats,
             "surface_evidence_summary": surface_evidence_summary,
             "face_embedding_rows": int(0 if face_lut is None else face_lut.size + 1),
             "surface_texture_rows": int(
@@ -2614,6 +2802,7 @@ def main() -> int:
         face_lut=face_lut,
         alpha_grid=alpha_grid,
         alpha_conditioned_residual=bool(args.alpha_conditioned_residual),
+        policy_allow_noop_alpha=bool(args.policy_allow_noop_alpha),
         policy_select_mode=str(args.policy_select_mode),
         policy_tail_fraction=float(args.policy_tail_fraction),
         policy_min_psnr_gain=float(args.policy_min_psnr_gain),
@@ -2631,6 +2820,16 @@ def main() -> int:
         output_dir=None if bool(args.skip_policy_val_renders) else output_dir / "policy_val_best",
     )
     all_axis = policy_val.get("best_all_axis") is not None
+    selected_for_phasej = policy_val.get("best_all_axis") or policy_val.get("best") or {}
+    phasej_policy_val_numeric_above_reference = bool(
+        selected_for_phasej
+        and float(selected_for_phasej.get("candidate_psnr", -math.inf)) > float(args.phasej_flowers_psnr)
+        and float(selected_for_phasej.get("candidate_ssim", -math.inf)) > float(args.phasej_flowers_ssim)
+        and (
+            not bool(args.compute_lpips)
+            or float(selected_for_phasej.get("candidate_lpips", math.inf)) < float(args.phasej_flowers_lpips)
+        )
+    )
     target_apply = None
     target_no_gt_precheck = None
     if str(args.target_evidence_dir):
@@ -2660,6 +2859,7 @@ def main() -> int:
         float(args.gt_l1_weight)
         + float(args.gt_ssim_weight)
         + float(args.gt_lpips_weight)
+        + float(args.gt_lpips_noharm_weight)
         + float(args.gt_grad_weight)
         + float(args.gt_highfreq_weight)
     )
@@ -2669,14 +2869,27 @@ def main() -> int:
         for example in train_examples
         if "residual_debt_mask" in example
     ]
+    teacher_benefit_active_fractions = [
+        float(torch.mean(example["teacher_benefit_mask"]).item())
+        for example in train_examples
+        if "teacher_benefit_mask" in example
+    ]
     gt_usage_audit = {
         "schema": "spcarnet_gt_usage_audit_v1",
         "uses_train_fit_gt": bool(
-            train_fit_gt_available and (train_gt_weight_sum > 0.0 or bool(args.residual_debt_mask))
+            train_fit_gt_available
+            and (
+                train_gt_weight_sum > 0.0
+                or bool(args.residual_debt_mask)
+                or str(args.teacher_benefit_mask_mode) != "off"
+            )
         ),
         "train_fit_gt_available": bool(train_fit_gt_available),
         "train_fit_gt_weight_sum": float(train_gt_weight_sum),
         "uses_train_fit_gt_for_residual_debt_mask": bool(args.residual_debt_mask and train_fit_gt_available),
+        "uses_train_fit_gt_for_teacher_benefit_mask": bool(
+            str(args.teacher_benefit_mask_mode) != "off" and train_fit_gt_available
+        ),
         "uses_policy_val_gt": True,
         "policy_val_gt_purpose": "candidate certification and alpha selection only",
         "uses_target_or_test_gt_during_apply": False,
@@ -2766,16 +2979,31 @@ def main() -> int:
             "train_residual_debt_active_fraction": (
                 float(np.mean(residual_debt_active_fractions)) if residual_debt_active_fractions else None
             ),
+            "teacher_benefit_mask_mode": str(args.teacher_benefit_mask_mode),
+            "teacher_benefit_min_gain_l1": float(args.teacher_benefit_min_gain_l1),
+            "teacher_benefit_dilate": int(args.teacher_benefit_dilate),
+            "train_teacher_benefit_active_fraction": (
+                float(np.mean(teacher_benefit_active_fractions)) if teacher_benefit_active_fractions else None
+            ),
             "checkpoint": str(checkpoint_path),
         },
         "policy_val": policy_val,
         "policy_val_all_axis_pass": bool(all_axis),
+        "phasej_flowers_gate": {
+            "psnr": float(args.phasej_flowers_psnr),
+            "ssim": float(args.phasej_flowers_ssim),
+            "lpips": float(args.phasej_flowers_lpips),
+            "policy_val_numeric_above_reference": bool(phasej_policy_val_numeric_above_reference),
+            "official_exact_status": "not_evaluated_by_this_training_script",
+            "note": "Policy-val numeric comparison is diagnostic only and is not a Phase-J exact win; v169 completion still requires official flowers exact metrics.",
+        },
         "target_apply": target_apply,
         "target_no_gt_precheck": target_no_gt_precheck,
         "gt_usage_audit": gt_usage_audit,
         "audit_notes": {
             "policy_val_gate_scope": "candidate improvement over parent on held-out fit/policy-val views",
-            "phasej_gate_enforced_by_script": False,
+            "phasej_gate_recorded_by_script": True,
+            "phasej_exact_gate_enforced_by_script": False,
             "phasej_gate_must_be_checked_by_official_eval": True,
             "target_alpha_selection": "manual_target_alpha" if args.target_alpha is not None else "policy_val_selected",
             "alpha_contract": (

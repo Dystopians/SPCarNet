@@ -2,6 +2,28 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-29:
+
+The v169 prompt has now been executed through v249-v252 representation-gate experiments.  Treat the current status as **NOT COMPLETE for paper-level all-axis win**, but with a much clearer bottleneck diagnosis.  New files:
+
+- `docs/car_model/6-29-v249-v252-v169-RepresentationGate-Log.md`
+- `docs/car_model/results/v249_v252_v169_representation_gate_summary.json`
+
+Important new facts:
+
+- Phase-J teacher signal is strong on flowers policy-val: about `+0.913279 PSNR / +0.065512 SSIM / +0.017600 LPIPS` teacher headroom in v251/v252 reports.
+- v249a LPIPS no-harm GT-assisted U-Net has positive mean gains but fails tails: `+0.027357 PSNR / +0.000589 SSIM / +0.000250 LPIPS`, with min SSIM `-0.000152` and min LPIPS `-0.001432`; projection energy retention is only `0.020147`, cosine `0.127558`.
+- v250 memory textures improve active local projection but fail GT policy-val SSIM/LPIPS: v250a `+0.007847 PSNR / -0.000152 SSIM / -0.000019 LPIPS`, v250b `+0.007915 PSNR / -0.000107 SSIM / -0.000004 LPIPS`.
+- v251 low-rank/surface-feature carriers select `alpha=0` under strict tail guard, meaning the safest policy is no-op.
+- v252 added a real train-fit-only `teacher_benefit_mask_mode` method and excluded `alpha=0` from policy best by default.  It reduced damage but collapsed useful residual magnitude:
+  - v252a: `+0.000094 PSNR / +0.000002 SSIM / +0.000002 LPIPS`, changed fraction `0.000369`, projection energy `0.000019`, cosine `0.021462`.
+  - v252b: `+0.000382 PSNR / +0.000011 SSIM / +0.000004 LPIPS`, changed fraction `0.003078`, projection energy `0.000158`, cosine `0.026398`.
+- No full9 was launched because the v169 flowers gate was not passed.  Target/test apply was skipped when policy-val all-axis failed, so no target/test RGB GT leakage occurred in v252.
+
+Lesson for the next model:
+
+> Do not continue alpha scans, face gates, support thresholds, footprint expansion, or simple baked RGB residual carriers.  The measured blocker is residual representation capacity/alignment: current carriers retain almost none of the teacher residual once no-harm/tail constraints are enforced.  The next viable direction should be a stronger view-dependent source-feature/deferred surface renderer or another genuinely new representation class, then flowers policy-val and exact must be re-certified before any full9.
+
 Latest update: the first v168 exact flowers attempt failed before evaluation because the old pipeline copied a full reparented evidence cache. A low-copy/direct-teacher unblock patch is now implemented and validated by smoke tests plus dry-run. A new v168 direct-teacher low-copy exact flowers run is currently running, so treat v168 as **protocol-ready, exact-metric-in-progress, not yet a metric win**.
 
 This file is a handoff report for a stronger AI model. It records current facts, experiment data, failures, and lessons. The goal is to prevent repeating the same loops: small parameter tuning, unfair comparisons, and footprint expansion without real visual/metric gains.

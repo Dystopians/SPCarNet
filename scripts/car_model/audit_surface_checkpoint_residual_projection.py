@@ -25,6 +25,7 @@ from scripts.car_model.ecsr_apply_surface_residual_region_texture_adapter import
     image_ssim_chw,
 )
 from scripts.car_model.train_surface_conditioned_residual_unet import (  # noqa: E402
+    _append_alpha_channel_chw,
     _load_face_ids_tensor,
     _load_input_chw,
     _predict_delta_tiled,
@@ -296,6 +297,7 @@ def _audit_policy_val(
     residual_rgb_key: str,
     residual_l1_key: str,
     alpha: float,
+    alpha_conditioned_residual: bool,
     stride: int,
     max_views: int,
     min_alpha: float,
@@ -344,19 +346,27 @@ def _audit_policy_val(
             else:
                 features = torch.from_numpy(_load_input_chw(z))
                 face_ids = _load_face_ids_tensor(z, face_lut, max_side=-1)
-                pred_delta = (
-                    float(alpha)
-                    * _predict_delta_tiled(
+                if bool(alpha_conditioned_residual) and float(alpha) == 0.0:
+                    pred_delta = np.zeros_like(parent, dtype=np.float32)
+                    model_features = features
+                else:
+                    model_features = (
+                        _append_alpha_channel_chw(features, float(alpha))
+                        if bool(alpha_conditioned_residual)
+                        else features
+                    )
+                    pred_delta_raw = _predict_delta_tiled(
                         model,
-                        features,
+                        model_features,
                         face_ids=face_ids,
                         device=device,
                         tile=int(eval_tile),
                         overlap=int(eval_overlap),
                     )
-                    .numpy()
-                )
-                support = _support_summary(model, features, face_ids, _valid_mask(z, float(min_alpha)))
+                    pred_delta = pred_delta_raw.numpy()
+                    if not bool(alpha_conditioned_residual):
+                        pred_delta = float(alpha) * pred_delta
+                support = _support_summary(model, model_features, face_ids, _valid_mask(z, float(min_alpha)))
             candidate = np.clip(parent + pred_delta, 0.0, 1.0)
             valid = _valid_mask(z, float(min_alpha))
             residual = _residual_stats(pred_delta, raw_delta, valid)
@@ -567,6 +577,7 @@ def main() -> int:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     checkpoint = torch.load(str(args.checkpoint), map_location="cpu", weights_only=False)
     checkpoint_args = dict(checkpoint.get("args") or {})
+    alpha_conditioned_residual = bool(checkpoint_args.get("alpha_conditioned_residual", False))
     perceptual_feature_mode = str(checkpoint_args.get("feature_mode", "basic"))
     candidate_faces = None
     if str(args.checkpoint_type) == "perceptual_surface_decoder":
@@ -585,6 +596,7 @@ def main() -> int:
         residual_rgb_key=str(args.residual_rgb_key),
         residual_l1_key=str(args.residual_l1_key),
         alpha=float(args.alpha),
+        alpha_conditioned_residual=bool(alpha_conditioned_residual),
         stride=int(args.policy_val_stride),
         max_views=int(args.max_policy_views),
         min_alpha=float(args.min_alpha),
@@ -651,6 +663,12 @@ def main() -> int:
             "residual_l1_key": str(args.residual_l1_key),
             "perceptual_feature_mode": str(perceptual_feature_mode),
             "alpha": float(args.alpha),
+            "alpha_conditioned_residual": bool(alpha_conditioned_residual),
+            "alpha_contract": (
+                "model_outputs_final_delta_for_selected_alpha"
+                if bool(alpha_conditioned_residual)
+                else "posthoc_policy_val_alpha_multiplier"
+            ),
             "policy_val_stride": int(args.policy_val_stride),
             "min_alpha": float(args.min_alpha),
             "min_l1": float(args.min_l1),

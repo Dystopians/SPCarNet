@@ -2,6 +2,37 @@
 
 Date: 2026-06-28
 
+## 2026-06-29 v249-v252 v169 Representation Gate Update
+
+新增日志：`docs/car_model/6-29-v249-v252-v169-RepresentationGate-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v249_v252_v169_representation_gate_summary.json`。
+
+这轮严格参考 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md` 执行：先做 flowers policy-val、teacher residual projection audit 和表示层改动；未通过 Phase-J all-axis gate 前不启动 full9。
+
+代码层面新增了真实方法与协议修复：
+
+- `scripts/car_model/train_surface_conditioned_residual_unet.py` 新增 train-fit-only `teacher_benefit_mask_mode`，只在 Phase-J teacher 相对 parent 真正有收益的区域学习 teacher residual，其余区域训练成 parent/no-op。
+- 默认把 `alpha=0` 从 policy best 选择中排除，避免失败方法被 no-op 伪装成“最优策略”；alpha-0 仍保留在诊断 rows 中。
+- checkpoint 现在显式保存 `surface_evidence_stats`，独立 checkpoint apply 可以重建 surface-evidence model。
+- 报告中明确标注 Phase-J flowers reference 只是 numeric reference，不能替代 official flowers exact。
+
+关键结果是负向但清晰：
+
+| run | change | alpha | PSNR gain | SSIM gain | LPIPS gain | changed | energy retention | cosine | verdict |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| v249a | LPIPS no-harm GT-assisted U-Net | 0.25 | +0.027357 | +0.000589 | +0.000250 | 0.246711 | 0.020147 | 0.127558 | tails fail |
+| v250a | edge/confidence memory texture | 0.125 | +0.007847 | -0.000152 | -0.000019 | n/a | active 0.048002 | active 0.284919 | SSIM/LPIPS fail |
+| v250b | raw-RGB memory texture | 0.125 | +0.007915 | -0.000107 | -0.000004 | n/a | active 0.031182 | active 0.295237 | SSIM/LPIPS fail |
+| v251a | low-rank K=4 surface texture | 0.0 | +0.000000 | +0.000000 | +0.000000 | 0.000000 | n/a | n/a | strict policy selects no-op |
+| v251b | surface texture U-Net evidence | 0.0 | +0.000000 | +0.000000 | +0.000000 | 0.000000 | n/a | n/a | strict policy selects no-op |
+| v252a | low-rank + teacher-benefit mask | 0.0625 | +0.000094 | +0.000002 | +0.000002 | 0.000369 | 0.000019 | 0.021462 | near no-op |
+| v252b | surface U-Net + teacher-benefit mask | 0.0625 | +0.000382 | +0.000011 | +0.000004 | 0.003078 | 0.000158 | 0.026398 | near no-op |
+
+结论：Phase-J teacher signal 很强（v251/v252 policy-val teacher headroom 约 `+0.913279 PSNR / +0.065512 SSIM / +0.017600 LPIPS`），但当前 baked surface RGB residual carrier 无法可靠承载这个信号。v252 的 teacher-benefit mask 确实降低了尾部破坏，但把 residual magnitude 压到接近 no-op；projection audit 证明 energy retention 低到 `0.000019` 和 `0.000158`，不是 full9 没跑导致的证据缺口。
+
+当前状态仍是 `NOT COMPLETE for paper-level all-axis win`。但对于 v169 prompt 的诊断标准，已经满足 B 类结论：当前 carrier family 无法在无 target/test GT 泄漏的前提下稳定改善 SSIM/LPIPS。下一步不应继续 alpha、face gate、support threshold 或 full9 promotion，而应换更强的 view-dependent source-feature/deferred surface renderer 表示。
+
 ## 2026-06-29 v246-v247 Source Evidence Bank / Projection Loss Update
 
 新增日志：`docs/car_model/6-29-v246-v247-SourceEvidenceBank-ProjectionLoss-Log.md`。
