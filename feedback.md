@@ -2,6 +2,28 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-30, v279-v280:
+
+The newest branch is **train-fit baked surface feature texture + neural residual decoder** in `scripts/car_model/train_perceptual_surface_residual_decoder.py`. New files:
+
+- `docs/car_model/6-30-v279-v280-SurfaceFeatureTexture-v169-Gate-Log.md`
+- `docs/car_model/results/v279_v280_surface_feature_texture_summary.json`
+
+Important new facts:
+
+- v279 added a calibration face reliability gate and confirmed that reliability gating alone only makes the method conservative; it does not solve target perceptual transfer.
+- v280 added `--surface_texture_mode v1`, a real representation-level upgrade. It bakes train-fit teacher residual statistics into a `face x UV-bin` surface feature texture and appends those features to the neural residual decoder during train, policy-val, and stripped no-GT target apply.
+- v280a texture coverage: `65536` candidate faces, `1048576` bins, `0.998383` covered faces, `0.406538` covered bins, `3788244` train-fit samples.
+- target/test apply no longer opens eval GT before adapted output is generated; eval GT is loaded only after no-GT apply for metrics.
+- v280a greatly improves policy-val: gains `+0.031057 PSNR / +0.000530 SSIM / +0.000980 LPIPS`.
+- v280a still fails target exact: `19.840939 / 0.618396 / 0.181078`, gains `+0.008885 / -0.001514 / -0.000743`.
+- v280a is still `0.463419` PSNR below the Phase-J flowers gate. Do not run full9.
+- Offline alpha-rescale diagnostic from v280a target renders shows that alphas `0.025` through `0.300` never achieve all-axis target gains; LPIPS remains negative even when SSIM becomes slightly positive.
+
+Current direct verdict:
+
+> v280 is the right kind of representation-level attempt, and it proves that a train-fit surface feature texture can carry more policy-val teacher signal. It still fails held-out target exact because the residual direction is perceptually unsafe. The next model should not continue alpha/face-gate scans. It should change the supervision target, for example patch/perceptual teacher residual distillation, or add a target-free residual-direction uncertainty model learned from source-view disagreement.
+
 Latest update on 2026-06-30, v274:
 
 The newest branch is **structure-safe texture low-rank residual carrier** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:

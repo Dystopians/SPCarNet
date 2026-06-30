@@ -2,6 +2,35 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 v279-v280 Surface Feature Texture Update
+
+新增日志：`docs/car_model/6-30-v279-v280-SurfaceFeatureTexture-v169-Gate-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v279_v280_surface_feature_texture_summary.json`。
+
+这轮严格参考 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md`：仍只跑 flowers policy-val + target exact；未过 Phase-J flowers all-axis gate 前不启动 full9。
+
+代码层面新增真实 train/eval pipeline 方法改动：
+
+- v279 新增 disjoint calibration split 和 per-face calibration reliability gate；这只是诊断性门控，不能作为主创新。
+- v280 新增 `--surface_texture_mode v1`，从 train-fit evidence 烘焙 `face x UV-bin` surface feature texture。
+- surface texture 每个 bin 有 18 维 train-only teacher residual / gain / parent / normal-view 统计，未覆盖 bin 回退到 face 均值。
+- neural decoder 的 train、policy-val、target no-GT apply 都拼接同一张 surface feature texture。
+- target exact 的形式审计已修正为先用 stripped no-GT evidence 生成 adapted，再读取 eval GT 计算指标。
+
+关键结果：
+
+| run | method | policy-val gains | target gains | target candidate | verdict |
+|---|---|---:|---:|---:|---|
+| v279a | calibration face reliability | +0.002628 / +0.000018 / +0.000135 | +0.000292 / -0.000277 / -0.000150 | 19.832346 / 0.619633 / 0.180485 | conservative fail |
+| v280a | surface feature texture v1 | +0.031057 / +0.000530 / +0.000980 | +0.008885 / -0.001514 / -0.000743 | 19.840939 / 0.618396 / 0.181078 | representation upgrade, target fail |
+
+v280a surface texture coverage: `65536` candidate faces, `1048576` UV bins, `0.998383` covered faces, `0.406538` covered bins, `3788244` train-fit samples.
+
+Alpha rescale diagnostic from saved v280a target PNGs shows no tested alpha from `0.025` to `0.300` achieves all-axis target gain: small alpha can make SSIM positive, but LPIPS remains negative. Therefore the target failure is not merely over-strong alpha; the residual direction remains perceptually unsafe on held-out target views.
+
+Direct verdict: v280 is a real representation-level attempt and is stronger on policy-val than v279/v277, but it still fails flowers exact and remains about `0.463` PSNR below Phase-J. Current state remains `NOT COMPLETE`; full9 remains blocked. Next work should replace raw RGB residual regression with perceptual/patch teacher supervision or a target-free residual-direction uncertainty model.
+
 ## 2026-06-30 v274 Structure-Safe Texture Low-Rank Update
 
 新增日志：`docs/car_model/6-30-v274-StructureSafeTexture-Gate-Log.md`。

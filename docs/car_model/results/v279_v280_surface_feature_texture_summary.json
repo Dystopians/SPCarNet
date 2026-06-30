@@ -1,0 +1,86 @@
+{
+  "date": "2026-06-30",
+  "status": "NOT COMPLETE",
+  "phasej_flowers_reference": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "runs": {
+    "v279a_calibration_face_reliability": {
+      "method": "reuse v277a learned decoder with calibration face reliability gate",
+      "output_json": "outputs/carnet/spcarnet_v279_calibration_face_reliability_20260630/v279a_reuse_v277a_calib_face_reliability_targetexact/v180_perceptual_surface_decoder_audit.json",
+      "policy_val_gains": {
+        "psnr": 0.0026276486296333466,
+        "ssim": 0.00001811981201171875,
+        "lpips": 0.0001347841074069341
+      },
+      "target_exact": {
+        "candidate_psnr": 19.832345946804228,
+        "candidate_ssim": 0.6196334632960233,
+        "candidate_lpips": 0.18048499050465497,
+        "psnr_gain": 0.0002920683567571429,
+        "ssim_gain": -0.00027694756334478205,
+        "lpips_gain": -0.00015012445774945346,
+        "mean_changed_fraction": 0.00910465542521994,
+        "phasej_gate_pass": false
+      },
+      "verdict": "negative; face reliability makes the method conservative but does not solve target perceptual transfer"
+    },
+    "v280a_surface_feature_texture_v1": {
+      "method": "train-fit baked face x UV-bin surface feature texture plus neural residual decoder",
+      "output_json": "outputs/carnet/spcarnet_v280_surface_feature_texture_20260630/v280a_surface_texture_v1_mid_targetexact/v180_perceptual_surface_decoder_audit.json",
+      "policy_val_gains": {
+        "psnr": 0.031057352721775604,
+        "ssim": 0.0005304813385009766,
+        "lpips": 0.0009799990803003311
+      },
+      "surface_texture": {
+        "candidate_faces": 65536,
+        "uv_bins_per_face": 16,
+        "total_bins": 1048576,
+        "covered_bins": 426286,
+        "covered_bin_fraction": 0.4065380096435547,
+        "covered_faces": 65430,
+        "covered_face_fraction": 0.998382568359375,
+        "train_fit_samples_used": 3788244
+      },
+      "target_exact": {
+        "candidate_psnr": 19.840938974779508,
+        "candidate_ssim": 0.618395981463519,
+        "candidate_lpips": 0.18107815967364746,
+        "psnr_gain": 0.008885096332039892,
+        "ssim_gain": -0.0015144293958490546,
+        "lpips_gain": -0.0007432936267419295,
+        "mean_changed_fraction": 0.12114967871312748,
+        "candidate_psnr_minus_phasej": -0.4634190252204924,
+        "candidate_ssim_minus_phasej": 0.06062598146351905,
+        "phasej_lpips_minus_candidate": 0.14814384032635255,
+        "phasej_gate_pass": false
+      },
+      "verdict": "real representation upgrade; policy-val improves, target exact still fails SSIM/LPIPS transfer and Phase-J PSNR gate"
+    }
+  },
+  "alpha_rescale_diagnostic": {
+    "source": "v280a saved alpha 0.75 target PNGs; image-space rescale diagnostic, not exact model reapply",
+    "json": "outputs/carnet/spcarnet_v280_surface_feature_texture_20260630/v280a_alpha_rescale_diagnostic/alpha_rescale_sweep.json",
+    "best_ssim_alpha": 0.125,
+    "all_tested_alphas_all_axis": false,
+    "tested": {
+      "0.025": {"psnr_gain": 0.0013842181219886644, "ssim_gain": 0.000034634362567554824, "lpips_gain": -0.000007449564608660611},
+      "0.05": {"psnr_gain": 0.002693655113667956, "ssim_gain": 0.00006185742941769686, "lpips_gain": -0.00002311339432542974},
+      "0.075": {"psnr_gain": 0.003928176592394195, "ssim_gain": 0.00008163939822803844, "lpips_gain": -0.0000472383742982691},
+      "0.1": {"psnr_gain": 0.0050878444339832055, "ssim_gain": 0.00009410625154321843, "lpips_gain": -0.00007948618043552746},
+      "0.125": {"psnr_gain": 0.006172638216243375, "ssim_gain": 0.00009942054748535156, "lpips_gain": -0.00012003088539296931},
+      "0.15": {"psnr_gain": 0.0071824438252202135, "ssim_gain": 0.00009770962325009432, "lpips_gain": -0.00016495653174140236},
+      "0.2": {"psnr_gain": 0.008976609803884372, "ssim_gain": 0.00007414275949651545, "lpips_gain": -0.00025311518799174917},
+      "0.25": {"psnr_gain": 0.010470095770404374, "ssim_gain": 0.0000252046368338845, "lpips_gain": -0.0003338202156803825},
+      "0.3": {"psnr_gain": 0.011662630916485643, "ssim_gain": -0.00004730983213944869, "lpips_gain": -0.0004046704958785664}
+    }
+  },
+  "no_target_gt_audit": {
+    "v279a": "pass, 22 checked views, no forbidden target keys",
+    "v280a": "pass, 22 checked views, no forbidden target keys; eval GT is loaded after no-GT apply"
+  },
+  "next_recommendation": "Do not run full9. Replace raw RGB residual regression with perceptual/patch teacher supervision or a target-free residual-direction uncertainty model."
+}
