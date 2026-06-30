@@ -694,3 +694,72 @@ Verdict: source residual variance alone is not a sufficient perceptual
 reliability signal. It improves target PSNR/SSIM but makes target LPIPS more
 negative than v253b/v253d. The next model should use a learned/calibrated
 perceptual reliability predictor, not just hand-designed agreement confidence.
+
+## 2026-06-29 Update: v256 Policy-Val L1 Reliability
+
+v256 implements the first learned/calibrated target-blind reliability policy in
+the v253 family:
+
+- build/load the v253 deferred source-feature bank;
+- use policy-val GT only to estimate per-face/per-UV-bin local L1 improvement;
+- convert that into a frozen reliability map;
+- apply to stripped target no-GT evidence;
+- load target GT only after apply for exact evaluation.
+
+Implementation:
+
+```text
+scripts/car_model/train_surface_deferred_source_residual_renderer.py
+```
+
+New controls:
+
+```text
+--policy_reliability_mode local_l1
+--policy_reliability_alpha
+--policy_reliability_min_count
+--policy_reliability_min_positive_fraction
+--policy_reliability_min_mean_gain
+--policy_reliability_gain_scale
+--policy_reliability_floor
+```
+
+Result:
+
+| run | min positive fraction | alpha | policy PSNR gain | policy SSIM gain | policy LPIPS gain | target PSNR gain | target SSIM gain | target LPIPS gain | target all-axis |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| v256a | 0.52 | 0.125 | +0.002737 | +0.000087 | +0.000035 | +0.000830 | +0.000026 | +0.000013 | pass |
+| v256b | 0.50 | 0.250 | +0.005508 | +0.000175 | +0.000070 | +0.001659 | +0.000050 | +0.000026 | pass |
+| v256c | 0.48 | 0.500 | +0.010844 | +0.000343 | +0.000144 | +0.003185 | +0.000091 | +0.000050 | pass |
+
+Current best is v256c:
+
+```text
+target exact: 19.835239 PSNR / 0.620001 SSIM / 0.180285 LPIPS
+gains vs parent: +0.003185 / +0.000091 / +0.000050
+```
+
+This is a real improvement over v253-v255 because the target exact LPIPS mean is
+now positive instead of negative. It is still **not** enough for full9 or paper
+readiness:
+
+- Phase-J flowers PSNR gate is still `20.304358`, so v256c is still `-0.469119`
+  PSNR below it under this flowers exact evidence path.
+- target SSIM and LPIPS tails remain slightly negative;
+- changed fraction is only `0.007788`, so qualitative changes are still subtle.
+
+Artifacts:
+
+```text
+docs/car_model/6-29-v256-PolicyL1Reliability-Log.md
+docs/car_model/results/v256_policy_l1_reliability_summary.json
+/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256c_policy_l1_reliability_minpos048_targetexact/v253_deferred_source_renderer_audit.json
+/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256c_policy_l1_reliability_minpos048_targetexact/target_exact_fixed_policy
+/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256c_policy_l1_reliability_minpos048_targetexact/wandb/offline-run-20260629_201901-7rm7opzk
+```
+
+Current verdict remains:
+
+```text
+Final status: NOT COMPLETE.
+```

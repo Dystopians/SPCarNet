@@ -366,6 +366,8 @@ def _load_source_bank(path: Path) -> tuple[np.ndarray, dict[str, np.ndarray], di
             "gain_l1": np.asarray(z["gain_l1"], dtype=np.float32),
             "alpha": np.asarray(z["alpha"], dtype=np.float32),
         }
+        if "policy_reliability" in z:
+            bank["policy_reliability"] = np.asarray(z["policy_reliability"], dtype=np.float32)
         args_json = str(np.asarray(z["args_json"]).item()) if "args_json" in z else "{}"
     valid = bank["counts"] > 0.0
     bins = int(bank["counts"].shape[1]) if bank["counts"].ndim >= 2 else 0
@@ -421,6 +423,110 @@ def _transform_bank_residuals(bank: dict[str, np.ndarray], mode: str, chroma_shr
     }
 
 
+def _calibrate_policy_reliability(
+    val_paths: list[Path],
+    candidate_faces: np.ndarray,
+    bank: dict[str, np.ndarray],
+    *,
+    grid: int,
+    alpha: float,
+    min_alpha: float,
+    min_source_count: float,
+    chunk_size: int,
+    view_beta: float,
+    normal_beta: float,
+    parent_beta: float,
+    count_gamma: float,
+    gain_beta: float,
+    confidence_tau: float,
+    source_agreement_mode: str,
+    source_agreement_beta: float,
+    source_agreement_min_confidence: float,
+    min_count: int,
+    min_positive_fraction: float,
+    min_mean_gain: float,
+    gain_scale: float,
+    floor: float,
+) -> dict[str, Any]:
+    bins = int(grid) * int(grid)
+    counts = np.zeros((int(candidate_faces.size), bins), dtype=np.float64)
+    positive = np.zeros_like(counts)
+    gain_sum = np.zeros_like(counts)
+    for path in tqdm(val_paths, desc="calibrate policy reliability"):
+        with np.load(path, allow_pickle=False) as z:
+            parent = np.asarray(z["rgb_render"], dtype=np.float32)[:3]
+            gt = np.asarray(z["rgb_gt"], dtype=np.float32)[:3]
+            delta, active, _support_stats = _predict_delta(
+                z,
+                candidate_faces,
+                bank,
+                grid=int(grid),
+                min_alpha=float(min_alpha),
+                min_source_count=float(min_source_count),
+                chunk_size=int(chunk_size),
+                view_beta=float(view_beta),
+                normal_beta=float(normal_beta),
+                parent_beta=float(parent_beta),
+                count_gamma=float(count_gamma),
+                gain_beta=float(gain_beta),
+                confidence_tau=float(confidence_tau),
+                source_agreement_mode=str(source_agreement_mode),
+                source_agreement_beta=float(source_agreement_beta),
+                source_agreement_min_confidence=float(source_agreement_min_confidence),
+            )
+            ys, xs = np.nonzero(active)
+            if ys.size == 0:
+                continue
+            faces = np.asarray(z["face_id"], dtype=np.int64)[ys, xs]
+            face_idx, ok = _face_indices(faces, candidate_faces)
+            if not np.any(ok):
+                continue
+            ys, xs, face_idx = ys[ok], xs[ok], face_idx[ok]
+            bin_id = _bin_ids(z, ys, xs, int(grid))
+            candidate = np.clip(parent + float(alpha) * delta, 0.0, 1.0)
+            parent_l1 = np.mean(np.abs(parent[:, ys, xs] - gt[:, ys, xs]), axis=0).astype(np.float64)
+            candidate_l1 = np.mean(np.abs(candidate[:, ys, xs] - gt[:, ys, xs]), axis=0).astype(np.float64)
+            gain = parent_l1 - candidate_l1
+            np.add.at(counts, (face_idx, bin_id), 1.0)
+            np.add.at(positive, (face_idx, bin_id), gain > 0.0)
+            np.add.at(gain_sum, (face_idx, bin_id), gain)
+    mean_gain = np.divide(gain_sum, np.maximum(counts, 1.0), out=np.zeros_like(gain_sum), where=counts > 0.0)
+    positive_fraction = np.divide(positive, np.maximum(counts, 1.0), out=np.zeros_like(positive), where=counts > 0.0)
+    min_pos = float(np.clip(float(min_positive_fraction), 0.0, 0.999))
+    pos_score = np.clip((positive_fraction - min_pos) / max(1.0 - min_pos, 1.0e-6), 0.0, 1.0)
+    gain_score = 1.0 / (
+        1.0 + np.exp(-np.clip((mean_gain - float(min_mean_gain)) / max(float(gain_scale), 1.0e-8), -50.0, 50.0))
+    )
+    reliable = (counts >= int(min_count)).astype(np.float64)
+    reliability = reliable * pos_score * gain_score
+    floor_v = float(np.clip(float(floor), 0.0, 1.0))
+    reliability = floor_v + (1.0 - floor_v) * reliability
+    reliability = reliability.astype(np.float32)
+    bank["policy_reliability"] = reliability
+    valid = counts >= int(min_count)
+    active = reliability > (floor_v + 1.0e-6)
+    return {
+        "mode": "local_l1",
+        "alpha": float(alpha),
+        "policy_val_views": int(len(val_paths)),
+        "min_count": int(min_count),
+        "min_positive_fraction": float(min_positive_fraction),
+        "min_mean_gain": float(min_mean_gain),
+        "gain_scale": float(gain_scale),
+        "floor": float(floor_v),
+        "observed_bins": int(np.count_nonzero(counts > 0.0)),
+        "valid_bins": int(np.count_nonzero(valid)),
+        "active_bins": int(np.count_nonzero(active)),
+        "active_bin_fraction": float(np.mean(active)),
+        "mean_reliability": float(np.mean(reliability)),
+        "mean_reliability_valid": float(np.mean(reliability[valid])) if np.any(valid) else 0.0,
+        "mean_positive_fraction_valid": float(np.mean(positive_fraction[valid])) if np.any(valid) else 0.0,
+        "mean_gain_valid": float(np.mean(mean_gain[valid])) if np.any(valid) else 0.0,
+        "reliability_quantiles": _quantiles([float(x) for x in reliability.reshape(-1)]),
+        "valid_reliability_quantiles": _quantiles([float(x) for x in reliability[valid].reshape(-1)]) if np.any(valid) else _quantiles([]),
+    }
+
+
 def _predict_delta(
     z: np.lib.npyio.NpzFile,
     candidate_faces: np.ndarray,
@@ -457,6 +563,7 @@ def _predict_delta(
     normal_map = np.asarray(z["normal"], dtype=np.float32)[:3]
     confidences: list[float] = []
     agreement_confidences: list[float] = []
+    policy_reliabilities: list[float] = []
     active_count = 0
     for start in range(0, int(ys_all.size), int(chunk_size)):
         end = min(int(ys_all.size), start + int(chunk_size))
@@ -511,6 +618,11 @@ def _predict_delta(
             confidence = np.ones_like(denom, dtype=np.float32)
         if str(source_agreement_mode) == "soft":
             confidence = confidence * source_agreement
+        policy_reliability = np.ones_like(confidence, dtype=np.float32)
+        if "policy_reliability" in bank:
+            policy_map = np.asarray(bank["policy_reliability"], dtype=np.float32)
+            policy_reliability = np.clip(policy_map[face_idx, bin_id], 0.0, 1.0).astype(np.float32)
+            confidence = confidence * policy_reliability
         pred = pred * confidence[:, None]
         yy, xx = ys[ok_rows], xs[ok_rows]
         delta[:, yy, xx] = pred[ok_rows].T
@@ -518,10 +630,12 @@ def _predict_delta(
         active_count += int(np.count_nonzero(ok_rows))
         confidences.append(confidence[ok_rows].astype(np.float32))
         agreement_confidences.append(source_agreement[ok_rows].astype(np.float32))
+        policy_reliabilities.append(policy_reliability[ok_rows].astype(np.float32))
     conf = np.concatenate(confidences) if confidences else np.zeros((0,), dtype=np.float32)
     agreement_conf = (
         np.concatenate(agreement_confidences) if agreement_confidences else np.zeros((0,), dtype=np.float32)
     )
+    policy_rel = np.concatenate(policy_reliabilities) if policy_reliabilities else np.zeros((0,), dtype=np.float32)
     return delta, active, {
         "surface_support_fraction": float(np.mean(support)),
         "active_fraction": float(active_count / max(int(support.size), 1)),
@@ -530,6 +644,8 @@ def _predict_delta(
         "p10_confidence": float(np.quantile(conf, 0.10)) if conf.size else 0.0,
         "mean_source_agreement_confidence": float(np.mean(agreement_conf)) if agreement_conf.size else 0.0,
         "p10_source_agreement_confidence": float(np.quantile(agreement_conf, 0.10)) if agreement_conf.size else 0.0,
+        "mean_policy_reliability": float(np.mean(policy_rel)) if policy_rel.size else 0.0,
+        "p10_policy_reliability": float(np.quantile(policy_rel, 0.10)) if policy_rel.size else 0.0,
     }
 
 
@@ -551,6 +667,7 @@ def _summarize_rows(rows: list[dict[str, Any]], *, compute_lpips: bool) -> dict[
         "support_active_fraction": _mean([float(r.get("active_fraction", 0.0)) for r in rows]),
         "support_active_over_support_fraction": _mean([float(r.get("active_over_support_fraction", 0.0)) for r in rows]),
         "mean_confidence": _mean([float(r.get("mean_confidence", 0.0)) for r in rows]),
+        "mean_policy_reliability": _mean([float(r.get("mean_policy_reliability", 0.0)) for r in rows]),
         "mean_changed_fraction": _mean([float(r.get("changed_fraction", 0.0)) for r in rows]),
     }
     if compute_lpips:
@@ -1058,6 +1175,13 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- nonempty face bins: `{payload['fit_source_bank'].get('nonempty_face_bins')}`",
         f"- nonempty source slots: `{payload['fit_source_bank'].get('nonempty_source_slots')}`",
         "",
+        "## Policy Reliability",
+        "",
+        f"- mode: `{payload.get('policy_reliability', {}).get('mode', 'off')}`",
+        f"- active bins: `{payload.get('policy_reliability', {}).get('active_bins', 0)}`",
+        f"- mean reliability: `{payload.get('policy_reliability', {}).get('mean_reliability', 0.0):.6f}`",
+        f"- mean valid reliability: `{payload.get('policy_reliability', {}).get('mean_reliability_valid', 0.0):.6f}`",
+        "",
         "## Artifacts",
         "",
         f"- JSON: `{payload['output_json']}`",
@@ -1125,6 +1249,13 @@ def main() -> int:
     parser.add_argument("--source_agreement_mode", choices=["off", "soft", "hard"], default="off")
     parser.add_argument("--source_agreement_beta", type=float, default=0.0)
     parser.add_argument("--source_agreement_min_confidence", type=float, default=0.25)
+    parser.add_argument("--policy_reliability_mode", choices=["off", "local_l1"], default="off")
+    parser.add_argument("--policy_reliability_alpha", type=float, default=0.03125)
+    parser.add_argument("--policy_reliability_min_count", type=int, default=8)
+    parser.add_argument("--policy_reliability_min_positive_fraction", type=float, default=0.52)
+    parser.add_argument("--policy_reliability_min_mean_gain", type=float, default=0.0)
+    parser.add_argument("--policy_reliability_gain_scale", type=float, default=0.00025)
+    parser.add_argument("--policy_reliability_floor", type=float, default=0.0)
     parser.add_argument("--bank_residual_transform_mode", choices=["raw_rgb", "luma_only", "chroma_shrink"], default="raw_rgb")
     parser.add_argument("--bank_residual_chroma_shrink", type=float, default=0.25)
     parser.add_argument("--alpha_grid", default="0,0.03125,0.0625,0.09375,0.125,0.1875,0.25,0.375,0.5,0.75,1")
@@ -1205,6 +1336,32 @@ def main() -> int:
         str(args.bank_residual_transform_mode),
         float(args.bank_residual_chroma_shrink),
     )
+    policy_reliability_summary: dict[str, Any] = {"mode": "off"}
+    if str(args.policy_reliability_mode) == "local_l1":
+        policy_reliability_summary = _calibrate_policy_reliability(
+            val_paths,
+            candidate_faces,
+            bank,
+            grid=int(args.grid),
+            alpha=float(args.policy_reliability_alpha),
+            min_alpha=float(args.min_alpha),
+            min_source_count=float(args.min_source_count),
+            chunk_size=int(args.eval_chunk_size),
+            view_beta=float(args.view_beta),
+            normal_beta=float(args.normal_beta),
+            parent_beta=float(args.parent_beta),
+            count_gamma=float(args.count_gamma),
+            gain_beta=float(args.gain_beta),
+            confidence_tau=float(args.confidence_tau),
+            source_agreement_mode=str(args.source_agreement_mode),
+            source_agreement_beta=float(args.source_agreement_beta),
+            source_agreement_min_confidence=float(args.source_agreement_min_confidence),
+            min_count=int(args.policy_reliability_min_count),
+            min_positive_fraction=float(args.policy_reliability_min_positive_fraction),
+            min_mean_gain=float(args.policy_reliability_min_mean_gain),
+            gain_scale=float(args.policy_reliability_gain_scale),
+            floor=float(args.policy_reliability_floor),
+        )
     alpha_grid = sorted({float(item) for item in str(args.alpha_grid).split(",") if item.strip()})
     if 0.0 not in alpha_grid:
         alpha_grid = [0.0, *alpha_grid]
@@ -1294,20 +1451,22 @@ def main() -> int:
             and (not bool(args.compute_lpips) or target_summary.get("lpips_gain", 0.0) > 0.0)
         )
     checkpoint_path = output_dir / "v253_deferred_source_renderer_bank.npz"
-    np.savez_compressed(
-        checkpoint_path,
-        schema=np.asarray("spcarnet_v253_deferred_source_renderer_bank_v1"),
-        candidate_faces=candidate_faces.astype(np.int64),
-        score=bank["score"].astype(np.float16),
-        counts=bank["counts"].astype(np.float16),
-        residual=bank["residual"].astype(np.float16),
-        parent_rgb=bank["parent_rgb"].astype(np.float16),
-        normal=bank["normal"].astype(np.float16),
-        camera_dir=bank["camera_dir"].astype(np.float16),
-        gain_l1=bank["gain_l1"].astype(np.float16),
-        alpha=bank["alpha"].astype(np.float16),
-        args_json=np.asarray(json.dumps(vars(args), sort_keys=True)),
-    )
+    checkpoint_payload = {
+        "schema": np.asarray("spcarnet_v253_deferred_source_renderer_bank_v1"),
+        "candidate_faces": candidate_faces.astype(np.int64),
+        "score": bank["score"].astype(np.float16),
+        "counts": bank["counts"].astype(np.float16),
+        "residual": bank["residual"].astype(np.float16),
+        "parent_rgb": bank["parent_rgb"].astype(np.float16),
+        "normal": bank["normal"].astype(np.float16),
+        "camera_dir": bank["camera_dir"].astype(np.float16),
+        "gain_l1": bank["gain_l1"].astype(np.float16),
+        "alpha": bank["alpha"].astype(np.float16),
+        "args_json": np.asarray(json.dumps(vars(args), sort_keys=True)),
+    }
+    if "policy_reliability" in bank:
+        checkpoint_payload["policy_reliability"] = bank["policy_reliability"].astype(np.float16)
+    np.savez_compressed(checkpoint_path, **checkpoint_payload)
     verdict = (
         "PASS_POLICY_VAL_PROMOTE_TO_FLOWERS_EXACT"
         if all_axis
@@ -1326,6 +1485,7 @@ def main() -> int:
         "candidate_face_summary": face_summary,
         "fit_source_bank": bank_summary,
         "bank_residual_transform": residual_transform_summary,
+        "policy_reliability": policy_reliability_summary,
         "policy_val_all_axis_pass": bool(all_axis),
         "policy_val": policy_val,
         "target_no_gt_audit": target_no_gt_audit,
@@ -1359,6 +1519,8 @@ def main() -> int:
                 "source_bank/residual_energy_ratio_after_transform": float(
                     residual_transform_summary.get("energy_ratio_after_before", 1.0)
                 ),
+                "policy_reliability/mean": float(policy_reliability_summary.get("mean_reliability", 0.0)),
+                "policy_reliability/active_bins": float(policy_reliability_summary.get("active_bins", 0.0)),
                 "target_no_gt/pass": float(bool(target_no_gt_audit.get("pass", False))),
                 "target_eval/pass_vs_parent_all_axis": float(bool(target_eval.get("pass_vs_parent_all_axis", False))),
                 "target_eval/psnr_gain": float(target_eval.get("summary", {}).get("psnr_gain", 0.0)),

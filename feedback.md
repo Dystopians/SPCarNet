@@ -759,6 +759,65 @@ reliability from held-out policy-val evidence, using richer features:
 multi-source agreement, source view diversity, residual variance, edge support,
 teacher-gain stability, normal/view consistency, and parent-color consistency.
 
+# 2026-06-29 v256 Policy-Val L1 Reliability Addendum
+
+v256 implements a learned/calibrated target-blind reliability map:
+
+```text
+scripts/car_model/train_surface_deferred_source_residual_renderer.py
+--policy_reliability_mode local_l1
+```
+
+The policy uses policy-val GT only to learn whether each face/UV bin locally
+reduces L1 error. The learned reliability map is frozen before target apply.
+Target evidence remains stripped no-GT; target GT is loaded only after apply for
+evaluation.
+
+Artifacts:
+
+```text
+docs/car_model/6-29-v256-PolicyL1Reliability-Log.md
+docs/car_model/results/v256_policy_l1_reliability_summary.json
+```
+
+Results:
+
+| run | min positive fraction | alpha | policy PSNR gain | policy SSIM gain | policy LPIPS gain | target PSNR gain | target SSIM gain | target LPIPS gain | target all-axis |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| v256a | 0.52 | 0.125 | +0.002737 | +0.000087 | +0.000035 | +0.000830 | +0.000026 | +0.000013 | pass |
+| v256b | 0.50 | 0.250 | +0.005508 | +0.000175 | +0.000070 | +0.001659 | +0.000050 | +0.000026 | pass |
+| v256c | 0.48 | 0.500 | +0.010844 | +0.000343 | +0.000144 | +0.003185 | +0.000091 | +0.000050 | pass |
+
+Current best:
+
+```text
+v256c target exact = 19.835239 / 0.620001 / 0.180285
+v256c target gains vs parent = +0.003185 / +0.000091 / +0.000050
+```
+
+This is the first v253-family result that fixes the target mean LPIPS failure.
+It should replace v253/v255 as the current best method state.
+
+Remaining limitations:
+
+- It still does not pass the Phase-J flowers PSNR gate (`20.304358`).
+- Target SSIM and LPIPS tails are still slightly negative.
+- The visual changed fraction remains small (`0.007788` in v256c), so
+  qualitative improvements may be subtle.
+- Full9 is still blocked by the v169 rule.
+
+Next recommended prompt:
+
+```text
+Continue from v256c. Preserve the target-blind policy-val reliability principle,
+but replace local L1 reliability with a richer patch/perceptual reliability
+model. Use policy-val only to learn reliability from patch L1, luma-gradient
+error, SSIM proxy, LPIPS-sensitive edge statistics, source view diversity,
+teacher-gain stability, and residual variance. Require policy-val and target
+exact mean metrics and tails to improve before any full9. Do not use target/test
+GT for policy selection.
+```
+
 # 2026-06-29 Residual Projection Audit Addendum
 
 New tool:

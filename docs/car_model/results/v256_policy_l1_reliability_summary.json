@@ -1,0 +1,148 @@
+{
+  "schema": "spcarnet_v256_policy_l1_reliability_summary_v1",
+  "date": "2026-06-29",
+  "base_bank": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v253b_source_feature_deferred_targetexact/v253_deferred_source_renderer_bank.npz",
+  "script": "scripts/car_model/train_surface_deferred_source_residual_renderer.py",
+  "method_change": {
+    "name": "policy-val local-L1 reliability",
+    "description": "Use train-policy-val GT only to learn a per-face/per-UV-bin reliability map from local L1 improvement. Freeze this target-blind reliability map before applying residuals to stripped target no-GT evidence.",
+    "target_gt_used_for_policy": false,
+    "policy_val_gt_used_for_calibration": true,
+    "target_gt_loaded_after_apply_for_eval": true
+  },
+  "status": {
+    "target_exact_all_axis_vs_parent": true,
+    "phasej_flowers_gate_passed": false,
+    "full9_allowed": false,
+    "verdict": "v256 fixes the v253-v255 mean LPIPS failure and gives target exact all-axis mean gains vs parent, but it still does not beat the Phase-J flowers PSNR gate and target tails are not fully safe."
+  },
+  "phasej_flowers_exact_gate": {
+    "psnr_gt": 20.304358,
+    "ssim_gt": 0.55777,
+    "lpips_lt": 0.329222
+  },
+  "runs": [
+    {
+      "name": "v256a_policy_l1_reliability_targetexact",
+      "min_positive_fraction": 0.52,
+      "selected_alpha": 0.125,
+      "policy_reliability": {
+        "mean_reliability": 0.04256530851125717,
+        "active_bins": 14792
+      },
+      "policy_val": {
+        "psnr_gain": 0.0027371519363867947,
+        "ssim_gain": 0.00008738040924072266,
+        "lpips_gain": 0.000034850090742111206,
+        "psnr_tail_cvar": 0.002031521614453524,
+        "ssim_tail_cvar": 0.00006395578384399414,
+        "lpips_tail_cvar": 0.000015310943126678467,
+        "positive_view_fraction": 1.0,
+        "ssim_positive_view_fraction": 1.0,
+        "lpips_positive_view_fraction": 1.0
+      },
+      "target_exact": {
+        "candidate_psnr": 19.832884057162964,
+        "candidate_ssim": 0.6199359446763992,
+        "candidate_lpips": 0.18032207814129916,
+        "psnr_gain": 0.0008301787154980644,
+        "ssim_gain": 0.00002553381703116677,
+        "lpips_gain": 0.000012787905606356533,
+        "psnr_tail_cvar": 0.00012083761078329758,
+        "ssim_tail_cvar": 0.000003238519032796224,
+        "lpips_tail_cvar": -0.000013401110967000326,
+        "changed_fraction": 0.0031352423667414184,
+        "lpips_positive_view_fraction": 0.7727272727272727,
+        "pass_vs_parent_all_axis": true
+      },
+      "artifacts": {
+        "json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256a_policy_l1_reliability_targetexact/v253_deferred_source_renderer_audit.json",
+        "wandb": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256a_policy_l1_reliability_targetexact/wandb/offline-run-20260629_201415-tsv1tup6"
+      }
+    },
+    {
+      "name": "v256b_policy_l1_reliability_minpos050_targetexact",
+      "min_positive_fraction": 0.5,
+      "selected_alpha": 0.25,
+      "policy_reliability": {
+        "mean_reliability": 0.04432579129934311,
+        "active_bins": 15026
+      },
+      "policy_val": {
+        "psnr_gain": 0.005507573578141726,
+        "ssim_gain": 0.00017536679903666177,
+        "lpips_gain": 0.00007022048036257426,
+        "psnr_tail_cvar": 0.00406541360857382,
+        "ssim_tail_cvar": 0.00012823939323425293,
+        "lpips_tail_cvar": 0.000029765069484710693,
+        "positive_view_fraction": 1.0,
+        "ssim_positive_view_fraction": 1.0,
+        "lpips_positive_view_fraction": 1.0
+      },
+      "target_exact": {
+        "candidate_psnr": 19.83371240587043,
+        "candidate_ssim": 0.6199602240865881,
+        "candidate_lpips": 0.1803089857778766,
+        "psnr_gain": 0.0016585274229635031,
+        "ssim_gain": 0.000049813227220015094,
+        "lpips_gain": 0.000025880269028923728,
+        "psnr_tail_cvar": 0.00021896834189287043,
+        "ssim_tail_cvar": 0.0000036160151163736978,
+        "lpips_tail_cvar": -0.000028227766354878742,
+        "changed_fraction": 0.005323928324995688,
+        "lpips_positive_view_fraction": 0.7727272727272727,
+        "pass_vs_parent_all_axis": true
+      },
+      "artifacts": {
+        "json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256b_policy_l1_reliability_minpos050_targetexact/v253_deferred_source_renderer_audit.json",
+        "wandb": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256b_policy_l1_reliability_minpos050_targetexact/wandb/offline-run-20260629_201641-gfaajjfy"
+      }
+    },
+    {
+      "name": "v256c_policy_l1_reliability_minpos048_targetexact",
+      "min_positive_fraction": 0.48,
+      "selected_alpha": 0.5,
+      "policy_reliability": {
+        "mean_reliability": 0.04617001488804817,
+        "active_bins": 16542
+      },
+      "policy_val": {
+        "psnr_gain": 0.010843740621999073,
+        "ssim_gain": 0.00034345189730326336,
+        "lpips_gain": 0.00014396756887435913,
+        "psnr_tail_cvar": 0.007958967730591127,
+        "ssim_tail_cvar": 0.0002506673336029053,
+        "lpips_tail_cvar": 0.00006010383367538452,
+        "positive_view_fraction": 1.0,
+        "ssim_positive_view_fraction": 1.0,
+        "lpips_positive_view_fraction": 1.0
+      },
+      "target_exact": {
+        "candidate_psnr": 19.835239182752343,
+        "candidate_ssim": 0.6200014393437993,
+        "candidate_lpips": 0.1802853521975604,
+        "psnr_gain": 0.0031853043048758163,
+        "ssim_gain": 0.00009102848443118009,
+        "lpips_gain": 0.00004951384934512052,
+        "psnr_tail_cvar": 0.00031298371804311387,
+        "ssim_tail_cvar": -0.000005086263020833333,
+        "lpips_tail_cvar": -0.00005555649598439535,
+        "changed_fraction": 0.007787864412627219,
+        "lpips_positive_view_fraction": 0.8181818181818182,
+        "pass_vs_parent_all_axis": true
+      },
+      "artifacts": {
+        "json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256c_policy_l1_reliability_minpos048_targetexact/v253_deferred_source_renderer_audit.json",
+        "wandb": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256c_policy_l1_reliability_minpos048_targetexact/wandb/offline-run-20260629_201901-7rm7opzk",
+        "target_renders": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v256c_policy_l1_reliability_minpos048_targetexact/target_exact_fixed_policy"
+      }
+    }
+  ],
+  "best_current": "v256c_policy_l1_reliability_minpos048_targetexact",
+  "lessons": [
+    "Policy-val local-L1 reliability is the first v253-family strategy to make target exact mean LPIPS positive while preserving PSNR and SSIM gains.",
+    "The reliability map is sparse: mean reliability is about 0.046 and only 16542 face/bin entries are active in v256c.",
+    "Relaxing the positive-fraction threshold from 0.52 to 0.48 increases target gains, but target SSIM and LPIPS tails remain slightly negative.",
+    "This is not enough for full9 because the Phase-J flowers PSNR gate is still not met."
+  ]
+}
