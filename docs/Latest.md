@@ -1074,6 +1074,69 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-06-30 Update: v294 Teacher Projection Upper-Bound Diagnostic
+
+This update follows the hard diagnostic requirement in:
+
+```text
+docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md
+```
+
+Command summary:
+
+```text
+CUDA_VISIBLE_DEVICES=1 /home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/analyze_v169_policy_val_upper_bound.py \
+  --fit_evidence_dir /dev/shm/peilincai_spcarnet_20260629_v168_direct_teacher_lowcopy_exact/flowers/teacher_surface_evidence \
+  --region_carrier_json /dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/flowers/carrier.json \
+  --texture_sizes 8,16 \
+  --teacher_distilled_basis_mode low_rank_view_texture_rich \
+  --teacher_distilled_low_rank_texture_ranks 2,4,8 \
+  --enable_full_image_psnr_rescan
+```
+
+The diagnostic fit Phase-J teacher residuals on train-fit evidence and certified
+on train-policy-val only. It did not read target/test GT and did not write model
+artifacts.
+
+Key result:
+
+| verdict | value |
+|---|---|
+| nominal all-axis pass | true |
+| robust all-axis pass | false |
+| best texture/rank/alpha | 8 / 4 / 0.03125 |
+| full-image PSNR gain | +0.000164 dB |
+| SSIM gain | +0.000000392 |
+| LPIPS gain | +0.000000956 |
+| SSIM positive-view fraction | 0.500000 |
+| LPIPS positive-view fraction | 0.666667 |
+| SSIM CVaR20 gain | -0.000002623 |
+| LPIPS CVaR20 gain | -0.000008220 |
+
+Interpretation:
+
+- The current carrier can technically project a nonzero Phase-J residual signal
+  into policy-val, but the useful image-level gain is far too small.
+- The robust tail gate fails, so this does not justify flowers exact or full9.
+- This confirms the Phase-J bottleneck diagnosis: the problem is not another
+  alpha/rank setting. The current carrier lacks a reliable cross-view residual
+  direction model.
+
+Artifacts:
+
+```text
+docs/car_model/6-30-v294-TeacherProjectionUpperBound-Diagnostic.md
+docs/car_model/results/v294_teacher_projection_upper_bound_summary.json
+outputs/carnet/spcarnet_v294_projection_diagnostics_20260630/flowers_v169_projection_upper_bound.json
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-06-30 Update: v290-v292 PatchViewMoE + View-Support v169 Gate
 
 This update follows the stricter v169 prompt:

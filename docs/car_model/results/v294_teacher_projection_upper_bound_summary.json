@@ -1,0 +1,55 @@
+{
+  "date": "2026-06-30",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "script": "scripts/car_model/analyze_v169_policy_val_upper_bound.py",
+  "method": "v294 teacher residual projection upper-bound diagnostic",
+  "fit_evidence_dir": "/dev/shm/peilincai_spcarnet_20260629_v168_direct_teacher_lowcopy_exact/flowers/teacher_surface_evidence",
+  "region_carrier_json": "/dev/shm/peilincai_spcarnet_vnext_full9_inputs_20260626/flowers/carrier.json",
+  "full_output_json": "outputs/carnet/spcarnet_v294_projection_diagnostics_20260630/flowers_v169_projection_upper_bound.json",
+  "report_md": "docs/car_model/6-30-v294-TeacherProjectionUpperBound-Diagnostic.md",
+  "tested_candidates": {
+    "texture_sizes": [8, 16],
+    "teacher_distilled_basis_mode": "low_rank_view_texture_rich",
+    "teacher_distilled_low_rank_texture_ranks": [2, 4, 8],
+    "alpha_grid": [0.0, 0.03125, 0.0625, 0.125, 0.25, 0.5],
+    "full_image_psnr_rescan": true,
+    "lpips_enabled": true,
+    "policy_val_views": 12,
+    "fit_views": 34
+  },
+  "verdict": {
+    "policy_val_upper_bound_pass": true,
+    "robust_policy_val_upper_bound_pass": false,
+    "reason": "current_carrier_improves_policy_val_all_axis",
+    "robust_reason": "current_carrier_too_weak_for_tail_robust_policy_val_ssim_lpips",
+    "required_next_step": "proceed_to_v169_representation_upgrade",
+    "robust_required_next_step": "do_not_launch_flowers_exact_from_this_projection_without_stronger_representation"
+  },
+  "best_all_axis": {
+    "texture_size": 8,
+    "teacher_distilled_low_rank_texture_rank": 4,
+    "alpha": 0.03125,
+    "relative_gain": 0.019032331544334775,
+    "psnr_gain": 0.0001638197727489299,
+    "ssim_gain": 3.923972447713216e-7,
+    "lpips_gain": 9.561578432718913e-7,
+    "psnr_positive_view_fraction": 0.9166666666666666,
+    "ssim_positive_view_fraction": 0.5,
+    "lpips_positive_view_fraction": 0.6666666666666666,
+    "ssim_min_view_gain": -3.993511199951172e-6,
+    "ssim_cvar20_view_gain": -2.6226043701171875e-6,
+    "lpips_min_view_gain": -1.2680888175964355e-5,
+    "lpips_cvar20_view_gain": -8.220473925272623e-6
+  },
+  "candidate_counts": {
+    "all_axis_candidates": 4,
+    "robust_all_axis_candidates": 0
+  },
+  "interpretation": [
+    "The current face/UV/low-rank carrier can produce a tiny policy-val all-axis gain, but only at alpha 0.03125.",
+    "The gain is many orders too small for the Phase-J PSNR gap: best full-image PSNR gain is only +0.000164 dB.",
+    "SSIM and LPIPS gains are around 1e-6 and fail tail robustness; SSIM positive-view fraction is only 0.5 and LPIPS positive-view fraction is 0.667.",
+    "This diagnostic should block flowers exact/full9 promotion for this projection route and motivate a stronger representation that models cross-view residual direction and uncertainty."
+  ],
+  "final_status": "NOT COMPLETE"
+}

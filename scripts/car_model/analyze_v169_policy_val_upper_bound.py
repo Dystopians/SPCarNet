@@ -89,6 +89,8 @@ def parse_args() -> argparse.Namespace:
             "low_rank_view_texture",
             "low_rank_view_texture_rich_k4",
             "low_rank_view_texture_rich",
+            "full_rank_view_texture_rich",
+            "full_rank_surface_feature_rff_texture",
         ),
         default="none",
     )
@@ -117,6 +119,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--phasej_flowers_psnr", type=float, default=20.304358)
     parser.add_argument("--phasej_flowers_ssim", type=float, default=0.557770)
     parser.add_argument("--phasej_flowers_lpips", type=float, default=0.329222)
+    parser.add_argument("--robust_min_positive_view_fraction", type=float, default=0.75)
+    parser.add_argument("--robust_min_ssim_positive_view_fraction", type=float, default=0.75)
+    parser.add_argument("--robust_min_lpips_positive_view_fraction", type=float, default=0.75)
+    parser.add_argument("--robust_min_image_l1_positive_view_fraction", type=float, default=0.75)
+    parser.add_argument("--robust_min_relative_cvar20_gain", type=float, default=0.0)
+    parser.add_argument("--robust_min_ssim_cvar20_gain", type=float, default=0.0)
+    parser.add_argument("--robust_min_lpips_cvar20_gain", type=float, default=0.0)
+    parser.add_argument("--robust_min_image_l1_cvar20_gain", type=float, default=0.0)
+    parser.add_argument("--robust_min_relative_min_view_gain", type=float, default=0.0)
+    parser.add_argument("--robust_min_ssim_min_view_gain", type=float, default=-1.0e-7)
+    parser.add_argument("--robust_min_lpips_min_view_gain", type=float, default=-1.0e-7)
     return parser.parse_args()
 
 
@@ -318,7 +331,58 @@ def row_with_psnr(row: dict[str, Any], psnr_summary: dict[str, dict[str, Any]]) 
     return out
 
 
-def select_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _float_or_default(row: dict[str, Any], key: str, default: float) -> float:
+    value = row.get(key)
+    if value is None:
+        return float(default)
+    try:
+        value_f = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+    if not math.isfinite(value_f):
+        return float(default)
+    return value_f
+
+
+def _passes_robust_gate(row: dict[str, Any], args: argparse.Namespace) -> bool:
+    if float(row.get("alpha", 0.0)) <= 0.0:
+        return False
+    if _float_or_default(row, "relative_gain", -1.0) <= 0.0:
+        return False
+    psnr_gain = row.get("psnr_gain")
+    if psnr_gain is not None and _float_or_default(row, "psnr_gain", -1.0) <= 0.0:
+        return False
+    if _float_or_default(row, "ssim_gain", -1.0) <= 0.0:
+        return False
+    if int(row.get("lpips_view_count", 0) or 0) <= 0:
+        return False
+    if _float_or_default(row, "lpips_gain", -1.0) <= 0.0:
+        return False
+    checks = [
+        ("positive_view_fraction", "robust_min_positive_view_fraction"),
+        ("ssim_positive_view_fraction", "robust_min_ssim_positive_view_fraction"),
+        ("lpips_positive_view_fraction", "robust_min_lpips_positive_view_fraction"),
+        ("image_l1_positive_view_fraction", "robust_min_image_l1_positive_view_fraction"),
+    ]
+    for key, arg_name in checks:
+        if _float_or_default(row, key, 0.0) < float(getattr(args, arg_name)):
+            return False
+    tail_checks = [
+        ("cvar20_view_relative_gain", "robust_min_relative_cvar20_gain"),
+        ("ssim_cvar20_view_gain", "robust_min_ssim_cvar20_gain"),
+        ("lpips_cvar20_view_gain", "robust_min_lpips_cvar20_gain"),
+        ("image_l1_cvar20_view_gain", "robust_min_image_l1_cvar20_gain"),
+        ("min_view_relative_gain", "robust_min_relative_min_view_gain"),
+        ("ssim_min_view_gain", "robust_min_ssim_min_view_gain"),
+        ("lpips_min_view_gain", "robust_min_lpips_min_view_gain"),
+    ]
+    for key, arg_name in tail_checks:
+        if _float_or_default(row, key, -float("inf")) < float(getattr(args, arg_name)):
+            return False
+    return True
+
+
+def select_rows(rows: list[dict[str, Any]], args: argparse.Namespace) -> dict[str, Any]:
     nonzero = [row for row in rows if float(row.get("alpha", 0.0)) > 0.0]
     all_axis = [
         row
@@ -329,6 +393,7 @@ def select_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         and int(row.get("lpips_view_count", 0) or 0) > 0
         and float(row.get("lpips_gain", 0.0)) > 0.0
     ]
+    robust_all_axis = [row for row in nonzero if _passes_robust_gate(row, args)]
     return {
         "best_relative_gain": max(nonzero, key=lambda row: float(row.get("relative_gain", -1.0)), default=None),
         "best_ssim_gain": max(nonzero, key=lambda row: float(row.get("ssim_gain", -1.0)), default=None),
@@ -342,7 +407,17 @@ def select_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
             ),
             default=None,
         ),
+        "best_robust_all_axis": max(
+            robust_all_axis,
+            key=lambda row: (
+                float(row.get("ssim_gain", 0.0)),
+                float(row.get("lpips_gain", 0.0)),
+                float(row.get("relative_gain", 0.0)),
+            ),
+            default=None,
+        ),
         "all_axis_candidate_count": int(len(all_axis)),
+        "robust_all_axis_candidate_count": int(len(robust_all_axis)),
     }
 
 
@@ -383,6 +458,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
 
     candidate_reports = []
     best_overall = None
+    best_robust_overall = None
     for texture_size in texture_sizes:
         for rank in rank_candidates:
             args._current_teacher_low_rank_texture_rank = int(rank)
@@ -412,7 +488,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                 }
             )
             rows = [row_with_psnr(row, psnr.get("summary_by_alpha", {})) for row in list(policy.get("rows", []))]
-            selections = select_rows(rows)
+            selections = select_rows(rows, args)
             report = {
                 "texture_size": int(texture_size),
                 "teacher_distilled_low_rank_texture_rank": int(rank),
@@ -440,16 +516,39 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                     float(best_overall.get("relative_gain", 0.0)),
                 ):
                     best_overall = selected_with_size
+            robust_selected = selections.get("best_robust_all_axis")
+            if robust_selected is not None:
+                robust_selected_with_size = dict(robust_selected)
+                robust_selected_with_size["texture_size"] = int(texture_size)
+                robust_selected_with_size["teacher_distilled_low_rank_texture_rank"] = int(rank)
+                if best_robust_overall is None or (
+                    float(robust_selected_with_size.get("ssim_gain", 0.0)),
+                    float(robust_selected_with_size.get("lpips_gain", 0.0)),
+                    float(robust_selected_with_size.get("relative_gain", 0.0)),
+                ) > (
+                    float(best_robust_overall.get("ssim_gain", 0.0)),
+                    float(best_robust_overall.get("lpips_gain", 0.0)),
+                    float(best_robust_overall.get("relative_gain", 0.0)),
+                ):
+                    best_robust_overall = robust_selected_with_size
 
     verdict = {
         "policy_val_upper_bound_pass": bool(best_overall is not None),
+        "robust_policy_val_upper_bound_pass": bool(best_robust_overall is not None),
         "reason": "current_carrier_improves_policy_val_all_axis"
         if best_overall is not None
         else "current_carrier_too_weak_for_policy_val_ssim_lpips",
+        "robust_reason": "current_carrier_improves_policy_val_tail_robust_all_axis"
+        if best_robust_overall is not None
+        else "current_carrier_too_weak_for_tail_robust_policy_val_ssim_lpips",
         "best_all_axis": best_overall,
+        "best_robust_all_axis": best_robust_overall,
         "required_next_step": "proceed_to_v169_representation_upgrade"
         if best_overall is not None
         else "do_not_launch_flowers_exact_or_full9_until_representation_changes",
+        "robust_required_next_step": "flowers_exact_is_justified_by_robust_policy_val"
+        if best_robust_overall is not None
+        else "do_not_launch_flowers_exact_from_this_projection_without_stronger_representation",
     }
     return adapter.json_safe(
         {
@@ -481,6 +580,19 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                 "teacher_distilled_basis_apply_mode": str(args.teacher_distilled_basis_apply_mode),
                 "teacher_distilled_basis_blend": float(args.teacher_distilled_basis_blend),
                 "adaptive_low_support_teacher_basis": bool(args.enable_adaptive_low_support_teacher_basis),
+                "robust_gate": {
+                    "min_positive_view_fraction": float(args.robust_min_positive_view_fraction),
+                    "min_ssim_positive_view_fraction": float(args.robust_min_ssim_positive_view_fraction),
+                    "min_lpips_positive_view_fraction": float(args.robust_min_lpips_positive_view_fraction),
+                    "min_image_l1_positive_view_fraction": float(args.robust_min_image_l1_positive_view_fraction),
+                    "min_relative_cvar20_gain": float(args.robust_min_relative_cvar20_gain),
+                    "min_ssim_cvar20_gain": float(args.robust_min_ssim_cvar20_gain),
+                    "min_lpips_cvar20_gain": float(args.robust_min_lpips_cvar20_gain),
+                    "min_image_l1_cvar20_gain": float(args.robust_min_image_l1_cvar20_gain),
+                    "min_relative_min_view_gain": float(args.robust_min_relative_min_view_gain),
+                    "min_ssim_min_view_gain": float(args.robust_min_ssim_min_view_gain),
+                    "min_lpips_min_view_gain": float(args.robust_min_lpips_min_view_gain),
+                },
             },
             "phasej_flowers_gate_reference": {
                 "PSNR": float(args.phasej_flowers_psnr),
@@ -515,6 +627,7 @@ def render_markdown(result: dict[str, Any]) -> str:
         f"- candidate faces: `{result['candidate_face_count']}`",
         f"- view count: `{result['view_count']}`",
         f"- verdict: `{verdict['reason']}`",
+        f"- robust verdict: `{verdict.get('robust_reason', 'missing')}`",
         "",
         "## Best All-Axis Candidate",
         "",
@@ -534,6 +647,28 @@ def render_markdown(result: dict[str, Any]) -> str:
         )
     else:
         lines.append("- no nonzero alpha improves relative residual error, PSNR, SSIM, and LPIPS simultaneously.")
+    lines.extend(["", "## Best Robust All-Axis Candidate", ""])
+    robust_best = verdict.get("best_robust_all_axis")
+    if robust_best:
+        lines.extend(
+            [
+                f"- texture size: `{robust_best.get('texture_size')}`",
+                f"- teacher low-rank texture rank: `{robust_best.get('teacher_distilled_low_rank_texture_rank')}`",
+                f"- alpha: `{fmt(robust_best.get('alpha'))}`",
+                f"- relative gain: `{fmt(robust_best.get('relative_gain'), signed=True)}`",
+                f"- PSNR gain: `{fmt(robust_best.get('psnr_gain'), signed=True)}`",
+                f"- SSIM gain: `{fmt(robust_best.get('ssim_gain'), signed=True)}`",
+                f"- LPIPS gain: `{fmt(robust_best.get('lpips_gain'), signed=True)}`",
+                f"- SSIM positive-view fraction: `{fmt(robust_best.get('ssim_positive_view_fraction'))}`",
+                f"- LPIPS positive-view fraction: `{fmt(robust_best.get('lpips_positive_view_fraction'))}`",
+                f"- SSIM CVaR20 gain: `{fmt(robust_best.get('ssim_cvar20_view_gain'), signed=True)}`",
+                f"- LPIPS CVaR20 gain: `{fmt(robust_best.get('lpips_cvar20_view_gain'), signed=True)}`",
+            ]
+        )
+    else:
+        lines.append(
+            "- no candidate passes the tail-robust gate over positive-view fraction, min-view, and CVaR metrics."
+        )
     lines.extend(["", "## Candidate Rows", "", "| texture | rank | alpha | rel gain | PSNR gain | SSIM gain | LPIPS gain | all-axis |", "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |"])
     for candidate in result.get("candidates", []):
         all_axis_alpha = None

@@ -1131,6 +1131,53 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-06-30 v294 Teacher Projection Upper-Bound Feedback Addendum
+
+This addendum records the direct answer to the v169 diagnostic question:
+
+> Can the current face/UV/low-rank carrier represent a meaningful fraction of
+> Phase-J teacher residual on train-policy-val?
+
+Short answer: **only a tiny, non-robust fraction**.
+
+Artifacts:
+
+```text
+scripts/car_model/analyze_v169_policy_val_upper_bound.py
+docs/car_model/6-30-v294-TeacherProjectionUpperBound-Diagnostic.md
+docs/car_model/results/v294_teacher_projection_upper_bound_summary.json
+outputs/carnet/spcarnet_v294_projection_diagnostics_20260630/flowers_v169_projection_upper_bound.json
+```
+
+Best candidate:
+
+```text
+texture_size=8
+low_rank_rank=4
+alpha=0.03125
+PSNR gain=+0.0001638198 dB
+SSIM gain=+0.0000003924
+LPIPS gain=+0.0000009562
+SSIM positive-view fraction=0.5
+LPIPS positive-view fraction=0.666667
+robust all-axis pass=false
+```
+
+Lesson:
+
+The carrier is not completely broken, but its upper-bound image-level effect is
+essentially negligible compared with the Phase-J PSNR gap. Raising alpha or rank
+increases residual magnitude but quickly hurts SSIM/LPIPS. Therefore the next
+route should not be an alpha/rank scan. It needs a representation that explicitly
+models cross-view residual direction reliability, source-view uncertainty, and
+target support before applying Phase-J residuals.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-06-30 v290-v292 PatchViewMoE + View-Support Feedback Addendum
 
 This addendum records the latest attempt based on:
