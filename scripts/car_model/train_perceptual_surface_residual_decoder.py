@@ -977,6 +977,7 @@ class SurfaceResidualDecoder(torch.nn.Module):
         lowrank_basis_count: int = 0,
         lowrank_basis_feature_offset: int = -1,
         lowrank_coeff_scale: float = 1.0,
+        lowrank_direct_scale: float = 0.25,
     ):
         super().__init__()
         self.face_embedding = torch.nn.Embedding(int(face_count), int(embedding_dim))
@@ -986,12 +987,13 @@ class SurfaceResidualDecoder(torch.nn.Module):
         self.lowrank_basis_count = int(lowrank_basis_count)
         self.lowrank_basis_feature_offset = int(lowrank_basis_feature_offset)
         self.lowrank_coeff_scale = float(lowrank_coeff_scale)
-        if self.output_mode not in {"direct", "lowrank_texture"}:
+        self.lowrank_direct_scale = float(lowrank_direct_scale)
+        if self.output_mode not in {"direct", "lowrank_texture", "lowrank_plus_direct"}:
             raise ValueError(f"unknown decoder output mode={self.output_mode}")
-        if self.output_mode == "lowrank_texture":
+        if self.output_mode in {"lowrank_texture", "lowrank_plus_direct"}:
             if self.lowrank_basis_count <= 0 or self.lowrank_basis_feature_offset < 0:
-                raise ValueError("lowrank_texture output requires positive basis count and feature offset")
-            residual_out_dim = self.lowrank_basis_count
+                raise ValueError(f"{self.output_mode} output requires positive basis count and feature offset")
+            residual_out_dim = self.lowrank_basis_count + (3 if self.output_mode == "lowrank_plus_direct" else 0)
         else:
             residual_out_dim = 3
         out_dim = residual_out_dim + (1 if self.predict_confidence else 0)
@@ -1006,14 +1008,19 @@ class SurfaceResidualDecoder(torch.nn.Module):
     def forward_with_confidence(self, face_idx: torch.Tensor, features: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         emb = self.face_embedding(face_idx)
         raw = self.net(torch.cat([features, emb], dim=1))
-        if self.output_mode == "lowrank_texture":
+        if self.output_mode in {"lowrank_texture", "lowrank_plus_direct"}:
             coeff = torch.tanh(raw[:, : self.lowrank_basis_count]) * self.lowrank_coeff_scale
             basis_start = int(self.lowrank_basis_feature_offset)
             basis_end = basis_start + 3 * int(self.lowrank_basis_count)
             basis = features[:, basis_start:basis_end].reshape(-1, int(self.lowrank_basis_count), 3)
             residual = torch.sum(coeff[:, :, None] * basis, dim=1)
+            if self.output_mode == "lowrank_plus_direct":
+                direct_start = int(self.lowrank_basis_count)
+                direct_end = direct_start + 3
+                direct = torch.tanh(raw[:, direct_start:direct_end]) * self.max_delta * self.lowrank_direct_scale
+                residual = residual + direct
             residual = torch.clamp(residual, -self.max_delta, self.max_delta)
-            confidence_index = self.lowrank_basis_count
+            confidence_index = self.lowrank_basis_count + (3 if self.output_mode == "lowrank_plus_direct" else 0)
         else:
             residual = torch.tanh(raw[:, :3]) * self.max_delta
             confidence_index = 3
@@ -1166,6 +1173,12 @@ def _image_proxy_loss(
     residual_target_structure_eps: float,
     residual_target_chroma_scale: float,
     surface_feature_texture: dict[str, Any] | None,
+    image_loss_mode: str,
+    image_loss_patch_kernel: int,
+    image_loss_luma_weight: float,
+    image_loss_gradient_weight: float,
+    image_loss_highpass_weight: float,
+    image_loss_residual_gradient_weight: float,
     device: torch.device,
 ) -> torch.Tensor:
     z = np.load(path)
@@ -1210,8 +1223,10 @@ def _image_proxy_loss(
     parent = torch.from_numpy(parent_np).to(device)
     target_img = torch.clamp(parent + torch.from_numpy(residual_np).to(device), 0.0, 1.0)
     adapted = parent.clone()
-    adapted[:, torch.from_numpy(ys_lr).to(device), torch.from_numpy(xs_lr).to(device)] = torch.clamp(
-        adapted[:, torch.from_numpy(ys_lr).to(device), torch.from_numpy(xs_lr).to(device)] + pred.T,
+    ys_t = torch.from_numpy(ys_lr).to(device)
+    xs_t = torch.from_numpy(xs_lr).to(device)
+    adapted[:, ys_t, xs_t] = torch.clamp(
+        adapted[:, ys_t, xs_t] + pred.T,
         0.0,
         1.0,
     )
@@ -1222,7 +1237,60 @@ def _image_proxy_loss(
     grad_a = torch.abs(lum_a[:, 1:] - lum_a[:, :-1]).mean() + torch.abs(lum_a[1:, :] - lum_a[:-1, :]).mean()
     grad_t = torch.abs(lum_t[:, 1:] - lum_t[:, :-1]).mean() + torch.abs(lum_t[1:, :] - lum_t[:-1, :]).mean()
     edge = torch.abs(grad_a - grad_t)
-    return l1 + 0.25 * ssim_loss + 0.5 * edge
+    if str(image_loss_mode) == "global_proxy":
+        return l1 + 0.25 * ssim_loss + 0.5 * edge
+
+    support = torch.zeros_like(lum_a)
+    support[ys_t, xs_t] = 1.0
+    support = F.max_pool2d(support[None, None], kernel_size=3, stride=1, padding=1)[0, 0]
+    support_den = torch.clamp(torch.sum(support), min=1.0)
+    local_luma = torch.sum(torch.abs(lum_a - lum_t) * support) / support_den
+
+    gx_a = lum_a[:, 1:] - lum_a[:, :-1]
+    gx_t = lum_t[:, 1:] - lum_t[:, :-1]
+    gy_a = lum_a[1:, :] - lum_a[:-1, :]
+    gy_t = lum_t[1:, :] - lum_t[:-1, :]
+    support_x = torch.maximum(support[:, 1:], support[:, :-1])
+    support_y = torch.maximum(support[1:, :], support[:-1, :])
+    grad_map = (
+        torch.sum(torch.abs(gx_a - gx_t) * support_x) / torch.clamp(torch.sum(support_x), min=1.0)
+        + torch.sum(torch.abs(gy_a - gy_t) * support_y) / torch.clamp(torch.sum(support_y), min=1.0)
+    )
+
+    patch_kernel = max(3, int(image_loss_patch_kernel))
+    if patch_kernel % 2 == 0:
+        patch_kernel += 1
+    pad = patch_kernel // 2
+    if int(lum_a.shape[0]) > pad and int(lum_a.shape[1]) > pad:
+        lum_a4 = lum_a[None, None]
+        lum_t4 = lum_t[None, None]
+        low_a = F.avg_pool2d(F.pad(lum_a4, (pad, pad, pad, pad), mode="reflect"), patch_kernel, stride=1)[0, 0]
+        low_t = F.avg_pool2d(F.pad(lum_t4, (pad, pad, pad, pad), mode="reflect"), patch_kernel, stride=1)[0, 0]
+        highpass = torch.sum(torch.abs((lum_a - low_a) - (lum_t - low_t)) * support) / support_den
+    else:
+        highpass = torch.zeros((), device=device)
+
+    delta_a = adapted - parent
+    delta_t = target_img - parent
+    delta_lum_a = 0.299 * delta_a[0] + 0.587 * delta_a[1] + 0.114 * delta_a[2]
+    delta_lum_t = 0.299 * delta_t[0] + 0.587 * delta_t[1] + 0.114 * delta_t[2]
+    dgx_a = delta_lum_a[:, 1:] - delta_lum_a[:, :-1]
+    dgx_t = delta_lum_t[:, 1:] - delta_lum_t[:, :-1]
+    dgy_a = delta_lum_a[1:, :] - delta_lum_a[:-1, :]
+    dgy_t = delta_lum_t[1:, :] - delta_lum_t[:-1, :]
+    residual_grad = (
+        torch.sum(torch.abs(dgx_a - dgx_t) * support_x) / torch.clamp(torch.sum(support_x), min=1.0)
+        + torch.sum(torch.abs(dgy_a - dgy_t) * support_y) / torch.clamp(torch.sum(support_y), min=1.0)
+    )
+    return (
+        l1
+        + 0.25 * ssim_loss
+        + 0.5 * edge
+        + float(image_loss_luma_weight) * local_luma
+        + float(image_loss_gradient_weight) * grad_map
+        + float(image_loss_highpass_weight) * highpass
+        + float(image_loss_residual_gradient_weight) * residual_grad
+    )
 
 
 def _apply_face_reliability(
@@ -2007,11 +2075,22 @@ def main() -> int:
     parser.add_argument("--surface_texture_mode", choices=["none", "v1", "v2", "lowrank_v1"], default="none")
     parser.add_argument("--surface_texture_uv_bins", type=int, default=4)
     parser.add_argument("--surface_texture_max_samples_per_view", type=int, default=250000)
-    parser.add_argument("--decoder_output_mode", choices=["direct", "lowrank_texture"], default="direct")
+    parser.add_argument(
+        "--decoder_output_mode",
+        choices=["direct", "lowrank_texture", "lowrank_plus_direct"],
+        default="direct",
+    )
     parser.add_argument("--lowrank_coeff_scale", type=float, default=1.0)
+    parser.add_argument("--lowrank_direct_scale", type=float, default=0.25)
     parser.add_argument("--image_loss_every", type=int, default=4)
     parser.add_argument("--image_loss_stride", type=int, default=12)
     parser.add_argument("--image_loss_weight", type=float, default=0.35)
+    parser.add_argument("--image_loss_mode", choices=["global_proxy", "patch_edge_v1"], default="global_proxy")
+    parser.add_argument("--image_loss_patch_kernel", type=int, default=5)
+    parser.add_argument("--image_loss_luma_weight", type=float, default=0.35)
+    parser.add_argument("--image_loss_gradient_weight", type=float, default=0.75)
+    parser.add_argument("--image_loss_highpass_weight", type=float, default=0.50)
+    parser.add_argument("--image_loss_residual_gradient_weight", type=float, default=0.35)
     parser.add_argument("--sample_weight_gamma", type=float, default=0.0)
     parser.add_argument("--sample_weight_clip", type=float, default=8.0)
     parser.add_argument("--sample_weight_confidence_power", type=float, default=0.0)
@@ -2144,12 +2223,12 @@ def main() -> int:
                     dtype=np.int64,
                 ),
             )
-    if str(args.decoder_output_mode) == "lowrank_texture" and str(args.surface_texture_mode) != "lowrank_v1":
-        raise ValueError("--decoder_output_mode lowrank_texture requires --surface_texture_mode lowrank_v1")
+    if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct"} and str(args.surface_texture_mode) != "lowrank_v1":
+        raise ValueError(f"--decoder_output_mode {args.decoder_output_mode} requires --surface_texture_mode lowrank_v1")
     feature_dim = _feature_dim(str(args.feature_mode), surface_feature_texture)
     lowrank_basis_feature_offset = (
         _base_feature_dim(str(args.feature_mode)) + LOWRANK_TEXTURE_BASIS_OFFSET
-        if str(args.decoder_output_mode) == "lowrank_texture"
+        if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct"}
         else -1
     )
     model = SurfaceResidualDecoder(
@@ -2162,9 +2241,12 @@ def main() -> int:
         predict_confidence=bool(args.confidence_head),
         confidence_floor=float(args.confidence_floor),
         output_mode=str(args.decoder_output_mode),
-        lowrank_basis_count=LOWRANK_TEXTURE_BASIS_COUNT if str(args.decoder_output_mode) == "lowrank_texture" else 0,
+        lowrank_basis_count=LOWRANK_TEXTURE_BASIS_COUNT
+        if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct"}
+        else 0,
         lowrank_basis_feature_offset=int(lowrank_basis_feature_offset),
         lowrank_coeff_scale=float(args.lowrank_coeff_scale),
+        lowrank_direct_scale=float(args.lowrank_direct_scale),
     ).to(device)
     if init_checkpoint is not None:
         model.load_state_dict(init_checkpoint["model_state_dict"], strict=True)
@@ -2261,6 +2343,12 @@ def main() -> int:
                 residual_target_structure_eps=float(args.residual_target_structure_eps),
                 residual_target_chroma_scale=float(args.residual_target_chroma_scale),
                 surface_feature_texture=surface_feature_texture,
+                image_loss_mode=str(args.image_loss_mode),
+                image_loss_patch_kernel=int(args.image_loss_patch_kernel),
+                image_loss_luma_weight=float(args.image_loss_luma_weight),
+                image_loss_gradient_weight=float(args.image_loss_gradient_weight),
+                image_loss_highpass_weight=float(args.image_loss_highpass_weight),
+                image_loss_residual_gradient_weight=float(args.image_loss_residual_gradient_weight),
                 device=device,
             )
         mag = torch.mean(torch.square(pred))
@@ -2491,10 +2579,11 @@ def main() -> int:
             "base_feature_dim": int(_base_feature_dim(str(args.feature_mode))),
             "decoder_output_mode": str(args.decoder_output_mode),
             "lowrank_basis_count": int(LOWRANK_TEXTURE_BASIS_COUNT)
-            if str(args.decoder_output_mode) == "lowrank_texture"
+            if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct"}
             else 0,
             "lowrank_basis_feature_offset": int(lowrank_basis_feature_offset),
             "lowrank_coeff_scale": float(args.lowrank_coeff_scale),
+            "lowrank_direct_scale": float(args.lowrank_direct_scale),
             "surface_texture_mode": str(args.surface_texture_mode),
             "surface_texture_uv_bins": int(args.surface_texture_uv_bins),
             "surface_texture_max_samples_per_view": int(args.surface_texture_max_samples_per_view),
@@ -2502,6 +2591,12 @@ def main() -> int:
             "image_loss_every": int(args.image_loss_every),
             "image_loss_stride": int(args.image_loss_stride),
             "image_loss_weight": float(args.image_loss_weight),
+            "image_loss_mode": str(args.image_loss_mode),
+            "image_loss_patch_kernel": int(args.image_loss_patch_kernel),
+            "image_loss_luma_weight": float(args.image_loss_luma_weight),
+            "image_loss_gradient_weight": float(args.image_loss_gradient_weight),
+            "image_loss_highpass_weight": float(args.image_loss_highpass_weight),
+            "image_loss_residual_gradient_weight": float(args.image_loss_residual_gradient_weight),
             "sample_weight_gamma": float(args.sample_weight_gamma),
             "sample_weight_clip": float(args.sample_weight_clip),
             "sample_weight_confidence_power": float(args.sample_weight_confidence_power),

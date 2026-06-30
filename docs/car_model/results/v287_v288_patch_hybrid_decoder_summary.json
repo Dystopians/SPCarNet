@@ -1,0 +1,391 @@
+{
+  "schema": "spcarnet_v287_v288_patch_and_hybrid_decoder_summary_v1",
+  "date": "2026-06-30",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "phasej_flowers_reference": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "code_path": "scripts/car_model/train_perceptual_surface_residual_decoder.py",
+  "method_changes": [
+    "Added image_loss_mode=patch_edge_v1 with support-local luma, gradient-map, highpass, and residual-gradient teacher proxy terms.",
+    "Added decoder_output_mode=lowrank_plus_direct to combine low-rank surface texture bases with a bounded direct RGB residual head.",
+    "Kept target/test GT stripped during apply; target GT is loaded only after no-GT apply for metrics."
+  ],
+  "runs": [
+    {
+      "name": "v282b_exact_alpha075",
+      "audit_json": "outputs/carnet/spcarnet_v282_lowrank_texture_20260630/v282b_lowrank_no_confidence_ablation_policyauto/v180_perceptual_surface_decoder_audit.json",
+      "audit_md": "outputs/carnet/spcarnet_v282_lowrank_texture_20260630/v282b_lowrank_no_confidence_ablation_policyauto/v180_perceptual_surface_decoder_audit.md",
+      "decoder_output_mode": "lowrank_texture",
+      "image_loss_mode": null,
+      "image_loss_every": 0,
+      "lowrank_direct_scale": null,
+      "policy_val": {
+        "alpha": 0.75,
+        "psnr_gain": 0.03025288247954272,
+        "ssim_gain": 0.000819087028503418,
+        "lpips_gain": 0.0011194037894407909,
+        "positive_view_fraction": 0.8333333333333334,
+        "ssim_positive_view_fraction": 0.75,
+        "lpips_positive_view_fraction": 1.0,
+        "psnr_gain_tail": {
+          "min": -0.008145255679018248,
+          "cvar": -0.006908527016065591,
+          "p10": -0.003196195298164637
+        },
+        "ssim_gain_tail": {
+          "min": -0.0002872943878173828,
+          "cvar": -0.00026911497116088867,
+          "p10": -0.0002473592758178711
+        },
+        "lpips_gain_tail": {
+          "min": 0.0003842264413833618,
+          "cvar": 0.0004574880003929138,
+          "p10": 0.0005447715520858765
+        }
+      },
+      "target_exact": {
+        "candidate_psnr": 19.84712682055351,
+        "candidate_ssim": 0.6190158806063912,
+        "candidate_lpips": 0.18056372993371703,
+        "psnr_gain": 0.015072942106042608,
+        "ssim_gain": -0.000894530252976851,
+        "lpips_gain": -0.0002288638868115165,
+        "positive_view_fraction": 0.7272727272727273,
+        "ssim_positive_view_fraction": 0.3181818181818182,
+        "lpips_positive_view_fraction": 0.5454545454545454,
+        "psnr_gain_tail": {
+          "min": -0.03100234168832472,
+          "cvar": -0.023654434096712862,
+          "p10": -0.013125954794644555
+        },
+        "ssim_gain_tail": {
+          "min": -0.00445026159286499,
+          "cvar": -0.003891448179880778,
+          "p10": -0.002821153402328491
+        },
+        "lpips_gain_tail": {
+          "min": -0.005620807409286499,
+          "cvar": -0.0048530201117197675,
+          "p10": -0.0034175753593444825
+        },
+        "phasej_psnr_gap": -0.4572311794464916,
+        "phasej_ssim_gap": 0.061245880606391245,
+        "phasej_lpips_margin": 0.148658270066283
+      },
+      "no_gt_pass": true,
+      "flowers_exact_phasej_gate_pass": false,
+      "wandb_offline_dir": "outputs/carnet/spcarnet_v282_lowrank_texture_20260630/v282b_lowrank_no_confidence_ablation_policyauto/wandb/offline-run-20260630_090749-p5zfkf03"
+    },
+    {
+      "name": "v282b_exact_alpha050",
+      "audit_json": "outputs/carnet/spcarnet_v282_lowrank_texture_20260630/v282b_fixed_alpha050_exact/v180_perceptual_surface_decoder_audit.json",
+      "audit_md": "outputs/carnet/spcarnet_v282_lowrank_texture_20260630/v282b_fixed_alpha050_exact/v180_perceptual_surface_decoder_audit.md",
+      "decoder_output_mode": "lowrank_texture",
+      "image_loss_mode": null,
+      "image_loss_every": 4,
+      "lowrank_direct_scale": null,
+      "policy_val": {
+        "alpha": 0.5,
+        "psnr_gain": 0.02588528846782327,
+        "ssim_gain": 0.0007666895786921183,
+        "lpips_gain": 0.0006700896968444189,
+        "positive_view_fraction": 1.0,
+        "ssim_positive_view_fraction": 1.0,
+        "lpips_positive_view_fraction": 1.0,
+        "psnr_gain_tail": {
+          "min": 9.053157838678771e-05,
+          "cvar": 0.0010718683906372206,
+          "p10": 0.0035996140862700103
+        },
+        "ssim_gain_tail": {
+          "min": 2.5272369384765625e-05,
+          "cvar": 3.24249267578125e-05,
+          "p10": 4.050135612487793e-05
+        },
+        "lpips_gain_tail": {
+          "min": 0.0002749636769294739,
+          "cvar": 0.00028244033455848694,
+          "p10": 0.00029968619346618656
+        }
+      },
+      "target_exact": {
+        "candidate_psnr": 19.850665649758948,
+        "candidate_ssim": 0.6197450553829019,
+        "candidate_lpips": 0.18062040920961986,
+        "psnr_gain": 0.018611771311484435,
+        "ssim_gain": -0.0001653554764660922,
+        "lpips_gain": -0.0002855431627143513,
+        "positive_view_fraction": 0.8181818181818182,
+        "ssim_positive_view_fraction": 0.36363636363636365,
+        "lpips_positive_view_fraction": 0.5454545454545454,
+        "psnr_gain_tail": {
+          "min": -0.011242466318012845,
+          "cvar": -0.0071477131813395545,
+          "p10": -0.003223832734480325
+        },
+        "ssim_gain_tail": {
+          "min": -0.002333343029022217,
+          "cvar": -0.001967449982961019,
+          "p10": -0.0013180673122406006
+        },
+        "lpips_gain_tail": {
+          "min": -0.004819333553314209,
+          "cvar": -0.0038069834311803183,
+          "p10": -0.0022432684898376467
+        },
+        "phasej_psnr_gap": -0.45369235024105237,
+        "phasej_ssim_gap": 0.061975055382901933,
+        "phasej_lpips_margin": 0.14860159079038016
+      },
+      "no_gt_pass": true,
+      "flowers_exact_phasej_gate_pass": false,
+      "wandb_offline_dir": "outputs/carnet/spcarnet_v282_lowrank_texture_20260630/v282b_fixed_alpha050_exact/wandb/offline-run-20260630_093759-hlzhzpjy"
+    },
+    {
+      "name": "v287a_patch_exact_alpha075",
+      "audit_json": "outputs/carnet/spcarnet_v287_patch_edge_lowrank_20260630/v287a_patch_edge_lowrank_exact_alpha075_20260630/v180_perceptual_surface_decoder_audit.json",
+      "audit_md": "outputs/carnet/spcarnet_v287_patch_edge_lowrank_20260630/v287a_patch_edge_lowrank_exact_alpha075_20260630/v180_perceptual_surface_decoder_audit.md",
+      "decoder_output_mode": "lowrank_texture",
+      "image_loss_mode": "patch_edge_v1",
+      "image_loss_every": 4,
+      "lowrank_direct_scale": null,
+      "policy_val": {
+        "alpha": 0.75,
+        "psnr_gain": 0.029179246724058434,
+        "ssim_gain": 0.0007952700058619181,
+        "lpips_gain": 0.0010778997093439102,
+        "positive_view_fraction": 0.9166666666666666,
+        "ssim_positive_view_fraction": 0.75,
+        "lpips_positive_view_fraction": 1.0,
+        "psnr_gain_tail": {
+          "min": -0.0033327890848546815,
+          "cvar": -0.0016177529616552278,
+          "p10": 0.0018851553892453427
+        },
+        "ssim_gain_tail": {
+          "min": -0.0002003312110900879,
+          "cvar": -0.00013047456741333008,
+          "p10": -5.7578086853027344e-05
+        },
+        "lpips_gain_tail": {
+          "min": 0.000272214412689209,
+          "cvar": 0.00033808499574661255,
+          "p10": 0.0004189446568489075
+        }
+      },
+      "target_exact": {
+        "candidate_psnr": 19.84875385730332,
+        "candidate_ssim": 0.6191755898974158,
+        "candidate_lpips": 0.18082219599322838,
+        "psnr_gain": 0.016699978855849486,
+        "ssim_gain": -0.0007348209619522095,
+        "lpips_gain": -0.0004873299463228746,
+        "positive_view_fraction": 0.7727272727272727,
+        "ssim_positive_view_fraction": 0.3181818181818182,
+        "lpips_positive_view_fraction": 0.5909090909090909,
+        "psnr_gain_tail": {
+          "min": -0.022730204919685804,
+          "cvar": -0.01767749294163205,
+          "p10": -0.010218336191907795
+        },
+        "ssim_gain_tail": {
+          "min": -0.00433880090713501,
+          "cvar": -0.0034078756968180337,
+          "p10": -0.002227860689163208
+        },
+        "lpips_gain_tail": {
+          "min": -0.00697094202041626,
+          "cvar": -0.005414565404256185,
+          "p10": -0.003125181794166565
+        },
+        "phasej_psnr_gap": -0.45560414269668215,
+        "phasej_ssim_gap": 0.061405589897415847,
+        "phasej_lpips_margin": 0.14839980400677164
+      },
+      "no_gt_pass": true,
+      "flowers_exact_phasej_gate_pass": false,
+      "wandb_offline_dir": "outputs/carnet/spcarnet_v287_patch_edge_lowrank_20260630/v287a_patch_edge_lowrank_exact_alpha075_20260630/wandb/offline-run-20260630_124218-a11teyp9"
+    },
+    {
+      "name": "v287b_global_exact_alpha075",
+      "audit_json": "outputs/carnet/spcarnet_v287_patch_edge_lowrank_20260630/v287b_global_proxy_lowrank_exact_alpha075_20260630/v180_perceptual_surface_decoder_audit.json",
+      "audit_md": "outputs/carnet/spcarnet_v287_patch_edge_lowrank_20260630/v287b_global_proxy_lowrank_exact_alpha075_20260630/v180_perceptual_surface_decoder_audit.md",
+      "decoder_output_mode": "lowrank_texture",
+      "image_loss_mode": "global_proxy",
+      "image_loss_every": 4,
+      "lowrank_direct_scale": null,
+      "policy_val": {
+        "alpha": 0.75,
+        "psnr_gain": 0.031137391111120277,
+        "ssim_gain": 0.0008625487486521403,
+        "lpips_gain": 0.0009114121397336324,
+        "positive_view_fraction": 0.8333333333333334,
+        "ssim_positive_view_fraction": 0.75,
+        "lpips_positive_view_fraction": 0.9166666666666666,
+        "psnr_gain_tail": {
+          "min": -0.0060444656740230585,
+          "cvar": -0.004100379880867422,
+          "p10": -3.0168053145727524e-05
+        },
+        "ssim_gain_tail": {
+          "min": -0.0001926422119140625,
+          "cvar": -0.00012084841728210449,
+          "p10": -4.620552062988281e-05
+        },
+        "lpips_gain_tail": {
+          "min": -0.00013075768947601318,
+          "cvar": 5.7153403759002686e-05,
+          "p10": 0.00024892985820770266
+        }
+      },
+      "target_exact": {
+        "candidate_psnr": 19.845958517456822,
+        "candidate_ssim": 0.6189066523855383,
+        "candidate_lpips": 0.18059313060207802,
+        "psnr_gain": 0.013904639009357728,
+        "ssim_gain": -0.0010037584738297896,
+        "lpips_gain": -0.0002582645551724867,
+        "positive_view_fraction": 0.6818181818181818,
+        "ssim_positive_view_fraction": 0.2727272727272727,
+        "lpips_positive_view_fraction": 0.6363636363636364,
+        "psnr_gain_tail": {
+          "min": -0.038136676390653435,
+          "cvar": -0.02895344985158251,
+          "p10": -0.01739132069151452
+        },
+        "ssim_gain_tail": {
+          "min": -0.005365967750549316,
+          "cvar": -0.00426707665125529,
+          "p10": -0.0030043423175811768
+        },
+        "lpips_gain_tail": {
+          "min": -0.006498321890830994,
+          "cvar": -0.005266139904658,
+          "p10": -0.003414821624755859
+        },
+        "phasej_psnr_gap": -0.45839948254317875,
+        "phasej_ssim_gap": 0.06113665238553834,
+        "phasej_lpips_margin": 0.148628869397922
+      },
+      "no_gt_pass": true,
+      "flowers_exact_phasej_gate_pass": false,
+      "wandb_offline_dir": "outputs/carnet/spcarnet_v287_patch_edge_lowrank_20260630/v287b_global_proxy_lowrank_exact_alpha075_20260630/wandb/offline-run-20260630_124218-li9fwve3"
+    },
+    {
+      "name": "v288a_lowrank_plus_direct_exact_alpha075",
+      "audit_json": "outputs/carnet/spcarnet_v288_lowrank_plus_direct_20260630/v288a_lowrank_plus_direct_s010_exact_alpha075_20260630/v180_perceptual_surface_decoder_audit.json",
+      "audit_md": "outputs/carnet/spcarnet_v288_lowrank_plus_direct_20260630/v288a_lowrank_plus_direct_s010_exact_alpha075_20260630/v180_perceptual_surface_decoder_audit.md",
+      "decoder_output_mode": "lowrank_plus_direct",
+      "image_loss_mode": "global_proxy",
+      "image_loss_every": 4,
+      "lowrank_direct_scale": 0.1,
+      "policy_val": {
+        "alpha": 0.75,
+        "psnr_gain": 0.03066719043497142,
+        "ssim_gain": 0.0008386025826136271,
+        "lpips_gain": 0.0009160240491231283,
+        "positive_view_fraction": 0.8333333333333334,
+        "ssim_positive_view_fraction": 0.75,
+        "lpips_positive_view_fraction": 0.9166666666666666,
+        "psnr_gain_tail": {
+          "min": -0.006878254277577156,
+          "cvar": -0.005109522819219947,
+          "p10": -0.0011470112004374738
+        },
+        "ssim_gain_tail": {
+          "min": -0.00020682811737060547,
+          "cvar": -0.00014653801918029785,
+          "p10": -8.4763765335083e-05
+        },
+        "lpips_gain_tail": {
+          "min": -0.00013944506645202637,
+          "cvar": 4.1231513023376465e-05,
+          "p10": 0.00022694021463394166
+        }
+      },
+      "target_exact": {
+        "candidate_psnr": 19.845384838266636,
+        "candidate_ssim": 0.6188430894504894,
+        "candidate_lpips": 0.18060696497559547,
+        "psnr_gain": 0.013330959819168632,
+        "ssim_gain": -0.0010673214088786733,
+        "lpips_gain": -0.00027209892868995667,
+        "positive_view_fraction": 0.6363636363636364,
+        "ssim_positive_view_fraction": 0.2727272727272727,
+        "lpips_positive_view_fraction": 0.6363636363636364,
+        "psnr_gain_tail": {
+          "min": -0.03974557364508158,
+          "cvar": -0.030627535670623967,
+          "p10": -0.01808145694121883
+        },
+        "ssim_gain_tail": {
+          "min": -0.005497574806213379,
+          "cvar": -0.0044348835945129395,
+          "p10": -0.0031087636947631837
+        },
+        "lpips_gain_tail": {
+          "min": -0.006612211465835571,
+          "cvar": -0.00532245139280955,
+          "p10": -0.00343487411737442
+        },
+        "phasej_psnr_gap": -0.4589731617333648,
+        "phasej_ssim_gap": 0.06107308945048939,
+        "phasej_lpips_margin": 0.14861503502440454
+      },
+      "no_gt_pass": true,
+      "flowers_exact_phasej_gate_pass": false,
+      "wandb_offline_dir": "outputs/carnet/spcarnet_v288_lowrank_plus_direct_20260630/v288a_lowrank_plus_direct_s010_exact_alpha075_20260630/wandb/offline-run-20260630_125351-l5dwm24l"
+    },
+    {
+      "name": "v288b_lowrank_plus_direct_s020_policy",
+      "audit_json": "outputs/carnet/spcarnet_v288_lowrank_plus_direct_20260630/v288b_lowrank_plus_direct_s020_policy_20260630/v180_perceptual_surface_decoder_audit.json",
+      "audit_md": "outputs/carnet/spcarnet_v288_lowrank_plus_direct_20260630/v288b_lowrank_plus_direct_s020_policy_20260630/v180_perceptual_surface_decoder_audit.md",
+      "decoder_output_mode": "lowrank_plus_direct",
+      "image_loss_mode": "global_proxy",
+      "image_loss_every": 0,
+      "lowrank_direct_scale": 0.2,
+      "policy_val": {
+        "alpha": 0.75,
+        "psnr_gain": 0.02973104798656608,
+        "ssim_gain": 0.0008310874303181967,
+        "lpips_gain": 0.0008051476130882899,
+        "positive_view_fraction": 0.8333333333333334,
+        "ssim_positive_view_fraction": 0.8333333333333334,
+        "lpips_positive_view_fraction": 0.9166666666666666,
+        "psnr_gain_tail": {
+          "min": -0.0036605502436444226,
+          "cvar": -0.0023947139697071407,
+          "p10": 0.0008300103738591263
+        },
+        "ssim_gain_tail": {
+          "min": -0.0002167820930480957,
+          "cvar": -0.00013524293899536133,
+          "p10": -4.345178604125976e-05
+        },
+        "lpips_gain_tail": {
+          "min": -0.00011448562145233154,
+          "cvar": 3.0957162380218506e-05,
+          "p10": 0.00018703490495681764
+        }
+      },
+      "target_exact": null,
+      "no_gt_pass": true,
+      "flowers_exact_phasej_gate_pass": false,
+      "wandb_offline_dir": "outputs/carnet/spcarnet_v288_lowrank_plus_direct_20260630/v288b_lowrank_plus_direct_s020_policy_20260630/wandb/offline-run-20260630_124906-glq71e64"
+    }
+  ],
+  "verdict": {
+    "status": "NOT_COMPLETE",
+    "full9_allowed": false,
+    "best_new_exact_run": "v287a_patch_exact_alpha075",
+    "best_new_exact_psnr": 19.84875385730332,
+    "best_new_phasej_psnr_gap": -0.45560414269668215,
+    "best_prior_v282b_exact_alpha050_psnr": 19.850665649758948,
+    "best_new_vs_v282b_alpha050_psnr_delta": -0.0019117924556297794,
+    "main_bottleneck": "Patch-aware image proxy and lowrank+direct capacity both improve or pass policy-val but fail to transfer enough target-view PSNR/structure; held-out target still loses SSIM/LPIPS vs parent and remains about 0.456 dB below Phase-J flowers PSNR.",
+    "next_recommendation": "Do not run full9. The next route should change the evidence aggregation/render-time visibility model, not add more low-rank/direct-head capacity or patch-loss weights."
+  }
+}

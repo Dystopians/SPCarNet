@@ -2,6 +2,28 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 v287-v288 Patch/Hybrid Decoder Update
+
+新增日志：`docs/car_model/6-30-v287-v288-PatchHybridDecoder-v169-Gate-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v287_v288_patch_hybrid_decoder_summary.json`。
+
+这轮继续严格执行 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md` 的 flowers-first gate。代码层面在 `scripts/car_model/train_perceptual_surface_residual_decoder.py` 中新增两类真实 train/eval pipeline 改动：
+
+- `--image_loss_mode patch_edge_v1`：在 teacher-residual 支持区域附近加入局部 luma、梯度图、高频 patch residual、residual-gradient teacher proxy。
+- `--decoder_output_mode lowrank_plus_direct`：在 v282 low-rank baked surface texture basis 外增加 bounded direct RGB residual head，比例由 `--lowrank_direct_scale` 控制。
+
+关键结果：
+
+| run | method | policy gains | exact candidate | exact gains vs parent | Phase-J PSNR gap | verdict |
+|---|---|---:|---:|---:|---:|---|
+| v287a | lowrank + patch-edge proxy | +0.029179 / +0.000795 / +0.001078 | 19.848754 / 0.619176 / 0.180822 | +0.016700 / -0.000735 / -0.000487 | -0.455604 | fail |
+| v287b | lowrank + global-proxy ablation | +0.031137 / +0.000863 / +0.000911 | 19.845959 / 0.618907 / 0.180593 | +0.013905 / -0.001004 / -0.000258 | -0.458399 | fail |
+| v288a | lowrank plus direct, scale 0.10 | +0.030667 / +0.000839 / +0.000916 | 19.845385 / 0.618843 / 0.180607 | +0.013331 / -0.001067 / -0.000272 | -0.458973 | fail |
+| v288b | lowrank plus direct, scale 0.20 | +0.029731 / +0.000831 / +0.000805 | not exacted | n/a | n/a | policy only |
+
+所有 exact no-target-GT audit 均通过；所有中量/精确验证使用 W&B offline，GPU1/GPU2。直接结论：`patch_edge_v1` 是有效实现但不是突破；同预算 global proxy 甚至 policy-val 更强。`lowrank_plus_direct` 证明增加 direct RGB capacity 也不能解决 target-view transfer，且更大 direct head 会削弱 LPIPS。当前 best new exact `v287a` 仍低于 v282b fixed alpha 0.50 的 `19.850666`，更比 Phase-J flowers 低约 `0.456 dB`。状态仍为 `NOT COMPLETE`，full9 继续阻塞。下一步必须改变 source-view evidence aggregation / visibility mismatch 建模，而不是继续 patch-loss weight、direct-head scale 或 alpha 扫描。
+
 ## 2026-06-30 v285-v286 Source-Heldout Calibration Update
 
 新增日志：`docs/car_model/6-30-v285-v286-HeldoutCalibration-v169-Gate-Log.md`。

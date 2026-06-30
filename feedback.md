@@ -2,6 +2,32 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-30, v287-v288:
+
+The newest branch is **patch-aware teacher proxy and lowrank-plus-direct hybrid decoder** in `scripts/car_model/train_perceptual_surface_residual_decoder.py`. New files:
+
+- `docs/car_model/6-30-v287-v288-PatchHybridDecoder-v169-Gate-Log.md`
+- `docs/car_model/results/v287_v288_patch_hybrid_decoder_summary.json`
+
+Important new facts:
+
+- v287 adds `--image_loss_mode patch_edge_v1`, a support-local teacher proxy using local luma, luma-gradient map, high-pass patch residual, and residual-gradient matching.
+- v287 also keeps `global_proxy` as the same-budget ablation.
+- v288 adds `--decoder_output_mode lowrank_plus_direct`, which keeps the v282 low-rank surface texture basis and adds a bounded direct RGB residual head controlled by `--lowrank_direct_scale`.
+- v287/v288 exact runs used stripped target no-GT evidence for apply and loaded target/test GT only after apply for metrics. W&B was offline on GPU1/GPU2.
+
+Effective results:
+
+- v287a patch policy-val: `20.635616 / 0.718321 / 0.152239`, gains `+0.029179 / +0.000795 / +0.001078`.
+- v287a patch target exact: `19.848754 / 0.619176 / 0.180822`, gains `+0.016700 / -0.000735 / -0.000487`, Phase-J PSNR gap `-0.455604`.
+- v287b global-proxy target exact: `19.845959 / 0.618907 / 0.180593`, gains `+0.013905 / -0.001004 / -0.000258`, Phase-J PSNR gap `-0.458399`.
+- v288a lowrank-plus-direct scale 0.10 target exact: `19.845385 / 0.618843 / 0.180607`, gains `+0.013331 / -0.001067 / -0.000272`, Phase-J PSNR gap `-0.458973`.
+- v288b scale 0.20 policy only: gains `+0.029731 / +0.000831 / +0.000805`; larger direct capacity did not justify exact.
+
+Current direct verdict:
+
+> v287-v288 proves two additional bottleneck facts. First, patch/gradient teacher proxy is implementable and policy-val positive, but it does not beat the same-budget global proxy and does not improve flowers exact beyond the prior v282b alpha 0.50 frontier. Second, adding a bounded direct RGB head on top of low-rank texture does not fix target-view transfer; it weakens perceptual stability before closing the Phase-J PSNR gap. Do not run full9. Do not continue patch-loss weight scans, direct-head scale scans, or alpha scans as the main route. The next model should change source-view evidence aggregation and visibility/OOD mismatch modeling.
+
 Latest update on 2026-06-30, v285-v286:
 
 The newest branch is **source-heldout calibration for view-feature ridge texture** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:
