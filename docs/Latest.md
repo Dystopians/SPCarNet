@@ -2,6 +2,49 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 Topline: v297 Source-Heldout Transport Loss
+
+Newest method/objective change:
+
+```text
+docs/car_model/6-30-v297-SourceHeldoutTransportLoss-Log.md
+docs/car_model/results/v297_source_heldout_transport_summary.json
+```
+
+Implementation:
+
+```text
+scripts/car_model/train_perceptual_surface_residual_decoder.py
+```
+
+What changed:
+
+- Added `--enable_source_heldout_transport_loss`.
+- Split train-fit views into source and heldout-source subsets.
+- Built a source-only surface texture and trained the decoder to predict
+  heldout-source residuals from it.
+- Added audited source-heldout loss fields to JSON, Markdown, W&B, and stdout.
+- Added `--policy_val_min_changed_fraction` defaulting to `1e-5` to stop no-op
+  floating-point noise from passing policy-val all-axis gates.
+
+Pilot result:
+
+| run | selected alpha | PSNR gain | SSIM gain | changed fraction | policy-val pass |
+|---|---:|---:|---:|---:|---|
+| no transport pilot | 0.12500 | -0.000000388 | +0.0000000715 | 0.000015655 | false |
+| transport pilot, fixed gate | 0.12500 | -0.0000000512 | +0.0000000834 | 0.000020517 | false |
+
+Direct verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+v297 is a real objective-level method change and the interface works, but the
+first pilot is still numerical-noise scale. It must not be promoted to flowers
+exact or full9. The next step is residual-energy scaling and sampler efficiency,
+not claiming success from the old no-op gate pass.
+
 ## 2026-06-30 Topline: Phase-J Stall Investigation + v296 Reduced Negative
 
 Newest investigation log:

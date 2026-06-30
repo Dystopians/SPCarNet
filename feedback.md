@@ -2,6 +2,41 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-30, v297:
+
+New files:
+
+- `docs/car_model/6-30-v297-SourceHeldoutTransportLoss-Log.md`
+- `docs/car_model/results/v297_source_heldout_transport_summary.json`
+
+Important change:
+
+- v297 implements the missing source-heldout residual transport objective in
+  `scripts/car_model/train_perceptual_surface_residual_decoder.py`.
+- It builds a source-only surface texture from train-fit source views and uses
+  heldout-source views as an auxiliary residual prediction target.
+- It adds `--policy_val_min_changed_fraction` with default `1e-5`, because the
+  first pilot exposed a no-op false positive in the old policy-val gate.
+
+Pilot evidence:
+
+- Smoke passed: source-heldout loss was computed and logged with 28 source views
+  and 14 heldout views.
+- 24-step no-transport pilot: PSNR gain `-3.88e-7`, SSIM gain `+7.15e-8`,
+  changed fraction `1.57e-5`, policy-val pass `false`.
+- 24-step transport pilot initially showed an old-gate pass, but selected
+  changed fraction was `0.0`; after fixed changed-fraction gate, transport
+  policy-val pass is `false`.
+- Fixed-gate transport pilot: PSNR gain `-5.12e-8`, SSIM gain `+8.34e-8`,
+  changed fraction `2.05e-5`.
+
+Direct verdict:
+
+> v297 is the correct kind of method change, but not yet a quality
+> breakthrough. It should be improved, not promoted. Next work should focus on
+> residual-energy scaling and a cached/cheaper source-heldout sampler before
+> longer runs.
+
 Latest update on 2026-06-30, Phase-J stall investigation + v296:
 
 New files:

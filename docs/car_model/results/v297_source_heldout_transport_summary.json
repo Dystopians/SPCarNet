@@ -1,0 +1,77 @@
+{
+  "date": "2026-06-30",
+  "method": "v297 source-heldout residual transport loss",
+  "script": "scripts/car_model/train_perceptual_surface_residual_decoder.py",
+  "real_method_change": true,
+  "implemented_cli": [
+    "--enable_source_heldout_transport_loss",
+    "--source_heldout_stride",
+    "--source_heldout_loss_weight",
+    "--source_heldout_batch_fraction",
+    "--source_heldout_loss_every",
+    "--policy_val_min_changed_fraction"
+  ],
+  "static_checks": {
+    "py_compile": true,
+    "diff_check": true,
+    "help_exposes_new_flags": true
+  },
+  "smoke": {
+    "output_dir": "/tmp/peilincai_spcarnet_v297_transport_smoke_20260630",
+    "audit_json": "/tmp/peilincai_spcarnet_v297_transport_smoke_20260630/v180_perceptual_surface_decoder_audit.json",
+    "wandb_offline": "/tmp/peilincai_spcarnet_v297_transport_smoke_20260630/wandb/offline-run-20260630_163634-z0dkn1a0",
+    "source_heldout_enabled": true,
+    "source_views": 28,
+    "heldout_views": 14,
+    "loss_weight": 0.35,
+    "final_source_heldout_loss": 0.009145751595497131,
+    "final_source_heldout_rgb_loss": 0.007064515259116888,
+    "final_source_heldout_batch_cosine": -0.03284566104412079,
+    "policy_val_all_axis_pass": false,
+    "selected_alpha": 0.0
+  },
+  "pilot": {
+    "baseline_no_transport": {
+      "output_dir": "/tmp/peilincai_spcarnet_v297_pilot_base_20260630",
+      "wandb_offline": "/tmp/peilincai_spcarnet_v297_pilot_base_20260630/wandb/offline-run-20260630_164010-j8rtbt57",
+      "selected_alpha": 0.125,
+      "psnr_gain": -3.8806281068559654e-7,
+      "ssim_gain": 7.152557373046875e-8,
+      "mean_changed_fraction": 1.5654648956356734e-5,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false
+    },
+    "transport_old_gate": {
+      "output_dir": "/tmp/peilincai_spcarnet_v297_pilot_transport_20260630",
+      "wandb_offline": "/tmp/peilincai_spcarnet_v297_pilot_transport_20260630/wandb/offline-run-20260630_164010-nuybeso9",
+      "source_views": 27,
+      "heldout_views": 14,
+      "selected_alpha": 0.03125,
+      "psnr_gain": 6.406741590581077e-8,
+      "ssim_gain": 1.1920928955078126e-8,
+      "mean_changed_fraction": 0.0,
+      "policy_val_all_axis_pass": true,
+      "policy_val_tail_safe_pass": true,
+      "invalidated_by_gate_fix": true
+    },
+    "transport_fixed_gate": {
+      "output_dir": "/tmp/peilincai_spcarnet_v297_pilot_transport_gatefix_20260630",
+      "selected_alpha": 0.125,
+      "psnr_gain": -5.1201389084098994e-8,
+      "ssim_gain": 8.344650268554687e-8,
+      "mean_changed_fraction": 2.0517077798861483e-5,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "min_changed_fraction_gate": 1.0e-5
+    }
+  },
+  "verdict": {
+    "source_heldout_loss_smoke_passed": true,
+    "quality_breakthrough": false,
+    "flowers_exact_allowed": false,
+    "full9_allowed": false,
+    "lesson": "The objective-level source-heldout transport interface works, but the first pilot remains numerical-noise scale. The old policy-val gate produced a no-op false positive, so min changed-fraction gating is now required.",
+    "next_step": "Improve residual-energy scaling and sampler efficiency before longer runs; only promote when policy-val has nontrivial changed fraction and robust positive gains."
+  },
+  "final_status": "NOT COMPLETE"
+}

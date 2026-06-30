@@ -732,6 +732,39 @@ def _fit_calibration_policy_split(paths: list[Path], policy_stride: int, calibra
     return fit, cal, val
 
 
+def _source_heldout_transport_split(paths: list[Path], stride: int) -> tuple[list[Path], list[Path], dict[str, Any]]:
+    if int(stride) <= 1 or len(paths) < 3:
+        return list(paths), [], {
+            "enabled": False,
+            "reason": "stride_disabled_or_too_few_fit_views",
+            "stride": int(stride),
+            "source_views": int(len(paths)),
+            "heldout_views": 0,
+        }
+    source, heldout = [], []
+    for idx, path in enumerate(paths):
+        if idx % int(stride) == 0:
+            heldout.append(path)
+        else:
+            source.append(path)
+    if not source or not heldout:
+        return list(paths), [], {
+            "enabled": False,
+            "reason": "empty_source_or_heldout_split",
+            "stride": int(stride),
+            "source_views": int(len(paths)),
+            "heldout_views": 0,
+        }
+    return source, heldout, {
+        "enabled": True,
+        "stride": int(stride),
+        "source_views": int(len(source)),
+        "heldout_views": int(len(heldout)),
+        "source_view_names": [p.stem for p in source],
+        "heldout_view_names": [p.stem for p in heldout],
+    }
+
+
 def _rank_candidate_faces(
     fit_paths: list[Path],
     *,
@@ -1512,6 +1545,72 @@ def _sample_batch(
     )
 
 
+def _decoder_sample_losses(
+    model: SurfaceResidualDecoder,
+    sampled: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    *,
+    device: torch.device,
+    cosine_loss_weight: float,
+    energy_match_weight: float,
+    confidence_loss_weight: float,
+) -> dict[str, torch.Tensor]:
+    face_idx, features, target, sample_weights, confidence_target, texture_bin_idx = sampled
+    face_t = torch.from_numpy(face_idx).to(device)
+    feat_t = torch.from_numpy(features).to(device)
+    texture_bin_t = torch.from_numpy(texture_bin_idx).to(device)
+    target_t = torch.from_numpy(target).to(device)
+    confidence_target_t = torch.from_numpy(confidence_target).to(device).reshape(-1)
+    weight_t = torch.from_numpy(sample_weights).to(device).reshape(-1)
+    weight_t = weight_t / torch.clamp(torch.mean(weight_t), min=1.0e-6)
+    pred, pred_confidence = model.forward_with_confidence(face_t, feat_t, texture_bin_t)
+
+    rgb_per = torch.sqrt(torch.square(pred - target_t) + 1.0e-6).mean(dim=1)
+    rgb_loss = torch.sum(weight_t * rgb_per) / torch.clamp(torch.sum(weight_t), min=1.0e-6)
+    luma_pred = 0.299 * pred[:, 0] + 0.587 * pred[:, 1] + 0.114 * pred[:, 2]
+    luma_target = 0.299 * target_t[:, 0] + 0.587 * target_t[:, 1] + 0.114 * target_t[:, 2]
+    luma_per = torch.sqrt(torch.square(luma_pred - luma_target) + 1.0e-6)
+    luma_loss = torch.sum(weight_t * luma_per) / torch.clamp(torch.sum(weight_t), min=1.0e-6)
+    cosine = F.cosine_similarity(pred, target_t, dim=1, eps=1.0e-6)
+    target_mag = torch.mean(torch.abs(target_t), dim=1)
+    pred_mag = torch.mean(torch.abs(pred), dim=1)
+    direction_weight = weight_t * (target_mag > 1.0e-5).float()
+    cosine_loss = torch.sum(direction_weight * (1.0 - cosine)) / torch.clamp(torch.sum(direction_weight), min=1.0e-6)
+    energy_loss = torch.sum(weight_t * torch.sqrt(torch.square(pred_mag - target_mag) + 1.0e-6)) / torch.clamp(
+        torch.sum(weight_t),
+        min=1.0e-6,
+    )
+    confidence_loss = torch.zeros((), device=device)
+    if bool(model.predict_confidence):
+        confidence_loss = F.binary_cross_entropy(
+            torch.clamp(pred_confidence, 1.0e-6, 1.0 - 1.0e-6),
+            confidence_target_t,
+            weight=torch.clamp(weight_t, 0.25, 4.0),
+            reduction="sum",
+        ) / torch.clamp(torch.sum(torch.clamp(weight_t, 0.25, 4.0)), min=1.0e-6)
+    loss = (
+        rgb_loss
+        + 0.35 * luma_loss
+        + float(cosine_loss_weight) * cosine_loss
+        + float(energy_match_weight) * energy_loss
+        + float(confidence_loss_weight) * confidence_loss
+    )
+    return {
+        "loss": loss,
+        "rgb_loss": rgb_loss,
+        "luma_loss": luma_loss,
+        "cosine_loss": cosine_loss,
+        "energy_loss": energy_loss,
+        "confidence_loss": confidence_loss,
+        "mean_confidence": torch.mean(pred_confidence),
+        "mean_confidence_target": torch.mean(confidence_target_t),
+        "mean_abs_pred": torch.mean(torch.abs(pred)),
+        "mean_abs_target": torch.mean(torch.abs(target_t)),
+        "weighted_mean_abs_target": torch.sum(weight_t * target_mag) / torch.clamp(torch.sum(weight_t), min=1.0e-6),
+        "batch_cosine": torch.mean(cosine),
+        "pred_mag_regularizer": torch.mean(torch.square(pred)),
+    }
+
+
 def _image_proxy_loss(
     model: SurfaceResidualDecoder,
     path: Path,
@@ -1962,6 +2061,7 @@ def _evaluate(
     min_positive_view_fraction: float,
     min_ssim_positive_view_fraction: float,
     min_lpips_positive_view_fraction: float,
+    min_changed_fraction: float,
     min_psnr_cvar_gain: float,
     min_ssim_cvar_gain: float,
     min_lpips_cvar_gain: float,
@@ -2191,6 +2291,7 @@ def _evaluate(
             float(row.get("psnr_gain", 0.0)) > 0.0
             and float(row.get("ssim_gain", 0.0)) > 0.0
             and (not compute_lpips or float(row.get("lpips_gain", 0.0)) > 0.0)
+            and float(row.get("mean_changed_fraction", 0.0)) >= float(min_changed_fraction)
         )
         tail_safe_pass = (
             all_axis_pass
@@ -2299,6 +2400,7 @@ def _evaluate(
             "min_positive_view_fraction": float(min_positive_view_fraction),
             "min_ssim_positive_view_fraction": float(min_ssim_positive_view_fraction),
             "min_lpips_positive_view_fraction": float(min_lpips_positive_view_fraction),
+            "min_changed_fraction": float(min_changed_fraction),
             "min_psnr_cvar_gain": float(min_psnr_cvar_gain),
             "min_ssim_cvar_gain": float(min_ssim_cvar_gain),
             "min_lpips_cvar_gain": float(min_lpips_cvar_gain),
@@ -2613,6 +2715,10 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- texture latent dim/count/reg: `{payload['train'].get('texture_latent_dim', 0)}` / "
         f"`{payload['train'].get('texture_latent_count', 0)}` / "
         f"`{payload['train'].get('texture_latent_reg', 0.0):.6g}`",
+        f"- source-heldout transport loss: `{payload.get('source_heldout_transport', {}).get('enabled', False)}` "
+        f"weight `{payload['train'].get('source_heldout_loss_weight', 0.0):.6g}` "
+        f"source `{payload.get('source_heldout_transport', {}).get('source_views', 0)}` "
+        f"heldout `{payload.get('source_heldout_transport', {}).get('heldout_views', 0)}`",
         f"- calibration views: `{payload.get('calibration_views', 0)}`",
         f"- calibration face reliability: `{payload.get('calibration_face_reliability', {}).get('enabled', False)}`",
         f"- calibration texture reliability: `{payload.get('calibration_texture_reliability', {}).get('enabled', False)}`",
@@ -2791,6 +2897,11 @@ def main() -> int:
     parser.add_argument("--cosine_loss_weight", type=float, default=0.0)
     parser.add_argument("--energy_match_weight", type=float, default=0.0)
     parser.add_argument("--mag_reg", type=float, default=1.0e-4)
+    parser.add_argument("--enable_source_heldout_transport_loss", action="store_true")
+    parser.add_argument("--source_heldout_stride", type=int, default=4)
+    parser.add_argument("--source_heldout_loss_weight", type=float, default=0.35)
+    parser.add_argument("--source_heldout_batch_fraction", type=float, default=0.50)
+    parser.add_argument("--source_heldout_loss_every", type=int, default=1)
     parser.add_argument("--alpha_grid", default="0,0.0625,0.125,0.25,0.5,0.75,1")
     parser.add_argument("--apply_confidence_threshold", type=float, default=0.0)
     parser.add_argument("--apply_confidence_threshold_grid", default="")
@@ -2811,6 +2922,7 @@ def main() -> int:
     parser.add_argument("--policy_val_min_positive_view_fraction", type=float, default=0.0)
     parser.add_argument("--policy_val_min_ssim_positive_view_fraction", type=float, default=0.0)
     parser.add_argument("--policy_val_min_lpips_positive_view_fraction", type=float, default=0.0)
+    parser.add_argument("--policy_val_min_changed_fraction", type=float, default=1.0e-5)
     parser.add_argument("--policy_val_min_psnr_cvar_gain", type=float, default=-1.0e9)
     parser.add_argument("--policy_val_min_ssim_cvar_gain", type=float, default=-1.0e9)
     parser.add_argument("--policy_val_min_lpips_cvar_gain", type=float, default=-1.0e9)
@@ -2937,6 +3049,76 @@ def main() -> int:
                     dtype=np.int64,
                 ),
             )
+    source_heldout_surface_texture: dict[str, Any] | None = None
+    source_heldout_paths: list[Path] = []
+    source_heldout_payload: dict[str, Any] = {
+        "enabled": False,
+        "reason": "disabled",
+        "loss_weight": float(args.source_heldout_loss_weight),
+    }
+    if bool(args.enable_source_heldout_transport_loss) and float(args.source_heldout_loss_weight) > 0.0:
+        if surface_feature_texture is None:
+            raise ValueError("--enable_source_heldout_transport_loss requires --surface_texture_mode other than none")
+        source_paths, heldout_paths, split_payload = _source_heldout_transport_split(
+            fit_paths,
+            int(args.source_heldout_stride),
+        )
+        if not split_payload.get("enabled", False):
+            source_heldout_payload = {
+                **split_payload,
+                "enabled": False,
+                "loss_weight": float(args.source_heldout_loss_weight),
+            }
+        else:
+            source_heldout_surface_texture = _fit_surface_feature_texture(
+                source_paths,
+                candidate_faces,
+                mode=str(args.surface_texture_mode),
+                residual_rgb_key=str(args.residual_rgb_key),
+                residual_l1_key=str(args.residual_l1_key),
+                min_l1=float(args.min_l1),
+                min_alpha=float(args.min_alpha),
+                uv_bins=int(args.surface_texture_uv_bins),
+                max_samples_per_view=int(args.surface_texture_max_samples_per_view),
+                residual_target_mode=str(args.residual_target_mode),
+                residual_target_gain_floor=float(args.residual_target_gain_floor),
+                residual_target_gain_scale=float(args.residual_target_gain_scale),
+                residual_target_structure_strength=float(args.residual_target_structure_strength),
+                residual_target_structure_floor=float(args.residual_target_structure_floor),
+                residual_target_structure_eps=float(args.residual_target_structure_eps),
+                residual_target_chroma_scale=float(args.residual_target_chroma_scale),
+                seed=int(args.seed) + 23001,
+            )
+            if int(source_heldout_surface_texture.get("feature_dim", 0)) != int(
+                surface_feature_texture.get("feature_dim", 0)
+            ):
+                raise RuntimeError("source-heldout texture feature dimension mismatch")
+            source_heldout_paths = heldout_paths
+            source_heldout_payload = {
+                **split_payload,
+                "enabled": True,
+                "loss_weight": float(args.source_heldout_loss_weight),
+                "batch_fraction": float(args.source_heldout_batch_fraction),
+                "loss_every": int(args.source_heldout_loss_every),
+                "surface_texture_summary": dict(source_heldout_surface_texture.get("summary", {})),
+            }
+            np.savez_compressed(
+                output_dir / f"source_heldout_surface_feature_texture_{str(args.surface_texture_mode)}.npz",
+                candidate_faces=candidate_faces.astype(np.int64),
+                features=np.asarray(source_heldout_surface_texture["features"], dtype=np.float32),
+                counts=np.asarray(source_heldout_surface_texture["counts"], dtype=np.int64),
+                uv_bins=np.asarray([int(source_heldout_surface_texture["uv_bins"])], dtype=np.int64),
+                feature_dim=np.asarray([int(source_heldout_surface_texture["feature_dim"])], dtype=np.int64),
+                mode=np.asarray([str(args.surface_texture_mode)]),
+                lowrank_basis_count=np.asarray(
+                    [
+                        LOWRANK_TEXTURE_BASIS_COUNT
+                        if str(args.surface_texture_mode) in LOWRANK_TEXTURE_MODES
+                        else 0
+                    ],
+                    dtype=np.int64,
+                ),
+            )
     if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"} and str(
         args.surface_texture_mode
     ) not in LOWRANK_TEXTURE_MODES:
@@ -3026,38 +3208,64 @@ def main() -> int:
                 continue
         if sampled is None:
             raise RuntimeError("no train-fit view contains the selected candidate faces")
-        face_idx, features, target, sample_weights, confidence_target, texture_bin_idx = sampled
-        face_t = torch.from_numpy(face_idx).to(device)
-        feat_t = torch.from_numpy(features).to(device)
-        texture_bin_t = torch.from_numpy(texture_bin_idx).to(device)
-        target_t = torch.from_numpy(target).to(device)
-        confidence_target_t = torch.from_numpy(confidence_target).to(device).reshape(-1)
-        weight_t = torch.from_numpy(sample_weights).to(device).reshape(-1)
-        weight_t = weight_t / torch.clamp(torch.mean(weight_t), min=1.0e-6)
-        pred, pred_confidence = model.forward_with_confidence(face_t, feat_t, texture_bin_t)
-        rgb_per = torch.sqrt(torch.square(pred - target_t) + 1.0e-6).mean(dim=1)
-        rgb_loss = torch.sum(weight_t * rgb_per) / torch.clamp(torch.sum(weight_t), min=1.0e-6)
-        luma_pred = 0.299 * pred[:, 0] + 0.587 * pred[:, 1] + 0.114 * pred[:, 2]
-        luma_target = 0.299 * target_t[:, 0] + 0.587 * target_t[:, 1] + 0.114 * target_t[:, 2]
-        luma_per = torch.sqrt(torch.square(luma_pred - luma_target) + 1.0e-6)
-        luma_loss = torch.sum(weight_t * luma_per) / torch.clamp(torch.sum(weight_t), min=1.0e-6)
-        cosine = F.cosine_similarity(pred, target_t, dim=1, eps=1.0e-6)
-        target_mag = torch.mean(torch.abs(target_t), dim=1)
-        pred_mag = torch.mean(torch.abs(pred), dim=1)
-        direction_weight = weight_t * (target_mag > 1.0e-5).float()
-        cosine_loss = torch.sum(direction_weight * (1.0 - cosine)) / torch.clamp(torch.sum(direction_weight), min=1.0e-6)
-        energy_loss = torch.sum(weight_t * torch.sqrt(torch.square(pred_mag - target_mag) + 1.0e-6)) / torch.clamp(
-            torch.sum(weight_t),
-            min=1.0e-6,
+        main_losses = _decoder_sample_losses(
+            model,
+            sampled,
+            device=device,
+            cosine_loss_weight=float(args.cosine_loss_weight),
+            energy_match_weight=float(args.energy_match_weight),
+            confidence_loss_weight=float(args.confidence_loss_weight),
         )
-        confidence_loss = torch.zeros((), device=device)
-        if bool(args.confidence_head):
-            confidence_loss = F.binary_cross_entropy(
-                torch.clamp(pred_confidence, 1.0e-6, 1.0 - 1.0e-6),
-                confidence_target_t,
-                weight=torch.clamp(weight_t, 0.25, 4.0),
-                reduction="sum",
-            ) / torch.clamp(torch.sum(torch.clamp(weight_t, 0.25, 4.0)), min=1.0e-6)
+        source_heldout_losses: dict[str, torch.Tensor] | None = None
+        if (
+            source_heldout_surface_texture is not None
+            and source_heldout_paths
+            and int(args.source_heldout_loss_every) > 0
+            and step % int(args.source_heldout_loss_every) == 0
+        ):
+            heldout_path = source_heldout_paths[(step - 1) % len(source_heldout_paths)]
+            heldout_batch_size = max(256, int(round(int(args.batch_size) * float(args.source_heldout_batch_fraction))))
+            heldout_sampled = None
+            for attempt in range(max(1, len(source_heldout_paths))):
+                heldout_path = source_heldout_paths[(step + attempt - 1) % len(source_heldout_paths)]
+                try:
+                    heldout_sampled = _sample_batch(
+                        heldout_path,
+                        candidate_faces,
+                        residual_rgb_key=str(args.residual_rgb_key),
+                        residual_l1_key=str(args.residual_l1_key),
+                        min_l1=float(args.min_l1),
+                        min_alpha=float(args.min_alpha),
+                        batch_size=int(heldout_batch_size),
+                        seed=int(args.seed) + 310000 + step + attempt * 1009,
+                        sample_weight_gamma=float(args.sample_weight_gamma),
+                        sample_weight_clip=float(args.sample_weight_clip),
+                        confidence_target_mode=str(args.confidence_target_mode),
+                        confidence_gain_floor=float(args.confidence_gain_floor),
+                        confidence_gain_scale=float(args.confidence_gain_scale),
+                        sample_weight_confidence_power=float(args.sample_weight_confidence_power),
+                        residual_target_mode=str(args.residual_target_mode),
+                        residual_target_gain_floor=float(args.residual_target_gain_floor),
+                        residual_target_gain_scale=float(args.residual_target_gain_scale),
+                        residual_target_structure_strength=float(args.residual_target_structure_strength),
+                        residual_target_structure_floor=float(args.residual_target_structure_floor),
+                        residual_target_structure_eps=float(args.residual_target_structure_eps),
+                        residual_target_chroma_scale=float(args.residual_target_chroma_scale),
+                        feature_mode=str(args.feature_mode),
+                        surface_feature_texture=source_heldout_surface_texture,
+                    )
+                    break
+                except RuntimeError:
+                    continue
+            if heldout_sampled is not None:
+                source_heldout_losses = _decoder_sample_losses(
+                    model,
+                    heldout_sampled,
+                    device=device,
+                    cosine_loss_weight=float(args.cosine_loss_weight),
+                    energy_match_weight=float(args.energy_match_weight),
+                    confidence_loss_weight=float(args.confidence_loss_weight),
+                )
         img_loss = torch.zeros((), device=device)
         if int(args.image_loss_every) > 0 and step % int(args.image_loss_every) == 0:
             img_path = train_rng.choice(fit_cycle)
@@ -3087,16 +3295,18 @@ def main() -> int:
                 image_loss_residual_gradient_weight=float(args.image_loss_residual_gradient_weight),
                 device=device,
             )
-        mag = torch.mean(torch.square(pred))
+        mag = main_losses["pred_mag_regularizer"]
         texture_latent_loss = torch.zeros((), device=device)
         if model.texture_embedding is not None:
             texture_latent_loss = torch.mean(torch.square(model.texture_embedding.weight))
+        source_heldout_loss = (
+            source_heldout_losses["loss"]
+            if source_heldout_losses is not None
+            else torch.zeros((), device=device)
+        )
         loss = (
-            rgb_loss
-            + 0.35 * luma_loss
-            + float(args.cosine_loss_weight) * cosine_loss
-            + float(args.energy_match_weight) * energy_loss
-            + float(args.confidence_loss_weight) * confidence_loss
+            main_losses["loss"]
+            + float(args.source_heldout_loss_weight) * source_heldout_loss
             + float(args.image_loss_weight) * img_loss
             + float(args.mag_reg) * mag
             + float(args.texture_latent_reg) * texture_latent_loss
@@ -3109,19 +3319,35 @@ def main() -> int:
             row = {
                 "step": int(step),
                 "loss": float(loss.detach().cpu()),
-                "rgb_loss": float(rgb_loss.detach().cpu()),
-                "luma_loss": float(luma_loss.detach().cpu()),
-                "cosine_loss": float(cosine_loss.detach().cpu()),
-                "energy_loss": float(energy_loss.detach().cpu()),
-                "confidence_loss": float(confidence_loss.detach().cpu()),
+                "rgb_loss": float(main_losses["rgb_loss"].detach().cpu()),
+                "luma_loss": float(main_losses["luma_loss"].detach().cpu()),
+                "cosine_loss": float(main_losses["cosine_loss"].detach().cpu()),
+                "energy_loss": float(main_losses["energy_loss"].detach().cpu()),
+                "confidence_loss": float(main_losses["confidence_loss"].detach().cpu()),
+                "source_heldout_loss": float(source_heldout_loss.detach().cpu()),
+                "source_heldout_rgb_loss": (
+                    float(source_heldout_losses["rgb_loss"].detach().cpu())
+                    if source_heldout_losses is not None
+                    else 0.0
+                ),
+                "source_heldout_cosine_loss": (
+                    float(source_heldout_losses["cosine_loss"].detach().cpu())
+                    if source_heldout_losses is not None
+                    else 0.0
+                ),
+                "source_heldout_batch_cosine": (
+                    float(source_heldout_losses["batch_cosine"].detach().cpu())
+                    if source_heldout_losses is not None
+                    else 0.0
+                ),
                 "texture_latent_loss": float(texture_latent_loss.detach().cpu()),
-                "mean_confidence": float(torch.mean(pred_confidence).detach().cpu()),
-                "mean_confidence_target": float(torch.mean(confidence_target_t).detach().cpu()),
+                "mean_confidence": float(main_losses["mean_confidence"].detach().cpu()),
+                "mean_confidence_target": float(main_losses["mean_confidence_target"].detach().cpu()),
                 "image_proxy_loss": float(img_loss.detach().cpu()),
-                "mean_abs_pred": float(torch.mean(torch.abs(pred)).detach().cpu()),
-                "mean_abs_target": float(torch.mean(torch.abs(target_t)).detach().cpu()),
-                "weighted_mean_abs_target": float((torch.sum(weight_t * target_mag) / torch.clamp(torch.sum(weight_t), min=1.0e-6)).detach().cpu()),
-                "batch_cosine": float(torch.mean(cosine).detach().cpu()),
+                "mean_abs_pred": float(main_losses["mean_abs_pred"].detach().cpu()),
+                "mean_abs_target": float(main_losses["mean_abs_target"].detach().cpu()),
+                "weighted_mean_abs_target": float(main_losses["weighted_mean_abs_target"].detach().cpu()),
+                "batch_cosine": float(main_losses["batch_cosine"].detach().cpu()),
             }
             train_rows.append(row)
             if wandb_run is not None:
@@ -3249,6 +3475,7 @@ def main() -> int:
         min_positive_view_fraction=float(args.policy_val_min_positive_view_fraction),
         min_ssim_positive_view_fraction=float(args.policy_val_min_ssim_positive_view_fraction),
         min_lpips_positive_view_fraction=float(args.policy_val_min_lpips_positive_view_fraction),
+        min_changed_fraction=float(args.policy_val_min_changed_fraction),
         min_psnr_cvar_gain=float(args.policy_val_min_psnr_cvar_gain),
         min_ssim_cvar_gain=float(args.policy_val_min_ssim_cvar_gain),
         min_lpips_cvar_gain=float(args.policy_val_min_lpips_cvar_gain),
@@ -3439,11 +3666,17 @@ def main() -> int:
             "sample_weight_confidence_power": float(args.sample_weight_confidence_power),
             "cosine_loss_weight": float(args.cosine_loss_weight),
             "energy_match_weight": float(args.energy_match_weight),
+            "enable_source_heldout_transport_loss": bool(args.enable_source_heldout_transport_loss),
+            "source_heldout_stride": int(args.source_heldout_stride),
+            "source_heldout_loss_weight": float(args.source_heldout_loss_weight),
+            "source_heldout_batch_fraction": float(args.source_heldout_batch_fraction),
+            "source_heldout_loss_every": int(args.source_heldout_loss_every),
             "apply_confidence_threshold": float(args.apply_confidence_threshold),
             "apply_confidence_threshold_grid": [float(x) for x in apply_confidence_threshold_grid],
             "policy_val_min_positive_view_fraction": float(args.policy_val_min_positive_view_fraction),
             "policy_val_min_ssim_positive_view_fraction": float(args.policy_val_min_ssim_positive_view_fraction),
             "policy_val_min_lpips_positive_view_fraction": float(args.policy_val_min_lpips_positive_view_fraction),
+            "policy_val_min_changed_fraction": float(args.policy_val_min_changed_fraction),
             "policy_val_min_psnr_cvar_gain": float(args.policy_val_min_psnr_cvar_gain),
             "policy_val_min_ssim_cvar_gain": float(args.policy_val_min_ssim_cvar_gain),
             "policy_val_min_lpips_cvar_gain": float(args.policy_val_min_lpips_cvar_gain),
@@ -3477,6 +3710,7 @@ def main() -> int:
         "policy_val": policy_val,
         "target_no_gt_audit": target_no_gt_audit,
         "surface_feature_texture": surface_texture_payload,
+        "source_heldout_transport": source_heldout_payload,
         "calibration_face_reliability": face_reliability_payload,
         "calibration_texture_reliability": texture_reliability_payload,
         "target_exact_eval": target_eval,
@@ -3546,6 +3780,10 @@ def main() -> int:
                 ),
                 "texture_latent/dim": float(args.texture_latent_dim),
                 "texture_latent/count": float(texture_latent_count),
+                "source_heldout/enabled": float(bool(source_heldout_payload.get("enabled", False))),
+                "source_heldout/source_views": float(source_heldout_payload.get("source_views", 0)),
+                "source_heldout/heldout_views": float(source_heldout_payload.get("heldout_views", 0)),
+                "source_heldout/loss_weight": float(args.source_heldout_loss_weight),
                 "target_exact/ran": float(bool(target_eval)),
                 "target_exact/psnr_gain": float(target_eval.get("summary", {}).get("psnr_gain", 0.0)),
                 "target_exact/ssim_gain": float(target_eval.get("summary", {}).get("ssim_gain", 0.0)),
@@ -3574,6 +3812,12 @@ def main() -> int:
                 "selected_apply_gate_strength": selected_gate_strength,
                 "selected_face_reliability_threshold": selected_face_reliability_threshold,
                 "selected_texture_reliability_threshold": selected_texture_reliability_threshold,
+                "source_heldout_transport": {
+                    "enabled": bool(source_heldout_payload.get("enabled", False)),
+                    "source_views": int(source_heldout_payload.get("source_views", 0)),
+                    "heldout_views": int(source_heldout_payload.get("heldout_views", 0)),
+                    "loss_weight": float(args.source_heldout_loss_weight),
+                },
                 "best": best,
             },
             allow_nan=False,
