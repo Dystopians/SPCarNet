@@ -1,0 +1,131 @@
+{
+  "created_at": "2026-06-30",
+  "phasej_flowers_reference": {
+    "lpips": 0.329222,
+    "psnr": 20.304358,
+    "ssim": 0.55777
+  },
+  "status": "NOT_COMPLETE",
+  "summary": "v272 implemented feature-only source consistency and a learned OOD/gain head with floor/ceiling support. It improved flowers policy-val but failed to improve target exact over the previous v266/v270 frontier, so it is retained as infrastructure/diagnostic evidence rather than promoted.",
+  "runs": {
+    "v266c_reference": {
+      "policy": {
+        "lpips": 0.15227354255815348,
+        "psnr": 20.668308607980936,
+        "ssim": 0.7197893460591634
+      },
+      "target": {
+        "lpips": 0.17991537634621968,
+        "lpips_gain": 0.0004194897006858479,
+        "psnr": 19.84569811982831,
+        "psnr_gain": 0.013644241380842555,
+        "ssim": 0.6202007559212771,
+        "ssim_gain": 0.0002903450619090687
+      }
+    },
+    "v270d_reference": {
+      "policy": {
+        "lpips": 0.15211169483760992,
+        "psnr": 20.673377916443698,
+        "ssim": 0.7202436576286951
+      },
+      "target": {
+        "lpips": 0.17993430657820267,
+        "lpips_gain": 0.00040055946870283646,
+        "psnr": 19.844319672793553,
+        "psnr_gain": 0.012265794346084618,
+        "ssim": 0.620225648988377,
+        "ssim_gain": 0.00031523812900890005
+      }
+    },
+    "v272b_feature_head": {
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v272_learned_consistency_flowers_20260630/v272b_feature_head_fullflowers/v253_deferred_source_renderer_audit.json",
+      "head": {
+        "ceiling": 1.05,
+        "floor": 0.65,
+        "mean_target_ood_confidence": 0.864957
+      },
+      "policy": {
+        "lpips": 0.15212195863326392,
+        "psnr": 20.672710436625426,
+        "ssim": 0.7201704283555349
+      },
+      "target": {
+        "lpips": 0.179945,
+        "lpips_gain": 0.00039,
+        "psnr": 19.843843,
+        "psnr_gain": 0.011789,
+        "ssim": 0.620191,
+        "ssim_gain": 0.000281
+      },
+      "verdict": "target_fail"
+    },
+    "v272c_mild_feature_head": {
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v272_learned_consistency_flowers_20260630/v272c_feature_head_mild_fullflowers/v253_deferred_source_renderer_audit.json",
+      "head": {
+        "ceiling": 1.03,
+        "floor": 0.85,
+        "mean_target_ood_confidence": 0.946682
+      },
+      "policy": {
+        "lpips": 0.15209377060333887,
+        "psnr": 20.673808429668767,
+        "ssim": 0.720213457942009
+      },
+      "target": {
+        "lpips": 0.179934,
+        "lpips_gain": 0.000401,
+        "psnr": 19.844036,
+        "psnr_gain": 0.011983,
+        "ssim": 0.620193,
+        "ssim_gain": 0.000282
+      },
+      "verdict": "target_fail"
+    },
+    "v272d_boost_only_v266": {
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v272_learned_consistency_flowers_20260630/v272d_boost_only_v266_fullflowers/v253_deferred_source_renderer_audit.json",
+      "head": {
+        "ceiling": 1.05,
+        "floor": 1.0,
+        "mean_target_ood_confidence": 1.026891
+      },
+      "policy": {
+        "lpips": 0.15204915342231592,
+        "psnr": 20.675601509349814,
+        "ssim": 0.7202837119499842
+      },
+      "target": {
+        "lpips": 0.179918,
+        "lpips_gain": 0.000417,
+        "psnr": 19.843998,
+        "psnr_gain": 0.011944,
+        "ssim": 0.620177,
+        "ssim_gain": 0.000267
+      },
+      "verdict": "target_fail"
+    },
+    "v272e_boost_only_v270_texture": {
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v272_learned_consistency_flowers_20260630/v272e_boost_only_v270_texture_fullflowers/v253_deferred_source_renderer_audit.json",
+      "head": {
+        "ceiling": 1.05,
+        "floor": 1.0,
+        "mean_target_ood_confidence": 1.027554
+      },
+      "policy": {
+        "lpips": 0.1520753838121891,
+        "psnr": 20.674817610002467,
+        "ssim": 0.720302551984787
+      },
+      "target": {
+        "lpips": 0.179923,
+        "lpips_gain": 0.000412,
+        "psnr": 19.844132,
+        "psnr_gain": 0.012078,
+        "ssim": 0.620207,
+        "ssim_gain": 0.000296
+      },
+      "verdict": "target_fail"
+    }
+  },
+  "next_recommendation": "Do not promote v272 to full9. Use the implementation as diagnostic infrastructure, but the next method must change the carrier or supervision target rather than adding another scalar learned confidence head."
+}

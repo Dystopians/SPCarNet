@@ -58,6 +58,11 @@ LEARNED_OOD_FEATURE_NAMES = [
     "effective_count_risk",
     "source_agreement_proxy",
     "max_view_cos",
+    "source_consistency_reliability",
+    "source_consistency_amplitude",
+    "source_consistency_gap",
+    "base_confidence",
+    "raw_residual_magnitude",
 ]
 
 FORBIDDEN_TARGET_KEYS = {
@@ -164,8 +169,13 @@ def _stack_learned_ood_features(
     parent_mismatch: np.ndarray,
     effective_count_risk: np.ndarray,
     max_view_cos: np.ndarray,
+    source_consistency_reliability: np.ndarray,
+    source_consistency_amplitude: np.ndarray,
+    base_confidence: np.ndarray,
+    raw_residual_magnitude: np.ndarray,
 ) -> np.ndarray:
     source_agreement_proxy = np.exp(-0.25 * np.clip(np.asarray(variance_ratio, dtype=np.float32), 0.0, 4.0))
+    source_consistency_rel = np.clip(np.asarray(source_consistency_reliability, dtype=np.float32), 0.0, 1.0)
     return np.stack(
         [
             np.asarray(gain_boost, dtype=np.float32),
@@ -177,6 +187,11 @@ def _stack_learned_ood_features(
             np.clip(np.asarray(effective_count_risk, dtype=np.float32), 0.0, 1.0),
             source_agreement_proxy.astype(np.float32),
             np.clip(np.asarray(max_view_cos, dtype=np.float32), -1.0, 1.0),
+            source_consistency_rel,
+            np.clip(np.asarray(source_consistency_amplitude, dtype=np.float32), 0.0, 2.0),
+            np.clip(1.0 - source_consistency_rel, 0.0, 1.0),
+            np.clip(np.asarray(base_confidence, dtype=np.float32), 0.0, 4.0),
+            np.clip(np.asarray(raw_residual_magnitude, dtype=np.float32), 0.0, 0.25),
         ],
         axis=1,
     ).astype(np.float32)
@@ -192,9 +207,12 @@ def _apply_learned_ood_head(bank: dict[str, np.ndarray], features: np.ndarray) -
     mean = np.asarray(bank["learned_ood_head_mean"], dtype=np.float32)
     scale = np.maximum(np.asarray(bank["learned_ood_head_scale"], dtype=np.float32), 1.0e-6)
     floor = float(np.asarray(bank.get("learned_ood_head_floor", np.asarray([0.0], dtype=np.float32))).reshape(-1)[0])
+    ceiling = float(
+        np.asarray(bank.get("learned_ood_head_ceiling", np.asarray([1.0], dtype=np.float32))).reshape(-1)[0]
+    )
     standardized = (np.asarray(features, dtype=np.float32) - mean.reshape(1, -1)) / scale.reshape(1, -1)
     pred = bias + np.sum(standardized * coef.reshape(1, -1), axis=1)
-    confidence = np.clip(pred, floor, 1.0).astype(np.float32)
+    confidence = np.clip(pred, floor, max(floor, ceiling)).astype(np.float32)
     return confidence
 
 
@@ -499,6 +517,8 @@ def _load_source_bank(path: Path) -> tuple[np.ndarray, dict[str, np.ndarray], di
             "source_consistency_amplitude",
             "source_consistency_relative_error",
             "source_consistency_cosine",
+            "source_consistency_apply_weight",
+            "source_consistency_apply_amplitude",
         ):
             if key in z:
                 bank[key] = np.asarray(z[key], dtype=np.float32)
@@ -508,6 +528,7 @@ def _load_source_bank(path: Path) -> tuple[np.ndarray, dict[str, np.ndarray], di
             "learned_ood_head_mean",
             "learned_ood_head_scale",
             "learned_ood_head_floor",
+            "learned_ood_head_ceiling",
         ):
             if key in z:
                 bank[key] = np.asarray(z[key], dtype=np.float32)
@@ -646,12 +667,14 @@ def _calibrate_source_view_consistency(
     mode: str,
 ) -> dict[str, Any]:
     mode_s = str(mode or "off")
-    if mode_s not in {"weight", "weight_amplitude"}:
+    if mode_s not in {"feature_only", "weight", "weight_amplitude"}:
         for key in (
             "source_consistency_reliability",
             "source_consistency_amplitude",
             "source_consistency_relative_error",
             "source_consistency_cosine",
+            "source_consistency_apply_weight",
+            "source_consistency_apply_amplitude",
         ):
             bank.pop(key, None)
         return {"mode": "off", "enabled": False}
@@ -732,6 +755,12 @@ def _calibrate_source_view_consistency(
     bank["source_consistency_amplitude"] = amplitude.astype(np.float32)
     bank["source_consistency_relative_error"] = relative_error.astype(np.float32)
     bank["source_consistency_cosine"] = cosine_map.astype(np.float32)
+    bank["source_consistency_apply_weight"] = np.asarray(
+        [1.0 if mode_s in {"weight", "weight_amplitude"} else 0.0], dtype=np.float32
+    )
+    bank["source_consistency_apply_amplitude"] = np.asarray(
+        [1.0 if mode_s == "weight_amplitude" else 0.0], dtype=np.float32
+    )
     reliable_valid = valid & (reliability > floor_v + 1.0e-6)
     return {
         "mode": mode_s,
@@ -1028,6 +1057,7 @@ def _fit_learned_ood_head(
     l2: float,
     gain_scale: float,
     floor: float,
+    ceiling: float,
     min_gain: float,
     max_samples: int,
     seed: int,
@@ -1123,8 +1153,11 @@ def _fit_learned_ood_head(
             parent_l1 = np.mean(np.abs(parent[:, ys, xs] - gt[:, ys, xs]), axis=0).astype(np.float32)
             candidate_l1 = np.mean(np.abs(candidate[:, ys, xs] - gt[:, ys, xs]), axis=0).astype(np.float32)
             local_gain = (parent_l1 - candidate_l1).astype(np.float32)
-            labels = _sigmoid((local_gain - float(min_gain)) / max(float(gain_scale), 1.0e-8))
-            labels = np.clip(labels, float(floor), 1.0).astype(np.float32)
+            ceiling_v = max(float(ceiling), float(floor))
+            labels = float(floor) + (ceiling_v - float(floor)) * _sigmoid(
+                (local_gain - float(min_gain)) / max(float(gain_scale), 1.0e-8)
+            )
+            labels = np.clip(labels, float(floor), ceiling_v).astype(np.float32)
             feature_parts.append(features.astype(np.float32))
             label_parts.append(labels)
             gain_parts.append(local_gain)
@@ -1159,12 +1192,14 @@ def _fit_learned_ood_head(
     xty = (x.T @ y).astype(np.float64) / float(x.shape[0])
     ridge = max(float(l2), 0.0)
     coef = np.linalg.solve(xtx + ridge * np.eye(xtx.shape[0], dtype=np.float64), xty).astype(np.float32)
-    pred_train = np.clip(y_mean + np.sum(x * coef.reshape(1, -1), axis=1), float(floor), 1.0).astype(np.float32)
+    ceiling_v = max(float(ceiling), float(floor))
+    pred_train = np.clip(y_mean + np.sum(x * coef.reshape(1, -1), axis=1), float(floor), ceiling_v).astype(np.float32)
     bank["learned_ood_head_coef"] = coef
     bank["learned_ood_head_bias"] = np.asarray([y_mean], dtype=np.float32)
     bank["learned_ood_head_mean"] = mean.astype(np.float32)
     bank["learned_ood_head_scale"] = scale.astype(np.float32)
     bank["learned_ood_head_floor"] = np.asarray([float(floor)], dtype=np.float32)
+    bank["learned_ood_head_ceiling"] = np.asarray([max(float(ceiling), float(floor))], dtype=np.float32)
     corr = 0.0
     if float(np.std(pred_train)) > 1.0e-8 and float(np.std(labels_all)) > 1.0e-8:
         corr = float(np.corrcoef(pred_train, labels_all)[0, 1])
@@ -1176,6 +1211,7 @@ def _fit_learned_ood_head(
         "gain_scale": float(gain_scale),
         "min_gain": float(min_gain),
         "floor": float(floor),
+        "ceiling": float(max(float(ceiling), float(floor))),
         "sample_count": int(features_all.shape[0]),
         "view_count": int(len(val_paths)),
         "label_mean": float(np.mean(labels_all)),
@@ -1268,6 +1304,25 @@ def _predict_delta(
     texture_blends: list[float] = []
     source_consistency_reliabilities: list[float] = []
     source_consistency_amplitudes: list[float] = []
+    has_source_consistency = "source_consistency_reliability" in bank
+    apply_source_consistency_weight = has_source_consistency and bool(
+        float(
+            np.asarray(
+                bank.get("source_consistency_apply_weight", np.asarray([1.0], dtype=np.float32)),
+                dtype=np.float32,
+            ).reshape(-1)[0]
+        )
+        > 0.5
+    )
+    apply_source_consistency_amplitude = "source_consistency_amplitude" in bank and bool(
+        float(
+            np.asarray(
+                bank.get("source_consistency_apply_amplitude", np.asarray([1.0], dtype=np.float32)),
+                dtype=np.float32,
+            ).reshape(-1)[0]
+        )
+        > 0.5
+    )
     patch_active_count = 0
     texture_active_count = 0
     active_count = 0
@@ -1307,6 +1362,7 @@ def _predict_delta(
                 0.0,
                 2.0,
             ).astype(np.float32)
+        if apply_source_consistency_amplitude:
             src_residual = (src_residual * src_amplitude[:, :, None]).astype(np.float32)
         tgt_parent = np.moveaxis(parent[:, ys, xs], 0, 1).astype(np.float32)
         tgt_parent_edge = parent_edge_map[ys, xs].astype(np.float32)
@@ -1325,10 +1381,22 @@ def _predict_delta(
             weights *= np.exp(np.clip(-float(parent_beta) * parent_dist, -30.0, 30.0)).astype(np.float32)
         if float(gain_beta) != 0.0:
             weights *= np.clip(1.0 + float(gain_beta) * np.clip(src_gain, 0.0, None), 0.05, 10.0).astype(np.float32)
-        if "source_consistency_reliability" in bank:
+        source_consistency_base_weights = weights.copy()
+        source_consistency_base_denom = np.sum(source_consistency_base_weights, axis=1)
+        row_source_consistency_reliability = np.ones_like(source_consistency_base_denom, dtype=np.float32)
+        row_source_consistency_amplitude = np.ones_like(source_consistency_base_denom, dtype=np.float32)
+        if has_source_consistency:
+            row_source_consistency_reliability = (
+                np.sum(source_consistency_base_weights * src_consistency, axis=1)
+                / np.maximum(source_consistency_base_denom, 1.0e-12)
+            ).astype(np.float32)
+            row_source_consistency_amplitude = (
+                np.sum(source_consistency_base_weights * src_amplitude, axis=1)
+                / np.maximum(source_consistency_base_denom, 1.0e-12)
+            ).astype(np.float32)
+        if apply_source_consistency_weight:
             weights *= src_consistency
         denom = np.sum(weights, axis=1)
-        source_consistency_base_denom = denom.copy()
         ok_rows = denom > 1.0e-12
         patch_mode = decoder_mode_s == "patch_coherent_hybrid"
         if not np.any(ok_rows) and not neighbor_carrier_mode:
@@ -1529,7 +1597,8 @@ def _predict_delta(
             if tex_residual_parts:
                 tex_residual = np.concatenate(tex_residual_parts, axis=1)
                 tex_amplitude = np.clip(np.concatenate(tex_amplitude_parts, axis=1), 0.0, 2.0)
-                tex_residual = (tex_residual * tex_amplitude[:, :, None]).astype(np.float32)
+                if apply_source_consistency_amplitude:
+                    tex_residual = (tex_residual * tex_amplitude[:, :, None]).astype(np.float32)
                 tex_parent = np.concatenate(tex_parent_parts, axis=1)
                 tex_edge = np.concatenate(tex_edge_parts, axis=1)
                 tex_normal = np.concatenate(tex_normal_parts, axis=1)
@@ -1546,7 +1615,7 @@ def _predict_delta(
                 tex_parent_dist = np.sum(np.square(tex_parent - tgt_parent[:, None, :]), axis=2)
                 tex_edge_dist = np.abs(tex_edge - tgt_parent_edge[:, None])
                 tex_weights = tex_valid.astype(np.float32) * tex_bin_weight
-                if "source_consistency_reliability" in bank:
+                if apply_source_consistency_weight:
                     tex_weights *= tex_consistency
                 if float(count_gamma) != 0.0:
                     tex_weights *= np.power(np.maximum(tex_counts, 1.0), float(count_gamma)).astype(np.float32)
@@ -1705,7 +1774,8 @@ def _predict_delta(
             if nb_residual_parts:
                 nb_residual = np.concatenate(nb_residual_parts, axis=1)
                 nb_amplitude = np.clip(np.concatenate(nb_amplitude_parts, axis=1), 0.0, 2.0)
-                nb_residual = (nb_residual * nb_amplitude[:, :, None]).astype(np.float32)
+                if apply_source_consistency_amplitude:
+                    nb_residual = (nb_residual * nb_amplitude[:, :, None]).astype(np.float32)
                 nb_parent = np.concatenate(nb_parent_parts, axis=1)
                 nb_edge = np.concatenate(nb_edge_parts, axis=1)
                 nb_normal = np.concatenate(nb_normal_parts, axis=1)
@@ -1720,7 +1790,7 @@ def _predict_delta(
                 nb_parent_dist = np.sum(np.square(nb_parent - tgt_parent[:, None, :]), axis=2)
                 nb_edge_dist = np.abs(nb_edge - tgt_parent_edge[:, None])
                 patch_weights = nb_valid.astype(np.float32) * nb_bin_weight
-                if "source_consistency_reliability" in bank:
+                if apply_source_consistency_weight:
                     patch_weights *= nb_consistency
                 if float(count_gamma) != 0.0:
                     patch_weights *= np.power(np.maximum(nb_counts, 1.0), float(count_gamma)).astype(np.float32)
@@ -1804,6 +1874,8 @@ def _predict_delta(
             gain_map = np.asarray(bank["policy_gain"], dtype=np.float32)
             policy_gain = np.clip(gain_map[face_idx, bin_id], 0.0, 8.0).astype(np.float32)
             confidence = confidence * policy_gain
+        base_confidence = confidence.copy()
+        raw_residual_magnitude = np.linalg.norm(pred, axis=1).astype(np.float32)
         ood_confidence = np.ones_like(confidence, dtype=np.float32)
         ood_score = np.zeros_like(confidence, dtype=np.float32)
         policy_tail_risk = np.zeros_like(confidence, dtype=np.float32)
@@ -1831,6 +1903,10 @@ def _predict_delta(
                 parent_mismatch=parent_mismatch,
                 effective_count_risk=effective_count_risk,
                 max_view_cos=max_view_cos,
+                source_consistency_reliability=row_source_consistency_reliability,
+                source_consistency_amplitude=row_source_consistency_amplitude,
+                base_confidence=base_confidence,
+                raw_residual_magnitude=raw_residual_magnitude,
             )
             ood_score = (
                 float(ood_gain_view_weight) * view_gap
@@ -1876,15 +1952,9 @@ def _predict_delta(
         ood_confidences.append(ood_confidence[ok_rows].astype(np.float32))
         ood_scores.append(ood_score[ok_rows].astype(np.float32))
         tail_risks.append(policy_tail_risk[ok_rows].astype(np.float32))
-        if "source_consistency_reliability" in bank:
-            row_reliability = np.sum(weights * src_consistency, axis=1) / np.maximum(
-                source_consistency_base_denom, 1.0e-12
-            )
-            row_amplitude = np.sum(weights * src_amplitude, axis=1) / np.maximum(
-                source_consistency_base_denom, 1.0e-12
-            )
-            source_consistency_reliabilities.append(row_reliability[ok_rows].astype(np.float32))
-            source_consistency_amplitudes.append(row_amplitude[ok_rows].astype(np.float32))
+        if has_source_consistency:
+            source_consistency_reliabilities.append(row_source_consistency_reliability[ok_rows].astype(np.float32))
+            source_consistency_amplitudes.append(row_source_consistency_amplitude[ok_rows].astype(np.float32))
     conf = np.concatenate(confidences) if confidences else np.zeros((0,), dtype=np.float32)
     agreement_conf = (
         np.concatenate(agreement_confidences) if agreement_confidences else np.zeros((0,), dtype=np.float32)
@@ -2728,6 +2798,8 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         "",
         f"- mode: `{payload.get('learned_ood_head', {}).get('mode', 'off')}`",
         f"- sample count: `{payload.get('learned_ood_head', {}).get('sample_count', 0)}`",
+        f"- floor / ceiling: `{payload.get('learned_ood_head', {}).get('floor', 0.0):.6f}` / "
+        f"`{payload.get('learned_ood_head', {}).get('ceiling', 1.0):.6f}`",
         f"- label mean: `{payload.get('learned_ood_head', {}).get('label_mean', 0.0):.6f}`",
         f"- predicted confidence mean: `{payload.get('learned_ood_head', {}).get('predicted_confidence_mean', 0.0):.6f}`",
         f"- label/prediction correlation: `{payload.get('learned_ood_head', {}).get('label_prediction_correlation', 0.0):.6f}`",
@@ -2837,7 +2909,11 @@ def main() -> int:
     parser.add_argument("--source_agreement_mode", choices=["off", "soft", "hard"], default="off")
     parser.add_argument("--source_agreement_beta", type=float, default=0.0)
     parser.add_argument("--source_agreement_min_confidence", type=float, default=0.25)
-    parser.add_argument("--source_consistency_mode", choices=["off", "weight", "weight_amplitude"], default="off")
+    parser.add_argument(
+        "--source_consistency_mode",
+        choices=["off", "feature_only", "weight", "weight_amplitude"],
+        default="off",
+    )
     parser.add_argument("--source_consistency_min_other_sources", type=int, default=2)
     parser.add_argument("--source_consistency_error_beta", type=float, default=1.0)
     parser.add_argument("--source_consistency_floor", type=float, default=0.35)
@@ -2866,6 +2942,7 @@ def main() -> int:
     parser.add_argument("--learned_ood_head_l2", type=float, default=0.01)
     parser.add_argument("--learned_ood_head_gain_scale", type=float, default=0.0002)
     parser.add_argument("--learned_ood_head_floor", type=float, default=0.35)
+    parser.add_argument("--learned_ood_head_ceiling", type=float, default=1.0)
     parser.add_argument("--learned_ood_head_min_gain", type=float, default=0.0)
     parser.add_argument("--learned_ood_head_max_samples", type=int, default=200000)
     parser.add_argument("--bank_residual_transform_mode", choices=["raw_rgb", "luma_only", "chroma_shrink"], default="raw_rgb")
@@ -3062,6 +3139,7 @@ def main() -> int:
             l2=float(args.learned_ood_head_l2),
             gain_scale=float(args.learned_ood_head_gain_scale),
             floor=float(args.learned_ood_head_floor),
+            ceiling=float(args.learned_ood_head_ceiling),
             min_gain=float(args.learned_ood_head_min_gain),
             max_samples=int(args.learned_ood_head_max_samples),
             seed=int(args.seed),
@@ -3297,12 +3375,16 @@ def main() -> int:
             else:
                 arr = np.clip(arr, 0.0, 2.0)
             checkpoint_payload[key] = arr.astype(np.float16)
+    for key in ("source_consistency_apply_weight", "source_consistency_apply_amplitude"):
+        if key in bank:
+            checkpoint_payload[key] = np.asarray(bank[key], dtype=np.float32)
     for key in (
         "learned_ood_head_coef",
         "learned_ood_head_bias",
         "learned_ood_head_mean",
         "learned_ood_head_scale",
         "learned_ood_head_floor",
+        "learned_ood_head_ceiling",
     ):
         if key in bank:
             checkpoint_payload[key] = bank[key].astype(np.float32)
@@ -3467,6 +3549,8 @@ def main() -> int:
                     policy_reliability_summary.get("mean_tail_risk_valid", 0.0)
                 ),
                 "learned_ood_head/sample_count": float(learned_ood_head_summary.get("sample_count", 0.0)),
+                "learned_ood_head/floor": float(learned_ood_head_summary.get("floor", 0.0)),
+                "learned_ood_head/ceiling": float(learned_ood_head_summary.get("ceiling", 1.0)),
                 "learned_ood_head/label_mean": float(learned_ood_head_summary.get("label_mean", 0.0)),
                 "learned_ood_head/predicted_confidence_mean": float(
                     learned_ood_head_summary.get("predicted_confidence_mean", 0.0)

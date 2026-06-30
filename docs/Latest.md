@@ -2,6 +2,34 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 v272 Learned Source-Consistency Head Update
+
+新增日志：`docs/car_model/6-30-v272-LearnedConsistencyHead-Gate-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v272_learned_consistency_head_summary.json`。
+
+这轮参考 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md` 做了一次明确的机制革新尝试：不再把 source-view consistency 当成硬权重门控，而是把它作为 learned policy 的 target-free 特征。
+
+代码层面新增真实 train/eval pipeline 改动：
+
+- 新增 `--source_consistency_mode feature_only`，把 source consistency map 保存进 bank，但不强制乘到 source residual/weight。
+- checkpoint 保存/加载 `source_consistency_apply_weight` 和 `source_consistency_apply_amplitude`，旧 checkpoint 仍保持向后兼容的 hard-apply 行为。
+- learned OOD/gain head 新增 source consistency reliability/amplitude/gap、base confidence、raw residual magnitude 等特征。
+- 新增 `--learned_ood_head_ceiling`，支持 shrink/mild/boost-only learned head；W&B 和 Markdown 记录 floor/ceiling。
+
+关键结果：
+
+| run | method | policy PSNR / SSIM / LPIPS | target PSNR / SSIM / LPIPS | target gains | verdict |
+|---|---|---:|---:|---:|---|
+| v266c | conservative hybrid reference | 20.668309 / 0.719789 / 0.152274 | 19.845698 / 0.620201 / 0.179915 | +0.013644 / +0.000290 / +0.000419 | best target PSNR/LPIPS reference |
+| v270d | texture-lowrank reference | 20.673378 / 0.720244 / 0.152112 | 19.844320 / 0.620226 / 0.179934 | +0.012266 / +0.000315 / +0.000401 | best target SSIM reference |
+| v272b | feature-only consistency + learned head 0.65-1.05 | 20.672710 / 0.720170 / 0.152122 | 19.843843 / 0.620191 / 0.179945 | +0.011789 / +0.000281 / +0.000390 | target fail |
+| v272c | mild learned head 0.85-1.03 | 20.673808 / 0.720213 / 0.152094 | 19.844036 / 0.620193 / 0.179934 | +0.011983 / +0.000282 / +0.000401 | target fail |
+| v272d | boost-only v266 head 1.00-1.05 | 20.675602 / 0.720284 / 0.152049 | 19.843998 / 0.620177 / 0.179918 | +0.011944 / +0.000267 / +0.000417 | target fail |
+| v272e | boost-only v270 texture head 1.00-1.05 | 20.674818 / 0.720303 / 0.152075 | 19.844132 / 0.620207 / 0.179923 | +0.012078 / +0.000296 / +0.000412 | target fail |
+
+结论：v272 的接口和策略实现是成功的，且 learned head 在 policy-val 上确实学到非随机信号；但所有 full flowers target exact 都没超过 v266c/v270d 的 target frontier。它暴露了一个关键问题：policy-val supervised scalar confidence 可以过拟合 policy-val split，却不能可靠外推到 held-out target。当前状态仍是 `NOT COMPLETE`，不能启动 full9。下一步必须改变 residual carrier 或监督目标，而不是继续叠 scalar confidence head。
+
 ## 2026-06-30 v264-v266 Edge / Low-Rank Hybrid Update
 
 新增日志：`docs/car_model/6-30-v264-v266-EdgeLowrankHybrid-Log.md`。

@@ -2,6 +2,32 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-30, v272:
+
+The newest branch is **learned source-consistency feature head** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:
+
+- `docs/car_model/6-30-v272-LearnedConsistencyHead-Gate-Log.md`
+- `docs/car_model/results/v272_learned_consistency_head_summary.json`
+
+Important new facts:
+
+- v272 added `--source_consistency_mode feature_only`, so source-view consistency can be used as a feature rather than another hard residual/weight multiplier.
+- Checkpoints now save/load `source_consistency_apply_weight`, `source_consistency_apply_amplitude`, and `learned_ood_head_ceiling`.
+- The learned OOD/gain head now sees source consistency reliability/amplitude/gap, base confidence, and raw residual magnitude.
+- W&B offline logs and audit Markdown now record learned-head floor/ceiling.
+- The implementation passed `py_compile`, `git diff --check`, CLI help, one smoke run, and four full flowers target exact runs.
+- All v272 full runs improved policy-val, but none improved target exact over the v266/v270 frontier:
+  - v266c reference target: `19.845698 / 0.620201 / 0.179915`.
+  - v270d reference target: `19.844320 / 0.620226 / 0.179934`.
+  - v272b target: `19.843843 / 0.620191 / 0.179945`.
+  - v272c target: `19.844036 / 0.620193 / 0.179934`.
+  - v272d target: `19.843998 / 0.620177 / 0.179918`.
+  - v272e target: `19.844132 / 0.620207 / 0.179923`.
+
+Current direct verdict:
+
+> v272 is a valid engineering/method interface upgrade but a quality failure. Learned scalar confidence, even with target-free source-consistency features and boost-only variants, overfits policy-val and does not transfer to flowers target exact. Do not promote v272 to full9. The next model should change the residual carrier or supervision target instead of stacking another scalar policy head.
+
 Latest update on 2026-06-30, v264-v266:
 
 The newest branch is **edge-aware / low-rank hybrid deferred source residual rendering** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:
