@@ -1,0 +1,40 @@
+{
+  "date": "2026-06-30",
+  "method": "v295 texture-bin reliability interface closure",
+  "script": "scripts/car_model/train_perceptual_surface_residual_decoder.py",
+  "smoke_artifact_root": "/tmp/peilincai_spcarnet_v295_texture_reliability_smoke_20260630",
+  "static_checks": {
+    "py_compile": true,
+    "diff_check": true,
+    "help_texture_reliability_flags_visible": true
+  },
+  "smoke_scope": {
+    "steps": 1,
+    "candidate_faces": 16,
+    "target_eval_mode": "never",
+    "compute_lpips": false,
+    "quality_claim": false
+  },
+  "smoke_result": {
+    "texture_calibration_enabled": true,
+    "texture_valid_bin_fraction": 0.28125,
+    "texture_positive_bin_fraction": 0.5555555555555556,
+    "texture_reliability_threshold_grid": [
+      -1000000000.0,
+      0.0
+    ],
+    "selected_texture_reliability_threshold": -1000000000.0,
+    "selected_texture_keep_fraction": 1.0,
+    "target_exact_ran": false,
+    "target_or_test_gt_used_for_apply": false,
+    "target_or_test_gt_after_apply_for_eval": false,
+    "target_no_gt_audit_pass": true,
+    "phasej_gate_pass": false
+  },
+  "verdict": {
+    "interface_closed": true,
+    "phasej_quality_breakthrough": false,
+    "final_status": "NOT_COMPLETE",
+    "next_required_method": "source-heldout cross-view residual direction predictor or multi-source residual basis"
+  }
+}

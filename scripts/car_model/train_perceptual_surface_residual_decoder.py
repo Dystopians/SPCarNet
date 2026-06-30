@@ -1548,6 +1548,22 @@ def _apply_face_reliability(
     return (np.asarray(pred, dtype=np.float32) * keep.reshape(-1, 1)).astype(np.float32), keep
 
 
+def _apply_texture_reliability(
+    pred: np.ndarray,
+    texture_bin_idx: np.ndarray,
+    texture_reliability_scores: np.ndarray | None,
+    texture_reliability_threshold: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    if texture_reliability_scores is None:
+        keep = np.ones((int(pred.shape[0]),), dtype=np.float32)
+        return pred, keep
+    scores = np.asarray(texture_reliability_scores, dtype=np.float32)
+    valid = (texture_bin_idx >= 0) & (texture_bin_idx < int(scores.size))
+    keep = np.zeros((int(texture_bin_idx.size),), dtype=np.float32)
+    keep[valid] = (scores[texture_bin_idx[valid]] >= float(texture_reliability_threshold)).astype(np.float32)
+    return (np.asarray(pred, dtype=np.float32) * keep.reshape(-1, 1)).astype(np.float32), keep
+
+
 def _calibrate_face_reliability(
     model: SurfaceResidualDecoder,
     calibration_paths: list[Path],
@@ -1672,6 +1688,131 @@ def _calibrate_face_reliability(
     }
 
 
+def _calibrate_texture_reliability(
+    model: SurfaceResidualDecoder,
+    calibration_paths: list[Path],
+    candidate_faces: np.ndarray,
+    *,
+    residual_l1_key: str,
+    min_l1: float,
+    min_alpha: float,
+    feature_mode: str,
+    surface_feature_texture: dict[str, Any] | None,
+    calibration_alpha: float,
+    structure_weight: float,
+    min_count: int,
+    chunk_size: int,
+    device: torch.device,
+) -> dict[str, Any]:
+    if surface_feature_texture is None:
+        raise ValueError("texture reliability calibration requires surface_feature_texture")
+    texture_count = int(np.asarray(surface_feature_texture["features"], dtype=np.float32).shape[0])
+    score_sum = np.zeros((texture_count,), dtype=np.float64)
+    l1_sum = np.zeros_like(score_sum)
+    structure_sum = np.zeros_like(score_sum)
+    counts = np.zeros((texture_count,), dtype=np.int64)
+    positive_counts = np.zeros_like(counts)
+    rows: list[dict[str, Any]] = []
+    model.eval()
+    with torch.no_grad():
+        for path in tqdm(calibration_paths, desc="calibrate texture-bin reliability"):
+            z = np.load(path)
+            parent = np.asarray(z["rgb_render"], dtype=np.float32)
+            gt = np.asarray(z["rgb_gt"], dtype=np.float32)
+            mask = _valid_mask(z, candidate_faces, residual_l1_key=residual_l1_key, min_l1=min_l1, min_alpha=min_alpha)
+            ys, xs = np.nonzero(mask)
+            if ys.size == 0:
+                rows.append({"view": path.stem, "sample_count": 0})
+                continue
+            faces = np.asarray(z["face_id"], dtype=np.int64)[ys, xs]
+            face_idx, ok = _face_indices(faces, candidate_faces)
+            ys, xs, face_idx = ys[ok], xs[ok], face_idx[ok]
+            if ys.size == 0:
+                rows.append({"view": path.stem, "sample_count": 0})
+                continue
+            texture_bin_idx = _surface_texture_flat_bin_ids(z, ys, xs, face_idx, surface_feature_texture)
+            delta = np.zeros_like(parent, dtype=np.float32)
+            for start in range(0, int(ys.size), int(chunk_size)):
+                end = min(int(ys.size), start + int(chunk_size))
+                feat = torch.from_numpy(
+                    _load_feature_rows(
+                        z,
+                        ys[start:end],
+                        xs[start:end],
+                        feature_mode=str(feature_mode),
+                        face_idx=face_idx[start:end],
+                        surface_feature_texture=surface_feature_texture,
+                    )
+                ).to(device)
+                texture_bin_t = torch.from_numpy(texture_bin_idx[start:end].astype(np.int64)).to(device)
+                face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
+                pred = model(face_t, feat, texture_bin_t).detach().cpu().numpy().astype(np.float32)
+                delta[:, ys[start:end], xs[start:end]] = pred.T
+            adapted = np.clip(parent + float(calibration_alpha) * delta, 0.0, 1.0).astype(np.float32)
+            parent_l1 = np.mean(np.abs(parent - gt), axis=0)
+            adapted_l1 = np.mean(np.abs(adapted - gt), axis=0)
+            l1_gain = (parent_l1 - adapted_l1).astype(np.float32)
+            parent_grad = _gradient_magnitude_2d(_luma(parent))
+            adapted_grad = _gradient_magnitude_2d(_luma(adapted))
+            gt_grad = _gradient_magnitude_2d(_luma(gt))
+            structure_gain = (np.abs(parent_grad - gt_grad) - np.abs(adapted_grad - gt_grad)).astype(np.float32)
+            score = (l1_gain + float(structure_weight) * structure_gain).astype(np.float32)
+            sample_score = score[ys, xs].astype(np.float64)
+            sample_l1 = l1_gain[ys, xs].astype(np.float64)
+            sample_structure = structure_gain[ys, xs].astype(np.float64)
+            score_sum += np.bincount(texture_bin_idx, weights=sample_score, minlength=texture_count)
+            l1_sum += np.bincount(texture_bin_idx, weights=sample_l1, minlength=texture_count)
+            structure_sum += np.bincount(texture_bin_idx, weights=sample_structure, minlength=texture_count)
+            counts += np.bincount(texture_bin_idx, minlength=texture_count).astype(np.int64)
+            positive_counts += np.bincount(
+                texture_bin_idx,
+                weights=(sample_score > 0.0).astype(np.float64),
+                minlength=texture_count,
+            ).astype(np.int64)
+            rows.append(
+                {
+                    "view": path.stem,
+                    "sample_count": int(sample_score.size),
+                    "mean_score": float(np.mean(sample_score)) if sample_score.size else 0.0,
+                    "positive_fraction": float(np.mean(sample_score > 0.0)) if sample_score.size else 0.0,
+                }
+            )
+    scores = np.full((texture_count,), -1.0e9, dtype=np.float32)
+    mean_l1 = np.zeros_like(scores)
+    mean_structure = np.zeros_like(scores)
+    positive_fraction = np.zeros_like(scores)
+    enough = counts >= max(1, int(min_count))
+    scores[enough] = (score_sum[enough] / np.maximum(counts[enough], 1)).astype(np.float32)
+    mean_l1[enough] = (l1_sum[enough] / np.maximum(counts[enough], 1)).astype(np.float32)
+    mean_structure[enough] = (structure_sum[enough] / np.maximum(counts[enough], 1)).astype(np.float32)
+    positive_fraction[enough] = (positive_counts[enough] / np.maximum(counts[enough], 1)).astype(np.float32)
+    finite_scores = scores[enough]
+    summary = {
+        "enabled": bool(calibration_paths),
+        "calibration_views": int(len(calibration_paths)),
+        "calibration_alpha": float(calibration_alpha),
+        "structure_weight": float(structure_weight),
+        "min_count": int(min_count),
+        "texture_bins": int(texture_count),
+        "valid_bins": int(np.count_nonzero(enough)),
+        "valid_bin_fraction": float(np.mean(enough)) if texture_count else 0.0,
+        "positive_bin_fraction": float(np.mean(finite_scores > 0.0)) if finite_scores.size else 0.0,
+        "mean_score": float(np.mean(finite_scores)) if finite_scores.size else 0.0,
+        "p10_score": float(np.quantile(finite_scores, 0.10)) if finite_scores.size else 0.0,
+        "p50_score": float(np.quantile(finite_scores, 0.50)) if finite_scores.size else 0.0,
+        "p90_score": float(np.quantile(finite_scores, 0.90)) if finite_scores.size else 0.0,
+        "rows": rows,
+    }
+    return {
+        "scores": scores,
+        "counts": counts.astype(np.int64),
+        "mean_l1_gain": mean_l1,
+        "mean_structure_gain": mean_structure,
+        "positive_fraction": positive_fraction,
+        "summary": summary,
+    }
+
+
 def _evaluate(
     model: SurfaceResidualDecoder,
     val_paths: list[Path],
@@ -1686,6 +1827,8 @@ def _evaluate(
     apply_confidence_threshold_grid: list[float],
     face_reliability_scores: np.ndarray | None,
     face_reliability_threshold_grid: list[float],
+    texture_reliability_scores: np.ndarray | None,
+    texture_reliability_threshold_grid: list[float],
     apply_gate_mode: str,
     apply_gate_strength_grid: list[float],
     apply_gate_floor: float,
@@ -1713,14 +1856,15 @@ def _evaluate(
 ) -> dict[str, Any]:
     lpips_model = build_lpips_model() if compute_lpips else None
     policy_grid = [
-        (float(a), float(g), float(t), float(r))
+        (float(a), float(g), float(t), float(r), float(tr))
         for a in alpha_grid
         for g in apply_gate_strength_grid
         for t in apply_confidence_threshold_grid
         for r in face_reliability_threshold_grid
+        for tr in texture_reliability_threshold_grid
     ]
     rows_by_policy: dict[str, list[dict[str, Any]]] = {
-        f"{a:.8g}|{g:.8g}|{t:.8g}|{r:.8g}": [] for a, g, t, r in policy_grid
+        f"{a:.8g}|{g:.8g}|{t:.8g}|{r:.8g}|{tr:.8g}": [] for a, g, t, r, tr in policy_grid
     }
     if output_dir is not None:
         (output_dir / "renders").mkdir(parents=True, exist_ok=True)
@@ -1739,6 +1883,7 @@ def _evaluate(
                 faces = np.asarray(z["face_id"], dtype=np.int64)[ys, xs]
                 face_idx, ok = _face_indices(faces, candidate_faces)
                 ys, xs, face_idx = ys[ok], xs[ok], face_idx[ok]
+                texture_bin_idx = _surface_texture_flat_bin_ids(z, ys, xs, face_idx, surface_feature_texture)
                 for start in range(0, int(ys.size), int(chunk_size)):
                     end = min(int(ys.size), start + int(chunk_size))
                     features_np = _load_feature_rows(
@@ -1759,13 +1904,7 @@ def _evaluate(
                         floor=float(view_support_floor),
                     )
                     texture_bin_t = torch.from_numpy(
-                        _surface_texture_flat_bin_ids(
-                            z,
-                            ys[start:end],
-                            xs[start:end],
-                            face_idx[start:end],
-                            surface_feature_texture,
-                        )
+                        texture_bin_idx[start:end].astype(np.int64)
                     ).to(device)
                     feat = torch.from_numpy(features_np).to(device)
                     face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
@@ -1777,18 +1916,28 @@ def _evaluate(
             p_psnr = _psnr(parent, gt)
             p_ssim = image_ssim_chw(parent, gt, int(ssim_max_side))
             p_lp = image_lpips_chw(parent, gt, int(lpips_max_side), lpips_model) if compute_lpips else None
-            for alpha, gate_strength, confidence_threshold, face_reliability_threshold in policy_grid:
-                if face_reliability_scores is not None:
-                    # Rebuild the face gate cheaply without rerunning the MLP.
+            for alpha, gate_strength, confidence_threshold, face_reliability_threshold, texture_reliability_threshold in policy_grid:
+                if face_reliability_scores is not None or texture_reliability_scores is not None:
+                    # Rebuild reliability gates cheaply without rerunning the MLP.
                     gated_delta = np.zeros_like(delta, dtype=np.float32)
                     gated_confidence = np.zeros_like(confidence, dtype=np.float32)
                     if ys.size:
-                        face_keep = (
-                            np.asarray(face_reliability_scores, dtype=np.float32)[face_idx]
-                            >= float(face_reliability_threshold)
-                        ).astype(np.float32)
-                        gated_delta[:, ys, xs] = delta[:, ys, xs] * face_keep.reshape(1, -1)
-                        gated_confidence[ys, xs] = confidence[ys, xs] * face_keep
+                        keep = np.ones((int(ys.size),), dtype=np.float32)
+                        if face_reliability_scores is not None:
+                            keep *= (
+                                np.asarray(face_reliability_scores, dtype=np.float32)[face_idx]
+                                >= float(face_reliability_threshold)
+                            ).astype(np.float32)
+                        if texture_reliability_scores is not None:
+                            tex_scores = np.asarray(texture_reliability_scores, dtype=np.float32)
+                            valid_tex = (texture_bin_idx >= 0) & (texture_bin_idx < int(tex_scores.size))
+                            tex_keep = np.zeros((int(ys.size),), dtype=np.float32)
+                            tex_keep[valid_tex] = (
+                                tex_scores[texture_bin_idx[valid_tex]] >= float(texture_reliability_threshold)
+                            ).astype(np.float32)
+                            keep *= tex_keep
+                        gated_delta[:, ys, xs] = delta[:, ys, xs] * keep.reshape(1, -1)
+                        gated_confidence[ys, xs] = confidence[ys, xs] * keep
                 else:
                     gated_delta = delta
                     gated_confidence = confidence
@@ -1812,9 +1961,20 @@ def _evaluate(
                     "apply_gate_strength": float(gate_strength),
                     "apply_confidence_threshold": float(confidence_threshold),
                     "face_reliability_threshold": float(face_reliability_threshold),
+                    "texture_reliability_threshold": float(texture_reliability_threshold),
                     "face_reliability_keep_fraction": (
                         float(np.mean(np.asarray(face_reliability_scores, dtype=np.float32)[face_idx] >= float(face_reliability_threshold)))
                         if face_reliability_scores is not None and ys.size
+                        else 1.0
+                    ),
+                    "texture_reliability_keep_fraction": (
+                        float(
+                            np.mean(
+                                np.asarray(texture_reliability_scores, dtype=np.float32)[texture_bin_idx]
+                                >= float(texture_reliability_threshold)
+                            )
+                        )
+                        if texture_reliability_scores is not None and ys.size
                         else 1.0
                     ),
                     "apply_confidence_keep_fraction": float(gate_summary.get("confidence_keep_fraction", 1.0)),
@@ -1836,7 +1996,7 @@ def _evaluate(
                         }
                     )
                 rows_by_policy[
-                    f"{float(alpha):.8g}|{float(gate_strength):.8g}|{float(confidence_threshold):.8g}|{float(face_reliability_threshold):.8g}"
+                    f"{float(alpha):.8g}|{float(gate_strength):.8g}|{float(confidence_threshold):.8g}|{float(face_reliability_threshold):.8g}|{float(texture_reliability_threshold):.8g}"
                 ].append(row)
     summaries: list[dict[str, Any]] = []
     for _policy_key, rows in rows_by_policy.items():
@@ -1850,10 +2010,12 @@ def _evaluate(
         gate_strength = float(rows[0]["apply_gate_strength"]) if rows else 0.0
         confidence_threshold = float(rows[0]["apply_confidence_threshold"]) if rows else 0.0
         face_reliability_threshold = float(rows[0]["face_reliability_threshold"]) if rows else -1.0e9
+        texture_reliability_threshold = float(rows[0]["texture_reliability_threshold"]) if rows else -1.0e9
         summary = {
             "alpha": float(alpha),
             "apply_confidence_threshold": float(confidence_threshold),
             "face_reliability_threshold": float(face_reliability_threshold),
+            "texture_reliability_threshold": float(texture_reliability_threshold),
             "apply_gate_mode": str(apply_gate_mode),
             "apply_gate_strength": float(gate_strength),
             "apply_gate_floor": float(apply_gate_floor),
@@ -1870,6 +2032,7 @@ def _evaluate(
             "ssim_positive_view_fraction": float(np.mean(np.asarray(ssim_gain) > 0.0)),
             "mean_changed_fraction": float(np.mean([r["changed_fraction"] for r in rows])),
             "mean_face_reliability_keep_fraction": float(np.mean([r["face_reliability_keep_fraction"] for r in rows])),
+            "mean_texture_reliability_keep_fraction": float(np.mean([r["texture_reliability_keep_fraction"] for r in rows])),
             "mean_apply_confidence_keep_fraction": float(np.mean([r["apply_confidence_keep_fraction"] for r in rows])),
             "mean_apply_gate_active": float(np.mean([r["apply_gate_active_mean"] for r in rows])),
             "per_view": rows,
@@ -1934,6 +2097,7 @@ def _evaluate(
         best_alpha = float(best["alpha"])
         best_confidence_threshold = float(best.get("apply_confidence_threshold", apply_confidence_threshold_grid[0]))
         best_face_reliability_threshold = float(best.get("face_reliability_threshold", face_reliability_threshold_grid[0]))
+        best_texture_reliability_threshold = float(best.get("texture_reliability_threshold", texture_reliability_threshold_grid[0]))
         best_gate_strength = float(best.get("apply_gate_strength", apply_gate_strength_grid[0]))
         with torch.no_grad():
             for path in tqdm(val_paths, desc="write best policy-val renders"):
@@ -1948,6 +2112,7 @@ def _evaluate(
                     faces = np.asarray(z["face_id"], dtype=np.int64)[ys, xs]
                     face_idx, ok = _face_indices(faces, candidate_faces)
                     ys, xs, face_idx = ys[ok], xs[ok], face_idx[ok]
+                    texture_bin_idx = _surface_texture_flat_bin_ids(z, ys, xs, face_idx, surface_feature_texture)
                     for start in range(0, int(ys.size), int(chunk_size)):
                         end = min(int(ys.size), start + int(chunk_size))
                         features_np = _load_feature_rows(
@@ -1968,13 +2133,7 @@ def _evaluate(
                             floor=float(view_support_floor),
                         )
                         texture_bin_t = torch.from_numpy(
-                            _surface_texture_flat_bin_ids(
-                                z,
-                                ys[start:end],
-                                xs[start:end],
-                                face_idx[start:end],
-                                surface_feature_texture,
-                            )
+                            texture_bin_idx[start:end].astype(np.int64)
                         ).to(device)
                         feat = torch.from_numpy(features_np).to(device)
                         face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
@@ -1986,9 +2145,15 @@ def _evaluate(
                             face_reliability_scores,
                             best_face_reliability_threshold,
                         )
+                        pred, texture_keep = _apply_texture_reliability(
+                            pred,
+                            texture_bin_idx[start:end],
+                            texture_reliability_scores,
+                            best_texture_reliability_threshold,
+                        )
                         conf = conf_t.detach().cpu().numpy().astype(np.float32) * view_gate
                         delta[:, ys[start:end], xs[start:end]] = pred.T
-                        confidence[ys[start:end], xs[start:end]] = conf * face_keep
+                        confidence[ys[start:end], xs[start:end]] = conf * face_keep * texture_keep
                 adapted, _applied_delta, _gate_summary = _apply_delta(
                     parent,
                     delta,
@@ -2036,6 +2201,8 @@ def _predict_delta_image(
     device: torch.device,
     face_reliability_scores: np.ndarray | None = None,
     face_reliability_threshold: float = -1.0e9,
+    texture_reliability_scores: np.ndarray | None = None,
+    texture_reliability_threshold: float = -1.0e9,
     view_support_gate_mode: str = "none",
     view_support_min_cos: float = -1.0,
     view_support_min_concentration: float = 0.0,
@@ -2054,6 +2221,7 @@ def _predict_delta_image(
         face_idx, ok = _face_indices(faces, candidate_faces)
         ys, xs, face_idx = ys[ok], xs[ok], face_idx[ok]
         active_count = int(ys.size)
+        texture_bin_idx = _surface_texture_flat_bin_ids(z, ys, xs, face_idx, surface_feature_texture)
         with torch.no_grad():
             for start in range(0, int(ys.size), int(chunk_size)):
                 end = min(int(ys.size), start + int(chunk_size))
@@ -2075,13 +2243,7 @@ def _predict_delta_image(
                     floor=float(view_support_floor),
                 )
                 texture_bin_t = torch.from_numpy(
-                    _surface_texture_flat_bin_ids(
-                        z,
-                        ys[start:end],
-                        xs[start:end],
-                        face_idx[start:end],
-                        surface_feature_texture,
-                    )
+                    texture_bin_idx[start:end].astype(np.int64)
                 ).to(device)
                 feat = torch.from_numpy(features_np).to(device)
                 face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
@@ -2093,9 +2255,15 @@ def _predict_delta_image(
                     face_reliability_scores,
                     float(face_reliability_threshold),
                 )
+                pred, texture_keep = _apply_texture_reliability(
+                    pred,
+                    texture_bin_idx[start:end],
+                    texture_reliability_scores,
+                    float(texture_reliability_threshold),
+                )
                 conf = conf_t.detach().cpu().numpy().astype(np.float32) * view_gate
                 delta[:, ys[start:end], xs[start:end]] = pred.T
-                confidence[ys[start:end], xs[start:end]] = conf * face_keep
+                confidence[ys[start:end], xs[start:end]] = conf * face_keep * texture_keep
     active_fraction = float(active_count / max(int(parent.shape[1] * parent.shape[2]), 1))
     if return_confidence:
         return delta, active_fraction, confidence
@@ -2117,6 +2285,8 @@ def _target_exact_eval(
     apply_confidence_threshold: float,
     face_reliability_scores: np.ndarray | None,
     face_reliability_threshold: float,
+    texture_reliability_scores: np.ndarray | None,
+    texture_reliability_threshold: float,
     apply_gate_mode: str,
     apply_gate_strength: float,
     apply_gate_floor: float,
@@ -2163,6 +2333,8 @@ def _target_exact_eval(
                 device=device,
                 face_reliability_scores=face_reliability_scores,
                 face_reliability_threshold=float(face_reliability_threshold),
+                texture_reliability_scores=texture_reliability_scores,
+                texture_reliability_threshold=float(texture_reliability_threshold),
                 view_support_gate_mode=str(view_support_gate_mode),
                 view_support_min_cos=float(view_support_min_cos),
                 view_support_min_concentration=float(view_support_min_concentration),
@@ -2199,6 +2371,7 @@ def _target_exact_eval(
                 "changed_fraction": float(np.mean(np.any(np.abs(applied_delta) > (0.5 / 255.0), axis=0))),
                 "apply_confidence_threshold": float(apply_confidence_threshold),
                 "face_reliability_threshold": float(face_reliability_threshold),
+                "texture_reliability_threshold": float(texture_reliability_threshold),
                 "apply_confidence_keep_fraction": float(gate_summary.get("confidence_keep_fraction", 1.0)),
                 "apply_gate_active_mean": float(gate_summary.get("active_mean", 1.0)),
             }
@@ -2267,6 +2440,7 @@ def _target_exact_eval(
         "alpha": float(alpha),
         "apply_confidence_threshold": float(apply_confidence_threshold),
         "face_reliability_threshold": float(face_reliability_threshold),
+        "texture_reliability_threshold": float(texture_reliability_threshold),
         "apply_gate_mode": str(apply_gate_mode),
         "apply_gate_strength": float(apply_gate_strength),
         "apply_gate_floor": float(apply_gate_floor),
@@ -2319,6 +2493,7 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"`{payload['train'].get('texture_latent_reg', 0.0):.6g}`",
         f"- calibration views: `{payload.get('calibration_views', 0)}`",
         f"- calibration face reliability: `{payload.get('calibration_face_reliability', {}).get('enabled', False)}`",
+        f"- calibration texture reliability: `{payload.get('calibration_texture_reliability', {}).get('enabled', False)}`",
         f"- confidence head: `{payload['train'].get('confidence_head', False)}`",
         f"- confidence target: `{payload['train'].get('confidence_target_mode')}`",
         f"- apply confidence thresholds: `{payload['train'].get('apply_confidence_threshold_grid')}`",
@@ -2331,16 +2506,18 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         "",
         "## Best Policy-Val Row",
         "",
-        "| alpha | face th | conf th | gate | PSNR gain | SSIM gain | LPIPS gain | changed | face keep | conf keep | pos views | SSIM pos | LPIPS pos |",
-        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| alpha | face th | texture th | conf th | gate | PSNR gain | SSIM gain | LPIPS gain | changed | face keep | texture keep | conf keep | pos views | SSIM pos | LPIPS pos |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         (
             f"| {best.get('alpha', 0.0):.4f} | {best.get('face_reliability_threshold', -1.0e9):.6f} | "
+            f"{best.get('texture_reliability_threshold', -1.0e9):.6f} | "
             f"{best.get('apply_confidence_threshold', 0.0):.4f} | "
             f"{best.get('apply_gate_strength', 0.0):.4f} | "
             f"{best.get('psnr_gain', 0.0):.6f} | "
             f"{best.get('ssim_gain', 0.0):.6f} | {best.get('lpips_gain', 0.0):.6f} | "
             f"{best.get('mean_changed_fraction', 0.0):.6f} | "
             f"{best.get('mean_face_reliability_keep_fraction', 1.0):.6f} | "
+            f"{best.get('mean_texture_reliability_keep_fraction', 1.0):.6f} | "
             f"{best.get('mean_apply_confidence_keep_fraction', 1.0):.6f} | "
             f"{best.get('positive_view_fraction', 0.0):.3f} | "
             f"{best.get('ssim_positive_view_fraction', 0.0):.3f} | "
@@ -2378,6 +2555,7 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
                 (
                     f"- fixed policy: alpha `{target_eval.get('alpha', 0.0)}`, "
                     f"confidence threshold `{target_eval.get('apply_confidence_threshold', 0.0)}`, "
+                    f"texture reliability threshold `{target_eval.get('texture_reliability_threshold', -1.0e9)}`, "
                     f"gate `{target_eval.get('apply_gate_strength', 0.0)}`"
                 ),
                 f"- Phase-J comparison: `{comparison}`",
@@ -2417,6 +2595,10 @@ def main() -> int:
     parser.add_argument("--calibration_min_face_count", type=int, default=128)
     parser.add_argument("--face_reliability_threshold", type=float, default=-1.0e9)
     parser.add_argument("--face_reliability_threshold_grid", default="")
+    parser.add_argument("--enable_calibration_texture_reliability", action="store_true")
+    parser.add_argument("--calibration_texture_min_bin_count", type=int, default=8)
+    parser.add_argument("--texture_reliability_threshold", type=float, default=-1.0e9)
+    parser.add_argument("--texture_reliability_threshold_grid", default="")
     parser.add_argument("--residual_rgb_key", default="teacher_residual_rgb")
     parser.add_argument("--residual_l1_key", default="teacher_residual_l1")
     parser.add_argument(
@@ -2546,7 +2728,9 @@ def main() -> int:
     fit_paths, calibration_paths, val_paths = _fit_calibration_policy_split(
         paths,
         int(args.policy_val_stride),
-        int(args.calibration_stride) if bool(args.enable_calibration_face_reliability) else 0,
+        int(args.calibration_stride)
+        if bool(args.enable_calibration_face_reliability or args.enable_calibration_texture_reliability)
+        else 0,
     )
     init_checkpoint: dict[str, Any] | None = None
     if str(args.init_checkpoint):
@@ -2861,6 +3045,47 @@ def main() -> int:
                 positive_fraction=np.asarray(reliability["positive_fraction"], dtype=np.float32),
             )
 
+    texture_reliability_payload: dict[str, Any] = {"enabled": False, "reason": "disabled"}
+    texture_reliability_scores: np.ndarray | None = None
+    if bool(args.enable_calibration_texture_reliability):
+        if surface_feature_texture is None:
+            texture_reliability_payload = {"enabled": False, "reason": "missing_surface_feature_texture"}
+        elif not calibration_paths:
+            texture_reliability_payload = {"enabled": False, "reason": "no_calibration_views"}
+        else:
+            reliability = _calibrate_texture_reliability(
+                model,
+                calibration_paths,
+                candidate_faces,
+                residual_l1_key=str(args.residual_l1_key),
+                min_l1=float(args.min_l1),
+                min_alpha=float(args.min_alpha),
+                feature_mode=str(args.feature_mode),
+                surface_feature_texture=surface_feature_texture,
+                calibration_alpha=float(args.calibration_alpha),
+                structure_weight=float(args.calibration_structure_weight),
+                min_count=int(args.calibration_texture_min_bin_count),
+                chunk_size=int(args.eval_chunk_size),
+                device=device,
+            )
+            texture_reliability_scores = np.asarray(reliability["scores"], dtype=np.float32)
+            texture_reliability_payload = {
+                **dict(reliability["summary"]),
+                "score_quantiles": {
+                    "p10": float(reliability["summary"].get("p10_score", 0.0)),
+                    "p50": float(reliability["summary"].get("p50_score", 0.0)),
+                    "p90": float(reliability["summary"].get("p90_score", 0.0)),
+                },
+            }
+            np.savez_compressed(
+                output_dir / "calibration_texture_reliability.npz",
+                scores=texture_reliability_scores.astype(np.float32),
+                counts=np.asarray(reliability["counts"], dtype=np.int64),
+                mean_l1_gain=np.asarray(reliability["mean_l1_gain"], dtype=np.float32),
+                mean_structure_gain=np.asarray(reliability["mean_structure_gain"], dtype=np.float32),
+                positive_fraction=np.asarray(reliability["positive_fraction"], dtype=np.float32),
+            )
+
     render_dir = output_dir / "policy_val_best"
     alpha_grid = _parse_float_grid(str(args.alpha_grid), fallback=0.0)
     apply_confidence_threshold_grid = _parse_float_grid(
@@ -2870,6 +3095,10 @@ def main() -> int:
     face_reliability_threshold_grid = _parse_float_grid(
         str(args.face_reliability_threshold_grid),
         fallback=float(args.face_reliability_threshold),
+    )
+    texture_reliability_threshold_grid = _parse_float_grid(
+        str(args.texture_reliability_threshold_grid),
+        fallback=float(args.texture_reliability_threshold),
     )
     apply_gate_strength_grid = _parse_float_grid(str(args.apply_gate_strength_grid), fallback=float(args.apply_gate_strength))
     policy_val = _evaluate(
@@ -2885,6 +3114,8 @@ def main() -> int:
         apply_confidence_threshold_grid=apply_confidence_threshold_grid,
         face_reliability_scores=face_reliability_scores,
         face_reliability_threshold_grid=face_reliability_threshold_grid,
+        texture_reliability_scores=texture_reliability_scores,
+        texture_reliability_threshold_grid=texture_reliability_threshold_grid,
         apply_gate_mode=str(args.apply_gate_mode),
         apply_gate_strength_grid=apply_gate_strength_grid,
         apply_gate_floor=float(args.apply_gate_floor),
@@ -2921,6 +3152,9 @@ def main() -> int:
     selected_face_reliability_threshold = float(
         selected_policy.get("face_reliability_threshold", face_reliability_threshold_grid[0])
     )
+    selected_texture_reliability_threshold = float(
+        selected_policy.get("texture_reliability_threshold", texture_reliability_threshold_grid[0])
+    )
     selected_gate_strength = float(selected_policy.get("apply_gate_strength", apply_gate_strength_grid[0]))
     target_no_gt_audit = (
         _verify_target_no_gt(Path(args.target_evidence_dir))
@@ -2946,6 +3180,8 @@ def main() -> int:
             apply_confidence_threshold=float(selected_confidence_threshold),
             face_reliability_scores=face_reliability_scores,
             face_reliability_threshold=float(selected_face_reliability_threshold),
+            texture_reliability_scores=texture_reliability_scores,
+            texture_reliability_threshold=float(selected_texture_reliability_threshold),
             apply_gate_mode=str(args.apply_gate_mode),
             apply_gate_strength=float(selected_gate_strength),
             apply_gate_floor=float(args.apply_gate_floor),
@@ -2975,6 +3211,12 @@ def main() -> int:
         interpretation = (
             "The learned surface-feature decoder passed policy-val and flowers exact Phase-J all-axis gates; "
             "the fixed policy is eligible for full9."
+        )
+    elif not target_eval:
+        interpretation = (
+            "The learned surface-feature decoder finished train/policy-val auditing, but target exact evaluation "
+            "was not run. This is an interface or policy-val diagnostic only; it cannot be used as a flowers "
+            "exact or Phase-J comparison claim."
         )
     elif all_axis and not tail_safe:
         interpretation = (
@@ -3028,6 +3270,10 @@ def main() -> int:
             "calibration_min_face_count": int(args.calibration_min_face_count),
             "face_reliability_threshold": float(args.face_reliability_threshold),
             "face_reliability_threshold_grid": [float(x) for x in face_reliability_threshold_grid],
+            "enable_calibration_texture_reliability": bool(args.enable_calibration_texture_reliability),
+            "calibration_texture_min_bin_count": int(args.calibration_texture_min_bin_count),
+            "texture_reliability_threshold": float(args.texture_reliability_threshold),
+            "texture_reliability_threshold_grid": [float(x) for x in texture_reliability_threshold_grid],
             "embedding_dim": int(args.embedding_dim),
             "hidden_dim": int(args.hidden_dim),
             "layers": int(args.layers),
@@ -3097,7 +3343,10 @@ def main() -> int:
         "teacher_signal_pass": True,
         "uses_train_fit_teacher": True,
         "uses_train_fit_surface_texture": bool(surface_feature_texture is not None),
-        "uses_calibration_gt": bool(args.enable_calibration_face_reliability and calibration_paths),
+        "uses_calibration_gt": bool(
+            (args.enable_calibration_face_reliability or args.enable_calibration_texture_reliability)
+            and calibration_paths
+        ),
         "uses_policy_val_gt": True,
         "uses_target_or_test_gt": False,
         "uses_target_or_test_gt_after_apply_for_eval": bool(target_eval),
@@ -3107,6 +3356,7 @@ def main() -> int:
         "target_no_gt_audit": target_no_gt_audit,
         "surface_feature_texture": surface_texture_payload,
         "calibration_face_reliability": face_reliability_payload,
+        "calibration_texture_reliability": texture_reliability_payload,
         "target_exact_eval": target_eval,
         "phasej_flowers_exact_reference": PHASEJ_FLOWERS,
         "flowers_exact_phasej_gate_pass": bool(target_phasej_pass),
@@ -3144,13 +3394,26 @@ def main() -> int:
                 "policy_val/best_face_reliability_threshold": float(
                     best.get("face_reliability_threshold", face_reliability_threshold_grid[0])
                 ),
+                "policy_val/best_texture_reliability_threshold": float(
+                    best.get("texture_reliability_threshold", texture_reliability_threshold_grid[0])
+                ),
                 "policy_val/selected_alpha": float(selected_alpha),
                 "policy_val/selected_apply_confidence_threshold": float(selected_confidence_threshold),
                 "policy_val/selected_apply_gate_strength": float(selected_gate_strength),
                 "policy_val/selected_face_reliability_threshold": float(selected_face_reliability_threshold),
+                "policy_val/selected_texture_reliability_threshold": float(selected_texture_reliability_threshold),
                 "calibration/face_reliability_enabled": float(bool(face_reliability_payload.get("enabled", False))),
                 "calibration/positive_face_fraction": float(
                     face_reliability_payload.get("positive_face_fraction", 0.0)
+                ),
+                "calibration/texture_reliability_enabled": float(
+                    bool(texture_reliability_payload.get("enabled", False))
+                ),
+                "calibration/positive_texture_bin_fraction": float(
+                    texture_reliability_payload.get("positive_bin_fraction", 0.0)
+                ),
+                "calibration/valid_texture_bin_fraction": float(
+                    texture_reliability_payload.get("valid_bin_fraction", 0.0)
                 ),
                 "surface_texture/enabled": float(bool(surface_feature_texture is not None)),
                 "surface_texture/covered_bin_fraction": float(
@@ -3188,6 +3451,7 @@ def main() -> int:
                 "selected_apply_confidence_threshold": selected_confidence_threshold,
                 "selected_apply_gate_strength": selected_gate_strength,
                 "selected_face_reliability_threshold": selected_face_reliability_threshold,
+                "selected_texture_reliability_threshold": selected_texture_reliability_threshold,
                 "best": best,
             },
             allow_nan=False,

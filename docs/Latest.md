@@ -2,6 +2,53 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 Topline: v295 Texture Reliability Interface Closure
+
+Newest engineering closure:
+
+```text
+docs/car_model/6-30-v295-TextureReliability-Interface-Log.md
+docs/car_model/results/v295_texture_reliability_interface_smoke_summary.json
+```
+
+Implementation:
+
+```text
+scripts/car_model/train_perceptual_surface_residual_decoder.py
+```
+
+What changed:
+
+- texture-bin reliability calibration is now a first-class CLI/policy-val/target
+  exact policy, not a half-wired helper;
+- selected `texture_reliability_threshold` is threaded through policy-val,
+  best-render writing, `_predict_delta_image`, and target no-GT exact apply;
+- payload, W&B, Markdown, and stdout now record texture calibration status,
+  selected threshold, and mean texture keep fraction;
+- audit interpretation now explicitly says when target exact was not run,
+  preventing a policy-val smoke from being misread as a Phase-J comparison.
+
+Smoke validation passed on GPU5 with `steps=1`, 16 candidate faces, target exact
+disabled, and output under:
+
+```text
+/tmp/peilincai_spcarnet_v295_texture_reliability_smoke_20260630
+```
+
+Key smoke facts: texture calibration enabled, valid-bin fraction `0.281250`,
+positive-bin fraction `0.555556`, no-target-GT audit pass `true`, target exact
+ran `false`.
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+This is not a quality result and does not change the Phase-J conclusion. It
+removes a protocol gap before the next real method attempt: source-heldout
+cross-view residual direction prediction or a multi-source residual basis.
+
 ## 2026-06-30 Topline: v293 TextureBinLatent PatchViewMoE
 
 Newest method log:

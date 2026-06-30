@@ -2,6 +2,45 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-30, v295:
+
+The newest committed change is an **engineering interface closure**, not a
+quality breakthrough. It completes texture-bin reliability calibration in
+`scripts/car_model/train_perceptual_surface_residual_decoder.py`.
+
+New files:
+
+- `docs/car_model/6-30-v295-TextureReliability-Interface-Log.md`
+- `docs/car_model/results/v295_texture_reliability_interface_smoke_summary.json`
+
+Important facts:
+
+- Added CLI flags for texture-bin calibration and threshold grids.
+- Threaded selected texture reliability threshold through policy-val, best
+  render writing, `_predict_delta_image`, and target no-GT exact apply.
+- Added payload / W&B / Markdown / stdout reporting for texture calibration,
+  selected texture threshold, and mean texture keep fraction.
+- Fixed interpretation wording so a run with `target_eval_mode=never` cannot be
+  presented as a flowers exact or Phase-J comparison.
+
+Smoke validation:
+
+- output root:
+  `/tmp/peilincai_spcarnet_v295_texture_reliability_smoke_20260630`
+- `steps=1`, 16 candidate faces, no LPIPS, target exact disabled.
+- texture calibration enabled: `true`
+- valid-bin fraction: `0.281250`
+- positive-bin fraction: `0.555556`
+- no-target-GT audit pass: `true`
+- target exact ran: `false`
+
+Direct verdict:
+
+> v295 closes a real protocol gap but does not solve the Phase-J bottleneck.
+> It should be used only as a cleaner substrate for the next real method:
+> source-heldout cross-view residual direction prediction or a multi-source
+> residual basis. Full9 remains blocked.
+
 Latest update on 2026-06-30, v293:
 
 The newest branch is **TextureBinLatent PatchViewMoE** in
