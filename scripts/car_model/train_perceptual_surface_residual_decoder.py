@@ -286,6 +286,13 @@ LOWRANK_VIEW_CAMERA_OFFSET = SURFACE_TEXTURE_LOWRANK_V1_DIM
 LOWRANK_VIEW_CAMERA_CONCENTRATION_INDEX = LOWRANK_VIEW_CAMERA_OFFSET + 3
 LOWRANK_VIEW_TARGET_COS_INDEX = LOWRANK_VIEW_CAMERA_CONCENTRATION_INDEX + 1
 SURFACE_TEXTURE_LOWRANK_VIEW_V2_DIM = LOWRANK_VIEW_TARGET_COS_INDEX + 1
+LOWRANK_VIEW_HOLDOUT_COSINE_INDEX = SURFACE_TEXTURE_LOWRANK_VIEW_V2_DIM
+LOWRANK_VIEW_HOLDOUT_ERROR_CONF_INDEX = LOWRANK_VIEW_HOLDOUT_COSINE_INDEX + 1
+LOWRANK_VIEW_HOLDOUT_SUPPORT_BALANCE_INDEX = LOWRANK_VIEW_HOLDOUT_ERROR_CONF_INDEX + 1
+LOWRANK_VIEW_HOLDOUT_CONFIDENCE_INDEX = LOWRANK_VIEW_HOLDOUT_SUPPORT_BALANCE_INDEX + 1
+SURFACE_TEXTURE_LOWRANK_VIEW_HOLDOUT_V3_DIM = LOWRANK_VIEW_HOLDOUT_CONFIDENCE_INDEX + 1
+LOWRANK_TEXTURE_MODES = {"lowrank_v1", "lowrank_view_v2", "lowrank_view_holdout_v3"}
+LOWRANK_VIEW_TEXTURE_MODES = {"lowrank_view_v2", "lowrank_view_holdout_v3"}
 
 
 def _base_feature_dim(feature_mode: str) -> int:
@@ -317,7 +324,19 @@ def _surface_texture_reliability_from_rows(
         return np.ones((int(features.shape[0]),), dtype=np.float32)
     tex = np.asarray(features[:, -texture_dim:], dtype=np.float32)
     mode = str(surface_feature_texture.get("mode", "v1"))
-    if mode in {"lowrank_v1", "lowrank_view_v2"} and texture_dim >= SURFACE_TEXTURE_LOWRANK_V1_DIM:
+    if mode == "lowrank_view_holdout_v3" and texture_dim >= SURFACE_TEXTURE_LOWRANK_VIEW_HOLDOUT_V3_DIM:
+        base = np.clip(
+            np.nan_to_num(tex[:, LOWRANK_TEXTURE_RELIABILITY_INDEX], nan=0.0, posinf=1.0, neginf=0.0),
+            0.0,
+            1.0,
+        )
+        holdout = np.clip(
+            np.nan_to_num(tex[:, LOWRANK_VIEW_HOLDOUT_CONFIDENCE_INDEX], nan=0.0, posinf=1.0, neginf=0.0),
+            0.0,
+            1.0,
+        )
+        return (base * holdout).astype(np.float32)
+    if mode in LOWRANK_TEXTURE_MODES and texture_dim >= SURFACE_TEXTURE_LOWRANK_V1_DIM:
         return np.clip(
             np.nan_to_num(tex[:, LOWRANK_TEXTURE_RELIABILITY_INDEX], nan=0.0, posinf=1.0, neginf=0.0),
             0.0,
@@ -347,7 +366,11 @@ def _view_support_gate_from_rows(
     if texture_dim <= 0 or int(features.shape[1]) < texture_dim:
         return np.ones((int(features.shape[0]),), dtype=np.float32)
     texture_mode = str(surface_feature_texture.get("mode", surface_feature_texture.get("summary", {}).get("mode", "v1")))
-    if str(mode) != "lowrank_view_cos" or texture_mode != "lowrank_view_v2" or texture_dim < SURFACE_TEXTURE_LOWRANK_VIEW_V2_DIM:
+    if (
+        str(mode) != "lowrank_view_cos"
+        or texture_mode not in LOWRANK_VIEW_TEXTURE_MODES
+        or texture_dim < SURFACE_TEXTURE_LOWRANK_VIEW_V2_DIM
+    ):
         return np.ones((int(features.shape[0]),), dtype=np.float32)
     tex = np.asarray(features[:, -texture_dim:], dtype=np.float32)
     target_cos = np.clip(tex[:, LOWRANK_VIEW_TARGET_COS_INDEX], -1.0, 1.0)
@@ -489,6 +512,49 @@ def _lowrank_residual_basis_batch(
     return basis, eigen_sqrt.astype(np.float32), reliability
 
 
+def _split_holdout_direction_features(
+    split_sum: np.ndarray,
+    split_counts: np.ndarray,
+) -> np.ndarray:
+    """Estimate target-blind residual direction stability from two source splits."""
+    sums = np.asarray(split_sum, dtype=np.float64)
+    counts = np.asarray(split_counts, dtype=np.float64)
+    if sums.shape[0] != 2 or counts.shape[0] != 2:
+        raise ValueError("split holdout features require exactly two source splits")
+    n = int(sums.shape[1])
+    out = np.zeros((n, 4), dtype=np.float32)
+    valid = (counts[0] > 0.0) & (counts[1] > 0.0)
+    if not np.any(valid):
+        return out
+    mean0 = np.zeros((n, 3), dtype=np.float64)
+    mean1 = np.zeros((n, 3), dtype=np.float64)
+    mean0[valid] = sums[0, valid] / np.maximum(counts[0, valid, None], 1.0)
+    mean1[valid] = sums[1, valid] / np.maximum(counts[1, valid, None], 1.0)
+    dot = np.sum(mean0 * mean1, axis=1)
+    e0 = np.sum(np.square(mean0), axis=1)
+    e1 = np.sum(np.square(mean1), axis=1)
+    cosine = np.zeros((n,), dtype=np.float64)
+    cosine[valid] = dot[valid] / np.maximum(np.sqrt(e0[valid] * e1[valid]), 1.0e-8)
+    cosine = np.clip(np.nan_to_num(cosine, nan=0.0, posinf=1.0, neginf=-1.0), -1.0, 1.0)
+    diff_energy = np.sum(np.square(mean0 - mean1), axis=1)
+    reference_energy = 0.5 * (e0 + e1)
+    error_ratio = np.zeros((n,), dtype=np.float64)
+    error_ratio[valid] = diff_energy[valid] / np.maximum(reference_energy[valid], 1.0e-8)
+    error_conf = np.exp(-np.clip(error_ratio, 0.0, 30.0))
+    support_balance = np.zeros((n,), dtype=np.float64)
+    support_balance[valid] = np.minimum(counts[0, valid], counts[1, valid]) / np.maximum(
+        np.maximum(counts[0, valid], counts[1, valid]),
+        1.0,
+    )
+    direction_conf = np.clip(0.5 + 0.5 * cosine, 0.0, 1.0)
+    holdout_conf = direction_conf * error_conf * np.sqrt(np.clip(support_balance, 0.0, 1.0))
+    out[:, 0] = cosine.astype(np.float32)
+    out[:, 1] = np.clip(error_conf, 0.0, 1.0).astype(np.float32)
+    out[:, 2] = np.clip(support_balance, 0.0, 1.0).astype(np.float32)
+    out[:, 3] = np.clip(holdout_conf, 0.0, 1.0).astype(np.float32)
+    return out
+
+
 def _lookup_surface_texture_rows(
     z: np.lib.npyio.NpzFile,
     ys: np.ndarray,
@@ -507,7 +573,7 @@ def _lookup_surface_texture_rows(
     valid = (flat_ids >= 0) & (flat_ids < int(features.shape[0]))
     rows[valid] = features[flat_ids[valid]]
     mode = str(surface_feature_texture.get("mode", surface_feature_texture.get("summary", {}).get("mode", "v1")))
-    if mode == "lowrank_view_v2" and rows.shape[1] >= SURFACE_TEXTURE_LOWRANK_VIEW_V2_DIM:
+    if mode in LOWRANK_VIEW_TEXTURE_MODES and rows.shape[1] >= SURFACE_TEXTURE_LOWRANK_VIEW_V2_DIM:
         target_camera = np.asarray(z["camera_center"], dtype=np.float32).reshape(3)
         target_camera = target_camera / max(float(np.linalg.norm(target_camera)), 1.0e-8)
         source_camera = rows[:, LOWRANK_VIEW_CAMERA_OFFSET:LOWRANK_VIEW_CAMERA_OFFSET + 3].astype(np.float32)
@@ -758,9 +824,11 @@ def _fit_surface_feature_texture(
     rng = np.random.default_rng(int(seed))
     bins = max(1, int(uv_bins))
     mode = str(mode)
-    if mode not in {"v1", "v2", "lowrank_v1", "lowrank_view_v2"}:
+    if mode not in {"v1", "v2", "lowrank_v1", "lowrank_view_v2", "lowrank_view_holdout_v3"}:
         raise ValueError(f"unknown surface texture mode={mode}")
-    if mode == "lowrank_view_v2":
+    if mode == "lowrank_view_holdout_v3":
+        feature_dim = SURFACE_TEXTURE_LOWRANK_VIEW_HOLDOUT_V3_DIM
+    elif mode == "lowrank_view_v2":
         feature_dim = SURFACE_TEXTURE_LOWRANK_VIEW_V2_DIM
     elif mode == "lowrank_v1":
         feature_dim = SURFACE_TEXTURE_LOWRANK_V1_DIM
@@ -778,6 +846,8 @@ def _fit_surface_feature_texture(
     bin_luma_sign_sum = np.zeros((total_bins,), dtype=np.float64)
     bin_second_moment_sum = np.zeros((total_bins, 6), dtype=np.float64)
     bin_camera_sum = np.zeros((total_bins, 3), dtype=np.float64)
+    bin_split_residual_sum = np.zeros((2, total_bins, 3), dtype=np.float64)
+    bin_split_counts = np.zeros((2, total_bins), dtype=np.float64)
     bin_counts = np.zeros((total_bins,), dtype=np.int64)
     face_sum = np.zeros((face_count, stat_dim), dtype=np.float64)
     face_l1_sq_sum = np.zeros((face_count,), dtype=np.float64)
@@ -785,12 +855,14 @@ def _fit_surface_feature_texture(
     face_luma_sign_sum = np.zeros((face_count,), dtype=np.float64)
     face_second_moment_sum = np.zeros((face_count, 6), dtype=np.float64)
     face_camera_sum = np.zeros((face_count, 3), dtype=np.float64)
+    face_split_residual_sum = np.zeros((2, face_count, 3), dtype=np.float64)
+    face_split_counts = np.zeros((2, face_count), dtype=np.float64)
     face_counts = np.zeros((face_count,), dtype=np.int64)
     rows: list[dict[str, Any]] = []
     sampled_pixels = 0
     used_pixels = 0
 
-    for path in tqdm(fit_paths, desc="fit surface feature texture"):
+    for view_index, path in enumerate(tqdm(fit_paths, desc="fit surface feature texture")):
         z = np.load(path)
         mask = _valid_mask(z, candidate_faces, residual_l1_key=residual_l1_key, min_l1=min_l1, min_alpha=min_alpha)
         ys, xs = np.nonzero(mask)
@@ -868,6 +940,9 @@ def _fit_surface_feature_texture(
         face_res_norm_sum += np.bincount(face_idx, weights=res_norm.astype(np.float64), minlength=face_count)
         bin_luma_sign_sum += np.bincount(flat_ids, weights=luma_sign.astype(np.float64), minlength=total_bins)
         face_luma_sign_sum += np.bincount(face_idx, weights=luma_sign.astype(np.float64), minlength=face_count)
+        split = int(view_index) % 2
+        bin_split_counts[split] += np.bincount(flat_ids, minlength=total_bins).astype(np.float64)
+        face_split_counts[split] += np.bincount(face_idx, minlength=face_count).astype(np.float64)
         second_terms = [
             np.square(res[:, 0]).astype(np.float64),
             np.square(res[:, 1]).astype(np.float64),
@@ -879,6 +954,17 @@ def _fit_surface_feature_texture(
         for channel, term in enumerate(second_terms):
             bin_second_moment_sum[:, channel] += np.bincount(flat_ids, weights=term, minlength=total_bins)
             face_second_moment_sum[:, channel] += np.bincount(face_idx, weights=term, minlength=face_count)
+        for channel in range(3):
+            bin_split_residual_sum[split, :, channel] += np.bincount(
+                flat_ids,
+                weights=res[:, channel].astype(np.float64),
+                minlength=total_bins,
+            )
+            face_split_residual_sum[split, :, channel] += np.bincount(
+                face_idx,
+                weights=res[:, channel].astype(np.float64),
+                minlength=face_count,
+            )
         for channel in range(3):
             bin_camera_sum[:, channel] += np.bincount(
                 flat_ids,
@@ -908,7 +994,8 @@ def _fit_surface_feature_texture(
         )
         face_ids = np.nonzero(face_nonzero)[0]
         face_lowrank_basis = face_lowrank_eigen = face_lowrank_reliability = None
-        if mode in {"lowrank_v1", "lowrank_view_v2"}:
+        face_holdout = None
+        if mode in LOWRANK_TEXTURE_MODES:
             face_second = face_second_moment_sum[face_ids] / np.maximum(face_counts[face_ids, None], 1)
             face_lowrank_basis, face_lowrank_eigen, face_lowrank_reliability = _lowrank_residual_basis_batch(
                 face_mean[face_ids, 0:3],
@@ -918,6 +1005,8 @@ def _fit_surface_feature_texture(
                 face_luma_sign_sum[face_ids],
                 face_mean[face_ids, 6],
             )
+        if mode == "lowrank_view_holdout_v3":
+            face_holdout = _split_holdout_direction_features(face_split_residual_sum[:, face_ids], face_split_counts[:, face_ids])
         for local_face, face in enumerate(face_ids):
             start = int(face) * bin_count
             end = start + bin_count
@@ -931,7 +1020,7 @@ def _fit_surface_feature_texture(
             features[start:end, 13] = float(face_mean[face, 10])
             features[start:end, 14] = float(face_mean[face, 11])
             features[start:end, 15:18] = face_mean[face, 12:15].astype(np.float32)
-            if mode in {"v2", "lowrank_v1", "lowrank_view_v2"}:
+            if mode in {"v2", *LOWRANK_TEXTURE_MODES}:
                 face_mean_norm = face_res_norm_sum[face] / max(float(face_counts[face]), 1.0)
                 direction_agreement = float(np.linalg.norm(face_mean[face, 0:3]) / max(face_mean_norm, 1.0e-6))
                 luma_sign_consistency = float(abs(face_luma_sign_sum[face]) / max(float(face_counts[face]), 1.0))
@@ -941,7 +1030,7 @@ def _fit_surface_feature_texture(
                 features[start:end, 19] = float(np.clip(luma_sign_consistency, 0.0, 1.0))
                 features[start:end, 20] = float(np.clip(relative_std, 0.0, 1.0))
                 features[start:end, 21] = float(np.clip(reliability, 0.0, 1.0))
-            if mode in {"lowrank_v1", "lowrank_view_v2"} and face_lowrank_basis is not None:
+            if mode in LOWRANK_TEXTURE_MODES and face_lowrank_basis is not None:
                 features[start:end, LOWRANK_TEXTURE_BASIS_OFFSET:LOWRANK_TEXTURE_EIGEN_OFFSET] = face_lowrank_basis[
                     local_face
                 ].reshape(-1)
@@ -949,7 +1038,7 @@ def _fit_surface_feature_texture(
                     local_face
                 ]
                 features[start:end, LOWRANK_TEXTURE_RELIABILITY_INDEX] = face_lowrank_reliability[local_face]
-            if mode == "lowrank_view_v2":
+            if mode in LOWRANK_VIEW_TEXTURE_MODES:
                 camera_mean = face_camera_sum[face] / max(float(face_counts[face]), 1.0)
                 camera_concentration = float(np.linalg.norm(camera_mean))
                 camera_mean = camera_mean / max(camera_concentration, 1.0e-8)
@@ -959,6 +1048,10 @@ def _fit_surface_feature_texture(
                 features[start:end, LOWRANK_VIEW_CAMERA_CONCENTRATION_INDEX] = float(
                     np.clip(camera_concentration, 0.0, 1.0)
                 )
+            if mode == "lowrank_view_holdout_v3" and face_holdout is not None:
+                features[start:end, LOWRANK_VIEW_HOLDOUT_COSINE_INDEX:SURFACE_TEXTURE_LOWRANK_VIEW_HOLDOUT_V3_DIM] = face_holdout[
+                    local_face
+                ]
     if np.any(bin_nonzero):
         bin_mean = bin_sum[bin_nonzero] / bin_counts[bin_nonzero, None]
         bin_var = np.maximum(
@@ -980,7 +1073,7 @@ def _fit_surface_feature_texture(
         features[bin_nonzero, 13] = bin_mean[:, 10].astype(np.float32)
         features[bin_nonzero, 14] = bin_mean[:, 11].astype(np.float32)
         features[bin_nonzero, 15:18] = bin_mean[:, 12:15].astype(np.float32)
-        if mode in {"v2", "lowrank_v1", "lowrank_view_v2"}:
+        if mode in {"v2", *LOWRANK_TEXTURE_MODES}:
             mean_norm = bin_res_norm_sum[bin_nonzero] / np.maximum(bin_counts[bin_nonzero], 1)
             direction_agreement = np.linalg.norm(bin_mean[:, 0:3], axis=1) / np.maximum(mean_norm, 1.0e-6)
             luma_sign_consistency = np.abs(bin_luma_sign_sum[bin_nonzero]) / np.maximum(bin_counts[bin_nonzero], 1)
@@ -990,7 +1083,7 @@ def _fit_surface_feature_texture(
             features[bin_nonzero, 19] = np.clip(luma_sign_consistency, 0.0, 1.0).astype(np.float32)
             features[bin_nonzero, 20] = np.clip(relative_std, 0.0, 1.0).astype(np.float32)
             features[bin_nonzero, 21] = np.clip(reliability, 0.0, 1.0).astype(np.float32)
-        if mode in {"lowrank_v1", "lowrank_view_v2"}:
+        if mode in LOWRANK_TEXTURE_MODES:
             nonzero_ids = np.nonzero(bin_nonzero)[0]
             bin_second = bin_second_moment_sum[bin_nonzero] / np.maximum(bin_counts[bin_nonzero, None], 1)
             basis, eigen_sqrt, lowrank_reliability = _lowrank_residual_basis_batch(
@@ -1007,7 +1100,7 @@ def _fit_surface_feature_texture(
             )
             features[nonzero_ids, LOWRANK_TEXTURE_EIGEN_OFFSET:LOWRANK_TEXTURE_RELIABILITY_INDEX] = eigen_sqrt
             features[nonzero_ids, LOWRANK_TEXTURE_RELIABILITY_INDEX] = lowrank_reliability
-            if mode == "lowrank_view_v2":
+            if mode in LOWRANK_VIEW_TEXTURE_MODES:
                 camera_mean = bin_camera_sum[bin_nonzero] / np.maximum(bin_counts[bin_nonzero, None], 1)
                 camera_concentration = np.linalg.norm(camera_mean, axis=1)
                 camera_dir = camera_mean / np.maximum(camera_concentration[:, None], 1.0e-8)
@@ -1019,6 +1112,15 @@ def _fit_surface_feature_texture(
                     0.0,
                     1.0,
                 ).astype(np.float32)
+            if mode == "lowrank_view_holdout_v3":
+                holdout = _split_holdout_direction_features(
+                    bin_split_residual_sum[:, bin_nonzero],
+                    bin_split_counts[:, bin_nonzero],
+                )
+                features[
+                    nonzero_ids,
+                    LOWRANK_VIEW_HOLDOUT_COSINE_INDEX:SURFACE_TEXTURE_LOWRANK_VIEW_HOLDOUT_V3_DIM,
+                ] = holdout
     features = np.clip(np.nan_to_num(features, nan=0.0, posinf=1.0, neginf=-1.0), -1.0, 1.0).astype(np.float32)
     summary = {
         "enabled": True,
@@ -1036,33 +1138,53 @@ def _fit_surface_feature_texture(
         "max_samples_per_view": int(max_samples_per_view),
         "mean_bin_count_on_covered": float(np.mean(bin_counts[bin_nonzero])) if np.any(bin_nonzero) else 0.0,
         "mean_direction_agreement_on_covered": (
-            float(np.mean(features[bin_nonzero, 18])) if mode in {"v2", "lowrank_v1", "lowrank_view_v2"} and np.any(bin_nonzero) else None
+            float(np.mean(features[bin_nonzero, 18])) if mode in {"v2", *LOWRANK_TEXTURE_MODES} and np.any(bin_nonzero) else None
         ),
         "mean_luma_sign_consistency_on_covered": (
-            float(np.mean(features[bin_nonzero, 19])) if mode in {"v2", "lowrank_v1", "lowrank_view_v2"} and np.any(bin_nonzero) else None
+            float(np.mean(features[bin_nonzero, 19])) if mode in {"v2", *LOWRANK_TEXTURE_MODES} and np.any(bin_nonzero) else None
         ),
         "mean_direction_reliability_on_covered": (
-            float(np.mean(features[bin_nonzero, 21])) if mode in {"v2", "lowrank_v1", "lowrank_view_v2"} and np.any(bin_nonzero) else None
+            float(np.mean(features[bin_nonzero, 21])) if mode in {"v2", *LOWRANK_TEXTURE_MODES} and np.any(bin_nonzero) else None
         ),
-        "lowrank_basis_count": int(LOWRANK_TEXTURE_BASIS_COUNT) if mode in {"lowrank_v1", "lowrank_view_v2"} else 0,
+        "lowrank_basis_count": int(LOWRANK_TEXTURE_BASIS_COUNT) if mode in LOWRANK_TEXTURE_MODES else 0,
         "mean_lowrank_reliability_on_covered": (
             float(np.mean(features[bin_nonzero, LOWRANK_TEXTURE_RELIABILITY_INDEX]))
-            if mode in {"lowrank_v1", "lowrank_view_v2"} and np.any(bin_nonzero)
+            if mode in LOWRANK_TEXTURE_MODES and np.any(bin_nonzero)
             else None
         ),
         "mean_lowrank_basis0_l1_on_covered": (
             float(np.mean(np.mean(np.abs(features[bin_nonzero, LOWRANK_TEXTURE_BASIS_OFFSET:LOWRANK_TEXTURE_BASIS_OFFSET + 3]), axis=1)))
-            if mode in {"lowrank_v1", "lowrank_view_v2"} and np.any(bin_nonzero)
+            if mode in LOWRANK_TEXTURE_MODES and np.any(bin_nonzero)
             else None
         ),
         "mean_lowrank_pca_energy_on_covered": (
             float(np.mean(np.sum(np.square(features[bin_nonzero, LOWRANK_TEXTURE_EIGEN_OFFSET:LOWRANK_TEXTURE_RELIABILITY_INDEX]), axis=1)))
-            if mode in {"lowrank_v1", "lowrank_view_v2"} and np.any(bin_nonzero)
+            if mode in LOWRANK_TEXTURE_MODES and np.any(bin_nonzero)
             else None
         ),
         "mean_source_camera_concentration_on_covered": (
             float(np.mean(features[bin_nonzero, LOWRANK_VIEW_CAMERA_CONCENTRATION_INDEX]))
-            if mode == "lowrank_view_v2" and np.any(bin_nonzero)
+            if mode in LOWRANK_VIEW_TEXTURE_MODES and np.any(bin_nonzero)
+            else None
+        ),
+        "mean_holdout_cosine_on_covered": (
+            float(np.mean(features[bin_nonzero, LOWRANK_VIEW_HOLDOUT_COSINE_INDEX]))
+            if mode == "lowrank_view_holdout_v3" and np.any(bin_nonzero)
+            else None
+        ),
+        "mean_holdout_error_confidence_on_covered": (
+            float(np.mean(features[bin_nonzero, LOWRANK_VIEW_HOLDOUT_ERROR_CONF_INDEX]))
+            if mode == "lowrank_view_holdout_v3" and np.any(bin_nonzero)
+            else None
+        ),
+        "mean_holdout_support_balance_on_covered": (
+            float(np.mean(features[bin_nonzero, LOWRANK_VIEW_HOLDOUT_SUPPORT_BALANCE_INDEX]))
+            if mode == "lowrank_view_holdout_v3" and np.any(bin_nonzero)
+            else None
+        ),
+        "mean_holdout_confidence_on_covered": (
+            float(np.mean(features[bin_nonzero, LOWRANK_VIEW_HOLDOUT_CONFIDENCE_INDEX]))
+            if mode == "lowrank_view_holdout_v3" and np.any(bin_nonzero)
             else None
         ),
         "rows": rows,
@@ -1073,7 +1195,7 @@ def _fit_surface_feature_texture(
         "counts": bin_counts.astype(np.int64),
         "uv_bins": int(bins),
         "feature_dim": int(feature_dim),
-        "lowrank_basis_count": int(LOWRANK_TEXTURE_BASIS_COUNT) if mode in {"lowrank_v1", "lowrank_view_v2"} else 0,
+        "lowrank_basis_count": int(LOWRANK_TEXTURE_BASIS_COUNT) if mode in LOWRANK_TEXTURE_MODES else 0,
         "summary": summary,
     }
 
@@ -2637,7 +2759,7 @@ def main() -> int:
     parser.add_argument("--feature_mode", choices=["basic", "fourier_v1"], default="basic")
     parser.add_argument(
         "--surface_texture_mode",
-        choices=["none", "v1", "v2", "lowrank_v1", "lowrank_view_v2"],
+        choices=["none", "v1", "v2", "lowrank_v1", "lowrank_view_v2", "lowrank_view_holdout_v3"],
         default="none",
     )
     parser.add_argument("--surface_texture_uv_bins", type=int, default=4)
@@ -2757,7 +2879,7 @@ def main() -> int:
         raise RuntimeError("no candidate faces selected")
     surface_feature_texture: dict[str, Any] | None = None
     surface_texture_payload: dict[str, Any] = {"enabled": False, "mode": str(args.surface_texture_mode)}
-    if str(args.surface_texture_mode) in {"v1", "v2", "lowrank_v1", "lowrank_view_v2"}:
+    if str(args.surface_texture_mode) in {"v1", "v2", *LOWRANK_TEXTURE_MODES}:
         if init_checkpoint is not None and init_checkpoint.get("surface_feature_texture") is not None:
             surface_feature_texture = init_checkpoint["surface_feature_texture"]
             loaded_mode = str(surface_feature_texture.get("mode", surface_feature_texture.get("summary", {}).get("mode", "v1")))
@@ -2809,7 +2931,7 @@ def main() -> int:
                 lowrank_basis_count=np.asarray(
                     [
                         LOWRANK_TEXTURE_BASIS_COUNT
-                        if str(args.surface_texture_mode) in {"lowrank_v1", "lowrank_view_v2"}
+                        if str(args.surface_texture_mode) in LOWRANK_TEXTURE_MODES
                         else 0
                     ],
                     dtype=np.int64,
@@ -2817,9 +2939,9 @@ def main() -> int:
             )
     if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"} and str(
         args.surface_texture_mode
-    ) not in {"lowrank_v1", "lowrank_view_v2"}:
+    ) not in LOWRANK_TEXTURE_MODES:
         raise ValueError(
-            f"--decoder_output_mode {args.decoder_output_mode} requires --surface_texture_mode lowrank_v1 or lowrank_view_v2"
+            f"--decoder_output_mode {args.decoder_output_mode} requires --surface_texture_mode lowrank_v1, lowrank_view_v2, or lowrank_view_holdout_v3"
         )
     feature_dim = _feature_dim(str(args.feature_mode), surface_feature_texture)
     texture_latent_count = (

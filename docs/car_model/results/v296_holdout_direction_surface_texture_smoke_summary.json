@@ -1,0 +1,53 @@
+{
+  "date": "2026-06-30",
+  "method": "v296 lowrank_view_holdout_v3 surface texture scaffold",
+  "script": "scripts/car_model/train_perceptual_surface_residual_decoder.py",
+  "smoke_artifact_root": "/tmp/peilincai_spcarnet_v296_holdout_v3_smoke_20260630",
+  "static_checks": {
+    "py_compile": true,
+    "diff_check": true,
+    "help_lowrank_view_holdout_v3_visible": true
+  },
+  "method_change": {
+    "real_representation_change": true,
+    "surface_texture_mode": "lowrank_view_holdout_v3",
+    "extends": "lowrank_view_v2",
+    "new_feature_count": 4,
+    "new_features": [
+      "holdout_cosine",
+      "holdout_error_confidence",
+      "holdout_support_balance",
+      "holdout_confidence"
+    ],
+    "uses_target_or_test_gt": false
+  },
+  "smoke_scope": {
+    "steps": 1,
+    "candidate_faces": 8,
+    "target_eval_mode": "never",
+    "compute_lpips": false,
+    "quality_claim": false
+  },
+  "smoke_surface_texture": {
+    "feature_dim": 47,
+    "covered_bin_fraction": 0.4453125,
+    "mean_lowrank_reliability_on_covered": 0.1596546173095703,
+    "mean_source_camera_concentration_on_covered": 0.9509592056274414,
+    "mean_holdout_cosine_on_covered": 0.3648873269557953,
+    "mean_holdout_error_confidence_on_covered": 0.539535641670227,
+    "mean_holdout_support_balance_on_covered": 0.5336474776268005,
+    "mean_holdout_confidence_on_covered": 0.2881647050380707
+  },
+  "smoke_policy_val": {
+    "policy_val_all_axis_pass": false,
+    "policy_val_tail_safe_pass": false,
+    "selected_alpha": 0.0,
+    "target_exact_ran": false
+  },
+  "verdict": {
+    "interface_closed": true,
+    "phasej_quality_breakthrough": false,
+    "final_status": "NOT_COMPLETE",
+    "next_required_experiment": "same-budget lowrank_view_v2 vs lowrank_view_holdout_v3 reduced comparison with W&B offline"
+  }
+}
