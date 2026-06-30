@@ -1074,6 +1074,41 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-06-30 Update: v294 Cross-View Residual Direction Synthesis
+
+New synthesis:
+
+```text
+docs/car_model/6-30-v294-CrossViewResidualDirection-Synthesis.md
+docs/car_model/results/v294_cross_view_direction_synthesis.json
+```
+
+It combines v294 projection upper-bound evidence with existing v285/v286
+source-heldout evidence.
+
+Key conclusion:
+
+- v294 best policy-val projection gives only `+0.000164 dB` full-image PSNR,
+  `+0.000000392` SSIM, and `+0.000000956` LPIPS.
+- v285/v286 source-heldout residual cosine is only about `0.214671`, with
+  heldout error ratio about `2.078181`.
+- Conservative heldout calibration can make target tails safer, but it cannot
+  add the missing Phase-J-scale RGB residual energy.
+
+Decision:
+
+```text
+Do not promote the current projection carrier to flowers exact/full9.
+Do not continue rank/alpha scans as the main route.
+Next required change: cross-view residual direction predictor with source-heldout loss.
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-06-30 Update: v294 Teacher Projection Upper-Bound Diagnostic
 
 This update follows the hard diagnostic requirement in:

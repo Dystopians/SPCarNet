@@ -1,0 +1,42 @@
+{
+  "date": "2026-06-30",
+  "sources": [
+    "docs/car_model/results/v294_teacher_projection_upper_bound_summary.json",
+    "docs/car_model/results/v285_v286_holdout_calibration_summary.json"
+  ],
+  "diagnosis": "The current surface carrier has nonzero but tiny teacher projection capacity, and source-heldout evidence shows weak cross-view residual direction stability.",
+  "v294_projection_upper_bound": {
+    "best_texture_size": 8,
+    "best_low_rank_rank": 4,
+    "best_alpha": 0.03125,
+    "psnr_gain": 0.0001638197727489299,
+    "ssim_gain": 3.923972447713216e-7,
+    "lpips_gain": 9.561578432718913e-7,
+    "ssim_positive_view_fraction": 0.5,
+    "lpips_positive_view_fraction": 0.6666666666666666,
+    "robust_all_axis_pass": false
+  },
+  "v285_v286_source_heldout": {
+    "heldout_cosine": 0.21467097984118896,
+    "heldout_error_ratio": 2.0781807357614692,
+    "v285b_target_gains": {
+      "psnr": 0.010698441305053081,
+      "ssim": 0.0002151280641555786,
+      "lpips": 0.00031701610846952957,
+      "phasej_psnr_gap": -0.4616056802474837
+    },
+    "v286b_target_gains": {
+      "psnr": 0.00885611531813007,
+      "ssim": 0.0002723227847706188,
+      "lpips": 0.00023499368266625837,
+      "phasej_psnr_gap": -0.46344800623440463
+    }
+  },
+  "decision": {
+    "promote_current_projection_to_flowers_exact": false,
+    "promote_current_projection_to_full9": false,
+    "continue_rank_alpha_scan_as_main_route": false,
+    "next_required_change": "cross_view_residual_direction_predictor_with_source_heldout_loss_and_calibrated_reliability"
+  },
+  "final_status": "NOT_COMPLETE"
+}

@@ -1131,6 +1131,27 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-06-30 v294 Cross-View Direction Feedback Addendum
+
+The latest integrated diagnosis is:
+
+```text
+docs/car_model/6-30-v294-CrossViewResidualDirection-Synthesis.md
+docs/car_model/results/v294_cross_view_direction_synthesis.json
+```
+
+Important lesson for the next model:
+
+The bottleneck is not merely capacity. v294 shows the current carrier upper
+bound is almost no-op at robust policy-val scale. v285/v286 show why: source
+heldout residual direction is weak, with cosine around `0.214671` and error
+ratio around `2.078181`. A reliability gate can suppress bad residuals, but then
+the method loses the energy needed to approach Phase-J.
+
+Next prompt should ask for a representation that learns residual direction
+transport itself, supervised by source-heldout loss, instead of only fitting
+teacher residual RGB and gating after the fact.
+
 # 2026-06-30 v294 Teacher Projection Upper-Bound Feedback Addendum
 
 This addendum records the direct answer to the v169 diagnostic question:
