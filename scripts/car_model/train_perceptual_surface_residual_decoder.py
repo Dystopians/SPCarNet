@@ -269,6 +269,12 @@ def _verify_target_no_gt(target_dir: Path) -> dict[str, Any]:
 
 
 SURFACE_TEXTURE_V1_DIM = 18
+SURFACE_TEXTURE_V2_DIM = 22
+LOWRANK_TEXTURE_BASIS_COUNT = 4
+LOWRANK_TEXTURE_BASIS_OFFSET = SURFACE_TEXTURE_V2_DIM
+LOWRANK_TEXTURE_EIGEN_OFFSET = LOWRANK_TEXTURE_BASIS_OFFSET + 3 * LOWRANK_TEXTURE_BASIS_COUNT
+LOWRANK_TEXTURE_RELIABILITY_INDEX = LOWRANK_TEXTURE_EIGEN_OFFSET + 3
+SURFACE_TEXTURE_LOWRANK_V1_DIM = LOWRANK_TEXTURE_RELIABILITY_INDEX + 1
 
 
 def _base_feature_dim(feature_mode: str) -> int:
@@ -289,12 +295,136 @@ def _feature_dim(feature_mode: str, surface_feature_texture: dict[str, Any] | No
     return _base_feature_dim(str(feature_mode)) + _surface_texture_dim(surface_feature_texture)
 
 
+def _surface_texture_reliability_from_rows(
+    features: np.ndarray,
+    surface_feature_texture: dict[str, Any] | None,
+) -> np.ndarray:
+    if not surface_feature_texture:
+        return np.ones((int(features.shape[0]),), dtype=np.float32)
+    texture_dim = _surface_texture_dim(surface_feature_texture)
+    if texture_dim <= 0:
+        return np.ones((int(features.shape[0]),), dtype=np.float32)
+    tex = np.asarray(features[:, -texture_dim:], dtype=np.float32)
+    mode = str(surface_feature_texture.get("mode", "v1"))
+    if mode == "lowrank_v1" and texture_dim >= SURFACE_TEXTURE_LOWRANK_V1_DIM:
+        return np.clip(
+            np.nan_to_num(tex[:, LOWRANK_TEXTURE_RELIABILITY_INDEX], nan=0.0, posinf=1.0, neginf=0.0),
+            0.0,
+            1.0,
+        ).astype(np.float32)
+    if mode == "v2" and texture_dim >= SURFACE_TEXTURE_V2_DIM:
+        return np.clip(np.nan_to_num(tex[:, 21], nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0).astype(np.float32)
+    # v1 fallback: covered-bin support times positive teacher-gain fraction.
+    if texture_dim >= 10:
+        return np.clip(tex[:, 1] * tex[:, 9], 0.0, 1.0).astype(np.float32)
+    return np.ones((int(features.shape[0]),), dtype=np.float32)
+
+
 def _surface_uv_bin_ids(z: np.lib.npyio.NpzFile, ys: np.ndarray, xs: np.ndarray, uv_bins: int) -> np.ndarray:
     bary = np.asarray(z["barycentric"], dtype=np.float32)
     bins = max(1, int(uv_bins))
     u_bin = np.clip(np.floor(np.clip(bary[1, ys, xs], 0.0, 0.999999) * bins).astype(np.int64), 0, bins - 1)
     v_bin = np.clip(np.floor(np.clip(bary[2, ys, xs], 0.0, 0.999999) * bins).astype(np.int64), 0, bins - 1)
     return (u_bin * bins + v_bin).astype(np.int64)
+
+
+def _lowrank_residual_basis(
+    mean_rgb: np.ndarray,
+    second_moment6: np.ndarray,
+    count: float,
+    mean_norm: float,
+    luma_sign_sum: float,
+    positive_gain_fraction: float,
+) -> tuple[np.ndarray, np.ndarray, float]:
+    mean = np.asarray(mean_rgb, dtype=np.float64).reshape(3)
+    second6 = np.asarray(second_moment6, dtype=np.float64).reshape(6)
+    basis = np.zeros((LOWRANK_TEXTURE_BASIS_COUNT, 3), dtype=np.float32)
+    eigen_sqrt = np.zeros((3,), dtype=np.float32)
+    basis[0] = mean.astype(np.float32)
+    if float(count) > 1.0:
+        second = np.array(
+            [
+                [second6[0], second6[3], second6[4]],
+                [second6[3], second6[1], second6[5]],
+                [second6[4], second6[5], second6[2]],
+            ],
+            dtype=np.float64,
+        )
+        cov = second - np.outer(mean, mean)
+        cov = 0.5 * (cov + cov.T)
+        try:
+            eigvals, eigvecs = np.linalg.eigh(cov)
+            order = np.argsort(eigvals)[::-1]
+            eigvals = np.maximum(eigvals[order], 0.0)
+            eigvecs = eigvecs[:, order]
+            scales = np.sqrt(eigvals[:3])
+            eigen_sqrt[:] = scales.astype(np.float32)
+            for idx in range(3):
+                basis[idx + 1] = (eigvecs[:, idx] * scales[idx]).astype(np.float32)
+        except np.linalg.LinAlgError:
+            pass
+    direction_agreement = float(np.linalg.norm(mean) / max(float(mean_norm), 1.0e-6))
+    luma_sign_consistency = float(abs(float(luma_sign_sum)) / max(float(count), 1.0))
+    variance_energy = float(np.sum(np.square(eigen_sqrt)))
+    mean_energy = float(np.sum(np.square(basis[0])))
+    stability = mean_energy / max(mean_energy + variance_energy, 1.0e-8)
+    reliability = direction_agreement * luma_sign_consistency * float(np.clip(positive_gain_fraction, 0.0, 1.0))
+    reliability *= math.sqrt(max(stability, 0.0))
+    reliability = float(np.clip(np.nan_to_num(reliability, nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0))
+    basis = np.clip(np.nan_to_num(basis, nan=0.0, posinf=1.0, neginf=-1.0), -1.0, 1.0).astype(np.float32)
+    return basis, eigen_sqrt.astype(np.float32), reliability
+
+
+def _lowrank_residual_basis_batch(
+    mean_rgb: np.ndarray,
+    second_moment6: np.ndarray,
+    counts: np.ndarray,
+    mean_norm: np.ndarray,
+    luma_sign_sum: np.ndarray,
+    positive_gain_fraction: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    mean = np.asarray(mean_rgb, dtype=np.float64).reshape(-1, 3)
+    second6 = np.asarray(second_moment6, dtype=np.float64).reshape(-1, 6)
+    counts = np.asarray(counts, dtype=np.float64).reshape(-1)
+    n = int(mean.shape[0])
+    basis = np.zeros((n, LOWRANK_TEXTURE_BASIS_COUNT, 3), dtype=np.float32)
+    eigen_sqrt = np.zeros((n, 3), dtype=np.float32)
+    basis[:, 0, :] = mean.astype(np.float32)
+    if n:
+        second = np.zeros((n, 3, 3), dtype=np.float64)
+        second[:, 0, 0] = second6[:, 0]
+        second[:, 1, 1] = second6[:, 1]
+        second[:, 2, 2] = second6[:, 2]
+        second[:, 0, 1] = second[:, 1, 0] = second6[:, 3]
+        second[:, 0, 2] = second[:, 2, 0] = second6[:, 4]
+        second[:, 1, 2] = second[:, 2, 1] = second6[:, 5]
+        cov = second - mean[:, :, None] * mean[:, None, :]
+        cov = 0.5 * (cov + np.swapaxes(cov, 1, 2))
+        cov[counts <= 1.0] = 0.0
+        try:
+            eigvals, eigvecs = np.linalg.eigh(cov)
+            order = np.argsort(eigvals, axis=1)[:, ::-1]
+            eigvals = np.take_along_axis(eigvals, order, axis=1)
+            eigvecs = np.take_along_axis(eigvecs, order[:, None, :], axis=2)
+            scales = np.sqrt(np.maximum(eigvals[:, :3], 0.0))
+            eigen_sqrt[:, :] = scales.astype(np.float32)
+            basis[:, 1:4, :] = np.transpose(eigvecs[:, :, :3] * scales[:, None, :], (0, 2, 1)).astype(np.float32)
+        except np.linalg.LinAlgError:
+            pass
+    direction_agreement = np.linalg.norm(mean, axis=1) / np.maximum(np.asarray(mean_norm, dtype=np.float64), 1.0e-6)
+    luma_sign_consistency = np.abs(np.asarray(luma_sign_sum, dtype=np.float64)) / np.maximum(counts, 1.0)
+    variance_energy = np.sum(np.square(eigen_sqrt.astype(np.float64)), axis=1)
+    mean_energy = np.sum(np.square(basis[:, 0, :].astype(np.float64)), axis=1)
+    stability = mean_energy / np.maximum(mean_energy + variance_energy, 1.0e-8)
+    reliability = (
+        direction_agreement
+        * luma_sign_consistency
+        * np.clip(np.asarray(positive_gain_fraction, dtype=np.float64), 0.0, 1.0)
+        * np.sqrt(np.maximum(stability, 0.0))
+    )
+    reliability = np.clip(np.nan_to_num(reliability, nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0).astype(np.float32)
+    basis = np.clip(np.nan_to_num(basis, nan=0.0, posinf=1.0, neginf=-1.0), -1.0, 1.0).astype(np.float32)
+    return basis, eigen_sqrt.astype(np.float32), reliability
 
 
 def _lookup_surface_texture_rows(
@@ -534,6 +664,7 @@ def _fit_surface_feature_texture(
     fit_paths: list[Path],
     candidate_faces: np.ndarray,
     *,
+    mode: str,
     residual_rgb_key: str,
     residual_l1_key: str,
     min_l1: float,
@@ -552,15 +683,30 @@ def _fit_surface_feature_texture(
     """Bake train-fit teacher residual statistics into a face+UV texture."""
     rng = np.random.default_rng(int(seed))
     bins = max(1, int(uv_bins))
+    mode = str(mode)
+    if mode not in {"v1", "v2", "lowrank_v1"}:
+        raise ValueError(f"unknown surface texture mode={mode}")
+    if mode == "lowrank_v1":
+        feature_dim = SURFACE_TEXTURE_LOWRANK_V1_DIM
+    elif mode == "v2":
+        feature_dim = SURFACE_TEXTURE_V2_DIM
+    else:
+        feature_dim = SURFACE_TEXTURE_V1_DIM
     bin_count = bins * bins
     face_count = int(candidate_faces.size)
     total_bins = face_count * bin_count
     stat_dim = 15
     bin_sum = np.zeros((total_bins, stat_dim), dtype=np.float64)
     bin_l1_sq_sum = np.zeros((total_bins,), dtype=np.float64)
+    bin_res_norm_sum = np.zeros((total_bins,), dtype=np.float64)
+    bin_luma_sign_sum = np.zeros((total_bins,), dtype=np.float64)
+    bin_second_moment_sum = np.zeros((total_bins, 6), dtype=np.float64)
     bin_counts = np.zeros((total_bins,), dtype=np.int64)
     face_sum = np.zeros((face_count, stat_dim), dtype=np.float64)
     face_l1_sq_sum = np.zeros((face_count,), dtype=np.float64)
+    face_res_norm_sum = np.zeros((face_count,), dtype=np.float64)
+    face_luma_sign_sum = np.zeros((face_count,), dtype=np.float64)
+    face_second_moment_sum = np.zeros((face_count, 6), dtype=np.float64)
     face_counts = np.zeros((face_count,), dtype=np.int64)
     rows: list[dict[str, Any]] = []
     sampled_pixels = 0
@@ -595,8 +741,10 @@ def _fit_surface_feature_texture(
             residual_target_chroma_scale=float(residual_target_chroma_scale),
         )
         res = np.stack([residual[0, ys, xs], residual[1, ys, xs], residual[2, ys, xs]], axis=1).astype(np.float32)
+        res_norm = np.linalg.norm(res, axis=1).astype(np.float32)
         abs_res = np.mean(np.abs(res), axis=1).astype(np.float32)
         res_luma = (0.299 * res[:, 0] + 0.587 * res[:, 1] + 0.114 * res[:, 2]).astype(np.float32)
+        luma_sign = np.sign(np.where(np.abs(res_luma) > 1.0e-6, res_luma, 0.0)).astype(np.float32)
         if "teacher_gain_l1" in z:
             gain = np.asarray(z["teacher_gain_l1"], dtype=np.float32)[ys, xs]
         elif residual_l1_key in z:
@@ -637,12 +785,27 @@ def _fit_surface_feature_texture(
         face_counts += np.bincount(face_idx, minlength=face_count).astype(np.int64)
         bin_l1_sq_sum += np.bincount(flat_ids, weights=np.square(abs_res).astype(np.float64), minlength=total_bins)
         face_l1_sq_sum += np.bincount(face_idx, weights=np.square(abs_res).astype(np.float64), minlength=face_count)
+        bin_res_norm_sum += np.bincount(flat_ids, weights=res_norm.astype(np.float64), minlength=total_bins)
+        face_res_norm_sum += np.bincount(face_idx, weights=res_norm.astype(np.float64), minlength=face_count)
+        bin_luma_sign_sum += np.bincount(flat_ids, weights=luma_sign.astype(np.float64), minlength=total_bins)
+        face_luma_sign_sum += np.bincount(face_idx, weights=luma_sign.astype(np.float64), minlength=face_count)
+        second_terms = [
+            np.square(res[:, 0]).astype(np.float64),
+            np.square(res[:, 1]).astype(np.float64),
+            np.square(res[:, 2]).astype(np.float64),
+            (res[:, 0] * res[:, 1]).astype(np.float64),
+            (res[:, 0] * res[:, 2]).astype(np.float64),
+            (res[:, 1] * res[:, 2]).astype(np.float64),
+        ]
+        for channel, term in enumerate(second_terms):
+            bin_second_moment_sum[:, channel] += np.bincount(flat_ids, weights=term, minlength=total_bins)
+            face_second_moment_sum[:, channel] += np.bincount(face_idx, weights=term, minlength=face_count)
         for channel in range(stat_dim):
             bin_sum[:, channel] += np.bincount(flat_ids, weights=values[:, channel], minlength=total_bins)
             face_sum[:, channel] += np.bincount(face_idx, weights=values[:, channel], minlength=face_count)
         rows.append({"view": path.stem, "sampled": int(ys.size), "used": int(flat_ids.size)})
 
-    features = np.zeros((total_bins, SURFACE_TEXTURE_V1_DIM), dtype=np.float32)
+    features = np.zeros((total_bins, feature_dim), dtype=np.float32)
     bin_nonzero = bin_counts > 0
     face_nonzero = face_counts > 0
     if np.any(face_nonzero):
@@ -653,7 +816,19 @@ def _fit_surface_feature_texture(
             face_l1_sq_sum[face_nonzero] / face_counts[face_nonzero] - np.square(face_mean[face_nonzero, 3]),
             0.0,
         )
-        for face in np.nonzero(face_nonzero)[0]:
+        face_ids = np.nonzero(face_nonzero)[0]
+        face_lowrank_basis = face_lowrank_eigen = face_lowrank_reliability = None
+        if mode == "lowrank_v1":
+            face_second = face_second_moment_sum[face_ids] / np.maximum(face_counts[face_ids, None], 1)
+            face_lowrank_basis, face_lowrank_eigen, face_lowrank_reliability = _lowrank_residual_basis_batch(
+                face_mean[face_ids, 0:3],
+                face_second,
+                face_counts[face_ids],
+                face_res_norm_sum[face_ids] / np.maximum(face_counts[face_ids], 1),
+                face_luma_sign_sum[face_ids],
+                face_mean[face_ids, 6],
+            )
+        for local_face, face in enumerate(face_ids):
             start = int(face) * bin_count
             end = start + bin_count
             features[start:end, 2:5] = face_mean[face, 0:3].astype(np.float32)
@@ -666,6 +841,24 @@ def _fit_surface_feature_texture(
             features[start:end, 13] = float(face_mean[face, 10])
             features[start:end, 14] = float(face_mean[face, 11])
             features[start:end, 15:18] = face_mean[face, 12:15].astype(np.float32)
+            if mode in {"v2", "lowrank_v1"}:
+                face_mean_norm = face_res_norm_sum[face] / max(float(face_counts[face]), 1.0)
+                direction_agreement = float(np.linalg.norm(face_mean[face, 0:3]) / max(face_mean_norm, 1.0e-6))
+                luma_sign_consistency = float(abs(face_luma_sign_sum[face]) / max(float(face_counts[face]), 1.0))
+                relative_std = float(math.sqrt(float(face_var[face])) / max(float(abs(face_mean[face, 3])), 1.0e-6))
+                reliability = direction_agreement * luma_sign_consistency * float(np.clip(face_mean[face, 6], 0.0, 1.0))
+                features[start:end, 18] = float(np.clip(direction_agreement, 0.0, 1.0))
+                features[start:end, 19] = float(np.clip(luma_sign_consistency, 0.0, 1.0))
+                features[start:end, 20] = float(np.clip(relative_std, 0.0, 1.0))
+                features[start:end, 21] = float(np.clip(reliability, 0.0, 1.0))
+            if mode == "lowrank_v1" and face_lowrank_basis is not None:
+                features[start:end, LOWRANK_TEXTURE_BASIS_OFFSET:LOWRANK_TEXTURE_EIGEN_OFFSET] = face_lowrank_basis[
+                    local_face
+                ].reshape(-1)
+                features[start:end, LOWRANK_TEXTURE_EIGEN_OFFSET:LOWRANK_TEXTURE_RELIABILITY_INDEX] = face_lowrank_eigen[
+                    local_face
+                ]
+                features[start:end, LOWRANK_TEXTURE_RELIABILITY_INDEX] = face_lowrank_reliability[local_face]
     if np.any(bin_nonzero):
         bin_mean = bin_sum[bin_nonzero] / bin_counts[bin_nonzero, None]
         bin_var = np.maximum(
@@ -687,12 +880,39 @@ def _fit_surface_feature_texture(
         features[bin_nonzero, 13] = bin_mean[:, 10].astype(np.float32)
         features[bin_nonzero, 14] = bin_mean[:, 11].astype(np.float32)
         features[bin_nonzero, 15:18] = bin_mean[:, 12:15].astype(np.float32)
+        if mode in {"v2", "lowrank_v1"}:
+            mean_norm = bin_res_norm_sum[bin_nonzero] / np.maximum(bin_counts[bin_nonzero], 1)
+            direction_agreement = np.linalg.norm(bin_mean[:, 0:3], axis=1) / np.maximum(mean_norm, 1.0e-6)
+            luma_sign_consistency = np.abs(bin_luma_sign_sum[bin_nonzero]) / np.maximum(bin_counts[bin_nonzero], 1)
+            relative_std = np.sqrt(bin_var) / np.maximum(np.abs(bin_mean[:, 3]), 1.0e-6)
+            reliability = direction_agreement * luma_sign_consistency * np.clip(bin_mean[:, 6], 0.0, 1.0)
+            features[bin_nonzero, 18] = np.clip(direction_agreement, 0.0, 1.0).astype(np.float32)
+            features[bin_nonzero, 19] = np.clip(luma_sign_consistency, 0.0, 1.0).astype(np.float32)
+            features[bin_nonzero, 20] = np.clip(relative_std, 0.0, 1.0).astype(np.float32)
+            features[bin_nonzero, 21] = np.clip(reliability, 0.0, 1.0).astype(np.float32)
+        if mode == "lowrank_v1":
+            nonzero_ids = np.nonzero(bin_nonzero)[0]
+            bin_second = bin_second_moment_sum[bin_nonzero] / np.maximum(bin_counts[bin_nonzero, None], 1)
+            basis, eigen_sqrt, lowrank_reliability = _lowrank_residual_basis_batch(
+                bin_mean[:, 0:3],
+                bin_second,
+                bin_counts[bin_nonzero],
+                bin_res_norm_sum[bin_nonzero] / np.maximum(bin_counts[bin_nonzero], 1),
+                bin_luma_sign_sum[bin_nonzero],
+                bin_mean[:, 6],
+            )
+            features[nonzero_ids, LOWRANK_TEXTURE_BASIS_OFFSET:LOWRANK_TEXTURE_EIGEN_OFFSET] = basis.reshape(
+                basis.shape[0],
+                -1,
+            )
+            features[nonzero_ids, LOWRANK_TEXTURE_EIGEN_OFFSET:LOWRANK_TEXTURE_RELIABILITY_INDEX] = eigen_sqrt
+            features[nonzero_ids, LOWRANK_TEXTURE_RELIABILITY_INDEX] = lowrank_reliability
     features = np.clip(np.nan_to_num(features, nan=0.0, posinf=1.0, neginf=-1.0), -1.0, 1.0).astype(np.float32)
     summary = {
         "enabled": True,
-        "mode": "v1",
+        "mode": mode,
         "uv_bins": int(bins),
-        "feature_dim": int(SURFACE_TEXTURE_V1_DIM),
+        "feature_dim": int(feature_dim),
         "candidate_faces": int(face_count),
         "total_bins": int(total_bins),
         "covered_bins": int(np.count_nonzero(bin_nonzero)),
@@ -703,13 +923,40 @@ def _fit_surface_feature_texture(
         "used_pixels": int(used_pixels),
         "max_samples_per_view": int(max_samples_per_view),
         "mean_bin_count_on_covered": float(np.mean(bin_counts[bin_nonzero])) if np.any(bin_nonzero) else 0.0,
+        "mean_direction_agreement_on_covered": (
+            float(np.mean(features[bin_nonzero, 18])) if mode in {"v2", "lowrank_v1"} and np.any(bin_nonzero) else None
+        ),
+        "mean_luma_sign_consistency_on_covered": (
+            float(np.mean(features[bin_nonzero, 19])) if mode in {"v2", "lowrank_v1"} and np.any(bin_nonzero) else None
+        ),
+        "mean_direction_reliability_on_covered": (
+            float(np.mean(features[bin_nonzero, 21])) if mode in {"v2", "lowrank_v1"} and np.any(bin_nonzero) else None
+        ),
+        "lowrank_basis_count": int(LOWRANK_TEXTURE_BASIS_COUNT) if mode == "lowrank_v1" else 0,
+        "mean_lowrank_reliability_on_covered": (
+            float(np.mean(features[bin_nonzero, LOWRANK_TEXTURE_RELIABILITY_INDEX]))
+            if mode == "lowrank_v1" and np.any(bin_nonzero)
+            else None
+        ),
+        "mean_lowrank_basis0_l1_on_covered": (
+            float(np.mean(np.mean(np.abs(features[bin_nonzero, LOWRANK_TEXTURE_BASIS_OFFSET:LOWRANK_TEXTURE_BASIS_OFFSET + 3]), axis=1)))
+            if mode == "lowrank_v1" and np.any(bin_nonzero)
+            else None
+        ),
+        "mean_lowrank_pca_energy_on_covered": (
+            float(np.mean(np.sum(np.square(features[bin_nonzero, LOWRANK_TEXTURE_EIGEN_OFFSET:LOWRANK_TEXTURE_RELIABILITY_INDEX]), axis=1)))
+            if mode == "lowrank_v1" and np.any(bin_nonzero)
+            else None
+        ),
         "rows": rows,
     }
     return {
+        "mode": mode,
         "features": features,
         "counts": bin_counts.astype(np.int64),
         "uv_bins": int(bins),
-        "feature_dim": int(SURFACE_TEXTURE_V1_DIM),
+        "feature_dim": int(feature_dim),
+        "lowrank_basis_count": int(LOWRANK_TEXTURE_BASIS_COUNT) if mode == "lowrank_v1" else 0,
         "summary": summary,
     }
 
@@ -726,12 +973,28 @@ class SurfaceResidualDecoder(torch.nn.Module):
         *,
         predict_confidence: bool = False,
         confidence_floor: float = 0.0,
+        output_mode: str = "direct",
+        lowrank_basis_count: int = 0,
+        lowrank_basis_feature_offset: int = -1,
+        lowrank_coeff_scale: float = 1.0,
     ):
         super().__init__()
         self.face_embedding = torch.nn.Embedding(int(face_count), int(embedding_dim))
         self.predict_confidence = bool(predict_confidence)
         self.confidence_floor = float(np.clip(float(confidence_floor), 0.0, 1.0))
-        out_dim = 4 if self.predict_confidence else 3
+        self.output_mode = str(output_mode)
+        self.lowrank_basis_count = int(lowrank_basis_count)
+        self.lowrank_basis_feature_offset = int(lowrank_basis_feature_offset)
+        self.lowrank_coeff_scale = float(lowrank_coeff_scale)
+        if self.output_mode not in {"direct", "lowrank_texture"}:
+            raise ValueError(f"unknown decoder output mode={self.output_mode}")
+        if self.output_mode == "lowrank_texture":
+            if self.lowrank_basis_count <= 0 or self.lowrank_basis_feature_offset < 0:
+                raise ValueError("lowrank_texture output requires positive basis count and feature offset")
+            residual_out_dim = self.lowrank_basis_count
+        else:
+            residual_out_dim = 3
+        out_dim = residual_out_dim + (1 if self.predict_confidence else 0)
         dims = [int(feature_dim) + int(embedding_dim)] + [int(hidden_dim)] * int(layers) + [out_dim]
         blocks: list[torch.nn.Module] = []
         for a, b in zip(dims[:-2], dims[1:-1], strict=False):
@@ -743,11 +1006,21 @@ class SurfaceResidualDecoder(torch.nn.Module):
     def forward_with_confidence(self, face_idx: torch.Tensor, features: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         emb = self.face_embedding(face_idx)
         raw = self.net(torch.cat([features, emb], dim=1))
-        residual = torch.tanh(raw[:, :3]) * self.max_delta
+        if self.output_mode == "lowrank_texture":
+            coeff = torch.tanh(raw[:, : self.lowrank_basis_count]) * self.lowrank_coeff_scale
+            basis_start = int(self.lowrank_basis_feature_offset)
+            basis_end = basis_start + 3 * int(self.lowrank_basis_count)
+            basis = features[:, basis_start:basis_end].reshape(-1, int(self.lowrank_basis_count), 3)
+            residual = torch.sum(coeff[:, :, None] * basis, dim=1)
+            residual = torch.clamp(residual, -self.max_delta, self.max_delta)
+            confidence_index = self.lowrank_basis_count
+        else:
+            residual = torch.tanh(raw[:, :3]) * self.max_delta
+            confidence_index = 3
         if not self.predict_confidence:
             confidence = torch.ones((raw.shape[0],), dtype=residual.dtype, device=residual.device)
         else:
-            confidence = self.confidence_floor + (1.0 - self.confidence_floor) * torch.sigmoid(raw[:, 3])
+            confidence = self.confidence_floor + (1.0 - self.confidence_floor) * torch.sigmoid(raw[:, confidence_index])
         return residual * confidence[:, None], confidence
 
     def forward(self, face_idx: torch.Tensor, features: torch.Tensor) -> torch.Tensor:
@@ -830,7 +1103,9 @@ def _sample_batch(
     )
     target = np.stack([residual[0, ys, xs], residual[1, ys, xs], residual[2, ys, xs]], axis=1).astype(np.float32)
     confidence_mode = str(confidence_target_mode)
-    if confidence_mode == "gain_soft" and "teacher_gain_l1" in z:
+    if confidence_mode == "texture_direction":
+        confidence_target = _surface_texture_reliability_from_rows(features, surface_feature_texture)
+    elif confidence_mode == "gain_soft" and "teacher_gain_l1" in z:
         gain = np.asarray(z["teacher_gain_l1"], dtype=np.float32)[ys, xs]
         confidence_target = np.clip(
             (gain - float(confidence_gain_floor)) / max(float(confidence_gain_scale), 1.0e-6),
@@ -1598,6 +1873,8 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"source `{payload.get('surface_feature_texture', {}).get('source', 'none')}`",
         f"- surface texture coverage: face `{payload.get('surface_feature_texture', {}).get('covered_face_fraction', 0.0):.6f}`, "
         f"bin `{payload.get('surface_feature_texture', {}).get('covered_bin_fraction', 0.0):.6f}`",
+        f"- decoder output mode: `{payload['train'].get('decoder_output_mode', 'direct')}` "
+        f"basis `{payload['train'].get('lowrank_basis_count', 0)}`",
         f"- calibration views: `{payload.get('calibration_views', 0)}`",
         f"- calibration face reliability: `{payload.get('calibration_face_reliability', {}).get('enabled', False)}`",
         f"- confidence head: `{payload['train'].get('confidence_head', False)}`",
@@ -1719,13 +1996,19 @@ def main() -> int:
     parser.add_argument("--confidence_head", action="store_true")
     parser.add_argument("--confidence_floor", type=float, default=0.0)
     parser.add_argument("--confidence_loss_weight", type=float, default=0.10)
-    parser.add_argument("--confidence_target_mode", choices=["mask", "gain_binary", "gain_soft"], default="mask")
+    parser.add_argument(
+        "--confidence_target_mode",
+        choices=["mask", "gain_binary", "gain_soft", "texture_direction"],
+        default="mask",
+    )
     parser.add_argument("--confidence_gain_floor", type=float, default=0.0)
     parser.add_argument("--confidence_gain_scale", type=float, default=0.03)
     parser.add_argument("--feature_mode", choices=["basic", "fourier_v1"], default="basic")
-    parser.add_argument("--surface_texture_mode", choices=["none", "v1"], default="none")
+    parser.add_argument("--surface_texture_mode", choices=["none", "v1", "v2", "lowrank_v1"], default="none")
     parser.add_argument("--surface_texture_uv_bins", type=int, default=4)
     parser.add_argument("--surface_texture_max_samples_per_view", type=int, default=250000)
+    parser.add_argument("--decoder_output_mode", choices=["direct", "lowrank_texture"], default="direct")
+    parser.add_argument("--lowrank_coeff_scale", type=float, default=1.0)
     parser.add_argument("--image_loss_every", type=int, default=4)
     parser.add_argument("--image_loss_stride", type=int, default=12)
     parser.add_argument("--image_loss_weight", type=float, default=0.35)
@@ -1807,20 +2090,28 @@ def main() -> int:
         raise RuntimeError("no candidate faces selected")
     surface_feature_texture: dict[str, Any] | None = None
     surface_texture_payload: dict[str, Any] = {"enabled": False, "mode": str(args.surface_texture_mode)}
-    if str(args.surface_texture_mode) == "v1":
+    if str(args.surface_texture_mode) in {"v1", "v2", "lowrank_v1"}:
         if init_checkpoint is not None and init_checkpoint.get("surface_feature_texture") is not None:
             surface_feature_texture = init_checkpoint["surface_feature_texture"]
+            loaded_mode = str(surface_feature_texture.get("mode", surface_feature_texture.get("summary", {}).get("mode", "v1")))
+            if loaded_mode != str(args.surface_texture_mode):
+                raise ValueError(
+                    f"--surface_texture_mode {args.surface_texture_mode} requested, but checkpoint contains {loaded_mode}"
+                )
             surface_texture_payload = {
                 **dict(surface_feature_texture.get("summary", {})),
                 "source": "init_checkpoint",
                 "checkpoint": str(args.init_checkpoint),
             }
         elif init_checkpoint is not None:
-            raise ValueError("--surface_texture_mode v1 requires a v1 checkpoint or no --init_checkpoint")
+            raise ValueError(
+                f"--surface_texture_mode {args.surface_texture_mode} requires a matching checkpoint or no --init_checkpoint"
+            )
         else:
             surface_feature_texture = _fit_surface_feature_texture(
                 fit_paths,
                 candidate_faces,
+                mode=str(args.surface_texture_mode),
                 residual_rgb_key=str(args.residual_rgb_key),
                 residual_l1_key=str(args.residual_l1_key),
                 min_l1=float(args.min_l1),
@@ -1841,13 +2132,26 @@ def main() -> int:
                 "source": "train_fit_evidence",
             }
             np.savez_compressed(
-                output_dir / "surface_feature_texture_v1.npz",
+                output_dir / f"surface_feature_texture_{str(args.surface_texture_mode)}.npz",
                 candidate_faces=candidate_faces.astype(np.int64),
                 features=np.asarray(surface_feature_texture["features"], dtype=np.float32),
                 counts=np.asarray(surface_feature_texture["counts"], dtype=np.int64),
                 uv_bins=np.asarray([int(surface_feature_texture["uv_bins"])], dtype=np.int64),
+                feature_dim=np.asarray([int(surface_feature_texture["feature_dim"])], dtype=np.int64),
+                mode=np.asarray([str(args.surface_texture_mode)]),
+                lowrank_basis_count=np.asarray(
+                    [LOWRANK_TEXTURE_BASIS_COUNT if str(args.surface_texture_mode) == "lowrank_v1" else 0],
+                    dtype=np.int64,
+                ),
             )
+    if str(args.decoder_output_mode) == "lowrank_texture" and str(args.surface_texture_mode) != "lowrank_v1":
+        raise ValueError("--decoder_output_mode lowrank_texture requires --surface_texture_mode lowrank_v1")
     feature_dim = _feature_dim(str(args.feature_mode), surface_feature_texture)
+    lowrank_basis_feature_offset = (
+        _base_feature_dim(str(args.feature_mode)) + LOWRANK_TEXTURE_BASIS_OFFSET
+        if str(args.decoder_output_mode) == "lowrank_texture"
+        else -1
+    )
     model = SurfaceResidualDecoder(
         int(candidate_faces.size),
         feature_dim=int(feature_dim),
@@ -1857,6 +2161,10 @@ def main() -> int:
         max_delta=float(args.max_delta),
         predict_confidence=bool(args.confidence_head),
         confidence_floor=float(args.confidence_floor),
+        output_mode=str(args.decoder_output_mode),
+        lowrank_basis_count=LOWRANK_TEXTURE_BASIS_COUNT if str(args.decoder_output_mode) == "lowrank_texture" else 0,
+        lowrank_basis_feature_offset=int(lowrank_basis_feature_offset),
+        lowrank_coeff_scale=float(args.lowrank_coeff_scale),
     ).to(device)
     if init_checkpoint is not None:
         model.load_state_dict(init_checkpoint["model_state_dict"], strict=True)
@@ -2181,6 +2489,12 @@ def main() -> int:
             "feature_mode": str(args.feature_mode),
             "feature_dim": int(feature_dim),
             "base_feature_dim": int(_base_feature_dim(str(args.feature_mode))),
+            "decoder_output_mode": str(args.decoder_output_mode),
+            "lowrank_basis_count": int(LOWRANK_TEXTURE_BASIS_COUNT)
+            if str(args.decoder_output_mode) == "lowrank_texture"
+            else 0,
+            "lowrank_basis_feature_offset": int(lowrank_basis_feature_offset),
+            "lowrank_coeff_scale": float(args.lowrank_coeff_scale),
             "surface_texture_mode": str(args.surface_texture_mode),
             "surface_texture_uv_bins": int(args.surface_texture_uv_bins),
             "surface_texture_max_samples_per_view": int(args.surface_texture_max_samples_per_view),

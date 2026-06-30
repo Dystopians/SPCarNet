@@ -1,0 +1,150 @@
+{
+  "schema": "spcarnet_v169_lowrank_texture_summary_v1",
+  "date": "2026-06-30",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "phasej_flowers_reference": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "code_path": "scripts/car_model/train_perceptual_surface_residual_decoder.py",
+  "method_changes": [
+    "v281 fixed the surface_feature_texture mode interface and added texture-direction confidence targets for surface texture v2.",
+    "v282 adds surface_texture_mode=lowrank_v1, a train-fit-only face x UV-bin low-rank teacher residual texture.",
+    "v282 adds decoder_output_mode=lowrank_texture, where the decoder predicts coefficients over baked surface residual bases instead of unconstrained RGB residuals.",
+    "v282 stores mean residual basis plus three PCA residual bases per face/UV bin, with vectorized covariance eigendecomposition and target-free reliability statistics."
+  ],
+  "artifacts": {
+    "v281a_audit": "outputs/carnet/spcarnet_v281_texture_direction_20260630/v281a_surface_texture_v2_direction_confidence_targetexact/v180_perceptual_surface_decoder_audit.json",
+    "v282a_audit": "outputs/carnet/spcarnet_v282_lowrank_texture_20260630/v282a_lowrank_confidence_policyauto/v180_perceptual_surface_decoder_audit.json",
+    "v282b_audit": "outputs/carnet/spcarnet_v282_lowrank_texture_20260630/v282b_lowrank_no_confidence_ablation_policyauto/v180_perceptual_surface_decoder_audit.json",
+    "v282b_alpha025_audit": "outputs/carnet/spcarnet_v282_lowrank_texture_20260630/v282b_fixed_alpha025_exact/v180_perceptual_surface_decoder_audit.json",
+    "v282b_alpha050_audit": "outputs/carnet/spcarnet_v282_lowrank_texture_20260630/v282b_fixed_alpha050_exact/v180_perceptual_surface_decoder_audit.json",
+    "v282_report": "docs/car_model/6-30-v281-v282-LowRankTexture-v169-Gate-Log.md"
+  },
+  "results": [
+    {
+      "run": "v281a_surface_texture_v2_direction_confidence",
+      "surface_texture_mode": "v2",
+      "decoder_output_mode": "direct",
+      "policy_val_gain": {
+        "psnr": 0.011055,
+        "ssim": 0.000251,
+        "lpips": 0.000209
+      },
+      "target_exact_candidate": {
+        "psnr": 19.832653,
+        "ssim": 0.619412,
+        "lpips": 0.180652
+      },
+      "target_exact_gain_vs_parent": {
+        "psnr": 0.000599,
+        "ssim": -0.000498,
+        "lpips": -0.000317
+      },
+      "phasej_psnr_gap": -0.471705,
+      "phasej_gate_pass": false,
+      "no_target_gt_audit_pass": true
+    },
+    {
+      "run": "v282a_lowrank_confidence_alpha075",
+      "surface_texture_mode": "lowrank_v1",
+      "decoder_output_mode": "lowrank_texture",
+      "policy_val_gain": {
+        "psnr": 0.027855,
+        "ssim": 0.000774,
+        "lpips": 0.000903
+      },
+      "target_exact_candidate": {
+        "psnr": 19.842574,
+        "ssim": 0.6189,
+        "lpips": 0.180701
+      },
+      "target_exact_gain_vs_parent": {
+        "psnr": 0.01052,
+        "ssim": -0.00101,
+        "lpips": -0.000366
+      },
+      "phasej_psnr_gap": -0.461784,
+      "phasej_gate_pass": false,
+      "no_target_gt_audit_pass": true
+    },
+    {
+      "run": "v282b_lowrank_no_confidence_alpha075",
+      "surface_texture_mode": "lowrank_v1",
+      "decoder_output_mode": "lowrank_texture",
+      "policy_val_gain": {
+        "psnr": 0.030253,
+        "ssim": 0.000819,
+        "lpips": 0.001119
+      },
+      "target_exact_candidate": {
+        "psnr": 19.847127,
+        "ssim": 0.619016,
+        "lpips": 0.180564
+      },
+      "target_exact_gain_vs_parent": {
+        "psnr": 0.015073,
+        "ssim": -0.000895,
+        "lpips": -0.000229
+      },
+      "phasej_psnr_gap": -0.457231,
+      "phasej_gate_pass": false,
+      "no_target_gt_audit_pass": true
+    },
+    {
+      "run": "v282b_lowrank_no_confidence_fixed_alpha025",
+      "surface_texture_mode": "lowrank_v1",
+      "decoder_output_mode": "lowrank_texture",
+      "policy_val_gain": {
+        "psnr": 0.015793,
+        "ssim": 0.000501,
+        "lpips": 0.000282
+      },
+      "target_exact_candidate": {
+        "psnr": 19.845635,
+        "ssim": 0.620099,
+        "lpips": 0.180523
+      },
+      "target_exact_gain_vs_parent": {
+        "psnr": 0.013581,
+        "ssim": 0.000188,
+        "lpips": -0.000188
+      },
+      "phasej_psnr_gap": -0.458723,
+      "phasej_gate_pass": false,
+      "no_target_gt_audit_pass": true
+    },
+    {
+      "run": "v282b_lowrank_no_confidence_fixed_alpha050",
+      "surface_texture_mode": "lowrank_v1",
+      "decoder_output_mode": "lowrank_texture",
+      "policy_val_gain": {
+        "psnr": 0.025885,
+        "ssim": 0.000767,
+        "lpips": 0.00067
+      },
+      "target_exact_candidate": {
+        "psnr": 19.850666,
+        "ssim": 0.619745,
+        "lpips": 0.18062
+      },
+      "target_exact_gain_vs_parent": {
+        "psnr": 0.018612,
+        "ssim": -0.000165,
+        "lpips": -0.000286
+      },
+      "phasej_psnr_gap": -0.453692,
+      "phasej_gate_pass": false,
+      "no_target_gt_audit_pass": true
+    }
+  ],
+  "verdict": {
+    "status": "NOT COMPLETE",
+    "full9_allowed": false,
+    "best_v282_exact_psnr": 19.850666,
+    "best_v282_phasej_psnr_gap": -0.453692,
+    "main_bottleneck": "The low-rank baked carrier transfers more teacher residual than v281 and improves policy-val strongly, but target exact remains far below the Phase-J flowers PSNR gate and LPIPS/SSIM trade off with alpha.",
+    "next_recommended_direction": "Stop low-rank/alpha variants as the main route; move to a stronger coherent view-dependent deferred surface renderer or patch-level teacher supervision with target-free uncertainty."
+  }
+}

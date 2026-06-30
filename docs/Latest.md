@@ -2,6 +2,35 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 v281-v282 Low-Rank Teacher Residual Texture Update
+
+新增日志：`docs/car_model/6-30-v281-v282-LowRankTexture-v169-Gate-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v281_v282_lowrank_texture_summary.json`。
+
+这轮严格参考 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md`：先做 flowers policy-val + target exact gate；未过 Phase-J flowers all-axis gate 前不启动 full9。
+
+代码层面新增真实 representation-level 方法改动：
+
+- 修复 `surface_feature_texture` runtime payload 未保存 `mode` 的接口问题，避免 v2/lowrank reliability 在运行时退回 v1 逻辑。
+- 新增 `--surface_texture_mode lowrank_v1`：为每个 train-fit face/UV bin 烘焙 mean teacher residual basis + 3 个 PCA residual basis。
+- 新增 `--decoder_output_mode lowrank_texture`：decoder 不再直接输出 unconstrained RGB residual，而是预测 baked surface basis 的混合权重。
+- PCA/covariance fitting 已向量化，可在 flowers 65536 faces / 1048576 bins 规模运行。
+
+关键结果：
+
+| run | policy gains | target gains | target candidate | Phase-J PSNR gap | verdict |
+|---|---:|---:|---:|---:|---|
+| v281a texture-direction confidence | +0.011055 / +0.000251 / +0.000209 | +0.000599 / -0.000498 / -0.000317 | 19.832653 / 0.619412 / 0.180652 | -0.471705 | fail |
+| v282a lowrank + confidence | +0.027855 / +0.000774 / +0.000903 | +0.010520 / -0.001010 / -0.000366 | 19.842574 / 0.618900 / 0.180701 | -0.461784 | fail |
+| v282b lowrank no confidence | +0.030253 / +0.000819 / +0.001119 | +0.015073 / -0.000895 / -0.000229 | 19.847127 / 0.619016 / 0.180564 | -0.457231 | fail |
+| v282b fixed alpha 0.25 | +0.015793 / +0.000501 / +0.000282 | +0.013581 / +0.000188 / -0.000188 | 19.845635 / 0.620099 / 0.180523 | -0.458723 | fail |
+| v282b fixed alpha 0.50 | +0.025885 / +0.000767 / +0.000670 | +0.018612 / -0.000165 / -0.000286 | 19.850666 / 0.619745 / 0.180620 | -0.453692 | fail |
+
+no-target-GT audit 全部通过；所有中程训练/评估使用 W&B offline。v282 相比 v281 明显增强 policy-val 和 target PSNR，但 best target PSNR 仍只有 `19.850666`，低 Phase-J flowers `20.304358` 约 `0.453692`。固定 alpha 诊断说明：降低 alpha 可以让 target SSIM 转正，但 LPIPS 仍负；提高 alpha 提升 PSNR 但伤 SSIM/LPIPS。
+
+直接结论：v282 是一次真实的 v169 首选 low-rank teacher residual texture 革新，但不是 paper-level 突破。当前 blocker 不是单纯 alpha/confidence，而是 face/UV baked low-rank carrier 可传递的 Phase-J teacher correction 太弱、跨 target 视角不够 view-coherent。状态仍是 `NOT COMPLETE`；full9 继续阻塞。下一步应转向 coherent view-dependent deferred surface renderer 或 patch/gradient teacher supervision，而不是继续 lowrank/alpha variants。
+
 ## 2026-06-30 v279-v280 Surface Feature Texture Update
 
 新增日志：`docs/car_model/6-30-v279-v280-SurfaceFeatureTexture-v169-Gate-Log.md`。

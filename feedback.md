@@ -2,6 +2,34 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-30, v281-v282:
+
+The newest branch is **Phase-J low-rank teacher residual texture + coefficient decoder** in `scripts/car_model/train_perceptual_surface_residual_decoder.py`. New files:
+
+- `docs/car_model/6-30-v281-v282-LowRankTexture-v169-Gate-Log.md`
+- `docs/car_model/results/v281_v282_lowrank_texture_summary.json`
+
+Important new facts:
+
+- A runtime interface bug was fixed: fitted `surface_feature_texture` now preserves `mode`, so v2/lowrank reliability no longer risks falling back to v1 reliability logic.
+- v282 adds `--surface_texture_mode lowrank_v1`: each train-fit face/UV bin stores mean teacher residual plus three PCA residual bases.
+- v282 adds `--decoder_output_mode lowrank_texture`: the decoder predicts mixture coefficients over baked surface bases instead of unconstrained RGB residual.
+- PCA/covariance fitting is vectorized for the 65536-face flowers scale.
+- v282 texture coverage is about `0.998` covered faces and `0.407` covered UV bins.
+- v282a/b used W&B offline, stripped target apply, and target/test GT only after apply for evaluation.
+
+Effective results:
+
+- v281a target: `19.832653 / 0.619412 / 0.180652`, gains `+0.000599 / -0.000498 / -0.000317`.
+- v282a lowrank + confidence target: `19.842574 / 0.618900 / 0.180701`, gains `+0.010520 / -0.001010 / -0.000366`.
+- v282b lowrank no-confidence target: `19.847127 / 0.619016 / 0.180564`, gains `+0.015073 / -0.000895 / -0.000229`.
+- v282b fixed alpha 0.25 target: `19.845635 / 0.620099 / 0.180523`, gains `+0.013581 / +0.000188 / -0.000188`.
+- v282b fixed alpha 0.50 target: `19.850666 / 0.619745 / 0.180620`, gains `+0.018612 / -0.000165 / -0.000286`.
+
+Current direct verdict:
+
+> v282 is a real v169-style representation upgrade and substantially improves policy-val plus target PSNR over v281. It still fails the Phase-J flowers PSNR gate by about `0.453692` at best. Fixed-alpha diagnostics show the issue is not just alpha: lower alpha recovers SSIM but still hurts LPIPS and remains far below Phase-J PSNR. Do not promote to full9. Do not continue lowrank/alpha variants as the main route. The next model needs a stronger coherent view-dependent deferred surface renderer or patch/gradient teacher supervision with target-free uncertainty.
+
 Latest update on 2026-06-30, v279-v280:
 
 The newest branch is **train-fit baked surface feature texture + neural residual decoder** in `scripts/car_model/train_perceptual_surface_residual_decoder.py`. New files:
