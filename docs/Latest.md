@@ -654,3 +654,43 @@ Final status: NOT COMPLETE.
 ```
 
 The next step should not be another alpha grid. The residual bank needs a target-blind perceptual confidence/reliability predictor that suppresses source/bin residuals with weak multi-source agreement, high residual variance, or poor edge/teacher-gain consistency before target apply.
+
+## 2026-06-29 Update: v255 Source-Agreement Confidence
+
+v255 tested the simplest version of that confidence idea: a target-blind soft
+agreement gate based on top-k source residual variance in the frozen v253b bank.
+
+Implementation update:
+
+```text
+scripts/car_model/train_surface_deferred_source_residual_renderer.py
+```
+
+New options:
+
+```text
+--source_agreement_mode {off,soft,hard}
+--source_agreement_beta
+--source_agreement_min_confidence
+```
+
+Result:
+
+| stage | alpha | PSNR gain | SSIM gain | LPIPS gain | mean confidence | all-axis |
+|---|---:|---:|---:|---:|---:|---|
+| policy-val | 0.046875 | +0.001655 | +0.000018 | +0.000001 | 0.655315 | pass |
+| target exact | 0.046875 | +0.001395 | +0.000036 | -0.000008 | 0.651719 | fail |
+
+Artifacts:
+
+```text
+docs/car_model/6-29-v255-SourceAgreementConfidence-Log.md
+docs/car_model/results/v255_source_agreement_confidence_summary.json
+/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v255a_loadedbank_soft_agreement_targetexact/v253_deferred_source_renderer_audit.json
+/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v255a_loadedbank_soft_agreement_targetexact/wandb/offline-run-20260629_200707-e3wmgpr9
+```
+
+Verdict: source residual variance alone is not a sufficient perceptual
+reliability signal. It improves target PSNR/SSIM but makes target LPIPS more
+negative than v253b/v253d. The next model should use a learned/calibrated
+perceptual reliability predictor, not just hand-designed agreement confidence.

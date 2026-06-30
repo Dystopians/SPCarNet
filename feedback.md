@@ -724,6 +724,41 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-06-29 v255 Source-Agreement Confidence Addendum
+
+v255 tested whether the v253 LPIPS failure can be fixed by a simple target-blind
+source agreement confidence:
+
+```text
+scripts/car_model/train_surface_deferred_source_residual_renderer.py
+--source_agreement_mode soft
+--source_agreement_beta 0.25
+```
+
+Summary artifact:
+
+```text
+docs/car_model/results/v255_source_agreement_confidence_summary.json
+docs/car_model/6-29-v255-SourceAgreementConfidence-Log.md
+```
+
+Result:
+
+| stage | alpha | PSNR gain | SSIM gain | LPIPS gain | mean confidence | all-axis |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| policy-val | 0.046875 | +0.001655 | +0.000018 | +0.000001 | 0.655315 | pass |
+| target exact | 0.046875 | +0.001395 | +0.000036 | -0.000008 | 0.651719 | fail |
+
+Lesson:
+
+The source residual variance gate attenuates residuals, but it does not solve
+perceptual transfer. It even makes target LPIPS more negative than v253b/v253d
+while preserving PSNR/SSIM gains. Therefore the next model should not repeat a
+hand-designed agreement scalar. It should learn or calibrate perceptual
+reliability from held-out policy-val evidence, using richer features:
+multi-source agreement, source view diversity, residual variance, edge support,
+teacher-gain stability, normal/view consistency, and parent-color consistency.
+
 # 2026-06-29 Residual Projection Audit Addendum
 
 New tool:

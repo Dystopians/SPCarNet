@@ -1,0 +1,41 @@
+{
+  "schema": "spcarnet_v255_source_agreement_confidence_summary_v1",
+  "date": "2026-06-29",
+  "base_bank": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v253b_source_feature_deferred_targetexact/v253_deferred_source_renderer_bank.npz",
+  "script": "scripts/car_model/train_surface_deferred_source_residual_renderer.py",
+  "method_change": {
+    "name": "source agreement confidence",
+    "mode": "soft",
+    "beta": 0.25,
+    "description": "Use target-blind top-k source residual variance per face/UV bin to softly attenuate residuals with weak multi-source agreement."
+  },
+  "artifacts": {
+    "json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v255a_loadedbank_soft_agreement_targetexact/v253_deferred_source_renderer_audit.json",
+    "md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v255a_loadedbank_soft_agreement_targetexact/v253_deferred_source_renderer_audit.md",
+    "target_renders": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v255a_loadedbank_soft_agreement_targetexact/target_exact_fixed_policy",
+    "wandb": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v255a_loadedbank_soft_agreement_targetexact/wandb/offline-run-20260629_200707-e3wmgpr9"
+  },
+  "policy_val": {
+    "selected_alpha": 0.046875,
+    "psnr_gain": 0.0016553964601841997,
+    "ssim_gain": 0.000017931063969930012,
+    "lpips_gain": 0.0000009095917145411173,
+    "ssim_tail_cvar": -0.0000009834766387939453,
+    "lpips_tail_cvar": -0.00006993860006332397,
+    "mean_confidence": 0.6553148279587427,
+    "all_axis_pass": true
+  },
+  "target_exact": {
+    "candidate_psnr": 19.833448952878857,
+    "candidate_ssim": 0.6199461262334477,
+    "candidate_lpips": 0.18034307997335086,
+    "psnr_gain": 0.001395074431389047,
+    "ssim_gain": 0.00003571537407961759,
+    "lpips_gain": -0.000008213926445354115,
+    "lpips_positive_view_fraction": 0.45454545454545453,
+    "mean_confidence": 0.6517189009623094,
+    "changed_fraction": 0.00837068203381059,
+    "pass_vs_parent_all_axis": false
+  },
+  "verdict": "Soft source-agreement confidence does not solve the LPIPS transfer bottleneck. It attenuates residuals, but target LPIPS becomes more negative than v253b/v253d."
+}

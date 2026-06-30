@@ -436,6 +436,9 @@ def _predict_delta(
     count_gamma: float,
     gain_beta: float,
     confidence_tau: float,
+    source_agreement_mode: str,
+    source_agreement_beta: float,
+    source_agreement_min_confidence: float,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, float]]:
     parent = np.asarray(z["rgb_render"], dtype=np.float32)[:3]
     delta = np.zeros_like(parent, dtype=np.float32)
@@ -453,6 +456,7 @@ def _predict_delta(
     target_cam = _camera_dir(z).reshape(1, 1, 3)
     normal_map = np.asarray(z["normal"], dtype=np.float32)[:3]
     confidences: list[float] = []
+    agreement_confidences: list[float] = []
     active_count = 0
     for start in range(0, int(ys_all.size), int(chunk_size)):
         end = min(int(ys_all.size), start + int(chunk_size))
@@ -489,23 +493,43 @@ def _predict_delta(
         if not np.any(ok_rows):
             continue
         pred = np.sum(weights[:, :, None] * src_residual, axis=1) / np.maximum(denom[:, None], 1.0e-12)
+        source_agreement = np.ones_like(denom, dtype=np.float32)
+        if str(source_agreement_mode) != "off" and float(source_agreement_beta) > 0.0:
+            diff = src_residual - pred[:, None, :]
+            variance = np.sum(weights * np.sum(diff * diff, axis=2), axis=1) / np.maximum(denom, 1.0e-12)
+            pred_energy = np.sum(pred * pred, axis=1)
+            source_agreement = np.exp(
+                np.clip(-float(source_agreement_beta) * variance / np.maximum(pred_energy, 1.0e-8), -30.0, 0.0)
+            ).astype(np.float32)
+            if str(source_agreement_mode) == "hard":
+                ok_rows &= source_agreement >= float(source_agreement_min_confidence)
+            elif str(source_agreement_mode) != "soft":
+                raise ValueError(f"unsupported source_agreement_mode={source_agreement_mode}")
         if float(confidence_tau) > 0.0:
             confidence = denom / (denom + float(confidence_tau))
-            pred = pred * confidence[:, None]
         else:
             confidence = np.ones_like(denom, dtype=np.float32)
+        if str(source_agreement_mode) == "soft":
+            confidence = confidence * source_agreement
+        pred = pred * confidence[:, None]
         yy, xx = ys[ok_rows], xs[ok_rows]
         delta[:, yy, xx] = pred[ok_rows].T
         active[yy, xx] = True
         active_count += int(np.count_nonzero(ok_rows))
         confidences.append(confidence[ok_rows].astype(np.float32))
+        agreement_confidences.append(source_agreement[ok_rows].astype(np.float32))
     conf = np.concatenate(confidences) if confidences else np.zeros((0,), dtype=np.float32)
+    agreement_conf = (
+        np.concatenate(agreement_confidences) if agreement_confidences else np.zeros((0,), dtype=np.float32)
+    )
     return delta, active, {
         "surface_support_fraction": float(np.mean(support)),
         "active_fraction": float(active_count / max(int(support.size), 1)),
         "active_over_support_fraction": float(active_count / max(int(np.count_nonzero(support)), 1)),
         "mean_confidence": float(np.mean(conf)) if conf.size else 0.0,
         "p10_confidence": float(np.quantile(conf, 0.10)) if conf.size else 0.0,
+        "mean_source_agreement_confidence": float(np.mean(agreement_conf)) if agreement_conf.size else 0.0,
+        "p10_source_agreement_confidence": float(np.quantile(agreement_conf, 0.10)) if agreement_conf.size else 0.0,
     }
 
 
@@ -588,6 +612,9 @@ def _evaluate_policy_val(
     count_gamma: float,
     gain_beta: float,
     confidence_tau: float,
+    source_agreement_mode: str,
+    source_agreement_beta: float,
+    source_agreement_min_confidence: float,
     compute_lpips: bool,
     ssim_max_side: int,
     lpips_max_side: int,
@@ -618,6 +645,9 @@ def _evaluate_policy_val(
                 count_gamma=float(count_gamma),
                 gain_beta=float(gain_beta),
                 confidence_tau=float(confidence_tau),
+                source_agreement_mode=str(source_agreement_mode),
+                source_agreement_beta=float(source_agreement_beta),
+                source_agreement_min_confidence=float(source_agreement_min_confidence),
             )
             raw_cache.append((path, parent, gt, delta, active, support_stats))
             full_mask = _surface_support_mask(z, candidate_faces, min_alpha=float(min_alpha))
@@ -759,6 +789,9 @@ def _target_no_gt_preview(
     count_gamma: float,
     gain_beta: float,
     confidence_tau: float,
+    source_agreement_mode: str,
+    source_agreement_beta: float,
+    source_agreement_min_confidence: float,
     alpha: float,
     max_views: int,
     output_dir: Path,
@@ -786,6 +819,9 @@ def _target_no_gt_preview(
                 count_gamma=float(count_gamma),
                 gain_beta=float(gain_beta),
                 confidence_tau=float(confidence_tau),
+                source_agreement_mode=str(source_agreement_mode),
+                source_agreement_beta=float(source_agreement_beta),
+                source_agreement_min_confidence=float(source_agreement_min_confidence),
             )
             out = np.clip(parent + float(alpha) * delta, 0.0, 1.0)
             save_image_chw(preview_dir / f"{path.stem}.png", out)
@@ -824,6 +860,9 @@ def _target_exact_eval(
     count_gamma: float,
     gain_beta: float,
     confidence_tau: float,
+    source_agreement_mode: str,
+    source_agreement_beta: float,
+    source_agreement_min_confidence: float,
     alpha: float,
     compute_lpips: bool,
     ssim_max_side: int,
@@ -857,6 +896,9 @@ def _target_exact_eval(
                 count_gamma=float(count_gamma),
                 gain_beta=float(gain_beta),
                 confidence_tau=float(confidence_tau),
+                source_agreement_mode=str(source_agreement_mode),
+                source_agreement_beta=float(source_agreement_beta),
+                source_agreement_min_confidence=float(source_agreement_min_confidence),
             )
             candidate = np.clip(parent + float(alpha) * delta, 0.0, 1.0)
         with np.load(eval_paths[stem], allow_pickle=False) as z_eval:
@@ -1080,6 +1122,9 @@ def main() -> int:
     parser.add_argument("--count_gamma", type=float, default=0.25)
     parser.add_argument("--gain_beta", type=float, default=1.0)
     parser.add_argument("--confidence_tau", type=float, default=0.0)
+    parser.add_argument("--source_agreement_mode", choices=["off", "soft", "hard"], default="off")
+    parser.add_argument("--source_agreement_beta", type=float, default=0.0)
+    parser.add_argument("--source_agreement_min_confidence", type=float, default=0.25)
     parser.add_argument("--bank_residual_transform_mode", choices=["raw_rgb", "luma_only", "chroma_shrink"], default="raw_rgb")
     parser.add_argument("--bank_residual_chroma_shrink", type=float, default=0.25)
     parser.add_argument("--alpha_grid", default="0,0.03125,0.0625,0.09375,0.125,0.1875,0.25,0.375,0.5,0.75,1")
@@ -1178,6 +1223,9 @@ def main() -> int:
         count_gamma=float(args.count_gamma),
         gain_beta=float(args.gain_beta),
         confidence_tau=float(args.confidence_tau),
+        source_agreement_mode=str(args.source_agreement_mode),
+        source_agreement_beta=float(args.source_agreement_beta),
+        source_agreement_min_confidence=float(args.source_agreement_min_confidence),
         compute_lpips=bool(args.compute_lpips),
         ssim_max_side=int(args.policy_val_ssim_max_side),
         lpips_max_side=int(args.policy_val_lpips_max_side),
@@ -1203,6 +1251,9 @@ def main() -> int:
             count_gamma=float(args.count_gamma),
             gain_beta=float(args.gain_beta),
             confidence_tau=float(args.confidence_tau),
+            source_agreement_mode=str(args.source_agreement_mode),
+            source_agreement_beta=float(args.source_agreement_beta),
+            source_agreement_min_confidence=float(args.source_agreement_min_confidence),
             alpha=float(selected_alpha),
             max_views=int(args.target_preview_views),
             output_dir=output_dir,
@@ -1227,6 +1278,9 @@ def main() -> int:
             count_gamma=float(args.count_gamma),
             gain_beta=float(args.gain_beta),
             confidence_tau=float(args.confidence_tau),
+            source_agreement_mode=str(args.source_agreement_mode),
+            source_agreement_beta=float(args.source_agreement_beta),
+            source_agreement_min_confidence=float(args.source_agreement_min_confidence),
             alpha=float(selected_alpha),
             compute_lpips=bool(args.compute_lpips),
             ssim_max_side=int(args.policy_val_ssim_max_side),
