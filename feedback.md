@@ -2,7 +2,46 @@
 
 Date: 2026-06-28
 
-Latest update on 2026-06-30, v290-v292:
+Latest update on 2026-06-30, v293:
+
+The newest branch is **TextureBinLatent PatchViewMoE** in
+`scripts/car_model/train_perceptual_surface_residual_decoder.py`. New files:
+
+- `docs/car_model/6-30-v293-TextureLatent-v169-Gate-Log.md`
+- `docs/car_model/results/v293_texture_latent_summary.json`
+
+Important new facts:
+
+- v293 adds a learned neural texture latent per face/UV bin.
+- The latent is used in train, image proxy loss, policy-val, best-render
+  writing, and target no-GT exact apply.
+- v293 also adds `--allow_partial_init_checkpoint`, which can warm-start older
+  PatchViewMoE checkpoints by expanding `net.0.weight` and zero-initializing the
+  new latent input columns.
+- v293a trains from scratch with latent dim 8.
+- v293b warm-starts from v290 PatchViewMoE with latent dim 4.
+
+Effective results:
+
+- v292d prior balanced frontier: `19.851452 / 0.620343 / 0.180212`, gains
+  `+0.019398 / +0.000432 / +0.000123`.
+- v293a target exact: `19.853420 / 0.620328 / 0.180312`, gains
+  `+0.021366 / +0.000418 / +0.000022`, Phase-J PSNR gap `-0.450938`.
+- v293b target exact: `19.852988 / 0.620345 / 0.180246`, gains
+  `+0.020934 / +0.000435 / +0.000088`, Phase-J PSNR gap `-0.451370`.
+
+Current direct verdict:
+
+> v293 is a real representation-capacity upgrade and gives the best target PSNR
+> so far, but it does not close the paper blocker. The learned texture latent
+> improves PSNR while increasing target perceptual tail risk. v293a is the best
+> PSNR frontier; v292d remains the better balanced frontier because v293 LPIPS is
+> worse. Full9 remains blocked by the v169 flowers Phase-J gate. The next model
+> should not scan latent dimension as the main route; it should keep the latent
+> carrier and add target-blind perceptual/tail reliability so the extra capacity
+> is suppressed on views that cause negative SSIM/LPIPS tails.
+
+Previous update on 2026-06-30, v290-v292:
 
 The newest branch is **PatchViewMoE surface decoder with target-blind
 view-support gating** in `scripts/car_model/train_perceptual_surface_residual_decoder.py`.

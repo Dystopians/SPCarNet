@@ -2,6 +2,47 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 Topline: v293 TextureBinLatent PatchViewMoE
+
+Newest method log:
+
+```text
+docs/car_model/6-30-v293-TextureLatent-v169-Gate-Log.md
+docs/car_model/results/v293_texture_latent_summary.json
+```
+
+Implementation:
+
+```text
+scripts/car_model/train_perceptual_surface_residual_decoder.py
+```
+
+New representation-level change:
+
+- per face/UV-bin trainable neural texture latent;
+- latent is used consistently in train batches, image proxy loss, policy-val,
+  best render writing, and target no-GT apply;
+- `--allow_partial_init_checkpoint` can warm-start old PatchViewMoE checkpoints
+  by expanding the first MLP input layer.
+
+Key results:
+
+| run | target PSNR | target SSIM | target LPIPS | PSNR gain | SSIM gain | LPIPS gain | verdict |
+|---|---:|---:|---:|---:|---:|---:|---|
+| v292d prior balanced frontier | 19.851452 | 0.620343 | 0.180212 | +0.019398 | +0.000432 | +0.000123 | balanced frontier |
+| v293a latent dim 8 scratch | **19.853420** | 0.620328 | 0.180312 | **+0.021366** | +0.000418 | +0.000022 | best PSNR |
+| v293b latent dim 4 warm-start | 19.852988 | **0.620345** | 0.180246 | +0.020934 | **+0.000435** | +0.000088 | warm-start validated |
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+v293 is real progress on carrier capacity and PSNR. It still does not beat
+v292d all-axis because LPIPS is worse, and it remains about `0.45 dB` below the
+Phase-J flowers PSNR gate. Full9 remains blocked.
+
 ## 2026-06-30 Topline: v292d PatchViewMoE + View-Support Frontier
 
 Current newest method log:

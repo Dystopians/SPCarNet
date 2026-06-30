@@ -1,0 +1,85 @@
+{
+  "date": "2026-06-30",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "script": "scripts/car_model/train_perceptual_surface_residual_decoder.py",
+  "method": "TextureBinLatent PatchViewMoE",
+  "phasej_flowers_gate": {
+    "psnr_gt": 20.304358,
+    "ssim_gt": 0.55777,
+    "lpips_lt": 0.329222
+  },
+  "baseline_frontier_before_v293": {
+    "name": "v292d_v290a_raw_viewsupport_floor035",
+    "target_metrics": [19.85145235125944, 0.6203426745804873, 0.18021195381879807],
+    "target_gains_vs_parent": [0.019398472811975962, 0.0004322637211192738, 0.0001229122281074524],
+    "phasej_psnr_gap": -0.45290564874056116
+  },
+  "method_changes": [
+    "Added optional per face/UV-bin trainable texture latent embeddings to the SurfaceResidualDecoder input.",
+    "Threaded texture bin ids through train batches, image proxy loss, policy-val evaluation, best-render writing, and target no-GT exact apply.",
+    "Added --texture_latent_dim, --texture_latent_init_std, and --texture_latent_reg controls.",
+    "Added --allow_partial_init_checkpoint to warm-start from older checkpoints by expanding the first MLP input layer and zero-initializing new latent columns."
+  ],
+  "runs": [
+    {
+      "name": "v293a_texture_latent_dim8_from_scratch",
+      "output_dir": "outputs/carnet/spcarnet_v293_texture_latent_20260630/v293a_patch_view_moe_texture_latent_dim8_fixedviewsupport_20260630",
+      "wandb_offline": "outputs/carnet/spcarnet_v293_texture_latent_20260630/v293a_patch_view_moe_texture_latent_dim8_fixedviewsupport_20260630/wandb/offline-run-20260630_151008-51sked7q",
+      "texture_latent_dim": 8,
+      "texture_latent_count": 1048576,
+      "init": "from_scratch",
+      "policy_val_gains": [0.02877650692831975, 0.0009809881448745728, 0.000664574404557546],
+      "policy_val_tail_safe_pass": false,
+      "target_metrics": [19.853419513062263, 0.6203283897855065, 0.18031238527460533],
+      "target_gains_vs_parent": [0.02136563461480214, 0.00041797892613844437, 0.00002248077230020003],
+      "target_positive_view_fractions": [0.9545454545454546, 0.6818181818181818, 0.7272727272727273],
+      "target_tail_cvar_gains": [-0.00009768749233648084, -0.0004756450653076172, -0.002216895421346029],
+      "target_changed_fraction": 0.11267864843884769,
+      "phasej_psnr_gap": -0.4509384869377371,
+      "no_target_gt_audit_pass": true,
+      "phasej_gate_pass": false,
+      "lesson": "Highest PSNR so far, but target SSIM/LPIPS and tails are weaker than v292d."
+    },
+    {
+      "name": "v293b_warmstart_texture_latent_dim4",
+      "output_dir": "outputs/carnet/spcarnet_v293_texture_latent_20260630/v293b_warmstart_texture_latent_dim4_fixedviewsupport_20260630",
+      "wandb_offline": "outputs/carnet/spcarnet_v293_texture_latent_20260630/v293b_warmstart_texture_latent_dim4_fixedviewsupport_20260630/wandb/offline-run-20260630_151401-f8flt68s",
+      "texture_latent_dim": 4,
+      "texture_latent_count": 1048576,
+      "init": {
+        "mode": "partial_input_expansion",
+        "loaded": 11,
+        "expanded": [
+          {
+            "key": "net.0.weight",
+            "old_input_dim": 116,
+            "new_input_dim": 120,
+            "added_input_dim": 4
+          }
+        ],
+        "skipped": []
+      },
+      "policy_val_gains": [0.027931961537048206, 0.0009476741154988607, 0.0005186547835667928],
+      "policy_val_tail_safe_pass": false,
+      "target_metrics": [19.852987698014292, 0.6203450167720969, 0.18024642731655727],
+      "target_gains_vs_parent": [0.020933819566826436, 0.00043460591272874313, 0.00008843873034824024],
+      "target_positive_view_fractions": [0.9545454545454546, 0.6818181818181818, 0.6363636363636364],
+      "target_tail_cvar_gains": [0.00044177058844970435, -0.00037356217702229816, -0.0021099994579950967],
+      "target_changed_fraction": 0.11348143436260133,
+      "phasej_psnr_gap": -0.45137030198570827,
+      "no_target_gt_audit_pass": true,
+      "phasej_gate_pass": false,
+      "lesson": "Warm-start works and is more stable than from-scratch on SSIM, but LPIPS remains below v292d and tails remain unsafe."
+    }
+  ],
+  "verdict": {
+    "current_best_psnr": "v293a_texture_latent_dim8_from_scratch",
+    "current_best_balanced_frontier": "v292d_v290a_raw_viewsupport_floor035",
+    "real_method_change": true,
+    "beats_parent_all_axis": true,
+    "beats_v292d_all_axis": false,
+    "beats_phasej_flowers_all_axis": false,
+    "full9_allowed_by_v169_prompt": false,
+    "final_status": "NOT COMPLETE"
+  }
+}

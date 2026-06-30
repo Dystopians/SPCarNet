@@ -371,6 +371,25 @@ def _surface_uv_bin_ids(z: np.lib.npyio.NpzFile, ys: np.ndarray, xs: np.ndarray,
     return (u_bin * bins + v_bin).astype(np.int64)
 
 
+def _surface_texture_flat_bin_ids(
+    z: np.lib.npyio.NpzFile,
+    ys: np.ndarray,
+    xs: np.ndarray,
+    face_idx: np.ndarray,
+    surface_feature_texture: dict[str, Any] | None,
+) -> np.ndarray:
+    if not surface_feature_texture:
+        return np.zeros((int(ys.size),), dtype=np.int64)
+    uv_bins = int(surface_feature_texture.get("uv_bins", 1))
+    bin_count = max(1, uv_bins * uv_bins)
+    bin_ids = _surface_uv_bin_ids(z, ys, xs, uv_bins)
+    flat_ids = np.asarray(face_idx, dtype=np.int64) * bin_count + bin_ids
+    feature_rows = int(np.asarray(surface_feature_texture.get("features", np.zeros((1, 0))), dtype=np.float32).shape[0])
+    if feature_rows <= 0:
+        return np.zeros((int(ys.size),), dtype=np.int64)
+    return np.clip(flat_ids, 0, feature_rows - 1).astype(np.int64)
+
+
 def _lowrank_residual_basis(
     mean_rgb: np.ndarray,
     second_moment6: np.ndarray,
@@ -1078,9 +1097,21 @@ class SurfaceResidualDecoder(torch.nn.Module):
         lowrank_direct_scale: float = 0.25,
         moe_expert_count: int = 3,
         moe_direct_scale: float = 0.35,
+        texture_latent_count: int = 0,
+        texture_latent_dim: int = 0,
+        texture_latent_init_std: float = 0.02,
     ):
         super().__init__()
         self.face_embedding = torch.nn.Embedding(int(face_count), int(embedding_dim))
+        self.texture_latent_count = max(0, int(texture_latent_count))
+        self.texture_latent_dim = max(0, int(texture_latent_dim))
+        if self.texture_latent_dim > 0:
+            if self.texture_latent_count <= 0:
+                raise ValueError("texture latent embedding requires positive texture_latent_count")
+            self.texture_embedding = torch.nn.Embedding(self.texture_latent_count, self.texture_latent_dim)
+            torch.nn.init.normal_(self.texture_embedding.weight, mean=0.0, std=float(texture_latent_init_std))
+        else:
+            self.texture_embedding = None
         self.predict_confidence = bool(predict_confidence)
         self.confidence_floor = float(np.clip(float(confidence_floor), 0.0, 1.0))
         self.output_mode = str(output_mode)
@@ -1104,7 +1135,7 @@ class SurfaceResidualDecoder(torch.nn.Module):
         else:
             residual_out_dim = 3
         out_dim = residual_out_dim + (1 if self.predict_confidence else 0)
-        dims = [int(feature_dim) + int(embedding_dim)] + [int(hidden_dim)] * int(layers) + [out_dim]
+        dims = [int(feature_dim) + int(embedding_dim) + int(self.texture_latent_dim)] + [int(hidden_dim)] * int(layers) + [out_dim]
         blocks: list[torch.nn.Module] = []
         for a, b in zip(dims[:-2], dims[1:-1], strict=False):
             blocks += [torch.nn.Linear(a, b), torch.nn.SiLU()]
@@ -1112,9 +1143,20 @@ class SurfaceResidualDecoder(torch.nn.Module):
         self.net = torch.nn.Sequential(*blocks)
         self.max_delta = float(max_delta)
 
-    def forward_with_confidence(self, face_idx: torch.Tensor, features: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward_with_confidence(
+        self,
+        face_idx: torch.Tensor,
+        features: torch.Tensor,
+        texture_bin_idx: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         emb = self.face_embedding(face_idx)
-        raw = self.net(torch.cat([features, emb], dim=1))
+        inputs = [features, emb]
+        if self.texture_embedding is not None:
+            if texture_bin_idx is None:
+                raise ValueError("texture_bin_idx is required when texture_latent_dim > 0")
+            texture_bin_idx = torch.clamp(texture_bin_idx.long(), 0, self.texture_latent_count - 1)
+            inputs.append(torch.tanh(self.texture_embedding(texture_bin_idx)))
+        raw = self.net(torch.cat(inputs, dim=1))
         if self.output_mode in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}:
             coeff = torch.tanh(raw[:, : self.lowrank_basis_count]) * self.lowrank_coeff_scale
             basis_start = int(self.lowrank_basis_feature_offset)
@@ -1157,9 +1199,74 @@ class SurfaceResidualDecoder(torch.nn.Module):
             confidence = self.confidence_floor + (1.0 - self.confidence_floor) * torch.sigmoid(raw[:, confidence_index])
         return residual * confidence[:, None], confidence
 
-    def forward(self, face_idx: torch.Tensor, features: torch.Tensor) -> torch.Tensor:
-        residual, _confidence = self.forward_with_confidence(face_idx, features)
+    def forward(
+        self,
+        face_idx: torch.Tensor,
+        features: torch.Tensor,
+        texture_bin_idx: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        residual, _confidence = self.forward_with_confidence(face_idx, features, texture_bin_idx)
         return residual
+
+
+def _load_model_state_with_optional_input_expansion(
+    model: SurfaceResidualDecoder,
+    checkpoint_state: dict[str, torch.Tensor],
+    *,
+    allow_partial: bool,
+) -> dict[str, Any]:
+    if not bool(allow_partial):
+        model.load_state_dict(checkpoint_state, strict=True)
+        return {"mode": "strict", "loaded": int(len(checkpoint_state)), "expanded": [], "skipped": []}
+
+    current = model.state_dict()
+    loaded: list[str] = []
+    expanded: list[dict[str, int | str]] = []
+    skipped: list[dict[str, str]] = []
+    adapted = dict(current)
+    for key, old_value in checkpoint_state.items():
+        if key not in current:
+            skipped.append({"key": key, "reason": "missing_in_current_model"})
+            continue
+        new_value = current[key]
+        if tuple(new_value.shape) == tuple(old_value.shape):
+            adapted[key] = old_value
+            loaded.append(key)
+            continue
+        if (
+            key == "net.0.weight"
+            and old_value.ndim == 2
+            and new_value.ndim == 2
+            and int(old_value.shape[0]) == int(new_value.shape[0])
+            and int(old_value.shape[1]) < int(new_value.shape[1])
+        ):
+            merged = new_value.clone()
+            merged[:, : int(old_value.shape[1])] = old_value
+            merged[:, int(old_value.shape[1]) :] = 0.0
+            adapted[key] = merged
+            loaded.append(key)
+            expanded.append(
+                {
+                    "key": key,
+                    "old_input_dim": int(old_value.shape[1]),
+                    "new_input_dim": int(new_value.shape[1]),
+                    "added_input_dim": int(new_value.shape[1] - old_value.shape[1]),
+                }
+            )
+            continue
+        skipped.append(
+            {
+                "key": key,
+                "reason": f"shape_mismatch_old_{tuple(old_value.shape)}_new_{tuple(new_value.shape)}",
+            }
+        )
+    model.load_state_dict(adapted, strict=True)
+    return {
+        "mode": "partial_input_expansion",
+        "loaded": int(len(loaded)),
+        "expanded": expanded,
+        "skipped": skipped,
+    }
 
 
 def _sample_batch(
@@ -1187,7 +1294,7 @@ def _sample_batch(
     residual_target_chroma_scale: float,
     feature_mode: str,
     surface_feature_texture: dict[str, Any] | None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     rng = np.random.default_rng(int(seed))
     z = np.load(path)
     mask = _valid_mask(z, candidate_faces, residual_l1_key=residual_l1_key, min_l1=min_l1, min_alpha=min_alpha)
@@ -1224,6 +1331,7 @@ def _sample_batch(
         face_idx=face_idx,
         surface_feature_texture=surface_feature_texture,
     )
+    texture_bin_idx = _surface_texture_flat_bin_ids(z, ys, xs, face_idx, surface_feature_texture)
     residual, target_scale, _target_summary = _transformed_residual_target(
         z,
         residual_rgb_key=str(residual_rgb_key),
@@ -1278,6 +1386,7 @@ def _sample_batch(
         target,
         weights.astype(np.float32),
         np.clip(confidence_target.astype(np.float32), 0.0, 1.0),
+        texture_bin_idx.astype(np.int64),
     )
 
 
@@ -1331,8 +1440,11 @@ def _image_proxy_loss(
             surface_feature_texture=surface_feature_texture,
         )
     ).to(device)
+    texture_bin_idx = torch.from_numpy(
+        _surface_texture_flat_bin_ids(z, ys, xs, face_idx, surface_feature_texture)
+    ).to(device)
     face_t = torch.from_numpy(face_idx.astype(np.int64)).to(device)
-    pred = model(face_t, features)
+    pred = model(face_t, features, texture_bin_idx)
 
     parent_np = np.asarray(z["rgb_render"], dtype=np.float32)[:, :: int(stride), :: int(stride)]
     residual_np, _target_scale, _target_summary = _transformed_residual_target(
@@ -1488,8 +1600,17 @@ def _calibrate_face_reliability(
                         surface_feature_texture=surface_feature_texture,
                     )
                 ).to(device)
+                texture_bin_t = torch.from_numpy(
+                    _surface_texture_flat_bin_ids(
+                        z,
+                        ys[start:end],
+                        xs[start:end],
+                        face_idx[start:end],
+                        surface_feature_texture,
+                    )
+                ).to(device)
                 face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
-                pred = model(face_t, feat).detach().cpu().numpy().astype(np.float32)
+                pred = model(face_t, feat, texture_bin_t).detach().cpu().numpy().astype(np.float32)
                 delta[:, ys[start:end], xs[start:end]] = pred.T
             adapted = np.clip(parent + float(calibration_alpha) * delta, 0.0, 1.0).astype(np.float32)
             parent_l1 = np.mean(np.abs(parent - gt), axis=0)
@@ -1637,9 +1758,18 @@ def _evaluate(
                         power=float(view_support_power),
                         floor=float(view_support_floor),
                     )
+                    texture_bin_t = torch.from_numpy(
+                        _surface_texture_flat_bin_ids(
+                            z,
+                            ys[start:end],
+                            xs[start:end],
+                            face_idx[start:end],
+                            surface_feature_texture,
+                        )
+                    ).to(device)
                     feat = torch.from_numpy(features_np).to(device)
                     face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
-                    pred_t, conf_t = model.forward_with_confidence(face_t, feat)
+                    pred_t, conf_t = model.forward_with_confidence(face_t, feat, texture_bin_t)
                     pred = pred_t.detach().cpu().numpy().astype(np.float32) * view_gate.reshape(-1, 1)
                     conf = conf_t.detach().cpu().numpy().astype(np.float32) * view_gate
                     delta[:, ys[start:end], xs[start:end]] = pred.T
@@ -1837,9 +1967,18 @@ def _evaluate(
                             power=float(view_support_power),
                             floor=float(view_support_floor),
                         )
+                        texture_bin_t = torch.from_numpy(
+                            _surface_texture_flat_bin_ids(
+                                z,
+                                ys[start:end],
+                                xs[start:end],
+                                face_idx[start:end],
+                                surface_feature_texture,
+                            )
+                        ).to(device)
                         feat = torch.from_numpy(features_np).to(device)
                         face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
-                        pred_t, conf_t = model.forward_with_confidence(face_t, feat)
+                        pred_t, conf_t = model.forward_with_confidence(face_t, feat, texture_bin_t)
                         pred = pred_t.detach().cpu().numpy().astype(np.float32) * view_gate.reshape(-1, 1)
                         pred, face_keep = _apply_face_reliability(
                             pred,
@@ -1935,9 +2074,18 @@ def _predict_delta_image(
                     power=float(view_support_power),
                     floor=float(view_support_floor),
                 )
+                texture_bin_t = torch.from_numpy(
+                    _surface_texture_flat_bin_ids(
+                        z,
+                        ys[start:end],
+                        xs[start:end],
+                        face_idx[start:end],
+                        surface_feature_texture,
+                    )
+                ).to(device)
                 feat = torch.from_numpy(features_np).to(device)
                 face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
-                pred_t, conf_t = model.forward_with_confidence(face_t, feat)
+                pred_t, conf_t = model.forward_with_confidence(face_t, feat, texture_bin_t)
                 pred = pred_t.detach().cpu().numpy().astype(np.float32) * view_gate.reshape(-1, 1)
                 pred, face_keep = _apply_face_reliability(
                     pred,
@@ -2155,6 +2303,7 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- Phase-J flowers reference: `{PHASEJ_FLOWERS}`",
         f"- selected faces: `{payload['candidate_face_summary']['selected_faces']}`",
         f"- train steps: `{payload['train']['steps']}`",
+        f"- init checkpoint load: `{payload['train'].get('init_checkpoint_load', {})}`",
         f"- residual target mode: `{payload['train'].get('residual_target_mode')}`",
         f"- surface texture: `{payload.get('surface_feature_texture', {}).get('enabled', False)}` "
         f"mode `{payload.get('surface_feature_texture', {}).get('mode', 'none')}` "
@@ -2165,6 +2314,9 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"basis `{payload['train'].get('lowrank_basis_count', 0)}`",
         f"- MoE experts / direct scale: `{payload['train'].get('moe_expert_count', 0)}` / "
         f"`{payload['train'].get('moe_direct_scale', 0.0):.6f}`",
+        f"- texture latent dim/count/reg: `{payload['train'].get('texture_latent_dim', 0)}` / "
+        f"`{payload['train'].get('texture_latent_count', 0)}` / "
+        f"`{payload['train'].get('texture_latent_reg', 0.0):.6g}`",
         f"- calibration views: `{payload.get('calibration_views', 0)}`",
         f"- calibration face reliability: `{payload.get('calibration_face_reliability', {}).get('enabled', False)}`",
         f"- confidence head: `{payload['train'].get('confidence_head', False)}`",
@@ -2255,6 +2407,7 @@ def main() -> int:
     parser.add_argument("--target_eval_evidence_dir", default=DEFAULT_TARGET_EVAL)
     parser.add_argument("--target_eval_mode", choices=["auto", "always", "never"], default="auto")
     parser.add_argument("--init_checkpoint", default="")
+    parser.add_argument("--allow_partial_init_checkpoint", action="store_true")
     parser.add_argument("--skip_training", action="store_true")
     parser.add_argument("--policy_val_stride", type=int, default=4)
     parser.add_argument("--calibration_stride", type=int, default=0)
@@ -2316,6 +2469,9 @@ def main() -> int:
     parser.add_argument("--lowrank_direct_scale", type=float, default=0.25)
     parser.add_argument("--moe_expert_count", type=int, default=3)
     parser.add_argument("--moe_direct_scale", type=float, default=0.35)
+    parser.add_argument("--texture_latent_dim", type=int, default=0)
+    parser.add_argument("--texture_latent_init_std", type=float, default=0.02)
+    parser.add_argument("--texture_latent_reg", type=float, default=0.0)
     parser.add_argument("--image_loss_every", type=int, default=4)
     parser.add_argument("--image_loss_stride", type=int, default=12)
     parser.add_argument("--image_loss_weight", type=float, default=0.35)
@@ -2482,6 +2638,13 @@ def main() -> int:
             f"--decoder_output_mode {args.decoder_output_mode} requires --surface_texture_mode lowrank_v1 or lowrank_view_v2"
         )
     feature_dim = _feature_dim(str(args.feature_mode), surface_feature_texture)
+    texture_latent_count = (
+        int(np.asarray(surface_feature_texture["features"], dtype=np.float32).shape[0])
+        if surface_feature_texture is not None and int(args.texture_latent_dim) > 0
+        else 0
+    )
+    if int(args.texture_latent_dim) > 0 and surface_feature_texture is None:
+        raise ValueError("--texture_latent_dim requires --surface_texture_mode other than none")
     lowrank_basis_feature_offset = (
         _base_feature_dim(str(args.feature_mode)) + LOWRANK_TEXTURE_BASIS_OFFSET
         if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}
@@ -2505,9 +2668,17 @@ def main() -> int:
         lowrank_direct_scale=float(args.lowrank_direct_scale),
         moe_expert_count=int(args.moe_expert_count),
         moe_direct_scale=float(args.moe_direct_scale),
+        texture_latent_count=int(texture_latent_count),
+        texture_latent_dim=int(args.texture_latent_dim),
+        texture_latent_init_std=float(args.texture_latent_init_std),
     ).to(device)
+    init_load_summary: dict[str, Any] = {"mode": "none", "loaded": 0, "expanded": [], "skipped": []}
     if init_checkpoint is not None:
-        model.load_state_dict(init_checkpoint["model_state_dict"], strict=True)
+        init_load_summary = _load_model_state_with_optional_input_expansion(
+            model,
+            init_checkpoint["model_state_dict"],
+            allow_partial=bool(args.allow_partial_init_checkpoint),
+        )
     opt = torch.optim.AdamW(model.parameters(), lr=float(args.lr), weight_decay=1.0e-5)
     train_rows: list[dict[str, Any]] = []
     fit_cycle = list(fit_paths)
@@ -2549,14 +2720,15 @@ def main() -> int:
                 continue
         if sampled is None:
             raise RuntimeError("no train-fit view contains the selected candidate faces")
-        face_idx, features, target, sample_weights, confidence_target = sampled
+        face_idx, features, target, sample_weights, confidence_target, texture_bin_idx = sampled
         face_t = torch.from_numpy(face_idx).to(device)
         feat_t = torch.from_numpy(features).to(device)
+        texture_bin_t = torch.from_numpy(texture_bin_idx).to(device)
         target_t = torch.from_numpy(target).to(device)
         confidence_target_t = torch.from_numpy(confidence_target).to(device).reshape(-1)
         weight_t = torch.from_numpy(sample_weights).to(device).reshape(-1)
         weight_t = weight_t / torch.clamp(torch.mean(weight_t), min=1.0e-6)
-        pred, pred_confidence = model.forward_with_confidence(face_t, feat_t)
+        pred, pred_confidence = model.forward_with_confidence(face_t, feat_t, texture_bin_t)
         rgb_per = torch.sqrt(torch.square(pred - target_t) + 1.0e-6).mean(dim=1)
         rgb_loss = torch.sum(weight_t * rgb_per) / torch.clamp(torch.sum(weight_t), min=1.0e-6)
         luma_pred = 0.299 * pred[:, 0] + 0.587 * pred[:, 1] + 0.114 * pred[:, 2]
@@ -2610,6 +2782,9 @@ def main() -> int:
                 device=device,
             )
         mag = torch.mean(torch.square(pred))
+        texture_latent_loss = torch.zeros((), device=device)
+        if model.texture_embedding is not None:
+            texture_latent_loss = torch.mean(torch.square(model.texture_embedding.weight))
         loss = (
             rgb_loss
             + 0.35 * luma_loss
@@ -2618,6 +2793,7 @@ def main() -> int:
             + float(args.confidence_loss_weight) * confidence_loss
             + float(args.image_loss_weight) * img_loss
             + float(args.mag_reg) * mag
+            + float(args.texture_latent_reg) * texture_latent_loss
         )
         opt.zero_grad(set_to_none=True)
         loss.backward()
@@ -2632,6 +2808,7 @@ def main() -> int:
                 "cosine_loss": float(cosine_loss.detach().cpu()),
                 "energy_loss": float(energy_loss.detach().cpu()),
                 "confidence_loss": float(confidence_loss.detach().cpu()),
+                "texture_latent_loss": float(texture_latent_loss.detach().cpu()),
                 "mean_confidence": float(torch.mean(pred_confidence).detach().cpu()),
                 "mean_confidence_target": float(torch.mean(confidence_target_t).detach().cpu()),
                 "image_proxy_loss": float(img_loss.detach().cpu()),
@@ -2833,6 +3010,8 @@ def main() -> int:
             "steps": int(train_steps),
             "skip_training": bool(args.skip_training),
             "init_checkpoint": str(args.init_checkpoint),
+            "allow_partial_init_checkpoint": bool(args.allow_partial_init_checkpoint),
+            "init_checkpoint_load": init_load_summary,
             "batch_size": int(args.batch_size),
             "lr": float(args.lr),
             "residual_target_mode": str(args.residual_target_mode),
@@ -2870,6 +3049,10 @@ def main() -> int:
             "lowrank_direct_scale": float(args.lowrank_direct_scale),
             "moe_expert_count": int(args.moe_expert_count),
             "moe_direct_scale": float(args.moe_direct_scale),
+            "texture_latent_dim": int(args.texture_latent_dim),
+            "texture_latent_count": int(texture_latent_count),
+            "texture_latent_init_std": float(args.texture_latent_init_std),
+            "texture_latent_reg": float(args.texture_latent_reg),
             "surface_texture_mode": str(args.surface_texture_mode),
             "surface_texture_uv_bins": int(args.surface_texture_uv_bins),
             "surface_texture_max_samples_per_view": int(args.surface_texture_max_samples_per_view),
@@ -2976,6 +3159,8 @@ def main() -> int:
                 "surface_texture/covered_face_fraction": float(
                     surface_texture_payload.get("covered_face_fraction", 0.0)
                 ),
+                "texture_latent/dim": float(args.texture_latent_dim),
+                "texture_latent/count": float(texture_latent_count),
                 "target_exact/ran": float(bool(target_eval)),
                 "target_exact/psnr_gain": float(target_eval.get("summary", {}).get("psnr_gain", 0.0)),
                 "target_exact/ssim_gain": float(target_eval.get("summary", {}).get("ssim_gain", 0.0)),
