@@ -1,0 +1,148 @@
+{
+  "schema": "spcarnet_v269_v270_face_texture_lowrank_summary_v1",
+  "date": "2026-06-30",
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "phasej_flowers_reference": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "verdict": "NOT_COMPLETE",
+  "full9_status": "blocked_until_flowers_exact_beats_phasej_psnr",
+  "implementation": {
+    "file": "scripts/car_model/train_surface_deferred_source_residual_renderer.py",
+    "new_decoder_modes": [
+      "patch_coherent_hybrid",
+      "face_texture_lowrank",
+      "hybrid_edge_texture_lowrank"
+    ],
+    "primary_v169_mode": "hybrid_edge_texture_lowrank",
+    "notes": [
+      "face_texture_lowrank gathers same-face neighboring UV/bin teacher residual samples and fits a compact RGB low-rank surface texture carrier.",
+      "hybrid_edge_texture_lowrank keeps the prior edge-local-linear base, then injects the coherent face-texture low-rank carrier with disagreement damping.",
+      "target/test apply uses stripped no-GT evidence; target GT is loaded only after apply for exact evaluation."
+    ]
+  },
+  "storage_preflight": {
+    "data_avail": "129G",
+    "dev_shm_avail": "1.6G",
+    "tmp_avail": "6.0T",
+    "policy": "read existing low-copy evidence; write outputs under /data; do not duplicate /dev/shm evidence"
+  },
+  "runs": [
+    {
+      "id": "v269a",
+      "mode": "face_texture_lowrank",
+      "status": "aborted",
+      "reason": "policy reliability calibration was too slow: first view did not finish after about 80 seconds; no metrics promoted",
+      "wandb": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v269_face_texture_flowers_20260630/v269a_face_texture_lowrank_loadedbank/wandb/offline-run-20260629_230523-0pkynrmb"
+    },
+    {
+      "id": "v269b",
+      "mode": "face_texture_lowrank",
+      "status": "bounded_policy_val_pass",
+      "policy_val_views": 6,
+      "alpha": 0.125,
+      "policy_val": {
+        "psnr_gain": 0.010007616,
+        "ssim_gain": 0.000386149,
+        "lpips_gain": 0.00014433,
+        "texture_active_over_support_fraction": 0.595934829
+      },
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v269_face_texture_flowers_20260630/v269b_face_texture_lowrank_bounded/v253_deferred_source_renderer_audit.json"
+    },
+    {
+      "id": "v269c",
+      "mode": "face_texture_lowrank",
+      "status": "flowers_exact_fail_phasej_psnr",
+      "alpha": 0.125,
+      "policy_val": {
+        "psnr_gain": 0.009748734,
+        "ssim_gain": 0.000394265,
+        "lpips_gain": 0.000137128,
+        "texture_active_over_support_fraction": 0.558111034
+      },
+      "target_exact": {
+        "psnr": 19.834772514,
+        "ssim": 0.620011026,
+        "lpips": 0.180293713,
+        "psnr_gain_vs_parent": 0.002718635,
+        "ssim_gain_vs_parent": 0.000100615,
+        "lpips_gain_vs_parent": 0.000041153,
+        "phasej_psnr_gap": -0.469585486
+      },
+      "projection_selected_alpha": {
+        "full_energy_retention": 0.005680942,
+        "full_cosine": 0.296857348,
+        "active_energy_retention": 0.005995857,
+        "active_cosine": 0.304822213
+      },
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v269_face_texture_flowers_20260630/v269c_face_texture_lowrank_fullflowers/v253_deferred_source_renderer_audit.json",
+      "render_dir": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v269_face_texture_flowers_20260630/v269c_face_texture_lowrank_fullflowers/target_exact_fixed_policy"
+    },
+    {
+      "id": "v270c",
+      "mode": "hybrid_edge_texture_lowrank",
+      "status": "flowers_exact_fail_phasej_psnr",
+      "alpha": 0.25,
+      "note": "Initial fair-run mistake: alpha grid ended at 0.25 while v266c used alpha 1.0; v270d fixes this.",
+      "target_exact": {
+        "psnr": 19.837958033,
+        "ssim": 0.62013076,
+        "lpips": 0.180230926,
+        "psnr_gain_vs_parent": 0.005904155,
+        "ssim_gain_vs_parent": 0.000220349,
+        "lpips_gain_vs_parent": 0.00010394,
+        "phasej_psnr_gap": -0.466399967
+      },
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v270_hybrid_edge_texture_flowers_20260630/v270c_hybrid_edge_texture_fullflowers/v253_deferred_source_renderer_audit.json"
+    },
+    {
+      "id": "v270d",
+      "mode": "hybrid_edge_texture_lowrank",
+      "status": "best_v270_but_still_fail_phasej_psnr",
+      "alpha": 1.0,
+      "policy_val": {
+        "psnr_gain": 0.066941013,
+        "ssim_gain": 0.002717525,
+        "lpips_gain": 0.001204725,
+        "texture_active_over_support_fraction": 0.558111034
+      },
+      "target_exact": {
+        "psnr": 19.844319673,
+        "ssim": 0.620225649,
+        "lpips": 0.179934307,
+        "psnr_gain_vs_parent": 0.012265794,
+        "ssim_gain_vs_parent": 0.000315238,
+        "lpips_gain_vs_parent": 0.000400559,
+        "phasej_psnr_gap": -0.460038327
+      },
+      "projection_selected_alpha": {
+        "full_energy_retention": 0.45534968,
+        "full_cosine": 0.316949604,
+        "active_energy_retention": 0.480498146,
+        "active_cosine": 0.325420755
+      },
+      "audit_json": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v270_hybrid_edge_texture_flowers_20260630/v270d_hybrid_edge_texture_fullalpha_flowers/v253_deferred_source_renderer_audit.json",
+      "render_dir": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v270_hybrid_edge_texture_flowers_20260630/v270d_hybrid_edge_texture_fullalpha_flowers/target_exact_fixed_policy",
+      "wandb": "/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v270_hybrid_edge_texture_flowers_20260630/v270d_hybrid_edge_texture_fullalpha_flowers/wandb/offline-run-20260629_233947-arf2zxuk"
+    }
+  ],
+  "comparison_to_previous_best": {
+    "v266c_target_psnr": 19.84569812,
+    "v266c_target_ssim": 0.620200756,
+    "v266c_target_lpips": 0.179915376,
+    "v270d_minus_v266c": {
+      "psnr": -0.001378447,
+      "ssim": 0.000024893,
+      "lpips_gain_direction": -0.000018931
+    },
+    "interpretation": "v270d slightly improves SSIM over v266c but loses PSNR and LPIPS, so it is not a new overall best."
+  },
+  "diagnosis": [
+    "The coherent face-texture carrier creates a real policy-val signal, but target exact PSNR remains far below Phase-J.",
+    "Pure face_texture_lowrank is too diluted on target; hybridizing with edge-local-linear restores most of v266 stability but does not beat v266 overall.",
+    "The teacher residual projection cosine improves only modestly, so same-face UV texture capacity alone is insufficient for Phase-J-level baked transfer.",
+    "No full9 should be launched from this branch until flowers exact PSNR exceeds 20.304358 under the same no-GT target protocol."
+  ]
+}

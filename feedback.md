@@ -806,6 +806,88 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-06-30 v269-v270 Face-Texture Low-Rank Feedback Addendum
+
+This addendum records the direct follow-up to:
+
+```text
+docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md
+```
+
+New implementation:
+
+```text
+scripts/car_model/train_surface_deferred_source_residual_renderer.py
+```
+
+Detailed log and JSON summary:
+
+```text
+docs/car_model/6-30-v269-v270-FaceTextureLowrank-v169-Gate-Log.md
+docs/car_model/results/v269_v270_face_texture_lowrank_summary.json
+```
+
+What was implemented:
+
+- `patch_coherent_hybrid`: same-face neighboring UV/bin residual carrier.
+- `face_texture_lowrank`: coherent same-face UV low-rank Phase-J teacher
+  residual texture. It predicts target coefficients from view, parent RGB,
+  edge, and relative UV offset features.
+- `hybrid_edge_texture_lowrank`: stable edge-local-linear base plus the new
+  coherent face-texture low-rank carrier.
+
+Key result:
+
+| run | mode | alpha | flowers exact PSNR | SSIM | LPIPS | Phase-J PSNR gap | result |
+|---|---|---:|---:|---:|---:|---:|---|
+| v266c | hybrid_edge_lowrank | 1.000 | 19.845698 | 0.620201 | 0.179915 | -0.458660 | previous best |
+| v269c | face_texture_lowrank | 0.125 | 19.834773 | 0.620011 | 0.180294 | -0.469585 | too diluted |
+| v270d | hybrid_edge_texture_lowrank | 1.000 | 19.844320 | 0.620226 | 0.179934 | -0.460038 | not better overall |
+
+Important lesson:
+
+The v169 prompt was directionally correct: a surface-attached teacher residual
+texture carrier is more principled than another alpha/footprint tweak. However,
+this implementation proves that same-face UV low-rank capacity alone is not
+enough. It gives strong policy-val all-axis gains, but target exact PSNR remains
+below both Phase-J and the previous v266c best.
+
+Concrete bottleneck:
+
+- v270d policy-val is strong: `+0.066941 PSNR / +0.002718 SSIM /
+  +0.001205 LPIPS`.
+- v270d target exact is only `+0.012266 PSNR / +0.000315 SSIM /
+  +0.000401 LPIPS` vs parent.
+- v270d target exact is slightly better than v266c in SSIM, but worse in PSNR
+  and LPIPS.
+- v270d remains `-0.460038` PSNR below the Phase-J flowers reference.
+
+No-GT protocol:
+
+The completed exact runs used stripped target no-GT evidence and loaded target
+GT only after apply for evaluation. The no-GT verifier passed.
+
+Next recommendation for a stronger model:
+
+```text
+Continue from v270d, but do not tune alpha or UV radius first. The same-face
+low-rank texture carrier is not enough. Replace the residual-only projection
+with a teacher-student objective that jointly predicts residual amplitude and
+confidence under held-out source-view validation. The method should explicitly
+penalize teacher residual directions that pass train-policy-val but fail target
+trajectory transfer. Candidate directions: view-held-out residual sign
+consistency, residual covariance/uncertainty calibration, compact learned
+surface decoder with confidence head, or pseudo-target/source-view leave-one-out
+distillation. Keep the v169 gate: flowers exact must exceed Phase-J PSNR
+20.304358, SSIM 0.557770, and LPIPS 0.329222 before full9.
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-06-29 v255 Source-Agreement Confidence Addendum
 
 v255 tested whether the v253 LPIPS failure can be fixed by a simple target-blind

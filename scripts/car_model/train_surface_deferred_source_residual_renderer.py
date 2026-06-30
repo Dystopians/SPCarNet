@@ -664,6 +664,14 @@ def _calibrate_policy_reliability(
     lowrank_basis_blend: float = 1.0,
     lowrank_basis_residual_clip: float = 0.12,
     lowrank_basis_disagreement_beta: float = 0.0,
+    patch_coherent_radius: int = 1,
+    patch_coherent_bin_sigma: float = 0.75,
+    patch_coherent_blend: float = 0.25,
+    patch_coherent_min_sources: float = 1.0,
+    patch_coherent_parent_beta: float = 8.0,
+    patch_coherent_edge_beta: float = 4.0,
+    patch_coherent_disagreement_beta: float = 4.0,
+    patch_coherent_residual_clip: float = 0.12,
     target_edge_gain: float = 0.0,
     target_edge_gain_clip: float = 1.5,
 ) -> dict[str, Any]:
@@ -710,6 +718,14 @@ def _calibrate_policy_reliability(
                 lowrank_basis_blend=float(lowrank_basis_blend),
                 lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                patch_coherent_radius=int(patch_coherent_radius),
+                patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
+                patch_coherent_blend=float(patch_coherent_blend),
+                patch_coherent_min_sources=float(patch_coherent_min_sources),
+                patch_coherent_parent_beta=float(patch_coherent_parent_beta),
+                patch_coherent_edge_beta=float(patch_coherent_edge_beta),
+                patch_coherent_disagreement_beta=float(patch_coherent_disagreement_beta),
+                patch_coherent_residual_clip=float(patch_coherent_residual_clip),
                 target_edge_gain=float(target_edge_gain),
                 target_edge_gain_clip=float(target_edge_gain_clip),
             )
@@ -892,6 +908,14 @@ def _fit_learned_ood_head(
     lowrank_basis_blend: float = 1.0,
     lowrank_basis_residual_clip: float = 0.12,
     lowrank_basis_disagreement_beta: float = 0.0,
+    patch_coherent_radius: int = 1,
+    patch_coherent_bin_sigma: float = 0.75,
+    patch_coherent_blend: float = 0.25,
+    patch_coherent_min_sources: float = 1.0,
+    patch_coherent_parent_beta: float = 8.0,
+    patch_coherent_edge_beta: float = 4.0,
+    patch_coherent_disagreement_beta: float = 4.0,
+    patch_coherent_residual_clip: float = 0.12,
     target_edge_gain: float = 0.0,
     target_edge_gain_clip: float = 1.5,
 ) -> dict[str, Any]:
@@ -938,6 +962,14 @@ def _fit_learned_ood_head(
                 lowrank_basis_blend=float(lowrank_basis_blend),
                 lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                patch_coherent_radius=int(patch_coherent_radius),
+                patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
+                patch_coherent_blend=float(patch_coherent_blend),
+                patch_coherent_min_sources=float(patch_coherent_min_sources),
+                patch_coherent_parent_beta=float(patch_coherent_parent_beta),
+                patch_coherent_edge_beta=float(patch_coherent_edge_beta),
+                patch_coherent_disagreement_beta=float(patch_coherent_disagreement_beta),
+                patch_coherent_residual_clip=float(patch_coherent_residual_clip),
                 target_edge_gain=float(target_edge_gain),
                 target_edge_gain_clip=float(target_edge_gain_clip),
                 ood_gain_mode="off",
@@ -1056,6 +1088,14 @@ def _predict_delta(
     lowrank_basis_blend: float = 1.0,
     lowrank_basis_residual_clip: float = 0.12,
     lowrank_basis_disagreement_beta: float = 0.0,
+    patch_coherent_radius: int = 1,
+    patch_coherent_bin_sigma: float = 0.75,
+    patch_coherent_blend: float = 0.25,
+    patch_coherent_min_sources: float = 1.0,
+    patch_coherent_parent_beta: float = 8.0,
+    patch_coherent_edge_beta: float = 4.0,
+    patch_coherent_disagreement_beta: float = 4.0,
+    patch_coherent_residual_clip: float = 0.12,
     target_edge_gain: float = 0.0,
     target_edge_gain_clip: float = 1.5,
     ood_gain_mode: str = "off",
@@ -1089,6 +1129,10 @@ def _predict_delta(
     ood_confidences: list[float] = []
     ood_scores: list[float] = []
     tail_risks: list[float] = []
+    patch_blends: list[float] = []
+    texture_blends: list[float] = []
+    patch_active_count = 0
+    texture_active_count = 0
     active_count = 0
     for start in range(0, int(ys_all.size), int(chunk_size)):
         end = min(int(ys_all.size), start + int(chunk_size))
@@ -1097,7 +1141,13 @@ def _predict_delta(
         bin_id = bin_all[start:end]
         counts = bank["counts"][face_idx, bin_id].astype(np.float32)
         valid_src = counts >= float(min_source_count)
-        if not np.any(valid_src):
+        decoder_mode_s = str(residual_decoder_mode or "weighted_average")
+        neighbor_carrier_mode = decoder_mode_s in {
+            "patch_coherent_hybrid",
+            "face_texture_lowrank",
+            "hybrid_edge_texture_lowrank",
+        }
+        if not np.any(valid_src) and not neighbor_carrier_mode:
             continue
         src_residual = bank["residual"][face_idx, bin_id]
         src_parent = bank["parent_rgb"][face_idx, bin_id]
@@ -1125,14 +1175,29 @@ def _predict_delta(
             weights *= np.clip(1.0 + float(gain_beta) * np.clip(src_gain, 0.0, None), 0.05, 10.0).astype(np.float32)
         denom = np.sum(weights, axis=1)
         ok_rows = denom > 1.0e-12
-        if not np.any(ok_rows):
+        patch_mode = decoder_mode_s == "patch_coherent_hybrid"
+        if not np.any(ok_rows) and not neighbor_carrier_mode:
             continue
         pred = np.sum(weights[:, :, None] * src_residual, axis=1) / np.maximum(denom[:, None], 1.0e-12)
-        decoder_mode_s = str(residual_decoder_mode or "weighted_average")
-        allowed_decoder_modes = {"weighted_average", "local_linear", "edge_local_linear", "lowrank_source_basis", "hybrid_edge_lowrank"}
+        allowed_decoder_modes = {
+            "weighted_average",
+            "local_linear",
+            "edge_local_linear",
+            "lowrank_source_basis",
+            "hybrid_edge_lowrank",
+            "patch_coherent_hybrid",
+            "face_texture_lowrank",
+            "hybrid_edge_texture_lowrank",
+        }
         if decoder_mode_s not in allowed_decoder_modes:
             raise ValueError(f"unsupported residual_decoder_mode={residual_decoder_mode}")
-        if decoder_mode_s in {"local_linear", "edge_local_linear", "hybrid_edge_lowrank"}:
+        if decoder_mode_s in {
+            "local_linear",
+            "edge_local_linear",
+            "hybrid_edge_lowrank",
+            "patch_coherent_hybrid",
+            "hybrid_edge_texture_lowrank",
+        }:
             valid_float = valid_src.astype(np.float32)
             valid_count = np.sum(valid_float, axis=1)
             enough_sources = (valid_count >= int(local_linear_min_sources)) & ok_rows
@@ -1148,7 +1213,12 @@ def _predict_delta(
                     np.repeat(target_cam.reshape(1, 3), idx.size, axis=0).astype(np.float32),
                     tgt_parent[idx].astype(np.float32),
                 ]
-                if decoder_mode_s in {"edge_local_linear", "hybrid_edge_lowrank"}:
+                if decoder_mode_s in {
+                    "edge_local_linear",
+                    "hybrid_edge_lowrank",
+                    "patch_coherent_hybrid",
+                    "hybrid_edge_texture_lowrank",
+                }:
                     source_features.append(np.clip(src_parent_edge[idx], 0.0, 0.25).astype(np.float32)[:, :, None])
                     target_features.append(np.clip(tgt_parent_edge[idx], 0.0, 0.25).astype(np.float32)[:, None])
                 src_feat = np.concatenate(source_features, axis=2)
@@ -1235,6 +1305,273 @@ def _predict_delta(
                     pred[idx] = ((1.0 - row_blend[:, None]) * pred[idx] + row_blend[:, None] * lowrank_pred).astype(np.float32)
                 else:
                     pred[idx] = ((1.0 - blend) * pred[idx] + blend * lowrank_pred).astype(np.float32)
+        if decoder_mode_s in {"face_texture_lowrank", "hybrid_edge_texture_lowrank"}:
+            radius = max(0, int(patch_coherent_radius))
+            grid_i = int(grid)
+            u0 = (bin_id // grid_i).astype(np.int64)
+            v0 = (bin_id % grid_i).astype(np.int64)
+            tex_residual_parts: list[np.ndarray] = []
+            tex_parent_parts: list[np.ndarray] = []
+            tex_edge_parts: list[np.ndarray] = []
+            tex_normal_parts: list[np.ndarray] = []
+            tex_camera_parts: list[np.ndarray] = []
+            tex_gain_parts: list[np.ndarray] = []
+            tex_count_parts: list[np.ndarray] = []
+            tex_view_id_parts: list[np.ndarray] = []
+            tex_valid_parts: list[np.ndarray] = []
+            tex_bin_weight_parts: list[np.ndarray] = []
+            tex_offset_parts: list[np.ndarray] = []
+            sigma = max(float(patch_coherent_bin_sigma), 1.0e-6)
+            for du in range(-radius, radius + 1):
+                for dv in range(-radius, radius + 1):
+                    uu = u0 + int(du)
+                    vv = v0 + int(dv)
+                    in_bounds = (uu >= 0) & (uu < grid_i) & (vv >= 0) & (vv < grid_i)
+                    if not np.any(in_bounds):
+                        continue
+                    tex_bin = np.clip(uu, 0, grid_i - 1) * grid_i + np.clip(vv, 0, grid_i - 1)
+                    counts_tex = bank["counts"][face_idx, tex_bin].astype(np.float32)
+                    valid_tex = (counts_tex >= float(lowrank_basis_min_sources)) & in_bounds[:, None]
+                    if not np.any(valid_tex):
+                        continue
+                    bin_weight = math.exp(-float(du * du + dv * dv) / (2.0 * sigma * sigma))
+                    tex_residual_parts.append(bank["residual"][face_idx, tex_bin].astype(np.float32))
+                    tex_parent_parts.append(bank["parent_rgb"][face_idx, tex_bin].astype(np.float32))
+                    tex_edge_parts.append(
+                        np.asarray(bank.get("parent_edge", np.zeros_like(bank["counts"])), dtype=np.float32)[
+                            face_idx, tex_bin
+                        ]
+                    )
+                    tex_normal_parts.append(bank["normal"][face_idx, tex_bin].astype(np.float32))
+                    tex_camera_parts.append(bank["camera_dir"][face_idx, tex_bin].astype(np.float32))
+                    tex_gain_parts.append(bank["gain_l1"][face_idx, tex_bin].astype(np.float32))
+                    tex_count_parts.append(counts_tex)
+                    tex_view_id_parts.append(
+                        np.asarray(bank.get("source_view_id", np.full_like(bank["counts"], -1)), dtype=np.int32)[
+                            face_idx, tex_bin
+                        ]
+                    )
+                    tex_valid_parts.append(valid_tex)
+                    tex_bin_weight_parts.append(np.full_like(counts_tex, float(bin_weight), dtype=np.float32))
+                    offsets = np.zeros((*counts_tex.shape, 2), dtype=np.float32)
+                    offsets[..., 0] = float(du) / max(float(grid_i), 1.0)
+                    offsets[..., 1] = float(dv) / max(float(grid_i), 1.0)
+                    tex_offset_parts.append(offsets)
+            if tex_residual_parts:
+                tex_residual = np.concatenate(tex_residual_parts, axis=1)
+                tex_parent = np.concatenate(tex_parent_parts, axis=1)
+                tex_edge = np.concatenate(tex_edge_parts, axis=1)
+                tex_normal = np.concatenate(tex_normal_parts, axis=1)
+                tex_camera = np.concatenate(tex_camera_parts, axis=1)
+                tex_gain = np.concatenate(tex_gain_parts, axis=1)
+                tex_counts = np.concatenate(tex_count_parts, axis=1)
+                tex_view_id = np.concatenate(tex_view_id_parts, axis=1)
+                tex_valid = np.concatenate(tex_valid_parts, axis=1)
+                tex_bin_weight = np.concatenate(tex_bin_weight_parts, axis=1)
+                tex_offset = np.concatenate(tex_offset_parts, axis=1)
+                tex_view_cos = np.sum(tex_camera * target_cam, axis=2)
+                tex_normal_cos = np.sum(tex_normal * tgt_normal[:, None, :], axis=2)
+                tex_parent_dist = np.sum(np.square(tex_parent - tgt_parent[:, None, :]), axis=2)
+                tex_edge_dist = np.abs(tex_edge - tgt_parent_edge[:, None])
+                tex_weights = tex_valid.astype(np.float32) * tex_bin_weight
+                if float(count_gamma) != 0.0:
+                    tex_weights *= np.power(np.maximum(tex_counts, 1.0), float(count_gamma)).astype(np.float32)
+                if float(view_beta) != 0.0:
+                    tex_weights *= np.exp(np.clip(float(view_beta) * (tex_view_cos - 1.0), -30.0, 30.0)).astype(
+                        np.float32
+                    )
+                if float(normal_beta) != 0.0:
+                    tex_weights *= np.exp(
+                        np.clip(float(normal_beta) * (tex_normal_cos - 1.0), -30.0, 30.0)
+                    ).astype(np.float32)
+                if float(parent_beta) != 0.0:
+                    tex_weights *= np.exp(np.clip(-float(parent_beta) * tex_parent_dist, -30.0, 30.0)).astype(
+                        np.float32
+                    )
+                if float(patch_coherent_edge_beta) != 0.0:
+                    tex_weights *= np.exp(
+                        np.clip(-float(patch_coherent_edge_beta) * tex_edge_dist, -30.0, 0.0)
+                    ).astype(np.float32)
+                if float(gain_beta) != 0.0:
+                    tex_weights *= np.clip(1.0 + float(gain_beta) * np.clip(tex_gain, 0.0, None), 0.05, 10.0).astype(
+                        np.float32
+                    )
+                tex_denom = np.sum(tex_weights, axis=1)
+                tex_valid_count = np.sum(tex_valid.astype(np.float32), axis=1)
+                tex_unique_view_count = np.asarray(
+                    [len(set(int(v) for v in row if int(v) >= 0)) for row in np.where(tex_valid, tex_view_id, -1)],
+                    dtype=np.float32,
+                )
+                if np.max(tex_unique_view_count, initial=0.0) <= 0.0:
+                    tex_unique_view_count = tex_valid_count
+                tex_ok = (
+                    (tex_denom > 1.0e-12)
+                    & (tex_valid_count >= max(2, int(lowrank_basis_min_sources)))
+                    & (tex_unique_view_count >= max(1, int(lowrank_basis_min_unique_views)))
+                )
+                basis_rank = max(1, min(3, int(lowrank_basis_rank)))
+                if np.any(tex_ok):
+                    idx = np.nonzero(tex_ok)[0]
+                    row_weights = tex_weights[idx].astype(np.float32)
+                    norm_weights = row_weights / np.maximum(np.sum(row_weights, axis=1, keepdims=True), 1.0e-12)
+                    src_delta = tex_residual[idx].astype(np.float32)
+                    mean_delta = np.sum(norm_weights[:, :, None] * src_delta, axis=1).astype(np.float32)
+                    centered = (src_delta - mean_delta[:, None, :]).astype(np.float32)
+                    cov = np.einsum("nk,nkc,nkd->ncd", norm_weights, centered, centered, optimize=True).astype(
+                        np.float64
+                    )
+                    eigvals, eigvecs = np.linalg.eigh(cov)
+                    order = np.argsort(eigvals, axis=1)[:, -basis_rank:]
+                    basis = np.take_along_axis(eigvecs, order[:, None, :], axis=2).astype(np.float32)
+                    coeff = np.einsum("nkc,ncr->nkr", centered, basis, optimize=True).astype(np.float32)
+                    src_feat = np.concatenate(
+                        [
+                            np.ones((idx.size, tex_camera.shape[1], 1), dtype=np.float32),
+                            tex_camera[idx].astype(np.float32),
+                            tex_parent[idx].astype(np.float32),
+                            np.clip(tex_edge[idx], 0.0, 0.25).astype(np.float32)[:, :, None],
+                            tex_offset[idx].astype(np.float32),
+                        ],
+                        axis=2,
+                    )
+                    tgt_feat = np.concatenate(
+                        [
+                            np.ones((idx.size, 1), dtype=np.float32),
+                            np.repeat(target_cam.reshape(1, 3), idx.size, axis=0).astype(np.float32),
+                            tgt_parent[idx].astype(np.float32),
+                            np.clip(tgt_parent_edge[idx], 0.0, 0.25).astype(np.float32)[:, None],
+                            np.zeros((idx.size, 2), dtype=np.float32),
+                        ],
+                        axis=1,
+                    )
+                    xw = src_feat * np.sqrt(np.maximum(row_weights, 0.0))[:, :, None]
+                    yw = coeff * np.sqrt(np.maximum(row_weights, 0.0))[:, :, None]
+                    xtx = np.einsum("nkd,nke->nde", xw, xw, optimize=True).astype(np.float64)
+                    diag = np.arange(xtx.shape[1])
+                    xtx[:, diag, diag] += max(float(lowrank_basis_l2), 1.0e-8)
+                    xty = np.einsum("nkd,nkr->ndr", xw, yw, optimize=True).astype(np.float64)
+                    coef = np.linalg.solve(xtx, xty).astype(np.float32)
+                    target_coeff = np.einsum("nd,ndr->nr", tgt_feat.astype(np.float32), coef, optimize=True)
+                    texture_pred = mean_delta + np.einsum("nr,ncr->nc", target_coeff, basis, optimize=True)
+                    clip_v = float(lowrank_basis_residual_clip)
+                    if clip_v > 0.0:
+                        texture_pred = np.clip(texture_pred, -clip_v, clip_v)
+                    blend = float(np.clip(float(lowrank_basis_blend), 0.0, 1.0))
+                    pred_norm = np.maximum(np.linalg.norm(pred[idx], axis=1), 1.0e-6)
+                    disagreement = np.linalg.norm(texture_pred - pred[idx], axis=1) / pred_norm
+                    if float(lowrank_basis_disagreement_beta) > 0.0:
+                        row_blend = blend * np.exp(
+                            np.clip(-float(lowrank_basis_disagreement_beta) * disagreement, -30.0, 0.0)
+                        ).astype(np.float32)
+                    else:
+                        row_blend = np.full((idx.size,), blend, dtype=np.float32)
+                    row_blend = np.where(ok_rows[idx], row_blend, blend).astype(np.float32)
+                    pred[idx] = (
+                        (1.0 - row_blend[:, None]) * pred[idx] + row_blend[:, None] * texture_pred
+                    ).astype(np.float32)
+                    ok_rows[idx] = True
+                    denom[idx] = np.maximum(denom[idx], tex_denom[idx].astype(np.float32))
+                    texture_active_count += int(idx.size)
+                    texture_blends.append(row_blend.astype(np.float32))
+        if decoder_mode_s == "patch_coherent_hybrid" and int(patch_coherent_radius) > 0:
+            radius = max(0, int(patch_coherent_radius))
+            grid_i = int(grid)
+            u0 = (bin_id // grid_i).astype(np.int64)
+            v0 = (bin_id % grid_i).astype(np.int64)
+            nb_residual_parts: list[np.ndarray] = []
+            nb_parent_parts: list[np.ndarray] = []
+            nb_edge_parts: list[np.ndarray] = []
+            nb_normal_parts: list[np.ndarray] = []
+            nb_camera_parts: list[np.ndarray] = []
+            nb_gain_parts: list[np.ndarray] = []
+            nb_count_parts: list[np.ndarray] = []
+            nb_valid_parts: list[np.ndarray] = []
+            nb_bin_weight_parts: list[np.ndarray] = []
+            sigma = max(float(patch_coherent_bin_sigma), 1.0e-6)
+            for du in range(-radius, radius + 1):
+                for dv in range(-radius, radius + 1):
+                    uu = u0 + int(du)
+                    vv = v0 + int(dv)
+                    in_bounds = (uu >= 0) & (uu < grid_i) & (vv >= 0) & (vv < grid_i)
+                    if not np.any(in_bounds):
+                        continue
+                    nb_bin = np.clip(uu, 0, grid_i - 1) * grid_i + np.clip(vv, 0, grid_i - 1)
+                    counts_nb = bank["counts"][face_idx, nb_bin].astype(np.float32)
+                    valid_nb = (counts_nb >= float(patch_coherent_min_sources)) & in_bounds[:, None]
+                    if not np.any(valid_nb):
+                        continue
+                    bin_weight = math.exp(-float(du * du + dv * dv) / (2.0 * sigma * sigma))
+                    nb_residual_parts.append(bank["residual"][face_idx, nb_bin].astype(np.float32))
+                    nb_parent_parts.append(bank["parent_rgb"][face_idx, nb_bin].astype(np.float32))
+                    nb_edge_parts.append(
+                        np.asarray(bank.get("parent_edge", np.zeros_like(bank["counts"])), dtype=np.float32)[
+                            face_idx, nb_bin
+                        ]
+                    )
+                    nb_normal_parts.append(bank["normal"][face_idx, nb_bin].astype(np.float32))
+                    nb_camera_parts.append(bank["camera_dir"][face_idx, nb_bin].astype(np.float32))
+                    nb_gain_parts.append(bank["gain_l1"][face_idx, nb_bin].astype(np.float32))
+                    nb_count_parts.append(counts_nb)
+                    nb_valid_parts.append(valid_nb)
+                    nb_bin_weight_parts.append(np.full_like(counts_nb, float(bin_weight), dtype=np.float32))
+            if nb_residual_parts:
+                nb_residual = np.concatenate(nb_residual_parts, axis=1)
+                nb_parent = np.concatenate(nb_parent_parts, axis=1)
+                nb_edge = np.concatenate(nb_edge_parts, axis=1)
+                nb_normal = np.concatenate(nb_normal_parts, axis=1)
+                nb_camera = np.concatenate(nb_camera_parts, axis=1)
+                nb_gain = np.concatenate(nb_gain_parts, axis=1)
+                nb_counts = np.concatenate(nb_count_parts, axis=1)
+                nb_valid = np.concatenate(nb_valid_parts, axis=1)
+                nb_bin_weight = np.concatenate(nb_bin_weight_parts, axis=1)
+                nb_view_cos = np.sum(nb_camera * target_cam, axis=2)
+                nb_normal_cos = np.sum(nb_normal * tgt_normal[:, None, :], axis=2)
+                nb_parent_dist = np.sum(np.square(nb_parent - tgt_parent[:, None, :]), axis=2)
+                nb_edge_dist = np.abs(nb_edge - tgt_parent_edge[:, None])
+                patch_weights = nb_valid.astype(np.float32) * nb_bin_weight
+                if float(count_gamma) != 0.0:
+                    patch_weights *= np.power(np.maximum(nb_counts, 1.0), float(count_gamma)).astype(np.float32)
+                if float(view_beta) != 0.0:
+                    patch_weights *= np.exp(np.clip(float(view_beta) * (nb_view_cos - 1.0), -30.0, 30.0)).astype(
+                        np.float32
+                    )
+                if float(normal_beta) != 0.0:
+                    patch_weights *= np.exp(
+                        np.clip(float(normal_beta) * (nb_normal_cos - 1.0), -30.0, 30.0)
+                    ).astype(np.float32)
+                if float(patch_coherent_parent_beta) != 0.0:
+                    patch_weights *= np.exp(
+                        np.clip(-float(patch_coherent_parent_beta) * nb_parent_dist, -30.0, 30.0)
+                    ).astype(np.float32)
+                if float(patch_coherent_edge_beta) != 0.0:
+                    patch_weights *= np.exp(
+                        np.clip(-float(patch_coherent_edge_beta) * nb_edge_dist, -30.0, 0.0)
+                    ).astype(np.float32)
+                if float(gain_beta) != 0.0:
+                    patch_weights *= np.clip(1.0 + float(gain_beta) * np.clip(nb_gain, 0.0, None), 0.05, 10.0).astype(
+                        np.float32
+                    )
+                patch_denom = np.sum(patch_weights, axis=1)
+                patch_ok = patch_denom > 1.0e-12
+                if np.any(patch_ok):
+                    patch_pred = np.sum(patch_weights[:, :, None] * nb_residual, axis=1) / np.maximum(
+                        patch_denom[:, None], 1.0e-12
+                    )
+                    clip_v = float(patch_coherent_residual_clip)
+                    if clip_v > 0.0:
+                        patch_pred = np.clip(patch_pred, -clip_v, clip_v)
+                    blend = float(np.clip(float(patch_coherent_blend), 0.0, 1.0))
+                    pred_norm = np.maximum(np.linalg.norm(pred, axis=1), 1.0e-6)
+                    disagreement = np.linalg.norm(patch_pred - pred, axis=1) / pred_norm
+                    row_blend = blend * np.exp(
+                        np.clip(-float(patch_coherent_disagreement_beta) * disagreement, -30.0, 0.0)
+                    ).astype(np.float32)
+                    row_blend = np.where(patch_ok, row_blend, 0.0).astype(np.float32)
+                    pred = ((1.0 - row_blend[:, None]) * pred + row_blend[:, None] * patch_pred).astype(np.float32)
+                    ok_rows |= patch_ok
+                    denom = np.maximum(denom, patch_denom.astype(np.float32))
+                    patch_active_count += int(np.count_nonzero(patch_ok))
+                    patch_blends.append(row_blend[patch_ok].astype(np.float32))
         variance_ratio = np.zeros_like(denom, dtype=np.float32)
         source_agreement = np.ones_like(denom, dtype=np.float32)
         needs_variance = (
@@ -1355,10 +1692,20 @@ def _predict_delta(
     ood_conf = np.concatenate(ood_confidences) if ood_confidences else np.ones((0,), dtype=np.float32)
     ood_score_arr = np.concatenate(ood_scores) if ood_scores else np.zeros((0,), dtype=np.float32)
     tail_risk_arr = np.concatenate(tail_risks) if tail_risks else np.zeros((0,), dtype=np.float32)
+    patch_blend_arr = np.concatenate(patch_blends) if patch_blends else np.zeros((0,), dtype=np.float32)
+    texture_blend_arr = np.concatenate(texture_blends) if texture_blends else np.zeros((0,), dtype=np.float32)
     return delta, active, {
         "surface_support_fraction": float(np.mean(support)),
         "active_fraction": float(active_count / max(int(support.size), 1)),
         "active_over_support_fraction": float(active_count / max(int(np.count_nonzero(support)), 1)),
+        "patch_active_fraction": float(patch_active_count / max(int(support.size), 1)),
+        "patch_active_over_support_fraction": float(patch_active_count / max(int(np.count_nonzero(support)), 1)),
+        "mean_patch_blend": float(np.mean(patch_blend_arr)) if patch_blend_arr.size else 0.0,
+        "p90_patch_blend": float(np.quantile(patch_blend_arr, 0.90)) if patch_blend_arr.size else 0.0,
+        "texture_active_fraction": float(texture_active_count / max(int(support.size), 1)),
+        "texture_active_over_support_fraction": float(texture_active_count / max(int(np.count_nonzero(support)), 1)),
+        "mean_texture_blend": float(np.mean(texture_blend_arr)) if texture_blend_arr.size else 0.0,
+        "p90_texture_blend": float(np.quantile(texture_blend_arr, 0.90)) if texture_blend_arr.size else 0.0,
         "mean_confidence": float(np.mean(conf)) if conf.size else 0.0,
         "p10_confidence": float(np.quantile(conf, 0.10)) if conf.size else 0.0,
         "mean_source_agreement_confidence": float(np.mean(agreement_conf)) if agreement_conf.size else 0.0,
@@ -1391,6 +1738,14 @@ def _summarize_rows(rows: list[dict[str, Any]], *, compute_lpips: bool) -> dict[
         "ssim_positive_view_fraction": float(np.mean(np.asarray(ssim_gain) > 0.0)) if rows else 0.0,
         "support_active_fraction": _mean([float(r.get("active_fraction", 0.0)) for r in rows]),
         "support_active_over_support_fraction": _mean([float(r.get("active_over_support_fraction", 0.0)) for r in rows]),
+        "patch_active_fraction": _mean([float(r.get("patch_active_fraction", 0.0)) for r in rows]),
+        "patch_active_over_support_fraction": _mean([float(r.get("patch_active_over_support_fraction", 0.0)) for r in rows]),
+        "mean_patch_blend": _mean([float(r.get("mean_patch_blend", 0.0)) for r in rows]),
+        "p90_patch_blend": _mean([float(r.get("p90_patch_blend", 0.0)) for r in rows]),
+        "texture_active_fraction": _mean([float(r.get("texture_active_fraction", 0.0)) for r in rows]),
+        "texture_active_over_support_fraction": _mean([float(r.get("texture_active_over_support_fraction", 0.0)) for r in rows]),
+        "mean_texture_blend": _mean([float(r.get("mean_texture_blend", 0.0)) for r in rows]),
+        "p90_texture_blend": _mean([float(r.get("p90_texture_blend", 0.0)) for r in rows]),
         "mean_confidence": _mean([float(r.get("mean_confidence", 0.0)) for r in rows]),
         "mean_policy_reliability": _mean([float(r.get("mean_policy_reliability", 0.0)) for r in rows]),
         "mean_policy_gain": _mean([float(r.get("mean_policy_gain", 1.0)) for r in rows]),
@@ -1475,6 +1830,14 @@ def _evaluate_policy_val(
     lowrank_basis_blend: float,
     lowrank_basis_residual_clip: float,
     lowrank_basis_disagreement_beta: float,
+    patch_coherent_radius: int,
+    patch_coherent_bin_sigma: float,
+    patch_coherent_blend: float,
+    patch_coherent_min_sources: float,
+    patch_coherent_parent_beta: float,
+    patch_coherent_edge_beta: float,
+    patch_coherent_disagreement_beta: float,
+    patch_coherent_residual_clip: float,
     target_edge_gain: float,
     target_edge_gain_clip: float,
     ood_gain_mode: str,
@@ -1528,6 +1891,14 @@ def _evaluate_policy_val(
                 lowrank_basis_blend=float(lowrank_basis_blend),
                 lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                patch_coherent_radius=int(patch_coherent_radius),
+                patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
+                patch_coherent_blend=float(patch_coherent_blend),
+                patch_coherent_min_sources=float(patch_coherent_min_sources),
+                patch_coherent_parent_beta=float(patch_coherent_parent_beta),
+                patch_coherent_edge_beta=float(patch_coherent_edge_beta),
+                patch_coherent_disagreement_beta=float(patch_coherent_disagreement_beta),
+                patch_coherent_residual_clip=float(patch_coherent_residual_clip),
                 target_edge_gain=float(target_edge_gain),
                 target_edge_gain_clip=float(target_edge_gain_clip),
                 ood_gain_mode=str(ood_gain_mode),
@@ -1692,6 +2063,14 @@ def _target_no_gt_preview(
     lowrank_basis_blend: float,
     lowrank_basis_residual_clip: float,
     lowrank_basis_disagreement_beta: float,
+    patch_coherent_radius: int,
+    patch_coherent_bin_sigma: float,
+    patch_coherent_blend: float,
+    patch_coherent_min_sources: float,
+    patch_coherent_parent_beta: float,
+    patch_coherent_edge_beta: float,
+    patch_coherent_disagreement_beta: float,
+    patch_coherent_residual_clip: float,
     target_edge_gain: float,
     target_edge_gain_clip: float,
     ood_gain_mode: str,
@@ -1742,6 +2121,14 @@ def _target_no_gt_preview(
                 lowrank_basis_blend=float(lowrank_basis_blend),
                 lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                patch_coherent_radius=int(patch_coherent_radius),
+                patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
+                patch_coherent_blend=float(patch_coherent_blend),
+                patch_coherent_min_sources=float(patch_coherent_min_sources),
+                patch_coherent_parent_beta=float(patch_coherent_parent_beta),
+                patch_coherent_edge_beta=float(patch_coherent_edge_beta),
+                patch_coherent_disagreement_beta=float(patch_coherent_disagreement_beta),
+                patch_coherent_residual_clip=float(patch_coherent_residual_clip),
                 target_edge_gain=float(target_edge_gain),
                 target_edge_gain_clip=float(target_edge_gain_clip),
                 ood_gain_mode=str(ood_gain_mode),
@@ -1803,6 +2190,14 @@ def _target_exact_eval(
     lowrank_basis_blend: float,
     lowrank_basis_residual_clip: float,
     lowrank_basis_disagreement_beta: float,
+    patch_coherent_radius: int,
+    patch_coherent_bin_sigma: float,
+    patch_coherent_blend: float,
+    patch_coherent_min_sources: float,
+    patch_coherent_parent_beta: float,
+    patch_coherent_edge_beta: float,
+    patch_coherent_disagreement_beta: float,
+    patch_coherent_residual_clip: float,
     target_edge_gain: float,
     target_edge_gain_clip: float,
     ood_gain_mode: str,
@@ -1859,6 +2254,14 @@ def _target_exact_eval(
                 lowrank_basis_blend=float(lowrank_basis_blend),
                 lowrank_basis_residual_clip=float(lowrank_basis_residual_clip),
                 lowrank_basis_disagreement_beta=float(lowrank_basis_disagreement_beta),
+                patch_coherent_radius=int(patch_coherent_radius),
+                patch_coherent_bin_sigma=float(patch_coherent_bin_sigma),
+                patch_coherent_blend=float(patch_coherent_blend),
+                patch_coherent_min_sources=float(patch_coherent_min_sources),
+                patch_coherent_parent_beta=float(patch_coherent_parent_beta),
+                patch_coherent_edge_beta=float(patch_coherent_edge_beta),
+                patch_coherent_disagreement_beta=float(patch_coherent_disagreement_beta),
+                patch_coherent_residual_clip=float(patch_coherent_residual_clip),
                 target_edge_gain=float(target_edge_gain),
                 target_edge_gain_clip=float(target_edge_gain_clip),
                 ood_gain_mode=str(ood_gain_mode),
@@ -1967,6 +2370,14 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
             "teacher-gain confidence. This changes the representation carrier rather than tuning an alpha gate."
         ),
         "",
+        (
+            "`face_texture_lowrank` is the v169-oriented representation upgrade: it collects train-fit Phase-J "
+            "teacher residual samples from a coherent UV neighborhood on the same mesh face, fits a compact RGB "
+            "low-rank texture basis, and predicts target-view coefficients from view, parent appearance, edge, "
+            "and relative-UV features. This is meant to test whether the teacher residual can be baked into a "
+            "surface-attached representation instead of another scalar residual atlas."
+        ),
+        "",
         "## Residual Decoder",
         "",
         f"- mode: `{payload.get('residual_decoder', {}).get('mode', 'weighted_average')}`",
@@ -1981,6 +2392,14 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- lowrank basis blend: `{payload.get('residual_decoder', {}).get('lowrank_basis_blend', 0.0):.6f}`",
         f"- lowrank basis residual clip: `{payload.get('residual_decoder', {}).get('lowrank_basis_residual_clip', 0.0):.6f}`",
         f"- lowrank basis disagreement beta: `{payload.get('residual_decoder', {}).get('lowrank_basis_disagreement_beta', 0.0):.6f}`",
+        f"- patch/texture radius: `{payload.get('residual_decoder', {}).get('patch_coherent_radius', 0)}`",
+        f"- patch/texture bin sigma: `{payload.get('residual_decoder', {}).get('patch_coherent_bin_sigma', 0.0):.6f}`",
+        f"- patch coherent blend: `{payload.get('residual_decoder', {}).get('patch_coherent_blend', 0.0):.6f}`",
+        f"- patch coherent min sources: `{payload.get('residual_decoder', {}).get('patch_coherent_min_sources', 0.0):.6f}`",
+        f"- patch coherent parent beta: `{payload.get('residual_decoder', {}).get('patch_coherent_parent_beta', 0.0):.6f}`",
+        f"- patch coherent edge beta: `{payload.get('residual_decoder', {}).get('patch_coherent_edge_beta', 0.0):.6f}`",
+        f"- patch coherent disagreement beta: `{payload.get('residual_decoder', {}).get('patch_coherent_disagreement_beta', 0.0):.6f}`",
+        f"- patch coherent residual clip: `{payload.get('residual_decoder', {}).get('patch_coherent_residual_clip', 0.0):.6f}`",
         f"- source edge score weight: `{payload.get('residual_decoder', {}).get('source_edge_score_weight', 0.0):.6f}`",
         f"- target edge gain: `{payload.get('residual_decoder', {}).get('target_edge_gain', 0.0):.6f}`",
         f"- target edge gain clip: `{payload.get('residual_decoder', {}).get('target_edge_gain_clip', 0.0):.6f}`",
@@ -1988,7 +2407,9 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         (
             "`lowrank_source_basis` is a source-slot low-rank teacher-residual basis over the train-fit source bank. "
             "It checks independent source-view support through `source_view_id`, but it is not yet a coherent "
-            "per-face texture sheet across UV bins."
+            "per-face texture sheet across UV bins. `face_texture_lowrank` is the explicit coherent face-texture "
+            "variant introduced for the v169 prompt gate. `hybrid_edge_texture_lowrank` keeps the stable "
+            "edge-local-linear base and injects that coherent face-texture basis as a controlled residual carrier."
         ),
         "",
         "## Policy-Val Metrics",
@@ -2139,7 +2560,16 @@ def main() -> int:
     parser.add_argument("--confidence_tau", type=float, default=0.0)
     parser.add_argument(
         "--residual_decoder_mode",
-        choices=["weighted_average", "local_linear", "edge_local_linear", "lowrank_source_basis", "hybrid_edge_lowrank"],
+        choices=[
+            "weighted_average",
+            "local_linear",
+            "edge_local_linear",
+            "lowrank_source_basis",
+            "hybrid_edge_lowrank",
+            "patch_coherent_hybrid",
+            "face_texture_lowrank",
+            "hybrid_edge_texture_lowrank",
+        ],
         default="weighted_average",
     )
     parser.add_argument("--local_linear_l2", type=float, default=0.05)
@@ -2153,6 +2583,14 @@ def main() -> int:
     parser.add_argument("--lowrank_basis_blend", type=float, default=1.0)
     parser.add_argument("--lowrank_basis_residual_clip", type=float, default=0.12)
     parser.add_argument("--lowrank_basis_disagreement_beta", type=float, default=0.0)
+    parser.add_argument("--patch_coherent_radius", type=int, default=1)
+    parser.add_argument("--patch_coherent_bin_sigma", type=float, default=0.75)
+    parser.add_argument("--patch_coherent_blend", type=float, default=0.25)
+    parser.add_argument("--patch_coherent_min_sources", type=float, default=1.0)
+    parser.add_argument("--patch_coherent_parent_beta", type=float, default=8.0)
+    parser.add_argument("--patch_coherent_edge_beta", type=float, default=4.0)
+    parser.add_argument("--patch_coherent_disagreement_beta", type=float, default=4.0)
+    parser.add_argument("--patch_coherent_residual_clip", type=float, default=0.12)
     parser.add_argument("--target_edge_gain", type=float, default=0.0)
     parser.add_argument("--target_edge_gain_clip", type=float, default=1.5)
     parser.add_argument("--source_agreement_mode", choices=["off", "soft", "hard"], default="off")
@@ -2328,6 +2766,14 @@ def main() -> int:
             lowrank_basis_blend=float(args.lowrank_basis_blend),
             lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
             lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+            patch_coherent_radius=int(args.patch_coherent_radius),
+            patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
+            patch_coherent_blend=float(args.patch_coherent_blend),
+            patch_coherent_min_sources=float(args.patch_coherent_min_sources),
+            patch_coherent_parent_beta=float(args.patch_coherent_parent_beta),
+            patch_coherent_edge_beta=float(args.patch_coherent_edge_beta),
+            patch_coherent_disagreement_beta=float(args.patch_coherent_disagreement_beta),
+            patch_coherent_residual_clip=float(args.patch_coherent_residual_clip),
             target_edge_gain=float(args.target_edge_gain),
             target_edge_gain_clip=float(args.target_edge_gain_clip),
         )
@@ -2369,6 +2815,14 @@ def main() -> int:
             lowrank_basis_blend=float(args.lowrank_basis_blend),
             lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
             lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+            patch_coherent_radius=int(args.patch_coherent_radius),
+            patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
+            patch_coherent_blend=float(args.patch_coherent_blend),
+            patch_coherent_min_sources=float(args.patch_coherent_min_sources),
+            patch_coherent_parent_beta=float(args.patch_coherent_parent_beta),
+            patch_coherent_edge_beta=float(args.patch_coherent_edge_beta),
+            patch_coherent_disagreement_beta=float(args.patch_coherent_disagreement_beta),
+            patch_coherent_residual_clip=float(args.patch_coherent_residual_clip),
             target_edge_gain=float(args.target_edge_gain),
             target_edge_gain_clip=float(args.target_edge_gain_clip),
         )
@@ -2405,6 +2859,14 @@ def main() -> int:
         lowrank_basis_blend=float(args.lowrank_basis_blend),
         lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
         lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+        patch_coherent_radius=int(args.patch_coherent_radius),
+        patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
+        patch_coherent_blend=float(args.patch_coherent_blend),
+        patch_coherent_min_sources=float(args.patch_coherent_min_sources),
+        patch_coherent_parent_beta=float(args.patch_coherent_parent_beta),
+        patch_coherent_edge_beta=float(args.patch_coherent_edge_beta),
+        patch_coherent_disagreement_beta=float(args.patch_coherent_disagreement_beta),
+        patch_coherent_residual_clip=float(args.patch_coherent_residual_clip),
         target_edge_gain=float(args.target_edge_gain),
         target_edge_gain_clip=float(args.target_edge_gain_clip),
         ood_gain_mode=str(args.ood_gain_mode),
@@ -2453,6 +2915,14 @@ def main() -> int:
             lowrank_basis_blend=float(args.lowrank_basis_blend),
             lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
             lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+            patch_coherent_radius=int(args.patch_coherent_radius),
+            patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
+            patch_coherent_blend=float(args.patch_coherent_blend),
+            patch_coherent_min_sources=float(args.patch_coherent_min_sources),
+            patch_coherent_parent_beta=float(args.patch_coherent_parent_beta),
+            patch_coherent_edge_beta=float(args.patch_coherent_edge_beta),
+            patch_coherent_disagreement_beta=float(args.patch_coherent_disagreement_beta),
+            patch_coherent_residual_clip=float(args.patch_coherent_residual_clip),
             target_edge_gain=float(args.target_edge_gain),
             target_edge_gain_clip=float(args.target_edge_gain_clip),
             ood_gain_mode=str(args.ood_gain_mode),
@@ -2500,6 +2970,14 @@ def main() -> int:
             lowrank_basis_blend=float(args.lowrank_basis_blend),
             lowrank_basis_residual_clip=float(args.lowrank_basis_residual_clip),
             lowrank_basis_disagreement_beta=float(args.lowrank_basis_disagreement_beta),
+            patch_coherent_radius=int(args.patch_coherent_radius),
+            patch_coherent_bin_sigma=float(args.patch_coherent_bin_sigma),
+            patch_coherent_blend=float(args.patch_coherent_blend),
+            patch_coherent_min_sources=float(args.patch_coherent_min_sources),
+            patch_coherent_parent_beta=float(args.patch_coherent_parent_beta),
+            patch_coherent_edge_beta=float(args.patch_coherent_edge_beta),
+            patch_coherent_disagreement_beta=float(args.patch_coherent_disagreement_beta),
+            patch_coherent_residual_clip=float(args.patch_coherent_residual_clip),
             target_edge_gain=float(args.target_edge_gain),
             target_edge_gain_clip=float(args.target_edge_gain_clip),
             ood_gain_mode=str(args.ood_gain_mode),
@@ -2587,6 +3065,14 @@ def main() -> int:
             "lowrank_basis_blend": float(args.lowrank_basis_blend),
             "lowrank_basis_residual_clip": float(args.lowrank_basis_residual_clip),
             "lowrank_basis_disagreement_beta": float(args.lowrank_basis_disagreement_beta),
+            "patch_coherent_radius": int(args.patch_coherent_radius),
+            "patch_coherent_bin_sigma": float(args.patch_coherent_bin_sigma),
+            "patch_coherent_blend": float(args.patch_coherent_blend),
+            "patch_coherent_min_sources": float(args.patch_coherent_min_sources),
+            "patch_coherent_parent_beta": float(args.patch_coherent_parent_beta),
+            "patch_coherent_edge_beta": float(args.patch_coherent_edge_beta),
+            "patch_coherent_disagreement_beta": float(args.patch_coherent_disagreement_beta),
+            "patch_coherent_residual_clip": float(args.patch_coherent_residual_clip),
             "source_edge_score_weight": float(args.source_edge_score_weight),
             "target_edge_gain": float(args.target_edge_gain),
             "target_edge_gain_clip": float(args.target_edge_gain_clip),
@@ -2639,6 +3125,15 @@ def main() -> int:
                 "residual_decoder/is_hybrid_edge_lowrank": float(
                     str(args.residual_decoder_mode) == "hybrid_edge_lowrank"
                 ),
+                "residual_decoder/is_patch_coherent_hybrid": float(
+                    str(args.residual_decoder_mode) == "patch_coherent_hybrid"
+                ),
+                "residual_decoder/is_face_texture_lowrank": float(
+                    str(args.residual_decoder_mode) == "face_texture_lowrank"
+                ),
+                "residual_decoder/is_hybrid_edge_texture_lowrank": float(
+                    str(args.residual_decoder_mode) == "hybrid_edge_texture_lowrank"
+                ),
                 "residual_decoder/local_linear_l2": float(args.local_linear_l2),
                 "residual_decoder/local_linear_blend": float(args.local_linear_blend),
                 "residual_decoder/local_linear_min_sources": float(args.local_linear_min_sources),
@@ -2650,6 +3145,14 @@ def main() -> int:
                 "residual_decoder/lowrank_basis_blend": float(args.lowrank_basis_blend),
                 "residual_decoder/lowrank_basis_residual_clip": float(args.lowrank_basis_residual_clip),
                 "residual_decoder/lowrank_basis_disagreement_beta": float(args.lowrank_basis_disagreement_beta),
+                "residual_decoder/patch_coherent_radius": float(args.patch_coherent_radius),
+                "residual_decoder/patch_coherent_bin_sigma": float(args.patch_coherent_bin_sigma),
+                "residual_decoder/patch_coherent_blend": float(args.patch_coherent_blend),
+                "residual_decoder/patch_coherent_min_sources": float(args.patch_coherent_min_sources),
+                "residual_decoder/patch_coherent_parent_beta": float(args.patch_coherent_parent_beta),
+                "residual_decoder/patch_coherent_edge_beta": float(args.patch_coherent_edge_beta),
+                "residual_decoder/patch_coherent_disagreement_beta": float(args.patch_coherent_disagreement_beta),
+                "residual_decoder/patch_coherent_residual_clip": float(args.patch_coherent_residual_clip),
                 "residual_decoder/source_edge_score_weight": float(args.source_edge_score_weight),
                 "residual_decoder/target_edge_gain": float(args.target_edge_gain),
                 "residual_decoder/target_edge_gain_clip": float(args.target_edge_gain_clip),

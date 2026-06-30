@@ -866,3 +866,65 @@ Current verdict remains:
 ```text
 Final status: NOT COMPLETE.
 ```
+
+## 2026-06-30 Update: v269-v270 Face-Texture Low-Rank v169 Gate
+
+This update follows:
+
+```text
+docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md
+```
+
+Implemented representation changes:
+
+```text
+scripts/car_model/train_surface_deferred_source_residual_renderer.py
+```
+
+New decoder modes:
+
+```text
+patch_coherent_hybrid
+face_texture_lowrank
+hybrid_edge_texture_lowrank
+```
+
+The v169-oriented change is a coherent same-face UV texture carrier: gather
+Phase-J teacher residual samples from neighboring UV bins on the same mesh face,
+fit a compact RGB low-rank basis, and predict target coefficients from view,
+parent appearance, edge, and relative-UV features. The hybrid variant keeps the
+stable edge-local-linear base and injects the face-texture carrier as a
+controlled residual correction.
+
+Latest exact comparison on flowers:
+
+| run | mode | alpha | exact PSNR | exact SSIM | exact LPIPS | PSNR gain | SSIM gain | LPIPS gain | Phase-J PSNR gap |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| v266c | hybrid_edge_lowrank | 1.000 | 19.845698 | 0.620201 | 0.179915 | +0.013644 | +0.000290 | +0.000419 | -0.458660 |
+| v269c | face_texture_lowrank | 0.125 | 19.834773 | 0.620011 | 0.180294 | +0.002719 | +0.000101 | +0.000041 | -0.469585 |
+| v270d | hybrid_edge_texture_lowrank | 1.000 | 19.844320 | 0.620226 | 0.179934 | +0.012266 | +0.000315 | +0.000401 | -0.460038 |
+
+Interpretation:
+
+- v270d is a real representation-level upgrade and has strong policy-val gains:
+  `+0.066941 PSNR / +0.002718 SSIM / +0.001205 LPIPS`.
+- It does not beat v266c overall on flowers exact: SSIM is slightly higher, but
+  PSNR and LPIPS are lower.
+- It still fails the v169 Phase-J PSNR gate by `-0.460038`.
+- Full9 remains blocked.
+
+Artifacts:
+
+```text
+docs/car_model/6-30-v269-v270-FaceTextureLowrank-v169-Gate-Log.md
+docs/car_model/results/v269_v270_face_texture_lowrank_summary.json
+/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v270_hybrid_edge_texture_flowers_20260630/v270d_hybrid_edge_texture_fullalpha_flowers/v253_deferred_source_renderer_audit.json
+/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v270_hybrid_edge_texture_flowers_20260630/v270d_hybrid_edge_texture_fullalpha_flowers/target_exact_fixed_policy
+/data/peilincai/mesh-splatting/outputs/carnet/spcarnet_v270_hybrid_edge_texture_flowers_20260630/v270d_hybrid_edge_texture_fullalpha_flowers/wandb/offline-run-20260629_233947-arf2zxuk
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
