@@ -2,6 +2,41 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 Topline: Phase-J Stall Investigation + v296 Reduced Negative
+
+Newest investigation log:
+
+```text
+docs/car_model/6-30-PhaseJ-Stall-Thorough-Investigation.md
+docs/car_model/results/v296_reduced_v2_v3_comparison_summary.json
+```
+
+Direct conclusion:
+
+- The current v169/vNext representation line is not stuck because of a missing
+  alpha/rank/threshold scan. It is stuck because the face/UV/bin residual carrier
+  does not transport enough correct cross-view Phase-J residual energy.
+- v293a, the best recent PSNR route, captures only about `4.76%` of the MSE
+  reduction needed to go from parent to Phase-J on flowers.
+- v294 upper-bound projection showed only `+0.000164 dB` policy-val PSNR gain
+  for the current carrier under a favorable train-fit residual projection.
+- v285/v286 heldout diagnostics showed weak residual direction stability
+  (`heldout cosine ~= 0.214671`, error ratio `~= 2.078181`).
+- v296 tried exposing heldout direction features through
+  `lowrank_view_holdout_v3`, but the reduced same-budget comparison selected
+  alpha `0.0` for both v2 and v3. Nonzero alpha rows had microscopic changed
+  fractions and negative SSIM/LPIPS tails.
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+The next real method must train a source-heldout residual transport objective.
+Adding more scalar gates or diagnostic features is no longer a credible main
+route to Phase-J.
+
 ## 2026-06-30 Topline: v295 Texture Reliability Interface Closure
 
 Newest engineering closure:

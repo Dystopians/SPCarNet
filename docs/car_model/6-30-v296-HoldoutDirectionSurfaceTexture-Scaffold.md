@@ -119,9 +119,32 @@ If the v3 reduced run improves policy-val all-axis without worse tails, then run
 flowers exact with target no-GT apply. If not, do not promote it; move to a
 stronger source-heldout auxiliary direction loss.
 
+## Reduced Same-Budget Result
+
+The fair reduced comparison has now completed with W&B offline logging:
+
+```text
+docs/car_model/results/v296_reduced_v2_v3_comparison_summary.json
+/tmp/peilincai_spcarnet_v296_reduced_v2_20260630
+/tmp/peilincai_spcarnet_v296_reduced_v3_20260630
+```
+
+| mode | feature dim | covered bins | holdout cosine | holdout confidence | selected alpha | policy-val all-axis |
+|---|---:|---:|---:|---:|---:|---|
+| `lowrank_view_v2` | 43 | 0.507812 | n/a | n/a | 0.000000 | false |
+| `lowrank_view_holdout_v3` | 47 | 0.507812 | 0.356491 | 0.286819 | 0.000000 | false |
+
+Nonzero alpha rows changed only about `4.6e-6` to `3.3e-5` of pixels and did
+not pass all-axis policy-val. v3 did not beat v2 under this reduced budget.
+
+Conclusion: v3 is a useful diagnostic/interface scaffold, but it is not a
+quality improvement. The next method should not just expose heldout statistics
+as features; it needs an explicit source-heldout residual transport loss.
+
 ## Status
 
 Final status: NOT COMPLETE.
 
 v296 is now implementable and smoke-tested, but it has not yet proven a
-Phase-J-scale quality gain.
+Phase-J-scale quality gain. The reduced comparison is negative, so flowers exact
+and full9 promotion remain blocked for this route.

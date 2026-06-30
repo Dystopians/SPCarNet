@@ -2,6 +2,39 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-30, Phase-J stall investigation + v296:
+
+New files:
+
+- `docs/car_model/6-30-PhaseJ-Stall-Thorough-Investigation.md`
+- `docs/car_model/results/v296_reduced_v2_v3_comparison_summary.json`
+
+Hard lesson:
+
+> The current method family is not missing one more parameter scan. It is
+> missing a source-heldout residual transport objective.
+
+Evidence:
+
+- v293a is the best recent PSNR route, but it captures only about `4.76%` of the
+  parent-to-Phase-J MSE reduction on flowers.
+- v294 showed the current carrier's favorable projection upper bound is only
+  `+0.000164 dB` policy-val PSNR and fails robust SSIM/LPIPS tails.
+- v285/v286 showed weak cross-view residual direction stability: heldout cosine
+  about `0.214671`, heldout error ratio about `2.078181`.
+- v296 `lowrank_view_holdout_v3` adds target-blind heldout direction statistics,
+  but same-budget reduced testing selected alpha `0.0` for both v2 and v3.
+  Nonzero alpha rows changed only `1e-5` scale pixels and already hurt
+  SSIM/LPIPS tails.
+
+Direct verdict:
+
+> v296 is a useful diagnostic scaffold but not a quality breakthrough. Do not
+> promote this route to flowers exact or full9. The next model must train on
+> source-A to heldout-source-B residual prediction with explicit RGB residual,
+> direction, magnitude, and confidence losses. Policy-val should certify the
+> learned transport model, not act as the main mechanism.
+
 Latest update on 2026-06-30, v295:
 
 The newest committed change is an **engineering interface closure**, not a

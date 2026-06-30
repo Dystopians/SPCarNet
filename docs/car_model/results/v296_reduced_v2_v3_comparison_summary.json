@@ -1,0 +1,120 @@
+{
+  "date": "2026-06-30",
+  "purpose": "Same-budget reduced comparison after the Phase-J stall root-cause analysis. Tests whether exposing source-heldout residual direction features as surface texture inputs improves policy-val quality.",
+  "script": "scripts/car_model/train_perceptual_surface_residual_decoder.py",
+  "fit_evidence_dir": "/dev/shm/peilincai_spcarnet_20260629_v168_direct_teacher_lowcopy_exact/flowers/teacher_surface_evidence",
+  "target_eval_mode": "never",
+  "shared_settings": {
+    "surface_texture_uv_bins": 4,
+    "surface_texture_max_samples_per_view": 50000,
+    "decoder_output_mode": "patch_view_moe",
+    "max_candidate_faces": 64,
+    "max_candidate_face_samples_per_view": 1024,
+    "steps": 80,
+    "batch_size": 4096,
+    "policy_val_stride": 8,
+    "alpha_grid": [
+      0.0,
+      0.03125,
+      0.0625,
+      0.125
+    ],
+    "eval_chunk_size": 32768,
+    "compute_lpips": true,
+    "policy_val_ssim_max_side": 384,
+    "policy_val_lpips_max_side": 192,
+    "wandb_mode": "offline"
+  },
+  "runs": [
+    {
+      "name": "v296_reduced_v2_lowrank_view",
+      "surface_texture_mode": "lowrank_view_v2",
+      "output_dir": "/tmp/peilincai_spcarnet_v296_reduced_v2_20260630",
+      "wandb_offline": "/tmp/peilincai_spcarnet_v296_reduced_v2_20260630/wandb/offline-run-20260630_162127-m8dqjv69",
+      "audit_json": "/tmp/peilincai_spcarnet_v296_reduced_v2_20260630/v180_perceptual_surface_decoder_audit.json",
+      "feature_dim": 43,
+      "covered_bin_fraction": 0.5078125,
+      "mean_lowrank_reliability_on_covered": 0.2361333817243576,
+      "mean_lowrank_pca_energy_on_covered": 0.006454114802181721,
+      "mean_source_camera_concentration_on_covered": 0.9515378475189209,
+      "selected_alpha": 0.0,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "target_exact_ran": false,
+      "nonzero_alpha_rows": [
+        {
+          "alpha": 0.03125,
+          "psnr_gain": 0.0000027654412620610933,
+          "ssim_gain": -0.000000019868214925130207,
+          "lpips_gain": -0.000001944601535797119,
+          "mean_changed_fraction": 0.000005139152435167616
+        },
+        {
+          "alpha": 0.0625,
+          "psnr_gain": 0.00000530679516212255,
+          "ssim_gain": -0.00000006953875223795573,
+          "lpips_gain": -0.0000016850729783376057,
+          "mean_changed_fraction": 0.000014429158760278307
+        },
+        {
+          "alpha": 0.125,
+          "psnr_gain": 0.000010541,
+          "ssim_gain": -0.000000089,
+          "lpips_gain": -0.000004155,
+          "mean_changed_fraction": 0.000033108
+        }
+      ]
+    },
+    {
+      "name": "v296_reduced_v3_lowrank_view_holdout",
+      "surface_texture_mode": "lowrank_view_holdout_v3",
+      "output_dir": "/tmp/peilincai_spcarnet_v296_reduced_v3_20260630",
+      "wandb_offline": "/tmp/peilincai_spcarnet_v296_reduced_v3_20260630/wandb/offline-run-20260630_162127-we9r6yry",
+      "audit_json": "/tmp/peilincai_spcarnet_v296_reduced_v3_20260630/v180_perceptual_surface_decoder_audit.json",
+      "feature_dim": 47,
+      "covered_bin_fraction": 0.5078125,
+      "mean_lowrank_reliability_on_covered": 0.2361333817243576,
+      "mean_lowrank_pca_energy_on_covered": 0.006454114802181721,
+      "mean_source_camera_concentration_on_covered": 0.9515378475189209,
+      "mean_holdout_cosine_on_covered": 0.3564912676811218,
+      "mean_holdout_error_confidence_on_covered": 0.5729206800460815,
+      "mean_holdout_support_balance_on_covered": 0.5124320387840271,
+      "mean_holdout_confidence_on_covered": 0.28681880235671997,
+      "selected_alpha": 0.0,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "target_exact_ran": false,
+      "nonzero_alpha_rows": [
+        {
+          "alpha": 0.03125,
+          "psnr_gain": 0.0000024827570879182304,
+          "ssim_gain": 0.0,
+          "lpips_gain": -0.0000008468826611836752,
+          "mean_changed_fraction": 0.000004645003162555344
+        },
+        {
+          "alpha": 0.0625,
+          "psnr_gain": 0.0000047473808268231705,
+          "ssim_gain": -0.00000004967053731282552,
+          "lpips_gain": -0.0000015919407208760579,
+          "mean_changed_fraction": 0.000015615117014547752
+        },
+        {
+          "alpha": 0.125,
+          "psnr_gain": 0.000009116,
+          "ssim_gain": -0.000000089,
+          "lpips_gain": -0.000004034,
+          "mean_changed_fraction": 0.000029056
+        }
+      ]
+    }
+  ],
+  "verdict": {
+    "v3_beats_v2": false,
+    "reduced_promotion_allowed": false,
+    "flowers_exact_allowed": false,
+    "full9_allowed": false,
+    "interpretation": "Adding heldout direction statistics as decoder input features is not enough. Policy-val selects no-op for both v2 and v3; nonzero alpha gives only microscopic PSNR changes and negative LPIPS/SSIM tails. The next method needs an explicit source-heldout residual transport objective, not another feature or threshold scan."
+  },
+  "final_status": "NOT COMPLETE"
+}
