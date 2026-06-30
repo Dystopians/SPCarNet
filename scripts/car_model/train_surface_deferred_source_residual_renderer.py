@@ -159,6 +159,80 @@ def _sigmoid(values: np.ndarray) -> np.ndarray:
     return (1.0 / (1.0 + np.exp(-arr))).astype(np.float32)
 
 
+def _target_compatibility_row_confidence(
+    weights: np.ndarray,
+    view_cos: np.ndarray,
+    parent_dist: np.ndarray,
+    edge_dist: np.ndarray,
+    residual: np.ndarray,
+    pred: np.ndarray,
+    source_view_id: np.ndarray,
+    *,
+    beta: float,
+    floor: float,
+    min_effective_sources: float,
+    view_weight: float,
+    parent_weight: float,
+    edge_weight: float,
+    variance_weight: float,
+    effective_weight: float,
+    unique_view_weight: float,
+) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    weights_f = np.maximum(np.asarray(weights, dtype=np.float32), 0.0)
+    denom = np.sum(weights_f, axis=1)
+    norm = weights_f / np.maximum(denom[:, None], 1.0e-12)
+    valid = weights_f > 1.0e-12
+    view_cos_f = np.clip(np.asarray(view_cos, dtype=np.float32), -1.0, 1.0)
+    max_view_cos = np.max(np.where(valid, view_cos_f, -1.0), axis=1).astype(np.float32)
+    mean_view_gap = (1.0 - np.sum(norm * view_cos_f, axis=1)).astype(np.float32)
+    parent_mismatch = np.sqrt(np.sum(norm * np.maximum(parent_dist, 0.0), axis=1)).astype(np.float32)
+    edge_mismatch = np.sum(norm * np.maximum(edge_dist, 0.0), axis=1).astype(np.float32)
+    effective_sources = (
+        np.square(denom) / np.maximum(np.sum(np.square(weights_f), axis=1), 1.0e-12)
+    ).astype(np.float32)
+    min_eff = max(float(min_effective_sources), 1.0e-6)
+    effective_risk = np.clip(1.0 - effective_sources / min_eff, 0.0, 1.0).astype(np.float32)
+    source_view_id_i = np.asarray(source_view_id, dtype=np.int32)
+    unique_sources = np.asarray(
+        [
+            len(set(int(v) for v, keep in zip(row, keep_row, strict=False) if keep and int(v) >= 0))
+            for row, keep_row in zip(source_view_id_i, valid, strict=False)
+        ],
+        dtype=np.float32,
+    )
+    fallback_unique = np.sum(valid.astype(np.float32), axis=1).astype(np.float32)
+    unique_sources = np.where(unique_sources > 0.0, unique_sources, fallback_unique).astype(np.float32)
+    unique_risk = np.clip(1.0 - unique_sources / min_eff, 0.0, 1.0).astype(np.float32)
+    diff = np.asarray(residual, dtype=np.float32) - np.asarray(pred, dtype=np.float32)[:, None, :]
+    variance = np.sum(norm * np.sum(np.square(diff), axis=2), axis=1).astype(np.float32)
+    pred_energy = np.sum(np.square(np.asarray(pred, dtype=np.float32)), axis=1).astype(np.float32)
+    variance_ratio = (variance / np.maximum(pred_energy, 1.0e-8)).astype(np.float32)
+    risk = (
+        float(view_weight) * np.clip(mean_view_gap, 0.0, 2.0)
+        + float(parent_weight) * np.clip(parent_mismatch, 0.0, 1.0)
+        + float(edge_weight) * np.clip(edge_mismatch / 0.08, 0.0, 2.0)
+        + float(variance_weight) * np.clip(variance_ratio, 0.0, 4.0)
+        + float(effective_weight) * effective_risk
+        + float(unique_view_weight) * unique_risk
+    ).astype(np.float32)
+    floor_v = float(np.clip(float(floor), 0.0, 1.0))
+    conf = (
+        floor_v
+        + (1.0 - floor_v) * np.exp(np.clip(-float(beta) * risk, -30.0, 0.0)).astype(np.float32)
+    ).astype(np.float32)
+    conf = np.where(denom > 1.0e-12, conf, 0.0).astype(np.float32)
+    return conf, {
+        "risk": risk,
+        "mean_view_gap": mean_view_gap,
+        "max_view_cos": max_view_cos,
+        "parent_mismatch": parent_mismatch,
+        "edge_mismatch": edge_mismatch,
+        "variance_ratio": variance_ratio,
+        "effective_sources": effective_sources,
+        "unique_sources": unique_sources,
+    }
+
+
 def _stack_learned_ood_features(
     *,
     gain_boost: np.ndarray,
@@ -948,6 +1022,18 @@ def _calibrate_policy_reliability(
     patch_coherent_residual_clip: float = 0.12,
     target_edge_gain: float = 0.0,
     target_edge_gain_clip: float = 1.5,
+    target_compatibility_mode: str = "off",
+    target_compatibility_view_sharpness: float = 0.0,
+    target_compatibility_min_view_cos: float = -1.0,
+    target_compatibility_beta: float = 0.0,
+    target_compatibility_floor: float = 0.35,
+    target_compatibility_min_effective_sources: float = 2.0,
+    target_compatibility_view_weight: float = 1.0,
+    target_compatibility_parent_weight: float = 1.0,
+    target_compatibility_edge_weight: float = 0.5,
+    target_compatibility_variance_weight: float = 0.5,
+    target_compatibility_effective_weight: float = 0.5,
+    target_compatibility_unique_view_weight: float = 0.5,
 ) -> dict[str, Any]:
     bins = int(grid) * int(grid)
     counts = np.zeros((int(candidate_faces.size), bins), dtype=np.float64)
@@ -1007,6 +1093,18 @@ def _calibrate_policy_reliability(
                 patch_coherent_residual_clip=float(patch_coherent_residual_clip),
                 target_edge_gain=float(target_edge_gain),
                 target_edge_gain_clip=float(target_edge_gain_clip),
+                target_compatibility_mode=str(target_compatibility_mode),
+                target_compatibility_view_sharpness=float(target_compatibility_view_sharpness),
+                target_compatibility_min_view_cos=float(target_compatibility_min_view_cos),
+                target_compatibility_beta=float(target_compatibility_beta),
+                target_compatibility_floor=float(target_compatibility_floor),
+                target_compatibility_min_effective_sources=float(target_compatibility_min_effective_sources),
+                target_compatibility_view_weight=float(target_compatibility_view_weight),
+                target_compatibility_parent_weight=float(target_compatibility_parent_weight),
+                target_compatibility_edge_weight=float(target_compatibility_edge_weight),
+                target_compatibility_variance_weight=float(target_compatibility_variance_weight),
+                target_compatibility_effective_weight=float(target_compatibility_effective_weight),
+                target_compatibility_unique_view_weight=float(target_compatibility_unique_view_weight),
             )
             ys, xs = np.nonzero(active)
             if ys.size == 0:
@@ -1203,6 +1301,18 @@ def _fit_learned_ood_head(
     patch_coherent_residual_clip: float = 0.12,
     target_edge_gain: float = 0.0,
     target_edge_gain_clip: float = 1.5,
+    target_compatibility_mode: str = "off",
+    target_compatibility_view_sharpness: float = 0.0,
+    target_compatibility_min_view_cos: float = -1.0,
+    target_compatibility_beta: float = 0.0,
+    target_compatibility_floor: float = 0.35,
+    target_compatibility_min_effective_sources: float = 2.0,
+    target_compatibility_view_weight: float = 1.0,
+    target_compatibility_parent_weight: float = 1.0,
+    target_compatibility_edge_weight: float = 0.5,
+    target_compatibility_variance_weight: float = 0.5,
+    target_compatibility_effective_weight: float = 0.5,
+    target_compatibility_unique_view_weight: float = 0.5,
 ) -> dict[str, Any]:
     if not val_paths:
         raise RuntimeError("learned OOD head requested but no policy-val views are available")
@@ -1262,6 +1372,18 @@ def _fit_learned_ood_head(
                 patch_coherent_residual_clip=float(patch_coherent_residual_clip),
                 target_edge_gain=float(target_edge_gain),
                 target_edge_gain_clip=float(target_edge_gain_clip),
+                target_compatibility_mode=str(target_compatibility_mode),
+                target_compatibility_view_sharpness=float(target_compatibility_view_sharpness),
+                target_compatibility_min_view_cos=float(target_compatibility_min_view_cos),
+                target_compatibility_beta=float(target_compatibility_beta),
+                target_compatibility_floor=float(target_compatibility_floor),
+                target_compatibility_min_effective_sources=float(target_compatibility_min_effective_sources),
+                target_compatibility_view_weight=float(target_compatibility_view_weight),
+                target_compatibility_parent_weight=float(target_compatibility_parent_weight),
+                target_compatibility_edge_weight=float(target_compatibility_edge_weight),
+                target_compatibility_variance_weight=float(target_compatibility_variance_weight),
+                target_compatibility_effective_weight=float(target_compatibility_effective_weight),
+                target_compatibility_unique_view_weight=float(target_compatibility_unique_view_weight),
                 ood_gain_mode="off",
                 feature_rows=feature_rows,
             )
@@ -1399,6 +1521,18 @@ def _predict_delta(
     patch_coherent_residual_clip: float = 0.12,
     target_edge_gain: float = 0.0,
     target_edge_gain_clip: float = 1.5,
+    target_compatibility_mode: str = "off",
+    target_compatibility_view_sharpness: float = 0.0,
+    target_compatibility_min_view_cos: float = -1.0,
+    target_compatibility_beta: float = 0.0,
+    target_compatibility_floor: float = 0.35,
+    target_compatibility_min_effective_sources: float = 2.0,
+    target_compatibility_view_weight: float = 1.0,
+    target_compatibility_parent_weight: float = 1.0,
+    target_compatibility_edge_weight: float = 0.5,
+    target_compatibility_variance_weight: float = 0.5,
+    target_compatibility_effective_weight: float = 0.5,
+    target_compatibility_unique_view_weight: float = 0.5,
     ood_gain_mode: str = "off",
     ood_gain_beta: float = 1.0,
     ood_gain_view_weight: float = 1.0,
@@ -1440,6 +1574,11 @@ def _predict_delta(
     texture_holdout_confidences: list[float] = []
     texture_holdout_error_ratios: list[float] = []
     texture_holdout_cosines: list[float] = []
+    target_compatibility_confidences: list[float] = []
+    target_compatibility_risks: list[float] = []
+    target_compatibility_view_gaps: list[float] = []
+    target_compatibility_effective_sources: list[float] = []
+    target_compatibility_unique_sources: list[float] = []
     source_consistency_reliabilities: list[float] = []
     source_consistency_amplitudes: list[float] = []
     has_source_consistency = "source_consistency_reliability" in bank
@@ -1521,6 +1660,26 @@ def _predict_delta(
             weights *= np.exp(np.clip(-float(parent_beta) * parent_dist, -30.0, 30.0)).astype(np.float32)
         if float(gain_beta) != 0.0:
             weights *= np.clip(1.0 + float(gain_beta) * np.clip(src_gain, 0.0, None), 0.05, 10.0).astype(np.float32)
+        target_compatibility_mode_s = str(target_compatibility_mode or "off")
+        if target_compatibility_mode_s not in {"off", "soft", "hard"}:
+            raise ValueError(f"unsupported target_compatibility_mode={target_compatibility_mode}")
+        if target_compatibility_mode_s != "off":
+            row_max_view_cos = np.max(np.where(valid_src, view_cos, -1.0), axis=1, keepdims=True).astype(np.float32)
+            if float(target_compatibility_view_sharpness) > 0.0:
+                weights *= np.exp(
+                    np.clip(
+                        float(target_compatibility_view_sharpness) * (view_cos - row_max_view_cos),
+                        -30.0,
+                        0.0,
+                    )
+                ).astype(np.float32)
+            if float(target_compatibility_min_view_cos) > -1.0:
+                view_keep = view_cos >= float(target_compatibility_min_view_cos)
+                if target_compatibility_mode_s == "hard":
+                    weights *= view_keep.astype(np.float32)
+                else:
+                    margin = view_cos - float(target_compatibility_min_view_cos)
+                    weights *= _sigmoid(margin / 0.04).astype(np.float32)
         source_consistency_base_weights = weights.copy()
         source_consistency_base_denom = np.sum(source_consistency_base_weights, axis=1)
         row_source_consistency_reliability = np.ones_like(source_consistency_base_denom, dtype=np.float32)
@@ -1542,6 +1701,15 @@ def _predict_delta(
         if not np.any(ok_rows) and not neighbor_carrier_mode:
             continue
         pred = np.sum(weights[:, :, None] * src_residual, axis=1) / np.maximum(denom[:, None], 1.0e-12)
+        target_compatibility_confidence = np.ones_like(denom, dtype=np.float32)
+        target_compatibility_updated = np.zeros_like(denom, dtype=bool)
+        target_compatibility_stats: dict[str, np.ndarray] = {
+            "risk": np.zeros_like(denom, dtype=np.float32),
+            "mean_view_gap": np.zeros_like(denom, dtype=np.float32),
+            "max_view_cos": np.ones_like(denom, dtype=np.float32),
+            "effective_sources": np.zeros_like(denom, dtype=np.float32),
+            "unique_sources": np.zeros_like(denom, dtype=np.float32),
+        }
         allowed_decoder_modes = {
             "weighted_average",
             "local_linear",
@@ -1809,6 +1977,28 @@ def _predict_delta(
                     tex_weights *= np.clip(1.0 + float(gain_beta) * np.clip(tex_gain, 0.0, None), 0.05, 10.0).astype(
                         np.float32
                     )
+                if target_compatibility_mode_s != "off":
+                    tex_row_max_view_cos = np.max(
+                        np.where(tex_valid, tex_view_cos, -1.0),
+                        axis=1,
+                        keepdims=True,
+                    ).astype(np.float32)
+                    if float(target_compatibility_view_sharpness) > 0.0:
+                        tex_weights *= np.exp(
+                            np.clip(
+                                float(target_compatibility_view_sharpness)
+                                * (tex_view_cos - tex_row_max_view_cos),
+                                -30.0,
+                                0.0,
+                            )
+                        ).astype(np.float32)
+                    if float(target_compatibility_min_view_cos) > -1.0:
+                        tex_view_keep = tex_view_cos >= float(target_compatibility_min_view_cos)
+                        if target_compatibility_mode_s == "hard":
+                            tex_weights *= tex_view_keep.astype(np.float32)
+                        else:
+                            tex_margin = tex_view_cos - float(target_compatibility_min_view_cos)
+                            tex_weights *= _sigmoid(tex_margin / 0.04).astype(np.float32)
                 tex_denom = np.sum(tex_weights, axis=1)
                 tex_valid_count = np.sum(tex_valid.astype(np.float32), axis=1)
                 tex_unique_view_count = np.asarray(
@@ -1934,6 +2124,31 @@ def _predict_delta(
                         ).astype(np.float32)
                     else:
                         row_blend = np.full((idx.size,), blend, dtype=np.float32)
+                    if target_compatibility_mode_s != "off" and float(target_compatibility_beta) > 0.0:
+                        compat_conf, compat_stats = _target_compatibility_row_confidence(
+                            row_weights,
+                            tex_view_cos[idx].astype(np.float32),
+                            tex_parent_dist[idx].astype(np.float32),
+                            tex_edge_dist[idx].astype(np.float32),
+                            tex_residual[idx].astype(np.float32),
+                            texture_pred.astype(np.float32),
+                            tex_view_id[idx].astype(np.int32),
+                            beta=float(target_compatibility_beta),
+                            floor=float(target_compatibility_floor),
+                            min_effective_sources=float(target_compatibility_min_effective_sources),
+                            view_weight=float(target_compatibility_view_weight),
+                            parent_weight=float(target_compatibility_parent_weight),
+                            edge_weight=float(target_compatibility_edge_weight),
+                            variance_weight=float(target_compatibility_variance_weight),
+                            effective_weight=float(target_compatibility_effective_weight),
+                            unique_view_weight=float(target_compatibility_unique_view_weight),
+                        )
+                        row_blend = (row_blend * compat_conf).astype(np.float32)
+                        target_compatibility_confidence[idx] = compat_conf.astype(np.float32)
+                        target_compatibility_updated[idx] = True
+                        for key in target_compatibility_stats:
+                            if key in compat_stats:
+                                target_compatibility_stats[key][idx] = compat_stats[key].astype(np.float32)
                     if float(view_feature_ridge_self_error_beta) > 0.0:
                         train_pred = np.einsum("nkd,ndc->nkc", src_feat.astype(np.float32), coef, optimize=True)
                         train_err = (
@@ -2256,6 +2471,34 @@ def _predict_delta(
                     denom = np.maximum(denom, patch_denom.astype(np.float32))
                     patch_active_count += int(np.count_nonzero(patch_ok))
                     patch_blends.append(row_blend[patch_ok].astype(np.float32))
+        if target_compatibility_mode_s != "off" and float(target_compatibility_beta) > 0.0:
+            remaining_compat = ~target_compatibility_updated
+            if np.any(remaining_compat):
+                base_edge_dist = np.abs(src_parent_edge - tgt_parent_edge[:, None]).astype(np.float32)
+                base_conf, base_stats = _target_compatibility_row_confidence(
+                    weights,
+                    view_cos.astype(np.float32),
+                    parent_dist.astype(np.float32),
+                    base_edge_dist,
+                    src_residual.astype(np.float32),
+                    pred.astype(np.float32),
+                    src_view_id.astype(np.int32),
+                    beta=float(target_compatibility_beta),
+                    floor=float(target_compatibility_floor),
+                    min_effective_sources=float(target_compatibility_min_effective_sources),
+                    view_weight=float(target_compatibility_view_weight),
+                    parent_weight=float(target_compatibility_parent_weight),
+                    edge_weight=float(target_compatibility_edge_weight),
+                    variance_weight=float(target_compatibility_variance_weight),
+                    effective_weight=float(target_compatibility_effective_weight),
+                    unique_view_weight=float(target_compatibility_unique_view_weight),
+                )
+                target_compatibility_confidence[remaining_compat] = base_conf[remaining_compat].astype(np.float32)
+                for key in target_compatibility_stats:
+                    if key in base_stats:
+                        target_compatibility_stats[key][remaining_compat] = base_stats[key][
+                            remaining_compat
+                        ].astype(np.float32)
         variance_ratio = np.zeros_like(denom, dtype=np.float32)
         source_agreement = np.ones_like(denom, dtype=np.float32)
         needs_variance = (
@@ -2351,6 +2594,8 @@ def _predict_delta(
             confidence = confidence * ood_confidence
         elif str(ood_gain_mode) != "off":
             raise ValueError(f"unsupported ood_gain_mode={ood_gain_mode}")
+        if target_compatibility_mode_s != "off" and float(target_compatibility_beta) > 0.0:
+            confidence = confidence * target_compatibility_confidence
         pred = pred * confidence[:, None]
         yy, xx = ys[ok_rows], xs[ok_rows]
         delta[:, yy, xx] = pred[ok_rows].T
@@ -2373,6 +2618,20 @@ def _predict_delta(
         ood_confidences.append(ood_confidence[ok_rows].astype(np.float32))
         ood_scores.append(ood_score[ok_rows].astype(np.float32))
         tail_risks.append(policy_tail_risk[ok_rows].astype(np.float32))
+        if target_compatibility_mode_s != "off" and float(target_compatibility_beta) > 0.0:
+            target_compatibility_confidences.append(
+                target_compatibility_confidence[ok_rows].astype(np.float32)
+            )
+            target_compatibility_risks.append(target_compatibility_stats["risk"][ok_rows].astype(np.float32))
+            target_compatibility_view_gaps.append(
+                target_compatibility_stats["mean_view_gap"][ok_rows].astype(np.float32)
+            )
+            target_compatibility_effective_sources.append(
+                target_compatibility_stats["effective_sources"][ok_rows].astype(np.float32)
+            )
+            target_compatibility_unique_sources.append(
+                target_compatibility_stats["unique_sources"][ok_rows].astype(np.float32)
+            )
         if has_source_consistency:
             source_consistency_reliabilities.append(row_source_consistency_reliability[ok_rows].astype(np.float32))
             source_consistency_amplitudes.append(row_source_consistency_amplitude[ok_rows].astype(np.float32))
@@ -2385,6 +2644,31 @@ def _predict_delta(
     ood_conf = np.concatenate(ood_confidences) if ood_confidences else np.ones((0,), dtype=np.float32)
     ood_score_arr = np.concatenate(ood_scores) if ood_scores else np.zeros((0,), dtype=np.float32)
     tail_risk_arr = np.concatenate(tail_risks) if tail_risks else np.zeros((0,), dtype=np.float32)
+    target_compat_conf_arr = (
+        np.concatenate(target_compatibility_confidences)
+        if target_compatibility_confidences
+        else np.ones((0,), dtype=np.float32)
+    )
+    target_compat_risk_arr = (
+        np.concatenate(target_compatibility_risks)
+        if target_compatibility_risks
+        else np.zeros((0,), dtype=np.float32)
+    )
+    target_compat_view_gap_arr = (
+        np.concatenate(target_compatibility_view_gaps)
+        if target_compatibility_view_gaps
+        else np.zeros((0,), dtype=np.float32)
+    )
+    target_compat_effective_sources_arr = (
+        np.concatenate(target_compatibility_effective_sources)
+        if target_compatibility_effective_sources
+        else np.zeros((0,), dtype=np.float32)
+    )
+    target_compat_unique_sources_arr = (
+        np.concatenate(target_compatibility_unique_sources)
+        if target_compatibility_unique_sources
+        else np.zeros((0,), dtype=np.float32)
+    )
     patch_blend_arr = np.concatenate(patch_blends) if patch_blends else np.zeros((0,), dtype=np.float32)
     texture_blend_arr = np.concatenate(texture_blends) if texture_blends else np.zeros((0,), dtype=np.float32)
     texture_structure_gate_arr = (
@@ -2492,6 +2776,26 @@ def _predict_delta(
         "p10_ood_confidence": float(np.quantile(ood_conf, 0.10)) if ood_conf.size else 1.0,
         "mean_ood_score": float(np.mean(ood_score_arr)) if ood_score_arr.size else 0.0,
         "mean_policy_tail_risk": float(np.mean(tail_risk_arr)) if tail_risk_arr.size else 0.0,
+        "mean_target_compatibility_confidence": (
+            float(np.mean(target_compat_conf_arr)) if target_compat_conf_arr.size else 1.0
+        ),
+        "p10_target_compatibility_confidence": (
+            float(np.quantile(target_compat_conf_arr, 0.10)) if target_compat_conf_arr.size else 1.0
+        ),
+        "mean_target_compatibility_risk": (
+            float(np.mean(target_compat_risk_arr)) if target_compat_risk_arr.size else 0.0
+        ),
+        "mean_target_compatibility_view_gap": (
+            float(np.mean(target_compat_view_gap_arr)) if target_compat_view_gap_arr.size else 0.0
+        ),
+        "mean_target_compatibility_effective_sources": (
+            float(np.mean(target_compat_effective_sources_arr))
+            if target_compat_effective_sources_arr.size
+            else 0.0
+        ),
+        "mean_target_compatibility_unique_sources": (
+            float(np.mean(target_compat_unique_sources_arr)) if target_compat_unique_sources_arr.size else 0.0
+        ),
     }
 
 
@@ -2559,6 +2863,24 @@ def _summarize_rows(rows: list[dict[str, Any]], *, compute_lpips: bool) -> dict[
         "p10_ood_confidence": _mean([float(r.get("p10_ood_confidence", 1.0)) for r in rows]),
         "mean_ood_score": _mean([float(r.get("mean_ood_score", 0.0)) for r in rows]),
         "mean_policy_tail_risk": _mean([float(r.get("mean_policy_tail_risk", 0.0)) for r in rows]),
+        "mean_target_compatibility_confidence": _mean(
+            [float(r.get("mean_target_compatibility_confidence", 1.0)) for r in rows]
+        ),
+        "p10_target_compatibility_confidence": _mean(
+            [float(r.get("p10_target_compatibility_confidence", 1.0)) for r in rows]
+        ),
+        "mean_target_compatibility_risk": _mean(
+            [float(r.get("mean_target_compatibility_risk", 0.0)) for r in rows]
+        ),
+        "mean_target_compatibility_view_gap": _mean(
+            [float(r.get("mean_target_compatibility_view_gap", 0.0)) for r in rows]
+        ),
+        "mean_target_compatibility_effective_sources": _mean(
+            [float(r.get("mean_target_compatibility_effective_sources", 0.0)) for r in rows]
+        ),
+        "mean_target_compatibility_unique_sources": _mean(
+            [float(r.get("mean_target_compatibility_unique_sources", 0.0)) for r in rows]
+        ),
         "mean_changed_fraction": _mean([float(r.get("changed_fraction", 0.0)) for r in rows]),
     }
     if compute_lpips:
@@ -2650,6 +2972,18 @@ def _evaluate_policy_val(
     patch_coherent_residual_clip: float,
     target_edge_gain: float,
     target_edge_gain_clip: float,
+    target_compatibility_mode: str,
+    target_compatibility_view_sharpness: float,
+    target_compatibility_min_view_cos: float,
+    target_compatibility_beta: float,
+    target_compatibility_floor: float,
+    target_compatibility_min_effective_sources: float,
+    target_compatibility_view_weight: float,
+    target_compatibility_parent_weight: float,
+    target_compatibility_edge_weight: float,
+    target_compatibility_variance_weight: float,
+    target_compatibility_effective_weight: float,
+    target_compatibility_unique_view_weight: float,
     ood_gain_mode: str,
     ood_gain_beta: float,
     ood_gain_view_weight: float,
@@ -2716,6 +3050,18 @@ def _evaluate_policy_val(
                 patch_coherent_residual_clip=float(patch_coherent_residual_clip),
                 target_edge_gain=float(target_edge_gain),
                 target_edge_gain_clip=float(target_edge_gain_clip),
+                target_compatibility_mode=str(target_compatibility_mode),
+                target_compatibility_view_sharpness=float(target_compatibility_view_sharpness),
+                target_compatibility_min_view_cos=float(target_compatibility_min_view_cos),
+                target_compatibility_beta=float(target_compatibility_beta),
+                target_compatibility_floor=float(target_compatibility_floor),
+                target_compatibility_min_effective_sources=float(target_compatibility_min_effective_sources),
+                target_compatibility_view_weight=float(target_compatibility_view_weight),
+                target_compatibility_parent_weight=float(target_compatibility_parent_weight),
+                target_compatibility_edge_weight=float(target_compatibility_edge_weight),
+                target_compatibility_variance_weight=float(target_compatibility_variance_weight),
+                target_compatibility_effective_weight=float(target_compatibility_effective_weight),
+                target_compatibility_unique_view_weight=float(target_compatibility_unique_view_weight),
                 ood_gain_mode=str(ood_gain_mode),
                 ood_gain_beta=float(ood_gain_beta),
                 ood_gain_view_weight=float(ood_gain_view_weight),
@@ -2893,6 +3239,18 @@ def _target_no_gt_preview(
     patch_coherent_residual_clip: float,
     target_edge_gain: float,
     target_edge_gain_clip: float,
+    target_compatibility_mode: str,
+    target_compatibility_view_sharpness: float,
+    target_compatibility_min_view_cos: float,
+    target_compatibility_beta: float,
+    target_compatibility_floor: float,
+    target_compatibility_min_effective_sources: float,
+    target_compatibility_view_weight: float,
+    target_compatibility_parent_weight: float,
+    target_compatibility_edge_weight: float,
+    target_compatibility_variance_weight: float,
+    target_compatibility_effective_weight: float,
+    target_compatibility_unique_view_weight: float,
     ood_gain_mode: str,
     ood_gain_beta: float,
     ood_gain_view_weight: float,
@@ -2956,6 +3314,18 @@ def _target_no_gt_preview(
                 patch_coherent_residual_clip=float(patch_coherent_residual_clip),
                 target_edge_gain=float(target_edge_gain),
                 target_edge_gain_clip=float(target_edge_gain_clip),
+                target_compatibility_mode=str(target_compatibility_mode),
+                target_compatibility_view_sharpness=float(target_compatibility_view_sharpness),
+                target_compatibility_min_view_cos=float(target_compatibility_min_view_cos),
+                target_compatibility_beta=float(target_compatibility_beta),
+                target_compatibility_floor=float(target_compatibility_floor),
+                target_compatibility_min_effective_sources=float(target_compatibility_min_effective_sources),
+                target_compatibility_view_weight=float(target_compatibility_view_weight),
+                target_compatibility_parent_weight=float(target_compatibility_parent_weight),
+                target_compatibility_edge_weight=float(target_compatibility_edge_weight),
+                target_compatibility_variance_weight=float(target_compatibility_variance_weight),
+                target_compatibility_effective_weight=float(target_compatibility_effective_weight),
+                target_compatibility_unique_view_weight=float(target_compatibility_unique_view_weight),
                 ood_gain_mode=str(ood_gain_mode),
                 ood_gain_beta=float(ood_gain_beta),
                 ood_gain_view_weight=float(ood_gain_view_weight),
@@ -3030,6 +3400,18 @@ def _target_exact_eval(
     patch_coherent_residual_clip: float,
     target_edge_gain: float,
     target_edge_gain_clip: float,
+    target_compatibility_mode: str,
+    target_compatibility_view_sharpness: float,
+    target_compatibility_min_view_cos: float,
+    target_compatibility_beta: float,
+    target_compatibility_floor: float,
+    target_compatibility_min_effective_sources: float,
+    target_compatibility_view_weight: float,
+    target_compatibility_parent_weight: float,
+    target_compatibility_edge_weight: float,
+    target_compatibility_variance_weight: float,
+    target_compatibility_effective_weight: float,
+    target_compatibility_unique_view_weight: float,
     ood_gain_mode: str,
     ood_gain_beta: float,
     ood_gain_view_weight: float,
@@ -3099,6 +3481,18 @@ def _target_exact_eval(
                 patch_coherent_residual_clip=float(patch_coherent_residual_clip),
                 target_edge_gain=float(target_edge_gain),
                 target_edge_gain_clip=float(target_edge_gain_clip),
+                target_compatibility_mode=str(target_compatibility_mode),
+                target_compatibility_view_sharpness=float(target_compatibility_view_sharpness),
+                target_compatibility_min_view_cos=float(target_compatibility_min_view_cos),
+                target_compatibility_beta=float(target_compatibility_beta),
+                target_compatibility_floor=float(target_compatibility_floor),
+                target_compatibility_min_effective_sources=float(target_compatibility_min_effective_sources),
+                target_compatibility_view_weight=float(target_compatibility_view_weight),
+                target_compatibility_parent_weight=float(target_compatibility_parent_weight),
+                target_compatibility_edge_weight=float(target_compatibility_edge_weight),
+                target_compatibility_variance_weight=float(target_compatibility_variance_weight),
+                target_compatibility_effective_weight=float(target_compatibility_effective_weight),
+                target_compatibility_unique_view_weight=float(target_compatibility_unique_view_weight),
                 ood_gain_mode=str(ood_gain_mode),
                 ood_gain_beta=float(ood_gain_beta),
                 ood_gain_view_weight=float(ood_gain_view_weight),
@@ -3251,6 +3645,11 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- source edge score weight: `{payload.get('residual_decoder', {}).get('source_edge_score_weight', 0.0):.6f}`",
         f"- target edge gain: `{payload.get('residual_decoder', {}).get('target_edge_gain', 0.0):.6f}`",
         f"- target edge gain clip: `{payload.get('residual_decoder', {}).get('target_edge_gain_clip', 0.0):.6f}`",
+        f"- target compatibility mode: `{payload.get('residual_decoder', {}).get('target_compatibility_mode', 'off')}`",
+        f"- target compatibility view sharpness: `{payload.get('residual_decoder', {}).get('target_compatibility_view_sharpness', 0.0):.6f}`",
+        f"- target compatibility min view cosine: `{payload.get('residual_decoder', {}).get('target_compatibility_min_view_cos', -1.0):.6f}`",
+        f"- target compatibility beta/floor: `{payload.get('residual_decoder', {}).get('target_compatibility_beta', 0.0):.6f}` / `{payload.get('residual_decoder', {}).get('target_compatibility_floor', 1.0):.6f}`",
+        f"- target compatibility min effective sources: `{payload.get('residual_decoder', {}).get('target_compatibility_min_effective_sources', 0.0):.6f}`",
         "",
         (
             "`lowrank_source_basis` is a source-slot low-rank teacher-residual basis over the train-fit source bank. "
@@ -3311,6 +3710,31 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
             stail=float((best_all or {}).get("ssim_gain_tail", {}).get("cvar", 0.0)),
             ltail=float((best_all or {}).get("lpips_gain_tail", {}).get("cvar", 0.0)),
             active=float((best_all or {}).get("support_active_over_support_fraction", 0.0)),
+        ),
+        "",
+        "## Target Compatibility Diagnostics",
+        "",
+        "| row | mean conf | p10 conf | mean risk | view gap | effective sources | unique sources |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+        (
+            "| best | {conf:.6f} | {p10:.6f} | {risk:.6f} | {gap:.6f} | {eff:.6f} | {uniq:.6f} |"
+        ).format(
+            conf=float(best.get("mean_target_compatibility_confidence", 1.0)),
+            p10=float(best.get("p10_target_compatibility_confidence", 1.0)),
+            risk=float(best.get("mean_target_compatibility_risk", 0.0)),
+            gap=float(best.get("mean_target_compatibility_view_gap", 0.0)),
+            eff=float(best.get("mean_target_compatibility_effective_sources", 0.0)),
+            uniq=float(best.get("mean_target_compatibility_unique_sources", 0.0)),
+        ),
+        (
+            "| best all-axis | {conf:.6f} | {p10:.6f} | {risk:.6f} | {gap:.6f} | {eff:.6f} | {uniq:.6f} |"
+        ).format(
+            conf=float((best_all or {}).get("mean_target_compatibility_confidence", 1.0)),
+            p10=float((best_all or {}).get("p10_target_compatibility_confidence", 1.0)),
+            risk=float((best_all or {}).get("mean_target_compatibility_risk", 0.0)),
+            gap=float((best_all or {}).get("mean_target_compatibility_view_gap", 0.0)),
+            eff=float((best_all or {}).get("mean_target_compatibility_effective_sources", 0.0)),
+            uniq=float((best_all or {}).get("mean_target_compatibility_unique_sources", 0.0)),
         ),
         "",
         "## Teacher Projection At Selected Alpha",
@@ -3473,6 +3897,18 @@ def main() -> int:
     parser.add_argument("--patch_coherent_residual_clip", type=float, default=0.12)
     parser.add_argument("--target_edge_gain", type=float, default=0.0)
     parser.add_argument("--target_edge_gain_clip", type=float, default=1.5)
+    parser.add_argument("--target_compatibility_mode", choices=["off", "soft", "hard"], default="off")
+    parser.add_argument("--target_compatibility_view_sharpness", type=float, default=0.0)
+    parser.add_argument("--target_compatibility_min_view_cos", type=float, default=-1.0)
+    parser.add_argument("--target_compatibility_beta", type=float, default=0.0)
+    parser.add_argument("--target_compatibility_floor", type=float, default=0.35)
+    parser.add_argument("--target_compatibility_min_effective_sources", type=float, default=2.0)
+    parser.add_argument("--target_compatibility_view_weight", type=float, default=1.0)
+    parser.add_argument("--target_compatibility_parent_weight", type=float, default=1.0)
+    parser.add_argument("--target_compatibility_edge_weight", type=float, default=0.5)
+    parser.add_argument("--target_compatibility_variance_weight", type=float, default=0.5)
+    parser.add_argument("--target_compatibility_effective_weight", type=float, default=0.5)
+    parser.add_argument("--target_compatibility_unique_view_weight", type=float, default=0.5)
     parser.add_argument("--source_agreement_mode", choices=["off", "soft", "hard"], default="off")
     parser.add_argument("--source_agreement_beta", type=float, default=0.0)
     parser.add_argument("--source_agreement_min_confidence", type=float, default=0.25)
@@ -3696,6 +4132,18 @@ def main() -> int:
             patch_coherent_residual_clip=float(args.patch_coherent_residual_clip),
             target_edge_gain=float(args.target_edge_gain),
             target_edge_gain_clip=float(args.target_edge_gain_clip),
+            target_compatibility_mode=str(args.target_compatibility_mode),
+            target_compatibility_view_sharpness=float(args.target_compatibility_view_sharpness),
+            target_compatibility_min_view_cos=float(args.target_compatibility_min_view_cos),
+            target_compatibility_beta=float(args.target_compatibility_beta),
+            target_compatibility_floor=float(args.target_compatibility_floor),
+            target_compatibility_min_effective_sources=float(args.target_compatibility_min_effective_sources),
+            target_compatibility_view_weight=float(args.target_compatibility_view_weight),
+            target_compatibility_parent_weight=float(args.target_compatibility_parent_weight),
+            target_compatibility_edge_weight=float(args.target_compatibility_edge_weight),
+            target_compatibility_variance_weight=float(args.target_compatibility_variance_weight),
+            target_compatibility_effective_weight=float(args.target_compatibility_effective_weight),
+            target_compatibility_unique_view_weight=float(args.target_compatibility_unique_view_weight),
         )
     learned_ood_head_summary: dict[str, Any] = {"mode": "off"}
     if str(args.ood_gain_mode) == "learned_linear":
@@ -3751,6 +4199,18 @@ def main() -> int:
             patch_coherent_residual_clip=float(args.patch_coherent_residual_clip),
             target_edge_gain=float(args.target_edge_gain),
             target_edge_gain_clip=float(args.target_edge_gain_clip),
+            target_compatibility_mode=str(args.target_compatibility_mode),
+            target_compatibility_view_sharpness=float(args.target_compatibility_view_sharpness),
+            target_compatibility_min_view_cos=float(args.target_compatibility_min_view_cos),
+            target_compatibility_beta=float(args.target_compatibility_beta),
+            target_compatibility_floor=float(args.target_compatibility_floor),
+            target_compatibility_min_effective_sources=float(args.target_compatibility_min_effective_sources),
+            target_compatibility_view_weight=float(args.target_compatibility_view_weight),
+            target_compatibility_parent_weight=float(args.target_compatibility_parent_weight),
+            target_compatibility_edge_weight=float(args.target_compatibility_edge_weight),
+            target_compatibility_variance_weight=float(args.target_compatibility_variance_weight),
+            target_compatibility_effective_weight=float(args.target_compatibility_effective_weight),
+            target_compatibility_unique_view_weight=float(args.target_compatibility_unique_view_weight),
         )
     alpha_grid = sorted({float(item) for item in str(args.alpha_grid).split(",") if item.strip()})
     if 0.0 not in alpha_grid:
@@ -3800,6 +4260,18 @@ def main() -> int:
         patch_coherent_residual_clip=float(args.patch_coherent_residual_clip),
         target_edge_gain=float(args.target_edge_gain),
         target_edge_gain_clip=float(args.target_edge_gain_clip),
+        target_compatibility_mode=str(args.target_compatibility_mode),
+        target_compatibility_view_sharpness=float(args.target_compatibility_view_sharpness),
+        target_compatibility_min_view_cos=float(args.target_compatibility_min_view_cos),
+        target_compatibility_beta=float(args.target_compatibility_beta),
+        target_compatibility_floor=float(args.target_compatibility_floor),
+        target_compatibility_min_effective_sources=float(args.target_compatibility_min_effective_sources),
+        target_compatibility_view_weight=float(args.target_compatibility_view_weight),
+        target_compatibility_parent_weight=float(args.target_compatibility_parent_weight),
+        target_compatibility_edge_weight=float(args.target_compatibility_edge_weight),
+        target_compatibility_variance_weight=float(args.target_compatibility_variance_weight),
+        target_compatibility_effective_weight=float(args.target_compatibility_effective_weight),
+        target_compatibility_unique_view_weight=float(args.target_compatibility_unique_view_weight),
         ood_gain_mode=str(args.ood_gain_mode),
         ood_gain_beta=float(args.ood_gain_beta),
         ood_gain_view_weight=float(args.ood_gain_view_weight),
@@ -3861,6 +4333,18 @@ def main() -> int:
             patch_coherent_residual_clip=float(args.patch_coherent_residual_clip),
             target_edge_gain=float(args.target_edge_gain),
             target_edge_gain_clip=float(args.target_edge_gain_clip),
+            target_compatibility_mode=str(args.target_compatibility_mode),
+            target_compatibility_view_sharpness=float(args.target_compatibility_view_sharpness),
+            target_compatibility_min_view_cos=float(args.target_compatibility_min_view_cos),
+            target_compatibility_beta=float(args.target_compatibility_beta),
+            target_compatibility_floor=float(args.target_compatibility_floor),
+            target_compatibility_min_effective_sources=float(args.target_compatibility_min_effective_sources),
+            target_compatibility_view_weight=float(args.target_compatibility_view_weight),
+            target_compatibility_parent_weight=float(args.target_compatibility_parent_weight),
+            target_compatibility_edge_weight=float(args.target_compatibility_edge_weight),
+            target_compatibility_variance_weight=float(args.target_compatibility_variance_weight),
+            target_compatibility_effective_weight=float(args.target_compatibility_effective_weight),
+            target_compatibility_unique_view_weight=float(args.target_compatibility_unique_view_weight),
             ood_gain_mode=str(args.ood_gain_mode),
             ood_gain_beta=float(args.ood_gain_beta),
             ood_gain_view_weight=float(args.ood_gain_view_weight),
@@ -3921,6 +4405,18 @@ def main() -> int:
             patch_coherent_residual_clip=float(args.patch_coherent_residual_clip),
             target_edge_gain=float(args.target_edge_gain),
             target_edge_gain_clip=float(args.target_edge_gain_clip),
+            target_compatibility_mode=str(args.target_compatibility_mode),
+            target_compatibility_view_sharpness=float(args.target_compatibility_view_sharpness),
+            target_compatibility_min_view_cos=float(args.target_compatibility_min_view_cos),
+            target_compatibility_beta=float(args.target_compatibility_beta),
+            target_compatibility_floor=float(args.target_compatibility_floor),
+            target_compatibility_min_effective_sources=float(args.target_compatibility_min_effective_sources),
+            target_compatibility_view_weight=float(args.target_compatibility_view_weight),
+            target_compatibility_parent_weight=float(args.target_compatibility_parent_weight),
+            target_compatibility_edge_weight=float(args.target_compatibility_edge_weight),
+            target_compatibility_variance_weight=float(args.target_compatibility_variance_weight),
+            target_compatibility_effective_weight=float(args.target_compatibility_effective_weight),
+            target_compatibility_unique_view_weight=float(args.target_compatibility_unique_view_weight),
             ood_gain_mode=str(args.ood_gain_mode),
             ood_gain_beta=float(args.ood_gain_beta),
             ood_gain_view_weight=float(args.ood_gain_view_weight),
@@ -3939,6 +4435,7 @@ def main() -> int:
             and target_summary.get("ssim_gain", 0.0) > 0.0
             and (not bool(args.compute_lpips) or target_summary.get("lpips_gain", 0.0) > 0.0)
         )
+    phasej_exact_comparison = target_eval.get("phasej_reference_comparison", {}) if target_eval else {}
     checkpoint_path = output_dir / "v253_deferred_source_renderer_bank.npz"
     checkpoint_payload = {
         "schema": np.asarray("spcarnet_v253_deferred_source_renderer_bank_v1"),
@@ -4045,6 +4542,18 @@ def main() -> int:
             "source_edge_score_weight": float(args.source_edge_score_weight),
             "target_edge_gain": float(args.target_edge_gain),
             "target_edge_gain_clip": float(args.target_edge_gain_clip),
+            "target_compatibility_mode": str(args.target_compatibility_mode),
+            "target_compatibility_view_sharpness": float(args.target_compatibility_view_sharpness),
+            "target_compatibility_min_view_cos": float(args.target_compatibility_min_view_cos),
+            "target_compatibility_beta": float(args.target_compatibility_beta),
+            "target_compatibility_floor": float(args.target_compatibility_floor),
+            "target_compatibility_min_effective_sources": float(args.target_compatibility_min_effective_sources),
+            "target_compatibility_view_weight": float(args.target_compatibility_view_weight),
+            "target_compatibility_parent_weight": float(args.target_compatibility_parent_weight),
+            "target_compatibility_edge_weight": float(args.target_compatibility_edge_weight),
+            "target_compatibility_variance_weight": float(args.target_compatibility_variance_weight),
+            "target_compatibility_effective_weight": float(args.target_compatibility_effective_weight),
+            "target_compatibility_unique_view_weight": float(args.target_compatibility_unique_view_weight),
         },
         "policy_reliability": policy_reliability_summary,
         "learned_ood_head": learned_ood_head_summary,
@@ -4063,6 +4572,12 @@ def main() -> int:
         "target_no_gt_preview": target_preview,
         "target_exact_eval": target_eval,
         "phasej_flowers_exact_reference": PHASEJ_FLOWERS,
+        "flowers_exact_phasej_gate_pass": bool(
+            phasej_exact_comparison.get("beats_phasej_all_axis_under_reported_metric_scale", False)
+        ),
+        "candidate_psnr_minus_phasej": phasej_exact_comparison.get("candidate_psnr_minus_phasej"),
+        "candidate_ssim_minus_phasej": phasej_exact_comparison.get("candidate_ssim_minus_phasej"),
+        "phasej_lpips_minus_candidate": phasej_exact_comparison.get("phasej_lpips_minus_candidate"),
         "flowers_exact_run_allowed_next": bool(all_axis and target_no_gt_audit.get("pass", False)),
         "uses_train_fit_teacher": True,
         "uses_policy_val_gt": True,
@@ -4142,6 +4657,34 @@ def main() -> int:
                 "residual_decoder/source_edge_score_weight": float(args.source_edge_score_weight),
                 "residual_decoder/target_edge_gain": float(args.target_edge_gain),
                 "residual_decoder/target_edge_gain_clip": float(args.target_edge_gain_clip),
+                "residual_decoder/target_compatibility_enabled": float(
+                    str(args.target_compatibility_mode) != "off"
+                ),
+                "residual_decoder/target_compatibility_view_sharpness": float(
+                    args.target_compatibility_view_sharpness
+                ),
+                "residual_decoder/target_compatibility_min_view_cos": float(
+                    args.target_compatibility_min_view_cos
+                ),
+                "residual_decoder/target_compatibility_beta": float(args.target_compatibility_beta),
+                "residual_decoder/target_compatibility_floor": float(args.target_compatibility_floor),
+                "residual_decoder/target_compatibility_min_effective_sources": float(
+                    args.target_compatibility_min_effective_sources
+                ),
+                "residual_decoder/target_compatibility_view_weight": float(args.target_compatibility_view_weight),
+                "residual_decoder/target_compatibility_parent_weight": float(
+                    args.target_compatibility_parent_weight
+                ),
+                "residual_decoder/target_compatibility_edge_weight": float(args.target_compatibility_edge_weight),
+                "residual_decoder/target_compatibility_variance_weight": float(
+                    args.target_compatibility_variance_weight
+                ),
+                "residual_decoder/target_compatibility_effective_weight": float(
+                    args.target_compatibility_effective_weight
+                ),
+                "residual_decoder/target_compatibility_unique_view_weight": float(
+                    args.target_compatibility_unique_view_weight
+                ),
                 "source_bank/nonempty_source_slots": float(bank_summary.get("nonempty_source_slots", 0)),
                 "source_bank/residual_energy_ratio_after_transform": float(
                     residual_transform_summary.get("energy_ratio_after_before", 1.0)

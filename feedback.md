@@ -2,6 +2,32 @@
 
 Date: 2026-06-28
 
+Latest update on 2026-06-30, v289:
+
+The newest branch is **target-compatible source aggregation for deferred source residual rendering** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`. New files:
+
+- `docs/car_model/6-30-v289-TargetCompatibility-v169-Gate-Log.md`
+- `docs/car_model/results/v289_target_compatibility_summary.json`
+
+Important new facts:
+
+- v289 adds `target_compatibility_*` controls to the train/eval pipeline.
+- The method reweights train-fit Phase-J teacher residual source slots by target-view compatibility before deferred source aggregation.
+- Optional confidence shrink estimates target row risk from view gap, parent mismatch, edge mismatch, residual disagreement, effective source count, and unique source-view count.
+- Three full flowers target exact runs were completed with W&B offline and strict stripped target no-GT apply.
+- All v289 runs passed policy-val all-axis, passed no-GT audit, and improved over the parent on flowers exact.
+
+Effective results:
+
+- v286b reference target exact: `19.840910 / 0.620183 / 0.180100`, gains `+0.008856 / +0.000272 / +0.000235`, Phase-J PSNR gap `-0.463448`.
+- v289a soft weighting + mild shrink target exact: `19.841450 / 0.620205 / 0.180094`, gains `+0.009396 / +0.000294 / +0.000241`, Phase-J PSNR gap `-0.462908`.
+- v289b sharper weighting + stronger shrink target exact: `19.841702 / 0.620217 / 0.180109`, gains `+0.009648 / +0.000306 / +0.000226`, Phase-J PSNR gap `-0.462656`.
+- v289c source-weighting-only target exact: `19.841839 / 0.620214 / 0.180080`, gains `+0.009785 / +0.000303 / +0.000255`, Phase-J PSNR gap `-0.462519`.
+
+Current direct verdict:
+
+> v289 proves that target-compatible source weighting is a small positive component, but it is not the missing paper-level mechanism. The best version is v289c, where confidence shrink is disabled; shrink reduces useful residual energy. The exact gain over v286b is only about `+0.000929` PSNR, so the remaining blocker is not source-selection calibration. The baked/deferred carrier still cannot inject enough correct high-frequency Phase-J residual energy into target views. Do not run full9. Do not continue target-compatibility beta/floor scans as the main route. The next model should keep source weighting as a minor component and move to a higher-capacity patch-aware learned view-dependent surface decoder or stronger patch/perceptual residual supervision.
+
 Latest update on 2026-06-30, v287-v288:
 
 The newest branch is **patch-aware teacher proxy and lowrank-plus-direct hybrid decoder** in `scripts/car_model/train_perceptual_surface_residual_decoder.py`. New files:

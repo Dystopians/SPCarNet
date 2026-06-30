@@ -2,6 +2,37 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 v289 Target-Compatible Source Aggregation Update
+
+新增日志：`docs/car_model/6-30-v289-TargetCompatibility-v169-Gate-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v289_target_compatibility_summary.json`。
+
+这轮严格参考 `docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md`，继续执行 flowers-first gate。代码层面在 `scripts/car_model/train_surface_deferred_source_residual_renderer.py` 中新增真实 train/eval pipeline 改动：`target_compatibility_*` source aggregation。该机制在 deferred source residual renderer 中按目标视角兼容性重加权 train-fit Phase-J teacher residual source slots，并可选地基于 view gap、parent/edge mismatch、source residual disagreement、effective source count 和 unique source-view count 做 confidence shrink。
+
+关键接口：
+
+- `--target_compatibility_mode {off,soft,hard}`
+- `--target_compatibility_view_sharpness`
+- `--target_compatibility_min_view_cos`
+- `--target_compatibility_beta`
+- `--target_compatibility_floor`
+- `--target_compatibility_min_effective_sources`
+- `--target_compatibility_{view,parent,edge,variance,effective,unique_view}_weight`
+
+关键结果：
+
+| run | method | policy-val candidate | target exact candidate | exact gains vs parent | Phase-J PSNR gap | verdict |
+|---|---|---:|---:|---:|---:|---|
+| v286b ref | heldout-recalibrated view-feature ridge | 20.650730 / 0.719454 / 0.152572 | 19.840910 / 0.620183 / 0.180100 | +0.008856 / +0.000272 / +0.000235 | -0.463448 | fail |
+| v289a | soft target-compatible weighting + mild shrink | 20.652035 / 0.719490 / 0.152559 | 19.841450 / 0.620205 / 0.180094 | +0.009396 / +0.000294 / +0.000241 | -0.462908 | fail |
+| v289b | sharper weighting + stronger shrink | 20.650309 / 0.719392 / 0.152597 | 19.841702 / 0.620217 / 0.180109 | +0.009648 / +0.000306 / +0.000226 | -0.462656 | fail |
+| v289c | source weighting only, no compatibility shrink | 20.654506 / 0.719583 / 0.152522 | 19.841839 / 0.620214 / 0.180080 | +0.009785 / +0.000303 / +0.000255 | -0.462519 | fail |
+
+所有 v289 runs 使用 stripped target no-GT evidence apply，target/test GT 只在 apply 后用于 exact metrics；no-GT audit 均通过；中程和 exact 评估均使用 W&B offline，GPU1/GPU2。`v289c` 是本轮最佳，说明 target-compatible source weighting 是正贡献；但 confidence shrink 会压掉有效 residual energy，不应继续作为主路线扫描。v289c 相比 v286b 只提升约 `+0.000929` PSNR / `+0.000031` SSIM / `0.000020` LPIPS reduction，仍比 Phase-J flowers PSNR 低 `0.462519`。
+
+直接结论：v289 是有效的小机制改进和重要诊断，但不是 v169 gate 突破。当前瓶颈仍是 baked/deferred carrier 能传递的正确 Phase-J RGB residual energy 太弱，target-compatible source selection 不能凭空增加高频 teacher residual capacity。状态仍为 `NOT COMPLETE`，full9 继续阻塞。下一步应保留 source weighting 作为组件，但主线必须转向更强的 patch-aware learned view-dependent surface decoder 或更高容量 residual supervision。
+
 ## 2026-06-30 v287-v288 Patch/Hybrid Decoder Update
 
 新增日志：`docs/car_model/6-30-v287-v288-PatchHybridDecoder-v169-Gate-Log.md`。

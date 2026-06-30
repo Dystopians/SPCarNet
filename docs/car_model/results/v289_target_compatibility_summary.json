@@ -1,0 +1,127 @@
+{
+  "date": "2026-06-30",
+  "prompt_reference": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "method": "target-compatible source aggregation for view_feature_ridge_texture",
+  "phasej_flowers_reference": {
+    "psnr": 20.304358,
+    "ssim": 0.55777,
+    "lpips": 0.329222
+  },
+  "shared_inputs": {
+    "bank_checkpoint": "outputs/carnet/spcarnet_v265_lowrank_full_flowers_20260630/v265a_lowrank_source_basis_targetvisible_32k/v253_deferred_source_renderer_bank.npz",
+    "fit_evidence_dir": "/dev/shm/peilincai_spcarnet_20260629_v168_direct_teacher_lowcopy_exact/flowers/teacher_surface_evidence",
+    "target_evidence_dir": "/dev/shm/peilincai_spcarnet_20260629_v168_direct_teacher_lowcopy_exact/flowers/target_evidence_no_gt",
+    "target_eval_evidence_dir": "/dev/shm/peilincai_spcarnet_20260629_v168_direct_teacher_lowcopy_exact/flowers/target_evidence_reparented"
+  },
+  "runs": [
+    {
+      "id": "v286b_holdout_recalibrated",
+      "target_compatibility": "off",
+      "audit_json": "outputs/carnet/v286b_holdout_recalibrated_flowers_exact_alpha1_20260630/v253_deferred_source_renderer_audit.json",
+      "policy_val": {
+        "psnr": 20.650730,
+        "ssim": 0.719454,
+        "lpips": 0.152572,
+        "psnr_gain": 0.044293,
+        "ssim_gain": 0.001928,
+        "lpips_gain": 0.000745
+      },
+      "target_exact": {
+        "psnr": 19.840910,
+        "ssim": 0.620183,
+        "lpips": 0.180100,
+        "psnr_gain": 0.008856,
+        "ssim_gain": 0.000272,
+        "lpips_gain": 0.000235,
+        "phasej_psnr_gap": -0.463448,
+        "phasej_gate_pass": false,
+        "no_gt_audit_pass": true
+      }
+    },
+    {
+      "id": "v289a_soft_weight_plus_shrink",
+      "target_compatibility": "soft weighting plus mild confidence shrink",
+      "audit_json": "outputs/carnet/spcarnet_v289_targetcompat_20260630/v289a_soft_targetcompat_flowers/v253_deferred_source_renderer_audit.json",
+      "policy_val": {
+        "psnr": 20.652035,
+        "ssim": 0.719490,
+        "lpips": 0.152559,
+        "psnr_gain": 0.045598,
+        "ssim_gain": 0.001964,
+        "lpips_gain": 0.000757,
+        "mean_target_compatibility_confidence": 0.966902,
+        "p10_target_compatibility_confidence": 0.940959,
+        "mean_target_compatibility_risk": 0.976007
+      },
+      "target_exact": {
+        "psnr": 19.841450,
+        "ssim": 0.620205,
+        "lpips": 0.180094,
+        "psnr_gain": 0.009396,
+        "ssim_gain": 0.000294,
+        "lpips_gain": 0.000241,
+        "phasej_psnr_gap": -0.462908,
+        "phasej_gate_pass": false,
+        "no_gt_audit_pass": true
+      }
+    },
+    {
+      "id": "v289b_strong_weight_plus_shrink",
+      "target_compatibility": "sharper weighting plus stronger confidence shrink",
+      "audit_json": "outputs/carnet/spcarnet_v289_targetcompat_20260630/v289b_stronger_targetcompat_flowers/v253_deferred_source_renderer_audit.json",
+      "policy_val": {
+        "psnr": 20.650309,
+        "ssim": 0.719392,
+        "lpips": 0.152597,
+        "psnr_gain": 0.043872,
+        "ssim_gain": 0.001866,
+        "lpips_gain": 0.000720,
+        "mean_target_compatibility_confidence": 0.832399,
+        "p10_target_compatibility_confidence": 0.724754,
+        "mean_target_compatibility_risk": 1.476044
+      },
+      "target_exact": {
+        "psnr": 19.841702,
+        "ssim": 0.620217,
+        "lpips": 0.180109,
+        "psnr_gain": 0.009648,
+        "ssim_gain": 0.000306,
+        "lpips_gain": 0.000226,
+        "phasej_psnr_gap": -0.462656,
+        "phasej_gate_pass": false,
+        "no_gt_audit_pass": true
+      }
+    },
+    {
+      "id": "v289c_weight_only",
+      "target_compatibility": "source weighting only, no compatibility confidence shrink",
+      "audit_json": "outputs/carnet/spcarnet_v289_targetcompat_20260630/v289c_weightonly_targetcompat_flowers/v253_deferred_source_renderer_audit.json",
+      "policy_val": {
+        "psnr": 20.654506,
+        "ssim": 0.719583,
+        "lpips": 0.152522,
+        "psnr_gain": 0.048069,
+        "ssim_gain": 0.002057,
+        "lpips_gain": 0.000794
+      },
+      "target_exact": {
+        "psnr": 19.841839,
+        "ssim": 0.620214,
+        "lpips": 0.180080,
+        "psnr_gain": 0.009785,
+        "ssim_gain": 0.000303,
+        "lpips_gain": 0.000255,
+        "phasej_psnr_gap": -0.462519,
+        "phasej_gate_pass": false,
+        "no_gt_audit_pass": true
+      }
+    }
+  ],
+  "best_run": "v289c_weight_only",
+  "best_vs_v286b_exact_delta": {
+    "psnr": 0.000929,
+    "ssim": 0.000031,
+    "lpips_reduction": 0.000020
+  },
+  "conclusion": "Target-compatible source weighting is mildly positive, but confidence shrink is not useful and the Phase-J PSNR gap remains about 0.4625 dB. Full9 remains blocked."
+}
