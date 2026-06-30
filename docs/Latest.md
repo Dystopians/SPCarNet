@@ -2,6 +2,30 @@
 
 Date: 2026-06-28
 
+## 2026-06-29 v259 Target-Support / OOD-Aware Gain Update
+
+新增日志：`docs/car_model/6-29-v259-TargetSupportOODGain-Log.md`。
+
+新增机器可读汇总：`docs/car_model/results/v259_ood_gain_summary.json`。
+
+v259 继续沿用 v169 硬约束：flowers exact 没有超过 Phase-J 三指标前不启动 full9。
+
+代码层面新增了真实方法改动：
+
+- `scripts/car_model/train_surface_deferred_source_residual_renderer.py` 新增 `policy_tail_risk`，由 policy-val 的 positive fraction、negative gain magnitude 和 gain variance 学得。
+- 新增 `--ood_gain_mode boosted_soft`，仅对被 `policy_gain` 放大的 residual 使用 source-support/OOD confidence 自动降权。
+- OOD 特征不使用 target/test GT，包括 source camera view gap、source residual variance ratio、parent RGB mismatch、effective source count concentration、policy-val tail risk。
+
+关键结果：
+
+| run | target PSNR | SSIM | LPIPS | target gains | target tails | Phase-J gate |
+|---|---:|---:|---:|---|---|---|
+| v258a gain max 2.0 | 19.838304 | 0.620019 | 0.180196 | +0.006250 / +0.000108 / +0.000139 | -0.002007 / -0.000258 / -0.000380 | fail PSNR |
+| v259a OOD beta 1 | 19.838006 | 0.620050 | 0.180238 | +0.005952 / +0.000139 / +0.000097 | -0.000483 / -0.000164 / -0.000233 | fail PSNR |
+| v259b OOD beta 2 | 19.837280 | 0.620046 | 0.180256 | +0.005226 / +0.000135 / +0.000079 | +0.000040 / -0.000116 / -0.000148 | fail PSNR |
+
+结论：v259 证明 target-support/OOD-aware gain 是有效方向。它把 v258a 的 PSNR tail CVaR 从 `-0.002007` 改善到 v259b 的 `+0.000040`，v259a 也给出了当前 deferred-source line 最好的 target SSIM mean `0.620050`。但它仍没过 Phase-J PSNR gate：最好 PSNR 仍低 Phase-J `0.466352` 左右，并且 SSIM/LPIPS tail 还没有完全修复。所以状态仍是 `NOT COMPLETE`，下一步不应继续固定 beta 扫描，而应训练一个 policy-val-supervised OOD/gain head 或更强 residual carrier。
+
 ## 2026-06-29 v257-v258 Policy-Calibrated Deferred Gain Update
 
 新增日志：`docs/car_model/6-29-v257-v258-PolicyCalibratedGain-Log.md`。

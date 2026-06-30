@@ -1,0 +1,299 @@
+{
+  "best_roles": {
+    "best_mean_psnr_and_lpips": "v258a_policy_gain_max2",
+    "best_mean_ssim": "v259a_ood_gain_beta1",
+    "best_psnr_tail_safety": "v259b_ood_gain_beta2",
+    "phasej_gate": "none"
+  },
+  "date": "2026-06-29",
+  "gate_rule": "Do not run full9 until flowers exact beats Phase-J all-axis.",
+  "main_conclusion": "v259 adds target-support/OOD-aware shrink for boosted residual gain. It improves target PSNR tail risk versus v258a and gives the best SSIM mean in this deferred-source line at beta=1, while beta=2 makes PSNR tail CVaR positive. It still fails the Phase-J flowers PSNR gate and does not fully fix SSIM/LPIPS tails, so full9 remains blocked.",
+  "phasej_flowers_reference": {
+    "lpips": 0.329222,
+    "psnr": 20.304358,
+    "ssim": 0.55777
+  },
+  "prompt": "docs/6-28-SPCarNet-v169-Lessons-Learned-ImprovedPrompt.md",
+  "runs": {
+    "v258a_policy_gain_max2": {
+      "artifact_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258a_policy_gain_patch_perceptual_targetexact/v253_deferred_source_renderer_audit.json",
+      "artifact_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258a_policy_gain_patch_perceptual_targetexact/v253_deferred_source_renderer_audit.md",
+      "ood_gain": {},
+      "policy_reliability": {
+        "active_bins": 16841,
+        "mean_policy_gain_valid": 1.217036485671997,
+        "mean_reliability": 0.049058325588703156,
+        "mean_tail_risk_valid": null,
+        "mode": "patch_perceptual_v1",
+        "policy_gain_mode": "positive_soft"
+      },
+      "policy_val": {
+        "alpha": 1.0,
+        "lpips_gain": 0.0004503292342027028,
+        "lpips_tail_cvar": 8.895993232727051e-05,
+        "mean_ood_confidence": null,
+        "p10_ood_confidence": null,
+        "psnr_gain": 0.030403920093269754,
+        "psnr_tail_cvar": 0.02233937280403353,
+        "ssim_gain": 0.0009415944417317709,
+        "ssim_tail_cvar": 0.0005620419979095459
+      },
+      "render_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258a_policy_gain_patch_perceptual_targetexact/target_exact_fixed_policy",
+      "target_exact": {
+        "beats_phasej_all_axis": false,
+        "candidate_lpips": 0.18019579486413437,
+        "candidate_psnr": 19.838304260034057,
+        "candidate_ssim": 0.6200187721035697,
+        "lpips_gain": 0.00013907118277116254,
+        "lpips_positive_view_fraction": 0.6363636363636364,
+        "lpips_tail_cvar": -0.00037965675195058185,
+        "mean_changed_fraction": 0.010295384466103159,
+        "mean_ood_confidence": null,
+        "p10_ood_confidence": null,
+        "pass_vs_parent_all_axis": true,
+        "phasej_lpips_margin": 0.14902620513586565,
+        "phasej_psnr_gap": -0.46605373996594324,
+        "phasej_ssim_gap": 0.062248772103569716,
+        "positive_view_fraction": 0.8636363636363636,
+        "psnr_gain": 0.00625038158659211,
+        "psnr_tail_cvar": -0.0020068008788278746,
+        "ssim_gain": 0.00010836124420166016,
+        "ssim_positive_view_fraction": 0.6363636363636364,
+        "ssim_tail_cvar": -0.00025786956151326496
+      },
+      "teacher_projection_active": {
+        "changed_fraction": 0.36784571287256135,
+        "cosine": 0.3431320762449646,
+        "energy_retention": 0.46704332296511875
+      },
+      "wandb_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258a_policy_gain_patch_perceptual_targetexact/wandb"
+    },
+    "v258b_policy_gain_max1p5": {
+      "artifact_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258b_policy_gain15_patch_perceptual_targetexact/v253_deferred_source_renderer_audit.json",
+      "artifact_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258b_policy_gain15_patch_perceptual_targetexact/v253_deferred_source_renderer_audit.md",
+      "ood_gain": {},
+      "policy_reliability": {
+        "active_bins": 16841,
+        "mean_policy_gain_valid": 1.1085182428359985,
+        "mean_reliability": 0.049058325588703156,
+        "mean_tail_risk_valid": null,
+        "mode": "patch_perceptual_v1",
+        "policy_gain_mode": "positive_soft"
+      },
+      "policy_val": {
+        "alpha": 1.0,
+        "lpips_gain": 0.0003915044168631236,
+        "lpips_tail_cvar": 0.00012736022472381592,
+        "mean_ood_confidence": null,
+        "p10_ood_confidence": null,
+        "psnr_gain": 0.026002800936554788,
+        "psnr_tail_cvar": 0.019118859097932983,
+        "ssim_gain": 0.0008115420738855997,
+        "ssim_tail_cvar": 0.0005253851413726807
+      },
+      "render_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258b_policy_gain15_patch_perceptual_targetexact/target_exact_fixed_policy",
+      "target_exact": {
+        "beats_phasej_all_axis": false,
+        "candidate_lpips": 0.18021729317578403,
+        "candidate_psnr": 19.838286222286566,
+        "candidate_ssim": 0.6200469434261322,
+        "lpips_gain": 0.00011757287112149325,
+        "lpips_positive_view_fraction": 0.7272727272727273,
+        "lpips_tail_cvar": -0.0002451812227567037,
+        "mean_changed_fraction": 0.010148029153010177,
+        "mean_ood_confidence": null,
+        "p10_ood_confidence": null,
+        "pass_vs_parent_all_axis": true,
+        "phasej_lpips_margin": 0.149004706824216,
+        "phasej_psnr_gap": -0.46607177771343444,
+        "phasej_ssim_gap": 0.062276943426132214,
+        "positive_view_fraction": 0.8636363636363636,
+        "psnr_gain": 0.006232343839100419,
+        "psnr_tail_cvar": -0.00081608962759816,
+        "ssim_gain": 0.00013653256676413795,
+        "ssim_positive_view_fraction": 0.6818181818181818,
+        "ssim_tail_cvar": -0.0001509984334309896
+      },
+      "teacher_projection_active": {
+        "changed_fraction": 0.3625554103624889,
+        "cosine": 0.34817763908550486,
+        "energy_retention": 0.28121686993910944
+      },
+      "wandb_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258b_policy_gain15_patch_perceptual_targetexact/wandb"
+    },
+    "v258c_policy_gain_max1p5_source_agreement": {
+      "artifact_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258c_policy_gain15_source_agreement_targetexact/v253_deferred_source_renderer_audit.json",
+      "artifact_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258c_policy_gain15_source_agreement_targetexact/v253_deferred_source_renderer_audit.md",
+      "ood_gain": {},
+      "policy_reliability": {
+        "active_bins": 16948,
+        "mean_policy_gain_valid": 1.103338360786438,
+        "mean_reliability": 0.04724810644984245,
+        "mean_tail_risk_valid": null,
+        "mode": "patch_perceptual_v1",
+        "policy_gain_mode": "positive_soft"
+      },
+      "policy_val": {
+        "alpha": 1.0,
+        "lpips_gain": 0.0003633474310239156,
+        "lpips_tail_cvar": 0.00010048598051071167,
+        "mean_ood_confidence": null,
+        "p10_ood_confidence": null,
+        "psnr_gain": 0.02256366759029582,
+        "psnr_tail_cvar": 0.01628809387593222,
+        "ssim_gain": 0.0006956160068511963,
+        "ssim_tail_cvar": 0.0004545152187347412
+      },
+      "render_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258c_policy_gain15_source_agreement_targetexact/target_exact_fixed_policy",
+      "target_exact": {
+        "beats_phasej_all_axis": false,
+        "candidate_lpips": 0.18023527853868224,
+        "candidate_psnr": 19.83758793559166,
+        "candidate_ssim": 0.6200368187644265,
+        "lpips_gain": 9.958750822327353e-05,
+        "lpips_positive_view_fraction": 0.7727272727272727,
+        "lpips_tail_cvar": -0.0002034356196721395,
+        "mean_changed_fraction": 0.00808858569087459,
+        "mean_ood_confidence": null,
+        "p10_ood_confidence": null,
+        "pass_vs_parent_all_axis": true,
+        "phasej_lpips_margin": 0.14898672146131778,
+        "phasej_psnr_gap": -0.46677006440834035,
+        "phasej_ssim_gap": 0.062266818764426524,
+        "positive_view_fraction": 0.9090909090909091,
+        "psnr_gain": 0.005534057144196777,
+        "psnr_tail_cvar": -0.0006739369293550604,
+        "ssim_gain": 0.0001264079050584273,
+        "ssim_positive_view_fraction": 0.6818181818181818,
+        "ssim_tail_cvar": -0.00013695160547892252
+      },
+      "teacher_projection_active": {
+        "changed_fraction": 0.29495500956384,
+        "cosine": 0.32845436092336927,
+        "energy_retention": 0.24112155980377392
+      },
+      "wandb_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v258c_policy_gain15_source_agreement_targetexact/wandb"
+    },
+    "v259a_ood_gain_beta1": {
+      "artifact_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v259a_ood_gain2_targetexact/v253_deferred_source_renderer_audit.json",
+      "artifact_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v259a_ood_gain2_targetexact/v253_deferred_source_renderer_audit.md",
+      "ood_gain": {
+        "beta": 1.0,
+        "effective_count_weight": 0.5,
+        "mode": "boosted_soft",
+        "parent_weight": 1.0,
+        "variance_weight": 0.5,
+        "view_weight": 2.0
+      },
+      "policy_reliability": {
+        "active_bins": 16841,
+        "mean_policy_gain_valid": 1.217036485671997,
+        "mean_reliability": 0.049058325588703156,
+        "mean_tail_risk_valid": 0.6739572286605835,
+        "mode": "patch_perceptual_v1",
+        "policy_gain_mode": "positive_soft"
+      },
+      "policy_val": {
+        "alpha": 1.0,
+        "lpips_gain": 0.00036778425176938373,
+        "lpips_tail_cvar": 9.921938180923462e-05,
+        "mean_ood_confidence": 0.8838412165641785,
+        "p10_ood_confidence": 0.5980701595544815,
+        "psnr_gain": 0.02350622490362279,
+        "psnr_tail_cvar": 0.016505360515207457,
+        "ssim_gain": 0.0007385661204655966,
+        "ssim_tail_cvar": 0.0004918575286865234
+      },
+      "render_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v259a_ood_gain2_targetexact/target_exact_fixed_policy",
+      "target_exact": {
+        "beats_phasej_all_axis": false,
+        "candidate_lpips": 0.18023826689882713,
+        "candidate_psnr": 19.838006278102647,
+        "candidate_ssim": 0.6200498112223365,
+        "lpips_gain": 9.659914807839827e-05,
+        "lpips_positive_view_fraction": 0.6818181818181818,
+        "lpips_tail_cvar": -0.00023263196150461832,
+        "mean_changed_fraction": 0.00951709936173883,
+        "mean_ood_confidence": 0.8966815607114271,
+        "p10_ood_confidence": 0.6185388158668171,
+        "pass_vs_parent_all_axis": true,
+        "phasej_lpips_margin": 0.14898373310117288,
+        "phasej_psnr_gap": -0.46635172189735385,
+        "phasej_ssim_gap": 0.0622798112223365,
+        "positive_view_fraction": 0.9090909090909091,
+        "psnr_gain": 0.005952399655180685,
+        "psnr_tail_cvar": -0.00048250362284818493,
+        "ssim_gain": 0.00013940036296844482,
+        "ssim_positive_view_fraction": 0.7727272727272727,
+        "ssim_tail_cvar": -0.00016395250956217447
+      },
+      "teacher_projection_active": {
+        "changed_fraction": 0.3429132987666222,
+        "cosine": 0.33508182331297376,
+        "energy_retention": 0.2671990323520404
+      },
+      "wandb_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v259a_ood_gain2_targetexact/wandb"
+    },
+    "v259b_ood_gain_beta2": {
+      "artifact_json": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v259b_ood_gain2_beta2_targetexact/v253_deferred_source_renderer_audit.json",
+      "artifact_md": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v259b_ood_gain2_beta2_targetexact/v253_deferred_source_renderer_audit.md",
+      "ood_gain": {
+        "beta": 2.0,
+        "effective_count_weight": 0.5,
+        "mode": "boosted_soft",
+        "parent_weight": 1.0,
+        "variance_weight": 0.5,
+        "view_weight": 2.0
+      },
+      "policy_reliability": {
+        "active_bins": 16841,
+        "mean_policy_gain_valid": 1.217036485671997,
+        "mean_reliability": 0.049058325588703156,
+        "mean_tail_risk_valid": 0.6739572286605835,
+        "mode": "patch_perceptual_v1",
+        "policy_gain_mode": "positive_soft"
+      },
+      "policy_val": {
+        "alpha": 1.0,
+        "lpips_gain": 0.0003072768449783325,
+        "lpips_tail_cvar": 9.587407112121582e-05,
+        "mean_ood_confidence": 0.8150092562039694,
+        "p10_ood_confidence": 0.3581562687953313,
+        "psnr_gain": 0.018683824703945067,
+        "psnr_tail_cvar": 0.012554561416527221,
+        "ssim_gain": 0.000588501493136088,
+        "ssim_tail_cvar": 0.00041803717613220215
+      },
+      "render_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v259b_ood_gain2_beta2_targetexact/target_exact_fixed_policy",
+      "target_exact": {
+        "beats_phasej_all_axis": false,
+        "candidate_lpips": 0.18025599589402025,
+        "candidate_psnr": 19.837280259477517,
+        "candidate_ssim": 0.6200458028099753,
+        "lpips_gain": 7.887015288526362e-05,
+        "lpips_positive_view_fraction": 0.6818181818181818,
+        "lpips_tail_cvar": -0.00014754136403401694,
+        "mean_changed_fraction": 0.008117992064861135,
+        "mean_ood_confidence": 0.8374922925775702,
+        "p10_ood_confidence": 0.3842363831671802,
+        "pass_vs_parent_all_axis": true,
+        "phasej_lpips_margin": 0.14896600410597977,
+        "phasej_psnr_gap": -0.46707774052248396,
+        "phasej_ssim_gap": 0.062275802809975356,
+        "positive_view_fraction": 0.9545454545454546,
+        "psnr_gain": 0.005226381030046215,
+        "psnr_tail_cvar": 3.97520686460003e-05,
+        "ssim_gain": 0.0001353919506072998,
+        "ssim_positive_view_fraction": 0.8181818181818182,
+        "ssim_tail_cvar": -0.00011636813481648763
+      },
+      "teacher_projection_active": {
+        "changed_fraction": 0.2970519965807764,
+        "cosine": 0.3236264859179954,
+        "energy_retention": 0.17348692027577495
+      },
+      "wandb_dir": "/tmp/peilincai_spcarnet_v253_deferred_flowers_20260629/v259b_ood_gain2_beta2_targetexact/wandb"
+    }
+  },
+  "schema": "spcarnet_v259_target_support_ood_gain_summary_v1"
+}

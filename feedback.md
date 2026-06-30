@@ -2,7 +2,27 @@
 
 Date: 2026-06-28
 
-Latest update on 2026-06-29, v257-v258:
+Latest update on 2026-06-29, v259:
+
+The newest branch is **target-support / OOD-aware gain** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`.  New files:
+
+- `docs/car_model/6-29-v259-TargetSupportOODGain-Log.md`
+- `docs/car_model/results/v259_ood_gain_summary.json`
+
+Important new facts:
+
+- v259 adds `policy_tail_risk`, learned from policy-val positive fraction, negative gain magnitude, and gain variance per face/UV bin.
+- v259 adds `--ood_gain_mode boosted_soft`, which automatically shrinks only boosted residuals using target-free OOD/source-support features: source camera view gap, residual variance ratio, parent RGB mismatch, effective source count concentration, and policy-val tail risk.
+- v259a OOD beta 1 gives the best target SSIM mean in the deferred-source line: `19.838006 / 0.620050 / 0.180238`, gains `+0.005952 / +0.000139 / +0.000097`.
+- v259b OOD beta 2 makes target PSNR tail CVaR positive for the first time in this v253-v259 line: tail `+0.000040 / -0.000116 / -0.000148`, but mean drops to `19.837280 / 0.620046 / 0.180256`.
+- v258a remains best mean PSNR/LPIPS in this local line, but its tails are much riskier: target tail `-0.002007 / -0.000258 / -0.000380`.
+- No v259 run passes the Phase-J flowers gate because PSNR is still about `0.466` below Phase-J flowers `20.304358`.  Full9 remains blocked.
+
+Current direct verdict:
+
+> v259 is meaningful method progress for OOD/tail safety, but it is still **NOT COMPLETE**.  It confirms that hand-crafted OOD shrink can trade residual energy for safer tails, but a fixed beta is not enough.  The next stage should train a policy-val-supervised OOD/gain head or use a stronger residual carrier, not continue manual beta/gain scanning.
+
+Previous update on 2026-06-29, v257-v258:
 
 The current newest branch is **policy-calibrated deferred residual gain** in `scripts/car_model/train_surface_deferred_source_residual_renderer.py`.  New files:
 

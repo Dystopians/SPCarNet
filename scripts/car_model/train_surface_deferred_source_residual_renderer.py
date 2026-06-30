@@ -397,6 +397,8 @@ def _load_source_bank(path: Path) -> tuple[np.ndarray, dict[str, np.ndarray], di
             bank["policy_reliability"] = np.asarray(z["policy_reliability"], dtype=np.float32)
         if "policy_gain" in z:
             bank["policy_gain"] = np.asarray(z["policy_gain"], dtype=np.float32)
+        if "policy_tail_risk" in z:
+            bank["policy_tail_risk"] = np.asarray(z["policy_tail_risk"], dtype=np.float32)
         args_json = str(np.asarray(z["args_json"]).item()) if "args_json" in z else "{}"
     valid = bank["counts"] > 0.0
     bins = int(bank["counts"].shape[1]) if bank["counts"].ndim >= 2 else 0
@@ -488,6 +490,8 @@ def _calibrate_policy_reliability(
     counts = np.zeros((int(candidate_faces.size), bins), dtype=np.float64)
     positive = np.zeros_like(counts)
     gain_sum = np.zeros_like(counts)
+    gain_sq_sum = np.zeros_like(counts)
+    negative_gain_sum = np.zeros_like(counts)
     l1_gain_sum = np.zeros_like(counts)
     patch_gain_sum = np.zeros_like(counts)
     grad_gain_sum = np.zeros_like(counts)
@@ -550,10 +554,25 @@ def _calibrate_policy_reliability(
             np.add.at(counts, (face_idx, bin_id), 1.0)
             np.add.at(positive, (face_idx, bin_id), gain > 0.0)
             np.add.at(gain_sum, (face_idx, bin_id), gain)
+            np.add.at(gain_sq_sum, (face_idx, bin_id), gain * gain)
+            np.add.at(negative_gain_sum, (face_idx, bin_id), np.maximum(-gain, 0.0))
             np.add.at(l1_gain_sum, (face_idx, bin_id), l1_gain)
             np.add.at(patch_gain_sum, (face_idx, bin_id), patch_gain)
             np.add.at(grad_gain_sum, (face_idx, bin_id), grad_gain)
     mean_gain = np.divide(gain_sum, np.maximum(counts, 1.0), out=np.zeros_like(gain_sum), where=counts > 0.0)
+    mean_gain_sq = np.divide(
+        gain_sq_sum,
+        np.maximum(counts, 1.0),
+        out=np.zeros_like(gain_sq_sum),
+        where=counts > 0.0,
+    )
+    gain_std = np.sqrt(np.maximum(mean_gain_sq - mean_gain * mean_gain, 0.0))
+    mean_negative_gain = np.divide(
+        negative_gain_sum,
+        np.maximum(counts, 1.0),
+        out=np.zeros_like(negative_gain_sum),
+        where=counts > 0.0,
+    )
     mean_l1_gain = np.divide(l1_gain_sum, np.maximum(counts, 1.0), out=np.zeros_like(l1_gain_sum), where=counts > 0.0)
     mean_patch_gain = np.divide(
         patch_gain_sum,
@@ -579,6 +598,16 @@ def _calibrate_policy_reliability(
     reliability = floor_v + (1.0 - floor_v) * reliability
     reliability = reliability.astype(np.float32)
     bank["policy_reliability"] = reliability
+    risk_scale = max(float(gain_scale), 1.0e-8)
+    tail_risk = reliable * np.clip(
+        0.40 * (1.0 - positive_fraction)
+        + 0.35 * np.clip(mean_negative_gain / risk_scale, 0.0, 1.0)
+        + 0.25 * np.clip(gain_std / risk_scale, 0.0, 1.0),
+        0.0,
+        1.0,
+    )
+    tail_risk = tail_risk.astype(np.float32)
+    bank["policy_tail_risk"] = tail_risk
     gain_mode_s = str(policy_gain_mode or "off")
     policy_gain = np.ones_like(reliability, dtype=np.float32)
     if gain_mode_s == "positive_soft":
@@ -610,6 +639,8 @@ def _calibrate_policy_reliability(
         "mean_reliability_valid": float(np.mean(reliability[valid])) if np.any(valid) else 0.0,
         "mean_positive_fraction_valid": float(np.mean(positive_fraction[valid])) if np.any(valid) else 0.0,
         "mean_gain_valid": float(np.mean(mean_gain[valid])) if np.any(valid) else 0.0,
+        "mean_gain_std_valid": float(np.mean(gain_std[valid])) if np.any(valid) else 0.0,
+        "mean_negative_gain_valid": float(np.mean(mean_negative_gain[valid])) if np.any(valid) else 0.0,
         "mean_l1_gain_valid": float(np.mean(mean_l1_gain[valid])) if np.any(valid) else 0.0,
         "mean_patch_gain_valid": float(np.mean(mean_patch_gain[valid])) if np.any(valid) else 0.0,
         "mean_gradient_gain_valid": float(np.mean(mean_grad_gain[valid])) if np.any(valid) else 0.0,
@@ -620,6 +651,10 @@ def _calibrate_policy_reliability(
         "max_policy_gain": float(np.max(policy_gain)) if policy_gain.size else 1.0,
         "policy_gain_quantiles": _quantiles([float(x) for x in policy_gain.reshape(-1)]),
         "valid_policy_gain_quantiles": _quantiles([float(x) for x in policy_gain[valid].reshape(-1)]) if np.any(valid) else _quantiles([]),
+        "mean_tail_risk_valid": float(np.mean(tail_risk[valid])) if np.any(valid) else 0.0,
+        "max_tail_risk": float(np.max(tail_risk)) if tail_risk.size else 0.0,
+        "tail_risk_quantiles": _quantiles([float(x) for x in tail_risk.reshape(-1)]),
+        "valid_tail_risk_quantiles": _quantiles([float(x) for x in tail_risk[valid].reshape(-1)]) if np.any(valid) else _quantiles([]),
         "reliability_quantiles": _quantiles([float(x) for x in reliability.reshape(-1)]),
         "valid_reliability_quantiles": _quantiles([float(x) for x in reliability[valid].reshape(-1)]) if np.any(valid) else _quantiles([]),
     }
@@ -643,6 +678,12 @@ def _predict_delta(
     source_agreement_mode: str,
     source_agreement_beta: float,
     source_agreement_min_confidence: float,
+    ood_gain_mode: str = "off",
+    ood_gain_beta: float = 1.0,
+    ood_gain_view_weight: float = 1.0,
+    ood_gain_variance_weight: float = 1.0,
+    ood_gain_parent_weight: float = 1.0,
+    ood_gain_effective_count_weight: float = 0.5,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, float]]:
     parent = np.asarray(z["rgb_render"], dtype=np.float32)[:3]
     delta = np.zeros_like(parent, dtype=np.float32)
@@ -663,6 +704,9 @@ def _predict_delta(
     agreement_confidences: list[float] = []
     policy_reliabilities: list[float] = []
     policy_gains: list[float] = []
+    ood_confidences: list[float] = []
+    ood_scores: list[float] = []
+    tail_risks: list[float] = []
     active_count = 0
     for start in range(0, int(ys_all.size), int(chunk_size)):
         end = min(int(ys_all.size), start + int(chunk_size))
@@ -699,13 +743,17 @@ def _predict_delta(
         if not np.any(ok_rows):
             continue
         pred = np.sum(weights[:, :, None] * src_residual, axis=1) / np.maximum(denom[:, None], 1.0e-12)
+        variance_ratio = np.zeros_like(denom, dtype=np.float32)
         source_agreement = np.ones_like(denom, dtype=np.float32)
-        if str(source_agreement_mode) != "off" and float(source_agreement_beta) > 0.0:
+        needs_variance = str(source_agreement_mode) != "off" or str(ood_gain_mode) != "off"
+        if needs_variance:
             diff = src_residual - pred[:, None, :]
             variance = np.sum(weights * np.sum(diff * diff, axis=2), axis=1) / np.maximum(denom, 1.0e-12)
             pred_energy = np.sum(pred * pred, axis=1)
+            variance_ratio = (variance / np.maximum(pred_energy, 1.0e-8)).astype(np.float32)
+        if str(source_agreement_mode) != "off" and float(source_agreement_beta) > 0.0:
             source_agreement = np.exp(
-                np.clip(-float(source_agreement_beta) * variance / np.maximum(pred_energy, 1.0e-8), -30.0, 0.0)
+                np.clip(-float(source_agreement_beta) * variance_ratio, -30.0, 0.0)
             ).astype(np.float32)
             if str(source_agreement_mode) == "hard":
                 ok_rows &= source_agreement >= float(source_agreement_min_confidence)
@@ -727,6 +775,36 @@ def _predict_delta(
             gain_map = np.asarray(bank["policy_gain"], dtype=np.float32)
             policy_gain = np.clip(gain_map[face_idx, bin_id], 0.0, 8.0).astype(np.float32)
             confidence = confidence * policy_gain
+        ood_confidence = np.ones_like(confidence, dtype=np.float32)
+        ood_score = np.zeros_like(confidence, dtype=np.float32)
+        policy_tail_risk = np.zeros_like(confidence, dtype=np.float32)
+        if str(ood_gain_mode) == "boosted_soft":
+            valid_float = valid_src.astype(np.float32)
+            valid_count = np.maximum(np.sum(valid_float, axis=1), 1.0)
+            max_view_cos = np.max(np.where(valid_src, view_cos, -1.0), axis=1).astype(np.float32)
+            view_gap = np.clip(1.0 - max_view_cos, 0.0, 2.0)
+            parent_mismatch = np.sqrt(
+                np.sum(weights * parent_dist, axis=1) / np.maximum(denom, 1.0e-12)
+            ).astype(np.float32)
+            effective_count = (denom * denom) / np.maximum(np.sum(weights * weights, axis=1), 1.0e-12)
+            effective_count_risk = np.clip(1.0 - effective_count / valid_count, 0.0, 1.0).astype(np.float32)
+            if "policy_tail_risk" in bank:
+                tail_map = np.asarray(bank["policy_tail_risk"], dtype=np.float32)
+                policy_tail_risk = np.clip(tail_map[face_idx, bin_id], 0.0, 1.0).astype(np.float32)
+            gain_boost = np.maximum(policy_gain - 1.0, 0.0)
+            ood_score = (
+                float(ood_gain_view_weight) * view_gap
+                + float(ood_gain_variance_weight) * np.clip(variance_ratio, 0.0, 4.0)
+                + float(ood_gain_parent_weight) * np.clip(parent_mismatch, 0.0, 1.0)
+                + float(ood_gain_effective_count_weight) * effective_count_risk
+            ).astype(np.float32)
+            risk_multiplier = 0.5 + policy_tail_risk
+            ood_confidence = np.exp(
+                np.clip(-float(ood_gain_beta) * gain_boost * risk_multiplier * ood_score, -30.0, 0.0)
+            ).astype(np.float32)
+            confidence = confidence * ood_confidence
+        elif str(ood_gain_mode) != "off":
+            raise ValueError(f"unsupported ood_gain_mode={ood_gain_mode}")
         pred = pred * confidence[:, None]
         yy, xx = ys[ok_rows], xs[ok_rows]
         delta[:, yy, xx] = pred[ok_rows].T
@@ -736,12 +814,18 @@ def _predict_delta(
         agreement_confidences.append(source_agreement[ok_rows].astype(np.float32))
         policy_reliabilities.append(policy_reliability[ok_rows].astype(np.float32))
         policy_gains.append(policy_gain[ok_rows].astype(np.float32))
+        ood_confidences.append(ood_confidence[ok_rows].astype(np.float32))
+        ood_scores.append(ood_score[ok_rows].astype(np.float32))
+        tail_risks.append(policy_tail_risk[ok_rows].astype(np.float32))
     conf = np.concatenate(confidences) if confidences else np.zeros((0,), dtype=np.float32)
     agreement_conf = (
         np.concatenate(agreement_confidences) if agreement_confidences else np.zeros((0,), dtype=np.float32)
     )
     policy_rel = np.concatenate(policy_reliabilities) if policy_reliabilities else np.zeros((0,), dtype=np.float32)
     policy_gain_arr = np.concatenate(policy_gains) if policy_gains else np.zeros((0,), dtype=np.float32)
+    ood_conf = np.concatenate(ood_confidences) if ood_confidences else np.ones((0,), dtype=np.float32)
+    ood_score_arr = np.concatenate(ood_scores) if ood_scores else np.zeros((0,), dtype=np.float32)
+    tail_risk_arr = np.concatenate(tail_risks) if tail_risks else np.zeros((0,), dtype=np.float32)
     return delta, active, {
         "surface_support_fraction": float(np.mean(support)),
         "active_fraction": float(active_count / max(int(support.size), 1)),
@@ -754,6 +838,10 @@ def _predict_delta(
         "p10_policy_reliability": float(np.quantile(policy_rel, 0.10)) if policy_rel.size else 0.0,
         "mean_policy_gain": float(np.mean(policy_gain_arr)) if policy_gain_arr.size else 1.0,
         "p90_policy_gain": float(np.quantile(policy_gain_arr, 0.90)) if policy_gain_arr.size else 1.0,
+        "mean_ood_confidence": float(np.mean(ood_conf)) if ood_conf.size else 1.0,
+        "p10_ood_confidence": float(np.quantile(ood_conf, 0.10)) if ood_conf.size else 1.0,
+        "mean_ood_score": float(np.mean(ood_score_arr)) if ood_score_arr.size else 0.0,
+        "mean_policy_tail_risk": float(np.mean(tail_risk_arr)) if tail_risk_arr.size else 0.0,
     }
 
 
@@ -778,6 +866,10 @@ def _summarize_rows(rows: list[dict[str, Any]], *, compute_lpips: bool) -> dict[
         "mean_policy_reliability": _mean([float(r.get("mean_policy_reliability", 0.0)) for r in rows]),
         "mean_policy_gain": _mean([float(r.get("mean_policy_gain", 1.0)) for r in rows]),
         "p90_policy_gain": _mean([float(r.get("p90_policy_gain", 1.0)) for r in rows]),
+        "mean_ood_confidence": _mean([float(r.get("mean_ood_confidence", 1.0)) for r in rows]),
+        "p10_ood_confidence": _mean([float(r.get("p10_ood_confidence", 1.0)) for r in rows]),
+        "mean_ood_score": _mean([float(r.get("mean_ood_score", 0.0)) for r in rows]),
+        "mean_policy_tail_risk": _mean([float(r.get("mean_policy_tail_risk", 0.0)) for r in rows]),
         "mean_changed_fraction": _mean([float(r.get("changed_fraction", 0.0)) for r in rows]),
     }
     if compute_lpips:
@@ -842,6 +934,12 @@ def _evaluate_policy_val(
     source_agreement_mode: str,
     source_agreement_beta: float,
     source_agreement_min_confidence: float,
+    ood_gain_mode: str,
+    ood_gain_beta: float,
+    ood_gain_view_weight: float,
+    ood_gain_variance_weight: float,
+    ood_gain_parent_weight: float,
+    ood_gain_effective_count_weight: float,
     compute_lpips: bool,
     ssim_max_side: int,
     lpips_max_side: int,
@@ -875,6 +973,12 @@ def _evaluate_policy_val(
                 source_agreement_mode=str(source_agreement_mode),
                 source_agreement_beta=float(source_agreement_beta),
                 source_agreement_min_confidence=float(source_agreement_min_confidence),
+                ood_gain_mode=str(ood_gain_mode),
+                ood_gain_beta=float(ood_gain_beta),
+                ood_gain_view_weight=float(ood_gain_view_weight),
+                ood_gain_variance_weight=float(ood_gain_variance_weight),
+                ood_gain_parent_weight=float(ood_gain_parent_weight),
+                ood_gain_effective_count_weight=float(ood_gain_effective_count_weight),
             )
             raw_cache.append((path, parent, gt, delta, active, support_stats))
             full_mask = _surface_support_mask(z, candidate_faces, min_alpha=float(min_alpha))
@@ -1019,6 +1123,12 @@ def _target_no_gt_preview(
     source_agreement_mode: str,
     source_agreement_beta: float,
     source_agreement_min_confidence: float,
+    ood_gain_mode: str,
+    ood_gain_beta: float,
+    ood_gain_view_weight: float,
+    ood_gain_variance_weight: float,
+    ood_gain_parent_weight: float,
+    ood_gain_effective_count_weight: float,
     alpha: float,
     max_views: int,
     output_dir: Path,
@@ -1049,6 +1159,12 @@ def _target_no_gt_preview(
                 source_agreement_mode=str(source_agreement_mode),
                 source_agreement_beta=float(source_agreement_beta),
                 source_agreement_min_confidence=float(source_agreement_min_confidence),
+                ood_gain_mode=str(ood_gain_mode),
+                ood_gain_beta=float(ood_gain_beta),
+                ood_gain_view_weight=float(ood_gain_view_weight),
+                ood_gain_variance_weight=float(ood_gain_variance_weight),
+                ood_gain_parent_weight=float(ood_gain_parent_weight),
+                ood_gain_effective_count_weight=float(ood_gain_effective_count_weight),
             )
             out = np.clip(parent + float(alpha) * delta, 0.0, 1.0)
             save_image_chw(preview_dir / f"{path.stem}.png", out)
@@ -1090,6 +1206,12 @@ def _target_exact_eval(
     source_agreement_mode: str,
     source_agreement_beta: float,
     source_agreement_min_confidence: float,
+    ood_gain_mode: str,
+    ood_gain_beta: float,
+    ood_gain_view_weight: float,
+    ood_gain_variance_weight: float,
+    ood_gain_parent_weight: float,
+    ood_gain_effective_count_weight: float,
     alpha: float,
     compute_lpips: bool,
     ssim_max_side: int,
@@ -1126,6 +1248,12 @@ def _target_exact_eval(
                 source_agreement_mode=str(source_agreement_mode),
                 source_agreement_beta=float(source_agreement_beta),
                 source_agreement_min_confidence=float(source_agreement_min_confidence),
+                ood_gain_mode=str(ood_gain_mode),
+                ood_gain_beta=float(ood_gain_beta),
+                ood_gain_view_weight=float(ood_gain_view_weight),
+                ood_gain_variance_weight=float(ood_gain_variance_weight),
+                ood_gain_parent_weight=float(ood_gain_parent_weight),
+                ood_gain_effective_count_weight=float(ood_gain_effective_count_weight),
             )
             candidate = np.clip(parent + float(alpha) * delta, 0.0, 1.0)
         with np.load(eval_paths[stem], allow_pickle=False) as z_eval:
@@ -1294,6 +1422,8 @@ def _write_md(path: Path, payload: dict[str, Any]) -> None:
         f"- policy gain mode: `{payload.get('policy_reliability', {}).get('policy_gain_mode', 'off')}`",
         f"- mean valid policy gain: `{payload.get('policy_reliability', {}).get('mean_policy_gain_valid', 1.0):.6f}`",
         f"- max policy gain: `{payload.get('policy_reliability', {}).get('max_policy_gain', 1.0):.6f}`",
+        f"- mean valid tail risk: `{payload.get('policy_reliability', {}).get('mean_tail_risk_valid', 0.0):.6f}`",
+        f"- OOD gain mode: `{payload.get('ood_gain', {}).get('mode', 'off')}`",
         "",
         "## Artifacts",
         "",
@@ -1375,6 +1505,12 @@ def main() -> int:
     parser.add_argument("--policy_gain_mode", choices=["off", "positive_soft"], default="off")
     parser.add_argument("--policy_gain_max", type=float, default=2.0)
     parser.add_argument("--policy_gain_scale", type=float, default=0.000025)
+    parser.add_argument("--ood_gain_mode", choices=["off", "boosted_soft"], default="off")
+    parser.add_argument("--ood_gain_beta", type=float, default=1.0)
+    parser.add_argument("--ood_gain_view_weight", type=float, default=1.0)
+    parser.add_argument("--ood_gain_variance_weight", type=float, default=1.0)
+    parser.add_argument("--ood_gain_parent_weight", type=float, default=1.0)
+    parser.add_argument("--ood_gain_effective_count_weight", type=float, default=0.5)
     parser.add_argument("--bank_residual_transform_mode", choices=["raw_rgb", "luma_only", "chroma_shrink"], default="raw_rgb")
     parser.add_argument("--bank_residual_chroma_shrink", type=float, default=0.25)
     parser.add_argument("--alpha_grid", default="0,0.03125,0.0625,0.09375,0.125,0.1875,0.25,0.375,0.5,0.75,1")
@@ -1509,6 +1645,12 @@ def main() -> int:
         source_agreement_mode=str(args.source_agreement_mode),
         source_agreement_beta=float(args.source_agreement_beta),
         source_agreement_min_confidence=float(args.source_agreement_min_confidence),
+        ood_gain_mode=str(args.ood_gain_mode),
+        ood_gain_beta=float(args.ood_gain_beta),
+        ood_gain_view_weight=float(args.ood_gain_view_weight),
+        ood_gain_variance_weight=float(args.ood_gain_variance_weight),
+        ood_gain_parent_weight=float(args.ood_gain_parent_weight),
+        ood_gain_effective_count_weight=float(args.ood_gain_effective_count_weight),
         compute_lpips=bool(args.compute_lpips),
         ssim_max_side=int(args.policy_val_ssim_max_side),
         lpips_max_side=int(args.policy_val_lpips_max_side),
@@ -1537,6 +1679,12 @@ def main() -> int:
             source_agreement_mode=str(args.source_agreement_mode),
             source_agreement_beta=float(args.source_agreement_beta),
             source_agreement_min_confidence=float(args.source_agreement_min_confidence),
+            ood_gain_mode=str(args.ood_gain_mode),
+            ood_gain_beta=float(args.ood_gain_beta),
+            ood_gain_view_weight=float(args.ood_gain_view_weight),
+            ood_gain_variance_weight=float(args.ood_gain_variance_weight),
+            ood_gain_parent_weight=float(args.ood_gain_parent_weight),
+            ood_gain_effective_count_weight=float(args.ood_gain_effective_count_weight),
             alpha=float(selected_alpha),
             max_views=int(args.target_preview_views),
             output_dir=output_dir,
@@ -1564,6 +1712,12 @@ def main() -> int:
             source_agreement_mode=str(args.source_agreement_mode),
             source_agreement_beta=float(args.source_agreement_beta),
             source_agreement_min_confidence=float(args.source_agreement_min_confidence),
+            ood_gain_mode=str(args.ood_gain_mode),
+            ood_gain_beta=float(args.ood_gain_beta),
+            ood_gain_view_weight=float(args.ood_gain_view_weight),
+            ood_gain_variance_weight=float(args.ood_gain_variance_weight),
+            ood_gain_parent_weight=float(args.ood_gain_parent_weight),
+            ood_gain_effective_count_weight=float(args.ood_gain_effective_count_weight),
             alpha=float(selected_alpha),
             compute_lpips=bool(args.compute_lpips),
             ssim_max_side=int(args.policy_val_ssim_max_side),
@@ -1594,6 +1748,8 @@ def main() -> int:
         checkpoint_payload["policy_reliability"] = bank["policy_reliability"].astype(np.float16)
     if "policy_gain" in bank:
         checkpoint_payload["policy_gain"] = bank["policy_gain"].astype(np.float16)
+    if "policy_tail_risk" in bank:
+        checkpoint_payload["policy_tail_risk"] = bank["policy_tail_risk"].astype(np.float16)
     np.savez_compressed(checkpoint_path, **checkpoint_payload)
     verdict = (
         "PASS_POLICY_VAL_PROMOTE_TO_FLOWERS_EXACT"
@@ -1614,6 +1770,14 @@ def main() -> int:
         "fit_source_bank": bank_summary,
         "bank_residual_transform": residual_transform_summary,
         "policy_reliability": policy_reliability_summary,
+        "ood_gain": {
+            "mode": str(args.ood_gain_mode),
+            "beta": float(args.ood_gain_beta),
+            "view_weight": float(args.ood_gain_view_weight),
+            "variance_weight": float(args.ood_gain_variance_weight),
+            "parent_weight": float(args.ood_gain_parent_weight),
+            "effective_count_weight": float(args.ood_gain_effective_count_weight),
+        },
         "policy_val_all_axis_pass": bool(all_axis),
         "policy_val": policy_val,
         "target_no_gt_audit": target_no_gt_audit,
@@ -1653,8 +1817,17 @@ def main() -> int:
                     policy_reliability_summary.get("mean_policy_gain_valid", 1.0)
                 ),
                 "policy_reliability/max_policy_gain": float(policy_reliability_summary.get("max_policy_gain", 1.0)),
+                "policy_reliability/mean_tail_risk_valid": float(
+                    policy_reliability_summary.get("mean_tail_risk_valid", 0.0)
+                ),
                 "target_no_gt/pass": float(bool(target_no_gt_audit.get("pass", False))),
                 "target_eval/pass_vs_parent_all_axis": float(bool(target_eval.get("pass_vs_parent_all_axis", False))),
+                "target_eval/mean_ood_confidence": float(
+                    target_eval.get("summary", {}).get("mean_ood_confidence", 1.0)
+                ),
+                "target_eval/p10_ood_confidence": float(
+                    target_eval.get("summary", {}).get("p10_ood_confidence", 1.0)
+                ),
                 "target_eval/psnr_gain": float(target_eval.get("summary", {}).get("psnr_gain", 0.0)),
                 "target_eval/ssim_gain": float(target_eval.get("summary", {}).get("ssim_gain", 0.0)),
                 "target_eval/lpips_gain": float(target_eval.get("summary", {}).get("lpips_gain", 0.0)),
