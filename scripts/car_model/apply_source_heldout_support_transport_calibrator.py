@@ -392,6 +392,11 @@ def _generated_candidate_names(args: argparse.Namespace) -> list[str]:
         if name in names:
             raise ValueError(f"duplicate generated candidate name: {name}")
         names.append(name)
+    if bool(getattr(args, "enable_tnc_regularized_residual_candidate", False)):
+        name = str(getattr(args, "tnc_regularized_residual_candidate_name", "tnc_reg")).strip() or "tnc_reg"
+        if name in names:
+            raise ValueError(f"duplicate generated candidate name: {name}")
+        names.append(name)
     return names
 
 
@@ -521,6 +526,12 @@ def _source_evidence_reliability_gate(ev: Any, args: argparse.Namespace, *, devi
     return torch.clamp(confidence_gate * support_gate * stability * valid, 0.0, 1.0)
 
 
+def _target_neighbor_generated_consensus_requested(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "enable_target_neighbor_generated_candidate", False)) or bool(
+        getattr(args, "enable_tnc_regularized_residual_candidate", False)
+    )
+
+
 def _target_neighbor_consensus_delta(
     *,
     target: Any,
@@ -538,7 +549,7 @@ def _target_neighbor_consensus_delta(
         direction_weight=float(args.target_neighbor_generated_direction_weight),
     )
     diagnostics: dict[str, Any] = {
-        "enabled": bool(args.enable_target_neighbor_generated_candidate),
+        "enabled": _target_neighbor_generated_consensus_requested(args),
         "neighbor_count": int(len(neighbors)),
         "used_neighbors": [],
         "mean_confident_fraction": 0.0,
@@ -626,61 +637,184 @@ def _augment_deltas_with_target_neighbor_generated_candidate(
     device: torch.device,
     args: argparse.Namespace,
 ) -> tuple[dict[str, torch.Tensor], dict[str, Any] | None]:
-    if not bool(getattr(args, "enable_target_neighbor_generated_candidate", False)):
+    if not _target_neighbor_generated_consensus_requested(args):
         return deltas, None
-    name = str(getattr(args, "target_neighbor_generated_candidate_name", "tnc_gen")).strip() or "tnc_gen"
-    base_variant = str(getattr(args, "target_neighbor_generated_base_variant", "hybrid"))
     diagnostics: dict[str, Any] = {
         "enabled": True,
-        "name": name,
-        "base_variant": base_variant,
         "uses_target_gt": False,
-        "applied": False,
-        "reason": None,
+        "direct_consensus": None,
+        "regularized_residual": None,
     }
-    if name in deltas:
-        raise ValueError(f"target-neighbor generated candidate name collides with deltas: {name}")
-    if base_variant not in deltas:
-        diagnostics["reason"] = "missing_base_variant"
-        return deltas, diagnostics
-    consensus_delta, consensus_diagnostics = _target_neighbor_consensus_delta(
-        target=target,
-        ev=ev,
-        neighbor_frames=neighbor_frames,
-        loader=loader,
-        device=device,
-        args=args,
-    )
-    diagnostics["consensus"] = consensus_diagnostics
     out = dict(deltas)
-    if consensus_delta is None:
-        out[name] = deltas[base_variant]
-        diagnostics.update(
-            {
-                "applied": False,
-                "reason": f"fallback_to_{base_variant}:{consensus_diagnostics.get('reason', 'no_consensus_delta')}",
-                "mean_blend": 0.0,
-                "max_blend": 0.0,
-                "candidate_changed_fraction": _changed_fraction_from_delta(out[name]),
-            }
-        )
-        return out, diagnostics
+    consensus_delta: torch.Tensor | None = None
+    consensus_diagnostics: dict[str, Any] | None = None
 
-    reliability = _source_evidence_reliability_gate(ev, args, device=device)
-    gamma = float(args.target_neighbor_generated_max_blend)
-    blend = torch.clamp(gamma * reliability, min=0.0, max=gamma)
-    base_delta = deltas[base_variant]
-    candidate_delta = (1.0 - blend) * base_delta + blend * consensus_delta.to(device=base_delta.device, dtype=base_delta.dtype)
-    out[name] = candidate_delta
-    diagnostics.update(
-        {
-            "applied": True,
-            "reason": "ok",
-            "mean_blend": float(blend.mean().detach().cpu().item()),
-            "max_blend": float(blend.max().detach().cpu().item()),
-            "candidate_changed_fraction": _changed_fraction_from_delta(candidate_delta),
+    def get_consensus() -> tuple[torch.Tensor | None, dict[str, Any]]:
+        nonlocal consensus_delta, consensus_diagnostics
+        if consensus_diagnostics is None:
+            consensus_delta, consensus_diagnostics = _target_neighbor_consensus_delta(
+                target=target,
+                ev=ev,
+                neighbor_frames=neighbor_frames,
+                loader=loader,
+                device=device,
+                args=args,
+            )
+        return consensus_delta, consensus_diagnostics
+
+    if bool(getattr(args, "enable_target_neighbor_generated_candidate", False)):
+        name = str(getattr(args, "target_neighbor_generated_candidate_name", "tnc_gen")).strip() or "tnc_gen"
+        base_variant = str(getattr(args, "target_neighbor_generated_base_variant", "hybrid"))
+        direct_diag: dict[str, Any] = {
+            "enabled": True,
+            "name": name,
+            "base_variant": base_variant,
+            "uses_target_gt": False,
+            "applied": False,
+            "reason": None,
         }
-    )
+        if name in out:
+            raise ValueError(f"target-neighbor generated candidate name collides with deltas: {name}")
+        if base_variant not in out:
+            direct_diag["reason"] = "missing_base_variant"
+            diagnostics["direct_consensus"] = direct_diag
+        else:
+            current_consensus_delta, current_consensus_diagnostics = get_consensus()
+            direct_diag["consensus"] = current_consensus_diagnostics
+            if current_consensus_delta is None:
+                out[name] = out[base_variant]
+                direct_diag.update(
+                    {
+                        "applied": False,
+                        "reason": f"fallback_to_{base_variant}:{current_consensus_diagnostics.get('reason', 'no_consensus_delta')}",
+                        "mean_blend": 0.0,
+                        "max_blend": 0.0,
+                        "candidate_changed_fraction": _changed_fraction_from_delta(out[name]),
+                    }
+                )
+            else:
+                reliability = _source_evidence_reliability_gate(ev, args, device=device)
+                gamma = float(args.target_neighbor_generated_max_blend)
+                blend = torch.clamp(gamma * reliability, min=0.0, max=gamma)
+                base_delta = out[base_variant]
+                candidate_delta = (1.0 - blend) * base_delta + blend * current_consensus_delta.to(
+                    device=base_delta.device,
+                    dtype=base_delta.dtype,
+                )
+                out[name] = candidate_delta
+                direct_diag.update(
+                    {
+                        "applied": True,
+                        "reason": "ok",
+                        "mean_blend": float(blend.mean().detach().cpu().item()),
+                        "max_blend": float(blend.max().detach().cpu().item()),
+                        "candidate_changed_fraction": _changed_fraction_from_delta(candidate_delta),
+                    }
+                )
+            diagnostics["direct_consensus"] = direct_diag
+
+    if bool(getattr(args, "enable_tnc_regularized_residual_candidate", False)):
+        name = str(getattr(args, "tnc_regularized_residual_candidate_name", "tnc_reg")).strip() or "tnc_reg"
+        base_variant = str(getattr(args, "tnc_regularized_base_variant", "hybrid"))
+        learned_variant = str(getattr(args, "tnc_regularized_learned_variant", "learned"))
+        fixed_variant = str(getattr(args, "tnc_regularized_fixed_variant", "fixed"))
+        reg_diag: dict[str, Any] = {
+            "enabled": True,
+            "name": name,
+            "base_variant": base_variant,
+            "learned_variant": learned_variant,
+            "fixed_variant": fixed_variant,
+            "uses_target_gt": False,
+            "applied": False,
+            "reason": None,
+        }
+        if name in out:
+            raise ValueError(f"TNC-regularized generated candidate name collides with deltas: {name}")
+        missing = [variant for variant in (base_variant, learned_variant, fixed_variant) if variant not in out]
+        if missing:
+            fallback = base_variant if base_variant in out else (fixed_variant if fixed_variant in out else next(iter(out)))
+            out[name] = out[fallback]
+            reg_diag.update(
+                {
+                    "reason": f"missing_required_variant:{','.join(missing)}",
+                    "fallback_variant": fallback,
+                    "candidate_changed_fraction": _changed_fraction_from_delta(out[name]),
+                }
+            )
+            diagnostics["regularized_residual"] = reg_diag
+        else:
+            current_consensus_delta, current_consensus_diagnostics = get_consensus()
+            reg_diag["consensus"] = current_consensus_diagnostics
+            min_effective = float(getattr(args, "tnc_regularized_min_consensus_effective_weight", 1.0e-5))
+            min_confident = float(getattr(args, "tnc_regularized_min_confident_fraction", 0.005))
+            consensus_ok = (
+                current_consensus_delta is not None
+                and float(current_consensus_diagnostics.get("total_effective_weight", 0.0)) >= min_effective
+                and float(current_consensus_diagnostics.get("mean_confident_fraction", 0.0)) >= min_confident
+            )
+            if not consensus_ok:
+                out[name] = out[base_variant]
+                reg_diag.update(
+                    {
+                        "reason": f"fallback_to_{base_variant}:{current_consensus_diagnostics.get('reason', 'insufficient_consensus')}",
+                        "min_consensus_effective_weight": min_effective,
+                        "min_confident_fraction": min_confident,
+                        "candidate_changed_fraction": _changed_fraction_from_delta(out[name]),
+                    }
+                )
+            else:
+                base_delta = out[base_variant]
+                learned_delta = out[learned_variant]
+                fixed_delta = out[fixed_variant]
+                consensus = current_consensus_delta.to(device=base_delta.device, dtype=base_delta.dtype)
+                reliability = _source_evidence_reliability_gate(ev, args, device=device)
+                fixed_error = torch.mean(torch.abs(fixed_delta - consensus), dim=0, keepdim=True)
+                learned_error = torch.mean(torch.abs(learned_delta - consensus), dim=0, keepdim=True)
+                advantage = fixed_error - learned_error
+                margin = float(getattr(args, "tnc_regularized_learned_margin", 0.0))
+                temperature = max(float(getattr(args, "tnc_regularized_decision_temperature", 0.005)), 1.0e-6)
+                agreement_scale = max(float(getattr(args, "tnc_regularized_agreement_scale", 0.02)), 1.0e-6)
+                learned_preference = torch.sigmoid((advantage - margin) / temperature)
+                learned_agreement = torch.exp(-learned_error / agreement_scale)
+                fixed_agreement = torch.exp(-fixed_error / agreement_scale)
+                learned_step = (
+                    float(getattr(args, "tnc_regularized_max_learned_step", 0.25))
+                    * reliability
+                    * learned_preference
+                    * learned_agreement
+                )
+                fixed_step = (
+                    float(getattr(args, "tnc_regularized_max_fixed_step", 0.15))
+                    * reliability
+                    * (1.0 - learned_preference)
+                    * fixed_agreement
+                )
+                candidate_delta = base_delta + learned_step * (learned_delta - base_delta) + fixed_step * (
+                    fixed_delta - base_delta
+                )
+                delta_clip = float(getattr(args, "tnc_regularized_delta_clip", 0.25))
+                if delta_clip > 0.0:
+                    candidate_delta = torch.clamp(candidate_delta, min=-delta_clip, max=delta_clip)
+                out[name] = candidate_delta
+                reg_diag.update(
+                    {
+                        "applied": True,
+                        "reason": "ok",
+                        "min_consensus_effective_weight": min_effective,
+                        "min_confident_fraction": min_confident,
+                        "mean_reliability": float(reliability.mean().detach().cpu().item()),
+                        "mean_learned_preference": float(learned_preference.mean().detach().cpu().item()),
+                        "mean_learned_step": float(learned_step.mean().detach().cpu().item()),
+                        "max_learned_step": float(learned_step.max().detach().cpu().item()),
+                        "mean_fixed_step": float(fixed_step.mean().detach().cpu().item()),
+                        "max_fixed_step": float(fixed_step.max().detach().cpu().item()),
+                        "mean_fixed_error": float(fixed_error.mean().detach().cpu().item()),
+                        "mean_learned_error": float(learned_error.mean().detach().cpu().item()),
+                        "candidate_changed_fraction": _changed_fraction_from_delta(candidate_delta),
+                    }
+                )
+            diagnostics["regularized_residual"] = reg_diag
+
     return out, diagnostics
 
 
@@ -5956,6 +6090,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         bool(getattr(args, "enable_target_neighbor_consistency_certificate", False))
         or bool(getattr(args, "enable_target_neighbor_candidate_unlock", False))
         or bool(getattr(args, "enable_target_neighbor_generated_candidate", False))
+        or bool(getattr(args, "enable_tnc_regularized_residual_candidate", False))
         or bool(target_neighbor_combined_candidate_ranker_payload.get("enabled", False))
     )
     payload: dict[str, Any] = {
@@ -5986,6 +6121,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "target_neighbor_combined_candidate_ranker_scope": "source_heldout_candidate_evidence_plus_target_render_depth_camera_online_per_view_ranker",
             "target_neighbor_generated_candidate_uses_target_gt": False,
             "target_neighbor_generated_candidate_scope": "target_or_sourceheldout_render_depth_camera_consensus_candidate",
+            "tnc_regularized_residual_candidate_uses_target_gt": False,
+            "tnc_regularized_residual_candidate_scope": "source_evidence_reliability_gated_fixed_learned_residual_with_target_neighbor_self_consistency_regularization",
             "target_neighbor_all_candidate_scores_affect_selection": bool(
                 target_neighbor_combined_candidate_ranker_payload.get("enabled", False)
             ),
@@ -6058,6 +6195,23 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "confidence_norm": float(args.target_neighbor_generated_confidence_norm),
                 "uses_target_gt": False,
                 "reference": "target/train-heldout neighbor render-depth-camera consensus delta, gated by source evidence reliability",
+            },
+            "tnc_regularized_residual_candidate": {
+                "enabled": bool(args.enable_tnc_regularized_residual_candidate),
+                "name": str(args.tnc_regularized_residual_candidate_name),
+                "base_variant": str(args.tnc_regularized_base_variant),
+                "learned_variant": str(args.tnc_regularized_learned_variant),
+                "fixed_variant": str(args.tnc_regularized_fixed_variant),
+                "max_learned_step": float(args.tnc_regularized_max_learned_step),
+                "max_fixed_step": float(args.tnc_regularized_max_fixed_step),
+                "agreement_scale": float(args.tnc_regularized_agreement_scale),
+                "decision_temperature": float(args.tnc_regularized_decision_temperature),
+                "learned_margin": float(args.tnc_regularized_learned_margin),
+                "delta_clip": float(args.tnc_regularized_delta_clip),
+                "min_consensus_effective_weight": float(args.tnc_regularized_min_consensus_effective_weight),
+                "min_confident_fraction": float(args.tnc_regularized_min_confident_fraction),
+                "uses_target_gt": False,
+                "reference": "target-neighbor consistency regularizes per-pixel movement between source-supported base, learned, and fixed residuals; it does not copy neighbor consensus directly",
             },
             "target_neighbor_all_candidate_diagnostic": {
                 "enabled": bool(args.enable_target_neighbor_all_candidate_diagnostic),
@@ -6351,6 +6505,26 @@ def main() -> None:
     parser.add_argument("--target_neighbor_generated_min_confidence", type=float, default=1.0e-4)
     parser.add_argument("--target_neighbor_generated_std_scale", type=float, default=2.0)
     parser.add_argument("--target_neighbor_generated_confidence_norm", type=float, default=1.0)
+    parser.add_argument(
+        "--enable_tnc_regularized_residual_candidate",
+        action="store_true",
+        help=(
+            "Add a target-GT-free generated residual candidate that uses target-neighbor "
+            "self-consistency only as a regularizer for source-supported fixed/learned residual blending."
+        ),
+    )
+    parser.add_argument("--tnc_regularized_residual_candidate_name", default="tnc_reg")
+    parser.add_argument("--tnc_regularized_base_variant", default="hybrid")
+    parser.add_argument("--tnc_regularized_learned_variant", default="learned")
+    parser.add_argument("--tnc_regularized_fixed_variant", default="fixed")
+    parser.add_argument("--tnc_regularized_max_learned_step", type=float, default=0.15)
+    parser.add_argument("--tnc_regularized_max_fixed_step", type=float, default=0.20)
+    parser.add_argument("--tnc_regularized_agreement_scale", type=float, default=0.02)
+    parser.add_argument("--tnc_regularized_decision_temperature", type=float, default=0.005)
+    parser.add_argument("--tnc_regularized_learned_margin", type=float, default=0.001)
+    parser.add_argument("--tnc_regularized_delta_clip", type=float, default=0.25)
+    parser.add_argument("--tnc_regularized_min_consensus_effective_weight", type=float, default=1.0e-5)
+    parser.add_argument("--tnc_regularized_min_confident_fraction", type=float, default=0.005)
     parser.add_argument(
         "--enable_target_neighbor_all_candidate_diagnostic",
         action="store_true",

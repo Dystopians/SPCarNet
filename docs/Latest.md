@@ -191,6 +191,45 @@ observability tool. The next real step should improve candidate-generation
 capacity itself, using TNC as a training/evidence signal rather than as another
 thresholded ranker.
 
+## 2026-07-01 Follow-up: v339 TNC-Regularized Residual Candidate
+
+Newest candidate-generation investigation:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v339-TNCRegularizedResidual-NegativeLog.md
+docs/car_model/results/v339_tnc_regularized_residual_focus6_summary.json
+docs/car_model/results/v339_tnc_regularized_residual_focus6_summary.md
+docs/car_model/results/v339d_tnc_reg_fullstack_focus6_oracle_gap.json
+docs/car_model/results/v339d_tnc_reg_fullstack_focus6_oracle_gap.md
+outputs/carnet/spcarnet_v339d_tnc_reg_fullstack_focus6_20260701
+```
+
+v339 adds a real generated residual candidate, `tnc_reg`. Unlike v338, this is
+not a ranker: it uses target-neighbor render/depth/camera self-consistency as a
+weak regularizer for per-pixel movement between source-supported base,
+`learned`, and `fixed` residuals. The candidate is still target/test-GT-free and
+must pass source-summary admission before it can enter downstream policies.
+
+Fair focus6 validation used the complete v337/v335/v334/v333 stack plus
+`adaptive` and `tnc_reg`. The result is safe but not positive:
+
+| method | selected PSNR gain | selected SSIM gain | oracle headroom |
+|---|---:|---:|---:|
+| v337diag | 0.301231403771 | 0.003460387180 | +0.012506552 |
+| v339d full stack | 0.301231403771 | 0.003460387180 | +0.012506552 |
+
+`tnc_reg` survives source-summary admission only on room. There it is weaker
+than the existing adaptive/selected behavior; on the other focus6 scenes it is
+rejected by source-summary PSNR or SSIM. A learned-base shrink probe was also
+rejected by source-heldout evidence (`source_summary_psnr_delta:-0.0135018206`).
+
+Conclusion: v339 is a valid implementation and a useful negative result, but it
+does not advance the paper method. The bottleneck is now clearer: TNC can serve
+as a certificate and maybe an auxiliary learned feature/loss, but not as a
+hand-crafted residual generator. The next candidate generator needs learned
+capacity trained on source-heldout residual outcomes.
+
 ## 2026-07-01 Follow-up: v335 Target-Neighbor Candidate Unlock
 
 Newest positive method update:

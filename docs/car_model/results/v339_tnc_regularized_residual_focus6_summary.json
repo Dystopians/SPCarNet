@@ -1,0 +1,745 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-01",
+  "methods": {
+    "v337diag": {
+      "root": "outputs/carnet/spcarnet_v337_all_candidate_tnc_diag_focus6_20260701",
+      "scenes": {
+        "stump": {
+          "selected_psnr_gain": 0.05702976139303506,
+          "selected_ssim_gain": 0.001208242028951645,
+          "selected_variant": "fixed",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "scene_selected_fixed"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.05702976139303506,
+            "learned": 0.06240550678673129,
+            "hybrid": 0.062019967739911364,
+            "mix0250": 0.06010001319501135,
+            "mix0750": 0.06278834288415114
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.001208242028951645,
+            "learned": 0.0008767247200012207,
+            "hybrid": 0.001134432852268219,
+            "mix0250": 0.0011944696307182312,
+            "mix0750": 0.001028411090373993
+          },
+          "wandb_offline_runs": []
+        },
+        "treehill": {
+          "selected_psnr_gain": 0.1181213825083878,
+          "selected_ssim_gain": 0.0017174349890814887,
+          "selected_variant": "fixed",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "scene_selected_fixed"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.09075745623850276,
+            "learned": 0.12031289335964404,
+            "hybrid": 0.10709009243203561,
+            "mix0250": 0.09930943992351596,
+            "mix0750": 0.114093441318005
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.0015932122866312663,
+            "learned": 0.001588390933142768,
+            "hybrid": 0.0016907321082221137,
+            "mix0250": 0.0016670260164472791,
+            "mix0750": 0.0016642842027876112
+          },
+          "wandb_offline_runs": []
+        },
+        "room": {
+          "selected_psnr_gain": 0.4426811270759636,
+          "selected_ssim_gain": 0.005089075137407352,
+          "selected_variant": "hybrid",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750",
+            "adaptive"
+          ],
+          "suppressed_generated_candidate_reasons": {},
+          "candidate_psnr_gains": {
+            "fixed": 0.39369127175138374,
+            "learned": 0.43979794049711474,
+            "hybrid": 0.42183782192548464,
+            "mix0250": 0.40902484479099205,
+            "mix0750": 0.43210275110795254,
+            "adaptive": 0.42652872601151925
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.004668333591558995,
+            "learned": 0.0051460495361915,
+            "hybrid": 0.004989705024621425,
+            "mix0250": 0.004849777771876409,
+            "mix0750": 0.005088372108263847,
+            "adaptive": 0.0049589581978626745
+          },
+          "wandb_offline_runs": []
+        },
+        "bicycle": {
+          "selected_psnr_gain": 0.11995854884043254,
+          "selected_ssim_gain": 0.00298875093460083,
+          "selected_variant": "hybrid",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "source_summary_psnr_delta:-0.0152193543"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.09834530782944569,
+            "learned": 0.12032849879064286,
+            "hybrid": 0.11208827481638309,
+            "mix0250": 0.10590204762664414,
+            "mix0750": 0.11689823673379124
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.0028195738792419433,
+            "learned": 0.002834932804107666,
+            "hybrid": 0.002952544689178467,
+            "mix0250": 0.002917327880859375,
+            "mix0750": 0.0029250693321228025
+          },
+          "wandb_offline_runs": []
+        },
+        "bonsai": {
+          "selected_psnr_gain": 0.5759744422762492,
+          "selected_ssim_gain": 0.005847958294120994,
+          "selected_variant": "learned",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "source_summary_psnr_delta:-0.0454876448"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.4863971501099032,
+            "learned": 0.5677124421175066,
+            "hybrid": 0.5313874915060735,
+            "mix0250": 0.5099592620212438,
+            "mix0750": 0.5506491988846892
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.005299505349752065,
+            "learned": 0.005785043175156052,
+            "hybrid": 0.005616486072540283,
+            "mix0250": 0.005476660019642598,
+            "mix0750": 0.005719254145751128
+          },
+          "wandb_offline_runs": []
+        },
+        "kitchen": {
+          "selected_psnr_gain": 0.4936231605325725,
+          "selected_ssim_gain": 0.003910861696515764,
+          "selected_variant": "learned",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "source_summary_psnr_delta:-0.0761276079"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.39306139938107726,
+            "learned": 0.4936231605325725,
+            "hybrid": 0.4465212053717037,
+            "mix0250": 0.4205672554792259,
+            "mix0750": 0.4708856464896016
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.0034032719475882395,
+            "learned": 0.003910861696515764,
+            "hybrid": 0.0037016255514962333,
+            "mix0250": 0.0035636067390441895,
+            "mix0750": 0.003817449297223772
+          },
+          "wandb_offline_runs": []
+        }
+      },
+      "macro": {
+        "selected_psnr_gain": 0.30123140377110674,
+        "selected_ssim_gain": 0.0034603871801130123
+      },
+      "suppression_counts": {
+        "adaptive:scene_selected_fixed": 2,
+        "adaptive:source_summary_psnr_delta": 3
+      },
+      "candidate_available_scene_counts": {
+        "fixed": 6,
+        "learned": 6,
+        "hybrid": 6,
+        "mix0250": 6,
+        "mix0750": 6,
+        "adaptive": 1
+      },
+      "tnc_reg_active_views": {}
+    },
+    "v339c_incomplete_stack": {
+      "root": "outputs/carnet/spcarnet_v339c_tnc_reg_margin_focus6_20260701",
+      "scenes": {
+        "stump": {
+          "selected_psnr_gain": 0.05702976139303506,
+          "selected_ssim_gain": 0.001208242028951645,
+          "selected_variant": "fixed",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "source_summary_ssim_delta:-6.42120838e-05",
+            "tnc_reg": "source_summary_ssim_delta:-5.85615635e-05"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.05702976139303506,
+            "learned": 0.06240550678673129,
+            "hybrid": 0.062019967739911364,
+            "mix0250": 0.06010001319501135,
+            "mix0750": 0.06278834288415114
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.001208242028951645,
+            "learned": 0.0008767247200012207,
+            "hybrid": 0.001134432852268219,
+            "mix0250": 0.0011944696307182312,
+            "mix0750": 0.001028411090373993
+          },
+          "wandb_offline_runs": []
+        },
+        "treehill": {
+          "selected_psnr_gain": 0.10384367229618736,
+          "selected_ssim_gain": 0.0016648040877448188,
+          "selected_variant": "fixed",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "source_summary_ssim_delta:-0.000138911334",
+            "tnc_reg": "source_summary_ssim_delta:-0.000134403055"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.09075745623850276,
+            "learned": 0.12031289335964404,
+            "hybrid": 0.10709009243203561,
+            "mix0250": 0.09930943992351596,
+            "mix0750": 0.114093441318005
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.0015932122866312663,
+            "learned": 0.001588390933142768,
+            "hybrid": 0.0016907321082221137,
+            "mix0250": 0.0016670260164472791,
+            "mix0750": 0.0016642842027876112
+          },
+          "wandb_offline_runs": []
+        },
+        "room": {
+          "selected_psnr_gain": 0.4426811270759636,
+          "selected_ssim_gain": 0.005089075137407352,
+          "selected_variant": "hybrid",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750",
+            "adaptive",
+            "tnc_reg"
+          ],
+          "suppressed_generated_candidate_reasons": {},
+          "candidate_psnr_gains": {
+            "fixed": 0.39369127175138374,
+            "learned": 0.43979794049711474,
+            "hybrid": 0.42183782192548464,
+            "mix0250": 0.40902484479099205,
+            "mix0750": 0.43210275110795254,
+            "adaptive": 0.42652872601151925,
+            "tnc_reg": 0.42486999161392464
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.004668333591558995,
+            "learned": 0.0051460495361915,
+            "hybrid": 0.004989705024621425,
+            "mix0250": 0.004849777771876409,
+            "mix0750": 0.005088372108263847,
+            "adaptive": 0.0049589581978626745,
+            "tnc_reg": 0.004949676684844188
+          },
+          "wandb_offline_runs": []
+        },
+        "bicycle": {
+          "selected_psnr_gain": 0.11995854884043254,
+          "selected_ssim_gain": 0.00298875093460083,
+          "selected_variant": "hybrid",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "source_summary_psnr_delta:-0.0152193543",
+            "tnc_reg": "source_summary_psnr_delta:-0.0151268617"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.09834530782944569,
+            "learned": 0.12032849879064286,
+            "hybrid": 0.11208827481638309,
+            "mix0250": 0.10590204762664414,
+            "mix0750": 0.11689823673379124
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.0028195738792419433,
+            "learned": 0.002834932804107666,
+            "hybrid": 0.002952544689178467,
+            "mix0250": 0.002917327880859375,
+            "mix0750": 0.0029250693321228025
+          },
+          "wandb_offline_runs": []
+        },
+        "bonsai": {
+          "selected_psnr_gain": 0.5680114008651865,
+          "selected_ssim_gain": 0.005784803145640605,
+          "selected_variant": "learned",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "source_summary_psnr_delta:-0.0454876448",
+            "tnc_reg": "source_summary_psnr_delta:-0.0469213021"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.4863971501099032,
+            "learned": 0.5677124421175066,
+            "hybrid": 0.5313874915060735,
+            "mix0250": 0.5099592620212438,
+            "mix0750": 0.5506491988846892
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.005299505349752065,
+            "learned": 0.005785043175156052,
+            "hybrid": 0.005616486072540283,
+            "mix0250": 0.005476660019642598,
+            "mix0750": 0.005719254145751128
+          },
+          "wandb_offline_runs": []
+        },
+        "kitchen": {
+          "selected_psnr_gain": 0.4936231605325725,
+          "selected_ssim_gain": 0.003910861696515764,
+          "selected_variant": "learned",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "source_summary_psnr_delta:-0.0761276079",
+            "tnc_reg": "source_summary_psnr_delta:-0.0769644151"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.39306139938107726,
+            "learned": 0.4936231605325725,
+            "hybrid": 0.4465212053717037,
+            "mix0250": 0.4205672554792259,
+            "mix0750": 0.4708856464896016
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.0034032719475882395,
+            "learned": 0.003910861696515764,
+            "hybrid": 0.0037016255514962333,
+            "mix0250": 0.0035636067390441895,
+            "mix0750": 0.003817449297223772
+          },
+          "wandb_offline_runs": []
+        }
+      },
+      "macro": {
+        "selected_psnr_gain": 0.2975246118338963,
+        "selected_ssim_gain": 0.0034410895051435026
+      },
+      "suppression_counts": {
+        "adaptive:source_summary_ssim_delta": 2,
+        "tnc_reg:source_summary_ssim_delta": 2,
+        "adaptive:source_summary_psnr_delta": 3,
+        "tnc_reg:source_summary_psnr_delta": 3
+      },
+      "candidate_available_scene_counts": {
+        "fixed": 6,
+        "learned": 6,
+        "hybrid": 6,
+        "mix0250": 6,
+        "mix0750": 6,
+        "adaptive": 1,
+        "tnc_reg": 1
+      },
+      "tnc_reg_active_views": {
+        "room": 39
+      }
+    },
+    "v339d_full_stack": {
+      "root": "outputs/carnet/spcarnet_v339d_tnc_reg_fullstack_focus6_20260701",
+      "scenes": {
+        "stump": {
+          "selected_psnr_gain": 0.05702976139303506,
+          "selected_ssim_gain": 0.001208242028951645,
+          "selected_variant": "fixed",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "source_summary_ssim_delta:-6.42120838e-05",
+            "tnc_reg": "source_summary_ssim_delta:-5.85615635e-05"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.05702976139303506,
+            "learned": 0.06240550678673129,
+            "hybrid": 0.062019967739911364,
+            "mix0250": 0.06010001319501135,
+            "mix0750": 0.06278834288415114
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.001208242028951645,
+            "learned": 0.0008767247200012207,
+            "hybrid": 0.001134432852268219,
+            "mix0250": 0.0011944696307182312,
+            "mix0750": 0.001028411090373993
+          },
+          "wandb_offline_runs": []
+        },
+        "treehill": {
+          "selected_psnr_gain": 0.1181213825083878,
+          "selected_ssim_gain": 0.0017174349890814887,
+          "selected_variant": "fixed",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "source_summary_ssim_delta:-0.000138911334",
+            "tnc_reg": "source_summary_ssim_delta:-0.000134403055"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.09075745623850276,
+            "learned": 0.12031289335964404,
+            "hybrid": 0.10709009243203561,
+            "mix0250": 0.09930943992351596,
+            "mix0750": 0.114093441318005
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.0015932122866312663,
+            "learned": 0.001588390933142768,
+            "hybrid": 0.0016907321082221137,
+            "mix0250": 0.0016670260164472791,
+            "mix0750": 0.0016642842027876112
+          },
+          "wandb_offline_runs": []
+        },
+        "room": {
+          "selected_psnr_gain": 0.4426811270759636,
+          "selected_ssim_gain": 0.005089075137407352,
+          "selected_variant": "hybrid",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750",
+            "adaptive",
+            "tnc_reg"
+          ],
+          "suppressed_generated_candidate_reasons": {},
+          "candidate_psnr_gains": {
+            "fixed": 0.39369127175138374,
+            "learned": 0.43979794049711474,
+            "hybrid": 0.42183782192548464,
+            "mix0250": 0.40902484479099205,
+            "mix0750": 0.43210275110795254,
+            "adaptive": 0.42652872601151925,
+            "tnc_reg": 0.42486999161392464
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.004668333591558995,
+            "learned": 0.0051460495361915,
+            "hybrid": 0.004989705024621425,
+            "mix0250": 0.004849777771876409,
+            "mix0750": 0.005088372108263847,
+            "adaptive": 0.0049589581978626745,
+            "tnc_reg": 0.004949676684844188
+          },
+          "wandb_offline_runs": []
+        },
+        "bicycle": {
+          "selected_psnr_gain": 0.11995854884043254,
+          "selected_ssim_gain": 0.00298875093460083,
+          "selected_variant": "hybrid",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "source_summary_psnr_delta:-0.0152193543",
+            "tnc_reg": "source_summary_psnr_delta:-0.0151268617"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.09834530782944569,
+            "learned": 0.12032849879064286,
+            "hybrid": 0.11208827481638309,
+            "mix0250": 0.10590204762664414,
+            "mix0750": 0.11689823673379124
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.0028195738792419433,
+            "learned": 0.002834932804107666,
+            "hybrid": 0.002952544689178467,
+            "mix0250": 0.002917327880859375,
+            "mix0750": 0.0029250693321228025
+          },
+          "wandb_offline_runs": []
+        },
+        "bonsai": {
+          "selected_psnr_gain": 0.5759744422762492,
+          "selected_ssim_gain": 0.005847958294120994,
+          "selected_variant": "learned",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "source_summary_psnr_delta:-0.0454876448",
+            "tnc_reg": "source_summary_psnr_delta:-0.0469213021"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.4863971501099032,
+            "learned": 0.5677124421175066,
+            "hybrid": 0.5313874915060735,
+            "mix0250": 0.5099592620212438,
+            "mix0750": 0.5506491988846892
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.005299505349752065,
+            "learned": 0.005785043175156052,
+            "hybrid": 0.005616486072540283,
+            "mix0250": 0.005476660019642598,
+            "mix0750": 0.005719254145751128
+          },
+          "wandb_offline_runs": []
+        },
+        "kitchen": {
+          "selected_psnr_gain": 0.4936231605325725,
+          "selected_ssim_gain": 0.003910861696515764,
+          "selected_variant": "learned",
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "suppressed_generated_candidate_reasons": {
+            "adaptive": "source_summary_psnr_delta:-0.0761276079",
+            "tnc_reg": "source_summary_psnr_delta:-0.0769644151"
+          },
+          "candidate_psnr_gains": {
+            "fixed": 0.39306139938107726,
+            "learned": 0.4936231605325725,
+            "hybrid": 0.4465212053717037,
+            "mix0250": 0.4205672554792259,
+            "mix0750": 0.4708856464896016
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.0034032719475882395,
+            "learned": 0.003910861696515764,
+            "hybrid": 0.0037016255514962333,
+            "mix0250": 0.0035636067390441895,
+            "mix0750": 0.003817449297223772
+          },
+          "wandb_offline_runs": []
+        }
+      },
+      "macro": {
+        "selected_psnr_gain": 0.30123140377110674,
+        "selected_ssim_gain": 0.0034603871801130123
+      },
+      "suppression_counts": {
+        "adaptive:source_summary_ssim_delta": 2,
+        "tnc_reg:source_summary_ssim_delta": 2,
+        "adaptive:source_summary_psnr_delta": 3,
+        "tnc_reg:source_summary_psnr_delta": 3
+      },
+      "candidate_available_scene_counts": {
+        "fixed": 6,
+        "learned": 6,
+        "hybrid": 6,
+        "mix0250": 6,
+        "mix0750": 6,
+        "adaptive": 1,
+        "tnc_reg": 1
+      },
+      "tnc_reg_active_views": {
+        "room": 39
+      }
+    }
+  },
+  "verdict": "v339 implements a real TNC-regularized residual candidate, but full-stack focus6 is identical to v337 and oracle headroom is unchanged.",
+  "room_probes": {
+    "v339b_adaptive_base_smoke3": {
+      "root": "outputs/carnet/spcarnet_v339b_tnc_reg_adaptive_smoke3_room_20260701",
+      "target_views": 3,
+      "selected_psnr_gain": 0.2515615146423163,
+      "selected_ssim_gain": 0.0037259658177693686,
+      "candidate_psnr_gains": {
+        "fixed": 0.25450978447083256,
+        "learned": 0.20007489845536242,
+        "hybrid": 0.23220551632172004,
+        "mix0250": 0.24459826606148974,
+        "mix0750": 0.21735481325852035,
+        "adaptive": 0.256933644932964,
+        "tnc_reg": 0.2557358662587899
+      },
+      "candidate_ssim_gains": {
+        "fixed": 0.0036183794339497886,
+        "learned": 0.0034508705139160156,
+        "hybrid": 0.0036097168922424316,
+        "mix0250": 0.0036332011222839355,
+        "mix0750": 0.0035488009452819824,
+        "adaptive": 0.003750622272491455,
+        "tnc_reg": 0.003743469715118408
+      },
+      "suppressed_generated_candidate_reasons": {},
+      "candidate_variants": [
+        "fixed",
+        "learned",
+        "hybrid",
+        "mix0250",
+        "mix0750",
+        "adaptive",
+        "tnc_reg"
+      ]
+    },
+    "v339c_adaptive_base_margin_smoke3": {
+      "root": "outputs/carnet/spcarnet_v339c_tnc_reg_margin_smoke3_room_20260701",
+      "target_views": 3,
+      "selected_psnr_gain": 0.2515615146423163,
+      "selected_ssim_gain": 0.0037259658177693686,
+      "candidate_psnr_gains": {
+        "fixed": 0.25450978447083256,
+        "learned": 0.20007489845536242,
+        "hybrid": 0.23220551632172004,
+        "mix0250": 0.24459826606148974,
+        "mix0750": 0.21735481325852035,
+        "adaptive": 0.256933644932964,
+        "tnc_reg": 0.25617130369391933
+      },
+      "candidate_ssim_gains": {
+        "fixed": 0.0036183794339497886,
+        "learned": 0.0034508705139160156,
+        "hybrid": 0.0036097168922424316,
+        "mix0250": 0.0036332011222839355,
+        "mix0750": 0.0035488009452819824,
+        "adaptive": 0.003750622272491455,
+        "tnc_reg": 0.0037438074747721353
+      },
+      "suppressed_generated_candidate_reasons": {},
+      "candidate_variants": [
+        "fixed",
+        "learned",
+        "hybrid",
+        "mix0250",
+        "mix0750",
+        "adaptive",
+        "tnc_reg"
+      ]
+    },
+    "v339e_learned_base_full_room": {
+      "root": "outputs/carnet/spcarnet_v339e_tnc_reg_learnedbase_room_probe_20260701",
+      "target_views": 39,
+      "selected_psnr_gain": 0.4426811270759636,
+      "selected_ssim_gain": 0.005089075137407352,
+      "candidate_psnr_gains": {
+        "fixed": 0.39369127175138374,
+        "learned": 0.43979794049711474,
+        "hybrid": 0.42183782192548464,
+        "mix0250": 0.40902484479099205,
+        "mix0750": 0.43210275110795254,
+        "adaptive": 0.42652872601151925
+      },
+      "candidate_ssim_gains": {
+        "fixed": 0.004668333591558995,
+        "learned": 0.0051460495361915,
+        "hybrid": 0.004989705024621425,
+        "mix0250": 0.004849777771876409,
+        "mix0750": 0.005088372108263847,
+        "adaptive": 0.0049589581978626745
+      },
+      "suppressed_generated_candidate_reasons": {
+        "tnc_reg": "source_summary_psnr_delta:-0.0135018206"
+      },
+      "candidate_variants": [
+        "fixed",
+        "learned",
+        "hybrid",
+        "mix0250",
+        "mix0750",
+        "adaptive"
+      ]
+    }
+  }
+}
