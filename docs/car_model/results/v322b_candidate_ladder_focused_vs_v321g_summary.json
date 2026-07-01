@@ -1,0 +1,639 @@
+{
+  "scenes": [
+    "stump",
+    "treehill",
+    "room",
+    "bonsai",
+    "bicycle",
+    "flowers",
+    "garden"
+  ],
+  "methods": {
+    "v319c": {
+      "aggregate": {
+        "scene_count": 7,
+        "mean_psnr_gain": 0.21536367827616842,
+        "mean_ssim_gain": 0.0032372714618462365,
+        "mean_min_psnr_gain": 0.008899251641901276,
+        "mean_cvar10_psnr_gain": 0.028289632888485964,
+        "total_negative_views": 7,
+        "safe_scene_count": 7,
+        "selected_variant_counts": {
+          "fixed": 28,
+          "learned": 74,
+          "hybrid": 79
+        }
+      },
+      "scenes": [
+        {
+          "scene": "stump",
+          "psnr_gain": 0.05702976139303506,
+          "ssim_gain": 0.001208242028951645,
+          "min_psnr_gain": -0.01318482027017609,
+          "cvar10_psnr_gain": -0.01318482027017609,
+          "negative_views": 3,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "fixed": 16
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/stump/support_transport_apply_report.json"
+        },
+        {
+          "scene": "treehill",
+          "psnr_gain": 0.10384367229618736,
+          "ssim_gain": 0.0016648040877448188,
+          "min_psnr_gain": -0.04984594221641814,
+          "cvar10_psnr_gain": -0.04984594221641814,
+          "negative_views": 2,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "fixed": 12,
+            "learned": 6
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/treehill/support_transport_apply_report.json"
+        },
+        {
+          "scene": "room",
+          "psnr_gain": 0.42183782192548464,
+          "ssim_gain": 0.004989705024621425,
+          "min_psnr_gain": 0.011894511570545774,
+          "cvar10_psnr_gain": 0.039106985118980475,
+          "negative_views": 0,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "hybrid": 39
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/room/support_transport_apply_report.json"
+        },
+        {
+          "scene": "bonsai",
+          "psnr_gain": 0.5680114008651865,
+          "ssim_gain": 0.005784803145640605,
+          "min_psnr_gain": 0.14005710063242205,
+          "cvar10_psnr_gain": 0.21370041880688953,
+          "negative_views": 0,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "learned": 36,
+            "hybrid": 1
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/bonsai/support_transport_apply_report.json"
+        },
+        {
+          "scene": "bicycle",
+          "psnr_gain": 0.11995854884043254,
+          "ssim_gain": 0.00298875093460083,
+          "min_psnr_gain": -0.060029153144686376,
+          "cvar10_psnr_gain": -0.04755920221850296,
+          "negative_views": 2,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "learned": 5,
+            "hybrid": 20
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/bicycle/support_transport_apply_report.json"
+        },
+        {
+          "scene": "flowers",
+          "psnr_gain": 0.0923596316861136,
+          "ssim_gain": 0.00411434065211903,
+          "min_psnr_gain": 0.02777446740415357,
+          "cvar10_psnr_gain": 0.027897987886380093,
+          "negative_views": 0,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "hybrid": 13,
+            "learned": 9
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/flowers/support_transport_apply_report.json"
+        },
+        {
+          "scene": "garden",
+          "psnr_gain": 0.14450491092673934,
+          "ssim_gain": 0.0019102543592453003,
+          "min_psnr_gain": 0.005628597517468137,
+          "cvar10_psnr_gain": 0.02791200311224884,
+          "negative_views": 0,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "learned": 18,
+            "hybrid": 6
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/garden/support_transport_apply_report.json"
+        }
+      ]
+    },
+    "v321g": {
+      "aggregate": {
+        "scene_count": 7,
+        "mean_psnr_gain": 0.2173217070245237,
+        "mean_ssim_gain": 0.0032458030043343066,
+        "mean_min_psnr_gain": 0.008899251641901276,
+        "mean_cvar10_psnr_gain": 0.028289632888485964,
+        "total_negative_views": 7,
+        "safe_scene_count": 7,
+        "selected_variant_counts": {
+          "fixed": 28,
+          "learned": 88,
+          "hybrid": 65
+        }
+      },
+      "scenes": [
+        {
+          "scene": "stump",
+          "psnr_gain": 0.05702976139303506,
+          "ssim_gain": 0.001208242028951645,
+          "min_psnr_gain": -0.01318482027017609,
+          "cvar10_psnr_gain": -0.01318482027017609,
+          "negative_views": 3,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "fixed": 16
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v321g_rawmargin_accept10_full9_20260701/stump/support_transport_apply_report.json"
+        },
+        {
+          "scene": "treehill",
+          "psnr_gain": 0.10384367229618736,
+          "ssim_gain": 0.0016648040877448188,
+          "min_psnr_gain": -0.04984594221641814,
+          "cvar10_psnr_gain": -0.04984594221641814,
+          "negative_views": 2,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "fixed": 12,
+            "learned": 6
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v321g_rawmargin_accept10_full9_20260701/treehill/support_transport_apply_report.json"
+        },
+        {
+          "scene": "room",
+          "psnr_gain": 0.43554402316397134,
+          "ssim_gain": 0.005049425822037917,
+          "min_psnr_gain": 0.011894511570545774,
+          "cvar10_psnr_gain": 0.039106985118980475,
+          "negative_views": 0,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "hybrid": 25,
+            "learned": 14
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v321g_rawmargin_accept10_full9_20260701/room/support_transport_apply_report.json"
+        },
+        {
+          "scene": "bonsai",
+          "psnr_gain": 0.5680114008651865,
+          "ssim_gain": 0.005784803145640605,
+          "min_psnr_gain": 0.14005710063242205,
+          "cvar10_psnr_gain": 0.21370041880688953,
+          "negative_views": 0,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "learned": 36,
+            "hybrid": 1
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v321g_rawmargin_accept10_full9_20260701/bonsai/support_transport_apply_report.json"
+        },
+        {
+          "scene": "bicycle",
+          "psnr_gain": 0.11995854884043254,
+          "ssim_gain": 0.00298875093460083,
+          "min_psnr_gain": -0.060029153144686376,
+          "cvar10_psnr_gain": -0.04755920221850296,
+          "negative_views": 2,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "learned": 5,
+            "hybrid": 20
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v321g_rawmargin_accept10_full9_20260701/bicycle/support_transport_apply_report.json"
+        },
+        {
+          "scene": "flowers",
+          "psnr_gain": 0.0923596316861136,
+          "ssim_gain": 0.00411434065211903,
+          "min_psnr_gain": 0.02777446740415357,
+          "cvar10_psnr_gain": 0.027897987886380093,
+          "negative_views": 0,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "hybrid": 13,
+            "learned": 9
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v321g_rawmargin_accept10_full9_20260701/flowers/support_transport_apply_report.json"
+        },
+        {
+          "scene": "garden",
+          "psnr_gain": 0.14450491092673934,
+          "ssim_gain": 0.0019102543592453003,
+          "min_psnr_gain": 0.005628597517468137,
+          "cvar10_psnr_gain": 0.02791200311224884,
+          "negative_views": 0,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "learned": 18,
+            "hybrid": 6
+          },
+          "candidate_variants": null,
+          "candidate_psnr_gains": null,
+          "candidate_ssim_gains": null,
+          "report_path": "outputs/carnet/spcarnet_v321g_rawmargin_accept10_full9_20260701/garden/support_transport_apply_report.json"
+        }
+      ]
+    },
+    "v322b_ladder": {
+      "aggregate": {
+        "scene_count": 7,
+        "mean_psnr_gain": 0.21724837341348613,
+        "mean_ssim_gain": 0.0032465702602036605,
+        "mean_min_psnr_gain": 0.00864941331680821,
+        "mean_cvar10_psnr_gain": 0.028147067942764215,
+        "total_negative_views": 7,
+        "safe_scene_count": 7,
+        "selected_variant_counts": {
+          "fixed": 28,
+          "learned": 87,
+          "hybrid": 48,
+          "mix0750": 6,
+          "mix0250": 12
+        }
+      },
+      "scenes": [
+        {
+          "scene": "stump",
+          "psnr_gain": 0.05702976139303506,
+          "ssim_gain": 0.001208242028951645,
+          "min_psnr_gain": -0.01318482027017609,
+          "cvar10_psnr_gain": -0.01318482027017609,
+          "negative_views": 3,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "fixed": 16
+          },
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "candidate_psnr_gains": {
+            "fixed": 0.05702976139303506,
+            "learned": 0.06240550678673129,
+            "hybrid": 0.062019967739911364,
+            "mix0250": 0.06010001319501135,
+            "mix0750": 0.06278834288415114
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.001208242028951645,
+            "learned": 0.0008767247200012207,
+            "hybrid": 0.001134432852268219,
+            "mix0250": 0.0011944696307182312,
+            "mix0750": 0.001028411090373993
+          },
+          "report_path": "outputs/carnet/spcarnet_v322b_candidate_ladder_focused_20260701/stump/support_transport_apply_report.json"
+        },
+        {
+          "scene": "treehill",
+          "psnr_gain": 0.10384367229618736,
+          "ssim_gain": 0.0016648040877448188,
+          "min_psnr_gain": -0.04984594221641814,
+          "cvar10_psnr_gain": -0.04984594221641814,
+          "negative_views": 2,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "fixed": 12,
+            "learned": 6
+          },
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "candidate_psnr_gains": {
+            "fixed": 0.09075745623850276,
+            "learned": 0.12031289335964404,
+            "hybrid": 0.10709009243203561,
+            "mix0250": 0.09930943992351596,
+            "mix0750": 0.114093441318005
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.0015932122866312663,
+            "learned": 0.001588390933142768,
+            "hybrid": 0.0016907321082221137,
+            "mix0250": 0.0016670260164472791,
+            "mix0750": 0.0016642842027876112
+          },
+          "report_path": "outputs/carnet/spcarnet_v322b_candidate_ladder_focused_20260701/treehill/support_transport_apply_report.json"
+        },
+        {
+          "scene": "room",
+          "psnr_gain": 0.43663617004835187,
+          "ssim_gain": 0.005051268981053279,
+          "min_psnr_gain": 0.011894511570545774,
+          "cvar10_psnr_gain": 0.039106985118980475,
+          "negative_views": 0,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "hybrid": 23,
+            "learned": 15,
+            "mix0750": 1
+          },
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "candidate_psnr_gains": {
+            "fixed": 0.39369127175138374,
+            "learned": 0.43979794049711474,
+            "hybrid": 0.42183782192548464,
+            "mix0250": 0.40902484479099205,
+            "mix0750": 0.43210275110795254
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.004668333591558995,
+            "learned": 0.0051460495361915,
+            "hybrid": 0.004989705024621425,
+            "mix0250": 0.004849777771876409,
+            "mix0750": 0.005088372108263847
+          },
+          "report_path": "outputs/carnet/spcarnet_v322b_candidate_ladder_focused_20260701/room/support_transport_apply_report.json"
+        },
+        {
+          "scene": "bonsai",
+          "psnr_gain": 0.5677124421175066,
+          "ssim_gain": 0.005785043175156052,
+          "min_psnr_gain": 0.14005710063242205,
+          "cvar10_psnr_gain": 0.21370041880688953,
+          "negative_views": 0,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "learned": 37
+          },
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "candidate_psnr_gains": {
+            "fixed": 0.4863971501099032,
+            "learned": 0.5677124421175066,
+            "hybrid": 0.5313874915060735,
+            "mix0250": 0.5099592620212438,
+            "mix0750": 0.5506491988846892
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.005299505349752065,
+            "learned": 0.005785043175156052,
+            "hybrid": 0.005616486072540283,
+            "mix0250": 0.005476660019642598,
+            "mix0750": 0.005719254145751128
+          },
+          "report_path": "outputs/carnet/spcarnet_v322b_candidate_ladder_focused_20260701/bonsai/support_transport_apply_report.json"
+        },
+        {
+          "scene": "bicycle",
+          "psnr_gain": 0.11814247449201076,
+          "ssim_gain": 0.003014535903930664,
+          "min_psnr_gain": -0.060029153144686376,
+          "cvar10_psnr_gain": -0.04755920221850296,
+          "negative_views": 2,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "learned": 3,
+            "mix0750": 1,
+            "hybrid": 17,
+            "mix0250": 4
+          },
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "candidate_psnr_gains": {
+            "fixed": 0.09834530782944569,
+            "learned": 0.12032849879064286,
+            "hybrid": 0.11208827481638309,
+            "mix0250": 0.10590204762664414,
+            "mix0750": 0.11689823673379124
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.0028195738792419433,
+            "learned": 0.002834932804107666,
+            "hybrid": 0.002952544689178467,
+            "mix0250": 0.002917327880859375,
+            "mix0750": 0.0029250693321228025
+          },
+          "report_path": "outputs/carnet/spcarnet_v322b_candidate_ladder_focused_20260701/bicycle/support_transport_apply_report.json"
+        },
+        {
+          "scene": "flowers",
+          "psnr_gain": 0.09237756810629107,
+          "ssim_gain": 0.004099629142067649,
+          "min_psnr_gain": 0.026025599128502108,
+          "cvar10_psnr_gain": 0.02690003326632784,
+          "negative_views": 0,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "mix0250": 5,
+            "learned": 9,
+            "hybrid": 6,
+            "mix0750": 2
+          },
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "candidate_psnr_gains": {
+            "fixed": 0.0782240266728122,
+            "learned": 0.0961603690330438,
+            "hybrid": 0.08886119364080872,
+            "mix0250": 0.08395779670828657,
+            "mix0750": 0.09293004394649981
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.003794328732924028,
+            "learned": 0.004101170734925704,
+            "hybrid": 0.004047775810415094,
+            "mix0250": 0.0039460794492201376,
+            "mix0750": 0.004099490967663852
+          },
+          "report_path": "outputs/carnet/spcarnet_v322b_candidate_ladder_focused_20260701/flowers/support_transport_apply_report.json"
+        },
+        {
+          "scene": "garden",
+          "psnr_gain": 0.14499652544102024,
+          "ssim_gain": 0.001902468502521515,
+          "min_psnr_gain": 0.005628597517468137,
+          "cvar10_psnr_gain": 0.02791200311224884,
+          "negative_views": 0,
+          "safe_vs_fixed": true,
+          "selected_variants": {
+            "learned": 17,
+            "hybrid": 2,
+            "mix0750": 2,
+            "mix0250": 3
+          },
+          "candidate_variants": [
+            "fixed",
+            "learned",
+            "hybrid",
+            "mix0250",
+            "mix0750"
+          ],
+          "candidate_psnr_gains": {
+            "fixed": 0.13318078577315484,
+            "learned": 0.14426260173874775,
+            "hybrid": 0.1409308747749085,
+            "mix0250": 0.13760661325482845,
+            "mix0750": 0.1431508509121399
+          },
+          "candidate_ssim_gains": {
+            "fixed": 0.0018310770392417908,
+            "learned": 0.0018803179264068604,
+            "hybrid": 0.0019092063109079997,
+            "mix0250": 0.0018835018078486125,
+            "mix0750": 0.001908158262570699
+          },
+          "report_path": "outputs/carnet/spcarnet_v322b_candidate_ladder_focused_20260701/garden/support_transport_apply_report.json"
+        }
+      ]
+    }
+  },
+  "v322b_minus_v321g": {
+    "stump": {
+      "psnr_gain_delta": 0.0,
+      "ssim_gain_delta": 0.0,
+      "negative_view_delta": 0,
+      "safe_v322b": true,
+      "v322b_selected_variants": {
+        "fixed": 16
+      }
+    },
+    "treehill": {
+      "psnr_gain_delta": 0.0,
+      "ssim_gain_delta": 0.0,
+      "negative_view_delta": 0,
+      "safe_v322b": true,
+      "v322b_selected_variants": {
+        "fixed": 12,
+        "learned": 6
+      }
+    },
+    "room": {
+      "psnr_gain_delta": 0.0010921468843805293,
+      "ssim_gain_delta": 1.843159015362146e-06,
+      "negative_view_delta": 0,
+      "safe_v322b": true,
+      "v322b_selected_variants": {
+        "hybrid": 23,
+        "learned": 15,
+        "mix0750": 1
+      }
+    },
+    "bonsai": {
+      "psnr_gain_delta": -0.0002989587476799338,
+      "ssim_gain_delta": 2.400295154468199e-07,
+      "negative_view_delta": 0,
+      "safe_v322b": true,
+      "v322b_selected_variants": {
+        "learned": 37
+      }
+    },
+    "bicycle": {
+      "psnr_gain_delta": -0.0018160743484217784,
+      "ssim_gain_delta": 2.5784969329833898e-05,
+      "negative_view_delta": 0,
+      "safe_v322b": true,
+      "v322b_selected_variants": {
+        "learned": 3,
+        "mix0750": 1,
+        "hybrid": 17,
+        "mix0250": 4
+      }
+    },
+    "flowers": {
+      "psnr_gain_delta": 1.7936420177472323e-05,
+      "ssim_gain_delta": -1.4711510051381056e-05,
+      "negative_view_delta": 0,
+      "safe_v322b": true,
+      "v322b_selected_variants": {
+        "mix0250": 5,
+        "learned": 9,
+        "hybrid": 6,
+        "mix0750": 2
+      }
+    },
+    "garden": {
+      "psnr_gain_delta": 0.000491614514280897,
+      "ssim_gain_delta": -7.7858567237854e-06,
+      "negative_view_delta": 0,
+      "safe_v322b": true,
+      "v322b_selected_variants": {
+        "learned": 17,
+        "hybrid": 2,
+        "mix0750": 2,
+        "mix0250": 3
+      }
+    }
+  },
+  "aggregate_v322b_minus_v321g": {
+    "mean_psnr_gain_delta": -7.333361103756264e-05,
+    "mean_ssim_gain_delta": 7.672558693539583e-07,
+    "mean_min_psnr_gain_delta": -0.0002498383250930658,
+    "mean_cvar10_psnr_gain_delta": -0.00014256494572174871,
+    "negative_views_delta": 0,
+    "safe_scene_count_delta": 0
+  }
+}

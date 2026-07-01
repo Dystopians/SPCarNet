@@ -76,6 +76,8 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
         f"- target views: `{payload['split']['target_views']}`",
         f"- support train views: `{payload['split']['support_views']}`",
         f"- anchor alpha / learned scale / blend: `{payload['policy']['anchor_alpha']}` / `{payload['policy']['learned_scale']}` / `{payload['policy']['blend']}`",
+        f"- candidate ladder: `{payload['policy'].get('enable_candidate_ladder')}` / `{payload['policy'].get('candidate_ladder_blends')}`",
+        f"- candidate variants: `{payload['policy'].get('candidate_variants')}`",
         f"- output variant: `{payload['policy']['output_variant']}`",
         f"- selected variant: `{payload['policy']['selected_variant']}`",
         f"- per-view gate: `{payload['policy'].get('per_view_gate_mode', 'off')}`",
@@ -102,13 +104,22 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
         "| method | PSNR gain | SSIM gain | changed | positive views | min PSNR gain | CVaR20 PSNR gain |",
         "|---|---:|---:|---:|---:|---:|---:|",
     ]
-    for key, label in [
-        ("fixed_summary", "fixed raw ELA"),
-        ("learned_summary", "learned only"),
-        ("hybrid_summary", "hybrid"),
-        ("selected_summary", "selected output"),
-    ]:
-        row = payload[key]
+    method_rows: list[tuple[str, dict[str, Any]]] = []
+    candidate_summaries = payload.get("candidate_summaries")
+    if isinstance(candidate_summaries, dict) and candidate_summaries:
+        for variant in payload["policy"].get("candidate_variants", []):
+            if variant in candidate_summaries:
+                method_rows.append((f"candidate:{variant}", candidate_summaries[variant]))
+    else:
+        method_rows.extend(
+            [
+                ("fixed raw ELA", payload["fixed_summary"]),
+                ("learned only", payload["learned_summary"]),
+                ("hybrid", payload["hybrid_summary"]),
+            ]
+        )
+    method_rows.append(("selected output", payload["selected_summary"]))
+    for label, row in method_rows:
         tail = row.get("psnr_gain_tail", {})
         lines.append(
             "| {label} | {psnr:+.9f} | {ssim:+.9f} | {changed:.9f} | {pos:.6f} | {minv:+.9f} | {cvar:+.9f} |".format(
@@ -217,11 +228,58 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
     (output_dir / "support_transport_apply_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+BASE_CANDIDATE_VARIANTS = ("fixed", "learned", "hybrid")
+
+
+def _variant_name_for_blend(value: float) -> str:
+    return f"mix{int(round(float(value) * 1000.0)):04d}"
+
+
+def _candidate_ladder_blends(args: argparse.Namespace) -> list[float]:
+    if not bool(getattr(args, "enable_candidate_ladder", False)):
+        return []
+    values: list[float] = []
+    seen = {0.0, 1.0, float(args.blend)}
+    for raw in str(getattr(args, "candidate_ladder_blends", "")).split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        value = float(raw)
+        if value <= 0.0 or value >= 1.0:
+            continue
+        if any(abs(value - prev) < 1.0e-6 for prev in seen):
+            continue
+        seen.add(value)
+        values.append(value)
+    return sorted(values)
+
+
+def _candidate_variant_blend_map(args: argparse.Namespace) -> dict[str, float]:
+    blend_map = {"fixed": 0.0, "learned": 1.0, "hybrid": float(args.blend)}
+    for value in _candidate_ladder_blends(args):
+        name = _variant_name_for_blend(value)
+        if name in blend_map:
+            raise ValueError(f"candidate ladder blend name collision for {value}: {name}")
+        blend_map[name] = float(value)
+    return blend_map
+
+
+def _candidate_variant_names(args: argparse.Namespace) -> list[str]:
+    return list(_candidate_variant_blend_map(args).keys())
+
+
+def _candidate_count_dict(variants: list[str]) -> dict[str, int]:
+    return {variant: 0 for variant in variants} | {"noop": 0, "scene": 0}
+
+
 def _candidate_deltas(ev: Any, pred_delta: torch.Tensor, args: argparse.Namespace) -> dict[str, torch.Tensor]:
     fixed_delta = float(args.anchor_alpha) * ev.signal
     learned_delta = float(args.learned_scale) * pred_delta
     hybrid_delta = (1.0 - float(args.blend)) * fixed_delta + float(args.blend) * learned_delta
-    return {"fixed": fixed_delta, "learned": learned_delta, "hybrid": hybrid_delta}
+    deltas = {"fixed": fixed_delta, "learned": learned_delta, "hybrid": hybrid_delta}
+    for value in _candidate_ladder_blends(args):
+        deltas[_variant_name_for_blend(value)] = (1.0 - float(value)) * fixed_delta + float(value) * learned_delta
+    return deltas
 
 
 def _changed_fraction_from_delta(delta: torch.Tensor) -> float:
@@ -441,12 +499,19 @@ def _augment_source_perceptual_metrics(
             )
 
 
-def _candidate_learning_features(proxy: dict[str, float], variant: str, feature_names: list[str]) -> list[float]:
+def _candidate_learning_features(
+    proxy: dict[str, float],
+    variant: str,
+    feature_names: list[str],
+    *,
+    variant_blend: float | None = None,
+) -> list[float]:
     base = _feature_vector(proxy, feature_names)
     return base + [
         1.0 if variant == "fixed" else 0.0,
         1.0 if variant == "learned" else 0.0,
         1.0 if variant == "hybrid" else 0.0,
+        float(variant_blend) if variant_blend is not None else 0.0,
     ]
 
 
@@ -457,6 +522,8 @@ def _source_reliability_features(
     variant: str,
     scene_variant: str,
     feature_names: list[str],
+    variant_blend: float | None = None,
+    scene_variant_blend: float | None = None,
 ) -> list[float]:
     candidate = _feature_vector(candidate_proxy, feature_names)
     scene = _feature_vector(scene_proxy, feature_names)
@@ -473,6 +540,11 @@ def _source_reliability_features(
             1.0 if scene_variant == "learned" else 0.0,
             1.0 if scene_variant == "hybrid" else 0.0,
             1.0 if variant == scene_variant else 0.0,
+            float(variant_blend) if variant_blend is not None else 0.0,
+            float(scene_variant_blend) if scene_variant_blend is not None else 0.0,
+            (float(variant_blend) - float(scene_variant_blend))
+            if variant_blend is not None and scene_variant_blend is not None
+            else 0.0,
         ]
     )
 
@@ -542,10 +614,14 @@ def _fit_ridge_predictor(
         "mean": mean.squeeze(0).tolist(),
         "std": std.squeeze(0).tolist(),
         "weight": weight.tolist(),
+        "feature_dim": int(x.shape[1]),
     }
 
 
 def _predict_ridge(model: dict[str, Any], features: list[float]) -> list[float]:
+    expected_dim = int(model.get("feature_dim", len(model["mean"])))
+    if len(features) != expected_dim:
+        raise ValueError(f"ridge feature dimension mismatch: got {len(features)}, expected {expected_dim}")
     x = torch.tensor(features, dtype=torch.float64)
     mean = torch.tensor(model["mean"], dtype=torch.float64)
     std = torch.tensor(model["std"], dtype=torch.float64)
@@ -750,7 +826,7 @@ def _fit_per_view_knn_policy(
             "verdict": "disabled because scene-level source-heldout selector fell back to fixed",
         }
     feature_names = _parse_feature_names(args.per_view_knn_feature_grid)
-    variants = ["fixed", "learned", "hybrid"]
+    variants = list(BASE_CANDIDATE_VARIANTS) if bool(args.per_view_knn_base_variants_only) else _candidate_variant_names(args)
     entries_by_variant: dict[str, list[dict[str, Any]]] = {variant: [] for variant in variants}
     all_vectors: list[list[float]] = []
     for row in selector_payload["per_view"]:
@@ -837,7 +913,7 @@ def _fit_per_view_knn_policy(
         threshold: float,
     ) -> tuple[dict[str, Any], dict[str, int], list[dict[str, float]], dict[str, Any]]:
         source_policy_rows: list[dict[str, float]] = []
-        selected_counts: dict[str, int] = {"fixed": 0, "learned": 0, "hybrid": 0, "noop": 0, "scene": 0}
+        selected_counts: dict[str, int] = _candidate_count_dict(variants)
         local_tail_reject_views: list[dict[str, Any]] = []
         for decision in source_decisions:
             scene_score = float(decision["predictions"][selected_variant])
@@ -1033,6 +1109,9 @@ def _fit_per_view_knn_policy(
     return {
         "enabled": True,
         "verdict": "source-heldout KNN per-view policy selected",
+        "feature_schema_version": 2,
+        "variants": variants,
+        "base_variants_only": bool(args.per_view_knn_base_variants_only),
         "feature_names": feature_names,
         "feature_mean": mean,
         "feature_std": std,
@@ -1079,7 +1158,7 @@ def _knn_choose_variant(
     *,
     compute_ssim: bool,
 ) -> tuple[str, dict[str, float], dict[str, Any]]:
-    variants = ["fixed", "learned", "hybrid"]
+    variants = list(policy.get("variants", BASE_CANDIDATE_VARIANTS))
     feature_names = list(policy["feature_names"])
     mean = [float(x) for x in policy["feature_mean"]]
     std = [float(x) for x in policy["feature_std"]]
@@ -1177,7 +1256,8 @@ def _fit_per_view_risk_model_policy(
             "verdict": "disabled because scene-level source-heldout selector fell back to fixed",
         }
     feature_names = _parse_feature_names(args.per_view_risk_model_feature_grid)
-    variants = ["fixed", "learned", "hybrid"]
+    variants = _candidate_variant_names(args)
+    variant_blend_map = _candidate_variant_blend_map(args)
     examples: list[dict[str, Any]] = []
     rows_by_view: dict[str, dict[str, Any]] = {}
     entries_by_variant: dict[str, list[dict[str, Any]]] = {variant: [] for variant in variants}
@@ -1187,7 +1267,12 @@ def _fit_per_view_risk_model_policy(
         for variant in variants:
             candidate = row["candidates"][variant]
             metrics = candidate["metrics"]
-            features = _candidate_learning_features(candidate["proxy"], variant, feature_names)
+            features = _candidate_learning_features(
+                candidate["proxy"],
+                variant,
+                feature_names,
+                variant_blend=variant_blend_map.get(variant),
+            )
             target = [
                 _risk_model_objective_from_metrics(metrics, compute_ssim=compute_ssim, args=args),
                 float(metrics.get("psnr_gain", 0.0)),
@@ -1248,7 +1333,12 @@ def _fit_per_view_risk_model_policy(
             candidate = row["candidates"][variant]
             predictions[variant] = _predict_ridge(
                 model,
-                _candidate_learning_features(candidate["proxy"], variant, feature_names),
+                _candidate_learning_features(
+                    candidate["proxy"],
+                    variant,
+                    feature_names,
+                    variant_blend=variant_blend_map.get(variant),
+                ),
             )
         return predictions
 
@@ -1293,7 +1383,7 @@ def _fit_per_view_risk_model_policy(
 
     def evaluate_risk_margin(objective_margin: float) -> tuple[dict[str, Any], dict[str, int], list[dict[str, float]], list[dict[str, Any]]]:
         source_policy_rows: list[dict[str, float]] = []
-        selected_counts: dict[str, int] = {"fixed": 0, "learned": 0, "hybrid": 0, "noop": 0, "scene": 0}
+        selected_counts: dict[str, int] = _candidate_count_dict(variants)
         predictions_log: list[dict[str, Any]] = []
         for item in loo_items:
             row = item["row"]
@@ -1422,7 +1512,10 @@ def _fit_per_view_risk_model_policy(
     )
     accept_fraction = 1.0 - float((selected_counts["noop"] + selected_counts["scene"]) / max(len(rows_by_view), 1))
     base_payload = {
+        "feature_schema_version": 2,
         "feature_names": feature_names,
+        "variants": variants,
+        "variant_blend_map": variant_blend_map,
         "ridge": float(args.per_view_risk_model_ridge),
         "reject_variant": str(args.per_view_risk_model_reject_variant),
         "scene_selected_variant": selected_variant,
@@ -1541,13 +1634,19 @@ def _risk_model_choose_variant(
     *,
     compute_ssim: bool,
 ) -> tuple[str, dict[str, list[float]], dict[str, Any]]:
-    variants = ["fixed", "learned", "hybrid"]
+    variants = list(policy.get("variants", BASE_CANDIDATE_VARIANTS))
+    variant_blend_map = {str(k): float(v) for k, v in dict(policy.get("variant_blend_map", {})).items()}
     feature_names = list(policy["feature_names"])
     scene_variant = str(policy["scene_selected_variant"])
     predictions: dict[str, list[float]] = {}
     feature_vectors: dict[str, list[float]] = {}
     for variant in variants:
-        feature_vectors[variant] = _candidate_learning_features(proxies_by_variant[variant], variant, feature_names)
+        feature_vectors[variant] = _candidate_learning_features(
+            proxies_by_variant[variant],
+            variant,
+            feature_names,
+            variant_blend=variant_blend_map.get(variant),
+        )
         predictions[variant] = _predict_ridge(
             policy["model"],
             feature_vectors[variant],
@@ -1625,7 +1724,8 @@ def _fit_source_reliability_policy(
         return {"enabled": False, "verdict": "missing source-heldout selector per-view evidence"}
     selected_variant = str(selector_payload["selected_variant"])
     feature_names = _parse_feature_names(args.source_reliability_feature_grid)
-    variants = ["fixed", "learned", "hybrid"]
+    variants = _candidate_variant_names(args)
+    variant_blend_map = _candidate_variant_blend_map(args)
     examples: list[dict[str, Any]] = []
     rows_by_view: dict[str, dict[str, Any]] = {}
     entries_by_variant: dict[str, list[dict[str, Any]]] = {variant: [] for variant in variants}
@@ -1645,6 +1745,8 @@ def _fit_source_reliability_policy(
                 variant=variant,
                 scene_variant=selected_variant,
                 feature_names=feature_names,
+                variant_blend=variant_blend_map.get(variant),
+                scene_variant_blend=variant_blend_map.get(selected_variant),
             )
             target = _source_reliability_target(metrics, scene_metrics, compute_ssim=compute_ssim, args=args)
             example = {
@@ -1702,6 +1804,8 @@ def _fit_source_reliability_policy(
                 variant=variant,
                 scene_variant=selected_variant,
                 feature_names=feature_names,
+                variant_blend=variant_blend_map.get(variant),
+                scene_variant_blend=variant_blend_map.get(selected_variant),
             )
             vectors[variant] = vector
             predictions[variant] = _predict_ridge(model, vector)
@@ -1935,7 +2039,7 @@ def _fit_source_reliability_policy(
         allow_calibrated_lcb_override: bool = True,
     ) -> tuple[dict[str, Any], dict[str, int], list[dict[str, float]], list[dict[str, Any]]]:
         source_policy_rows: list[dict[str, float]] = []
-        selected_counts: dict[str, int] = {"fixed": 0, "learned": 0, "hybrid": 0, "noop": 0, "scene": 0}
+        selected_counts: dict[str, int] = _candidate_count_dict(variants)
         prediction_log: list[dict[str, Any]] = []
         for item in loo_items:
             row = item["row"]
@@ -2093,7 +2197,10 @@ def _fit_source_reliability_policy(
     )
     accept_fraction = 1.0 - float((selected_counts["noop"] + selected_counts["scene"]) / max(len(rows_by_view), 1))
     base_payload = {
+        "feature_schema_version": 2,
         "feature_names": feature_names,
+        "variants": variants,
+        "variant_blend_map": variant_blend_map,
         "ridge": float(args.source_reliability_ridge),
         "reject_variant": str(args.source_reliability_reject_variant),
         "scene_selected_variant": selected_variant,
@@ -2197,7 +2304,8 @@ def _source_reliability_choose_variant(
     *,
     compute_ssim: bool,
 ) -> tuple[str, dict[str, list[float]], dict[str, Any]]:
-    variants = ["fixed", "learned", "hybrid"]
+    variants = list(policy.get("variants", BASE_CANDIDATE_VARIANTS))
+    variant_blend_map = {str(k): float(v) for k, v in dict(policy.get("variant_blend_map", {})).items()}
     feature_names = list(policy["feature_names"])
     scene_variant = str(policy["scene_selected_variant"])
     scene_proxy = proxies_by_variant[scene_variant]
@@ -2210,6 +2318,8 @@ def _source_reliability_choose_variant(
             variant=variant,
             scene_variant=scene_variant,
             feature_names=feature_names,
+            variant_blend=variant_blend_map.get(variant),
+            scene_variant_blend=variant_blend_map.get(scene_variant),
         )
         vectors[variant] = vector
         predictions[variant] = _predict_ridge(policy["model"], vector)
@@ -2489,7 +2599,9 @@ def _select_variant_from_source_heldout(
     if int(args.max_selector_views) > 0:
         selector_val_frames = selector_val_frames[: int(args.max_selector_views)]
 
-    candidate_rows: dict[str, list[dict[str, float]]] = {"fixed": [], "learned": [], "hybrid": []}
+    candidate_variants = _candidate_variant_names(args)
+    variant_blend_map = _candidate_variant_blend_map(args)
+    candidate_rows: dict[str, list[dict[str, float]]] = {variant: [] for variant in candidate_variants}
     per_view: list[dict[str, Any]] = []
     source_perceptual_models = _load_source_perceptual_models(device, args)
     model.eval()
@@ -2553,7 +2665,8 @@ def _select_variant_from_source_heldout(
     fixed_summary = summaries["fixed"]
     passing = [
         variant
-        for variant in ["learned", "hybrid"]
+        for variant in candidate_variants
+        if variant != "fixed"
         if _candidate_passes_guard(
             summaries[variant],
             fixed_summary,
@@ -2569,12 +2682,14 @@ def _select_variant_from_source_heldout(
             passing,
             key=lambda name: _source_objective_from_metrics(summaries[name], compute_ssim=bool(args.compute_ssim), args=args),
         )
-        verdict = "source-heldout selector found a learned candidate that beats fixed on the guard axes"
+        verdict = "source-heldout selector found a non-fixed candidate that beats fixed on the guard axes"
     else:
         selected_variant = "fixed"
-        verdict = "source-heldout selector fell back to fixed because learned candidates did not clear the guard"
+        verdict = "source-heldout selector fell back to fixed because non-fixed candidates did not clear the guard"
     return {
         "selected_variant": selected_variant,
+        "candidate_variants": candidate_variants,
+        "candidate_variant_blend_map": variant_blend_map,
         "val_views": int(len(selector_val_frames)),
         "summaries": summaries,
         "per_view": per_view,
@@ -2619,6 +2734,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         target_frames = target_frames[: int(args.max_target_views)]
 
     loader = FrameLoader(device=device)
+    candidate_variants = _candidate_variant_names(args)
+    candidate_variant_blend_map = _candidate_variant_blend_map(args)
+    valid_output_variants = set(candidate_variants) | {"source_heldout_auto"}
+    if str(args.output_variant) not in valid_output_variants:
+        raise ValueError(
+            f"unsupported output_variant {args.output_variant!r}; valid variants are {sorted(valid_output_variants)}"
+        )
     selector_payload: dict[str, Any] | None = None
     selected_variant = str(args.output_variant)
     if selected_variant == "source_heldout_auto":
@@ -2657,6 +2779,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     fixed_rows: list[dict[str, float]] = []
     learned_rows: list[dict[str, float]] = []
     hybrid_rows: list[dict[str, float]] = []
+    candidate_rows_by_variant: dict[str, list[dict[str, float]]] = {variant: [] for variant in candidate_variants}
     selected_rows: list[dict[str, float]] = []
     per_view: list[dict[str, Any]] = []
     nooped_views = 0
@@ -2799,12 +2922,28 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 shutil.copy2(target.gt_path, gt_dir / f"{target.name}{target.gt_path.suffix}")
 
             gt = loader.gt(str(target.gt_path)).to(device=device, dtype=torch.float32)
-            fixed_row = _image_metrics(ev.base, gt, fixed_delta, compute_ssim=bool(args.compute_ssim), ssim_max_side=int(args.ssim_max_side))
-            learned_row = _image_metrics(ev.base, gt, learned_delta, compute_ssim=bool(args.compute_ssim), ssim_max_side=int(args.ssim_max_side))
-            hybrid_row = _image_metrics(ev.base, gt, hybrid_delta, compute_ssim=bool(args.compute_ssim), ssim_max_side=int(args.ssim_max_side))
-            selected_row = _image_metrics(ev.base, gt, selected_delta, compute_ssim=bool(args.compute_ssim), ssim_max_side=int(args.ssim_max_side))
-            for row in [fixed_row, learned_row, hybrid_row]:
+            candidate_metric_rows = {
+                variant: _image_metrics(
+                    ev.base,
+                    gt,
+                    delta,
+                    compute_ssim=bool(args.compute_ssim),
+                    ssim_max_side=int(args.ssim_max_side),
+                )
+                for variant, delta in deltas.items()
+            }
+            fixed_row = candidate_metric_rows["fixed"]
+            learned_row = candidate_metric_rows["learned"]
+            hybrid_row = candidate_metric_rows["hybrid"]
+            selected_row = (
+                dict(candidate_metric_rows[output_variant])
+                if output_variant in candidate_metric_rows
+                else _image_metrics(ev.base, gt, selected_delta, compute_ssim=bool(args.compute_ssim), ssim_max_side=int(args.ssim_max_side))
+            )
+            for row in candidate_metric_rows.values():
                 row["view"] = target.name
+            for variant, row in candidate_metric_rows.items():
+                candidate_rows_by_variant.setdefault(variant, []).append(row)
             selected_row["view"] = target.name
             fixed_rows.append(fixed_row)
             learned_rows.append(learned_row)
@@ -2818,6 +2957,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "fixed": fixed_row,
                     "learned": learned_row,
                     "hybrid": hybrid_row,
+                    "candidate_metrics": candidate_metric_rows,
                     "selected": selected_row,
                     "selected_variant": selected_variant,
                     "output_variant": output_variant,
@@ -2852,6 +2992,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     fixed_summary = _summarize_rows(fixed_rows, compute_ssim=bool(args.compute_ssim))
     learned_summary = _summarize_rows(learned_rows, compute_ssim=bool(args.compute_ssim))
     hybrid_summary = _summarize_rows(hybrid_rows, compute_ssim=bool(args.compute_ssim))
+    candidate_summaries = {
+        variant: _summarize_rows(rows, compute_ssim=bool(args.compute_ssim))
+        for variant, rows in candidate_rows_by_variant.items()
+    }
     selected_summary = _summarize_rows(selected_rows, compute_ssim=bool(args.compute_ssim))
     hybrid_minus_fixed_psnr = float(hybrid_summary.get("psnr_gain", 0.0)) - float(fixed_summary.get("psnr_gain", 0.0))
     hybrid_minus_fixed_ssim = (
@@ -2935,6 +3079,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "anchor_alpha": float(args.anchor_alpha),
             "learned_scale": float(args.learned_scale),
             "blend": float(args.blend),
+            "enable_candidate_ladder": bool(args.enable_candidate_ladder),
+            "candidate_ladder_blends": str(args.candidate_ladder_blends),
+            "candidate_variants": candidate_variants,
+            "candidate_variant_blend_map": candidate_variant_blend_map,
+            "candidate_feature_schema_version": 2,
             "output_variant": str(args.output_variant),
             "selected_variant": selected_variant,
             "per_view_gate_mode": active_gate,
@@ -2956,6 +3105,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "fixed_summary": fixed_summary,
         "learned_summary": learned_summary,
         "hybrid_summary": hybrid_summary,
+        "candidate_summaries": candidate_summaries,
         "selected_summary": selected_summary,
         "summary": {
             "fixed_psnr_gain": float(fixed_summary.get("psnr_gain", 0.0)),
@@ -2974,6 +3124,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "selected_all_axis_safe_vs_fixed": bool(selected_all_axis_safe_vs_fixed),
             "mean_covered_fraction": _mean([float(row["covered_fraction"]) for row in per_view]),
             "per_view_noop_fraction": float(nooped_views / max(len(per_view), 1)),
+            "candidate_psnr_gains": {
+                variant: float(row.get("psnr_gain", 0.0))
+                for variant, row in candidate_summaries.items()
+            },
+            "candidate_ssim_gains": {
+                variant: float(row.get("ssim_gain", 0.0))
+                for variant, row in candidate_summaries.items()
+            }
+            if bool(args.compute_ssim)
+            else None,
         },
         "per_view": per_view,
         "selector": selector_payload,
@@ -3008,6 +3168,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             flat["apply/selected_ssim_gain"] = float(payload["summary"]["selected_ssim_gain"])
             flat["apply/hybrid_minus_fixed_ssim_gain"] = float(payload["summary"]["hybrid_minus_fixed_ssim_gain"])
             flat["apply/selected_minus_fixed_ssim_gain"] = float(payload["summary"]["selected_minus_fixed_ssim_gain"])
+        for variant, row in payload.get("candidate_summaries", {}).items():
+            flat[f"apply/candidate/{variant}/psnr_gain"] = float(row.get("psnr_gain", 0.0))
+            if bool(args.compute_ssim):
+                flat[f"apply/candidate/{variant}/ssim_gain"] = float(row.get("ssim_gain", 0.0))
         run.log(flat)
         run.summary.update(flat)
         run.finish()
@@ -3030,7 +3194,13 @@ def main() -> None:
     parser.add_argument("--anchor_alpha", type=float, default=0.25)
     parser.add_argument("--learned_scale", type=float, default=0.5)
     parser.add_argument("--blend", type=float, default=0.5)
-    parser.add_argument("--output_variant", choices=["fixed", "learned", "hybrid", "source_heldout_auto"], default="hybrid")
+    parser.add_argument("--enable_candidate_ladder", action="store_true")
+    parser.add_argument(
+        "--candidate_ladder_blends",
+        default="0.25,0.75",
+        help="Comma-separated residual blend strengths to add as source-heldout candidates when candidate ladder is enabled.",
+    )
+    parser.add_argument("--output_variant", default="hybrid")
     parser.add_argument("--selector_val_stride", type=int, default=3)
     parser.add_argument("--selector_val_offset", type=int, default=0)
     parser.add_argument("--max_selector_views", type=int, default=0)
@@ -3060,6 +3230,7 @@ def main() -> None:
     parser.add_argument("--per_view_knn_k", type=int, default=3)
     parser.add_argument("--per_view_knn_min_predicted_score", type=float, default=0.0)
     parser.add_argument("--per_view_knn_min_score_delta_vs_scene", type=float, default=0.0)
+    parser.add_argument("--per_view_knn_base_variants_only", action="store_true")
     parser.add_argument("--per_view_knn_forbid_fixed_when_scene_nonfixed", action="store_true")
     parser.add_argument("--per_view_knn_enable_local_tail_guard", action="store_true")
     parser.add_argument("--per_view_knn_local_tail_k", type=int, default=0)

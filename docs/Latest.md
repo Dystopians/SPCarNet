@@ -2,6 +2,63 @@
 
 Date: 2026-06-28
 
+## 2026-07-01 Topline: v322C Candidate Ladder With Incumbent Preservation
+
+Newest v322C evidence package:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v322C-CandidateLadder-IncumbentPreserve-Log.md
+docs/car_model/results/v322c_baseknn_ladder_full9_vs_v321g_summary.json
+docs/car_model/results/v322c_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v322c_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v322c_frontier_panels/
+outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701
+outputs/carnet/spcarnet_v322c_frontier_comparison_full9_20260701
+```
+
+What changed:
+
+- the apply pipeline now supports dynamic residual ladder candidates
+  `mix0250/mix0750`, direct mix ablations, and candidate-level target
+  counterfactual summaries;
+- KNN is kept base-only (`fixed/learned/hybrid`) after v322B showed that KNN
+  over ladder candidates mis-selected `bicycle` views;
+- source reliability can still use ladder candidates, but v322C uses a fixed
+  low objective margin to preserve the v321G incumbent and avoid the v322B
+  `bonsai` auto-margin regression.
+
+Full9 apply metrics:
+
+| method | PSNR gain | SSIM gain | mean min PSNR | mean CVaR10 PSNR | negative views | safe scenes |
+|---|---:|---:|---:|---:|---:|---:|
+| v319c | +0.269725 | +0.003720 | +0.014301 | +0.039726 | 8 | 9/9 |
+| v321G | +0.271248 | +0.003727 | +0.014301 | +0.039726 | 8 | 9/9 |
+| v322C | +0.271334 | +0.003727 | +0.014301 | +0.039726 | 8 | 9/9 |
+
+Clean-MeshSplatting frontier metrics:
+
+| method | scenes | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|---:|
+| clean26000 | 9 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v319c | 9 | 27.583642 | 0.028181 | 0.087746 | 0.057678 |
+| v321G | 9 | 27.586900 | 0.028173 | 0.087736 | 0.057660 |
+| v322C | 9 | 27.587073 | 0.028173 | 0.087735 | 0.057659 |
+
+Verdict:
+
+v322C is now the best verified local incumbent. It slightly beats v321G on
+full9 mean PSNR/SSIM and on clean-frontier PSNR/MAE/LPIPS/DISTS while preserving
+tail metrics, negative-view count, and `9/9` scene safety. The gain is still
+small and concentrated in `room/garden`, so the project remains short of a
+paper-level closed loop.
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Topline: v321G Raw-Margin Accept10 Reliability
 
 Newest v321G evidence package:

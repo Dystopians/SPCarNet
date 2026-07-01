@@ -2,6 +2,67 @@
 
 Date: 2026-06-28
 
+# 2026-07-01 v322C Feedback Addendum: Candidate Ladder Helped Only After Incumbent Preservation
+
+New files:
+
+```text
+docs/car_model/7-01-v322C-CandidateLadder-IncumbentPreserve-Log.md
+docs/car_model/results/v322c_baseknn_ladder_full9_vs_v321g_summary.json
+docs/car_model/results/v322c_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v322c_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v322c_frontier_panels/
+outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701
+outputs/carnet/spcarnet_v322c_frontier_comparison_full9_20260701
+```
+
+Implemented change:
+
+The apply pipeline now supports dynamic residual blend candidates
+`mix0250/mix0750` and records candidate-level counterfactual target metrics.
+The important lesson is that candidate expansion alone was unsafe: v322B let
+KNN and source-reliability auto-margin freely use ladder candidates and
+regressed `bicycle` and `bonsai`. v322C fixes this by keeping KNN base-only and
+using a fixed low source-reliability objective margin, so ladder candidates can
+supplement the incumbent without destabilizing it.
+
+Full9 apply result:
+
+| method | PSNR gain | SSIM gain | mean min PSNR | mean CVaR10 PSNR | negative views | safe scenes |
+|---|---:|---:|---:|---:|---:|---:|
+| v319c | +0.269725 | +0.003720 | +0.014301 | +0.039726 | 8 | 9/9 |
+| v321G | +0.271248 | +0.003727 | +0.014301 | +0.039726 | 8 | 9/9 |
+| v322C | +0.271334 | +0.003727 | +0.014301 | +0.039726 | 8 | 9/9 |
+
+Frontier result:
+
+| method | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v319c | 27.583642 | 0.028181 | 0.087746 | 0.057678 |
+| v321G | 27.586900 | 0.028173 | 0.087736 | 0.057660 |
+| v322C | 27.587073 | 0.028173 | 0.087735 | 0.057659 |
+
+Hard lessons for the next model:
+
+- Expanding the candidate space is useful only when protected by an incumbent.
+  v322B selected `mix0750/mix0250` in several views but lost more than it gained.
+- KNN should not be trusted to extrapolate to ladder candidates from sparse
+  source-heldout evidence; it mis-ranked `bicycle/00002`.
+- Auto-margin search can become too conservative after the candidate set
+  changes; this caused the `bonsai/00005` hybrid view to be rejected in v322B.
+- v322C is the best current verified incumbent, but its gain over v321G is very
+  small: `+0.000086` mean PSNR gain and preserved tails/safety.
+- A stronger next method should unlock more of the visible learned/mix oracle
+  gap on `stump`, `treehill`, `room`, and `bicycle`, ideally through a better
+  representation or calibrated per-view model rather than more threshold scans.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v321G Feedback Addendum: Reflection Finally Produced a Clean Incumbent Upgrade
 
 New files:
