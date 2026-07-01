@@ -56,6 +56,9 @@ docs/car_model/results/v333_target_neighbor_consistency_enforce_treehill_report.
 docs/car_model/results/v333_target_neighbor_consistency_enforce_stump_report.json
 docs/car_model/results/v333_target_neighbor_consistency_full9_vs_v329b_audit.json
 docs/car_model/results/v333_target_neighbor_consistency_full9_vs_v329b_audit.md
+docs/car_model/results/v333_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v333_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v333_frontier_panels/
 ```
 
 Full output dirs:
@@ -66,6 +69,7 @@ outputs/carnet/spcarnet_v333_target_neighbor_consistency_shadow_treehill_2026070
 outputs/carnet/spcarnet_v333_target_neighbor_consistency_enforce_treehill_20260701
 outputs/carnet/spcarnet_v333_target_neighbor_consistency_enforce_stump_20260701
 outputs/carnet/spcarnet_v333_target_neighbor_consistency_full9_20260701
+outputs/carnet/spcarnet_v333_frontier_comparison_full9_20260701
 ```
 
 W&B offline runs:
@@ -178,6 +182,33 @@ Reading: v333 is full9-positive, but the full9 gain is narrow and entirely
 comes from treehill tail repair. This is a valid milestone and a safer candidate
 than v331/v332, but not a broad capability jump.
 
+## Perceptual / Qualitative Frontier
+
+The same full9 render roots were evaluated with the existing LPIPS/DISTS
+frontier script.
+
+Artifacts:
+
+```text
+docs/car_model/results/v333_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v333_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v333_frontier_panels/treehill_00007_00008_v329b_v333_gt_panel.png
+outputs/carnet/spcarnet_v333_frontier_comparison_full9_20260701/wandb/offline-run-20260701_035327-b4r8j55w
+```
+
+Aggregate:
+
+| method | PSNR | MAE | LPIPS | DISTS | dPSNR vs clean | dMAE vs clean | dLPIPS vs clean | dDISTS vs clean |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 | +0.000000 | +0.000000 | +0.000000 | +0.000000 |
+| v329b | 27.588444 | 0.028173 | 0.087733 | 0.057664 | +0.394801 | -0.000939 | -0.002474 | -0.002238 |
+| v333 | 27.588734 | 0.028171 | 0.087735 | 0.057664 | +0.395091 | -0.000941 | -0.002473 | -0.002238 |
+
+Reading: v333 slightly improves PSNR, MAE, and DISTS over v329b, but LPIPS is
+microscopically worse than v329b while still clearly better than clean. The
+dedicated treehill rollback panel confirms that the visual difference is subtle,
+so v333 is not yet a strong qualitative-story breakthrough.
+
 ## Commands
 
 Treehill enforce:
@@ -235,6 +266,7 @@ However, it is not a final paper endpoint:
 - it improves treehill and full9 over v329b, but the gain is still modest;
 - `00009` remains a target-negative promotion that the current threshold keeps;
 - the full9 gain is concentrated in one scene rather than broad across scenes;
+- LPIPS is effectively tied but not strictly better than v329b;
 - same-variant target-neighborhood consistency failed as a discriminator,
   confirming that model self-coherence alone is not enough.
 

@@ -17,10 +17,14 @@ docs/car_model/results/v333_target_neighbor_consistency_enforce_treehill_report.
 docs/car_model/results/v333_target_neighbor_consistency_enforce_stump_report.json
 docs/car_model/results/v333_target_neighbor_consistency_full9_vs_v329b_audit.json
 docs/car_model/results/v333_target_neighbor_consistency_full9_vs_v329b_audit.md
+docs/car_model/results/v333_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v333_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v333_frontier_panels/
 outputs/carnet/spcarnet_v333_target_neighbor_consistency_enforce_treehill_20260701
 outputs/carnet/spcarnet_v333_target_neighbor_consistency_shadow_treehill_20260701
 outputs/carnet/spcarnet_v333_target_neighbor_consistency_enforce_stump_20260701
 outputs/carnet/spcarnet_v333_target_neighbor_consistency_full9_20260701
+outputs/carnet/spcarnet_v333_frontier_comparison_full9_20260701
 ```
 
 v333 adds an opt-in target-neighbor render self-consistency certificate inside
@@ -54,6 +58,22 @@ Full9 replay versus v329b is also positive, but narrow:
 The only changed scene is treehill; the other 8 scenes are unchanged relative
 to v329b. This makes v333 a verified tail-risk repair, not a broad capability
 jump.
+
+Perceptual/frontier result:
+
+| method | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v329b | 27.588444 | 0.028173 | 0.087733 | 0.057664 |
+| v333 | 27.588734 | 0.028171 | 0.087735 | 0.057664 |
+
+v333 is slightly better than v329b on PSNR/MAE/DISTS, but LPIPS is
+microscopically worse than v329b while still clearly better than clean. The
+dedicated rollback panel is:
+
+```text
+docs/car_model/results/v333_frontier_panels/treehill_00007_00008_v329b_v333_gt_panel.png
+```
 
 Status:
 

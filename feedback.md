@@ -17,6 +17,9 @@ docs/car_model/results/v333_target_neighbor_consistency_enforce_treehill_report.
 docs/car_model/results/v333_target_neighbor_consistency_enforce_stump_report.json
 docs/car_model/results/v333_target_neighbor_consistency_full9_vs_v329b_audit.json
 docs/car_model/results/v333_target_neighbor_consistency_full9_vs_v329b_audit.md
+docs/car_model/results/v333_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v333_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v333_frontier_panels/treehill_00007_00008_v329b_v333_gt_panel.png
 ```
 
 Implemented change:
@@ -46,13 +49,23 @@ Full9 result versus v329b:
 | selected SSIM gain | 0.003736660673 | 0.003738908357 | +0.000002247684 |
 | target-neighbor rollback count | 0 | 2 | +2 |
 
+Perceptual/frontier result:
+
+| method | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v329b | 27.588444 | 0.028173 | 0.087733 | 0.057664 |
+| v333 | 27.588734 | 0.028171 | 0.087735 | 0.057664 |
+
 Hard lesson:
 
 The base-reference target-neighbor signal is useful as a conservative tail-risk
 veto, not as a complete selector. It correctly rolls back treehill `00007` and
 `00008`, giving a verified full9 macro gain over v329b, but it still keeps
 `00009`, which is target-negative. The same-variant neighbor check is mostly
-self-coherence and is not discriminative.
+self-coherence and is not discriminative. The visual/perceptual evidence also
+remains weak: PSNR/MAE/DISTS are slightly better than v329b, but LPIPS is not a
+strict win and the rollback panel shows subtle differences.
 
 Next-stage implication:
 
