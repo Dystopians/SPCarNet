@@ -1,0 +1,1023 @@
+{
+  "v319c": {
+    "aggregate": {
+      "scene_count": 6,
+      "missing_count": 0,
+      "mean_psnr_gain": 0.21886649312668874,
+      "mean_ssim_gain": 0.0029663679748663306,
+      "mean_min_psnr_gain": 0.008716460033653561,
+      "mean_cvar10_psnr_gain": 0.020451627065113265,
+      "total_negative_views": 5,
+      "safe_scene_count": 6
+    },
+    "scenes": [
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16
+        },
+        "source_reliability_decisions": {
+          "not_used": 16
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 16
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "verdict": "source reliability did not improve scene-selected PSNR enough",
+          "source_accept_fraction": 0.30000000000000004,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 3,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 7
+          },
+          "decision_prediction_source": null,
+          "calibrated_lcb_mode": null
+        },
+        "risk_model_policy": {
+          "enabled": true,
+          "verdict": "source-heldout learned risk model selected",
+          "source_accept_fraction": 0.0,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 0,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 10
+          },
+          "selected_objective_margin": 0.1359198249831396,
+          "require_predicted_scene_axis_nonregression": null
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.10384367229618736,
+        "ssim_gain": 0.0016648040877448188,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 12,
+          "learned": 6
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 11,
+          "candidate": 7
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 11,
+          "not_used": 7
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "verdict": "source-only relative reliability model selected",
+          "source_accept_fraction": 0.18181818181818177,
+          "source_selected_counts": {
+            "fixed": 1,
+            "learned": 1,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 9
+          },
+          "decision_prediction_source": null,
+          "calibrated_lcb_mode": null
+        },
+        "risk_model_policy": {
+          "enabled": true,
+          "verdict": "source-heldout learned risk model selected",
+          "source_accept_fraction": 0.0,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 0,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 11
+          },
+          "selected_objective_margin": 0.8303211680048873,
+          "require_predicted_scene_axis_nonregression": null
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/treehill/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.0923596316861136,
+        "ssim_gain": 0.00411434065211903,
+        "min_psnr_gain": 0.02777446740415357,
+        "cvar10_psnr_gain": 0.027897987886380093,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 13,
+          "learned": 9
+        },
+        "source_reliability_decisions": {
+          "not_used": 22
+        },
+        "risk_model_decisions": {
+          "not_used": 22
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "verdict": "source reliability did not clear min-gain tail delta",
+          "source_accept_fraction": 0.5384615384615384,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 4,
+            "hybrid": 3,
+            "noop": 0,
+            "scene": 6
+          },
+          "decision_prediction_source": null,
+          "calibrated_lcb_mode": null
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "disabled because scene-level source-heldout selector was not fixed",
+          "source_accept_fraction": null,
+          "source_selected_counts": null,
+          "selected_objective_margin": null,
+          "require_predicted_scene_axis_nonregression": null
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.14450491092673934,
+        "ssim_gain": 0.0019102543592453003,
+        "min_psnr_gain": 0.005628597517468137,
+        "cvar10_psnr_gain": 0.02791200311224884,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 18,
+          "hybrid": 6
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 10,
+          "candidate": 14
+        },
+        "risk_model_decisions": {
+          "not_used": 24
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "verdict": "source-only relative reliability model selected",
+          "source_accept_fraction": 0.6428571428571428,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 5,
+            "hybrid": 4,
+            "noop": 0,
+            "scene": 5
+          },
+          "decision_prediction_source": null,
+          "calibrated_lcb_mode": null
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "disabled because scene-level source-heldout selector was not fixed",
+          "source_accept_fraction": null,
+          "source_selected_counts": null,
+          "selected_objective_margin": null,
+          "require_predicted_scene_axis_nonregression": null
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 35
+        },
+        "source_reliability_decisions": {
+          "not_used": 35
+        },
+        "risk_model_decisions": {
+          "not_used": 35
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "verdict": "source reliability did not improve scene-selected PSNR enough",
+          "source_accept_fraction": 0.38095238095238093,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 6,
+            "hybrid": 2,
+            "noop": 0,
+            "scene": 13
+          },
+          "decision_prediction_source": null,
+          "calibrated_lcb_mode": null
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "disabled because scene-level source-heldout selector was not fixed",
+          "source_accept_fraction": null,
+          "source_selected_counts": null,
+          "selected_objective_margin": null,
+          "require_predicted_scene_axis_nonregression": null
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.42183782192548464,
+        "ssim_gain": 0.004989705024621425,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 39
+        },
+        "source_reliability_decisions": {
+          "not_used": 39
+        },
+        "risk_model_decisions": {
+          "not_used": 39
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "verdict": "source reliability did not improve scene-selected PSNR enough",
+          "source_accept_fraction": 0.3913043478260869,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 7,
+            "hybrid": 2,
+            "noop": 0,
+            "scene": 14
+          },
+          "decision_prediction_source": null,
+          "calibrated_lcb_mode": null
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "disabled because scene-level source-heldout selector was not fixed",
+          "source_accept_fraction": null,
+          "source_selected_counts": null,
+          "selected_objective_margin": null,
+          "require_predicted_scene_axis_nonregression": null
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/room/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701"
+  },
+  "v320q50s05": {
+    "aggregate": {
+      "scene_count": 6,
+      "missing_count": 0,
+      "mean_psnr_gain": 0.21675651854566744,
+      "mean_ssim_gain": 0.002945789198618259,
+      "mean_min_psnr_gain": 0.008268234587211154,
+      "mean_cvar10_psnr_gain": 0.020183353300034648,
+      "total_negative_views": 5,
+      "safe_scene_count": 5
+    },
+    "scenes": [
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05261294004473549,
+        "ssim_gain": 0.0011695213615894318,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "safe_vs_fixed": false,
+        "selected_variants": {
+          "fixed": 15,
+          "learned": 1
+        },
+        "source_reliability_decisions": {
+          "not_used": 16
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 15,
+          "candidate": 1
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "verdict": "source reliability did not clear fixed safety gate",
+          "source_accept_fraction": 0.09999999999999998,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 1,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 9
+          },
+          "decision_prediction_source": null,
+          "calibrated_lcb_mode": null
+        },
+        "risk_model_policy": {
+          "enabled": true,
+          "verdict": "source-heldout learned risk model selected",
+          "source_accept_fraction": 0.0,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 0,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 10
+          },
+          "selected_objective_margin": 0.14778910448951296,
+          "require_predicted_scene_axis_nonregression": null
+        },
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09075745623850276,
+        "ssim_gain": 0.0015932122866312663,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 18
+        },
+        "source_reliability_decisions": {
+          "not_used": 18
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 18
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "verdict": "source reliability did not clear fixed safety gate",
+          "source_accept_fraction": 0.09090909090909094,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 1,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 10
+          },
+          "decision_prediction_source": null,
+          "calibrated_lcb_mode": null
+        },
+        "risk_model_policy": {
+          "enabled": true,
+          "verdict": "source-heldout learned risk model selected",
+          "source_accept_fraction": 0.0,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 0,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 11
+          },
+          "selected_objective_margin": 0.528705402061016,
+          "require_predicted_scene_axis_nonregression": null
+        },
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/treehill/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.09009997175326263,
+        "ssim_gain": 0.0040604553439400415,
+        "min_psnr_gain": 0.025085114725499125,
+        "cvar10_psnr_gain": 0.02655331154705287,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 18,
+          "learned": 4
+        },
+        "source_reliability_decisions": {
+          "candidate": 11,
+          "incumbent_fallback": 11
+        },
+        "risk_model_decisions": {
+          "not_used": 22
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "verdict": "source-only relative reliability model selected",
+          "source_accept_fraction": 0.15384615384615385,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 0,
+            "hybrid": 2,
+            "noop": 0,
+            "scene": 11
+          },
+          "decision_prediction_source": "calibrated_lower_bound",
+          "calibrated_lcb_mode": null
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "disabled because scene-level source-heldout selector was not fixed",
+          "source_accept_fraction": null,
+          "source_selected_counts": null,
+          "selected_objective_margin": null,
+          "require_predicted_scene_axis_nonregression": null
+        },
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.14317596393239448,
+        "ssim_gain": 0.0019007399678230286,
+        "min_psnr_gain": 0.005628597517468137,
+        "cvar10_psnr_gain": 0.027647036861104368,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 11,
+          "hybrid": 13
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 19,
+          "candidate": 5
+        },
+        "risk_model_decisions": {
+          "not_used": 24
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "verdict": "source-only relative reliability model selected",
+          "source_accept_fraction": 0.2857142857142857,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 0,
+            "hybrid": 4,
+            "noop": 0,
+            "scene": 10
+          },
+          "decision_prediction_source": "calibrated_lower_bound",
+          "calibrated_lcb_mode": null
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "disabled because scene-level source-heldout selector was not fixed",
+          "source_accept_fraction": null,
+          "source_selected_counts": null,
+          "selected_objective_margin": null,
+          "require_predicted_scene_axis_nonregression": null
+        },
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.49144992937725385,
+        "ssim_gain": 0.003916379383632115,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 34,
+          "hybrid": 1
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 24,
+          "candidate": 11
+        },
+        "risk_model_decisions": {
+          "not_used": 35
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "verdict": "source-only relative reliability model selected",
+          "source_accept_fraction": 0.23809523809523814,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 4,
+            "hybrid": 1,
+            "noop": 0,
+            "scene": 16
+          },
+          "decision_prediction_source": "calibrated_lower_bound",
+          "calibrated_lcb_mode": null
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "disabled because scene-level source-heldout selector was not fixed",
+          "source_accept_fraction": null,
+          "source_selected_counts": null,
+          "selected_objective_margin": null,
+          "require_predicted_scene_axis_nonregression": null
+        },
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.43244284992785537,
+        "ssim_gain": 0.005034426848093669,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 30,
+          "learned": 9
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 30,
+          "candidate": 9
+        },
+        "risk_model_decisions": {
+          "not_used": 39
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "verdict": "source-only relative reliability model selected",
+          "source_accept_fraction": 0.08695652173913049,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 2,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 21
+          },
+          "decision_prediction_source": "calibrated_lower_bound",
+          "calibrated_lcb_mode": null
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "disabled because scene-level source-heldout selector was not fixed",
+          "source_accept_fraction": null,
+          "source_selected_counts": null,
+          "selected_objective_margin": null,
+          "require_predicted_scene_axis_nonregression": null
+        },
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/room/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701"
+  },
+  "v321a": {
+    "aggregate": {
+      "scene_count": 2,
+      "missing_count": 4,
+      "mean_psnr_gain": 0.09704712613902389,
+      "mean_ssim_gain": 0.0015421193093061447,
+      "mean_min_psnr_gain": -0.004164344071725168,
+      "mean_cvar10_psnr_gain": 0.0070379919477785435,
+      "total_negative_views": 3,
+      "safe_scene_count": 1
+    },
+    "scenes": [
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05261294004473549,
+        "ssim_gain": 0.0011695213615894318,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "safe_vs_fixed": false,
+        "selected_variants": {
+          "fixed": 15,
+          "learned": 1
+        },
+        "source_reliability_decisions": {
+          "not_used": 16
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 15,
+          "candidate": 1
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "verdict": "source reliability did not clear fixed safety gate",
+          "source_accept_fraction": 0.19999999999999996,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 2,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 8
+          },
+          "decision_prediction_source": null,
+          "calibrated_lcb_mode": "raw_incumbent"
+        },
+        "risk_model_policy": {
+          "enabled": true,
+          "verdict": "source-heldout learned risk model selected",
+          "source_accept_fraction": 0.0,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 0,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 10
+          },
+          "selected_objective_margin": 0.14778910448951296,
+          "require_predicted_scene_axis_nonregression": true
+        },
+        "report_path": "outputs/carnet/spcarnet_v321a_raw_incumbent_guard_focused_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "missing": true,
+        "report_path": "outputs/carnet/spcarnet_v321a_raw_incumbent_guard_focused_20260701/treehill/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "missing": true,
+        "report_path": "outputs/carnet/spcarnet_v321a_raw_incumbent_guard_focused_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.14148131223331228,
+        "ssim_gain": 0.0019147172570228577,
+        "min_psnr_gain": 0.004856132126725754,
+        "cvar10_psnr_gain": 0.027260804165733177,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 22,
+          "learned": 2
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 19,
+          "candidate": 5
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 19,
+          "not_used": 5
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "verdict": "source-only relative reliability model selected",
+          "source_accept_fraction": 0.2857142857142857,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 0,
+            "hybrid": 4,
+            "noop": 0,
+            "scene": 10
+          },
+          "decision_prediction_source": "raw_incumbent_with_calibrated_lcb_override",
+          "calibrated_lcb_mode": "raw_incumbent"
+        },
+        "risk_model_policy": {
+          "enabled": true,
+          "verdict": "source-heldout learned risk model selected",
+          "source_accept_fraction": 0.0,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 0,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 14
+          },
+          "selected_objective_margin": 0.08805937784825965,
+          "require_predicted_scene_axis_nonregression": true
+        },
+        "report_path": "outputs/carnet/spcarnet_v321a_raw_incumbent_guard_focused_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "missing": true,
+        "report_path": "outputs/carnet/spcarnet_v321a_raw_incumbent_guard_focused_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "missing": true,
+        "report_path": "outputs/carnet/spcarnet_v321a_raw_incumbent_guard_focused_20260701/room/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v321a_raw_incumbent_guard_focused_20260701"
+  },
+  "v321b": {
+    "aggregate": {
+      "scene_count": 6,
+      "missing_count": 0,
+      "mean_psnr_gain": 0.21764014551458266,
+      "mean_ssim_gain": 0.002955317550471851,
+      "mean_min_psnr_gain": 0.008268234587211154,
+      "mean_cvar10_psnr_gain": 0.020183353300034648,
+      "total_negative_views": 5,
+      "safe_scene_count": 6
+    },
+    "scenes": [
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16
+        },
+        "source_reliability_decisions": {
+          "not_used": 16
+        },
+        "risk_model_decisions": {
+          "not_used": 16
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "verdict": "source reliability did not improve scene-selected PSNR enough",
+          "source_accept_fraction": 0.30000000000000004,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 3,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 7
+          },
+          "decision_prediction_source": null,
+          "calibrated_lcb_mode": "raw_incumbent"
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "source-heldout risk model did not clear fixed safety gate",
+          "source_accept_fraction": 0.7,
+          "source_selected_counts": {
+            "fixed": 4,
+            "learned": 3,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 3
+          },
+          "selected_objective_margin": 0.0,
+          "require_predicted_scene_axis_nonregression": true
+        },
+        "report_path": "outputs/carnet/spcarnet_v321b_raw_incumbent_guard_focused_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09075745623850276,
+        "ssim_gain": 0.0015932122866312663,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 18
+        },
+        "source_reliability_decisions": {
+          "not_used": 18
+        },
+        "risk_model_decisions": {
+          "not_used": 18
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "verdict": "source reliability did not clear fixed safety gate",
+          "source_accept_fraction": 0.18181818181818177,
+          "source_selected_counts": {
+            "fixed": 1,
+            "learned": 1,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 9
+          },
+          "decision_prediction_source": null,
+          "calibrated_lcb_mode": "raw_incumbent"
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "source-heldout risk model did not clear fixed safety gate",
+          "source_accept_fraction": 0.2727272727272727,
+          "source_selected_counts": {
+            "fixed": 2,
+            "learned": 1,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 8
+          },
+          "selected_objective_margin": 0.0,
+          "require_predicted_scene_axis_nonregression": true
+        },
+        "report_path": "outputs/carnet/spcarnet_v321b_raw_incumbent_guard_focused_20260701/treehill/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.09092195622768609,
+        "ssim_gain": 0.004080414772033691,
+        "min_psnr_gain": 0.025085114725499125,
+        "cvar10_psnr_gain": 0.02655331154705287,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 18,
+          "learned": 4
+        },
+        "source_reliability_decisions": {
+          "candidate": 5,
+          "incumbent_fallback": 17
+        },
+        "risk_model_decisions": {
+          "not_used": 22
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "verdict": "source-only relative reliability model selected",
+          "source_accept_fraction": 0.23076923076923073,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 3,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 10
+          },
+          "decision_prediction_source": "raw_incumbent_with_calibrated_lcb_override",
+          "calibrated_lcb_mode": "raw_incumbent"
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "source-heldout risk model did not clear fixed safety gate",
+          "source_accept_fraction": 0.7692307692307692,
+          "source_selected_counts": {
+            "fixed": 2,
+            "learned": 6,
+            "hybrid": 2,
+            "noop": 0,
+            "scene": 3
+          },
+          "selected_objective_margin": 0.0,
+          "require_predicted_scene_axis_nonregression": true
+        },
+        "report_path": "outputs/carnet/spcarnet_v321b_raw_incumbent_guard_focused_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.14323891992316287,
+        "ssim_gain": 0.0018992299834887187,
+        "min_psnr_gain": 0.005628597517468137,
+        "cvar10_psnr_gain": 0.027647036861104368,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 11,
+          "hybrid": 13
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 21,
+          "candidate": 3
+        },
+        "risk_model_decisions": {
+          "not_used": 24
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "verdict": "source-only relative reliability model selected",
+          "source_accept_fraction": 0.1428571428571429,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 2,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 12
+          },
+          "decision_prediction_source": "raw_incumbent_with_calibrated_lcb_override",
+          "calibrated_lcb_mode": "raw_incumbent"
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "source-heldout risk model did not improve scene-selected PSNR enough",
+          "source_accept_fraction": 0.6428571428571428,
+          "source_selected_counts": {
+            "fixed": 4,
+            "learned": 2,
+            "hybrid": 3,
+            "noop": 0,
+            "scene": 5
+          },
+          "selected_objective_margin": 0.0,
+          "require_predicted_scene_axis_nonregression": true
+        },
+        "report_path": "outputs/carnet/spcarnet_v321b_raw_incumbent_guard_focused_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.49144992937725385,
+        "ssim_gain": 0.003916379383632115,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 34,
+          "hybrid": 1
+        },
+        "source_reliability_decisions": {
+          "not_used": 35
+        },
+        "risk_model_decisions": {
+          "not_used": 35
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "verdict": "source reliability did not improve scene-selected PSNR enough",
+          "source_accept_fraction": 0.38095238095238093,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 6,
+            "hybrid": 2,
+            "noop": 0,
+            "scene": 13
+          },
+          "decision_prediction_source": null,
+          "calibrated_lcb_mode": "raw_incumbent"
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "source-heldout risk model did not improve scene-selected PSNR enough",
+          "source_accept_fraction": 0.9523809523809523,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 19,
+            "hybrid": 1,
+            "noop": 0,
+            "scene": 1
+          },
+          "selected_objective_margin": 0.0,
+          "require_predicted_scene_axis_nonregression": true
+        },
+        "report_path": "outputs/carnet/spcarnet_v321b_raw_incumbent_guard_focused_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.43244284992785537,
+        "ssim_gain": 0.005034426848093669,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 30,
+          "learned": 9
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 30,
+          "candidate": 9
+        },
+        "risk_model_decisions": {
+          "not_used": 39
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "verdict": "source-only relative reliability model selected",
+          "source_accept_fraction": 0.08695652173913049,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 2,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 21
+          },
+          "decision_prediction_source": "raw_incumbent_with_calibrated_lcb_override",
+          "calibrated_lcb_mode": "raw_incumbent"
+        },
+        "risk_model_policy": {
+          "enabled": false,
+          "verdict": "source-heldout risk model did not improve scene-selected PSNR enough",
+          "source_accept_fraction": 0.6086956521739131,
+          "source_selected_counts": {
+            "fixed": 2,
+            "learned": 3,
+            "hybrid": 9,
+            "noop": 0,
+            "scene": 9
+          },
+          "selected_objective_margin": 0.0,
+          "require_predicted_scene_axis_nonregression": true
+        },
+        "report_path": "outputs/carnet/spcarnet_v321b_raw_incumbent_guard_focused_20260701/room/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v321b_raw_incumbent_guard_focused_20260701"
+  },
+  "v321b_minus_v319c": {
+    "mean_psnr_gain": -0.0012263476121060768,
+    "mean_ssim_gain": -1.105042439447949e-05,
+    "mean_min_psnr_gain": -0.00044822544644240736,
+    "mean_cvar10_psnr_gain": -0.00026827376507861794,
+    "total_negative_views": 0,
+    "safe_scene_count": 0
+  },
+  "v321b_minus_v320q50s05": {
+    "mean_psnr_gain": 0.0008836269689152243,
+    "mean_ssim_gain": 9.528351853592236e-06,
+    "mean_min_psnr_gain": 0.0,
+    "mean_cvar10_psnr_gain": 0.0,
+    "total_negative_views": 0,
+    "safe_scene_count": 1
+  },
+  "verdict": {
+    "v321a": "FAIL: source-perceptual raw-incumbent plus risk nonregression still breaks stump because risk model had zero source accepts but was enabled.",
+    "v321b": "PARTIAL_FAIL: restores stump safety and room gain, but remains below v319c on treehill/garden/kitchen/flowers; do not launch full9 as incumbent.",
+    "next": "Implement v321c incumbent-replay fallback: when a new policy would be below v319c per-scene incumbent behavior, replay v319c-compatible raw source/risk settings or disable the risky module by source accept/tail gates."
+  }
+}

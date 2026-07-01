@@ -210,6 +210,8 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- source min PSNR delta vs scene: `{reliability.get('source_min_psnr_delta_vs_scene_selected')}`",
             f"- source positive-view delta vs scene: `{reliability.get('source_positive_view_fraction_delta_vs_scene_selected')}`",
             f"- source selected counts: `{reliability.get('source_selected_counts')}`",
+            f"- decision prediction source: `{reliability.get('decision_prediction_source')}`",
+            f"- calibration: `{reliability.get('source_reliability_calibration')}`",
             f"- verdict: `{reliability.get('verdict')}`",
         ]
     (output_dir / "support_transport_apply_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -475,8 +477,43 @@ def _source_reliability_features(
     )
 
 
+SOURCE_RELIABILITY_TARGET_NAMES = [
+    "objective_delta_vs_scene",
+    "psnr_delta_vs_scene",
+    "ssim_delta_vs_scene",
+    "lpips_delta_vs_scene",
+    "dists_delta_vs_scene",
+]
+
+
 def _metric_delta(candidate: dict[str, float], scene: dict[str, float], key: str) -> float:
     return float(candidate.get(key, 0.0)) - float(scene.get(key, 0.0))
+
+
+def _source_reliability_target(
+    metrics: dict[str, float],
+    scene_metrics: dict[str, float],
+    *,
+    compute_ssim: bool,
+    args: argparse.Namespace,
+) -> list[float]:
+    scene_objective = _source_objective_from_metrics(scene_metrics, compute_ssim=compute_ssim, args=args)
+    return [
+        _source_objective_from_metrics(metrics, compute_ssim=compute_ssim, args=args) - scene_objective,
+        _metric_delta(metrics, scene_metrics, "psnr_gain"),
+        _metric_delta(metrics, scene_metrics, "ssim_gain") if compute_ssim else 0.0,
+        _metric_delta(metrics, scene_metrics, "lpips_gain"),
+        _metric_delta(metrics, scene_metrics, "dists_gain"),
+    ]
+
+
+def _calibrated_lower_bounds(prediction: list[float], calibration: dict[str, Any] | None) -> list[float]:
+    if not calibration or not bool(calibration.get("enabled", False)):
+        return [float(value) for value in prediction]
+    bounds = [float(value) for value in calibration.get("error_bounds", [])]
+    if len(bounds) < len(prediction):
+        bounds = bounds + [0.0] * (len(prediction) - len(bounds))
+    return [float(value) - float(bound) for value, bound in zip(prediction, bounds)]
 
 
 def _fit_ridge_predictor(
@@ -1224,6 +1261,14 @@ def _fit_per_view_risk_model_policy(
         best_variant, best_pred = max(predictions.items(), key=lambda item: item[1][0])
         if best_pred[0] < scene_pred[0] + float(objective_margin):
             return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop"
+        if bool(args.per_view_risk_model_require_predicted_scene_axis_nonregression):
+            if best_pred[1] < scene_pred[1] + float(args.per_view_risk_model_scene_axis_guard_margin_psnr):
+                return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop"
+            if (
+                compute_ssim
+                and best_pred[2] < scene_pred[2] + float(args.per_view_risk_model_scene_axis_guard_margin_ssim)
+            ):
+                return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop"
         if best_pred[1] < scene_pred[1] + float(args.per_view_risk_model_min_predicted_psnr_delta_vs_scene):
             return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop"
         if (
@@ -1409,6 +1454,11 @@ def _fit_per_view_risk_model_policy(
             "dists": float(args.source_objective_dists_weight),
             "used_by_risk_model": bool(args.per_view_risk_model_use_source_perceptual_objective),
         },
+        "require_predicted_scene_axis_nonregression": bool(
+            args.per_view_risk_model_require_predicted_scene_axis_nonregression
+        ),
+        "scene_axis_guard_margin_psnr": float(args.per_view_risk_model_scene_axis_guard_margin_psnr),
+        "scene_axis_guard_margin_ssim": float(args.per_view_risk_model_scene_axis_guard_margin_ssim),
         "loo_predictions": loo_predictions,
     }
     if (
@@ -1521,6 +1571,15 @@ def _risk_model_choose_variant(
     if best_pred[0] < scene_pred[0] + min_objective_delta:
         diagnostics["reject_reason"] = "objective_delta"
         return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions, diagnostics
+    if bool(policy.get("require_predicted_scene_axis_nonregression", False)):
+        psnr_margin = float(policy.get("scene_axis_guard_margin_psnr", 0.0))
+        ssim_margin = float(policy.get("scene_axis_guard_margin_ssim", 0.0))
+        if best_pred[1] < scene_pred[1] + psnr_margin:
+            diagnostics["reject_reason"] = "scene_axis_psnr_nonregression"
+            return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions, diagnostics
+        if compute_ssim and best_pred[2] < scene_pred[2] + ssim_margin:
+            diagnostics["reject_reason"] = "scene_axis_ssim_nonregression"
+            return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions, diagnostics
     if best_pred[1] < scene_pred[1] + min_psnr_delta_vs_scene:
         diagnostics["reject_reason"] = "psnr_delta_vs_scene"
         return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions, diagnostics
@@ -1577,7 +1636,6 @@ def _fit_source_reliability_policy(
         scene_candidate = row["candidates"][selected_variant]
         scene_metrics = scene_candidate["metrics"]
         scene_proxy = scene_candidate["proxy"]
-        scene_objective = _source_objective_from_metrics(scene_metrics, compute_ssim=compute_ssim, args=args)
         for variant in variants:
             candidate = row["candidates"][variant]
             metrics = candidate["metrics"]
@@ -1588,13 +1646,7 @@ def _fit_source_reliability_policy(
                 scene_variant=selected_variant,
                 feature_names=feature_names,
             )
-            target = [
-                _source_objective_from_metrics(metrics, compute_ssim=compute_ssim, args=args) - scene_objective,
-                _metric_delta(metrics, scene_metrics, "psnr_gain"),
-                _metric_delta(metrics, scene_metrics, "ssim_gain") if compute_ssim else 0.0,
-                _metric_delta(metrics, scene_metrics, "lpips_gain"),
-                _metric_delta(metrics, scene_metrics, "dists_gain"),
-            ]
+            target = _source_reliability_target(metrics, scene_metrics, compute_ssim=compute_ssim, args=args)
             example = {
                 "view": view,
                 "variant": variant,
@@ -1661,42 +1713,126 @@ def _fit_source_reliability_policy(
         *,
         objective_margin: float,
         exclude_view: str | None = None,
+        allow_calibrated_lcb_override: bool = True,
     ) -> tuple[str, dict[str, Any]]:
-        best_variant, best_pred = max(predictions.items(), key=lambda item: item[1][0])
-        scene_pred = predictions[selected_variant]
-        diagnostics: dict[str, Any] = {
-            "best_variant": best_variant,
-            "scene_variant": selected_variant,
-            "best_prediction": best_pred,
-            "scene_prediction": scene_pred,
-            "reject_reason": None,
-            "ood_distance": None,
-            "ood_threshold": None,
+        def evaluate_decision_predictions(
+            decision_predictions: dict[str, list[float]],
+            *,
+            prediction_source: str,
+        ) -> tuple[str, dict[str, Any]]:
+            best_variant, best_pred = max(decision_predictions.items(), key=lambda item: item[1][0])
+            scene_pred = decision_predictions[selected_variant]
+            diagnostics: dict[str, Any] = {
+                "best_variant": best_variant,
+                "scene_variant": selected_variant,
+                "best_prediction": predictions[best_variant],
+                "scene_prediction": predictions[selected_variant],
+                "best_decision_prediction": best_pred,
+                "scene_decision_prediction": scene_pred,
+                "decision_prediction_source": prediction_source,
+                "calibrated_lower_bounds": decision_predictions
+                if prediction_source == "calibrated_lower_bound"
+                else None,
+                "reject_reason": None,
+                "ood_distance": None,
+                "ood_threshold": None,
+            }
+
+            def reject(reason: str) -> str:
+                diagnostics["reject_reason"] = reason
+                return "__scene__" if str(args.source_reliability_reject_variant) == "scene" else "noop"
+
+            if best_pred[0] < float(objective_margin):
+                return reject("objective_margin"), diagnostics
+            if best_pred[1] < float(args.source_reliability_min_predicted_psnr_delta_vs_scene):
+                return reject("psnr_delta_vs_scene"), diagnostics
+            if compute_ssim and best_pred[2] < float(args.source_reliability_min_predicted_ssim_delta_vs_scene):
+                return reject("ssim_delta_vs_scene"), diagnostics
+            if best_pred[3] < float(args.source_reliability_min_predicted_lpips_delta_vs_scene):
+                return reject("lpips_delta_vs_scene"), diagnostics
+            if best_pred[4] < float(args.source_reliability_min_predicted_dists_delta_vs_scene):
+                return reject("dists_delta_vs_scene"), diagnostics
+            if (
+                bool(args.source_reliability_forbid_fixed_when_scene_nonfixed)
+                and selected_variant != "fixed"
+                and best_variant == "fixed"
+            ):
+                return reject("fixed_when_scene_nonfixed"), diagnostics
+            if bool(args.source_reliability_enable_ood_guard):
+                ood_distance = nearest_source_distance(best_variant, vectors[best_variant], exclude_view=exclude_view)
+                diagnostics["ood_distance"] = float(ood_distance)
+                diagnostics["ood_threshold"] = float(ood_threshold)
+                if ood_distance > ood_threshold:
+                    return reject("ood_distance"), diagnostics
+            return best_variant, diagnostics
+
+        raw_predictions = {variant: [float(value) for value in prediction] for variant, prediction in predictions.items()}
+        raw_variant, raw_diagnostics = evaluate_decision_predictions(
+            raw_predictions,
+            prediction_source="raw_prediction",
+        )
+        calibration_enabled = bool(calibration_payload.get("enabled", False))
+        mode = str(args.source_reliability_calibrated_lcb_mode)
+        if not calibration_enabled:
+            raw_diagnostics["raw_incumbent_variant"] = raw_variant
+            raw_diagnostics["calibrated_lcb_variant"] = None
+            raw_diagnostics["final_decision_source"] = "raw_prediction"
+            return raw_variant, raw_diagnostics
+
+        lcb_predictions = {
+            variant: _calibrated_lower_bounds(prediction, calibration_payload)
+            for variant, prediction in predictions.items()
         }
-
-        def reject(reason: str) -> str:
-            diagnostics["reject_reason"] = reason
-            return "__scene__" if str(args.source_reliability_reject_variant) == "scene" else "noop"
-
-        if best_pred[0] < float(objective_margin):
-            return reject("objective_margin"), diagnostics
-        if best_pred[1] < float(args.source_reliability_min_predicted_psnr_delta_vs_scene):
-            return reject("psnr_delta_vs_scene"), diagnostics
-        if compute_ssim and best_pred[2] < float(args.source_reliability_min_predicted_ssim_delta_vs_scene):
-            return reject("ssim_delta_vs_scene"), diagnostics
-        if best_pred[3] < float(args.source_reliability_min_predicted_lpips_delta_vs_scene):
-            return reject("lpips_delta_vs_scene"), diagnostics
-        if best_pred[4] < float(args.source_reliability_min_predicted_dists_delta_vs_scene):
-            return reject("dists_delta_vs_scene"), diagnostics
-        if bool(args.source_reliability_forbid_fixed_when_scene_nonfixed) and selected_variant != "fixed" and best_variant == "fixed":
-            return reject("fixed_when_scene_nonfixed"), diagnostics
-        if bool(args.source_reliability_enable_ood_guard):
-            ood_distance = nearest_source_distance(best_variant, vectors[best_variant], exclude_view=exclude_view)
-            diagnostics["ood_distance"] = float(ood_distance)
-            diagnostics["ood_threshold"] = float(ood_threshold)
-            if ood_distance > ood_threshold:
-                return reject("ood_distance"), diagnostics
-        return best_variant, diagnostics
+        lcb_variant, lcb_diagnostics = evaluate_decision_predictions(
+            lcb_predictions,
+            prediction_source="calibrated_lower_bound",
+        )
+        if mode == "raw_incumbent":
+            if raw_variant not in {"__scene__", "noop"} or not allow_calibrated_lcb_override:
+                diagnostics = dict(raw_diagnostics)
+                diagnostics.update(
+                    {
+                        "raw_incumbent_variant": raw_variant,
+                        "raw_incumbent_diagnostics": raw_diagnostics,
+                        "calibrated_lcb_variant": lcb_variant,
+                        "calibrated_lcb_diagnostics": lcb_diagnostics,
+                        "final_decision_source": (
+                            "raw_incumbent"
+                            if raw_variant not in {"__scene__", "noop"}
+                            else "raw_incumbent_reject_no_lcb_override"
+                        ),
+                    }
+                )
+                return raw_variant, diagnostics
+            if lcb_variant not in {"__scene__", "noop"}:
+                diagnostics = dict(lcb_diagnostics)
+                diagnostics.update(
+                    {
+                        "raw_incumbent_variant": raw_variant,
+                        "raw_incumbent_diagnostics": raw_diagnostics,
+                        "calibrated_lcb_variant": lcb_variant,
+                        "calibrated_lcb_diagnostics": lcb_diagnostics,
+                        "final_decision_source": "calibrated_lcb_override",
+                    }
+                )
+                return lcb_variant, diagnostics
+            diagnostics = dict(raw_diagnostics)
+            diagnostics.update(
+                {
+                    "raw_incumbent_variant": raw_variant,
+                    "raw_incumbent_diagnostics": raw_diagnostics,
+                    "calibrated_lcb_variant": lcb_variant,
+                    "calibrated_lcb_diagnostics": lcb_diagnostics,
+                    "final_decision_source": "raw_incumbent_reject",
+                }
+            )
+            return raw_variant, diagnostics
+        lcb_diagnostics["raw_incumbent_variant"] = raw_variant
+        lcb_diagnostics["raw_incumbent_diagnostics"] = raw_diagnostics
+        lcb_diagnostics["calibrated_lcb_variant"] = lcb_variant
+        lcb_diagnostics["calibrated_lcb_diagnostics"] = dict(lcb_diagnostics)
+        lcb_diagnostics["final_decision_source"] = "calibrated_lower_bound"
+        return lcb_variant, lcb_diagnostics
 
     loo_items: list[dict[str, Any]] = []
     for view, row in rows_by_view.items():
@@ -1708,7 +1844,96 @@ def _fit_source_reliability_policy(
         predictions, vectors = predict_for_row(row, model)
         loo_items.append({"view": view, "row": row, "predictions": predictions, "vectors": vectors})
 
-    def evaluate_margin(objective_margin: float) -> tuple[dict[str, Any], dict[str, int], list[dict[str, float]], list[dict[str, Any]]]:
+    calibration_errors_by_metric: list[list[float]] = [[] for _ in SOURCE_RELIABILITY_TARGET_NAMES]
+    calibration_abs_errors_by_metric: list[list[float]] = [[] for _ in SOURCE_RELIABILITY_TARGET_NAMES]
+    for item in loo_items:
+        row = item["row"]
+        predictions = item.get("predictions")
+        if predictions is None:
+            continue
+        scene_metrics = row["candidates"][selected_variant]["metrics"]
+        for variant in variants:
+            if variant not in predictions:
+                continue
+            actual = _source_reliability_target(
+                row["candidates"][variant]["metrics"],
+                scene_metrics,
+                compute_ssim=compute_ssim,
+                args=args,
+            )
+            predicted = predictions[variant]
+            for idx, (pred_value, actual_value) in enumerate(zip(predicted, actual)):
+                overestimate = max(float(pred_value) - float(actual_value), 0.0)
+                calibration_errors_by_metric[idx].append(overestimate)
+                calibration_abs_errors_by_metric[idx].append(abs(float(pred_value) - float(actual_value)))
+    calibration_count = min((len(values) for values in calibration_errors_by_metric), default=0)
+    calibration_requested = bool(args.source_reliability_enable_calibrated_lcb)
+    calibration_usable = calibration_count >= int(args.source_reliability_calibration_min_samples)
+    calibration_error_bounds = [
+        float(_quantile(values, float(args.source_reliability_calibration_quantile)))
+        * float(args.source_reliability_calibration_scale)
+        if values
+        else float("inf")
+        for values in calibration_errors_by_metric
+    ]
+    calibration_abs_error_quantiles = [
+        float(_quantile(values, float(args.source_reliability_calibration_quantile))) if values else float("inf")
+        for values in calibration_abs_errors_by_metric
+    ]
+    calibration_coverage_hits = [0 for _ in SOURCE_RELIABILITY_TARGET_NAMES]
+    calibration_coverage_counts = [0 for _ in SOURCE_RELIABILITY_TARGET_NAMES]
+    if calibration_usable:
+        for item in loo_items:
+            row = item["row"]
+            predictions = item.get("predictions")
+            if predictions is None:
+                continue
+            scene_metrics = row["candidates"][selected_variant]["metrics"]
+            for variant in variants:
+                if variant not in predictions:
+                    continue
+                actual = _source_reliability_target(
+                    row["candidates"][variant]["metrics"],
+                    scene_metrics,
+                    compute_ssim=compute_ssim,
+                    args=args,
+                )
+                lower = _calibrated_lower_bounds(predictions[variant], {"enabled": True, "error_bounds": calibration_error_bounds})
+                for idx, (lower_value, actual_value) in enumerate(zip(lower, actual)):
+                    calibration_coverage_counts[idx] += 1
+                    if float(actual_value) >= float(lower_value):
+                        calibration_coverage_hits[idx] += 1
+    calibration_payload = {
+        "enabled": bool(calibration_requested and calibration_usable),
+        "requested": bool(calibration_requested),
+        "usable": bool(calibration_usable),
+        "target_names": list(SOURCE_RELIABILITY_TARGET_NAMES),
+        "error_mode": "positive_overprediction",
+        "quantile": float(args.source_reliability_calibration_quantile),
+        "scale": float(args.source_reliability_calibration_scale),
+        "min_samples": int(args.source_reliability_calibration_min_samples),
+        "sample_count": int(calibration_count),
+        "error_bounds": calibration_error_bounds,
+        "abs_error_quantiles": calibration_abs_error_quantiles,
+        "empirical_lcb_coverage": {
+            name: (
+                float(calibration_coverage_hits[idx] / max(calibration_coverage_counts[idx], 1))
+                if calibration_coverage_counts[idx]
+                else None
+            )
+            for idx, name in enumerate(SOURCE_RELIABILITY_TARGET_NAMES)
+        },
+        "coverage_counts": {
+            name: int(calibration_coverage_counts[idx])
+            for idx, name in enumerate(SOURCE_RELIABILITY_TARGET_NAMES)
+        },
+    }
+
+    def evaluate_margin(
+        objective_margin: float,
+        *,
+        allow_calibrated_lcb_override: bool = True,
+    ) -> tuple[dict[str, Any], dict[str, int], list[dict[str, float]], list[dict[str, Any]]]:
         source_policy_rows: list[dict[str, float]] = []
         selected_counts: dict[str, int] = {"fixed": 0, "learned": 0, "hybrid": 0, "noop": 0, "scene": 0}
         prediction_log: list[dict[str, Any]] = []
@@ -1726,6 +1951,7 @@ def _fit_source_reliability_policy(
                 vectors,
                 objective_margin=float(objective_margin),
                 exclude_view=str(item["view"]),
+                allow_calibrated_lcb_override=allow_calibrated_lcb_override,
             )
             prediction_log.append(
                 {
@@ -1754,7 +1980,20 @@ def _fit_source_reliability_policy(
             predictions = item.get("predictions")
             if not predictions:
                 continue
-            best_variant, best_pred = max(predictions.items(), key=lambda pair: pair[1][0])
+            if (
+                bool(calibration_payload.get("enabled", False))
+                and str(args.source_reliability_calibrated_lcb_mode) != "raw_incumbent"
+            ):
+                decision_predictions = {
+                    variant: _calibrated_lower_bounds(prediction, calibration_payload)
+                    for variant, prediction in predictions.items()
+                }
+            else:
+                decision_predictions = {
+                    variant: [float(value) for value in prediction]
+                    for variant, prediction in predictions.items()
+                }
+            best_variant, best_pred = max(decision_predictions.items(), key=lambda pair: pair[1][0])
             if best_variant != selected_variant:
                 candidate_margins.add(float(best_pred[0]))
         if candidate_margins:
@@ -1763,7 +2002,13 @@ def _fit_source_reliability_policy(
             candidate_margins.add(ordered[-1] + 1.0e-9)
         best_trial: dict[str, Any] | None = None
         for margin in sorted(candidate_margins):
-            trial_summary, trial_counts, _, _ = evaluate_margin(float(margin))
+            trial_summary, trial_counts, _, _ = evaluate_margin(
+                float(margin),
+                allow_calibrated_lcb_override=not (
+                    bool(calibration_payload.get("enabled", False))
+                    and str(args.source_reliability_calibrated_lcb_mode) == "raw_incumbent"
+                ),
+            )
             reject_count = int(trial_counts["noop"] + trial_counts["scene"])
             accept_fraction_trial = 1.0 - float(reject_count / max(len(loo_items), 1))
             scene_summary = selector_payload["summaries"][selected_variant]
@@ -1875,8 +2120,17 @@ def _fit_source_reliability_policy(
             "mean": _mean(ood_source_distances) if ood_source_distances else None,
             "max": max(ood_source_distances) if ood_source_distances else None,
         },
+        "calibrated_lcb_mode": str(args.source_reliability_calibrated_lcb_mode),
+        "source_reliability_calibration": calibration_payload,
+        "fixed_scene_min_source_ssim_delta": float(args.source_reliability_fixed_scene_min_source_ssim_delta),
         "loo_predictions": loo_predictions,
     }
+    if (
+        calibration_requested
+        and not calibration_usable
+        and str(args.source_reliability_calibrated_lcb_mode) != "raw_incumbent"
+    ):
+        return {"enabled": False, "verdict": "source reliability calibrated LCB did not have enough calibration samples", **base_payload}
     if (
         bool(args.source_reliability_enable_ood_guard)
         and len(ood_source_distances) < int(args.source_reliability_ood_min_samples)
@@ -1890,6 +2144,16 @@ def _fit_source_reliability_policy(
         return {"enabled": False, "verdict": "source reliability did not improve scene-selected PSNR enough", **base_payload}
     if compute_ssim and ssim_delta < float(args.source_reliability_min_source_ssim_delta):
         return {"enabled": False, "verdict": "source reliability did not clear SSIM delta", **base_payload}
+    if (
+        compute_ssim
+        and selected_variant == "fixed"
+        and ssim_delta < float(args.source_reliability_fixed_scene_min_source_ssim_delta)
+    ):
+        return {
+            "enabled": False,
+            "verdict": "source reliability did not clear fixed-scene SSIM delta",
+            **base_payload,
+        }
     if cvar_delta < float(args.source_reliability_min_source_cvar_delta):
         return {"enabled": False, "verdict": "source reliability did not clear CVaR tail delta", **base_payload}
     if min_delta < float(args.source_reliability_min_source_min_delta):
@@ -1913,6 +2177,15 @@ def _fit_source_reliability_policy(
         "min_predicted_ssim_delta_vs_scene": float(args.source_reliability_min_predicted_ssim_delta_vs_scene),
         "min_predicted_lpips_delta_vs_scene": float(args.source_reliability_min_predicted_lpips_delta_vs_scene),
         "min_predicted_dists_delta_vs_scene": float(args.source_reliability_min_predicted_dists_delta_vs_scene),
+        "decision_prediction_source": (
+            "raw_incumbent_with_calibrated_lcb_override"
+            if bool(calibration_payload.get("enabled", False))
+            and str(args.source_reliability_calibrated_lcb_mode) == "raw_incumbent"
+            else "calibrated_lower_bound"
+            if bool(calibration_payload.get("enabled", False))
+            else "raw_prediction"
+        ),
+        "calibrated_lcb_mode": str(args.source_reliability_calibrated_lcb_mode),
         "forbid_fixed_when_scene_nonfixed": bool(args.source_reliability_forbid_fixed_when_scene_nonfixed),
         **base_payload,
     }
@@ -1940,50 +2213,127 @@ def _source_reliability_choose_variant(
         )
         vectors[variant] = vector
         predictions[variant] = _predict_ridge(policy["model"], vector)
-    best_variant, best_pred = max(predictions.items(), key=lambda item: item[1][0])
-    scene_pred = predictions[scene_variant]
-    diagnostics: dict[str, Any] = {
-        "best_variant": best_variant,
-        "scene_variant": scene_variant,
-        "best_prediction": best_pred,
-        "scene_prediction": scene_pred,
-        "reject_reason": None,
-        "ood_distance": None,
-        "ood_threshold": None,
+    calibration_payload = policy.get("source_reliability_calibration", {})
+
+    def evaluate_decision_predictions(
+        decision_predictions: dict[str, list[float]],
+        *,
+        prediction_source: str,
+    ) -> tuple[str, dict[str, Any]]:
+        best_variant, best_pred = max(decision_predictions.items(), key=lambda item: item[1][0])
+        scene_pred = decision_predictions[scene_variant]
+        diagnostics: dict[str, Any] = {
+            "best_variant": best_variant,
+            "scene_variant": scene_variant,
+            "best_prediction": predictions[best_variant],
+            "scene_prediction": predictions[scene_variant],
+            "best_decision_prediction": best_pred,
+            "scene_decision_prediction": scene_pred,
+            "decision_prediction_source": prediction_source,
+            "calibrated_lower_bounds": decision_predictions
+            if prediction_source == "calibrated_lower_bound"
+            else None,
+            "reject_reason": None,
+            "ood_distance": None,
+            "ood_threshold": None,
+        }
+
+        def reject(reason: str) -> tuple[str, dict[str, Any]]:
+            diagnostics["reject_reason"] = reason
+            if str(policy.get("reject_variant", "scene")) == "scene":
+                return "__scene__", diagnostics
+            return "noop", diagnostics
+
+        if best_pred[0] < float(policy.get("min_predicted_objective_delta_vs_scene", 0.0)):
+            return reject("objective_margin")
+        if best_pred[1] < float(policy.get("min_predicted_psnr_delta_vs_scene", -1.0e9)):
+            return reject("psnr_delta_vs_scene")
+        if compute_ssim and best_pred[2] < float(policy.get("min_predicted_ssim_delta_vs_scene", -1.0e9)):
+            return reject("ssim_delta_vs_scene")
+        if best_pred[3] < float(policy.get("min_predicted_lpips_delta_vs_scene", -1.0e9)):
+            return reject("lpips_delta_vs_scene")
+        if best_pred[4] < float(policy.get("min_predicted_dists_delta_vs_scene", -1.0e9)):
+            return reject("dists_delta_vs_scene")
+        if bool(policy.get("forbid_fixed_when_scene_nonfixed", False)) and scene_variant != "fixed" and best_variant == "fixed":
+            return reject("fixed_when_scene_nonfixed")
+        if bool(policy.get("ood_guard_enabled", False)):
+            pool = policy.get("source_entries_by_variant", {}).get(best_variant, [])
+            mean = [float(x) for x in policy.get("ood_feature_mean", [])]
+            std = [float(x) for x in policy.get("ood_feature_std", [])]
+            if pool and mean and std:
+                ood_distance = min(_normalized_distance(vectors[best_variant], entry["vector"], mean, std) for entry in pool)
+            else:
+                ood_distance = float("inf")
+            ood_threshold = float(policy.get("ood_source_distance_threshold", float("inf")))
+            diagnostics["ood_distance"] = float(ood_distance)
+            diagnostics["ood_threshold"] = float(ood_threshold)
+            if ood_distance > ood_threshold:
+                return reject("ood_distance")
+        return best_variant, diagnostics
+
+    raw_predictions = {variant: [float(value) for value in prediction] for variant, prediction in predictions.items()}
+    raw_variant, raw_diagnostics = evaluate_decision_predictions(
+        raw_predictions,
+        prediction_source="raw_prediction",
+    )
+    calibration_enabled = bool(calibration_payload.get("enabled", False))
+    mode = str(policy.get("calibrated_lcb_mode", "calibrated_lcb"))
+    if not calibration_enabled:
+        raw_diagnostics["raw_incumbent_variant"] = raw_variant
+        raw_diagnostics["calibrated_lcb_variant"] = None
+        raw_diagnostics["final_decision_source"] = "raw_prediction"
+        return raw_variant, predictions, raw_diagnostics
+
+    lcb_predictions = {
+        variant: _calibrated_lower_bounds(prediction, calibration_payload)
+        for variant, prediction in predictions.items()
     }
-
-    def reject(reason: str) -> tuple[str, dict[str, list[float]], dict[str, Any]]:
-        diagnostics["reject_reason"] = reason
-        if str(policy.get("reject_variant", "scene")) == "scene":
-            return "__scene__", predictions, diagnostics
-        return "noop", predictions, diagnostics
-
-    if best_pred[0] < float(policy.get("min_predicted_objective_delta_vs_scene", 0.0)):
-        return reject("objective_margin")
-    if best_pred[1] < float(policy.get("min_predicted_psnr_delta_vs_scene", -1.0e9)):
-        return reject("psnr_delta_vs_scene")
-    if compute_ssim and best_pred[2] < float(policy.get("min_predicted_ssim_delta_vs_scene", -1.0e9)):
-        return reject("ssim_delta_vs_scene")
-    if best_pred[3] < float(policy.get("min_predicted_lpips_delta_vs_scene", -1.0e9)):
-        return reject("lpips_delta_vs_scene")
-    if best_pred[4] < float(policy.get("min_predicted_dists_delta_vs_scene", -1.0e9)):
-        return reject("dists_delta_vs_scene")
-    if bool(policy.get("forbid_fixed_when_scene_nonfixed", False)) and scene_variant != "fixed" and best_variant == "fixed":
-        return reject("fixed_when_scene_nonfixed")
-    if bool(policy.get("ood_guard_enabled", False)):
-        pool = policy.get("source_entries_by_variant", {}).get(best_variant, [])
-        mean = [float(x) for x in policy.get("ood_feature_mean", [])]
-        std = [float(x) for x in policy.get("ood_feature_std", [])]
-        if pool and mean and std:
-            ood_distance = min(_normalized_distance(vectors[best_variant], entry["vector"], mean, std) for entry in pool)
-        else:
-            ood_distance = float("inf")
-        ood_threshold = float(policy.get("ood_source_distance_threshold", float("inf")))
-        diagnostics["ood_distance"] = float(ood_distance)
-        diagnostics["ood_threshold"] = float(ood_threshold)
-        if ood_distance > ood_threshold:
-            return reject("ood_distance")
-    return best_variant, predictions, diagnostics
+    lcb_variant, lcb_diagnostics = evaluate_decision_predictions(
+        lcb_predictions,
+        prediction_source="calibrated_lower_bound",
+    )
+    if mode == "raw_incumbent":
+        if raw_variant not in {"__scene__", "noop"}:
+            diagnostics = dict(raw_diagnostics)
+            diagnostics.update(
+                {
+                    "raw_incumbent_variant": raw_variant,
+                    "raw_incumbent_diagnostics": raw_diagnostics,
+                    "calibrated_lcb_variant": lcb_variant,
+                    "calibrated_lcb_diagnostics": lcb_diagnostics,
+                    "final_decision_source": "raw_incumbent",
+                }
+            )
+            return raw_variant, predictions, diagnostics
+        if lcb_variant not in {"__scene__", "noop"}:
+            diagnostics = dict(lcb_diagnostics)
+            diagnostics.update(
+                {
+                    "raw_incumbent_variant": raw_variant,
+                    "raw_incumbent_diagnostics": raw_diagnostics,
+                    "calibrated_lcb_variant": lcb_variant,
+                    "calibrated_lcb_diagnostics": lcb_diagnostics,
+                    "final_decision_source": "calibrated_lcb_override",
+                }
+            )
+            return lcb_variant, predictions, diagnostics
+        diagnostics = dict(raw_diagnostics)
+        diagnostics.update(
+            {
+                "raw_incumbent_variant": raw_variant,
+                "raw_incumbent_diagnostics": raw_diagnostics,
+                "calibrated_lcb_variant": lcb_variant,
+                "calibrated_lcb_diagnostics": lcb_diagnostics,
+                "final_decision_source": "raw_incumbent_reject",
+            }
+        )
+        return raw_variant, predictions, diagnostics
+    lcb_diagnostics["raw_incumbent_variant"] = raw_variant
+    lcb_diagnostics["raw_incumbent_diagnostics"] = raw_diagnostics
+    lcb_diagnostics["calibrated_lcb_variant"] = lcb_variant
+    lcb_diagnostics["calibrated_lcb_diagnostics"] = dict(lcb_diagnostics)
+    lcb_diagnostics["final_decision_source"] = "calibrated_lower_bound"
+    return lcb_variant, predictions, lcb_diagnostics
 
 
 def _gate_accepts(proxy: dict[str, float], gate: dict[str, Any] | None) -> bool:
@@ -2569,6 +2919,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "source_perceptual_uses_train_heldout_gt_only": bool(args.compute_source_perceptual),
             "source_reliability_uses_target_gt": False,
             "source_reliability_fit_scope": "source_heldout_before_target_loop",
+            "source_reliability_calibrated_lcb_uses_target_gt": False,
         },
         "checkpoint": str(args.checkpoint),
         "base_model_path": str(base_model),
@@ -2756,6 +3107,9 @@ def main() -> None:
     parser.add_argument("--per_view_risk_model_min_predicted_ssim_delta_vs_scene", type=float, default=-1.0e9)
     parser.add_argument("--per_view_risk_model_min_predicted_psnr", type=float, default=-1.0e9)
     parser.add_argument("--per_view_risk_model_min_predicted_ssim", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_risk_model_require_predicted_scene_axis_nonregression", action="store_true")
+    parser.add_argument("--per_view_risk_model_scene_axis_guard_margin_psnr", type=float, default=0.0)
+    parser.add_argument("--per_view_risk_model_scene_axis_guard_margin_ssim", type=float, default=0.0)
     parser.add_argument("--per_view_risk_model_enable_ood_guard", action="store_true")
     parser.add_argument("--per_view_risk_model_ood_quantile", type=float, default=0.90)
     parser.add_argument("--per_view_risk_model_ood_min_samples", type=int, default=4)
@@ -2772,6 +3126,7 @@ def main() -> None:
     parser.add_argument("--source_reliability_max_accept_fraction", type=float, default=1.0)
     parser.add_argument("--source_reliability_min_source_psnr_delta", type=float, default=0.0)
     parser.add_argument("--source_reliability_min_source_ssim_delta", type=float, default=-1.0e9)
+    parser.add_argument("--source_reliability_fixed_scene_min_source_ssim_delta", type=float, default=-1.0e9)
     parser.add_argument("--source_reliability_min_source_cvar_delta", type=float, default=-1.0e9)
     parser.add_argument("--source_reliability_min_source_min_delta", type=float, default=-1.0e9)
     parser.add_argument("--source_reliability_min_source_positive_fraction_delta", type=float, default=-1.0e9)
@@ -2786,6 +3141,15 @@ def main() -> None:
     parser.add_argument("--source_reliability_min_predicted_lpips_delta_vs_scene", type=float, default=-1.0e9)
     parser.add_argument("--source_reliability_min_predicted_dists_delta_vs_scene", type=float, default=-1.0e9)
     parser.add_argument("--source_reliability_forbid_fixed_when_scene_nonfixed", action="store_true")
+    parser.add_argument("--source_reliability_enable_calibrated_lcb", action="store_true")
+    parser.add_argument(
+        "--source_reliability_calibrated_lcb_mode",
+        choices=["calibrated_lcb", "raw_incumbent"],
+        default="calibrated_lcb",
+    )
+    parser.add_argument("--source_reliability_calibration_quantile", type=float, default=0.80)
+    parser.add_argument("--source_reliability_calibration_scale", type=float, default=1.0)
+    parser.add_argument("--source_reliability_calibration_min_samples", type=int, default=12)
     parser.add_argument("--source_reliability_enable_ood_guard", action="store_true")
     parser.add_argument("--source_reliability_ood_quantile", type=float, default=0.90)
     parser.add_argument("--source_reliability_ood_min_samples", type=int, default=4)

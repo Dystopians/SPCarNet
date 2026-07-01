@@ -2,6 +2,65 @@
 
 Date: 2026-06-28
 
+# 2026-07-01 v321G Feedback Addendum: Reflection Finally Produced a Clean Incumbent Upgrade
+
+New files:
+
+```text
+docs/car_model/7-01-v321G-RawMarginAccept10-Log.md
+docs/car_model/results/v321g_full9_apply_metrics_vs_prior_summary.json
+docs/car_model/results/v321g_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v321g_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v321g_frontier_panels/
+outputs/carnet/spcarnet_v321g_rawmargin_accept10_full9_20260701
+outputs/carnet/spcarnet_v321g_frontier_comparison_full9_20260701
+```
+
+Implemented change:
+
+The current source reliability policy now treats v319c as a true incumbent.
+Raw source predictions choose the auto-margin. Calibrated LCB can only provide
+diagnostics/limited fallback behavior; it cannot silently change the raw
+incumbent threshold. The final v321G policy also uses a `0.10` source accept
+support floor, which rejects the low-support margin that caused the v321E/F
+bonsai regression.
+
+Full9 apply result:
+
+| method | PSNR gain | SSIM gain | mean min PSNR | mean CVaR10 PSNR | negative views | safe scenes |
+|---|---:|---:|---:|---:|---:|---:|
+| v319c | +0.269725 | +0.003720 | +0.014301 | +0.039726 | 8 | 9/9 |
+| v321E | +0.270871 | +0.003725 | +0.014301 | +0.039726 | 8 | 9/9 |
+| v321G | +0.271248 | +0.003727 | +0.014301 | +0.039726 | 8 | 9/9 |
+
+Clean-frontier result:
+
+| method | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v319c | 27.583642 | 0.028181 | 0.087746 | 0.057678 |
+| v321G | 27.586900 | 0.028173 | 0.087736 | 0.057660 |
+
+Hard lessons for the next model:
+
+- Reflection was not enough as rhetoric. It only helped when translated into
+  no-regression checks against v319c, v321E, and the failing v320/v321F cases.
+- The key failure mode was not lack of a fancier model. It was letting a
+  low-support source-heldout margin (`9.09%` accept fraction on bonsai) override
+  a stronger incumbent.
+- v321G is the cleanest current engineering incumbent: no scene regresses
+  against v319c in apply metrics, and room improves.
+- The scientific bottleneck remains: most scenes tie v319c, so the paper story
+  still cannot claim a broad visual breakthrough.
+- The next model should target tail/visual improvements that affect multiple
+  scenes, not another broad parameter scan.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v319 Feedback Addendum: Incumbent Fallback Worked, Perceptual Hard Gate Failed
 
 New files:

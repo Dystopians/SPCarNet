@@ -1,0 +1,892 @@
+{
+  "scenes": [
+    "bicycle",
+    "bonsai",
+    "counter",
+    "flowers",
+    "garden",
+    "kitchen",
+    "room",
+    "stump",
+    "treehill"
+  ],
+  "comparison_protocol": "All methods are read from local full9 apply reports on the same nine selected Mip-NeRF360 scenes; gains are relative to fixed MeshSplatting apply baseline inside each report.",
+  "v315d": {
+    "aggregate": {
+      "mean_psnr_gain": 0.2691751230961524,
+      "mean_ssim_gain": 0.003718043972504198,
+      "mean_min_psnr_gain": 0.014301479513850524,
+      "mean_cvar10_psnr_gain": 0.03972570852378235,
+      "total_negative_views": 8,
+      "safe_scene_count": 9,
+      "scene_count": 9
+    },
+    "scenes": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11995854884043254,
+        "ssim_gain": 0.00298875093460083,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar10_psnr_gain": -0.04755920221850296,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0007012486457824707,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 5,
+          "hybrid": 20
+        },
+        "source_reliability_decisions": {
+          "null": 25
+        },
+        "risk_model_decisions": {
+          "not_used": 25
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/bicycle/wandb",
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/bicycle/support_transport_apply_report.json"
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain": 0.5677124421175066,
+        "ssim_gain": 0.005785043175156052,
+        "min_psnr_gain": 0.14005710063242205,
+        "cvar10_psnr_gain": 0.21370041880688953,
+        "negative_views": 0,
+        "min_ssim_gain": 0.002852320671081543,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 37
+        },
+        "source_reliability_decisions": {
+          "null": 37
+        },
+        "risk_model_decisions": {
+          "not_used": 37
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/bonsai/wandb",
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/bonsai/support_transport_apply_report.json"
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar10_psnr_gain": 0.06868039773497496,
+        "negative_views": 1,
+        "min_ssim_gain": 0.0011790990829467773,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 30
+        },
+        "source_reliability_decisions": {
+          "null": 30
+        },
+        "risk_model_decisions": {
+          "not_used": 30
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/counter/wandb",
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/counter/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.0923596316861136,
+        "ssim_gain": 0.00411434065211903,
+        "min_psnr_gain": 0.02777446740415357,
+        "cvar10_psnr_gain": 0.027897987886380093,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0005679726600646973,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 13,
+          "learned": 9
+        },
+        "source_reliability_decisions": {
+          "null": 22
+        },
+        "risk_model_decisions": {
+          "not_used": 22
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/flowers/wandb",
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.14401626243899424,
+        "ssim_gain": 0.0019136294722557068,
+        "min_psnr_gain": 0.005628597517468137,
+        "cvar10_psnr_gain": 0.02791200311224884,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0002714395523071289,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 16,
+          "hybrid": 8
+        },
+        "source_reliability_decisions": {
+          "null": 24
+        },
+        "risk_model_decisions": {
+          "not_used": 24
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/garden/wandb",
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0009958744049072266,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 35
+        },
+        "source_reliability_decisions": {
+          "null": 35
+        },
+        "risk_model_decisions": {
+          "not_used": 35
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/kitchen/wandb",
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.42183782192548464,
+        "ssim_gain": 0.004989705024621425,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0008046627044677734,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 39
+        },
+        "source_reliability_decisions": {
+          "null": 39
+        },
+        "risk_model_decisions": {
+          "not_used": 39
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/room/wandb",
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/room/support_transport_apply_report.json"
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "min_ssim_gain": -0.0017296671867370605,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16
+        },
+        "source_reliability_decisions": {
+          "null": 16
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 16
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/stump/wandb",
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09967884204178172,
+        "ssim_gain": 0.0016434755590226916,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0008407831192016602,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 15,
+          "learned": 3
+        },
+        "source_reliability_decisions": {
+          "null": 18
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 13,
+          "candidate": 5
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/treehill/wandb",
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/treehill/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701"
+  },
+  "v319c": {
+    "aggregate": {
+      "mean_psnr_gain": 0.2697253939283558,
+      "mean_ssim_gain": 0.0037200121265260062,
+      "mean_min_psnr_gain": 0.014301479513850524,
+      "mean_cvar10_psnr_gain": 0.03972570852378235,
+      "total_negative_views": 8,
+      "safe_scene_count": 9,
+      "scene_count": 9
+    },
+    "scenes": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11995854884043254,
+        "ssim_gain": 0.00298875093460083,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar10_psnr_gain": -0.04755920221850296,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0007012486457824707,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 5,
+          "hybrid": 20
+        },
+        "source_reliability_decisions": {
+          "not_used": 25
+        },
+        "risk_model_decisions": {
+          "not_used": 25
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/bicycle/wandb",
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/bicycle/support_transport_apply_report.json"
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain": 0.5680114008651865,
+        "ssim_gain": 0.005784803145640605,
+        "min_psnr_gain": 0.14005710063242205,
+        "cvar10_psnr_gain": 0.21370041880688953,
+        "negative_views": 0,
+        "min_ssim_gain": 0.002852320671081543,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 36,
+          "hybrid": 1
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 22,
+          "candidate": 15
+        },
+        "risk_model_decisions": {
+          "not_used": 37
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/bonsai/wandb",
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/bonsai/support_transport_apply_report.json"
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar10_psnr_gain": 0.06868039773497496,
+        "negative_views": 1,
+        "min_ssim_gain": 0.0011790990829467773,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 30
+        },
+        "source_reliability_decisions": {
+          "candidate": 13,
+          "incumbent_fallback": 17
+        },
+        "risk_model_decisions": {
+          "not_used": 30
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/counter/wandb",
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/counter/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.0923596316861136,
+        "ssim_gain": 0.00411434065211903,
+        "min_psnr_gain": 0.02777446740415357,
+        "cvar10_psnr_gain": 0.027897987886380093,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0005679726600646973,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 13,
+          "learned": 9
+        },
+        "source_reliability_decisions": {
+          "not_used": 22
+        },
+        "risk_model_decisions": {
+          "not_used": 22
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/flowers/wandb",
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.14450491092673934,
+        "ssim_gain": 0.0019102543592453003,
+        "min_psnr_gain": 0.005628597517468137,
+        "cvar10_psnr_gain": 0.02791200311224884,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0002714395523071289,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 18,
+          "hybrid": 6
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 10,
+          "candidate": 14
+        },
+        "risk_model_decisions": {
+          "not_used": 24
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/garden/wandb",
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0009958744049072266,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 35
+        },
+        "source_reliability_decisions": {
+          "not_used": 35
+        },
+        "risk_model_decisions": {
+          "not_used": 35
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/kitchen/wandb",
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.42183782192548464,
+        "ssim_gain": 0.004989705024621425,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0008046627044677734,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 39
+        },
+        "source_reliability_decisions": {
+          "not_used": 39
+        },
+        "risk_model_decisions": {
+          "not_used": 39
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/room/wandb",
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/room/support_transport_apply_report.json"
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "min_ssim_gain": -0.0017296671867370605,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16
+        },
+        "source_reliability_decisions": {
+          "not_used": 16
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 16
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/stump/wandb",
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.10384367229618736,
+        "ssim_gain": 0.0016648040877448188,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0008407831192016602,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 12,
+          "learned": 6
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 11,
+          "candidate": 7
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 11,
+          "not_used": 7
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/treehill/wandb",
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/treehill/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701"
+  },
+  "v320q50s05": {
+    "aggregate": {
+      "mean_psnr_gain": 0.2682855265690438,
+      "mean_ssim_gain": 0.0037063196123067856,
+      "mean_min_psnr_gain": 0.014002662549555586,
+      "mean_cvar10_psnr_gain": 0.03954685934706327,
+      "total_negative_views": 8,
+      "safe_scene_count": 8,
+      "scene_count": 9
+    },
+    "scenes": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11995854884043254,
+        "ssim_gain": 0.00298875093460083,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar10_psnr_gain": -0.04755920221850296,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0007012486457824707,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 5,
+          "hybrid": 20
+        },
+        "source_reliability_decisions": {
+          "not_used": 25
+        },
+        "risk_model_decisions": {
+          "not_used": 25
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/bicycle/wandb",
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/bicycle/support_transport_apply_report.json"
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain": 0.5677124421175066,
+        "ssim_gain": 0.005785043175156052,
+        "min_psnr_gain": 0.14005710063242205,
+        "cvar10_psnr_gain": 0.21370041880688953,
+        "negative_views": 0,
+        "min_ssim_gain": 0.002852320671081543,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 37
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 35,
+          "candidate": 2
+        },
+        "risk_model_decisions": {
+          "not_used": 37
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/bonsai/wandb",
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/bonsai/support_transport_apply_report.json"
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar10_psnr_gain": 0.06868039773497496,
+        "negative_views": 1,
+        "min_ssim_gain": 0.0011790990829467773,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 30
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 22,
+          "candidate": 8
+        },
+        "risk_model_decisions": {
+          "not_used": 30
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/counter/wandb",
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/counter/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.09009997175326263,
+        "ssim_gain": 0.0040604553439400415,
+        "min_psnr_gain": 0.025085114725499125,
+        "cvar10_psnr_gain": 0.02655331154705287,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0005679726600646973,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 18,
+          "learned": 4
+        },
+        "source_reliability_decisions": {
+          "candidate": 11,
+          "incumbent_fallback": 11
+        },
+        "risk_model_decisions": {
+          "not_used": 22
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/flowers/wandb",
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.14317596393239448,
+        "ssim_gain": 0.0019007399678230286,
+        "min_psnr_gain": 0.005628597517468137,
+        "cvar10_psnr_gain": 0.027647036861104368,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0002714395523071289,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 11,
+          "hybrid": 13
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 19,
+          "candidate": 5
+        },
+        "risk_model_decisions": {
+          "not_used": 24
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/garden/wandb",
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.49144992937725385,
+        "ssim_gain": 0.003916379383632115,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0009958744049072266,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 34,
+          "hybrid": 1
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 24,
+          "candidate": 11
+        },
+        "risk_model_decisions": {
+          "not_used": 35
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/kitchen/wandb",
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.43244284992785537,
+        "ssim_gain": 0.005034426848093669,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0008046627044677734,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 30,
+          "learned": 9
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 30,
+          "candidate": 9
+        },
+        "risk_model_decisions": {
+          "not_used": 39
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/room/wandb",
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/room/support_transport_apply_report.json"
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05261294004473549,
+        "ssim_gain": 0.0011695213615894318,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "min_ssim_gain": -0.0017296671867370605,
+        "safe_vs_fixed": false,
+        "selected_variants": {
+          "fixed": 15,
+          "learned": 1
+        },
+        "source_reliability_decisions": {
+          "not_used": 16
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 15,
+          "candidate": 1
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/stump/wandb",
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09075745623850276,
+        "ssim_gain": 0.0015932122866312663,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0008407831192016602,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 18
+        },
+        "source_reliability_decisions": {
+          "not_used": 18
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 18
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/treehill/wandb",
+        "report_path": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701/treehill/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v320_calibrated_lcb_q50s05_full9_20260701"
+  },
+  "v321e": {
+    "aggregate": {
+      "mean_psnr_gain": 0.2708705127344326,
+      "mean_ssim_gain": 0.003725007887969083,
+      "mean_min_psnr_gain": 0.014301479513850524,
+      "mean_cvar10_psnr_gain": 0.03972570852378235,
+      "total_negative_views": 8,
+      "safe_scene_count": 9,
+      "scene_count": 9
+    },
+    "scenes": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11995854884043254,
+        "ssim_gain": 0.00298875093460083,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar10_psnr_gain": -0.04755920221850296,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0007012486457824707,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 5,
+          "hybrid": 20
+        },
+        "source_reliability_decisions": {
+          "not_used": 25
+        },
+        "risk_model_decisions": {
+          "not_used": 25
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/bicycle/wandb",
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/bicycle/support_transport_apply_report.json"
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain": 0.5677124421175066,
+        "ssim_gain": 0.005785043175156052,
+        "min_psnr_gain": 0.14005710063242205,
+        "cvar10_psnr_gain": 0.21370041880688953,
+        "negative_views": 0,
+        "min_ssim_gain": 0.002852320671081543,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 37
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 34,
+          "candidate": 3
+        },
+        "risk_model_decisions": {
+          "not_used": 37
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/bonsai/wandb",
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/bonsai/support_transport_apply_report.json"
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar10_psnr_gain": 0.06868039773497496,
+        "negative_views": 1,
+        "min_ssim_gain": 0.0011790990829467773,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 30
+        },
+        "source_reliability_decisions": {
+          "candidate": 13,
+          "incumbent_fallback": 17
+        },
+        "risk_model_decisions": {
+          "not_used": 30
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/counter/wandb",
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/counter/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.0923596316861136,
+        "ssim_gain": 0.00411434065211903,
+        "min_psnr_gain": 0.02777446740415357,
+        "cvar10_psnr_gain": 0.027897987886380093,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0005679726600646973,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 13,
+          "learned": 9
+        },
+        "source_reliability_decisions": {
+          "not_used": 22
+        },
+        "risk_model_decisions": {
+          "not_used": 22
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/flowers/wandb",
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.14450491092673934,
+        "ssim_gain": 0.0019102543592453003,
+        "min_psnr_gain": 0.005628597517468137,
+        "cvar10_psnr_gain": 0.02791200311224884,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0002714395523071289,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 18,
+          "hybrid": 6
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 10,
+          "candidate": 14
+        },
+        "risk_model_decisions": {
+          "not_used": 24
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/garden/wandb",
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0009958744049072266,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 35
+        },
+        "source_reliability_decisions": {
+          "not_used": 35
+        },
+        "risk_model_decisions": {
+          "not_used": 35
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/kitchen/wandb",
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.43244284992785537,
+        "ssim_gain": 0.005034426848093669,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0008046627044677734,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 30,
+          "learned": 9
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 30,
+          "candidate": 9
+        },
+        "risk_model_decisions": {
+          "not_used": 39
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/room/wandb",
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/room/support_transport_apply_report.json"
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "min_ssim_gain": -0.0017296671867370605,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16
+        },
+        "source_reliability_decisions": {
+          "not_used": 16
+        },
+        "risk_model_decisions": {
+          "not_used": 16
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/stump/wandb",
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.10384367229618736,
+        "ssim_gain": 0.0016648040877448188,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0008407831192016602,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 12,
+          "learned": 6
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 11,
+          "candidate": 7
+        },
+        "risk_model_decisions": {
+          "not_used": 18
+        },
+        "wandb_dir": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/treehill/wandb",
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701/treehill/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_full9_20260701"
+  },
+  "v321e_minus_v315d": {
+    "mean_psnr_gain": 0.001695389638280198,
+    "mean_ssim_gain": 6.963915464884909e-06,
+    "mean_min_psnr_gain": 0.0,
+    "mean_cvar10_psnr_gain": 0.0,
+    "total_negative_views": 0,
+    "safe_scene_count": 0
+  },
+  "v321e_minus_v319c": {
+    "mean_psnr_gain": 0.0011451188060767614,
+    "mean_ssim_gain": 4.99576144307682e-06,
+    "mean_min_psnr_gain": 0.0,
+    "mean_cvar10_psnr_gain": 0.0,
+    "total_negative_views": 0,
+    "safe_scene_count": 0
+  },
+  "v321e_minus_v320q50s05": {
+    "mean_psnr_gain": 0.0025849861653887696,
+    "mean_ssim_gain": 1.8688275662297454e-05,
+    "mean_min_psnr_gain": 0.00029881696429493766,
+    "mean_cvar10_psnr_gain": 0.00017884917671907863,
+    "total_negative_views": 0,
+    "safe_scene_count": 1
+  },
+  "verdict": {
+    "status": "V321E_FULL9_PASSES_ENGINEERING_INCUMBENT",
+    "reason": "v321e improves mean PSNR/SSIM over v319c while preserving full 9/9 scene safety, tail PSNR, and negative-view count; the gain is concentrated in room and the method remains below a paper-level universal improvement claim."
+  }
+}

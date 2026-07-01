@@ -1,0 +1,205 @@
+{
+  "v319c": {
+    "aggregate": {
+      "mean_psnr_gain": 0.21886649312668874,
+      "mean_ssim_gain": 0.0029663679748663306,
+      "mean_min_psnr_gain": 0.008716460033653561,
+      "mean_cvar10_psnr_gain": 0.020451627065113265,
+      "total_negative_views": 5,
+      "safe_scene_count": 6,
+      "scene_count": 6
+    },
+    "scenes": [
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.10384367229618736,
+        "ssim_gain": 0.0016648040877448188,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 12,
+          "learned": 6
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/treehill/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.0923596316861136,
+        "ssim_gain": 0.00411434065211903,
+        "min_psnr_gain": 0.02777446740415357,
+        "cvar10_psnr_gain": 0.027897987886380093,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 13,
+          "learned": 9
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.14450491092673934,
+        "ssim_gain": 0.0019102543592453003,
+        "min_psnr_gain": 0.005628597517468137,
+        "cvar10_psnr_gain": 0.02791200311224884,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 18,
+          "hybrid": 6
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 35
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.42183782192548464,
+        "ssim_gain": 0.004989705024621425,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 39
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/room/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701"
+  },
+  "v321e": {
+    "aggregate": {
+      "mean_psnr_gain": 0.22063399779375054,
+      "mean_ssim_gain": 0.0029738216121117044,
+      "mean_min_psnr_gain": 0.008716460033653561,
+      "mean_cvar10_psnr_gain": 0.020451627065113265,
+      "total_negative_views": 5,
+      "safe_scene_count": 6,
+      "scene_count": 6
+    },
+    "scenes": [
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16
+        },
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_focused_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.10384367229618736,
+        "ssim_gain": 0.0016648040877448188,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 12,
+          "learned": 6
+        },
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_focused_20260701/treehill/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.0923596316861136,
+        "ssim_gain": 0.00411434065211903,
+        "min_psnr_gain": 0.02777446740415357,
+        "cvar10_psnr_gain": 0.027897987886380093,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 13,
+          "learned": 9
+        },
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_focused_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.14450491092673934,
+        "ssim_gain": 0.0019102543592453003,
+        "min_psnr_gain": 0.005628597517468137,
+        "cvar10_psnr_gain": 0.02791200311224884,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 18,
+          "hybrid": 6
+        },
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_focused_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 35
+        },
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_focused_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.43244284992785537,
+        "ssim_gain": 0.005034426848093669,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 30,
+          "learned": 9
+        },
+        "report_path": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_focused_20260701/room/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v321e_fixedrisk_sourcesafe_focused_20260701"
+  },
+  "v321e_minus_v319c": {
+    "mean_psnr_gain": 0.0017675046670617978,
+    "mean_ssim_gain": 7.453637245373804e-06,
+    "mean_min_psnr_gain": 0.0,
+    "mean_cvar10_psnr_gain": 0.0,
+    "total_negative_views": 0,
+    "safe_scene_count": 0
+  },
+  "verdict": {
+    "status": "FOCUSED_PASS",
+    "reason": "v321e matches v319c on stump/treehill/flowers/garden/kitchen and improves room, with all six scenes safe; launch full9."
+  }
+}
