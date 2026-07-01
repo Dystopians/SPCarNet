@@ -141,6 +141,56 @@ The next real method should combine TNC with source-heldout evidence,
 support-dropout stability, and conservative hard-control safeguards instead of
 using target-neighbor MAE as the selector.
 
+## 2026-07-01 Follow-up: v338 Combined TNC Ranker Negative Reflection
+
+Newest negative method investigation:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v338-CombinedTNCRanker-NegativeReflection.md
+docs/car_model/results/v338_combined_ranker_focus6_oracle_gap.json
+docs/car_model/results/v338_combined_ranker_focus6_oracle_gap.md
+docs/car_model/results/v338b_combined_ranker_focus6_oracle_gap.json
+docs/car_model/results/v338b_combined_ranker_focus6_oracle_gap.md
+docs/car_model/results/v338_combined_ranker_focus6_rejection_and_relaxation_diagnostic.json
+docs/car_model/results/v338_combined_ranker_focus6_rejection_and_relaxation_diagnostic.md
+outputs/carnet/spcarnet_v338_combined_ranker_smoke3_room_20260701
+outputs/carnet/spcarnet_v338_combined_ranker_focus6_20260701
+outputs/carnet/spcarnet_v338b_rank1_cvar002_focus6_20260701
+```
+
+v338 implements the natural follow-up to v337: an opt-in
+`--enable_target_neighbor_combined_candidate_ranker` branch that computes
+all-candidate target-neighbor consistency without target/test GT, then combines
+that signal with source-heldout KNN local evidence and source-summary safety
+checks. It writes per-view diagnostics, policy summaries, markdown report
+sections, and W&B metrics. The pure all-candidate TNC diagnostic remains
+non-selecting unless the combined ranker is explicitly enabled.
+
+The result is diagnostic, not positive. On the same focus6 scenes and 170 target
+views, both v338 default and v338b rank1/cvar002 produced zero promotions and
+the same macro metrics as v337diag:
+
+| method | selected PSNR gain | selected SSIM gain | promotions | oracle headroom |
+|---|---:|---:|---:|---:|
+| v337diag | 0.301231403771 | 0.003460387180 | n/a | +0.012506552 |
+| v338 default | 0.301231403771 | 0.003460387180 | 0 | +0.012506552 |
+| v338b rank1/cvar002 | 0.301231403771 | 0.003460387180 | 0 | +0.012506552 |
+
+The main rejection reasons were `target_neighbor_rank`,
+`fixed_when_incumbent_nonfixed`, and source-local SSIM/PSNR/CVaR guards. A
+post-hoc relaxed-policy diagnostic over saved v338b reports found that even the
+best posterior relaxed setting gives only `+0.000240408751` PSNR and
+`+0.000004195381` SSIM, while causing `10` bad promotions and `room` regression.
+That simulation uses target GT only after the fact, so it is not a fair selector;
+it only shows that relaxing the ranker is not a stable research path.
+
+Current conclusion: reflection helped at the diagnosis level but has not yet
+worked at the method level. v338 should stay as a negative result and
+observability tool. The next real step should improve candidate-generation
+capacity itself, using TNC as a training/evidence signal rather than as another
+thresholded ranker.
+
 ## 2026-07-01 Follow-up: v335 Target-Neighbor Candidate Unlock
 
 Newest positive method update:

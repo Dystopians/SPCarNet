@@ -1,0 +1,4516 @@
+{
+  "schema_version": 1,
+  "root": "outputs/carnet/spcarnet_v338b_rank1_cvar002_focus6_20260701",
+  "read_only_posthoc_target_gt_diagnostic": true,
+  "fair_method_selection": false,
+  "base_macro": {
+    "psnr_gain": 0.30123140377110674,
+    "ssim_gain": 0.0034603871801130123
+  },
+  "rejections": {
+    "stump": {
+      "views": 16,
+      "promote_count": 0,
+      "keep_count": 16,
+      "reason_counts": {
+        "no_accepted_candidate": 16
+      },
+      "candidate_reject_reasons": {
+        "target_neighbor_rank": 59,
+        "target_neighbor_margin": 5
+      },
+      "source_local_reasons": {
+        "local_ssim": 46,
+        "passed": 4,
+        "local_psnr,local_ssim,local_cvar": 5,
+        "local_psnr,local_cvar": 1,
+        "local_cvar": 2,
+        "local_ssim,local_cvar": 2,
+        "local_psnr,local_ssim": 4
+      },
+      "candidate_variants": {
+        "learned": 16,
+        "hybrid": 16,
+        "mix0250": 16,
+        "mix0750": 16
+      },
+      "candidate_reject_count": 64
+    },
+    "treehill": {
+      "views": 18,
+      "promote_count": 0,
+      "keep_count": 18,
+      "reason_counts": {
+        "no_accepted_candidate": 18
+      },
+      "candidate_reject_reasons": {
+        "source_local:local_ssim": 3,
+        "target_neighbor_rank": 54,
+        "fixed_when_incumbent_nonfixed": 13,
+        "target_neighbor_margin": 2
+      },
+      "source_local_reasons": {
+        "local_ssim": 37,
+        "passed": 17,
+        "local_psnr": 9,
+        "local_psnr,local_ssim,local_cvar": 3,
+        "local_cvar": 2,
+        "local_psnr,local_cvar": 4
+      },
+      "candidate_variants": {
+        "learned": 12,
+        "hybrid": 18,
+        "mix0250": 11,
+        "mix0750": 18,
+        "fixed": 13
+      },
+      "candidate_reject_count": 72
+    },
+    "room": {
+      "views": 39,
+      "promote_count": 0,
+      "keep_count": 39,
+      "reason_counts": {
+        "no_accepted_candidate": 39
+      },
+      "candidate_reject_reasons": {
+        "fixed_when_incumbent_nonfixed": 39,
+        "target_neighbor_rank": 149,
+        "target_neighbor_margin": 7
+      },
+      "source_local_reasons": {
+        "local_psnr,local_ssim": 44,
+        "local_psnr,local_cvar": 27,
+        "passed": 35,
+        "local_psnr,local_ssim,local_cvar": 17,
+        "local_ssim": 42,
+        "local_ssim,local_cvar": 2,
+        "local_psnr": 17,
+        "local_cvar": 11
+      },
+      "candidate_variants": {
+        "fixed": 39,
+        "learned": 25,
+        "hybrid": 28,
+        "mix0250": 39,
+        "mix0750": 39,
+        "adaptive": 25
+      },
+      "candidate_reject_count": 195
+    },
+    "bicycle": {
+      "views": 25,
+      "promote_count": 0,
+      "keep_count": 25,
+      "reason_counts": {
+        "no_accepted_candidate": 25
+      },
+      "candidate_reject_reasons": {
+        "fixed_when_incumbent_nonfixed": 25,
+        "target_neighbor_rank": 66,
+        "target_neighbor_margin": 8,
+        "source_local:local_psnr,local_ssim,local_cvar": 1
+      },
+      "source_local_reasons": {
+        "local_psnr,local_ssim,local_cvar": 7,
+        "local_psnr,local_cvar": 6,
+        "local_psnr": 35,
+        "local_psnr,local_ssim": 17,
+        "local_cvar": 2,
+        "local_ssim": 22,
+        "passed": 11
+      },
+      "candidate_variants": {
+        "fixed": 25,
+        "hybrid": 5,
+        "mix0250": 25,
+        "mix0750": 25,
+        "learned": 20
+      },
+      "candidate_reject_count": 100
+    },
+    "bonsai": {
+      "views": 37,
+      "promote_count": 0,
+      "keep_count": 37,
+      "reason_counts": {
+        "no_accepted_candidate": 37
+      },
+      "candidate_reject_reasons": {
+        "fixed_when_incumbent_nonfixed": 34,
+        "target_neighbor_rank": 109,
+        "target_neighbor_margin": 5
+      },
+      "source_local_reasons": {
+        "local_psnr,local_ssim": 52,
+        "local_ssim": 4,
+        "passed": 22,
+        "local_psnr,local_cvar": 5,
+        "local_cvar": 1,
+        "local_psnr,local_ssim,local_cvar": 48,
+        "local_psnr": 16
+      },
+      "candidate_variants": {
+        "fixed": 34,
+        "hybrid": 36,
+        "mix0250": 37,
+        "mix0750": 37,
+        "learned": 4
+      },
+      "candidate_reject_count": 148
+    },
+    "kitchen": {
+      "views": 35,
+      "promote_count": 0,
+      "keep_count": 35,
+      "reason_counts": {
+        "no_accepted_candidate": 35
+      },
+      "candidate_reject_reasons": {
+        "fixed_when_incumbent_nonfixed": 35,
+        "target_neighbor_rank": 102,
+        "target_neighbor_margin": 3
+      },
+      "source_local_reasons": {
+        "local_psnr,local_ssim": 15,
+        "local_psnr": 23,
+        "passed": 24,
+        "local_psnr,local_ssim,local_cvar": 46,
+        "local_psnr,local_cvar": 17,
+        "local_ssim": 9,
+        "local_ssim,local_cvar": 3,
+        "local_cvar": 3
+      },
+      "candidate_variants": {
+        "fixed": 35,
+        "hybrid": 35,
+        "mix0250": 35,
+        "mix0750": 35
+      },
+      "candidate_reject_count": 140
+    }
+  },
+  "top_by_macro_psnr": [
+    {
+      "name": "r3_m-0.0001_lp-0.002_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": -0.0001,
+        "local_psnr": -0.002,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": 0.00024040875104769377,
+      "macro_dssim": 4.195380943599822e-06,
+      "promotions": 18,
+      "bad_promotions": 10,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.002031375288812809,
+          "dssim": 1.1298805475234985e-05,
+          "promotions": 3,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00010",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.010165797953501254,
+              "dssim": 3.606081008911133e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 6.013077030651848e-06
+            },
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            },
+            {
+              "view": "00012",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.01417196467340176,
+              "dssim": 6.413459777832031e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -3.726694575208189e-05
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.0018398357325316445,
+          "dssim": 1.2543466356065586e-05,
+          "promotions": 1,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00011",
+              "from": "mix0250",
+              "to": "hybrid",
+              "dpsnr": 0.03311704318556963,
+              "dssim": 0.0002257823944091797,
+              "tnc_rank": 3,
+              "tnc_delta": -7.662643942995401e-05
+            }
+          ]
+        },
+        "room": {
+          "dpsnr": -0.004019369857171884,
+          "dssim": -2.487347676203861e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.005742985262500611,
+              "dssim": 6.574392318725586e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0001849247791040412
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.003897911656654429,
+              "dssim": -0.0005273222923278809,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00019327140121534747
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.0009069995387123719,
+          "dssim": 1.1801719665527344e-05,
+          "promotions": 5,
+          "bad_promotions": 2,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0006836118034008187,
+          "dssim": 1.4401770926810928e-05,
+          "promotions": 5,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00014",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.0020712062804584264,
+              "dssim": 2.1755695343017578e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -4.318829883980663e-06
+            },
+            {
+              "view": "00017",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021710900564254842,
+              "dssim": -3.8504600524902344e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -2.300579087274879e-06
+            },
+            {
+              "view": "00019",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021735014377572526,
+              "dssim": -0.00021445751190185547,
+              "tnc_rank": 2,
+              "tnc_delta": -3.0579387245689704e-05
+            },
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            },
+            {
+              "view": "00035",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": 0.07101859450906645,
+              "dssim": 0.0007387995719909668,
+              "tnc_rank": 2,
+              "tnc_delta": -3.2410726781617605e-05
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r3_m-0.0001_lp0.0_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": -0.0001,
+        "local_psnr": 0.0,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": 0.00015645001554726035,
+      "macro_dssim": 2.8979865089890505e-06,
+      "promotions": 17,
+      "bad_promotions": 10,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.002031375288812809,
+          "dssim": 1.1298805475234985e-05,
+          "promotions": 3,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00010",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.010165797953501254,
+              "dssim": 3.606081008911133e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 6.013077030651848e-06
+            },
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            },
+            {
+              "view": "00012",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.01417196467340176,
+              "dssim": 6.413459777832031e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -3.726694575208189e-05
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.0018398357325316445,
+          "dssim": 1.2543466356065586e-05,
+          "promotions": 1,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00011",
+              "from": "mix0250",
+              "to": "hybrid",
+              "dpsnr": 0.03311704318556963,
+              "dssim": 0.0002257823944091797,
+              "tnc_rank": 3,
+              "tnc_delta": -7.662643942995401e-05
+            }
+          ]
+        },
+        "room": {
+          "dpsnr": -0.004019369857171884,
+          "dssim": -2.487347676203861e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.005742985262500611,
+              "dssim": 6.574392318725586e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0001849247791040412
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.003897911656654429,
+              "dssim": -0.0005273222923278809,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00019327140121534747
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.0004032471257100628,
+          "dssim": 4.017353057861415e-06,
+          "promotions": 4,
+          "bad_promotions": 2,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0006836118034008187,
+          "dssim": 1.4401770926810928e-05,
+          "promotions": 5,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00014",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.0020712062804584264,
+              "dssim": 2.1755695343017578e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -4.318829883980663e-06
+            },
+            {
+              "view": "00017",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021710900564254842,
+              "dssim": -3.8504600524902344e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -2.300579087274879e-06
+            },
+            {
+              "view": "00019",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021735014377572526,
+              "dssim": -0.00021445751190185547,
+              "tnc_rank": 2,
+              "tnc_delta": -3.0579387245689704e-05
+            },
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            },
+            {
+              "view": "00035",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": 0.07101859450906645,
+              "dssim": 0.0007387995719909668,
+              "tnc_rank": 2,
+              "tnc_delta": -3.2410726781617605e-05
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r3_m-0.0001_lp-0.005_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": -0.0001,
+        "local_psnr": -0.005,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": 0.00010802228754902554,
+      "macro_dssim": 2.83076750508867e-06,
+      "promotions": 24,
+      "bad_promotions": 14,
+      "nonnegative_psnr_scenes": 4,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.002031375288812809,
+          "dssim": 1.1298805475234985e-05,
+          "promotions": 3,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00010",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.010165797953501254,
+              "dssim": 3.606081008911133e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 6.013077030651848e-06
+            },
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            },
+            {
+              "view": "00012",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.01417196467340176,
+              "dssim": 6.413459777832031e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -3.726694575208189e-05
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.0018398357325316445,
+          "dssim": 1.2543466356065586e-05,
+          "promotions": 1,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00011",
+              "from": "mix0250",
+              "to": "hybrid",
+              "dpsnr": 0.03311704318556963,
+              "dssim": 0.0002257823944091797,
+              "tnc_rank": 3,
+              "tnc_delta": -7.662643942995401e-05
+            }
+          ]
+        },
+        "room": {
+          "dpsnr": -0.004019369857171884,
+          "dssim": -2.487347676203861e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.005742985262500611,
+              "dssim": 6.574392318725586e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0001849247791040412
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.003897911656654429,
+              "dssim": -0.0005273222923278809,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00019327140121534747
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.001071875583666615,
+          "dssim": 1.2524127960205234e-05,
+          "promotions": 10,
+          "bad_promotions": 5,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00008",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.003085888973338058,
+              "dssim": 0.00013566017150878906,
+              "tnc_rank": 2,
+              "tnc_delta": 2.0135246058518297e-05
+            },
+            {
+              "view": "00009",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.0066222472314585445,
+              "dssim": 6.54458999633789e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 0.0001365304421893851
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            },
+            {
+              "view": "00022",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.001636755216399166,
+              "dssim": -7.927417755126953e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 1.8552261041512863e-05
+            },
+            {
+              "view": "00023",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.005242785940676953,
+              "dssim": -0.0001442432403564453,
+              "tnc_rank": 2,
+              "tnc_delta": 7.884197620520311e-05
+            },
+            {
+              "view": "00024",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.001980204356662796,
+              "dssim": 4.0471553802490234e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 1.4307425697288045e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": -0.00027558302254537814,
+          "dssim": 5.491682001063092e-06,
+          "promotions": 6,
+          "bad_promotions": 5,
+          "views": [
+            {
+              "view": "00014",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.0020712062804584264,
+              "dssim": 2.1755695343017578e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -4.318829883980663e-06
+            },
+            {
+              "view": "00017",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021710900564254842,
+              "dssim": -3.8504600524902344e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -2.300579087274879e-06
+            },
+            {
+              "view": "00019",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021735014377572526,
+              "dssim": -0.00021445751190185547,
+              "tnc_rank": 2,
+              "tnc_delta": -3.0579387245689704e-05
+            },
+            {
+              "view": "00026",
+              "from": "fixed",
+              "to": "hybrid",
+              "dpsnr": -0.035490208560009506,
+              "dssim": -0.00032967329025268555,
+              "tnc_rank": 3,
+              "tnc_delta": 3.3072028749372984e-05
+            },
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            },
+            {
+              "view": "00035",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": 0.07101859450906645,
+              "dssim": 0.0007387995719909668,
+              "tnc_rank": 2,
+              "tnc_delta": -3.2410726781617605e-05
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r3_m0.0_lp-0.002_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": 0.0,
+        "local_psnr": -0.002,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.00032872667101402353,
+      "macro_dssim": -8.497211620031933e-07,
+      "promotions": 12,
+      "bad_promotions": 7,
+      "nonnegative_psnr_scenes": 4,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.001145627496725199,
+          "dssim": 7.290393114089966e-06,
+          "promotions": 2,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00010",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.010165797953501254,
+              "dssim": 3.606081008911133e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 6.013077030651848e-06
+            },
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "room": {
+          "dpsnr": -0.004019369857171884,
+          "dssim": -2.487347676203861e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.005742985262500611,
+              "dssim": 6.574392318725586e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0001849247791040412
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.003897911656654429,
+              "dssim": -0.0005273222923278809,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00019327140121534747
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.0009069995387123719,
+          "dssim": 1.1801719665527344e-05,
+          "promotions": 5,
+          "bad_promotions": 2,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": -5.617204349994687e-06,
+          "dssim": 6.830370103995398e-07,
+          "promotions": 1,
+          "bad_promotions": 1,
+          "views": [
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r3_m0.0_lp0.0_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": 0.0,
+        "local_psnr": 0.0,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.00041268540651440144,
+      "macro_dssim": -2.147115596614832e-06,
+      "promotions": 11,
+      "bad_promotions": 7,
+      "nonnegative_psnr_scenes": 4,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.001145627496725199,
+          "dssim": 7.290393114089966e-06,
+          "promotions": 2,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00010",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.010165797953501254,
+              "dssim": 3.606081008911133e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 6.013077030651848e-06
+            },
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "room": {
+          "dpsnr": -0.004019369857171884,
+          "dssim": -2.487347676203861e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.005742985262500611,
+              "dssim": 6.574392318725586e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0001849247791040412
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.003897911656654429,
+              "dssim": -0.0005273222923278809,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00019327140121534747
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.0004032471257100628,
+          "dssim": 4.017353057861415e-06,
+          "promotions": 4,
+          "bad_promotions": 2,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": -5.617204349994687e-06,
+          "dssim": 6.830370103995398e-07,
+          "promotions": 1,
+          "bad_promotions": 1,
+          "views": [
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r3_m0.0_lp-0.005_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": 0.0,
+        "local_psnr": -0.005,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.00046111313451269176,
+      "macro_dssim": -2.2143346005152123e-06,
+      "promotions": 18,
+      "bad_promotions": 11,
+      "nonnegative_psnr_scenes": 4,
+      "nonnegative_ssim_scenes": 4,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.001145627496725199,
+          "dssim": 7.290393114089966e-06,
+          "promotions": 2,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00010",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.010165797953501254,
+              "dssim": 3.606081008911133e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 6.013077030651848e-06
+            },
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "room": {
+          "dpsnr": -0.004019369857171884,
+          "dssim": -2.487347676203861e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.005742985262500611,
+              "dssim": 6.574392318725586e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0001849247791040412
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.003897911656654429,
+              "dssim": -0.0005273222923278809,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00019327140121534747
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.001071875583666615,
+          "dssim": 1.2524127960205234e-05,
+          "promotions": 10,
+          "bad_promotions": 5,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00008",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.003085888973338058,
+              "dssim": 0.00013566017150878906,
+              "tnc_rank": 2,
+              "tnc_delta": 2.0135246058518297e-05
+            },
+            {
+              "view": "00009",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.0066222472314585445,
+              "dssim": 6.54458999633789e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 0.0001365304421893851
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            },
+            {
+              "view": "00022",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.001636755216399166,
+              "dssim": -7.927417755126953e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 1.8552261041512863e-05
+            },
+            {
+              "view": "00023",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.005242785940676953,
+              "dssim": -0.0001442432403564453,
+              "tnc_rank": 2,
+              "tnc_delta": 7.884197620520311e-05
+            },
+            {
+              "view": "00024",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.001980204356662796,
+              "dssim": 4.0471553802490234e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 1.4307425697288045e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": -0.0009648120302961916,
+          "dssim": -8.227051915349164e-06,
+          "promotions": 2,
+          "bad_promotions": 2,
+          "views": [
+            {
+              "view": "00026",
+              "from": "fixed",
+              "to": "hybrid",
+              "dpsnr": -0.035490208560009506,
+              "dssim": -0.00032967329025268555,
+              "tnc_rank": 3,
+              "tnc_delta": 3.3072028749372984e-05
+            },
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r3_m-0.0001_lp-0.02_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": -0.0001,
+        "local_psnr": -0.02,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.0005683911427861732,
+      "macro_dssim": -1.74075761489971e-06,
+      "promotions": 31,
+      "bad_promotions": 20,
+      "nonnegative_psnr_scenes": 3,
+      "nonnegative_ssim_scenes": 4,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.002031375288812809,
+          "dssim": 1.1298805475234985e-05,
+          "promotions": 3,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00010",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.010165797953501254,
+              "dssim": 3.606081008911133e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 6.013077030651848e-06
+            },
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            },
+            {
+              "view": "00012",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.01417196467340176,
+              "dssim": 6.413459777832031e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -3.726694575208189e-05
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": -4.9141374501279755e-05,
+          "dssim": 2.447101804945156e-06,
+          "promotions": 3,
+          "bad_promotions": 2,
+          "views": [
+            {
+              "view": "00011",
+              "from": "mix0250",
+              "to": "hybrid",
+              "dpsnr": 0.03311704318556963,
+              "dssim": 0.0002257823944091797,
+              "tnc_rank": 3,
+              "tnc_delta": -7.662643942995401e-05
+            },
+            {
+              "view": "00013",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.018924717990319806,
+              "dssim": 2.765655517578125e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -1.1390416965434413e-05
+            },
+            {
+              "view": "00015",
+              "from": "mix0250",
+              "to": "fixed",
+              "dpsnr": -0.015076869936272885,
+              "dssim": -0.00020939111709594727,
+              "tnc_rank": 1,
+              "tnc_delta": 4.4425695274533106e-05
+            }
+          ]
+        },
+        "room": {
+          "dpsnr": -0.005253158086763521,
+          "dssim": -2.4064993247007935e-05,
+          "promotions": 6,
+          "bad_promotions": 6,
+          "views": [
+            {
+              "view": "00004",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.047708789414617314,
+              "dssim": 0.00015342235565185547,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0005222097050131165
+            },
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.005742985262500611,
+              "dssim": 6.574392318725586e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0001849247791040412
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.003897911656654429,
+              "dssim": -0.0005273222923278809,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00019327140121534747
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            },
+            {
+              "view": "00031",
+              "from": "adaptive",
+              "to": "hybrid",
+              "dpsnr": -0.0004089515394554155,
+              "dssim": -0.00012189149856567383,
+              "tnc_rank": 3,
+              "tnc_delta": 9.408220648765564e-05
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.00013616033828028895,
+          "dssim": -5.617141723632691e-06,
+          "promotions": 13,
+          "bad_promotions": 7,
+          "views": [
+            {
+              "view": "00001",
+              "from": "learned",
+              "to": "hybrid",
+              "dpsnr": -0.03342638659696817,
+              "dssim": -0.0007392764091491699,
+              "tnc_rank": 3,
+              "tnc_delta": 7.520077468914366e-05
+            },
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00006",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004101465184064068,
+              "dssim": -2.3186206817626953e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00022310333811435823
+            },
+            {
+              "view": "00008",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.003085888973338058,
+              "dssim": 0.00013566017150878906,
+              "tnc_rank": 2,
+              "tnc_delta": 2.0135246058518297e-05
+            },
+            {
+              "view": "00009",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.0066222472314585445,
+              "dssim": 6.54458999633789e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 0.0001365304421893851
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            },
+            {
+              "view": "00016",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014134970646374256,
+              "dssim": 0.0003089308738708496,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00015107881793872263
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            },
+            {
+              "view": "00022",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.001636755216399166,
+              "dssim": -7.927417755126953e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 1.8552261041512863e-05
+            },
+            {
+              "view": "00023",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.005242785940676953,
+              "dssim": -0.0001442432403564453,
+              "tnc_rank": 2,
+              "tnc_delta": 7.884197620520311e-05
+            },
+            {
+              "view": "00024",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.001980204356662796,
+              "dssim": 4.0471553802490234e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 1.4307425697288045e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": -0.00027558302254537814,
+          "dssim": 5.491682001063092e-06,
+          "promotions": 6,
+          "bad_promotions": 5,
+          "views": [
+            {
+              "view": "00014",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.0020712062804584264,
+              "dssim": 2.1755695343017578e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -4.318829883980663e-06
+            },
+            {
+              "view": "00017",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021710900564254842,
+              "dssim": -3.8504600524902344e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -2.300579087274879e-06
+            },
+            {
+              "view": "00019",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021735014377572526,
+              "dssim": -0.00021445751190185547,
+              "tnc_rank": 2,
+              "tnc_delta": -3.0579387245689704e-05
+            },
+            {
+              "view": "00026",
+              "from": "fixed",
+              "to": "hybrid",
+              "dpsnr": -0.035490208560009506,
+              "dssim": -0.00032967329025268555,
+              "tnc_rank": 3,
+              "tnc_delta": 3.3072028749372984e-05
+            },
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            },
+            {
+              "view": "00035",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": 0.07101859450906645,
+              "dssim": 0.0007387995719909668,
+              "tnc_rank": 2,
+              "tnc_delta": -3.2410726781617605e-05
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r2_m-0.0001_lp-0.005_ls-5e-05",
+      "config": {
+        "max_rank": 2,
+        "margin": -0.0001,
+        "local_psnr": -0.005,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.0006095559920712423,
+      "macro_dssim": -1.599347172831847e-06,
+      "promotions": 21,
+      "bad_promotions": 13,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.0013960129167189805,
+          "dssim": 9.045004844665527e-06,
+          "promotions": 2,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            },
+            {
+              "view": "00012",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.01417196467340176,
+              "dssim": 6.413459777832031e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -3.726694575208189e-05
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "room": {
+          "dpsnr": -0.006808836256214146,
+          "dssim": -4.556698676867407e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02531354811278419,
+              "dssim": -4.869699478149414e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0002679742756382178
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02037046228925732,
+              "dssim": -0.0009766221046447754,
+              "tnc_rank": 1,
+              "tnc_delta": 0.00029748381442018523
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.20870863448288546,
+              "dssim": -0.00044232606887817383,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0003395675395581922
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.001071875583666615,
+          "dssim": 1.2524127960205234e-05,
+          "promotions": 10,
+          "bad_promotions": 5,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00008",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.003085888973338058,
+              "dssim": 0.00013566017150878906,
+              "tnc_rank": 2,
+              "tnc_delta": 2.0135246058518297e-05
+            },
+            {
+              "view": "00009",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.0066222472314585445,
+              "dssim": 6.54458999633789e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 0.0001365304421893851
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            },
+            {
+              "view": "00022",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.001636755216399166,
+              "dssim": -7.927417755126953e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 1.8552261041512863e-05
+            },
+            {
+              "view": "00023",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.005242785940676953,
+              "dssim": -0.0001442432403564453,
+              "tnc_rank": 2,
+              "tnc_delta": 7.884197620520311e-05
+            },
+            {
+              "view": "00024",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.001980204356662796,
+              "dssim": 4.0471553802490234e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 1.4307425697288045e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0006836118034008187,
+          "dssim": 1.4401770926810928e-05,
+          "promotions": 5,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00014",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.0020712062804584264,
+              "dssim": 2.1755695343017578e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -4.318829883980663e-06
+            },
+            {
+              "view": "00017",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021710900564254842,
+              "dssim": -3.8504600524902344e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -2.300579087274879e-06
+            },
+            {
+              "view": "00019",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021735014377572526,
+              "dssim": -0.00021445751190185547,
+              "tnc_rank": 2,
+              "tnc_delta": -3.0579387245689704e-05
+            },
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            },
+            {
+              "view": "00035",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": 0.07101859450906645,
+              "dssim": 0.0007387995719909668,
+              "tnc_rank": 2,
+              "tnc_delta": -3.2410726781617605e-05
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r3_m0.0001_lp-0.005_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": 0.0001,
+        "local_psnr": -0.005,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.0006113641820468252,
+      "macro_dssim": -2.732949379162606e-06,
+      "promotions": 8,
+      "bad_promotions": 5,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "treehill": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "room": {
+          "dpsnr": -0.004019369857171884,
+          "dssim": -2.487347676203861e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.005742985262500611,
+              "dssim": 6.574392318725586e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0001849247791040412
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.003897911656654429,
+              "dssim": -0.0005273222923278809,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00019327140121534747
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.00035118476489075234,
+          "dssim": 8.475780487060807e-06,
+          "promotions": 4,
+          "bad_promotions": 1,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00009",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.0066222472314585445,
+              "dssim": 6.54458999633789e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 0.0001365304421893851
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r2_m-0.0001_lp-0.002_ls-5e-05",
+      "config": {
+        "max_rank": 2,
+        "margin": -0.0001,
+        "local_psnr": -0.002,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.0006370353328969403,
+      "macro_dssim": -1.719748555278379e-06,
+      "promotions": 16,
+      "bad_promotions": 10,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.0013960129167189805,
+          "dssim": 9.045004844665527e-06,
+          "promotions": 2,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            },
+            {
+              "view": "00012",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.01417196467340176,
+              "dssim": 6.413459777832031e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -3.726694575208189e-05
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "room": {
+          "dpsnr": -0.006808836256214146,
+          "dssim": -4.556698676867407e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02531354811278419,
+              "dssim": -4.869699478149414e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0002679742756382178
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02037046228925732,
+              "dssim": -0.0009766221046447754,
+              "tnc_rank": 1,
+              "tnc_delta": 0.00029748381442018523
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.20870863448288546,
+              "dssim": -0.00044232606887817383,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0003395675395581922
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.0009069995387123719,
+          "dssim": 1.1801719665527344e-05,
+          "promotions": 5,
+          "bad_promotions": 2,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0006836118034008187,
+          "dssim": 1.4401770926810928e-05,
+          "promotions": 5,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00014",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.0020712062804584264,
+              "dssim": 2.1755695343017578e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -4.318829883980663e-06
+            },
+            {
+              "view": "00017",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021710900564254842,
+              "dssim": -3.8504600524902344e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -2.300579087274879e-06
+            },
+            {
+              "view": "00019",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021735014377572526,
+              "dssim": -0.00021445751190185547,
+              "tnc_rank": 2,
+              "tnc_delta": -3.0579387245689704e-05
+            },
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            },
+            {
+              "view": "00035",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": 0.07101859450906645,
+              "dssim": 0.0007387995719909668,
+              "tnc_rank": 2,
+              "tnc_delta": -3.2410726781617605e-05
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    }
+  ],
+  "top_by_nonnegative_scene_then_psnr": [
+    {
+      "name": "r3_m-0.0001_lp-0.002_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": -0.0001,
+        "local_psnr": -0.002,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": 0.00024040875104769377,
+      "macro_dssim": 4.195380943599822e-06,
+      "promotions": 18,
+      "bad_promotions": 10,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.002031375288812809,
+          "dssim": 1.1298805475234985e-05,
+          "promotions": 3,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00010",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.010165797953501254,
+              "dssim": 3.606081008911133e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 6.013077030651848e-06
+            },
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            },
+            {
+              "view": "00012",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.01417196467340176,
+              "dssim": 6.413459777832031e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -3.726694575208189e-05
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.0018398357325316445,
+          "dssim": 1.2543466356065586e-05,
+          "promotions": 1,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00011",
+              "from": "mix0250",
+              "to": "hybrid",
+              "dpsnr": 0.03311704318556963,
+              "dssim": 0.0002257823944091797,
+              "tnc_rank": 3,
+              "tnc_delta": -7.662643942995401e-05
+            }
+          ]
+        },
+        "room": {
+          "dpsnr": -0.004019369857171884,
+          "dssim": -2.487347676203861e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.005742985262500611,
+              "dssim": 6.574392318725586e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0001849247791040412
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.003897911656654429,
+              "dssim": -0.0005273222923278809,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00019327140121534747
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.0009069995387123719,
+          "dssim": 1.1801719665527344e-05,
+          "promotions": 5,
+          "bad_promotions": 2,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0006836118034008187,
+          "dssim": 1.4401770926810928e-05,
+          "promotions": 5,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00014",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.0020712062804584264,
+              "dssim": 2.1755695343017578e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -4.318829883980663e-06
+            },
+            {
+              "view": "00017",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021710900564254842,
+              "dssim": -3.8504600524902344e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -2.300579087274879e-06
+            },
+            {
+              "view": "00019",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021735014377572526,
+              "dssim": -0.00021445751190185547,
+              "tnc_rank": 2,
+              "tnc_delta": -3.0579387245689704e-05
+            },
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            },
+            {
+              "view": "00035",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": 0.07101859450906645,
+              "dssim": 0.0007387995719909668,
+              "tnc_rank": 2,
+              "tnc_delta": -3.2410726781617605e-05
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r3_m-0.0001_lp0.0_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": -0.0001,
+        "local_psnr": 0.0,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": 0.00015645001554726035,
+      "macro_dssim": 2.8979865089890505e-06,
+      "promotions": 17,
+      "bad_promotions": 10,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.002031375288812809,
+          "dssim": 1.1298805475234985e-05,
+          "promotions": 3,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00010",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.010165797953501254,
+              "dssim": 3.606081008911133e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 6.013077030651848e-06
+            },
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            },
+            {
+              "view": "00012",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.01417196467340176,
+              "dssim": 6.413459777832031e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -3.726694575208189e-05
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.0018398357325316445,
+          "dssim": 1.2543466356065586e-05,
+          "promotions": 1,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00011",
+              "from": "mix0250",
+              "to": "hybrid",
+              "dpsnr": 0.03311704318556963,
+              "dssim": 0.0002257823944091797,
+              "tnc_rank": 3,
+              "tnc_delta": -7.662643942995401e-05
+            }
+          ]
+        },
+        "room": {
+          "dpsnr": -0.004019369857171884,
+          "dssim": -2.487347676203861e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.005742985262500611,
+              "dssim": 6.574392318725586e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0001849247791040412
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.003897911656654429,
+              "dssim": -0.0005273222923278809,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00019327140121534747
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.0004032471257100628,
+          "dssim": 4.017353057861415e-06,
+          "promotions": 4,
+          "bad_promotions": 2,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0006836118034008187,
+          "dssim": 1.4401770926810928e-05,
+          "promotions": 5,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00014",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.0020712062804584264,
+              "dssim": 2.1755695343017578e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -4.318829883980663e-06
+            },
+            {
+              "view": "00017",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021710900564254842,
+              "dssim": -3.8504600524902344e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -2.300579087274879e-06
+            },
+            {
+              "view": "00019",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021735014377572526,
+              "dssim": -0.00021445751190185547,
+              "tnc_rank": 2,
+              "tnc_delta": -3.0579387245689704e-05
+            },
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            },
+            {
+              "view": "00035",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": 0.07101859450906645,
+              "dssim": 0.0007387995719909668,
+              "tnc_rank": 2,
+              "tnc_delta": -3.2410726781617605e-05
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r2_m-0.0001_lp-0.005_ls-5e-05",
+      "config": {
+        "max_rank": 2,
+        "margin": -0.0001,
+        "local_psnr": -0.005,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.0006095559920712423,
+      "macro_dssim": -1.599347172831847e-06,
+      "promotions": 21,
+      "bad_promotions": 13,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.0013960129167189805,
+          "dssim": 9.045004844665527e-06,
+          "promotions": 2,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            },
+            {
+              "view": "00012",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.01417196467340176,
+              "dssim": 6.413459777832031e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -3.726694575208189e-05
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "room": {
+          "dpsnr": -0.006808836256214146,
+          "dssim": -4.556698676867407e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02531354811278419,
+              "dssim": -4.869699478149414e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0002679742756382178
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02037046228925732,
+              "dssim": -0.0009766221046447754,
+              "tnc_rank": 1,
+              "tnc_delta": 0.00029748381442018523
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.20870863448288546,
+              "dssim": -0.00044232606887817383,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0003395675395581922
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.001071875583666615,
+          "dssim": 1.2524127960205234e-05,
+          "promotions": 10,
+          "bad_promotions": 5,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00008",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.003085888973338058,
+              "dssim": 0.00013566017150878906,
+              "tnc_rank": 2,
+              "tnc_delta": 2.0135246058518297e-05
+            },
+            {
+              "view": "00009",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.0066222472314585445,
+              "dssim": 6.54458999633789e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 0.0001365304421893851
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            },
+            {
+              "view": "00022",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.001636755216399166,
+              "dssim": -7.927417755126953e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 1.8552261041512863e-05
+            },
+            {
+              "view": "00023",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.005242785940676953,
+              "dssim": -0.0001442432403564453,
+              "tnc_rank": 2,
+              "tnc_delta": 7.884197620520311e-05
+            },
+            {
+              "view": "00024",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.001980204356662796,
+              "dssim": 4.0471553802490234e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 1.4307425697288045e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0006836118034008187,
+          "dssim": 1.4401770926810928e-05,
+          "promotions": 5,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00014",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.0020712062804584264,
+              "dssim": 2.1755695343017578e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -4.318829883980663e-06
+            },
+            {
+              "view": "00017",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021710900564254842,
+              "dssim": -3.8504600524902344e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -2.300579087274879e-06
+            },
+            {
+              "view": "00019",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021735014377572526,
+              "dssim": -0.00021445751190185547,
+              "tnc_rank": 2,
+              "tnc_delta": -3.0579387245689704e-05
+            },
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            },
+            {
+              "view": "00035",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": 0.07101859450906645,
+              "dssim": 0.0007387995719909668,
+              "tnc_rank": 2,
+              "tnc_delta": -3.2410726781617605e-05
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r3_m0.0001_lp-0.005_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": 0.0001,
+        "local_psnr": -0.005,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.0006113641820468252,
+      "macro_dssim": -2.732949379162606e-06,
+      "promotions": 8,
+      "bad_promotions": 5,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "treehill": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "room": {
+          "dpsnr": -0.004019369857171884,
+          "dssim": -2.487347676203861e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.005742985262500611,
+              "dssim": 6.574392318725586e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0001849247791040412
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.003897911656654429,
+              "dssim": -0.0005273222923278809,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00019327140121534747
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.00035118476489075234,
+          "dssim": 8.475780487060807e-06,
+          "promotions": 4,
+          "bad_promotions": 1,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00009",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.0066222472314585445,
+              "dssim": 6.54458999633789e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 0.0001365304421893851
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r2_m-0.0001_lp-0.002_ls-5e-05",
+      "config": {
+        "max_rank": 2,
+        "margin": -0.0001,
+        "local_psnr": -0.002,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.0006370353328969403,
+      "macro_dssim": -1.719748555278379e-06,
+      "promotions": 16,
+      "bad_promotions": 10,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.0013960129167189805,
+          "dssim": 9.045004844665527e-06,
+          "promotions": 2,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            },
+            {
+              "view": "00012",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.01417196467340176,
+              "dssim": 6.413459777832031e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -3.726694575208189e-05
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "room": {
+          "dpsnr": -0.006808836256214146,
+          "dssim": -4.556698676867407e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02531354811278419,
+              "dssim": -4.869699478149414e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0002679742756382178
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02037046228925732,
+              "dssim": -0.0009766221046447754,
+              "tnc_rank": 1,
+              "tnc_delta": 0.00029748381442018523
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.20870863448288546,
+              "dssim": -0.00044232606887817383,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0003395675395581922
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.0009069995387123719,
+          "dssim": 1.1801719665527344e-05,
+          "promotions": 5,
+          "bad_promotions": 2,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0006836118034008187,
+          "dssim": 1.4401770926810928e-05,
+          "promotions": 5,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00014",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.0020712062804584264,
+              "dssim": 2.1755695343017578e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -4.318829883980663e-06
+            },
+            {
+              "view": "00017",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021710900564254842,
+              "dssim": -3.8504600524902344e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -2.300579087274879e-06
+            },
+            {
+              "view": "00019",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021735014377572526,
+              "dssim": -0.00021445751190185547,
+              "tnc_rank": 2,
+              "tnc_delta": -3.0579387245689704e-05
+            },
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            },
+            {
+              "view": "00035",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": 0.07101859450906645,
+              "dssim": 0.0007387995719909668,
+              "tnc_rank": 2,
+              "tnc_delta": -3.2410726781617605e-05
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r3_m0.0001_lp-0.002_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": 0.0001,
+        "local_psnr": -0.002,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.000655512496923194,
+      "macro_dssim": -3.1692553789188817e-06,
+      "promotions": 7,
+      "bad_promotions": 5,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "treehill": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "room": {
+          "dpsnr": -0.004019369857171884,
+          "dssim": -2.487347676203861e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.005742985262500611,
+              "dssim": 6.574392318725586e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0001849247791040412
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.003897911656654429,
+              "dssim": -0.0005273222923278809,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00019327140121534747
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 8.629487563240057e-05,
+          "dssim": 5.857944488525321e-06,
+          "promotions": 3,
+          "bad_promotions": 1,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r2_m-0.0001_lp0.0_ls-0.0005",
+      "config": {
+        "max_rank": 2,
+        "margin": -0.0001,
+        "local_psnr": 0.0,
+        "local_ssim": -0.0005,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.000697746095256857,
+      "macro_dssim": -6.952571713539531e-06,
+      "promotions": 35,
+      "bad_promotions": 24,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.0067774075945354895,
+          "dssim": 6.604939699172974e-06,
+          "promotions": 12,
+          "bad_promotions": 6,
+          "views": [
+            {
+              "view": "00001",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008687452628134196,
+              "dssim": 0.00014442205429077148,
+              "tnc_rank": 2,
+              "tnc_delta": -3.618467534146491e-05
+            },
+            {
+              "view": "00002",
+              "from": "fixed",
+              "to": "mix0750",
+              "dpsnr": 0.05753889821146885,
+              "dssim": 0.0004025697708129883,
+              "tnc_rank": 2,
+              "tnc_delta": 4.276340435347553e-05
+            },
+            {
+              "view": "00004",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.00237392910898393,
+              "dssim": -0.0001035928726196289,
+              "tnc_rank": 2,
+              "tnc_delta": -3.35280674109012e-05
+            },
+            {
+              "view": "00005",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.015063371225792821,
+              "dssim": -0.0001951456069946289,
+              "tnc_rank": 2,
+              "tnc_delta": -1.2140258820771133e-05
+            },
+            {
+              "view": "00007",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.014555627965457063,
+              "dssim": -4.9233436584472656e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.099265766553122e-06
+            },
+            {
+              "view": "00008",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.00338953611641557,
+              "dssim": -0.00034928321838378906,
+              "tnc_rank": 2,
+              "tnc_delta": -5.227731197066793e-05
+            },
+            {
+              "view": "00009",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.0023744425641574196,
+              "dssim": -3.713369369506836e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -9.484229812678491e-05
+            },
+            {
+              "view": "00010",
+              "from": "fixed",
+              "to": "mix0750",
+              "dpsnr": 0.02705331393068633,
+              "dssim": 1.2814998626708984e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 8.81911180741074e-06
+            },
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "hybrid",
+              "dpsnr": 0.014345297763057374,
+              "dssim": 0.00010675191879272461,
+              "tnc_rank": 1,
+              "tnc_delta": 6.723920540907535e-06
+            },
+            {
+              "view": "00012",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.01417196467340176,
+              "dssim": 6.413459777832031e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -3.726694575208189e-05
+            },
+            {
+              "view": "00013",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.0025954760798683196,
+              "dssim": -2.7418136596679688e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -1.7365207691820428e-05
+            },
+            {
+              "view": "00014",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.02180302520675781,
+              "dssim": 0.00013679265975952148,
+              "tnc_rank": 2,
+              "tnc_delta": -3.580954552306892e-05
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.00018543173226229226,
+          "dssim": 1.44971741570367e-05,
+          "promotions": 2,
+          "bad_promotions": 1,
+          "views": [
+            {
+              "view": "00002",
+              "from": "mix0250",
+              "to": "mix0750",
+              "dpsnr": 0.013349480801057467,
+              "dssim": 0.0004191398620605469,
+              "tnc_rank": 2,
+              "tnc_delta": 0.0005798121317088789
+            },
+            {
+              "view": "00006",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.010011709620336262,
+              "dssim": -0.00015819072723388672,
+              "tnc_rank": 2,
+              "tnc_delta": -6.0314158330104783e-05
+            }
+          ]
+        },
+        "room": {
+          "dpsnr": -0.01273886755678677,
+          "dssim": -8.047849704057811e-05,
+          "promotions": 10,
+          "bad_promotions": 10,
+          "views": [
+            {
+              "view": "00006",
+              "from": "learned",
+              "to": "mix0250",
+              "dpsnr": -0.16680047684650035,
+              "dssim": -0.0001633763313293457,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00014688535138222825
+            },
+            {
+              "view": "00007",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": 0.017020608493755418,
+              "dssim": -5.227327346801758e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0003376277478527902
+            },
+            {
+              "view": "00008",
+              "from": "learned",
+              "to": "mix0250",
+              "dpsnr": -0.006594521206721993,
+              "dssim": 0.00011342763900756836,
+              "tnc_rank": 2,
+              "tnc_delta": 4.6109766302086796e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.06770245959184251,
+              "dssim": -0.0005263090133666992,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011979967791359881
+            },
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02531354811278419,
+              "dssim": -4.869699478149414e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0002679742756382178
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02037046228925732,
+              "dssim": -0.0009766221046447754,
+              "tnc_rank": 1,
+              "tnc_delta": 0.00029748381442018523
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.20870863448288546,
+              "dssim": -0.00044232606887817383,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0003395675395581922
+            },
+            {
+              "view": "00028",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.015078156673453691,
+              "dssim": -0.0002829432487487793,
+              "tnc_rank": 1,
+              "tnc_delta": 3.0472874641418457e-06
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            },
+            {
+              "view": "00038",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": 0.00788378510242893,
+              "dssim": -0.0004500746726989746,
+              "tnc_rank": 2,
+              "tnc_delta": 0.0004595857052859323
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.0009059398550469722,
+          "dssim": 3.2591819763183767e-06,
+          "promotions": 6,
+          "bad_promotions": 3,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00017",
+              "from": "hybrid",
+              "to": "mix0750",
+              "dpsnr": 0.010072459298015701,
+              "dssim": -3.528594970703125e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 4.3016804433700095e-05
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            },
+            {
+              "view": "00020",
+              "from": "hybrid",
+              "to": "mix0750",
+              "dpsnr": 0.0024948589354067963,
+              "dssim": 1.633167266845703e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 4.154433336339691e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0006836118034008187,
+          "dssim": 1.4401770926810928e-05,
+          "promotions": 5,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00014",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.0020712062804584264,
+              "dssim": 2.1755695343017578e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -4.318829883980663e-06
+            },
+            {
+              "view": "00017",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021710900564254842,
+              "dssim": -3.8504600524902344e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -2.300579087274879e-06
+            },
+            {
+              "view": "00019",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021735014377572526,
+              "dssim": -0.00021445751190185547,
+              "tnc_rank": 2,
+              "tnc_delta": -3.0579387245689704e-05
+            },
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            },
+            {
+              "view": "00035",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": 0.07101859450906645,
+              "dssim": 0.0007387995719909668,
+              "tnc_rank": 2,
+              "tnc_delta": -3.2410726781617605e-05
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r2_m-0.0001_lp0.0_ls-5e-05",
+      "config": {
+        "max_rank": 2,
+        "margin": -0.0001,
+        "local_psnr": 0.0,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.0007209940683973182,
+      "macro_dssim": -3.0171429898891503e-06,
+      "promotions": 15,
+      "bad_promotions": 10,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.0013960129167189805,
+          "dssim": 9.045004844665527e-06,
+          "promotions": 2,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00011",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.008164241994101928,
+              "dssim": 8.058547973632812e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 6.168550952909135e-06
+            },
+            {
+              "view": "00012",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": 0.01417196467340176,
+              "dssim": 6.413459777832031e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -3.726694575208189e-05
+            }
+          ]
+        },
+        "treehill": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "room": {
+          "dpsnr": -0.006808836256214146,
+          "dssim": -4.556698676867407e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02531354811278419,
+              "dssim": -4.869699478149414e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0002679742756382178
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02037046228925732,
+              "dssim": -0.0009766221046447754,
+              "tnc_rank": 1,
+              "tnc_delta": 0.00029748381442018523
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.20870863448288546,
+              "dssim": -0.00044232606887817383,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0003395675395581922
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.0004032471257100628,
+          "dssim": 4.017353057861415e-06,
+          "promotions": 4,
+          "bad_promotions": 2,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00010",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004502124324325507,
+              "dssim": 2.8192996978759766e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 9.744114653031932e-05
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00019",
+              "from": "hybrid",
+              "to": "learned",
+              "dpsnr": 0.02501974090132464,
+              "dssim": 0.00012040138244628906,
+              "tnc_rank": 1,
+              "tnc_delta": 2.7145336137922305e-05
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0006836118034008187,
+          "dssim": 1.4401770926810928e-05,
+          "promotions": 5,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00014",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.0020712062804584264,
+              "dssim": 2.1755695343017578e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -4.318829883980663e-06
+            },
+            {
+              "view": "00017",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021710900564254842,
+              "dssim": -3.8504600524902344e-05,
+              "tnc_rank": 2,
+              "tnc_delta": -2.300579087274879e-06
+            },
+            {
+              "view": "00019",
+              "from": "fixed",
+              "to": "mix0250",
+              "dpsnr": -0.021735014377572526,
+              "dssim": -0.00021445751190185547,
+              "tnc_rank": 2,
+              "tnc_delta": -3.0579387245689704e-05
+            },
+            {
+              "view": "00031",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": -0.00020783656094991443,
+              "dssim": 2.5272369384765625e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 1.3799672100786586e-06
+            },
+            {
+              "view": "00035",
+              "from": "learned",
+              "to": "mix0750",
+              "dpsnr": 0.07101859450906645,
+              "dssim": 0.0007387995719909668,
+              "tnc_rank": 2,
+              "tnc_delta": -3.2410726781617605e-05
+            }
+          ]
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r3_m0.0001_lp-0.02_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": 0.0001,
+        "local_psnr": -0.02,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.0007483578610785191,
+      "macro_dssim": -1.7233383961231044e-07,
+      "promotions": 11,
+      "bad_promotions": 7,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "treehill": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "room": {
+          "dpsnr": -0.0052426721498544104,
+          "dssim": -2.093957020686283e-05,
+          "promotions": 5,
+          "bad_promotions": 5,
+          "views": [
+            {
+              "view": "00004",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.047708789414617314,
+              "dssim": 0.00015342235565185547,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0005222097050131165
+            },
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.005742985262500611,
+              "dssim": 6.574392318725586e-05,
+              "tnc_rank": 3,
+              "tnc_delta": 0.0001849247791040412
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.003897911656654429,
+              "dssim": -0.0005273222923278809,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00019327140121534747
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "adaptive",
+              "dpsnr": -0.011151969107423554,
+              "dssim": -0.0003094673156738281,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00011443905532360077
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.0007525249833831571,
+          "dssim": 1.99055671691894e-05,
+          "promotions": 6,
+          "bad_promotions": 2,
+          "views": [
+            {
+              "view": "00004",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.0251871198196163,
+              "dssim": -0.00017696619033813477,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00013649958390724026
+            },
+            {
+              "view": "00006",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": -0.004101465184064068,
+              "dssim": -2.3186206817626953e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00022310333811435823
+            },
+            {
+              "view": "00009",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.0066222472314585445,
+              "dssim": 6.54458999633789e-05,
+              "tnc_rank": 2,
+              "tnc_delta": 0.0001365304421893851
+            },
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            },
+            {
+              "view": "00012",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.012593810325057575,
+              "dssim": 0.0001946091651916504,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00012443211637300916
+            },
+            {
+              "view": "00016",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014134970646374256,
+              "dssim": 0.0003089308738708496,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00015107881793872263
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    },
+    {
+      "name": "r3_m0.0002_lp0.0_ls-5e-05",
+      "config": {
+        "max_rank": 3,
+        "margin": 0.0002,
+        "local_psnr": 0.0,
+        "local_ssim": -5e-05,
+        "local_cvar": -0.02,
+        "source_psnr": -0.02,
+        "source_ssim": -0.002,
+        "require_safe": false,
+        "forbid_fixed": false
+      },
+      "macro_dpsnr": -0.0007769586690630215,
+      "macro_dssim": -7.185630309275957e-06,
+      "promotions": 5,
+      "bad_promotions": 4,
+      "nonnegative_psnr_scenes": 5,
+      "nonnegative_ssim_scenes": 5,
+      "scene_delta": {
+        "stump": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "treehill": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "room": {
+          "dpsnr": -0.005251779269792978,
+          "dssim": -4.8266007350041516e-05,
+          "promotions": 4,
+          "bad_promotions": 4,
+          "views": [
+            {
+              "view": "00016",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02531354811278419,
+              "dssim": -4.869699478149414e-05,
+              "tnc_rank": 1,
+              "tnc_delta": 0.0002679742756382178
+            },
+            {
+              "view": "00019",
+              "from": "learned",
+              "to": "fixed",
+              "dpsnr": -0.02037046228925732,
+              "dssim": -0.0009766221046447754,
+              "tnc_rank": 1,
+              "tnc_delta": 0.00029748381442018523
+            },
+            {
+              "view": "00021",
+              "from": "learned",
+              "to": "adaptive",
+              "dpsnr": -0.13596255840312566,
+              "dssim": -0.0001990199089050293,
+              "tnc_rank": 3,
+              "tnc_delta": 0.00021950048472851175
+            },
+            {
+              "view": "00029",
+              "from": "hybrid",
+              "to": "fixed",
+              "dpsnr": -0.023172822716759356,
+              "dssim": -0.0006580352783203125,
+              "tnc_rank": 1,
+              "tnc_delta": 0.00020221620798110962
+            }
+          ]
+        },
+        "bicycle": {
+          "dpsnr": 0.0005900272554147518,
+          "dssim": 5.152225494384904e-06,
+          "promotions": 1,
+          "bad_promotions": 0,
+          "views": [
+            {
+              "view": "00011",
+              "from": "hybrid",
+              "to": "mix0250",
+              "dpsnr": 0.014750681385368836,
+              "dssim": 0.00012880563735961914,
+              "tnc_rank": 2,
+              "tnc_delta": 0.00044374829509059854
+            }
+          ]
+        },
+        "bonsai": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        },
+        "kitchen": {
+          "dpsnr": 0.0,
+          "dssim": 0.0,
+          "promotions": 0,
+          "bad_promotions": 0,
+          "views": []
+        }
+      }
+    }
+  ],
+  "verdict": "Relaxed combined ranker can create tiny posterior macro gains only by allowing scene regressions and bad promotions; do not promote as method."
+}

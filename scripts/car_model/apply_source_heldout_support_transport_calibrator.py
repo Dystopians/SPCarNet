@@ -316,6 +316,23 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- keep / promote / skipped: `{unlock.get('keep_count')}` / `{unlock.get('promote_count')}` / `{unlock.get('skipped_count')}`",
             f"- reason counts: `{unlock.get('reason_counts')}`",
         ]
+    if payload.get("target_neighbor_combined_candidate_ranker_policy"):
+        combined = payload["target_neighbor_combined_candidate_ranker_policy"]
+        lines += [
+            "",
+            "## Target-Neighbor Combined Candidate Ranker",
+            "",
+            f"- enabled: `{combined.get('enabled')}`",
+            f"- source policy available: `{combined.get('source_policy_available')}`",
+            f"- target GT used: `{combined.get('uses_target_gt')}`",
+            f"- k / max target-neighbor rank: `{combined.get('k')}` / `{combined.get('max_target_neighbor_rank')}`",
+            f"- min incumbent-minus-candidate MAE delta: `{combined.get('min_incumbent_minus_candidate_delta')}`",
+            f"- min local PSNR / CVaR delta vs incumbent: `{combined.get('min_local_psnr_delta_vs_incumbent')}` / `{combined.get('min_local_cvar_delta_vs_incumbent')}`",
+            f"- require source safe / OOD guard: `{combined.get('require_source_safe')}` / `{combined.get('ood_guard_enabled')}`",
+            f"- keep / promote / skipped: `{combined.get('keep_count')}` / `{combined.get('promote_count')}` / `{combined.get('skipped_count')}`",
+            f"- reason counts: `{combined.get('reason_counts')}`",
+            f"- verdict: `{combined.get('verdict')}`",
+        ]
     (output_dir / "support_transport_apply_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -2816,9 +2833,13 @@ def _target_neighbor_all_candidate_scores(
     device: torch.device,
     args: argparse.Namespace,
 ) -> dict[str, Any]:
-    enabled = bool(getattr(args, "enable_target_neighbor_all_candidate_diagnostic", False))
+    enabled = bool(getattr(args, "enable_target_neighbor_all_candidate_diagnostic", False)) or bool(
+        getattr(args, "enable_target_neighbor_combined_candidate_ranker", False)
+    )
     payload: dict[str, Any] = {
         "enabled": enabled,
+        "diagnostic_enabled": bool(getattr(args, "enable_target_neighbor_all_candidate_diagnostic", False)),
+        "computed_for_combined_ranker": bool(getattr(args, "enable_target_neighbor_combined_candidate_ranker", False)),
         "uses_target_gt": False,
         "candidate_count": int(len(deltas)),
         "scores": {},
@@ -2927,6 +2948,13 @@ def _target_neighbor_all_candidate_rank_diagnostic(
     payload = dict(scores_payload)
     if not bool(payload.get("enabled", False)):
         return payload
+    if not bool(getattr(args, "enable_target_neighbor_all_candidate_diagnostic", False)):
+        return {
+            "enabled": False,
+            "computed_for_combined_ranker": bool(payload.get("computed_for_combined_ranker", False)),
+            "score_uses_target_gt": False,
+            "oracle_uses_target_gt_posthoc": False,
+        }
     eps = float(getattr(args, "target_neighbor_all_candidate_diagnostic_eps", 1.0e-12))
     oracle_variant, oracle_row = _strict_candidate_oracle(
         candidate_rows,
@@ -3054,6 +3082,319 @@ def _summarize_target_neighbor_all_candidate_diagnostics(per_view: list[dict[str
         "oracle_uses_target_gt_posthoc": True,
         "affects_selection": False,
     }
+
+
+def _fit_target_neighbor_combined_candidate_ranker_policy(
+    selector_payload: dict[str, Any] | None,
+    *,
+    compute_ssim: bool,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    enabled = bool(getattr(args, "enable_target_neighbor_combined_candidate_ranker", False))
+    base_payload: dict[str, Any] = {
+        "enabled": False,
+        "requested": enabled,
+        "source_policy_available": False,
+        "uses_target_gt": False,
+        "verdict": "disabled by CLI" if not enabled else "missing source-heldout selector per-view evidence",
+    }
+    if not enabled:
+        return base_payload
+    if selector_payload is None or not selector_payload.get("per_view"):
+        return base_payload
+    feature_names = _parse_feature_names(str(args.target_neighbor_combined_candidate_ranker_feature_grid))
+    variants = list(selector_payload.get("candidate_variants", _candidate_variant_names(args)))
+    entries_by_variant: dict[str, list[dict[str, Any]]] = {variant: [] for variant in variants}
+    all_vectors: list[list[float]] = []
+    for row in selector_payload.get("per_view", []):
+        for variant in variants:
+            candidate = dict(row.get("candidates", {})).get(variant)
+            if not isinstance(candidate, dict):
+                continue
+            vector = _feature_vector(dict(candidate.get("proxy", {})), feature_names)
+            entry = {
+                "view": str(row.get("view")),
+                "variant": variant,
+                "vector": vector,
+                "metrics": candidate.get("metrics", {}),
+                "score": _source_objective_from_metrics(
+                    dict(candidate.get("metrics", {})),
+                    compute_ssim=compute_ssim,
+                    args=args,
+                ),
+            }
+            entries_by_variant[variant].append(entry)
+            all_vectors.append(vector)
+    feature_mean, feature_std = _feature_stats(all_vectors)
+    if not feature_mean:
+        base_payload["verdict"] = "no usable source-heldout proxy vectors"
+        return base_payload
+
+    ood_source_distances: list[float] = []
+    for variant, entries in entries_by_variant.items():
+        for entry in entries:
+            pool = [item for item in entries if str(item["view"]) != str(entry["view"])]
+            if not pool:
+                continue
+            distance = min(
+                _normalized_distance(entry["vector"], item["vector"], feature_mean, feature_std)
+                for item in pool
+            )
+            if math.isfinite(distance):
+                ood_source_distances.append(float(distance))
+    ood_threshold = (
+        _quantile(ood_source_distances, float(args.target_neighbor_combined_candidate_ranker_ood_quantile))
+        if bool(args.target_neighbor_combined_candidate_ranker_enable_ood_guard)
+        else float("inf")
+    )
+    return {
+        "enabled": True,
+        "source_policy_available": True,
+        "uses_target_gt": False,
+        "verdict": "target-neighbor combined candidate ranker prepared",
+        "feature_schema_version": 1,
+        "feature_names": feature_names,
+        "feature_mean": feature_mean,
+        "feature_std": feature_std,
+        "variants": variants,
+        "entries_by_variant": entries_by_variant,
+        "source_summaries": dict(selector_payload.get("summaries", {})),
+        "source_fixed_summary": dict(selector_payload.get("summaries", {})).get("fixed", {}),
+        "scene_selected_variant": str(selector_payload.get("selected_variant", "fixed")),
+        "k": int(args.target_neighbor_combined_candidate_ranker_k),
+        "max_target_neighbor_rank": int(args.target_neighbor_combined_candidate_ranker_max_target_neighbor_rank),
+        "min_incumbent_minus_candidate_delta": float(
+            args.target_neighbor_combined_candidate_ranker_min_incumbent_minus_candidate_delta
+        ),
+        "min_effective_weight": float(args.target_neighbor_combined_candidate_ranker_min_effective_weight),
+        "min_local_psnr_delta_vs_incumbent": float(
+            args.target_neighbor_combined_candidate_ranker_min_local_psnr_delta_vs_incumbent
+        ),
+        "min_local_ssim_delta_vs_incumbent": float(
+            args.target_neighbor_combined_candidate_ranker_min_local_ssim_delta_vs_incumbent
+        ),
+        "min_local_cvar_delta_vs_incumbent": float(
+            args.target_neighbor_combined_candidate_ranker_min_local_cvar_delta_vs_incumbent
+        ),
+        "min_local_min_delta_vs_incumbent": float(
+            args.target_neighbor_combined_candidate_ranker_min_local_min_delta_vs_incumbent
+        ),
+        "min_local_positive_fraction_delta_vs_incumbent": float(
+            args.target_neighbor_combined_candidate_ranker_min_local_positive_fraction_delta_vs_incumbent
+        ),
+        "min_source_summary_psnr_delta_vs_incumbent": float(
+            args.target_neighbor_combined_candidate_ranker_min_source_summary_psnr_delta_vs_incumbent
+        ),
+        "min_source_summary_ssim_delta_vs_incumbent": float(
+            args.target_neighbor_combined_candidate_ranker_min_source_summary_ssim_delta_vs_incumbent
+        ),
+        "require_source_safe": bool(args.target_neighbor_combined_candidate_ranker_require_source_safe),
+        "forbid_fixed_when_incumbent_nonfixed": bool(
+            args.target_neighbor_combined_candidate_ranker_forbid_fixed_when_incumbent_nonfixed
+        ),
+        "ood_guard_enabled": bool(args.target_neighbor_combined_candidate_ranker_enable_ood_guard),
+        "ood_quantile": float(args.target_neighbor_combined_candidate_ranker_ood_quantile),
+        "ood_source_distance_count": int(len(ood_source_distances)),
+        "ood_source_distance_threshold": float(ood_threshold),
+        "target_neighbor_weight": float(args.target_neighbor_combined_candidate_ranker_target_neighbor_weight),
+        "local_cvar_weight": float(args.target_neighbor_combined_candidate_ranker_local_cvar_weight),
+        "local_min_weight": float(args.target_neighbor_combined_candidate_ranker_local_min_weight),
+        "local_positive_weight": float(args.target_neighbor_combined_candidate_ranker_local_positive_weight),
+    }
+
+
+def _target_neighbor_combined_candidate_ranker_decision(
+    *,
+    incumbent_variant: str,
+    proxies_by_variant: dict[str, dict[str, float]],
+    target_neighbor_scores: dict[str, Any],
+    policy: dict[str, Any],
+    compute_ssim: bool,
+) -> tuple[str, dict[str, Any]]:
+    payload: dict[str, Any] = {
+        "enabled": bool(policy.get("enabled", False)),
+        "input_variant": incumbent_variant,
+        "output_variant": incumbent_variant,
+        "decision": "keep",
+        "promote_applied": False,
+        "reject_reason": None,
+        "candidate_scores": [],
+        "rejected_candidates": [],
+    }
+    if not bool(policy.get("enabled", False)):
+        payload["reject_reason"] = "disabled"
+        return incumbent_variant, payload
+    if incumbent_variant in {"noop", "__scene__", "__incumbent__"}:
+        payload["reject_reason"] = "input_not_candidate"
+        return incumbent_variant, payload
+    scores = dict(target_neighbor_scores.get("scores", {}))
+    ranked = [str(item) for item in target_neighbor_scores.get("ranked_variants", [])]
+    if not scores or incumbent_variant not in scores:
+        payload["reject_reason"] = "missing_target_neighbor_scores"
+        return incumbent_variant, payload
+    incumbent_score = dict(scores.get(incumbent_variant, {}))
+    incumbent_error = incumbent_score.get("mean_mae_to_neighbor_base")
+    min_effective_weight = float(policy.get("min_effective_weight", 0.0))
+    if incumbent_error is None or float(incumbent_score.get("total_effective_weight", 0.0)) < min_effective_weight:
+        payload["reject_reason"] = "insufficient_incumbent_target_neighbor_support"
+        payload["incumbent_score"] = incumbent_score
+        return incumbent_variant, payload
+
+    variants = [variant for variant in list(policy.get("variants", [])) if variant in proxies_by_variant and variant in scores]
+    feature_names = list(policy.get("feature_names", []))
+    feature_mean = [float(value) for value in policy.get("feature_mean", [])]
+    feature_std = [float(value) for value in policy.get("feature_std", [])]
+    entries_by_variant = dict(policy.get("entries_by_variant", {}))
+    source_summaries = dict(policy.get("source_summaries", {}))
+    fixed_summary = dict(policy.get("source_fixed_summary", {}))
+    incumbent_summary = dict(source_summaries.get(incumbent_variant, {}))
+    incumbent_vector = _feature_vector(proxies_by_variant[incumbent_variant], feature_names)
+    incumbent_local = _knn_local_metric_summary(
+        entries_by_variant,
+        incumbent_variant,
+        incumbent_vector,
+        mean=feature_mean,
+        std=feature_std,
+        k=int(policy.get("k", 3)),
+        compute_ssim=compute_ssim,
+    )
+
+    accepted: list[tuple[float, str, dict[str, Any]]] = []
+    for variant in variants:
+        if variant == incumbent_variant:
+            continue
+        reason = None
+        score_payload = dict(scores.get(variant, {}))
+        candidate_error = score_payload.get("mean_mae_to_neighbor_base")
+        candidate_rank = _variant_rank(ranked, variant)
+        if (
+            bool(policy.get("forbid_fixed_when_incumbent_nonfixed", False))
+            and incumbent_variant != "fixed"
+            and variant == "fixed"
+        ):
+            reason = "fixed_when_incumbent_nonfixed"
+        elif candidate_error is None or float(score_payload.get("total_effective_weight", 0.0)) < min_effective_weight:
+            reason = "insufficient_target_neighbor_support"
+        elif candidate_rank is None or candidate_rank > int(policy.get("max_target_neighbor_rank", 1)):
+            reason = "target_neighbor_rank"
+        target_delta = (
+            float(incumbent_error) - float(candidate_error)
+            if candidate_error is not None
+            else float("-inf")
+        )
+        if reason is None and target_delta < float(policy.get("min_incumbent_minus_candidate_delta", 0.0)):
+            reason = "target_neighbor_margin"
+
+        candidate_vector = _feature_vector(proxies_by_variant[variant], feature_names)
+        candidate_local = _knn_local_metric_summary(
+            entries_by_variant,
+            variant,
+            candidate_vector,
+            mean=feature_mean,
+            std=feature_std,
+            k=int(policy.get("k", 3)),
+            compute_ssim=compute_ssim,
+        )
+        local_summaries = {incumbent_variant: incumbent_local, variant: candidate_local}
+        local_guard = _knn_local_tail_guard_decision(
+            variant,
+            incumbent_variant,
+            local_summaries,
+            compute_ssim=compute_ssim,
+            min_psnr_delta_vs_scene=float(policy.get("min_local_psnr_delta_vs_incumbent", 0.0)),
+            min_ssim_delta_vs_scene=float(policy.get("min_local_ssim_delta_vs_incumbent", -1.0e9)),
+            min_cvar_delta_vs_scene=float(policy.get("min_local_cvar_delta_vs_incumbent", -1.0e9)),
+            min_min_delta_vs_scene=float(policy.get("min_local_min_delta_vs_incumbent", -1.0e9)),
+            min_positive_fraction_delta_vs_scene=float(
+                policy.get("min_local_positive_fraction_delta_vs_incumbent", -1.0e9)
+            ),
+        )
+        if reason is None and bool(local_guard.get("rejected", False)):
+            reason = f"source_local:{local_guard.get('reason', 'rejected')}"
+
+        candidate_summary = dict(source_summaries.get(variant, {}))
+        source_summary_psnr_delta = float(candidate_summary.get("psnr_gain", -1.0e9)) - float(
+            incumbent_summary.get("psnr_gain", 0.0)
+        )
+        source_summary_ssim_delta = float(candidate_summary.get("ssim_gain", -1.0e9)) - float(
+            incumbent_summary.get("ssim_gain", 0.0)
+        )
+        if reason is None and source_summary_psnr_delta < float(
+            policy.get("min_source_summary_psnr_delta_vs_incumbent", 0.0)
+        ):
+            reason = "source_summary_psnr"
+        if (
+            reason is None
+            and compute_ssim
+            and source_summary_ssim_delta < float(policy.get("min_source_summary_ssim_delta_vs_incumbent", -1.0e9))
+        ):
+            reason = "source_summary_ssim"
+        if reason is None and bool(policy.get("require_source_safe", True)):
+            safe_vs_fixed = _candidate_passes_guard(
+                candidate_summary,
+                fixed_summary,
+                compute_ssim=compute_ssim,
+                min_psnr_delta=0.0,
+                min_ssim_delta=0.0,
+                min_lpips_delta=-1.0e9,
+                min_dists_delta=-1.0e9,
+            )
+            if not safe_vs_fixed:
+                reason = "source_safe_vs_fixed"
+        ood_distance = float("inf")
+        if reason is None and bool(policy.get("ood_guard_enabled", False)):
+            pool = list(entries_by_variant.get(variant, []))
+            if pool:
+                ood_distance = min(
+                    _normalized_distance(candidate_vector, list(entry["vector"]), feature_mean, feature_std)
+                    for entry in pool
+                )
+            threshold = float(policy.get("ood_source_distance_threshold", float("inf")))
+            if ood_distance > threshold:
+                reason = "ood_distance"
+
+        local_deltas = dict(local_guard.get("deltas_vs_scene", {}))
+        local_score = (
+            float(local_deltas.get("psnr_gain", 0.0))
+            + (20.0 * float(local_deltas.get("ssim_gain", 0.0)) if compute_ssim else 0.0)
+            + float(policy.get("local_cvar_weight", 0.0)) * float(local_deltas.get("cvar_psnr_gain", 0.0))
+            + float(policy.get("local_min_weight", 0.0)) * float(local_deltas.get("min_psnr_gain", 0.0))
+            + float(policy.get("local_positive_weight", 0.0)) * float(local_deltas.get("positive_view_fraction", 0.0))
+        )
+        combined_score = local_score + float(policy.get("target_neighbor_weight", 1.0)) * target_delta
+        candidate_diag = {
+            "variant": variant,
+            "combined_score": float(combined_score),
+            "local_score": float(local_score),
+            "target_neighbor_rank": candidate_rank,
+            "incumbent_minus_candidate_mae_delta": float(target_delta),
+            "source_summary_psnr_delta_vs_incumbent": float(source_summary_psnr_delta),
+            "source_summary_ssim_delta_vs_incumbent": float(source_summary_ssim_delta),
+            "source_local_guard": local_guard,
+            "target_neighbor_score": score_payload,
+            "ood_distance": float(ood_distance),
+            "reject_reason": reason,
+        }
+        if reason is None:
+            accepted.append((combined_score, variant, candidate_diag))
+            payload["candidate_scores"].append(candidate_diag)
+        else:
+            payload["rejected_candidates"].append(candidate_diag)
+    if not accepted:
+        payload["reject_reason"] = "no_accepted_candidate"
+        return incumbent_variant, payload
+    accepted.sort(key=lambda item: (item[0], -int(item[2].get("target_neighbor_rank") or 999999), item[1]), reverse=True)
+    _, chosen_variant, chosen_diag = accepted[0]
+    payload.update(
+        {
+            "output_variant": chosen_variant,
+            "decision": "promote",
+            "promote_applied": True,
+            "best_candidate": chosen_diag,
+            "reject_reason": None,
+        }
+    )
+    return chosen_variant, payload
 
 
 def _target_neighbor_consistency_decision(
@@ -4988,6 +5329,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         compute_ssim=bool(args.compute_ssim),
         args=args,
     )
+    target_neighbor_combined_candidate_ranker_payload = _fit_target_neighbor_combined_candidate_ranker_policy(
+        selector_payload,
+        compute_ssim=bool(args.compute_ssim),
+        args=args,
+    )
     fixed_rows: list[dict[str, float]] = []
     learned_rows: list[dict[str, float]] = []
     hybrid_rows: list[dict[str, float]] = []
@@ -5010,6 +5356,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "reason_counts": {},
     }
     target_neighbor_candidate_unlock_stats = {
+        "promote_count": 0,
+        "keep_count": 0,
+        "skipped_count": 0,
+        "reason_counts": {},
+    }
+    target_neighbor_combined_candidate_ranker_stats = {
         "promote_count": 0,
         "keep_count": 0,
         "skipped_count": 0,
@@ -5098,6 +5450,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             promotion_rollback_diagnostics: dict[str, Any] | None = None
             target_neighbor_consistency_diagnostics: dict[str, Any] | None = None
             target_neighbor_candidate_unlock_diagnostics: dict[str, Any] | None = None
+            target_neighbor_combined_candidate_ranker_diagnostics: dict[str, Any] | None = None
             target_neighbor_all_candidate_scores = _target_neighbor_all_candidate_scores(
                 ev=ev,
                 deltas=deltas,
@@ -5286,6 +5639,50 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         gate_accepted = output_variant != "noop"
                 elif local_support_decision == "not_used":
                     local_support_decision = "skipped_incumbent_already_refined"
+            if (
+                bool(target_neighbor_combined_candidate_ranker_payload.get("enabled", False))
+                and output_variant != "noop"
+                and gate_accepted
+                and output_variant in deltas
+            ):
+                combined_incumbent_variant = output_variant
+                (
+                    combined_output_variant,
+                    target_neighbor_combined_candidate_ranker_diagnostics,
+                ) = _target_neighbor_combined_candidate_ranker_decision(
+                    incumbent_variant=combined_incumbent_variant,
+                    proxies_by_variant=proxies_by_variant,
+                    target_neighbor_scores=target_neighbor_all_candidate_scores,
+                    policy=target_neighbor_combined_candidate_ranker_payload,
+                    compute_ssim=bool(args.compute_ssim),
+                )
+                decision = str(
+                    target_neighbor_combined_candidate_ranker_diagnostics.get("decision", "keep")
+                    if target_neighbor_combined_candidate_ranker_diagnostics
+                    else "keep"
+                )
+                reason = str(
+                    (
+                        target_neighbor_combined_candidate_ranker_diagnostics.get("reject_reason")
+                        if target_neighbor_combined_candidate_ranker_diagnostics
+                        else None
+                    )
+                    or ("promoted" if decision == "promote" else "kept")
+                )
+                if decision == "promote":
+                    target_neighbor_combined_candidate_ranker_stats["promote_count"] += 1
+                    output_variant = combined_output_variant
+                    selected_delta = deltas[output_variant]
+                    selected_proxy = proxies_by_variant[output_variant]
+                    selected_proxy_variant = output_variant
+                    output_decision_source = "target_neighbor_combined_ranker"
+                    promotion_incumbent_variant = combined_incumbent_variant
+                elif reason == "input_not_candidate":
+                    target_neighbor_combined_candidate_ranker_stats["skipped_count"] += 1
+                else:
+                    target_neighbor_combined_candidate_ranker_stats["keep_count"] += 1
+                reason_counts = target_neighbor_combined_candidate_ranker_stats["reason_counts"]
+                reason_counts[reason] = int(reason_counts.get(reason, 0)) + 1
             promotion_rollback_diagnostics = _promotion_rollback_decision(
                 output_variant=output_variant,
                 incumbent_variant=promotion_incumbent_variant,
@@ -5465,6 +5862,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "source_reliability_diagnostics": source_reliability_diagnostics,
                     "target_neighbor_consistency_diagnostics": target_neighbor_consistency_diagnostics,
                     "target_neighbor_candidate_unlock_diagnostics": target_neighbor_candidate_unlock_diagnostics,
+                    "target_neighbor_combined_candidate_ranker_diagnostics": target_neighbor_combined_candidate_ranker_diagnostics,
                     "target_neighbor_generated_candidate_diagnostics": target_neighbor_generated_candidate_diagnostics,
                     "target_neighbor_all_candidate_rank_diagnostics": target_neighbor_all_candidate_rank_diagnostics,
                 }
@@ -5522,21 +5920,25 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     )
     target_neighbor_all_candidate_rank_summary = _summarize_target_neighbor_all_candidate_diagnostics(per_view)
     active_gate = (
-        "source_pairwise_dominance"
-        if bool(pairwise_dominance_payload.get("enabled", False))
+        "target_neighbor_combined_ranker"
+        if bool(target_neighbor_combined_candidate_ranker_payload.get("enabled", False))
         else (
-            "source_heldout_local_support"
-            if bool(local_support_payload.get("enabled", False))
+            "source_pairwise_dominance"
+            if bool(pairwise_dominance_payload.get("enabled", False))
             else (
-                "source_heldout_reliability"
-                if bool(source_reliability_payload.get("enabled", False))
+                "source_heldout_local_support"
+                if bool(local_support_payload.get("enabled", False))
                 else (
-                    "source_heldout_risk_model"
-                    if bool(per_view_risk_model_payload.get("enabled", False))
+                    "source_heldout_reliability"
+                    if bool(source_reliability_payload.get("enabled", False))
                     else (
-                        "source_heldout_knn"
-                        if bool(per_view_knn_payload.get("enabled", False))
-                        else ("source_heldout_threshold" if bool(per_view_gate_payload.get("enabled", False)) else "off")
+                        "source_heldout_risk_model"
+                        if bool(per_view_risk_model_payload.get("enabled", False))
+                        else (
+                            "source_heldout_knn"
+                            if bool(per_view_knn_payload.get("enabled", False))
+                            else ("source_heldout_threshold" if bool(per_view_gate_payload.get("enabled", False)) else "off")
+                        )
                     )
                 )
             )
@@ -5554,6 +5956,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         bool(getattr(args, "enable_target_neighbor_consistency_certificate", False))
         or bool(getattr(args, "enable_target_neighbor_candidate_unlock", False))
         or bool(getattr(args, "enable_target_neighbor_generated_candidate", False))
+        or bool(target_neighbor_combined_candidate_ranker_payload.get("enabled", False))
     )
     payload: dict[str, Any] = {
         "method": "apply v302 constrained hybrid support-transport calibrator",
@@ -5579,8 +5982,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "target_neighbor_consistency_scope": "target_render_depth_camera_only_post_decision_certificate",
             "target_neighbor_candidate_unlock_uses_target_gt": False,
             "target_neighbor_candidate_unlock_scope": "target_render_depth_camera_only_online_per_view_unlock",
+            "target_neighbor_combined_candidate_ranker_uses_target_gt": False,
+            "target_neighbor_combined_candidate_ranker_scope": "source_heldout_candidate_evidence_plus_target_render_depth_camera_online_per_view_ranker",
             "target_neighbor_generated_candidate_uses_target_gt": False,
             "target_neighbor_generated_candidate_scope": "target_or_sourceheldout_render_depth_camera_consensus_candidate",
+            "target_neighbor_all_candidate_scores_affect_selection": bool(
+                target_neighbor_combined_candidate_ranker_payload.get("enabled", False)
+            ),
             "target_neighbor_all_candidate_diagnostic_affects_selection": False,
             "target_neighbor_all_candidate_diagnostic_scores_use_target_gt": False,
             "target_neighbor_all_candidate_diagnostic_oracle_uses_target_gt_posthoc": bool(
@@ -5655,9 +6063,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "enabled": bool(args.enable_target_neighbor_all_candidate_diagnostic),
                 "eps": float(args.target_neighbor_all_candidate_diagnostic_eps),
                 "affects_selection": False,
+                "candidate_scores_reused_by_combined_ranker": bool(
+                    target_neighbor_combined_candidate_ranker_payload.get("enabled", False)
+                ),
                 "score_uses_target_gt": False,
                 "oracle_uses_target_gt_posthoc": bool(args.enable_target_neighbor_all_candidate_diagnostic),
                 "reference": "optional all-candidate target-neighbor score ranking plus post-hoc strict oracle alignment",
+            },
+            "target_neighbor_combined_candidate_ranker": {
+                "requested": bool(args.enable_target_neighbor_combined_candidate_ranker),
+                "enabled": bool(target_neighbor_combined_candidate_ranker_payload.get("enabled", False)),
+                "uses_target_gt": False,
+                "reference": "opt-in source-heldout local-support candidate ranker with target-neighbor diagnostic features",
             },
             "output_variant": str(args.output_variant),
             "selected_variant": selected_variant,
@@ -5780,6 +6197,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "skipped_count": int(target_neighbor_candidate_unlock_stats["skipped_count"]),
             "reason_counts": dict(target_neighbor_candidate_unlock_stats["reason_counts"]),
         },
+        "target_neighbor_combined_candidate_ranker_policy": {
+            **target_neighbor_combined_candidate_ranker_payload,
+            "promote_count": int(target_neighbor_combined_candidate_ranker_stats["promote_count"]),
+            "keep_count": int(target_neighbor_combined_candidate_ranker_stats["keep_count"]),
+            "skipped_count": int(target_neighbor_combined_candidate_ranker_stats["skipped_count"]),
+            "reason_counts": dict(target_neighbor_combined_candidate_ranker_stats["reason_counts"]),
+            "reference": "requires source-heldout local/summary safeguards and a target-neighbor candidate improvement; no target GT is read before image save",
+        },
         "target_neighbor_all_candidate_rank_diagnostic": target_neighbor_all_candidate_rank_summary,
         "verdict": verdict,
         "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
@@ -5853,6 +6278,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             flat["apply/target_neighbor_candidate_unlock/promote_count"] = float(unlock.get("promote_count", 0) or 0)
             flat["apply/target_neighbor_candidate_unlock/keep_count"] = float(unlock.get("keep_count", 0) or 0)
             flat["apply/target_neighbor_candidate_unlock/skipped_count"] = float(unlock.get("skipped_count", 0) or 0)
+        if payload.get("target_neighbor_combined_candidate_ranker_policy"):
+            combined = payload["target_neighbor_combined_candidate_ranker_policy"]
+            flat["apply/target_neighbor_combined_ranker/enabled"] = float(bool(combined.get("enabled", False)))
+            flat["apply/target_neighbor_combined_ranker/promote_count"] = float(combined.get("promote_count", 0) or 0)
+            flat["apply/target_neighbor_combined_ranker/keep_count"] = float(combined.get("keep_count", 0) or 0)
+            flat["apply/target_neighbor_combined_ranker/skipped_count"] = float(combined.get("skipped_count", 0) or 0)
         if payload.get("target_neighbor_all_candidate_rank_diagnostic"):
             rank_diag = payload["target_neighbor_all_candidate_rank_diagnostic"]
             flat["apply/target_neighbor_all_candidate/enabled"] = float(bool(rank_diag.get("enabled", False)))
@@ -6121,6 +6552,53 @@ def main() -> None:
     parser.add_argument("--target_neighbor_candidate_unlock_incumbent_variant", default="fixed")
     parser.add_argument("--target_neighbor_candidate_unlock_candidate_variant", default="learned")
     parser.add_argument("--target_neighbor_candidate_unlock_min_incumbent_minus_candidate_delta", type=float, default=2.0e-4)
+    parser.add_argument(
+        "--enable_target_neighbor_combined_candidate_ranker",
+        action="store_true",
+        help=(
+            "Opt in to a no-target-GT candidate ranker that combines source-heldout local evidence "
+            "with target-neighbor all-candidate scores. Disabled by default."
+        ),
+    )
+    parser.add_argument(
+        "--target_neighbor_combined_candidate_ranker_feature_grid",
+        default=(
+            "covered_fraction,mean_abs_delta,confidence_mean,residual_std_mean,delta_snr,signal_snr,"
+            "confidence_snr,changed_fraction,delta_signal_cosine,opposition_fraction,aligned_fraction,"
+            "delta_to_signal_ratio,std_to_signal_ratio,support_confidence,support_count_mean"
+        ),
+    )
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_k", type=int, default=3)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_max_target_neighbor_rank", type=int, default=2)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_min_incumbent_minus_candidate_delta", type=float, default=2.0e-4)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_min_effective_weight", type=float, default=0.01)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_min_local_psnr_delta_vs_incumbent", type=float, default=0.0)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_min_local_ssim_delta_vs_incumbent", type=float, default=-5.0e-5)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_min_local_cvar_delta_vs_incumbent", type=float, default=0.0)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_min_local_min_delta_vs_incumbent", type=float, default=-1.0e9)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_min_local_positive_fraction_delta_vs_incumbent", type=float, default=-1.0e9)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_min_source_summary_psnr_delta_vs_incumbent", type=float, default=0.0)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_min_source_summary_ssim_delta_vs_incumbent", type=float, default=-5.0e-5)
+    parser.add_argument(
+        "--target_neighbor_combined_candidate_ranker_require_source_safe",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument(
+        "--target_neighbor_combined_candidate_ranker_forbid_fixed_when_incumbent_nonfixed",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument(
+        "--target_neighbor_combined_candidate_ranker_enable_ood_guard",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_ood_quantile", type=float, default=0.90)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_target_neighbor_weight", type=float, default=1.0)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_local_cvar_weight", type=float, default=0.25)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_local_min_weight", type=float, default=0.10)
+    parser.add_argument("--target_neighbor_combined_candidate_ranker_local_positive_weight", type=float, default=0.25)
     parser.add_argument("--enable_per_view_risk_model_policy", action="store_true")
     parser.add_argument(
         "--per_view_risk_model_feature_grid",
