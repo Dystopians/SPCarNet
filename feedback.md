@@ -63,6 +63,61 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-07-01 Feedback: v327b Reflection Helped, But Only Narrowly
+
+New detailed log:
+
+```text
+docs/car_model/7-01-v327b-BlendStep-Pairwise-Full9-Log.md
+```
+
+New audit:
+
+```text
+docs/car_model/results/v327b_pairwise_blendstep_full9_vs_v322c_audit.json
+```
+
+What changed:
+
+- `scripts/car_model/apply_source_heldout_support_transport_calibrator.py`
+  now supports `--pairwise_dominance_max_blend_step`.
+- This rejects pairwise candidates that jump too far from the current incumbent
+  in the candidate-ladder blend space.
+- The intended fix is to prevent the v327a failure mode where relaxed source
+  evidence allowed target overreach, especially `fixed -> mix0750` jumps.
+
+Full9 result versus v322C:
+
+| metric | delta |
+|---|---:|
+| selected PSNR gain mean | +0.000091155791 |
+| selected SSIM gain mean | +0.000000982373 |
+
+Per-scene result:
+
+- treehill improves by `+0.000820402117` PSNR gain and `+0.000008841356` SSIM
+  gain versus v322C.
+- bicycle, bonsai, counter, flowers, garden, kitchen, room, and stump exactly
+  match v322C under replay audit.
+
+Lessons:
+
+- The recent reflection was not useless: it found that pairwise local/source
+  evidence needs an overreach bound.
+- The zero-accept guard and blend-step guard convert a dangerous pairwise module
+  into a conservative no-regression module.
+- The benefit is still too small and too localized. This remains engineering
+  closure evidence, not a paper-level method breakthrough.
+- Future prompts should not ask for broad parameter sweeps first. They should
+  demand a stronger target-blind residual reliability model or representation
+  update that can activate safely on more than one scene.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v325b/v326 Replay Closure Feedback Addendum
 
 This addendum records the latest post-v322C lesson for the next model/prompt.

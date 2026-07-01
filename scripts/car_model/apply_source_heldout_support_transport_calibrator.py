@@ -1849,8 +1849,19 @@ def _fit_pairwise_dominance_policy(
                 "reject_reason": None,
             }
             local_deltas = dict(local.get("deltas", {}))
+            candidate_blend = variant_blend_map.get(variant)
+            incumbent_blend = variant_blend_map.get(incumbent_variant)
+            blend_step = (
+                abs(float(candidate_blend) - float(incumbent_blend))
+                if candidate_blend is not None and incumbent_blend is not None
+                else None
+            )
+            cand_diag["blend_step"] = blend_step
+            cand_diag["max_blend_step"] = float(args.pairwise_dominance_max_blend_step)
             reject_reason = None
-            if prediction[0] < float(args.pairwise_dominance_min_predicted_objective_delta):
+            if blend_step is not None and blend_step > float(args.pairwise_dominance_max_blend_step):
+                reject_reason = "blend_step"
+            elif prediction[0] < float(args.pairwise_dominance_min_predicted_objective_delta):
                 reject_reason = "predicted_objective_delta"
             elif prediction[1] < float(args.pairwise_dominance_min_predicted_psnr_delta):
                 reject_reason = "predicted_psnr_delta"
@@ -1959,6 +1970,7 @@ def _fit_pairwise_dominance_policy(
         "ood_guard_enabled": bool(args.pairwise_dominance_enable_ood_guard),
         "ood_quantile": float(args.pairwise_dominance_ood_quantile),
         "ood_source_distance_threshold": float(ood_threshold),
+        "max_blend_step": float(args.pairwise_dominance_max_blend_step),
     }
     if selected_counts["incumbent"] >= len(rows_by_view):
         return {"enabled": False, "verdict": "pairwise dominance accepted no source views", **base_payload}
@@ -2028,8 +2040,17 @@ def _pairwise_dominance_choose_variant(
             else float("inf")
         )
         local_deltas = dict(local.get("deltas", {}))
+        candidate_blend = variant_blend_map.get(variant)
+        incumbent_blend = variant_blend_map.get(incumbent_variant)
+        blend_step = (
+            abs(float(candidate_blend) - float(incumbent_blend))
+            if candidate_blend is not None and incumbent_blend is not None
+            else None
+        )
         reject_reason = None
-        if prediction[0] < float(args.pairwise_dominance_min_predicted_objective_delta):
+        if blend_step is not None and blend_step > float(args.pairwise_dominance_max_blend_step):
+            reject_reason = "blend_step"
+        elif prediction[0] < float(args.pairwise_dominance_min_predicted_objective_delta):
             reject_reason = "predicted_objective_delta"
         elif prediction[1] < float(args.pairwise_dominance_min_predicted_psnr_delta):
             reject_reason = "predicted_psnr_delta"
@@ -2050,6 +2071,8 @@ def _pairwise_dominance_choose_variant(
         cand_diag = {
             "prediction": prediction,
             "local": local,
+            "blend_step": blend_step,
+            "max_blend_step": float(args.pairwise_dominance_max_blend_step),
             "ood_distance": float(ood_distance),
             "ood_threshold": float(policy.get("ood_source_distance_threshold", float("inf"))),
             "reject_reason": reject_reason,
@@ -4364,6 +4387,7 @@ def main() -> None:
     parser.add_argument("--pairwise_dominance_min_source_min_delta", type=float, default=0.0)
     parser.add_argument("--pairwise_dominance_enable_ood_guard", action="store_true")
     parser.add_argument("--pairwise_dominance_ood_quantile", type=float, default=0.80)
+    parser.add_argument("--pairwise_dominance_max_blend_step", type=float, default=1.0e9)
     parser.add_argument("--pairwise_dominance_psnr_weight", type=float, default=0.0)
     parser.add_argument("--pairwise_dominance_ssim_weight", type=float, default=0.0)
     parser.add_argument("--pairwise_dominance_local_cvar_weight", type=float, default=0.25)

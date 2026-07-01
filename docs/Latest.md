@@ -1690,6 +1690,52 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-07-01 v327b Blend-Step Pairwise Reflection Result
+
+Detailed log:
+
+```text
+docs/car_model/7-01-v327b-BlendStep-Pairwise-Full9-Log.md
+```
+
+v327b is the first post-reflection pairwise policy that gives a positive full9
+delta over the v322C incumbent while preserving all non-changing scenes exactly.
+It adds a blend-step overreach guard to the pairwise dominance policy:
+
+```text
+--pairwise_dominance_max_blend_step 0.25
+```
+
+Full9 audit versus v322C:
+
+```text
+docs/car_model/results/v327b_pairwise_blendstep_full9_vs_v322c_audit.json
+```
+
+| metric | v322C | v327b | delta |
+|---|---:|---:|---:|
+| selected PSNR gain mean | 0.271334337119 | 0.271425492910 | +0.000091155791 |
+| selected SSIM gain mean | 0.003727241355 | 0.003728223728 | +0.000000982373 |
+
+Per-scene delta: only treehill changes, with `+0.000820402117` PSNR gain and
+`+0.000008841356` SSIM gain versus v322C. The other eight scenes exactly match
+v322C under the replay audit.
+
+Interpretation:
+
+- reflection did help: it identified pairwise overreach and produced a guard
+  that avoids v326/v327a regressions;
+- the gain is real but extremely small;
+- this is not enough to claim paper-level completion or a broad win;
+- the next step must be a stronger target-blind residual reliability model or
+  representation-level update, not another threshold scan.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Update: v325b Replay Closure and v326 Pairwise Guard
 
 Current best verified incumbent remains archived v322C. The latest work did not
