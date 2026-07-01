@@ -1,0 +1,625 @@
+{
+  "title": "v334 source-target contradiction full9 audit",
+  "date": "2026-07-01",
+  "scenes": [
+    "bicycle",
+    "flowers",
+    "garden",
+    "stump",
+    "counter",
+    "treehill",
+    "bonsai",
+    "room",
+    "kitchen"
+  ],
+  "roots": {
+    "v329b": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701",
+    "v333": "outputs/carnet/spcarnet_v333_target_neighbor_consistency_full9_20260701",
+    "v334": "outputs/carnet/spcarnet_v334_source_target_contradiction_full9_20260701"
+  },
+  "macro": {
+    "v329b": {
+      "selected_psnr_gain_mean": 0.2725226524788792,
+      "selected_ssim_gain_mean": 0.0037366606734715343,
+      "rollback_count_sum": 0,
+      "all_axis_safe_scenes": 9
+    },
+    "v333": {
+      "selected_psnr_gain_mean": 0.27271657335352273,
+      "selected_ssim_gain_mean": 0.003738908357267416,
+      "rollback_count_sum": 2,
+      "all_axis_safe_scenes": 9
+    },
+    "v334": {
+      "selected_psnr_gain_mean": 0.2727930217252385,
+      "selected_ssim_gain_mean": 0.0037389330085711198,
+      "rollback_count_sum": 3,
+      "all_axis_safe_scenes": 9
+    },
+    "v334_minus_v333": {
+      "selected_psnr_gain_mean": 7.644837171577601e-05,
+      "selected_ssim_gain_mean": 2.4651303703621813e-08,
+      "rollback_count_sum": 1
+    },
+    "v334_minus_v329b": {
+      "selected_psnr_gain_mean": 0.00027036924635931436,
+      "selected_ssim_gain_mean": 2.2723350995854444e-06,
+      "rollback_count_sum": 3
+    }
+  },
+  "scene_rows": [
+    {
+      "scene": "bicycle",
+      "v329b": {
+        "selected_psnr_gain": 0.11995854884043254,
+        "selected_ssim_gain": 0.00298875093460083,
+        "fixed_psnr_gain": 0.09834530782944569,
+        "fixed_ssim_gain": 0.0028195738792419433,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {}
+      },
+      "v333": {
+        "selected_psnr_gain": 0.11995854884043254,
+        "selected_ssim_gain": 0.00298875093460083,
+        "fixed_psnr_gain": 0.09834530782944569,
+        "fixed_ssim_gain": 0.0028195738792419433,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "no_promotion": 25
+        }
+      },
+      "v334": {
+        "selected_psnr_gain": 0.11995854884043254,
+        "selected_ssim_gain": 0.00298875093460083,
+        "fixed_psnr_gain": 0.09834530782944569,
+        "fixed_ssim_gain": 0.0028195738792419433,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "no_promotion": 25
+        }
+      },
+      "v334_minus_v333": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      },
+      "v334_minus_v329b": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      }
+    },
+    {
+      "scene": "flowers",
+      "v329b": {
+        "selected_psnr_gain": 0.0923596316861136,
+        "selected_ssim_gain": 0.00411434065211903,
+        "fixed_psnr_gain": 0.0782240266728122,
+        "fixed_ssim_gain": 0.003794328732924028,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {}
+      },
+      "v333": {
+        "selected_psnr_gain": 0.0923596316861136,
+        "selected_ssim_gain": 0.00411434065211903,
+        "fixed_psnr_gain": 0.0782240266728122,
+        "fixed_ssim_gain": 0.003794328732924028,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "no_promotion": 13,
+          "decision_source_not_checked": 9
+        }
+      },
+      "v334": {
+        "selected_psnr_gain": 0.0923596316861136,
+        "selected_ssim_gain": 0.00411434065211903,
+        "fixed_psnr_gain": 0.0782240266728122,
+        "fixed_ssim_gain": 0.003794328732924028,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "no_promotion": 13,
+          "decision_source_not_checked": 9
+        }
+      },
+      "v334_minus_v333": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      },
+      "v334_minus_v329b": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      }
+    },
+    {
+      "scene": "garden",
+      "v329b": {
+        "selected_psnr_gain": 0.14544912017232203,
+        "selected_ssim_gain": 0.0019197786847750347,
+        "fixed_psnr_gain": 0.13318078577315484,
+        "fixed_ssim_gain": 0.0018310770392417908,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {}
+      },
+      "v333": {
+        "selected_psnr_gain": 0.14544912017232203,
+        "selected_ssim_gain": 0.0019197786847750347,
+        "fixed_psnr_gain": 0.13318078577315484,
+        "fixed_ssim_gain": 0.0018310770392417908,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "decision_source_not_checked": 21,
+          "no_promotion": 3
+        }
+      },
+      "v334": {
+        "selected_psnr_gain": 0.14544912017232203,
+        "selected_ssim_gain": 0.0019197786847750347,
+        "fixed_psnr_gain": 0.13318078577315484,
+        "fixed_ssim_gain": 0.0018310770392417908,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "decision_source_not_checked": 21,
+          "no_promotion": 3
+        }
+      },
+      "v334_minus_v333": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      },
+      "v334_minus_v329b": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      }
+    },
+    {
+      "scene": "stump",
+      "v329b": {
+        "selected_psnr_gain": 0.05702976139303506,
+        "selected_ssim_gain": 0.001208242028951645,
+        "fixed_psnr_gain": 0.05702976139303506,
+        "fixed_ssim_gain": 0.001208242028951645,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {}
+      },
+      "v333": {
+        "selected_psnr_gain": 0.05702976139303506,
+        "selected_ssim_gain": 0.001208242028951645,
+        "fixed_psnr_gain": 0.05702976139303506,
+        "fixed_ssim_gain": 0.001208242028951645,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "no_promotion": 16
+        }
+      },
+      "v334": {
+        "selected_psnr_gain": 0.05702976139303506,
+        "selected_ssim_gain": 0.001208242028951645,
+        "fixed_psnr_gain": 0.05702976139303506,
+        "fixed_ssim_gain": 0.001208242028951645,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "no_promotion": 16
+        }
+      },
+      "v334_minus_v333": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      },
+      "v334_minus_v329b": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      }
+    },
+    {
+      "scene": "counter",
+      "v329b": {
+        "selected_psnr_gain": 0.4263596368894508,
+        "selected_ssim_gain": 0.006908347209294637,
+        "fixed_psnr_gain": 0.3396316968123441,
+        "fixed_ssim_gain": 0.006116793553034464,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {}
+      },
+      "v333": {
+        "selected_psnr_gain": 0.4263596368894508,
+        "selected_ssim_gain": 0.006908347209294637,
+        "fixed_psnr_gain": 0.3396316968123441,
+        "fixed_ssim_gain": 0.006116793553034464,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "no_promotion": 30
+        }
+      },
+      "v334": {
+        "selected_psnr_gain": 0.4263596368894508,
+        "selected_ssim_gain": 0.006908347209294637,
+        "fixed_psnr_gain": 0.3396316968123441,
+        "fixed_ssim_gain": 0.006116793553034464,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "no_promotion": 30
+        }
+      },
+      "v334_minus_v333": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      },
+      "v334_minus_v329b": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      }
+    },
+    {
+      "scene": "treehill",
+      "v329b": {
+        "selected_psnr_gain": 0.10466407441286524,
+        "selected_ssim_gain": 0.0016736454433865016,
+        "fixed_psnr_gain": 0.09075745623850276,
+        "fixed_ssim_gain": 0.0015932122866312663,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {}
+      },
+      "v333": {
+        "selected_psnr_gain": 0.10640936228465729,
+        "selected_ssim_gain": 0.0016938745975494385,
+        "fixed_psnr_gain": 0.09075745623850276,
+        "fixed_ssim_gain": 0.0015932122866312663,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 2,
+        "shadow_rollback_count": 0,
+        "considered_count": 7,
+        "reason_counts": {
+          "no_promotion": 11,
+          "passed": 5,
+          "target_neighbor_consistency_delta": 2
+        }
+      },
+      "v334": {
+        "selected_psnr_gain": 0.10709739763009887,
+        "selected_ssim_gain": 0.0016940964592827691,
+        "fixed_psnr_gain": 0.09075745623850276,
+        "fixed_ssim_gain": 0.0015932122866312663,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 3,
+        "shadow_rollback_count": 0,
+        "considered_count": 7,
+        "reason_counts": {
+          "no_promotion": 11,
+          "passed": 4,
+          "target_neighbor_consistency_delta": 2,
+          "source_target_neighbor_contradiction": 1
+        }
+      },
+      "v334_minus_v333": {
+        "selected_psnr_gain": 0.0006880353454415816,
+        "selected_ssim_gain": 2.2186173333064475e-07,
+        "rollback_count": 1
+      },
+      "v334_minus_v329b": {
+        "selected_psnr_gain": 0.002433323217233635,
+        "selected_ssim_gain": 2.045101589626748e-05,
+        "rollback_count": 3
+      }
+    },
+    {
+      "scene": "bonsai",
+      "v329b": {
+        "selected_psnr_gain": 0.5759744422762492,
+        "selected_ssim_gain": 0.005847958294120994,
+        "fixed_psnr_gain": 0.4863971501099032,
+        "fixed_ssim_gain": 0.005299505349752065,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {}
+      },
+      "v333": {
+        "selected_psnr_gain": 0.5759744422762492,
+        "selected_ssim_gain": 0.005847958294120994,
+        "fixed_psnr_gain": 0.4863971501099032,
+        "fixed_ssim_gain": 0.005299505349752065,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "no_promotion": 33,
+          "decision_source_not_checked": 4
+        }
+      },
+      "v334": {
+        "selected_psnr_gain": 0.5759744422762492,
+        "selected_ssim_gain": 0.005847958294120994,
+        "fixed_psnr_gain": 0.4863971501099032,
+        "fixed_ssim_gain": 0.005299505349752065,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "no_promotion": 33,
+          "decision_source_not_checked": 4
+        }
+      },
+      "v334_minus_v333": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      },
+      "v334_minus_v329b": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      }
+    },
+    {
+      "scene": "room",
+      "v329b": {
+        "selected_psnr_gain": 0.43728549610687184,
+        "selected_ssim_gain": 0.005058021117479374,
+        "fixed_psnr_gain": 0.39369127175138374,
+        "fixed_ssim_gain": 0.004668333591558995,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {}
+      },
+      "v333": {
+        "selected_psnr_gain": 0.43728549610687184,
+        "selected_ssim_gain": 0.005058021117479374,
+        "fixed_psnr_gain": 0.39369127175138374,
+        "fixed_ssim_gain": 0.004668333591558995,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "decision_source_not_checked": 20,
+          "no_promotion": 19
+        }
+      },
+      "v334": {
+        "selected_psnr_gain": 0.43728549610687184,
+        "selected_ssim_gain": 0.005058021117479374,
+        "fixed_psnr_gain": 0.39369127175138374,
+        "fixed_ssim_gain": 0.004668333591558995,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "decision_source_not_checked": 20,
+          "no_promotion": 19
+        }
+      },
+      "v334_minus_v333": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      },
+      "v334_minus_v329b": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      }
+    },
+    {
+      "scene": "kitchen",
+      "v329b": {
+        "selected_psnr_gain": 0.4936231605325725,
+        "selected_ssim_gain": 0.003910861696515764,
+        "fixed_psnr_gain": 0.39306139938107726,
+        "fixed_ssim_gain": 0.0034032719475882395,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {}
+      },
+      "v333": {
+        "selected_psnr_gain": 0.4936231605325725,
+        "selected_ssim_gain": 0.003910861696515764,
+        "fixed_psnr_gain": 0.39306139938107726,
+        "fixed_ssim_gain": 0.0034032719475882395,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "no_promotion": 35
+        }
+      },
+      "v334": {
+        "selected_psnr_gain": 0.4936231605325725,
+        "selected_ssim_gain": 0.003910861696515764,
+        "fixed_psnr_gain": 0.39306139938107726,
+        "fixed_ssim_gain": 0.0034032719475882395,
+        "selected_all_axis_safe_vs_fixed": true,
+        "rollback_count": 0,
+        "shadow_rollback_count": 0,
+        "considered_count": 0,
+        "reason_counts": {
+          "no_promotion": 35
+        }
+      },
+      "v334_minus_v333": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      },
+      "v334_minus_v329b": {
+        "selected_psnr_gain": 0.0,
+        "selected_ssim_gain": 0.0,
+        "rollback_count": 0
+      }
+    }
+  ],
+  "treehill_critical_views": [
+    {
+      "view": "00007",
+      "raw_output_variant": "mix0250",
+      "final_output_variant": "fixed",
+      "rollback_applied": true,
+      "reject_reason": "target_neighbor_consistency_delta",
+      "incumbent_minus_output_mae_delta": -0.00012173932083296007,
+      "source_local_psnr_min": 0.021059423674685718,
+      "source_local_psnr_cvar": 0.021059423674685718,
+      "source_local_positive_fraction": 1.0,
+      "raw_minus_fixed_psnr_gain_delta": -0.02646940841344758,
+      "raw_minus_fixed_ssim_gain_delta": -4.291534423828125e-05,
+      "final_psnr_gain": -0.04984594221641814,
+      "final_ssim_gain": 0.0017403960227966309
+    },
+    {
+      "view": "00008",
+      "raw_output_variant": "mix0250",
+      "final_output_variant": "fixed",
+      "rollback_applied": true,
+      "reject_reason": "target_neighbor_consistency_delta",
+      "incumbent_minus_output_mae_delta": -0.00014801272689870387,
+      "source_local_psnr_min": 0.0004136997906343254,
+      "source_local_psnr_cvar": 0.0004136997906343254,
+      "source_local_positive_fraction": 1.0,
+      "raw_minus_fixed_psnr_gain_delta": -0.004945773278809185,
+      "raw_minus_fixed_ssim_gain_delta": -0.0003212094306945801,
+      "final_psnr_gain": 0.057252173198978795,
+      "final_ssim_gain": 3.6954879760742188e-06
+    },
+    {
+      "view": "00009",
+      "raw_output_variant": "mix0250",
+      "final_output_variant": "fixed",
+      "rollback_applied": true,
+      "reject_reason": "source_target_neighbor_contradiction",
+      "incumbent_minus_output_mae_delta": -2.4989737967738568e-05,
+      "source_local_psnr_min": 0.021059423674685718,
+      "source_local_psnr_cvar": 0.021059423674685718,
+      "source_local_positive_fraction": 1.0,
+      "raw_minus_fixed_psnr_gain_delta": -0.012384636217948497,
+      "raw_minus_fixed_ssim_gain_delta": -3.993511199951172e-06,
+      "final_psnr_gain": -0.0016943227117742765,
+      "final_ssim_gain": 0.0030724406242370605
+    },
+    {
+      "view": "00011",
+      "raw_output_variant": "mix0250",
+      "final_output_variant": "mix0250",
+      "rollback_applied": false,
+      "reject_reason": null,
+      "incumbent_minus_output_mae_delta": -7.00536277686431e-05,
+      "source_local_psnr_min": 0.0004136997906343254,
+      "source_local_psnr_cvar": 0.0004136997906343254,
+      "source_local_positive_fraction": 1.0,
+      "raw_minus_fixed_psnr_gain_delta": 0.03372038690325496,
+      "raw_minus_fixed_ssim_gain_delta": 0.0002688169479370117,
+      "final_psnr_gain": 0.32814087722680085,
+      "final_ssim_gain": 0.004323422908782959
+    },
+    {
+      "view": "00015",
+      "raw_output_variant": "mix0250",
+      "final_output_variant": "mix0250",
+      "rollback_applied": false,
+      "reject_reason": null,
+      "incumbent_minus_output_mae_delta": -4.4425695274533106e-05,
+      "source_local_psnr_min": 0.0004136997906343254,
+      "source_local_psnr_cvar": 0.0004136997906343254,
+      "source_local_positive_fraction": 1.0,
+      "raw_minus_fixed_psnr_gain_delta": 0.015076869936272885,
+      "raw_minus_fixed_ssim_gain_delta": 0.00020939111709594727,
+      "final_psnr_gain": 0.14922445503405157,
+      "final_ssim_gain": 0.0041405558586120605
+    }
+  ],
+  "policy": {
+    "enabled": true,
+    "mode": "enforce",
+    "sources": [
+      "pairwise"
+    ],
+    "min_incumbent_minus_output_delta": -0.0001,
+    "neighbor_k": 2,
+    "direction_weight": 0.35,
+    "max_side": 256,
+    "depth_abs_tol": 0.03,
+    "depth_rel_tol": 0.04,
+    "min_confidence": 0.0001,
+    "min_effective_weight": 0.01,
+    "source_contradiction_enabled": true,
+    "contradiction_min_source_local_min_delta": 0.01,
+    "contradiction_min_source_local_cvar_delta": 0.01,
+    "contradiction_min_source_positive_fraction": 1.0,
+    "contradiction_max_incumbent_minus_output_delta": -2e-05,
+    "uses_target_gt": false,
+    "reference": "target split render/depth/camera only; compares candidate-vs-incumbent warp MAE to neighboring base renders",
+    "keep_count": 4,
+    "shadow_rollback_count": 0,
+    "rollback_count": 3,
+    "considered_count": 7,
+    "reason_counts": {
+      "no_promotion": 11,
+      "passed": 4,
+      "target_neighbor_consistency_delta": 2,
+      "source_target_neighbor_contradiction": 1
+    }
+  },
+  "verdict": "v334 is a real full9-safe tail-repair increment over v333/v329b under the frozen policy. The gain is narrow and comes from one additional source-target contradiction rollback on treehill 00009, so it is a milestone certificate, not a broad representation-level breakthrough."
+}

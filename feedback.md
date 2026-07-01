@@ -2,6 +2,73 @@
 
 Date: 2026-06-28
 
+# 2026-07-01 v334 Feedback Addendum: Reflection Finally Became a Mechanism, But the Gain Is Still Narrow
+
+New files:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v334-SourceTargetContradiction-Certificate.md
+docs/car_model/results/v334_source_target_contradiction_treehill_report.json
+docs/car_model/results/v334_source_target_contradiction_full9_vs_v333_v329b_audit.json
+docs/car_model/results/v334_source_target_contradiction_full9_vs_v333_v329b_audit.md
+docs/car_model/results/v334_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v334_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v334_frontier_panels/treehill_00009_v333_v334_gt_panel.png
+outputs/carnet/spcarnet_v334_source_target_contradiction_treehill_20260701
+outputs/carnet/spcarnet_v334_source_target_contradiction_full9_20260701
+outputs/carnet/spcarnet_v334_frontier_comparison_full9_20260701
+```
+
+Implemented change:
+
+v334 extends the v333 target-neighbor consistency certificate with a
+source-target contradiction rule. The new rule handles the case where
+source-local pairwise support is very confident, but target-neighbor
+self-consistency mildly prefers the incumbent. It is opt-in and target/test-GT
+free at decision time.
+
+Full9 result:
+
+| metric | v329b | v333 | v334 | v334-v333 | v334-v329b |
+|---|---:|---:|---:|---:|---:|
+| selected PSNR gain | 0.272522652479 | 0.272716573354 | 0.272793021725 | +0.000076448372 | +0.000270369246 |
+| selected SSIM gain | 0.003736660673 | 0.003738908357 | 0.003738933009 | +0.000000024651 | +0.000002272335 |
+| rollback count | 0 | 2 | 3 | +1 | +3 |
+
+Perceptual/frontier result:
+
+| method | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v329b | 27.588444 | 0.028173 | 0.087733 | 0.057664 |
+| v333 | 27.588734 | 0.028171 | 0.087735 | 0.057664 |
+| v334 | 27.588834 | 0.028170 | 0.087735 | 0.057664 |
+
+Hard lesson:
+
+The reflection started to work only after it was converted into a falsifiable
+failure-mode certificate. The missed treehill `00009` case was not caught by
+support dropout or ordinary source LCB because those signals were stable and
+over-confident. It was caught by looking for a contradiction: high source-local
+confidence plus mild target-neighbor disagreement.
+
+Remaining bottleneck:
+
+This still does not solve the deeper problem. v334 is a narrow tail-risk repair
+over an existing candidate generator. It improves full9 metrics without
+regressing LPIPS/DISTS, but the visible difference is subtle and the gain is
+concentrated in treehill. A next-stage model should not keep stacking vetoes as
+the main contribution; it needs a stronger raw representation/candidate module
+or a richer target-blind evidence field that produces visibly larger
+improvements before arbitration.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v333 Feedback Addendum: Target-Neighbor Consistency Is the First Positive Post-v332 Fix, But Not Final Closure
 
 New files:

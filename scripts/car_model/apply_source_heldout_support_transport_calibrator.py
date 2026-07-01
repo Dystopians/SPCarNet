@@ -296,6 +296,9 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- checked sources: `{target_neighbor.get('sources')}`",
             f"- min incumbent-minus-output MAE delta: `{target_neighbor.get('min_incumbent_minus_output_delta')}`",
             f"- neighbor k / max side: `{target_neighbor.get('neighbor_k')}` / `{target_neighbor.get('max_side')}`",
+            f"- source contradiction enabled: `{target_neighbor.get('source_contradiction_enabled')}`",
+            f"- contradiction source local min / CVaR / positive fraction: `{target_neighbor.get('contradiction_min_source_local_min_delta')}` / `{target_neighbor.get('contradiction_min_source_local_cvar_delta')}` / `{target_neighbor.get('contradiction_min_source_positive_fraction')}`",
+            f"- contradiction max incumbent-minus-output delta: `{target_neighbor.get('contradiction_max_incumbent_minus_output_delta')}`",
             f"- target GT used: `{target_neighbor.get('uses_target_gt')}`",
             f"- keep / shadow rollback / rollback: `{target_neighbor.get('keep_count')}` / `{target_neighbor.get('shadow_rollback_count')}` / `{target_neighbor.get('rollback_count')}`",
             f"- reason counts: `{target_neighbor.get('reason_counts')}`",
@@ -2491,6 +2494,7 @@ def _target_neighbor_consistency_decision(
     output_variant: str,
     incumbent_variant: str,
     decision_source: str,
+    pairwise_diagnostics: dict[str, Any] | None,
     ev: Any,
     deltas: dict[str, torch.Tensor],
     target: Any,
@@ -2512,6 +2516,7 @@ def _target_neighbor_consistency_decision(
         "incumbent_minus_output_mae_delta": None,
         "output_score": None,
         "incumbent_score": None,
+        "source_local_deltas": None,
     }
     if not enabled:
         payload["reject_reason"] = "disabled"
@@ -2569,6 +2574,32 @@ def _target_neighbor_consistency_decision(
     mae_delta = float(incumbent_error) - float(output_error)
     payload["incumbent_minus_output_mae_delta"] = float(mae_delta)
     if mae_delta >= float(args.target_neighbor_consistency_min_incumbent_minus_output_delta):
+        if bool(args.target_neighbor_consistency_enable_source_contradiction):
+            candidate_diag = (
+                dict((pairwise_diagnostics or {}).get("candidate_diagnostics", {}))
+                .get(output_variant, {})
+            )
+            local = dict(candidate_diag.get("local", {})) if isinstance(candidate_diag, dict) else {}
+            local_deltas = dict(local.get("deltas", {}))
+            payload["source_local_deltas"] = local_deltas
+            source_local_min = float(local_deltas.get("psnr_min", -1.0e9))
+            source_local_cvar = float(local_deltas.get("psnr_cvar", -1.0e9))
+            source_positive_fraction = float(local_deltas.get("positive_fraction", 0.0))
+            source_strong = (
+                source_local_min >= float(args.target_neighbor_consistency_contradiction_min_source_local_min_delta)
+                and source_local_cvar >= float(args.target_neighbor_consistency_contradiction_min_source_local_cvar_delta)
+                and source_positive_fraction >= float(args.target_neighbor_consistency_contradiction_min_source_positive_fraction)
+            )
+            target_negative = mae_delta < float(args.target_neighbor_consistency_contradiction_max_incumbent_minus_output_delta)
+            if source_strong and target_negative:
+                payload["reject_reason"] = "source_target_neighbor_contradiction"
+                if str(args.target_neighbor_consistency_mode) == "enforce":
+                    payload["decision"] = "rollback"
+                    payload["rollback_applied"] = True
+                else:
+                    payload["decision"] = "shadow_rollback"
+                    payload["rollback_applied"] = False
+                return payload
         return payload
 
     payload["reject_reason"] = "target_neighbor_consistency_delta"
@@ -4536,6 +4567,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 output_variant=output_variant,
                 incumbent_variant=promotion_incumbent_variant,
                 decision_source=output_decision_source,
+                pairwise_diagnostics=pairwise_dominance_diagnostics,
                 ev=ev,
                 deltas=deltas,
                 target=target,
@@ -4855,6 +4887,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "depth_rel_tol": float(args.target_neighbor_consistency_depth_rel_tol),
             "min_confidence": float(args.target_neighbor_consistency_min_confidence),
             "min_effective_weight": float(args.target_neighbor_consistency_min_effective_weight),
+            "source_contradiction_enabled": bool(args.target_neighbor_consistency_enable_source_contradiction),
+            "contradiction_min_source_local_min_delta": float(
+                args.target_neighbor_consistency_contradiction_min_source_local_min_delta
+            ),
+            "contradiction_min_source_local_cvar_delta": float(
+                args.target_neighbor_consistency_contradiction_min_source_local_cvar_delta
+            ),
+            "contradiction_min_source_positive_fraction": float(
+                args.target_neighbor_consistency_contradiction_min_source_positive_fraction
+            ),
+            "contradiction_max_incumbent_minus_output_delta": float(
+                args.target_neighbor_consistency_contradiction_max_incumbent_minus_output_delta
+            ),
             "uses_target_gt": False,
             "reference": "target split render/depth/camera only; compares candidate-vs-incumbent warp MAE to neighboring base renders",
             "keep_count": int(target_neighbor_consistency_stats["keep_count"]),
@@ -5120,6 +5165,11 @@ def main() -> None:
     parser.add_argument("--target_neighbor_consistency_depth_rel_tol", type=float, default=0.04)
     parser.add_argument("--target_neighbor_consistency_min_confidence", type=float, default=1.0e-4)
     parser.add_argument("--target_neighbor_consistency_min_effective_weight", type=float, default=0.01)
+    parser.add_argument("--target_neighbor_consistency_enable_source_contradiction", action="store_true")
+    parser.add_argument("--target_neighbor_consistency_contradiction_min_source_local_min_delta", type=float, default=1.0e9)
+    parser.add_argument("--target_neighbor_consistency_contradiction_min_source_local_cvar_delta", type=float, default=1.0e9)
+    parser.add_argument("--target_neighbor_consistency_contradiction_min_source_positive_fraction", type=float, default=1.0)
+    parser.add_argument("--target_neighbor_consistency_contradiction_max_incumbent_minus_output_delta", type=float, default=-1.0e9)
     parser.add_argument("--enable_per_view_risk_model_policy", action="store_true")
     parser.add_argument(
         "--per_view_risk_model_feature_grid",

@@ -2,6 +2,71 @@
 
 Date: 2026-06-28
 
+## 2026-07-01 Follow-up: v334 Source-Target Contradiction Certificate
+
+Newest positive method update:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v334-SourceTargetContradiction-Certificate.md
+docs/car_model/results/v334_source_target_contradiction_treehill_report.json
+docs/car_model/results/v334_source_target_contradiction_full9_vs_v333_v329b_audit.json
+docs/car_model/results/v334_source_target_contradiction_full9_vs_v333_v329b_audit.md
+docs/car_model/results/v334_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v334_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v334_frontier_panels/treehill_00009_v333_v334_gt_panel.png
+outputs/carnet/spcarnet_v334_source_target_contradiction_treehill_20260701
+outputs/carnet/spcarnet_v334_source_target_contradiction_full9_20260701
+outputs/carnet/spcarnet_v334_frontier_comparison_full9_20260701
+```
+
+v334 adds a source-target contradiction branch inside the v333
+target-neighbor certificate. It targets the missed treehill `00009` failure:
+source-local pairwise evidence is strongly positive, but target-neighbor
+self-consistency mildly prefers the incumbent. This is target/test-GT-free at
+decision time and remains opt-in.
+
+Full9 replay:
+
+| metric | v329b | v333 | v334 | v334-v333 | v334-v329b |
+|---|---:|---:|---:|---:|---:|
+| selected PSNR gain | 0.272522652479 | 0.272716573354 | 0.272793021725 | +0.000076448372 | +0.000270369246 |
+| selected SSIM gain | 0.003736660673 | 0.003738908357 | 0.003738933009 | +0.000000024651 | +0.000002272335 |
+| rollback count | 0 | 2 | 3 | +1 | +3 |
+| all-axis safe scenes | 9/9 | 9/9 | 9/9 |  |  |
+
+Treehill focused result:
+
+| method | selected PSNR gain | selected SSIM gain | rollback count |
+|---|---:|---:|---:|
+| v333 treehill | 0.106409362285 | 0.001693874598 | 2 |
+| v334 treehill | 0.107097397630 | 0.001694096459 | 3 |
+
+The new rollback is `00009`, with reason
+`source_target_neighbor_contradiction`. Positive controls `00011` and `00015`
+are still kept.
+
+Perceptual/frontier result:
+
+| method | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v329b | 27.588444 | 0.028173 | 0.087733 | 0.057664 |
+| v333 | 27.588734 | 0.028171 | 0.087735 | 0.057664 |
+| v334 | 27.588834 | 0.028170 | 0.087735 | 0.057664 |
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+v334 proves that the latest reflection is finally actionable: it models a
+specific source-target evidence contradiction and fixes a previously missed
+tail failure. But the gain is still narrow, concentrated in treehill, and
+visually subtle. It should be treated as a reliability milestone, not final
+paper closure.
+
 ## 2026-07-01 Follow-up: v333 Target-Neighbor Consistency Certificate
 
 Newest positive method update:
