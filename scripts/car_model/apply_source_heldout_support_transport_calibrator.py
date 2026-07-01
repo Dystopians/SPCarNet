@@ -409,6 +409,11 @@ def _generated_candidate_names(args: argparse.Namespace) -> list[str]:
     if bool(getattr(args, "enable_adaptive_residual_candidate", False)):
         name = str(getattr(args, "adaptive_residual_candidate_name", "adaptive")).strip() or "adaptive"
         names.append(name)
+    if bool(getattr(args, "enable_source_trust_residual_candidate", False)):
+        name = str(getattr(args, "source_trust_residual_candidate_name", "source_trust")).strip() or "source_trust"
+        if name in names:
+            raise ValueError(f"duplicate generated candidate name: {name}")
+        names.append(name)
     if bool(getattr(args, "enable_target_neighbor_generated_candidate", False)):
         name = str(getattr(args, "target_neighbor_generated_candidate_name", "tnc_gen")).strip() or "tnc_gen"
         if name in names:
@@ -466,6 +471,9 @@ def _candidate_deltas(ev: Any, pred_delta: torch.Tensor, args: argparse.Namespac
     if bool(getattr(args, "enable_adaptive_residual_candidate", False)):
         name = str(getattr(args, "adaptive_residual_candidate_name", "adaptive")).strip() or "adaptive"
         deltas[name] = _adaptive_residual_candidate_delta(ev, fixed_delta, learned_delta, args)
+    if bool(getattr(args, "enable_source_trust_residual_candidate", False)):
+        name = str(getattr(args, "source_trust_residual_candidate_name", "source_trust")).strip() or "source_trust"
+        deltas[name] = _source_trust_residual_candidate_delta(ev, fixed_delta, learned_delta, args)
     return deltas
 
 
@@ -517,6 +525,76 @@ def _adaptive_residual_candidate_delta(
     if max_blend < min_blend:
         raise ValueError("adaptive_residual_max_blend must be >= adaptive_residual_min_blend")
     blend = torch.clamp(min_blend + (max_blend - min_blend) * gate, min=min_blend, max=max_blend)
+    return (1.0 - blend) * fixed_delta + blend * learned_delta
+
+
+def _source_trust_residual_candidate_delta(
+    ev: Any,
+    fixed_delta: torch.Tensor,
+    learned_delta: torch.Tensor,
+    args: argparse.Namespace,
+) -> torch.Tensor:
+    device = learned_delta.device
+    eps = 1.0e-6
+    signal = ev.signal.to(device=device, dtype=torch.float32)
+    confidence = ev.confidence.to(device=device, dtype=torch.float32)
+    support_count = (
+        ev.support_count.to(device=device, dtype=torch.float32)
+        if getattr(ev, "support_count", None) is not None
+        else (ev.valid.to(device=device, dtype=torch.float32) * float(max(1, int(getattr(args, "k", 1)))))
+    )
+    residual_std = (
+        ev.residual_std.to(device=device, dtype=torch.float32)
+        if getattr(ev, "residual_std", None) is not None
+        else torch.zeros_like(confidence)
+    )
+    valid = ev.valid.to(device=device, dtype=torch.float32)
+
+    signal_mag = torch.mean(torch.abs(signal), dim=0, keepdim=True)
+    stability = signal_mag / (
+        signal_mag + float(getattr(args, "source_trust_residual_std_scale", 2.0)) * residual_std + eps
+    )
+    support = torch.clamp(support_count / max(float(getattr(args, "k", 1)), 1.0), 0.0, 1.0)
+    confidence_gate = torch.clamp(
+        confidence / max(float(getattr(args, "source_trust_residual_confidence_norm", 1.0)), eps),
+        0.0,
+        1.0,
+    )
+
+    fixed_norm = torch.sqrt(torch.sum(fixed_delta.pow(2), dim=0, keepdim=True) + eps)
+    learned_norm = torch.sqrt(torch.sum(learned_delta.pow(2), dim=0, keepdim=True) + eps)
+    dot = torch.sum(fixed_delta * learned_delta, dim=0, keepdim=True)
+    cosine = dot / torch.clamp(fixed_norm * learned_norm, min=eps)
+    min_alignment = float(getattr(args, "source_trust_residual_min_alignment", -0.10))
+    alignment = torch.clamp((cosine - min_alignment) / max(1.0 - min_alignment, eps), 0.0, 1.0)
+
+    disagreement = torch.sqrt(torch.sum((learned_delta - fixed_delta).pow(2), dim=0, keepdim=True) + eps)
+    disagreement = disagreement / torch.clamp(fixed_norm + learned_norm + residual_std + eps, min=eps)
+    disagreement_gate = torch.exp(-float(getattr(args, "source_trust_residual_disagreement_scale", 1.0)) * disagreement)
+
+    trust = (
+        torch.pow(confidence_gate, float(getattr(args, "source_trust_residual_confidence_power", 0.5)))
+        * torch.pow(support, float(getattr(args, "source_trust_residual_support_power", 0.5)))
+        * torch.pow(stability, float(getattr(args, "source_trust_residual_stability_power", 0.5)))
+        * torch.pow(alignment, float(getattr(args, "source_trust_residual_alignment_power", 0.5)))
+        * disagreement_gate
+        * valid
+    )
+
+    max_ratio = max(float(getattr(args, "source_trust_residual_overshoot_ratio", 4.0)), eps)
+    overshoot = torch.clamp((learned_norm / torch.clamp(fixed_norm + residual_std + eps, min=eps) - max_ratio) / max_ratio, 0.0, 1.0)
+    overshoot_shrink = torch.clamp(
+        1.0 - float(getattr(args, "source_trust_residual_overshoot_shrink", 0.5)) * overshoot * (1.0 - stability),
+        0.0,
+        1.0,
+    )
+    trust = torch.clamp(trust * overshoot_shrink, 0.0, 1.0)
+
+    min_blend = float(getattr(args, "source_trust_residual_min_blend", 0.0))
+    max_blend = float(getattr(args, "source_trust_residual_max_blend", 1.0))
+    if max_blend < min_blend:
+        raise ValueError("source_trust_residual_max_blend must be >= source_trust_residual_min_blend")
+    blend = torch.clamp(min_blend + (max_blend - min_blend) * trust, min=min_blend, max=max_blend)
     return (1.0 - blend) * fixed_delta + blend * learned_delta
 
 
@@ -6906,6 +6984,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "target_neighbor_generated_candidate_scope": "target_or_sourceheldout_render_depth_camera_consensus_candidate",
             "tnc_regularized_residual_candidate_uses_target_gt": False,
             "tnc_regularized_residual_candidate_scope": "source_evidence_reliability_gated_fixed_learned_residual_with_target_neighbor_self_consistency_regularization",
+            "source_trust_residual_candidate_uses_target_gt": False,
+            "source_trust_residual_candidate_scope": "source_evidence_confidence_support_stability_alignment_disagreement_gated_full_fixed_learned_residual_blend",
             "target_neighbor_all_candidate_scores_affect_selection": bool(
                 target_neighbor_combined_candidate_ranker_payload.get("enabled", False)
             ),
@@ -6962,6 +7042,27 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "min_alignment": float(args.adaptive_residual_min_alignment),
                 "uses_target_gt": False,
                 "reference": "source-evidence confidence/std/support/alignment per-pixel blend between fixed and learned residuals",
+            },
+            "source_trust_residual_candidate": {
+                "enabled": bool(args.enable_source_trust_residual_candidate),
+                "name": str(args.source_trust_residual_candidate_name),
+                "min_blend": float(args.source_trust_residual_min_blend),
+                "max_blend": float(args.source_trust_residual_max_blend),
+                "std_scale": float(args.source_trust_residual_std_scale),
+                "confidence_norm": float(args.source_trust_residual_confidence_norm),
+                "confidence_power": float(args.source_trust_residual_confidence_power),
+                "support_power": float(args.source_trust_residual_support_power),
+                "stability_power": float(args.source_trust_residual_stability_power),
+                "alignment_power": float(args.source_trust_residual_alignment_power),
+                "min_alignment": float(args.source_trust_residual_min_alignment),
+                "disagreement_scale": float(args.source_trust_residual_disagreement_scale),
+                "overshoot_ratio": float(args.source_trust_residual_overshoot_ratio),
+                "overshoot_shrink": float(args.source_trust_residual_overshoot_shrink),
+                "uses_target_gt": False,
+                "reference": (
+                    "source-trust residual candidate: allows full learned residual where source evidence is stable "
+                    "and aligned, while shrinking toward fixed under disagreement or uncertainty"
+                ),
             },
             "target_neighbor_generated_candidate": {
                 "enabled": bool(args.enable_target_neighbor_generated_candidate),
@@ -7286,6 +7387,27 @@ def main() -> None:
     parser.add_argument("--adaptive_residual_stability_power", type=float, default=1.0)
     parser.add_argument("--adaptive_residual_alignment_power", type=float, default=1.0)
     parser.add_argument("--adaptive_residual_min_alignment", type=float, default=-0.25)
+    parser.add_argument(
+        "--enable_source_trust_residual_candidate",
+        action="store_true",
+        help=(
+            "Add a target-GT-free source-trust residual candidate that can use full learned residuals "
+            "where source evidence is stable/aligned and shrink toward fixed where evidence disagrees."
+        ),
+    )
+    parser.add_argument("--source_trust_residual_candidate_name", default="source_trust")
+    parser.add_argument("--source_trust_residual_min_blend", type=float, default=0.0)
+    parser.add_argument("--source_trust_residual_max_blend", type=float, default=1.0)
+    parser.add_argument("--source_trust_residual_std_scale", type=float, default=2.0)
+    parser.add_argument("--source_trust_residual_confidence_norm", type=float, default=1.0)
+    parser.add_argument("--source_trust_residual_confidence_power", type=float, default=0.5)
+    parser.add_argument("--source_trust_residual_support_power", type=float, default=0.5)
+    parser.add_argument("--source_trust_residual_stability_power", type=float, default=0.5)
+    parser.add_argument("--source_trust_residual_alignment_power", type=float, default=0.5)
+    parser.add_argument("--source_trust_residual_min_alignment", type=float, default=-0.10)
+    parser.add_argument("--source_trust_residual_disagreement_scale", type=float, default=1.0)
+    parser.add_argument("--source_trust_residual_overshoot_ratio", type=float, default=4.0)
+    parser.add_argument("--source_trust_residual_overshoot_shrink", type=float, default=0.5)
     parser.add_argument("--enable_target_neighbor_generated_candidate", action="store_true")
     parser.add_argument("--target_neighbor_generated_candidate_name", default="tnc_gen")
     parser.add_argument("--target_neighbor_generated_base_variant", default="hybrid")

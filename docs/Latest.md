@@ -2369,6 +2369,77 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-07-01 Update: v341 Source-Trust Residual Candidate
+
+This update adds a real opt-in candidate-generation change in:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+```
+
+New CLI:
+
+```text
+--enable_source_trust_residual_candidate
+```
+
+The new `source_trust` candidate is generated before both source-heldout
+selection and target-time policy arbitration. It blends fixed source-evidence
+residuals and learned residuals per pixel using source confidence, support,
+stability, fixed/learned alignment, disagreement, and overshoot shrink. It uses
+no target GT.
+
+Focus6 comparison against `v340d`:
+
+| metric | v340d | v341 | delta |
+|---|---:|---:|---:|
+| macro selected PSNR gain | 0.301510278 | 0.302505694 | +0.000995415 |
+| macro selected SSIM gain | 0.003461710 | 0.003469209 | +0.000007500 |
+| macro oracle headroom | 0.012505689 | 0.012075390 | -0.000430299 |
+
+Scene-level deltas:
+
+| scene | PSNR delta | SSIM delta | note |
+|---|---:|---:|---|
+| room | +0.006079317 | +0.000052399 | successful source_trust admission |
+| bonsai | -0.000106826 | -0.000007401 | slight regression |
+| bicycle | +0.000000000 | +0.000000000 | unchanged |
+| kitchen | +0.000000000 | +0.000000000 | unchanged |
+| stump | +0.000000000 | +0.000000000 | fixed-scene bottleneck unchanged |
+| treehill | +0.000000000 | +0.000000000 | fixed-scene bottleneck unchanged |
+
+Artifacts:
+
+```text
+docs/car_model/7-01-v341-SourceTrustResidualCandidate-Log.md
+docs/car_model/results/v341_source_trust_focus6_oracle_gap.json
+docs/car_model/results/v341_source_trust_focus6_oracle_gap.md
+outputs/carnet/spcarnet_v341_source_trust_focus4_20260701
+```
+
+Negative probes also recorded:
+
+```text
+outputs/carnet/spcarnet_v341b_source_trust_unsuppressed_probe_20260701
+outputs/carnet/spcarnet_v342_fixed_scene_risk_unlock_probe_20260701
+outputs/carnet/spcarnet_v342b_pairwise_micro_relax_probe_20260701
+```
+
+Verdict:
+
+- `v341` is a legitimate method improvement and validates candidate generation
+  as the right direction.
+- It is still far from paper closure because `stump/treehill` fixed-scene
+  unlock and `bonsai` fixed/learned arbitration remain unresolved.
+- The next work should be a stricter fixed-scene local certificate, not broad
+  threshold relaxation or the existing per-view risk model.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 v327b Blend-Step Pairwise Reflection Result
 
 Detailed log:
