@@ -2,6 +2,43 @@
 
 Date: 2026-06-28
 
+Latest method update on 2026-06-30, v302:
+
+New files:
+
+- `scripts/car_model/train_source_heldout_support_transport_calibrator.py`
+- `docs/car_model/6-30-v302-ConstrainedHybridSupportTransport-Log.md`
+- `docs/car_model/results/v302_constrained_hybrid_support_transport_summary.json`
+
+Key result:
+
+- full flowers source-heldout protocol uses 113 source train views, 25
+  calibrator-train heldout views, and 13 calibrator-validation heldout views;
+- raw fixed ELA alpha `0.25`: PSNR `+0.072807`, SSIM `+0.001316`;
+- learned-only scale `0.5`: PSNR `+0.100625`, SSIM `+0.001164`;
+- selected v302 hybrid alpha `0.25`, scale `0.5`, blend `0.5`: PSNR
+  `+0.088643`, SSIM `+0.001350`;
+- v302 hybrid vs fixed raw ELA: PSNR `+0.015836`, SSIM `+0.0000339`;
+- positive-view fraction `1.0`, changed fraction `0.693829`;
+- all-axis source-heldout pass `true`;
+- W&B offline:
+  `outputs/carnet/spcarnet_v302_constrained_hybrid_anchor_flowers_20260630/wandb/offline-run-20260630_175614-cakafhs3`.
+
+Important lesson:
+
+> The reflection finally produced a real positive method step, but the
+> mechanism must be described honestly.  Learned support-transport calibration
+> raises PSNR/tail but can lose SSIM if selected greedily.  The constrained
+> hybrid anchor is the currently best version because it preserves raw ELA's
+> structure-safe behavior while accepting learned transport only when it also
+> beats the fixed anchor on SSIM.
+
+Next-stage instruction:
+
+> Freeze the constrained hybrid no-GT policy and test it on the real flowers
+> target/test protocol.  If target/test passes, run multi-scene validation and
+> ablations.  Do not claim paper closure from source-heldout validation alone.
+
 Latest positive diagnostic on 2026-06-30, v298:
 
 New files:

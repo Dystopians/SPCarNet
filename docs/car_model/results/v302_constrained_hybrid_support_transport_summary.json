@@ -1,0 +1,55 @@
+{
+  "date": "2026-06-30",
+  "method": "v302 constrained hybrid support-transport calibrator",
+  "script": "scripts/car_model/train_source_heldout_support_transport_calibrator.py",
+  "real_method_change": true,
+  "target_gt_usage": "train source-heldout supervision and validation only; target/test GT is not used",
+  "base_model_path": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/flowers/ratio_0200/compact_model",
+  "base_method_name": "ours_26000_phasef_extra_compact_base",
+  "output_dir": "outputs/carnet/spcarnet_v302_constrained_hybrid_anchor_flowers_20260630",
+  "report_json": "outputs/carnet/spcarnet_v302_constrained_hybrid_anchor_flowers_20260630/support_transport_calibrator_report.json",
+  "report_md": "outputs/carnet/spcarnet_v302_constrained_hybrid_anchor_flowers_20260630/support_transport_calibrator_report.md",
+  "wandb_offline": "outputs/carnet/spcarnet_v302_constrained_hybrid_anchor_flowers_20260630/wandb/offline-run-20260630_175614-cakafhs3",
+  "visual_dir": "outputs/carnet/spcarnet_v302_constrained_hybrid_anchor_flowers_20260630/visuals",
+  "split": {
+    "train_views": 151,
+    "source_views": 113,
+    "calibrator_train_views": 25,
+    "calibrator_val_views": 13
+  },
+  "fixed_raw_ela": {
+    "alpha": 0.25,
+    "psnr_gain": 0.07280665812643396,
+    "ssim_gain": 0.0013155845495370717,
+    "changed_fraction": 0.7012138137450585,
+    "positive_view_fraction": 1.0,
+    "psnr_min_gain": 0.03850021456901942,
+    "psnr_cvar20_gain": 0.039400244029602995
+  },
+  "learned_only": {
+    "scale": 0.5,
+    "psnr_gain": 0.10062518437741155,
+    "ssim_gain": 0.001164408830495981,
+    "changed_fraction": 0.6165899840685037,
+    "positive_view_fraction": 1.0,
+    "psnr_min_gain": 0.041096107963847334,
+    "psnr_cvar20_gain": 0.049219346364812554,
+    "all_axis_vs_fixed": false
+  },
+  "selected_hybrid": {
+    "anchor_alpha": 0.25,
+    "learned_scale": 0.5,
+    "blend": 0.5,
+    "psnr_gain": 0.08864254519915758,
+    "ssim_gain": 0.0013495179323049693,
+    "changed_fraction": 0.6938288234747373,
+    "positive_view_fraction": 1.0,
+    "psnr_min_gain": 0.042650057340960976,
+    "psnr_cvar20_gain": 0.04630314049290771,
+    "psnr_delta_vs_fixed": 0.015835887072723626,
+    "ssim_delta_vs_fixed": 0.00003393338276789755,
+    "all_axis_vs_fixed": true
+  },
+  "interpretation": "Constrained hybrid support-transport calibration is a real method step and beats the raw fixed-alpha ELA anchor on source-heldout validation. It remains not complete until target/test exact and multi-scene validation pass.",
+  "final_status": "NOT_COMPLETE"
+}

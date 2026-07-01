@@ -2,6 +2,56 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 Topline: v302 Constrained Hybrid Support-Transport
+
+New method tool and log:
+
+```text
+scripts/car_model/train_source_heldout_support_transport_calibrator.py
+docs/car_model/6-30-v302-ConstrainedHybridSupportTransport-Log.md
+docs/car_model/results/v302_constrained_hybrid_support_transport_summary.json
+```
+
+What changed:
+
+- v298 was a positive diagnostic; v302 is a real trainable method module.
+- It trains a small source-heldout support-transport calibrator on ELA
+  support-warp features.
+- It uses a constrained hybrid anchor policy: keep fixed-alpha raw ELA as the
+  structure-safe anchor and blend in learned transport only when it beats the
+  fixed anchor on both PSNR and SSIM.
+
+Flowers source-heldout validation:
+
+| method | PSNR gain | SSIM gain | changed | pos views | min PSNR gain |
+|---|---:|---:|---:|---:|---:|
+| fixed raw ELA alpha 0.25 | +0.072807 | +0.001316 | 0.701214 | 1.000000 | +0.038500 |
+| learned only scale 0.5 | +0.100625 | +0.001164 | 0.616590 | 1.000000 | +0.041096 |
+| v302 hybrid alpha 0.25 / scale 0.5 / blend 0.5 | +0.088643 | +0.001350 | 0.693829 | 1.000000 | +0.042650 |
+
+Selected v302 hybrid vs fixed raw ELA:
+
+```text
+PSNR delta: +0.015836
+SSIM delta: +0.0000339
+all-axis source-heldout pass: true
+```
+
+Direct interpretation:
+
+> The Phase-J stall reflection did produce a useful method step.  Learned
+> support-transport calibration alone raises PSNR but can lose SSIM; the
+> constrained hybrid anchor fixes the selection policy and finds a point that
+> beats the raw fixed-alpha ELA anchor on PSNR, SSIM, positive-view fraction,
+> and tail PSNR.  This is still source-heldout evidence, not final target/test
+> or full9 paper closure.
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-06-30 Topline: v298 High-Bandwidth ELA Transport Diagnostic
 
 New diagnostic tool and log:
