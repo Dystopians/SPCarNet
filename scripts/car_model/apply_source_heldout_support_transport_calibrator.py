@@ -209,7 +209,8 @@ def _candidate_proxy_stats(ev: Any, delta: torch.Tensor) -> dict[str, float]:
     valid = ev.valid.to(device=delta.device, dtype=torch.float32)
     valid3 = valid.expand_as(delta)
     abs_delta = torch.abs(delta)
-    abs_signal = torch.abs(ev.signal.to(device=delta.device, dtype=torch.float32))
+    signal = ev.signal.to(device=delta.device, dtype=torch.float32)
+    abs_signal = torch.abs(signal)
     confidence = ev.confidence.to(device=delta.device, dtype=torch.float32)
     residual_std = (
         ev.residual_std.to(device=delta.device, dtype=torch.float32)
@@ -228,6 +229,22 @@ def _candidate_proxy_stats(ev: Any, delta: torch.Tensor) -> dict[str, float]:
     support_count_mean = _masked_mean(support_count, valid)
     covered = float(valid.mean().detach().cpu().item())
     eps = 1.0e-6
+    pixel_dot = torch.sum(delta * signal, dim=0, keepdim=True)
+    delta_sq = torch.sum(delta.pow(2), dim=0, keepdim=True)
+    signal_sq = torch.sum(signal.pow(2), dim=0, keepdim=True)
+    valid_weight = valid.to(device=delta.device, dtype=torch.float32)
+    global_dot = float((pixel_dot * valid_weight).sum().detach().cpu().item())
+    global_delta_energy = float((delta_sq * valid_weight).sum().detach().cpu().item())
+    global_signal_energy = float((signal_sq * valid_weight).sum().detach().cpu().item())
+    delta_signal_cosine = global_dot / max((global_delta_energy * global_signal_energy) ** 0.5, eps)
+    active = (valid_weight > 0.0) & (delta_sq > eps) & (signal_sq > eps)
+    active_count = float(active.to(torch.float32).sum().detach().cpu().item())
+    if active_count > 0.0:
+        opposition_fraction = float(((pixel_dot < 0.0) & active).to(torch.float32).sum().detach().cpu().item() / active_count)
+        aligned_fraction = float(((pixel_dot >= 0.0) & active).to(torch.float32).sum().detach().cpu().item() / active_count)
+    else:
+        opposition_fraction = 0.0
+        aligned_fraction = 0.0
     return {
         "covered_fraction": covered,
         "mean_abs_delta": mean_abs_delta,
@@ -240,6 +257,12 @@ def _candidate_proxy_stats(ev: Any, delta: torch.Tensor) -> dict[str, float]:
         "signal_snr": mean_abs_signal / (residual_std_mean + eps),
         "confidence_snr": confidence_mean * mean_abs_delta / (residual_std_mean + eps),
         "residual_stability": 1.0 / (residual_std_mean + eps),
+        "delta_signal_cosine": float(delta_signal_cosine),
+        "opposition_fraction": opposition_fraction,
+        "aligned_fraction": aligned_fraction,
+        "delta_to_signal_ratio": mean_abs_delta / (mean_abs_signal + eps),
+        "std_to_signal_ratio": residual_std_mean / (mean_abs_signal + eps),
+        "support_confidence": support_count_mean * confidence_mean,
     }
 
 

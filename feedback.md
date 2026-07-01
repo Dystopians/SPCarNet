@@ -1344,6 +1344,74 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-07-01 v313 Consistency-Feature Risk Model Feedback Addendum
+
+New implementation:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+```
+
+New reports:
+
+```text
+docs/car_model/7-01-v313-ConsistencyFeatureRiskModel-Log.md
+docs/car_model/results/v313_consistency_feature_risk_model_focused_summary.json
+docs/car_model/results/v313_consistency_tailguard_risk_model_focused_summary.json
+```
+
+What changed:
+
+- Added residual-consistency proxy features:
+  `delta_signal_cosine`, `opposition_fraction`, `aligned_fraction`,
+  `delta_to_signal_ratio`, `std_to_signal_ratio`, and `support_confidence`.
+- Tested v313a with these features in the learned risk model.
+- Tested v313b with the same features plus a source-heldout min-tail guard.
+
+Key focused result:
+
+| method | macro PSNR gain | macro SSIM gain | safe scene rate | positive-view fraction | negative views |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| v309 selective KNN | +0.173055 | +0.003173 | 1.00 | 0.887014 | 9 |
+| v310c tail-risk scene fallback | +0.172930 | +0.003176 | 1.00 | 0.897014 | 8 |
+| v313a consistency features | +0.167239 | +0.003093 | 0.75 | 0.905347 | 7 |
+| v313b consistency + source min guard | +0.170377 | +0.003166 | 1.00 | 0.905347 | 7 |
+
+Important lesson:
+
+Residual-consistency features are more useful than plain source-feature OOD
+distance. They fixed the `treehill` learned-risk failure, and the source min-tail
+guard correctly disabled the bad `stump` branch. However, v313b still loses mean
+PSNR/SSIM versus v309/v310c, mostly because `counter` and `bicycle` give up too
+much mean quality.
+
+Current bottleneck:
+
+```text
+We can now make the learned-risk branch safer, but not yet better. Reliability
+guarding recovers safety at the cost of suppressing or misranking high-quality
+scene-level choices.
+```
+
+Next recommended prompt:
+
+```text
+Continue from v313b. Keep residual-consistency features and source min-tail
+safety, but stop letting the learned risk branch override strong scene-level
+choices unless it has a clear source-heldout mean-quality margin. Build a
+two-level policy: v309/v310c remains the default frontier; learned-risk
+refinement is allowed only for views/scenes where source-heldout evidence proves
+both tail safety and mean utility. Optimize this as a single fixed policy on
+focused scenes, then full9 only if macro PSNR/SSIM match or exceed v309/v310c
+while preserving v313b's lower negative-view count.
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v312 OOD-Guarded Risk Model Feedback Addendum
 
 This addendum records the follow-up attempt after v311.

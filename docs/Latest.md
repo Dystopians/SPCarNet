@@ -1346,6 +1346,48 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-07-01 Update: v313 Consistency-Feature Risk Model
+
+This update adds residual-consistency proxy features and tests a safer learned
+risk branch.
+
+Artifacts:
+
+```text
+docs/car_model/7-01-v313-ConsistencyFeatureRiskModel-Log.md
+docs/car_model/results/v313_consistency_feature_risk_model_focused_summary.json
+docs/car_model/results/v313_consistency_tailguard_risk_model_focused_summary.json
+```
+
+Focused result:
+
+| method | macro PSNR gain | macro SSIM gain | safe scene rate | positive-view fraction | negative views |
+|---|---:|---:|---:|---:|---:|
+| v309 selective KNN | +0.173055 | +0.003173 | 1.00 | 0.887014 | 9 |
+| v310c tail-risk scene fallback | +0.172930 | +0.003176 | 1.00 | 0.897014 | 8 |
+| v313a consistency features | +0.167239 | +0.003093 | 0.75 | 0.905347 | 7 |
+| v313b consistency + source min guard | +0.170377 | +0.003166 | 1.00 | 0.905347 | 7 |
+
+Conclusion:
+
+- v313a fixed the `treehill` failure but still failed `stump`.
+- v313b used a source-heldout min-tail guard to disable the unsafe `stump`
+  learned-risk branch and recovered focused all-scene safety.
+- v313b improves reliability/negative-view count, but it still does not beat
+  v309/v310c on macro PSNR/SSIM.
+
+Current method ranking:
+
+- `v309`: mean-quality frontier.
+- `v310c`: tail-balanced frontier.
+- `v313b`: reliability ablation, useful story evidence, not main method.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Update: v312 OOD-Guarded Risk Model
 
 This update tested whether a target-blind source-feature OOD guard can rescue

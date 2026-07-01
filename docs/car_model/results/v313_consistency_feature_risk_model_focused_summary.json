@@ -1,0 +1,558 @@
+{
+  "v309": {
+    "scene_count": 4,
+    "macro_psnr_gain": 0.17305526822573883,
+    "macro_ssim_gain": 0.0031725906953215597,
+    "safe_scene_rate": 1.0,
+    "mean_positive_view_fraction": 0.8870138888888889,
+    "mean_min_psnr_gain": -0.03166832692407073,
+    "mean_cvar_psnr_gain": 0.03090573516058428,
+    "negative_views": 9,
+    "rows": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11807421838196674,
+        "ssim_gain": 0.002980561256408691,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.88,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar_psnr_gain": -0.008901360141875614,
+        "negative_views": 3,
+        "risk_enabled": null,
+        "feature_names": null,
+        "output_counts": {
+          "fixed": 5,
+          "learned": 5,
+          "hybrid": 15,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.9666666666666667,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar_psnr_gain": 0.1329347732944406,
+        "negative_views": 1,
+        "risk_enabled": null,
+        "feature_names": null,
+        "output_counts": {
+          "fixed": 0,
+          "learned": 30,
+          "hybrid": 0,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.8125,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar_psnr_gain": -0.0024780650761844214,
+        "negative_views": 3,
+        "risk_enabled": null,
+        "feature_names": null,
+        "output_counts": {
+          "fixed": 16,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09075745623850276,
+        "ssim_gain": 0.0015932122866312663,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.8888888888888888,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar_psnr_gain": 0.0020675925659565664,
+        "negative_views": 2,
+        "risk_enabled": null,
+        "feature_names": null,
+        "output_counts": {
+          "fixed": 18,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      }
+    ]
+  },
+  "v310c": {
+    "scene_count": 4,
+    "macro_psnr_gain": 0.17293019522205205,
+    "macro_ssim_gain": 0.0031755721196532246,
+    "safe_scene_rate": 1.0,
+    "mean_positive_view_fraction": 0.8970138888888889,
+    "mean_min_psnr_gain": -0.03166832692407073,
+    "mean_cvar_psnr_gain": 0.03189296190135935,
+    "negative_views": 8,
+    "rows": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.1175739263672196,
+        "ssim_gain": 0.0029924869537353515,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.92,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar_psnr_gain": -0.004952453178775329,
+        "negative_views": 2,
+        "risk_enabled": null,
+        "feature_names": null,
+        "output_counts": {
+          "fixed": 0,
+          "learned": 3,
+          "hybrid": 22,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.9666666666666667,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar_psnr_gain": 0.1329347732944406,
+        "negative_views": 1,
+        "risk_enabled": null,
+        "feature_names": null,
+        "output_counts": {
+          "fixed": 0,
+          "learned": 30,
+          "hybrid": 0,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.8125,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar_psnr_gain": -0.0024780650761844214,
+        "negative_views": 3,
+        "risk_enabled": null,
+        "feature_names": null,
+        "output_counts": {
+          "fixed": 16,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09075745623850276,
+        "ssim_gain": 0.0015932122866312663,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.8888888888888888,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar_psnr_gain": 0.0020675925659565664,
+        "negative_views": 2,
+        "risk_enabled": null,
+        "feature_names": null,
+        "output_counts": {
+          "fixed": 18,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      }
+    ]
+  },
+  "v311c": {
+    "scene_count": 4,
+    "macro_psnr_gain": 0.16551797473976196,
+    "macro_ssim_gain": 0.003099336690372891,
+    "safe_scene_rate": 0.5,
+    "mean_positive_view_fraction": 0.9053472222222222,
+    "mean_min_psnr_gain": -0.06185955768923623,
+    "mean_cvar_psnr_gain": 0.022347141141632554,
+    "negative_views": 7,
+    "rows": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11254799597180722,
+        "ssim_gain": 0.0028956961631774903,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.92,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar_psnr_gain": -0.00277894329030417,
+        "negative_views": 2,
+        "risk_enabled": true,
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "output_counts": {
+          "fixed": 0,
+          "learned": 3,
+          "hybrid": 22,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.41977664817091853,
+        "ssim_gain": 0.006913858652114868,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 1.0,
+        "min_psnr_gain": 0.007318496897603666,
+        "cvar_psnr_gain": 0.1320696856096474,
+        "negative_views": 0,
+        "risk_enabled": true,
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "output_counts": {
+          "fixed": 2,
+          "learned": 25,
+          "hybrid": 3,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.0451170416677773,
+        "ssim_gain": 0.0010151863098144531,
+        "safe_vs_fixed": false,
+        "positive_view_fraction": 0.8125,
+        "min_psnr_gain": -0.03459125667420082,
+        "cvar_psnr_gain": -0.014397176413958768,
+        "negative_views": 3,
+        "risk_enabled": true,
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "output_counts": {
+          "fixed": 10,
+          "learned": 5,
+          "hybrid": 1,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.0846302131485448,
+        "ssim_gain": 0.0015726056363847521,
+        "safe_vs_fixed": false,
+        "positive_view_fraction": 0.8888888888888888,
+        "min_psnr_gain": -0.1601363178356614,
+        "cvar_psnr_gain": -0.02550500133885425,
+        "negative_views": 2,
+        "risk_enabled": true,
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "output_counts": {
+          "fixed": 17,
+          "learned": 1,
+          "hybrid": 0,
+          "noop": 0
+        }
+      }
+    ]
+  },
+  "v312a": {
+    "scene_count": 4,
+    "macro_psnr_gain": 0.16551797473976196,
+    "macro_ssim_gain": 0.003099336690372891,
+    "safe_scene_rate": 0.5,
+    "mean_positive_view_fraction": 0.9053472222222222,
+    "mean_min_psnr_gain": -0.06185955768923623,
+    "mean_cvar_psnr_gain": 0.022347141141632554,
+    "negative_views": 7,
+    "rows": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11254799597180722,
+        "ssim_gain": 0.0028956961631774903,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.92,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar_psnr_gain": -0.00277894329030417,
+        "negative_views": 2,
+        "risk_enabled": true,
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "output_counts": {
+          "fixed": 0,
+          "learned": 3,
+          "hybrid": 22,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.41977664817091853,
+        "ssim_gain": 0.006913858652114868,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 1.0,
+        "min_psnr_gain": 0.007318496897603666,
+        "cvar_psnr_gain": 0.1320696856096474,
+        "negative_views": 0,
+        "risk_enabled": true,
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "output_counts": {
+          "fixed": 2,
+          "learned": 25,
+          "hybrid": 3,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.0451170416677773,
+        "ssim_gain": 0.0010151863098144531,
+        "safe_vs_fixed": false,
+        "positive_view_fraction": 0.8125,
+        "min_psnr_gain": -0.03459125667420082,
+        "cvar_psnr_gain": -0.014397176413958768,
+        "negative_views": 3,
+        "risk_enabled": true,
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "output_counts": {
+          "fixed": 10,
+          "learned": 5,
+          "hybrid": 1,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.0846302131485448,
+        "ssim_gain": 0.0015726056363847521,
+        "safe_vs_fixed": false,
+        "positive_view_fraction": 0.8888888888888888,
+        "min_psnr_gain": -0.1601363178356614,
+        "cvar_psnr_gain": -0.02550500133885425,
+        "negative_views": 2,
+        "risk_enabled": true,
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "output_counts": {
+          "fixed": 17,
+          "learned": 1,
+          "hybrid": 0,
+          "noop": 0
+        }
+      }
+    ]
+  },
+  "v313a": {
+    "scene_count": 4,
+    "macro_psnr_gain": 0.16723893437467785,
+    "macro_ssim_gain": 0.003093476994997925,
+    "safe_scene_rate": 0.75,
+    "mean_positive_view_fraction": 0.9053472222222222,
+    "mean_min_psnr_gain": -0.06117566618162318,
+    "mean_cvar_psnr_gain": 0.022526685630173716,
+    "negative_views": 7,
+    "rows": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.1121821449626468,
+        "ssim_gain": 0.002953202724456787,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.92,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar_psnr_gain": 0.0005960483470417444,
+        "negative_views": 2,
+        "risk_enabled": true,
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction",
+          "delta_signal_cosine",
+          "opposition_fraction",
+          "aligned_fraction",
+          "delta_to_signal_ratio",
+          "std_to_signal_ratio",
+          "support_confidence",
+          "support_count_mean"
+        ],
+        "output_counts": {
+          "fixed": 4,
+          "learned": 0,
+          "hybrid": 21,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4170002932230773,
+        "ssim_gain": 0.006875824928283691,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 1.0,
+        "min_psnr_gain": 0.007318496897603666,
+        "cvar_psnr_gain": 0.1320696856096474,
+        "negative_views": 0,
+        "risk_enabled": true,
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction",
+          "delta_signal_cosine",
+          "opposition_fraction",
+          "aligned_fraction",
+          "delta_to_signal_ratio",
+          "std_to_signal_ratio",
+          "support_confidence",
+          "support_count_mean"
+        ],
+        "output_counts": {
+          "fixed": 3,
+          "learned": 24,
+          "hybrid": 3,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.0444779706427092,
+        "ssim_gain": 0.0009164251387119293,
+        "safe_vs_fixed": false,
+        "positive_view_fraction": 0.8125,
+        "min_psnr_gain": -0.0318556906437486,
+        "cvar_psnr_gain": -0.01695346051423119,
+        "negative_views": 3,
+        "risk_enabled": true,
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction",
+          "delta_signal_cosine",
+          "opposition_fraction",
+          "aligned_fraction",
+          "delta_to_signal_ratio",
+          "std_to_signal_ratio",
+          "support_confidence",
+          "support_count_mean"
+        ],
+        "output_counts": {
+          "fixed": 9,
+          "learned": 5,
+          "hybrid": 2,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09529532867027808,
+        "ssim_gain": 0.0016284551885392931,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.8888888888888888,
+        "min_psnr_gain": -0.1601363178356614,
+        "cvar_psnr_gain": -0.025605530921763098,
+        "negative_views": 2,
+        "risk_enabled": true,
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction",
+          "delta_signal_cosine",
+          "opposition_fraction",
+          "aligned_fraction",
+          "delta_to_signal_ratio",
+          "std_to_signal_ratio",
+          "support_confidence",
+          "support_count_mean"
+        ],
+        "output_counts": {
+          "fixed": 13,
+          "learned": 5,
+          "hybrid": 0,
+          "noop": 0
+        }
+      }
+    ]
+  }
+}
