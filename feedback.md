@@ -2,6 +2,38 @@
 
 Date: 2026-06-28
 
+Latest positive diagnostic on 2026-06-30, v298:
+
+New files:
+
+- `scripts/car_model/diagnose_source_heldout_ela_transport.py`
+- `docs/car_model/6-30-v298-HighBandwidthELA-SourceHeldoutDiagnostic.md`
+- `docs/car_model/results/v298_source_heldout_ela_transport_summary.json`
+
+Key result:
+
+- full flowers source-heldout diagnostic uses 113 source train views and 38
+  heldout train views;
+- best alpha `0.25`;
+- PSNR gain `+0.075520`;
+- SSIM gain `+0.001146`;
+- changed fraction `0.683378`;
+- all-axis pass `true`;
+- W&B offline:
+  `outputs/carnet/spcarnet_v298_source_heldout_ela_transport_20260630/wandb/offline-run-20260630_170937-urlbgvz1`.
+
+Important lesson:
+
+> Phase-J/ELA's high-bandwidth support-view warp path still has train-only
+> source-heldout headroom. The current failure is therefore not that residual
+> transport is impossible; it is that the baked face/UV/bin/latent carrier loses
+> too much target-conditioned support-view information.
+
+Next-stage instruction:
+
+> Build a target-conditioned support-warp feature decoder. Do not continue
+> alpha/rank/gate scans as the main route.
+
 Latest root-cause reflection on 2026-06-30:
 
 New file:

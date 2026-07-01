@@ -2,6 +2,56 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 Topline: v298 High-Bandwidth ELA Transport Diagnostic
+
+New diagnostic tool and log:
+
+```text
+scripts/car_model/diagnose_source_heldout_ela_transport.py
+docs/car_model/6-30-v298-HighBandwidthELA-SourceHeldoutDiagnostic.md
+docs/car_model/results/v298_source_heldout_ela_transport_summary.json
+```
+
+What it tests:
+
+- split train views into source and heldout-source;
+- keep Phase-J / ELA's target-conditioned support-view warp path;
+- measure heldout-source repair headroom without target/test GT.
+
+Full flowers heldout result:
+
+| field | value |
+|---|---:|
+| source / heldout views | 113 / 38 |
+| best alpha | 0.25 |
+| PSNR gain | +0.075520 |
+| SSIM gain | +0.001146 |
+| changed fraction | 0.683378 |
+| mean covered fraction | 0.912223 |
+| all-axis pass | true |
+
+Direct interpretation:
+
+> v298 is a diagnostic, not a completed new method. It gives the clearest
+> positive evidence so far that the Phase-J high-bandwidth support-view path has
+> real source-heldout headroom. The previous baked carrier line fails because it
+> does not preserve this information path, not because residual evidence is
+> impossible to transport.
+
+Updated next step:
+
+```text
+Distill target-conditioned support-view transport itself:
+source-view residual features + depth consistency + normal/view/occlusion
+features + source-heldout RGB/direction/magnitude/patch losses.
+```
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-06-30 Topline: Why We Are Stuck Below Phase-J
 
 Newest root-cause reflection:
