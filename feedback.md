@@ -2,6 +2,99 @@
 
 Date: 2026-06-28
 
+# 2026-07-01 v329b Feedback Addendum: Fixed Rollback Certificate Is Useful, But Not Enough
+
+New files:
+
+```text
+docs/car_model/7-01-v329b-FixedRollbackCertificate-Full9-Log.md
+docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v322c_audit.json
+docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v327b_audit.json
+docs/car_model/results/v329b_fixed_rollback_strict_focused3_vs_v322c_audit.json
+docs/car_model/results/v329b_fixed_rollback_strict_garden_vs_v322c_audit.json
+docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel.png
+docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel_manifest.json
+outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701
+```
+
+Implemented change:
+
+`scripts/car_model/apply_source_heldout_support_transport_calibrator.py` now
+has an opt-in source-reliability fixed rollback certificate. It specifically
+addresses the case where the source-heldout model predicts that `fixed` is
+better than the scene-selected `learned` or `hybrid` output, but the previous
+incumbent-preservation rule rejects it as `fixed_when_scene_nonfixed`.
+
+The certificate is target-blind. It uses source-heldout predicted objective,
+PSNR/SSIM margins, best fixed-source margins, and scene-consistency
+opposition/alignment checks. It does not use held-out target/test metrics for
+selection. Target/test metrics are only used after apply for reporting.
+
+Full9 result:
+
+| comparison | PSNR gain delta | SSIM gain delta |
+|---|---:|---:|
+| v329b vs v322C | +0.001188315360 | +0.000009419319 |
+| v329b vs v327b | +0.001097159569 | +0.000008436946 |
+
+Per-scene result versus v322C:
+
+| scene | delta PSNR gain | delta SSIM gain | changed views |
+|---|---:|---:|---:|
+| bonsai | +0.007963041411 | +0.000063155148 | 3 |
+| room | +0.001369726094 | +0.000009183700 | 1 |
+| garden | +0.000541668618 | +0.000003593663 | 1 |
+| treehill | +0.000820402117 | +0.000008841356 | 7 |
+| bicycle | +0.000000000000 | +0.000000000000 | 0 |
+| flowers | +0.000000000000 | +0.000000000000 | 0 |
+| stump | +0.000000000000 | +0.000000000000 | 0 |
+| counter | +0.000000000000 | +0.000000000000 | 0 |
+| kitchen | +0.000000000000 | +0.000000000000 | 0 |
+
+Key changed views:
+
+| view | change | delta PSNR gain | delta SSIM gain |
+|---|---|---:|---:|
+| bonsai/00017 | learned -> fixed | +0.102373814711 | +0.000340580940 |
+| bonsai/00019 | learned -> fixed | +0.107126042486 | +0.001131176949 |
+| bonsai/00026 | learned -> fixed | +0.085132675013 | +0.000864982605 |
+| room/00002 | hybrid -> fixed | +0.053419317668 | +0.000358164310 |
+| garden/00016 | hybrid -> fixed | +0.013000046828 | +0.000086247921 |
+
+Important ablation lesson:
+
+v329a used a looser rollback certificate. It improved `bonsai` and `room`, but
+also accepted `garden/00008`, producing a garden regression of
+`-0.000699067991` PSNR gain and `-0.000007919967` SSIM gain. v329b tightened
+`min_best_psnr_delta` to `0.005`, rejected the bad `garden/00008` rollback, and
+kept the good `garden/00016` rollback. This is useful evidence that the
+certificate is not a cosmetic flag; it prevents a real target regression found
+by the ablation.
+
+Hard lessons for the next model:
+
+- Incumbent preservation alone is too conservative. It blocks high-confidence
+  fixed rollbacks on `bonsai`, `room`, and `garden`.
+- Loosening rollback without a certificate is unsafe. It creates exactly the
+  garden failure above.
+- Source-heldout reliability can identify some good fixed rollbacks, but the
+  effect size is still very small at full9 macro scale.
+- Qualitative panels remain subtle. Even views with clear numeric PSNR gains do
+  not yet produce the obvious before/after improvement expected from a strong
+  top-conference result.
+- v329b still lacks fresh LPIPS/DISTS/frontier and geometry/triangle evidence.
+  It should be treated as a policy/certificate milestone, not as final paper
+  closure.
+- The next improvement should increase representation capacity or residual
+  transport quality, then use this certificate style to guard it. More threshold
+  scans around the current carrier are unlikely to create a large win.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v322C Feedback Addendum: Candidate Ladder Helped Only After Incumbent Preservation
 
 New files:

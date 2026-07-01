@@ -1,0 +1,1376 @@
+{
+  "archive_report_count": 9,
+  "archive_root": "outputs/carnet/spcarnet_v327b_pairwise_blendstep_full9_20260701",
+  "knn_policy_source_selected_counts": {
+    "archive": {
+      "fixed": 0,
+      "hybrid": 14,
+      "learned": 33,
+      "noop": 0,
+      "scene": 79
+    },
+    "replay": {
+      "fixed": 0,
+      "hybrid": 14,
+      "learned": 33,
+      "noop": 0,
+      "scene": 79
+    }
+  },
+  "macro": {
+    "archive_psnr_gain_mean": 0.271425492909664,
+    "archive_psnr_mean": 25.411819719175227,
+    "archive_ssim_gain_mean": 0.0037282237276800834,
+    "archive_ssim_mean": 0.8404822281713045,
+    "delta_psnr_gain_mean_replay_minus_archive": 0.0010971595692151892,
+    "delta_psnr_mean_replay_minus_archive": 0.0010971595692153989,
+    "delta_ssim_gain_mean_replay_minus_archive": 8.436945791450896e-06,
+    "delta_ssim_mean_replay_minus_archive": 8.436945791458052e-06,
+    "paired_psnr_gain_scene_count": 9,
+    "paired_psnr_scene_count": 9,
+    "paired_ssim_gain_scene_count": 9,
+    "paired_ssim_scene_count": 9,
+    "replay_psnr_gain_mean": 0.2725226524788792,
+    "replay_psnr_mean": 25.412916878744443,
+    "replay_ssim_gain_mean": 0.0037366606734715343,
+    "replay_ssim_mean": 0.8404906651170958
+  },
+  "missing_archive_scenes": [],
+  "missing_replay_scenes": [],
+  "replay_report_count": 9,
+  "replay_root": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701",
+  "scene_count": 9,
+  "scene_filter": [
+    "bicycle",
+    "bonsai",
+    "counter",
+    "flowers",
+    "garden",
+    "kitchen",
+    "room",
+    "stump",
+    "treehill"
+  ],
+  "scenes": [
+    {
+      "archive": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 7,
+            "noop": 0,
+            "scene": 8
+          },
+          "verdict": "source-heldout KNN per-view policy selected"
+        },
+        "per_view_count": 25,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "hybrid",
+        "report_path": "outputs/carnet/spcarnet_v327b_pairwise_blendstep_full9_20260701/bicycle/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 23.41343825879067,
+          "candidate_ssim": 0.7954698014259338,
+          "psnr_gain": 0.11995854884043254,
+          "ssim_gain": 0.00298875093460083
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "hybrid": 20,
+            "learned": 5
+          },
+          "per_view_selected_variant": {
+            "hybrid": 25
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "hybrid": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 4,
+            "mix0250": 1,
+            "mix0750": 3,
+            "noop": 0,
+            "scene": 7
+          },
+          "verdict": "source reliability did not clear min-gain tail delta"
+        },
+        "verdict": "Selected support-transport output scene `hybrid` with per-view `source_pairwise_dominance` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "comparison": {
+        "delta_psnr_gain_replay_minus_archive": 0.0,
+        "delta_psnr_replay_minus_archive": 0.0,
+        "delta_ssim_gain_replay_minus_archive": 0.0,
+        "delta_ssim_replay_minus_archive": 0.0,
+        "has_both_reports": true,
+        "per_view": {
+          "archive_only_views": [],
+          "archive_per_view_count": 25,
+          "common_view_count": 25,
+          "output_variant_mismatch_count": 0,
+          "output_variant_mismatches": [],
+          "replay_only_views": [],
+          "replay_per_view_count": 25
+        }
+      },
+      "replay": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 7,
+            "noop": 0,
+            "scene": 8
+          },
+          "verdict": "source-heldout KNN per-view policy selected"
+        },
+        "per_view_count": 25,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "hybrid",
+        "report_path": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701/bicycle/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 23.41343825879067,
+          "candidate_ssim": 0.7954698014259338,
+          "psnr_gain": 0.11995854884043254,
+          "ssim_gain": 0.00298875093460083
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "hybrid": 20,
+            "learned": 5
+          },
+          "per_view_selected_variant": {
+            "hybrid": 25
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "hybrid": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 4,
+            "mix0250": 1,
+            "mix0750": 3,
+            "noop": 0,
+            "scene": 7
+          },
+          "verdict": "source reliability did not clear min-gain tail delta"
+        },
+        "verdict": "Selected support-transport output scene `hybrid` with per-view `source_pairwise_dominance` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "scene": "bicycle"
+    },
+    {
+      "archive": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 6,
+            "noop": 0,
+            "scene": 7
+          },
+          "verdict": "source-heldout KNN per-view policy selected"
+        },
+        "per_view_count": 22,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "hybrid",
+        "report_path": "outputs/carnet/spcarnet_v327b_pairwise_blendstep_full9_20260701/flowers/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 19.761055062848676,
+          "candidate_ssim": 0.6869376057928259,
+          "psnr_gain": 0.0923596316861136,
+          "ssim_gain": 0.00411434065211903
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "hybrid": 13,
+            "learned": 9
+          },
+          "per_view_selected_variant": {
+            "hybrid": 22
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "hybrid": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 2,
+            "learned": 4,
+            "mix0250": 0,
+            "mix0750": 0,
+            "noop": 0,
+            "scene": 7
+          },
+          "verdict": "source reliability did not clear min-gain tail delta"
+        },
+        "verdict": "Selected support-transport output scene `hybrid` with per-view `source_heldout_knn` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "comparison": {
+        "delta_psnr_gain_replay_minus_archive": 0.0,
+        "delta_psnr_replay_minus_archive": 0.0,
+        "delta_ssim_gain_replay_minus_archive": 0.0,
+        "delta_ssim_replay_minus_archive": 0.0,
+        "has_both_reports": true,
+        "per_view": {
+          "archive_only_views": [],
+          "archive_per_view_count": 22,
+          "common_view_count": 22,
+          "output_variant_mismatch_count": 0,
+          "output_variant_mismatches": [],
+          "replay_only_views": [],
+          "replay_per_view_count": 22
+        }
+      },
+      "replay": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 6,
+            "noop": 0,
+            "scene": 7
+          },
+          "verdict": "source-heldout KNN per-view policy selected"
+        },
+        "per_view_count": 22,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "hybrid",
+        "report_path": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701/flowers/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 19.761055062848676,
+          "candidate_ssim": 0.6869376057928259,
+          "psnr_gain": 0.0923596316861136,
+          "ssim_gain": 0.00411434065211903
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "hybrid": 13,
+            "learned": 9
+          },
+          "per_view_selected_variant": {
+            "hybrid": 22
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "hybrid": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 2,
+            "learned": 4,
+            "mix0250": 0,
+            "mix0750": 0,
+            "noop": 0,
+            "scene": 7
+          },
+          "verdict": "source reliability did not clear min-gain tail delta"
+        },
+        "verdict": "Selected support-transport output scene `hybrid` with per-view `source_heldout_knn` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "scene": "flowers"
+    },
+    {
+      "archive": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 9,
+            "noop": 0,
+            "scene": 5
+          },
+          "verdict": "source-heldout KNN per-view policy selected"
+        },
+        "per_view_count": 24,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "hybrid",
+        "report_path": "outputs/carnet/spcarnet_v327b_pairwise_blendstep_full9_20260701/garden/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 25.17244491411043,
+          "candidate_ssim": 0.8927608008186022,
+          "psnr_gain": 0.14490745155449636,
+          "ssim_gain": 0.0019161850214004517
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "hybrid": 4,
+            "learned": 15,
+            "mix0250": 3,
+            "mix0750": 2
+          },
+          "per_view_selected_variant": {
+            "hybrid": 24
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "hybrid": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 2,
+            "learned": 3,
+            "mix0250": 2,
+            "mix0750": 2,
+            "noop": 0,
+            "scene": 5
+          },
+          "verdict": "source-only relative reliability model selected"
+        },
+        "verdict": "Selected support-transport output scene `hybrid` with per-view `source_heldout_reliability` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "comparison": {
+        "delta_psnr_gain_replay_minus_archive": 0.0005416686178256747,
+        "delta_psnr_replay_minus_archive": 0.0005416686178243424,
+        "delta_ssim_gain_replay_minus_archive": 3.5936633745829987e-06,
+        "delta_ssim_replay_minus_archive": 3.5936633746569413e-06,
+        "has_both_reports": true,
+        "per_view": {
+          "archive_only_views": [],
+          "archive_per_view_count": 24,
+          "common_view_count": 24,
+          "output_variant_mismatch_count": 1,
+          "output_variant_mismatches": [
+            {
+              "archive_output_variant": "hybrid",
+              "archive_selected_variant": "hybrid",
+              "replay_output_variant": "fixed",
+              "replay_selected_variant": "hybrid",
+              "view": "00016"
+            }
+          ],
+          "replay_only_views": [],
+          "replay_per_view_count": 24
+        }
+      },
+      "replay": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 9,
+            "noop": 0,
+            "scene": 5
+          },
+          "verdict": "source-heldout KNN per-view policy selected"
+        },
+        "per_view_count": 24,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "hybrid",
+        "report_path": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701/garden/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 25.172986582728253,
+          "candidate_ssim": 0.8927643944819769,
+          "psnr_gain": 0.14544912017232203,
+          "ssim_gain": 0.0019197786847750347
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "fixed": 1,
+            "hybrid": 3,
+            "learned": 15,
+            "mix0250": 3,
+            "mix0750": 2
+          },
+          "per_view_selected_variant": {
+            "hybrid": 24
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "hybrid": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 2,
+            "learned": 3,
+            "mix0250": 2,
+            "mix0750": 2,
+            "noop": 0,
+            "scene": 5
+          },
+          "verdict": "source-only relative reliability model selected"
+        },
+        "verdict": "Selected support-transport output scene `hybrid` with per-view `source_heldout_reliability` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "scene": "garden"
+    },
+    {
+      "archive": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": null,
+          "scene_selected_variant": null,
+          "selected_variant": "fixed",
+          "source_selected_counts": {},
+          "verdict": "disabled because scene-level source-heldout selector fell back to fixed"
+        },
+        "per_view_count": 16,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "fixed",
+        "report_path": "outputs/carnet/spcarnet_v327b_pairwise_blendstep_full9_20260701/stump/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 25.237947952434336,
+          "candidate_ssim": 0.8144056648015976,
+          "psnr_gain": 0.05702976139303506,
+          "ssim_gain": 0.001208242028951645
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "fixed": 16
+          },
+          "per_view_selected_variant": {
+            "fixed": 16
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "fixed": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": "fixed",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 3,
+            "mix0250": 0,
+            "mix0750": 0,
+            "noop": 0,
+            "scene": 7
+          },
+          "verdict": "source reliability did not improve scene-selected PSNR enough"
+        },
+        "verdict": "Selected support-transport output scene `fixed` is all-axis safe versus fixed on this target/test split."
+      },
+      "comparison": {
+        "delta_psnr_gain_replay_minus_archive": 0.0,
+        "delta_psnr_replay_minus_archive": 0.0,
+        "delta_ssim_gain_replay_minus_archive": 0.0,
+        "delta_ssim_replay_minus_archive": 0.0,
+        "has_both_reports": true,
+        "per_view": {
+          "archive_only_views": [],
+          "archive_per_view_count": 16,
+          "common_view_count": 16,
+          "output_variant_mismatch_count": 0,
+          "output_variant_mismatches": [],
+          "replay_only_views": [],
+          "replay_per_view_count": 16
+        }
+      },
+      "replay": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": null,
+          "scene_selected_variant": null,
+          "selected_variant": "fixed",
+          "source_selected_counts": {},
+          "verdict": "disabled because scene-level source-heldout selector fell back to fixed"
+        },
+        "per_view_count": 16,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "fixed",
+        "report_path": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701/stump/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 25.237947952434336,
+          "candidate_ssim": 0.8144056648015976,
+          "psnr_gain": 0.05702976139303506,
+          "ssim_gain": 0.001208242028951645
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "fixed": 16
+          },
+          "per_view_selected_variant": {
+            "fixed": 16
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "fixed": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": "fixed",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 3,
+            "mix0250": 0,
+            "mix0750": 0,
+            "noop": 0,
+            "scene": 7
+          },
+          "verdict": "source reliability did not improve scene-selected PSNR enough"
+        },
+        "verdict": "Selected support-transport output scene `fixed` is all-axis safe versus fixed on this target/test split."
+      },
+      "scene": "stump"
+    },
+    {
+      "archive": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": null,
+          "scene_selected_variant": null,
+          "selected_variant": "fixed",
+          "source_selected_counts": {},
+          "verdict": "disabled because scene-level source-heldout selector fell back to fixed"
+        },
+        "per_view_count": 18,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "fixed",
+        "report_path": "outputs/carnet/spcarnet_v327b_pairwise_blendstep_full9_20260701/treehill/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 21.027890901313697,
+          "candidate_ssim": 0.6753641135162778,
+          "psnr_gain": 0.10466407441286524,
+          "ssim_gain": 0.0016736454433865016
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "fixed": 5,
+            "learned": 6,
+            "mix0250": 7
+          },
+          "per_view_selected_variant": {
+            "fixed": 18
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "fixed": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "fixed",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 1,
+            "hybrid": 0,
+            "learned": 1,
+            "mix0250": 0,
+            "mix0750": 0,
+            "noop": 0,
+            "scene": 9
+          },
+          "verdict": "source-only relative reliability model selected"
+        },
+        "verdict": "Selected support-transport output scene `fixed` with per-view `source_pairwise_dominance` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "comparison": {
+        "delta_psnr_gain_replay_minus_archive": 0.0,
+        "delta_psnr_replay_minus_archive": 0.0,
+        "delta_ssim_gain_replay_minus_archive": 0.0,
+        "delta_ssim_replay_minus_archive": 0.0,
+        "has_both_reports": true,
+        "per_view": {
+          "archive_only_views": [],
+          "archive_per_view_count": 18,
+          "common_view_count": 18,
+          "output_variant_mismatch_count": 0,
+          "output_variant_mismatches": [],
+          "replay_only_views": [],
+          "replay_per_view_count": 18
+        }
+      },
+      "replay": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": null,
+          "scene_selected_variant": null,
+          "selected_variant": "fixed",
+          "source_selected_counts": {},
+          "verdict": "disabled because scene-level source-heldout selector fell back to fixed"
+        },
+        "per_view_count": 18,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "fixed",
+        "report_path": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701/treehill/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 21.027890901313697,
+          "candidate_ssim": 0.6753641135162778,
+          "psnr_gain": 0.10466407441286524,
+          "ssim_gain": 0.0016736454433865016
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "fixed": 5,
+            "learned": 6,
+            "mix0250": 7
+          },
+          "per_view_selected_variant": {
+            "fixed": 18
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "fixed": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "fixed",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 1,
+            "hybrid": 0,
+            "learned": 1,
+            "mix0250": 0,
+            "mix0750": 0,
+            "noop": 0,
+            "scene": 9
+          },
+          "verdict": "source-only relative reliability model selected"
+        },
+        "verdict": "Selected support-transport output scene `fixed` with per-view `source_pairwise_dominance` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "scene": "treehill"
+    },
+    {
+      "archive": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": null,
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 11,
+            "noop": 0,
+            "scene": 12
+          },
+          "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough"
+        },
+        "per_view_count": 39,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "hybrid",
+        "report_path": "outputs/carnet/spcarnet_v327b_pairwise_blendstep_full9_20260701/room/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 29.17501485076741,
+          "candidate_ssim": 0.9268689904457483,
+          "psnr_gain": 0.43591577001282344,
+          "ssim_gain": 0.005048837417211288
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "hybrid": 20,
+            "learned": 15,
+            "mix0250": 1,
+            "mix0750": 3
+          },
+          "per_view_selected_variant": {
+            "hybrid": 39
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "hybrid": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 1,
+            "learned": 9,
+            "mix0250": 2,
+            "mix0750": 1,
+            "noop": 0,
+            "scene": 10
+          },
+          "verdict": "source-only relative reliability model selected"
+        },
+        "verdict": "Selected support-transport output scene `hybrid` with per-view `source_heldout_reliability` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "comparison": {
+        "delta_psnr_gain_replay_minus_archive": 0.0013697260940483957,
+        "delta_psnr_replay_minus_archive": 0.0013697260940510603,
+        "delta_ssim_gain_replay_minus_archive": 9.183700268085987e-06,
+        "delta_ssim_replay_minus_archive": 9.183700268144968e-06,
+        "has_both_reports": true,
+        "per_view": {
+          "archive_only_views": [],
+          "archive_per_view_count": 39,
+          "common_view_count": 39,
+          "output_variant_mismatch_count": 1,
+          "output_variant_mismatches": [
+            {
+              "archive_output_variant": "hybrid",
+              "archive_selected_variant": "hybrid",
+              "replay_output_variant": "fixed",
+              "replay_selected_variant": "hybrid",
+              "view": "00002"
+            }
+          ],
+          "replay_only_views": [],
+          "replay_per_view_count": 39
+        }
+      },
+      "replay": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": null,
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 11,
+            "noop": 0,
+            "scene": 12
+          },
+          "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough"
+        },
+        "per_view_count": 39,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "hybrid",
+        "report_path": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701/room/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 29.176384576861462,
+          "candidate_ssim": 0.9268781741460165,
+          "psnr_gain": 0.43728549610687184,
+          "ssim_gain": 0.005058021117479374
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "fixed": 1,
+            "hybrid": 19,
+            "learned": 15,
+            "mix0250": 1,
+            "mix0750": 3
+          },
+          "per_view_selected_variant": {
+            "hybrid": 39
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "hybrid": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "hybrid",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 1,
+            "learned": 9,
+            "mix0250": 2,
+            "mix0750": 1,
+            "noop": 0,
+            "scene": 10
+          },
+          "verdict": "source-only relative reliability model selected"
+        },
+        "verdict": "Selected support-transport output scene `hybrid` with per-view `source_heldout_reliability` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "scene": "room"
+    },
+    {
+      "archive": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": null,
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 5,
+            "learned": 0,
+            "noop": 0,
+            "scene": 13
+          },
+          "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough"
+        },
+        "per_view_count": 30,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "learned",
+        "report_path": "outputs/carnet/spcarnet_v327b_pairwise_blendstep_full9_20260701/counter/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 27.17623254234645,
+          "candidate_ssim": 0.9031632761160533,
+          "psnr_gain": 0.4263596368894508,
+          "ssim_gain": 0.006908347209294637
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "learned": 30
+          },
+          "per_view_selected_variant": {
+            "learned": 30
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "learned": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "learned",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 8,
+            "mix0250": 0,
+            "mix0750": 0,
+            "noop": 0,
+            "scene": 10
+          },
+          "verdict": "source-only relative reliability model selected"
+        },
+        "verdict": "Selected support-transport output scene `learned` with per-view `source_heldout_reliability` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "comparison": {
+        "delta_psnr_gain_replay_minus_archive": 0.0,
+        "delta_psnr_replay_minus_archive": 0.0,
+        "delta_ssim_gain_replay_minus_archive": 0.0,
+        "delta_ssim_replay_minus_archive": 0.0,
+        "has_both_reports": true,
+        "per_view": {
+          "archive_only_views": [],
+          "archive_per_view_count": 30,
+          "common_view_count": 30,
+          "output_variant_mismatch_count": 0,
+          "output_variant_mismatches": [],
+          "replay_only_views": [],
+          "replay_per_view_count": 30
+        }
+      },
+      "replay": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": null,
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 5,
+            "learned": 0,
+            "noop": 0,
+            "scene": 13
+          },
+          "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough"
+        },
+        "per_view_count": 30,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "learned",
+        "report_path": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701/counter/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 27.17623254234645,
+          "candidate_ssim": 0.9031632761160533,
+          "psnr_gain": 0.4263596368894508,
+          "ssim_gain": 0.006908347209294637
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "learned": 30
+          },
+          "per_view_selected_variant": {
+            "learned": 30
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "learned": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "learned",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 8,
+            "mix0250": 0,
+            "mix0750": 0,
+            "noop": 0,
+            "scene": 10
+          },
+          "verdict": "source-only relative reliability model selected"
+        },
+        "verdict": "Selected support-transport output scene `learned` with per-view `source_heldout_reliability` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "scene": "counter"
+    },
+    {
+      "archive": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": null,
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 5,
+            "learned": 0,
+            "noop": 0,
+            "scene": 16
+          },
+          "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough"
+        },
+        "per_view_count": 35,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "learned",
+        "report_path": "outputs/carnet/spcarnet_v327b_pairwise_blendstep_full9_20260701/kitchen/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 28.31000256168673,
+          "candidate_ssim": 0.9321290067264012,
+          "psnr_gain": 0.4936231605325725,
+          "ssim_gain": 0.003910861696515764
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "learned": 35
+          },
+          "per_view_selected_variant": {
+            "learned": 35
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "learned": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": "learned",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 6,
+            "mix0250": 1,
+            "mix0750": 1,
+            "noop": 0,
+            "scene": 13
+          },
+          "verdict": "source reliability did not improve scene-selected PSNR enough"
+        },
+        "verdict": "Selected support-transport output scene `learned` is all-axis safe versus fixed on this target/test split."
+      },
+      "comparison": {
+        "delta_psnr_gain_replay_minus_archive": 0.0,
+        "delta_psnr_replay_minus_archive": 0.0,
+        "delta_ssim_gain_replay_minus_archive": 0.0,
+        "delta_ssim_replay_minus_archive": 0.0,
+        "has_both_reports": true,
+        "per_view": {
+          "archive_only_views": [],
+          "archive_per_view_count": 35,
+          "common_view_count": 35,
+          "output_variant_mismatch_count": 0,
+          "output_variant_mismatches": [],
+          "replay_only_views": [],
+          "replay_per_view_count": 35
+        }
+      },
+      "replay": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": null,
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 5,
+            "learned": 0,
+            "noop": 0,
+            "scene": 16
+          },
+          "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough"
+        },
+        "per_view_count": 35,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "learned",
+        "report_path": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701/kitchen/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 28.31000256168673,
+          "candidate_ssim": 0.9321290067264012,
+          "psnr_gain": 0.4936231605325725,
+          "ssim_gain": 0.003910861696515764
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "learned": 35
+          },
+          "per_view_selected_variant": {
+            "learned": 35
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "learned": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": "learned",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 0,
+            "learned": 6,
+            "mix0250": 1,
+            "mix0750": 1,
+            "noop": 0,
+            "scene": 13
+          },
+          "verdict": "source reliability did not improve scene-selected PSNR enough"
+        },
+        "verdict": "Selected support-transport output scene `learned` is all-axis safe versus fixed on this target/test split."
+      },
+      "scene": "kitchen"
+    },
+    {
+      "archive": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": null,
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 4,
+            "learned": 0,
+            "noop": 0,
+            "scene": 18
+          },
+          "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough"
+        },
+        "per_view_count": 37,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "learned",
+        "report_path": "outputs/carnet/spcarnet_v327b_pairwise_blendstep_full9_20260701/bonsai/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 29.43235042827867,
+          "candidate_ssim": 0.937240793898299,
+          "psnr_gain": 0.5680114008651865,
+          "ssim_gain": 0.005784803145640605
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "hybrid": 1,
+            "learned": 36
+          },
+          "per_view_selected_variant": {
+            "learned": 37
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "learned": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "learned",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 1,
+            "learned": 8,
+            "mix0250": 2,
+            "mix0750": 1,
+            "noop": 0,
+            "scene": 10
+          },
+          "verdict": "source-only relative reliability model selected"
+        },
+        "verdict": "Selected support-transport output scene `learned` with per-view `source_heldout_reliability` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "comparison": {
+        "delta_psnr_gain_replay_minus_archive": 0.007963041411062632,
+        "delta_psnr_replay_minus_archive": 0.007963041411063188,
+        "delta_ssim_gain_replay_minus_archive": 6.315514848038908e-05,
+        "delta_ssim_replay_minus_archive": 6.315514848032056e-05,
+        "has_both_reports": true,
+        "per_view": {
+          "archive_only_views": [],
+          "archive_per_view_count": 37,
+          "common_view_count": 37,
+          "output_variant_mismatch_count": 3,
+          "output_variant_mismatches": [
+            {
+              "archive_output_variant": "learned",
+              "archive_selected_variant": "learned",
+              "replay_output_variant": "fixed",
+              "replay_selected_variant": "learned",
+              "view": "00017"
+            },
+            {
+              "archive_output_variant": "learned",
+              "archive_selected_variant": "learned",
+              "replay_output_variant": "fixed",
+              "replay_selected_variant": "learned",
+              "view": "00019"
+            },
+            {
+              "archive_output_variant": "learned",
+              "archive_selected_variant": "learned",
+              "replay_output_variant": "fixed",
+              "replay_selected_variant": "learned",
+              "view": "00026"
+            }
+          ],
+          "replay_only_views": [],
+          "replay_per_view_count": 37
+        }
+      },
+      "replay": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": "scene",
+          "scene_selected_variant": null,
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 4,
+            "learned": 0,
+            "noop": 0,
+            "scene": 18
+          },
+          "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough"
+        },
+        "per_view_count": 37,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "learned",
+        "report_path": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701/bonsai/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 29.440313469689734,
+          "candidate_ssim": 0.9373039490467793,
+          "psnr_gain": 0.5759744422762492,
+          "ssim_gain": 0.005847958294120994
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "fixed": 3,
+            "hybrid": 1,
+            "learned": 33
+          },
+          "per_view_selected_variant": {
+            "learned": 37
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "learned": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "learned",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 0,
+            "hybrid": 1,
+            "learned": 8,
+            "mix0250": 2,
+            "mix0750": 1,
+            "noop": 0,
+            "scene": 10
+          },
+          "verdict": "source-only relative reliability model selected"
+        },
+        "verdict": "Selected support-transport output scene `learned` with per-view `source_heldout_reliability` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "scene": "bonsai"
+    }
+  ],
+  "selected_variant_counts": {
+    "archive": {
+      "per_view_output_variant": {
+        "fixed": 21,
+        "hybrid": 58,
+        "learned": 151,
+        "mix0250": 11,
+        "mix0750": 5
+      },
+      "per_view_selected_variant": {
+        "fixed": 34,
+        "hybrid": 110,
+        "learned": 102
+      },
+      "scene_policy_output_variant": {
+        "source_heldout_auto": 9
+      },
+      "scene_policy_selected_variant": {
+        "fixed": 2,
+        "hybrid": 4,
+        "learned": 3
+      }
+    },
+    "replay": {
+      "per_view_output_variant": {
+        "fixed": 26,
+        "hybrid": 56,
+        "learned": 148,
+        "mix0250": 11,
+        "mix0750": 5
+      },
+      "per_view_selected_variant": {
+        "fixed": 34,
+        "hybrid": 110,
+        "learned": 102
+      },
+      "scene_policy_output_variant": {
+        "source_heldout_auto": 9
+      },
+      "scene_policy_selected_variant": {
+        "fixed": 2,
+        "hybrid": 4,
+        "learned": 3
+      }
+    }
+  },
+  "source_reliability_source_selected_counts": {
+    "archive": {
+      "fixed": 1,
+      "hybrid": 6,
+      "learned": 46,
+      "mix0250": 8,
+      "mix0750": 8,
+      "noop": 0,
+      "scene": 78
+    },
+    "replay": {
+      "fixed": 1,
+      "hybrid": 6,
+      "learned": 46,
+      "mix0250": 8,
+      "mix0750": 8,
+      "noop": 0,
+      "scene": 78
+    }
+  }
+}

@@ -2,6 +2,84 @@
 
 Date: 2026-06-28
 
+## 2026-07-01 Topline: v329b Fixed Rollback Certificate
+
+Newest v329b evidence package:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v329b-FixedRollbackCertificate-Full9-Log.md
+docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v322c_audit.json
+docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v327b_audit.json
+docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel.png
+docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel_manifest.json
+outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701
+```
+
+What changed:
+
+- source reliability now has an opt-in fixed rollback certificate that can
+  override `fixed_when_scene_nonfixed` only when source-heldout predictions
+  strongly favor `fixed` and the scene-consistency evidence is aligned;
+- pairwise dominance now also has opt-in adaptive blend-step diagnostics, but
+  the promoted v329b result keeps the stricter v327b `max_blend_step=0.25`;
+- all new behavior is explicit-flag opt-in, so archived v322C/v327b replay
+  behavior is preserved unless the new certificate is enabled.
+
+Full9 replay metrics:
+
+| comparison | PSNR gain delta | SSIM gain delta | changed scenes |
+|---|---:|---:|---|
+| v329b vs v322C | +0.001188315360 | +0.000009419319 | bonsai, room, garden, treehill |
+| v329b vs v327b | +0.001097159569 | +0.000008436946 | bonsai, room, garden |
+
+v329b final full9 apply metrics are `0.272522652479` mean PSNR gain,
+`0.003736660673` mean SSIM gain, `25.412916878744` mean PSNR, and
+`0.840490665117` mean SSIM.
+
+Per-scene delta versus v322C:
+
+| scene | PSNR gain delta | SSIM gain delta | changed output views |
+|---|---:|---:|---:|
+| bicycle | +0.000000000000 | +0.000000000000 | 0 |
+| flowers | +0.000000000000 | +0.000000000000 | 0 |
+| garden | +0.000541668618 | +0.000003593663 | 1 |
+| stump | +0.000000000000 | +0.000000000000 | 0 |
+| treehill | +0.000820402117 | +0.000008841356 | 7 |
+| room | +0.001369726094 | +0.000009183700 | 1 |
+| counter | +0.000000000000 | +0.000000000000 | 0 |
+| kitchen | +0.000000000000 | +0.000000000000 | 0 |
+| bonsai | +0.007963041411 | +0.000063155148 | 3 |
+
+Key changed-view qualitative panel:
+
+![v329b key changed views](car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel.png)
+
+Interpretation:
+
+v329b is a real target-blind policy/certificate improvement over v322C and
+v327b. It is not just a per-scene parameter game: the same fixed rollback
+certificate is applied across the full9 replay. The v329a ablation also shows
+why the stricter certificate is needed: loose rollback improved `bonsai/room`
+but harmed `garden`; v329b rejects the bad `garden/00008` rollback while keeping
+the good `garden/00016` rollback.
+
+Honest status:
+
+- the full9 macro gain is still small;
+- the visual improvement is subtle in full-frame qualitative panels;
+- treehill remains scene-positive but has several negative changed views;
+- v329b does not yet include a fresh LPIPS/DISTS/frontier or triangle-count
+  table;
+- this is a useful engineering/research milestone, not the final paper-level
+  closed loop.
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Topline: v322C Candidate Ladder With Incumbent Preservation
 
 Newest v322C evidence package:

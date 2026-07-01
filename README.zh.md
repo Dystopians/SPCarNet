@@ -2,6 +2,28 @@
 
 **基于训练证据、协议审计安全的 Mesh Splatting 压缩与渲染修复。**
 
+## 最新状态（2026-07-01）
+
+当前最新已验证里程碑是 **v329b fixed rollback certificate**。它新增了一个
+target-blind 的 source-heldout 证书：当 source reliability 和场景一致性
+margin 都支持时，才允许把不可靠的 `learned/hybrid` 单视角输出回退到
+`fixed`。full9 replay 相对 v322C incumbent 提升 `+0.001188315360` mean PSNR
+gain 和 `+0.000009419319` mean SSIM gain；相对 v327b 继续提升
+`+0.001097159569` / `+0.000008436946`。
+
+优先阅读：
+
+- [最新完整评估日志](docs/Latest.md)
+- [v329b fixed rollback certificate 日志](docs/car_model/7-01-v329b-FixedRollbackCertificate-Full9-Log.md)
+- [v329b full9 audit vs v322C](docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v322c_audit.json)
+- [v329b full9 audit vs v327b](docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v327b_audit.json)
+- [v329b 定性 changed-view 面板](docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel.png)
+- [给下一阶段模型的反馈与经验教训](feedback.md)
+
+诚实状态：v329b 是真实的方法和证据里程碑，但还不是最终论文闭环。收益主要集中在
+`bonsai`、`room`、`garden`，以及继承自 v327b 的 `treehill` 小收益；定性差异仍然细微，
+新的 LPIPS/DISTS/frontier/几何表也还没有补齐。
+
 ## 当前报告包（2026-06-26）
 
 本地 clone 后做 mentor/PPT 分析请从这里开始：

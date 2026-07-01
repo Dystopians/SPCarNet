@@ -2,6 +2,29 @@
 
 **Train-only evidence-guided compact Mesh Splatting with protocol-audited geometry-safe reconstruction repair.**
 
+## Latest Status (2026-07-01)
+
+The newest verified milestone is **v329b fixed rollback certificate**. It adds
+a target-blind source-heldout certificate that can roll unsafe
+`learned/hybrid` per-view outputs back to `fixed` only when source reliability
+and scene-consistency margins agree. Full9 replay improves over the v322C
+incumbent by `+0.001188315360` mean PSNR gain and `+0.000009419319` mean SSIM
+gain, and improves over v327b by `+0.001097159569` / `+0.000008436946`.
+
+Start from:
+
+- [Latest full evaluation log](docs/Latest.md)
+- [v329b fixed rollback certificate log](docs/car_model/7-01-v329b-FixedRollbackCertificate-Full9-Log.md)
+- [v329b full9 audit vs v322C](docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v322c_audit.json)
+- [v329b full9 audit vs v327b](docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v327b_audit.json)
+- [v329b qualitative changed-view panel](docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel.png)
+- [next-model feedback and lessons](feedback.md)
+
+Honest status: v329b is a real method and evidence milestone, not final
+paper-level closure. The gain is concentrated in `bonsai`, `room`, `garden`,
+and the preserved v327b `treehill` improvement; visual differences remain
+subtle and fresh LPIPS/DISTS/frontier/geometry tables are still missing.
+
 ## Current Report Package (2026-06-26)
 
 Start here for mentor/PPT analysis from a fresh clone:

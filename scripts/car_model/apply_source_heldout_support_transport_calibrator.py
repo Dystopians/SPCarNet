@@ -1692,6 +1692,31 @@ def _pairwise_local_delta_summary(
     }
 
 
+def _pairwise_blend_step_reject_reason(
+    *,
+    blend_step: float | None,
+    local_deltas: dict[str, Any],
+    args: argparse.Namespace,
+) -> str | None:
+    if blend_step is None or blend_step <= float(args.pairwise_dominance_max_blend_step):
+        return None
+    if not bool(args.pairwise_dominance_enable_adaptive_blend_step):
+        return "blend_step"
+    if blend_step > float(args.pairwise_dominance_adaptive_max_blend_step):
+        return "blend_step"
+    if float(local_deltas.get("psnr", 0.0)) < float(args.pairwise_dominance_large_step_min_local_psnr_delta):
+        return "adaptive_blend_local_psnr"
+    if float(local_deltas.get("ssim", 0.0)) < float(args.pairwise_dominance_large_step_min_local_ssim_delta):
+        return "adaptive_blend_local_ssim"
+    if float(local_deltas.get("psnr_cvar", 0.0)) < float(args.pairwise_dominance_large_step_min_local_cvar_delta):
+        return "adaptive_blend_local_cvar"
+    if float(local_deltas.get("psnr_min", 0.0)) < float(args.pairwise_dominance_large_step_min_local_min_delta):
+        return "adaptive_blend_local_min"
+    if float(local_deltas.get("positive_fraction", 0.0)) < float(args.pairwise_dominance_large_step_min_positive_fraction):
+        return "adaptive_blend_positive_fraction"
+    return None
+
+
 def _source_incumbent_variant_for_view(
     view: str,
     *,
@@ -1858,9 +1883,16 @@ def _fit_pairwise_dominance_policy(
             )
             cand_diag["blend_step"] = blend_step
             cand_diag["max_blend_step"] = float(args.pairwise_dominance_max_blend_step)
+            cand_diag["adaptive_blend_step_enabled"] = bool(args.pairwise_dominance_enable_adaptive_blend_step)
+            cand_diag["adaptive_max_blend_step"] = float(args.pairwise_dominance_adaptive_max_blend_step)
             reject_reason = None
-            if blend_step is not None and blend_step > float(args.pairwise_dominance_max_blend_step):
-                reject_reason = "blend_step"
+            blend_reject_reason = _pairwise_blend_step_reject_reason(
+                blend_step=blend_step,
+                local_deltas=local_deltas,
+                args=args,
+            )
+            if blend_reject_reason is not None:
+                reject_reason = blend_reject_reason
             elif prediction[0] < float(args.pairwise_dominance_min_predicted_objective_delta):
                 reject_reason = "predicted_objective_delta"
             elif prediction[1] < float(args.pairwise_dominance_min_predicted_psnr_delta):
@@ -1971,6 +2003,13 @@ def _fit_pairwise_dominance_policy(
         "ood_quantile": float(args.pairwise_dominance_ood_quantile),
         "ood_source_distance_threshold": float(ood_threshold),
         "max_blend_step": float(args.pairwise_dominance_max_blend_step),
+        "adaptive_blend_step_enabled": bool(args.pairwise_dominance_enable_adaptive_blend_step),
+        "adaptive_max_blend_step": float(args.pairwise_dominance_adaptive_max_blend_step),
+        "large_step_min_local_psnr_delta": float(args.pairwise_dominance_large_step_min_local_psnr_delta),
+        "large_step_min_local_ssim_delta": float(args.pairwise_dominance_large_step_min_local_ssim_delta),
+        "large_step_min_local_cvar_delta": float(args.pairwise_dominance_large_step_min_local_cvar_delta),
+        "large_step_min_local_min_delta": float(args.pairwise_dominance_large_step_min_local_min_delta),
+        "large_step_min_positive_fraction": float(args.pairwise_dominance_large_step_min_positive_fraction),
     }
     if selected_counts["incumbent"] >= len(rows_by_view):
         return {"enabled": False, "verdict": "pairwise dominance accepted no source views", **base_payload}
@@ -2048,8 +2087,13 @@ def _pairwise_dominance_choose_variant(
             else None
         )
         reject_reason = None
-        if blend_step is not None and blend_step > float(args.pairwise_dominance_max_blend_step):
-            reject_reason = "blend_step"
+        blend_reject_reason = _pairwise_blend_step_reject_reason(
+            blend_step=blend_step,
+            local_deltas=local_deltas,
+            args=args,
+        )
+        if blend_reject_reason is not None:
+            reject_reason = blend_reject_reason
         elif prediction[0] < float(args.pairwise_dominance_min_predicted_objective_delta):
             reject_reason = "predicted_objective_delta"
         elif prediction[1] < float(args.pairwise_dominance_min_predicted_psnr_delta):
@@ -2073,6 +2117,8 @@ def _pairwise_dominance_choose_variant(
             "local": local,
             "blend_step": blend_step,
             "max_blend_step": float(args.pairwise_dominance_max_blend_step),
+            "adaptive_blend_step_enabled": bool(args.pairwise_dominance_enable_adaptive_blend_step),
+            "adaptive_max_blend_step": float(args.pairwise_dominance_adaptive_max_blend_step),
             "ood_distance": float(ood_distance),
             "ood_threshold": float(policy.get("ood_source_distance_threshold", float("inf"))),
             "reject_reason": reject_reason,
@@ -3108,6 +3154,18 @@ def _fit_source_reliability_policy(
         "min_predicted_lpips_delta_vs_scene": float(args.source_reliability_min_predicted_lpips_delta_vs_scene),
         "min_predicted_dists_delta_vs_scene": float(args.source_reliability_min_predicted_dists_delta_vs_scene),
         "forbid_fixed_when_scene_nonfixed": bool(args.source_reliability_forbid_fixed_when_scene_nonfixed),
+        "fixed_rollback_certificate_enabled": bool(args.source_reliability_enable_fixed_rollback_certificate),
+        "fixed_rollback_min_objective_margin": float(args.source_reliability_fixed_rollback_min_objective_margin),
+        "fixed_rollback_min_psnr_margin": float(args.source_reliability_fixed_rollback_min_psnr_margin),
+        "fixed_rollback_min_ssim_margin": float(args.source_reliability_fixed_rollback_min_ssim_margin),
+        "fixed_rollback_min_best_psnr_delta": float(args.source_reliability_fixed_rollback_min_best_psnr_delta),
+        "fixed_rollback_min_best_ssim_delta": float(args.source_reliability_fixed_rollback_min_best_ssim_delta),
+        "fixed_rollback_max_scene_opposition_fraction": float(
+            args.source_reliability_fixed_rollback_max_scene_opposition_fraction
+        ),
+        "fixed_rollback_min_scene_aligned_fraction": float(
+            args.source_reliability_fixed_rollback_min_scene_aligned_fraction
+        ),
         "loo_predictions": loo_predictions,
     }
     if (
@@ -3226,6 +3284,52 @@ def _source_reliability_choose_variant(
                 return "__scene__", diagnostics
             return "noop", diagnostics
 
+        def fixed_rollback_certificate() -> dict[str, Any]:
+            scene_consistency = proxies_by_variant.get(scene_variant, {})
+            payload = {
+                "enabled": bool(policy.get("fixed_rollback_certificate_enabled", False)),
+                "accepted": False,
+                "reason": "disabled",
+                "objective_margin": float(best_pred[0]) - float(scene_pred[0]),
+                "psnr_margin": float(best_pred[1]) - float(scene_pred[1]),
+                "ssim_margin": float(best_pred[2]) - float(scene_pred[2]) if compute_ssim else 0.0,
+                "best_psnr_delta": float(best_pred[1]),
+                "best_ssim_delta": float(best_pred[2]) if compute_ssim else 0.0,
+                "scene_opposition_fraction": float(scene_consistency.get("opposition_fraction", 0.0)),
+                "scene_aligned_fraction": float(scene_consistency.get("aligned_fraction", 0.0)),
+            }
+            if not bool(payload["enabled"]):
+                return payload
+            if best_variant != "fixed" or scene_variant == "fixed":
+                payload["reason"] = "not_fixed_rollback"
+                return payload
+            if payload["objective_margin"] < float(policy.get("fixed_rollback_min_objective_margin", 0.0)):
+                payload["reason"] = "objective_margin"
+                return payload
+            if payload["psnr_margin"] < float(policy.get("fixed_rollback_min_psnr_margin", 0.0)):
+                payload["reason"] = "psnr_margin"
+                return payload
+            if compute_ssim and payload["ssim_margin"] < float(policy.get("fixed_rollback_min_ssim_margin", 0.0)):
+                payload["reason"] = "ssim_margin"
+                return payload
+            if payload["best_psnr_delta"] < float(policy.get("fixed_rollback_min_best_psnr_delta", 0.0)):
+                payload["reason"] = "best_psnr_delta"
+                return payload
+            if compute_ssim and payload["best_ssim_delta"] < float(policy.get("fixed_rollback_min_best_ssim_delta", 0.0)):
+                payload["reason"] = "best_ssim_delta"
+                return payload
+            if payload["scene_opposition_fraction"] > float(
+                policy.get("fixed_rollback_max_scene_opposition_fraction", 1.0)
+            ):
+                payload["reason"] = "scene_opposition_fraction"
+                return payload
+            if payload["scene_aligned_fraction"] < float(policy.get("fixed_rollback_min_scene_aligned_fraction", 0.0)):
+                payload["reason"] = "scene_aligned_fraction"
+                return payload
+            payload["accepted"] = True
+            payload["reason"] = "passed"
+            return payload
+
         if best_pred[0] < float(policy.get("min_predicted_objective_delta_vs_scene", 0.0)):
             return reject("objective_margin")
         if best_pred[1] < float(policy.get("min_predicted_psnr_delta_vs_scene", -1.0e9)):
@@ -3237,7 +3341,10 @@ def _source_reliability_choose_variant(
         if best_pred[4] < float(policy.get("min_predicted_dists_delta_vs_scene", -1.0e9)):
             return reject("dists_delta_vs_scene")
         if bool(policy.get("forbid_fixed_when_scene_nonfixed", False)) and scene_variant != "fixed" and best_variant == "fixed":
-            return reject("fixed_when_scene_nonfixed")
+            rollback_payload = fixed_rollback_certificate()
+            diagnostics["fixed_rollback_certificate"] = rollback_payload
+            if not bool(rollback_payload.get("accepted", False)):
+                return reject("fixed_when_scene_nonfixed")
         if bool(policy.get("ood_guard_enabled", False)):
             pool = policy.get("source_entries_by_variant", {}).get(best_variant, [])
             mean = [float(x) for x in policy.get("ood_feature_mean", [])]
@@ -4388,6 +4495,13 @@ def main() -> None:
     parser.add_argument("--pairwise_dominance_enable_ood_guard", action="store_true")
     parser.add_argument("--pairwise_dominance_ood_quantile", type=float, default=0.80)
     parser.add_argument("--pairwise_dominance_max_blend_step", type=float, default=1.0e9)
+    parser.add_argument("--pairwise_dominance_enable_adaptive_blend_step", action="store_true")
+    parser.add_argument("--pairwise_dominance_adaptive_max_blend_step", type=float, default=1.0e9)
+    parser.add_argument("--pairwise_dominance_large_step_min_local_psnr_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_large_step_min_local_ssim_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_large_step_min_local_cvar_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_large_step_min_local_min_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_large_step_min_positive_fraction", type=float, default=1.0)
     parser.add_argument("--pairwise_dominance_psnr_weight", type=float, default=0.0)
     parser.add_argument("--pairwise_dominance_ssim_weight", type=float, default=0.0)
     parser.add_argument("--pairwise_dominance_local_cvar_weight", type=float, default=0.25)
@@ -4450,6 +4564,14 @@ def main() -> None:
     parser.add_argument("--source_reliability_min_predicted_lpips_delta_vs_scene", type=float, default=-1.0e9)
     parser.add_argument("--source_reliability_min_predicted_dists_delta_vs_scene", type=float, default=-1.0e9)
     parser.add_argument("--source_reliability_forbid_fixed_when_scene_nonfixed", action="store_true")
+    parser.add_argument("--source_reliability_enable_fixed_rollback_certificate", action="store_true")
+    parser.add_argument("--source_reliability_fixed_rollback_min_objective_margin", type=float, default=0.0)
+    parser.add_argument("--source_reliability_fixed_rollback_min_psnr_margin", type=float, default=0.0)
+    parser.add_argument("--source_reliability_fixed_rollback_min_ssim_margin", type=float, default=0.0)
+    parser.add_argument("--source_reliability_fixed_rollback_min_best_psnr_delta", type=float, default=0.0)
+    parser.add_argument("--source_reliability_fixed_rollback_min_best_ssim_delta", type=float, default=0.0)
+    parser.add_argument("--source_reliability_fixed_rollback_max_scene_opposition_fraction", type=float, default=1.0)
+    parser.add_argument("--source_reliability_fixed_rollback_min_scene_aligned_fraction", type=float, default=0.0)
     parser.add_argument("--source_reliability_enable_calibrated_lcb", action="store_true")
     parser.add_argument(
         "--source_reliability_calibrated_lcb_mode",

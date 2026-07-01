@@ -1,0 +1,80 @@
+[
+  {
+    "scene": "bonsai",
+    "view": "00019",
+    "old_root": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/bonsai",
+    "new_root": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_focused3_20260701/bonsai",
+    "old_output_variant": "learned",
+    "new_output_variant": "fixed",
+    "delta_psnr_gain": 0.10712604248584867,
+    "delta_ssim_gain": 0.0011311769485473633,
+    "old_render": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/bonsai/renders/00019.png",
+    "new_render": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_focused3_20260701/bonsai/renders/00019.png",
+    "gt": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/bonsai/gt/00019.png"
+  },
+  {
+    "scene": "bonsai",
+    "view": "00017",
+    "old_root": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/bonsai",
+    "new_root": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_focused3_20260701/bonsai",
+    "old_output_variant": "learned",
+    "new_output_variant": "fixed",
+    "delta_psnr_gain": 0.10237381471087659,
+    "delta_ssim_gain": 0.00034058094024658203,
+    "old_render": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/bonsai/renders/00017.png",
+    "new_render": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_focused3_20260701/bonsai/renders/00017.png",
+    "gt": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/bonsai/gt/00017.png"
+  },
+  {
+    "scene": "bonsai",
+    "view": "00026",
+    "old_root": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/bonsai",
+    "new_root": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_focused3_20260701/bonsai",
+    "old_output_variant": "learned",
+    "new_output_variant": "fixed",
+    "delta_psnr_gain": 0.08513267501259492,
+    "delta_ssim_gain": 0.0008649826049804688,
+    "old_render": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/bonsai/renders/00026.png",
+    "new_render": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_focused3_20260701/bonsai/renders/00026.png",
+    "gt": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/bonsai/gt/00026.png"
+  },
+  {
+    "scene": "room",
+    "view": "00002",
+    "old_root": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/room",
+    "new_root": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_focused3_20260701/room",
+    "old_output_variant": "hybrid",
+    "new_output_variant": "fixed",
+    "delta_psnr_gain": 0.05341931766788832,
+    "delta_ssim_gain": 0.00035816431045532227,
+    "old_render": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/room/renders/00002.png",
+    "new_render": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_focused3_20260701/room/renders/00002.png",
+    "gt": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/room/gt/00002.png"
+  },
+  {
+    "scene": "garden",
+    "view": "00016",
+    "old_root": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/garden",
+    "new_root": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_garden_20260701",
+    "old_output_variant": "hybrid",
+    "new_output_variant": "fixed",
+    "delta_psnr_gain": 0.013000046827816192,
+    "delta_ssim_gain": 8.624792098999023e-05,
+    "old_render": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/garden/renders/00016.png",
+    "new_render": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_garden_20260701/renders/00016.png",
+    "gt": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/garden/gt/00016.png"
+  },
+  {
+    "scene": "treehill",
+    "view": "00011",
+    "old_root": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/treehill",
+    "new_root": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701/treehill",
+    "old_output_variant": "fixed",
+    "new_output_variant": "mix0250",
+    "delta_psnr_gain": 0.03372038690325496,
+    "delta_ssim_gain": 0.0002688169479370117,
+    "old_render": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/treehill/renders/00011.png",
+    "new_render": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701/treehill/renders/00011.png",
+    "gt": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/treehill/gt/00011.png"
+  }
+]
