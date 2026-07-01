@@ -1,0 +1,1002 @@
+{
+  "method": "v309 selective source-heldout KNN policy over v302 support-transport calibrator",
+  "root": "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630",
+  "base_root": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/*/ratio_0200/compact_model",
+  "base_method_name": "ours_26000_phasef_extra_compact_base",
+  "checkpoint": "outputs/carnet/spcarnet_v302_constrained_hybrid_anchor_flowers_20260630/support_transport_calibrator.pt",
+  "policy": "scene-level source-heldout auto first; per-view choices use source-heldout KNN on a PSNR+20*SSIM objective; KNN is enabled only when source-heldout leave-one-out PSNR delta over the scene-selected branch is non-negative and the scene-selected branch is not fixed",
+  "target_gt_policy_use": "none; target/test GT is read only after selected renders are saved for evaluation",
+  "rows": [
+    {
+      "scene": "bicycle",
+      "views": 25,
+      "support_views": 126,
+      "support_source_mode": "source_split",
+      "target_gt_usage": "GT read only after candidate images are saved, for evaluation",
+      "scene_selected_variant": "hybrid",
+      "per_view_gate_mode": "source_heldout_knn",
+      "knn_enabled": true,
+      "output_counts": {
+        "learned": 5,
+        "hybrid": 15,
+        "fixed": 5
+      },
+      "negative_psnr_views": [
+        "00011",
+        "00016",
+        "00017"
+      ],
+      "base_psnr": 23.293479709950237,
+      "base_ssim": 0.792481050491333,
+      "selected_psnr": 23.4115539283322,
+      "selected_ssim": 0.7954616117477417,
+      "fixed_psnr_gain": 0.09834530782944569,
+      "fixed_ssim_gain": 0.0028195738792419433,
+      "learned_psnr_gain": 0.12032849879064286,
+      "learned_ssim_gain": 0.002834932804107666,
+      "hybrid_psnr_gain": 0.11208827481638309,
+      "hybrid_ssim_gain": 0.002952544689178467,
+      "selected_psnr_gain": 0.11807421838196674,
+      "selected_ssim_gain": 0.002980561256408691,
+      "selected_minus_fixed_psnr_gain": 0.01972891055252106,
+      "selected_minus_fixed_ssim_gain": 0.00016098737716674794,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 0.88,
+      "selected_min_psnr_gain": -0.060029153144686376,
+      "selected_cvar20_psnr_gain": -0.008901360141875614,
+      "per_view_noop_fraction": 0.0,
+      "mean_covered_fraction": 0.9386110186576844,
+      "source_heldout_knn_audit": {
+        "enabled": true,
+        "verdict": "source-heldout KNN per-view policy selected",
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "k": 3,
+        "min_predicted_score": 0.0,
+        "source_mean_psnr_delta_vs_scene_selected": 0.0033626823199481293,
+        "source_mean_ssim_delta_vs_scene_selected": -0.00013391176859537768,
+        "source_safe_vs_fixed": false,
+        "source_selected_counts": {
+          "fixed": 6,
+          "learned": 7,
+          "hybrid": 2,
+          "noop": 0
+        },
+        "source_summary": {
+          "base_psnr": 21.386857962156075,
+          "candidate_psnr": 21.486683882880186,
+          "psnr_gain": 0.09982592072410365,
+          "positive_view_fraction": 0.9333333333333333,
+          "base_ssim": 0.7772897760073344,
+          "candidate_ssim": 0.7778796037038167,
+          "ssim_gain": 0.0005898276964823405
+        },
+        "source_fixed_summary": {
+          "base_psnr": 21.386857962156075,
+          "candidate_psnr": 21.461678509405374,
+          "psnr_gain": 0.07482054724929933,
+          "positive_view_fraction": 0.9333333333333333,
+          "base_ssim": 0.7772897760073344,
+          "candidate_ssim": 0.777954085667928,
+          "ssim_gain": 0.0006643096605936686
+        },
+        "source_scene_selected_summary": {
+          "base_psnr": 21.386857962156075,
+          "candidate_psnr": 21.483321200560237,
+          "psnr_gain": 0.09646323840415552,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.7772897760073344,
+          "candidate_ssim": 0.7780135154724122,
+          "ssim_gain": 0.0007237394650777181
+        }
+      },
+      "source_heldout_threshold_gate_audit": {
+        "enabled": false,
+        "verdict": "disabled by CLI",
+        "score_name": null,
+        "threshold": null,
+        "polarity": null,
+        "source_accept_fraction": null
+      },
+      "wandb_dirs": [
+        "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/bicycle/wandb/offline-run-20260630_184355-uvm9hi71"
+      ],
+      "report": "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/bicycle/support_transport_apply_report.json"
+    },
+    {
+      "scene": "bonsai",
+      "views": 37,
+      "support_views": 191,
+      "support_source_mode": "source_split",
+      "target_gt_usage": "GT read only after candidate images are saved, for evaluation",
+      "scene_selected_variant": "learned",
+      "per_view_gate_mode": "off",
+      "knn_enabled": false,
+      "output_counts": {
+        "learned": 37
+      },
+      "negative_psnr_views": [],
+      "base_psnr": 28.864339027413482,
+      "base_ssim": 0.9314559907526583,
+      "selected_psnr": 29.432051469530993,
+      "selected_ssim": 0.9372410339278143,
+      "fixed_psnr_gain": 0.4863971501099032,
+      "fixed_ssim_gain": 0.005299505349752065,
+      "learned_psnr_gain": 0.5677124421175066,
+      "learned_ssim_gain": 0.005785043175156052,
+      "hybrid_psnr_gain": 0.5313874915060735,
+      "hybrid_ssim_gain": 0.005616486072540283,
+      "selected_psnr_gain": 0.5677124421175066,
+      "selected_ssim_gain": 0.005785043175156052,
+      "selected_minus_fixed_psnr_gain": 0.0813152920076034,
+      "selected_minus_fixed_ssim_gain": 0.0004855378254039868,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 1.0,
+      "selected_min_psnr_gain": 0.14005710063242205,
+      "selected_cvar20_psnr_gain": 0.26431199696331875,
+      "per_view_noop_fraction": 0.0,
+      "mean_covered_fraction": 0.9798638530679651,
+      "source_heldout_knn_audit": {
+        "enabled": false,
+        "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough",
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "k": null,
+        "min_predicted_score": null,
+        "source_mean_psnr_delta_vs_scene_selected": -0.019882605449240698,
+        "source_mean_ssim_delta_vs_scene_selected": -0.00016948309811678792,
+        "source_safe_vs_fixed": true,
+        "source_selected_counts": {
+          "fixed": 5,
+          "learned": 13,
+          "hybrid": 4,
+          "noop": 0
+        },
+        "source_summary": {
+          "base_psnr": 29.638797522120555,
+          "candidate_psnr": 30.24213535462035,
+          "psnr_gain": 0.6033378324997908,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9382668110457334,
+          "candidate_ssim": 0.9434401799332012,
+          "ssim_gain": 0.005173368887467818
+        },
+        "source_fixed_summary": {
+          "base_psnr": 29.638797522120555,
+          "candidate_psnr": 30.184144815486196,
+          "psnr_gain": 0.5453472933656417,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9382668110457334,
+          "candidate_ssim": 0.9432931352745403,
+          "ssim_gain": 0.0050263242288069295
+        },
+        "source_scene_selected_summary": {
+          "base_psnr": 29.638797522120555,
+          "candidate_psnr": 30.262017960069592,
+          "psnr_gain": 0.6232204379490315,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9382668110457334,
+          "candidate_ssim": 0.943609663031318,
+          "ssim_gain": 0.005342851985584606
+        }
+      },
+      "source_heldout_threshold_gate_audit": {
+        "enabled": false,
+        "verdict": "disabled by CLI",
+        "score_name": null,
+        "threshold": null,
+        "polarity": null,
+        "source_accept_fraction": null
+      },
+      "wandb_dirs": [
+        "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/bonsai/wandb/offline-run-20260630_184452-ngiqm8cf"
+      ],
+      "report": "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/bonsai/support_transport_apply_report.json"
+    },
+    {
+      "scene": "counter",
+      "views": 30,
+      "support_views": 157,
+      "support_source_mode": "source_split",
+      "target_gt_usage": "GT read only after candidate images are saved, for evaluation",
+      "scene_selected_variant": "learned",
+      "per_view_gate_mode": "off",
+      "knn_enabled": false,
+      "output_counts": {
+        "learned": 30
+      },
+      "negative_psnr_views": [
+        "00008"
+      ],
+      "base_psnr": 26.749872905457007,
+      "base_ssim": 0.8962549289067586,
+      "selected_psnr": 27.17623254234645,
+      "selected_ssim": 0.9031632761160533,
+      "fixed_psnr_gain": 0.3396316968123441,
+      "fixed_ssim_gain": 0.006116793553034464,
+      "learned_psnr_gain": 0.4263596368894508,
+      "learned_ssim_gain": 0.006908347209294637,
+      "hybrid_psnr_gain": 0.38625746785628956,
+      "hybrid_ssim_gain": 0.006588270266850789,
+      "selected_psnr_gain": 0.4263596368894508,
+      "selected_ssim_gain": 0.006908347209294637,
+      "selected_minus_fixed_psnr_gain": 0.08672794007710666,
+      "selected_minus_fixed_ssim_gain": 0.0007915536562601725,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 0.9666666666666667,
+      "selected_min_psnr_gain": -0.00361339206500233,
+      "selected_cvar20_psnr_gain": 0.1329347732944406,
+      "per_view_noop_fraction": 0.0,
+      "mean_covered_fraction": 0.9798579374949138,
+      "source_heldout_knn_audit": {
+        "enabled": false,
+        "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough",
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "k": null,
+        "min_predicted_score": null,
+        "source_mean_psnr_delta_vs_scene_selected": -0.013091946561091916,
+        "source_mean_ssim_delta_vs_scene_selected": -8.462203873528355e-05,
+        "source_safe_vs_fixed": true,
+        "source_selected_counts": {
+          "fixed": 0,
+          "learned": 13,
+          "hybrid": 5,
+          "noop": 0
+        },
+        "source_summary": {
+          "base_psnr": 27.766441884429565,
+          "candidate_psnr": 28.251838294689218,
+          "psnr_gain": 0.4853964102596559,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9144567747910818,
+          "candidate_ssim": 0.9209359221988254,
+          "ssim_gain": 0.006479147407743666
+        },
+        "source_fixed_summary": {
+          "base_psnr": 27.766441884429565,
+          "candidate_psnr": 28.156585371988243,
+          "psnr_gain": 0.3901434875586827,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9144567747910818,
+          "candidate_ssim": 0.9202606777350107,
+          "ssim_gain": 0.005803902943929036
+        },
+        "source_scene_selected_summary": {
+          "base_psnr": 27.766441884429565,
+          "candidate_psnr": 28.26493024125031,
+          "psnr_gain": 0.4984883568207478,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9144567747910818,
+          "candidate_ssim": 0.9210205442375607,
+          "ssim_gain": 0.00656376944647895
+        }
+      },
+      "source_heldout_threshold_gate_audit": {
+        "enabled": false,
+        "verdict": "disabled by CLI",
+        "score_name": null,
+        "threshold": null,
+        "polarity": null,
+        "source_accept_fraction": null
+      },
+      "wandb_dirs": [
+        "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/counter/wandb/offline-run-20260630_184439-llopdidw"
+      ],
+      "report": "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/counter/support_transport_apply_report.json"
+    },
+    {
+      "scene": "flowers",
+      "views": 22,
+      "support_views": 113,
+      "support_source_mode": "source_split",
+      "target_gt_usage": "GT read only after candidate images are saved, for evaluation",
+      "scene_selected_variant": "hybrid",
+      "per_view_gate_mode": "source_heldout_knn",
+      "knn_enabled": true,
+      "output_counts": {
+        "fixed": 5,
+        "learned": 9,
+        "hybrid": 8
+      },
+      "negative_psnr_views": [],
+      "base_psnr": 19.66869543116256,
+      "base_ssim": 0.6828232651407068,
+      "selected_psnr": 19.760120859118263,
+      "selected_ssim": 0.686930466781963,
+      "fixed_psnr_gain": 0.0782240266728122,
+      "fixed_ssim_gain": 0.003794328732924028,
+      "learned_psnr_gain": 0.0961603690330438,
+      "learned_ssim_gain": 0.004101170734925704,
+      "hybrid_psnr_gain": 0.08886119364080872,
+      "hybrid_ssim_gain": 0.004047775810415094,
+      "selected_psnr_gain": 0.09142542795570369,
+      "selected_ssim_gain": 0.004107201641256159,
+      "selected_minus_fixed_psnr_gain": 0.01320140128289149,
+      "selected_minus_fixed_ssim_gain": 0.00031287290833213093,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 1.0,
+      "selected_min_psnr_gain": 0.023411258559505654,
+      "selected_cvar20_psnr_gain": 0.04353161703746977,
+      "per_view_noop_fraction": 0.0,
+      "mean_covered_fraction": 0.9092622887004506,
+      "source_heldout_knn_audit": {
+        "enabled": true,
+        "verdict": "source-heldout KNN per-view policy selected",
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "k": 3,
+        "min_predicted_score": 0.0,
+        "source_mean_psnr_delta_vs_scene_selected": 0.006031617254514024,
+        "source_mean_ssim_delta_vs_scene_selected": -4.2553131396953726e-05,
+        "source_safe_vs_fixed": false,
+        "source_selected_counts": {
+          "fixed": 4,
+          "learned": 6,
+          "hybrid": 3,
+          "noop": 0
+        },
+        "source_summary": {
+          "base_psnr": 20.088391009720745,
+          "candidate_psnr": 20.183065316193733,
+          "psnr_gain": 0.09467430647298104,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.7641581342770503,
+          "candidate_ssim": 0.7654651265877944,
+          "ssim_gain": 0.0013069923107440656
+        },
+        "source_fixed_summary": {
+          "base_psnr": 20.088391009720745,
+          "candidate_psnr": 20.16119753708403,
+          "psnr_gain": 0.07280652736327954,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.7641581342770503,
+          "candidate_ssim": 0.7654737325815054,
+          "ssim_gain": 0.0013155983044550968
+        },
+        "source_scene_selected_summary": {
+          "base_psnr": 20.088391009720745,
+          "candidate_psnr": 20.177033698939212,
+          "psnr_gain": 0.08864268921846702,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.7641581342770503,
+          "candidate_ssim": 0.7655076797191913,
+          "ssim_gain": 0.0013495454421410193
+        }
+      },
+      "source_heldout_threshold_gate_audit": {
+        "enabled": false,
+        "verdict": "disabled by CLI",
+        "score_name": null,
+        "threshold": null,
+        "polarity": null,
+        "source_accept_fraction": null
+      },
+      "wandb_dirs": [
+        "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/flowers/wandb/offline-run-20260630_184601-xw184q7d"
+      ],
+      "report": "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/flowers/support_transport_apply_report.json"
+    },
+    {
+      "scene": "garden",
+      "views": 24,
+      "support_views": 120,
+      "support_source_mode": "source_split",
+      "target_gt_usage": "GT read only after candidate images are saved, for evaluation",
+      "scene_selected_variant": "hybrid",
+      "per_view_gate_mode": "source_heldout_knn",
+      "knn_enabled": true,
+      "output_counts": {
+        "learned": 17,
+        "fixed": 6,
+        "hybrid": 1
+      },
+      "negative_psnr_views": [],
+      "base_psnr": 25.027537462555937,
+      "base_ssim": 0.8908446157972018,
+      "selected_psnr": 25.171307654957683,
+      "selected_ssim": 0.8927580739061037,
+      "fixed_psnr_gain": 0.13318078577315484,
+      "fixed_ssim_gain": 0.0018310770392417908,
+      "learned_psnr_gain": 0.14426260173874775,
+      "learned_ssim_gain": 0.0018803179264068604,
+      "hybrid_psnr_gain": 0.1409308747749085,
+      "hybrid_ssim_gain": 0.0019092063109079997,
+      "selected_psnr_gain": 0.14377019240175581,
+      "selected_ssim_gain": 0.0019134581089019775,
+      "selected_minus_fixed_psnr_gain": 0.010589406628600972,
+      "selected_minus_fixed_ssim_gain": 8.238106966018677e-05,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 1.0,
+      "selected_min_psnr_gain": 0.005628597517468137,
+      "selected_cvar20_psnr_gain": 0.05312219228403521,
+      "per_view_noop_fraction": 0.0,
+      "mean_covered_fraction": 0.9811212966839472,
+      "source_heldout_knn_audit": {
+        "enabled": true,
+        "verdict": "source-heldout KNN per-view policy selected",
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "k": 3,
+        "min_predicted_score": 0.0,
+        "source_mean_psnr_delta_vs_scene_selected": 0.004291727963753281,
+        "source_mean_ssim_delta_vs_scene_selected": -2.2803034101213666e-05,
+        "source_safe_vs_fixed": false,
+        "source_selected_counts": {
+          "fixed": 2,
+          "learned": 9,
+          "hybrid": 3,
+          "noop": 0
+        },
+        "source_summary": {
+          "base_psnr": 26.041438972858575,
+          "candidate_psnr": 26.16750686465381,
+          "psnr_gain": 0.12606789179522768,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9159395524433681,
+          "candidate_ssim": 0.9170473430837903,
+          "ssim_gain": 0.0011077906404222762
+        },
+        "source_fixed_summary": {
+          "base_psnr": 26.041438972858575,
+          "candidate_psnr": 26.155002112790072,
+          "psnr_gain": 0.1135631399314873,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9159395524433681,
+          "candidate_ssim": 0.9170528096812112,
+          "ssim_gain": 0.0011132572378431047
+        },
+        "source_scene_selected_summary": {
+          "base_psnr": 26.041438972858575,
+          "candidate_psnr": 26.16321513669006,
+          "psnr_gain": 0.1217761638314744,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9159395524433681,
+          "candidate_ssim": 0.9170701461178916,
+          "ssim_gain": 0.0011305936745234898
+        }
+      },
+      "source_heldout_threshold_gate_audit": {
+        "enabled": false,
+        "verdict": "disabled by CLI",
+        "score_name": null,
+        "threshold": null,
+        "polarity": null,
+        "source_accept_fraction": null
+      },
+      "wandb_dirs": [
+        "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/garden/wandb/offline-run-20260630_184604-0nsvmjlb"
+      ],
+      "report": "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/garden/support_transport_apply_report.json"
+    },
+    {
+      "scene": "kitchen",
+      "views": 35,
+      "support_views": 183,
+      "support_source_mode": "source_split",
+      "target_gt_usage": "GT read only after candidate images are saved, for evaluation",
+      "scene_selected_variant": "learned",
+      "per_view_gate_mode": "off",
+      "knn_enabled": false,
+      "output_counts": {
+        "learned": 35
+      },
+      "negative_psnr_views": [],
+      "base_psnr": 27.81637940115416,
+      "base_ssim": 0.9282181450298854,
+      "selected_psnr": 28.31000256168673,
+      "selected_ssim": 0.9321290067264012,
+      "fixed_psnr_gain": 0.39306139938107726,
+      "fixed_ssim_gain": 0.0034032719475882395,
+      "learned_psnr_gain": 0.4936231605325725,
+      "learned_ssim_gain": 0.003910861696515764,
+      "hybrid_psnr_gain": 0.4465212053717037,
+      "hybrid_ssim_gain": 0.0037016255514962333,
+      "selected_psnr_gain": 0.4936231605325725,
+      "selected_ssim_gain": 0.003910861696515764,
+      "selected_minus_fixed_psnr_gain": 0.10056176115149523,
+      "selected_minus_fixed_ssim_gain": 0.0005075897489275247,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 1.0,
+      "selected_min_psnr_gain": 0.07003194619634812,
+      "selected_cvar20_psnr_gain": 0.1562402019907775,
+      "per_view_noop_fraction": 0.0,
+      "mean_covered_fraction": 0.9887362837791442,
+      "source_heldout_knn_audit": {
+        "enabled": false,
+        "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough",
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "k": null,
+        "min_predicted_score": null,
+        "source_mean_psnr_delta_vs_scene_selected": -0.011620513843585534,
+        "source_mean_ssim_delta_vs_scene_selected": 2.1298726399739728e-05,
+        "source_safe_vs_fixed": true,
+        "source_selected_counts": {
+          "fixed": 2,
+          "learned": 14,
+          "hybrid": 5,
+          "noop": 0
+        },
+        "source_summary": {
+          "base_psnr": 28.792910925122392,
+          "candidate_psnr": 29.31046640923453,
+          "psnr_gain": 0.5175554841121351,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9402255642981756,
+          "candidate_ssim": 0.9431436147008624,
+          "ssim_gain": 0.0029180504026867097
+        },
+        "source_fixed_summary": {
+          "base_psnr": 28.792910925122392,
+          "candidate_psnr": 29.204502876011816,
+          "psnr_gain": 0.41159195088942857,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9402255642981756,
+          "candidate_ssim": 0.9427976494743711,
+          "ssim_gain": 0.002572085176195417
+        },
+        "source_scene_selected_summary": {
+          "base_psnr": 28.792910925122392,
+          "candidate_psnr": 29.32208692307811,
+          "psnr_gain": 0.5291759979557207,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9402255642981756,
+          "candidate_ssim": 0.9431223159744626,
+          "ssim_gain": 0.00289675167628697
+        }
+      },
+      "source_heldout_threshold_gate_audit": {
+        "enabled": false,
+        "verdict": "disabled by CLI",
+        "score_name": null,
+        "threshold": null,
+        "polarity": null,
+        "source_accept_fraction": null
+      },
+      "wandb_dirs": [
+        "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/kitchen/wandb/offline-run-20260630_184651-2zj3ufdo"
+      ],
+      "report": "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/kitchen/support_transport_apply_report.json"
+    },
+    {
+      "scene": "room",
+      "views": 39,
+      "support_views": 204,
+      "support_source_mode": "source_split",
+      "target_gt_usage": "GT read only after candidate images are saved, for evaluation",
+      "scene_selected_variant": "hybrid",
+      "per_view_gate_mode": "off",
+      "knn_enabled": false,
+      "output_counts": {
+        "hybrid": 39
+      },
+      "negative_psnr_views": [],
+      "base_psnr": 28.73909908075459,
+      "base_ssim": 0.921820153028537,
+      "selected_psnr": 29.160936902680067,
+      "selected_ssim": 0.9268098580531585,
+      "fixed_psnr_gain": 0.39369127175138374,
+      "fixed_ssim_gain": 0.004668333591558995,
+      "learned_psnr_gain": 0.43979794049711474,
+      "learned_ssim_gain": 0.0051460495361915,
+      "hybrid_psnr_gain": 0.42183782192548464,
+      "hybrid_ssim_gain": 0.004989705024621425,
+      "selected_psnr_gain": 0.42183782192548464,
+      "selected_ssim_gain": 0.004989705024621425,
+      "selected_minus_fixed_psnr_gain": 0.028146550174100893,
+      "selected_minus_fixed_ssim_gain": 0.0003213714330624305,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 1.0,
+      "selected_min_psnr_gain": 0.011894511570545774,
+      "selected_cvar20_psnr_gain": 0.09189485450926194,
+      "per_view_noop_fraction": 0.0,
+      "mean_covered_fraction": 0.9426764922264295,
+      "source_heldout_knn_audit": {
+        "enabled": false,
+        "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough",
+        "feature_names": [
+          "covered_fraction",
+          "mean_abs_delta",
+          "confidence_mean",
+          "residual_std_mean",
+          "delta_snr",
+          "signal_snr",
+          "confidence_snr",
+          "changed_fraction"
+        ],
+        "k": null,
+        "min_predicted_score": null,
+        "source_mean_psnr_delta_vs_scene_selected": -0.014646804256748358,
+        "source_mean_ssim_delta_vs_scene_selected": 1.8899855406388257e-05,
+        "source_safe_vs_fixed": false,
+        "source_selected_counts": {
+          "fixed": 7,
+          "learned": 12,
+          "hybrid": 4,
+          "noop": 0
+        },
+        "source_summary": {
+          "base_psnr": 31.30616781296903,
+          "candidate_psnr": 31.686891001251738,
+          "psnr_gain": 0.38072318828271057,
+          "positive_view_fraction": 0.9565217391304348,
+          "base_ssim": 0.9429185312727223,
+          "candidate_ssim": 0.9468694381091906,
+          "ssim_gain": 0.003950906836468241
+        },
+        "source_fixed_summary": {
+          "base_psnr": 31.30616781296903,
+          "candidate_psnr": 31.700414671304138,
+          "psnr_gain": 0.3942468583351045,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9429185312727223,
+          "candidate_ssim": 0.9466685885968416,
+          "ssim_gain": 0.003750057324119236
+        },
+        "source_scene_selected_summary": {
+          "base_psnr": 31.30616781296903,
+          "candidate_psnr": 31.701537805508487,
+          "psnr_gain": 0.3953699925394589,
+          "positive_view_fraction": 1.0,
+          "base_ssim": 0.9429185312727223,
+          "candidate_ssim": 0.9468505382537842,
+          "ssim_gain": 0.0039320069810618525
+        }
+      },
+      "source_heldout_threshold_gate_audit": {
+        "enabled": false,
+        "verdict": "disabled by CLI",
+        "score_name": null,
+        "threshold": null,
+        "polarity": null,
+        "source_accept_fraction": null
+      },
+      "wandb_dirs": [
+        "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/room/wandb/offline-run-20260630_185030-r42w25y0"
+      ],
+      "report": "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/room/support_transport_apply_report.json"
+    },
+    {
+      "scene": "stump",
+      "views": 16,
+      "support_views": 81,
+      "support_source_mode": "source_split",
+      "target_gt_usage": "GT read only after candidate images are saved, for evaluation",
+      "scene_selected_variant": "fixed",
+      "per_view_gate_mode": "off",
+      "knn_enabled": false,
+      "output_counts": {
+        "fixed": 16
+      },
+      "negative_psnr_views": [
+        "00008",
+        "00011",
+        "00015"
+      ],
+      "base_psnr": 25.1809181910413,
+      "base_ssim": 0.813197422772646,
+      "selected_psnr": 25.237947952434336,
+      "selected_ssim": 0.8144056648015976,
+      "fixed_psnr_gain": 0.05702976139303506,
+      "fixed_ssim_gain": 0.001208242028951645,
+      "learned_psnr_gain": 0.06240550678673129,
+      "learned_ssim_gain": 0.0008767247200012207,
+      "hybrid_psnr_gain": 0.062019967739911364,
+      "hybrid_ssim_gain": 0.001134432852268219,
+      "selected_psnr_gain": 0.05702976139303506,
+      "selected_ssim_gain": 0.001208242028951645,
+      "selected_minus_fixed_psnr_gain": 0.0,
+      "selected_minus_fixed_ssim_gain": 0.0,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 0.8125,
+      "selected_min_psnr_gain": -0.01318482027017609,
+      "selected_cvar20_psnr_gain": -0.0024780650761844214,
+      "per_view_noop_fraction": 0.0,
+      "mean_covered_fraction": 0.9393598698079586,
+      "source_heldout_knn_audit": {
+        "enabled": false,
+        "verdict": "disabled because scene-level source-heldout selector fell back to fixed",
+        "feature_names": null,
+        "k": null,
+        "min_predicted_score": null,
+        "source_mean_psnr_delta_vs_scene_selected": null,
+        "source_mean_ssim_delta_vs_scene_selected": null,
+        "source_safe_vs_fixed": null,
+        "source_selected_counts": null
+      },
+      "source_heldout_threshold_gate_audit": {
+        "enabled": false,
+        "verdict": "disabled by CLI",
+        "score_name": null,
+        "threshold": null,
+        "polarity": null,
+        "source_accept_fraction": null
+      },
+      "wandb_dirs": [
+        "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/stump/wandb/offline-run-20260630_184927-zi2qd627"
+      ],
+      "report": "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/stump/support_transport_apply_report.json"
+    },
+    {
+      "scene": "treehill",
+      "views": 18,
+      "support_views": 92,
+      "support_source_mode": "source_split",
+      "target_gt_usage": "GT read only after candidate images are saved, for evaluation",
+      "scene_selected_variant": "fixed",
+      "per_view_gate_mode": "off",
+      "knn_enabled": false,
+      "output_counts": {
+        "fixed": 18
+      },
+      "negative_psnr_views": [
+        "00007",
+        "00009"
+      ],
+      "base_psnr": 20.92322682690083,
+      "base_ssim": 0.6736904680728912,
+      "selected_psnr": 21.013984283139333,
+      "selected_ssim": 0.6752836803595225,
+      "fixed_psnr_gain": 0.09075745623850276,
+      "fixed_ssim_gain": 0.0015932122866312663,
+      "learned_psnr_gain": 0.12031289335964404,
+      "learned_ssim_gain": 0.001588390933142768,
+      "hybrid_psnr_gain": 0.10709009243203561,
+      "hybrid_ssim_gain": 0.0016907321082221137,
+      "selected_psnr_gain": 0.09075745623850276,
+      "selected_ssim_gain": 0.0015932122866312663,
+      "selected_minus_fixed_psnr_gain": 0.0,
+      "selected_minus_fixed_ssim_gain": 0.0,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 0.8888888888888888,
+      "selected_min_psnr_gain": -0.04984594221641814,
+      "selected_cvar20_psnr_gain": 0.0020675925659565664,
+      "per_view_noop_fraction": 0.0,
+      "mean_covered_fraction": 0.8743352890014648,
+      "source_heldout_knn_audit": {
+        "enabled": false,
+        "verdict": "disabled because scene-level source-heldout selector fell back to fixed",
+        "feature_names": null,
+        "k": null,
+        "min_predicted_score": null,
+        "source_mean_psnr_delta_vs_scene_selected": null,
+        "source_mean_ssim_delta_vs_scene_selected": null,
+        "source_safe_vs_fixed": null,
+        "source_selected_counts": null
+      },
+      "source_heldout_threshold_gate_audit": {
+        "enabled": false,
+        "verdict": "disabled by CLI",
+        "score_name": null,
+        "threshold": null,
+        "polarity": null,
+        "source_accept_fraction": null
+      },
+      "wandb_dirs": [
+        "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/treehill/wandb/offline-run-20260630_184933-0ffhum0c"
+      ],
+      "report": "outputs/carnet/spcarnet_v309_selective_knn_policy_multiscene_20260630/treehill/support_transport_apply_report.json"
+    }
+  ],
+  "macro": {
+    "scenes": 9,
+    "views": 246,
+    "support_source_modes": [
+      "source_split"
+    ],
+    "selected_psnr_gain": 0.26784334642621993,
+    "selected_ssim_gain": 0.003710736936415291,
+    "selected_minus_fixed_psnr_gain": 0.03780791798603553,
+    "selected_minus_fixed_ssim_gain": 0.0002958104465347978,
+    "selected_safe_vs_fixed_rate": 1.0,
+    "selected_positive_vs_base_rate": 1.0,
+    "mean_selected_positive_view_fraction": 0.9497839506172839,
+    "mean_selected_min_psnr_gain": 0.013816678531111867,
+    "mean_selected_cvar20_psnr_gain": 0.0814137559363556,
+    "mean_covered_fraction": 0.9482027032688843,
+    "knn_enabled_scene_rate": 0.3333333333333333,
+    "negative_psnr_scene_count": 4
+  },
+  "comparison_to_v305": {
+    "v305_macro": {
+      "scenes": 9,
+      "views": 246,
+      "selected_psnr_gain": 0.26657784692540587,
+      "selected_ssim_gain": 0.0037005486924080386,
+      "selected_minus_fixed_psnr_gain": 0.03654241848522153,
+      "selected_minus_fixed_ssim_gain": 0.000285622202527546,
+      "selected_safe_vs_fixed_rate": 1.0,
+      "selected_positive_vs_base_rate": 1.0,
+      "mean_selected_positive_view_fraction": 0.9542283950617284,
+      "mean_covered_fraction": 0.9482027032688843
+    },
+    "v309_minus_v305_selected_psnr_gain": 0.0012654995008140602,
+    "v309_minus_v305_selected_ssim_gain": 1.0188244007252288e-05,
+    "v309_minus_v305_selected_minus_fixed_psnr_gain": 0.0012654995008139977,
+    "v309_minus_v305_selected_minus_fixed_ssim_gain": 1.01882440072518e-05,
+    "v309_minus_v305_selected_safe_vs_fixed_rate": 0.0,
+    "v309_minus_v305_selected_positive_vs_base_rate": 0.0,
+    "v309_minus_v305_mean_selected_positive_view_fraction": -0.004444444444444473,
+    "scene_deltas": [
+      {
+        "scene": "bicycle",
+        "psnr_gain_delta": 0.005985943565583657,
+        "ssim_gain_delta": 2.8016567230224228e-05,
+        "positive_view_fraction_delta": -0.040000000000000036
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain_delta": 0.0,
+        "ssim_gain_delta": 0.0,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "counter",
+        "psnr_gain_delta": 0.0,
+        "ssim_gain_delta": 0.0,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain_delta": 0.0025642343148949698,
+        "ssim_gain_delta": 5.942583084106445e-05,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "garden",
+        "psnr_gain_delta": 0.002839317626847304,
+        "ssim_gain_delta": 4.251797993977792e-06,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain_delta": 0.0,
+        "ssim_gain_delta": 0.0,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "room",
+        "psnr_gain_delta": 0.0,
+        "ssim_gain_delta": 0.0,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "stump",
+        "psnr_gain_delta": 0.0,
+        "ssim_gain_delta": 0.0,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain_delta": 0.0,
+        "ssim_gain_delta": 0.0,
+        "positive_view_fraction_delta": 0.0
+      }
+    ]
+  },
+  "comparison_to_v308": {
+    "v308_macro": {
+      "scenes": 9,
+      "views": 246,
+      "selected_psnr_gain": 0.2655209817329718,
+      "selected_ssim_gain": 0.0036992745362645647,
+      "selected_minus_fixed_psnr_gain": 0.035485553292787415,
+      "selected_minus_fixed_ssim_gain": 0.0002843480463840718,
+      "selected_safe_vs_fixed_rate": 1.0,
+      "selected_positive_vs_base_rate": 1.0,
+      "mean_selected_positive_view_fraction": 0.9534876543209876
+    },
+    "v309_minus_v308_selected_psnr_gain": 0.0023223646932481468,
+    "v309_minus_v308_selected_ssim_gain": 1.14624001507262e-05,
+    "v309_minus_v308_selected_minus_fixed_psnr_gain": 0.002322364693248112,
+    "v309_minus_v308_selected_minus_fixed_ssim_gain": 1.1462400150725983e-05,
+    "v309_minus_v308_selected_safe_vs_fixed_rate": 0.0,
+    "v309_minus_v308_selected_positive_vs_base_rate": 0.0,
+    "v309_minus_v308_mean_selected_positive_view_fraction": -0.0037037037037036535,
+    "scene_deltas": [
+      {
+        "scene": "bicycle",
+        "psnr_gain_delta": 0.0,
+        "ssim_gain_delta": 0.0,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain_delta": 0.00713217853653636,
+        "ssim_gain_delta": 7.635354995727539e-05,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "counter",
+        "psnr_gain_delta": 0.0016272024175824629,
+        "ssim_gain_delta": -1.5715758005779151e-06,
+        "positive_view_fraction_delta": -0.033333333333333326
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain_delta": 0.0,
+        "ssim_gain_delta": 0.0,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "garden",
+        "psnr_gain_delta": 0.0,
+        "ssim_gain_delta": 0.0,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain_delta": 0.007516861855905832,
+        "ssim_gain_delta": 3.637586321149529e-06,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "room",
+        "psnr_gain_delta": 0.004625039429208333,
+        "ssim_gain_delta": 2.474204087868706e-05,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "stump",
+        "psnr_gain_delta": 0.0,
+        "ssim_gain_delta": 0.0,
+        "positive_view_fraction_delta": 0.0
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain_delta": 0.0,
+        "ssim_gain_delta": 0.0,
+        "positive_view_fraction_delta": 0.0
+      }
+    ]
+  }
+}

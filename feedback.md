@@ -1344,6 +1344,146 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-06-30 v305-v309 Support-Transport Policy Feedback
+
+This addendum supersedes the earlier v253-v270 branch as the current strongest
+working direction.
+
+## What finally worked
+
+The useful shift was to stop treating the problem as a parameter sweep or a
+weak surface-carrier fitting problem. The current best method keeps the strong
+online support-transport residual signal and learns/selects how to use it from
+source-heldout evidence:
+
+```text
+scripts/car_model/train_source_heldout_support_transport_calibrator.py
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+```
+
+The pipeline is:
+
+1. build support evidence from source/train views;
+2. train a bounded calibrator on source-heldout views;
+3. evaluate fixed, learned, and hybrid branches on source-heldout validation;
+4. choose the scene-level branch without target/test GT;
+5. in v309, use source-heldout KNN to score fixed/learned/hybrid per-view
+   choices with `PSNR gain + 20 * SSIM gain`;
+6. allow that KNN policy only when leave-one-out source-heldout evidence has a
+   non-negative PSNR delta over the scene-level branch;
+7. apply to target/test and read GT only afterward for evaluation.
+
+## Current best result
+
+Latest machine-readable summary:
+
+```text
+docs/car_model/results/v309_selective_knn_policy_multiscene_summary.json
+docs/car_model/6-30-v309-SelectiveKNNPolicy-Log.md
+```
+
+v309 over 9 scenes / 246 target-test views:
+
+```text
+selected PSNR gain:              +0.267843
+selected SSIM gain:              +0.003711
+selected minus fixed PSNR gain:  +0.037808
+selected minus fixed SSIM gain:  +0.000296
+safe vs fixed scene rate:        9/9
+positive vs base scene rate:     9/9
+mean positive-view fraction:     0.949784
+support source mode:             source_split on 9/9 scenes
+```
+
+KNN enable audit:
+
+```text
+bicycle +0.003363 PSNR source delta -> KNN enabled
+flowers +0.006032 PSNR source delta -> KNN enabled
+garden  +0.004292 PSNR source delta -> KNN enabled
+bonsai  -0.019883 PSNR source delta -> KNN disabled
+counter -0.013092 PSNR source delta -> KNN disabled
+kitchen -0.011621 PSNR source delta -> KNN disabled
+room    -0.014647 PSNR source delta -> KNN disabled
+stump/treehill fixed fallback -> KNN disabled
+```
+
+Compared with v305:
+
+```text
+v305 macro: +0.266578 PSNR / +0.003701 SSIM
+v309 macro: +0.267843 PSNR / +0.003711 SSIM
+delta:      +0.001265 PSNR / +0.000010 SSIM
+```
+
+Compared with v308:
+
+```text
+v308 macro: +0.265521 PSNR / +0.003699 SSIM
+v309 macro: +0.267843 PSNR / +0.003711 SSIM
+delta:      +0.002322 PSNR / +0.000011 SSIM
+```
+
+## Lessons from failures
+
+v306 threshold gate failed. A hand-designed target-blind scalar threshold can
+look reasonable on source-heldout evidence but over-noop hard target views:
+stump and treehill became unsafe versus fixed.
+
+v307 unconditional KNN failed as a general policy. It improved bicycle, but
+overrode fixed fallback scenes and hurt stump/treehill safety.
+
+v308 hierarchical KNN partially fixed the problem by keeping fixed scenes fixed,
+but still enabled KNN on learned indoor scenes where source-heldout evidence
+predicted a loss. It remained safe but fell below v305 macro PSNR.
+
+v309 is the lesson encoded as policy: per-view intelligence must be selectively
+enabled by source-heldout evidence, not globally enabled. It is still only a
+small refinement because its macro gain over v305 is tiny and its mean
+positive-view fraction is lower.
+
+## Current bottleneck
+
+The current bottleneck is not basic scene-level safety. v309 already has 9/9
+positive-vs-base and 9/9 safe-vs-fixed scene rates on the current compact-model
+full9 protocol.
+
+The bottleneck is that the additional improvement over v305 is marginal:
+
+- `+0.001265` macro PSNR over v305 is real but tiny;
+- mean positive-view fraction drops from `0.954228` to `0.949784`;
+- the KNN enable gate checks source PSNR delta versus the scene-level branch,
+  not full source fixed-safety;
+- negative individual PSNR views remain in bicycle, counter, stump, and
+  treehill;
+- LPIPS/DISTS and geometry/triangle-accounting metrics are not yet included;
+- qualitative changes remain subtle because the method is conservative.
+
+## Next prompt for a stronger model
+
+Continue from v309. Do not replace it with another parameter sweep. The next
+method should attack the remaining negative per-view tails while preserving the
+9/9 scene-level safety guarantee:
+
+```text
+Build a target-GT-free tail-risk controller on top of v309. Use source-heldout
+leave-one-out evidence to predict not only mean branch gain, but per-view tail
+risk. The controller must optimize a multi-objective source-heldout score:
+mean PSNR/SSIM gain, CVaR20 PSNR gain, minimum gain, positive-view fraction,
+and optional perceptual proxies. It should be allowed to choose fixed/learned/
+hybrid/no-op per target view only when the source-heldout policy improves mean
+gain and does not degrade CVaR/min-gain beyond a pre-registered tolerance.
+Evaluate against v305 and v309 on the same 9-scene compact-model protocol, then
+add LPIPS/DISTS and geometry/triangle accounting. Test GT must remain evaluation
+only.
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-06-30 v302-v305 Source-Heldout Support-Transport Feedback Addendum
 
 This addendum records the first successful reflection-driven method revision

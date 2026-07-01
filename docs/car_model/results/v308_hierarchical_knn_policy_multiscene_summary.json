@@ -1,0 +1,259 @@
+{
+  "method": "v308 hierarchical source-heldout scene policy plus KNN per-view refinement",
+  "root": "outputs/carnet/spcarnet_v308_hierarchical_knn_policy_multiscene_20260630",
+  "policy": "scene-level source_heldout_auto first; KNN per-view refinement only when scene selected branch is learned or hybrid; fixed scenes stay fixed",
+  "rows": [
+    {
+      "scene": "bicycle",
+      "views": 25,
+      "scene_selected_variant": "hybrid",
+      "knn_enabled": true,
+      "output_counts": {
+        "learned": 5,
+        "hybrid": 15,
+        "fixed": 5
+      },
+      "negative_psnr_views": [
+        "00011",
+        "00016",
+        "00017"
+      ],
+      "base_psnr": 23.293479709950237,
+      "selected_psnr_gain": 0.11807421838196674,
+      "selected_ssim_gain": 0.002980561256408691,
+      "selected_minus_fixed_psnr_gain": 0.01972891055252106,
+      "selected_minus_fixed_ssim_gain": 0.00016098737716674794,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 0.88,
+      "selected_min_psnr_gain": -0.060029153144686376,
+      "selected_cvar20_psnr_gain": -0.008901360141875614,
+      "per_view_noop_fraction": 0.0,
+      "report": "outputs/carnet/spcarnet_v308_hierarchical_knn_policy_multiscene_20260630/bicycle/support_transport_apply_report.json"
+    },
+    {
+      "scene": "bonsai",
+      "views": 37,
+      "scene_selected_variant": "learned",
+      "knn_enabled": true,
+      "output_counts": {
+        "fixed": 2,
+        "learned": 25,
+        "hybrid": 10
+      },
+      "negative_psnr_views": [],
+      "base_psnr": 28.864339027413482,
+      "selected_psnr_gain": 0.5605802635809702,
+      "selected_ssim_gain": 0.005708689625198777,
+      "selected_minus_fixed_psnr_gain": 0.07418311347106704,
+      "selected_minus_fixed_ssim_gain": 0.0004091842754467114,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 1.0,
+      "selected_min_psnr_gain": 0.14005710063242205,
+      "selected_cvar20_psnr_gain": 0.26830624287765037,
+      "per_view_noop_fraction": 0.0,
+      "report": "outputs/carnet/spcarnet_v308_hierarchical_knn_policy_multiscene_20260630/bonsai/support_transport_apply_report.json"
+    },
+    {
+      "scene": "counter",
+      "views": 30,
+      "scene_selected_variant": "learned",
+      "knn_enabled": true,
+      "output_counts": {
+        "learned": 26,
+        "hybrid": 4
+      },
+      "negative_psnr_views": [],
+      "base_psnr": 26.749872905457007,
+      "selected_psnr_gain": 0.4247324344718683,
+      "selected_ssim_gain": 0.006909918785095215,
+      "selected_minus_fixed_psnr_gain": 0.0851007376595242,
+      "selected_minus_fixed_ssim_gain": 0.0007931252320607504,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 1.0,
+      "selected_min_psnr_gain": 0.007318496897603666,
+      "selected_cvar20_psnr_gain": 0.13314544089394786,
+      "per_view_noop_fraction": 0.0,
+      "report": "outputs/carnet/spcarnet_v308_hierarchical_knn_policy_multiscene_20260630/counter/support_transport_apply_report.json"
+    },
+    {
+      "scene": "flowers",
+      "views": 22,
+      "scene_selected_variant": "hybrid",
+      "knn_enabled": true,
+      "output_counts": {
+        "fixed": 5,
+        "learned": 9,
+        "hybrid": 8
+      },
+      "negative_psnr_views": [],
+      "base_psnr": 19.66869543116256,
+      "selected_psnr_gain": 0.09142542795570369,
+      "selected_ssim_gain": 0.004107201641256159,
+      "selected_minus_fixed_psnr_gain": 0.01320140128289149,
+      "selected_minus_fixed_ssim_gain": 0.00031287290833213093,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 1.0,
+      "selected_min_psnr_gain": 0.023411258559505654,
+      "selected_cvar20_psnr_gain": 0.04353161703746977,
+      "per_view_noop_fraction": 0.0,
+      "report": "outputs/carnet/spcarnet_v308_hierarchical_knn_policy_multiscene_20260630/flowers/support_transport_apply_report.json"
+    },
+    {
+      "scene": "garden",
+      "views": 24,
+      "scene_selected_variant": "hybrid",
+      "knn_enabled": true,
+      "output_counts": {
+        "learned": 17,
+        "fixed": 6,
+        "hybrid": 1
+      },
+      "negative_psnr_views": [],
+      "base_psnr": 25.027537462555937,
+      "selected_psnr_gain": 0.14377019240175581,
+      "selected_ssim_gain": 0.0019134581089019775,
+      "selected_minus_fixed_psnr_gain": 0.010589406628600972,
+      "selected_minus_fixed_ssim_gain": 8.238106966018677e-05,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 1.0,
+      "selected_min_psnr_gain": 0.005628597517468137,
+      "selected_cvar20_psnr_gain": 0.05312219228403521,
+      "per_view_noop_fraction": 0.0,
+      "report": "outputs/carnet/spcarnet_v308_hierarchical_knn_policy_multiscene_20260630/garden/support_transport_apply_report.json"
+    },
+    {
+      "scene": "kitchen",
+      "views": 35,
+      "scene_selected_variant": "learned",
+      "knn_enabled": true,
+      "output_counts": {
+        "learned": 29,
+        "hybrid": 4,
+        "fixed": 2
+      },
+      "negative_psnr_views": [],
+      "base_psnr": 27.81637940115416,
+      "selected_psnr_gain": 0.48610629867666666,
+      "selected_ssim_gain": 0.003907224110194615,
+      "selected_minus_fixed_psnr_gain": 0.0930448992955894,
+      "selected_minus_fixed_ssim_gain": 0.0005039521626063752,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 1.0,
+      "selected_min_psnr_gain": 0.07003194619634812,
+      "selected_cvar20_psnr_gain": 0.1562402019907775,
+      "per_view_noop_fraction": 0.0,
+      "report": "outputs/carnet/spcarnet_v308_hierarchical_knn_policy_multiscene_20260630/kitchen/support_transport_apply_report.json"
+    },
+    {
+      "scene": "room",
+      "views": 39,
+      "scene_selected_variant": "hybrid",
+      "knn_enabled": true,
+      "output_counts": {
+        "learned": 15,
+        "fixed": 10,
+        "hybrid": 14
+      },
+      "negative_psnr_views": [],
+      "base_psnr": 28.73909908075459,
+      "selected_psnr_gain": 0.4172127824962763,
+      "selected_ssim_gain": 0.004964962983742738,
+      "selected_minus_fixed_psnr_gain": 0.02352151074489256,
+      "selected_minus_fixed_ssim_gain": 0.00029662939218374346,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 1.0,
+      "selected_min_psnr_gain": 0.011894511570545774,
+      "selected_cvar20_psnr_gain": 0.09377864389684643,
+      "per_view_noop_fraction": 0.0,
+      "report": "outputs/carnet/spcarnet_v308_hierarchical_knn_policy_multiscene_20260630/room/support_transport_apply_report.json"
+    },
+    {
+      "scene": "stump",
+      "views": 16,
+      "scene_selected_variant": "fixed",
+      "knn_enabled": false,
+      "output_counts": {
+        "fixed": 16
+      },
+      "negative_psnr_views": [
+        "00008",
+        "00011",
+        "00015"
+      ],
+      "base_psnr": 25.1809181910413,
+      "selected_psnr_gain": 0.05702976139303506,
+      "selected_ssim_gain": 0.001208242028951645,
+      "selected_minus_fixed_psnr_gain": 0.0,
+      "selected_minus_fixed_ssim_gain": 0.0,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 0.8125,
+      "selected_min_psnr_gain": -0.01318482027017609,
+      "selected_cvar20_psnr_gain": -0.0024780650761844214,
+      "per_view_noop_fraction": 0.0,
+      "report": "outputs/carnet/spcarnet_v308_hierarchical_knn_policy_multiscene_20260630/stump/support_transport_apply_report.json"
+    },
+    {
+      "scene": "treehill",
+      "views": 18,
+      "scene_selected_variant": "fixed",
+      "knn_enabled": false,
+      "output_counts": {
+        "fixed": 18
+      },
+      "negative_psnr_views": [
+        "00007",
+        "00009"
+      ],
+      "base_psnr": 20.92322682690083,
+      "selected_psnr_gain": 0.09075745623850276,
+      "selected_ssim_gain": 0.0015932122866312663,
+      "selected_minus_fixed_psnr_gain": 0.0,
+      "selected_minus_fixed_ssim_gain": 0.0,
+      "selected_all_axis_safe_vs_fixed": true,
+      "selected_positive_view_fraction": 0.8888888888888888,
+      "selected_min_psnr_gain": -0.04984594221641814,
+      "selected_cvar20_psnr_gain": 0.0020675925659565664,
+      "per_view_noop_fraction": 0.0,
+      "report": "outputs/carnet/spcarnet_v308_hierarchical_knn_policy_multiscene_20260630/treehill/support_transport_apply_report.json"
+    }
+  ],
+  "macro": {
+    "scenes": 9,
+    "views": 246,
+    "selected_psnr_gain": 0.2655209817329718,
+    "selected_ssim_gain": 0.0036992745362645647,
+    "selected_minus_fixed_psnr_gain": 0.035485553292787415,
+    "selected_minus_fixed_ssim_gain": 0.0002843480463840718,
+    "selected_safe_vs_fixed_rate": 1.0,
+    "selected_positive_vs_base_rate": 1.0,
+    "mean_selected_positive_view_fraction": 0.9534876543209876
+  },
+  "comparison_to_v305": {
+    "v305_macro": {
+      "scenes": 9,
+      "views": 246,
+      "selected_psnr_gain": 0.26657784692540587,
+      "selected_ssim_gain": 0.0037005486924080386,
+      "selected_minus_fixed_psnr_gain": 0.03654241848522153,
+      "selected_minus_fixed_ssim_gain": 0.000285622202527546,
+      "selected_safe_vs_fixed_rate": 1.0,
+      "selected_positive_vs_base_rate": 1.0,
+      "mean_selected_positive_view_fraction": 0.9542283950617284,
+      "mean_covered_fraction": 0.9482027032688843
+    },
+    "v308_macro": {
+      "scenes": 9,
+      "views": 246,
+      "selected_psnr_gain": 0.2655209817329718,
+      "selected_ssim_gain": 0.0036992745362645647,
+      "selected_minus_fixed_psnr_gain": 0.035485553292787415,
+      "selected_minus_fixed_ssim_gain": 0.0002843480463840718,
+      "selected_safe_vs_fixed_rate": 1.0,
+      "selected_positive_vs_base_rate": 1.0,
+      "mean_selected_positive_view_fraction": 0.9534876543209876
+    },
+    "v308_minus_v305_psnr_gain": -0.0010568651924340866,
+    "v308_minus_v305_ssim_gain": -1.2741561434739118e-06,
+    "v308_minus_v305_safe_rate": 0.0
+  }
+}

@@ -1346,6 +1346,90 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-06-30 Update: v305-v309 Support-Transport Auto Policy
+
+The effective line of work after the earlier representation-level failures is
+the support-transport calibrator plus target-GT-free source-heldout policy
+selection.
+
+Key files:
+
+```text
+scripts/car_model/train_source_heldout_support_transport_calibrator.py
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/6-30-v305-SourceHeldoutAutoPolicy-Multiscene-Log.md
+docs/car_model/6-30-v309-SelectiveKNNPolicy-Log.md
+docs/car_model/results/v305_sourceheldout_auto_policy_multiscene_summary.json
+docs/car_model/results/v308_hierarchical_knn_policy_multiscene_summary.json
+docs/car_model/results/v309_selective_knn_policy_multiscene_summary.json
+```
+
+Method summary:
+
+- v302 learns a constrained residual support-transport calibrator from
+  source-heldout train supervision.
+- v305 adds `--output_variant source_heldout_auto`, which chooses fixed,
+  learned, or hybrid output using only source-heldout validation evidence.
+- v306 tested a simple per-view threshold gate; it failed on stump/treehill by
+  over-nooping difficult views.
+- v307 tested unconditional per-view KNN; it improved bicycle but became unsafe
+  when it overrode fixed fallback scenes.
+- v308 disabled KNN on fixed scenes; it was safe but slightly below v305.
+- v309 uses source-heldout KNN to score per-view fixed/learned/hybrid choices
+  with `PSNR gain + 20 * SSIM gain`, and enables KNN only when source-heldout
+  leave-one-out PSNR delta over the scene-selected branch is non-negative.
+
+v309 full9 result over 9 scenes / 246 target-test views:
+
+```text
+selected PSNR gain:              +0.267843
+selected SSIM gain:              +0.003711
+selected minus fixed PSNR gain:  +0.037808
+selected minus fixed SSIM gain:  +0.000296
+safe vs fixed scene rate:        9/9
+positive vs base scene rate:     9/9
+mean positive-view fraction:     0.949784
+support source mode:             source_split on 9/9 scenes
+```
+
+Comparison:
+
+```text
+v305 macro: +0.266578 PSNR / +0.003701 SSIM
+v308 macro: +0.265521 PSNR / +0.003699 SSIM
+v309 macro: +0.267843 PSNR / +0.003711 SSIM
+v309 - v305: +0.001265 PSNR / +0.000010 SSIM
+v309 - v308: +0.002322 PSNR / +0.000011 SSIM
+```
+
+Interpretation:
+
+v309 is currently the best documented policy. The reflection did work in the
+specific sense that it stopped unsafe per-view selection and converted the
+method into a source-heldout adaptive policy rather than a manual parameter
+choice. The gain over v305 is small and mean positive-view fraction is lower
+than v305, so this is still an engineering/method milestone rather than a
+paper-complete result.
+
+Remaining blockers:
+
+- no fresh long clean MeshSplatting rerun has been used as the final official
+  baseline for this v309 pass;
+- LPIPS, DISTS, geometry, and triangle-accounting metrics are still missing;
+- v309's KNN enable gate is a non-negative source PSNR-delta check versus the
+  scene-selected branch, not a full source fixed-safety certificate;
+- individual negative PSNR views remain in bicycle, counter, stump, and
+  treehill;
+- qualitative differences are likely subtle because the correction is
+  conservative;
+- the method is not yet a top-conference closed loop.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-06-30 Update: v302-v305 Source-Heldout Support-Transport Auto Policy
 
 This update is the first recent step where reflection materially changed the
