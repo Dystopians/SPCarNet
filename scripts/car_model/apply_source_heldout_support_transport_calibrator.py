@@ -152,6 +152,8 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- k: `{knn.get('k')}`",
             f"- threshold mode: `{knn.get('threshold_mode')}`",
             f"- selected threshold: `{knn.get('selected_threshold')}`",
+            f"- min score delta vs scene: `{knn.get('min_score_delta_vs_scene')}`",
+            f"- forbid fixed when scene non-fixed: `{knn.get('forbid_fixed_when_scene_nonfixed')}`",
             f"- reject variant: `{knn.get('reject_variant')}`",
             f"- source safe vs fixed: `{knn.get('source_safe_vs_fixed')}`",
             f"- source PSNR delta vs scene: `{knn.get('source_mean_psnr_delta_vs_scene_selected')}`",
@@ -478,7 +480,15 @@ def _fit_per_view_knn_policy(
         source_policy_rows: list[dict[str, float]] = []
         selected_counts: dict[str, int] = {"fixed": 0, "learned": 0, "hybrid": 0, "noop": 0, "scene": 0}
         for decision in source_decisions:
-            if float(decision["best_score"]) < float(threshold):
+            scene_score = float(decision["predictions"][selected_variant])
+            low_absolute_score = float(decision["best_score"]) < float(threshold)
+            low_scene_margin = float(decision["best_score"]) < scene_score + float(args.per_view_knn_min_score_delta_vs_scene)
+            fixed_downgrade = (
+                bool(args.per_view_knn_forbid_fixed_when_scene_nonfixed)
+                and selected_variant != "fixed"
+                and str(decision["best_variant"]) == "fixed"
+            )
+            if low_absolute_score or low_scene_margin or fixed_downgrade:
                 if str(args.per_view_knn_reject_variant) == "scene":
                     selected_counts["scene"] += 1
                     source_policy_rows.append(decision["scene_metrics"])
@@ -634,6 +644,8 @@ def _fit_per_view_knn_policy(
         "feature_std": std,
         "k": int(args.per_view_knn_k),
         "min_predicted_score": float(selected_threshold),
+        "min_score_delta_vs_scene": float(args.per_view_knn_min_score_delta_vs_scene),
+        "forbid_fixed_when_scene_nonfixed": bool(args.per_view_knn_forbid_fixed_when_scene_nonfixed),
         "reject_variant": str(args.per_view_knn_reject_variant),
         "scene_selected_variant": selected_variant,
         "entries_by_variant": entries_by_variant,
@@ -676,6 +688,20 @@ def _knn_choose_variant(
         predictions[variant] = _mean([float(entry["score"]) for entry in ranked[:k]])
     best_variant, best_score = max(predictions.items(), key=lambda item: item[1])
     if best_score < float(policy.get("min_predicted_score", 0.0)):
+        if str(policy.get("reject_variant", "noop")) == "scene":
+            return "__scene__", predictions
+        return "noop", predictions
+    scene_variant = str(policy.get("scene_selected_variant", "fixed"))
+    scene_score = float(predictions.get(scene_variant, float("-inf")))
+    if best_score < scene_score + float(policy.get("min_score_delta_vs_scene", 0.0)):
+        if str(policy.get("reject_variant", "noop")) == "scene":
+            return "__scene__", predictions
+        return "noop", predictions
+    if (
+        bool(policy.get("forbid_fixed_when_scene_nonfixed", False))
+        and scene_variant != "fixed"
+        and best_variant == "fixed"
+    ):
         if str(policy.get("reject_variant", "noop")) == "scene":
             return "__scene__", predictions
         return "noop", predictions
@@ -1637,6 +1663,8 @@ def main() -> None:
     )
     parser.add_argument("--per_view_knn_k", type=int, default=3)
     parser.add_argument("--per_view_knn_min_predicted_score", type=float, default=0.0)
+    parser.add_argument("--per_view_knn_min_score_delta_vs_scene", type=float, default=0.0)
+    parser.add_argument("--per_view_knn_forbid_fixed_when_scene_nonfixed", action="store_true")
     parser.add_argument("--per_view_knn_auto_threshold", action="store_true")
     parser.add_argument("--per_view_knn_reject_variant", choices=["noop", "scene"], default="noop")
     parser.add_argument("--per_view_knn_min_accept_fraction", type=float, default=0.0)

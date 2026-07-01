@@ -2,6 +2,33 @@
 
 Date: 2026-06-28
 
+Latest method update on 2026-07-01, v315d:
+
+```text
+docs/car_model/7-01-v315-CompositeTailGuard-Log.md
+docs/car_model/results/v315d_no_fixed_downgrade_multiscene_summary.json
+outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701
+```
+
+Main lesson:
+
+v315d finally turns the repeated reflection into a stronger target-blind policy
+instead of another scene-specific parameter game. KNN needs a scene-margin and
+must not downgrade non-fixed scene choices to `fixed`; learned risk should only
+repair fixed fallback scenes and must pass source-heldout OOD support.
+
+Full9 headline:
+
+- v315d: PSNR `+0.269175`, SSIM `+0.003718`, mean min PSNR `+0.014301`,
+  mean CVaR PSNR `+0.082000`, negative views `8`;
+- v315d beats v309/v310c/v314 on the tracked mean and tail metrics;
+- v315d beats v305 on PSNR, SSIM, and mean-min tail, and matches v305 negative
+  views, but still trails v305 mean CVaR by `0.000173`.
+
+Do not claim 100% paper closure yet. The next model should focus on the tiny
+remaining CVaR gap, perceptual metrics, qualitative visibility, and geometry /
+triangle-count evidence.
+
 Latest method update on 2026-06-30, v302:
 
 New files:

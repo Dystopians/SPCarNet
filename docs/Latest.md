@@ -2,6 +2,41 @@
 
 Date: 2026-06-28
 
+## 2026-07-01 Topline: v315d Composite Tail Guard
+
+Current main method:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v315-CompositeTailGuard-Log.md
+docs/car_model/results/v315d_no_fixed_downgrade_multiscene_summary.json
+outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701
+```
+
+v315d adds a target-blind composite tail guard:
+
+- KNN must beat the scene branch by at least `0.0005`;
+- KNN cannot downgrade a non-fixed scene branch to `fixed`;
+- learned risk is only used for scene-level `fixed` fallback;
+- fixed-scene risk uses source-heldout OOD guard at quantile `0.8`.
+
+Full9 result:
+
+| method | PSNR | SSIM | safe scene rate | positive-view fraction | mean min PSNR | mean CVaR PSNR | negative views |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| v305 | +0.266578 | +0.003701 | 1.00 | 0.954228 | +0.013917 | +0.082173 | 8 |
+| v309 | +0.267843 | +0.003711 | 1.00 | 0.949784 | +0.013817 | +0.081414 | 9 |
+| v310c | +0.267134 | +0.003704 | 1.00 | 0.954228 | +0.014003 | +0.081866 | 8 |
+| v314 | +0.268348 | +0.003715 | 1.00 | 0.949784 | +0.001562 | +0.078339 | 9 |
+| v315d | +0.269175 | +0.003718 | 1.00 | 0.954228 | +0.014301 | +0.082000 | 8 |
+
+Verdict:
+
+v315d is now the best main policy and clearly improves over v309/v310c/v314.
+It is still not a 100% paper-closed solution because v305 keeps a tiny mean-CVaR
+advantage (`0.082173` vs `0.082000`) and geometry/perceptual/qualitative closure
+is not yet complete.
+
 ## 2026-06-30 Topline: v302 Constrained Hybrid Support-Transport
 
 New method tool and log:
