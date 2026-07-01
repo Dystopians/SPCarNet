@@ -150,7 +150,15 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             "",
             f"- enabled: `{knn.get('enabled')}`",
             f"- k: `{knn.get('k')}`",
+            f"- threshold mode: `{knn.get('threshold_mode')}`",
+            f"- selected threshold: `{knn.get('selected_threshold')}`",
+            f"- reject variant: `{knn.get('reject_variant')}`",
             f"- source safe vs fixed: `{knn.get('source_safe_vs_fixed')}`",
+            f"- source PSNR delta vs scene: `{knn.get('source_mean_psnr_delta_vs_scene_selected')}`",
+            f"- source SSIM delta vs scene: `{knn.get('source_mean_ssim_delta_vs_scene_selected')}`",
+            f"- source CVaR20 PSNR delta vs scene: `{knn.get('source_cvar_psnr_delta_vs_scene_selected')}`",
+            f"- source min PSNR delta vs scene: `{knn.get('source_min_psnr_delta_vs_scene_selected')}`",
+            f"- source positive-view delta vs scene: `{knn.get('source_positive_view_fraction_delta_vs_scene_selected')}`",
             f"- source selected counts: `{knn.get('source_selected_counts')}`",
             f"- verdict: `{knn.get('verdict')}`",
         ]
@@ -285,6 +293,15 @@ def _summarize_metric_rows(rows: list[dict[str, float]], *, compute_ssim: bool) 
     return _summarize_rows(rows, compute_ssim=compute_ssim) if rows else {}
 
 
+def _summary_psnr_tail(summary: dict[str, Any], name: str) -> float:
+    tail = summary.get("psnr_gain_tail", {})
+    return float(tail.get(name, 0.0))
+
+
+def _positive_view_fraction(summary: dict[str, Any]) -> float:
+    return float(summary.get("positive_view_fraction", 0.0))
+
+
 def _fit_per_view_knn_policy(
     selector_payload: dict[str, Any] | None,
     *,
@@ -322,6 +339,9 @@ def _fit_per_view_knn_policy(
     mean, std = _feature_stats(all_vectors)
     if not mean:
         return {"enabled": False, "verdict": "no usable source-heldout proxy vectors"}
+    fixed_summary = selector_payload["summaries"]["fixed"]
+    selected_variant = str(selector_payload["selected_variant"])
+    scene_selected_summary = selector_payload["summaries"][selected_variant]
 
     def predict(variant: str, vector: list[float], *, exclude_view: str | None = None) -> float:
         pool = [entry for entry in entries_by_variant[variant] if exclude_view is None or entry["view"] != exclude_view]
@@ -334,8 +354,7 @@ def _fit_per_view_knn_policy(
         k = max(1, min(int(args.per_view_knn_k), len(ranked)))
         return _mean([float(entry["score"]) for entry in ranked[:k]])
 
-    source_policy_rows = []
-    selected_counts: dict[str, int] = {"fixed": 0, "learned": 0, "hybrid": 0, "noop": 0}
+    source_decisions: list[dict[str, Any]] = []
     for row in selector_payload["per_view"]:
         predictions = {}
         for variant in variants:
@@ -345,23 +364,121 @@ def _fit_per_view_knn_policy(
                 exclude_view=row["view"],
             )
         best_variant, best_score = max(predictions.items(), key=lambda item: item[1])
-        if best_score < float(args.per_view_knn_min_predicted_score):
-            selected_counts["noop"] += 1
-            source_policy_rows.append(_noop_like(row["candidates"][best_variant]["metrics"]))
-        else:
-            selected_counts[best_variant] += 1
-            source_policy_rows.append(row["candidates"][best_variant]["metrics"])
+        source_decisions.append(
+            {
+                "view": row["view"],
+                "predictions": predictions,
+                "best_variant": best_variant,
+                "best_score": float(best_score),
+                "metrics": row["candidates"][best_variant]["metrics"],
+                "scene_metrics": row["candidates"][selected_variant]["metrics"],
+            }
+        )
 
-    source_summary = _summarize_metric_rows(source_policy_rows, compute_ssim=compute_ssim)
-    fixed_summary = selector_payload["summaries"]["fixed"]
-    selected_variant = str(selector_payload["selected_variant"])
-    scene_selected_summary = selector_payload["summaries"][selected_variant]
+    def evaluate_threshold(threshold: float) -> tuple[dict[str, Any], dict[str, int], list[dict[str, float]]]:
+        source_policy_rows: list[dict[str, float]] = []
+        selected_counts: dict[str, int] = {"fixed": 0, "learned": 0, "hybrid": 0, "noop": 0, "scene": 0}
+        for decision in source_decisions:
+            if float(decision["best_score"]) < float(threshold):
+                if str(args.per_view_knn_reject_variant) == "scene":
+                    selected_counts["scene"] += 1
+                    source_policy_rows.append(decision["scene_metrics"])
+                else:
+                    selected_counts["noop"] += 1
+                    source_policy_rows.append(_noop_like(decision["metrics"]))
+            else:
+                selected_counts[str(decision["best_variant"])] += 1
+                source_policy_rows.append(decision["metrics"])
+        return _summarize_metric_rows(source_policy_rows, compute_ssim=compute_ssim), selected_counts, source_policy_rows
+
+    threshold_trials: list[dict[str, Any]] = []
+    selected_threshold = float(args.per_view_knn_min_predicted_score)
+    if bool(args.per_view_knn_auto_threshold):
+        best_trial: dict[str, Any] | None = None
+        scores = sorted({float(decision["best_score"]) for decision in source_decisions})
+        if scores:
+            scores = [min(scores) - 1.0e-9] + scores + [max(scores) + 1.0e-9]
+        for threshold in scores:
+            source_summary, selected_counts, _ = evaluate_threshold(threshold)
+            reject_count = selected_counts["noop"] + selected_counts["scene"]
+            accept_fraction = 1.0 - float(reject_count / max(len(source_decisions), 1))
+            mean_delta = float(source_summary.get("psnr_gain", 0.0)) - float(scene_selected_summary.get("psnr_gain", 0.0))
+            ssim_delta = (
+                float(source_summary.get("ssim_gain", 0.0)) - float(scene_selected_summary.get("ssim_gain", 0.0))
+                if compute_ssim
+                else 0.0
+            )
+            cvar_delta = _summary_psnr_tail(source_summary, "cvar") - _summary_psnr_tail(scene_selected_summary, "cvar")
+            min_delta = _summary_psnr_tail(source_summary, "min") - _summary_psnr_tail(scene_selected_summary, "min")
+            positive_fraction_delta = _positive_view_fraction(source_summary) - _positive_view_fraction(scene_selected_summary)
+            safe_vs_fixed = (
+                float(source_summary.get("psnr_gain", 0.0)) >= float(fixed_summary.get("psnr_gain", 0.0)) - float(args.selected_safe_tolerance_psnr)
+                and (
+                    not compute_ssim
+                    or float(source_summary.get("ssim_gain", 0.0))
+                    >= float(fixed_summary.get("ssim_gain", 0.0)) - float(args.selected_safe_tolerance_ssim)
+                )
+            )
+            trial = {
+                "threshold": float(threshold),
+                "accept_fraction": accept_fraction,
+                "source_summary": source_summary,
+                "source_fixed_summary": fixed_summary,
+                "source_scene_selected_summary": scene_selected_summary,
+                "source_mean_psnr_delta_vs_scene_selected": mean_delta,
+                "source_mean_ssim_delta_vs_scene_selected": ssim_delta,
+                "source_cvar_psnr_delta_vs_scene_selected": cvar_delta,
+                "source_min_psnr_delta_vs_scene_selected": min_delta,
+                "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta,
+                "source_safe_vs_fixed": bool(safe_vs_fixed),
+                "source_selected_counts": selected_counts,
+            }
+            threshold_trials.append(trial)
+            if accept_fraction < float(args.per_view_knn_min_accept_fraction):
+                continue
+            if accept_fraction > float(args.per_view_knn_max_accept_fraction):
+                continue
+            if mean_delta < float(args.per_view_knn_min_source_psnr_delta):
+                continue
+            if compute_ssim and ssim_delta < float(args.per_view_knn_min_source_ssim_delta):
+                continue
+            if cvar_delta < float(args.per_view_knn_min_source_cvar_delta):
+                continue
+            if min_delta < float(args.per_view_knn_min_source_min_delta):
+                continue
+            if positive_fraction_delta < float(args.per_view_knn_min_source_positive_fraction_delta):
+                continue
+            if bool(args.per_view_knn_require_source_safe) and not safe_vs_fixed:
+                continue
+            objective = (
+                _objective_from_metrics(source_summary, compute_ssim=compute_ssim)
+                + float(args.per_view_knn_source_cvar_weight) * _summary_psnr_tail(source_summary, "cvar")
+                + float(args.per_view_knn_source_min_weight) * _summary_psnr_tail(source_summary, "min")
+                + float(args.per_view_knn_source_positive_weight) * _positive_view_fraction(source_summary)
+            )
+            trial["objective"] = float(objective)
+            if best_trial is None or float(objective) > float(best_trial["objective"]):
+                best_trial = trial
+        if best_trial is None:
+            return {
+                "enabled": False,
+                "verdict": "no source-heldout KNN threshold cleared the configured tail-risk constraints",
+                "feature_names": feature_names,
+                "threshold_mode": "source_tail_auto",
+                "threshold_trials": threshold_trials,
+            }
+        selected_threshold = float(best_trial["threshold"])
+
+    source_summary, selected_counts, _ = evaluate_threshold(selected_threshold)
     mean_delta = float(source_summary.get("psnr_gain", 0.0)) - float(scene_selected_summary.get("psnr_gain", 0.0))
     ssim_delta = (
         float(source_summary.get("ssim_gain", 0.0)) - float(scene_selected_summary.get("ssim_gain", 0.0))
         if compute_ssim
         else 0.0
     )
+    cvar_delta = _summary_psnr_tail(source_summary, "cvar") - _summary_psnr_tail(scene_selected_summary, "cvar")
+    min_delta = _summary_psnr_tail(source_summary, "min") - _summary_psnr_tail(scene_selected_summary, "min")
+    positive_fraction_delta = _positive_view_fraction(source_summary) - _positive_view_fraction(scene_selected_summary)
     safe_vs_fixed = (
         float(source_summary.get("psnr_gain", 0.0)) >= float(fixed_summary.get("psnr_gain", 0.0)) - float(args.selected_safe_tolerance_psnr)
         and (
@@ -375,23 +492,40 @@ def _fit_per_view_knn_policy(
             "enabled": False,
             "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough",
             "feature_names": feature_names,
+            "reject_variant": str(args.per_view_knn_reject_variant),
             "source_summary": source_summary,
             "source_fixed_summary": fixed_summary,
             "source_scene_selected_summary": scene_selected_summary,
             "source_mean_psnr_delta_vs_scene_selected": mean_delta,
             "source_mean_ssim_delta_vs_scene_selected": ssim_delta,
+            "source_cvar_psnr_delta_vs_scene_selected": cvar_delta,
+            "source_min_psnr_delta_vs_scene_selected": min_delta,
+            "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta,
             "source_safe_vs_fixed": bool(safe_vs_fixed),
             "source_selected_counts": selected_counts,
+            "threshold_mode": "source_tail_auto" if bool(args.per_view_knn_auto_threshold) else "fixed",
+            "selected_threshold": selected_threshold,
+            "threshold_trials": threshold_trials if bool(args.per_view_knn_auto_threshold) else [],
         }
     if bool(args.per_view_knn_require_source_safe) and not safe_vs_fixed:
         return {
             "enabled": False,
             "verdict": "source-heldout KNN policy did not clear fixed safety gate",
             "feature_names": feature_names,
+            "reject_variant": str(args.per_view_knn_reject_variant),
             "source_summary": source_summary,
             "source_fixed_summary": fixed_summary,
             "source_scene_selected_summary": scene_selected_summary,
             "source_selected_counts": selected_counts,
+            "source_mean_psnr_delta_vs_scene_selected": mean_delta,
+            "source_mean_ssim_delta_vs_scene_selected": ssim_delta,
+            "source_cvar_psnr_delta_vs_scene_selected": cvar_delta,
+            "source_min_psnr_delta_vs_scene_selected": min_delta,
+            "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta,
+            "source_safe_vs_fixed": bool(safe_vs_fixed),
+            "threshold_mode": "source_tail_auto" if bool(args.per_view_knn_auto_threshold) else "fixed",
+            "selected_threshold": selected_threshold,
+            "threshold_trials": threshold_trials if bool(args.per_view_knn_auto_threshold) else [],
         }
     return {
         "enabled": True,
@@ -400,15 +534,23 @@ def _fit_per_view_knn_policy(
         "feature_mean": mean,
         "feature_std": std,
         "k": int(args.per_view_knn_k),
-        "min_predicted_score": float(args.per_view_knn_min_predicted_score),
+        "min_predicted_score": float(selected_threshold),
+        "reject_variant": str(args.per_view_knn_reject_variant),
+        "scene_selected_variant": selected_variant,
         "entries_by_variant": entries_by_variant,
         "source_summary": source_summary,
         "source_fixed_summary": fixed_summary,
         "source_scene_selected_summary": scene_selected_summary,
         "source_mean_psnr_delta_vs_scene_selected": mean_delta,
         "source_mean_ssim_delta_vs_scene_selected": ssim_delta,
+        "source_cvar_psnr_delta_vs_scene_selected": cvar_delta,
+        "source_min_psnr_delta_vs_scene_selected": min_delta,
+        "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta,
         "source_safe_vs_fixed": bool(safe_vs_fixed),
         "source_selected_counts": selected_counts,
+        "threshold_mode": "source_tail_auto" if bool(args.per_view_knn_auto_threshold) else "fixed",
+        "selected_threshold": selected_threshold,
+        "threshold_trials": threshold_trials if bool(args.per_view_knn_auto_threshold) else [],
     }
 
 
@@ -435,6 +577,8 @@ def _knn_choose_variant(
         predictions[variant] = _mean([float(entry["score"]) for entry in ranked[:k]])
     best_variant, best_score = max(predictions.items(), key=lambda item: item[1])
     if best_score < float(policy.get("min_predicted_score", 0.0)):
+        if str(policy.get("reject_variant", "noop")) == "scene":
+            return "__scene__", predictions
         return "noop", predictions
     return best_variant, predictions
 
@@ -755,15 +899,23 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             knn_predictions: dict[str, float] | None = None
             gate_accepted = True
             output_variant = selected_variant
+            per_view_knn_rejected = False
             if bool(per_view_knn_payload.get("enabled", False)):
                 output_variant, knn_predictions = _knn_choose_variant(
                     proxies_by_variant,
                     per_view_knn_payload,
                     compute_ssim=bool(args.compute_ssim),
                 )
-                selected_delta = torch.zeros_like(selected_delta) if output_variant == "noop" else deltas[output_variant]
-                selected_proxy = proxies_by_variant[selected_variant] if output_variant == "noop" else proxies_by_variant[output_variant]
-                gate_accepted = output_variant != "noop"
+                if output_variant == "__scene__":
+                    per_view_knn_rejected = True
+                    output_variant = selected_variant
+                    selected_delta = deltas[selected_variant]
+                    selected_proxy = proxies_by_variant[selected_variant]
+                    gate_accepted = True
+                else:
+                    selected_delta = torch.zeros_like(selected_delta) if output_variant == "noop" else deltas[output_variant]
+                    selected_proxy = proxies_by_variant[selected_variant] if output_variant == "noop" else proxies_by_variant[output_variant]
+                    gate_accepted = output_variant != "noop"
             elif bool(per_view_gate_payload.get("enabled", False)):
                 gate_accepted = _gate_accepts(selected_proxy, per_view_gate_payload)
             if not gate_accepted and output_variant != "noop":
@@ -801,6 +953,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "selected_variant": selected_variant,
                     "output_variant": output_variant,
                     "per_view_gate_accepted": bool(gate_accepted),
+                    "per_view_knn_rejected_to_scene": bool(per_view_knn_rejected),
                     "per_view_gate_proxy": selected_proxy,
                     "per_view_knn_predictions": knn_predictions,
                 }
@@ -998,7 +1151,18 @@ def main() -> None:
     )
     parser.add_argument("--per_view_knn_k", type=int, default=3)
     parser.add_argument("--per_view_knn_min_predicted_score", type=float, default=0.0)
+    parser.add_argument("--per_view_knn_auto_threshold", action="store_true")
+    parser.add_argument("--per_view_knn_reject_variant", choices=["noop", "scene"], default="noop")
+    parser.add_argument("--per_view_knn_min_accept_fraction", type=float, default=0.0)
+    parser.add_argument("--per_view_knn_max_accept_fraction", type=float, default=1.0)
     parser.add_argument("--per_view_knn_min_source_psnr_delta", type=float, default=0.0)
+    parser.add_argument("--per_view_knn_min_source_ssim_delta", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_knn_min_source_cvar_delta", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_knn_min_source_min_delta", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_knn_min_source_positive_fraction_delta", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_knn_source_cvar_weight", type=float, default=0.25)
+    parser.add_argument("--per_view_knn_source_min_weight", type=float, default=0.10)
+    parser.add_argument("--per_view_knn_source_positive_weight", type=float, default=0.25)
     parser.add_argument("--per_view_knn_require_source_safe", action="store_true")
     parser.add_argument("--per_view_knn_allow_when_scene_fixed", action="store_true")
     parser.add_argument("--residual_clip", type=float, default=0.25)

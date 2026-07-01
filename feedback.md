@@ -1344,6 +1344,66 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-07-01 v310 Tail-Risk KNN Feedback Addendum
+
+v310 is the follow-up to v309's main weakness: v309 improves macro mean metrics
+but slightly worsens per-view tails.
+
+Implementation:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v310-TailRiskKNN-SceneFallback-Log.md
+docs/car_model/results/v310_tailrisk_knn_scenefallback_multiscene_summary.json
+```
+
+The new mechanism searches source-heldout KNN acceptance thresholds and can
+constrain source-heldout PSNR, CVaR20, minimum gain, and positive-view fraction.
+The important new option is:
+
+```text
+--per_view_knn_reject_variant scene
+```
+
+This means low-confidence KNN choices fall back to the source-heldout
+scene-level branch instead of no-oping to the base render.
+
+Main result:
+
+| method | PSNR gain | SSIM gain | positive-view fraction | mean min PSNR gain | mean CVaR20 PSNR gain | total negative views |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| v305 | +0.266578 | +0.003701 | 0.954228 | +0.013917 | +0.082173 | 8 |
+| v309 | +0.267843 | +0.003711 | 0.949784 | +0.013817 | +0.081414 | 9 |
+| v310c | +0.267134 | +0.003704 | 0.954228 | +0.014003 | +0.081866 | 8 |
+
+Lesson:
+
+- v309 remains the best mean-quality policy.
+- v310c is a valid tail-balanced frontier, not a new main result.
+- v310b proved that target no-op fallback is unsafe: stump collapsed to all
+  no-op and treehill became unsafe versus fixed.
+- scene fallback is the correct safety baseline for target-blind KNN rejection.
+- source-heldout threshold search is still too weak to repair fixed fallback
+  scenes; stump and treehill remain unchanged under safe v310c.
+
+Next recommended direction:
+
+```text
+Keep v309 as the mean-quality main policy and v310c as the tail-balanced
+ablation. Do not continue threshold-only scans. Build a learned tail-risk
+predictor trained on source-heldout per-view outcomes. It should predict
+per-view probability of negative PSNR/SSIM tail under fixed/learned/hybrid,
+calibrate uncertainty, and fall back to scene-selected output unless the
+predicted tail risk is low. It must be evaluated against both v309 and v310c,
+with LPIPS/DISTS and geometry accounting added before any paper-level claim.
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-06-30 v305-v309 Support-Transport Policy Feedback
 
 This addendum supersedes the earlier v253-v270 branch as the current strongest

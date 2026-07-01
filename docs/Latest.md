@@ -1346,6 +1346,64 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-07-01 Update: v310 Tail-Risk KNN with Scene Fallback
+
+v310 tests a direct response to the v309 weakness: v309 has the best macro
+PSNR/SSIM, but it worsens per-view tail behavior versus v305.
+
+Key files:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v310-TailRiskKNN-SceneFallback-Log.md
+docs/car_model/results/v310_tailrisk_knn_scenefallback_multiscene_summary.json
+```
+
+New controls:
+
+```text
+--per_view_knn_auto_threshold
+--per_view_knn_reject_variant {noop,scene}
+--per_view_knn_min_source_cvar_delta
+--per_view_knn_min_source_min_delta
+--per_view_knn_min_source_positive_fraction_delta
+```
+
+Result over the same 9 scenes / 246 target-test views:
+
+```text
+v305:  +0.266578 PSNR / +0.003701 SSIM / positive-view 0.954228 / 8 negative views
+v309:  +0.267843 PSNR / +0.003711 SSIM / positive-view 0.949784 / 9 negative views
+v310c: +0.267134 PSNR / +0.003704 SSIM / positive-view 0.954228 / 8 negative views
+```
+
+Interpretation:
+
+v310c is not the new mean-quality main result. It is a tail-balanced ablation:
+it remains above v305 on mean PSNR/SSIM and recovers v305-like tail behavior,
+but it is below v309 on macro PSNR/SSIM by `-0.000710 / -0.000007`.
+
+Important negative lesson:
+
+- v310b showed that low-confidence KNN should not no-op to the base render:
+  stump became 100% no-op and treehill became unsafe.
+- v310c fixes that by falling back to the scene-selected branch, but threshold
+  search still cannot repair fixed fallback scenes.
+
+Current best status:
+
+- mean-quality best: v309 selective source-heldout KNN;
+- tail-balanced frontier: v310c scene-fallback tail-risk KNN;
+- paper loop: still incomplete because LPIPS/DISTS, fresh clean long baseline,
+  geometry/triangle accounting, and stronger learned tail-risk prediction are
+  missing.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-06-30 Update: v305-v309 Support-Transport Auto Policy
 
 The effective line of work after the earlier representation-level failures is
