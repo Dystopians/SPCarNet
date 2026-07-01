@@ -17,13 +17,18 @@ Start from:
 - [v329b fixed rollback certificate log](docs/car_model/7-01-v329b-FixedRollbackCertificate-Full9-Log.md)
 - [v329b full9 audit vs v322C](docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v322c_audit.json)
 - [v329b full9 audit vs v327b](docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v327b_audit.json)
+- [v329b frontier/perceptual/geometry follow-up](docs/car_model/7-01-v329b-PerceptualGeometry-v330LocalSupport-Update.md)
+- [v329b clean-frontier LPIPS/DISTS summary](docs/car_model/results/v329b_frontier_lpips_qualitative_summary.md)
+- [v329b geometry accounting](docs/car_model/7-01-v329b-Frontier-Geometry-Accounting.md)
 - [v329b qualitative changed-view panel](docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel.png)
 - [next-model feedback and lessons](feedback.md)
 
 Honest status: v329b is a real method and evidence milestone, not final
 paper-level closure. The gain is concentrated in `bonsai`, `room`, `garden`,
 and the preserved v327b `treehill` improvement; visual differences remain
-subtle and fresh LPIPS/DISTS/frontier/geometry tables are still missing.
+subtle. Fresh LPIPS/DISTS/frontier/geometry evidence is now available: v329b
+beats the local clean frontier and has the best PSNR among clean26000/v322c/v327b/v329b,
+but it is not all-axis dominant over v327b because LPIPS/DISTS are mixed.
 
 ## Current Report Package (2026-06-26)
 

@@ -17,12 +17,17 @@ gain 和 `+0.000009419319` mean SSIM gain；相对 v327b 继续提升
 - [v329b fixed rollback certificate 日志](docs/car_model/7-01-v329b-FixedRollbackCertificate-Full9-Log.md)
 - [v329b full9 audit vs v322C](docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v322c_audit.json)
 - [v329b full9 audit vs v327b](docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v327b_audit.json)
+- [v329b frontier/perceptual/geometry 补充日志](docs/car_model/7-01-v329b-PerceptualGeometry-v330LocalSupport-Update.md)
+- [v329b clean-frontier LPIPS/DISTS 汇总](docs/car_model/results/v329b_frontier_lpips_qualitative_summary.md)
+- [v329b 几何 accounting](docs/car_model/7-01-v329b-Frontier-Geometry-Accounting.md)
 - [v329b 定性 changed-view 面板](docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel.png)
 - [给下一阶段模型的反馈与经验教训](feedback.md)
 
 诚实状态：v329b 是真实的方法和证据里程碑，但还不是最终论文闭环。收益主要集中在
 `bonsai`、`room`、`garden`，以及继承自 v327b 的 `treehill` 小收益；定性差异仍然细微，
-新的 LPIPS/DISTS/frontier/几何表也还没有补齐。
+新的 LPIPS/DISTS/frontier/几何证据已经补齐：v329b 优于本地 clean frontier，并且在
+clean26000/v322c/v327b/v329b 中 PSNR 最好，但它相对 v327b 不是全轴支配，因为
+LPIPS/DISTS 仍是 mixed 结果。
 
 ## 当前报告包（2026-06-26）
 

@@ -194,6 +194,56 @@ incumbent, v329b rollback, and GT. The visual changes are visible mostly as
 small color/structure corrections. They are not a dramatic qualitative
 breakthrough.
 
+## Perceptual / Frontier / Geometry Follow-up
+
+Follow-up log:
+
+```text
+docs/car_model/7-01-v329b-PerceptualGeometry-v330LocalSupport-Update.md
+```
+
+Fresh frontier artifacts:
+
+```text
+docs/car_model/results/v329b_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v329b_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v329b_frontier_panels/bonsai_00035_frontier_panel.png
+docs/car_model/results/v329b_frontier_panels/room_00009_frontier_panel.png
+docs/car_model/results/v329b_frontier_panels/garden_00017_frontier_panel.png
+docs/car_model/results/v329b_frontier_panels/treehill_00011_frontier_panel.png
+```
+
+Clean-frontier aggregate:
+
+| method | scenes | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|---:|
+| clean26000 | 9 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v322c | 9 | 27.587073 | 0.028173 | 0.087735 | 0.057659 |
+| v327b | 9 | 27.587183 | 0.028174 | 0.087733 | 0.057660 |
+| v329b | 9 | 27.588444 | 0.028173 | 0.087733 | 0.057664 |
+
+This closes the missing LPIPS/DISTS/frontier evidence gap for v329b. The result
+is mixed-positive: v329b is still clearly better than local clean MeshSplatting
+and has the best PSNR among these rows, but it is not all-axis dominant over
+v327b because LPIPS and DISTS are slightly worse.
+
+Geometry accounting:
+
+```text
+docs/car_model/results/v329b_frontier_geometry_accounting_summary.json
+docs/car_model/7-01-v329b-Frontier-Geometry-Accounting.md
+```
+
+The compact parent has `84,219,015` triangles versus clean's `91,019,714`,
+for a total triangle reduction of `7.471677%`; vertex reduction is `3.871315%`.
+All per-scene topology error counts are `0`. This is inherited compact-parent
+geometry, not a new triangle-reduction contribution from the fixed rollback
+certificate itself.
+
+The follow-up also records v330a/v330b local-support probes on `treehill` and
+`stump`. They are negative: local support did not change selected outputs
+relative to v329b and should not be promoted.
+
 ## Ablations and Failed Variants
 
 v328 adaptive blend-step:
@@ -265,8 +315,8 @@ paper result:
 - full9 macro gain over v322C is only `+0.001188` PSNR and `+0.0000094` SSIM;
 - only `bonsai`, `room`, `garden`, and `treehill` change;
 - treehill still has negative changed views;
-- no new LPIPS/DISTS/frontier or triangle-count table has been produced for
-  v329b;
+- fresh LPIPS/DISTS/frontier and triangle-count tables have now been produced,
+  but the perceptual result is mixed versus v327b rather than all-axis dominant;
 - the qualitative panel is technically correct but visually subtle;
 - the method is still mostly a conservative policy/certificate improvement,
   not a large representation-capacity breakthrough.

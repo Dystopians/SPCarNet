@@ -14,6 +14,12 @@ docs/car_model/results/v329b_fixed_rollback_strict_focused3_vs_v322c_audit.json
 docs/car_model/results/v329b_fixed_rollback_strict_garden_vs_v322c_audit.json
 docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel.png
 docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel_manifest.json
+docs/car_model/7-01-v329b-PerceptualGeometry-v330LocalSupport-Update.md
+docs/car_model/results/v329b_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v329b_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v329b_frontier_panels/
+docs/car_model/results/v329b_frontier_geometry_accounting_summary.json
+docs/car_model/7-01-v329b-Frontier-Geometry-Accounting.md
 outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701
 ```
 
@@ -61,6 +67,23 @@ Key changed views:
 | room/00002 | hybrid -> fixed | +0.053419317668 | +0.000358164310 |
 | garden/00016 | hybrid -> fixed | +0.013000046828 | +0.000086247921 |
 
+Fresh frontier/perceptual and geometry evidence:
+
+| method | scenes | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|---:|
+| clean26000 | 9 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v322c | 9 | 27.587073 | 0.028173 | 0.087735 | 0.057659 |
+| v327b | 9 | 27.587183 | 0.028174 | 0.087733 | 0.057660 |
+| v329b | 9 | 27.588444 | 0.028173 | 0.087733 | 0.057664 |
+
+| scenes | clean triangles | support-transport triangles | total triangle reduction | clean vertices | support-transport vertices | total vertex reduction |
+|---:|---:|---:|---:|---:|---:|---:|
+| 9 | 91019714 | 84219015 | 7.471677% | 28914623 | 27795247 | 3.871315% |
+
+Important interpretation: v329b is above local clean MeshSplatting on the
+frontier table and has the best PSNR among clean26000/v322c/v327b/v329b, but it
+does not all-axis dominate v327b because LPIPS and DISTS are mixed.
+
 Important ablation lesson:
 
 v329a used a looser rollback certificate. It improved `bonsai` and `room`, but
@@ -82,9 +105,13 @@ Hard lessons for the next model:
 - Qualitative panels remain subtle. Even views with clear numeric PSNR gains do
   not yet produce the obvious before/after improvement expected from a strong
   top-conference result.
-- v329b still lacks fresh LPIPS/DISTS/frontier and geometry/triangle evidence.
-  It should be treated as a policy/certificate milestone, not as final paper
-  closure.
+- The missing LPIPS/DISTS/frontier and geometry/triangle evidence is now
+  filled, but the result is mixed versus v327b. Evidence completeness improved;
+  the effect-size and perceptual-dominance bottlenecks remain.
+- v330a/v330b local-support probes on treehill/stump did not change selected
+  outputs. This suggests that scalar relaxation of the current local-support
+  gate is not the right path; the next model needs stronger per-view candidate
+  arbitration or a better representation candidate.
 - The next improvement should increase representation capacity or residual
   transport quality, then use this certificate style to guard it. More threshold
   scans around the current carrier are unlikely to create a large win.

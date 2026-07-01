@@ -13,6 +13,12 @@ docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v322c_audit.json
 docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v327b_audit.json
 docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel.png
 docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel_manifest.json
+docs/car_model/7-01-v329b-PerceptualGeometry-v330LocalSupport-Update.md
+docs/car_model/results/v329b_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v329b_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v329b_frontier_panels/
+docs/car_model/results/v329b_frontier_geometry_accounting_summary.json
+docs/car_model/7-01-v329b-Frontier-Geometry-Accounting.md
 outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701
 ```
 
@@ -55,6 +61,21 @@ Key changed-view qualitative panel:
 
 ![v329b key changed views](car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel.png)
 
+Fresh clean-frontier metrics:
+
+| method | scenes | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|---:|
+| clean26000 | 9 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v322c | 9 | 27.587073 | 0.028173 | 0.087735 | 0.057659 |
+| v327b | 9 | 27.587183 | 0.028174 | 0.087733 | 0.057660 |
+| v329b | 9 | 27.588444 | 0.028173 | 0.087733 | 0.057664 |
+
+Fresh geometry accounting:
+
+| scenes | clean triangles | support-transport triangles | total triangle reduction | clean vertices | support-transport vertices | total vertex reduction |
+|---:|---:|---:|---:|---:|---:|---:|
+| 9 | 91019714 | 84219015 | 7.471677% | 28914623 | 27795247 | 3.871315% |
+
 Interpretation:
 
 v329b is a real target-blind policy/certificate improvement over v322C and
@@ -69,8 +90,10 @@ Honest status:
 - the full9 macro gain is still small;
 - the visual improvement is subtle in full-frame qualitative panels;
 - treehill remains scene-positive but has several negative changed views;
-- v329b does not yet include a fresh LPIPS/DISTS/frontier or triangle-count
-  table;
+- fresh LPIPS/DISTS/frontier and triangle-count tables are now available, but
+  the perceptual result is mixed versus v327b rather than all-axis dominant;
+- v330a/v330b local-support probes on treehill/stump were negative and did not
+  change selected outputs relative to v329b;
 - this is a useful engineering/research milestone, not the final paper-level
   closed loop.
 
