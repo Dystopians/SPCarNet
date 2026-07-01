@@ -2,6 +2,34 @@
 
 Date: 2026-06-28
 
+## 2026-07-01 Follow-up: v332 Support-Dropout Consistency Probe
+
+Newest target-blind evidence probe:
+
+```text
+scripts/car_model/probe_support_dropout_consistency.py
+docs/car_model/7-01-v332-SupportDropoutConsistency-NegativeProbe.md
+docs/car_model/results/v332_support_dropout_treehill_consistency.json
+outputs/carnet/spcarnet_v332_support_dropout_treehill_20260701/support_dropout_consistency.json
+```
+
+v332 recomputes target evidence while dropping individual support frames and
+measures whether pairwise promotions are stable under support-subset changes.
+It is a useful diagnostic but a negative result: treehill's bad promoted views
+are also stable under this test, so support-dropout does not separate them from
+positive controls.
+
+Conclusion: the current treehill failure is not merely an unstable-support
+failure. It is closer to a stable-but-wrong residual transport decision, so the
+next improvement needs new target-blind evidence or a stronger raw candidate
+generator.
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Follow-up: v331 Promotion Rollback Probe
 
 Newest method-infrastructure probe:

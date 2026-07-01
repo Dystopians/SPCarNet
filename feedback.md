@@ -2,6 +2,46 @@
 
 Date: 2026-06-28
 
+# 2026-07-01 v332 Feedback Addendum: Support-Dropout Stability Also Fails to Separate Treehill Bad Views
+
+New files:
+
+```text
+scripts/car_model/probe_support_dropout_consistency.py
+docs/car_model/7-01-v332-SupportDropoutConsistency-NegativeProbe.md
+docs/car_model/results/v332_support_dropout_treehill_consistency.json
+outputs/carnet/spcarnet_v332_support_dropout_treehill_20260701/support_dropout_consistency.json
+```
+
+Implemented diagnostic:
+
+The v332 probe recomputes candidate residuals after dropping individual support
+frames, then measures stability of `delta[output_variant] -
+delta[incumbent_variant]`. It is target-blind; target/test deltas are copied
+only for post-hoc correlation.
+
+Key result:
+
+Treehill bad promoted views `00007`, `00008`, and `00009` are not cleanly
+separable from positive controls by pair relative std, cosine, or sign flip.
+`00009` is the clearest failure: it is target-negative, but has high dropout
+cosine (`0.940110` pair, `0.965856` output). This means the failure is not just
+"unstable support"; it can be stable but wrong under the current evidence
+representation.
+
+Next-stage implication:
+
+The next model should not rely on another source/support-side veto alone. It
+needs a new evidence family, such as camera-neighborhood render self-consistency
+or uncertainty from independently generated candidates, or a stronger raw
+candidate generator with visibly larger gains before arbitration.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v331 Feedback Addendum: Promotion Rollback LCB Is Implemented, But Source Evidence Is Still Over-Confident
 
 New files:
