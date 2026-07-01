@@ -1344,6 +1344,80 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-07-01 v311 Learned Risk Model Feedback Addendum
+
+This addendum records a focused learned-policy attempt after the v309/v310c
+frontier.
+
+Code touched:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+```
+
+New logs and summaries:
+
+```text
+docs/car_model/7-01-v311-LearnedRiskModel-Audit.md
+docs/car_model/results/v311_risk_model_focused_comparison_summary.json
+```
+
+What was tried:
+
+- A source-heldout ridge risk model was added to predict per-view candidate
+  objective, PSNR gain, and SSIM gain for `fixed`, `learned`, and `hybrid`.
+- v311a used strict source-side gates and mostly disabled the model.
+- v311b relaxed the source gates so the model actually selected per-view
+  variants.
+- v311c added predicted PSNR/SSIM dominance constraints versus the scene-level
+  source-heldout selected variant.
+
+Focused evidence on `bicycle/counter/stump/treehill`:
+
+| method | macro PSNR gain | macro SSIM gain | safe scene rate | mean min PSNR gain | negative views |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| v309 selective KNN | +0.173055 | +0.003173 | 1.00 | -0.031668 | 9 |
+| v310c tail-risk KNN scene fallback | +0.172930 | +0.003176 | 1.00 | -0.031668 | 8 |
+| v311a strict risk model | +0.171559 | +0.003166 | 1.00 | -0.031668 | 8 |
+| v311b relaxed risk model | +0.172679 | +0.003045 | 0.25 | -0.070348 | 8 |
+| v311c dual-guard risk model | +0.165518 | +0.003099 | 0.50 | -0.061860 | 7 |
+
+Important lesson:
+
+v311 proved that a naive learned per-view selector is not enough. Relaxing
+source-side gates activates the model, but it tends to exchange SSIM/tail safety
+for PSNR and becomes unsafe on `bicycle`, `stump`, and `treehill`. Adding
+predicted dual-axis constraints is still insufficient because the source-heldout
+proxy ranking does not reliably transfer to target views.
+
+Current best interpretation:
+
+- v309 remains the best mean-quality policy on full9 and focused comparisons.
+- v310c remains the useful tail-balanced frontier.
+- v311 should be kept as a negative ablation and diagnostic.
+- The next path should be a target-blind reliability/representation upgrade, not
+  a looser risk-model gate or parameter scan.
+
+Next recommended prompt for a stronger model:
+
+```text
+Continue from v309/v310c/v311. Treat v311 as a failed learned per-view risk
+selector. Build a target-blind reliability model for source-to-target proxy
+validity before allowing any per-view switch. Use only train/source-heldout
+evidence: multi-source residual agreement, source-view diversity, support depth
+consistency, normal/view consistency, residual variance, confidence coverage,
+and candidate delta stability. Selection must run without target GT; evaluation
+loads target GT only after outputs are written. Compare against v309 and v310c
+on focused scenes before full9, and require both mean PSNR/SSIM and tail safety
+to be no worse before expanding.
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v310 Tail-Risk KNN Feedback Addendum
 
 v310 is the follow-up to v309's main weakness: v309 improves macro mean metrics

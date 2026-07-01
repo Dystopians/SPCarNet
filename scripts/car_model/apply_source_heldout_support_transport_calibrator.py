@@ -162,6 +162,25 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- source selected counts: `{knn.get('source_selected_counts')}`",
             f"- verdict: `{knn.get('verdict')}`",
         ]
+    if payload.get("per_view_risk_model_policy"):
+        risk = payload["per_view_risk_model_policy"]
+        lines += [
+            "",
+            "## Per-View Learned Risk Model",
+            "",
+            f"- enabled: `{risk.get('enabled')}`",
+            f"- ridge: `{risk.get('ridge')}`",
+            f"- reject variant: `{risk.get('reject_variant')}`",
+            f"- source accept fraction: `{risk.get('source_accept_fraction')}`",
+            f"- source safe vs fixed: `{risk.get('source_safe_vs_fixed')}`",
+            f"- source PSNR delta vs scene: `{risk.get('source_mean_psnr_delta_vs_scene_selected')}`",
+            f"- source SSIM delta vs scene: `{risk.get('source_mean_ssim_delta_vs_scene_selected')}`",
+            f"- source CVaR20 PSNR delta vs scene: `{risk.get('source_cvar_psnr_delta_vs_scene_selected')}`",
+            f"- source min PSNR delta vs scene: `{risk.get('source_min_psnr_delta_vs_scene_selected')}`",
+            f"- source positive-view delta vs scene: `{risk.get('source_positive_view_fraction_delta_vs_scene_selected')}`",
+            f"- source selected counts: `{risk.get('source_selected_counts')}`",
+            f"- verdict: `{risk.get('verdict')}`",
+        ]
     (output_dir / "support_transport_apply_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -263,6 +282,54 @@ def _feature_vector(proxy: dict[str, float], feature_names: list[str]) -> list[f
 
 def _objective_from_metrics(row: dict[str, float], *, compute_ssim: bool) -> float:
     return float(row.get("psnr_gain", 0.0)) + (20.0 * float(row.get("ssim_gain", 0.0)) if compute_ssim else 0.0)
+
+
+def _candidate_learning_features(proxy: dict[str, float], variant: str, feature_names: list[str]) -> list[float]:
+    base = _feature_vector(proxy, feature_names)
+    return base + [
+        1.0 if variant == "fixed" else 0.0,
+        1.0 if variant == "learned" else 0.0,
+        1.0 if variant == "hybrid" else 0.0,
+    ]
+
+
+def _fit_ridge_predictor(
+    examples: list[dict[str, Any]],
+    *,
+    ridge: float,
+) -> dict[str, Any] | None:
+    if len(examples) < 2:
+        return None
+    x = torch.tensor([example["features"] for example in examples], dtype=torch.float64)
+    y = torch.tensor([example["target"] for example in examples], dtype=torch.float64)
+    mean = x.mean(dim=0, keepdim=True)
+    std = torch.clamp(x.std(dim=0, keepdim=True, unbiased=False), min=1.0e-6)
+    xn = (x - mean) / std
+    ones = torch.ones((xn.shape[0], 1), dtype=xn.dtype)
+    design = torch.cat([ones, xn], dim=1)
+    reg = torch.eye(design.shape[1], dtype=xn.dtype) * float(ridge)
+    reg[0, 0] = 0.0
+    lhs = design.T @ design + reg
+    rhs = design.T @ y
+    try:
+        weight = torch.linalg.solve(lhs, rhs)
+    except RuntimeError:
+        weight = torch.linalg.pinv(lhs) @ rhs
+    return {
+        "mean": mean.squeeze(0).tolist(),
+        "std": std.squeeze(0).tolist(),
+        "weight": weight.tolist(),
+    }
+
+
+def _predict_ridge(model: dict[str, Any], features: list[float]) -> list[float]:
+    x = torch.tensor(features, dtype=torch.float64)
+    mean = torch.tensor(model["mean"], dtype=torch.float64)
+    std = torch.tensor(model["std"], dtype=torch.float64)
+    weight = torch.tensor(model["weight"], dtype=torch.float64)
+    design = torch.cat([torch.ones(1, dtype=torch.float64), (x - mean) / torch.clamp(std, min=1.0e-6)])
+    pred = design @ weight
+    return [float(v) for v in pred.tolist()]
 
 
 def _feature_stats(vectors: list[list[float]]) -> tuple[list[float], list[float]]:
@@ -583,6 +650,232 @@ def _knn_choose_variant(
     return best_variant, predictions
 
 
+def _fit_per_view_risk_model_policy(
+    selector_payload: dict[str, Any] | None,
+    *,
+    compute_ssim: bool,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    if not bool(args.enable_per_view_risk_model_policy):
+        return {"enabled": False, "verdict": "disabled by CLI"}
+    if selector_payload is None or not selector_payload.get("per_view"):
+        return {"enabled": False, "verdict": "missing source-heldout selector per-view evidence"}
+    selected_variant = str(selector_payload["selected_variant"])
+    if selected_variant == "fixed" and not bool(args.per_view_risk_model_allow_when_scene_fixed):
+        return {
+            "enabled": False,
+            "selected_variant": selected_variant,
+            "verdict": "disabled because scene-level source-heldout selector fell back to fixed",
+        }
+    feature_names = _parse_feature_names(args.per_view_risk_model_feature_grid)
+    variants = ["fixed", "learned", "hybrid"]
+    examples: list[dict[str, Any]] = []
+    rows_by_view: dict[str, dict[str, Any]] = {}
+    for row in selector_payload["per_view"]:
+        rows_by_view[str(row["view"])] = row
+        for variant in variants:
+            candidate = row["candidates"][variant]
+            metrics = candidate["metrics"]
+            examples.append(
+                {
+                    "view": row["view"],
+                    "variant": variant,
+                    "features": _candidate_learning_features(candidate["proxy"], variant, feature_names),
+                    "target": [
+                        _objective_from_metrics(metrics, compute_ssim=compute_ssim),
+                        float(metrics.get("psnr_gain", 0.0)),
+                        float(metrics.get("ssim_gain", 0.0)) if compute_ssim else 0.0,
+                    ],
+                    "metrics": metrics,
+                }
+            )
+    if len({example["view"] for example in examples}) < 2:
+        return {"enabled": False, "verdict": "not enough source-heldout views for leave-one-out risk model"}
+
+    def choose_for_row(row: dict[str, Any], model: dict[str, Any]) -> tuple[str, dict[str, list[float]]]:
+        predictions: dict[str, list[float]] = {}
+        for variant in variants:
+            candidate = row["candidates"][variant]
+            predictions[variant] = _predict_ridge(
+                model,
+                _candidate_learning_features(candidate["proxy"], variant, feature_names),
+            )
+        scene_pred = predictions[selected_variant]
+        best_variant, best_pred = max(predictions.items(), key=lambda item: item[1][0])
+        if best_pred[0] < scene_pred[0] + float(args.per_view_risk_model_min_predicted_objective_delta):
+            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop", predictions
+        if best_pred[1] < scene_pred[1] + float(args.per_view_risk_model_min_predicted_psnr_delta_vs_scene):
+            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop", predictions
+        if (
+            compute_ssim
+            and best_pred[2] < scene_pred[2] + float(args.per_view_risk_model_min_predicted_ssim_delta_vs_scene)
+        ):
+            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop", predictions
+        if best_pred[1] < float(args.per_view_risk_model_min_predicted_psnr):
+            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop", predictions
+        if compute_ssim and best_pred[2] < float(args.per_view_risk_model_min_predicted_ssim):
+            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop", predictions
+        return best_variant, predictions
+
+    source_policy_rows: list[dict[str, float]] = []
+    selected_counts: dict[str, int] = {"fixed": 0, "learned": 0, "hybrid": 0, "noop": 0, "scene": 0}
+    loo_predictions: list[dict[str, Any]] = []
+    for view, row in rows_by_view.items():
+        train_examples = [example for example in examples if str(example["view"]) != str(view)]
+        model = _fit_ridge_predictor(train_examples, ridge=float(args.per_view_risk_model_ridge))
+        if model is None:
+            selected_counts["scene"] += 1
+            source_policy_rows.append(row["candidates"][selected_variant]["metrics"])
+            continue
+        chosen_variant, predictions = choose_for_row(row, model)
+        loo_predictions.append({"view": view, "chosen_variant": chosen_variant, "predictions": predictions})
+        if chosen_variant == "__scene__":
+            selected_counts["scene"] += 1
+            source_policy_rows.append(row["candidates"][selected_variant]["metrics"])
+        elif chosen_variant == "noop":
+            selected_counts["noop"] += 1
+            # The chosen candidate is irrelevant for no-op metrics; use scene metrics only as a template.
+            source_policy_rows.append(_noop_like(row["candidates"][selected_variant]["metrics"]))
+        else:
+            selected_counts[chosen_variant] += 1
+            source_policy_rows.append(row["candidates"][chosen_variant]["metrics"])
+
+    source_summary = _summarize_metric_rows(source_policy_rows, compute_ssim=compute_ssim)
+    fixed_summary = selector_payload["summaries"]["fixed"]
+    scene_selected_summary = selector_payload["summaries"][selected_variant]
+    mean_delta = float(source_summary.get("psnr_gain", 0.0)) - float(scene_selected_summary.get("psnr_gain", 0.0))
+    ssim_delta = (
+        float(source_summary.get("ssim_gain", 0.0)) - float(scene_selected_summary.get("ssim_gain", 0.0))
+        if compute_ssim
+        else 0.0
+    )
+    cvar_delta = _summary_psnr_tail(source_summary, "cvar") - _summary_psnr_tail(scene_selected_summary, "cvar")
+    min_delta = _summary_psnr_tail(source_summary, "min") - _summary_psnr_tail(scene_selected_summary, "min")
+    positive_fraction_delta = _positive_view_fraction(source_summary) - _positive_view_fraction(scene_selected_summary)
+    safe_vs_fixed = (
+        float(source_summary.get("psnr_gain", 0.0)) >= float(fixed_summary.get("psnr_gain", 0.0)) - float(args.selected_safe_tolerance_psnr)
+        and (
+            not compute_ssim
+            or float(source_summary.get("ssim_gain", 0.0))
+            >= float(fixed_summary.get("ssim_gain", 0.0)) - float(args.selected_safe_tolerance_ssim)
+        )
+    )
+    accept_fraction = 1.0 - float((selected_counts["noop"] + selected_counts["scene"]) / max(len(rows_by_view), 1))
+    base_payload = {
+        "feature_names": feature_names,
+        "ridge": float(args.per_view_risk_model_ridge),
+        "reject_variant": str(args.per_view_risk_model_reject_variant),
+        "scene_selected_variant": selected_variant,
+        "source_summary": source_summary,
+        "source_fixed_summary": fixed_summary,
+        "source_scene_selected_summary": scene_selected_summary,
+        "source_mean_psnr_delta_vs_scene_selected": mean_delta,
+        "source_mean_ssim_delta_vs_scene_selected": ssim_delta,
+        "source_cvar_psnr_delta_vs_scene_selected": cvar_delta,
+        "source_min_psnr_delta_vs_scene_selected": min_delta,
+        "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta,
+        "source_safe_vs_fixed": bool(safe_vs_fixed),
+        "source_selected_counts": selected_counts,
+        "source_accept_fraction": accept_fraction,
+        "loo_predictions": loo_predictions,
+    }
+    if accept_fraction < float(args.per_view_risk_model_min_accept_fraction):
+        return {
+            "enabled": False,
+            "verdict": "source-heldout risk model accepted too few views",
+            **base_payload,
+        }
+    if mean_delta < float(args.per_view_risk_model_min_source_psnr_delta):
+        return {
+            "enabled": False,
+            "verdict": "source-heldout risk model did not improve scene-selected PSNR enough",
+            **base_payload,
+        }
+    if compute_ssim and ssim_delta < float(args.per_view_risk_model_min_source_ssim_delta):
+        return {
+            "enabled": False,
+            "verdict": "source-heldout risk model did not clear SSIM delta",
+            **base_payload,
+        }
+    if cvar_delta < float(args.per_view_risk_model_min_source_cvar_delta):
+        return {
+            "enabled": False,
+            "verdict": "source-heldout risk model did not clear CVaR tail delta",
+            **base_payload,
+        }
+    if min_delta < float(args.per_view_risk_model_min_source_min_delta):
+        return {
+            "enabled": False,
+            "verdict": "source-heldout risk model did not clear min-gain tail delta",
+            **base_payload,
+        }
+    if positive_fraction_delta < float(args.per_view_risk_model_min_source_positive_fraction_delta):
+        return {
+            "enabled": False,
+            "verdict": "source-heldout risk model did not clear positive-view fraction delta",
+            **base_payload,
+        }
+    if bool(args.per_view_risk_model_require_source_safe) and not safe_vs_fixed:
+        return {
+            "enabled": False,
+            "verdict": "source-heldout risk model did not clear fixed safety gate",
+            **base_payload,
+        }
+    full_model = _fit_ridge_predictor(examples, ridge=float(args.per_view_risk_model_ridge))
+    if full_model is None:
+        return {
+            "enabled": False,
+            "verdict": "could not fit full source-heldout risk model",
+            **base_payload,
+        }
+    return {
+        "enabled": True,
+        "verdict": "source-heldout learned risk model selected",
+        "model": full_model,
+        "min_predicted_objective_delta": float(args.per_view_risk_model_min_predicted_objective_delta),
+        "min_predicted_psnr_delta_vs_scene": float(args.per_view_risk_model_min_predicted_psnr_delta_vs_scene),
+        "min_predicted_ssim_delta_vs_scene": float(args.per_view_risk_model_min_predicted_ssim_delta_vs_scene),
+        "min_predicted_psnr": float(args.per_view_risk_model_min_predicted_psnr),
+        "min_predicted_ssim": float(args.per_view_risk_model_min_predicted_ssim),
+        **base_payload,
+    }
+
+
+def _risk_model_choose_variant(
+    proxies_by_variant: dict[str, dict[str, float]],
+    policy: dict[str, Any],
+    *,
+    compute_ssim: bool,
+) -> tuple[str, dict[str, list[float]]]:
+    variants = ["fixed", "learned", "hybrid"]
+    feature_names = list(policy["feature_names"])
+    scene_variant = str(policy["scene_selected_variant"])
+    predictions: dict[str, list[float]] = {}
+    for variant in variants:
+        predictions[variant] = _predict_ridge(
+            policy["model"],
+            _candidate_learning_features(proxies_by_variant[variant], variant, feature_names),
+        )
+    scene_pred = predictions[scene_variant]
+    best_variant, best_pred = max(predictions.items(), key=lambda item: item[1][0])
+    min_objective_delta = float(policy.get("min_predicted_objective_delta", 0.0))
+    min_psnr_delta_vs_scene = float(policy.get("min_predicted_psnr_delta_vs_scene", -1.0e9))
+    min_ssim_delta_vs_scene = float(policy.get("min_predicted_ssim_delta_vs_scene", -1.0e9))
+    min_predicted_psnr = float(policy.get("min_predicted_psnr", -1.0e9))
+    min_predicted_ssim = float(policy.get("min_predicted_ssim", -1.0e9))
+    if best_pred[0] < scene_pred[0] + min_objective_delta:
+        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions
+    if best_pred[1] < scene_pred[1] + min_psnr_delta_vs_scene:
+        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions
+    if compute_ssim and best_pred[2] < scene_pred[2] + min_ssim_delta_vs_scene:
+        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions
+    if best_pred[1] < min_predicted_psnr:
+        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions
+    if compute_ssim and best_pred[2] < min_predicted_ssim:
+        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions
+    return best_variant, predictions
+
+
 def _gate_accepts(proxy: dict[str, float], gate: dict[str, Any] | None) -> bool:
     if not gate or not bool(gate.get("enabled", False)):
         return True
@@ -862,6 +1155,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         compute_ssim=bool(args.compute_ssim),
         args=args,
     )
+    per_view_risk_model_payload = _fit_per_view_risk_model_policy(
+        selector_payload,
+        compute_ssim=bool(args.compute_ssim),
+        args=args,
+    )
     fixed_rows: list[dict[str, float]] = []
     learned_rows: list[dict[str, float]] = []
     hybrid_rows: list[dict[str, float]] = []
@@ -897,10 +1195,42 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             selected_delta = deltas[selected_variant]
             selected_proxy = proxies_by_variant[selected_variant]
             knn_predictions: dict[str, float] | None = None
+            risk_model_predictions: dict[str, list[float]] | None = None
             gate_accepted = True
             output_variant = selected_variant
+            selected_proxy_variant = selected_variant
             per_view_knn_rejected = False
-            if bool(per_view_knn_payload.get("enabled", False)):
+            per_view_risk_model_rejected = False
+            risk_model_raw_output_variant: str | None = None
+            risk_model_decision = "not_used"
+            if bool(per_view_risk_model_payload.get("enabled", False)):
+                output_variant, risk_model_predictions = _risk_model_choose_variant(
+                    proxies_by_variant,
+                    per_view_risk_model_payload,
+                    compute_ssim=bool(args.compute_ssim),
+                )
+                risk_model_raw_output_variant = output_variant
+                if output_variant == "__scene__":
+                    per_view_risk_model_rejected = True
+                    risk_model_decision = "scene_fallback"
+                    output_variant = selected_variant
+                    selected_delta = deltas[selected_variant]
+                    selected_proxy = proxies_by_variant[selected_variant]
+                    selected_proxy_variant = selected_variant
+                    gate_accepted = True
+                else:
+                    if output_variant == "noop":
+                        selected_delta = torch.zeros_like(selected_delta)
+                        selected_proxy = _candidate_proxy_stats(ev, selected_delta)
+                        selected_proxy_variant = "noop"
+                        risk_model_decision = "noop"
+                    else:
+                        selected_delta = deltas[output_variant]
+                        selected_proxy = proxies_by_variant[output_variant]
+                        selected_proxy_variant = output_variant
+                        risk_model_decision = "candidate"
+                    gate_accepted = output_variant != "noop"
+            elif bool(per_view_knn_payload.get("enabled", False)):
                 output_variant, knn_predictions = _knn_choose_variant(
                     proxies_by_variant,
                     per_view_knn_payload,
@@ -911,16 +1241,25 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     output_variant = selected_variant
                     selected_delta = deltas[selected_variant]
                     selected_proxy = proxies_by_variant[selected_variant]
+                    selected_proxy_variant = selected_variant
                     gate_accepted = True
                 else:
-                    selected_delta = torch.zeros_like(selected_delta) if output_variant == "noop" else deltas[output_variant]
-                    selected_proxy = proxies_by_variant[selected_variant] if output_variant == "noop" else proxies_by_variant[output_variant]
+                    if output_variant == "noop":
+                        selected_delta = torch.zeros_like(selected_delta)
+                        selected_proxy = _candidate_proxy_stats(ev, selected_delta)
+                        selected_proxy_variant = "noop"
+                    else:
+                        selected_delta = deltas[output_variant]
+                        selected_proxy = proxies_by_variant[output_variant]
+                        selected_proxy_variant = output_variant
                     gate_accepted = output_variant != "noop"
             elif bool(per_view_gate_payload.get("enabled", False)):
                 gate_accepted = _gate_accepts(selected_proxy, per_view_gate_payload)
             if not gate_accepted and output_variant != "noop":
                 selected_delta = torch.zeros_like(selected_delta)
                 output_variant = "noop"
+                selected_proxy = _candidate_proxy_stats(ev, selected_delta)
+                selected_proxy_variant = "noop"
                 nooped_views += 1
             elif output_variant == "noop":
                 nooped_views += 1
@@ -954,8 +1293,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "output_variant": output_variant,
                     "per_view_gate_accepted": bool(gate_accepted),
                     "per_view_knn_rejected_to_scene": bool(per_view_knn_rejected),
+                    "per_view_risk_model_rejected_to_scene": bool(per_view_risk_model_rejected),
+                    "risk_model_raw_output_variant": risk_model_raw_output_variant,
+                    "risk_model_decision": risk_model_decision,
+                    "selected_proxy_variant": selected_proxy_variant,
+                    "selected_proxy": selected_proxy,
                     "per_view_gate_proxy": selected_proxy,
                     "per_view_knn_predictions": knn_predictions,
+                    "per_view_risk_model_predictions": risk_model_predictions,
                 }
             )
             if idx < int(args.save_example_views):
@@ -1006,9 +1351,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         )
     )
     active_gate = (
-        "source_heldout_knn"
-        if bool(per_view_knn_payload.get("enabled", False))
-        else ("source_heldout_threshold" if bool(per_view_gate_payload.get("enabled", False)) else "off")
+        "source_heldout_risk_model"
+        if bool(per_view_risk_model_payload.get("enabled", False))
+        else (
+            "source_heldout_knn"
+            if bool(per_view_knn_payload.get("enabled", False))
+            else ("source_heldout_threshold" if bool(per_view_gate_payload.get("enabled", False)) else "off")
+        )
     )
     output_label = f"scene `{selected_variant}`"
     if active_gate != "off":
@@ -1075,6 +1424,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "selector": selector_payload,
         "per_view_gate": per_view_gate_payload,
         "per_view_knn_policy": per_view_knn_payload,
+        "per_view_risk_model_policy": per_view_risk_model_payload,
         "verdict": verdict,
         "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
     }
@@ -1165,6 +1515,26 @@ def main() -> None:
     parser.add_argument("--per_view_knn_source_positive_weight", type=float, default=0.25)
     parser.add_argument("--per_view_knn_require_source_safe", action="store_true")
     parser.add_argument("--per_view_knn_allow_when_scene_fixed", action="store_true")
+    parser.add_argument("--enable_per_view_risk_model_policy", action="store_true")
+    parser.add_argument(
+        "--per_view_risk_model_feature_grid",
+        default="covered_fraction,mean_abs_delta,confidence_mean,residual_std_mean,delta_snr,signal_snr,confidence_snr,changed_fraction",
+    )
+    parser.add_argument("--per_view_risk_model_ridge", type=float, default=1.0e-3)
+    parser.add_argument("--per_view_risk_model_reject_variant", choices=["noop", "scene"], default="scene")
+    parser.add_argument("--per_view_risk_model_allow_when_scene_fixed", action="store_true")
+    parser.add_argument("--per_view_risk_model_require_source_safe", action="store_true")
+    parser.add_argument("--per_view_risk_model_min_accept_fraction", type=float, default=0.0)
+    parser.add_argument("--per_view_risk_model_min_source_psnr_delta", type=float, default=0.0)
+    parser.add_argument("--per_view_risk_model_min_source_ssim_delta", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_risk_model_min_source_cvar_delta", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_risk_model_min_source_min_delta", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_risk_model_min_source_positive_fraction_delta", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_risk_model_min_predicted_objective_delta", type=float, default=0.0)
+    parser.add_argument("--per_view_risk_model_min_predicted_psnr_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_risk_model_min_predicted_ssim_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_risk_model_min_predicted_psnr", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_risk_model_min_predicted_ssim", type=float, default=-1.0e9)
     parser.add_argument("--residual_clip", type=float, default=0.25)
     parser.add_argument("--min_confidence", type=float, default=1.0e-4)
     parser.add_argument("--depth_abs_tol", type=float, default=0.02)

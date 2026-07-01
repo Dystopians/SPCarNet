@@ -1,0 +1,506 @@
+{
+  "v305": {
+    "scene_count": 4,
+    "macro_psnr_gain": 0.1715587823343429,
+    "macro_ssim_gain": 0.0031655865535140035,
+    "safe_scene_rate": 1.0,
+    "mean_positive_view_fraction": 0.8970138888888889,
+    "mean_min_psnr_gain": -0.03166832692407073,
+    "mean_cvar_psnr_gain": 0.03189296190135935,
+    "negative_views": 8,
+    "rows": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11208827481638309,
+        "ssim_gain": 0.002952544689178467,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.92,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar_psnr_gain": -0.004952453178775329,
+        "negative_views": 2,
+        "risk_enabled": null,
+        "risk_verdict": null,
+        "output_counts": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.9666666666666667,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar_psnr_gain": 0.1329347732944406,
+        "negative_views": 1,
+        "risk_enabled": null,
+        "risk_verdict": null,
+        "output_counts": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.8125,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar_psnr_gain": -0.0024780650761844214,
+        "negative_views": 3,
+        "risk_enabled": null,
+        "risk_verdict": null,
+        "output_counts": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09075745623850276,
+        "ssim_gain": 0.0015932122866312663,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.8888888888888888,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar_psnr_gain": 0.0020675925659565664,
+        "negative_views": 2,
+        "risk_enabled": null,
+        "risk_verdict": null,
+        "output_counts": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      }
+    ]
+  },
+  "v309": {
+    "scene_count": 4,
+    "macro_psnr_gain": 0.17305526822573883,
+    "macro_ssim_gain": 0.0031725906953215597,
+    "safe_scene_rate": 1.0,
+    "mean_positive_view_fraction": 0.8870138888888889,
+    "mean_min_psnr_gain": -0.03166832692407073,
+    "mean_cvar_psnr_gain": 0.03090573516058428,
+    "negative_views": 9,
+    "rows": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11807421838196674,
+        "ssim_gain": 0.002980561256408691,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.88,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar_psnr_gain": -0.008901360141875614,
+        "negative_views": 3,
+        "risk_enabled": null,
+        "risk_verdict": null,
+        "output_counts": {
+          "fixed": 5,
+          "learned": 5,
+          "hybrid": 15,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.9666666666666667,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar_psnr_gain": 0.1329347732944406,
+        "negative_views": 1,
+        "risk_enabled": null,
+        "risk_verdict": null,
+        "output_counts": {
+          "fixed": 0,
+          "learned": 30,
+          "hybrid": 0,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.8125,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar_psnr_gain": -0.0024780650761844214,
+        "negative_views": 3,
+        "risk_enabled": null,
+        "risk_verdict": null,
+        "output_counts": {
+          "fixed": 16,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09075745623850276,
+        "ssim_gain": 0.0015932122866312663,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.8888888888888888,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar_psnr_gain": 0.0020675925659565664,
+        "negative_views": 2,
+        "risk_enabled": null,
+        "risk_verdict": null,
+        "output_counts": {
+          "fixed": 18,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      }
+    ]
+  },
+  "v310c": {
+    "scene_count": 4,
+    "macro_psnr_gain": 0.17293019522205205,
+    "macro_ssim_gain": 0.0031755721196532246,
+    "safe_scene_rate": 1.0,
+    "mean_positive_view_fraction": 0.8970138888888889,
+    "mean_min_psnr_gain": -0.03166832692407073,
+    "mean_cvar_psnr_gain": 0.03189296190135935,
+    "negative_views": 8,
+    "rows": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.1175739263672196,
+        "ssim_gain": 0.0029924869537353515,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.92,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar_psnr_gain": -0.004952453178775329,
+        "negative_views": 2,
+        "risk_enabled": null,
+        "risk_verdict": null,
+        "output_counts": {
+          "fixed": 0,
+          "learned": 3,
+          "hybrid": 22,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.9666666666666667,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar_psnr_gain": 0.1329347732944406,
+        "negative_views": 1,
+        "risk_enabled": null,
+        "risk_verdict": null,
+        "output_counts": {
+          "fixed": 0,
+          "learned": 30,
+          "hybrid": 0,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.8125,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar_psnr_gain": -0.0024780650761844214,
+        "negative_views": 3,
+        "risk_enabled": null,
+        "risk_verdict": null,
+        "output_counts": {
+          "fixed": 16,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09075745623850276,
+        "ssim_gain": 0.0015932122866312663,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.8888888888888888,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar_psnr_gain": 0.0020675925659565664,
+        "negative_views": 2,
+        "risk_enabled": null,
+        "risk_verdict": null,
+        "output_counts": {
+          "fixed": 18,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      }
+    ]
+  },
+  "v311a": {
+    "scene_count": 4,
+    "macro_psnr_gain": 0.1715587823343429,
+    "macro_ssim_gain": 0.0031655865535140035,
+    "safe_scene_rate": 1.0,
+    "mean_positive_view_fraction": 0.8970138888888889,
+    "mean_min_psnr_gain": -0.03166832692407073,
+    "mean_cvar_psnr_gain": 0.03189296190135935,
+    "negative_views": 8,
+    "rows": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11208827481638309,
+        "ssim_gain": 0.002952544689178467,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.92,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar_psnr_gain": -0.004952453178775329,
+        "negative_views": 2,
+        "risk_enabled": false,
+        "risk_verdict": "source-heldout risk model did not clear SSIM delta",
+        "output_counts": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 25,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.9666666666666667,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar_psnr_gain": 0.1329347732944406,
+        "negative_views": 1,
+        "risk_enabled": false,
+        "risk_verdict": "source-heldout risk model did not improve scene-selected PSNR enough",
+        "output_counts": {
+          "fixed": 0,
+          "learned": 30,
+          "hybrid": 0,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.8125,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar_psnr_gain": -0.0024780650761844214,
+        "negative_views": 3,
+        "risk_enabled": false,
+        "risk_verdict": "source-heldout risk model did not clear CVaR tail delta",
+        "output_counts": {
+          "fixed": 16,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09075745623850276,
+        "ssim_gain": 0.0015932122866312663,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.8888888888888888,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar_psnr_gain": 0.0020675925659565664,
+        "negative_views": 2,
+        "risk_enabled": false,
+        "risk_verdict": "source-heldout risk model did not clear SSIM delta",
+        "output_counts": {
+          "fixed": 18,
+          "learned": 0,
+          "hybrid": 0,
+          "noop": 0
+        }
+      }
+    ]
+  },
+  "v311b": {
+    "scene_count": 4,
+    "macro_psnr_gain": 0.17267921868381253,
+    "macro_ssim_gain": 0.003045149731139342,
+    "safe_scene_rate": 0.25,
+    "mean_positive_view_fraction": 0.8914583333333334,
+    "mean_min_psnr_gain": -0.07034789551410103,
+    "mean_cvar_psnr_gain": 0.00995625080417303,
+    "negative_views": 8,
+    "rows": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11612980774079219,
+        "ssim_gain": 0.0027895426750183107,
+        "safe_vs_fixed": false,
+        "positive_view_fraction": 0.92,
+        "min_psnr_gain": -0.09398250444414558,
+        "cvar_psnr_gain": -0.024827166400876167,
+        "negative_views": 2,
+        "risk_enabled": true,
+        "risk_verdict": "source-heldout learned risk model selected",
+        "output_counts": {
+          "fixed": 1,
+          "learned": 19,
+          "hybrid": 5,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.41977664817091853,
+        "ssim_gain": 0.006913858652114868,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 1.0,
+        "min_psnr_gain": 0.007318496897603666,
+        "cvar_psnr_gain": 0.1320696856096474,
+        "negative_views": 0,
+        "risk_enabled": true,
+        "risk_verdict": "source-heldout learned risk model selected",
+        "output_counts": {
+          "fixed": 2,
+          "learned": 25,
+          "hybrid": 3,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05216598132017758,
+        "ssim_gain": 0.0009369142353534698,
+        "safe_vs_fixed": false,
+        "positive_view_fraction": 0.8125,
+        "min_psnr_gain": -0.03459125667420082,
+        "cvar_psnr_gain": -0.020271030818309832,
+        "negative_views": 3,
+        "risk_enabled": true,
+        "risk_verdict": "source-heldout learned risk model selected",
+        "output_counts": {
+          "fixed": 6,
+          "learned": 8,
+          "hybrid": 2,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.10264443750336187,
+        "ssim_gain": 0.0015402833620707195,
+        "safe_vs_fixed": false,
+        "positive_view_fraction": 0.8333333333333334,
+        "min_psnr_gain": -0.1601363178356614,
+        "cvar_psnr_gain": -0.04714648517376929,
+        "negative_views": 3,
+        "risk_enabled": true,
+        "risk_verdict": "source-heldout learned risk model selected",
+        "output_counts": {
+          "fixed": 2,
+          "learned": 12,
+          "hybrid": 4,
+          "noop": 0
+        }
+      }
+    ]
+  },
+  "v311c": {
+    "scene_count": 4,
+    "macro_psnr_gain": 0.16551797473976196,
+    "macro_ssim_gain": 0.003099336690372891,
+    "safe_scene_rate": 0.5,
+    "mean_positive_view_fraction": 0.9053472222222222,
+    "mean_min_psnr_gain": -0.06185955768923623,
+    "mean_cvar_psnr_gain": 0.022347141141632554,
+    "negative_views": 7,
+    "rows": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11254799597180722,
+        "ssim_gain": 0.0028956961631774903,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 0.92,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar_psnr_gain": -0.00277894329030417,
+        "negative_views": 2,
+        "risk_enabled": true,
+        "risk_verdict": "source-heldout learned risk model selected",
+        "output_counts": {
+          "fixed": 0,
+          "learned": 3,
+          "hybrid": 22,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.41977664817091853,
+        "ssim_gain": 0.006913858652114868,
+        "safe_vs_fixed": true,
+        "positive_view_fraction": 1.0,
+        "min_psnr_gain": 0.007318496897603666,
+        "cvar_psnr_gain": 0.1320696856096474,
+        "negative_views": 0,
+        "risk_enabled": true,
+        "risk_verdict": "source-heldout learned risk model selected",
+        "output_counts": {
+          "fixed": 2,
+          "learned": 25,
+          "hybrid": 3,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.0451170416677773,
+        "ssim_gain": 0.0010151863098144531,
+        "safe_vs_fixed": false,
+        "positive_view_fraction": 0.8125,
+        "min_psnr_gain": -0.03459125667420082,
+        "cvar_psnr_gain": -0.014397176413958768,
+        "negative_views": 3,
+        "risk_enabled": true,
+        "risk_verdict": "source-heldout learned risk model selected",
+        "output_counts": {
+          "fixed": 10,
+          "learned": 5,
+          "hybrid": 1,
+          "noop": 0
+        }
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.0846302131485448,
+        "ssim_gain": 0.0015726056363847521,
+        "safe_vs_fixed": false,
+        "positive_view_fraction": 0.8888888888888888,
+        "min_psnr_gain": -0.1601363178356614,
+        "cvar_psnr_gain": -0.02550500133885425,
+        "negative_views": 2,
+        "risk_enabled": true,
+        "risk_verdict": "source-heldout learned risk model selected",
+        "output_counts": {
+          "fixed": 17,
+          "learned": 1,
+          "hybrid": 0,
+          "noop": 0
+        }
+      }
+    ]
+  }
+}

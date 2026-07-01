@@ -1346,6 +1346,50 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-07-01 Update: v311 Learned Risk Model Audit
+
+This update tested a real per-view learned risk model in:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+```
+
+New audit log:
+
+```text
+docs/car_model/7-01-v311-LearnedRiskModel-Audit.md
+docs/car_model/results/v311_risk_model_focused_comparison_summary.json
+```
+
+Focused result on `bicycle/counter/stump/treehill`:
+
+| method | macro PSNR gain | macro SSIM gain | safe scene rate | mean min PSNR gain | negative views |
+|---|---:|---:|---:|---:|---:|
+| v309 selective KNN | +0.173055 | +0.003173 | 1.00 | -0.031668 | 9 |
+| v310c tail-risk KNN scene fallback | +0.172930 | +0.003176 | 1.00 | -0.031668 | 8 |
+| v311a strict risk model | +0.171559 | +0.003166 | 1.00 | -0.031668 | 8 |
+| v311b relaxed risk model | +0.172679 | +0.003045 | 0.25 | -0.070348 | 8 |
+| v311c dual-guard risk model | +0.165518 | +0.003099 | 0.50 | -0.061860 | 7 |
+
+Conclusion:
+
+- v311a did not truly activate the learned risk model.
+- v311b/v311c activated it, but the model was not safe enough across focused
+  scenes.
+- v311 is therefore an ablation/negative diagnostic, not the new main method.
+- The current main reporting frontier remains `v309` for mean quality and
+  `v310c` for tail-balanced analysis.
+
+The key bottleneck is source-to-target proxy shift: source-heldout risk rankings
+do not reliably predict target-view per-view risk. Future improvement must
+attack reliability/representation, not just loosen thresholds.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Update: v310 Tail-Risk KNN with Scene Fallback
 
 v310 tests a direct response to the v309 weakness: v309 has the best macro
