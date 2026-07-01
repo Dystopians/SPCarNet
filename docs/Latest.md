@@ -2,6 +2,45 @@
 
 Date: 2026-06-28
 
+## 2026-07-01 Follow-up: v331 Promotion Rollback Probe
+
+Newest method-infrastructure probe:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v331-PromotionRollbackCertificate-Probe.md
+docs/car_model/results/v331_promotion_rollback_shadow_treehill_report.json
+docs/car_model/results/v331_promotion_rollback_shadow_stump_report.json
+docs/car_model/results/v331c_fineladder_treehill_report.json
+outputs/carnet/spcarnet_v331_promotion_rollback_shadow_treehill_20260701
+outputs/carnet/spcarnet_v331_promotion_rollback_shadow_stump_20260701
+outputs/carnet/spcarnet_v331c_fineladder_treehill_20260701
+```
+
+v331 adds an opt-in post-decision promotion rollback certificate. It uses
+source-heldout pairwise leave-one-out over-prediction residuals to build
+calibrated lower bounds, then audits pairwise per-view promotions before image
+save. The interface is implemented and target/test-GT-free, but the focused
+treehill/stump probes did **not** improve over v329b:
+
+| probe | scene | PSNR gain | SSIM gain | result |
+|---|---|---:|---:|---|
+| v331 shadow | treehill | 0.104664074413 | 0.001673645443 | no rollback, same as v329b |
+| v331 shadow | stump | 0.057029761393 | 0.001208242029 | no rollback, same as v329b |
+| v331c fine ladder | treehill | 0.103565986827 | 0.001683145761 | PSNR down, SSIM up |
+
+Conclusion: v331 should be kept as diagnostic infrastructure, not promoted as
+the current best method. It proves that source-local pairwise evidence is still
+over-confident on treehill's bad target views, so the next improvement needs new
+target-blind evidence or a stronger representation candidate rather than
+another relaxation of the existing source-local gates.
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Topline: v329b Fixed Rollback Certificate
 
 Newest v329b evidence package:

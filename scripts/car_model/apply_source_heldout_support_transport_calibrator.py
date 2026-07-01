@@ -267,6 +267,23 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- calibration: `{reliability.get('source_reliability_calibration')}`",
             f"- verdict: `{reliability.get('verdict')}`",
         ]
+    if payload.get("promotion_rollback_policy"):
+        promotion = payload["promotion_rollback_policy"]
+        lines += [
+            "",
+            "## Post-Decision Promotion Rollback Certificate",
+            "",
+            f"- enabled: `{promotion.get('enabled')}`",
+            f"- mode: `{promotion.get('mode')}`",
+            f"- checked sources: `{promotion.get('sources')}`",
+            f"- source sample count: `{promotion.get('source_sample_count')}`",
+            f"- calibration quantile / scale: `{promotion.get('calibration_quantile')}` / `{promotion.get('calibration_scale')}`",
+            f"- LCB min objective / PSNR / SSIM: `{promotion.get('min_lcb_objective_delta')}` / `{promotion.get('min_lcb_psnr_delta')}` / `{promotion.get('min_lcb_ssim_delta')}`",
+            f"- local min CVaR / min / max negative fraction: `{promotion.get('min_local_cvar_delta')}` / `{promotion.get('min_local_min_delta')}` / `{promotion.get('max_local_negative_fraction')}`",
+            f"- keep / shadow rollback / rollback: `{promotion.get('keep_count')}` / `{promotion.get('shadow_rollback_count')}` / `{promotion.get('rollback_count')}`",
+            f"- reason counts: `{promotion.get('reason_counts')}`",
+            f"- verdict: `{promotion.get('verdict')}`",
+        ]
     (output_dir / "support_transport_apply_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -2143,6 +2160,206 @@ def _pairwise_dominance_choose_variant(
     return variant, predictions, diagnostics
 
 
+def _fit_promotion_rollback_policy(
+    pairwise_policy: dict[str, Any],
+    *,
+    compute_ssim: bool,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    if not bool(args.enable_promotion_rollback_certificate):
+        return {"enabled": False, "verdict": "disabled by CLI"}
+    if not bool(pairwise_policy.get("enabled", False)):
+        return {
+            "enabled": False,
+            "verdict": "promotion rollback requires an enabled pairwise dominance policy",
+            "mode": str(args.promotion_rollback_mode),
+        }
+    target_names = list(pairwise_policy.get("target_names", PAIRWISE_DOMINANCE_TARGET_NAMES))
+    entries_by_candidate = dict(pairwise_policy.get("entries_by_candidate", {}))
+    entries_by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for variant, entries in entries_by_candidate.items():
+        for entry in entries:
+            key = (
+                str(entry.get("view")),
+                str(entry.get("candidate_variant", variant)),
+                str(entry.get("incumbent_variant")),
+            )
+            entries_by_key[key] = entry
+
+    residuals_by_axis: dict[str, list[float]] = {name: [] for name in target_names}
+    signed_residuals_by_axis: dict[str, list[float]] = {name: [] for name in target_names}
+    calibration_rows: list[dict[str, Any]] = []
+    for item in pairwise_policy.get("loo_decisions", []):
+        predictions = item.get("predictions")
+        if not isinstance(predictions, dict):
+            continue
+        view = str(item.get("view"))
+        incumbent_variant = str(item.get("incumbent_variant"))
+        for candidate_variant, prediction in predictions.items():
+            entry = entries_by_key.get((view, str(candidate_variant), incumbent_variant))
+            if entry is None:
+                continue
+            target = list(entry.get("target", []))
+            if len(target) < len(target_names) or len(prediction) < len(target_names):
+                continue
+            row_residuals: dict[str, float] = {}
+            for axis_idx, axis_name in enumerate(target_names):
+                signed = float(prediction[axis_idx]) - float(target[axis_idx])
+                signed_residuals_by_axis[axis_name].append(float(signed))
+                over = max(0.0, float(signed))
+                residuals_by_axis[axis_name].append(float(over))
+                row_residuals[axis_name] = float(over)
+            calibration_rows.append(
+                {
+                    "view": view,
+                    "candidate_variant": str(candidate_variant),
+                    "incumbent_variant": incumbent_variant,
+                    "overprediction_residuals": row_residuals,
+                }
+            )
+
+    sample_count = min((len(values) for values in residuals_by_axis.values()), default=0)
+    bounds = {
+        axis_name: float(_quantile(values, float(args.promotion_rollback_calibration_quantile)))
+        for axis_name, values in residuals_by_axis.items()
+    }
+    signed_summary = {
+        axis_name: {
+            "count": int(len(values)),
+            "mean": _mean(values),
+            "max_overprediction": max(residuals_by_axis.get(axis_name, [0.0])) if residuals_by_axis.get(axis_name) else None,
+        }
+        for axis_name, values in signed_residuals_by_axis.items()
+    }
+    sources = [
+        part.strip()
+        for part in str(args.promotion_rollback_sources).split(",")
+        if part.strip()
+    ]
+    base_payload = {
+        "mode": str(args.promotion_rollback_mode),
+        "sources": sources,
+        "target_names": target_names,
+        "source_sample_count": int(sample_count),
+        "min_calibration_samples": int(args.promotion_rollback_min_calibration_samples),
+        "calibration_quantile": float(args.promotion_rollback_calibration_quantile),
+        "calibration_scale": float(args.promotion_rollback_calibration_scale),
+        "calibration_error_bounds": bounds,
+        "source_loo_summary": signed_summary,
+        "min_lcb_objective_delta": float(args.promotion_rollback_min_lcb_objective_delta),
+        "min_lcb_psnr_delta": float(args.promotion_rollback_min_lcb_psnr_delta),
+        "min_lcb_ssim_delta": float(args.promotion_rollback_min_lcb_ssim_delta),
+        "min_local_cvar_delta": float(args.promotion_rollback_min_local_cvar_delta),
+        "min_local_min_delta": float(args.promotion_rollback_min_local_min_delta),
+        "max_local_negative_fraction": float(args.promotion_rollback_max_local_negative_fraction),
+        "calibration_rows": calibration_rows,
+    }
+    if sample_count < int(args.promotion_rollback_min_calibration_samples):
+        return {
+            "enabled": False,
+            "verdict": "not enough source LOO calibration samples for promotion rollback",
+            **base_payload,
+        }
+    return {
+        "enabled": True,
+        "verdict": "post-decision promotion rollback certificate fitted",
+        **base_payload,
+    }
+
+
+def _promotion_rollback_decision(
+    *,
+    output_variant: str,
+    incumbent_variant: str,
+    decision_source: str,
+    pairwise_diagnostics: dict[str, Any] | None,
+    policy: dict[str, Any],
+    compute_ssim: bool,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "enabled": bool(policy.get("enabled", False)),
+        "mode": str(policy.get("mode", "shadow")),
+        "candidate_variant": output_variant,
+        "incumbent_variant": incumbent_variant,
+        "decision_source": decision_source,
+        "decision": "keep",
+        "rollback_applied": False,
+        "reject_reason": None,
+        "prediction": None,
+        "calibrated_lower_bounds": None,
+        "local_deltas": None,
+    }
+    if not bool(policy.get("enabled", False)):
+        payload["reject_reason"] = "disabled"
+        return payload
+    if output_variant in {"noop", "__scene__", "__incumbent__"} or output_variant == incumbent_variant:
+        payload["reject_reason"] = "no_promotion"
+        return payload
+    if decision_source not in set(policy.get("sources", [])):
+        payload["reject_reason"] = "decision_source_not_checked"
+        return payload
+    if not pairwise_diagnostics:
+        payload["decision"] = "rollback" if str(policy.get("mode", "shadow")) == "enforce" else "shadow_rollback"
+        payload["rollback_applied"] = str(policy.get("mode", "shadow")) == "enforce"
+        payload["reject_reason"] = "missing_pairwise_diagnostics"
+        return payload
+    candidate_diagnostics = dict(pairwise_diagnostics.get("candidate_diagnostics", {}))
+    candidate_diag = candidate_diagnostics.get(output_variant)
+    if not isinstance(candidate_diag, dict):
+        payload["decision"] = "rollback" if str(policy.get("mode", "shadow")) == "enforce" else "shadow_rollback"
+        payload["rollback_applied"] = str(policy.get("mode", "shadow")) == "enforce"
+        payload["reject_reason"] = "missing_candidate_diagnostics"
+        return payload
+    prediction = [float(value) for value in candidate_diag.get("prediction", [])]
+    target_names = list(policy.get("target_names", PAIRWISE_DOMINANCE_TARGET_NAMES))
+    bounds_by_name = dict(policy.get("calibration_error_bounds", {}))
+    lcb_by_name: dict[str, float] = {}
+    for axis_idx, axis_name in enumerate(target_names):
+        if axis_idx >= len(prediction):
+            continue
+        bound = float(bounds_by_name.get(axis_name, 0.0)) * float(policy.get("calibration_scale", 1.0))
+        lcb_by_name[axis_name] = float(prediction[axis_idx]) - bound
+    local = dict(candidate_diag.get("local", {}))
+    local_deltas = dict(local.get("deltas", {}))
+    payload["prediction"] = prediction
+    payload["calibrated_lower_bounds"] = lcb_by_name
+    payload["local_deltas"] = local_deltas
+
+    reject_reason = None
+    if lcb_by_name.get("objective_delta_vs_incumbent", 0.0) < float(policy.get("min_lcb_objective_delta", -1.0e9)):
+        reject_reason = "lcb_objective_delta"
+    elif lcb_by_name.get("psnr_delta_vs_incumbent", 0.0) < float(policy.get("min_lcb_psnr_delta", -1.0e9)):
+        reject_reason = "lcb_psnr_delta"
+    elif (
+        compute_ssim
+        and lcb_by_name.get("ssim_delta_vs_incumbent", 0.0) < float(policy.get("min_lcb_ssim_delta", -1.0e9))
+    ):
+        reject_reason = "lcb_ssim_delta"
+    elif float(local_deltas.get("psnr_cvar", 0.0)) < float(policy.get("min_local_cvar_delta", -1.0e9)):
+        reject_reason = "local_cvar_delta"
+    elif float(local_deltas.get("psnr_min", 0.0)) < float(policy.get("min_local_min_delta", -1.0e9)):
+        reject_reason = "local_min_delta"
+    else:
+        negative_fraction = 1.0 - float(local_deltas.get("positive_fraction", 1.0))
+        payload["local_negative_fraction"] = float(negative_fraction)
+        if negative_fraction > float(policy.get("max_local_negative_fraction", 1.0)):
+            reject_reason = "local_negative_fraction"
+
+    if reject_reason is None:
+        payload["decision"] = "keep"
+        payload["reject_reason"] = None
+        return payload
+
+    payload["reject_reason"] = reject_reason
+    if str(policy.get("mode", "shadow")) == "enforce":
+        payload["decision"] = "rollback"
+        payload["rollback_applied"] = True
+    else:
+        payload["decision"] = "shadow_rollback"
+        payload["rollback_applied"] = False
+    return payload
+
+
 def _fit_per_view_risk_model_policy(
     selector_payload: dict[str, Any] | None,
     *,
@@ -3803,6 +4020,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         compute_ssim=bool(args.compute_ssim),
         args=args,
     )
+    promotion_rollback_payload = _fit_promotion_rollback_policy(
+        pairwise_dominance_payload,
+        compute_ssim=bool(args.compute_ssim),
+        args=args,
+    )
     fixed_rows: list[dict[str, float]] = []
     learned_rows: list[dict[str, float]] = []
     hybrid_rows: list[dict[str, float]] = []
@@ -3810,6 +4032,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     selected_rows: list[dict[str, float]] = []
     per_view: list[dict[str, Any]] = []
     nooped_views = 0
+    promotion_rollback_stats = {
+        "considered_count": 0,
+        "keep_count": 0,
+        "shadow_rollback_count": 0,
+        "rollback_count": 0,
+        "reason_counts": {},
+    }
 
     for idx, target in enumerate(tqdm(target_frames, desc="apply support-transport calibrator")):
         with torch.no_grad():
@@ -3865,6 +4094,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             local_support_claimed = False
             pairwise_dominance_claimed = False
             source_reliability_claimed = False
+            output_decision_source = "scene"
+            promotion_incumbent_variant = selected_variant
+            promotion_rollback_diagnostics: dict[str, Any] | None = None
             if bool(local_support_payload.get("enabled", False)) and not bool(args.local_support_post_incumbent_fallback_only):
                 output_variant, local_support_diagnostics = _local_support_choose_variant(
                     proxies_by_variant,
@@ -3892,6 +4124,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         selected_proxy = proxies_by_variant[output_variant]
                         selected_proxy_variant = output_variant
                         local_support_decision = "candidate"
+                        output_decision_source = "local_support"
                     gate_accepted = output_variant != "noop"
             if (not local_support_claimed) and bool(source_reliability_payload.get("enabled", False)):
                 output_variant, source_reliability_predictions, source_reliability_diagnostics = _source_reliability_choose_variant(
@@ -3920,6 +4153,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         selected_proxy = proxies_by_variant[output_variant]
                         selected_proxy_variant = output_variant
                         source_reliability_decision = "candidate"
+                        output_decision_source = "source_reliability"
                     gate_accepted = output_variant != "noop"
             if (not local_support_claimed) and (not source_reliability_claimed) and bool(per_view_risk_model_payload.get("enabled", False)):
                 output_variant, risk_model_predictions, risk_model_diagnostics = _risk_model_choose_variant(
@@ -3947,6 +4181,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         selected_proxy = proxies_by_variant[output_variant]
                         selected_proxy_variant = output_variant
                         risk_model_decision = "candidate"
+                        output_decision_source = "risk_model"
                     gate_accepted = output_variant != "noop"
             elif (not local_support_claimed) and (not source_reliability_claimed) and bool(per_view_knn_payload.get("enabled", False)):
                 output_variant, knn_predictions, knn_diagnostics = _knn_choose_variant(
@@ -3970,6 +4205,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         selected_delta = deltas[output_variant]
                         selected_proxy = proxies_by_variant[output_variant]
                         selected_proxy_variant = output_variant
+                        output_decision_source = "knn"
                     gate_accepted = output_variant != "noop"
             elif (not local_support_claimed) and (not source_reliability_claimed) and bool(per_view_gate_payload.get("enabled", False)):
                 gate_accepted = _gate_accepts(selected_proxy, per_view_gate_payload)
@@ -3980,6 +4216,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 and output_variant in deltas
             ):
                 incumbent_variant = output_variant
+                promotion_incumbent_variant = incumbent_variant
                 (
                     pairwise_output_variant,
                     pairwise_dominance_predictions,
@@ -4001,6 +4238,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     selected_proxy = proxies_by_variant[output_variant]
                     selected_proxy_variant = output_variant
                     pairwise_dominance_decision = "candidate"
+                    output_decision_source = "pairwise"
             if (
                 (not local_support_claimed)
                 and (not pairwise_dominance_claimed)
@@ -4034,9 +4272,37 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                             selected_proxy = proxies_by_variant[output_variant]
                             selected_proxy_variant = output_variant
                             local_support_decision = "candidate"
+                            output_decision_source = "local_support"
                         gate_accepted = output_variant != "noop"
                 elif local_support_decision == "not_used":
                     local_support_decision = "skipped_incumbent_already_refined"
+            promotion_rollback_diagnostics = _promotion_rollback_decision(
+                output_variant=output_variant,
+                incumbent_variant=promotion_incumbent_variant,
+                decision_source=output_decision_source,
+                pairwise_diagnostics=pairwise_dominance_diagnostics,
+                policy=promotion_rollback_payload,
+                compute_ssim=bool(args.compute_ssim),
+            )
+            if bool(promotion_rollback_diagnostics.get("enabled", False)):
+                decision = str(promotion_rollback_diagnostics.get("decision", "keep"))
+                if decision != "keep":
+                    promotion_rollback_stats["considered_count"] += 1
+                if decision == "rollback":
+                    promotion_rollback_stats["rollback_count"] += 1
+                elif decision == "shadow_rollback":
+                    promotion_rollback_stats["shadow_rollback_count"] += 1
+                else:
+                    promotion_rollback_stats["keep_count"] += 1
+                reason = str(promotion_rollback_diagnostics.get("reject_reason") or "passed")
+                reason_counts = promotion_rollback_stats["reason_counts"]
+                reason_counts[reason] = int(reason_counts.get(reason, 0)) + 1
+            if bool(promotion_rollback_diagnostics.get("rollback_applied", False)):
+                output_variant = promotion_incumbent_variant
+                selected_delta = deltas[output_variant]
+                selected_proxy = proxies_by_variant[output_variant]
+                selected_proxy_variant = output_variant
+                gate_accepted = True
             if not gate_accepted and output_variant != "noop":
                 selected_delta = torch.zeros_like(selected_delta)
                 output_variant = "noop"
@@ -4103,6 +4369,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "local_support_decision": local_support_decision,
                     "pairwise_dominance_decision": pairwise_dominance_decision,
                     "source_reliability_decision": source_reliability_decision,
+                    "output_decision_source": output_decision_source,
+                    "promotion_rollback_diagnostics": promotion_rollback_diagnostics,
                     "selected_proxy_variant": selected_proxy_variant,
                     "selected_proxy": selected_proxy,
                     "per_view_gate_proxy": selected_proxy,
@@ -4213,6 +4481,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "source_reliability_uses_target_gt": False,
             "source_reliability_fit_scope": "source_heldout_before_target_loop",
             "source_reliability_calibrated_lcb_uses_target_gt": False,
+            "promotion_rollback_uses_target_gt": False,
+            "promotion_rollback_fit_scope": "source_heldout_pairwise_loo_before_target_loop",
         },
         "checkpoint": str(args.checkpoint),
         "base_model_path": str(base_model),
@@ -4297,6 +4567,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "pairwise_dominance_policy": pairwise_dominance_payload,
         "per_view_risk_model_policy": per_view_risk_model_payload,
         "source_reliability_policy": source_reliability_payload,
+        "promotion_rollback_policy": {
+            **promotion_rollback_payload,
+            "keep_count": int(promotion_rollback_stats["keep_count"]),
+            "shadow_rollback_count": int(promotion_rollback_stats["shadow_rollback_count"]),
+            "rollback_count": int(promotion_rollback_stats["rollback_count"]),
+            "considered_count": int(promotion_rollback_stats["considered_count"]),
+            "reason_counts": dict(promotion_rollback_stats["reason_counts"]),
+        },
         "verdict": verdict,
         "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
     }
@@ -4345,6 +4623,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             flat["apply/pairwise_dominance/source_mean_ssim_delta_vs_incumbent"] = float(
                 pairwise.get("source_mean_ssim_delta_vs_incumbent", 0.0) or 0.0
             )
+        if payload.get("promotion_rollback_policy"):
+            promotion = payload["promotion_rollback_policy"]
+            flat["apply/promotion_rollback/enabled"] = float(bool(promotion.get("enabled", False)))
+            flat["apply/promotion_rollback/keep_count"] = float(promotion.get("keep_count", 0) or 0)
+            flat["apply/promotion_rollback/shadow_rollback_count"] = float(
+                promotion.get("shadow_rollback_count", 0) or 0
+            )
+            flat["apply/promotion_rollback/rollback_count"] = float(promotion.get("rollback_count", 0) or 0)
+            flat["apply/promotion_rollback/source_sample_count"] = float(promotion.get("source_sample_count", 0) or 0)
         run.log(flat)
         run.summary.update(flat)
         run.finish()
@@ -4505,6 +4792,22 @@ def main() -> None:
     parser.add_argument("--pairwise_dominance_psnr_weight", type=float, default=0.0)
     parser.add_argument("--pairwise_dominance_ssim_weight", type=float, default=0.0)
     parser.add_argument("--pairwise_dominance_local_cvar_weight", type=float, default=0.25)
+    parser.add_argument("--enable_promotion_rollback_certificate", action="store_true")
+    parser.add_argument("--promotion_rollback_mode", choices=["shadow", "enforce"], default="shadow")
+    parser.add_argument(
+        "--promotion_rollback_sources",
+        default="pairwise",
+        help="Comma-separated decision sources checked by the post-decision promotion rollback certificate.",
+    )
+    parser.add_argument("--promotion_rollback_min_calibration_samples", type=int, default=4)
+    parser.add_argument("--promotion_rollback_calibration_quantile", type=float, default=0.8)
+    parser.add_argument("--promotion_rollback_calibration_scale", type=float, default=1.0)
+    parser.add_argument("--promotion_rollback_min_lcb_objective_delta", type=float, default=-1.0e9)
+    parser.add_argument("--promotion_rollback_min_lcb_psnr_delta", type=float, default=-1.0e9)
+    parser.add_argument("--promotion_rollback_min_lcb_ssim_delta", type=float, default=-1.0e9)
+    parser.add_argument("--promotion_rollback_min_local_cvar_delta", type=float, default=-1.0e9)
+    parser.add_argument("--promotion_rollback_min_local_min_delta", type=float, default=-1.0e9)
+    parser.add_argument("--promotion_rollback_max_local_negative_fraction", type=float, default=1.0)
     parser.add_argument("--enable_per_view_risk_model_policy", action="store_true")
     parser.add_argument(
         "--per_view_risk_model_feature_grid",

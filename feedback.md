@@ -2,6 +2,62 @@
 
 Date: 2026-06-28
 
+# 2026-07-01 v331 Feedback Addendum: Promotion Rollback LCB Is Implemented, But Source Evidence Is Still Over-Confident
+
+New files:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v331-PromotionRollbackCertificate-Probe.md
+docs/car_model/results/v331_promotion_rollback_shadow_treehill_report.json
+docs/car_model/results/v331_promotion_rollback_shadow_stump_report.json
+docs/car_model/results/v331c_fineladder_treehill_report.json
+outputs/carnet/spcarnet_v331_promotion_rollback_shadow_treehill_20260701
+outputs/carnet/spcarnet_v331_promotion_rollback_shadow_stump_20260701
+outputs/carnet/spcarnet_v331c_fineladder_treehill_20260701
+```
+
+Implemented change:
+
+The apply pipeline now has an opt-in post-decision promotion rollback
+certificate. It fits source-heldout pairwise leave-one-out over-prediction
+bounds, then audits pairwise target promotions before the selected image is
+saved. It supports `shadow` and `enforce` modes and remains disabled by default.
+
+Focused results:
+
+| probe | scene | PSNR gain | SSIM gain | result |
+|---|---|---:|---:|---|
+| v331 shadow | treehill | 0.104664074413 | 0.001673645443 | no rollback; unchanged vs v329b |
+| v331 shadow | stump | 0.057029761393 | 0.001208242029 | no rollback; unchanged vs v329b |
+| v331c fine ladder | treehill | 0.103565986827 | 0.001683145761 | PSNR down, SSIM up |
+
+Hard lesson:
+
+The current source-local pairwise evidence is not enough to distinguish the
+bad treehill target views. `00007`, `00008`, and `00009` are target-negative
+after evaluation, but their target-blind source-local/LCB diagnostics still
+look safe. Requiring source-reliability/pairwise agreement is too blunt: it
+would reject some bad views, but also rejects strong positives such as
+`00011` and `00015`. Fine laddering only trades PSNR for SSIM.
+
+Next-stage implication:
+
+Do not spend the next attempt on more scalar relaxations of source-local gates.
+The next model needs either:
+
+- new target-blind evidence not captured by current residual statistics, for
+  example temporal/camera-neighborhood consistency, target-render self-risk, or
+  uncertainty from multiple independent support subsets; or
+- a stronger representation/candidate generator with a visibly larger raw
+  improvement before policy arbitration.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v329b Feedback Addendum: Fixed Rollback Certificate Is Useful, But Not Enough
 
 New files:
