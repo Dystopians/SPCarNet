@@ -2,6 +2,72 @@
 
 Date: 2026-06-28
 
+# 2026-07-01 v333 Feedback Addendum: Target-Neighbor Consistency Is the First Positive Post-v332 Fix, But Not Final Closure
+
+New files:
+
+```text
+scripts/car_model/probe_target_neighbor_self_consistency.py
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v333-TargetNeighborConsistency-Certificate.md
+docs/car_model/results/v333_target_neighbor_consistency_probe_treehill_base_reference.json
+docs/car_model/results/v333_target_neighbor_consistency_probe_treehill_same_variant.json
+docs/car_model/results/v333_target_neighbor_consistency_shadow_treehill_report.json
+docs/car_model/results/v333_target_neighbor_consistency_enforce_treehill_report.json
+docs/car_model/results/v333_target_neighbor_consistency_enforce_stump_report.json
+docs/car_model/results/v333_target_neighbor_consistency_full9_vs_v329b_audit.json
+docs/car_model/results/v333_target_neighbor_consistency_full9_vs_v329b_audit.md
+```
+
+Implemented change:
+
+v333 adds a target-neighbor render self-consistency certificate to the apply
+pipeline. For a pairwise promotion, it warps the promoted candidate and its
+incumbent into nearby target cameras using target render/depth/camera only, then
+compares each warped image against neighboring base renders. If the candidate is
+more inconsistent than the incumbent by more than the frozen margin, the
+certificate can shadow-log or enforce rollback. Target/test GT is not used for
+the decision.
+
+Focused results:
+
+| run | scene | mode | selected PSNR gain | selected SSIM gain | rollback |
+|---|---|---|---:|---:|---:|
+| v331 reference | treehill | none | 0.104664074413 | 0.001673645443 | 0 |
+| v333 shadow | treehill | shadow | 0.104664074413 | 0.001673645443 | 2 would rollback |
+| v333 enforce | treehill | enforce | 0.106409362285 | 0.001693874598 | 2 applied |
+| v333 enforce | stump | enforce | 0.057029761393 | 0.001208242029 | 0 applied |
+
+Full9 result versus v329b:
+
+| metric | v329b | v333 | delta |
+|---|---:|---:|---:|
+| selected PSNR gain | 0.272522652479 | 0.272716573354 | +0.000193920875 |
+| selected SSIM gain | 0.003736660673 | 0.003738908357 | +0.000002247684 |
+| target-neighbor rollback count | 0 | 2 | +2 |
+
+Hard lesson:
+
+The base-reference target-neighbor signal is useful as a conservative tail-risk
+veto, not as a complete selector. It correctly rolls back treehill `00007` and
+`00008`, giving a verified full9 macro gain over v329b, but it still keeps
+`00009`, which is target-negative. The same-variant neighbor check is mostly
+self-coherence and is not discriminative.
+
+Next-stage implication:
+
+Freeze v333 as the current post-v329b candidate policy, but do not claim paper
+closure yet. The full9 gain is real but narrow and entirely comes from treehill.
+The next improvement should either catch the remaining `00009`-style
+stable-but-wrong case or improve the raw candidate generator so that policy
+vetoes are not doing most of the work.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v332 Feedback Addendum: Support-Dropout Stability Also Fails to Separate Treehill Bad Views
 
 New files:

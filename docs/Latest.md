@@ -2,6 +2,69 @@
 
 Date: 2026-06-28
 
+## 2026-07-01 Follow-up: v333 Target-Neighbor Consistency Certificate
+
+Newest positive method update:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+scripts/car_model/probe_target_neighbor_self_consistency.py
+docs/car_model/7-01-v333-TargetNeighborConsistency-Certificate.md
+docs/car_model/results/v333_target_neighbor_consistency_probe_treehill_base_reference.json
+docs/car_model/results/v333_target_neighbor_consistency_probe_treehill_same_variant.json
+docs/car_model/results/v333_target_neighbor_consistency_shadow_treehill_report.json
+docs/car_model/results/v333_target_neighbor_consistency_enforce_treehill_report.json
+docs/car_model/results/v333_target_neighbor_consistency_enforce_stump_report.json
+docs/car_model/results/v333_target_neighbor_consistency_full9_vs_v329b_audit.json
+docs/car_model/results/v333_target_neighbor_consistency_full9_vs_v329b_audit.md
+outputs/carnet/spcarnet_v333_target_neighbor_consistency_enforce_treehill_20260701
+outputs/carnet/spcarnet_v333_target_neighbor_consistency_shadow_treehill_20260701
+outputs/carnet/spcarnet_v333_target_neighbor_consistency_enforce_stump_20260701
+outputs/carnet/spcarnet_v333_target_neighbor_consistency_full9_20260701
+```
+
+v333 adds an opt-in target-neighbor render self-consistency certificate inside
+the apply pipeline. For pairwise promotions, it warps the candidate and
+incumbent renders into nearby target cameras using target render/depth/camera
+only, compares each against neighboring base renders, and can shadow-log or
+enforce a rollback when the candidate becomes less camera-neighborhood
+consistent than the incumbent. Target/test GT is not used for the decision.
+
+Focused results:
+
+| run | scene | mode | selected PSNR gain | selected SSIM gain | target-neighbor rollback |
+|---|---|---|---:|---:|---:|
+| v331 reference | treehill | none | 0.104664074413 | 0.001673645443 | 0 |
+| v333 shadow | treehill | shadow | 0.104664074413 | 0.001673645443 | 2 would rollback |
+| v333 enforce | treehill | enforce | 0.106409362285 | 0.001693874598 | 2 applied |
+| v333 enforce | stump | enforce | 0.057029761393 | 0.001208242029 | 0 applied |
+
+Treehill improves over v331 by `+0.001745287872` PSNR gain and
+`+0.000020229154` SSIM gain. The enforced rollbacks are `00007` and `00008`,
+both true target regressions under post-save evaluation.
+
+Full9 replay versus v329b is also positive, but narrow:
+
+| metric | v329b | v333 | delta |
+|---|---:|---:|---:|
+| selected PSNR gain | 0.272522652479 | 0.272716573354 | +0.000193920875 |
+| selected SSIM gain | 0.003736660673 | 0.003738908357 | +0.000002247684 |
+| target-neighbor rollback count | 0 | 2 | +2 |
+
+The only changed scene is treehill; the other 8 scenes are unchanged relative
+to v329b. This makes v333 a verified tail-risk repair, not a broad capability
+jump.
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+This is real progress, but not final closure: `00009` remains a target-negative
+promotion that the current threshold keeps, and the full9 gain is too narrow to
+claim a strong final paper endpoint.
+
 ## 2026-07-01 Follow-up: v332 Support-Dropout Consistency Probe
 
 Newest target-blind evidence probe:

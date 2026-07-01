@@ -1,0 +1,169 @@
+{
+  "method": "v333 target-neighbor consistency enforce full9 audit",
+  "new_root": "outputs/carnet/spcarnet_v333_target_neighbor_consistency_full9_20260701",
+  "baseline_root": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701",
+  "scene_count": 9,
+  "macro": {
+    "v329b_psnr_gain": 0.2725226524788792,
+    "v333_psnr_gain": 0.27271657335352273,
+    "delta_psnr_gain": 0.00019392087464356148,
+    "v329b_ssim_gain": 0.0037366606734715343,
+    "v333_ssim_gain": 0.003738908357267416,
+    "delta_ssim_gain": 2.247683795881871e-06,
+    "total_rollbacks": 2,
+    "total_considered": 7,
+    "all_axis_safe_scene_count": 9
+  },
+  "rows": [
+    {
+      "scene": "bicycle",
+      "v329b_psnr_gain": 0.11995854884043254,
+      "v333_psnr_gain": 0.11995854884043254,
+      "delta_psnr_gain": 0.0,
+      "v329b_ssim_gain": 0.00298875093460083,
+      "v333_ssim_gain": 0.00298875093460083,
+      "delta_ssim_gain": 0.0,
+      "rollback_count": 0,
+      "keep_count": 0,
+      "considered_count": 0,
+      "reason_counts": {
+        "no_promotion": 25
+      },
+      "v333_all_axis_safe_vs_fixed": true
+    },
+    {
+      "scene": "flowers",
+      "v329b_psnr_gain": 0.0923596316861136,
+      "v333_psnr_gain": 0.0923596316861136,
+      "delta_psnr_gain": 0.0,
+      "v329b_ssim_gain": 0.00411434065211903,
+      "v333_ssim_gain": 0.00411434065211903,
+      "delta_ssim_gain": 0.0,
+      "rollback_count": 0,
+      "keep_count": 0,
+      "considered_count": 0,
+      "reason_counts": {
+        "no_promotion": 13,
+        "decision_source_not_checked": 9
+      },
+      "v333_all_axis_safe_vs_fixed": true
+    },
+    {
+      "scene": "garden",
+      "v329b_psnr_gain": 0.14544912017232203,
+      "v333_psnr_gain": 0.14544912017232203,
+      "delta_psnr_gain": 0.0,
+      "v329b_ssim_gain": 0.0019197786847750347,
+      "v333_ssim_gain": 0.0019197786847750347,
+      "delta_ssim_gain": 0.0,
+      "rollback_count": 0,
+      "keep_count": 0,
+      "considered_count": 0,
+      "reason_counts": {
+        "decision_source_not_checked": 21,
+        "no_promotion": 3
+      },
+      "v333_all_axis_safe_vs_fixed": true
+    },
+    {
+      "scene": "stump",
+      "v329b_psnr_gain": 0.05702976139303506,
+      "v333_psnr_gain": 0.05702976139303506,
+      "delta_psnr_gain": 0.0,
+      "v329b_ssim_gain": 0.001208242028951645,
+      "v333_ssim_gain": 0.001208242028951645,
+      "delta_ssim_gain": 0.0,
+      "rollback_count": 0,
+      "keep_count": 0,
+      "considered_count": 0,
+      "reason_counts": {
+        "no_promotion": 16
+      },
+      "v333_all_axis_safe_vs_fixed": true
+    },
+    {
+      "scene": "counter",
+      "v329b_psnr_gain": 0.4263596368894508,
+      "v333_psnr_gain": 0.4263596368894508,
+      "delta_psnr_gain": 0.0,
+      "v329b_ssim_gain": 0.006908347209294637,
+      "v333_ssim_gain": 0.006908347209294637,
+      "delta_ssim_gain": 0.0,
+      "rollback_count": 0,
+      "keep_count": 0,
+      "considered_count": 0,
+      "reason_counts": {
+        "no_promotion": 30
+      },
+      "v333_all_axis_safe_vs_fixed": true
+    },
+    {
+      "scene": "treehill",
+      "v329b_psnr_gain": 0.10466407441286524,
+      "v333_psnr_gain": 0.10640936228465729,
+      "delta_psnr_gain": 0.0017452878717920534,
+      "v329b_ssim_gain": 0.0016736454433865016,
+      "v333_ssim_gain": 0.0016938745975494385,
+      "delta_ssim_gain": 2.0229154162936837e-05,
+      "rollback_count": 2,
+      "keep_count": 5,
+      "considered_count": 7,
+      "reason_counts": {
+        "no_promotion": 11,
+        "passed": 5,
+        "target_neighbor_consistency_delta": 2
+      },
+      "v333_all_axis_safe_vs_fixed": true
+    },
+    {
+      "scene": "bonsai",
+      "v329b_psnr_gain": 0.5759744422762492,
+      "v333_psnr_gain": 0.5759744422762492,
+      "delta_psnr_gain": 0.0,
+      "v329b_ssim_gain": 0.005847958294120994,
+      "v333_ssim_gain": 0.005847958294120994,
+      "delta_ssim_gain": 0.0,
+      "rollback_count": 0,
+      "keep_count": 0,
+      "considered_count": 0,
+      "reason_counts": {
+        "no_promotion": 33,
+        "decision_source_not_checked": 4
+      },
+      "v333_all_axis_safe_vs_fixed": true
+    },
+    {
+      "scene": "room",
+      "v329b_psnr_gain": 0.43728549610687184,
+      "v333_psnr_gain": 0.43728549610687184,
+      "delta_psnr_gain": 0.0,
+      "v329b_ssim_gain": 0.005058021117479374,
+      "v333_ssim_gain": 0.005058021117479374,
+      "delta_ssim_gain": 0.0,
+      "rollback_count": 0,
+      "keep_count": 0,
+      "considered_count": 0,
+      "reason_counts": {
+        "decision_source_not_checked": 20,
+        "no_promotion": 19
+      },
+      "v333_all_axis_safe_vs_fixed": true
+    },
+    {
+      "scene": "kitchen",
+      "v329b_psnr_gain": 0.4936231605325725,
+      "v333_psnr_gain": 0.4936231605325725,
+      "delta_psnr_gain": 0.0,
+      "v329b_ssim_gain": 0.003910861696515764,
+      "v333_ssim_gain": 0.003910861696515764,
+      "delta_ssim_gain": 0.0,
+      "rollback_count": 0,
+      "keep_count": 0,
+      "considered_count": 0,
+      "reason_counts": {
+        "no_promotion": 35
+      },
+      "v333_all_axis_safe_vs_fixed": true
+    }
+  ]
+}

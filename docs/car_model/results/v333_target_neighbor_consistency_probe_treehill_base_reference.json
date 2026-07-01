@@ -1,0 +1,2196 @@
+{
+  "target_gt_usage": "self-consistency uses target render/depth/camera only; reference target metrics are copied for post-hoc diagnostic correlation",
+  "base_model_path": "outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/treehill/ratio_0200/compact_model",
+  "base_method_name": "ours_26000_phasef_extra_compact_base",
+  "checkpoint": "outputs/carnet/spcarnet_v302_constrained_hybrid_anchor_flowers_20260630/support_transport_calibrator.pt",
+  "reference_report": "docs/car_model/results/v331_promotion_rollback_shadow_treehill_report.json",
+  "target_split": "test",
+  "support_source_mode": "source_split",
+  "k": 4,
+  "neighbor_k": 2,
+  "neighbor_reference_mode": "base",
+  "consistency_max_side": 256,
+  "row_count": 13,
+  "summary": {
+    "target_positive_count": 4,
+    "target_negative_count": 9,
+    "consistency_positive_count": 2,
+    "consistency_negative_count": 11,
+    "mean_self_consistency_delta_incumbent_minus_output": -5.111980590001243e-06,
+    "positive_target_mean_consistency_delta": 5.707150950734659e-05,
+    "negative_target_mean_consistency_delta": -3.2749087299933613e-05
+  },
+  "rows": [
+    {
+      "view": "00001",
+      "output_variant": "learned",
+      "incumbent_variant": "learned",
+      "selected_variant": "fixed",
+      "support_names": [
+        "00007",
+        "00055",
+        "00029",
+        "00030"
+      ],
+      "neighbor_names": [
+        "00011",
+        "00014"
+      ],
+      "target_eval_delta": {
+        "delta_psnr_gain": 0.0,
+        "delta_ssim_gain": 0.0,
+        "output_psnr_gain": 0.11337941433485099,
+        "incumbent_psnr_gain": 0.11337941433485099,
+        "output_ssim_gain": 0.004167735576629639,
+        "incumbent_ssim_gain": 0.004167735576629639
+      },
+      "base_consistency": {
+        "available": true,
+        "neighbor_count": 2,
+        "mean_mae_to_neighbor_reference": 0.05203162495631764,
+        "mean_confident_fraction": 0.4472191333770752,
+        "total_effective_weight": 0.5318917588723314,
+        "neighbors": [
+          {
+            "neighbor": "00011",
+            "view_weight": 0.632944568577734,
+            "mae_to_neighbor_reference": 0.04682592302560806,
+            "confident_fraction": 0.4628673791885376,
+            "effective_weight": 0.29296939362919533
+          },
+          {
+            "neighbor": "00014",
+            "view_weight": 0.5536109411615772,
+            "mae_to_neighbor_reference": 0.058414917439222336,
+            "confident_fraction": 0.4315708875656128,
+            "effective_weight": 0.2389223652431361
+          }
+        ]
+      },
+      "variant_consistency": {
+        "fixed": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.05251710068131603,
+          "mean_confident_fraction": 0.4472191333770752,
+          "total_effective_weight": 0.5318917588723314,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.632944568577734,
+              "mae_to_neighbor_reference": 0.047156281769275665,
+              "confident_fraction": 0.4628673791885376,
+              "effective_weight": 0.29296939362919533
+            },
+            {
+              "neighbor": "00014",
+              "view_weight": 0.5536109411615772,
+              "mae_to_neighbor_reference": 0.05909059941768646,
+              "confident_fraction": 0.4315708875656128,
+              "effective_weight": 0.2389223652431361
+            }
+          ]
+        },
+        "learned": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.05185296291101864,
+          "mean_confident_fraction": 0.4472191333770752,
+          "total_effective_weight": 0.5318917588723314,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.632944568577734,
+              "mae_to_neighbor_reference": 0.04657914116978645,
+              "confident_fraction": 0.4628673791885376,
+              "effective_weight": 0.29296939362919533
+            },
+            {
+              "neighbor": "00014",
+              "view_weight": 0.5536109411615772,
+              "mae_to_neighbor_reference": 0.058319784700870514,
+              "confident_fraction": 0.4315708875656128,
+              "effective_weight": 0.2389223652431361
+            }
+          ]
+        },
+        "hybrid": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.052170500401770036,
+          "mean_confident_fraction": 0.4472191333770752,
+          "total_effective_weight": 0.5318917588723314,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.632944568577734,
+              "mae_to_neighbor_reference": 0.04685075953602791,
+              "confident_fraction": 0.4628673791885376,
+              "effective_weight": 0.29296939362919533
+            },
+            {
+              "neighbor": "00014",
+              "view_weight": 0.5536109411615772,
+              "mae_to_neighbor_reference": 0.05869362875819206,
+              "confident_fraction": 0.4315708875656128,
+              "effective_weight": 0.2389223652431361
+            }
+          ]
+        },
+        "mix0250": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.05234009196704977,
+          "mean_confident_fraction": 0.4472191333770752,
+          "total_effective_weight": 0.5318917588723314,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.632944568577734,
+              "mae_to_neighbor_reference": 0.04699895530939102,
+              "confident_fraction": 0.4628673791885376,
+              "effective_weight": 0.29296939362919533
+            },
+            {
+              "neighbor": "00014",
+              "view_weight": 0.5536109411615772,
+              "mae_to_neighbor_reference": 0.05888945609331131,
+              "confident_fraction": 0.4315708875656128,
+              "effective_weight": 0.2389223652431361
+            }
+          ]
+        },
+        "mix0750": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.052008365104085984,
+          "mean_confident_fraction": 0.4472191333770752,
+          "total_effective_weight": 0.5318917588723314,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.632944568577734,
+              "mae_to_neighbor_reference": 0.04671100899577141,
+              "confident_fraction": 0.4628673791885376,
+              "effective_weight": 0.29296939362919533
+            },
+            {
+              "neighbor": "00014",
+              "view_weight": 0.5536109411615772,
+              "mae_to_neighbor_reference": 0.05850404500961304,
+              "confident_fraction": 0.4315708875656128,
+              "effective_weight": 0.2389223652431361
+            }
+          ]
+        }
+      },
+      "self_consistency_delta_incumbent_minus_output": 0.0,
+      "self_consistency_delta_base_minus_output": 0.0001786620452990037,
+      "self_consistency_delta_base_minus_incumbent": 0.0001786620452990037
+    },
+    {
+      "view": "00002",
+      "output_variant": "mix0250",
+      "incumbent_variant": "fixed",
+      "selected_variant": "fixed",
+      "support_names": [
+        "00014",
+        "00037",
+        "00062",
+        "00083"
+      ],
+      "neighbor_names": [
+        "00015",
+        "00017"
+      ],
+      "target_eval_delta": {
+        "delta_psnr_gain": 0.007259106761875245,
+        "delta_ssim_gain": 0.0002688169479370117,
+        "output_psnr_gain": 0.08732730295343316,
+        "incumbent_psnr_gain": 0.08006819619155792,
+        "output_ssim_gain": 0.0042915940284729,
+        "incumbent_ssim_gain": 0.004022777080535889
+      },
+      "base_consistency": {
+        "available": true,
+        "neighbor_count": 2,
+        "mean_mae_to_neighbor_reference": 0.08892177065808146,
+        "mean_confident_fraction": 0.4784458875656128,
+        "total_effective_weight": 0.5293828797057901,
+        "neighbors": [
+          {
+            "neighbor": "00015",
+            "view_weight": 0.5837947971718764,
+            "mae_to_neighbor_reference": 0.07804827392101288,
+            "confident_fraction": 0.4423363208770752,
+            "effective_weight": 0.25823364272818616
+          },
+          {
+            "neighbor": "00017",
+            "view_weight": 0.52695824081903,
+            "mae_to_neighbor_reference": 0.09927733242511749,
+            "confident_fraction": 0.5145554542541504,
+            "effective_weight": 0.27114923697760396
+          }
+        ]
+      },
+      "variant_consistency": {
+        "fixed": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.08789932960452466,
+          "mean_confident_fraction": 0.4784458875656128,
+          "total_effective_weight": 0.5293828797057901,
+          "neighbors": [
+            {
+              "neighbor": "00015",
+              "view_weight": 0.5837947971718764,
+              "mae_to_neighbor_reference": 0.07700838148593903,
+              "confident_fraction": 0.4423363208770752,
+              "effective_weight": 0.25823364272818616
+            },
+            {
+              "neighbor": "00017",
+              "view_weight": 0.52695824081903,
+              "mae_to_neighbor_reference": 0.09827151149511337,
+              "confident_fraction": 0.5145554542541504,
+              "effective_weight": 0.27114923697760396
+            }
+          ]
+        },
+        "learned": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.08673997737708508,
+          "mean_confident_fraction": 0.4784458875656128,
+          "total_effective_weight": 0.5293828797057901,
+          "neighbors": [
+            {
+              "neighbor": "00015",
+              "view_weight": 0.5837947971718764,
+              "mae_to_neighbor_reference": 0.07583608478307724,
+              "confident_fraction": 0.4423363208770752,
+              "effective_weight": 0.25823364272818616
+            },
+            {
+              "neighbor": "00017",
+              "view_weight": 0.52695824081903,
+              "mae_to_neighbor_reference": 0.09712448716163635,
+              "confident_fraction": 0.5145554542541504,
+              "effective_weight": 0.27114923697760396
+            }
+          ]
+        },
+        "hybrid": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.08731461337132407,
+          "mean_confident_fraction": 0.4784458875656128,
+          "total_effective_weight": 0.5293828797057901,
+          "neighbors": [
+            {
+              "neighbor": "00015",
+              "view_weight": 0.5837947971718764,
+              "mae_to_neighbor_reference": 0.07641483843326569,
+              "confident_fraction": 0.4423363208770752,
+              "effective_weight": 0.25823364272818616
+            },
+            {
+              "neighbor": "00017",
+              "view_weight": 0.52695824081903,
+              "mae_to_neighbor_reference": 0.09769520163536072,
+              "confident_fraction": 0.5145554542541504,
+              "effective_weight": 0.27114923697760396
+            }
+          ]
+        },
+        "mix0250": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.08760581365359647,
+          "mean_confident_fraction": 0.4784458875656128,
+          "total_effective_weight": 0.5293828797057901,
+          "neighbors": [
+            {
+              "neighbor": "00015",
+              "view_weight": 0.5837947971718764,
+              "mae_to_neighbor_reference": 0.07670987397432327,
+              "confident_fraction": 0.4423363208770752,
+              "effective_weight": 0.25823364272818616
+            },
+            {
+              "neighbor": "00017",
+              "view_weight": 0.52695824081903,
+              "mae_to_neighbor_reference": 0.0979827493429184,
+              "confident_fraction": 0.5145554542541504,
+              "effective_weight": 0.27114923697760396
+            }
+          ]
+        },
+        "mix0750": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.0870260015218876,
+          "mean_confident_fraction": 0.4784458875656128,
+          "total_effective_weight": 0.5293828797057901,
+          "neighbors": [
+            {
+              "neighbor": "00015",
+              "view_weight": 0.5837947971718764,
+              "mae_to_neighbor_reference": 0.07612351328134537,
+              "confident_fraction": 0.4423363208770752,
+              "effective_weight": 0.25823364272818616
+            },
+            {
+              "neighbor": "00017",
+              "view_weight": 0.52695824081903,
+              "mae_to_neighbor_reference": 0.09740917384624481,
+              "confident_fraction": 0.5145554542541504,
+              "effective_weight": 0.27114923697760396
+            }
+          ]
+        }
+      },
+      "self_consistency_delta_incumbent_minus_output": 0.0002935159509281915,
+      "self_consistency_delta_base_minus_output": 0.0013159570044849883,
+      "self_consistency_delta_base_minus_incumbent": 0.0010224410535567968
+    },
+    {
+      "view": "00003",
+      "output_variant": "learned",
+      "incumbent_variant": "learned",
+      "selected_variant": "fixed",
+      "support_names": [
+        "00021",
+        "00043",
+        "00067",
+        "00090"
+      ],
+      "neighbor_names": [
+        "00016",
+        "00006"
+      ],
+      "target_eval_delta": {
+        "delta_psnr_gain": 0.0,
+        "delta_ssim_gain": 0.0,
+        "output_psnr_gain": 0.09377133219565792,
+        "incumbent_psnr_gain": 0.09377133219565792,
+        "output_ssim_gain": 0.0008027553558349609,
+        "incumbent_ssim_gain": 0.0008027553558349609
+      },
+      "base_consistency": {
+        "available": true,
+        "neighbor_count": 2,
+        "mean_mae_to_neighbor_reference": 0.052639382066488105,
+        "mean_confident_fraction": 0.3519228994846344,
+        "total_effective_weight": 0.37478251022690723,
+        "neighbors": [
+          {
+            "neighbor": "00016",
+            "view_weight": 0.5504653448521933,
+            "mae_to_neighbor_reference": 0.058764152228832245,
+            "confident_fraction": 0.3545154333114624,
+            "effective_weight": 0.1951484602532189
+          },
+          {
+            "neighbor": "00006",
+            "view_weight": 0.514223977166796,
+            "mae_to_neighbor_reference": 0.0459856353700161,
+            "confident_fraction": 0.3493303656578064,
+            "effective_weight": 0.17963404997368834
+          }
+        ]
+      },
+      "variant_consistency": {
+        "fixed": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.0539913792290301,
+          "mean_confident_fraction": 0.3519228994846344,
+          "total_effective_weight": 0.37478251022690723,
+          "neighbors": [
+            {
+              "neighbor": "00016",
+              "view_weight": 0.5504653448521933,
+              "mae_to_neighbor_reference": 0.0596139021217823,
+              "confident_fraction": 0.3545154333114624,
+              "effective_weight": 0.1951484602532189
+            },
+            {
+              "neighbor": "00006",
+              "view_weight": 0.514223977166796,
+              "mae_to_neighbor_reference": 0.047883257269859314,
+              "confident_fraction": 0.3493303656578064,
+              "effective_weight": 0.17963404997368834
+            }
+          ]
+        },
+        "learned": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.05281626885006276,
+          "mean_confident_fraction": 0.3519228994846344,
+          "total_effective_weight": 0.37478251022690723,
+          "neighbors": [
+            {
+              "neighbor": "00016",
+              "view_weight": 0.5504653448521933,
+              "mae_to_neighbor_reference": 0.058437127619981766,
+              "confident_fraction": 0.3545154333114624,
+              "effective_weight": 0.1951484602532189
+            },
+            {
+              "neighbor": "00006",
+              "view_weight": 0.514223977166796,
+              "mae_to_neighbor_reference": 0.04670995473861694,
+              "confident_fraction": 0.3493303656578064,
+              "effective_weight": 0.17963404997368834
+            }
+          ]
+        },
+        "hybrid": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.05338151827724102,
+          "mean_confident_fraction": 0.3519228994846344,
+          "total_effective_weight": 0.37478251022690723,
+          "neighbors": [
+            {
+              "neighbor": "00016",
+              "view_weight": 0.5504653448521933,
+              "mae_to_neighbor_reference": 0.058998968452215195,
+              "confident_fraction": 0.3545154333114624,
+              "effective_weight": 0.1951484602532189
+            },
+            {
+              "neighbor": "00006",
+              "view_weight": 0.514223977166796,
+              "mae_to_neighbor_reference": 0.047278907150030136,
+              "confident_fraction": 0.3493303656578064,
+              "effective_weight": 0.17963404997368834
+            }
+          ]
+        },
+        "mix0250": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.053681205628854,
+          "mean_confident_fraction": 0.3519228994846344,
+          "total_effective_weight": 0.37478251022690723,
+          "neighbors": [
+            {
+              "neighbor": "00016",
+              "view_weight": 0.5504653448521933,
+              "mae_to_neighbor_reference": 0.059300269931554794,
+              "confident_fraction": 0.3545154333114624,
+              "effective_weight": 0.1951484602532189
+            },
+            {
+              "neighbor": "00006",
+              "view_weight": 0.514223977166796,
+              "mae_to_neighbor_reference": 0.047576840966939926,
+              "confident_fraction": 0.3493303656578064,
+              "effective_weight": 0.17963404997368834
+            }
+          ]
+        },
+        "mix0750": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.05309340882313027,
+          "mean_confident_fraction": 0.3519228994846344,
+          "total_effective_weight": 0.37478251022690723,
+          "neighbors": [
+            {
+              "neighbor": "00016",
+              "view_weight": 0.5504653448521933,
+              "mae_to_neighbor_reference": 0.0587116964161396,
+              "confident_fraction": 0.3545154333114624,
+              "effective_weight": 0.1951484602532189
+            },
+            {
+              "neighbor": "00006",
+              "view_weight": 0.514223977166796,
+              "mae_to_neighbor_reference": 0.046989887952804565,
+              "confident_fraction": 0.3493303656578064,
+              "effective_weight": 0.17963404997368834
+            }
+          ]
+        }
+      },
+      "self_consistency_delta_incumbent_minus_output": 0.0,
+      "self_consistency_delta_base_minus_output": -0.00017688678357465765,
+      "self_consistency_delta_base_minus_incumbent": -0.00017688678357465765
+    },
+    {
+      "view": "00004",
+      "output_variant": "mix0250",
+      "incumbent_variant": "fixed",
+      "selected_variant": "fixed",
+      "support_names": [
+        "00051",
+        "00003",
+        "00050",
+        "00074"
+      ],
+      "neighbor_names": [
+        "00014",
+        "00007"
+      ],
+      "target_eval_delta": {
+        "delta_psnr_gain": 0.002510692409003923,
+        "delta_ssim_gain": -0.00021976232528686523,
+        "output_psnr_gain": 0.033834846406776364,
+        "incumbent_psnr_gain": 0.03132415399777244,
+        "output_ssim_gain": -0.0010605454444885254,
+        "incumbent_ssim_gain": -0.0008407831192016602
+      },
+      "base_consistency": {
+        "available": true,
+        "neighbor_count": 2,
+        "mean_mae_to_neighbor_reference": 0.044524176385824205,
+        "mean_confident_fraction": 0.5360165536403656,
+        "total_effective_weight": 0.5419448286414805,
+        "neighbors": [
+          {
+            "neighbor": "00014",
+            "view_weight": 0.5059682545068013,
+            "mae_to_neighbor_reference": 0.049664802849292755,
+            "confident_fraction": 0.4433361291885376,
+            "effective_weight": 0.22431400744532612
+          },
+          {
+            "neighbor": "00007",
+            "view_weight": 0.5052208492555793,
+            "mae_to_neighbor_reference": 0.04089381545782089,
+            "confident_fraction": 0.6286969780921936,
+            "effective_weight": 0.3176308211961544
+          }
+        ]
+      },
+      "variant_consistency": {
+        "fixed": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.0447426096501119,
+          "mean_confident_fraction": 0.5360165536403656,
+          "total_effective_weight": 0.5419448286414805,
+          "neighbors": [
+            {
+              "neighbor": "00014",
+              "view_weight": 0.5059682545068013,
+              "mae_to_neighbor_reference": 0.050102557986974716,
+              "confident_fraction": 0.4433361291885376,
+              "effective_weight": 0.22431400744532612
+            },
+            {
+              "neighbor": "00007",
+              "view_weight": 0.5052208492555793,
+              "mae_to_neighbor_reference": 0.040957361459732056,
+              "confident_fraction": 0.6286969780921936,
+              "effective_weight": 0.3176308211961544
+            }
+          ]
+        },
+        "learned": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.044564918406893875,
+          "mean_confident_fraction": 0.5360165536403656,
+          "total_effective_weight": 0.5419448286414805,
+          "neighbors": [
+            {
+              "neighbor": "00014",
+              "view_weight": 0.5059682545068013,
+              "mae_to_neighbor_reference": 0.04989122971892357,
+              "confident_fraction": 0.4433361291885376,
+              "effective_weight": 0.22431400744532612
+            },
+            {
+              "neighbor": "00007",
+              "view_weight": 0.5052208492555793,
+              "mae_to_neighbor_reference": 0.04080342501401901,
+              "confident_fraction": 0.6286969780921936,
+              "effective_weight": 0.3176308211961544
+            }
+          ]
+        },
+        "hybrid": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.04464730979195168,
+          "mean_confident_fraction": 0.5360165536403656,
+          "total_effective_weight": 0.5419448286414805,
+          "neighbors": [
+            {
+              "neighbor": "00014",
+              "view_weight": 0.5059682545068013,
+              "mae_to_neighbor_reference": 0.04998988285660744,
+              "confident_fraction": 0.4433361291885376,
+              "effective_weight": 0.22431400744532612
+            },
+            {
+              "neighbor": "00007",
+              "view_weight": 0.5052208492555793,
+              "mae_to_neighbor_reference": 0.040874332189559937,
+              "confident_fraction": 0.6286969780921936,
+              "effective_weight": 0.3176308211961544
+            }
+          ]
+        },
+        "mix0250": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.044693360239967526,
+          "mean_confident_fraction": 0.5360165536403656,
+          "total_effective_weight": 0.5419448286414805,
+          "neighbors": [
+            {
+              "neighbor": "00014",
+              "view_weight": 0.5059682545068013,
+              "mae_to_neighbor_reference": 0.05004437640309334,
+              "confident_fraction": 0.4433361291885376,
+              "effective_weight": 0.22431400744532612
+            },
+            {
+              "neighbor": "00007",
+              "view_weight": 0.5052208492555793,
+              "mae_to_neighbor_reference": 0.040914420038461685,
+              "confident_fraction": 0.6286969780921936,
+              "effective_weight": 0.3176308211961544
+            }
+          ]
+        },
+        "mix0750": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.04460451053493728,
+          "mean_confident_fraction": 0.5360165536403656,
+          "total_effective_weight": 0.5419448286414805,
+          "neighbors": [
+            {
+              "neighbor": "00014",
+              "view_weight": 0.5059682545068013,
+              "mae_to_neighbor_reference": 0.04993885010480881,
+              "confident_fraction": 0.4433361291885376,
+              "effective_weight": 0.22431400744532612
+            },
+            {
+              "neighbor": "00007",
+              "view_weight": 0.5052208492555793,
+              "mae_to_neighbor_reference": 0.04083734750747681,
+              "confident_fraction": 0.6286969780921936,
+              "effective_weight": 0.3176308211961544
+            }
+          ]
+        }
+      },
+      "self_consistency_delta_incumbent_minus_output": 4.9249410144371064e-05,
+      "self_consistency_delta_base_minus_output": -0.00016918385414332188,
+      "self_consistency_delta_base_minus_incumbent": -0.00021843326428769294
+    },
+    {
+      "view": "00005",
+      "output_variant": "learned",
+      "incumbent_variant": "learned",
+      "selected_variant": "fixed",
+      "support_names": [
+        "00035",
+        "00058",
+        "00081",
+        "00057"
+      ],
+      "neighbor_names": [
+        "00017",
+        "00002"
+      ],
+      "target_eval_delta": {
+        "delta_psnr_gain": 0.0,
+        "delta_ssim_gain": 0.0,
+        "output_psnr_gain": 0.07373768705870987,
+        "incumbent_psnr_gain": 0.07373768705870987,
+        "output_ssim_gain": 0.0004152059555053711,
+        "incumbent_ssim_gain": 0.0004152059555053711
+      },
+      "base_consistency": {
+        "available": true,
+        "neighbor_count": 2,
+        "mean_mae_to_neighbor_reference": 0.06300896514809151,
+        "mean_confident_fraction": 0.5246117115020752,
+        "total_effective_weight": 0.5895777246256505,
+        "neighbors": [
+          {
+            "neighbor": "00017",
+            "view_weight": 0.583070527038732,
+            "mae_to_neighbor_reference": 0.07078912109136581,
+            "confident_fraction": 0.6861979365348816,
+            "effective_weight": 0.40010179250828376
+          },
+          {
+            "neighbor": "00002",
+            "view_weight": 0.5219356193422703,
+            "mae_to_neighbor_reference": 0.04658020660281181,
+            "confident_fraction": 0.3630254864692688,
+            "effective_weight": 0.18947593211736677
+          }
+        ]
+      },
+      "variant_consistency": {
+        "fixed": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.06361973994827418,
+          "mean_confident_fraction": 0.5246117115020752,
+          "total_effective_weight": 0.5895777246256505,
+          "neighbors": [
+            {
+              "neighbor": "00017",
+              "view_weight": 0.583070527038732,
+              "mae_to_neighbor_reference": 0.07168770581483841,
+              "confident_fraction": 0.6861979365348816,
+              "effective_weight": 0.40010179250828376
+            },
+            {
+              "neighbor": "00002",
+              "view_weight": 0.5219356193422703,
+              "mae_to_neighbor_reference": 0.04658323526382446,
+              "confident_fraction": 0.3630254864692688,
+              "effective_weight": 0.18947593211736677
+            }
+          ]
+        },
+        "learned": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.06315147002099736,
+          "mean_confident_fraction": 0.5246117115020752,
+          "total_effective_weight": 0.5895777246256505,
+          "neighbors": [
+            {
+              "neighbor": "00017",
+              "view_weight": 0.583070527038732,
+              "mae_to_neighbor_reference": 0.07068279385566711,
+              "confident_fraction": 0.6861979365348816,
+              "effective_weight": 0.40010179250828376
+            },
+            {
+              "neighbor": "00002",
+              "view_weight": 0.5219356193422703,
+              "mae_to_neighbor_reference": 0.047248151153326035,
+              "confident_fraction": 0.3630254864692688,
+              "effective_weight": 0.18947593211736677
+            }
+          ]
+        },
+        "hybrid": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.06337667573281712,
+          "mean_confident_fraction": 0.5246117115020752,
+          "total_effective_weight": 0.5895777246256505,
+          "neighbors": [
+            {
+              "neighbor": "00017",
+              "view_weight": 0.583070527038732,
+              "mae_to_neighbor_reference": 0.0711807832121849,
+              "confident_fraction": 0.6861979365348816,
+              "effective_weight": 0.40010179250828376
+            },
+            {
+              "neighbor": "00002",
+              "view_weight": 0.5219356193422703,
+              "mae_to_neighbor_reference": 0.046897340565919876,
+              "confident_fraction": 0.3630254864692688,
+              "effective_weight": 0.18947593211736677
+            }
+          ]
+        },
+        "mix0250": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.06349593901161481,
+          "mean_confident_fraction": 0.5246117115020752,
+          "total_effective_weight": 0.5895777246256505,
+          "neighbors": [
+            {
+              "neighbor": "00017",
+              "view_weight": 0.583070527038732,
+              "mae_to_neighbor_reference": 0.07143322378396988,
+              "confident_fraction": 0.6861979365348816,
+              "effective_weight": 0.40010179250828376
+            },
+            {
+              "neighbor": "00002",
+              "view_weight": 0.5219356193422703,
+              "mae_to_neighbor_reference": 0.046735383570194244,
+              "confident_fraction": 0.3630254864692688,
+              "effective_weight": 0.18947593211736677
+            }
+          ]
+        },
+        "mix0750": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.0632619117169483,
+          "mean_confident_fraction": 0.5246117115020752,
+          "total_effective_weight": 0.5895777246256505,
+          "neighbors": [
+            {
+              "neighbor": "00017",
+              "view_weight": 0.583070527038732,
+              "mae_to_neighbor_reference": 0.07093068212270737,
+              "confident_fraction": 0.6861979365348816,
+              "effective_weight": 0.40010179250828376
+            },
+            {
+              "neighbor": "00002",
+              "view_weight": 0.5219356193422703,
+              "mae_to_neighbor_reference": 0.04706835746765137,
+              "confident_fraction": 0.3630254864692688,
+              "effective_weight": 0.18947593211736677
+            }
+          ]
+        }
+      },
+      "self_consistency_delta_incumbent_minus_output": 0.0,
+      "self_consistency_delta_base_minus_output": -0.00014250487290584646,
+      "self_consistency_delta_base_minus_incumbent": -0.00014250487290584646
+    },
+    {
+      "view": "00007",
+      "output_variant": "mix0250",
+      "incumbent_variant": "fixed",
+      "selected_variant": "fixed",
+      "support_names": [
+        "00071",
+        "00049",
+        "00095",
+        "00094"
+      ],
+      "neighbor_names": [
+        "00000",
+        "00010"
+      ],
+      "target_eval_delta": {
+        "delta_psnr_gain": -0.02646940841344758,
+        "delta_ssim_gain": -4.291534423828125e-05,
+        "output_psnr_gain": -0.07631535062986572,
+        "incumbent_psnr_gain": -0.04984594221641814,
+        "output_ssim_gain": 0.0016974806785583496,
+        "incumbent_ssim_gain": 0.0017403960227966309
+      },
+      "base_consistency": {
+        "available": true,
+        "neighbor_count": 2,
+        "mean_mae_to_neighbor_reference": 0.045802652268176515,
+        "mean_confident_fraction": 0.3680943250656128,
+        "total_effective_weight": 0.4491592494307004,
+        "neighbors": [
+          {
+            "neighbor": "00000",
+            "view_weight": 0.6537365717661102,
+            "mae_to_neighbor_reference": 0.0580064095556736,
+            "confident_fraction": 0.2346075177192688,
+            "effective_weight": 0.15337151434435176
+          },
+          {
+            "neighbor": "00010",
+            "view_weight": 0.5897106489312947,
+            "mae_to_neighbor_reference": 0.03947477415204048,
+            "confident_fraction": 0.5015811324119568,
+            "effective_weight": 0.29578773508634865
+          }
+        ]
+      },
+      "variant_consistency": {
+        "fixed": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.04632794857947384,
+          "mean_confident_fraction": 0.3680943250656128,
+          "total_effective_weight": 0.4491592494307004,
+          "neighbors": [
+            {
+              "neighbor": "00000",
+              "view_weight": 0.6537365717661102,
+              "mae_to_neighbor_reference": 0.05910436064004898,
+              "confident_fraction": 0.2346075177192688,
+              "effective_weight": 0.15337151434435176
+            },
+            {
+              "neighbor": "00010",
+              "view_weight": 0.5897106489312947,
+              "mae_to_neighbor_reference": 0.039703138172626495,
+              "confident_fraction": 0.5015811324119568,
+              "effective_weight": 0.29578773508634865
+            }
+          ]
+        },
+        "learned": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.04683319294848418,
+          "mean_confident_fraction": 0.3680943250656128,
+          "total_effective_weight": 0.4491592494307004,
+          "neighbors": [
+            {
+              "neighbor": "00000",
+              "view_weight": 0.6537365717661102,
+              "mae_to_neighbor_reference": 0.05986684188246727,
+              "confident_fraction": 0.2346075177192688,
+              "effective_weight": 0.15337151434435176
+            },
+            {
+              "neighbor": "00010",
+              "view_weight": 0.5897106489312947,
+              "mae_to_neighbor_reference": 0.04007500037550926,
+              "confident_fraction": 0.5015811324119568,
+              "effective_weight": 0.29578773508634865
+            }
+          ]
+        },
+        "hybrid": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.04657451085273302,
+          "mean_confident_fraction": 0.3680943250656128,
+          "total_effective_weight": 0.4491592494307004,
+          "neighbors": [
+            {
+              "neighbor": "00000",
+              "view_weight": 0.6537365717661102,
+              "mae_to_neighbor_reference": 0.05948099121451378,
+              "confident_fraction": 0.2346075177192688,
+              "effective_weight": 0.15337151434435176
+            },
+            {
+              "neighbor": "00010",
+              "view_weight": 0.5897106489312947,
+              "mae_to_neighbor_reference": 0.03988225758075714,
+              "confident_fraction": 0.5015811324119568,
+              "effective_weight": 0.29578773508634865
+            }
+          ]
+        },
+        "mix0250": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.0464496879003068,
+          "mean_confident_fraction": 0.3680943250656128,
+          "total_effective_weight": 0.4491592494307004,
+          "neighbors": [
+            {
+              "neighbor": "00000",
+              "view_weight": 0.6537365717661102,
+              "mae_to_neighbor_reference": 0.059291522949934006,
+              "confident_fraction": 0.2346075177192688,
+              "effective_weight": 0.15337151434435176
+            },
+            {
+              "neighbor": "00010",
+              "view_weight": 0.5897106489312947,
+              "mae_to_neighbor_reference": 0.03979095444083214,
+              "confident_fraction": 0.5015811324119568,
+              "effective_weight": 0.29578773508634865
+            }
+          ]
+        },
+        "mix0750": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.0467021790181734,
+          "mean_confident_fraction": 0.3680943250656128,
+          "total_effective_weight": 0.4491592494307004,
+          "neighbors": [
+            {
+              "neighbor": "00000",
+              "view_weight": 0.6537365717661102,
+              "mae_to_neighbor_reference": 0.0596725270152092,
+              "confident_fraction": 0.2346075177192688,
+              "effective_weight": 0.15337151434435176
+            },
+            {
+              "neighbor": "00010",
+              "view_weight": 0.5897106489312947,
+              "mae_to_neighbor_reference": 0.0399768091738224,
+              "confident_fraction": 0.5015811324119568,
+              "effective_weight": 0.29578773508634865
+            }
+          ]
+        }
+      },
+      "self_consistency_delta_incumbent_minus_output": -0.00012173932083296007,
+      "self_consistency_delta_base_minus_output": -0.0006470356321302828,
+      "self_consistency_delta_base_minus_incumbent": -0.0005252963112973227
+    },
+    {
+      "view": "00008",
+      "output_variant": "mix0250",
+      "incumbent_variant": "fixed",
+      "selected_variant": "fixed",
+      "support_names": [
+        "00078",
+        "00099",
+        "00079",
+        "00031"
+      ],
+      "neighbor_names": [
+        "00011",
+        "00001"
+      ],
+      "target_eval_delta": {
+        "delta_psnr_gain": -0.004945773278809185,
+        "delta_ssim_gain": -0.0003212094306945801,
+        "output_psnr_gain": 0.05230639992016961,
+        "incumbent_psnr_gain": 0.057252173198978795,
+        "output_ssim_gain": -0.00031751394271850586,
+        "incumbent_ssim_gain": 3.6954879760742188e-06
+      },
+      "base_consistency": {
+        "available": true,
+        "neighbor_count": 2,
+        "mean_mae_to_neighbor_reference": 0.03523383518933029,
+        "mean_confident_fraction": 0.4336170107126236,
+        "total_effective_weight": 0.5946987628234292,
+        "neighbors": [
+          {
+            "neighbor": "00011",
+            "view_weight": 0.7340361894023643,
+            "mae_to_neighbor_reference": 0.03266024589538574,
+            "confident_fraction": 0.6664574146270752,
+            "effective_weight": 0.4892038610318098
+          },
+          {
+            "neighbor": "00001",
+            "view_weight": 0.5254342299831112,
+            "mae_to_neighbor_reference": 0.04716815426945686,
+            "confident_fraction": 0.200776606798172,
+            "effective_weight": 0.10549490179161938
+          }
+        ]
+      },
+      "variant_consistency": {
+        "fixed": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03593810493969554,
+          "mean_confident_fraction": 0.4336170107126236,
+          "total_effective_weight": 0.5946987628234292,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.7340361894023643,
+              "mae_to_neighbor_reference": 0.03326229006052017,
+              "confident_fraction": 0.6664574146270752,
+              "effective_weight": 0.4892038610318098
+            },
+            {
+              "neighbor": "00001",
+              "view_weight": 0.5254342299831112,
+              "mae_to_neighbor_reference": 0.048346467316150665,
+              "confident_fraction": 0.200776606798172,
+              "effective_weight": 0.10549490179161938
+            }
+          ]
+        },
+        "learned": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.036583743530990365,
+          "mean_confident_fraction": 0.4336170107126236,
+          "total_effective_weight": 0.5946987628234292,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.7340361894023643,
+              "mae_to_neighbor_reference": 0.033773839473724365,
+              "confident_fraction": 0.6664574146270752,
+              "effective_weight": 0.4892038610318098
+            },
+            {
+              "neighbor": "00001",
+              "view_weight": 0.5254342299831112,
+              "mae_to_neighbor_reference": 0.04961390793323517,
+              "confident_fraction": 0.200776606798172,
+              "effective_weight": 0.10549490179161938
+            }
+          ]
+        },
+        "hybrid": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03624346248985769,
+          "mean_confident_fraction": 0.4336170107126236,
+          "total_effective_weight": 0.5946987628234292,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.7340361894023643,
+              "mae_to_neighbor_reference": 0.03349950537085533,
+              "confident_fraction": 0.6664574146270752,
+              "effective_weight": 0.4892038610318098
+            },
+            {
+              "neighbor": "00001",
+              "view_weight": 0.5254342299831112,
+              "mae_to_neighbor_reference": 0.048967815935611725,
+              "confident_fraction": 0.200776606798172,
+              "effective_weight": 0.10549490179161938
+            }
+          ]
+        },
+        "mix0250": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.036086117666594246,
+          "mean_confident_fraction": 0.4336170107126236,
+          "total_effective_weight": 0.5946987628234292,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.7340361894023643,
+              "mae_to_neighbor_reference": 0.033376023173332214,
+              "confident_fraction": 0.6664574146270752,
+              "effective_weight": 0.4892038610318098
+            },
+            {
+              "neighbor": "00001",
+              "view_weight": 0.5254342299831112,
+              "mae_to_neighbor_reference": 0.04865344241261482,
+              "confident_fraction": 0.200776606798172,
+              "effective_weight": 0.10549490179161938
+            }
+          ]
+        },
+        "mix0750": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03640898699194814,
+          "mean_confident_fraction": 0.4336170107126236,
+          "total_effective_weight": 0.5946987628234292,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.7340361894023643,
+              "mae_to_neighbor_reference": 0.03363170847296715,
+              "confident_fraction": 0.6664574146270752,
+              "effective_weight": 0.4892038610318098
+            },
+            {
+              "neighbor": "00001",
+              "view_weight": 0.5254342299831112,
+              "mae_to_neighbor_reference": 0.049287859350442886,
+              "confident_fraction": 0.200776606798172,
+              "effective_weight": 0.10549490179161938
+            }
+          ]
+        }
+      },
+      "self_consistency_delta_incumbent_minus_output": -0.00014801272689870387,
+      "self_consistency_delta_base_minus_output": -0.0008522824772639534,
+      "self_consistency_delta_base_minus_incumbent": -0.0007042697503652495
+    },
+    {
+      "view": "00009",
+      "output_variant": "mix0250",
+      "incumbent_variant": "fixed",
+      "selected_variant": "fixed",
+      "support_names": [
+        "00107",
+        "00106",
+        "00063",
+        "00085"
+      ],
+      "neighbor_names": [
+        "00012",
+        "00015"
+      ],
+      "target_eval_delta": {
+        "delta_psnr_gain": -0.012384636217948497,
+        "delta_ssim_gain": -3.993511199951172e-06,
+        "output_psnr_gain": -0.014078958929722774,
+        "incumbent_psnr_gain": -0.0016943227117742765,
+        "output_ssim_gain": 0.0030684471130371094,
+        "incumbent_ssim_gain": 0.0030724406242370605
+      },
+      "base_consistency": {
+        "available": true,
+        "neighbor_count": 2,
+        "mean_mae_to_neighbor_reference": 0.03581333827838425,
+        "mean_confident_fraction": 0.5423060953617096,
+        "total_effective_weight": 0.7413487866434467,
+        "neighbors": [
+          {
+            "neighbor": "00012",
+            "view_weight": 0.7650900853039589,
+            "mae_to_neighbor_reference": 0.03153848275542259,
+            "confident_fraction": 0.5878673791885376,
+            "effective_weight": 0.44977150329077303
+          },
+          {
+            "neighbor": "00015",
+            "view_weight": 0.5869760017255842,
+            "mae_to_neighbor_reference": 0.042407501488924026,
+            "confident_fraction": 0.4967448115348816,
+            "effective_weight": 0.29157728335267363
+          }
+        ]
+      },
+      "variant_consistency": {
+        "fixed": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03601876304603295,
+          "mean_confident_fraction": 0.5423060953617096,
+          "total_effective_weight": 0.7413487866434467,
+          "neighbors": [
+            {
+              "neighbor": "00012",
+              "view_weight": 0.7650900853039589,
+              "mae_to_neighbor_reference": 0.03182272985577583,
+              "confident_fraction": 0.5878673791885376,
+              "effective_weight": 0.44977150329077303
+            },
+            {
+              "neighbor": "00015",
+              "view_weight": 0.5869760017255842,
+              "mae_to_neighbor_reference": 0.04249133914709091,
+              "confident_fraction": 0.4967448115348816,
+              "effective_weight": 0.29157728335267363
+            }
+          ]
+        },
+        "learned": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03614972067476802,
+          "mean_confident_fraction": 0.5423060953617096,
+          "total_effective_weight": 0.7413487866434467,
+          "neighbors": [
+            {
+              "neighbor": "00012",
+              "view_weight": 0.7650900853039589,
+              "mae_to_neighbor_reference": 0.03201648220419884,
+              "confident_fraction": 0.5878673791885376,
+              "effective_weight": 0.44977150329077303
+            },
+            {
+              "neighbor": "00015",
+              "view_weight": 0.5869760017255842,
+              "mae_to_neighbor_reference": 0.042525433003902435,
+              "confident_fraction": 0.4967448115348816,
+              "effective_weight": 0.29157728335267363
+            }
+          ]
+        },
+        "hybrid": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03607377521668691,
+          "mean_confident_fraction": 0.5423060953617096,
+          "total_effective_weight": 0.7413487866434467,
+          "neighbors": [
+            {
+              "neighbor": "00012",
+              "view_weight": 0.7650900853039589,
+              "mae_to_neighbor_reference": 0.03190777823328972,
+              "confident_fraction": 0.5878673791885376,
+              "effective_weight": 0.44977150329077303
+            },
+            {
+              "neighbor": "00015",
+              "view_weight": 0.5869760017255842,
+              "mae_to_neighbor_reference": 0.04250001907348633,
+              "confident_fraction": 0.4967448115348816,
+              "effective_weight": 0.29157728335267363
+            }
+          ]
+        },
+        "mix0250": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03604375278400069,
+          "mean_confident_fraction": 0.5423060953617096,
+          "total_effective_weight": 0.7413487866434467,
+          "neighbors": [
+            {
+              "neighbor": "00012",
+              "view_weight": 0.7650900853039589,
+              "mae_to_neighbor_reference": 0.031862545758485794,
+              "confident_fraction": 0.5878673791885376,
+              "effective_weight": 0.44977150329077303
+            },
+            {
+              "neighbor": "00015",
+              "view_weight": 0.5869760017255842,
+              "mae_to_neighbor_reference": 0.04249345883727074,
+              "confident_fraction": 0.4967448115348816,
+              "effective_weight": 0.29157728335267363
+            }
+          ]
+        },
+        "mix0750": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03610921705623224,
+          "mean_confident_fraction": 0.5423060953617096,
+          "total_effective_weight": 0.7413487866434467,
+          "neighbors": [
+            {
+              "neighbor": "00012",
+              "view_weight": 0.7650900853039589,
+              "mae_to_neighbor_reference": 0.031959209591150284,
+              "confident_fraction": 0.5878673791885376,
+              "effective_weight": 0.44977150329077303
+            },
+            {
+              "neighbor": "00015",
+              "view_weight": 0.5869760017255842,
+              "mae_to_neighbor_reference": 0.04251079633831978,
+              "confident_fraction": 0.4967448115348816,
+              "effective_weight": 0.29157728335267363
+            }
+          ]
+        }
+      },
+      "self_consistency_delta_incumbent_minus_output": -2.4989737967738568e-05,
+      "self_consistency_delta_base_minus_output": -0.00023041450561643584,
+      "self_consistency_delta_base_minus_incumbent": -0.00020542476764869727
+    },
+    {
+      "view": "00011",
+      "output_variant": "mix0250",
+      "incumbent_variant": "fixed",
+      "selected_variant": "fixed",
+      "support_names": [
+        "00077",
+        "00054",
+        "00099",
+        "00055"
+      ],
+      "neighbor_names": [
+        "00008",
+        "00014"
+      ],
+      "target_eval_delta": {
+        "delta_psnr_gain": 0.03372038690325496,
+        "delta_ssim_gain": 0.0002688169479370117,
+        "output_psnr_gain": 0.32814087722680085,
+        "incumbent_psnr_gain": 0.2944204903235459,
+        "output_ssim_gain": 0.004323422908782959,
+        "incumbent_ssim_gain": 0.004054605960845947
+      },
+      "base_consistency": {
+        "available": true,
+        "neighbor_count": 2,
+        "mean_mae_to_neighbor_reference": 0.03383053257951653,
+        "mean_confident_fraction": 0.6361839771270752,
+        "total_effective_weight": 0.8873737554043928,
+        "neighbors": [
+          {
+            "neighbor": "00008",
+            "view_weight": 0.7340361894023643,
+            "mae_to_neighbor_reference": 0.03114183060824871,
+            "confident_fraction": 0.6631789803504944,
+            "effective_weight": 0.4867973716282223
+          },
+          {
+            "neighbor": "00014",
+            "view_weight": 0.6575568517094044,
+            "mae_to_neighbor_reference": 0.037097956985235214,
+            "confident_fraction": 0.609188973903656,
+            "effective_weight": 0.40057638377617055
+          }
+        ]
+      },
+      "variant_consistency": {
+        "fixed": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03444265522668511,
+          "mean_confident_fraction": 0.6361839771270752,
+          "total_effective_weight": 0.8873737554043928,
+          "neighbors": [
+            {
+              "neighbor": "00008",
+              "view_weight": 0.7340361894023643,
+              "mae_to_neighbor_reference": 0.031877897679805756,
+              "confident_fraction": 0.6631789803504944,
+              "effective_weight": 0.4867973716282223
+            },
+            {
+              "neighbor": "00014",
+              "view_weight": 0.6575568517094044,
+              "mae_to_neighbor_reference": 0.03755945712327957,
+              "confident_fraction": 0.609188973903656,
+              "effective_weight": 0.40057638377617055
+            }
+          ]
+        },
+        "learned": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03476061637537181,
+          "mean_confident_fraction": 0.6361839771270752,
+          "total_effective_weight": 0.8873737554043928,
+          "neighbors": [
+            {
+              "neighbor": "00008",
+              "view_weight": 0.7340361894023643,
+              "mae_to_neighbor_reference": 0.032336171716451645,
+              "confident_fraction": 0.6631789803504944,
+              "effective_weight": 0.4867973716282223
+            },
+            {
+              "neighbor": "00014",
+              "view_weight": 0.6575568517094044,
+              "mae_to_neighbor_reference": 0.037706904113292694,
+              "confident_fraction": 0.609188973903656,
+              "effective_weight": 0.40057638377617055
+            }
+          ]
+        },
+        "hybrid": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03458933529388371,
+          "mean_confident_fraction": 0.6361839771270752,
+          "total_effective_weight": 0.8873737554043928,
+          "neighbors": [
+            {
+              "neighbor": "00008",
+              "view_weight": 0.7340361894023643,
+              "mae_to_neighbor_reference": 0.032091908156871796,
+              "confident_fraction": 0.6631789803504944,
+              "effective_weight": 0.4867973716282223
+            },
+            {
+              "neighbor": "00014",
+              "view_weight": 0.6575568517094044,
+              "mae_to_neighbor_reference": 0.03762431442737579,
+              "confident_fraction": 0.609188973903656,
+              "effective_weight": 0.40057638377617055
+            }
+          ]
+        },
+        "mix0250": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.034512708854453754,
+          "mean_confident_fraction": 0.6361839771270752,
+          "total_effective_weight": 0.8873737554043928,
+          "neighbors": [
+            {
+              "neighbor": "00008",
+              "view_weight": 0.7340361894023643,
+              "mae_to_neighbor_reference": 0.03198083117604256,
+              "confident_fraction": 0.6631789803504944,
+              "effective_weight": 0.4867973716282223
+            },
+            {
+              "neighbor": "00014",
+              "view_weight": 0.6575568517094044,
+              "mae_to_neighbor_reference": 0.037589553743600845,
+              "confident_fraction": 0.609188973903656,
+              "effective_weight": 0.40057638377617055
+            }
+          ]
+        },
+        "mix0750": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.034672006572083004,
+          "mean_confident_fraction": 0.6361839771270752,
+          "total_effective_weight": 0.8873737554043928,
+          "neighbors": [
+            {
+              "neighbor": "00008",
+              "view_weight": 0.7340361894023643,
+              "mae_to_neighbor_reference": 0.03221045434474945,
+              "confident_fraction": 0.6631789803504944,
+              "effective_weight": 0.4867973716282223
+            },
+            {
+              "neighbor": "00014",
+              "view_weight": 0.6575568517094044,
+              "mae_to_neighbor_reference": 0.03766338899731636,
+              "confident_fraction": 0.609188973903656,
+              "effective_weight": 0.40057638377617055
+            }
+          ]
+        }
+      },
+      "self_consistency_delta_incumbent_minus_output": -7.00536277686431e-05,
+      "self_consistency_delta_base_minus_output": -0.0006821762749372254,
+      "self_consistency_delta_base_minus_incumbent": -0.0006121226471685823
+    },
+    {
+      "view": "00012",
+      "output_variant": "learned",
+      "incumbent_variant": "learned",
+      "selected_variant": "fixed",
+      "support_names": [
+        "00038",
+        "00119",
+        "00061",
+        "00105"
+      ],
+      "neighbor_names": [
+        "00015",
+        "00009"
+      ],
+      "target_eval_delta": {
+        "delta_psnr_gain": 0.0,
+        "delta_ssim_gain": 0.0,
+        "output_psnr_gain": 0.03092203566613705,
+        "incumbent_psnr_gain": 0.03092203566613705,
+        "output_ssim_gain": -0.0002875328063964844,
+        "incumbent_ssim_gain": -0.0002875328063964844
+      },
+      "base_consistency": {
+        "available": true,
+        "neighbor_count": 2,
+        "mean_mae_to_neighbor_reference": 0.03230445305282432,
+        "mean_confident_fraction": 0.6548084318637848,
+        "total_effective_weight": 1.0085840313639878,
+        "neighbors": [
+          {
+            "neighbor": "00015",
+            "view_weight": 0.7749969045444051,
+            "mae_to_neighbor_reference": 0.03279954940080643,
+            "confident_fraction": 0.6671317219734192,
+            "effective_weight": 0.5170250194527786
+          },
+          {
+            "neighbor": "00009",
+            "view_weight": 0.7650900853039589,
+            "mae_to_neighbor_reference": 0.031783707439899445,
+            "confident_fraction": 0.6424851417541504,
+            "effective_weight": 0.4915590119112091
+          }
+        ]
+      },
+      "variant_consistency": {
+        "fixed": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03265579073296145,
+          "mean_confident_fraction": 0.6548084318637848,
+          "total_effective_weight": 1.0085840313639878,
+          "neighbors": [
+            {
+              "neighbor": "00015",
+              "view_weight": 0.7749969045444051,
+              "mae_to_neighbor_reference": 0.0330771803855896,
+              "confident_fraction": 0.6671317219734192,
+              "effective_weight": 0.5170250194527786
+            },
+            {
+              "neighbor": "00009",
+              "view_weight": 0.7650900853039589,
+              "mae_to_neighbor_reference": 0.03221257030963898,
+              "confident_fraction": 0.6424851417541504,
+              "effective_weight": 0.4915590119112091
+            }
+          ]
+        },
+        "learned": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03269515929961837,
+          "mean_confident_fraction": 0.6548084318637848,
+          "total_effective_weight": 1.0085840313639878,
+          "neighbors": [
+            {
+              "neighbor": "00015",
+              "view_weight": 0.7749969045444051,
+              "mae_to_neighbor_reference": 0.03297588601708412,
+              "confident_fraction": 0.6671317219734192,
+              "effective_weight": 0.5170250194527786
+            },
+            {
+              "neighbor": "00009",
+              "view_weight": 0.7650900853039589,
+              "mae_to_neighbor_reference": 0.03239988908171654,
+              "confident_fraction": 0.6424851417541504,
+              "effective_weight": 0.4915590119112091
+            }
+          ]
+        },
+        "hybrid": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.032662173591378525,
+          "mean_confident_fraction": 0.6548084318637848,
+          "total_effective_weight": 1.0085840313639878,
+          "neighbors": [
+            {
+              "neighbor": "00015",
+              "view_weight": 0.7749969045444051,
+              "mae_to_neighbor_reference": 0.03301415592432022,
+              "confident_fraction": 0.6671317219734192,
+              "effective_weight": 0.5170250194527786
+            },
+            {
+              "neighbor": "00009",
+              "view_weight": 0.7650900853039589,
+              "mae_to_neighbor_reference": 0.0322919562458992,
+              "confident_fraction": 0.6424851417541504,
+              "effective_weight": 0.4915590119112091
+            }
+          ]
+        },
+        "mix0250": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03265555244951332,
+          "mean_confident_fraction": 0.6548084318637848,
+          "total_effective_weight": 1.0085840313639878,
+          "neighbors": [
+            {
+              "neighbor": "00015",
+              "view_weight": 0.7749969045444051,
+              "mae_to_neighbor_reference": 0.033042144030332565,
+              "confident_fraction": 0.6671317219734192,
+              "effective_weight": 0.5170250194527786
+            },
+            {
+              "neighbor": "00009",
+              "view_weight": 0.7650900853039589,
+              "mae_to_neighbor_reference": 0.032248932868242264,
+              "confident_fraction": 0.6424851417541504,
+              "effective_weight": 0.4915590119112091
+            }
+          ]
+        },
+        "mix0750": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.0326751824513201,
+          "mean_confident_fraction": 0.6548084318637848,
+          "total_effective_weight": 1.0085840313639878,
+          "neighbors": [
+            {
+              "neighbor": "00015",
+              "view_weight": 0.7749969045444051,
+              "mae_to_neighbor_reference": 0.032991863787174225,
+              "confident_fraction": 0.6671317219734192,
+              "effective_weight": 0.5170250194527786
+            },
+            {
+              "neighbor": "00009",
+              "view_weight": 0.7650900853039589,
+              "mae_to_neighbor_reference": 0.0323420949280262,
+              "confident_fraction": 0.6424851417541504,
+              "effective_weight": 0.4915590119112091
+            }
+          ]
+        }
+      },
+      "self_consistency_delta_incumbent_minus_output": 0.0,
+      "self_consistency_delta_base_minus_output": -0.000390706246794055,
+      "self_consistency_delta_base_minus_incumbent": -0.000390706246794055
+    },
+    {
+      "view": "00013",
+      "output_variant": "learned",
+      "incumbent_variant": "learned",
+      "selected_variant": "fixed",
+      "support_names": [
+        "00091",
+        "00045",
+        "00070",
+        "00047"
+      ],
+      "neighbor_names": [
+        "00016",
+        "00010"
+      ],
+      "target_eval_delta": {
+        "delta_psnr_gain": 0.0,
+        "delta_ssim_gain": 0.0,
+        "output_psnr_gain": 0.12144398378863741,
+        "incumbent_psnr_gain": 0.12144398378863741,
+        "output_ssim_gain": 0.002490401268005371,
+        "incumbent_ssim_gain": 0.002490401268005371
+      },
+      "base_consistency": {
+        "available": true,
+        "neighbor_count": 2,
+        "mean_mae_to_neighbor_reference": 0.02940504029378224,
+        "mean_confident_fraction": 0.7292713224887848,
+        "total_effective_weight": 1.1781759879389058,
+        "neighbors": [
+          {
+            "neighbor": "00016",
+            "view_weight": 0.8473186969071161,
+            "mae_to_neighbor_reference": 0.027884535491466522,
+            "confident_fraction": 0.7511160969734192,
+            "effective_weight": 0.6364347125134766
+          },
+          {
+            "neighbor": "00010",
+            "view_weight": 0.7657915538423515,
+            "mae_to_neighbor_reference": 0.031191321089863777,
+            "confident_fraction": 0.7074265480041504,
+            "effective_weight": 0.5417412754254293
+          }
+        ]
+      },
+      "variant_consistency": {
+        "fixed": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.029913362776335408,
+          "mean_confident_fraction": 0.7292713224887848,
+          "total_effective_weight": 1.1781759879389058,
+          "neighbors": [
+            {
+              "neighbor": "00016",
+              "view_weight": 0.8473186969071161,
+              "mae_to_neighbor_reference": 0.029007337987422943,
+              "confident_fraction": 0.7511160969734192,
+              "effective_weight": 0.6364347125134766
+            },
+            {
+              "neighbor": "00010",
+              "view_weight": 0.7657915538423515,
+              "mae_to_neighbor_reference": 0.030977755784988403,
+              "confident_fraction": 0.7074265480041504,
+              "effective_weight": 0.5417412754254293
+            }
+          ]
+        },
+        "learned": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.029757981686966455,
+          "mean_confident_fraction": 0.7292713224887848,
+          "total_effective_weight": 1.1781759879389058,
+          "neighbors": [
+            {
+              "neighbor": "00016",
+              "view_weight": 0.8473186969071161,
+              "mae_to_neighbor_reference": 0.02828390523791313,
+              "confident_fraction": 0.7511160969734192,
+              "effective_weight": 0.6364347125134766
+            },
+            {
+              "neighbor": "00010",
+              "view_weight": 0.7657915538423515,
+              "mae_to_neighbor_reference": 0.031489718705415726,
+              "confident_fraction": 0.7074265480041504,
+              "effective_weight": 0.5417412754254293
+            }
+          ]
+        },
+        "hybrid": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.029799828718684796,
+          "mean_confident_fraction": 0.7292713224887848,
+          "total_effective_weight": 1.1781759879389058,
+          "neighbors": [
+            {
+              "neighbor": "00016",
+              "view_weight": 0.8473186969071161,
+              "mae_to_neighbor_reference": 0.0286015123128891,
+              "confident_fraction": 0.7511160969734192,
+              "effective_weight": 0.6364347125134766
+            },
+            {
+              "neighbor": "00010",
+              "view_weight": 0.7657915538423515,
+              "mae_to_neighbor_reference": 0.031207604333758354,
+              "confident_fraction": 0.7074265480041504,
+              "effective_weight": 0.5417412754254293
+            }
+          ]
+        },
+        "mix0250": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.029847995693542722,
+          "mean_confident_fraction": 0.7292713224887848,
+          "total_effective_weight": 1.1781759879389058,
+          "neighbors": [
+            {
+              "neighbor": "00016",
+              "view_weight": 0.8473186969071161,
+              "mae_to_neighbor_reference": 0.028794314712285995,
+              "confident_fraction": 0.7511160969734192,
+              "effective_weight": 0.6364347125134766
+            },
+            {
+              "neighbor": "00010",
+              "view_weight": 0.7657915538423515,
+              "mae_to_neighbor_reference": 0.031085854396224022,
+              "confident_fraction": 0.7074265480041504,
+              "effective_weight": 0.5417412754254293
+            }
+          ]
+        },
+        "mix0750": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.02976937210393189,
+          "mean_confident_fraction": 0.7292713224887848,
+          "total_effective_weight": 1.1781759879389058,
+          "neighbors": [
+            {
+              "neighbor": "00016",
+              "view_weight": 0.8473186969071161,
+              "mae_to_neighbor_reference": 0.02843063324689865,
+              "confident_fraction": 0.7511160969734192,
+              "effective_weight": 0.6364347125134766
+            },
+            {
+              "neighbor": "00010",
+              "view_weight": 0.7657915538423515,
+              "mae_to_neighbor_reference": 0.03134211525321007,
+              "confident_fraction": 0.7074265480041504,
+              "effective_weight": 0.5417412754254293
+            }
+          ]
+        }
+      },
+      "self_consistency_delta_incumbent_minus_output": 0.0,
+      "self_consistency_delta_base_minus_output": -0.0003529413931842168,
+      "self_consistency_delta_base_minus_incumbent": -0.0003529413931842168
+    },
+    {
+      "view": "00014",
+      "output_variant": "learned",
+      "incumbent_variant": "learned",
+      "selected_variant": "fixed",
+      "support_names": [
+        "00098",
+        "00075",
+        "00054",
+        "00029"
+      ],
+      "neighbor_names": [
+        "00011",
+        "00001"
+      ],
+      "target_eval_delta": {
+        "delta_psnr_gain": 0.0,
+        "delta_ssim_gain": 0.0,
+        "output_psnr_gain": 0.19801295083748727,
+        "incumbent_psnr_gain": 0.19801295083748727,
+        "output_ssim_gain": 0.002568662166595459,
+        "incumbent_ssim_gain": 0.002568662166595459
+      },
+      "base_consistency": {
+        "available": true,
+        "neighbor_count": 2,
+        "mean_mae_to_neighbor_reference": 0.041109326877162275,
+        "mean_confident_fraction": 0.3737793043255806,
+        "total_effective_weight": 0.46828756542019584,
+        "neighbors": [
+          {
+            "neighbor": "00011",
+            "view_weight": 0.6575568517094044,
+            "mae_to_neighbor_reference": 0.03592734783887863,
+            "confident_fraction": 0.5236467719078064,
+            "effective_weight": 0.34432752274348977
+          },
+          {
+            "neighbor": "00001",
+            "view_weight": 0.5536109411615772,
+            "mae_to_neighbor_reference": 0.05550346523523331,
+            "confident_fraction": 0.2239118367433548,
+            "effective_weight": 0.12396004267670606
+          }
+        ]
+      },
+      "variant_consistency": {
+        "fixed": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.04137217041584845,
+          "mean_confident_fraction": 0.3737793043255806,
+          "total_effective_weight": 0.46828756542019584,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.6575568517094044,
+              "mae_to_neighbor_reference": 0.0362260565161705,
+              "confident_fraction": 0.5236467719078064,
+              "effective_weight": 0.34432752274348977
+            },
+            {
+              "neighbor": "00001",
+              "view_weight": 0.5536109411615772,
+              "mae_to_neighbor_reference": 0.05566668510437012,
+              "confident_fraction": 0.2239118367433548,
+              "effective_weight": 0.12396004267670606
+            }
+          ]
+        },
+        "learned": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.04192826599054994,
+          "mean_confident_fraction": 0.3737793043255806,
+          "total_effective_weight": 0.46828756542019584,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.6575568517094044,
+              "mae_to_neighbor_reference": 0.036581799387931824,
+              "confident_fraction": 0.5236467719078064,
+              "effective_weight": 0.34432752274348977
+            },
+            {
+              "neighbor": "00001",
+              "view_weight": 0.5536109411615772,
+              "mae_to_neighbor_reference": 0.05677930638194084,
+              "confident_fraction": 0.2239118367433548,
+              "effective_weight": 0.12396004267670606
+            }
+          ]
+        },
+        "hybrid": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.041638829610473535,
+          "mean_confident_fraction": 0.3737793043255806,
+          "total_effective_weight": 0.46828756542019584,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.6575568517094044,
+              "mae_to_neighbor_reference": 0.03639228641986847,
+              "confident_fraction": 0.5236467719078064,
+              "effective_weight": 0.34432752274348977
+            },
+            {
+              "neighbor": "00001",
+              "view_weight": 0.5536109411615772,
+              "mae_to_neighbor_reference": 0.05621230974793434,
+              "confident_fraction": 0.2239118367433548,
+              "effective_weight": 0.12396004267670606
+            }
+          ]
+        },
+        "mix0250": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.04150242035124455,
+          "mean_confident_fraction": 0.3737793043255806,
+          "total_effective_weight": 0.46828756542019584,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.6575568517094044,
+              "mae_to_neighbor_reference": 0.036305878311395645,
+              "confident_fraction": 0.5236467719078064,
+              "effective_weight": 0.34432752274348977
+            },
+            {
+              "neighbor": "00001",
+              "view_weight": 0.5536109411615772,
+              "mae_to_neighbor_reference": 0.055937010794878006,
+              "confident_fraction": 0.2239118367433548,
+              "effective_weight": 0.12396004267670606
+            }
+          ]
+        },
+        "mix0750": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.04178067845194128,
+          "mean_confident_fraction": 0.3737793043255806,
+          "total_effective_weight": 0.46828756542019584,
+          "neighbors": [
+            {
+              "neighbor": "00011",
+              "view_weight": 0.6575568517094044,
+              "mae_to_neighbor_reference": 0.03648405522108078,
+              "confident_fraction": 0.5236467719078064,
+              "effective_weight": 0.34432752274348977
+            },
+            {
+              "neighbor": "00001",
+              "view_weight": 0.5536109411615772,
+              "mae_to_neighbor_reference": 0.05649326741695404,
+              "confident_fraction": 0.2239118367433548,
+              "effective_weight": 0.12396004267670606
+            }
+          ]
+        }
+      },
+      "self_consistency_delta_incumbent_minus_output": 0.0,
+      "self_consistency_delta_base_minus_output": -0.000818939113387665,
+      "self_consistency_delta_base_minus_incumbent": -0.000818939113387665
+    },
+    {
+      "view": "00015",
+      "output_variant": "mix0250",
+      "incumbent_variant": "fixed",
+      "selected_variant": "fixed",
+      "support_names": [
+        "00105",
+        "00061",
+        "00119",
+        "00082"
+      ],
+      "neighbor_names": [
+        "00012",
+        "00017"
+      ],
+      "target_eval_delta": {
+        "delta_psnr_gain": 0.015076869936272885,
+        "delta_ssim_gain": 0.00020939111709594727,
+        "output_psnr_gain": 0.14922445503405157,
+        "incumbent_psnr_gain": 0.1341475850977787,
+        "output_ssim_gain": 0.0041405558586120605,
+        "incumbent_ssim_gain": 0.003931164741516113
+      },
+      "base_consistency": {
+        "available": true,
+        "neighbor_count": 2,
+        "mean_mae_to_neighbor_reference": 0.03827399258120609,
+        "mean_confident_fraction": 0.6700032651424408,
+        "total_effective_weight": 0.955652442495615,
+        "neighbors": [
+          {
+            "neighbor": "00012",
+            "view_weight": 0.7749969045444051,
+            "mae_to_neighbor_reference": 0.03255655616521835,
+            "confident_fraction": 0.6792922616004944,
+            "effective_weight": 0.5264494000213514
+          },
+          {
+            "neighbor": "00017",
+            "view_weight": 0.6496046215694596,
+            "mae_to_neighbor_reference": 0.04528685286641121,
+            "confident_fraction": 0.6607142686843872,
+            "effective_weight": 0.4292030424742636
+          }
+        ]
+      },
+      "variant_consistency": {
+        "fixed": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03863866605728915,
+          "mean_confident_fraction": 0.6700032651424408,
+          "total_effective_weight": 0.955652442495615,
+          "neighbors": [
+            {
+              "neighbor": "00012",
+              "view_weight": 0.7749969045444051,
+              "mae_to_neighbor_reference": 0.03313644602894783,
+              "confident_fraction": 0.6792922616004944,
+              "effective_weight": 0.5264494000213514
+            },
+            {
+              "neighbor": "00017",
+              "view_weight": 0.6496046215694596,
+              "mae_to_neighbor_reference": 0.045387547463178635,
+              "confident_fraction": 0.6607142686843872,
+              "effective_weight": 0.4292030424742636
+            }
+          ]
+        },
+        "learned": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.038839292535701654,
+          "mean_confident_fraction": 0.6700032651424408,
+          "total_effective_weight": 0.955652442495615,
+          "neighbors": [
+            {
+              "neighbor": "00012",
+              "view_weight": 0.7749969045444051,
+              "mae_to_neighbor_reference": 0.03362974524497986,
+              "confident_fraction": 0.6792922616004944,
+              "effective_weight": 0.5264494000213514
+            },
+            {
+              "neighbor": "00017",
+              "view_weight": 0.6496046215694596,
+              "mae_to_neighbor_reference": 0.04522918909788132,
+              "confident_fraction": 0.6607142686843872,
+              "effective_weight": 0.4292030424742636
+            }
+          ]
+        },
+        "hybrid": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03873158495972951,
+          "mean_confident_fraction": 0.6700032651424408,
+          "total_effective_weight": 0.955652442495615,
+          "neighbors": [
+            {
+              "neighbor": "00012",
+              "view_weight": 0.7749969045444051,
+              "mae_to_neighbor_reference": 0.03337417542934418,
+              "confident_fraction": 0.6792922616004944,
+              "effective_weight": 0.5264494000213514
+            },
+            {
+              "neighbor": "00017",
+              "view_weight": 0.6496046215694596,
+              "mae_to_neighbor_reference": 0.045302845537662506,
+              "confident_fraction": 0.6607142686843872,
+              "effective_weight": 0.4292030424742636
+            }
+          ]
+        },
+        "mix0250": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.03868309175256368,
+          "mean_confident_fraction": 0.6700032651424408,
+          "total_effective_weight": 0.955652442495615,
+          "neighbors": [
+            {
+              "neighbor": "00012",
+              "view_weight": 0.7749969045444051,
+              "mae_to_neighbor_reference": 0.033252835273742676,
+              "confident_fraction": 0.6792922616004944,
+              "effective_weight": 0.5264494000213514
+            },
+            {
+              "neighbor": "00017",
+              "view_weight": 0.6496046215694596,
+              "mae_to_neighbor_reference": 0.045343704521656036,
+              "confident_fraction": 0.6607142686843872,
+              "effective_weight": 0.4292030424742636
+            }
+          ]
+        },
+        "mix0750": {
+          "available": true,
+          "neighbor_count": 2,
+          "mean_mae_to_neighbor_reference": 0.038783699362292604,
+          "mean_confident_fraction": 0.6700032651424408,
+          "total_effective_weight": 0.955652442495615,
+          "neighbors": [
+            {
+              "neighbor": "00012",
+              "view_weight": 0.7749969045444051,
+              "mae_to_neighbor_reference": 0.033499911427497864,
+              "confident_fraction": 0.6792922616004944,
+              "effective_weight": 0.5264494000213514
+            },
+            {
+              "neighbor": "00017",
+              "view_weight": 0.6496046215694596,
+              "mae_to_neighbor_reference": 0.04526465758681297,
+              "confident_fraction": 0.6607142686843872,
+              "effective_weight": 0.4292030424742636
+            }
+          ]
+        }
+      },
+      "self_consistency_delta_incumbent_minus_output": -4.4425695274533106e-05,
+      "self_consistency_delta_base_minus_output": -0.0004090991713575909,
+      "self_consistency_delta_base_minus_incumbent": -0.0003646734760830578
+    }
+  ]
+}

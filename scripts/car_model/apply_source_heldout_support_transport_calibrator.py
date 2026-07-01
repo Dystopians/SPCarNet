@@ -14,7 +14,7 @@ import math
 import shutil
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import torch
 import torch.nn.functional as F
@@ -40,6 +40,8 @@ from utils.evidence_lumigraph_adapter import (  # noqa: E402
     compute_evidence_signal,
     load_split_frames,
     save_image_tensor,
+    select_support_frames,
+    warp_support_residual,
 )
 
 
@@ -283,6 +285,20 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- keep / shadow rollback / rollback: `{promotion.get('keep_count')}` / `{promotion.get('shadow_rollback_count')}` / `{promotion.get('rollback_count')}`",
             f"- reason counts: `{promotion.get('reason_counts')}`",
             f"- verdict: `{promotion.get('verdict')}`",
+        ]
+    if payload.get("target_neighbor_consistency_policy"):
+        target_neighbor = payload["target_neighbor_consistency_policy"]
+        lines += [
+            "",
+            "## Target-Neighbor Consistency Certificate",
+            "",
+            f"- enabled / mode: `{target_neighbor.get('enabled')}` / `{target_neighbor.get('mode')}`",
+            f"- checked sources: `{target_neighbor.get('sources')}`",
+            f"- min incumbent-minus-output MAE delta: `{target_neighbor.get('min_incumbent_minus_output_delta')}`",
+            f"- neighbor k / max side: `{target_neighbor.get('neighbor_k')}` / `{target_neighbor.get('max_side')}`",
+            f"- target GT used: `{target_neighbor.get('uses_target_gt')}`",
+            f"- keep / shadow rollback / rollback: `{target_neighbor.get('keep_count')}` / `{target_neighbor.get('shadow_rollback_count')}` / `{target_neighbor.get('rollback_count')}`",
+            f"- reason counts: `{target_neighbor.get('reason_counts')}`",
         ]
     (output_dir / "support_transport_apply_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -2360,6 +2376,211 @@ def _promotion_rollback_decision(
     return payload
 
 
+def _tnc_fit_hw(height: int, width: int, max_side: int) -> tuple[int, int] | None:
+    if int(max_side) <= 0 or max(height, width) <= int(max_side):
+        return None
+    scale = float(max_side) / float(max(height, width))
+    return max(1, int(round(height * scale))), max(1, int(round(width * scale)))
+
+
+def _tnc_resize_chw(image: torch.Tensor, size: tuple[int, int] | None) -> torch.Tensor:
+    if size is None or tuple(image.shape[-2:]) == tuple(size):
+        return image
+    return F.interpolate(image.unsqueeze(0), size=size, mode="bilinear", align_corners=False).squeeze(0)
+
+
+def _tnc_resize_hw(depth: torch.Tensor, size: tuple[int, int] | None) -> torch.Tensor:
+    if size is None or tuple(depth.shape[-2:]) == tuple(size):
+        return depth
+    return F.interpolate(depth[None, None], size=size, mode="bilinear", align_corners=False).squeeze(0).squeeze(0)
+
+
+def _tnc_weighted_mae(
+    warped: torch.Tensor,
+    reference: torch.Tensor,
+    confidence: torch.Tensor,
+    *,
+    min_confidence: float,
+) -> tuple[float, float]:
+    mask = (confidence > float(min_confidence)).to(device=warped.device, dtype=warped.dtype)
+    denom = torch.clamp(mask.sum() * float(warped.shape[0]), min=1.0)
+    mae = (torch.abs(warped - reference) * mask.unsqueeze(0)).sum() / denom
+    return float(mae.detach().cpu().item()), float(mask.mean().detach().cpu().item())
+
+
+def _target_neighbor_consistency_score(
+    *,
+    target: Any,
+    image: torch.Tensor,
+    target_frames: Sequence[Any],
+    loader: FrameLoader,
+    device: torch.device,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    neighbors = select_support_frames(
+        target,
+        target_frames,
+        k=int(args.target_neighbor_consistency_neighbor_k),
+        exclude_names={target.name, target.camera.image_name},
+        direction_weight=float(args.target_neighbor_consistency_direction_weight),
+    )
+    target_depth_full = loader.depth(str(target.depth_path)).to(device=device, dtype=torch.float32)
+    target_size = _tnc_fit_hw(
+        int(target_depth_full.shape[0]),
+        int(target_depth_full.shape[1]),
+        int(args.target_neighbor_consistency_max_side),
+    )
+    target_depth = _tnc_resize_hw(target_depth_full, target_size)
+    target_image = _tnc_resize_chw(image.to(device=device, dtype=torch.float32), target_size)
+
+    rows: list[dict[str, Any]] = []
+    weighted_error = 0.0
+    total_weight = 0.0
+    confident_fractions: list[float] = []
+    for neighbor, view_weight in neighbors:
+        neighbor_depth_full = loader.depth(str(neighbor.depth_path)).to(device=device, dtype=torch.float32)
+        neighbor_base_full = loader.render(str(neighbor.render_path)).to(device=device, dtype=torch.float32)
+        neighbor_size = _tnc_fit_hw(
+            int(neighbor_depth_full.shape[0]),
+            int(neighbor_depth_full.shape[1]),
+            int(args.target_neighbor_consistency_max_side),
+        )
+        neighbor_depth = _tnc_resize_hw(neighbor_depth_full, neighbor_size)
+        neighbor_base = _tnc_resize_chw(neighbor_base_full, neighbor_size)
+        warped, confidence = warp_support_residual(
+            neighbor,
+            target,
+            neighbor_depth,
+            target_depth,
+            target_image,
+            depth_abs_tol=float(args.target_neighbor_consistency_depth_abs_tol),
+            depth_rel_tol=float(args.target_neighbor_consistency_depth_rel_tol),
+            device=device,
+        )
+        mae, confident_fraction = _tnc_weighted_mae(
+            warped,
+            neighbor_base,
+            confidence,
+            min_confidence=float(args.target_neighbor_consistency_min_confidence),
+        )
+        effective_weight = float(view_weight) * max(confident_fraction, 0.0)
+        rows.append(
+            {
+                "neighbor": str(neighbor.name),
+                "view_weight": float(view_weight),
+                "mae_to_neighbor_base": float(mae),
+                "confident_fraction": float(confident_fraction),
+                "effective_weight": float(effective_weight),
+            }
+        )
+        weighted_error += mae * effective_weight
+        total_weight += effective_weight
+        confident_fractions.append(confident_fraction)
+    return {
+        "available": bool(rows),
+        "neighbor_count": int(len(rows)),
+        "mean_mae_to_neighbor_base": float(weighted_error / max(total_weight, 1.0e-12)) if rows else None,
+        "mean_confident_fraction": float(sum(confident_fractions) / len(confident_fractions)) if confident_fractions else 0.0,
+        "total_effective_weight": float(total_weight),
+        "neighbors": rows,
+    }
+
+
+def _target_neighbor_consistency_decision(
+    *,
+    output_variant: str,
+    incumbent_variant: str,
+    decision_source: str,
+    ev: Any,
+    deltas: dict[str, torch.Tensor],
+    target: Any,
+    target_frames: Sequence[Any],
+    loader: FrameLoader,
+    device: torch.device,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    enabled = bool(args.enable_target_neighbor_consistency_certificate)
+    payload: dict[str, Any] = {
+        "enabled": enabled,
+        "mode": str(args.target_neighbor_consistency_mode),
+        "candidate_variant": output_variant,
+        "incumbent_variant": incumbent_variant,
+        "decision_source": decision_source,
+        "decision": "keep",
+        "rollback_applied": False,
+        "reject_reason": None,
+        "incumbent_minus_output_mae_delta": None,
+        "output_score": None,
+        "incumbent_score": None,
+    }
+    if not enabled:
+        payload["reject_reason"] = "disabled"
+        return payload
+    if output_variant in {"noop", "__scene__", "__incumbent__"} or output_variant == incumbent_variant:
+        payload["reject_reason"] = "no_promotion"
+        return payload
+    sources = {
+        part.strip()
+        for part in str(args.target_neighbor_consistency_sources).split(",")
+        if part.strip()
+    }
+    if decision_source not in sources:
+        payload["reject_reason"] = "decision_source_not_checked"
+        return payload
+    if output_variant not in deltas or incumbent_variant not in deltas:
+        payload["decision"] = "rollback" if str(args.target_neighbor_consistency_mode) == "enforce" else "shadow_rollback"
+        payload["rollback_applied"] = str(args.target_neighbor_consistency_mode) == "enforce"
+        payload["reject_reason"] = "missing_candidate_delta"
+        return payload
+    output_image = torch.clamp(ev.base + deltas[output_variant], 0.0, 1.0)
+    incumbent_image = torch.clamp(ev.base + deltas[incumbent_variant], 0.0, 1.0)
+    output_score = _target_neighbor_consistency_score(
+        target=target,
+        image=output_image,
+        target_frames=target_frames,
+        loader=loader,
+        device=device,
+        args=args,
+    )
+    incumbent_score = _target_neighbor_consistency_score(
+        target=target,
+        image=incumbent_image,
+        target_frames=target_frames,
+        loader=loader,
+        device=device,
+        args=args,
+    )
+    payload["output_score"] = output_score
+    payload["incumbent_score"] = incumbent_score
+    output_error = output_score.get("mean_mae_to_neighbor_base")
+    incumbent_error = incumbent_score.get("mean_mae_to_neighbor_base")
+    if output_error is None or incumbent_error is None:
+        payload["decision"] = "rollback" if str(args.target_neighbor_consistency_mode) == "enforce" else "shadow_rollback"
+        payload["rollback_applied"] = str(args.target_neighbor_consistency_mode) == "enforce"
+        payload["reject_reason"] = "score_unavailable"
+        return payload
+    if float(output_score.get("total_effective_weight", 0.0)) < float(args.target_neighbor_consistency_min_effective_weight):
+        payload["decision"] = "rollback" if str(args.target_neighbor_consistency_mode) == "enforce" else "shadow_rollback"
+        payload["rollback_applied"] = str(args.target_neighbor_consistency_mode) == "enforce"
+        payload["reject_reason"] = "insufficient_target_neighbor_support"
+        payload["incumbent_minus_output_mae_delta"] = float(incumbent_error) - float(output_error)
+        return payload
+
+    mae_delta = float(incumbent_error) - float(output_error)
+    payload["incumbent_minus_output_mae_delta"] = float(mae_delta)
+    if mae_delta >= float(args.target_neighbor_consistency_min_incumbent_minus_output_delta):
+        return payload
+
+    payload["reject_reason"] = "target_neighbor_consistency_delta"
+    if str(args.target_neighbor_consistency_mode) == "enforce":
+        payload["decision"] = "rollback"
+        payload["rollback_applied"] = True
+    else:
+        payload["decision"] = "shadow_rollback"
+        payload["rollback_applied"] = False
+    return payload
+
+
 def _fit_per_view_risk_model_policy(
     selector_payload: dict[str, Any] | None,
     *,
@@ -4039,6 +4260,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "rollback_count": 0,
         "reason_counts": {},
     }
+    target_neighbor_consistency_stats = {
+        "considered_count": 0,
+        "keep_count": 0,
+        "shadow_rollback_count": 0,
+        "rollback_count": 0,
+        "reason_counts": {},
+    }
 
     for idx, target in enumerate(tqdm(target_frames, desc="apply support-transport calibrator")):
         with torch.no_grad():
@@ -4097,6 +4325,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             output_decision_source = "scene"
             promotion_incumbent_variant = selected_variant
             promotion_rollback_diagnostics: dict[str, Any] | None = None
+            target_neighbor_consistency_diagnostics: dict[str, Any] | None = None
             if bool(local_support_payload.get("enabled", False)) and not bool(args.local_support_post_incumbent_fallback_only):
                 output_variant, local_support_diagnostics = _local_support_choose_variant(
                     proxies_by_variant,
@@ -4303,6 +4532,38 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 selected_proxy = proxies_by_variant[output_variant]
                 selected_proxy_variant = output_variant
                 gate_accepted = True
+            target_neighbor_consistency_diagnostics = _target_neighbor_consistency_decision(
+                output_variant=output_variant,
+                incumbent_variant=promotion_incumbent_variant,
+                decision_source=output_decision_source,
+                ev=ev,
+                deltas=deltas,
+                target=target,
+                target_frames=target_frames,
+                loader=loader,
+                device=device,
+                args=args,
+            )
+            if bool(target_neighbor_consistency_diagnostics.get("enabled", False)):
+                decision = str(target_neighbor_consistency_diagnostics.get("decision", "keep"))
+                reason = str(target_neighbor_consistency_diagnostics.get("reject_reason") or "passed")
+                actionable = reason not in {"disabled", "no_promotion", "decision_source_not_checked"}
+                if actionable:
+                    target_neighbor_consistency_stats["considered_count"] += 1
+                if decision == "rollback":
+                    target_neighbor_consistency_stats["rollback_count"] += 1
+                elif decision == "shadow_rollback":
+                    target_neighbor_consistency_stats["shadow_rollback_count"] += 1
+                elif actionable:
+                    target_neighbor_consistency_stats["keep_count"] += 1
+                reason_counts = target_neighbor_consistency_stats["reason_counts"]
+                reason_counts[reason] = int(reason_counts.get(reason, 0)) + 1
+            if bool(target_neighbor_consistency_diagnostics.get("rollback_applied", False)):
+                output_variant = promotion_incumbent_variant
+                selected_delta = deltas[output_variant]
+                selected_proxy = proxies_by_variant[output_variant]
+                selected_proxy_variant = output_variant
+                gate_accepted = True
             if not gate_accepted and output_variant != "noop":
                 selected_delta = torch.zeros_like(selected_delta)
                 output_variant = "noop"
@@ -4383,6 +4644,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "pairwise_dominance_diagnostics": pairwise_dominance_diagnostics,
                     "source_reliability_predictions": source_reliability_predictions,
                     "source_reliability_diagnostics": source_reliability_diagnostics,
+                    "target_neighbor_consistency_diagnostics": target_neighbor_consistency_diagnostics,
                 }
             )
             if idx < int(args.save_example_views):
@@ -4483,6 +4745,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "source_reliability_calibrated_lcb_uses_target_gt": False,
             "promotion_rollback_uses_target_gt": False,
             "promotion_rollback_fit_scope": "source_heldout_pairwise_loo_before_target_loop",
+            "target_neighbor_consistency_uses_target_gt": False,
+            "target_neighbor_consistency_scope": "target_render_depth_camera_only_post_decision_certificate",
         },
         "checkpoint": str(args.checkpoint),
         "base_model_path": str(base_model),
@@ -4575,6 +4839,30 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "considered_count": int(promotion_rollback_stats["considered_count"]),
             "reason_counts": dict(promotion_rollback_stats["reason_counts"]),
         },
+        "target_neighbor_consistency_policy": {
+            "enabled": bool(args.enable_target_neighbor_consistency_certificate),
+            "mode": str(args.target_neighbor_consistency_mode),
+            "sources": [
+                part.strip()
+                for part in str(args.target_neighbor_consistency_sources).split(",")
+                if part.strip()
+            ],
+            "min_incumbent_minus_output_delta": float(args.target_neighbor_consistency_min_incumbent_minus_output_delta),
+            "neighbor_k": int(args.target_neighbor_consistency_neighbor_k),
+            "direction_weight": float(args.target_neighbor_consistency_direction_weight),
+            "max_side": int(args.target_neighbor_consistency_max_side),
+            "depth_abs_tol": float(args.target_neighbor_consistency_depth_abs_tol),
+            "depth_rel_tol": float(args.target_neighbor_consistency_depth_rel_tol),
+            "min_confidence": float(args.target_neighbor_consistency_min_confidence),
+            "min_effective_weight": float(args.target_neighbor_consistency_min_effective_weight),
+            "uses_target_gt": False,
+            "reference": "target split render/depth/camera only; compares candidate-vs-incumbent warp MAE to neighboring base renders",
+            "keep_count": int(target_neighbor_consistency_stats["keep_count"]),
+            "shadow_rollback_count": int(target_neighbor_consistency_stats["shadow_rollback_count"]),
+            "rollback_count": int(target_neighbor_consistency_stats["rollback_count"]),
+            "considered_count": int(target_neighbor_consistency_stats["considered_count"]),
+            "reason_counts": dict(target_neighbor_consistency_stats["reason_counts"]),
+        },
         "verdict": verdict,
         "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
     }
@@ -4632,6 +4920,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             )
             flat["apply/promotion_rollback/rollback_count"] = float(promotion.get("rollback_count", 0) or 0)
             flat["apply/promotion_rollback/source_sample_count"] = float(promotion.get("source_sample_count", 0) or 0)
+        if payload.get("target_neighbor_consistency_policy"):
+            target_neighbor = payload["target_neighbor_consistency_policy"]
+            flat["apply/target_neighbor_consistency/enabled"] = float(bool(target_neighbor.get("enabled", False)))
+            flat["apply/target_neighbor_consistency/keep_count"] = float(target_neighbor.get("keep_count", 0) or 0)
+            flat["apply/target_neighbor_consistency/shadow_rollback_count"] = float(
+                target_neighbor.get("shadow_rollback_count", 0) or 0
+            )
+            flat["apply/target_neighbor_consistency/rollback_count"] = float(target_neighbor.get("rollback_count", 0) or 0)
+            flat["apply/target_neighbor_consistency/considered_count"] = float(target_neighbor.get("considered_count", 0) or 0)
         run.log(flat)
         run.summary.update(flat)
         run.finish()
@@ -4808,6 +5105,21 @@ def main() -> None:
     parser.add_argument("--promotion_rollback_min_local_cvar_delta", type=float, default=-1.0e9)
     parser.add_argument("--promotion_rollback_min_local_min_delta", type=float, default=-1.0e9)
     parser.add_argument("--promotion_rollback_max_local_negative_fraction", type=float, default=1.0)
+    parser.add_argument("--enable_target_neighbor_consistency_certificate", action="store_true")
+    parser.add_argument("--target_neighbor_consistency_mode", choices=["shadow", "enforce"], default="shadow")
+    parser.add_argument(
+        "--target_neighbor_consistency_sources",
+        default="pairwise",
+        help="Comma-separated decision sources checked by the target-neighbor render self-consistency certificate.",
+    )
+    parser.add_argument("--target_neighbor_consistency_min_incumbent_minus_output_delta", type=float, default=-1.0e-4)
+    parser.add_argument("--target_neighbor_consistency_neighbor_k", type=int, default=2)
+    parser.add_argument("--target_neighbor_consistency_direction_weight", type=float, default=0.35)
+    parser.add_argument("--target_neighbor_consistency_max_side", type=int, default=256)
+    parser.add_argument("--target_neighbor_consistency_depth_abs_tol", type=float, default=0.03)
+    parser.add_argument("--target_neighbor_consistency_depth_rel_tol", type=float, default=0.04)
+    parser.add_argument("--target_neighbor_consistency_min_confidence", type=float, default=1.0e-4)
+    parser.add_argument("--target_neighbor_consistency_min_effective_weight", type=float, default=0.01)
     parser.add_argument("--enable_per_view_risk_model_policy", action="store_true")
     parser.add_argument(
         "--per_view_risk_model_feature_grid",
