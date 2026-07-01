@@ -2,6 +2,40 @@
 
 Date: 2026-06-28
 
+Latest root-cause reflection on 2026-06-30:
+
+New file:
+
+- `docs/car_model/6-30-PhaseJ-Stall-RootCause-Reflection.md`
+
+Hard answer:
+
+> The current representation-level line keeps stalling below Phase-J because
+> Phase-J is a high-bandwidth render-time residual transport endpoint, while the
+> newer baked routes compress that transport into a weaker face/UV/bin/latent
+> carrier. The learned residual direction is not stable enough across views, so
+> the safety gates correctly shrink the method toward near no-op.
+
+Evidence that this is not just a parameter problem:
+
+- v293a captures only about `4.76%` of the MSE reduction needed to move from the
+  parent to Phase-J on flowers.
+- v294 carrier upper-bound gives only `+0.000164 dB` policy-val PSNR under a
+  favorable projection setup.
+- v285/v286 source-heldout direction cosine is only about `0.214671`, with
+  heldout error ratio about `2.078181`.
+- v296 heldout features selected alpha `0.0` in reduced same-budget tests.
+- v297 source-heldout transport loss runs, but the pilot remains numerical-noise
+  scale; alpha expansion raises changed fraction while making PSNR more
+  negative.
+
+Next-stage instruction:
+
+> Stop treating alpha/rank/gate scans as the main route. The next model must
+> preserve more of Phase-J's target-conditioned support-view information path and
+> train source-A to heldout-source-B residual transport with RGB, direction,
+> magnitude, patch/perceptual, and uncertainty supervision.
+
 Latest update on 2026-06-30, v297:
 
 New files:
@@ -29,6 +63,9 @@ Pilot evidence:
   policy-val pass is `false`.
 - Fixed-gate transport pilot: PSNR gain `-5.12e-8`, SSIM gain `+8.34e-8`,
   changed fraction `2.05e-5`.
+- Alpha expansion to `1.0` increased changed fraction to `8.89e-5` but made
+  PSNR more negative (`-6.48e-6`), so the immediate issue is wrong residual
+  direction, not only too-small alpha.
 
 Direct verdict:
 

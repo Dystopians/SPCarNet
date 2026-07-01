@@ -2,6 +2,51 @@
 
 Date: 2026-06-28
 
+## 2026-06-30 Topline: Why We Are Stuck Below Phase-J
+
+Newest root-cause reflection:
+
+```text
+docs/car_model/6-30-PhaseJ-Stall-RootCause-Reflection.md
+```
+
+Direct answer:
+
+- Phase-J is a high-bandwidth render-time residual transport endpoint.
+- The newer baked/representation attempts compress that transport into a weaker
+  face/UV/bin/latent carrier.
+- The current carrier does not learn stable cross-view residual direction, so
+  safety gates correctly shrink it toward near no-op.
+- The blocker is not one missing alpha, rank, threshold, GPU run, W&B log, or
+  full9 promotion.
+
+Hard evidence:
+
+- v293a captures only about `4.76%` of the parent-to-Phase-J MSE reduction on
+  flowers.
+- v294 carrier upper-bound gives only `+0.000164 dB` policy-val PSNR under a
+  favorable projection setup.
+- v285/v286 source-heldout direction cosine is only about `0.214671`, with
+  heldout error ratio about `2.078181`.
+- v297 source-heldout transport loss is a real objective-level interface, but
+  the first pilot is still numerical-noise scale; alpha expansion increases
+  changed fraction while making PSNR more negative.
+
+Updated route:
+
+```text
+Stop alpha/rank/gate scans as the main route.
+Build a higher-bandwidth, target-conditioned, source-heldout-supervised
+residual transport model that preserves more of the Phase-J support-view
+information path.
+```
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-06-30 Topline: v297 Source-Heldout Transport Loss
 
 Newest method/objective change:
@@ -43,7 +88,9 @@ Final status: NOT COMPLETE.
 v297 is a real objective-level method change and the interface works, but the
 first pilot is still numerical-noise scale. It must not be promoted to flowers
 exact or full9. The next step is residual-energy scaling and sampler efficiency,
-not claiming success from the old no-op gate pass.
+not claiming success from the old no-op gate pass. An alpha-energy diagnostic up
+to `alpha=1.0` increased changed fraction to `8.89e-5`, but PSNR became more
+negative (`-6.48e-6`), so the current residual direction is still not reliable.
 
 ## 2026-06-30 Topline: Phase-J Stall Investigation + v296 Reduced Negative
 

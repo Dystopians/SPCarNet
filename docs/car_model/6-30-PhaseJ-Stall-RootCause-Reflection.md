@@ -1,246 +1,230 @@
 # 2026-06-30 Phase-J Stall Root-Cause Reflection
 
-This note answers why the current SPCarNet/v169 representation route keeps
-stalling below the Phase-J reference, despite many implementation and evaluation
-iterations.
+This note records the direct answer to a hard question:
 
-## Executive Verdict
+```text
+Why do recent SPCarNet representation-level attempts keep stalling below
+Phase-J?
+```
 
-The current route is not failing because of one missing hyperparameter, one
-unlucky GPU run, or one missing full9 sweep. It is failing because the accepted
-v169 representation line can only transfer a very small amount of correct
-Phase-J-like RGB residual energy to target views.
+The short answer is:
 
-The strongest recent flowers exact results are:
+```text
+Phase-J is a high-bandwidth render-time residual transport endpoint.
+The later baked/representation routes compress that transport into a much
+weaker face/UV/bin/latent carrier, and the learned residual direction is not
+stable enough across views.
+```
 
-| method | PSNR | SSIM | LPIPS | status |
-|---|---:|---:|---:|---|
-| parent | 19.832054 | 0.619910 | 0.180335 | reference parent |
-| v292d balanced frontier | 19.851452 | 0.620343 | 0.180212 | beats parent all-axis, fails Phase-J PSNR |
-| v293a PSNR frontier | 19.853420 | 0.620328 | 0.180312 | best recent PSNR, worse perceptual tail |
-| Phase-J flowers gate | 20.304358 | 0.557770 | 0.329222 | required reference |
+Therefore the current blocker is not a missing alpha, rank, threshold, GPU run,
+or W&B log.  It is a method-family bottleneck.
 
-Under this metric scale, current v292/v293 already clear the reported Phase-J
-SSIM and LPIPS thresholds. The blocker is PSNR: the best recent route is still
-about `0.451 dB` below Phase-J.
+## Current Hard Numbers
 
-## Why The Gap Is Not Small
+The relevant flowers Phase-J reference is:
 
-PSNR makes the gap look moderate, but MSE exposes the scale:
+| method | PSNR | SSIM | LPIPS |
+|---|---:|---:|---:|
+| Phase-J flowers gate | 20.304358 | 0.557770 | 0.329222 |
 
-| item | PSNR | MSE |
-|---|---:|---:|
-| parent | 19.832054 | 0.010394285 |
-| v293a | 19.853420 | 0.010343274 |
-| Phase-J | 20.304358 | 0.009323183 |
+Recent representation-level flowers results remain below that PSNR gate:
 
-v293a reduces MSE by about `5.10e-05` over the parent. Phase-J requires about
-`1.071e-03` MSE reduction over the parent. Current v293a therefore captures only
-about `1 / 21` of the needed MSE reduction.
+| method | PSNR | SSIM | LPIPS | PSNR gap vs Phase-J | reading |
+|---|---:|---:|---:|---:|---|
+| parent | 19.832054 | 0.619910 | 0.180335 | -0.472304 | direct parent |
+| v292d | 19.851452 | 0.620343 | 0.180212 | -0.452906 | best balanced recent route |
+| v293a | 19.853420 | 0.620328 | 0.180312 | -0.450938 | best recent PSNR route |
 
-This is the central reason the work feels stuck: many variants are real, but
-they are moving the needle in the wrong order of magnitude.
+The v293a improvement captures only about `4.76%` of the parent-to-Phase-J MSE
+reduction on flowers.  This is not a near miss.
 
-## What The Experiments Actually Proved
+## What Phase-J Has That The Baked Carrier Lacks
 
-### 1. The teacher signal exists
+Phase-J / ELA is not a static texture update.  At render time it:
 
-Phase-J is not a weak or empty teacher. Earlier audits showed strong policy-val
-teacher headroom, and the v169 prompt correctly asked for teacher residual
-projection before launching more expensive promotions.
+1. selects nearby support training views for the current target view;
+2. projects target pixels into support views using target depth and camera
+   geometry;
+3. samples support residual images;
+4. fuses residuals per target pixel using confidence, support, edge, and policy
+   gates;
+5. applies train/policy-val selected alpha or an edge/fallback branch.
 
-This rules out the explanation that "Phase-J has no useful residual to distill."
-The useful signal exists.
+In code this path is centered around:
 
-### 2. The current carrier cannot project enough of that signal
+- `utils/evidence_lumigraph_adapter.py::select_support_frames`
+- `utils/evidence_lumigraph_adapter.py::warp_support_residual`
+- `utils/evidence_lumigraph_adapter.py::compute_evidence_signal`
+- `utils/evidence_lumigraph_adapter.py::adapt_frame`
 
-The v294 teacher projection upper-bound diagnostic directly tested the current
-face/UV/low-rank carrier on train-fit Phase-J residuals and certified on
-train-policy-val only.
+The baked/representation route instead tries to compress the same information
+into surface features such as face IDs, UV bins, low-rank texture coefficients,
+texture latents, source-view summary statistics, and a decoder MLP.  That route
+does not keep the full target-conditioned support-image residual path.
 
-Best candidate:
+This is the central information-path mismatch.
 
-| item | value |
+## Evidence That This Is Not Just A Parameter Problem
+
+### v294 Projection Upper Bound
+
+The v294 teacher projection diagnostic gave the current face/UV/low-rank carrier
+a favorable policy-val projection setup.
+
+Best row:
+
+| field | value |
 |---|---:|
 | texture size | 8 |
-| low-rank rank | 4 |
+| rank | 4 |
 | alpha | 0.03125 |
-| full-image PSNR gain | +0.000163820 dB |
+| PSNR gain | +0.000163820 |
 | SSIM gain | +0.000000392 |
 | LPIPS gain | +0.000000956 |
-| SSIM positive-view fraction | 0.500000 |
-| LPIPS positive-view fraction | 0.666667 |
 | robust all-axis pass | false |
 
-This is the strongest evidence so far. Even when the carrier is given the
-teacher residual fitting problem directly, the useful full-image effect is
-near noise level. Increasing alpha/rank raises MSE slightly but quickly damages
-SSIM/LPIPS tails. Therefore the main limitation is not alpha selection.
+This says the carrier can produce a tiny all-axis numerical gain, but not enough
+to justify flowers exact or full9 promotion.
 
-### 3. Cross-view residual direction is unreliable
+### v285/v286 Source-Heldout Direction Test
 
-Source-heldout diagnostics from v285/v286 show:
+The source-heldout diagnostic estimated whether residual directions learned from
+one source split transfer to heldout source views.
 
 | statistic | value |
 |---|---:|
 | heldout residual direction cosine | 0.214671 |
 | heldout error ratio | 2.078181 |
-| v285b target PSNR gain | +0.010698 |
-| v286b target PSNR gain | +0.008856 |
-| Phase-J PSNR gap after these runs | about -0.462 dB |
 
-The cosine is too low for confident target-view residual transport. The error
-ratio says a residual predictor fitted from part of the source evidence is still
-substantially wrong on heldout source views. Reliability calibration can suppress
-bad tails, but it cannot create missing residual energy.
+A direction cosine around `0.21` is too weak for confident cross-view residual
+transport.  Calibration can detect the risk, but it does not create the missing
+directional signal.
 
-### 4. Policy-val success has not meant target success
+### v296 Heldout Feature Scaffold
 
-Recent models often look stronger on policy-val than on exact target:
+v296 added target-blind heldout direction features through:
 
-| run | policy-val PSNR gain | target PSNR gain | target issue |
-|---|---:|---:|---|
-| v293a | +0.028777 | +0.021366 | perceptual tails worsen |
-| v292d | +0.024338 | +0.019398 | safe but still weak |
-| v289c | policy-val positive | +0.009785 | source weighting too small |
+```text
+--surface_texture_mode lowrank_view_holdout_v3
+```
 
-This means the policy-val split is useful, but it is not enough to certify the
-cross-view direction of high-frequency residuals. We need a stronger heldout
-transport objective, not just a stronger post-hoc gate.
+Reduced same-budget testing selected `alpha=0.0` for both v2 and v3.  Nonzero
+alpha rows had only microscopic changed fractions and did not produce a robust
+all-axis signal.
 
-### 5. More coverage did not translate into quality
+This proves that heldout diagnostics as features are not enough.  They tell the
+model where it is uncertain; they do not force the model to learn transport.
 
-Earlier v165/v166 results showed that expanding target-impact footprint or
-filling more bins can be mechanically successful while visually and perceptually
-ineffective. The added pixels/bins did not carry the right residual direction.
+### v297 Source-Heldout Transport Loss
 
-This killed the "just affect more pixels" hypothesis.
+v297 made the first correct objective-level move:
 
-### 6. More capacity helped only slightly
+```text
+--enable_source_heldout_transport_loss
+```
 
-PatchViewMoE, low-rank view support, texture latent embeddings, local ridge
-features, and direct RGB heads were real representation changes. They were not
-just logging or parameter scans. But their measured effect remained small:
+It splits train-fit views into source and heldout-source subsets, builds a
+source-only surface texture, and adds heldout-source residual prediction loss.
 
-- v292d became a better balanced parent win.
-- v293a became the best recent PSNR frontier.
-- Neither moved close to Phase-J.
-- Added capacity often increased perceptual tail risk.
+The interface works, but the first pilot is still not a quality breakthrough:
 
-The issue is not that the code never changed. The issue is that the changes
-mostly improved safe local residual fitting, not reliable target-view residual
-transport.
+| run | selected alpha | PSNR gain | SSIM gain | changed fraction | pass |
+|---|---:|---:|---:|---:|---|
+| no transport pilot | 0.12500 | -0.000000388 | +0.0000000715 | 0.000015655 | false |
+| transport fixed-gate pilot | 0.12500 | -0.0000000512 | +0.0000000834 | 0.000020517 | false |
 
-## Why Some Historical Results Look Confusing
+The wider alpha diagnostic is decisive:
 
-There are three different result families that must not be mixed:
+| alpha | PSNR gain | SSIM gain | changed fraction |
+|---:|---:|---:|---:|
+| 0.125 | -0.000000051 | +0.000000083 | 0.000020517 |
+| 0.250 | -0.000000329 | +0.000000167 | 0.000050166 |
+| 0.500 | -0.000001632 | +0.000000310 | 0.000072225 |
+| 1.000 | -0.000006476 | +0.000000513 | 0.000088947 |
 
-1. Phase-J endpoint/reference:
-   strong RGB endpoint, not the desired baked representation.
+Increasing alpha raises changed fraction but makes PSNR worse.  The immediate
+problem is wrong residual direction, not merely under-application.
 
-2. Older or scene-limited wins:
-   some versions passed one scene or one axis. For example v165/v166 won PSNR on
-   flowers but lost SSIM/LPIPS; v191 passed flowers all-axis but did not close
-   counter and teacher-only/representation validity.
+## What Went Wrong In The Research Loop
 
-3. Current v169/vNext accepted representation line:
-   stricter no-target-GT, baked/surface-compatible, policy-val certified route.
-   This is the route currently stuck below Phase-J PSNR.
+The loop made real engineering progress:
 
-The apparent contradiction comes from mixing these families. A fair paper claim
-cannot use a single-scene or GT-dependent endpoint to declare the representation
-route solved.
-
-## Root Cause
-
-The short version:
-
-> We are trying to bake a view-dependent, high-frequency, perceptual Phase-J
-> correction into a sparse face/UV/bin residual carrier whose cross-view
-> residual direction is weak and whose reliable coverage is too small.
-
-More concretely:
-
-1. The Phase-J residual is view-dependent.
-2. The current carrier stores or predicts residuals in a mostly local surface
-   coordinate system.
-3. Target views often observe the same surface under different visibility,
-   support, parent color, edge, and normal/view configurations.
-4. Current gates can detect some unsafe regions, but then they shrink useful
-   residual energy.
-5. If gates are relaxed, PSNR rises a little while SSIM/LPIPS tails degrade.
-6. If gates are tightened, perceptual safety improves but the method becomes too
-   close to no-op.
-
-This is why the loop keeps returning to small `+0.01` to `+0.02 dB` target PSNR
-gains instead of Phase-J-scale improvement.
-
-## Engineering Reflection
-
-The repository now has a much stronger evaluation shell than before:
-
-- strict no-target-GT apply checks;
-- policy-val and target exact separation;
+- no-target-GT apply and target exact separation;
 - W&B offline logging for medium/exact runs;
-- baseline, Phase-J, v106, vNext comparison records;
-- projection upper-bound diagnostics;
-- source-heldout residual direction diagnostics;
-- documented negative results.
+- fair clean MeshSplatting baseline records;
+- Phase-J, v106, vNext, v169/v297 artifact records;
+- policy-val, tail-risk, no-op fallback, and changed-fraction gates;
+- projection upper-bound and source-heldout diagnostics.
 
-That is real progress, but it is not the same as a final paper method. We spent
-too much effort making weak residual mechanisms safe and auditable. Safety made
-the failures trustworthy, but it did not make the method strong.
+Those pieces are valuable.  They made the failure visible.
 
-There is also a current implementation hygiene issue: texture-bin reliability
-calibration has been partially introduced in
-`scripts/car_model/train_perceptual_surface_residual_decoder.py`, but its CLI,
-target exact path, and prediction path still need to be fully wired before it
-can be treated as a clean experimental feature. This is not the root cause of
-the Phase-J stall, but it must be closed before using that branch for new claims.
+The mistake was over-investing in making a weak residual carrier safe.  Safety
+can prevent regressions, but it cannot turn an underpowered representation into
+a high-bandwidth residual transport model.
+
+The failed assumption was:
+
+```text
+If the surface residual carrier is safer, more adaptive, and more feature-rich,
+it will eventually carry Phase-J-like corrections.
+```
+
+The evidence now says:
+
+```text
+The carrier/objective is not learning stable cross-view residual direction.
+More gates mostly decide when not to apply it.
+```
 
 ## What Should Stop
 
-The following should not remain the main route:
+These should not remain the main route:
 
-- more alpha/rank scans on the same carrier;
-- footprint expansion without a stronger residual target;
-- scalar face/bin reliability gates as the claimed innovation;
-- target-compatible source weighting as the main novelty;
-- local ridge/affine/patch fills without source-heldout direction supervision;
-- full9 promotion before flowers exact beats Phase-J all-axis.
+- alpha/rank/floor scans on the same carrier;
+- adding scalar reliability features without a transport objective;
+- footprint expansion without stronger residual direction learning;
+- global or per-bin alpha tuning as the headline novelty;
+- full9 promotion before flowers exact closes the Phase-J PSNR gap;
+- treating near-no-op policy-val numerical positives as success.
 
-These are useful diagnostics or components, not the missing breakthrough.
+## What The Next Real Method Must Do
 
-## What Should Happen Next
+The next credible paper-level attempt must preserve more of Phase-J's
+target-conditioned information path while staying train-only at decision time.
 
-The next credible method should directly model residual transport:
+Minimum viable direction:
 
-1. Build a cross-view residual direction predictor.
-   - Train with source-heldout loss.
-   - Predict RGB residual and confidence together.
-   - Use source-view diversity, heldout cosine/error, normal-view agreement,
-     parent color, edge/structure, UV position, and support statistics.
+1. keep a support-view residual feature bank instead of only static face/UV bins;
+2. train source-A to heldout-source-B residual transport explicitly;
+3. condition the decoder on target view geometry, normal/view angle, depth
+   consistency, source-view agreement, and occlusion uncertainty;
+4. supervise RGB residual, direction cosine, magnitude, and patch/perceptual
+   structure on heldout-source views;
+5. use policy-val only as certification and fixed-policy selection after the
+   model has learned nontrivial transport;
+6. require nontrivial changed fraction, positive view fractions, and tail-safe
+   PSNR/SSIM/LPIPS before target exact or full9.
 
-2. Replace single-bin texture latent with multi-source residual evidence.
-   - Store source residual sets or a source-conditioned basis.
-   - Decode target residual from target/source compatibility rather than only
-     from a static UV bin code.
+## Updated Success Criteria
 
-3. Keep Phase-J teacher projection as a required upper-bound check.
-   - If the new carrier cannot project teacher residual on policy-val with
-     robust SSIM/LPIPS tails, do not launch exact target or full9.
+Before another full9 promotion, the improved method should show:
 
-4. Separate scientific claims:
-   - Phase-J is the endpoint to beat.
-   - v106 is the strongest current baked baseline.
-   - v169/vNext is still an active research route, not a solved paper result.
+| gate | minimum expectation |
+|---|---|
+| policy-val | nonzero selected alpha with nontrivial changed fraction |
+| flowers exact | at least `+0.10 dB` over v293a before claiming a real breakthrough |
+| Phase-J gap | materially reduced, not `0.001 dB` scale |
+| tails | no SSIM/LPIPS tail damage under fixed policy |
+| protocol | target/test GT used only for final reporting |
+| evidence | commands, configs, W&B paths, renders, metrics, and errors documented |
 
-## Current Honest Status
+## Final Verdict
 
-Current status is `NOT COMPLETE`.
+```text
+Final status: NOT COMPLETE.
+```
 
-The current v169/vNext route has produced useful engineering infrastructure and
-clear negative evidence, but it has not yet produced a representation-level
-method that beats Phase-J all-axis under the required gate. The strongest
-explanation is a representation and residual-transport bottleneck, not lack of
-training length or missing full9 runs.
+The current work has a strong Phase-J endpoint and a strong audit shell, but the
+representation-level internalization of Phase-J is still unresolved.  The next
+step is not another parameter sweep.  It must be a higher-bandwidth,
+target-conditioned, source-heldout-supervised residual transport model.
