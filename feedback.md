@@ -1344,6 +1344,65 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-07-01 v314 Feedback Addendum
+
+New implementation:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+```
+
+New policy option:
+
+```text
+--per_view_risk_model_only_when_scene_fixed
+```
+
+Artifact index:
+
+```text
+docs/car_model/7-01-v314-SceneFixedRiskKNN-Log.md
+docs/car_model/results/v314_scene_fixed_risk_knn_focused_summary.json
+docs/car_model/results/v314_scene_fixed_risk_knn_multiscene_summary.json
+outputs/carnet/spcarnet_v314_scene_fixed_risk_knn_multiscene_20260701
+```
+
+What was learned:
+
+- Learned risk is not safe as a universal per-view override.
+- It becomes useful only as a fixed-fallback repair branch, and only with
+  source-heldout tail guards.
+- KNN remains better for scenes where the scene-level source-heldout selector
+  already chooses a non-fixed variant.
+
+Full9 result:
+
+| method | macro PSNR gain | macro SSIM gain | safe scene rate | positive-view fraction | mean min PSNR | mean CVaR PSNR | negative views |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| v305 | +0.266578 | +0.003701 | 1.00 | 0.954228 | +0.013917 | +0.082173 | 8 |
+| v309 | +0.267843 | +0.003711 | 1.00 | 0.949784 | +0.013817 | +0.081414 | 9 |
+| v310c | +0.267134 | +0.003704 | 1.00 | 0.954228 | +0.014003 | +0.081866 | 8 |
+| v314 | +0.268348 | +0.003715 | 1.00 | 0.949784 | +0.001562 | +0.078339 | 9 |
+
+Important failure:
+
+`treehill` is the bottleneck. v314 risk repair increases mean PSNR from
+`+0.090757` to `+0.095295`, but worsens worst-view PSNR from `-0.049846` to
+`-0.160136` and CVaR from `+0.002068` to `-0.025606`.
+
+Lesson for the next model:
+
+Do not optimize only macro mean. The next policy must explicitly preserve
+target-blind tail safety. A credible v315 should block candidate switches whose
+source-heldout evidence suggests worst-view collapse, while keeping v314's
+mean-quality gains on `flowers`, `garden`, and `treehill`.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v313 Consistency-Feature Risk Model Feedback Addendum
 
 New implementation:

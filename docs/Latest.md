@@ -1346,6 +1346,59 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-07-01 Update: v314 Scene-Fixed Risk + KNN Policy
+
+Implemented a stricter composition rule in:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+```
+
+New CLI:
+
+```text
+--per_view_risk_model_only_when_scene_fixed
+```
+
+The learned risk model is now allowed only when the source-heldout scene selector
+falls back to `fixed`. For non-fixed scene choices, v314 keeps the stronger
+scene-level selector and optional KNN refinement. This prevents learned risk
+from overriding reliable `learned`/`hybrid` scene decisions.
+
+Full9 summary:
+
+```text
+docs/car_model/results/v314_scene_fixed_risk_knn_multiscene_summary.json
+outputs/carnet/spcarnet_v314_scene_fixed_risk_knn_multiscene_20260701
+```
+
+| method | macro PSNR gain | macro SSIM gain | safe scene rate | positive-view fraction | mean min PSNR | mean CVaR PSNR | negative views |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| v305 | +0.266578 | +0.003701 | 1.00 | 0.954228 | +0.013917 | +0.082173 | 8 |
+| v309 | +0.267843 | +0.003711 | 1.00 | 0.949784 | +0.013817 | +0.081414 | 9 |
+| v310c | +0.267134 | +0.003704 | 1.00 | 0.954228 | +0.014003 | +0.081866 | 8 |
+| v314 | +0.268348 | +0.003715 | 1.00 | 0.949784 | +0.001562 | +0.078339 | 9 |
+
+Interpretation:
+
+- v314 is the current full9 mean-quality frontier: it improves macro PSNR/SSIM
+  over v309 and v310c.
+- The improvement is small but real under the same local evaluation summary.
+- v314 is not an all-axis winner because tail metrics regress. The main failure
+  is `treehill`: risk repair improves mean PSNR but worsens the worst-view tail.
+
+Detailed log:
+
+```text
+docs/car_model/7-01-v314-SceneFixedRiskKNN-Log.md
+```
+
+Current verdict remains:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Update: v313 Consistency-Feature Risk Model
 
 This update adds residual-consistency proxy features and tests a safer learned

@@ -693,6 +693,12 @@ def _fit_per_view_risk_model_policy(
     if selector_payload is None or not selector_payload.get("per_view"):
         return {"enabled": False, "verdict": "missing source-heldout selector per-view evidence"}
     selected_variant = str(selector_payload["selected_variant"])
+    if bool(args.per_view_risk_model_only_when_scene_fixed) and selected_variant != "fixed":
+        return {
+            "enabled": False,
+            "selected_variant": selected_variant,
+            "verdict": "disabled because scene-level source-heldout selector was not fixed",
+        }
     if selected_variant == "fixed" and not bool(args.per_view_risk_model_allow_when_scene_fixed):
         return {
             "enabled": False,
@@ -1652,6 +1658,7 @@ def main() -> None:
     )
     parser.add_argument("--per_view_risk_model_ridge", type=float, default=1.0e-3)
     parser.add_argument("--per_view_risk_model_reject_variant", choices=["noop", "scene"], default="scene")
+    parser.add_argument("--per_view_risk_model_only_when_scene_fixed", action="store_true")
     parser.add_argument("--per_view_risk_model_allow_when_scene_fixed", action="store_true")
     parser.add_argument("--per_view_risk_model_require_source_safe", action="store_true")
     parser.add_argument("--per_view_risk_model_min_accept_fraction", type=float, default=0.0)
