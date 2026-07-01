@@ -2,6 +2,78 @@
 
 Date: 2026-06-28
 
+## 2026-07-01 Follow-up: v335 Target-Neighbor Candidate Unlock
+
+Newest positive method update:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+scripts/car_model/probe_target_neighbor_candidate_rerank.py
+docs/car_model/7-01-v335-TargetNeighborCandidateUnlock.md
+docs/car_model/results/v335_target_neighbor_candidate_unlock_full9_vs_v334_v333_v329b_audit.json
+docs/car_model/results/v335_target_neighbor_candidate_unlock_full9_vs_v334_v333_v329b_audit.md
+docs/car_model/results/v335_target_neighbor_candidate_rerank_probe.json
+docs/car_model/results/v335_target_neighbor_candidate_rerank_probe.md
+docs/car_model/results/v335_target_neighbor_candidate_unlock_treehill_fair_report.json
+docs/car_model/results/v335_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v335_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v335_frontier_panels/
+outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701
+outputs/carnet/spcarnet_v335_frontier_comparison_full9_20260701
+```
+
+v335 is the first post-v334 step that uses target-neighbor evidence not only as
+a rollback/veto, but also as a tightly guarded unlock. A pure target-neighbor
+candidate reranker was tested first and rejected because it hurt full9 macro
+metrics. The accepted mechanism only unlocks `fixed -> learned` after the full
+v334 policy stack, and only when the learned candidate is more target-neighbor
+consistent by a frozen `0.0002` MAE margin. Target/test GT is not used at
+decision time.
+
+Negative probe:
+
+| metric | current/v334 | fixed | learned | pure TNC | oracle |
+|---|---:|---:|---:|---:|---:|
+| PSNR gain | 0.272793021725 | 0.230035428440 | 0.274551449972 | 0.235473066023 | 0.283612355038 |
+| SSIM gain | 0.003738933009 | 0.003414926490 | 0.003670204304 | 0.003419653533 | 0.003790476986 |
+
+Full9 replay:
+
+| metric | v329b | v333 | v334 | v335 | v335-v334 | v335-v329b |
+|---|---:|---:|---:|---:|---:|---:|
+| selected PSNR gain | 0.272522652479 | 0.272716573354 | 0.272793021725 | 0.274017908934 | +0.001224887209 | +0.001495256455 |
+| selected SSIM gain | 0.003736660673 | 0.003738908357 | 0.003738933009 | 0.003741526179 | +0.000002593170 | +0.000004865505 |
+| rollback count | 0 | 2 | 3 | 3 | +0 | +3 |
+| candidate unlock count | 0 | 0 | 0 | 2 | +2 | +2 |
+| all-axis safe scenes | 9/9 | 9/9 | 9/9 | 9/9 |  |  |
+
+The only changed scene is treehill. The two unlocked views are `00000` and
+`00010`, both `fixed -> learned`. Focused treehill improves from v334
+`0.107097397630 / 0.001694096459` to v335
+`0.118121382508 / 0.001717434989`.
+
+Perceptual/frontier result:
+
+| method | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v329b | 27.588444 | 0.028173 | 0.087733 | 0.057664 |
+| v334 | 27.588834 | 0.028170 | 0.087735 | 0.057664 |
+| v335 | 27.590394 | 0.028168 | 0.087742 | 0.057670 |
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+v335 is a verified positive milestone over v334/v333/v329b and remains far
+above the local clean26000 frontier, but it is still not final paper closure.
+The gain is localized, the visible difference remains subtle, and LPIPS/DISTS
+are slightly worse than v334/v329b. The next step should target raw candidate
+generation or representation capacity; v335-style certificates should remain
+the safety/arbitration layer rather than the main source of novelty.
+
 ## 2026-07-01 Follow-up: v334 Source-Target Contradiction Certificate
 
 Newest positive method update:

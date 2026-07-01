@@ -1,0 +1,710 @@
+{
+  "title": "v335 target-neighbor candidate unlock full9 audit",
+  "date": "2026-07-01",
+  "scenes": [
+    "bicycle",
+    "flowers",
+    "garden",
+    "stump",
+    "counter",
+    "treehill",
+    "bonsai",
+    "room",
+    "kitchen"
+  ],
+  "roots": {
+    "v329b": "outputs/carnet/spcarnet_v329b_fixed_rollback_strict_full9_20260701",
+    "v333": "outputs/carnet/spcarnet_v333_target_neighbor_consistency_full9_20260701",
+    "v334": "outputs/carnet/spcarnet_v334_source_target_contradiction_full9_20260701",
+    "v335": "outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701"
+  },
+  "macro": {
+    "v329b": {
+      "psnr": 0.2725226524788792,
+      "ssim": 0.0037366606734715343,
+      "safe_scenes": 9,
+      "rollback": 0,
+      "unlock": 0
+    },
+    "v333": {
+      "psnr": 0.27271657335352273,
+      "ssim": 0.003738908357267416,
+      "safe_scenes": 9,
+      "rollback": 2,
+      "unlock": 0
+    },
+    "v334": {
+      "psnr": 0.2727930217252385,
+      "ssim": 0.0037389330085711198,
+      "safe_scenes": 9,
+      "rollback": 3,
+      "unlock": 0
+    },
+    "v335": {
+      "psnr": 0.27401790893393724,
+      "ssim": 0.0037415261785487554,
+      "safe_scenes": 9,
+      "rollback": 3,
+      "unlock": 2
+    },
+    "v335_minus_v334": {
+      "psnr": 0.0012248872086987328,
+      "ssim": 2.5931699776356523e-06,
+      "rollback": 0,
+      "unlock": 2
+    },
+    "v335_minus_v333": {
+      "psnr": 0.0013013355804145088,
+      "ssim": 2.617821281339274e-06,
+      "rollback": 1,
+      "unlock": 2
+    },
+    "v335_minus_v329b": {
+      "psnr": 0.0014952564550580472,
+      "ssim": 4.865505077221097e-06,
+      "rollback": 3,
+      "unlock": 2
+    }
+  },
+  "scene_rows": [
+    {
+      "scene": "bicycle",
+      "v329b": {
+        "psnr": 0.11995854884043254,
+        "ssim": 0.00298875093460083,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {}
+      },
+      "v333": {
+        "psnr": 0.11995854884043254,
+        "ssim": 0.00298875093460083,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 25
+        }
+      },
+      "v334": {
+        "psnr": 0.11995854884043254,
+        "ssim": 0.00298875093460083,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 25
+        }
+      },
+      "v335": {
+        "psnr": 0.11995854884043254,
+        "ssim": 0.00298875093460083,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {
+          "input_not_incumbent": 25
+        },
+        "tnc_reasons": {
+          "no_promotion": 25
+        }
+      },
+      "v335_minus_v334": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v333": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v329b": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      }
+    },
+    {
+      "scene": "flowers",
+      "v329b": {
+        "psnr": 0.0923596316861136,
+        "ssim": 0.00411434065211903,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {}
+      },
+      "v333": {
+        "psnr": 0.0923596316861136,
+        "ssim": 0.00411434065211903,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 13,
+          "decision_source_not_checked": 9
+        }
+      },
+      "v334": {
+        "psnr": 0.0923596316861136,
+        "ssim": 0.00411434065211903,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 13,
+          "decision_source_not_checked": 9
+        }
+      },
+      "v335": {
+        "psnr": 0.0923596316861136,
+        "ssim": 0.00411434065211903,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {
+          "input_not_incumbent": 22
+        },
+        "tnc_reasons": {
+          "no_promotion": 13,
+          "decision_source_not_checked": 9
+        }
+      },
+      "v335_minus_v334": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v333": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v329b": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      }
+    },
+    {
+      "scene": "garden",
+      "v329b": {
+        "psnr": 0.14544912017232203,
+        "ssim": 0.0019197786847750347,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {}
+      },
+      "v333": {
+        "psnr": 0.14544912017232203,
+        "ssim": 0.0019197786847750347,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "decision_source_not_checked": 21,
+          "no_promotion": 3
+        }
+      },
+      "v334": {
+        "psnr": 0.14544912017232203,
+        "ssim": 0.0019197786847750347,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "decision_source_not_checked": 21,
+          "no_promotion": 3
+        }
+      },
+      "v335": {
+        "psnr": 0.14544912017232203,
+        "ssim": 0.0019197786847750347,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {
+          "input_not_incumbent": 23,
+          "margin_too_small": 1
+        },
+        "tnc_reasons": {
+          "decision_source_not_checked": 21,
+          "no_promotion": 3
+        }
+      },
+      "v335_minus_v334": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v333": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v329b": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      }
+    },
+    {
+      "scene": "stump",
+      "v329b": {
+        "psnr": 0.05702976139303506,
+        "ssim": 0.001208242028951645,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {}
+      },
+      "v333": {
+        "psnr": 0.05702976139303506,
+        "ssim": 0.001208242028951645,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 16
+        }
+      },
+      "v334": {
+        "psnr": 0.05702976139303506,
+        "ssim": 0.001208242028951645,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 16
+        }
+      },
+      "v335": {
+        "psnr": 0.05702976139303506,
+        "ssim": 0.001208242028951645,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {
+          "margin_too_small": 16
+        },
+        "tnc_reasons": {
+          "no_promotion": 16
+        }
+      },
+      "v335_minus_v334": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v333": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v329b": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      }
+    },
+    {
+      "scene": "counter",
+      "v329b": {
+        "psnr": 0.4263596368894508,
+        "ssim": 0.006908347209294637,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {}
+      },
+      "v333": {
+        "psnr": 0.4263596368894508,
+        "ssim": 0.006908347209294637,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 30
+        }
+      },
+      "v334": {
+        "psnr": 0.4263596368894508,
+        "ssim": 0.006908347209294637,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 30
+        }
+      },
+      "v335": {
+        "psnr": 0.4263596368894508,
+        "ssim": 0.006908347209294637,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {
+          "input_not_incumbent": 30
+        },
+        "tnc_reasons": {
+          "no_promotion": 30
+        }
+      },
+      "v335_minus_v334": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v333": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v329b": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      }
+    },
+    {
+      "scene": "treehill",
+      "v329b": {
+        "psnr": 0.10466407441286524,
+        "ssim": 0.0016736454433865016,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {}
+      },
+      "v333": {
+        "psnr": 0.10640936228465729,
+        "ssim": 0.0016938745975494385,
+        "safe": true,
+        "rollback": 2,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 11,
+          "passed": 5,
+          "target_neighbor_consistency_delta": 2
+        }
+      },
+      "v334": {
+        "psnr": 0.10709739763009887,
+        "ssim": 0.0016940964592827691,
+        "safe": true,
+        "rollback": 3,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 11,
+          "passed": 4,
+          "target_neighbor_consistency_delta": 2,
+          "source_target_neighbor_contradiction": 1
+        }
+      },
+      "v335": {
+        "psnr": 0.1181213825083878,
+        "ssim": 0.0017174349890814887,
+        "safe": true,
+        "rollback": 3,
+        "unlock": 2,
+        "unlock_reasons": {
+          "promoted": 2,
+          "input_not_incumbent": 10,
+          "margin_too_small": 6
+        },
+        "tnc_reasons": {
+          "no_promotion": 11,
+          "passed": 4,
+          "target_neighbor_consistency_delta": 2,
+          "source_target_neighbor_contradiction": 1
+        }
+      },
+      "v335_minus_v334": {
+        "psnr": 0.011023984878288928,
+        "ssim": 2.333852979871957e-05,
+        "unlock": 2,
+        "rollback": 0
+      },
+      "v335_minus_v333": {
+        "psnr": 0.01171202022373051,
+        "ssim": 2.3560391532050215e-05,
+        "unlock": 2,
+        "rollback": 1
+      },
+      "v335_minus_v329b": {
+        "psnr": 0.013457308095522563,
+        "ssim": 4.378954569498705e-05,
+        "unlock": 2,
+        "rollback": 3
+      }
+    },
+    {
+      "scene": "bonsai",
+      "v329b": {
+        "psnr": 0.5759744422762492,
+        "ssim": 0.005847958294120994,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {}
+      },
+      "v333": {
+        "psnr": 0.5759744422762492,
+        "ssim": 0.005847958294120994,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 33,
+          "decision_source_not_checked": 4
+        }
+      },
+      "v334": {
+        "psnr": 0.5759744422762492,
+        "ssim": 0.005847958294120994,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 33,
+          "decision_source_not_checked": 4
+        }
+      },
+      "v335": {
+        "psnr": 0.5759744422762492,
+        "ssim": 0.005847958294120994,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {
+          "input_not_incumbent": 34,
+          "margin_too_small": 3
+        },
+        "tnc_reasons": {
+          "no_promotion": 33,
+          "decision_source_not_checked": 4
+        }
+      },
+      "v335_minus_v334": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v333": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v329b": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      }
+    },
+    {
+      "scene": "room",
+      "v329b": {
+        "psnr": 0.43728549610687184,
+        "ssim": 0.005058021117479374,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {}
+      },
+      "v333": {
+        "psnr": 0.43728549610687184,
+        "ssim": 0.005058021117479374,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "decision_source_not_checked": 20,
+          "no_promotion": 19
+        }
+      },
+      "v334": {
+        "psnr": 0.43728549610687184,
+        "ssim": 0.005058021117479374,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "decision_source_not_checked": 20,
+          "no_promotion": 19
+        }
+      },
+      "v335": {
+        "psnr": 0.43728549610687184,
+        "ssim": 0.005058021117479374,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {
+          "input_not_incumbent": 38,
+          "margin_too_small": 1
+        },
+        "tnc_reasons": {
+          "decision_source_not_checked": 20,
+          "no_promotion": 19
+        }
+      },
+      "v335_minus_v334": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v333": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v329b": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      }
+    },
+    {
+      "scene": "kitchen",
+      "v329b": {
+        "psnr": 0.4936231605325725,
+        "ssim": 0.003910861696515764,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {}
+      },
+      "v333": {
+        "psnr": 0.4936231605325725,
+        "ssim": 0.003910861696515764,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 35
+        }
+      },
+      "v334": {
+        "psnr": 0.4936231605325725,
+        "ssim": 0.003910861696515764,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {},
+        "tnc_reasons": {
+          "no_promotion": 35
+        }
+      },
+      "v335": {
+        "psnr": 0.4936231605325725,
+        "ssim": 0.003910861696515764,
+        "safe": true,
+        "rollback": 0,
+        "unlock": 0,
+        "unlock_reasons": {
+          "input_not_incumbent": 35
+        },
+        "tnc_reasons": {
+          "no_promotion": 35
+        }
+      },
+      "v335_minus_v334": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v333": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      },
+      "v335_minus_v329b": {
+        "psnr": 0.0,
+        "ssim": 0.0,
+        "unlock": 0,
+        "rollback": 0
+      }
+    }
+  ],
+  "unlock_promotions": [
+    {
+      "scene": "treehill",
+      "view": "00000",
+      "from": "fixed",
+      "to": "learned",
+      "margin": 0.0008741538547972424,
+      "fixed_psnr": 0.028486481194246238,
+      "learned_psnr": 0.04660173254959332,
+      "selected_psnr": 0.04660173254959332,
+      "fixed_ssim": -0.000559389591217041,
+      "learned_ssim": -0.0003948211669921875,
+      "selected_ssim": -0.0003948211669921875
+    },
+    {
+      "scene": "treehill",
+      "view": "00010",
+      "from": "fixed",
+      "to": "learned",
+      "margin": 0.0006703781211745904,
+      "fixed_psnr": 0.4465543207125364,
+      "learned_psnr": 0.62687079716639,
+      "selected_psnr": 0.62687079716639,
+      "fixed_ssim": 0.0006002187728881836,
+      "learned_ssim": 0.0008557438850402832,
+      "selected_ssim": 0.0008557438850402832
+    }
+  ],
+  "verdict": "v335 adds a target-blind fixed-to-learned unlock after v334 rollback. Full9 macro improves over v334/v333/v329b, with no changed scenes except treehill and 9/9 all-axis safe scenes."
+}

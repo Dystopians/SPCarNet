@@ -303,6 +303,19 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- keep / shadow rollback / rollback: `{target_neighbor.get('keep_count')}` / `{target_neighbor.get('shadow_rollback_count')}` / `{target_neighbor.get('rollback_count')}`",
             f"- reason counts: `{target_neighbor.get('reason_counts')}`",
         ]
+    if payload.get("target_neighbor_candidate_unlock_policy"):
+        unlock = payload["target_neighbor_candidate_unlock_policy"]
+        lines += [
+            "",
+            "## Target-Neighbor Candidate Unlock",
+            "",
+            f"- enabled: `{unlock.get('enabled')}`",
+            f"- incumbent / candidate: `{unlock.get('incumbent_variant')}` / `{unlock.get('candidate_variant')}`",
+            f"- min incumbent-minus-candidate MAE delta: `{unlock.get('min_incumbent_minus_candidate_delta')}`",
+            f"- target GT used: `{unlock.get('uses_target_gt')}`",
+            f"- keep / promote / skipped: `{unlock.get('keep_count')}` / `{unlock.get('promote_count')}` / `{unlock.get('skipped_count')}`",
+            f"- reason counts: `{unlock.get('reason_counts')}`",
+        ]
     (output_dir / "support_transport_apply_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -2612,6 +2625,82 @@ def _target_neighbor_consistency_decision(
     return payload
 
 
+def _target_neighbor_candidate_unlock_decision(
+    *,
+    output_variant: str,
+    ev: Any,
+    deltas: dict[str, torch.Tensor],
+    target: Any,
+    target_frames: Sequence[Any],
+    loader: FrameLoader,
+    device: torch.device,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    enabled = bool(args.enable_target_neighbor_candidate_unlock)
+    incumbent_variant = str(args.target_neighbor_candidate_unlock_incumbent_variant)
+    candidate_variant = str(args.target_neighbor_candidate_unlock_candidate_variant)
+    payload: dict[str, Any] = {
+        "enabled": enabled,
+        "incumbent_variant": incumbent_variant,
+        "candidate_variant": candidate_variant,
+        "input_variant": output_variant,
+        "decision": "keep",
+        "promote_applied": False,
+        "reject_reason": None,
+        "incumbent_minus_candidate_mae_delta": None,
+        "candidate_score": None,
+        "incumbent_score": None,
+    }
+    if not enabled:
+        payload["reject_reason"] = "disabled"
+        return payload
+    if output_variant != incumbent_variant:
+        payload["reject_reason"] = "input_not_incumbent"
+        return payload
+    if incumbent_variant not in deltas or candidate_variant not in deltas:
+        payload["reject_reason"] = "missing_candidate_delta"
+        return payload
+
+    incumbent_image = torch.clamp(ev.base + deltas[incumbent_variant], 0.0, 1.0)
+    candidate_image = torch.clamp(ev.base + deltas[candidate_variant], 0.0, 1.0)
+    incumbent_score = _target_neighbor_consistency_score(
+        target=target,
+        image=incumbent_image,
+        target_frames=target_frames,
+        loader=loader,
+        device=device,
+        args=args,
+    )
+    candidate_score = _target_neighbor_consistency_score(
+        target=target,
+        image=candidate_image,
+        target_frames=target_frames,
+        loader=loader,
+        device=device,
+        args=args,
+    )
+    payload["incumbent_score"] = incumbent_score
+    payload["candidate_score"] = candidate_score
+    incumbent_error = incumbent_score.get("mean_mae_to_neighbor_base")
+    candidate_error = candidate_score.get("mean_mae_to_neighbor_base")
+    if incumbent_error is None or candidate_error is None:
+        payload["reject_reason"] = "score_unavailable"
+        return payload
+    if float(candidate_score.get("total_effective_weight", 0.0)) < float(args.target_neighbor_consistency_min_effective_weight):
+        payload["reject_reason"] = "insufficient_target_neighbor_support"
+        return payload
+
+    mae_delta = float(incumbent_error) - float(candidate_error)
+    payload["incumbent_minus_candidate_mae_delta"] = float(mae_delta)
+    if mae_delta < float(args.target_neighbor_candidate_unlock_min_incumbent_minus_candidate_delta):
+        payload["reject_reason"] = "margin_too_small"
+        return payload
+
+    payload["decision"] = "promote"
+    payload["promote_applied"] = True
+    return payload
+
+
 def _fit_per_view_risk_model_policy(
     selector_payload: dict[str, Any] | None,
     *,
@@ -4298,6 +4387,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "rollback_count": 0,
         "reason_counts": {},
     }
+    target_neighbor_candidate_unlock_stats = {
+        "promote_count": 0,
+        "keep_count": 0,
+        "skipped_count": 0,
+        "reason_counts": {},
+    }
 
     for idx, target in enumerate(tqdm(target_frames, desc="apply support-transport calibrator")):
         with torch.no_grad():
@@ -4357,6 +4452,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             promotion_incumbent_variant = selected_variant
             promotion_rollback_diagnostics: dict[str, Any] | None = None
             target_neighbor_consistency_diagnostics: dict[str, Any] | None = None
+            target_neighbor_candidate_unlock_diagnostics: dict[str, Any] | None = None
             if bool(local_support_payload.get("enabled", False)) and not bool(args.local_support_post_incumbent_fallback_only):
                 output_variant, local_support_diagnostics = _local_support_choose_variant(
                     proxies_by_variant,
@@ -4596,6 +4692,34 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 selected_proxy = proxies_by_variant[output_variant]
                 selected_proxy_variant = output_variant
                 gate_accepted = True
+            target_neighbor_candidate_unlock_diagnostics = _target_neighbor_candidate_unlock_decision(
+                output_variant=output_variant,
+                ev=ev,
+                deltas=deltas,
+                target=target,
+                target_frames=target_frames,
+                loader=loader,
+                device=device,
+                args=args,
+            )
+            if bool(target_neighbor_candidate_unlock_diagnostics.get("enabled", False)):
+                decision = str(target_neighbor_candidate_unlock_diagnostics.get("decision", "keep"))
+                reason = str(target_neighbor_candidate_unlock_diagnostics.get("reject_reason") or "promoted")
+                if decision == "promote":
+                    target_neighbor_candidate_unlock_stats["promote_count"] += 1
+                elif reason == "input_not_incumbent":
+                    target_neighbor_candidate_unlock_stats["skipped_count"] += 1
+                else:
+                    target_neighbor_candidate_unlock_stats["keep_count"] += 1
+                reason_counts = target_neighbor_candidate_unlock_stats["reason_counts"]
+                reason_counts[reason] = int(reason_counts.get(reason, 0)) + 1
+            if bool(target_neighbor_candidate_unlock_diagnostics.get("promote_applied", False)):
+                output_variant = str(args.target_neighbor_candidate_unlock_candidate_variant)
+                selected_delta = deltas[output_variant]
+                selected_proxy = proxies_by_variant[output_variant]
+                selected_proxy_variant = output_variant
+                output_decision_source = "target_neighbor_unlock"
+                gate_accepted = True
             if not gate_accepted and output_variant != "noop":
                 selected_delta = torch.zeros_like(selected_delta)
                 output_variant = "noop"
@@ -4677,6 +4801,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "source_reliability_predictions": source_reliability_predictions,
                     "source_reliability_diagnostics": source_reliability_diagnostics,
                     "target_neighbor_consistency_diagnostics": target_neighbor_consistency_diagnostics,
+                    "target_neighbor_candidate_unlock_diagnostics": target_neighbor_candidate_unlock_diagnostics,
                 }
             )
             if idx < int(args.save_example_views):
@@ -4759,13 +4884,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         if selected_all_axis_safe_vs_fixed
         else f"Selected support-transport output {output_label} is not all-axis safe versus fixed on this target/test split."
     )
+    online_target_proxy_enabled = bool(args.enable_target_neighbor_consistency) or bool(args.enable_target_neighbor_candidate_unlock)
     payload: dict[str, Any] = {
         "method": "apply v302 constrained hybrid support-transport calibrator",
         "target_gt_usage": "GT read only after candidate images are saved, for evaluation",
         "selection_protocol": {
             "scope": "source_heldout_before_target_loop",
             "target_gt_used_for_selection": False,
-            "selection_frozen_before_target_loop": True,
+            "selection_frozen_before_target_loop": not online_target_proxy_enabled,
+            "source_heldout_selector_frozen_before_target_loop": True,
+            "online_target_proxy_refinement_enabled": online_target_proxy_enabled,
             "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
             "source_perceptual_uses_train_heldout_gt_only": bool(args.compute_source_perceptual),
             "local_support_uses_target_gt": False,
@@ -4779,6 +4907,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "promotion_rollback_fit_scope": "source_heldout_pairwise_loo_before_target_loop",
             "target_neighbor_consistency_uses_target_gt": False,
             "target_neighbor_consistency_scope": "target_render_depth_camera_only_post_decision_certificate",
+            "target_neighbor_candidate_unlock_uses_target_gt": False,
+            "target_neighbor_candidate_unlock_scope": "target_render_depth_camera_only_online_per_view_unlock",
         },
         "checkpoint": str(args.checkpoint),
         "base_model_path": str(base_model),
@@ -4908,6 +5038,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "considered_count": int(target_neighbor_consistency_stats["considered_count"]),
             "reason_counts": dict(target_neighbor_consistency_stats["reason_counts"]),
         },
+        "target_neighbor_candidate_unlock_policy": {
+            "enabled": bool(args.enable_target_neighbor_candidate_unlock),
+            "incumbent_variant": str(args.target_neighbor_candidate_unlock_incumbent_variant),
+            "candidate_variant": str(args.target_neighbor_candidate_unlock_candidate_variant),
+            "min_incumbent_minus_candidate_delta": float(args.target_neighbor_candidate_unlock_min_incumbent_minus_candidate_delta),
+            "uses_target_gt": False,
+            "reference": "target split render/depth/camera only; promotes a fixed incumbent when the candidate is more target-neighbor consistent by a frozen margin",
+            "promote_count": int(target_neighbor_candidate_unlock_stats["promote_count"]),
+            "keep_count": int(target_neighbor_candidate_unlock_stats["keep_count"]),
+            "skipped_count": int(target_neighbor_candidate_unlock_stats["skipped_count"]),
+            "reason_counts": dict(target_neighbor_candidate_unlock_stats["reason_counts"]),
+        },
         "verdict": verdict,
         "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
     }
@@ -4974,6 +5116,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             )
             flat["apply/target_neighbor_consistency/rollback_count"] = float(target_neighbor.get("rollback_count", 0) or 0)
             flat["apply/target_neighbor_consistency/considered_count"] = float(target_neighbor.get("considered_count", 0) or 0)
+        if payload.get("target_neighbor_candidate_unlock_policy"):
+            unlock = payload["target_neighbor_candidate_unlock_policy"]
+            flat["apply/target_neighbor_candidate_unlock/enabled"] = float(bool(unlock.get("enabled", False)))
+            flat["apply/target_neighbor_candidate_unlock/promote_count"] = float(unlock.get("promote_count", 0) or 0)
+            flat["apply/target_neighbor_candidate_unlock/keep_count"] = float(unlock.get("keep_count", 0) or 0)
+            flat["apply/target_neighbor_candidate_unlock/skipped_count"] = float(unlock.get("skipped_count", 0) or 0)
         run.log(flat)
         run.summary.update(flat)
         run.finish()
@@ -5170,6 +5318,10 @@ def main() -> None:
     parser.add_argument("--target_neighbor_consistency_contradiction_min_source_local_cvar_delta", type=float, default=1.0e9)
     parser.add_argument("--target_neighbor_consistency_contradiction_min_source_positive_fraction", type=float, default=1.0)
     parser.add_argument("--target_neighbor_consistency_contradiction_max_incumbent_minus_output_delta", type=float, default=-1.0e9)
+    parser.add_argument("--enable_target_neighbor_candidate_unlock", action="store_true")
+    parser.add_argument("--target_neighbor_candidate_unlock_incumbent_variant", default="fixed")
+    parser.add_argument("--target_neighbor_candidate_unlock_candidate_variant", default="learned")
+    parser.add_argument("--target_neighbor_candidate_unlock_min_incumbent_minus_candidate_delta", type=float, default=2.0e-4)
     parser.add_argument("--enable_per_view_risk_model_policy", action="store_true")
     parser.add_argument(
         "--per_view_risk_model_feature_grid",

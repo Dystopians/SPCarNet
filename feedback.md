@@ -2,6 +2,84 @@
 
 Date: 2026-06-28
 
+# 2026-07-01 v335 Feedback Addendum: Guarded Unlock Works, Pure TNC Ranking Fails
+
+New files:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+scripts/car_model/probe_target_neighbor_candidate_rerank.py
+docs/car_model/7-01-v335-TargetNeighborCandidateUnlock.md
+docs/car_model/results/v335_target_neighbor_candidate_unlock_full9_vs_v334_v333_v329b_audit.json
+docs/car_model/results/v335_target_neighbor_candidate_unlock_full9_vs_v334_v333_v329b_audit.md
+docs/car_model/results/v335_target_neighbor_candidate_rerank_probe.json
+docs/car_model/results/v335_target_neighbor_candidate_rerank_probe.md
+docs/car_model/results/v335_target_neighbor_candidate_unlock_treehill_fair_report.json
+docs/car_model/results/v335_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v335_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v335_frontier_panels/
+outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701
+outputs/carnet/spcarnet_v335_frontier_comparison_full9_20260701
+```
+
+Implemented change:
+
+v335 adds a guarded target-neighbor candidate unlock after the full v334
+rollback stack. It only promotes `fixed -> learned` when the learned candidate
+has lower target-neighbor render/depth/camera self-consistency error by at
+least `0.0002` MAE. It remains opt-in, target/test-GT-free at decision time,
+and the source-heldout selector remains frozen before the target loop. The new
+online step is a target-neighbor proxy refinement, so it must be described as a
+test-time target-split/transductive certificate rather than single-view
+independent inference.
+
+Negative probe:
+
+| metric | current/v334 | fixed | learned | pure TNC | oracle |
+|---|---:|---:|---:|---:|---:|
+| PSNR gain | 0.272793021725 | 0.230035428440 | 0.274551449972 | 0.235473066023 | 0.283612355038 |
+| SSIM gain | 0.003738933009 | 0.003414926490 | 0.003670204304 | 0.003419653533 | 0.003790476986 |
+
+Pure target-neighbor candidate ranking is a failure, not the method. It loses
+`-0.037319955702` PSNR gain versus v334 and damages several indoor scenes. The
+lesson is that target-neighbor consistency is a useful certificate, but not a
+standalone quality oracle.
+
+Full9 result:
+
+| metric | v329b | v333 | v334 | v335 | v335-v334 | v335-v329b |
+|---|---:|---:|---:|---:|---:|---:|
+| selected PSNR gain | 0.272522652479 | 0.272716573354 | 0.272793021725 | 0.274017908934 | +0.001224887209 | +0.001495256455 |
+| selected SSIM gain | 0.003736660673 | 0.003738908357 | 0.003738933009 | 0.003741526179 | +0.000002593170 | +0.000004865505 |
+| rollback count | 0 | 2 | 3 | 3 | +0 | +3 |
+| candidate unlock count | 0 | 0 | 0 | 2 | +2 | +2 |
+| all-axis safe scenes | 9/9 | 9/9 | 9/9 | 9/9 |  |  |
+
+Perceptual/frontier result:
+
+| method | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v329b | 27.588444 | 0.028173 | 0.087733 | 0.057664 |
+| v334 | 27.588834 | 0.028170 | 0.087735 | 0.057664 |
+| v335 | 27.590394 | 0.028168 | 0.087742 | 0.057670 |
+
+Hard lesson:
+
+The reflection is now producing falsifiable mechanisms: v335 first falsified the
+over-broad idea, then retained only the narrow case that full9 evidence supports.
+This is the right research discipline. But the gain is still not enough for a
+paper-level endpoint: only treehill changes, the visible difference is subtle,
+and LPIPS/DISTS are slightly worse than v334/v329b. The next model should create
+a stronger candidate generator or representation, then use v335 as the
+arbitration/safety layer.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v334 Feedback Addendum: Reflection Finally Became a Mechanism, But the Gain Is Still Narrow
 
 New files:

@@ -4,30 +4,27 @@
 
 ## 最新状态（2026-07-01）
 
-当前最新已验证里程碑是 **v329b fixed rollback certificate**。它新增了一个
-target-blind 的 source-heldout 证书：当 source reliability 和场景一致性
-margin 都支持时，才允许把不可靠的 `learned/hybrid` 单视角输出回退到
-`fixed`。full9 replay 相对 v322C incumbent 提升 `+0.001188315360` mean PSNR
-gain 和 `+0.000009419319` mean SSIM gain；相对 v327b 继续提升
-`+0.001097159569` / `+0.000008436946`。
+当前最新已验证里程碑是 **v335 target-neighbor candidate unlock**。它保留
+v334 rollback / source-target contradiction 栈，然后新增一个很窄的 opt-in
+target-blind 解锁：rollback 之后，如果 `learned` 候选相对 `fixed` 在
+target-neighbor 一致性上至少低 `0.0002` MAE，才允许 `fixed -> learned`。
+full9 replay 相对 v334 提升 `+0.001224887209` mean selected PSNR gain 和
+`+0.000002593170` mean selected SSIM gain，并保持 `9 / 9` 场景 all-axis safe。
 
 优先阅读：
 
 - [最新完整评估日志](docs/Latest.md)
-- [v329b fixed rollback certificate 日志](docs/car_model/7-01-v329b-FixedRollbackCertificate-Full9-Log.md)
-- [v329b full9 audit vs v322C](docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v322c_audit.json)
-- [v329b full9 audit vs v327b](docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v327b_audit.json)
-- [v329b frontier/perceptual/geometry 补充日志](docs/car_model/7-01-v329b-PerceptualGeometry-v330LocalSupport-Update.md)
-- [v329b clean-frontier LPIPS/DISTS 汇总](docs/car_model/results/v329b_frontier_lpips_qualitative_summary.md)
-- [v329b 几何 accounting](docs/car_model/7-01-v329b-Frontier-Geometry-Accounting.md)
-- [v329b 定性 changed-view 面板](docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel.png)
+- [v335 target-neighbor candidate unlock 日志](docs/car_model/7-01-v335-TargetNeighborCandidateUnlock.md)
+- [v335 full9 audit vs v334/v333/v329b](docs/car_model/results/v335_target_neighbor_candidate_unlock_full9_vs_v334_v333_v329b_audit.md)
+- [v335 target-neighbor rerank probe](docs/car_model/results/v335_target_neighbor_candidate_rerank_probe.md)
+- [v335 frontier LPIPS/DISTS 汇总](docs/car_model/results/v335_frontier_lpips_qualitative_summary.md)
+- [v335 treehill 解锁定性面板](docs/car_model/results/v335_frontier_panels/treehill_00000_00010_v334_v335_gt_panel.png)
 - [给下一阶段模型的反馈与经验教训](feedback.md)
 
-诚实状态：v329b 是真实的方法和证据里程碑，但还不是最终论文闭环。收益主要集中在
-`bonsai`、`room`、`garden`，以及继承自 v327b 的 `treehill` 小收益；定性差异仍然细微，
-新的 LPIPS/DISTS/frontier/几何证据已经补齐：v329b 优于本地 clean frontier，并且在
-clean26000/v322c/v327b/v329b 中 PSNR 最好，但它相对 v327b 不是全轴支配，因为
-LPIPS/DISTS 仍是 mixed 结果。
+诚实状态：v335 是真实的方法与证据里程碑，但还不是最终论文闭环。它在 full9 PSNR/SSIM
+gain 上超过 v334/v333/v329b，也明显高于本地 clean26000 frontier。不过新增收益主要集中在
+`treehill`，定性差异仍然细微，并且 LPIPS/DISTS 相比 v334/v329b 略差。下一步应该增强原始
+candidate generation 或表示能力，而不是继续只叠加仲裁规则。
 
 ## 当前报告包（2026-06-26）
 

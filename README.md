@@ -4,31 +4,30 @@
 
 ## Latest Status (2026-07-01)
 
-The newest verified milestone is **v329b fixed rollback certificate**. It adds
-a target-blind source-heldout certificate that can roll unsafe
-`learned/hybrid` per-view outputs back to `fixed` only when source reliability
-and scene-consistency margins agree. Full9 replay improves over the v322C
-incumbent by `+0.001188315360` mean PSNR gain and `+0.000009419319` mean SSIM
-gain, and improves over v327b by `+0.001097159569` / `+0.000008436946`.
+The newest verified milestone is **v335 target-neighbor candidate unlock**. It
+keeps the v334 rollback/source-target contradiction stack, then adds a narrow
+opt-in target-blind unlock: after rollback, a `fixed` output may reopen to
+`learned` only when the learned candidate is more target-neighbor consistent by
+a frozen `0.0002` MAE margin. Full9 replay improves over v334 by
+`+0.001224887209` mean selected PSNR gain and `+0.000002593170` mean selected
+SSIM gain, while preserving `9 / 9` all-axis-safe scenes.
 
 Start from:
 
 - [Latest full evaluation log](docs/Latest.md)
-- [v329b fixed rollback certificate log](docs/car_model/7-01-v329b-FixedRollbackCertificate-Full9-Log.md)
-- [v329b full9 audit vs v322C](docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v322c_audit.json)
-- [v329b full9 audit vs v327b](docs/car_model/results/v329b_fixed_rollback_strict_full9_vs_v327b_audit.json)
-- [v329b frontier/perceptual/geometry follow-up](docs/car_model/7-01-v329b-PerceptualGeometry-v330LocalSupport-Update.md)
-- [v329b clean-frontier LPIPS/DISTS summary](docs/car_model/results/v329b_frontier_lpips_qualitative_summary.md)
-- [v329b geometry accounting](docs/car_model/7-01-v329b-Frontier-Geometry-Accounting.md)
-- [v329b qualitative changed-view panel](docs/car_model/results/v329b_fixed_rollback_panels/v329b_key_changed_views_panel.png)
+- [v335 target-neighbor candidate unlock log](docs/car_model/7-01-v335-TargetNeighborCandidateUnlock.md)
+- [v335 full9 audit vs v334/v333/v329b](docs/car_model/results/v335_target_neighbor_candidate_unlock_full9_vs_v334_v333_v329b_audit.md)
+- [v335 target-neighbor rerank probe](docs/car_model/results/v335_target_neighbor_candidate_rerank_probe.md)
+- [v335 frontier LPIPS/DISTS summary](docs/car_model/results/v335_frontier_lpips_qualitative_summary.md)
+- [v335 qualitative treehill unlock panel](docs/car_model/results/v335_frontier_panels/treehill_00000_00010_v334_v335_gt_panel.png)
 - [next-model feedback and lessons](feedback.md)
 
-Honest status: v329b is a real method and evidence milestone, not final
-paper-level closure. The gain is concentrated in `bonsai`, `room`, `garden`,
-and the preserved v327b `treehill` improvement; visual differences remain
-subtle. Fresh LPIPS/DISTS/frontier/geometry evidence is now available: v329b
-beats the local clean frontier and has the best PSNR among clean26000/v322c/v327b/v329b,
-but it is not all-axis dominant over v327b because LPIPS/DISTS are mixed.
+Honest status: v335 is a real method/evidence milestone, not final paper-level
+closure. It is stronger than v334/v333/v329b on full9 PSNR/SSIM gain and remains
+well above the local clean26000 frontier. However, the new gain is concentrated
+in `treehill`, the visual difference is subtle, and LPIPS/DISTS are slightly
+worse than v334/v329b. The next step should improve raw candidate generation or
+representation capacity rather than only stacking arbitration rules.
 
 ## Current Report Package (2026-06-26)
 
