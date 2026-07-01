@@ -204,6 +204,25 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- post incumbent fallback only: `{local_support.get('post_incumbent_fallback_only')}`",
             f"- verdict: `{local_support.get('verdict')}`",
         ]
+    if payload.get("pairwise_dominance_policy"):
+        pairwise = payload["pairwise_dominance_policy"]
+        lines += [
+            "",
+            "## Pairwise Candidate-vs-Incumbent Dominance Policy",
+            "",
+            f"- enabled: `{pairwise.get('enabled')}`",
+            f"- ridge: `{pairwise.get('ridge')}`",
+            f"- k: `{pairwise.get('k')}`",
+            f"- source accept fraction: `{pairwise.get('source_accept_fraction')}`",
+            f"- source PSNR delta vs incumbent: `{pairwise.get('source_mean_psnr_delta_vs_incumbent')}`",
+            f"- source SSIM delta vs incumbent: `{pairwise.get('source_mean_ssim_delta_vs_incumbent')}`",
+            f"- source CVaR20 PSNR delta vs incumbent: `{pairwise.get('source_cvar_psnr_delta_vs_incumbent')}`",
+            f"- source min PSNR delta vs incumbent: `{pairwise.get('source_min_psnr_delta_vs_incumbent')}`",
+            f"- source selected counts: `{pairwise.get('source_selected_counts')}`",
+            f"- OOD guard: `{pairwise.get('ood_guard_enabled')}` / `{pairwise.get('ood_quantile')}`",
+            f"- OOD threshold: `{pairwise.get('ood_source_distance_threshold')}`",
+            f"- verdict: `{pairwise.get('verdict')}`",
+        ]
     if payload.get("per_view_risk_model_policy"):
         risk = payload["per_view_risk_model_policy"]
         lines += [
@@ -1596,6 +1615,461 @@ def _local_support_choose_variant(
         "local_summaries": local_summaries,
         "reject_reason": None,
     }
+
+
+PAIRWISE_DOMINANCE_TARGET_NAMES = [
+    "objective_delta_vs_incumbent",
+    "psnr_delta_vs_incumbent",
+    "ssim_delta_vs_incumbent",
+    "lpips_delta_vs_incumbent",
+    "dists_delta_vs_incumbent",
+]
+
+
+def _pairwise_target(
+    candidate_metrics: dict[str, float],
+    incumbent_metrics: dict[str, float],
+    *,
+    compute_ssim: bool,
+    args: argparse.Namespace,
+) -> list[float]:
+    incumbent_objective = _source_objective_from_metrics(incumbent_metrics, compute_ssim=compute_ssim, args=args)
+    return [
+        _source_objective_from_metrics(candidate_metrics, compute_ssim=compute_ssim, args=args) - incumbent_objective,
+        _metric_delta(candidate_metrics, incumbent_metrics, "psnr_gain"),
+        _metric_delta(candidate_metrics, incumbent_metrics, "ssim_gain") if compute_ssim else 0.0,
+        _metric_delta(candidate_metrics, incumbent_metrics, "lpips_gain"),
+        _metric_delta(candidate_metrics, incumbent_metrics, "dists_gain"),
+    ]
+
+
+def _pairwise_local_delta_summary(
+    entries: list[dict[str, Any]],
+    vector: list[float],
+    *,
+    mean: list[float],
+    std: list[float],
+    k: int,
+    exclude_view: str | None = None,
+) -> dict[str, Any]:
+    pool = [entry for entry in entries if exclude_view is None or str(entry.get("view")) != str(exclude_view)]
+    if not pool:
+        return {"available": False, "k": 0, "neighbors": [], "deltas": {}}
+    ranked = sorted(
+        (
+            (
+                _normalized_distance(vector, list(entry["features"]), mean, std),
+                entry,
+            )
+            for entry in pool
+        ),
+        key=lambda item: item[0],
+    )[: max(1, min(int(k), len(pool)))]
+    psnr = [float(entry["target"][1]) for _, entry in ranked]
+    ssim = [float(entry["target"][2]) for _, entry in ranked]
+    objective = [float(entry["target"][0]) for _, entry in ranked]
+    return {
+        "available": True,
+        "k": int(len(ranked)),
+        "neighbors": [
+            {
+                "view": str(entry.get("view")),
+                "candidate_variant": str(entry.get("candidate_variant")),
+                "incumbent_variant": str(entry.get("incumbent_variant")),
+                "distance": float(distance),
+                "target": [float(value) for value in entry.get("target", [])],
+            }
+            for distance, entry in ranked
+        ],
+        "deltas": {
+            "objective": _mean(objective),
+            "psnr": _mean(psnr),
+            "ssim": _mean(ssim),
+            "psnr_min": min(psnr) if psnr else 0.0,
+            "psnr_cvar": _tail_values(psnr).get("cvar", 0.0),
+            "positive_fraction": _mean([1.0 if value >= 0.0 else 0.0 for value in psnr]),
+        },
+    }
+
+
+def _source_incumbent_variant_for_view(
+    view: str,
+    *,
+    selected_variant: str,
+    source_reliability_payload: dict[str, Any] | None,
+) -> str:
+    if source_reliability_payload and bool(source_reliability_payload.get("enabled", False)):
+        for item in source_reliability_payload.get("loo_predictions", []):
+            if str(item.get("view")) != str(view):
+                continue
+            chosen = str(item.get("chosen_variant", "__scene__"))
+            return selected_variant if chosen in {"__scene__", "noop"} else chosen
+    return selected_variant
+
+
+def _fit_pairwise_dominance_policy(
+    selector_payload: dict[str, Any] | None,
+    *,
+    source_reliability_payload: dict[str, Any] | None,
+    compute_ssim: bool,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    if not bool(args.enable_pairwise_dominance_policy):
+        return {"enabled": False, "verdict": "disabled by CLI"}
+    if selector_payload is None or not selector_payload.get("per_view"):
+        return {"enabled": False, "verdict": "missing source-heldout selector per-view evidence"}
+    selected_variant = str(selector_payload["selected_variant"])
+    feature_names = _parse_feature_names(args.pairwise_dominance_feature_grid)
+    variants = _candidate_variant_names(args)
+    variant_blend_map = _candidate_variant_blend_map(args)
+    examples: list[dict[str, Any]] = []
+    rows_by_view: dict[str, dict[str, Any]] = {}
+    source_incumbent_rows: list[dict[str, float]] = []
+    source_incumbents: dict[str, str] = {}
+    entries_by_candidate: dict[str, list[dict[str, Any]]] = {variant: [] for variant in variants}
+    all_vectors: list[list[float]] = []
+    for row in selector_payload["per_view"]:
+        view = str(row["view"])
+        rows_by_view[view] = row
+        incumbent_variant = _source_incumbent_variant_for_view(
+            view,
+            selected_variant=selected_variant,
+            source_reliability_payload=source_reliability_payload,
+        )
+        if incumbent_variant not in row["candidates"]:
+            incumbent_variant = selected_variant
+        source_incumbents[view] = incumbent_variant
+        incumbent = row["candidates"][incumbent_variant]
+        incumbent_metrics = incumbent["metrics"]
+        incumbent_proxy = incumbent["proxy"]
+        source_incumbent_rows.append(incumbent_metrics)
+        for variant in variants:
+            if variant == incumbent_variant:
+                continue
+            candidate = row["candidates"][variant]
+            features = _source_reliability_features(
+                candidate["proxy"],
+                incumbent_proxy,
+                variant=variant,
+                scene_variant=incumbent_variant,
+                feature_names=feature_names,
+                variant_blend=variant_blend_map.get(variant),
+                scene_variant_blend=variant_blend_map.get(incumbent_variant),
+            )
+            target = _pairwise_target(candidate["metrics"], incumbent_metrics, compute_ssim=compute_ssim, args=args)
+            example = {
+                "view": view,
+                "candidate_variant": variant,
+                "incumbent_variant": incumbent_variant,
+                "features": features,
+                "target": target,
+                "candidate_metrics": candidate["metrics"],
+                "incumbent_metrics": incumbent_metrics,
+            }
+            examples.append(example)
+            entries_by_candidate[variant].append(example)
+            all_vectors.append(features)
+    if len(rows_by_view) < 2 or len(examples) < 2:
+        return {"enabled": False, "verdict": "not enough source-heldout pairwise examples"}
+    feature_mean, feature_std = _feature_stats(all_vectors)
+    ood_source_distances: list[float] = []
+    for example in examples:
+        pool = [
+            entry
+            for entry in entries_by_candidate.get(str(example["candidate_variant"]), [])
+            if str(entry["view"]) != str(example["view"])
+        ]
+        if not pool:
+            continue
+        ood_source_distances.append(
+            min(
+                _normalized_distance(list(example["features"]), list(entry["features"]), feature_mean, feature_std)
+                for entry in pool
+            )
+        )
+    ood_threshold = (
+        _quantile(ood_source_distances, float(args.pairwise_dominance_ood_quantile))
+        if bool(args.pairwise_dominance_enable_ood_guard)
+        else float("inf")
+    )
+
+    def choose_from_model(
+        row: dict[str, Any],
+        incumbent_variant: str,
+        model: dict[str, Any],
+        *,
+        exclude_view: str | None = None,
+    ) -> tuple[str, dict[str, list[float]], dict[str, Any]]:
+        incumbent = row["candidates"][incumbent_variant]
+        predictions: dict[str, list[float]] = {}
+        diagnostics: dict[str, Any] = {
+            "incumbent_variant": incumbent_variant,
+            "candidate_diagnostics": {},
+            "reject_reason": None,
+        }
+        accepted: list[tuple[float, str, dict[str, Any]]] = []
+        for variant in variants:
+            if variant == incumbent_variant:
+                continue
+            candidate = row["candidates"][variant]
+            features = _source_reliability_features(
+                candidate["proxy"],
+                incumbent["proxy"],
+                variant=variant,
+                scene_variant=incumbent_variant,
+                feature_names=feature_names,
+                variant_blend=variant_blend_map.get(variant),
+                scene_variant_blend=variant_blend_map.get(incumbent_variant),
+            )
+            prediction = _predict_ridge(model, features)
+            predictions[variant] = prediction
+            local = _pairwise_local_delta_summary(
+                entries_by_candidate.get(variant, []),
+                features,
+                mean=feature_mean,
+                std=feature_std,
+                k=int(args.pairwise_dominance_k),
+                exclude_view=exclude_view,
+            )
+            pool = [
+                entry
+                for entry in entries_by_candidate.get(variant, [])
+                if exclude_view is None or str(entry["view"]) != str(exclude_view)
+            ]
+            ood_distance = (
+                min(_normalized_distance(features, list(entry["features"]), feature_mean, feature_std) for entry in pool)
+                if pool
+                else float("inf")
+            )
+            cand_diag = {
+                "prediction": prediction,
+                "local": local,
+                "ood_distance": float(ood_distance),
+                "ood_threshold": float(ood_threshold),
+                "reject_reason": None,
+            }
+            local_deltas = dict(local.get("deltas", {}))
+            reject_reason = None
+            if prediction[0] < float(args.pairwise_dominance_min_predicted_objective_delta):
+                reject_reason = "predicted_objective_delta"
+            elif prediction[1] < float(args.pairwise_dominance_min_predicted_psnr_delta):
+                reject_reason = "predicted_psnr_delta"
+            elif compute_ssim and prediction[2] < float(args.pairwise_dominance_min_predicted_ssim_delta):
+                reject_reason = "predicted_ssim_delta"
+            elif not bool(local.get("available", False)):
+                reject_reason = "missing_local_support"
+            elif float(local_deltas.get("psnr", 0.0)) < float(args.pairwise_dominance_min_local_psnr_delta):
+                reject_reason = "local_psnr_delta"
+            elif compute_ssim and float(local_deltas.get("ssim", 0.0)) < float(args.pairwise_dominance_min_local_ssim_delta):
+                reject_reason = "local_ssim_delta"
+            elif float(local_deltas.get("psnr_cvar", 0.0)) < float(args.pairwise_dominance_min_local_cvar_delta):
+                reject_reason = "local_cvar_delta"
+            elif float(local_deltas.get("psnr_min", 0.0)) < float(args.pairwise_dominance_min_local_min_delta):
+                reject_reason = "local_min_delta"
+            elif bool(args.pairwise_dominance_enable_ood_guard) and ood_distance > ood_threshold:
+                reject_reason = "ood_distance"
+            cand_diag["reject_reason"] = reject_reason
+            diagnostics["candidate_diagnostics"][variant] = cand_diag
+            if reject_reason is None:
+                score = (
+                    float(prediction[0])
+                    + float(args.pairwise_dominance_psnr_weight) * float(prediction[1])
+                    + float(args.pairwise_dominance_ssim_weight) * float(prediction[2])
+                    + float(args.pairwise_dominance_local_cvar_weight) * float(local_deltas.get("psnr_cvar", 0.0))
+                )
+                accepted.append((score, variant, cand_diag))
+        if not accepted:
+            diagnostics["reject_reason"] = "no_pairwise_candidate"
+            return "__incumbent__", predictions, diagnostics
+        accepted.sort(key=lambda item: item[0], reverse=True)
+        score, variant, cand_diag = accepted[0]
+        diagnostics["best_variant"] = variant
+        diagnostics["best_score"] = float(score)
+        diagnostics["best_diagnostics"] = cand_diag
+        return variant, predictions, diagnostics
+
+    source_policy_rows: list[dict[str, float]] = []
+    selected_counts: dict[str, int] = _candidate_count_dict(variants)
+    selected_counts["incumbent"] = 0
+    loo_decisions: list[dict[str, Any]] = []
+    for view, row in rows_by_view.items():
+        train_examples = [example for example in examples if str(example["view"]) != str(view)]
+        model = _fit_ridge_predictor(train_examples, ridge=float(args.pairwise_dominance_ridge))
+        incumbent_variant = source_incumbents[view]
+        incumbent_metrics = row["candidates"][incumbent_variant]["metrics"]
+        if model is None:
+            selected_counts["incumbent"] += 1
+            source_policy_rows.append(incumbent_metrics)
+            loo_decisions.append({"view": view, "chosen_variant": "__incumbent__", "incumbent_variant": incumbent_variant})
+            continue
+        chosen_variant, predictions, diagnostics = choose_from_model(
+            row,
+            incumbent_variant,
+            model,
+            exclude_view=view,
+        )
+        loo_decisions.append(
+            {
+                "view": view,
+                "chosen_variant": chosen_variant,
+                "incumbent_variant": incumbent_variant,
+                "predictions": predictions,
+                "diagnostics": diagnostics,
+            }
+        )
+        if chosen_variant == "__incumbent__":
+            selected_counts["incumbent"] += 1
+            source_policy_rows.append(incumbent_metrics)
+        else:
+            selected_counts[chosen_variant] += 1
+            source_policy_rows.append(row["candidates"][chosen_variant]["metrics"])
+
+    source_summary = _summarize_metric_rows(source_policy_rows, compute_ssim=compute_ssim)
+    incumbent_summary = _summarize_metric_rows(source_incumbent_rows, compute_ssim=compute_ssim)
+    mean_delta = float(source_summary.get("psnr_gain", 0.0)) - float(incumbent_summary.get("psnr_gain", 0.0))
+    ssim_delta = (
+        float(source_summary.get("ssim_gain", 0.0)) - float(incumbent_summary.get("ssim_gain", 0.0))
+        if compute_ssim
+        else 0.0
+    )
+    cvar_delta = _summary_psnr_tail(source_summary, "cvar") - _summary_psnr_tail(incumbent_summary, "cvar")
+    min_delta = _summary_psnr_tail(source_summary, "min") - _summary_psnr_tail(incumbent_summary, "min")
+    accept_fraction = 1.0 - float(selected_counts["incumbent"] / max(len(rows_by_view), 1))
+    base_payload = {
+        "feature_schema_version": 1,
+        "target_names": PAIRWISE_DOMINANCE_TARGET_NAMES,
+        "feature_names": feature_names,
+        "variants": variants,
+        "variant_blend_map": variant_blend_map,
+        "ridge": float(args.pairwise_dominance_ridge),
+        "k": int(args.pairwise_dominance_k),
+        "source_incumbents": source_incumbents,
+        "source_summary": source_summary,
+        "source_incumbent_summary": incumbent_summary,
+        "source_selected_counts": selected_counts,
+        "source_accept_fraction": accept_fraction,
+        "source_mean_psnr_delta_vs_incumbent": mean_delta,
+        "source_mean_ssim_delta_vs_incumbent": ssim_delta,
+        "source_cvar_psnr_delta_vs_incumbent": cvar_delta,
+        "source_min_psnr_delta_vs_incumbent": min_delta,
+        "loo_decisions": loo_decisions,
+        "entries_by_candidate": entries_by_candidate,
+        "feature_mean": feature_mean,
+        "feature_std": feature_std,
+        "ood_guard_enabled": bool(args.pairwise_dominance_enable_ood_guard),
+        "ood_quantile": float(args.pairwise_dominance_ood_quantile),
+        "ood_source_distance_threshold": float(ood_threshold),
+    }
+    if accept_fraction < float(args.pairwise_dominance_min_accept_fraction):
+        return {"enabled": False, "verdict": "pairwise dominance accepted too few source views", **base_payload}
+    if accept_fraction > float(args.pairwise_dominance_max_accept_fraction):
+        return {"enabled": False, "verdict": "pairwise dominance accepted too many source views", **base_payload}
+    if mean_delta < float(args.pairwise_dominance_min_source_psnr_delta):
+        return {"enabled": False, "verdict": "pairwise dominance did not clear source PSNR delta", **base_payload}
+    if compute_ssim and ssim_delta < float(args.pairwise_dominance_min_source_ssim_delta):
+        return {"enabled": False, "verdict": "pairwise dominance did not clear source SSIM delta", **base_payload}
+    if cvar_delta < float(args.pairwise_dominance_min_source_cvar_delta):
+        return {"enabled": False, "verdict": "pairwise dominance did not clear source CVaR delta", **base_payload}
+    if min_delta < float(args.pairwise_dominance_min_source_min_delta):
+        return {"enabled": False, "verdict": "pairwise dominance did not clear source min delta", **base_payload}
+    full_model = _fit_ridge_predictor(examples, ridge=float(args.pairwise_dominance_ridge))
+    if full_model is None:
+        return {"enabled": False, "verdict": "could not fit full pairwise dominance model", **base_payload}
+    return {"enabled": True, "verdict": "pairwise dominance certificate selected", "model": full_model, **base_payload}
+
+
+def _pairwise_dominance_choose_variant(
+    proxies_by_variant: dict[str, dict[str, float]],
+    incumbent_variant: str,
+    policy: dict[str, Any],
+    *,
+    compute_ssim: bool,
+    args: argparse.Namespace,
+) -> tuple[str, dict[str, list[float]], dict[str, Any]]:
+    if incumbent_variant not in proxies_by_variant:
+        return "__incumbent__", {}, {"reject_reason": "missing_incumbent_proxy", "incumbent_variant": incumbent_variant}
+    feature_names = list(policy["feature_names"])
+    variants = list(policy["variants"])
+    variant_blend_map = dict(policy.get("variant_blend_map", {}))
+    feature_mean = [float(value) for value in policy.get("feature_mean", [])]
+    feature_std = [float(value) for value in policy.get("feature_std", [])]
+    entries_by_candidate = policy.get("entries_by_candidate", {})
+    incumbent_proxy = proxies_by_variant[incumbent_variant]
+    predictions: dict[str, list[float]] = {}
+    diagnostics: dict[str, Any] = {"incumbent_variant": incumbent_variant, "candidate_diagnostics": {}, "reject_reason": None}
+    accepted: list[tuple[float, str, dict[str, Any]]] = []
+    for variant in variants:
+        if variant == incumbent_variant or variant not in proxies_by_variant:
+            continue
+        features = _source_reliability_features(
+            proxies_by_variant[variant],
+            incumbent_proxy,
+            variant=variant,
+            scene_variant=incumbent_variant,
+            feature_names=feature_names,
+            variant_blend=variant_blend_map.get(variant),
+            scene_variant_blend=variant_blend_map.get(incumbent_variant),
+        )
+        prediction = _predict_ridge(policy["model"], features)
+        predictions[variant] = prediction
+        local = _pairwise_local_delta_summary(
+            list(entries_by_candidate.get(variant, [])),
+            features,
+            mean=feature_mean,
+            std=feature_std,
+            k=int(policy.get("k", 3)),
+        )
+        pool = list(entries_by_candidate.get(variant, []))
+        ood_distance = (
+            min(_normalized_distance(features, list(entry["features"]), feature_mean, feature_std) for entry in pool)
+            if pool
+            else float("inf")
+        )
+        local_deltas = dict(local.get("deltas", {}))
+        reject_reason = None
+        if prediction[0] < float(args.pairwise_dominance_min_predicted_objective_delta):
+            reject_reason = "predicted_objective_delta"
+        elif prediction[1] < float(args.pairwise_dominance_min_predicted_psnr_delta):
+            reject_reason = "predicted_psnr_delta"
+        elif compute_ssim and prediction[2] < float(args.pairwise_dominance_min_predicted_ssim_delta):
+            reject_reason = "predicted_ssim_delta"
+        elif not bool(local.get("available", False)):
+            reject_reason = "missing_local_support"
+        elif float(local_deltas.get("psnr", 0.0)) < float(args.pairwise_dominance_min_local_psnr_delta):
+            reject_reason = "local_psnr_delta"
+        elif compute_ssim and float(local_deltas.get("ssim", 0.0)) < float(args.pairwise_dominance_min_local_ssim_delta):
+            reject_reason = "local_ssim_delta"
+        elif float(local_deltas.get("psnr_cvar", 0.0)) < float(args.pairwise_dominance_min_local_cvar_delta):
+            reject_reason = "local_cvar_delta"
+        elif float(local_deltas.get("psnr_min", 0.0)) < float(args.pairwise_dominance_min_local_min_delta):
+            reject_reason = "local_min_delta"
+        elif bool(policy.get("ood_guard_enabled", False)) and ood_distance > float(policy.get("ood_source_distance_threshold", float("inf"))):
+            reject_reason = "ood_distance"
+        cand_diag = {
+            "prediction": prediction,
+            "local": local,
+            "ood_distance": float(ood_distance),
+            "ood_threshold": float(policy.get("ood_source_distance_threshold", float("inf"))),
+            "reject_reason": reject_reason,
+        }
+        diagnostics["candidate_diagnostics"][variant] = cand_diag
+        if reject_reason is None:
+            score = (
+                float(prediction[0])
+                + float(args.pairwise_dominance_psnr_weight) * float(prediction[1])
+                + float(args.pairwise_dominance_ssim_weight) * float(prediction[2])
+                + float(args.pairwise_dominance_local_cvar_weight) * float(local_deltas.get("psnr_cvar", 0.0))
+            )
+            accepted.append((score, variant, cand_diag))
+    if not accepted:
+        diagnostics["reject_reason"] = "no_pairwise_candidate"
+        return "__incumbent__", predictions, diagnostics
+    accepted.sort(key=lambda item: item[0], reverse=True)
+    score, variant, cand_diag = accepted[0]
+    diagnostics["best_variant"] = variant
+    diagnostics["best_score"] = float(score)
+    diagnostics["best_diagnostics"] = cand_diag
+    return variant, predictions, diagnostics
 
 
 def _fit_per_view_risk_model_policy(
@@ -3148,6 +3622,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         args=args,
         incumbent_policy_payload=source_reliability_payload,
     )
+    pairwise_dominance_payload = _fit_pairwise_dominance_policy(
+        selector_payload,
+        source_reliability_payload=source_reliability_payload,
+        compute_ssim=bool(args.compute_ssim),
+        args=args,
+    )
     fixed_rows: list[dict[str, float]] = []
     learned_rows: list[dict[str, float]] = []
     hybrid_rows: list[dict[str, float]] = []
@@ -3188,6 +3668,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             risk_model_predictions: dict[str, list[float]] | None = None
             risk_model_diagnostics: dict[str, Any] | None = None
             local_support_diagnostics: dict[str, Any] | None = None
+            pairwise_dominance_predictions: dict[str, list[float]] | None = None
+            pairwise_dominance_diagnostics: dict[str, Any] | None = None
             source_reliability_predictions: dict[str, list[float]] | None = None
             source_reliability_diagnostics: dict[str, Any] | None = None
             gate_accepted = True
@@ -3199,11 +3681,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             source_reliability_rejected = False
             risk_model_raw_output_variant: str | None = None
             local_support_raw_output_variant: str | None = None
+            pairwise_dominance_raw_output_variant: str | None = None
             source_reliability_raw_output_variant: str | None = None
             risk_model_decision = "not_used"
             local_support_decision = "not_used"
+            pairwise_dominance_decision = "not_used"
             source_reliability_decision = "not_used"
             local_support_claimed = False
+            pairwise_dominance_claimed = False
             source_reliability_claimed = False
             if bool(local_support_payload.get("enabled", False)) and not bool(args.local_support_post_incumbent_fallback_only):
                 output_variant, local_support_diagnostics = _local_support_choose_variant(
@@ -3314,7 +3799,36 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             elif (not local_support_claimed) and (not source_reliability_claimed) and bool(per_view_gate_payload.get("enabled", False)):
                 gate_accepted = _gate_accepts(selected_proxy, per_view_gate_payload)
             if (
+                bool(pairwise_dominance_payload.get("enabled", False))
+                and output_variant != "noop"
+                and gate_accepted
+                and output_variant in deltas
+            ):
+                incumbent_variant = output_variant
+                (
+                    pairwise_output_variant,
+                    pairwise_dominance_predictions,
+                    pairwise_dominance_diagnostics,
+                ) = _pairwise_dominance_choose_variant(
+                    proxies_by_variant,
+                    incumbent_variant,
+                    pairwise_dominance_payload,
+                    compute_ssim=bool(args.compute_ssim),
+                    args=args,
+                )
+                pairwise_dominance_raw_output_variant = pairwise_output_variant
+                if pairwise_output_variant == "__incumbent__":
+                    pairwise_dominance_decision = "incumbent_fallback"
+                else:
+                    pairwise_dominance_claimed = True
+                    output_variant = pairwise_output_variant
+                    selected_delta = deltas[output_variant]
+                    selected_proxy = proxies_by_variant[output_variant]
+                    selected_proxy_variant = output_variant
+                    pairwise_dominance_decision = "candidate"
+            if (
                 (not local_support_claimed)
+                and (not pairwise_dominance_claimed)
                 and bool(args.local_support_post_incumbent_fallback_only)
                 and bool(local_support_payload.get("enabled", False))
             ):
@@ -3408,9 +3922,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "source_reliability_rejected_to_scene": bool(source_reliability_rejected),
                     "risk_model_raw_output_variant": risk_model_raw_output_variant,
                     "local_support_raw_output_variant": local_support_raw_output_variant,
+                    "pairwise_dominance_raw_output_variant": pairwise_dominance_raw_output_variant,
                     "source_reliability_raw_output_variant": source_reliability_raw_output_variant,
                     "risk_model_decision": risk_model_decision,
                     "local_support_decision": local_support_decision,
+                    "pairwise_dominance_decision": pairwise_dominance_decision,
                     "source_reliability_decision": source_reliability_decision,
                     "selected_proxy_variant": selected_proxy_variant,
                     "selected_proxy": selected_proxy,
@@ -3420,6 +3936,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "per_view_risk_model_predictions": risk_model_predictions,
                     "per_view_risk_model_diagnostics": risk_model_diagnostics,
                     "local_support_diagnostics": local_support_diagnostics,
+                    "pairwise_dominance_predictions": pairwise_dominance_predictions,
+                    "pairwise_dominance_diagnostics": pairwise_dominance_diagnostics,
                     "source_reliability_predictions": source_reliability_predictions,
                     "source_reliability_diagnostics": source_reliability_diagnostics,
                 }
@@ -3476,18 +3994,22 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         )
     )
     active_gate = (
-        "source_heldout_local_support"
-        if bool(local_support_payload.get("enabled", False))
+        "source_pairwise_dominance"
+        if bool(pairwise_dominance_payload.get("enabled", False))
         else (
-            "source_heldout_reliability"
-            if bool(source_reliability_payload.get("enabled", False))
+            "source_heldout_local_support"
+            if bool(local_support_payload.get("enabled", False))
             else (
-                "source_heldout_risk_model"
-                if bool(per_view_risk_model_payload.get("enabled", False))
+                "source_heldout_reliability"
+                if bool(source_reliability_payload.get("enabled", False))
                 else (
-                    "source_heldout_knn"
-                    if bool(per_view_knn_payload.get("enabled", False))
-                    else ("source_heldout_threshold" if bool(per_view_gate_payload.get("enabled", False)) else "off")
+                    "source_heldout_risk_model"
+                    if bool(per_view_risk_model_payload.get("enabled", False))
+                    else (
+                        "source_heldout_knn"
+                        if bool(per_view_knn_payload.get("enabled", False))
+                        else ("source_heldout_threshold" if bool(per_view_gate_payload.get("enabled", False)) else "off")
+                    )
                 )
             )
         )
@@ -3511,6 +4033,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "source_perceptual_uses_train_heldout_gt_only": bool(args.compute_source_perceptual),
             "local_support_uses_target_gt": False,
             "local_support_fit_scope": "source_heldout_before_target_loop",
+            "pairwise_dominance_uses_target_gt": False,
+            "pairwise_dominance_fit_scope": "source_heldout_before_target_loop",
             "source_reliability_uses_target_gt": False,
             "source_reliability_fit_scope": "source_heldout_before_target_loop",
             "source_reliability_calibrated_lcb_uses_target_gt": False,
@@ -3590,6 +4114,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "per_view_gate": per_view_gate_payload,
         "per_view_knn_policy": per_view_knn_payload,
         "local_support_policy": local_support_payload,
+        "pairwise_dominance_policy": pairwise_dominance_payload,
         "per_view_risk_model_policy": per_view_risk_model_payload,
         "source_reliability_policy": source_reliability_payload,
         "verdict": verdict,
@@ -3629,6 +4154,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             flat["apply/local_support/source_accept_fraction"] = float(local_support.get("source_accept_fraction", 0.0) or 0.0)
             flat["apply/local_support/source_mean_psnr_delta_vs_scene"] = float(
                 local_support.get("source_mean_psnr_delta_vs_scene_selected", 0.0) or 0.0
+            )
+        if payload.get("pairwise_dominance_policy"):
+            pairwise = payload["pairwise_dominance_policy"]
+            flat["apply/pairwise_dominance/enabled"] = float(bool(pairwise.get("enabled", False)))
+            flat["apply/pairwise_dominance/source_accept_fraction"] = float(pairwise.get("source_accept_fraction", 0.0) or 0.0)
+            flat["apply/pairwise_dominance/source_mean_psnr_delta_vs_incumbent"] = float(
+                pairwise.get("source_mean_psnr_delta_vs_incumbent", 0.0) or 0.0
+            )
+            flat["apply/pairwise_dominance/source_mean_ssim_delta_vs_incumbent"] = float(
+                pairwise.get("source_mean_ssim_delta_vs_incumbent", 0.0) or 0.0
             )
         run.log(flat)
         run.summary.update(flat)
@@ -3743,6 +4278,35 @@ def main() -> None:
     parser.add_argument("--local_support_cvar_weight", type=float, default=0.25)
     parser.add_argument("--local_support_min_weight", type=float, default=0.10)
     parser.add_argument("--local_support_positive_weight", type=float, default=0.25)
+    parser.add_argument("--enable_pairwise_dominance_policy", action="store_true")
+    parser.add_argument(
+        "--pairwise_dominance_feature_grid",
+        default=(
+            "covered_fraction,mean_abs_delta,confidence_mean,residual_std_mean,delta_snr,signal_snr,"
+            "confidence_snr,changed_fraction,delta_signal_cosine,opposition_fraction,aligned_fraction,"
+            "delta_to_signal_ratio,std_to_signal_ratio,support_confidence,support_count_mean"
+        ),
+    )
+    parser.add_argument("--pairwise_dominance_ridge", type=float, default=1.0e-3)
+    parser.add_argument("--pairwise_dominance_k", type=int, default=3)
+    parser.add_argument("--pairwise_dominance_min_predicted_objective_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_min_predicted_psnr_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_min_predicted_ssim_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_min_local_psnr_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_min_local_ssim_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_min_local_cvar_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_min_local_min_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_min_accept_fraction", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_max_accept_fraction", type=float, default=1.0)
+    parser.add_argument("--pairwise_dominance_min_source_psnr_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_min_source_ssim_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_min_source_cvar_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_min_source_min_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_enable_ood_guard", action="store_true")
+    parser.add_argument("--pairwise_dominance_ood_quantile", type=float, default=0.80)
+    parser.add_argument("--pairwise_dominance_psnr_weight", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_ssim_weight", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_local_cvar_weight", type=float, default=0.25)
     parser.add_argument("--enable_per_view_risk_model_policy", action="store_true")
     parser.add_argument(
         "--per_view_risk_model_feature_grid",
