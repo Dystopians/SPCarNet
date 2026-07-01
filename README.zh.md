@@ -26,6 +26,8 @@ PSNR、`0.028167` MAE、`0.087738` LPIPS、`0.057667` DISTS；本地 clean26000 
 - [v336c full9 audit vs v335/v336b](docs/car_model/results/v336c_source_summary_gate_full9_vs_v335_v336b_audit.md)
 - [v336c frontier LPIPS/DISTS 汇总](docs/car_model/results/v336c_frontier_lpips_qualitative_summary.md)
 - [v336c room 定性面板](docs/car_model/results/v336c_frontier_panels/room/00009_frontier_panel.png)
+- [v336c Phase-J 停滞与 oracle-gap 调查](docs/car_model/7-01-v336c-PhaseJ-Stall-Bottleneck-Investigation.md)
+- [v337 all-candidate target-neighbor 诊断](docs/car_model/7-01-v337-AllCandidateTNCDiagnostic-Log.md)
 - [给下一阶段模型的反馈与经验教训](feedback.md)
 
 诚实状态：v336c 是真实的方法与证据里程碑，但还不是最终论文闭环。它在 full9

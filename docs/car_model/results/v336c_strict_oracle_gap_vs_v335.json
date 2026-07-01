@@ -1,0 +1,2184 @@
+{
+  "baseline": {
+    "aggregate": {
+      "improved_oracle_variant_counts": {
+        "fixed": 19,
+        "hybrid": 2,
+        "learned": 30,
+        "mix0250": 4,
+        "mix0750": 11
+      },
+      "improved_view_count": 66,
+      "improved_view_fraction": 0.2682926829268293,
+      "macro_oracle_psnr_gain": 0.2826873905124914,
+      "macro_oracle_ssim_gain": 0.0038158857079986985,
+      "macro_psnr_delta": 0.008669481578554161,
+      "macro_selected_psnr_gain": 0.27401790893393724,
+      "macro_selected_ssim_gain": 0.003741526178548755,
+      "macro_ssim_delta": 7.435952944994294e-05,
+      "micro_improved_psnr_delta": 0.028903101886685812,
+      "micro_improved_ssim_delta": 0.0002725630095510772,
+      "missing_scenes": [],
+      "oracle_variant_counts": {
+        "fixed": 37,
+        "hybrid": 22,
+        "learned": 166,
+        "mix0250": 7,
+        "mix0750": 14
+      },
+      "scene_count": 9,
+      "selected_variant_counts": {
+        "fixed": 34,
+        "hybrid": 110,
+        "learned": 102
+      },
+      "view_count": 246
+    },
+    "root": "outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701",
+    "scenes": [
+      {
+        "eligible_view_count": 25,
+        "improved_mean_psnr_delta": 0.019891351894466097,
+        "improved_mean_ssim_delta": 0.00024660734029916616,
+        "improved_oracle_variant_counts": {
+          "fixed": 7,
+          "learned": 4,
+          "mix0250": 1,
+          "mix0750": 1
+        },
+        "improved_view_count": 13,
+        "improved_view_fraction": 0.52,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.20656244855045713,
+            "oracle_ssim_gain": 0.007036983966827393,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.061318412744611805,
+            "selected_psnr_gain": 0.14524403580584533,
+            "selected_ssim_gain": 0.0061380863189697266,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.000898897647857666,
+            "view": "00003"
+          },
+          {
+            "oracle_psnr_gain": 0.2528314217979286,
+            "oracle_ssim_gain": 0.005403757095336914,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.04833702053625544,
+            "selected_psnr_gain": 0.20449440126167318,
+            "selected_ssim_gain": 0.005206882953643799,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00019687414169311523,
+            "view": "00004"
+          },
+          {
+            "oracle_psnr_gain": 0.17520532301915637,
+            "oracle_ssim_gain": 0.0037958621978759766,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.004066247648275123,
+            "selected_psnr_gain": 0.17113907537088124,
+            "selected_ssim_gain": 0.0036295056343078613,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00016635656356811523,
+            "view": "00008"
+          },
+          {
+            "oracle_psnr_gain": 0.03706436259168555,
+            "oracle_ssim_gain": 0.001475691795349121,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.011921909234438033,
+            "selected_psnr_gain": 0.02514245335724752,
+            "selected_ssim_gain": 0.0014116764068603516,
+            "selected_variant": "hybrid",
+            "ssim_delta": 6.401538848876953e-05,
+            "view": "00009"
+          },
+          {
+            "oracle_psnr_gain": -0.007346743663234179,
+            "oracle_ssim_gain": 0.0037068724632263184,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.027742507629085367,
+            "selected_psnr_gain": -0.035089251292319545,
+            "selected_ssim_gain": 0.0035146474838256836,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00019222497940063477,
+            "view": "00011"
+          },
+          {
+            "oracle_psnr_gain": 0.06062187647477657,
+            "oracle_ssim_gain": 0.0031747817993164062,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.02398403725015541,
+            "selected_psnr_gain": 0.03663783922462116,
+            "selected_ssim_gain": 0.0028415918350219727,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0003331899642944336,
+            "view": "00012"
+          },
+          {
+            "oracle_psnr_gain": 0.037234550857988324,
+            "oracle_ssim_gain": 0.0012297630310058594,
+            "oracle_variant": "mix0250",
+            "psnr_delta": 0.002037972389754117,
+            "selected_psnr_gain": 0.03519657846823421,
+            "selected_ssim_gain": 0.0010587573051452637,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0001710057258605957,
+            "view": "00013"
+          },
+          {
+            "oracle_psnr_gain": 0.08329604502957011,
+            "oracle_ssim_gain": 0.0021194815635681152,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.014495753549976342,
+            "selected_psnr_gain": 0.06880029147959377,
+            "selected_ssim_gain": 0.001894235610961914,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00022524595260620117,
+            "view": "00014"
+          },
+          {
+            "oracle_psnr_gain": 0.13944211199628853,
+            "oracle_ssim_gain": 0.003555476665496826,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.0027434481185792947,
+            "selected_psnr_gain": 0.13669866387770924,
+            "selected_ssim_gain": 0.0034726858139038086,
+            "selected_variant": "hybrid",
+            "ssim_delta": 8.279085159301758e-05,
+            "view": "00015"
+          },
+          {
+            "oracle_psnr_gain": -0.03367739781493029,
+            "oracle_ssim_gain": -0.00014472007751464844,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.026351755329756088,
+            "selected_psnr_gain": -0.060029153144686376,
+            "selected_ssim_gain": -0.0007012486457824707,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0005565285682678223,
+            "view": "00016"
+          },
+          {
+            "oracle_psnr_gain": 0.29210342271002787,
+            "oracle_ssim_gain": 0.0042403340339660645,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.02501974090132464,
+            "selected_psnr_gain": 0.26708368180870323,
+            "selected_ssim_gain": 0.004119932651519775,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00012040138244628906,
+            "view": "00019"
+          },
+          {
+            "oracle_psnr_gain": 0.0869451153576577,
+            "oracle_ssim_gain": 0.0019227862358093262,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.0024948589354067963,
+            "selected_psnr_gain": 0.0844502564222509,
+            "selected_ssim_gain": 0.0019064545631408691,
+            "selected_variant": "hybrid",
+            "ssim_delta": 1.633167266845703e-05,
+            "view": "00020"
+          },
+          {
+            "oracle_psnr_gain": 0.09433044675226299,
+            "oracle_ssim_gain": 0.0027761459350585938,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.008073910360440806,
+            "selected_psnr_gain": 0.08625653639182218,
+            "selected_ssim_gain": 0.0025941133499145508,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00018203258514404297,
+            "view": "00023"
+          }
+        ],
+        "mean_psnr_delta": 0.01034350298512237,
+        "mean_ssim_delta": 0.0001282358169555664,
+        "oracle_mean_psnr_gain": 0.1303020518255549,
+        "oracle_mean_ssim_gain": 0.0031169867515563965,
+        "oracle_variant_counts": {
+          "fixed": 7,
+          "hybrid": 7,
+          "learned": 9,
+          "mix0250": 1,
+          "mix0750": 1
+        },
+        "report_path": "outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701/bicycle/support_transport_apply_report.json",
+        "scene": "bicycle",
+        "selected_mean_psnr_gain": 0.11995854884043254,
+        "selected_mean_ssim_gain": 0.00298875093460083,
+        "selected_variant_counts": {
+          "hybrid": 25
+        },
+        "view_count": 25,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 22,
+        "improved_mean_psnr_delta": 0.010882108881415005,
+        "improved_mean_ssim_delta": 0.00013526942994859483,
+        "improved_oracle_variant_counts": {
+          "fixed": 1,
+          "learned": 7,
+          "mix0750": 1
+        },
+        "improved_view_count": 9,
+        "improved_view_fraction": 0.4090909090909091,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.06906011361234121,
+            "oracle_ssim_gain": 0.001889944076538086,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.015673814207428194,
+            "selected_psnr_gain": 0.05338629940491302,
+            "selected_ssim_gain": 0.0015829801559448242,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0003069639205932617,
+            "view": "00000"
+          },
+          {
+            "oracle_psnr_gain": 0.10407743204699216,
+            "oracle_ssim_gain": 0.004556715488433838,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.00974773150967323,
+            "selected_psnr_gain": 0.09432970053731893,
+            "selected_ssim_gain": 0.004548788070678711,
+            "selected_variant": "hybrid",
+            "ssim_delta": 7.927417755126953e-06,
+            "view": "00005"
+          },
+          {
+            "oracle_psnr_gain": 0.21591682700496406,
+            "oracle_ssim_gain": 0.008678197860717773,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.017188821216397088,
+            "selected_psnr_gain": 0.19872800578856697,
+            "selected_ssim_gain": 0.008421599864959717,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00025659799575805664,
+            "view": "00010"
+          },
+          {
+            "oracle_psnr_gain": 0.08179913124484273,
+            "oracle_ssim_gain": 0.004564940929412842,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.0023317486604561566,
+            "selected_psnr_gain": 0.07946738258438657,
+            "selected_ssim_gain": 0.004395782947540283,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0001691579818725586,
+            "view": "00011"
+          },
+          {
+            "oracle_psnr_gain": 0.09687039023319244,
+            "oracle_ssim_gain": 0.003742992877960205,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.003219755634930266,
+            "selected_psnr_gain": 0.09365063459826217,
+            "selected_ssim_gain": 0.0036932826042175293,
+            "selected_variant": "hybrid",
+            "ssim_delta": 4.971027374267578e-05,
+            "view": "00012"
+          },
+          {
+            "oracle_psnr_gain": 0.11126362125040146,
+            "oracle_ssim_gain": 0.0067688822746276855,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.007872649451353908,
+            "selected_psnr_gain": 0.10339097179904755,
+            "selected_ssim_gain": 0.0065950751304626465,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00017380714416503906,
+            "view": "00014"
+          },
+          {
+            "oracle_psnr_gain": 0.07791452092700624,
+            "oracle_ssim_gain": 0.0031957626342773438,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.005293009764244516,
+            "selected_psnr_gain": 0.07262151116276172,
+            "selected_ssim_gain": 0.0031739473342895508,
+            "selected_variant": "hybrid",
+            "ssim_delta": 2.181529998779297e-05,
+            "view": "00017"
+          },
+          {
+            "oracle_psnr_gain": 0.14530295924640058,
+            "oracle_ssim_gain": 0.005594074726104736,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.02220296019773471,
+            "selected_psnr_gain": 0.12309999904866586,
+            "selected_ssim_gain": 0.005505561828613281,
+            "selected_variant": "hybrid",
+            "ssim_delta": 8.851289749145508e-05,
+            "view": "00019"
+          },
+          {
+            "oracle_psnr_gain": 0.09382830518316965,
+            "oracle_ssim_gain": 0.004058957099914551,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.014408489290516968,
+            "selected_psnr_gain": 0.07941981589265268,
+            "selected_ssim_gain": 0.003916025161743164,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00014293193817138672,
+            "view": "00020"
+          }
+        ],
+        "mean_psnr_delta": 0.00445177181512432,
+        "mean_ssim_delta": 5.5337494069879703e-05,
+        "oracle_mean_psnr_gain": 0.09681140350123792,
+        "oracle_mean_ssim_gain": 0.0041696781461889095,
+        "oracle_variant_counts": {
+          "fixed": 1,
+          "hybrid": 4,
+          "learned": 16,
+          "mix0750": 1
+        },
+        "report_path": "outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701/flowers/support_transport_apply_report.json",
+        "scene": "flowers",
+        "selected_mean_psnr_gain": 0.0923596316861136,
+        "selected_mean_ssim_gain": 0.00411434065211903,
+        "selected_variant_counts": {
+          "hybrid": 22
+        },
+        "view_count": 22,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 24,
+        "improved_mean_psnr_delta": 0.016662672019159903,
+        "improved_mean_ssim_delta": 9.979804356892903e-05,
+        "improved_oracle_variant_counts": {
+          "fixed": 3,
+          "hybrid": 1,
+          "learned": 1,
+          "mix0250": 1
+        },
+        "improved_view_count": 6,
+        "improved_view_fraction": 0.25,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.1950514412892268,
+            "oracle_ssim_gain": 0.0025041699409484863,
+            "oracle_variant": "hybrid",
+            "psnr_delta": 0.0024083330826982774,
+            "selected_psnr_gain": 0.19264310820652852,
+            "selected_ssim_gain": 0.002424299716949463,
+            "selected_variant": "hybrid",
+            "ssim_delta": 7.987022399902344e-05,
+            "view": "00002"
+          },
+          {
+            "oracle_psnr_gain": 0.22948633755672176,
+            "oracle_ssim_gain": 0.0030626654624938965,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.02583936693522304,
+            "selected_psnr_gain": 0.20364697062149872,
+            "selected_ssim_gain": 0.002894580364227295,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00016808509826660156,
+            "view": "00008"
+          },
+          {
+            "oracle_psnr_gain": 0.1899119234333213,
+            "oracle_ssim_gain": 0.001794576644897461,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.030162276906047225,
+            "selected_psnr_gain": 0.15974964652727408,
+            "selected_ssim_gain": 0.0017172694206237793,
+            "selected_variant": "hybrid",
+            "ssim_delta": 7.730722427368164e-05,
+            "view": "00011"
+          },
+          {
+            "oracle_psnr_gain": 0.09268204685173842,
+            "oracle_ssim_gain": 0.0008420348167419434,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.024544260807726204,
+            "selected_psnr_gain": 0.06813778604401222,
+            "selected_ssim_gain": 0.0006636381149291992,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00017839670181274414,
+            "view": "00012"
+          },
+          {
+            "oracle_psnr_gain": 0.21316942615572998,
+            "oracle_ssim_gain": 0.0022527575492858887,
+            "oracle_variant": "mix0250",
+            "psnr_delta": 0.007968216946874662,
+            "selected_psnr_gain": 0.20520120920885532,
+            "selected_ssim_gain": 0.002203702926635742,
+            "selected_variant": "hybrid",
+            "ssim_delta": 4.9054622650146484e-05,
+            "view": "00014"
+          },
+          {
+            "oracle_psnr_gain": 0.18214640752321287,
+            "oracle_ssim_gain": 0.0022400617599487305,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.009053577436390015,
+            "selected_psnr_gain": 0.17309283008682286,
+            "selected_ssim_gain": 0.0021939873695373535,
+            "selected_variant": "hybrid",
+            "ssim_delta": 4.607439041137695e-05,
+            "view": "00017"
+          }
+        ],
+        "mean_psnr_delta": 0.004165668004789976,
+        "mean_ssim_delta": 2.4949510892232258e-05,
+        "oracle_mean_psnr_gain": 0.14961478817711202,
+        "oracle_mean_ssim_gain": 0.0019447281956672668,
+        "oracle_variant_counts": {
+          "fixed": 4,
+          "hybrid": 3,
+          "learned": 12,
+          "mix0250": 3,
+          "mix0750": 2
+        },
+        "report_path": "outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701/garden/support_transport_apply_report.json",
+        "scene": "garden",
+        "selected_mean_psnr_gain": 0.14544912017232203,
+        "selected_mean_ssim_gain": 0.0019197786847750347,
+        "selected_variant_counts": {
+          "hybrid": 24
+        },
+        "view_count": 24,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 16,
+        "improved_mean_psnr_delta": 0.04996179456100843,
+        "improved_mean_ssim_delta": 0.00022248710904802595,
+        "improved_oracle_variant_counts": {
+          "learned": 5,
+          "mix0750": 2
+        },
+        "improved_view_count": 7,
+        "improved_view_fraction": 0.4375,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.1575071385233926,
+            "oracle_ssim_gain": 0.0011559128761291504,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.06677587961461384,
+            "selected_psnr_gain": 0.09073125890877876,
+            "selected_ssim_gain": 0.000896453857421875,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0002594590187072754,
+            "view": "00000"
+          },
+          {
+            "oracle_psnr_gain": 0.09175128571681412,
+            "oracle_ssim_gain": 0.003105759620666504,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.03044147762170013,
+            "selected_psnr_gain": 0.06130980809511399,
+            "selected_ssim_gain": 0.002835690975189209,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0002700686454772949,
+            "view": "00001"
+          },
+          {
+            "oracle_psnr_gain": 0.17244585853769578,
+            "oracle_ssim_gain": 0.0023305416107177734,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.07518899453575756,
+            "selected_psnr_gain": 0.09725686400193823,
+            "selected_ssim_gain": 0.0018981695175170898,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0004323720932006836,
+            "view": "00002"
+          },
+          {
+            "oracle_psnr_gain": 0.07762685248742685,
+            "oracle_ssim_gain": 0.0006948709487915039,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.02705331393068633,
+            "selected_psnr_gain": 0.050573538556740516,
+            "selected_ssim_gain": 0.0006820559501647949,
+            "selected_variant": "fixed",
+            "ssim_delta": 1.2814998626708984e-05,
+            "view": "00010"
+          },
+          {
+            "oracle_psnr_gain": 0.0053481989029933175,
+            "oracle_ssim_gain": -0.00020766258239746094,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.018533019173169407,
+            "selected_psnr_gain": -0.01318482027017609,
+            "selected_ssim_gain": -0.00028645992279052734,
+            "selected_variant": "fixed",
+            "ssim_delta": 7.87973403930664e-05,
+            "view": "00011"
+          },
+          {
+            "oracle_psnr_gain": 0.14241733344450225,
+            "oracle_ssim_gain": 0.0010135173797607422,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.05250409327279826,
+            "selected_psnr_gain": 0.08991324017170399,
+            "selected_ssim_gain": 0.0008677244186401367,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.00014579296112060547,
+            "view": "00012"
+          },
+          {
+            "oracle_psnr_gain": 0.2387780747669659,
+            "oracle_ssim_gain": 0.0030580759048461914,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.07923578377833351,
+            "selected_psnr_gain": 0.15954229098863237,
+            "selected_ssim_gain": 0.0026999711990356445,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0003581047058105469,
+            "view": "00014"
+          }
+        ],
+        "mean_psnr_delta": 0.02185828512044119,
+        "mean_ssim_delta": 9.733811020851135e-05,
+        "oracle_mean_psnr_gain": 0.07888804651347625,
+        "oracle_mean_ssim_gain": 0.0013055801391601562,
+        "oracle_variant_counts": {
+          "fixed": 9,
+          "learned": 5,
+          "mix0750": 2
+        },
+        "report_path": "outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701/stump/support_transport_apply_report.json",
+        "scene": "stump",
+        "selected_mean_psnr_gain": 0.05702976139303506,
+        "selected_mean_ssim_gain": 0.001208242028951645,
+        "selected_variant_counts": {
+          "fixed": 16
+        },
+        "view_count": 16,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 18,
+        "improved_mean_psnr_delta": 0.04570204138078893,
+        "improved_mean_ssim_delta": 0.0003357430299123128,
+        "improved_oracle_variant_counts": {
+          "hybrid": 1,
+          "learned": 5
+        },
+        "improved_view_count": 6,
+        "improved_view_fraction": 0.3333333333333333,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.10676070881207878,
+            "oracle_ssim_gain": 0.004862606525421143,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.019433405858645614,
+            "selected_psnr_gain": 0.08732730295343316,
+            "selected_ssim_gain": 0.0042915940284729,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0005710124969482422,
+            "view": "00002"
+          },
+          {
+            "oracle_psnr_gain": 0.4256187155946911,
+            "oracle_ssim_gain": 0.004872262477874756,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.09747783836789026,
+            "selected_psnr_gain": 0.32814087722680085,
+            "selected_ssim_gain": 0.004323422908782959,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0005488395690917969,
+            "view": "00011"
+          },
+          {
+            "oracle_psnr_gain": 0.03360994459603006,
+            "oracle_ssim_gain": -0.00010478496551513672,
+            "oracle_variant": "hybrid",
+            "psnr_delta": 0.0026879089298930126,
+            "selected_psnr_gain": 0.03092203566613705,
+            "selected_ssim_gain": -0.0002875328063964844,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.00018274784088134766,
+            "view": "00012"
+          },
+          {
+            "oracle_psnr_gain": 0.1884247467927409,
+            "oracle_ssim_gain": 0.004485726356506348,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.03920029175868933,
+            "selected_psnr_gain": 0.14922445503405157,
+            "selected_ssim_gain": 0.0041405558586120605,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0003451704978942871,
+            "view": "00015"
+          },
+          {
+            "oracle_psnr_gain": 0.1898541137504708,
+            "oracle_ssim_gain": 0.0009129643440246582,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.08402566843743742,
+            "selected_psnr_gain": 0.10582844531303337,
+            "selected_ssim_gain": 0.0006468296051025391,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.00026613473892211914,
+            "view": "00016"
+          },
+          {
+            "oracle_psnr_gain": 0.10103773016570372,
+            "oracle_ssim_gain": 0.0021454691886901855,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.03138713493217793,
+            "selected_psnr_gain": 0.06965059523352579,
+            "selected_ssim_gain": 0.0020449161529541016,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.00010055303573608398,
+            "view": "00017"
+          }
+        ],
+        "mean_psnr_delta": 0.01523401379359631,
+        "mean_ssim_delta": 0.00011191434330410427,
+        "oracle_mean_psnr_gain": 0.13335539630198412,
+        "oracle_mean_ssim_gain": 0.001829349332385593,
+        "oracle_variant_counts": {
+          "fixed": 4,
+          "hybrid": 1,
+          "learned": 12,
+          "mix0250": 1
+        },
+        "report_path": "outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701/treehill/support_transport_apply_report.json",
+        "scene": "treehill",
+        "selected_mean_psnr_gain": 0.1181213825083878,
+        "selected_mean_ssim_gain": 0.0017174349890814887,
+        "selected_variant_counts": {
+          "fixed": 18
+        },
+        "view_count": 18,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 39,
+        "improved_mean_psnr_delta": 0.026963605023084997,
+        "improved_mean_ssim_delta": 0.0003167811562033261,
+        "improved_oracle_variant_counts": {
+          "fixed": 4,
+          "learned": 8,
+          "mix0250": 2,
+          "mix0750": 3
+        },
+        "improved_view_count": 17,
+        "improved_view_fraction": 0.4358974358974359,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.22760479081625817,
+            "oracle_ssim_gain": 0.0027779340744018555,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.0157964937443289,
+            "selected_psnr_gain": 0.21180829707192927,
+            "selected_ssim_gain": 0.002774059772491455,
+            "selected_variant": "hybrid",
+            "ssim_delta": 3.874301910400391e-06,
+            "view": "00001"
+          },
+          {
+            "oracle_psnr_gain": 0.25324966343143274,
+            "oracle_ssim_gain": 0.0023374557495117188,
+            "oracle_variant": "mix0250",
+            "psnr_delta": 0.015963308658871966,
+            "selected_psnr_gain": 0.23728635477256077,
+            "selected_ssim_gain": 0.0023275017738342285,
+            "selected_variant": "hybrid",
+            "ssim_delta": 9.953975677490234e-06,
+            "view": "00007"
+          },
+          {
+            "oracle_psnr_gain": 0.965885836188793,
+            "oracle_ssim_gain": 0.00596010684967041,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.0338212881243507,
+            "selected_psnr_gain": 0.9320645480644423,
+            "selected_ssim_gain": 0.005664527416229248,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0002955794334411621,
+            "view": "00009"
+          },
+          {
+            "oracle_psnr_gain": 1.3206013996305686,
+            "oracle_ssim_gain": 0.010785400867462158,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.12172189707344216,
+            "selected_psnr_gain": 1.1988795025571264,
+            "selected_ssim_gain": 0.009881973266601562,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0009034276008605957,
+            "view": "00011"
+          },
+          {
+            "oracle_psnr_gain": 0.8902176462191704,
+            "oracle_ssim_gain": 0.006378293037414551,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.008948529663225457,
+            "selected_psnr_gain": 0.881269116555945,
+            "selected_ssim_gain": 0.006260931491851807,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00011736154556274414,
+            "view": "00012"
+          },
+          {
+            "oracle_psnr_gain": 0.4214667560262235,
+            "oracle_ssim_gain": 0.00580066442489624,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.033458576896464365,
+            "selected_psnr_gain": 0.38800817912975916,
+            "selected_ssim_gain": 0.005498707294464111,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0003019571304321289,
+            "view": "00013"
+          },
+          {
+            "oracle_psnr_gain": 1.12005819005525,
+            "oracle_ssim_gain": 0.01269751787185669,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.038039051028022186,
+            "selected_psnr_gain": 1.0820191390272278,
+            "selected_ssim_gain": 0.011912286281585693,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0007852315902709961,
+            "view": "00017"
+          },
+          {
+            "oracle_psnr_gain": 0.4799608017440846,
+            "oracle_ssim_gain": 0.005561470985412598,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.0142397994459742,
+            "selected_psnr_gain": 0.4657210022981104,
+            "selected_ssim_gain": 0.0052762627601623535,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00028520822525024414,
+            "view": "00022"
+          },
+          {
+            "oracle_psnr_gain": 0.5927550819454552,
+            "oracle_ssim_gain": 0.008378744125366211,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.0814036434035117,
+            "selected_psnr_gain": 0.5113514385419435,
+            "selected_ssim_gain": 0.007453501224517822,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0009252429008483887,
+            "view": "00023"
+          },
+          {
+            "oracle_psnr_gain": 0.13498579584412695,
+            "oracle_ssim_gain": 0.006663262844085693,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.011912431475270324,
+            "selected_psnr_gain": 0.12307336436885663,
+            "selected_ssim_gain": 0.0060027241706848145,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0006605386734008789,
+            "view": "00026"
+          },
+          {
+            "oracle_psnr_gain": 0.0624854432430908,
+            "oracle_ssim_gain": 0.0019304156303405762,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.0035809749962325554,
+            "selected_psnr_gain": 0.058904468246858244,
+            "selected_ssim_gain": 0.0019245743751525879,
+            "selected_variant": "hybrid",
+            "ssim_delta": 5.841255187988281e-06,
+            "view": "00027"
+          },
+          {
+            "oracle_psnr_gain": 0.3071213457109536,
+            "oracle_ssim_gain": 0.00914233922958374,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.01832109200251608,
+            "selected_psnr_gain": 0.28880025370843754,
+            "selected_ssim_gain": 0.008660435676574707,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0004819035530090332,
+            "view": "00029"
+          },
+          {
+            "oracle_psnr_gain": 0.22073794559680948,
+            "oracle_ssim_gain": 0.0027889013290405273,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.03553299330884485,
+            "selected_psnr_gain": 0.18520495228796463,
+            "selected_ssim_gain": 0.0027460455894470215,
+            "selected_variant": "hybrid",
+            "ssim_delta": 4.285573959350586e-05,
+            "view": "00030"
+          },
+          {
+            "oracle_psnr_gain": 0.0561294763051734,
+            "oracle_ssim_gain": 0.003671705722808838,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 9.367768001666832e-05,
+            "selected_psnr_gain": 0.05603579862515673,
+            "selected_ssim_gain": 0.0035477876663208008,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0001239180564880371,
+            "view": "00032"
+          },
+          {
+            "oracle_psnr_gain": 0.012162805177002411,
+            "oracle_ssim_gain": 0.002716541290283203,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.0002682936064566377,
+            "selected_psnr_gain": 0.011894511570545774,
+            "selected_ssim_gain": 0.002542555332183838,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00017398595809936523,
+            "view": "00034"
+          },
+          {
+            "oracle_psnr_gain": 0.1457934618195722,
+            "oracle_ssim_gain": 0.00397944450378418,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.02186371215951155,
+            "selected_psnr_gain": 0.12392974966006065,
+            "selected_ssim_gain": 0.003720581531524658,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0002588629722595215,
+            "view": "00036"
+          },
+          {
+            "oracle_psnr_gain": 0.5101855491292184,
+            "oracle_ssim_gain": 0.004764258861541748,
+            "oracle_variant": "mix0250",
+            "psnr_delta": 0.0034155221254046353,
+            "selected_psnr_gain": 0.5067700270038138,
+            "selected_ssim_gain": 0.0047547221183776855,
+            "selected_variant": "hybrid",
+            "ssim_delta": 9.5367431640625e-06,
+            "view": "00037"
+          }
+        ],
+        "mean_psnr_delta": 0.011753366292113973,
+        "mean_ssim_delta": 0.00013808409372965494,
+        "oracle_mean_psnr_gain": 0.4490388623989858,
+        "oracle_mean_ssim_gain": 0.005196105211209028,
+        "oracle_variant_counts": {
+          "fixed": 5,
+          "hybrid": 6,
+          "learned": 22,
+          "mix0250": 2,
+          "mix0750": 4
+        },
+        "report_path": "outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701/room/support_transport_apply_report.json",
+        "scene": "room",
+        "selected_mean_psnr_gain": 0.43728549610687184,
+        "selected_mean_ssim_gain": 0.005058021117479374,
+        "selected_variant_counts": {
+          "hybrid": 39
+        },
+        "view_count": 39,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 30,
+        "improved_mean_psnr_delta": 0.010432896342038589,
+        "improved_mean_ssim_delta": 0.00030052661895751953,
+        "improved_oracle_variant_counts": {
+          "fixed": 1,
+          "mix0750": 1
+        },
+        "improved_view_count": 2,
+        "improved_view_fraction": 0.06666666666666667,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.13286364695087016,
+            "oracle_ssim_gain": 0.0019648075103759766,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.0011953323755129475,
+            "selected_psnr_gain": 0.13166831457535721,
+            "selected_ssim_gain": 0.0016837716102600098,
+            "selected_variant": "learned",
+            "ssim_delta": 0.0002810359001159668,
+            "view": "00000"
+          },
+          {
+            "oracle_psnr_gain": 0.0160570682435619,
+            "oracle_ssim_gain": 0.0014991164207458496,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.01967046030856423,
+            "selected_psnr_gain": -0.00361339206500233,
+            "selected_ssim_gain": 0.0011790990829467773,
+            "selected_variant": "learned",
+            "ssim_delta": 0.00032001733779907227,
+            "view": "00008"
+          }
+        ],
+        "mean_psnr_delta": 0.0006955264228025726,
+        "mean_ssim_delta": 2.00351079305013e-05,
+        "oracle_mean_psnr_gain": 0.42705516331225335,
+        "oracle_mean_ssim_gain": 0.006928382317225138,
+        "oracle_variant_counts": {
+          "fixed": 1,
+          "learned": 28,
+          "mix0750": 1
+        },
+        "report_path": "outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701/counter/support_transport_apply_report.json",
+        "scene": "counter",
+        "selected_mean_psnr_gain": 0.4263596368894508,
+        "selected_mean_ssim_gain": 0.006908347209294637,
+        "selected_variant_counts": {
+          "learned": 30
+        },
+        "view_count": 30,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 35,
+        "improved_mean_psnr_delta": 0.02594749525482361,
+        "improved_mean_ssim_delta": 0.00026120742162068683,
+        "improved_oracle_variant_counts": {
+          "fixed": 1,
+          "mix0750": 2
+        },
+        "improved_view_count": 3,
+        "improved_view_fraction": 0.08571428571428572,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.41624152188257213,
+            "oracle_ssim_gain": 0.0028200745582580566,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.07710847752122874,
+            "selected_psnr_gain": 0.3391330443613434,
+            "selected_ssim_gain": 0.00227510929107666,
+            "selected_variant": "learned",
+            "ssim_delta": 0.0005449652671813965,
+            "view": "00018"
+          },
+          {
+            "oracle_psnr_gain": 0.2609424467224635,
+            "oracle_ssim_gain": 0.002100050449371338,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.00070783273177355,
+            "selected_psnr_gain": 0.2602346139906899,
+            "selected_ssim_gain": 0.002017080783843994,
+            "selected_variant": "learned",
+            "ssim_delta": 8.296966552734375e-05,
+            "view": "00026"
+          },
+          {
+            "oracle_psnr_gain": 0.36357151558582146,
+            "oracle_ssim_gain": 0.0023490190505981445,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 2.617551146855135e-05,
+            "selected_psnr_gain": 0.3635453400743529,
+            "selected_ssim_gain": 0.0021933317184448242,
+            "selected_variant": "learned",
+            "ssim_delta": 0.0001556873321533203,
+            "view": "00030"
+          }
+        ],
+        "mean_psnr_delta": 0.002224071021842024,
+        "mean_ssim_delta": 2.2389207567487444e-05,
+        "oracle_mean_psnr_gain": 0.4958472315544145,
+        "oracle_mean_ssim_gain": 0.003933250904083252,
+        "oracle_variant_counts": {
+          "fixed": 1,
+          "learned": 32,
+          "mix0750": 2
+        },
+        "report_path": "outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701/kitchen/support_transport_apply_report.json",
+        "scene": "kitchen",
+        "selected_mean_psnr_gain": 0.4936231605325725,
+        "selected_mean_ssim_gain": 0.003910861696515764,
+        "selected_variant_counts": {
+          "learned": 35
+        },
+        "view_count": 35,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 37,
+        "improved_mean_psnr_delta": 0.09002258793090807,
+        "improved_mean_ssim_delta": 0.0008750756581624349,
+        "improved_oracle_variant_counts": {
+          "fixed": 2,
+          "mix0750": 1
+        },
+        "improved_view_count": 3,
+        "improved_view_fraction": 0.08108108108108109,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.30061595022449694,
+            "oracle_ssim_gain": 0.003836691379547119,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.013560499983494623,
+            "selected_psnr_gain": 0.2870554502410023,
+            "selected_ssim_gain": 0.0036380887031555176,
+            "selected_variant": "learned",
+            "ssim_delta": 0.00019860267639160156,
+            "view": "00004"
+          },
+          {
+            "oracle_psnr_gain": 0.5095305441851039,
+            "oracle_ssim_gain": 0.003642439842224121,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.00019014618489165969,
+            "selected_psnr_gain": 0.5093403980002122,
+            "selected_ssim_gain": 0.0036419034004211426,
+            "selected_variant": "learned",
+            "ssim_delta": 5.364418029785156e-07,
+            "view": "00030"
+          },
+          {
+            "oracle_psnr_gain": 1.109007849028682,
+            "oracle_ssim_gain": 0.009537756443023682,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.25631711762433795,
+            "selected_psnr_gain": 0.8526907314043441,
+            "selected_ssim_gain": 0.007111668586730957,
+            "selected_variant": "learned",
+            "ssim_delta": 0.0024260878562927246,
+            "view": "00035"
+          }
+        ],
+        "mean_psnr_delta": 0.007299128751154709,
+        "mean_ssim_delta": 7.095208039154877e-05,
+        "oracle_mean_psnr_gain": 0.583273571027404,
+        "oracle_mean_ssim_gain": 0.005918910374512544,
+        "oracle_variant_counts": {
+          "fixed": 5,
+          "hybrid": 1,
+          "learned": 30,
+          "mix0750": 1
+        },
+        "report_path": "outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701/bonsai/support_transport_apply_report.json",
+        "scene": "bonsai",
+        "selected_mean_psnr_gain": 0.5759744422762492,
+        "selected_mean_ssim_gain": 0.005847958294120994,
+        "selected_variant_counts": {
+          "learned": 37
+        },
+        "view_count": 37,
+        "warnings": []
+      }
+    ]
+  },
+  "baseline_root": "outputs/carnet/spcarnet_v335_target_neighbor_candidate_unlock_full9_20260701",
+  "comparison": {
+    "aggregate": {
+      "improved_view_count_method_minus_baseline": -4.0,
+      "improved_view_fraction_method_minus_baseline": -0.01626016260162605,
+      "macro_oracle_psnr_gain_method_minus_baseline": 0.0005798993839871147,
+      "macro_oracle_ssim_gain_method_minus_baseline": 1.347132897444852e-06,
+      "macro_psnr_delta_method_minus_baseline": -1.9615168134158242e-05,
+      "macro_selected_psnr_gain_method_minus_baseline": 0.0005995145521213163,
+      "macro_selected_ssim_gain_method_minus_baseline": 3.450446658664376e-06,
+      "macro_ssim_delta_method_minus_baseline": -2.1033137612193477e-06
+    },
+    "baseline_only_scenes": [],
+    "method_only_scenes": [],
+    "scenes": [
+      {
+        "improved_view_count_method_minus_baseline": 0.0,
+        "mean_psnr_delta_method_minus_baseline": 0.0,
+        "mean_ssim_delta_method_minus_baseline": 0.0,
+        "scene": "bicycle",
+        "selected_mean_psnr_gain_method_minus_baseline": 0.0,
+        "selected_mean_ssim_gain_method_minus_baseline": 0.0
+      },
+      {
+        "improved_view_count_method_minus_baseline": 0.0,
+        "mean_psnr_delta_method_minus_baseline": 0.0,
+        "mean_ssim_delta_method_minus_baseline": 0.0,
+        "scene": "bonsai",
+        "selected_mean_psnr_gain_method_minus_baseline": 0.0,
+        "selected_mean_ssim_gain_method_minus_baseline": 0.0
+      },
+      {
+        "improved_view_count_method_minus_baseline": 0.0,
+        "mean_psnr_delta_method_minus_baseline": 0.0,
+        "mean_ssim_delta_method_minus_baseline": 0.0,
+        "scene": "counter",
+        "selected_mean_psnr_gain_method_minus_baseline": 0.0,
+        "selected_mean_ssim_gain_method_minus_baseline": 0.0
+      },
+      {
+        "improved_view_count_method_minus_baseline": 0.0,
+        "mean_psnr_delta_method_minus_baseline": 0.0,
+        "mean_ssim_delta_method_minus_baseline": 0.0,
+        "scene": "flowers",
+        "selected_mean_psnr_gain_method_minus_baseline": 0.0,
+        "selected_mean_ssim_gain_method_minus_baseline": 0.0
+      },
+      {
+        "improved_view_count_method_minus_baseline": 0.0,
+        "mean_psnr_delta_method_minus_baseline": 0.0,
+        "mean_ssim_delta_method_minus_baseline": 0.0,
+        "scene": "garden",
+        "selected_mean_psnr_gain_method_minus_baseline": 0.0,
+        "selected_mean_ssim_gain_method_minus_baseline": 0.0
+      },
+      {
+        "improved_view_count_method_minus_baseline": 0.0,
+        "mean_psnr_delta_method_minus_baseline": 0.0,
+        "mean_ssim_delta_method_minus_baseline": 0.0,
+        "scene": "kitchen",
+        "selected_mean_psnr_gain_method_minus_baseline": 0.0,
+        "selected_mean_ssim_gain_method_minus_baseline": 0.0
+      },
+      {
+        "improved_view_count_method_minus_baseline": -4.0,
+        "mean_psnr_delta_method_minus_baseline": -0.00017653651320742765,
+        "mean_ssim_delta_method_minus_baseline": -1.892982385097405e-05,
+        "scene": "room",
+        "selected_mean_psnr_gain_method_minus_baseline": 0.005395630969091736,
+        "selected_mean_ssim_gain_method_minus_baseline": 3.1054019927978516e-05
+      },
+      {
+        "improved_view_count_method_minus_baseline": 0.0,
+        "mean_psnr_delta_method_minus_baseline": 0.0,
+        "mean_ssim_delta_method_minus_baseline": 0.0,
+        "scene": "stump",
+        "selected_mean_psnr_gain_method_minus_baseline": 0.0,
+        "selected_mean_ssim_gain_method_minus_baseline": 0.0
+      },
+      {
+        "improved_view_count_method_minus_baseline": 0.0,
+        "mean_psnr_delta_method_minus_baseline": 0.0,
+        "mean_ssim_delta_method_minus_baseline": 0.0,
+        "scene": "treehill",
+        "selected_mean_psnr_gain_method_minus_baseline": 0.0,
+        "selected_mean_ssim_gain_method_minus_baseline": 0.0
+      }
+    ]
+  },
+  "method": {
+    "aggregate": {
+      "improved_oracle_variant_counts": {
+        "adaptive": 3,
+        "fixed": 15,
+        "hybrid": 2,
+        "learned": 30,
+        "mix0250": 2,
+        "mix0750": 10
+      },
+      "improved_view_count": 62,
+      "improved_view_fraction": 0.25203252032520324,
+      "macro_oracle_psnr_gain": 0.28326728989647854,
+      "macro_oracle_ssim_gain": 0.0038172328408961433,
+      "macro_psnr_delta": 0.008649866410420003,
+      "macro_selected_psnr_gain": 0.27461742348605855,
+      "macro_selected_ssim_gain": 0.0037449766252074194,
+      "macro_ssim_delta": 7.225621568872359e-05,
+      "micro_improved_psnr_delta": 0.03065677097590603,
+      "micro_improved_ssim_delta": 0.0002782402500029533,
+      "missing_scenes": [],
+      "oracle_variant_counts": {
+        "adaptive": 14,
+        "fixed": 32,
+        "hybrid": 18,
+        "learned": 165,
+        "mix0250": 5,
+        "mix0750": 12
+      },
+      "scene_count": 9,
+      "selected_variant_counts": {
+        "fixed": 34,
+        "hybrid": 110,
+        "learned": 102
+      },
+      "view_count": 246
+    },
+    "root": "outputs/carnet/spcarnet_v336c_source_summary_gate_full9_20260701",
+    "scenes": [
+      {
+        "eligible_view_count": 25,
+        "improved_mean_psnr_delta": 0.019891351894466097,
+        "improved_mean_ssim_delta": 0.00024660734029916616,
+        "improved_oracle_variant_counts": {
+          "fixed": 7,
+          "learned": 4,
+          "mix0250": 1,
+          "mix0750": 1
+        },
+        "improved_view_count": 13,
+        "improved_view_fraction": 0.52,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.20656244855045713,
+            "oracle_ssim_gain": 0.007036983966827393,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.061318412744611805,
+            "selected_psnr_gain": 0.14524403580584533,
+            "selected_ssim_gain": 0.0061380863189697266,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.000898897647857666,
+            "view": "00003"
+          },
+          {
+            "oracle_psnr_gain": 0.2528314217979286,
+            "oracle_ssim_gain": 0.005403757095336914,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.04833702053625544,
+            "selected_psnr_gain": 0.20449440126167318,
+            "selected_ssim_gain": 0.005206882953643799,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00019687414169311523,
+            "view": "00004"
+          },
+          {
+            "oracle_psnr_gain": 0.17520532301915637,
+            "oracle_ssim_gain": 0.0037958621978759766,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.004066247648275123,
+            "selected_psnr_gain": 0.17113907537088124,
+            "selected_ssim_gain": 0.0036295056343078613,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00016635656356811523,
+            "view": "00008"
+          },
+          {
+            "oracle_psnr_gain": 0.03706436259168555,
+            "oracle_ssim_gain": 0.001475691795349121,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.011921909234438033,
+            "selected_psnr_gain": 0.02514245335724752,
+            "selected_ssim_gain": 0.0014116764068603516,
+            "selected_variant": "hybrid",
+            "ssim_delta": 6.401538848876953e-05,
+            "view": "00009"
+          },
+          {
+            "oracle_psnr_gain": -0.007346743663234179,
+            "oracle_ssim_gain": 0.0037068724632263184,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.027742507629085367,
+            "selected_psnr_gain": -0.035089251292319545,
+            "selected_ssim_gain": 0.0035146474838256836,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00019222497940063477,
+            "view": "00011"
+          },
+          {
+            "oracle_psnr_gain": 0.06062187647477657,
+            "oracle_ssim_gain": 0.0031747817993164062,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.02398403725015541,
+            "selected_psnr_gain": 0.03663783922462116,
+            "selected_ssim_gain": 0.0028415918350219727,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0003331899642944336,
+            "view": "00012"
+          },
+          {
+            "oracle_psnr_gain": 0.037234550857988324,
+            "oracle_ssim_gain": 0.0012297630310058594,
+            "oracle_variant": "mix0250",
+            "psnr_delta": 0.002037972389754117,
+            "selected_psnr_gain": 0.03519657846823421,
+            "selected_ssim_gain": 0.0010587573051452637,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0001710057258605957,
+            "view": "00013"
+          },
+          {
+            "oracle_psnr_gain": 0.08329604502957011,
+            "oracle_ssim_gain": 0.0021194815635681152,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.014495753549976342,
+            "selected_psnr_gain": 0.06880029147959377,
+            "selected_ssim_gain": 0.001894235610961914,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00022524595260620117,
+            "view": "00014"
+          },
+          {
+            "oracle_psnr_gain": 0.13944211199628853,
+            "oracle_ssim_gain": 0.003555476665496826,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.0027434481185792947,
+            "selected_psnr_gain": 0.13669866387770924,
+            "selected_ssim_gain": 0.0034726858139038086,
+            "selected_variant": "hybrid",
+            "ssim_delta": 8.279085159301758e-05,
+            "view": "00015"
+          },
+          {
+            "oracle_psnr_gain": -0.03367739781493029,
+            "oracle_ssim_gain": -0.00014472007751464844,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.026351755329756088,
+            "selected_psnr_gain": -0.060029153144686376,
+            "selected_ssim_gain": -0.0007012486457824707,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0005565285682678223,
+            "view": "00016"
+          },
+          {
+            "oracle_psnr_gain": 0.29210342271002787,
+            "oracle_ssim_gain": 0.0042403340339660645,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.02501974090132464,
+            "selected_psnr_gain": 0.26708368180870323,
+            "selected_ssim_gain": 0.004119932651519775,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00012040138244628906,
+            "view": "00019"
+          },
+          {
+            "oracle_psnr_gain": 0.0869451153576577,
+            "oracle_ssim_gain": 0.0019227862358093262,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.0024948589354067963,
+            "selected_psnr_gain": 0.0844502564222509,
+            "selected_ssim_gain": 0.0019064545631408691,
+            "selected_variant": "hybrid",
+            "ssim_delta": 1.633167266845703e-05,
+            "view": "00020"
+          },
+          {
+            "oracle_psnr_gain": 0.09433044675226299,
+            "oracle_ssim_gain": 0.0027761459350585938,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.008073910360440806,
+            "selected_psnr_gain": 0.08625653639182218,
+            "selected_ssim_gain": 0.0025941133499145508,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00018203258514404297,
+            "view": "00023"
+          }
+        ],
+        "mean_psnr_delta": 0.01034350298512237,
+        "mean_ssim_delta": 0.0001282358169555664,
+        "oracle_mean_psnr_gain": 0.1303020518255549,
+        "oracle_mean_ssim_gain": 0.0031169867515563965,
+        "oracle_variant_counts": {
+          "fixed": 7,
+          "hybrid": 7,
+          "learned": 9,
+          "mix0250": 1,
+          "mix0750": 1
+        },
+        "report_path": "outputs/carnet/spcarnet_v336c_source_summary_gate_full9_20260701/bicycle/support_transport_apply_report.json",
+        "scene": "bicycle",
+        "selected_mean_psnr_gain": 0.11995854884043254,
+        "selected_mean_ssim_gain": 0.00298875093460083,
+        "selected_variant_counts": {
+          "hybrid": 25
+        },
+        "view_count": 25,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 22,
+        "improved_mean_psnr_delta": 0.010882108881415005,
+        "improved_mean_ssim_delta": 0.00013526942994859483,
+        "improved_oracle_variant_counts": {
+          "fixed": 1,
+          "learned": 7,
+          "mix0750": 1
+        },
+        "improved_view_count": 9,
+        "improved_view_fraction": 0.4090909090909091,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.06906011361234121,
+            "oracle_ssim_gain": 0.001889944076538086,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.015673814207428194,
+            "selected_psnr_gain": 0.05338629940491302,
+            "selected_ssim_gain": 0.0015829801559448242,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0003069639205932617,
+            "view": "00000"
+          },
+          {
+            "oracle_psnr_gain": 0.10407743204699216,
+            "oracle_ssim_gain": 0.004556715488433838,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.00974773150967323,
+            "selected_psnr_gain": 0.09432970053731893,
+            "selected_ssim_gain": 0.004548788070678711,
+            "selected_variant": "hybrid",
+            "ssim_delta": 7.927417755126953e-06,
+            "view": "00005"
+          },
+          {
+            "oracle_psnr_gain": 0.21591682700496406,
+            "oracle_ssim_gain": 0.008678197860717773,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.017188821216397088,
+            "selected_psnr_gain": 0.19872800578856697,
+            "selected_ssim_gain": 0.008421599864959717,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00025659799575805664,
+            "view": "00010"
+          },
+          {
+            "oracle_psnr_gain": 0.08179913124484273,
+            "oracle_ssim_gain": 0.004564940929412842,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.0023317486604561566,
+            "selected_psnr_gain": 0.07946738258438657,
+            "selected_ssim_gain": 0.004395782947540283,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0001691579818725586,
+            "view": "00011"
+          },
+          {
+            "oracle_psnr_gain": 0.09687039023319244,
+            "oracle_ssim_gain": 0.003742992877960205,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.003219755634930266,
+            "selected_psnr_gain": 0.09365063459826217,
+            "selected_ssim_gain": 0.0036932826042175293,
+            "selected_variant": "hybrid",
+            "ssim_delta": 4.971027374267578e-05,
+            "view": "00012"
+          },
+          {
+            "oracle_psnr_gain": 0.11126362125040146,
+            "oracle_ssim_gain": 0.0067688822746276855,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.007872649451353908,
+            "selected_psnr_gain": 0.10339097179904755,
+            "selected_ssim_gain": 0.0065950751304626465,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00017380714416503906,
+            "view": "00014"
+          },
+          {
+            "oracle_psnr_gain": 0.07791452092700624,
+            "oracle_ssim_gain": 0.0031957626342773438,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.005293009764244516,
+            "selected_psnr_gain": 0.07262151116276172,
+            "selected_ssim_gain": 0.0031739473342895508,
+            "selected_variant": "hybrid",
+            "ssim_delta": 2.181529998779297e-05,
+            "view": "00017"
+          },
+          {
+            "oracle_psnr_gain": 0.14530295924640058,
+            "oracle_ssim_gain": 0.005594074726104736,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.02220296019773471,
+            "selected_psnr_gain": 0.12309999904866586,
+            "selected_ssim_gain": 0.005505561828613281,
+            "selected_variant": "hybrid",
+            "ssim_delta": 8.851289749145508e-05,
+            "view": "00019"
+          },
+          {
+            "oracle_psnr_gain": 0.09382830518316965,
+            "oracle_ssim_gain": 0.004058957099914551,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.014408489290516968,
+            "selected_psnr_gain": 0.07941981589265268,
+            "selected_ssim_gain": 0.003916025161743164,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00014293193817138672,
+            "view": "00020"
+          }
+        ],
+        "mean_psnr_delta": 0.00445177181512432,
+        "mean_ssim_delta": 5.5337494069879703e-05,
+        "oracle_mean_psnr_gain": 0.09681140350123792,
+        "oracle_mean_ssim_gain": 0.0041696781461889095,
+        "oracle_variant_counts": {
+          "fixed": 1,
+          "hybrid": 4,
+          "learned": 16,
+          "mix0750": 1
+        },
+        "report_path": "outputs/carnet/spcarnet_v336c_source_summary_gate_full9_20260701/flowers/support_transport_apply_report.json",
+        "scene": "flowers",
+        "selected_mean_psnr_gain": 0.0923596316861136,
+        "selected_mean_ssim_gain": 0.00411434065211903,
+        "selected_variant_counts": {
+          "hybrid": 22
+        },
+        "view_count": 22,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 24,
+        "improved_mean_psnr_delta": 0.016662672019159903,
+        "improved_mean_ssim_delta": 9.979804356892903e-05,
+        "improved_oracle_variant_counts": {
+          "fixed": 3,
+          "hybrid": 1,
+          "learned": 1,
+          "mix0250": 1
+        },
+        "improved_view_count": 6,
+        "improved_view_fraction": 0.25,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.1950514412892268,
+            "oracle_ssim_gain": 0.0025041699409484863,
+            "oracle_variant": "hybrid",
+            "psnr_delta": 0.0024083330826982774,
+            "selected_psnr_gain": 0.19264310820652852,
+            "selected_ssim_gain": 0.002424299716949463,
+            "selected_variant": "hybrid",
+            "ssim_delta": 7.987022399902344e-05,
+            "view": "00002"
+          },
+          {
+            "oracle_psnr_gain": 0.22948633755672176,
+            "oracle_ssim_gain": 0.0030626654624938965,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.02583936693522304,
+            "selected_psnr_gain": 0.20364697062149872,
+            "selected_ssim_gain": 0.002894580364227295,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00016808509826660156,
+            "view": "00008"
+          },
+          {
+            "oracle_psnr_gain": 0.1899119234333213,
+            "oracle_ssim_gain": 0.001794576644897461,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.030162276906047225,
+            "selected_psnr_gain": 0.15974964652727408,
+            "selected_ssim_gain": 0.0017172694206237793,
+            "selected_variant": "hybrid",
+            "ssim_delta": 7.730722427368164e-05,
+            "view": "00011"
+          },
+          {
+            "oracle_psnr_gain": 0.09268204685173842,
+            "oracle_ssim_gain": 0.0008420348167419434,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.024544260807726204,
+            "selected_psnr_gain": 0.06813778604401222,
+            "selected_ssim_gain": 0.0006636381149291992,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.00017839670181274414,
+            "view": "00012"
+          },
+          {
+            "oracle_psnr_gain": 0.21316942615572998,
+            "oracle_ssim_gain": 0.0022527575492858887,
+            "oracle_variant": "mix0250",
+            "psnr_delta": 0.007968216946874662,
+            "selected_psnr_gain": 0.20520120920885532,
+            "selected_ssim_gain": 0.002203702926635742,
+            "selected_variant": "hybrid",
+            "ssim_delta": 4.9054622650146484e-05,
+            "view": "00014"
+          },
+          {
+            "oracle_psnr_gain": 0.18214640752321287,
+            "oracle_ssim_gain": 0.0022400617599487305,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.009053577436390015,
+            "selected_psnr_gain": 0.17309283008682286,
+            "selected_ssim_gain": 0.0021939873695373535,
+            "selected_variant": "hybrid",
+            "ssim_delta": 4.607439041137695e-05,
+            "view": "00017"
+          }
+        ],
+        "mean_psnr_delta": 0.004165668004789976,
+        "mean_ssim_delta": 2.4949510892232258e-05,
+        "oracle_mean_psnr_gain": 0.14961478817711202,
+        "oracle_mean_ssim_gain": 0.0019447281956672668,
+        "oracle_variant_counts": {
+          "fixed": 4,
+          "hybrid": 3,
+          "learned": 12,
+          "mix0250": 3,
+          "mix0750": 2
+        },
+        "report_path": "outputs/carnet/spcarnet_v336c_source_summary_gate_full9_20260701/garden/support_transport_apply_report.json",
+        "scene": "garden",
+        "selected_mean_psnr_gain": 0.14544912017232203,
+        "selected_mean_ssim_gain": 0.0019197786847750347,
+        "selected_variant_counts": {
+          "hybrid": 24
+        },
+        "view_count": 24,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 16,
+        "improved_mean_psnr_delta": 0.04996179456100843,
+        "improved_mean_ssim_delta": 0.00022248710904802595,
+        "improved_oracle_variant_counts": {
+          "learned": 5,
+          "mix0750": 2
+        },
+        "improved_view_count": 7,
+        "improved_view_fraction": 0.4375,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.1575071385233926,
+            "oracle_ssim_gain": 0.0011559128761291504,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.06677587961461384,
+            "selected_psnr_gain": 0.09073125890877876,
+            "selected_ssim_gain": 0.000896453857421875,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0002594590187072754,
+            "view": "00000"
+          },
+          {
+            "oracle_psnr_gain": 0.09175128571681412,
+            "oracle_ssim_gain": 0.003105759620666504,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.03044147762170013,
+            "selected_psnr_gain": 0.06130980809511399,
+            "selected_ssim_gain": 0.002835690975189209,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0002700686454772949,
+            "view": "00001"
+          },
+          {
+            "oracle_psnr_gain": 0.17244585853769578,
+            "oracle_ssim_gain": 0.0023305416107177734,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.07518899453575756,
+            "selected_psnr_gain": 0.09725686400193823,
+            "selected_ssim_gain": 0.0018981695175170898,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0004323720932006836,
+            "view": "00002"
+          },
+          {
+            "oracle_psnr_gain": 0.07762685248742685,
+            "oracle_ssim_gain": 0.0006948709487915039,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.02705331393068633,
+            "selected_psnr_gain": 0.050573538556740516,
+            "selected_ssim_gain": 0.0006820559501647949,
+            "selected_variant": "fixed",
+            "ssim_delta": 1.2814998626708984e-05,
+            "view": "00010"
+          },
+          {
+            "oracle_psnr_gain": 0.0053481989029933175,
+            "oracle_ssim_gain": -0.00020766258239746094,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.018533019173169407,
+            "selected_psnr_gain": -0.01318482027017609,
+            "selected_ssim_gain": -0.00028645992279052734,
+            "selected_variant": "fixed",
+            "ssim_delta": 7.87973403930664e-05,
+            "view": "00011"
+          },
+          {
+            "oracle_psnr_gain": 0.14241733344450225,
+            "oracle_ssim_gain": 0.0010135173797607422,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.05250409327279826,
+            "selected_psnr_gain": 0.08991324017170399,
+            "selected_ssim_gain": 0.0008677244186401367,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.00014579296112060547,
+            "view": "00012"
+          },
+          {
+            "oracle_psnr_gain": 0.2387780747669659,
+            "oracle_ssim_gain": 0.0030580759048461914,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.07923578377833351,
+            "selected_psnr_gain": 0.15954229098863237,
+            "selected_ssim_gain": 0.0026999711990356445,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0003581047058105469,
+            "view": "00014"
+          }
+        ],
+        "mean_psnr_delta": 0.02185828512044119,
+        "mean_ssim_delta": 9.733811020851135e-05,
+        "oracle_mean_psnr_gain": 0.07888804651347625,
+        "oracle_mean_ssim_gain": 0.0013055801391601562,
+        "oracle_variant_counts": {
+          "fixed": 9,
+          "learned": 5,
+          "mix0750": 2
+        },
+        "report_path": "outputs/carnet/spcarnet_v336c_source_summary_gate_full9_20260701/stump/support_transport_apply_report.json",
+        "scene": "stump",
+        "selected_mean_psnr_gain": 0.05702976139303506,
+        "selected_mean_ssim_gain": 0.001208242028951645,
+        "selected_variant_counts": {
+          "fixed": 16
+        },
+        "view_count": 16,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 18,
+        "improved_mean_psnr_delta": 0.04570204138078893,
+        "improved_mean_ssim_delta": 0.0003357430299123128,
+        "improved_oracle_variant_counts": {
+          "hybrid": 1,
+          "learned": 5
+        },
+        "improved_view_count": 6,
+        "improved_view_fraction": 0.3333333333333333,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.10676070881207878,
+            "oracle_ssim_gain": 0.004862606525421143,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.019433405858645614,
+            "selected_psnr_gain": 0.08732730295343316,
+            "selected_ssim_gain": 0.0042915940284729,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0005710124969482422,
+            "view": "00002"
+          },
+          {
+            "oracle_psnr_gain": 0.4256187155946911,
+            "oracle_ssim_gain": 0.004872262477874756,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.09747783836789026,
+            "selected_psnr_gain": 0.32814087722680085,
+            "selected_ssim_gain": 0.004323422908782959,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0005488395690917969,
+            "view": "00011"
+          },
+          {
+            "oracle_psnr_gain": 0.03360994459603006,
+            "oracle_ssim_gain": -0.00010478496551513672,
+            "oracle_variant": "hybrid",
+            "psnr_delta": 0.0026879089298930126,
+            "selected_psnr_gain": 0.03092203566613705,
+            "selected_ssim_gain": -0.0002875328063964844,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.00018274784088134766,
+            "view": "00012"
+          },
+          {
+            "oracle_psnr_gain": 0.1884247467927409,
+            "oracle_ssim_gain": 0.004485726356506348,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.03920029175868933,
+            "selected_psnr_gain": 0.14922445503405157,
+            "selected_ssim_gain": 0.0041405558586120605,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.0003451704978942871,
+            "view": "00015"
+          },
+          {
+            "oracle_psnr_gain": 0.1898541137504708,
+            "oracle_ssim_gain": 0.0009129643440246582,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.08402566843743742,
+            "selected_psnr_gain": 0.10582844531303337,
+            "selected_ssim_gain": 0.0006468296051025391,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.00026613473892211914,
+            "view": "00016"
+          },
+          {
+            "oracle_psnr_gain": 0.10103773016570372,
+            "oracle_ssim_gain": 0.0021454691886901855,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.03138713493217793,
+            "selected_psnr_gain": 0.06965059523352579,
+            "selected_ssim_gain": 0.0020449161529541016,
+            "selected_variant": "fixed",
+            "ssim_delta": 0.00010055303573608398,
+            "view": "00017"
+          }
+        ],
+        "mean_psnr_delta": 0.01523401379359631,
+        "mean_ssim_delta": 0.00011191434330410427,
+        "oracle_mean_psnr_gain": 0.13335539630198412,
+        "oracle_mean_ssim_gain": 0.001829349332385593,
+        "oracle_variant_counts": {
+          "fixed": 4,
+          "hybrid": 1,
+          "learned": 12,
+          "mix0250": 1
+        },
+        "report_path": "outputs/carnet/spcarnet_v336c_source_summary_gate_full9_20260701/treehill/support_transport_apply_report.json",
+        "scene": "treehill",
+        "selected_mean_psnr_gain": 0.1181213825083878,
+        "selected_mean_ssim_gain": 0.0017174349890814887,
+        "selected_variant_counts": {
+          "fixed": 18
+        },
+        "view_count": 18,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 39,
+        "improved_mean_psnr_delta": 0.034730489336719635,
+        "improved_mean_ssim_delta": 0.0003574628096360427,
+        "improved_oracle_variant_counts": {
+          "adaptive": 3,
+          "learned": 8,
+          "mix0750": 2
+        },
+        "improved_view_count": 13,
+        "improved_view_fraction": 0.3333333333333333,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.22792468794387233,
+            "oracle_ssim_gain": 0.002848029136657715,
+            "oracle_variant": "adaptive",
+            "psnr_delta": 0.016116390871943054,
+            "selected_psnr_gain": 0.21180829707192927,
+            "selected_ssim_gain": 0.002774059772491455,
+            "selected_variant": "hybrid",
+            "ssim_delta": 7.396936416625977e-05,
+            "view": "00001"
+          },
+          {
+            "oracle_psnr_gain": 0.2618722961096793,
+            "oracle_ssim_gain": 0.002400815486907959,
+            "oracle_variant": "adaptive",
+            "psnr_delta": 0.024585941337118555,
+            "selected_psnr_gain": 0.23728635477256077,
+            "selected_ssim_gain": 0.0023275017738342285,
+            "selected_variant": "hybrid",
+            "ssim_delta": 7.331371307373047e-05,
+            "view": "00007"
+          },
+          {
+            "oracle_psnr_gain": 1.3206013996305686,
+            "oracle_ssim_gain": 0.010785400867462158,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.12172189707344216,
+            "selected_psnr_gain": 1.1988795025571264,
+            "selected_ssim_gain": 0.009881973266601562,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0009034276008605957,
+            "view": "00011"
+          },
+          {
+            "oracle_psnr_gain": 0.9423595622856418,
+            "oracle_ssim_gain": 0.006281733512878418,
+            "oracle_variant": "adaptive",
+            "psnr_delta": 0.061090445729696796,
+            "selected_psnr_gain": 0.881269116555945,
+            "selected_ssim_gain": 0.006260931491851807,
+            "selected_variant": "hybrid",
+            "ssim_delta": 2.0802021026611328e-05,
+            "view": "00012"
+          },
+          {
+            "oracle_psnr_gain": 0.4214667560262235,
+            "oracle_ssim_gain": 0.00580066442489624,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.01881111396305002,
+            "selected_psnr_gain": 0.4026556420631735,
+            "selected_ssim_gain": 0.0057259202003479,
+            "selected_variant": "hybrid",
+            "ssim_delta": 7.474422454833984e-05,
+            "view": "00013"
+          },
+          {
+            "oracle_psnr_gain": 1.12005819005525,
+            "oracle_ssim_gain": 0.01269751787185669,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.023326273473834647,
+            "selected_psnr_gain": 1.0967319165814153,
+            "selected_ssim_gain": 0.011749029159545898,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.000948488712310791,
+            "view": "00017"
+          },
+          {
+            "oracle_psnr_gain": 0.5927550819454552,
+            "oracle_ssim_gain": 0.008378744125366211,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.0814036434035117,
+            "selected_psnr_gain": 0.5113514385419435,
+            "selected_ssim_gain": 0.007453501224517822,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0009252429008483887,
+            "view": "00023"
+          },
+          {
+            "oracle_psnr_gain": 0.41572393229488114,
+            "oracle_ssim_gain": 0.0021370649337768555,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.04536492396725933,
+            "selected_psnr_gain": 0.3703590083276218,
+            "selected_ssim_gain": 0.0020394325256347656,
+            "selected_variant": "hybrid",
+            "ssim_delta": 9.763240814208984e-05,
+            "view": "00025"
+          },
+          {
+            "oracle_psnr_gain": 0.13498579584412695,
+            "oracle_ssim_gain": 0.006663262844085693,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.011912431475270324,
+            "selected_psnr_gain": 0.12307336436885663,
+            "selected_ssim_gain": 0.0060027241706848145,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0006605386734008789,
+            "view": "00026"
+          },
+          {
+            "oracle_psnr_gain": 0.0624854432430908,
+            "oracle_ssim_gain": 0.0019304156303405762,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.006884818240184387,
+            "selected_psnr_gain": 0.05560062500290641,
+            "selected_ssim_gain": 0.0019262433052062988,
+            "selected_variant": "hybrid",
+            "ssim_delta": 4.172325134277344e-06,
+            "view": "00027"
+          },
+          {
+            "oracle_psnr_gain": 0.3071213457109536,
+            "oracle_ssim_gain": 0.00914233922958374,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.01832109200251608,
+            "selected_psnr_gain": 0.28880025370843754,
+            "selected_ssim_gain": 0.008660435676574707,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0004819035530090332,
+            "view": "00029"
+          },
+          {
+            "oracle_psnr_gain": 0.0561294763051734,
+            "oracle_ssim_gain": 0.003671705722808838,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 9.367768001666832e-05,
+            "selected_psnr_gain": 0.05603579862515673,
+            "selected_ssim_gain": 0.0035477876663208008,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0001239180564880371,
+            "view": "00032"
+          },
+          {
+            "oracle_psnr_gain": 0.1457934618195722,
+            "oracle_ssim_gain": 0.00397944450378418,
+            "oracle_variant": "learned",
+            "psnr_delta": 0.02186371215951155,
+            "selected_psnr_gain": 0.12392974966006065,
+            "selected_ssim_gain": 0.003720581531524658,
+            "selected_variant": "hybrid",
+            "ssim_delta": 0.0002588629722595215,
+            "view": "00036"
+          }
+        ],
+        "mean_psnr_delta": 0.011576829778906545,
+        "mean_ssim_delta": 0.00011915426987868089,
+        "oracle_mean_psnr_gain": 0.45425795685487014,
+        "oracle_mean_ssim_gain": 0.005208229407286033,
+        "oracle_variant_counts": {
+          "adaptive": 14,
+          "hybrid": 2,
+          "learned": 21,
+          "mix0750": 2
+        },
+        "report_path": "outputs/carnet/spcarnet_v336c_source_summary_gate_full9_20260701/room/support_transport_apply_report.json",
+        "scene": "room",
+        "selected_mean_psnr_gain": 0.4426811270759636,
+        "selected_mean_ssim_gain": 0.005089075137407352,
+        "selected_variant_counts": {
+          "hybrid": 39
+        },
+        "view_count": 39,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 30,
+        "improved_mean_psnr_delta": 0.010432896342038589,
+        "improved_mean_ssim_delta": 0.00030052661895751953,
+        "improved_oracle_variant_counts": {
+          "fixed": 1,
+          "mix0750": 1
+        },
+        "improved_view_count": 2,
+        "improved_view_fraction": 0.06666666666666667,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.13286364695087016,
+            "oracle_ssim_gain": 0.0019648075103759766,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.0011953323755129475,
+            "selected_psnr_gain": 0.13166831457535721,
+            "selected_ssim_gain": 0.0016837716102600098,
+            "selected_variant": "learned",
+            "ssim_delta": 0.0002810359001159668,
+            "view": "00000"
+          },
+          {
+            "oracle_psnr_gain": 0.0160570682435619,
+            "oracle_ssim_gain": 0.0014991164207458496,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.01967046030856423,
+            "selected_psnr_gain": -0.00361339206500233,
+            "selected_ssim_gain": 0.0011790990829467773,
+            "selected_variant": "learned",
+            "ssim_delta": 0.00032001733779907227,
+            "view": "00008"
+          }
+        ],
+        "mean_psnr_delta": 0.0006955264228025726,
+        "mean_ssim_delta": 2.00351079305013e-05,
+        "oracle_mean_psnr_gain": 0.42705516331225335,
+        "oracle_mean_ssim_gain": 0.006928382317225138,
+        "oracle_variant_counts": {
+          "fixed": 1,
+          "learned": 28,
+          "mix0750": 1
+        },
+        "report_path": "outputs/carnet/spcarnet_v336c_source_summary_gate_full9_20260701/counter/support_transport_apply_report.json",
+        "scene": "counter",
+        "selected_mean_psnr_gain": 0.4263596368894508,
+        "selected_mean_ssim_gain": 0.006908347209294637,
+        "selected_variant_counts": {
+          "learned": 30
+        },
+        "view_count": 30,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 35,
+        "improved_mean_psnr_delta": 0.02594749525482361,
+        "improved_mean_ssim_delta": 0.00026120742162068683,
+        "improved_oracle_variant_counts": {
+          "fixed": 1,
+          "mix0750": 2
+        },
+        "improved_view_count": 3,
+        "improved_view_fraction": 0.08571428571428572,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.41624152188257213,
+            "oracle_ssim_gain": 0.0028200745582580566,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.07710847752122874,
+            "selected_psnr_gain": 0.3391330443613434,
+            "selected_ssim_gain": 0.00227510929107666,
+            "selected_variant": "learned",
+            "ssim_delta": 0.0005449652671813965,
+            "view": "00018"
+          },
+          {
+            "oracle_psnr_gain": 0.2609424467224635,
+            "oracle_ssim_gain": 0.002100050449371338,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.00070783273177355,
+            "selected_psnr_gain": 0.2602346139906899,
+            "selected_ssim_gain": 0.002017080783843994,
+            "selected_variant": "learned",
+            "ssim_delta": 8.296966552734375e-05,
+            "view": "00026"
+          },
+          {
+            "oracle_psnr_gain": 0.36357151558582146,
+            "oracle_ssim_gain": 0.0023490190505981445,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 2.617551146855135e-05,
+            "selected_psnr_gain": 0.3635453400743529,
+            "selected_ssim_gain": 0.0021933317184448242,
+            "selected_variant": "learned",
+            "ssim_delta": 0.0001556873321533203,
+            "view": "00030"
+          }
+        ],
+        "mean_psnr_delta": 0.002224071021842024,
+        "mean_ssim_delta": 2.2389207567487444e-05,
+        "oracle_mean_psnr_gain": 0.4958472315544145,
+        "oracle_mean_ssim_gain": 0.003933250904083252,
+        "oracle_variant_counts": {
+          "fixed": 1,
+          "learned": 32,
+          "mix0750": 2
+        },
+        "report_path": "outputs/carnet/spcarnet_v336c_source_summary_gate_full9_20260701/kitchen/support_transport_apply_report.json",
+        "scene": "kitchen",
+        "selected_mean_psnr_gain": 0.4936231605325725,
+        "selected_mean_ssim_gain": 0.003910861696515764,
+        "selected_variant_counts": {
+          "learned": 35
+        },
+        "view_count": 35,
+        "warnings": []
+      },
+      {
+        "eligible_view_count": 37,
+        "improved_mean_psnr_delta": 0.09002258793090807,
+        "improved_mean_ssim_delta": 0.0008750756581624349,
+        "improved_oracle_variant_counts": {
+          "fixed": 2,
+          "mix0750": 1
+        },
+        "improved_view_count": 3,
+        "improved_view_fraction": 0.08108108108108109,
+        "improved_views": [
+          {
+            "oracle_psnr_gain": 0.30061595022449694,
+            "oracle_ssim_gain": 0.003836691379547119,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.013560499983494623,
+            "selected_psnr_gain": 0.2870554502410023,
+            "selected_ssim_gain": 0.0036380887031555176,
+            "selected_variant": "learned",
+            "ssim_delta": 0.00019860267639160156,
+            "view": "00004"
+          },
+          {
+            "oracle_psnr_gain": 0.5095305441851039,
+            "oracle_ssim_gain": 0.003642439842224121,
+            "oracle_variant": "mix0750",
+            "psnr_delta": 0.00019014618489165969,
+            "selected_psnr_gain": 0.5093403980002122,
+            "selected_ssim_gain": 0.0036419034004211426,
+            "selected_variant": "learned",
+            "ssim_delta": 5.364418029785156e-07,
+            "view": "00030"
+          },
+          {
+            "oracle_psnr_gain": 1.109007849028682,
+            "oracle_ssim_gain": 0.009537756443023682,
+            "oracle_variant": "fixed",
+            "psnr_delta": 0.25631711762433795,
+            "selected_psnr_gain": 0.8526907314043441,
+            "selected_ssim_gain": 0.007111668586730957,
+            "selected_variant": "learned",
+            "ssim_delta": 0.0024260878562927246,
+            "view": "00035"
+          }
+        ],
+        "mean_psnr_delta": 0.007299128751154709,
+        "mean_ssim_delta": 7.095208039154877e-05,
+        "oracle_mean_psnr_gain": 0.583273571027404,
+        "oracle_mean_ssim_gain": 0.005918910374512544,
+        "oracle_variant_counts": {
+          "fixed": 5,
+          "hybrid": 1,
+          "learned": 30,
+          "mix0750": 1
+        },
+        "report_path": "outputs/carnet/spcarnet_v336c_source_summary_gate_full9_20260701/bonsai/support_transport_apply_report.json",
+        "scene": "bonsai",
+        "selected_mean_psnr_gain": 0.5759744422762492,
+        "selected_mean_ssim_gain": 0.005847958294120994,
+        "selected_variant_counts": {
+          "learned": 37
+        },
+        "view_count": 37,
+        "warnings": []
+      }
+    ]
+  },
+  "method_root": "outputs/carnet/spcarnet_v336c_source_summary_gate_full9_20260701",
+  "scenes": [
+    "bicycle",
+    "flowers",
+    "garden",
+    "stump",
+    "treehill",
+    "room",
+    "counter",
+    "kitchen",
+    "bonsai"
+  ],
+  "strict_rule": {
+    "eligible_candidate": "candidate.psnr_gain >= selected.psnr_gain and candidate.ssim_gain >= selected.ssim_gain",
+    "eps": 1e-12,
+    "oracle_selection": "max psnr_gain, tie-break by max ssim_gain, prefer selected variant on exact ties"
+  }
+}

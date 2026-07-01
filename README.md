@@ -26,6 +26,8 @@ Start from:
 - [v336c full9 audit vs v335/v336b](docs/car_model/results/v336c_source_summary_gate_full9_vs_v335_v336b_audit.md)
 - [v336c frontier LPIPS/DISTS summary](docs/car_model/results/v336c_frontier_lpips_qualitative_summary.md)
 - [v336c room qualitative panel](docs/car_model/results/v336c_frontier_panels/room/00009_frontier_panel.png)
+- [v336c Phase-J stall and oracle-gap investigation](docs/car_model/7-01-v336c-PhaseJ-Stall-Bottleneck-Investigation.md)
+- [v337 all-candidate target-neighbor diagnostic](docs/car_model/7-01-v337-AllCandidateTNCDiagnostic-Log.md)
 - [next-model feedback and lessons](feedback.md)
 
 Honest status: v336c is a real method/evidence milestone, not final paper-level

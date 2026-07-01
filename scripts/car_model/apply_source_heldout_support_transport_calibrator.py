@@ -2806,6 +2806,256 @@ def _target_neighbor_consistency_score(
     }
 
 
+def _target_neighbor_all_candidate_scores(
+    *,
+    ev: Any,
+    deltas: dict[str, torch.Tensor],
+    target: Any,
+    target_frames: Sequence[Any],
+    loader: FrameLoader,
+    device: torch.device,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    enabled = bool(getattr(args, "enable_target_neighbor_all_candidate_diagnostic", False))
+    payload: dict[str, Any] = {
+        "enabled": enabled,
+        "uses_target_gt": False,
+        "candidate_count": int(len(deltas)),
+        "scores": {},
+        "ranked_variants": [],
+        "best_variant": None,
+        "insufficient_support_variants": [],
+    }
+    if not enabled:
+        return payload
+    for variant, delta in deltas.items():
+        image = torch.clamp(ev.base + delta, 0.0, 1.0)
+        score = _target_neighbor_consistency_score(
+            target=target,
+            image=image,
+            target_frames=target_frames,
+            loader=loader,
+            device=device,
+            args=args,
+        )
+        payload["scores"][variant] = score
+    ranked: list[str] = []
+    insufficient: list[str] = []
+    for variant, score in payload["scores"].items():
+        error = score.get("mean_mae_to_neighbor_base")
+        effective_weight = float(score.get("total_effective_weight", 0.0))
+        if error is None or effective_weight < float(args.target_neighbor_consistency_min_effective_weight):
+            insufficient.append(str(variant))
+            continue
+        ranked.append(str(variant))
+    ranked.sort(
+        key=lambda variant: (
+            float(payload["scores"][variant].get("mean_mae_to_neighbor_base", float("inf"))),
+            -float(payload["scores"][variant].get("total_effective_weight", 0.0)),
+            variant,
+        )
+    )
+    payload["ranked_variants"] = ranked
+    payload["best_variant"] = ranked[0] if ranked else None
+    payload["insufficient_support_variants"] = sorted(insufficient)
+    return payload
+
+
+def _numeric_metric(row: dict[str, Any], key: str) -> float | None:
+    value = row.get(key)
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+        return number if math.isfinite(number) else None
+    return None
+
+
+def _strict_candidate_oracle(
+    candidate_rows: dict[str, dict[str, Any]],
+    selected_row: dict[str, Any],
+    selected_variant: str,
+    *,
+    compute_ssim: bool,
+    eps: float,
+) -> tuple[str | None, dict[str, Any] | None]:
+    selected_psnr = _numeric_metric(selected_row, "psnr_gain")
+    if selected_psnr is None:
+        return None, None
+    selected_ssim = _numeric_metric(selected_row, "ssim_gain") if compute_ssim else None
+    eligible: list[tuple[str, dict[str, Any], float, float]] = []
+    for variant, row in candidate_rows.items():
+        psnr = _numeric_metric(row, "psnr_gain")
+        if psnr is None or psnr + eps < selected_psnr:
+            continue
+        ssim = _numeric_metric(row, "ssim_gain") if compute_ssim else 0.0
+        if compute_ssim and (ssim is None or selected_ssim is None or ssim + eps < selected_ssim):
+            continue
+        eligible.append((str(variant), row, float(psnr), float(ssim or 0.0)))
+    if not eligible:
+        return None, None
+    best_psnr = max(item[2] for item in eligible)
+    top = [item for item in eligible if abs(item[2] - best_psnr) <= eps]
+    best_ssim = max(item[3] for item in top)
+    top = [item for item in top if abs(item[3] - best_ssim) <= eps]
+    for item in top:
+        if item[0] == selected_variant:
+            return item[0], item[1]
+    chosen = sorted(top, key=lambda item: item[0])[0]
+    return chosen[0], chosen[1]
+
+
+def _variant_rank(ranked: list[str], variant: str | None) -> int | None:
+    if variant is None:
+        return None
+    try:
+        return int(ranked.index(str(variant)) + 1)
+    except ValueError:
+        return None
+
+
+def _target_neighbor_all_candidate_rank_diagnostic(
+    *,
+    scores_payload: dict[str, Any],
+    candidate_rows: dict[str, dict[str, Any]],
+    selected_row: dict[str, Any],
+    output_variant: str,
+    scene_selected_variant: str,
+    compute_ssim: bool,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    payload = dict(scores_payload)
+    if not bool(payload.get("enabled", False)):
+        return payload
+    eps = float(getattr(args, "target_neighbor_all_candidate_diagnostic_eps", 1.0e-12))
+    oracle_variant, oracle_row = _strict_candidate_oracle(
+        candidate_rows,
+        selected_row,
+        output_variant,
+        compute_ssim=compute_ssim,
+        eps=eps,
+    )
+    ranked = [str(item) for item in payload.get("ranked_variants", [])]
+    tnc_best = payload.get("best_variant")
+    tnc_best = str(tnc_best) if tnc_best is not None else None
+    tnc_best_row = candidate_rows.get(tnc_best) if tnc_best is not None else None
+    selected_psnr = _numeric_metric(selected_row, "psnr_gain")
+    selected_ssim = _numeric_metric(selected_row, "ssim_gain")
+    oracle_psnr = _numeric_metric(oracle_row or {}, "psnr_gain")
+    oracle_ssim = _numeric_metric(oracle_row or {}, "ssim_gain")
+    tnc_psnr = _numeric_metric(tnc_best_row or {}, "psnr_gain")
+    tnc_ssim = _numeric_metric(tnc_best_row or {}, "ssim_gain")
+    payload.update(
+        {
+            "strict_oracle_variant": oracle_variant,
+            "target_neighbor_best_variant": tnc_best,
+            "scene_selected_variant": scene_selected_variant,
+            "output_variant": output_variant,
+            "target_neighbor_matches_strict_oracle": bool(
+                oracle_variant is not None and tnc_best is not None and oracle_variant == tnc_best
+            ),
+            "output_target_neighbor_rank": _variant_rank(ranked, output_variant),
+            "strict_oracle_target_neighbor_rank": _variant_rank(ranked, oracle_variant),
+            "target_neighbor_best_strict_oracle_rank": (
+                1 if tnc_best is not None and oracle_variant is not None and tnc_best == oracle_variant else None
+            ),
+            "strict_oracle_minus_output": {
+                "psnr_gain": (float(oracle_psnr) - float(selected_psnr))
+                if oracle_psnr is not None and selected_psnr is not None
+                else None,
+                "ssim_gain": (float(oracle_ssim) - float(selected_ssim))
+                if oracle_ssim is not None and selected_ssim is not None
+                else None,
+            },
+            "target_neighbor_best_minus_output": {
+                "psnr_gain": (float(tnc_psnr) - float(selected_psnr))
+                if tnc_psnr is not None and selected_psnr is not None
+                else None,
+                "ssim_gain": (float(tnc_ssim) - float(selected_ssim))
+                if tnc_ssim is not None and selected_ssim is not None
+                else None,
+            },
+            "oracle_rule": "strict: candidate psnr_gain and ssim_gain must be non-worse than output, then max psnr_gain",
+            "oracle_uses_target_gt_posthoc": True,
+            "score_uses_target_gt": False,
+        }
+    )
+    return payload
+
+
+def _summarize_target_neighbor_all_candidate_diagnostics(per_view: list[dict[str, Any]]) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    for row in per_view:
+        diag = row.get("target_neighbor_all_candidate_rank_diagnostics")
+        if isinstance(diag, dict) and bool(diag.get("enabled", False)):
+            rows.append(diag)
+    if not rows:
+        return {"enabled": False, "view_count": 0}
+
+    def bump(counter: dict[str, int], key: Any) -> None:
+        name = str(key) if key is not None else "__none__"
+        counter[name] = int(counter.get(name, 0)) + 1
+
+    def mean(values: list[float]) -> float | None:
+        return float(sum(values) / len(values)) if values else None
+
+    best_counts: dict[str, int] = {}
+    oracle_counts: dict[str, int] = {}
+    output_counts: dict[str, int] = {}
+    oracle_rank_values: list[float] = []
+    output_rank_values: list[float] = []
+    oracle_psnr_deltas: list[float] = []
+    oracle_ssim_deltas: list[float] = []
+    tnc_psnr_deltas: list[float] = []
+    tnc_ssim_deltas: list[float] = []
+    available_count = 0
+    match_count = 0
+    for diag in rows:
+        if diag.get("best_variant") is not None:
+            available_count += 1
+        if bool(diag.get("target_neighbor_matches_strict_oracle", False)):
+            match_count += 1
+        bump(best_counts, diag.get("target_neighbor_best_variant"))
+        bump(oracle_counts, diag.get("strict_oracle_variant"))
+        bump(output_counts, diag.get("output_variant"))
+        oracle_rank = diag.get("strict_oracle_target_neighbor_rank")
+        output_rank = diag.get("output_target_neighbor_rank")
+        if isinstance(oracle_rank, (int, float)):
+            oracle_rank_values.append(float(oracle_rank))
+        if isinstance(output_rank, (int, float)):
+            output_rank_values.append(float(output_rank))
+        oracle_delta = diag.get("strict_oracle_minus_output", {})
+        tnc_delta = diag.get("target_neighbor_best_minus_output", {})
+        for values, payload, key in (
+            (oracle_psnr_deltas, oracle_delta, "psnr_gain"),
+            (oracle_ssim_deltas, oracle_delta, "ssim_gain"),
+            (tnc_psnr_deltas, tnc_delta, "psnr_gain"),
+            (tnc_ssim_deltas, tnc_delta, "ssim_gain"),
+        ):
+            value = payload.get(key) if isinstance(payload, dict) else None
+            if isinstance(value, (int, float)) and math.isfinite(float(value)):
+                values.append(float(value))
+    return {
+        "enabled": True,
+        "view_count": int(len(rows)),
+        "available_view_count": int(available_count),
+        "target_neighbor_matches_strict_oracle_count": int(match_count),
+        "target_neighbor_matches_strict_oracle_fraction": float(match_count / len(rows)) if rows else 0.0,
+        "mean_strict_oracle_target_neighbor_rank": mean(oracle_rank_values),
+        "mean_output_target_neighbor_rank": mean(output_rank_values),
+        "mean_strict_oracle_minus_output_psnr_gain": mean(oracle_psnr_deltas),
+        "mean_strict_oracle_minus_output_ssim_gain": mean(oracle_ssim_deltas),
+        "mean_target_neighbor_best_minus_output_psnr_gain": mean(tnc_psnr_deltas),
+        "mean_target_neighbor_best_minus_output_ssim_gain": mean(tnc_ssim_deltas),
+        "target_neighbor_best_variant_counts": dict(sorted(best_counts.items())),
+        "strict_oracle_variant_counts": dict(sorted(oracle_counts.items())),
+        "output_variant_counts": dict(sorted(output_counts.items())),
+        "score_uses_target_gt": False,
+        "oracle_uses_target_gt_posthoc": True,
+        "affects_selection": False,
+    }
+
+
 def _target_neighbor_consistency_decision(
     *,
     output_variant: str,
@@ -4848,6 +5098,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             promotion_rollback_diagnostics: dict[str, Any] | None = None
             target_neighbor_consistency_diagnostics: dict[str, Any] | None = None
             target_neighbor_candidate_unlock_diagnostics: dict[str, Any] | None = None
+            target_neighbor_all_candidate_scores = _target_neighbor_all_candidate_scores(
+                ev=ev,
+                deltas=deltas,
+                target=target,
+                target_frames=target_frames,
+                loader=loader,
+                device=device,
+                args=args,
+            )
             if bool(local_support_payload.get("enabled", False)) and not bool(args.local_support_post_incumbent_fallback_only):
                 output_variant, local_support_diagnostics = _local_support_choose_variant(
                     proxies_by_variant,
@@ -5152,6 +5411,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             for variant, row in candidate_metric_rows.items():
                 candidate_rows_by_variant.setdefault(variant, []).append(row)
             selected_row["view"] = target.name
+            target_neighbor_all_candidate_rank_diagnostics = _target_neighbor_all_candidate_rank_diagnostic(
+                scores_payload=target_neighbor_all_candidate_scores,
+                candidate_rows=candidate_metric_rows,
+                selected_row=selected_row,
+                output_variant=output_variant,
+                scene_selected_variant=selected_variant,
+                compute_ssim=bool(args.compute_ssim),
+                args=args,
+            )
             fixed_rows.append(fixed_row)
             learned_rows.append(learned_row)
             hybrid_rows.append(hybrid_row)
@@ -5198,6 +5466,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "target_neighbor_consistency_diagnostics": target_neighbor_consistency_diagnostics,
                     "target_neighbor_candidate_unlock_diagnostics": target_neighbor_candidate_unlock_diagnostics,
                     "target_neighbor_generated_candidate_diagnostics": target_neighbor_generated_candidate_diagnostics,
+                    "target_neighbor_all_candidate_rank_diagnostics": target_neighbor_all_candidate_rank_diagnostics,
                 }
             )
             if idx < int(args.save_example_views):
@@ -5251,6 +5520,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             )
         )
     )
+    target_neighbor_all_candidate_rank_summary = _summarize_target_neighbor_all_candidate_diagnostics(per_view)
     active_gate = (
         "source_pairwise_dominance"
         if bool(pairwise_dominance_payload.get("enabled", False))
@@ -5311,6 +5581,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "target_neighbor_candidate_unlock_scope": "target_render_depth_camera_only_online_per_view_unlock",
             "target_neighbor_generated_candidate_uses_target_gt": False,
             "target_neighbor_generated_candidate_scope": "target_or_sourceheldout_render_depth_camera_consensus_candidate",
+            "target_neighbor_all_candidate_diagnostic_affects_selection": False,
+            "target_neighbor_all_candidate_diagnostic_scores_use_target_gt": False,
+            "target_neighbor_all_candidate_diagnostic_oracle_uses_target_gt_posthoc": bool(
+                args.enable_target_neighbor_all_candidate_diagnostic
+            ),
         },
         "checkpoint": str(args.checkpoint),
         "base_model_path": str(base_model),
@@ -5375,6 +5650,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "confidence_norm": float(args.target_neighbor_generated_confidence_norm),
                 "uses_target_gt": False,
                 "reference": "target/train-heldout neighbor render-depth-camera consensus delta, gated by source evidence reliability",
+            },
+            "target_neighbor_all_candidate_diagnostic": {
+                "enabled": bool(args.enable_target_neighbor_all_candidate_diagnostic),
+                "eps": float(args.target_neighbor_all_candidate_diagnostic_eps),
+                "affects_selection": False,
+                "score_uses_target_gt": False,
+                "oracle_uses_target_gt_posthoc": bool(args.enable_target_neighbor_all_candidate_diagnostic),
+                "reference": "optional all-candidate target-neighbor score ranking plus post-hoc strict oracle alignment",
             },
             "output_variant": str(args.output_variant),
             "selected_variant": selected_variant,
@@ -5497,6 +5780,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "skipped_count": int(target_neighbor_candidate_unlock_stats["skipped_count"]),
             "reason_counts": dict(target_neighbor_candidate_unlock_stats["reason_counts"]),
         },
+        "target_neighbor_all_candidate_rank_diagnostic": target_neighbor_all_candidate_rank_summary,
         "verdict": verdict,
         "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
     }
@@ -5569,6 +5853,22 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             flat["apply/target_neighbor_candidate_unlock/promote_count"] = float(unlock.get("promote_count", 0) or 0)
             flat["apply/target_neighbor_candidate_unlock/keep_count"] = float(unlock.get("keep_count", 0) or 0)
             flat["apply/target_neighbor_candidate_unlock/skipped_count"] = float(unlock.get("skipped_count", 0) or 0)
+        if payload.get("target_neighbor_all_candidate_rank_diagnostic"):
+            rank_diag = payload["target_neighbor_all_candidate_rank_diagnostic"]
+            flat["apply/target_neighbor_all_candidate/enabled"] = float(bool(rank_diag.get("enabled", False)))
+            flat["apply/target_neighbor_all_candidate/view_count"] = float(rank_diag.get("view_count", 0) or 0)
+            flat["apply/target_neighbor_all_candidate/available_view_count"] = float(
+                rank_diag.get("available_view_count", 0) or 0
+            )
+            flat["apply/target_neighbor_all_candidate/match_fraction"] = float(
+                rank_diag.get("target_neighbor_matches_strict_oracle_fraction", 0.0) or 0.0
+            )
+            flat["apply/target_neighbor_all_candidate/mean_oracle_minus_output_psnr_gain"] = float(
+                rank_diag.get("mean_strict_oracle_minus_output_psnr_gain", 0.0) or 0.0
+            )
+            flat["apply/target_neighbor_all_candidate/mean_tnc_best_minus_output_psnr_gain"] = float(
+                rank_diag.get("mean_target_neighbor_best_minus_output_psnr_gain", 0.0) or 0.0
+            )
         run.log(flat)
         run.summary.update(flat)
         run.finish()
@@ -5620,6 +5920,15 @@ def main() -> None:
     parser.add_argument("--target_neighbor_generated_min_confidence", type=float, default=1.0e-4)
     parser.add_argument("--target_neighbor_generated_std_scale", type=float, default=2.0)
     parser.add_argument("--target_neighbor_generated_confidence_norm", type=float, default=1.0)
+    parser.add_argument(
+        "--enable_target_neighbor_all_candidate_diagnostic",
+        action="store_true",
+        help=(
+            "Record target-neighbor scores for every candidate and post-hoc strict oracle ranks. "
+            "This is diagnostic-only and never changes selection."
+        ),
+    )
+    parser.add_argument("--target_neighbor_all_candidate_diagnostic_eps", type=float, default=1.0e-12)
     parser.add_argument(
         "--generated_candidate_scene_selection_mode",
         choices=["candidate_only", "allow"],

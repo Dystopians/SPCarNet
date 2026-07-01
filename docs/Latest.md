@@ -63,6 +63,57 @@ differences remain subtle. The next step should improve candidate-generation
 capacity itself while keeping v336c-style source-summary admission as the safety
 layer.
 
+## 2026-07-01 Follow-up: v336c Phase-J Stall and Oracle-Gap Investigation
+
+Newest bottleneck investigation:
+
+```text
+docs/car_model/7-01-v336c-PhaseJ-Stall-Bottleneck-Investigation.md
+scripts/car_model/analyze_support_transport_oracle_gap.py
+docs/car_model/results/v336c_strict_oracle_gap_vs_v335.json
+docs/car_model/results/v336c_strict_oracle_gap_vs_v335.md
+docs/car_model/results/v336c_psnr_primary_oracle_gap_vs_v335.json
+docs/car_model/results/v336c_psnr_primary_oracle_gap_vs_v335.md
+```
+
+Main conclusion: v336c is safer and slightly stronger than v335, but it does
+not materially reduce the remaining per-view oracle headroom. Strict
+PSNR+SSIM-non-regressive oracle headroom is `+0.008649866410` on v336c, versus
+`+0.008669481579` on v335. PSNR-primary oracle headroom is `+0.009561210143` on
+v336c, versus `+0.009594446104` on v335. The largest remaining misses are mixed
+`fixed/hybrid -> learned` and `learned -> fixed` cases, so a simple learned bias
+would be unsafe.
+
+This confirms the real bottleneck: the v33x line has built a useful audit and
+safety shell, but it has not closed the Phase-J gap. More arbitration alone is
+unlikely to produce a paper-level endpoint; the next step needs stronger raw
+candidate generation or a richer no-target-GT per-view ranker, then full9 and
+frontier validation.
+
+## 2026-07-01 Follow-up: v337 All-Candidate TNC Diagnostic
+
+New diagnostic implementation:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+scripts/car_model/analyze_support_transport_oracle_gap.py
+docs/car_model/7-01-v337-AllCandidateTNCDiagnostic-Log.md
+outputs/carnet/spcarnet_v337_all_candidate_tnc_diag_smoke_room_20260701
+outputs/carnet/spcarnet_v337_all_candidate_tnc_diag_smoke3_room_20260701
+```
+
+The apply pipeline now has an opt-in
+`--enable_target_neighbor_all_candidate_diagnostic` mode. It scores every
+candidate with target-neighbor render/depth/camera consistency before target GT
+is read, then attaches post-hoc strict-oracle alignment after output save. It is
+diagnostic-only and does not affect selection.
+
+Three-view room smoke confirms why pure TNC ranking should not be promoted
+directly: TNC best matched strict oracle on `0/3` views and had mean
+`-0.042101944759` PSNR gain versus the selected output. This supports the
+current claim boundary: target-neighbor consistency is useful as a certificate
+and feature, not as a standalone selector.
+
 ## 2026-07-01 Follow-up: v335 Target-Neighbor Candidate Unlock
 
 Newest positive method update:
