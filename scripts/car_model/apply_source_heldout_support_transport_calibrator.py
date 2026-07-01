@@ -181,6 +181,29 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- source local-tail reject count: `{knn.get('source_local_tail_reject_count')}`",
             f"- verdict: `{knn.get('verdict')}`",
         ]
+    if payload.get("local_support_policy"):
+        local_support = payload["local_support_policy"]
+        lines += [
+            "",
+            "## Source-Heldout Local Support Policy",
+            "",
+            f"- enabled: `{local_support.get('enabled')}`",
+            f"- k: `{local_support.get('k')}`",
+            f"- reject variant: `{local_support.get('reject_variant')}`",
+            f"- source accept fraction: `{local_support.get('source_accept_fraction')}`",
+            f"- source safe vs fixed: `{local_support.get('source_safe_vs_fixed')}`",
+            f"- source PSNR delta vs scene: `{local_support.get('source_mean_psnr_delta_vs_scene_selected')}`",
+            f"- source SSIM delta vs scene: `{local_support.get('source_mean_ssim_delta_vs_scene_selected')}`",
+            f"- source CVaR20 PSNR delta vs scene: `{local_support.get('source_cvar_psnr_delta_vs_scene_selected')}`",
+            f"- source min PSNR delta vs scene: `{local_support.get('source_min_psnr_delta_vs_scene_selected')}`",
+            f"- source positive-view delta vs scene: `{local_support.get('source_positive_view_fraction_delta_vs_scene_selected')}`",
+            f"- source selected counts: `{local_support.get('source_selected_counts')}`",
+            f"- min local PSNR delta vs scene: `{local_support.get('min_local_psnr_delta_vs_scene')}`",
+            f"- min score delta vs scene: `{local_support.get('min_score_delta_vs_scene')}`",
+            f"- forbid fixed when scene non-fixed: `{local_support.get('forbid_fixed_when_scene_nonfixed')}`",
+            f"- post incumbent fallback only: `{local_support.get('post_incumbent_fallback_only')}`",
+            f"- verdict: `{local_support.get('verdict')}`",
+        ]
     if payload.get("per_view_risk_model_policy"):
         risk = payload["per_view_risk_model_policy"]
         lines += [
@@ -1230,6 +1253,349 @@ def _knn_choose_variant(
         diagnostics["reject_reason"] = "local_tail_guard"
         return reject()
     return best_variant, predictions, diagnostics
+
+
+def _fit_local_support_policy(
+    selector_payload: dict[str, Any] | None,
+    *,
+    compute_ssim: bool,
+    args: argparse.Namespace,
+    incumbent_policy_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not bool(args.enable_local_support_policy):
+        return {"enabled": False, "verdict": "disabled by CLI"}
+    if selector_payload is None or not selector_payload.get("per_view"):
+        return {"enabled": False, "verdict": "missing source-heldout selector per-view evidence"}
+    selected_variant = str(selector_payload["selected_variant"])
+    feature_names = _parse_feature_names(args.local_support_feature_grid)
+    variants = list(BASE_CANDIDATE_VARIANTS) if bool(args.local_support_base_variants_only) else _candidate_variant_names(args)
+    if selected_variant not in variants:
+        variants = [selected_variant] + [variant for variant in variants if variant != selected_variant]
+    entries_by_variant: dict[str, list[dict[str, Any]]] = {variant: [] for variant in variants}
+    all_vectors: list[list[float]] = []
+    for row in selector_payload["per_view"]:
+        for variant in variants:
+            candidate = row["candidates"][variant]
+            vector = _feature_vector(candidate["proxy"], feature_names)
+            entry = {
+                "view": row["view"],
+                "variant": variant,
+                "vector": vector,
+                "metrics": candidate["metrics"],
+                "score": _source_objective_from_metrics(candidate["metrics"], compute_ssim=compute_ssim, args=args),
+            }
+            entries_by_variant[variant].append(entry)
+            all_vectors.append(vector)
+    mean, std = _feature_stats(all_vectors)
+    if not mean:
+        return {"enabled": False, "verdict": "no usable local-support proxy vectors"}
+    fixed_summary = selector_payload["summaries"]["fixed"]
+    scene_summary = selector_payload["summaries"][selected_variant]
+    support_k = int(args.local_support_k)
+    post_incumbent_fallback_only = bool(args.local_support_post_incumbent_fallback_only)
+    incumbent_by_view: dict[str, str] = {}
+    if post_incumbent_fallback_only and incumbent_policy_payload and incumbent_policy_payload.get("loo_predictions"):
+        for item in incumbent_policy_payload.get("loo_predictions", []):
+            chosen = str(item.get("chosen_variant", "__scene__"))
+            if chosen == "__scene__":
+                incumbent_by_view[str(item.get("view"))] = selected_variant
+            else:
+                incumbent_by_view[str(item.get("view"))] = chosen
+
+    def local_summaries_for_row(row: dict[str, Any], *, exclude_view: str | None) -> dict[str, dict[str, Any]]:
+        summaries: dict[str, dict[str, Any]] = {}
+        for variant in variants:
+            vector = _feature_vector(row["candidates"][variant]["proxy"], feature_names)
+            summaries[variant] = _knn_local_metric_summary(
+                entries_by_variant,
+                variant,
+                vector,
+                mean=mean,
+                std=std,
+                k=support_k,
+                compute_ssim=compute_ssim,
+                exclude_view=exclude_view,
+            )
+        return summaries
+
+    def score_candidate(guard: dict[str, Any]) -> float:
+        deltas = dict(guard.get("deltas_vs_scene", {}))
+        return float(
+            float(deltas.get("psnr_gain", 0.0))
+            + float(args.local_support_ssim_weight) * float(deltas.get("ssim_gain", 0.0))
+            + float(args.local_support_cvar_weight) * float(deltas.get("cvar_psnr_gain", 0.0))
+            + float(args.local_support_min_weight) * float(deltas.get("min_psnr_gain", 0.0))
+            + float(args.local_support_positive_weight) * float(deltas.get("positive_view_fraction", 0.0))
+        )
+
+    def choose_from_local_summaries(local_summaries: dict[str, dict[str, Any]]) -> tuple[str, dict[str, Any]]:
+        candidates: list[tuple[float, str, dict[str, Any]]] = []
+        rejected: list[dict[str, Any]] = []
+        for variant in variants:
+            if variant == selected_variant:
+                continue
+            if (
+                bool(args.local_support_forbid_fixed_when_scene_nonfixed)
+                and selected_variant != "fixed"
+                and variant == "fixed"
+            ):
+                rejected.append({"variant": variant, "reason": "fixed_when_scene_nonfixed"})
+                continue
+            guard = _knn_local_tail_guard_decision(
+                variant,
+                selected_variant,
+                local_summaries,
+                compute_ssim=compute_ssim,
+                min_psnr_delta_vs_scene=float(args.local_support_min_local_psnr_delta_vs_scene),
+                min_ssim_delta_vs_scene=float(args.local_support_min_local_ssim_delta_vs_scene),
+                min_cvar_delta_vs_scene=float(args.local_support_min_local_cvar_delta_vs_scene),
+                min_min_delta_vs_scene=float(args.local_support_min_local_min_delta_vs_scene),
+                min_positive_fraction_delta_vs_scene=float(args.local_support_min_local_positive_fraction_delta_vs_scene),
+            )
+            score = score_candidate(guard)
+            guard["score"] = float(score)
+            if bool(guard.get("rejected", False)):
+                rejected.append({"variant": variant, "reason": guard.get("reason"), "guard": guard})
+                continue
+            if score < float(args.local_support_min_score_delta_vs_scene):
+                rejected.append({"variant": variant, "reason": "score_delta_vs_scene", "guard": guard})
+                continue
+            candidates.append((score, variant, guard))
+        if not candidates:
+            return "__scene__", {
+                "scene_variant": selected_variant,
+                "reject_reason": "no_candidate_with_local_support",
+                "rejected_candidates": rejected,
+                "local_summaries": local_summaries,
+            }
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        score, variant, guard = candidates[0]
+        return variant, {
+            "scene_variant": selected_variant,
+            "best_variant": variant,
+            "best_score": float(score),
+            "best_guard": guard,
+            "candidate_scores": [
+                {"variant": name, "score": float(value), "guard": cand_guard}
+                for value, name, cand_guard in candidates
+            ],
+            "rejected_candidates": rejected,
+            "local_summaries": local_summaries,
+            "reject_reason": None,
+        }
+
+    source_policy_rows: list[dict[str, float]] = []
+    source_incumbent_rows: list[dict[str, float]] = []
+    selected_counts: dict[str, int] = _candidate_count_dict(variants)
+    selected_counts["incumbent_skip"] = 0
+    source_decisions: list[dict[str, Any]] = []
+    for row in selector_payload["per_view"]:
+        incumbent_variant = str(incumbent_by_view.get(str(row["view"]), selected_variant))
+        if incumbent_variant == "noop":
+            incumbent_metrics = _noop_like(row["candidates"][selected_variant]["metrics"])
+        elif incumbent_variant in row["candidates"]:
+            incumbent_metrics = row["candidates"][incumbent_variant]["metrics"]
+        else:
+            incumbent_variant = selected_variant
+            incumbent_metrics = row["candidates"][selected_variant]["metrics"]
+        source_incumbent_rows.append(incumbent_metrics)
+        if post_incumbent_fallback_only and incumbent_variant != selected_variant:
+            selected_counts["incumbent_skip"] += 1
+            source_policy_rows.append(incumbent_metrics)
+            source_decisions.append(
+                {
+                    "view": str(row["view"]),
+                    "chosen_variant": "__incumbent__",
+                    "incumbent_variant": incumbent_variant,
+                    "diagnostics": {"skip_reason": "incumbent_already_refined"},
+                }
+            )
+            continue
+        local_summaries = local_summaries_for_row(row, exclude_view=str(row["view"]))
+        chosen_variant, diagnostics = choose_from_local_summaries(local_summaries)
+        source_decisions.append(
+            {
+                "view": str(row["view"]),
+                "chosen_variant": chosen_variant,
+                "incumbent_variant": incumbent_variant,
+                "diagnostics": diagnostics,
+            }
+        )
+        if chosen_variant == "__scene__":
+            selected_counts["scene"] += 1
+            source_policy_rows.append(incumbent_metrics)
+        elif chosen_variant == "noop":
+            selected_counts["noop"] += 1
+            source_policy_rows.append(_noop_like(incumbent_metrics))
+        else:
+            selected_counts[chosen_variant] += 1
+            source_policy_rows.append(row["candidates"][chosen_variant]["metrics"])
+    source_summary = _summarize_metric_rows(source_policy_rows, compute_ssim=compute_ssim)
+    incumbent_summary = _summarize_metric_rows(source_incumbent_rows, compute_ssim=compute_ssim)
+    comparison_summary = incumbent_summary if post_incumbent_fallback_only else scene_summary
+    reject_count = int(selected_counts["noop"] + selected_counts["scene"] + selected_counts.get("incumbent_skip", 0))
+    accept_fraction = 1.0 - float(reject_count / max(len(source_policy_rows), 1))
+    mean_delta = float(source_summary.get("psnr_gain", 0.0)) - float(comparison_summary.get("psnr_gain", 0.0))
+    ssim_delta = (
+        float(source_summary.get("ssim_gain", 0.0)) - float(comparison_summary.get("ssim_gain", 0.0))
+        if compute_ssim
+        else 0.0
+    )
+    cvar_delta = _summary_psnr_tail(source_summary, "cvar") - _summary_psnr_tail(comparison_summary, "cvar")
+    min_delta = _summary_psnr_tail(source_summary, "min") - _summary_psnr_tail(comparison_summary, "min")
+    positive_fraction_delta = _positive_view_fraction(source_summary) - _positive_view_fraction(comparison_summary)
+    safe_vs_fixed = (
+        float(source_summary.get("psnr_gain", 0.0)) >= float(fixed_summary.get("psnr_gain", 0.0)) - float(args.selected_safe_tolerance_psnr)
+        and (
+            not compute_ssim
+            or float(source_summary.get("ssim_gain", 0.0))
+            >= float(fixed_summary.get("ssim_gain", 0.0)) - float(args.selected_safe_tolerance_ssim)
+        )
+    )
+    base_payload = {
+        "feature_schema_version": 1,
+        "variants": variants,
+        "base_variants_only": bool(args.local_support_base_variants_only),
+        "feature_names": feature_names,
+        "feature_mean": mean,
+        "feature_std": std,
+        "k": support_k,
+        "scene_selected_variant": selected_variant,
+        "entries_by_variant": entries_by_variant,
+        "reject_variant": str(args.local_support_reject_variant),
+        "source_summary": source_summary,
+        "source_fixed_summary": fixed_summary,
+        "source_scene_selected_summary": scene_summary,
+        "source_incumbent_summary": incumbent_summary,
+        "source_comparison_summary_kind": "incumbent_policy" if post_incumbent_fallback_only else "scene_selected",
+        "source_mean_psnr_delta_vs_scene_selected": mean_delta,
+        "source_mean_ssim_delta_vs_scene_selected": ssim_delta,
+        "source_cvar_psnr_delta_vs_scene_selected": cvar_delta,
+        "source_min_psnr_delta_vs_scene_selected": min_delta,
+        "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta,
+        "source_safe_vs_fixed": bool(safe_vs_fixed),
+        "source_accept_fraction": accept_fraction,
+        "source_selected_counts": selected_counts,
+        "source_decisions": source_decisions,
+        "min_local_psnr_delta_vs_scene": float(args.local_support_min_local_psnr_delta_vs_scene),
+        "min_local_ssim_delta_vs_scene": float(args.local_support_min_local_ssim_delta_vs_scene),
+        "min_local_cvar_delta_vs_scene": float(args.local_support_min_local_cvar_delta_vs_scene),
+        "min_local_min_delta_vs_scene": float(args.local_support_min_local_min_delta_vs_scene),
+        "min_local_positive_fraction_delta_vs_scene": float(args.local_support_min_local_positive_fraction_delta_vs_scene),
+        "min_score_delta_vs_scene": float(args.local_support_min_score_delta_vs_scene),
+        "forbid_fixed_when_scene_nonfixed": bool(args.local_support_forbid_fixed_when_scene_nonfixed),
+        "post_incumbent_fallback_only": post_incumbent_fallback_only,
+        "ssim_weight": float(args.local_support_ssim_weight),
+        "cvar_weight": float(args.local_support_cvar_weight),
+        "min_weight": float(args.local_support_min_weight),
+        "positive_weight": float(args.local_support_positive_weight),
+    }
+    if accept_fraction < float(args.local_support_min_accept_fraction):
+        return {"enabled": False, "verdict": "local support accepted too few source views", **base_payload}
+    if accept_fraction > float(args.local_support_max_accept_fraction):
+        return {"enabled": False, "verdict": "local support accepted too many source views", **base_payload}
+    if mean_delta < float(args.local_support_min_source_psnr_delta):
+        return {"enabled": False, "verdict": "local support did not improve source PSNR enough", **base_payload}
+    if compute_ssim and ssim_delta < float(args.local_support_min_source_ssim_delta):
+        return {"enabled": False, "verdict": "local support did not improve source SSIM enough", **base_payload}
+    if cvar_delta < float(args.local_support_min_source_cvar_delta):
+        return {"enabled": False, "verdict": "local support did not clear source CVaR delta", **base_payload}
+    if min_delta < float(args.local_support_min_source_min_delta):
+        return {"enabled": False, "verdict": "local support did not clear source min delta", **base_payload}
+    if positive_fraction_delta < float(args.local_support_min_source_positive_fraction_delta):
+        return {"enabled": False, "verdict": "local support did not clear source positive-view delta", **base_payload}
+    if bool(args.local_support_require_source_safe) and not safe_vs_fixed:
+        return {"enabled": False, "verdict": "local support did not clear fixed safety gate", **base_payload}
+    return {"enabled": True, "verdict": "source-heldout local support certificate selected", **base_payload}
+
+
+def _local_support_choose_variant(
+    proxies_by_variant: dict[str, dict[str, float]],
+    policy: dict[str, Any],
+    *,
+    compute_ssim: bool,
+) -> tuple[str, dict[str, Any]]:
+    variants = list(policy.get("variants", BASE_CANDIDATE_VARIANTS))
+    feature_names = list(policy["feature_names"])
+    mean = [float(value) for value in policy.get("feature_mean", [])]
+    std = [float(value) for value in policy.get("feature_std", [])]
+    scene_variant = str(policy["scene_selected_variant"])
+    entries_by_variant = policy.get("entries_by_variant", {})
+    support_k = int(policy.get("k", 3))
+    local_summaries: dict[str, dict[str, Any]] = {}
+    for variant in variants:
+        vector = _feature_vector(proxies_by_variant[variant], feature_names)
+        local_summaries[variant] = _knn_local_metric_summary(
+            entries_by_variant,
+            variant,
+            vector,
+            mean=mean,
+            std=std,
+            k=support_k,
+            compute_ssim=compute_ssim,
+        )
+
+    def score_candidate(guard: dict[str, Any]) -> float:
+        deltas = dict(guard.get("deltas_vs_scene", {}))
+        return float(
+            float(deltas.get("psnr_gain", 0.0))
+            + float(policy.get("ssim_weight", 0.0)) * float(deltas.get("ssim_gain", 0.0))
+            + float(policy.get("cvar_weight", 0.0)) * float(deltas.get("cvar_psnr_gain", 0.0))
+            + float(policy.get("min_weight", 0.0)) * float(deltas.get("min_psnr_gain", 0.0))
+            + float(policy.get("positive_weight", 0.0)) * float(deltas.get("positive_view_fraction", 0.0))
+        )
+
+    candidates: list[tuple[float, str, dict[str, Any]]] = []
+    rejected: list[dict[str, Any]] = []
+    for variant in variants:
+        if variant == scene_variant:
+            continue
+        if bool(policy.get("forbid_fixed_when_scene_nonfixed", False)) and scene_variant != "fixed" and variant == "fixed":
+            rejected.append({"variant": variant, "reason": "fixed_when_scene_nonfixed"})
+            continue
+        guard = _knn_local_tail_guard_decision(
+            variant,
+            scene_variant,
+            local_summaries,
+            compute_ssim=compute_ssim,
+            min_psnr_delta_vs_scene=float(policy.get("min_local_psnr_delta_vs_scene", 0.0)),
+            min_ssim_delta_vs_scene=float(policy.get("min_local_ssim_delta_vs_scene", -1.0e9)),
+            min_cvar_delta_vs_scene=float(policy.get("min_local_cvar_delta_vs_scene", -1.0e9)),
+            min_min_delta_vs_scene=float(policy.get("min_local_min_delta_vs_scene", -1.0e9)),
+            min_positive_fraction_delta_vs_scene=float(policy.get("min_local_positive_fraction_delta_vs_scene", -1.0e9)),
+        )
+        score = score_candidate(guard)
+        guard["score"] = float(score)
+        if bool(guard.get("rejected", False)):
+            rejected.append({"variant": variant, "reason": guard.get("reason"), "guard": guard})
+            continue
+        if score < float(policy.get("min_score_delta_vs_scene", 0.0)):
+            rejected.append({"variant": variant, "reason": "score_delta_vs_scene", "guard": guard})
+            continue
+        candidates.append((score, variant, guard))
+    if not candidates:
+        reject = "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop"
+        return reject, {
+            "scene_variant": scene_variant,
+            "reject_reason": "no_candidate_with_local_support",
+            "rejected_candidates": rejected,
+            "local_summaries": local_summaries,
+        }
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    score, variant, guard = candidates[0]
+    return variant, {
+        "scene_variant": scene_variant,
+        "best_variant": variant,
+        "best_score": float(score),
+        "best_guard": guard,
+        "candidate_scores": [
+            {"variant": name, "score": float(value), "guard": cand_guard}
+            for value, name, cand_guard in candidates
+        ],
+        "rejected_candidates": rejected,
+        "local_summaries": local_summaries,
+        "reject_reason": None,
+    }
 
 
 def _fit_per_view_risk_model_policy(
@@ -2776,6 +3142,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         compute_ssim=bool(args.compute_ssim),
         args=args,
     )
+    local_support_payload = _fit_local_support_policy(
+        selector_payload,
+        compute_ssim=bool(args.compute_ssim),
+        args=args,
+        incumbent_policy_payload=source_reliability_payload,
+    )
     fixed_rows: list[dict[str, float]] = []
     learned_rows: list[dict[str, float]] = []
     hybrid_rows: list[dict[str, float]] = []
@@ -2815,6 +3187,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             knn_diagnostics: dict[str, Any] | None = None
             risk_model_predictions: dict[str, list[float]] | None = None
             risk_model_diagnostics: dict[str, Any] | None = None
+            local_support_diagnostics: dict[str, Any] | None = None
             source_reliability_predictions: dict[str, list[float]] | None = None
             source_reliability_diagnostics: dict[str, Any] | None = None
             gate_accepted = True
@@ -2822,13 +3195,45 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             selected_proxy_variant = selected_variant
             per_view_knn_rejected = False
             per_view_risk_model_rejected = False
+            local_support_rejected = False
             source_reliability_rejected = False
             risk_model_raw_output_variant: str | None = None
+            local_support_raw_output_variant: str | None = None
             source_reliability_raw_output_variant: str | None = None
             risk_model_decision = "not_used"
+            local_support_decision = "not_used"
             source_reliability_decision = "not_used"
+            local_support_claimed = False
             source_reliability_claimed = False
-            if bool(source_reliability_payload.get("enabled", False)):
+            if bool(local_support_payload.get("enabled", False)) and not bool(args.local_support_post_incumbent_fallback_only):
+                output_variant, local_support_diagnostics = _local_support_choose_variant(
+                    proxies_by_variant,
+                    local_support_payload,
+                    compute_ssim=bool(args.compute_ssim),
+                )
+                local_support_raw_output_variant = output_variant
+                if output_variant == "__scene__":
+                    local_support_rejected = True
+                    local_support_decision = "incumbent_fallback"
+                    output_variant = selected_variant
+                    selected_delta = deltas[selected_variant]
+                    selected_proxy = proxies_by_variant[selected_variant]
+                    selected_proxy_variant = selected_variant
+                    gate_accepted = True
+                else:
+                    local_support_claimed = True
+                    if output_variant == "noop":
+                        selected_delta = torch.zeros_like(selected_delta)
+                        selected_proxy = _candidate_proxy_stats(ev, selected_delta)
+                        selected_proxy_variant = "noop"
+                        local_support_decision = "noop"
+                    else:
+                        selected_delta = deltas[output_variant]
+                        selected_proxy = proxies_by_variant[output_variant]
+                        selected_proxy_variant = output_variant
+                        local_support_decision = "candidate"
+                    gate_accepted = output_variant != "noop"
+            if (not local_support_claimed) and bool(source_reliability_payload.get("enabled", False)):
                 output_variant, source_reliability_predictions, source_reliability_diagnostics = _source_reliability_choose_variant(
                     proxies_by_variant,
                     source_reliability_payload,
@@ -2856,7 +3261,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         selected_proxy_variant = output_variant
                         source_reliability_decision = "candidate"
                     gate_accepted = output_variant != "noop"
-            if (not source_reliability_claimed) and bool(per_view_risk_model_payload.get("enabled", False)):
+            if (not local_support_claimed) and (not source_reliability_claimed) and bool(per_view_risk_model_payload.get("enabled", False)):
                 output_variant, risk_model_predictions, risk_model_diagnostics = _risk_model_choose_variant(
                     proxies_by_variant,
                     per_view_risk_model_payload,
@@ -2883,7 +3288,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         selected_proxy_variant = output_variant
                         risk_model_decision = "candidate"
                     gate_accepted = output_variant != "noop"
-            elif (not source_reliability_claimed) and bool(per_view_knn_payload.get("enabled", False)):
+            elif (not local_support_claimed) and (not source_reliability_claimed) and bool(per_view_knn_payload.get("enabled", False)):
                 output_variant, knn_predictions, knn_diagnostics = _knn_choose_variant(
                     proxies_by_variant,
                     per_view_knn_payload,
@@ -2906,8 +3311,43 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         selected_proxy = proxies_by_variant[output_variant]
                         selected_proxy_variant = output_variant
                     gate_accepted = output_variant != "noop"
-            elif (not source_reliability_claimed) and bool(per_view_gate_payload.get("enabled", False)):
+            elif (not local_support_claimed) and (not source_reliability_claimed) and bool(per_view_gate_payload.get("enabled", False)):
                 gate_accepted = _gate_accepts(selected_proxy, per_view_gate_payload)
+            if (
+                (not local_support_claimed)
+                and bool(args.local_support_post_incumbent_fallback_only)
+                and bool(local_support_payload.get("enabled", False))
+            ):
+                if output_variant == selected_variant and gate_accepted:
+                    output_variant, local_support_diagnostics = _local_support_choose_variant(
+                        proxies_by_variant,
+                        local_support_payload,
+                        compute_ssim=bool(args.compute_ssim),
+                    )
+                    local_support_raw_output_variant = output_variant
+                    if output_variant == "__scene__":
+                        local_support_rejected = True
+                        local_support_decision = "incumbent_fallback"
+                        output_variant = selected_variant
+                        selected_delta = deltas[selected_variant]
+                        selected_proxy = proxies_by_variant[selected_variant]
+                        selected_proxy_variant = selected_variant
+                        gate_accepted = True
+                    else:
+                        local_support_claimed = True
+                        if output_variant == "noop":
+                            selected_delta = torch.zeros_like(selected_delta)
+                            selected_proxy = _candidate_proxy_stats(ev, selected_delta)
+                            selected_proxy_variant = "noop"
+                            local_support_decision = "noop"
+                        else:
+                            selected_delta = deltas[output_variant]
+                            selected_proxy = proxies_by_variant[output_variant]
+                            selected_proxy_variant = output_variant
+                            local_support_decision = "candidate"
+                        gate_accepted = output_variant != "noop"
+                elif local_support_decision == "not_used":
+                    local_support_decision = "skipped_incumbent_already_refined"
             if not gate_accepted and output_variant != "noop":
                 selected_delta = torch.zeros_like(selected_delta)
                 output_variant = "noop"
@@ -2964,10 +3404,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "per_view_gate_accepted": bool(gate_accepted),
                     "per_view_knn_rejected_to_scene": bool(per_view_knn_rejected),
                     "per_view_risk_model_rejected_to_scene": bool(per_view_risk_model_rejected),
+                    "local_support_rejected_to_scene": bool(local_support_rejected),
                     "source_reliability_rejected_to_scene": bool(source_reliability_rejected),
                     "risk_model_raw_output_variant": risk_model_raw_output_variant,
+                    "local_support_raw_output_variant": local_support_raw_output_variant,
                     "source_reliability_raw_output_variant": source_reliability_raw_output_variant,
                     "risk_model_decision": risk_model_decision,
+                    "local_support_decision": local_support_decision,
                     "source_reliability_decision": source_reliability_decision,
                     "selected_proxy_variant": selected_proxy_variant,
                     "selected_proxy": selected_proxy,
@@ -2976,6 +3419,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "per_view_knn_diagnostics": knn_diagnostics,
                     "per_view_risk_model_predictions": risk_model_predictions,
                     "per_view_risk_model_diagnostics": risk_model_diagnostics,
+                    "local_support_diagnostics": local_support_diagnostics,
                     "source_reliability_predictions": source_reliability_predictions,
                     "source_reliability_diagnostics": source_reliability_diagnostics,
                 }
@@ -3032,15 +3476,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         )
     )
     active_gate = (
-        "source_heldout_reliability"
-        if bool(source_reliability_payload.get("enabled", False))
+        "source_heldout_local_support"
+        if bool(local_support_payload.get("enabled", False))
         else (
-            "source_heldout_risk_model"
-            if bool(per_view_risk_model_payload.get("enabled", False))
+            "source_heldout_reliability"
+            if bool(source_reliability_payload.get("enabled", False))
             else (
-                "source_heldout_knn"
-                if bool(per_view_knn_payload.get("enabled", False))
-                else ("source_heldout_threshold" if bool(per_view_gate_payload.get("enabled", False)) else "off")
+                "source_heldout_risk_model"
+                if bool(per_view_risk_model_payload.get("enabled", False))
+                else (
+                    "source_heldout_knn"
+                    if bool(per_view_knn_payload.get("enabled", False))
+                    else ("source_heldout_threshold" if bool(per_view_gate_payload.get("enabled", False)) else "off")
+                )
             )
         )
     )
@@ -3061,6 +3509,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "selection_frozen_before_target_loop": True,
             "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
             "source_perceptual_uses_train_heldout_gt_only": bool(args.compute_source_perceptual),
+            "local_support_uses_target_gt": False,
+            "local_support_fit_scope": "source_heldout_before_target_loop",
             "source_reliability_uses_target_gt": False,
             "source_reliability_fit_scope": "source_heldout_before_target_loop",
             "source_reliability_calibrated_lcb_uses_target_gt": False,
@@ -3139,6 +3589,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "selector": selector_payload,
         "per_view_gate": per_view_gate_payload,
         "per_view_knn_policy": per_view_knn_payload,
+        "local_support_policy": local_support_payload,
         "per_view_risk_model_policy": per_view_risk_model_payload,
         "source_reliability_policy": source_reliability_payload,
         "verdict": verdict,
@@ -3172,6 +3623,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             flat[f"apply/candidate/{variant}/psnr_gain"] = float(row.get("psnr_gain", 0.0))
             if bool(args.compute_ssim):
                 flat[f"apply/candidate/{variant}/ssim_gain"] = float(row.get("ssim_gain", 0.0))
+        if payload.get("local_support_policy"):
+            local_support = payload["local_support_policy"]
+            flat["apply/local_support/enabled"] = float(bool(local_support.get("enabled", False)))
+            flat["apply/local_support/source_accept_fraction"] = float(local_support.get("source_accept_fraction", 0.0) or 0.0)
+            flat["apply/local_support/source_mean_psnr_delta_vs_scene"] = float(
+                local_support.get("source_mean_psnr_delta_vs_scene_selected", 0.0) or 0.0
+            )
         run.log(flat)
         run.summary.update(flat)
         run.finish()
@@ -3253,6 +3711,38 @@ def main() -> None:
     parser.add_argument("--per_view_knn_source_positive_weight", type=float, default=0.25)
     parser.add_argument("--per_view_knn_require_source_safe", action="store_true")
     parser.add_argument("--per_view_knn_allow_when_scene_fixed", action="store_true")
+    parser.add_argument("--enable_local_support_policy", action="store_true")
+    parser.add_argument(
+        "--local_support_feature_grid",
+        default=(
+            "covered_fraction,mean_abs_delta,confidence_mean,residual_std_mean,delta_snr,signal_snr,"
+            "confidence_snr,changed_fraction,delta_signal_cosine,opposition_fraction,aligned_fraction,"
+            "delta_to_signal_ratio,std_to_signal_ratio,support_confidence,support_count_mean"
+        ),
+    )
+    parser.add_argument("--local_support_k", type=int, default=3)
+    parser.add_argument("--local_support_base_variants_only", action="store_true")
+    parser.add_argument("--local_support_reject_variant", choices=["noop", "scene"], default="scene")
+    parser.add_argument("--local_support_min_local_psnr_delta_vs_scene", type=float, default=0.0)
+    parser.add_argument("--local_support_min_local_ssim_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--local_support_min_local_cvar_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--local_support_min_local_min_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--local_support_min_local_positive_fraction_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--local_support_min_score_delta_vs_scene", type=float, default=0.0)
+    parser.add_argument("--local_support_min_accept_fraction", type=float, default=0.0)
+    parser.add_argument("--local_support_max_accept_fraction", type=float, default=1.0)
+    parser.add_argument("--local_support_min_source_psnr_delta", type=float, default=0.0)
+    parser.add_argument("--local_support_min_source_ssim_delta", type=float, default=-1.0e9)
+    parser.add_argument("--local_support_min_source_cvar_delta", type=float, default=-1.0e9)
+    parser.add_argument("--local_support_min_source_min_delta", type=float, default=-1.0e9)
+    parser.add_argument("--local_support_min_source_positive_fraction_delta", type=float, default=-1.0e9)
+    parser.add_argument("--local_support_require_source_safe", action="store_true")
+    parser.add_argument("--local_support_forbid_fixed_when_scene_nonfixed", action="store_true")
+    parser.add_argument("--local_support_post_incumbent_fallback_only", action="store_true")
+    parser.add_argument("--local_support_ssim_weight", type=float, default=0.0)
+    parser.add_argument("--local_support_cvar_weight", type=float, default=0.25)
+    parser.add_argument("--local_support_min_weight", type=float, default=0.10)
+    parser.add_argument("--local_support_positive_weight", type=float, default=0.25)
     parser.add_argument("--enable_per_view_risk_model_policy", action="store_true")
     parser.add_argument(
         "--per_view_risk_model_feature_grid",
