@@ -2,6 +2,70 @@
 
 Date: 2026-06-28
 
+# 2026-07-01 v319 Feedback Addendum: Incumbent Fallback Worked, Perceptual Hard Gate Failed
+
+New files:
+
+```text
+docs/car_model/7-01-v319-IncumbentReliability-Log.md
+docs/car_model/results/v319c_full9_apply_metrics_vs_prior_summary.json
+docs/car_model/results/v319c_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v319c_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v319c_frontier_panels/
+docs/car_model/results/v319d_full9_apply_metrics_vs_prior_summary.json
+docs/car_model/results/v319d_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v319d_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v319d_frontier_panels/
+outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701
+outputs/carnet/spcarnet_v319d_perceptual_reliability_full9_20260701
+```
+
+Implemented change:
+
+`scripts/car_model/apply_source_heldout_support_transport_calibrator.py` now
+contains a source-only relative reliability policy. It predicts whether a
+candidate should override the scene-selected incumbent using source-heldout
+proxy evidence and OOD distance. The important protocol correction is
+abstention: rejection falls back to the v315d incumbent path instead of
+replacing it.
+
+Full9 apply result:
+
+| method | PSNR gain | SSIM gain | mean min PSNR | mean CVaR10 PSNR | negative views | safe scenes |
+|---|---:|---:|---:|---:|---:|---:|
+| v315d | +0.269175 | +0.003718 | +0.014301 | +0.039726 | 8 | 9/9 |
+| v319c | +0.269725 | +0.003720 | +0.014301 | +0.039726 | 8 | 9/9 |
+| v319d | +0.267239 | +0.003702 | +0.014301 | +0.039696 | 8 | 8/9 |
+
+Full9 clean-baseline frontier:
+
+| method | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v315d | 27.582989 | 0.028182 | 0.087739 | 0.057679 |
+| v319c | 27.583642 | 0.028181 | 0.087746 | 0.057678 |
+| v319d | 27.580252 | 0.028191 | 0.087746 | 0.057673 |
+
+Hard lessons for the next model:
+
+- The reflection did help once it became a concrete protocol audit. The winning
+  correction was not "more parameters"; it was "do not replace a strong
+  incumbent unless the source-only reliability model has a reason to override."
+- v319c finally beats v315d on full9 mean PSNR/SSIM and preserves its tail
+  metrics, but the gain is small.
+- v319c does not dominate v315d: LPIPS is still slightly worse.
+- v319d proves that current source-heldout LPIPS/DISTS prediction is too noisy
+  for hard target-time gating. It lowers PSNR/MAE and breaks stump fixed safety.
+- The next useful method must either learn a better calibrated abstention model
+  with source-heldout perceptual/tail objectives, or stop claiming universal
+  quality dominance and frame the result as a quality-complexity Pareto method.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v318e Feedback Addendum: Reflection Helped, But Did Not Beat v315d
 
 New files:

@@ -191,6 +191,27 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- source selected counts: `{risk.get('source_selected_counts')}`",
             f"- verdict: `{risk.get('verdict')}`",
         ]
+    if payload.get("source_reliability_policy"):
+        reliability = payload["source_reliability_policy"]
+        lines += [
+            "",
+            "## Source-Only Reliability Policy",
+            "",
+            f"- enabled: `{reliability.get('enabled')}`",
+            f"- ridge: `{reliability.get('ridge')}`",
+            f"- reject variant: `{reliability.get('reject_variant')}`",
+            f"- auto objective margin: `{reliability.get('auto_objective_margin')}`",
+            f"- selected objective margin: `{reliability.get('selected_objective_margin')}`",
+            f"- source accept fraction: `{reliability.get('source_accept_fraction')}`",
+            f"- source safe vs fixed: `{reliability.get('source_safe_vs_fixed')}`",
+            f"- source PSNR delta vs scene: `{reliability.get('source_mean_psnr_delta_vs_scene_selected')}`",
+            f"- source SSIM delta vs scene: `{reliability.get('source_mean_ssim_delta_vs_scene_selected')}`",
+            f"- source CVaR20 PSNR delta vs scene: `{reliability.get('source_cvar_psnr_delta_vs_scene_selected')}`",
+            f"- source min PSNR delta vs scene: `{reliability.get('source_min_psnr_delta_vs_scene_selected')}`",
+            f"- source positive-view delta vs scene: `{reliability.get('source_positive_view_fraction_delta_vs_scene_selected')}`",
+            f"- source selected counts: `{reliability.get('source_selected_counts')}`",
+            f"- verdict: `{reliability.get('verdict')}`",
+        ]
     (output_dir / "support_transport_apply_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -425,6 +446,37 @@ def _candidate_learning_features(proxy: dict[str, float], variant: str, feature_
         1.0 if variant == "learned" else 0.0,
         1.0 if variant == "hybrid" else 0.0,
     ]
+
+
+def _source_reliability_features(
+    candidate_proxy: dict[str, float],
+    scene_proxy: dict[str, float],
+    *,
+    variant: str,
+    scene_variant: str,
+    feature_names: list[str],
+) -> list[float]:
+    candidate = _feature_vector(candidate_proxy, feature_names)
+    scene = _feature_vector(scene_proxy, feature_names)
+    delta = [float(cv) - float(sv) for cv, sv in zip(candidate, scene)]
+    return (
+        candidate
+        + scene
+        + delta
+        + [
+            1.0 if variant == "fixed" else 0.0,
+            1.0 if variant == "learned" else 0.0,
+            1.0 if variant == "hybrid" else 0.0,
+            1.0 if scene_variant == "fixed" else 0.0,
+            1.0 if scene_variant == "learned" else 0.0,
+            1.0 if scene_variant == "hybrid" else 0.0,
+            1.0 if variant == scene_variant else 0.0,
+        ]
+    )
+
+
+def _metric_delta(candidate: dict[str, float], scene: dict[str, float], key: str) -> float:
+    return float(candidate.get(key, 0.0)) - float(scene.get(key, 0.0))
 
 
 def _fit_ridge_predictor(
@@ -1502,6 +1554,438 @@ def _risk_model_choose_variant(
     return best_variant, predictions, diagnostics
 
 
+def _fit_source_reliability_policy(
+    selector_payload: dict[str, Any] | None,
+    *,
+    compute_ssim: bool,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    if not bool(args.enable_source_reliability_policy):
+        return {"enabled": False, "verdict": "disabled by CLI"}
+    if selector_payload is None or not selector_payload.get("per_view"):
+        return {"enabled": False, "verdict": "missing source-heldout selector per-view evidence"}
+    selected_variant = str(selector_payload["selected_variant"])
+    feature_names = _parse_feature_names(args.source_reliability_feature_grid)
+    variants = ["fixed", "learned", "hybrid"]
+    examples: list[dict[str, Any]] = []
+    rows_by_view: dict[str, dict[str, Any]] = {}
+    entries_by_variant: dict[str, list[dict[str, Any]]] = {variant: [] for variant in variants}
+    all_vectors: list[list[float]] = []
+    for row in selector_payload["per_view"]:
+        view = str(row["view"])
+        rows_by_view[view] = row
+        scene_candidate = row["candidates"][selected_variant]
+        scene_metrics = scene_candidate["metrics"]
+        scene_proxy = scene_candidate["proxy"]
+        scene_objective = _source_objective_from_metrics(scene_metrics, compute_ssim=compute_ssim, args=args)
+        for variant in variants:
+            candidate = row["candidates"][variant]
+            metrics = candidate["metrics"]
+            features = _source_reliability_features(
+                candidate["proxy"],
+                scene_proxy,
+                variant=variant,
+                scene_variant=selected_variant,
+                feature_names=feature_names,
+            )
+            target = [
+                _source_objective_from_metrics(metrics, compute_ssim=compute_ssim, args=args) - scene_objective,
+                _metric_delta(metrics, scene_metrics, "psnr_gain"),
+                _metric_delta(metrics, scene_metrics, "ssim_gain") if compute_ssim else 0.0,
+                _metric_delta(metrics, scene_metrics, "lpips_gain"),
+                _metric_delta(metrics, scene_metrics, "dists_gain"),
+            ]
+            example = {
+                "view": view,
+                "variant": variant,
+                "features": features,
+                "target": target,
+                "metrics": metrics,
+                "scene_metrics": scene_metrics,
+            }
+            examples.append(example)
+            entries_by_variant[variant].append(
+                {
+                    "view": view,
+                    "variant": variant,
+                    "vector": features,
+                    "target": target,
+                    "metrics": metrics,
+                }
+            )
+            all_vectors.append(features)
+    if len(rows_by_view) < 2:
+        return {"enabled": False, "verdict": "not enough source-heldout views for reliability leave-one-out"}
+    ood_mean, ood_std = _feature_stats(all_vectors)
+    ood_source_distances: list[float] = []
+
+    def nearest_source_distance(variant: str, vector: list[float], *, exclude_view: str | None = None) -> float:
+        pool = [
+            entry
+            for entry in entries_by_variant.get(variant, [])
+            if exclude_view is None or str(entry["view"]) != str(exclude_view)
+        ]
+        if not pool or not ood_mean:
+            return float("inf")
+        return min(_normalized_distance(vector, entry["vector"], ood_mean, ood_std) for entry in pool)
+
+    for example in examples:
+        dist = nearest_source_distance(str(example["variant"]), list(example["features"]), exclude_view=str(example["view"]))
+        if math.isfinite(dist):
+            ood_source_distances.append(dist)
+    ood_threshold = (
+        _quantile(ood_source_distances, float(args.source_reliability_ood_quantile))
+        if bool(args.source_reliability_enable_ood_guard)
+        else float("inf")
+    )
+
+    def predict_for_row(row: dict[str, Any], model: dict[str, Any]) -> tuple[dict[str, list[float]], dict[str, list[float]]]:
+        predictions: dict[str, list[float]] = {}
+        vectors: dict[str, list[float]] = {}
+        scene_proxy = row["candidates"][selected_variant]["proxy"]
+        for variant in variants:
+            vector = _source_reliability_features(
+                row["candidates"][variant]["proxy"],
+                scene_proxy,
+                variant=variant,
+                scene_variant=selected_variant,
+                feature_names=feature_names,
+            )
+            vectors[variant] = vector
+            predictions[variant] = _predict_ridge(model, vector)
+        return predictions, vectors
+
+    def choose_from_predictions(
+        predictions: dict[str, list[float]],
+        vectors: dict[str, list[float]],
+        *,
+        objective_margin: float,
+        exclude_view: str | None = None,
+    ) -> tuple[str, dict[str, Any]]:
+        best_variant, best_pred = max(predictions.items(), key=lambda item: item[1][0])
+        scene_pred = predictions[selected_variant]
+        diagnostics: dict[str, Any] = {
+            "best_variant": best_variant,
+            "scene_variant": selected_variant,
+            "best_prediction": best_pred,
+            "scene_prediction": scene_pred,
+            "reject_reason": None,
+            "ood_distance": None,
+            "ood_threshold": None,
+        }
+
+        def reject(reason: str) -> str:
+            diagnostics["reject_reason"] = reason
+            return "__scene__" if str(args.source_reliability_reject_variant) == "scene" else "noop"
+
+        if best_pred[0] < float(objective_margin):
+            return reject("objective_margin"), diagnostics
+        if best_pred[1] < float(args.source_reliability_min_predicted_psnr_delta_vs_scene):
+            return reject("psnr_delta_vs_scene"), diagnostics
+        if compute_ssim and best_pred[2] < float(args.source_reliability_min_predicted_ssim_delta_vs_scene):
+            return reject("ssim_delta_vs_scene"), diagnostics
+        if best_pred[3] < float(args.source_reliability_min_predicted_lpips_delta_vs_scene):
+            return reject("lpips_delta_vs_scene"), diagnostics
+        if best_pred[4] < float(args.source_reliability_min_predicted_dists_delta_vs_scene):
+            return reject("dists_delta_vs_scene"), diagnostics
+        if bool(args.source_reliability_forbid_fixed_when_scene_nonfixed) and selected_variant != "fixed" and best_variant == "fixed":
+            return reject("fixed_when_scene_nonfixed"), diagnostics
+        if bool(args.source_reliability_enable_ood_guard):
+            ood_distance = nearest_source_distance(best_variant, vectors[best_variant], exclude_view=exclude_view)
+            diagnostics["ood_distance"] = float(ood_distance)
+            diagnostics["ood_threshold"] = float(ood_threshold)
+            if ood_distance > ood_threshold:
+                return reject("ood_distance"), diagnostics
+        return best_variant, diagnostics
+
+    loo_items: list[dict[str, Any]] = []
+    for view, row in rows_by_view.items():
+        train_examples = [example for example in examples if str(example["view"]) != str(view)]
+        model = _fit_ridge_predictor(train_examples, ridge=float(args.source_reliability_ridge))
+        if model is None:
+            loo_items.append({"view": view, "row": row, "predictions": None, "vectors": None})
+            continue
+        predictions, vectors = predict_for_row(row, model)
+        loo_items.append({"view": view, "row": row, "predictions": predictions, "vectors": vectors})
+
+    def evaluate_margin(objective_margin: float) -> tuple[dict[str, Any], dict[str, int], list[dict[str, float]], list[dict[str, Any]]]:
+        source_policy_rows: list[dict[str, float]] = []
+        selected_counts: dict[str, int] = {"fixed": 0, "learned": 0, "hybrid": 0, "noop": 0, "scene": 0}
+        prediction_log: list[dict[str, Any]] = []
+        for item in loo_items:
+            row = item["row"]
+            predictions = item.get("predictions")
+            vectors = item.get("vectors")
+            if predictions is None or vectors is None:
+                selected_counts["scene"] += 1
+                source_policy_rows.append(row["candidates"][selected_variant]["metrics"])
+                prediction_log.append({"view": item["view"], "chosen_variant": "__scene__", "predictions": None})
+                continue
+            chosen_variant, diagnostics = choose_from_predictions(
+                predictions,
+                vectors,
+                objective_margin=float(objective_margin),
+                exclude_view=str(item["view"]),
+            )
+            prediction_log.append(
+                {
+                    "view": item["view"],
+                    "chosen_variant": chosen_variant,
+                    "predictions": predictions,
+                    "diagnostics": diagnostics,
+                }
+            )
+            if chosen_variant == "__scene__":
+                selected_counts["scene"] += 1
+                source_policy_rows.append(row["candidates"][selected_variant]["metrics"])
+            elif chosen_variant == "noop":
+                selected_counts["noop"] += 1
+                source_policy_rows.append(_noop_like(row["candidates"][selected_variant]["metrics"]))
+            else:
+                selected_counts[chosen_variant] += 1
+                source_policy_rows.append(row["candidates"][chosen_variant]["metrics"])
+        return _summarize_metric_rows(source_policy_rows, compute_ssim=compute_ssim), selected_counts, source_policy_rows, prediction_log
+
+    selected_objective_margin = float(args.source_reliability_min_predicted_objective_delta_vs_scene)
+    margin_trials: list[dict[str, Any]] = []
+    if bool(args.source_reliability_auto_objective_margin):
+        candidate_margins = {selected_objective_margin}
+        for item in loo_items:
+            predictions = item.get("predictions")
+            if not predictions:
+                continue
+            best_variant, best_pred = max(predictions.items(), key=lambda pair: pair[1][0])
+            if best_variant != selected_variant:
+                candidate_margins.add(float(best_pred[0]))
+        if candidate_margins:
+            ordered = sorted(candidate_margins)
+            candidate_margins.add(ordered[0] - 1.0e-9)
+            candidate_margins.add(ordered[-1] + 1.0e-9)
+        best_trial: dict[str, Any] | None = None
+        for margin in sorted(candidate_margins):
+            trial_summary, trial_counts, _, _ = evaluate_margin(float(margin))
+            reject_count = int(trial_counts["noop"] + trial_counts["scene"])
+            accept_fraction_trial = 1.0 - float(reject_count / max(len(loo_items), 1))
+            scene_summary = selector_payload["summaries"][selected_variant]
+            fixed_summary = selector_payload["summaries"]["fixed"]
+            mean_delta_trial = float(trial_summary.get("psnr_gain", 0.0)) - float(scene_summary.get("psnr_gain", 0.0))
+            ssim_delta_trial = (
+                float(trial_summary.get("ssim_gain", 0.0)) - float(scene_summary.get("ssim_gain", 0.0))
+                if compute_ssim
+                else 0.0
+            )
+            cvar_delta_trial = _summary_psnr_tail(trial_summary, "cvar") - _summary_psnr_tail(scene_summary, "cvar")
+            min_delta_trial = _summary_psnr_tail(trial_summary, "min") - _summary_psnr_tail(scene_summary, "min")
+            positive_fraction_delta_trial = _positive_view_fraction(trial_summary) - _positive_view_fraction(scene_summary)
+            safe_vs_fixed_trial = (
+                float(trial_summary.get("psnr_gain", 0.0)) >= float(fixed_summary.get("psnr_gain", 0.0)) - float(args.selected_safe_tolerance_psnr)
+                and (
+                    not compute_ssim
+                    or float(trial_summary.get("ssim_gain", 0.0))
+                    >= float(fixed_summary.get("ssim_gain", 0.0)) - float(args.selected_safe_tolerance_ssim)
+                )
+            )
+            objective = (
+                _source_objective_from_metrics(trial_summary, compute_ssim=compute_ssim, args=args)
+                + float(args.source_reliability_source_cvar_weight) * _summary_psnr_tail(trial_summary, "cvar")
+                + float(args.source_reliability_source_min_weight) * _summary_psnr_tail(trial_summary, "min")
+                + float(args.source_reliability_source_positive_weight) * _positive_view_fraction(trial_summary)
+            )
+            trial = {
+                "objective_margin": float(margin),
+                "objective": float(objective),
+                "accept_fraction": float(accept_fraction_trial),
+                "source_summary": trial_summary,
+                "source_selected_counts": trial_counts,
+                "source_mean_psnr_delta_vs_scene_selected": mean_delta_trial,
+                "source_mean_ssim_delta_vs_scene_selected": ssim_delta_trial,
+                "source_cvar_psnr_delta_vs_scene_selected": cvar_delta_trial,
+                "source_min_psnr_delta_vs_scene_selected": min_delta_trial,
+                "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta_trial,
+                "source_safe_vs_fixed": bool(safe_vs_fixed_trial),
+            }
+            margin_trials.append(trial)
+            if accept_fraction_trial < float(args.source_reliability_min_accept_fraction):
+                continue
+            if accept_fraction_trial > float(args.source_reliability_max_accept_fraction):
+                continue
+            if mean_delta_trial < float(args.source_reliability_min_source_psnr_delta):
+                continue
+            if compute_ssim and ssim_delta_trial < float(args.source_reliability_min_source_ssim_delta):
+                continue
+            if cvar_delta_trial < float(args.source_reliability_min_source_cvar_delta):
+                continue
+            if min_delta_trial < float(args.source_reliability_min_source_min_delta):
+                continue
+            if positive_fraction_delta_trial < float(args.source_reliability_min_source_positive_fraction_delta):
+                continue
+            if bool(args.source_reliability_require_source_safe) and not safe_vs_fixed_trial:
+                continue
+            if best_trial is None or float(objective) > float(best_trial["objective"]):
+                best_trial = trial
+        if best_trial is not None:
+            selected_objective_margin = float(best_trial["objective_margin"])
+
+    source_summary, selected_counts, _, loo_predictions = evaluate_margin(selected_objective_margin)
+    fixed_summary = selector_payload["summaries"]["fixed"]
+    scene_summary = selector_payload["summaries"][selected_variant]
+    mean_delta = float(source_summary.get("psnr_gain", 0.0)) - float(scene_summary.get("psnr_gain", 0.0))
+    ssim_delta = (
+        float(source_summary.get("ssim_gain", 0.0)) - float(scene_summary.get("ssim_gain", 0.0))
+        if compute_ssim
+        else 0.0
+    )
+    cvar_delta = _summary_psnr_tail(source_summary, "cvar") - _summary_psnr_tail(scene_summary, "cvar")
+    min_delta = _summary_psnr_tail(source_summary, "min") - _summary_psnr_tail(scene_summary, "min")
+    positive_fraction_delta = _positive_view_fraction(source_summary) - _positive_view_fraction(scene_summary)
+    safe_vs_fixed = (
+        float(source_summary.get("psnr_gain", 0.0)) >= float(fixed_summary.get("psnr_gain", 0.0)) - float(args.selected_safe_tolerance_psnr)
+        and (
+            not compute_ssim
+            or float(source_summary.get("ssim_gain", 0.0))
+            >= float(fixed_summary.get("ssim_gain", 0.0)) - float(args.selected_safe_tolerance_ssim)
+        )
+    )
+    accept_fraction = 1.0 - float((selected_counts["noop"] + selected_counts["scene"]) / max(len(rows_by_view), 1))
+    base_payload = {
+        "feature_names": feature_names,
+        "ridge": float(args.source_reliability_ridge),
+        "reject_variant": str(args.source_reliability_reject_variant),
+        "scene_selected_variant": selected_variant,
+        "source_summary": source_summary,
+        "source_fixed_summary": fixed_summary,
+        "source_scene_selected_summary": scene_summary,
+        "source_mean_psnr_delta_vs_scene_selected": mean_delta,
+        "source_mean_ssim_delta_vs_scene_selected": ssim_delta,
+        "source_cvar_psnr_delta_vs_scene_selected": cvar_delta,
+        "source_min_psnr_delta_vs_scene_selected": min_delta,
+        "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta,
+        "source_safe_vs_fixed": bool(safe_vs_fixed),
+        "source_selected_counts": selected_counts,
+        "source_accept_fraction": accept_fraction,
+        "auto_objective_margin": bool(args.source_reliability_auto_objective_margin),
+        "selected_objective_margin": float(selected_objective_margin),
+        "objective_margin_trials": margin_trials,
+        "ood_guard_enabled": bool(args.source_reliability_enable_ood_guard),
+        "ood_quantile": float(args.source_reliability_ood_quantile),
+        "ood_source_distance_count": int(len(ood_source_distances)),
+        "ood_source_distance_threshold": float(ood_threshold),
+        "ood_source_distance_summary": {
+            "min": min(ood_source_distances) if ood_source_distances else None,
+            "mean": _mean(ood_source_distances) if ood_source_distances else None,
+            "max": max(ood_source_distances) if ood_source_distances else None,
+        },
+        "loo_predictions": loo_predictions,
+    }
+    if (
+        bool(args.source_reliability_enable_ood_guard)
+        and len(ood_source_distances) < int(args.source_reliability_ood_min_samples)
+    ):
+        return {"enabled": False, "verdict": "not enough OOD calibration distances", **base_payload}
+    if accept_fraction < float(args.source_reliability_min_accept_fraction):
+        return {"enabled": False, "verdict": "source reliability accepted too few views", **base_payload}
+    if accept_fraction > float(args.source_reliability_max_accept_fraction):
+        return {"enabled": False, "verdict": "source reliability accepted too many views", **base_payload}
+    if mean_delta < float(args.source_reliability_min_source_psnr_delta):
+        return {"enabled": False, "verdict": "source reliability did not improve scene-selected PSNR enough", **base_payload}
+    if compute_ssim and ssim_delta < float(args.source_reliability_min_source_ssim_delta):
+        return {"enabled": False, "verdict": "source reliability did not clear SSIM delta", **base_payload}
+    if cvar_delta < float(args.source_reliability_min_source_cvar_delta):
+        return {"enabled": False, "verdict": "source reliability did not clear CVaR tail delta", **base_payload}
+    if min_delta < float(args.source_reliability_min_source_min_delta):
+        return {"enabled": False, "verdict": "source reliability did not clear min-gain tail delta", **base_payload}
+    if positive_fraction_delta < float(args.source_reliability_min_source_positive_fraction_delta):
+        return {"enabled": False, "verdict": "source reliability did not clear positive-view fraction delta", **base_payload}
+    if bool(args.source_reliability_require_source_safe) and not safe_vs_fixed:
+        return {"enabled": False, "verdict": "source reliability did not clear fixed safety gate", **base_payload}
+    full_model = _fit_ridge_predictor(examples, ridge=float(args.source_reliability_ridge))
+    if full_model is None:
+        return {"enabled": False, "verdict": "could not fit full source reliability model", **base_payload}
+    return {
+        "enabled": True,
+        "verdict": "source-only relative reliability model selected",
+        "model": full_model,
+        "source_entries_by_variant": entries_by_variant,
+        "ood_feature_mean": ood_mean,
+        "ood_feature_std": ood_std,
+        "min_predicted_objective_delta_vs_scene": float(selected_objective_margin),
+        "min_predicted_psnr_delta_vs_scene": float(args.source_reliability_min_predicted_psnr_delta_vs_scene),
+        "min_predicted_ssim_delta_vs_scene": float(args.source_reliability_min_predicted_ssim_delta_vs_scene),
+        "min_predicted_lpips_delta_vs_scene": float(args.source_reliability_min_predicted_lpips_delta_vs_scene),
+        "min_predicted_dists_delta_vs_scene": float(args.source_reliability_min_predicted_dists_delta_vs_scene),
+        "forbid_fixed_when_scene_nonfixed": bool(args.source_reliability_forbid_fixed_when_scene_nonfixed),
+        **base_payload,
+    }
+
+
+def _source_reliability_choose_variant(
+    proxies_by_variant: dict[str, dict[str, float]],
+    policy: dict[str, Any],
+    *,
+    compute_ssim: bool,
+) -> tuple[str, dict[str, list[float]], dict[str, Any]]:
+    variants = ["fixed", "learned", "hybrid"]
+    feature_names = list(policy["feature_names"])
+    scene_variant = str(policy["scene_selected_variant"])
+    scene_proxy = proxies_by_variant[scene_variant]
+    predictions: dict[str, list[float]] = {}
+    vectors: dict[str, list[float]] = {}
+    for variant in variants:
+        vector = _source_reliability_features(
+            proxies_by_variant[variant],
+            scene_proxy,
+            variant=variant,
+            scene_variant=scene_variant,
+            feature_names=feature_names,
+        )
+        vectors[variant] = vector
+        predictions[variant] = _predict_ridge(policy["model"], vector)
+    best_variant, best_pred = max(predictions.items(), key=lambda item: item[1][0])
+    scene_pred = predictions[scene_variant]
+    diagnostics: dict[str, Any] = {
+        "best_variant": best_variant,
+        "scene_variant": scene_variant,
+        "best_prediction": best_pred,
+        "scene_prediction": scene_pred,
+        "reject_reason": None,
+        "ood_distance": None,
+        "ood_threshold": None,
+    }
+
+    def reject(reason: str) -> tuple[str, dict[str, list[float]], dict[str, Any]]:
+        diagnostics["reject_reason"] = reason
+        if str(policy.get("reject_variant", "scene")) == "scene":
+            return "__scene__", predictions, diagnostics
+        return "noop", predictions, diagnostics
+
+    if best_pred[0] < float(policy.get("min_predicted_objective_delta_vs_scene", 0.0)):
+        return reject("objective_margin")
+    if best_pred[1] < float(policy.get("min_predicted_psnr_delta_vs_scene", -1.0e9)):
+        return reject("psnr_delta_vs_scene")
+    if compute_ssim and best_pred[2] < float(policy.get("min_predicted_ssim_delta_vs_scene", -1.0e9)):
+        return reject("ssim_delta_vs_scene")
+    if best_pred[3] < float(policy.get("min_predicted_lpips_delta_vs_scene", -1.0e9)):
+        return reject("lpips_delta_vs_scene")
+    if best_pred[4] < float(policy.get("min_predicted_dists_delta_vs_scene", -1.0e9)):
+        return reject("dists_delta_vs_scene")
+    if bool(policy.get("forbid_fixed_when_scene_nonfixed", False)) and scene_variant != "fixed" and best_variant == "fixed":
+        return reject("fixed_when_scene_nonfixed")
+    if bool(policy.get("ood_guard_enabled", False)):
+        pool = policy.get("source_entries_by_variant", {}).get(best_variant, [])
+        mean = [float(x) for x in policy.get("ood_feature_mean", [])]
+        std = [float(x) for x in policy.get("ood_feature_std", [])]
+        if pool and mean and std:
+            ood_distance = min(_normalized_distance(vectors[best_variant], entry["vector"], mean, std) for entry in pool)
+        else:
+            ood_distance = float("inf")
+        ood_threshold = float(policy.get("ood_source_distance_threshold", float("inf")))
+        diagnostics["ood_distance"] = float(ood_distance)
+        diagnostics["ood_threshold"] = float(ood_threshold)
+        if ood_distance > ood_threshold:
+            return reject("ood_distance")
+    return best_variant, predictions, diagnostics
+
+
 def _gate_accepts(proxy: dict[str, float], gate: dict[str, Any] | None) -> bool:
     if not gate or not bool(gate.get("enabled", False)):
         return True
@@ -1815,6 +2299,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         compute_ssim=bool(args.compute_ssim),
         args=args,
     )
+    source_reliability_payload = _fit_source_reliability_policy(
+        selector_payload,
+        compute_ssim=bool(args.compute_ssim),
+        args=args,
+    )
     fixed_rows: list[dict[str, float]] = []
     learned_rows: list[dict[str, float]] = []
     hybrid_rows: list[dict[str, float]] = []
@@ -1853,14 +2342,48 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             knn_diagnostics: dict[str, Any] | None = None
             risk_model_predictions: dict[str, list[float]] | None = None
             risk_model_diagnostics: dict[str, Any] | None = None
+            source_reliability_predictions: dict[str, list[float]] | None = None
+            source_reliability_diagnostics: dict[str, Any] | None = None
             gate_accepted = True
             output_variant = selected_variant
             selected_proxy_variant = selected_variant
             per_view_knn_rejected = False
             per_view_risk_model_rejected = False
+            source_reliability_rejected = False
             risk_model_raw_output_variant: str | None = None
+            source_reliability_raw_output_variant: str | None = None
             risk_model_decision = "not_used"
-            if bool(per_view_risk_model_payload.get("enabled", False)):
+            source_reliability_decision = "not_used"
+            source_reliability_claimed = False
+            if bool(source_reliability_payload.get("enabled", False)):
+                output_variant, source_reliability_predictions, source_reliability_diagnostics = _source_reliability_choose_variant(
+                    proxies_by_variant,
+                    source_reliability_payload,
+                    compute_ssim=bool(args.compute_ssim),
+                )
+                source_reliability_raw_output_variant = output_variant
+                if output_variant == "__scene__":
+                    source_reliability_rejected = True
+                    source_reliability_decision = "incumbent_fallback"
+                    output_variant = selected_variant
+                    selected_delta = deltas[selected_variant]
+                    selected_proxy = proxies_by_variant[selected_variant]
+                    selected_proxy_variant = selected_variant
+                    gate_accepted = True
+                else:
+                    source_reliability_claimed = True
+                    if output_variant == "noop":
+                        selected_delta = torch.zeros_like(selected_delta)
+                        selected_proxy = _candidate_proxy_stats(ev, selected_delta)
+                        selected_proxy_variant = "noop"
+                        source_reliability_decision = "noop"
+                    else:
+                        selected_delta = deltas[output_variant]
+                        selected_proxy = proxies_by_variant[output_variant]
+                        selected_proxy_variant = output_variant
+                        source_reliability_decision = "candidate"
+                    gate_accepted = output_variant != "noop"
+            if (not source_reliability_claimed) and bool(per_view_risk_model_payload.get("enabled", False)):
                 output_variant, risk_model_predictions, risk_model_diagnostics = _risk_model_choose_variant(
                     proxies_by_variant,
                     per_view_risk_model_payload,
@@ -1887,7 +2410,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         selected_proxy_variant = output_variant
                         risk_model_decision = "candidate"
                     gate_accepted = output_variant != "noop"
-            elif bool(per_view_knn_payload.get("enabled", False)):
+            elif (not source_reliability_claimed) and bool(per_view_knn_payload.get("enabled", False)):
                 output_variant, knn_predictions, knn_diagnostics = _knn_choose_variant(
                     proxies_by_variant,
                     per_view_knn_payload,
@@ -1910,7 +2433,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         selected_proxy = proxies_by_variant[output_variant]
                         selected_proxy_variant = output_variant
                     gate_accepted = output_variant != "noop"
-            elif bool(per_view_gate_payload.get("enabled", False)):
+            elif (not source_reliability_claimed) and bool(per_view_gate_payload.get("enabled", False)):
                 gate_accepted = _gate_accepts(selected_proxy, per_view_gate_payload)
             if not gate_accepted and output_variant != "noop":
                 selected_delta = torch.zeros_like(selected_delta)
@@ -1951,8 +2474,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "per_view_gate_accepted": bool(gate_accepted),
                     "per_view_knn_rejected_to_scene": bool(per_view_knn_rejected),
                     "per_view_risk_model_rejected_to_scene": bool(per_view_risk_model_rejected),
+                    "source_reliability_rejected_to_scene": bool(source_reliability_rejected),
                     "risk_model_raw_output_variant": risk_model_raw_output_variant,
+                    "source_reliability_raw_output_variant": source_reliability_raw_output_variant,
                     "risk_model_decision": risk_model_decision,
+                    "source_reliability_decision": source_reliability_decision,
                     "selected_proxy_variant": selected_proxy_variant,
                     "selected_proxy": selected_proxy,
                     "per_view_gate_proxy": selected_proxy,
@@ -1960,6 +2486,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "per_view_knn_diagnostics": knn_diagnostics,
                     "per_view_risk_model_predictions": risk_model_predictions,
                     "per_view_risk_model_diagnostics": risk_model_diagnostics,
+                    "source_reliability_predictions": source_reliability_predictions,
+                    "source_reliability_diagnostics": source_reliability_diagnostics,
                 }
             )
             if idx < int(args.save_example_views):
@@ -2010,12 +2538,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         )
     )
     active_gate = (
-        "source_heldout_risk_model"
-        if bool(per_view_risk_model_payload.get("enabled", False))
+        "source_heldout_reliability"
+        if bool(source_reliability_payload.get("enabled", False))
         else (
-            "source_heldout_knn"
-            if bool(per_view_knn_payload.get("enabled", False))
-            else ("source_heldout_threshold" if bool(per_view_gate_payload.get("enabled", False)) else "off")
+            "source_heldout_risk_model"
+            if bool(per_view_risk_model_payload.get("enabled", False))
+            else (
+                "source_heldout_knn"
+                if bool(per_view_knn_payload.get("enabled", False))
+                else ("source_heldout_threshold" if bool(per_view_gate_payload.get("enabled", False)) else "off")
+            )
         )
     )
     output_label = f"scene `{selected_variant}`"
@@ -2035,6 +2567,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "selection_frozen_before_target_loop": True,
             "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
             "source_perceptual_uses_train_heldout_gt_only": bool(args.compute_source_perceptual),
+            "source_reliability_uses_target_gt": False,
+            "source_reliability_fit_scope": "source_heldout_before_target_loop",
         },
         "checkpoint": str(args.checkpoint),
         "base_model_path": str(base_model),
@@ -2095,6 +2629,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "per_view_gate": per_view_gate_payload,
         "per_view_knn_policy": per_view_knn_payload,
         "per_view_risk_model_policy": per_view_risk_model_payload,
+        "source_reliability_policy": source_reliability_payload,
         "verdict": verdict,
         "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
     }
@@ -2226,6 +2761,34 @@ def main() -> None:
     parser.add_argument("--per_view_risk_model_ood_min_samples", type=int, default=4)
     parser.add_argument("--per_view_risk_model_use_source_perceptual_objective", action="store_true")
     parser.add_argument("--per_view_risk_model_auto_objective_margin", action="store_true")
+    parser.add_argument("--enable_source_reliability_policy", action="store_true")
+    parser.add_argument(
+        "--source_reliability_feature_grid",
+        default="covered_fraction,mean_abs_delta,confidence_mean,residual_std_mean,delta_snr,signal_snr,confidence_snr,changed_fraction,delta_signal_cosine,opposition_fraction,aligned_fraction,delta_to_signal_ratio,std_to_signal_ratio,support_confidence,support_count_mean",
+    )
+    parser.add_argument("--source_reliability_ridge", type=float, default=1.0e-3)
+    parser.add_argument("--source_reliability_reject_variant", choices=["noop", "scene"], default="scene")
+    parser.add_argument("--source_reliability_min_accept_fraction", type=float, default=0.0)
+    parser.add_argument("--source_reliability_max_accept_fraction", type=float, default=1.0)
+    parser.add_argument("--source_reliability_min_source_psnr_delta", type=float, default=0.0)
+    parser.add_argument("--source_reliability_min_source_ssim_delta", type=float, default=-1.0e9)
+    parser.add_argument("--source_reliability_min_source_cvar_delta", type=float, default=-1.0e9)
+    parser.add_argument("--source_reliability_min_source_min_delta", type=float, default=-1.0e9)
+    parser.add_argument("--source_reliability_min_source_positive_fraction_delta", type=float, default=-1.0e9)
+    parser.add_argument("--source_reliability_source_cvar_weight", type=float, default=0.25)
+    parser.add_argument("--source_reliability_source_min_weight", type=float, default=0.10)
+    parser.add_argument("--source_reliability_source_positive_weight", type=float, default=0.25)
+    parser.add_argument("--source_reliability_require_source_safe", action="store_true")
+    parser.add_argument("--source_reliability_auto_objective_margin", action="store_true")
+    parser.add_argument("--source_reliability_min_predicted_objective_delta_vs_scene", type=float, default=0.0)
+    parser.add_argument("--source_reliability_min_predicted_psnr_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--source_reliability_min_predicted_ssim_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--source_reliability_min_predicted_lpips_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--source_reliability_min_predicted_dists_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--source_reliability_forbid_fixed_when_scene_nonfixed", action="store_true")
+    parser.add_argument("--source_reliability_enable_ood_guard", action="store_true")
+    parser.add_argument("--source_reliability_ood_quantile", type=float, default=0.90)
+    parser.add_argument("--source_reliability_ood_min_samples", type=int, default=4)
     parser.add_argument("--residual_clip", type=float, default=0.25)
     parser.add_argument("--min_confidence", type=float, default=1.0e-4)
     parser.add_argument("--depth_abs_tol", type=float, default=0.02)

@@ -2,6 +2,69 @@
 
 Date: 2026-06-28
 
+## 2026-07-01 Topline: v319c Incumbent Reliability, v319d Negative Ablation
+
+Newest v319 evidence package:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v319-IncumbentReliability-Log.md
+docs/car_model/results/v319c_full9_apply_metrics_vs_prior_summary.json
+docs/car_model/results/v319c_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v319c_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v319c_frontier_panels/
+docs/car_model/results/v319d_full9_apply_metrics_vs_prior_summary.json
+docs/car_model/results/v319d_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v319d_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v319d_frontier_panels/
+outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701
+outputs/carnet/spcarnet_v319d_perceptual_reliability_full9_20260701
+```
+
+What changed:
+
+- v319c adds a source-only relative reliability model that can override the
+  incumbent only when source-heldout evidence predicts a candidate-vs-incumbent
+  gain;
+- rejection now falls back to the v315d incumbent path instead of replacing it;
+- v319d tested a source-heldout LPIPS/DISTS hard guard and failed.
+
+Full9 apply metrics:
+
+| method | PSNR gain | SSIM gain | mean min PSNR | mean CVaR10 PSNR | negative views | safe scenes |
+|---|---:|---:|---:|---:|---:|---:|
+| v305 | +0.266578 | +0.003701 | +0.013917 | +0.039504 | 8 | 9/9 |
+| v315d | +0.269175 | +0.003718 | +0.014301 | +0.039726 | 8 | 9/9 |
+| v316c | +0.268444 | +0.003710 | +0.013917 | +0.039504 | 8 | 9/9 |
+| v318e | +0.268629 | +0.003715 | +0.013917 | +0.039504 | 8 | 9/9 |
+| v319c | +0.269725 | +0.003720 | +0.014301 | +0.039726 | 8 | 9/9 |
+| v319d | +0.267239 | +0.003702 | +0.014301 | +0.039696 | 8 | 8/9 |
+
+Full9 clean-MeshSplatting frontier metrics:
+
+| method | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v315d | 27.582989 | 0.028182 | 0.087739 | 0.057679 |
+| v318e | 27.581262 | 0.028185 | 0.087743 | 0.057674 |
+| v319c | 27.583642 | 0.028181 | 0.087746 | 0.057678 |
+| v319d | 27.580252 | 0.028191 | 0.087746 | 0.057673 |
+
+Verdict:
+
+The reflection is now operationally useful but not sufficient for paper
+closure. v319c is the current best engineering version: it improves full9 PSNR
+and MAE over v315d while preserving v315d tail/safety metrics. However, it is
+still slightly worse than v315d on LPIPS, and v319d proves that current
+source-heldout perceptual hard gates are unreliable. The project remains short
+of a 100% closed top-conference method.
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Topline: v318e Source-Perceptual Auto-Risk Follow-up
 
 Newest v318e evidence package:

@@ -1,0 +1,2448 @@
+{
+  "v305": {
+    "aggregate": {
+      "mean_psnr_gain": 0.26657784692540587,
+      "mean_ssim_gain": 0.003700548692408039,
+      "mean_min_psnr_gain": 0.01391683306169532,
+      "mean_cvar10_psnr_gain": 0.03950394460313314,
+      "total_negative_views": 8,
+      "safe_scene_count": 9,
+      "scene_count": 9,
+      "missing_scene_count": 0
+    },
+    "scenes": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11208827481638309,
+        "ssim_gain": 0.002952544689178467,
+        "fixed_psnr_gain": 0.09834530782944569,
+        "fixed_ssim_gain": 0.0028195738792419433,
+        "learned_psnr_gain": 0.12032849879064286,
+        "learned_ssim_gain": 0.002834932804107666,
+        "hybrid_psnr_gain": 0.11208827481638309,
+        "hybrid_ssim_gain": 0.002952544689178467,
+        "selected_minus_fixed_psnr_gain": 0.013742966986937402,
+        "selected_minus_fixed_ssim_gain": 0.00013297080993652372,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar10_psnr_gain": -0.04755920221850296,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0007012486457824707,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 25
+        },
+        "output_variants": {
+          "null": 25
+        },
+        "selected_proxy_variants": {
+          "null": 25
+        },
+        "source_reliability_decisions": {
+          "null": 25
+        },
+        "risk_model_decisions": {
+          "null": 25
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {},
+        "per_view_risk_model_policy_summary": {},
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v305_sourceheldout_auto_policy_test_apply_20260630/bicycle/support_transport_apply_report.json"
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain": 0.5677124421175066,
+        "ssim_gain": 0.005785043175156052,
+        "fixed_psnr_gain": 0.4863971501099032,
+        "fixed_ssim_gain": 0.005299505349752065,
+        "learned_psnr_gain": 0.5677124421175066,
+        "learned_ssim_gain": 0.005785043175156052,
+        "hybrid_psnr_gain": 0.5313874915060735,
+        "hybrid_ssim_gain": 0.005616486072540283,
+        "selected_minus_fixed_psnr_gain": 0.0813152920076034,
+        "selected_minus_fixed_ssim_gain": 0.0004855378254039868,
+        "min_psnr_gain": 0.14005710063242205,
+        "cvar10_psnr_gain": 0.21370041880688953,
+        "negative_views": 0,
+        "min_ssim_gain": 0.002852320671081543,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 37
+        },
+        "output_variants": {
+          "null": 37
+        },
+        "selected_proxy_variants": {
+          "null": 37
+        },
+        "source_reliability_decisions": {
+          "null": 37
+        },
+        "risk_model_decisions": {
+          "null": 37
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {},
+        "per_view_risk_model_policy_summary": {},
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v305_sourceheldout_auto_policy_test_apply_20260630/bonsai/support_transport_apply_report.json"
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "fixed_psnr_gain": 0.3396316968123441,
+        "fixed_ssim_gain": 0.006116793553034464,
+        "learned_psnr_gain": 0.4263596368894508,
+        "learned_ssim_gain": 0.006908347209294637,
+        "hybrid_psnr_gain": 0.38625746785628956,
+        "hybrid_ssim_gain": 0.006588270266850789,
+        "selected_minus_fixed_psnr_gain": 0.08672794007710666,
+        "selected_minus_fixed_ssim_gain": 0.0007915536562601725,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar10_psnr_gain": 0.06868039773497496,
+        "negative_views": 1,
+        "min_ssim_gain": 0.0011790990829467773,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 30
+        },
+        "output_variants": {
+          "null": 30
+        },
+        "selected_proxy_variants": {
+          "null": 30
+        },
+        "source_reliability_decisions": {
+          "null": 30
+        },
+        "risk_model_decisions": {
+          "null": 30
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {},
+        "per_view_risk_model_policy_summary": {},
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v305_sourceheldout_auto_policy_test_apply_20260630/counter/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.08886119364080872,
+        "ssim_gain": 0.004047775810415094,
+        "fixed_psnr_gain": 0.0782240266728122,
+        "fixed_ssim_gain": 0.003794328732924028,
+        "learned_psnr_gain": 0.0961603690330438,
+        "learned_ssim_gain": 0.004101170734925704,
+        "hybrid_psnr_gain": 0.08886119364080872,
+        "hybrid_ssim_gain": 0.004047775810415094,
+        "selected_minus_fixed_psnr_gain": 0.01063716696799652,
+        "selected_minus_fixed_ssim_gain": 0.0002534470774910665,
+        "min_psnr_gain": 0.025085114725499125,
+        "cvar10_psnr_gain": 0.02655331154705287,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0005679726600646973,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 22
+        },
+        "output_variants": {
+          "null": 22
+        },
+        "selected_proxy_variants": {
+          "null": 22
+        },
+        "source_reliability_decisions": {
+          "null": 22
+        },
+        "risk_model_decisions": {
+          "null": 22
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {},
+        "per_view_risk_model_policy_summary": {},
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v305_sourceheldout_auto_policy_test_apply_20260630/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.1409308747749085,
+        "ssim_gain": 0.0019092063109079997,
+        "fixed_psnr_gain": 0.13318078577315484,
+        "fixed_ssim_gain": 0.0018310770392417908,
+        "learned_psnr_gain": 0.14426260173874775,
+        "learned_ssim_gain": 0.0018803179264068604,
+        "hybrid_psnr_gain": 0.1409308747749085,
+        "hybrid_ssim_gain": 0.0019092063109079997,
+        "selected_minus_fixed_psnr_gain": 0.007750089001753668,
+        "selected_minus_fixed_ssim_gain": 7.812927166620898e-05,
+        "min_psnr_gain": 0.004856132126725754,
+        "cvar10_psnr_gain": 0.027260804165733177,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0002714395523071289,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 24
+        },
+        "output_variants": {
+          "null": 24
+        },
+        "selected_proxy_variants": {
+          "null": 24
+        },
+        "source_reliability_decisions": {
+          "null": 24
+        },
+        "risk_model_decisions": {
+          "null": 24
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {},
+        "per_view_risk_model_policy_summary": {},
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v305_sourceheldout_auto_policy_test_apply_20260630/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "fixed_psnr_gain": 0.39306139938107726,
+        "fixed_ssim_gain": 0.0034032719475882395,
+        "learned_psnr_gain": 0.4936231605325725,
+        "learned_ssim_gain": 0.003910861696515764,
+        "hybrid_psnr_gain": 0.4465212053717037,
+        "hybrid_ssim_gain": 0.0037016255514962333,
+        "selected_minus_fixed_psnr_gain": 0.10056176115149523,
+        "selected_minus_fixed_ssim_gain": 0.0005075897489275247,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0009958744049072266,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 35
+        },
+        "output_variants": {
+          "null": 35
+        },
+        "selected_proxy_variants": {
+          "null": 35
+        },
+        "source_reliability_decisions": {
+          "null": 35
+        },
+        "risk_model_decisions": {
+          "null": 35
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {},
+        "per_view_risk_model_policy_summary": {},
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v305_sourceheldout_auto_policy_test_apply_20260630/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.42183782192548464,
+        "ssim_gain": 0.004989705024621425,
+        "fixed_psnr_gain": 0.39369127175138374,
+        "fixed_ssim_gain": 0.004668333591558995,
+        "learned_psnr_gain": 0.43979794049711474,
+        "learned_ssim_gain": 0.0051460495361915,
+        "hybrid_psnr_gain": 0.42183782192548464,
+        "hybrid_ssim_gain": 0.004989705024621425,
+        "selected_minus_fixed_psnr_gain": 0.028146550174100893,
+        "selected_minus_fixed_ssim_gain": 0.0003213714330624305,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0008046627044677734,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 39
+        },
+        "output_variants": {
+          "null": 39
+        },
+        "selected_proxy_variants": {
+          "null": 39
+        },
+        "source_reliability_decisions": {
+          "null": 39
+        },
+        "risk_model_decisions": {
+          "null": 39
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {},
+        "per_view_risk_model_policy_summary": {},
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v305_sourceheldout_auto_policy_test_apply_20260630/room/support_transport_apply_report.json"
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "fixed_psnr_gain": 0.05702976139303506,
+        "fixed_ssim_gain": 0.001208242028951645,
+        "learned_psnr_gain": 0.06240550678673129,
+        "learned_ssim_gain": 0.0008767247200012207,
+        "hybrid_psnr_gain": 0.062019967739911364,
+        "hybrid_ssim_gain": 0.001134432852268219,
+        "selected_minus_fixed_psnr_gain": 0.0,
+        "selected_minus_fixed_ssim_gain": 0.0,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "min_ssim_gain": -0.0017296671867370605,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16
+        },
+        "output_variants": {
+          "null": 16
+        },
+        "selected_proxy_variants": {
+          "null": 16
+        },
+        "source_reliability_decisions": {
+          "null": 16
+        },
+        "risk_model_decisions": {
+          "null": 16
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {},
+        "per_view_risk_model_policy_summary": {},
+        "selector_summary": {
+          "selected_variant": "fixed"
+        },
+        "report_path": "outputs/carnet/spcarnet_v305_sourceheldout_auto_policy_test_apply_20260630/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09075745623850276,
+        "ssim_gain": 0.0015932122866312663,
+        "fixed_psnr_gain": 0.09075745623850276,
+        "fixed_ssim_gain": 0.0015932122866312663,
+        "learned_psnr_gain": 0.12031289335964404,
+        "learned_ssim_gain": 0.001588390933142768,
+        "hybrid_psnr_gain": 0.10709009243203561,
+        "hybrid_ssim_gain": 0.0016907321082221137,
+        "selected_minus_fixed_psnr_gain": 0.0,
+        "selected_minus_fixed_ssim_gain": 0.0,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0008407831192016602,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 18
+        },
+        "output_variants": {
+          "null": 18
+        },
+        "selected_proxy_variants": {
+          "null": 18
+        },
+        "source_reliability_decisions": {
+          "null": 18
+        },
+        "risk_model_decisions": {
+          "null": 18
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {},
+        "per_view_risk_model_policy_summary": {},
+        "selector_summary": {
+          "selected_variant": "fixed"
+        },
+        "report_path": "outputs/carnet/spcarnet_v305_sourceheldout_auto_policy_test_apply_20260630/treehill/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v305_sourceheldout_auto_policy_test_apply_20260630"
+  },
+  "v315d": {
+    "aggregate": {
+      "mean_psnr_gain": 0.2691751230961524,
+      "mean_ssim_gain": 0.003718043972504198,
+      "mean_min_psnr_gain": 0.014301479513850524,
+      "mean_cvar10_psnr_gain": 0.03972570852378235,
+      "total_negative_views": 8,
+      "safe_scene_count": 9,
+      "scene_count": 9,
+      "missing_scene_count": 0
+    },
+    "scenes": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11995854884043254,
+        "ssim_gain": 0.00298875093460083,
+        "fixed_psnr_gain": 0.09834530782944569,
+        "fixed_ssim_gain": 0.0028195738792419433,
+        "learned_psnr_gain": 0.12032849879064286,
+        "learned_ssim_gain": 0.002834932804107666,
+        "hybrid_psnr_gain": 0.11208827481638309,
+        "hybrid_ssim_gain": 0.002952544689178467,
+        "selected_minus_fixed_psnr_gain": 0.021613241010986856,
+        "selected_minus_fixed_ssim_gain": 0.0001691770553588867,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar10_psnr_gain": -0.04755920221850296,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0007012486457824707,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 25
+        },
+        "output_variants": {
+          "learned": 5,
+          "hybrid": 20
+        },
+        "selected_proxy_variants": {
+          "learned": 5,
+          "hybrid": 20
+        },
+        "source_reliability_decisions": {
+          "null": 25
+        },
+        "risk_model_decisions": {
+          "not_used": 25
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": true,
+          "k": 3
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/bicycle/support_transport_apply_report.json"
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain": 0.5677124421175066,
+        "ssim_gain": 0.005785043175156052,
+        "fixed_psnr_gain": 0.4863971501099032,
+        "fixed_ssim_gain": 0.005299505349752065,
+        "learned_psnr_gain": 0.5677124421175066,
+        "learned_ssim_gain": 0.005785043175156052,
+        "hybrid_psnr_gain": 0.5313874915060735,
+        "hybrid_ssim_gain": 0.005616486072540283,
+        "selected_minus_fixed_psnr_gain": 0.0813152920076034,
+        "selected_minus_fixed_ssim_gain": 0.0004855378254039868,
+        "min_psnr_gain": 0.14005710063242205,
+        "cvar10_psnr_gain": 0.21370041880688953,
+        "negative_views": 0,
+        "min_ssim_gain": 0.002852320671081543,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 37
+        },
+        "output_variants": {
+          "learned": 37
+        },
+        "selected_proxy_variants": {
+          "learned": 37
+        },
+        "source_reliability_decisions": {
+          "null": 37
+        },
+        "risk_model_decisions": {
+          "not_used": 37
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/bonsai/support_transport_apply_report.json"
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "fixed_psnr_gain": 0.3396316968123441,
+        "fixed_ssim_gain": 0.006116793553034464,
+        "learned_psnr_gain": 0.4263596368894508,
+        "learned_ssim_gain": 0.006908347209294637,
+        "hybrid_psnr_gain": 0.38625746785628956,
+        "hybrid_ssim_gain": 0.006588270266850789,
+        "selected_minus_fixed_psnr_gain": 0.08672794007710666,
+        "selected_minus_fixed_ssim_gain": 0.0007915536562601725,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar10_psnr_gain": 0.06868039773497496,
+        "negative_views": 1,
+        "min_ssim_gain": 0.0011790990829467773,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 30
+        },
+        "output_variants": {
+          "learned": 30
+        },
+        "selected_proxy_variants": {
+          "learned": 30
+        },
+        "source_reliability_decisions": {
+          "null": 30
+        },
+        "risk_model_decisions": {
+          "not_used": 30
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/counter/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.0923596316861136,
+        "ssim_gain": 0.00411434065211903,
+        "fixed_psnr_gain": 0.0782240266728122,
+        "fixed_ssim_gain": 0.003794328732924028,
+        "learned_psnr_gain": 0.0961603690330438,
+        "learned_ssim_gain": 0.004101170734925704,
+        "hybrid_psnr_gain": 0.08886119364080872,
+        "hybrid_ssim_gain": 0.004047775810415094,
+        "selected_minus_fixed_psnr_gain": 0.014135605013301397,
+        "selected_minus_fixed_ssim_gain": 0.00032001191919500205,
+        "min_psnr_gain": 0.02777446740415357,
+        "cvar10_psnr_gain": 0.027897987886380093,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0005679726600646973,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 22
+        },
+        "output_variants": {
+          "hybrid": 13,
+          "learned": 9
+        },
+        "selected_proxy_variants": {
+          "hybrid": 13,
+          "learned": 9
+        },
+        "source_reliability_decisions": {
+          "null": 22
+        },
+        "risk_model_decisions": {
+          "not_used": 22
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": true,
+          "k": 3
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.14401626243899424,
+        "ssim_gain": 0.0019136294722557068,
+        "fixed_psnr_gain": 0.13318078577315484,
+        "fixed_ssim_gain": 0.0018310770392417908,
+        "learned_psnr_gain": 0.14426260173874775,
+        "learned_ssim_gain": 0.0018803179264068604,
+        "hybrid_psnr_gain": 0.1409308747749085,
+        "hybrid_ssim_gain": 0.0019092063109079997,
+        "selected_minus_fixed_psnr_gain": 0.010835476665839394,
+        "selected_minus_fixed_ssim_gain": 8.255243301391602e-05,
+        "min_psnr_gain": 0.005628597517468137,
+        "cvar10_psnr_gain": 0.02791200311224884,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0002714395523071289,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 24
+        },
+        "output_variants": {
+          "learned": 16,
+          "hybrid": 8
+        },
+        "selected_proxy_variants": {
+          "learned": 16,
+          "hybrid": 8
+        },
+        "source_reliability_decisions": {
+          "null": 24
+        },
+        "risk_model_decisions": {
+          "not_used": 24
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": true,
+          "k": 3
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "fixed_psnr_gain": 0.39306139938107726,
+        "fixed_ssim_gain": 0.0034032719475882395,
+        "learned_psnr_gain": 0.4936231605325725,
+        "learned_ssim_gain": 0.003910861696515764,
+        "hybrid_psnr_gain": 0.4465212053717037,
+        "hybrid_ssim_gain": 0.0037016255514962333,
+        "selected_minus_fixed_psnr_gain": 0.10056176115149523,
+        "selected_minus_fixed_ssim_gain": 0.0005075897489275247,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0009958744049072266,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 35
+        },
+        "output_variants": {
+          "learned": 35
+        },
+        "selected_proxy_variants": {
+          "learned": 35
+        },
+        "source_reliability_decisions": {
+          "null": 35
+        },
+        "risk_model_decisions": {
+          "not_used": 35
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.42183782192548464,
+        "ssim_gain": 0.004989705024621425,
+        "fixed_psnr_gain": 0.39369127175138374,
+        "fixed_ssim_gain": 0.004668333591558995,
+        "learned_psnr_gain": 0.43979794049711474,
+        "learned_ssim_gain": 0.0051460495361915,
+        "hybrid_psnr_gain": 0.42183782192548464,
+        "hybrid_ssim_gain": 0.004989705024621425,
+        "selected_minus_fixed_psnr_gain": 0.028146550174100893,
+        "selected_minus_fixed_ssim_gain": 0.0003213714330624305,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0008046627044677734,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 39
+        },
+        "output_variants": {
+          "hybrid": 39
+        },
+        "selected_proxy_variants": {
+          "hybrid": 39
+        },
+        "source_reliability_decisions": {
+          "null": 39
+        },
+        "risk_model_decisions": {
+          "not_used": 39
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/room/support_transport_apply_report.json"
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "fixed_psnr_gain": 0.05702976139303506,
+        "fixed_ssim_gain": 0.001208242028951645,
+        "learned_psnr_gain": 0.06240550678673129,
+        "learned_ssim_gain": 0.0008767247200012207,
+        "hybrid_psnr_gain": 0.062019967739911364,
+        "hybrid_ssim_gain": 0.001134432852268219,
+        "selected_minus_fixed_psnr_gain": 0.0,
+        "selected_minus_fixed_ssim_gain": 0.0,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "min_ssim_gain": -0.0017296671867370605,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16
+        },
+        "output_variants": {
+          "fixed": 16
+        },
+        "selected_proxy_variants": {
+          "fixed": 16
+        },
+        "source_reliability_decisions": {
+          "null": 16
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 16
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": true,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 0,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 10
+          }
+        },
+        "selector_summary": {
+          "selected_variant": "fixed"
+        },
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09967884204178172,
+        "ssim_gain": 0.0016434755590226916,
+        "fixed_psnr_gain": 0.09075745623850276,
+        "fixed_ssim_gain": 0.0015932122866312663,
+        "learned_psnr_gain": 0.12031289335964404,
+        "learned_ssim_gain": 0.001588390933142768,
+        "hybrid_psnr_gain": 0.10709009243203561,
+        "hybrid_ssim_gain": 0.0016907321082221137,
+        "selected_minus_fixed_psnr_gain": 0.008921385803278961,
+        "selected_minus_fixed_ssim_gain": 5.0263272391425215e-05,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0008407831192016602,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 18
+        },
+        "output_variants": {
+          "fixed": 15,
+          "learned": 3
+        },
+        "selected_proxy_variants": {
+          "fixed": 15,
+          "learned": 3
+        },
+        "source_reliability_decisions": {
+          "null": 18
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 13,
+          "candidate": 5
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": true,
+          "source_selected_counts": {
+            "fixed": 3,
+            "learned": 1,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 7
+          }
+        },
+        "selector_summary": {
+          "selected_variant": "fixed"
+        },
+        "report_path": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701/treehill/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v315d_no_fixed_downgrade_multiscene_20260701"
+  },
+  "v316c": {
+    "aggregate": {
+      "mean_psnr_gain": 0.2684435869062201,
+      "mean_ssim_gain": 0.003710156416609571,
+      "mean_min_psnr_gain": 0.01391683306169532,
+      "mean_cvar10_psnr_gain": 0.03950394460313314,
+      "total_negative_views": 8,
+      "safe_scene_count": 9,
+      "scene_count": 9,
+      "missing_scene_count": 0
+    },
+    "scenes": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11995854884043254,
+        "ssim_gain": 0.00298875093460083,
+        "fixed_psnr_gain": 0.09834530782944569,
+        "fixed_ssim_gain": 0.0028195738792419433,
+        "learned_psnr_gain": 0.12032849879064286,
+        "learned_ssim_gain": 0.002834932804107666,
+        "hybrid_psnr_gain": 0.11208827481638309,
+        "hybrid_ssim_gain": 0.002952544689178467,
+        "selected_minus_fixed_psnr_gain": 0.021613241010986856,
+        "selected_minus_fixed_ssim_gain": 0.0001691770553588867,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar10_psnr_gain": -0.04755920221850296,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0007012486457824707,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 25
+        },
+        "output_variants": {
+          "learned": 5,
+          "hybrid": 20
+        },
+        "selected_proxy_variants": {
+          "learned": 5,
+          "hybrid": 20
+        },
+        "source_reliability_decisions": {
+          "null": 25
+        },
+        "risk_model_decisions": {
+          "not_used": 25
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": true,
+          "k": 3
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v316c_source_tail_acceptance_fixed_multiscene_20260701/bicycle/support_transport_apply_report.json"
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain": 0.5677124421175066,
+        "ssim_gain": 0.005785043175156052,
+        "fixed_psnr_gain": 0.4863971501099032,
+        "fixed_ssim_gain": 0.005299505349752065,
+        "learned_psnr_gain": 0.5677124421175066,
+        "learned_ssim_gain": 0.005785043175156052,
+        "hybrid_psnr_gain": 0.5313874915060735,
+        "hybrid_ssim_gain": 0.005616486072540283,
+        "selected_minus_fixed_psnr_gain": 0.0813152920076034,
+        "selected_minus_fixed_ssim_gain": 0.0004855378254039868,
+        "min_psnr_gain": 0.14005710063242205,
+        "cvar10_psnr_gain": 0.21370041880688953,
+        "negative_views": 0,
+        "min_ssim_gain": 0.002852320671081543,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 37
+        },
+        "output_variants": {
+          "learned": 37
+        },
+        "selected_proxy_variants": {
+          "learned": 37
+        },
+        "source_reliability_decisions": {
+          "null": 37
+        },
+        "risk_model_decisions": {
+          "not_used": 37
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v316c_source_tail_acceptance_fixed_multiscene_20260701/bonsai/support_transport_apply_report.json"
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "fixed_psnr_gain": 0.3396316968123441,
+        "fixed_ssim_gain": 0.006116793553034464,
+        "learned_psnr_gain": 0.4263596368894508,
+        "learned_ssim_gain": 0.006908347209294637,
+        "hybrid_psnr_gain": 0.38625746785628956,
+        "hybrid_ssim_gain": 0.006588270266850789,
+        "selected_minus_fixed_psnr_gain": 0.08672794007710666,
+        "selected_minus_fixed_ssim_gain": 0.0007915536562601725,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar10_psnr_gain": 0.06868039773497496,
+        "negative_views": 1,
+        "min_ssim_gain": 0.0011790990829467773,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 30
+        },
+        "output_variants": {
+          "learned": 30
+        },
+        "selected_proxy_variants": {
+          "learned": 30
+        },
+        "source_reliability_decisions": {
+          "null": 30
+        },
+        "risk_model_decisions": {
+          "not_used": 30
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v316c_source_tail_acceptance_fixed_multiscene_20260701/counter/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.08886119364080872,
+        "ssim_gain": 0.004047775810415094,
+        "fixed_psnr_gain": 0.0782240266728122,
+        "fixed_ssim_gain": 0.003794328732924028,
+        "learned_psnr_gain": 0.0961603690330438,
+        "learned_ssim_gain": 0.004101170734925704,
+        "hybrid_psnr_gain": 0.08886119364080872,
+        "hybrid_ssim_gain": 0.004047775810415094,
+        "selected_minus_fixed_psnr_gain": 0.01063716696799652,
+        "selected_minus_fixed_ssim_gain": 0.0002534470774910665,
+        "min_psnr_gain": 0.025085114725499125,
+        "cvar10_psnr_gain": 0.02655331154705287,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0005679726600646973,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 22
+        },
+        "output_variants": {
+          "hybrid": 22
+        },
+        "selected_proxy_variants": {
+          "hybrid": 22
+        },
+        "source_reliability_decisions": {
+          "null": 22
+        },
+        "risk_model_decisions": {
+          "not_used": 22
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v316c_source_tail_acceptance_fixed_multiscene_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.1409308747749085,
+        "ssim_gain": 0.0019092063109079997,
+        "fixed_psnr_gain": 0.13318078577315484,
+        "fixed_ssim_gain": 0.0018310770392417908,
+        "learned_psnr_gain": 0.14426260173874775,
+        "learned_ssim_gain": 0.0018803179264068604,
+        "hybrid_psnr_gain": 0.1409308747749085,
+        "hybrid_ssim_gain": 0.0019092063109079997,
+        "selected_minus_fixed_psnr_gain": 0.007750089001753668,
+        "selected_minus_fixed_ssim_gain": 7.812927166620898e-05,
+        "min_psnr_gain": 0.004856132126725754,
+        "cvar10_psnr_gain": 0.027260804165733177,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0002714395523071289,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 24
+        },
+        "output_variants": {
+          "hybrid": 24
+        },
+        "selected_proxy_variants": {
+          "hybrid": 24
+        },
+        "source_reliability_decisions": {
+          "null": 24
+        },
+        "risk_model_decisions": {
+          "not_used": 24
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v316c_source_tail_acceptance_fixed_multiscene_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "fixed_psnr_gain": 0.39306139938107726,
+        "fixed_ssim_gain": 0.0034032719475882395,
+        "learned_psnr_gain": 0.4936231605325725,
+        "learned_ssim_gain": 0.003910861696515764,
+        "hybrid_psnr_gain": 0.4465212053717037,
+        "hybrid_ssim_gain": 0.0037016255514962333,
+        "selected_minus_fixed_psnr_gain": 0.10056176115149523,
+        "selected_minus_fixed_ssim_gain": 0.0005075897489275247,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0009958744049072266,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 35
+        },
+        "output_variants": {
+          "learned": 35
+        },
+        "selected_proxy_variants": {
+          "learned": 35
+        },
+        "source_reliability_decisions": {
+          "null": 35
+        },
+        "risk_model_decisions": {
+          "not_used": 35
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v316c_source_tail_acceptance_fixed_multiscene_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.42183782192548464,
+        "ssim_gain": 0.004989705024621425,
+        "fixed_psnr_gain": 0.39369127175138374,
+        "fixed_ssim_gain": 0.004668333591558995,
+        "learned_psnr_gain": 0.43979794049711474,
+        "learned_ssim_gain": 0.0051460495361915,
+        "hybrid_psnr_gain": 0.42183782192548464,
+        "hybrid_ssim_gain": 0.004989705024621425,
+        "selected_minus_fixed_psnr_gain": 0.028146550174100893,
+        "selected_minus_fixed_ssim_gain": 0.0003213714330624305,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0008046627044677734,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 39
+        },
+        "output_variants": {
+          "hybrid": 39
+        },
+        "selected_proxy_variants": {
+          "hybrid": 39
+        },
+        "source_reliability_decisions": {
+          "null": 39
+        },
+        "risk_model_decisions": {
+          "not_used": 39
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v316c_source_tail_acceptance_fixed_multiscene_20260701/room/support_transport_apply_report.json"
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "fixed_psnr_gain": 0.05702976139303506,
+        "fixed_ssim_gain": 0.001208242028951645,
+        "learned_psnr_gain": 0.06240550678673129,
+        "learned_ssim_gain": 0.0008767247200012207,
+        "hybrid_psnr_gain": 0.062019967739911364,
+        "hybrid_ssim_gain": 0.001134432852268219,
+        "selected_minus_fixed_psnr_gain": 0.0,
+        "selected_minus_fixed_ssim_gain": 0.0,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "min_ssim_gain": -0.0017296671867370605,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16
+        },
+        "output_variants": {
+          "fixed": 16
+        },
+        "selected_proxy_variants": {
+          "fixed": 16
+        },
+        "source_reliability_decisions": {
+          "null": 16
+        },
+        "risk_model_decisions": {
+          "not_used": 16
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false,
+          "source_selected_counts": {
+            "fixed": 2,
+            "learned": 3,
+            "hybrid": 2,
+            "noop": 0,
+            "scene": 3
+          }
+        },
+        "selector_summary": {
+          "selected_variant": "fixed"
+        },
+        "report_path": "outputs/carnet/spcarnet_v316c_source_tail_acceptance_fixed_multiscene_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09967884204178172,
+        "ssim_gain": 0.0016434755590226916,
+        "fixed_psnr_gain": 0.09075745623850276,
+        "fixed_ssim_gain": 0.0015932122866312663,
+        "learned_psnr_gain": 0.12031289335964404,
+        "learned_ssim_gain": 0.001588390933142768,
+        "hybrid_psnr_gain": 0.10709009243203561,
+        "hybrid_ssim_gain": 0.0016907321082221137,
+        "selected_minus_fixed_psnr_gain": 0.008921385803278961,
+        "selected_minus_fixed_ssim_gain": 5.0263272391425215e-05,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0008407831192016602,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 18
+        },
+        "output_variants": {
+          "fixed": 15,
+          "learned": 3
+        },
+        "selected_proxy_variants": {
+          "fixed": 15,
+          "learned": 3
+        },
+        "source_reliability_decisions": {
+          "null": 18
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 13,
+          "candidate": 5
+        },
+        "selection_protocol": null,
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": true,
+          "source_selected_counts": {
+            "fixed": 3,
+            "learned": 1,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 7
+          }
+        },
+        "selector_summary": {
+          "selected_variant": "fixed"
+        },
+        "report_path": "outputs/carnet/spcarnet_v316c_source_tail_acceptance_fixed_multiscene_20260701/treehill/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v316c_source_tail_acceptance_fixed_multiscene_20260701"
+  },
+  "v318e": {
+    "aggregate": {
+      "mean_psnr_gain": 0.2686288291478135,
+      "mean_ssim_gain": 0.0037151349577814827,
+      "mean_min_psnr_gain": 0.01391683306169532,
+      "mean_cvar10_psnr_gain": 0.03950394460313314,
+      "total_negative_views": 8,
+      "safe_scene_count": 9,
+      "scene_count": 9,
+      "missing_scene_count": 0
+    },
+    "scenes": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11980156381277482,
+        "ssim_gain": 0.0030164837837219237,
+        "fixed_psnr_gain": 0.09834530782944569,
+        "fixed_ssim_gain": 0.0028195738792419433,
+        "learned_psnr_gain": 0.12032849879064286,
+        "learned_ssim_gain": 0.002834932804107666,
+        "hybrid_psnr_gain": 0.11208827481638309,
+        "hybrid_ssim_gain": 0.002952544689178467,
+        "selected_minus_fixed_psnr_gain": 0.021456255983329134,
+        "selected_minus_fixed_ssim_gain": 0.00019690990447998038,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar10_psnr_gain": -0.04755920221850296,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0007012486457824707,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 25
+        },
+        "output_variants": {
+          "learned": 4,
+          "hybrid": 21
+        },
+        "selected_proxy_variants": {
+          "learned": 4,
+          "hybrid": 21
+        },
+        "source_reliability_decisions": {
+          "null": 25
+        },
+        "risk_model_decisions": {
+          "not_used": 25
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": true,
+          "k": 3
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v318e_source_perceptual_autorisk_multiscene_20260701/bicycle/support_transport_apply_report.json"
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain": 0.5677124421175066,
+        "ssim_gain": 0.005785043175156052,
+        "fixed_psnr_gain": 0.4863971501099032,
+        "fixed_ssim_gain": 0.005299505349752065,
+        "learned_psnr_gain": 0.5677124421175066,
+        "learned_ssim_gain": 0.005785043175156052,
+        "hybrid_psnr_gain": 0.5313874915060735,
+        "hybrid_ssim_gain": 0.005616486072540283,
+        "selected_minus_fixed_psnr_gain": 0.0813152920076034,
+        "selected_minus_fixed_ssim_gain": 0.0004855378254039868,
+        "min_psnr_gain": 0.14005710063242205,
+        "cvar10_psnr_gain": 0.21370041880688953,
+        "negative_views": 0,
+        "min_ssim_gain": 0.002852320671081543,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 37
+        },
+        "output_variants": {
+          "learned": 37
+        },
+        "selected_proxy_variants": {
+          "learned": 37
+        },
+        "source_reliability_decisions": {
+          "null": 37
+        },
+        "risk_model_decisions": {
+          "not_used": 37
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v318e_source_perceptual_autorisk_multiscene_20260701/bonsai/support_transport_apply_report.json"
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "fixed_psnr_gain": 0.3396316968123441,
+        "fixed_ssim_gain": 0.006116793553034464,
+        "learned_psnr_gain": 0.4263596368894508,
+        "learned_ssim_gain": 0.006908347209294637,
+        "hybrid_psnr_gain": 0.38625746785628956,
+        "hybrid_ssim_gain": 0.006588270266850789,
+        "selected_minus_fixed_psnr_gain": 0.08672794007710666,
+        "selected_minus_fixed_ssim_gain": 0.0007915536562601725,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar10_psnr_gain": 0.06868039773497496,
+        "negative_views": 1,
+        "min_ssim_gain": 0.0011790990829467773,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 30
+        },
+        "output_variants": {
+          "learned": 30
+        },
+        "selected_proxy_variants": {
+          "learned": 30
+        },
+        "source_reliability_decisions": {
+          "null": 30
+        },
+        "risk_model_decisions": {
+          "not_used": 30
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v318e_source_perceptual_autorisk_multiscene_20260701/counter/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.09068535884280687,
+        "ssim_gain": 0.0040648498318412085,
+        "fixed_psnr_gain": 0.0782240266728122,
+        "fixed_ssim_gain": 0.003794328732924028,
+        "learned_psnr_gain": 0.0961603690330438,
+        "learned_ssim_gain": 0.004101170734925704,
+        "hybrid_psnr_gain": 0.08886119364080872,
+        "hybrid_ssim_gain": 0.004047775810415094,
+        "selected_minus_fixed_psnr_gain": 0.012461332169994677,
+        "selected_minus_fixed_ssim_gain": 0.00027052109891718057,
+        "min_psnr_gain": 0.025085114725499125,
+        "cvar10_psnr_gain": 0.02655331154705287,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0005679726600646973,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 22
+        },
+        "output_variants": {
+          "hybrid": 17,
+          "learned": 5
+        },
+        "selected_proxy_variants": {
+          "hybrid": 17,
+          "learned": 5
+        },
+        "source_reliability_decisions": {
+          "null": 22
+        },
+        "risk_model_decisions": {
+          "not_used": 22
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": true,
+          "k": 3
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v318e_source_perceptual_autorisk_multiscene_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.1409308747749085,
+        "ssim_gain": 0.0019092063109079997,
+        "fixed_psnr_gain": 0.13318078577315484,
+        "fixed_ssim_gain": 0.0018310770392417908,
+        "learned_psnr_gain": 0.14426260173874775,
+        "learned_ssim_gain": 0.0018803179264068604,
+        "hybrid_psnr_gain": 0.1409308747749085,
+        "hybrid_ssim_gain": 0.0019092063109079997,
+        "selected_minus_fixed_psnr_gain": 0.007750089001753668,
+        "selected_minus_fixed_ssim_gain": 7.812927166620898e-05,
+        "min_psnr_gain": 0.004856132126725754,
+        "cvar10_psnr_gain": 0.027260804165733177,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0002714395523071289,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 24
+        },
+        "output_variants": {
+          "hybrid": 24
+        },
+        "selected_proxy_variants": {
+          "hybrid": 24
+        },
+        "source_reliability_decisions": {
+          "null": 24
+        },
+        "risk_model_decisions": {
+          "not_used": 24
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v318e_source_perceptual_autorisk_multiscene_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "fixed_psnr_gain": 0.39306139938107726,
+        "fixed_ssim_gain": 0.0034032719475882395,
+        "learned_psnr_gain": 0.4936231605325725,
+        "learned_ssim_gain": 0.003910861696515764,
+        "hybrid_psnr_gain": 0.4465212053717037,
+        "hybrid_ssim_gain": 0.0037016255514962333,
+        "selected_minus_fixed_psnr_gain": 0.10056176115149523,
+        "selected_minus_fixed_ssim_gain": 0.0005075897489275247,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0009958744049072266,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 35
+        },
+        "output_variants": {
+          "learned": 35
+        },
+        "selected_proxy_variants": {
+          "learned": 35
+        },
+        "source_reliability_decisions": {
+          "null": 35
+        },
+        "risk_model_decisions": {
+          "not_used": 35
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v318e_source_perceptual_autorisk_multiscene_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.42183782192548464,
+        "ssim_gain": 0.004989705024621425,
+        "fixed_psnr_gain": 0.39369127175138374,
+        "fixed_ssim_gain": 0.004668333591558995,
+        "learned_psnr_gain": 0.43979794049711474,
+        "learned_ssim_gain": 0.0051460495361915,
+        "hybrid_psnr_gain": 0.42183782192548464,
+        "hybrid_ssim_gain": 0.004989705024621425,
+        "selected_minus_fixed_psnr_gain": 0.028146550174100893,
+        "selected_minus_fixed_ssim_gain": 0.0003213714330624305,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0008046627044677734,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 39
+        },
+        "output_variants": {
+          "hybrid": 39
+        },
+        "selected_proxy_variants": {
+          "hybrid": 39
+        },
+        "source_reliability_decisions": {
+          "null": 39
+        },
+        "risk_model_decisions": {
+          "not_used": 39
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v318e_source_perceptual_autorisk_multiscene_20260701/room/support_transport_apply_report.json"
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "fixed_psnr_gain": 0.05702976139303506,
+        "fixed_ssim_gain": 0.001208242028951645,
+        "learned_psnr_gain": 0.06240550678673129,
+        "learned_ssim_gain": 0.0008767247200012207,
+        "hybrid_psnr_gain": 0.062019967739911364,
+        "hybrid_ssim_gain": 0.001134432852268219,
+        "selected_minus_fixed_psnr_gain": 0.0,
+        "selected_minus_fixed_ssim_gain": 0.0,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "min_ssim_gain": -0.0017296671867370605,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16
+        },
+        "output_variants": {
+          "fixed": 16
+        },
+        "selected_proxy_variants": {
+          "fixed": 16
+        },
+        "source_reliability_decisions": {
+          "null": 16
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 16
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": true,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 0,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 10
+          }
+        },
+        "selector_summary": {
+          "selected_variant": "fixed"
+        },
+        "report_path": "outputs/carnet/spcarnet_v318e_source_perceptual_autorisk_multiscene_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09967884204178172,
+        "ssim_gain": 0.0016434755590226916,
+        "fixed_psnr_gain": 0.09075745623850276,
+        "fixed_ssim_gain": 0.0015932122866312663,
+        "learned_psnr_gain": 0.12031289335964404,
+        "learned_ssim_gain": 0.001588390933142768,
+        "hybrid_psnr_gain": 0.10709009243203561,
+        "hybrid_ssim_gain": 0.0016907321082221137,
+        "selected_minus_fixed_psnr_gain": 0.008921385803278961,
+        "selected_minus_fixed_ssim_gain": 5.0263272391425215e-05,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0008407831192016602,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 18
+        },
+        "output_variants": {
+          "fixed": 15,
+          "learned": 3
+        },
+        "selected_proxy_variants": {
+          "fixed": 15,
+          "learned": 3
+        },
+        "source_reliability_decisions": {
+          "null": 18
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 13,
+          "candidate": 5
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {},
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": true,
+          "source_selected_counts": {
+            "fixed": 3,
+            "learned": 1,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 7
+          }
+        },
+        "selector_summary": {
+          "selected_variant": "fixed"
+        },
+        "report_path": "outputs/carnet/spcarnet_v318e_source_perceptual_autorisk_multiscene_20260701/treehill/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v318e_source_perceptual_autorisk_multiscene_20260701"
+  },
+  "v319c": {
+    "aggregate": {
+      "mean_psnr_gain": 0.2697253939283558,
+      "mean_ssim_gain": 0.0037200121265260062,
+      "mean_min_psnr_gain": 0.014301479513850524,
+      "mean_cvar10_psnr_gain": 0.03972570852378235,
+      "total_negative_views": 8,
+      "safe_scene_count": 9,
+      "scene_count": 9,
+      "missing_scene_count": 0
+    },
+    "scenes": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11995854884043254,
+        "ssim_gain": 0.00298875093460083,
+        "fixed_psnr_gain": 0.09834530782944569,
+        "fixed_ssim_gain": 0.0028195738792419433,
+        "learned_psnr_gain": 0.12032849879064286,
+        "learned_ssim_gain": 0.002834932804107666,
+        "hybrid_psnr_gain": 0.11208827481638309,
+        "hybrid_ssim_gain": 0.002952544689178467,
+        "selected_minus_fixed_psnr_gain": 0.021613241010986856,
+        "selected_minus_fixed_ssim_gain": 0.0001691770553588867,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar10_psnr_gain": -0.04755920221850296,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0007012486457824707,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 25
+        },
+        "output_variants": {
+          "learned": 5,
+          "hybrid": 20
+        },
+        "selected_proxy_variants": {
+          "learned": 5,
+          "hybrid": 20
+        },
+        "source_reliability_decisions": {
+          "not_used": 25
+        },
+        "risk_model_decisions": {
+          "not_used": 25
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": false,
+          "source_reliability_uses_target_gt": false,
+          "source_reliability_fit_scope": "source_heldout_before_target_loop"
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 5,
+            "hybrid": 2,
+            "noop": 0,
+            "scene": 8
+          }
+        },
+        "per_view_knn_policy_summary": {
+          "enabled": true,
+          "k": 3
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/bicycle/support_transport_apply_report.json"
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain": 0.5680114008651865,
+        "ssim_gain": 0.005784803145640605,
+        "fixed_psnr_gain": 0.4863971501099032,
+        "fixed_ssim_gain": 0.005299505349752065,
+        "learned_psnr_gain": 0.5677124421175066,
+        "learned_ssim_gain": 0.005785043175156052,
+        "hybrid_psnr_gain": 0.5313874915060735,
+        "hybrid_ssim_gain": 0.005616486072540283,
+        "selected_minus_fixed_psnr_gain": 0.08161425075528334,
+        "selected_minus_fixed_ssim_gain": 0.00048529779588853995,
+        "min_psnr_gain": 0.14005710063242205,
+        "cvar10_psnr_gain": 0.21370041880688953,
+        "negative_views": 0,
+        "min_ssim_gain": 0.002852320671081543,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 37
+        },
+        "output_variants": {
+          "learned": 36,
+          "hybrid": 1
+        },
+        "selected_proxy_variants": {
+          "learned": 36,
+          "hybrid": 1
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 22,
+          "candidate": 15
+        },
+        "risk_model_decisions": {
+          "not_used": 37
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": false,
+          "source_reliability_uses_target_gt": false,
+          "source_reliability_fit_scope": "source_heldout_before_target_loop"
+        },
+        "source_reliability_policy_enabled": true,
+        "source_reliability_policy_summary": {
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 8,
+            "hybrid": 2,
+            "noop": 0,
+            "scene": 12
+          }
+        },
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/bonsai/support_transport_apply_report.json"
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "fixed_psnr_gain": 0.3396316968123441,
+        "fixed_ssim_gain": 0.006116793553034464,
+        "learned_psnr_gain": 0.4263596368894508,
+        "learned_ssim_gain": 0.006908347209294637,
+        "hybrid_psnr_gain": 0.38625746785628956,
+        "hybrid_ssim_gain": 0.006588270266850789,
+        "selected_minus_fixed_psnr_gain": 0.08672794007710666,
+        "selected_minus_fixed_ssim_gain": 0.0007915536562601725,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar10_psnr_gain": 0.06868039773497496,
+        "negative_views": 1,
+        "min_ssim_gain": 0.0011790990829467773,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 30
+        },
+        "output_variants": {
+          "learned": 30
+        },
+        "selected_proxy_variants": {
+          "learned": 30
+        },
+        "source_reliability_decisions": {
+          "candidate": 13,
+          "incumbent_fallback": 17
+        },
+        "risk_model_decisions": {
+          "not_used": 30
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": false,
+          "source_reliability_uses_target_gt": false,
+          "source_reliability_fit_scope": "source_heldout_before_target_loop"
+        },
+        "source_reliability_policy_enabled": true,
+        "source_reliability_policy_summary": {
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 9,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 9
+          }
+        },
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/counter/support_transport_apply_report.json"
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.0923596316861136,
+        "ssim_gain": 0.00411434065211903,
+        "fixed_psnr_gain": 0.0782240266728122,
+        "fixed_ssim_gain": 0.003794328732924028,
+        "learned_psnr_gain": 0.0961603690330438,
+        "learned_ssim_gain": 0.004101170734925704,
+        "hybrid_psnr_gain": 0.08886119364080872,
+        "hybrid_ssim_gain": 0.004047775810415094,
+        "selected_minus_fixed_psnr_gain": 0.014135605013301397,
+        "selected_minus_fixed_ssim_gain": 0.00032001191919500205,
+        "min_psnr_gain": 0.02777446740415357,
+        "cvar10_psnr_gain": 0.027897987886380093,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0005679726600646973,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 22
+        },
+        "output_variants": {
+          "hybrid": 13,
+          "learned": 9
+        },
+        "selected_proxy_variants": {
+          "hybrid": 13,
+          "learned": 9
+        },
+        "source_reliability_decisions": {
+          "not_used": 22
+        },
+        "risk_model_decisions": {
+          "not_used": 22
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": false,
+          "source_reliability_uses_target_gt": false,
+          "source_reliability_fit_scope": "source_heldout_before_target_loop"
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 4,
+            "hybrid": 3,
+            "noop": 0,
+            "scene": 6
+          }
+        },
+        "per_view_knn_policy_summary": {
+          "enabled": true,
+          "k": 3
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/flowers/support_transport_apply_report.json"
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.14450491092673934,
+        "ssim_gain": 0.0019102543592453003,
+        "fixed_psnr_gain": 0.13318078577315484,
+        "fixed_ssim_gain": 0.0018310770392417908,
+        "learned_psnr_gain": 0.14426260173874775,
+        "learned_ssim_gain": 0.0018803179264068604,
+        "hybrid_psnr_gain": 0.1409308747749085,
+        "hybrid_ssim_gain": 0.0019092063109079997,
+        "selected_minus_fixed_psnr_gain": 0.011324125153584497,
+        "selected_minus_fixed_ssim_gain": 7.917732000350952e-05,
+        "min_psnr_gain": 0.005628597517468137,
+        "cvar10_psnr_gain": 0.02791200311224884,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0002714395523071289,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 24
+        },
+        "output_variants": {
+          "learned": 18,
+          "hybrid": 6
+        },
+        "selected_proxy_variants": {
+          "learned": 18,
+          "hybrid": 6
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 10,
+          "candidate": 14
+        },
+        "risk_model_decisions": {
+          "not_used": 24
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": false,
+          "source_reliability_uses_target_gt": false,
+          "source_reliability_fit_scope": "source_heldout_before_target_loop"
+        },
+        "source_reliability_policy_enabled": true,
+        "source_reliability_policy_summary": {
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 5,
+            "hybrid": 4,
+            "noop": 0,
+            "scene": 5
+          }
+        },
+        "per_view_knn_policy_summary": {
+          "enabled": true,
+          "k": 3
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/garden/support_transport_apply_report.json"
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "fixed_psnr_gain": 0.39306139938107726,
+        "fixed_ssim_gain": 0.0034032719475882395,
+        "learned_psnr_gain": 0.4936231605325725,
+        "learned_ssim_gain": 0.003910861696515764,
+        "hybrid_psnr_gain": 0.4465212053717037,
+        "hybrid_ssim_gain": 0.0037016255514962333,
+        "selected_minus_fixed_psnr_gain": 0.10056176115149523,
+        "selected_minus_fixed_ssim_gain": 0.0005075897489275247,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0009958744049072266,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "learned": 35
+        },
+        "output_variants": {
+          "learned": 35
+        },
+        "selected_proxy_variants": {
+          "learned": 35
+        },
+        "source_reliability_decisions": {
+          "not_used": 35
+        },
+        "risk_model_decisions": {
+          "not_used": 35
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": false,
+          "source_reliability_uses_target_gt": false,
+          "source_reliability_fit_scope": "source_heldout_before_target_loop"
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 6,
+            "hybrid": 2,
+            "noop": 0,
+            "scene": 13
+          }
+        },
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "learned"
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/kitchen/support_transport_apply_report.json"
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.42183782192548464,
+        "ssim_gain": 0.004989705024621425,
+        "fixed_psnr_gain": 0.39369127175138374,
+        "fixed_ssim_gain": 0.004668333591558995,
+        "learned_psnr_gain": 0.43979794049711474,
+        "learned_ssim_gain": 0.0051460495361915,
+        "hybrid_psnr_gain": 0.42183782192548464,
+        "hybrid_ssim_gain": 0.004989705024621425,
+        "selected_minus_fixed_psnr_gain": 0.028146550174100893,
+        "selected_minus_fixed_ssim_gain": 0.0003213714330624305,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0008046627044677734,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "hybrid": 39
+        },
+        "output_variants": {
+          "hybrid": 39
+        },
+        "selected_proxy_variants": {
+          "hybrid": 39
+        },
+        "source_reliability_decisions": {
+          "not_used": 39
+        },
+        "risk_model_decisions": {
+          "not_used": 39
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": false,
+          "source_reliability_uses_target_gt": false,
+          "source_reliability_fit_scope": "source_heldout_before_target_loop"
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 7,
+            "hybrid": 2,
+            "noop": 0,
+            "scene": 14
+          }
+        },
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": false
+        },
+        "selector_summary": {
+          "selected_variant": "hybrid"
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/room/support_transport_apply_report.json"
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "fixed_psnr_gain": 0.05702976139303506,
+        "fixed_ssim_gain": 0.001208242028951645,
+        "learned_psnr_gain": 0.06240550678673129,
+        "learned_ssim_gain": 0.0008767247200012207,
+        "hybrid_psnr_gain": 0.062019967739911364,
+        "hybrid_ssim_gain": 0.001134432852268219,
+        "selected_minus_fixed_psnr_gain": 0.0,
+        "selected_minus_fixed_ssim_gain": 0.0,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "min_ssim_gain": -0.0017296671867370605,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16
+        },
+        "output_variants": {
+          "fixed": 16
+        },
+        "selected_proxy_variants": {
+          "fixed": 16
+        },
+        "source_reliability_decisions": {
+          "not_used": 16
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 16
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": false,
+          "source_reliability_uses_target_gt": false,
+          "source_reliability_fit_scope": "source_heldout_before_target_loop"
+        },
+        "source_reliability_policy_enabled": false,
+        "source_reliability_policy_summary": {
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 3,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 7
+          }
+        },
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": true,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 0,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 10
+          }
+        },
+        "selector_summary": {
+          "selected_variant": "fixed"
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/stump/support_transport_apply_report.json"
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.10384367229618736,
+        "ssim_gain": 0.0016648040877448188,
+        "fixed_psnr_gain": 0.09075745623850276,
+        "fixed_ssim_gain": 0.0015932122866312663,
+        "learned_psnr_gain": 0.12031289335964404,
+        "learned_ssim_gain": 0.001588390933142768,
+        "hybrid_psnr_gain": 0.10709009243203561,
+        "hybrid_ssim_gain": 0.0016907321082221137,
+        "selected_minus_fixed_psnr_gain": 0.013086216057684605,
+        "selected_minus_fixed_ssim_gain": 7.159180111355242e-05,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0008407831192016602,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 18
+        },
+        "output_variants": {
+          "fixed": 12,
+          "learned": 6
+        },
+        "selected_proxy_variants": {
+          "fixed": 12,
+          "learned": 6
+        },
+        "source_reliability_decisions": {
+          "incumbent_fallback": 11,
+          "candidate": 7
+        },
+        "risk_model_decisions": {
+          "scene_fallback": 11,
+          "not_used": 7
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": false,
+          "source_reliability_uses_target_gt": false,
+          "source_reliability_fit_scope": "source_heldout_before_target_loop"
+        },
+        "source_reliability_policy_enabled": true,
+        "source_reliability_policy_summary": {
+          "source_selected_counts": {
+            "fixed": 1,
+            "learned": 1,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 9
+          }
+        },
+        "per_view_knn_policy_summary": {
+          "enabled": false
+        },
+        "per_view_risk_model_policy_summary": {
+          "enabled": true,
+          "source_selected_counts": {
+            "fixed": 0,
+            "learned": 0,
+            "hybrid": 0,
+            "noop": 0,
+            "scene": 11
+          }
+        },
+        "selector_summary": {
+          "selected_variant": "fixed"
+        },
+        "report_path": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701/treehill/support_transport_apply_report.json"
+      }
+    ],
+    "root": "outputs/carnet/spcarnet_v319c_incumbent_reliability_full9_20260701"
+  },
+  "v319c_minus_v305": {
+    "mean_psnr_gain": 0.0031475470029499464,
+    "mean_ssim_gain": 1.9463434117967214e-05,
+    "mean_min_psnr_gain": 0.0003846464521552028,
+    "mean_cvar10_psnr_gain": 0.00022176392064920947,
+    "total_negative_views": 0,
+    "safe_scene_count": 0
+  },
+  "v319c_minus_v315d": {
+    "mean_psnr_gain": 0.0005502708322034366,
+    "mean_ssim_gain": 1.96815402180809e-06,
+    "mean_min_psnr_gain": 0.0,
+    "mean_cvar10_psnr_gain": 0.0,
+    "total_negative_views": 0,
+    "safe_scene_count": 0
+  },
+  "v319c_minus_v316c": {
+    "mean_psnr_gain": 0.0012818070221357059,
+    "mean_ssim_gain": 9.85570991643512e-06,
+    "mean_min_psnr_gain": 0.0003846464521552028,
+    "mean_cvar10_psnr_gain": 0.00022176392064920947,
+    "total_negative_views": 0,
+    "safe_scene_count": 0
+  },
+  "v319c_minus_v318e": {
+    "mean_psnr_gain": 0.0010965647805423195,
+    "mean_ssim_gain": 4.877168744523482e-06,
+    "mean_min_psnr_gain": 0.0003846464521552028,
+    "mean_cvar10_psnr_gain": 0.00022176392064920947,
+    "total_negative_views": 0,
+    "safe_scene_count": 0
+  },
+  "verdict": {
+    "apply_metric_status_vs_v315d": "PASS: v319c improves mean PSNR/SSIM over v315d on full9 while preserving v315d min/CVaR/negative/safe counts, pending perceptual frontier validation.",
+    "selection_protocol": "v319c source reliability is fit on source-heldout before target loop and target GT is not used for target-time selection.",
+    "known_limitations": "The gain is incremental rather than decisive; v319c mostly preserves v315d and selectively improves garden/treehill. Full paper closure still requires perceptual/qualitative confirmation and stronger geometry/compression evidence.",
+    "cvar10_protocol": "Mean of per-scene worst floor(10% * num_views) selected PSNR gains, matching prior summary files."
+  }
+}

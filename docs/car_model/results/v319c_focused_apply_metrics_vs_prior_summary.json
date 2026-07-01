@@ -1,0 +1,191 @@
+{
+  "v315d": {
+    "aggregate": {
+      "mean_psnr": 0.10260860928007143,
+      "mean_ssim": 0.0023736877293899805,
+      "mean_min": -0.01793137014193178,
+      "mean_cvar": -0.010955994741293652,
+      "neg": 7,
+      "safe": 5,
+      "n": 5
+    },
+    "scenes": [
+      {
+        "scene": "flowers",
+        "psnr": 0.0923596316861136,
+        "ssim": 0.00411434065211903,
+        "min": 0.02777446740415357,
+        "cvar": 0.027897987886380093,
+        "neg": 0,
+        "safe": true,
+        "gate": "source_heldout_knn"
+      },
+      {
+        "scene": "garden",
+        "psnr": 0.14401626243899424,
+        "ssim": 0.0019136294722557068,
+        "min": 0.005628597517468137,
+        "cvar": 0.02791200311224884,
+        "neg": 0,
+        "safe": true,
+        "gate": "source_heldout_knn"
+      },
+      {
+        "scene": "bicycle",
+        "psnr": 0.11995854884043254,
+        "ssim": 0.00298875093460083,
+        "min": -0.060029153144686376,
+        "cvar": -0.04755920221850296,
+        "neg": 2,
+        "safe": true,
+        "gate": "source_heldout_knn"
+      },
+      {
+        "scene": "treehill",
+        "psnr": 0.09967884204178172,
+        "ssim": 0.0016434755590226916,
+        "min": -0.04984594221641814,
+        "cvar": -0.04984594221641814,
+        "neg": 2,
+        "safe": true,
+        "gate": "source_heldout_risk_model"
+      },
+      {
+        "scene": "stump",
+        "psnr": 0.05702976139303506,
+        "ssim": 0.001208242028951645,
+        "min": -0.01318482027017609,
+        "cvar": -0.01318482027017609,
+        "neg": 3,
+        "safe": true,
+        "gate": "source_heldout_risk_model"
+      }
+    ]
+  },
+  "v318e": {
+    "aggregate": {
+      "mean_psnr": 0.1016252801730614,
+      "mean_ssim": 0.002368451502889094,
+      "mean_min": -0.018623733755811146,
+      "mean_cvar": -0.011355169798462229,
+      "neg": 7,
+      "safe": 5,
+      "n": 5
+    },
+    "scenes": [
+      {
+        "scene": "flowers",
+        "psnr": 0.09068535884280687,
+        "ssim": 0.0040648498318412085,
+        "min": 0.025085114725499125,
+        "cvar": 0.02655331154705287,
+        "neg": 0,
+        "safe": true,
+        "gate": "source_heldout_knn"
+      },
+      {
+        "scene": "garden",
+        "psnr": 0.1409308747749085,
+        "ssim": 0.0019092063109079997,
+        "min": 0.004856132126725754,
+        "cvar": 0.027260804165733177,
+        "neg": 0,
+        "safe": true,
+        "gate": "off"
+      },
+      {
+        "scene": "bicycle",
+        "psnr": 0.11980156381277482,
+        "ssim": 0.0030164837837219237,
+        "min": -0.060029153144686376,
+        "cvar": -0.04755920221850296,
+        "neg": 2,
+        "safe": true,
+        "gate": "source_heldout_knn"
+      },
+      {
+        "scene": "treehill",
+        "psnr": 0.09967884204178172,
+        "ssim": 0.0016434755590226916,
+        "min": -0.04984594221641814,
+        "cvar": -0.04984594221641814,
+        "neg": 2,
+        "safe": true,
+        "gate": "source_heldout_risk_model"
+      },
+      {
+        "scene": "stump",
+        "psnr": 0.05702976139303506,
+        "ssim": 0.001208242028951645,
+        "min": -0.01318482027017609,
+        "cvar": -0.01318482027017609,
+        "neg": 3,
+        "safe": true,
+        "gate": "source_heldout_risk_model"
+      }
+    ]
+  },
+  "v319c": {
+    "aggregate": {
+      "mean_psnr": 0.10353930502850157,
+      "mean_ssim": 0.0023772784125323247,
+      "mean_min": -0.01793137014193178,
+      "mean_cvar": -0.010955994741293652,
+      "neg": 7,
+      "safe": 5,
+      "n": 5
+    },
+    "scenes": [
+      {
+        "scene": "flowers",
+        "psnr": 0.0923596316861136,
+        "ssim": 0.00411434065211903,
+        "min": 0.02777446740415357,
+        "cvar": 0.027897987886380093,
+        "neg": 0,
+        "safe": true,
+        "gate": "source_heldout_knn"
+      },
+      {
+        "scene": "garden",
+        "psnr": 0.14450491092673934,
+        "ssim": 0.0019102543592453003,
+        "min": 0.005628597517468137,
+        "cvar": 0.02791200311224884,
+        "neg": 0,
+        "safe": true,
+        "gate": "source_heldout_reliability"
+      },
+      {
+        "scene": "bicycle",
+        "psnr": 0.11995854884043254,
+        "ssim": 0.00298875093460083,
+        "min": -0.060029153144686376,
+        "cvar": -0.04755920221850296,
+        "neg": 2,
+        "safe": true,
+        "gate": "source_heldout_knn"
+      },
+      {
+        "scene": "treehill",
+        "psnr": 0.10384367229618736,
+        "ssim": 0.0016648040877448188,
+        "min": -0.04984594221641814,
+        "cvar": -0.04984594221641814,
+        "neg": 2,
+        "safe": true,
+        "gate": "source_heldout_reliability"
+      },
+      {
+        "scene": "stump",
+        "psnr": 0.05702976139303506,
+        "ssim": 0.001208242028951645,
+        "min": -0.01318482027017609,
+        "cvar": -0.01318482027017609,
+        "neg": 3,
+        "safe": true,
+        "gate": "source_heldout_risk_model"
+      }
+    ]
+  }
+}
