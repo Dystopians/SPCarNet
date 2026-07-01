@@ -2,6 +2,64 @@
 
 Date: 2026-06-28
 
+Latest evidence closure on 2026-07-01, v317:
+
+```text
+docs/car_model/7-01-v317-Perceptual-DISTS-Qualitative-Geometry-Closure.md
+docs/car_model/7-01-v317-Frontier-Geometry-Accounting.md
+docs/car_model/results/v317_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v317_frontier_geometry_accounting_summary.json
+docs/car_model/results/v317_frontier_panels/
+scripts/car_model/build_support_transport_frontier_comparison.py
+scripts/car_model/build_support_transport_geometry_accounting.py
+```
+
+Full9 local clean-MeshSplatting baseline comparison:
+
+- clean26000: PSNR `27.193643`, MAE `0.029112`, LPIPS `0.090207`, DISTS
+  `0.059902`;
+- v305: PSNR `27.578504`, MAE `0.028198`, LPIPS `0.087748`, DISTS
+  `0.057662`;
+- v315d: PSNR `27.582989`, MAE `0.028182`, LPIPS `0.087739`, DISTS
+  `0.057679`;
+- v316c: PSNR `27.580930`, MAE `0.028183`, LPIPS `0.087745`, DISTS
+  `0.057673`.
+
+Geometry result:
+
+- clean MeshSplatting triangles `91,019,714`;
+- current compact-parent triangles `84,219,015`;
+- total triangle reduction `7.471677%`;
+- total vertex reduction `3.871315%`;
+- topology errors `0` across all 9 scenes.
+
+Key reflection:
+
+> The reflection finally became operationally useful. It forced the work away
+> from parameter-scanning claims and into a fixed evidence package with fair
+> clean-baseline comparison, perceptual metrics, DISTS, qualitative panels,
+> geometry accounting, topology validity, exact commands, and W&B logs.
+
+But do not tell the next model that this is a finished top-conference result.
+The true state is:
+
+- v315d is the mean-quality frontier: best PSNR, MAE, and LPIPS;
+- v316c is the stricter source-tail acceptance frontier, but does not dominate
+  v315d on mean quality;
+- v305 is still fractionally best on DISTS, although all three current methods
+  beat clean on DISTS;
+- full-frame qualitative gains remain subtle, so the paper story should use
+  crops/error maps/complexity evidence instead of pretending there is a large
+  visible transformation.
+
+Next-stage instruction:
+
+> Stop asking for another broad parameter scan as the main route. Either build
+> a unified source-only selector that dominates v305/v315d/v316c, or make the
+> paper story explicitly about a quality-complexity Pareto improvement with
+> conservative tail-risk policy selection. Any new method must be judged against
+> the v317 evidence package, not against an older weak baseline.
+
 Latest method update on 2026-07-01, v316c:
 
 ```text

@@ -2,6 +2,54 @@
 
 Date: 2026-06-28
 
+## 2026-07-01 Topline: v317 Perceptual / DISTS / Geometry Evidence Closure
+
+Newest evidence package:
+
+```text
+scripts/car_model/build_support_transport_frontier_comparison.py
+scripts/car_model/build_support_transport_geometry_accounting.py
+docs/car_model/7-01-v317-Perceptual-DISTS-Qualitative-Geometry-Closure.md
+docs/car_model/7-01-v317-Frontier-Geometry-Accounting.md
+docs/car_model/results/v317_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v317_frontier_geometry_accounting_summary.json
+docs/car_model/results/v317_frontier_panels/
+outputs/carnet/spcarnet_v317_frontier_lpips_qualitative_20260701
+```
+
+Full9 local clean-MeshSplatting comparison now includes PSNR, MAE, LPIPS, DISTS,
+qualitative panels, geometry counts, topology validity, exact commands, and
+W&B offline logging.
+
+| method | PSNR | MAE | LPIPS | DISTS | dPSNR vs clean | dMAE vs clean | dLPIPS vs clean | dDISTS vs clean |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 | +0.000000 | +0.000000 | +0.000000 | +0.000000 |
+| v305 | 27.578504 | 0.028198 | 0.087748 | 0.057662 | +0.384861 | -0.000915 | -0.002459 | -0.002240 |
+| v315d | 27.582989 | 0.028182 | 0.087739 | 0.057679 | +0.389346 | -0.000930 | -0.002469 | -0.002223 |
+| v316c | 27.580930 | 0.028183 | 0.087745 | 0.057673 | +0.387287 | -0.000930 | -0.002463 | -0.002229 |
+
+Geometry/topology accounting:
+
+- clean MeshSplatting triangles: `91,019,714`;
+- current support-transport compact-parent triangles: `84,219,015`;
+- total triangle reduction: `7.471677%`;
+- total vertex reduction: `3.871315%`;
+- topology audit errors: `0` for all 9 scenes.
+
+Reflection verdict:
+
+The reflection has become useful because it forced a fairer evidence closure:
+the current method beats the local clean baseline on all tracked full9 quality
+metrics while also keeping a geometry reduction. It is still not enough to call
+the project complete, because v305/v315d/v316c form a small Pareto frontier and
+the qualitative visual gains remain subtle in many full-frame views.
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Topline: v316c Source-Tail Acceptance Fixed
 
 Current frontier split:

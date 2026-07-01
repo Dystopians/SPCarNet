@@ -1,4 +1,5 @@
 lpips
+piq
 plyfile
 mediapy
 opencv-python
