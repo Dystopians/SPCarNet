@@ -152,6 +152,8 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- k: `{knn.get('k')}`",
             f"- threshold mode: `{knn.get('threshold_mode')}`",
             f"- selected threshold: `{knn.get('selected_threshold')}`",
+            f"- local tail guard: `{knn.get('local_tail_guard', {}).get('enabled')}`",
+            f"- local tail k: `{knn.get('local_tail_guard', {}).get('k')}`",
             f"- min score delta vs scene: `{knn.get('min_score_delta_vs_scene')}`",
             f"- forbid fixed when scene non-fixed: `{knn.get('forbid_fixed_when_scene_nonfixed')}`",
             f"- reject variant: `{knn.get('reject_variant')}`",
@@ -162,6 +164,7 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- source min PSNR delta vs scene: `{knn.get('source_min_psnr_delta_vs_scene_selected')}`",
             f"- source positive-view delta vs scene: `{knn.get('source_positive_view_fraction_delta_vs_scene_selected')}`",
             f"- source selected counts: `{knn.get('source_selected_counts')}`",
+            f"- source local-tail reject count: `{knn.get('source_local_tail_reject_count')}`",
             f"- verdict: `{knn.get('verdict')}`",
         ]
     if payload.get("per_view_risk_model_policy"):
@@ -403,6 +406,112 @@ def _positive_view_fraction(summary: dict[str, Any]) -> float:
     return float(summary.get("positive_view_fraction", 0.0))
 
 
+def _knn_local_metric_summary(
+    entries_by_variant: dict[str, list[dict[str, Any]]],
+    variant: str,
+    vector: list[float],
+    *,
+    mean: list[float],
+    std: list[float],
+    k: int,
+    compute_ssim: bool,
+    exclude_view: str | None = None,
+) -> dict[str, Any]:
+    pool = [
+        entry
+        for entry in entries_by_variant.get(variant, [])
+        if exclude_view is None or str(entry["view"]) != str(exclude_view)
+    ]
+    if not pool:
+        return {"available": False, "variant": variant, "k": 0, "summary": {}, "neighbors": []}
+    ranked = sorted(
+        pool,
+        key=lambda entry: _normalized_distance(vector, entry["vector"], mean, std),
+    )
+    local_k = max(1, min(int(k), len(ranked)))
+    neighbors = ranked[:local_k]
+    rows = [entry["metrics"] for entry in neighbors]
+    summary = _summarize_metric_rows(rows, compute_ssim=compute_ssim)
+    return {
+        "available": True,
+        "variant": variant,
+        "k": local_k,
+        "summary": summary,
+        "neighbors": [
+            {
+                "view": str(entry["view"]),
+                "distance": float(_normalized_distance(vector, entry["vector"], mean, std)),
+                "score": float(entry["score"]),
+                "psnr_gain": float(entry["metrics"].get("psnr_gain", 0.0)),
+                "ssim_gain": float(entry["metrics"].get("ssim_gain", 0.0)) if compute_ssim else 0.0,
+            }
+            for entry in neighbors
+        ],
+    }
+
+
+def _knn_local_tail_guard_decision(
+    candidate_variant: str,
+    scene_variant: str,
+    local_summaries: dict[str, dict[str, Any]],
+    *,
+    compute_ssim: bool,
+    min_psnr_delta_vs_scene: float,
+    min_ssim_delta_vs_scene: float,
+    min_cvar_delta_vs_scene: float,
+    min_min_delta_vs_scene: float,
+    min_positive_fraction_delta_vs_scene: float,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "enabled": True,
+        "candidate_variant": candidate_variant,
+        "scene_variant": scene_variant,
+        "rejected": False,
+        "reason": "passed",
+        "deltas_vs_scene": {},
+        "candidate_local": local_summaries.get(candidate_variant),
+        "scene_local": local_summaries.get(scene_variant),
+    }
+    if candidate_variant in {"noop", "__scene__"}:
+        result["reason"] = "non_candidate"
+        return result
+    if candidate_variant == scene_variant:
+        result["reason"] = "candidate_is_scene"
+        return result
+    candidate_local = local_summaries.get(candidate_variant, {})
+    scene_local = local_summaries.get(scene_variant, {})
+    if not bool(candidate_local.get("available", False)) or not bool(scene_local.get("available", False)):
+        result["rejected"] = True
+        result["reason"] = "missing_local_source_neighbors"
+        return result
+    candidate_summary = candidate_local.get("summary", {})
+    scene_summary = scene_local.get("summary", {})
+    deltas = {
+        "psnr_gain": float(candidate_summary.get("psnr_gain", 0.0)) - float(scene_summary.get("psnr_gain", 0.0)),
+        "cvar_psnr_gain": _summary_psnr_tail(candidate_summary, "cvar") - _summary_psnr_tail(scene_summary, "cvar"),
+        "min_psnr_gain": _summary_psnr_tail(candidate_summary, "min") - _summary_psnr_tail(scene_summary, "min"),
+        "positive_view_fraction": _positive_view_fraction(candidate_summary) - _positive_view_fraction(scene_summary),
+    }
+    if compute_ssim:
+        deltas["ssim_gain"] = float(candidate_summary.get("ssim_gain", 0.0)) - float(scene_summary.get("ssim_gain", 0.0))
+    result["deltas_vs_scene"] = deltas
+    failures = []
+    if deltas["psnr_gain"] < float(min_psnr_delta_vs_scene):
+        failures.append("local_psnr")
+    if compute_ssim and deltas.get("ssim_gain", 0.0) < float(min_ssim_delta_vs_scene):
+        failures.append("local_ssim")
+    if deltas["cvar_psnr_gain"] < float(min_cvar_delta_vs_scene):
+        failures.append("local_cvar")
+    if deltas["min_psnr_gain"] < float(min_min_delta_vs_scene):
+        failures.append("local_min")
+    if deltas["positive_view_fraction"] < float(min_positive_fraction_delta_vs_scene):
+        failures.append("local_positive_fraction")
+    if failures:
+        result["rejected"] = True
+        result["reason"] = ",".join(failures)
+    return result
+
+
 def _fit_per_view_knn_policy(
     selector_payload: dict[str, Any] | None,
     *,
@@ -443,9 +552,17 @@ def _fit_per_view_knn_policy(
     fixed_summary = selector_payload["summaries"]["fixed"]
     selected_variant = str(selector_payload["selected_variant"])
     scene_selected_summary = selector_payload["summaries"][selected_variant]
+    local_tail_guard_enabled = bool(args.per_view_knn_enable_local_tail_guard)
+    local_tail_k = int(args.per_view_knn_local_tail_k)
+    if local_tail_k <= 0:
+        local_tail_k = int(args.per_view_knn_k)
 
     def predict(variant: str, vector: list[float], *, exclude_view: str | None = None) -> float:
-        pool = [entry for entry in entries_by_variant[variant] if exclude_view is None or entry["view"] != exclude_view]
+        pool = [
+            entry
+            for entry in entries_by_variant[variant]
+            if exclude_view is None or str(entry["view"]) != str(exclude_view)
+        ]
         if not pool:
             return float("-inf")
         ranked = sorted(
@@ -458,12 +575,21 @@ def _fit_per_view_knn_policy(
     source_decisions: list[dict[str, Any]] = []
     for row in selector_payload["per_view"]:
         predictions = {}
+        local_summaries = {}
         for variant in variants:
-            predictions[variant] = predict(
-                variant,
-                _feature_vector(row["candidates"][variant]["proxy"], feature_names),
-                exclude_view=row["view"],
-            )
+            vector = _feature_vector(row["candidates"][variant]["proxy"], feature_names)
+            predictions[variant] = predict(variant, vector, exclude_view=row["view"])
+            if local_tail_guard_enabled:
+                local_summaries[variant] = _knn_local_metric_summary(
+                    entries_by_variant,
+                    variant,
+                    vector,
+                    mean=mean,
+                    std=std,
+                    k=local_tail_k,
+                    compute_ssim=compute_ssim,
+                    exclude_view=row["view"],
+                )
         best_variant, best_score = max(predictions.items(), key=lambda item: item[1])
         source_decisions.append(
             {
@@ -471,14 +597,28 @@ def _fit_per_view_knn_policy(
                 "predictions": predictions,
                 "best_variant": best_variant,
                 "best_score": float(best_score),
+                "local_summaries": local_summaries,
                 "metrics": row["candidates"][best_variant]["metrics"],
                 "scene_metrics": row["candidates"][selected_variant]["metrics"],
             }
         )
 
-    def evaluate_threshold(threshold: float) -> tuple[dict[str, Any], dict[str, int], list[dict[str, float]]]:
+    local_tail_guard_payload = {
+        "enabled": local_tail_guard_enabled,
+        "k": local_tail_k,
+        "min_psnr_delta_vs_scene": float(args.per_view_knn_min_local_psnr_delta_vs_scene),
+        "min_ssim_delta_vs_scene": float(args.per_view_knn_min_local_ssim_delta_vs_scene),
+        "min_cvar_delta_vs_scene": float(args.per_view_knn_min_local_cvar_delta_vs_scene),
+        "min_min_delta_vs_scene": float(args.per_view_knn_min_local_min_delta_vs_scene),
+        "min_positive_fraction_delta_vs_scene": float(args.per_view_knn_min_local_positive_fraction_delta_vs_scene),
+    }
+
+    def evaluate_threshold(
+        threshold: float,
+    ) -> tuple[dict[str, Any], dict[str, int], list[dict[str, float]], dict[str, Any]]:
         source_policy_rows: list[dict[str, float]] = []
         selected_counts: dict[str, int] = {"fixed": 0, "learned": 0, "hybrid": 0, "noop": 0, "scene": 0}
+        local_tail_reject_views: list[dict[str, Any]] = []
         for decision in source_decisions:
             scene_score = float(decision["predictions"][selected_variant])
             low_absolute_score = float(decision["best_score"]) < float(threshold)
@@ -488,7 +628,33 @@ def _fit_per_view_knn_policy(
                 and selected_variant != "fixed"
                 and str(decision["best_variant"]) == "fixed"
             )
-            if low_absolute_score or low_scene_margin or fixed_downgrade:
+            local_tail_guard = (
+                _knn_local_tail_guard_decision(
+                    str(decision["best_variant"]),
+                    selected_variant,
+                    decision.get("local_summaries", {}),
+                    compute_ssim=compute_ssim,
+                    min_psnr_delta_vs_scene=float(args.per_view_knn_min_local_psnr_delta_vs_scene),
+                    min_ssim_delta_vs_scene=float(args.per_view_knn_min_local_ssim_delta_vs_scene),
+                    min_cvar_delta_vs_scene=float(args.per_view_knn_min_local_cvar_delta_vs_scene),
+                    min_min_delta_vs_scene=float(args.per_view_knn_min_local_min_delta_vs_scene),
+                    min_positive_fraction_delta_vs_scene=float(args.per_view_knn_min_local_positive_fraction_delta_vs_scene),
+                )
+                if local_tail_guard_enabled
+                else {"enabled": False, "rejected": False}
+            )
+            local_tail_rejected = bool(local_tail_guard.get("rejected", False))
+            if local_tail_rejected:
+                local_tail_reject_views.append(
+                    {
+                        "view": str(decision["view"]),
+                        "best_variant": str(decision["best_variant"]),
+                        "scene_variant": selected_variant,
+                        "reason": str(local_tail_guard.get("reason", "")),
+                        "deltas_vs_scene": dict(local_tail_guard.get("deltas_vs_scene", {})),
+                    }
+                )
+            if low_absolute_score or low_scene_margin or fixed_downgrade or local_tail_rejected:
                 if str(args.per_view_knn_reject_variant) == "scene":
                     selected_counts["scene"] += 1
                     source_policy_rows.append(decision["scene_metrics"])
@@ -498,7 +664,11 @@ def _fit_per_view_knn_policy(
             else:
                 selected_counts[str(decision["best_variant"])] += 1
                 source_policy_rows.append(decision["metrics"])
-        return _summarize_metric_rows(source_policy_rows, compute_ssim=compute_ssim), selected_counts, source_policy_rows
+        local_tail_audit = {
+            "reject_count": len(local_tail_reject_views),
+            "reject_views": local_tail_reject_views,
+        }
+        return _summarize_metric_rows(source_policy_rows, compute_ssim=compute_ssim), selected_counts, source_policy_rows, local_tail_audit
 
     threshold_trials: list[dict[str, Any]] = []
     selected_threshold = float(args.per_view_knn_min_predicted_score)
@@ -508,7 +678,7 @@ def _fit_per_view_knn_policy(
         if scores:
             scores = [min(scores) - 1.0e-9] + scores + [max(scores) + 1.0e-9]
         for threshold in scores:
-            source_summary, selected_counts, _ = evaluate_threshold(threshold)
+            source_summary, selected_counts, _, local_tail_audit = evaluate_threshold(threshold)
             reject_count = selected_counts["noop"] + selected_counts["scene"]
             accept_fraction = 1.0 - float(reject_count / max(len(source_decisions), 1))
             mean_delta = float(source_summary.get("psnr_gain", 0.0)) - float(scene_selected_summary.get("psnr_gain", 0.0))
@@ -541,6 +711,8 @@ def _fit_per_view_knn_policy(
                 "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta,
                 "source_safe_vs_fixed": bool(safe_vs_fixed),
                 "source_selected_counts": selected_counts,
+                "source_local_tail_reject_count": int(local_tail_audit["reject_count"]),
+                "source_local_tail_reject_views": local_tail_audit["reject_views"],
             }
             threshold_trials.append(trial)
             if accept_fraction < float(args.per_view_knn_min_accept_fraction):
@@ -573,12 +745,13 @@ def _fit_per_view_knn_policy(
                 "enabled": False,
                 "verdict": "no source-heldout KNN threshold cleared the configured tail-risk constraints",
                 "feature_names": feature_names,
+                "local_tail_guard": local_tail_guard_payload,
                 "threshold_mode": "source_tail_auto",
                 "threshold_trials": threshold_trials,
             }
         selected_threshold = float(best_trial["threshold"])
 
-    source_summary, selected_counts, _ = evaluate_threshold(selected_threshold)
+    source_summary, selected_counts, _, local_tail_audit = evaluate_threshold(selected_threshold)
     mean_delta = float(source_summary.get("psnr_gain", 0.0)) - float(scene_selected_summary.get("psnr_gain", 0.0))
     ssim_delta = (
         float(source_summary.get("ssim_gain", 0.0)) - float(scene_selected_summary.get("ssim_gain", 0.0))
@@ -596,46 +769,43 @@ def _fit_per_view_knn_policy(
             >= float(fixed_summary.get("ssim_gain", 0.0)) - float(args.selected_safe_tolerance_ssim)
         )
     )
+
+    def disabled_payload(verdict: str) -> dict[str, Any]:
+        return {
+            "enabled": False,
+            "verdict": verdict,
+            "feature_names": feature_names,
+            "reject_variant": str(args.per_view_knn_reject_variant),
+            "local_tail_guard": local_tail_guard_payload,
+            "source_summary": source_summary,
+            "source_fixed_summary": fixed_summary,
+            "source_scene_selected_summary": scene_selected_summary,
+            "source_mean_psnr_delta_vs_scene_selected": mean_delta,
+            "source_mean_ssim_delta_vs_scene_selected": ssim_delta,
+            "source_cvar_psnr_delta_vs_scene_selected": cvar_delta,
+            "source_min_psnr_delta_vs_scene_selected": min_delta,
+            "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta,
+            "source_safe_vs_fixed": bool(safe_vs_fixed),
+            "source_selected_counts": selected_counts,
+            "source_local_tail_reject_count": int(local_tail_audit["reject_count"]),
+            "source_local_tail_reject_views": local_tail_audit["reject_views"],
+            "threshold_mode": "source_tail_auto" if bool(args.per_view_knn_auto_threshold) else "fixed",
+            "selected_threshold": selected_threshold,
+            "threshold_trials": threshold_trials if bool(args.per_view_knn_auto_threshold) else [],
+        }
+
     if mean_delta < float(args.per_view_knn_min_source_psnr_delta):
-        return {
-            "enabled": False,
-            "verdict": "source-heldout KNN policy did not improve scene-selected PSNR enough",
-            "feature_names": feature_names,
-            "reject_variant": str(args.per_view_knn_reject_variant),
-            "source_summary": source_summary,
-            "source_fixed_summary": fixed_summary,
-            "source_scene_selected_summary": scene_selected_summary,
-            "source_mean_psnr_delta_vs_scene_selected": mean_delta,
-            "source_mean_ssim_delta_vs_scene_selected": ssim_delta,
-            "source_cvar_psnr_delta_vs_scene_selected": cvar_delta,
-            "source_min_psnr_delta_vs_scene_selected": min_delta,
-            "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta,
-            "source_safe_vs_fixed": bool(safe_vs_fixed),
-            "source_selected_counts": selected_counts,
-            "threshold_mode": "source_tail_auto" if bool(args.per_view_knn_auto_threshold) else "fixed",
-            "selected_threshold": selected_threshold,
-            "threshold_trials": threshold_trials if bool(args.per_view_knn_auto_threshold) else [],
-        }
+        return disabled_payload("source-heldout KNN policy did not improve scene-selected PSNR enough")
+    if compute_ssim and ssim_delta < float(args.per_view_knn_min_source_ssim_delta):
+        return disabled_payload("source-heldout KNN policy did not improve scene-selected SSIM enough")
+    if cvar_delta < float(args.per_view_knn_min_source_cvar_delta):
+        return disabled_payload("source-heldout KNN policy did not improve scene-selected CVaR PSNR enough")
+    if min_delta < float(args.per_view_knn_min_source_min_delta):
+        return disabled_payload("source-heldout KNN policy did not improve scene-selected min PSNR enough")
+    if positive_fraction_delta < float(args.per_view_knn_min_source_positive_fraction_delta):
+        return disabled_payload("source-heldout KNN policy did not improve scene-selected positive-view fraction enough")
     if bool(args.per_view_knn_require_source_safe) and not safe_vs_fixed:
-        return {
-            "enabled": False,
-            "verdict": "source-heldout KNN policy did not clear fixed safety gate",
-            "feature_names": feature_names,
-            "reject_variant": str(args.per_view_knn_reject_variant),
-            "source_summary": source_summary,
-            "source_fixed_summary": fixed_summary,
-            "source_scene_selected_summary": scene_selected_summary,
-            "source_selected_counts": selected_counts,
-            "source_mean_psnr_delta_vs_scene_selected": mean_delta,
-            "source_mean_ssim_delta_vs_scene_selected": ssim_delta,
-            "source_cvar_psnr_delta_vs_scene_selected": cvar_delta,
-            "source_min_psnr_delta_vs_scene_selected": min_delta,
-            "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta,
-            "source_safe_vs_fixed": bool(safe_vs_fixed),
-            "threshold_mode": "source_tail_auto" if bool(args.per_view_knn_auto_threshold) else "fixed",
-            "selected_threshold": selected_threshold,
-            "threshold_trials": threshold_trials if bool(args.per_view_knn_auto_threshold) else [],
-        }
+        return disabled_payload("source-heldout KNN policy did not clear fixed safety gate")
     return {
         "enabled": True,
         "verdict": "source-heldout KNN per-view policy selected",
@@ -647,6 +817,14 @@ def _fit_per_view_knn_policy(
         "min_score_delta_vs_scene": float(args.per_view_knn_min_score_delta_vs_scene),
         "forbid_fixed_when_scene_nonfixed": bool(args.per_view_knn_forbid_fixed_when_scene_nonfixed),
         "reject_variant": str(args.per_view_knn_reject_variant),
+        "local_tail_guard": local_tail_guard_payload,
+        "local_tail_guard_enabled": local_tail_guard_enabled,
+        "local_tail_k": local_tail_k,
+        "min_local_psnr_delta_vs_scene": float(args.per_view_knn_min_local_psnr_delta_vs_scene),
+        "min_local_ssim_delta_vs_scene": float(args.per_view_knn_min_local_ssim_delta_vs_scene),
+        "min_local_cvar_delta_vs_scene": float(args.per_view_knn_min_local_cvar_delta_vs_scene),
+        "min_local_min_delta_vs_scene": float(args.per_view_knn_min_local_min_delta_vs_scene),
+        "min_local_positive_fraction_delta_vs_scene": float(args.per_view_knn_min_local_positive_fraction_delta_vs_scene),
         "scene_selected_variant": selected_variant,
         "entries_by_variant": entries_by_variant,
         "source_summary": source_summary,
@@ -659,6 +837,8 @@ def _fit_per_view_knn_policy(
         "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta,
         "source_safe_vs_fixed": bool(safe_vs_fixed),
         "source_selected_counts": selected_counts,
+        "source_local_tail_reject_count": int(local_tail_audit["reject_count"]),
+        "source_local_tail_reject_views": local_tail_audit["reject_views"],
         "threshold_mode": "source_tail_auto" if bool(args.per_view_knn_auto_threshold) else "fixed",
         "selected_threshold": selected_threshold,
         "threshold_trials": threshold_trials if bool(args.per_view_knn_auto_threshold) else [],
@@ -670,13 +850,13 @@ def _knn_choose_variant(
     policy: dict[str, Any],
     *,
     compute_ssim: bool,
-) -> tuple[str, dict[str, float]]:
-    del compute_ssim
+) -> tuple[str, dict[str, float], dict[str, Any]]:
     variants = ["fixed", "learned", "hybrid"]
     feature_names = list(policy["feature_names"])
     mean = [float(x) for x in policy["feature_mean"]]
     std = [float(x) for x in policy["feature_std"]]
     predictions: dict[str, float] = {}
+    local_summaries: dict[str, dict[str, Any]] = {}
     for variant in variants:
         vector = _feature_vector(proxies_by_variant[variant], feature_names)
         pool = policy["entries_by_variant"][variant]
@@ -686,26 +866,63 @@ def _knn_choose_variant(
         )
         k = max(1, min(int(policy.get("k", 3)), len(ranked)))
         predictions[variant] = _mean([float(entry["score"]) for entry in ranked[:k]])
+        if bool(policy.get("local_tail_guard_enabled", False)):
+            local_summaries[variant] = _knn_local_metric_summary(
+                policy["entries_by_variant"],
+                variant,
+                vector,
+                mean=mean,
+                std=std,
+                k=int(policy.get("local_tail_k", policy.get("k", 3))),
+                compute_ssim=compute_ssim,
+            )
     best_variant, best_score = max(predictions.items(), key=lambda item: item[1])
-    if best_score < float(policy.get("min_predicted_score", 0.0)):
-        if str(policy.get("reject_variant", "noop")) == "scene":
-            return "__scene__", predictions
-        return "noop", predictions
     scene_variant = str(policy.get("scene_selected_variant", "fixed"))
     scene_score = float(predictions.get(scene_variant, float("-inf")))
-    if best_score < scene_score + float(policy.get("min_score_delta_vs_scene", 0.0)):
+    diagnostics: dict[str, Any] = {
+        "best_variant": best_variant,
+        "best_score": float(best_score),
+        "scene_variant": scene_variant,
+        "scene_score": scene_score,
+        "local_tail_guard": {"enabled": False, "rejected": False},
+        "local_summaries": local_summaries if bool(policy.get("local_tail_guard_enabled", False)) else {},
+        "reject_reason": None,
+    }
+    if bool(policy.get("local_tail_guard_enabled", False)):
+        diagnostics["local_tail_guard"] = _knn_local_tail_guard_decision(
+            best_variant,
+            scene_variant,
+            local_summaries,
+            compute_ssim=compute_ssim,
+            min_psnr_delta_vs_scene=float(policy.get("min_local_psnr_delta_vs_scene", -1.0e9)),
+            min_ssim_delta_vs_scene=float(policy.get("min_local_ssim_delta_vs_scene", -1.0e9)),
+            min_cvar_delta_vs_scene=float(policy.get("min_local_cvar_delta_vs_scene", -1.0e9)),
+            min_min_delta_vs_scene=float(policy.get("min_local_min_delta_vs_scene", -1.0e9)),
+            min_positive_fraction_delta_vs_scene=float(policy.get("min_local_positive_fraction_delta_vs_scene", -1.0e9)),
+        )
+
+    def reject() -> tuple[str, dict[str, float], dict[str, Any]]:
         if str(policy.get("reject_variant", "noop")) == "scene":
-            return "__scene__", predictions
-        return "noop", predictions
+            return "__scene__", predictions, diagnostics
+        return "noop", predictions, diagnostics
+
+    if best_score < float(policy.get("min_predicted_score", 0.0)):
+        diagnostics["reject_reason"] = "low_absolute_score"
+        return reject()
+    if best_score < scene_score + float(policy.get("min_score_delta_vs_scene", 0.0)):
+        diagnostics["reject_reason"] = "low_scene_margin"
+        return reject()
     if (
         bool(policy.get("forbid_fixed_when_scene_nonfixed", False))
         and scene_variant != "fixed"
         and best_variant == "fixed"
     ):
-        if str(policy.get("reject_variant", "noop")) == "scene":
-            return "__scene__", predictions
-        return "noop", predictions
-    return best_variant, predictions
+        diagnostics["reject_reason"] = "fixed_when_scene_nonfixed"
+        return reject()
+    if bool(diagnostics.get("local_tail_guard", {}).get("rejected", False)):
+        diagnostics["reject_reason"] = "local_tail_guard"
+        return reject()
+    return best_variant, predictions, diagnostics
 
 
 def _fit_per_view_risk_model_policy(
@@ -1355,6 +1572,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             selected_delta = deltas[selected_variant]
             selected_proxy = proxies_by_variant[selected_variant]
             knn_predictions: dict[str, float] | None = None
+            knn_diagnostics: dict[str, Any] | None = None
             risk_model_predictions: dict[str, list[float]] | None = None
             risk_model_diagnostics: dict[str, Any] | None = None
             gate_accepted = True
@@ -1392,7 +1610,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         risk_model_decision = "candidate"
                     gate_accepted = output_variant != "noop"
             elif bool(per_view_knn_payload.get("enabled", False)):
-                output_variant, knn_predictions = _knn_choose_variant(
+                output_variant, knn_predictions, knn_diagnostics = _knn_choose_variant(
                     proxies_by_variant,
                     per_view_knn_payload,
                     compute_ssim=bool(args.compute_ssim),
@@ -1461,6 +1679,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "selected_proxy": selected_proxy,
                     "per_view_gate_proxy": selected_proxy,
                     "per_view_knn_predictions": knn_predictions,
+                    "per_view_knn_diagnostics": knn_diagnostics,
                     "per_view_risk_model_predictions": risk_model_predictions,
                     "per_view_risk_model_diagnostics": risk_model_diagnostics,
                 }
@@ -1665,6 +1884,13 @@ def main() -> None:
     parser.add_argument("--per_view_knn_min_predicted_score", type=float, default=0.0)
     parser.add_argument("--per_view_knn_min_score_delta_vs_scene", type=float, default=0.0)
     parser.add_argument("--per_view_knn_forbid_fixed_when_scene_nonfixed", action="store_true")
+    parser.add_argument("--per_view_knn_enable_local_tail_guard", action="store_true")
+    parser.add_argument("--per_view_knn_local_tail_k", type=int, default=0)
+    parser.add_argument("--per_view_knn_min_local_psnr_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_knn_min_local_ssim_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_knn_min_local_cvar_delta_vs_scene", type=float, default=0.0)
+    parser.add_argument("--per_view_knn_min_local_min_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_knn_min_local_positive_fraction_delta_vs_scene", type=float, default=-1.0e9)
     parser.add_argument("--per_view_knn_auto_threshold", action="store_true")
     parser.add_argument("--per_view_knn_reject_variant", choices=["noop", "scene"], default="noop")
     parser.add_argument("--per_view_knn_min_accept_fraction", type=float, default=0.0)

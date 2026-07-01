@@ -2,6 +2,37 @@
 
 Date: 2026-06-28
 
+## 2026-07-01 Topline: v316c Source-Tail Acceptance Fixed
+
+Current frontier split:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v316c-SourceTailAcceptanceFixed-Log.md
+docs/car_model/results/v316c_source_tail_acceptance_fixed_multiscene_summary.json
+outputs/carnet/spcarnet_v316c_source_tail_acceptance_fixed_multiscene_20260701
+```
+
+v316c fixes a real KNN policy acceptance bug: fixed-threshold KNN now enforces
+the same source-heldout CVaR/min/positive-view gates as auto-threshold search.
+This makes the method more target-blind and tail-safe.
+
+Full9 result:
+
+| method | PSNR | SSIM | safe scene rate | positive-view fraction | mean min PSNR | mean CVaR PSNR | negative views |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| v305 | +0.266578 | +0.003701 | 1.00 | 0.954228 | +0.013917 | +0.082173 | 8 |
+| v315d | +0.269175 | +0.003718 | 1.00 | 0.954228 | +0.014301 | +0.082000 | 8 |
+| v316c | +0.268444 | +0.003710 | 1.00 | 0.954228 | +0.013917 | +0.082235 | 8 |
+
+Verdict:
+
+v316c is the tail-safe frontier: it beats v305 on PSNR, SSIM, and mean CVaR,
+and matches v305 on mean min PSNR and negative-view count. v315d remains the
+mean-quality frontier and still beats v316c on PSNR/SSIM. Do not present this
+as 100% paper closure; present it as a two-point frontier with an honest
+mean-vs-tail tradeoff.
+
 ## 2026-07-01 Topline: v315d Composite Tail Guard
 
 Current main method:

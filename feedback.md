@@ -2,6 +2,37 @@
 
 Date: 2026-06-28
 
+Latest method update on 2026-07-01, v316c:
+
+```text
+docs/car_model/7-01-v316c-SourceTailAcceptanceFixed-Log.md
+docs/car_model/results/v316c_source_tail_acceptance_fixed_multiscene_summary.json
+outputs/carnet/spcarnet_v316c_source_tail_acceptance_fixed_multiscene_20260701
+```
+
+Main lesson:
+
+v315d exposed a subtle but important protocol bug: fixed-threshold KNN was not
+enforcing the configured source-heldout CVaR/min/positive-view gates in final
+policy acceptance. v316c fixes this and uses a global source-tail eligibility
+rule. It is not per-scene tuning and it does not read target/test GT before
+selection.
+
+Full9 headline:
+
+- v316c: PSNR `+0.268444`, SSIM `+0.003710`, mean min PSNR `+0.013917`,
+  mean CVaR PSNR `+0.082235`, negative views `8`;
+- relative to v305: PSNR `+0.001866`, SSIM `+0.00000961`, mean CVaR
+  `+0.0000621`, mean min PSNR tie, negative views tie;
+- relative to v315d: mean CVaR improves by `+0.000235`, but PSNR drops by
+  `-0.000732` and SSIM drops by `-0.00000789`.
+
+Do not tell the next model that v316c is universally better than v315d. The
+correct state is a two-frontier result: v315d is the mean-quality frontier,
+v316c is the source-tail-safe frontier. The next model should either unify them
+with a better source-only selector or build a paper story around the
+mean-vs-tail Pareto frontier, plus perceptual/geometry/qualitative evidence.
+
 Latest method update on 2026-07-01, v315d:
 
 ```text
