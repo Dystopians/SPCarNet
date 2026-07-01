@@ -1,0 +1,429 @@
+{
+  "root": "outputs/carnet/spcarnet_v337_all_candidate_tnc_diag_focus6_20260701",
+  "scenes": [
+    {
+      "scene": "stump",
+      "report": "outputs/carnet/spcarnet_v337_all_candidate_tnc_diag_focus6_20260701/stump/support_transport_apply_report.json",
+      "summary": {
+        "fixed_psnr_gain": 0.05702976139303506,
+        "fixed_ssim_gain": 0.001208242028951645,
+        "learned_psnr_gain": 0.06240550678673129,
+        "learned_ssim_gain": 0.0008767247200012207,
+        "hybrid_psnr_gain": 0.062019967739911364,
+        "hybrid_ssim_gain": 0.001134432852268219,
+        "selected_psnr_gain": 0.05702976139303506,
+        "selected_ssim_gain": 0.001208242028951645,
+        "hybrid_minus_fixed_psnr_gain": 0.0049902063468763025,
+        "hybrid_minus_fixed_ssim_gain": -7.38091766834259e-05,
+        "selected_minus_fixed_psnr_gain": 0.0,
+        "selected_minus_fixed_ssim_gain": 0.0,
+        "hybrid_all_axis_vs_fixed": false,
+        "selected_all_axis_safe_vs_fixed": true,
+        "mean_covered_fraction": 0.9393598698079586,
+        "per_view_noop_fraction": 0.0,
+        "candidate_psnr_gains": {
+          "fixed": 0.05702976139303506,
+          "learned": 0.06240550678673129,
+          "hybrid": 0.062019967739911364,
+          "mix0250": 0.06010001319501135,
+          "mix0750": 0.06278834288415114
+        },
+        "candidate_ssim_gains": {
+          "fixed": 0.001208242028951645,
+          "learned": 0.0008767247200012207,
+          "hybrid": 0.001134432852268219,
+          "mix0250": 0.0011944696307182312,
+          "mix0750": 0.001028411090373993
+        }
+      },
+      "diagnostic": {
+        "enabled": true,
+        "view_count": 16,
+        "available_view_count": 16,
+        "target_neighbor_matches_strict_oracle_count": 8,
+        "target_neighbor_matches_strict_oracle_fraction": 0.5,
+        "mean_strict_oracle_target_neighbor_rank": 2.625,
+        "mean_output_target_neighbor_rank": 2.125,
+        "mean_strict_oracle_minus_output_psnr_gain": 0.02185828512044119,
+        "mean_strict_oracle_minus_output_ssim_gain": 9.733811020851135e-05,
+        "mean_target_neighbor_best_minus_output_psnr_gain": 0.0015580005496191873,
+        "mean_target_neighbor_best_minus_output_ssim_gain": -2.4907290935516357e-05,
+        "target_neighbor_best_variant_counts": {
+          "fixed": 11,
+          "hybrid": 3,
+          "learned": 2
+        },
+        "strict_oracle_variant_counts": {
+          "fixed": 9,
+          "learned": 5,
+          "mix0750": 2
+        },
+        "output_variant_counts": {
+          "fixed": 16
+        },
+        "score_uses_target_gt": false,
+        "oracle_uses_target_gt_posthoc": true,
+        "affects_selection": false
+      }
+    },
+    {
+      "scene": "treehill",
+      "report": "outputs/carnet/spcarnet_v337_all_candidate_tnc_diag_focus6_20260701/treehill/support_transport_apply_report.json",
+      "summary": {
+        "fixed_psnr_gain": 0.09075745623850276,
+        "fixed_ssim_gain": 0.0015932122866312663,
+        "learned_psnr_gain": 0.12031289335964404,
+        "learned_ssim_gain": 0.001588390933142768,
+        "hybrid_psnr_gain": 0.10709009243203561,
+        "hybrid_ssim_gain": 0.0016907321082221137,
+        "selected_psnr_gain": 0.1181213825083878,
+        "selected_ssim_gain": 0.0017174349890814887,
+        "hybrid_minus_fixed_psnr_gain": 0.016332636193532854,
+        "hybrid_minus_fixed_ssim_gain": 9.751982159084734e-05,
+        "selected_minus_fixed_psnr_gain": 0.02736392626988504,
+        "selected_minus_fixed_ssim_gain": 0.00012422270245022234,
+        "hybrid_all_axis_vs_fixed": true,
+        "selected_all_axis_safe_vs_fixed": true,
+        "mean_covered_fraction": 0.8743352890014648,
+        "per_view_noop_fraction": 0.0,
+        "candidate_psnr_gains": {
+          "fixed": 0.09075745623850276,
+          "learned": 0.12031289335964404,
+          "hybrid": 0.10709009243203561,
+          "mix0250": 0.09930943992351596,
+          "mix0750": 0.114093441318005
+        },
+        "candidate_ssim_gains": {
+          "fixed": 0.0015932122866312663,
+          "learned": 0.001588390933142768,
+          "hybrid": 0.0016907321082221137,
+          "mix0250": 0.0016670260164472791,
+          "mix0750": 0.0016642842027876112
+        }
+      },
+      "diagnostic": {
+        "enabled": true,
+        "view_count": 18,
+        "available_view_count": 18,
+        "target_neighbor_matches_strict_oracle_count": 11,
+        "target_neighbor_matches_strict_oracle_fraction": 0.6111111111111112,
+        "mean_strict_oracle_target_neighbor_rank": 2.388888888888889,
+        "mean_output_target_neighbor_rank": 1.8888888888888888,
+        "mean_strict_oracle_minus_output_psnr_gain": 0.01523401379359631,
+        "mean_strict_oracle_minus_output_ssim_gain": 0.00011191434330410427,
+        "mean_target_neighbor_best_minus_output_psnr_gain": -0.005465829862460975,
+        "mean_target_neighbor_best_minus_output_ssim_gain": -6.653202904595269e-05,
+        "target_neighbor_best_variant_counts": {
+          "fixed": 9,
+          "learned": 8,
+          "mix0250": 1
+        },
+        "strict_oracle_variant_counts": {
+          "fixed": 4,
+          "hybrid": 1,
+          "learned": 12,
+          "mix0250": 1
+        },
+        "output_variant_counts": {
+          "fixed": 6,
+          "learned": 8,
+          "mix0250": 4
+        },
+        "score_uses_target_gt": false,
+        "oracle_uses_target_gt_posthoc": true,
+        "affects_selection": false
+      }
+    },
+    {
+      "scene": "room",
+      "report": "outputs/carnet/spcarnet_v337_all_candidate_tnc_diag_focus6_20260701/room/support_transport_apply_report.json",
+      "summary": {
+        "fixed_psnr_gain": 0.39369127175138374,
+        "fixed_ssim_gain": 0.004668333591558995,
+        "learned_psnr_gain": 0.43979794049711474,
+        "learned_ssim_gain": 0.0051460495361915,
+        "hybrid_psnr_gain": 0.42183782192548464,
+        "hybrid_ssim_gain": 0.004989705024621425,
+        "selected_psnr_gain": 0.4426811270759636,
+        "selected_ssim_gain": 0.005089075137407352,
+        "hybrid_minus_fixed_psnr_gain": 0.028146550174100893,
+        "hybrid_minus_fixed_ssim_gain": 0.0003213714330624305,
+        "selected_minus_fixed_psnr_gain": 0.048989855324579834,
+        "selected_minus_fixed_ssim_gain": 0.0004207415458483575,
+        "hybrid_all_axis_vs_fixed": true,
+        "selected_all_axis_safe_vs_fixed": true,
+        "mean_covered_fraction": 0.9426764922264295,
+        "per_view_noop_fraction": 0.0,
+        "candidate_psnr_gains": {
+          "fixed": 0.39369127175138374,
+          "learned": 0.43979794049711474,
+          "hybrid": 0.42183782192548464,
+          "mix0250": 0.40902484479099205,
+          "mix0750": 0.43210275110795254,
+          "adaptive": 0.42652872601151925
+        },
+        "candidate_ssim_gains": {
+          "fixed": 0.004668333591558995,
+          "learned": 0.0051460495361915,
+          "hybrid": 0.004989705024621425,
+          "mix0250": 0.004849777771876409,
+          "mix0750": 0.005088372108263847,
+          "adaptive": 0.0049589581978626745
+        }
+      },
+      "diagnostic": {
+        "enabled": true,
+        "view_count": 39,
+        "available_view_count": 39,
+        "target_neighbor_matches_strict_oracle_count": 1,
+        "target_neighbor_matches_strict_oracle_fraction": 0.02564102564102564,
+        "mean_strict_oracle_target_neighbor_rank": 4.948717948717949,
+        "mean_output_target_neighbor_rank": 4.435897435897436,
+        "mean_strict_oracle_minus_output_psnr_gain": 0.011576829778906545,
+        "mean_strict_oracle_minus_output_ssim_gain": 0.00011915426987868089,
+        "mean_target_neighbor_best_minus_output_psnr_gain": -0.045652079577711224,
+        "mean_target_neighbor_best_minus_output_ssim_gain": -0.00040393762099437224,
+        "target_neighbor_best_variant_counts": {
+          "adaptive": 1,
+          "fixed": 31,
+          "hybrid": 1,
+          "learned": 4,
+          "mix0750": 2
+        },
+        "strict_oracle_variant_counts": {
+          "adaptive": 14,
+          "hybrid": 2,
+          "learned": 21,
+          "mix0750": 2
+        },
+        "output_variant_counts": {
+          "adaptive": 14,
+          "hybrid": 11,
+          "learned": 14
+        },
+        "score_uses_target_gt": false,
+        "oracle_uses_target_gt_posthoc": true,
+        "affects_selection": false
+      }
+    },
+    {
+      "scene": "bicycle",
+      "report": "outputs/carnet/spcarnet_v337_all_candidate_tnc_diag_focus6_20260701/bicycle/support_transport_apply_report.json",
+      "summary": {
+        "fixed_psnr_gain": 0.09834530782944569,
+        "fixed_ssim_gain": 0.0028195738792419433,
+        "learned_psnr_gain": 0.12032849879064286,
+        "learned_ssim_gain": 0.002834932804107666,
+        "hybrid_psnr_gain": 0.11208827481638309,
+        "hybrid_ssim_gain": 0.002952544689178467,
+        "selected_psnr_gain": 0.11995854884043254,
+        "selected_ssim_gain": 0.00298875093460083,
+        "hybrid_minus_fixed_psnr_gain": 0.013742966986937402,
+        "hybrid_minus_fixed_ssim_gain": 0.00013297080993652372,
+        "selected_minus_fixed_psnr_gain": 0.021613241010986856,
+        "selected_minus_fixed_ssim_gain": 0.0001691770553588867,
+        "hybrid_all_axis_vs_fixed": true,
+        "selected_all_axis_safe_vs_fixed": true,
+        "mean_covered_fraction": 0.9386110186576844,
+        "per_view_noop_fraction": 0.0,
+        "candidate_psnr_gains": {
+          "fixed": 0.09834530782944569,
+          "learned": 0.12032849879064286,
+          "hybrid": 0.11208827481638309,
+          "mix0250": 0.10590204762664414,
+          "mix0750": 0.11689823673379124
+        },
+        "candidate_ssim_gains": {
+          "fixed": 0.0028195738792419433,
+          "learned": 0.002834932804107666,
+          "hybrid": 0.002952544689178467,
+          "mix0250": 0.002917327880859375,
+          "mix0750": 0.0029250693321228025
+        }
+      },
+      "diagnostic": {
+        "enabled": true,
+        "view_count": 25,
+        "available_view_count": 25,
+        "target_neighbor_matches_strict_oracle_count": 7,
+        "target_neighbor_matches_strict_oracle_fraction": 0.28,
+        "mean_strict_oracle_target_neighbor_rank": 3.08,
+        "mean_output_target_neighbor_rank": 3.24,
+        "mean_strict_oracle_minus_output_psnr_gain": 0.01034350298512237,
+        "mean_strict_oracle_minus_output_ssim_gain": 0.0001282358169555664,
+        "mean_target_neighbor_best_minus_output_psnr_gain": -0.01702561454178678,
+        "mean_target_neighbor_best_minus_output_ssim_gain": -0.00023369550704956056,
+        "target_neighbor_best_variant_counts": {
+          "fixed": 16,
+          "learned": 7,
+          "mix0250": 1,
+          "mix0750": 1
+        },
+        "strict_oracle_variant_counts": {
+          "fixed": 7,
+          "hybrid": 7,
+          "learned": 9,
+          "mix0250": 1,
+          "mix0750": 1
+        },
+        "output_variant_counts": {
+          "hybrid": 20,
+          "learned": 5
+        },
+        "score_uses_target_gt": false,
+        "oracle_uses_target_gt_posthoc": true,
+        "affects_selection": false
+      }
+    },
+    {
+      "scene": "bonsai",
+      "report": "outputs/carnet/spcarnet_v337_all_candidate_tnc_diag_focus6_20260701/bonsai/support_transport_apply_report.json",
+      "summary": {
+        "fixed_psnr_gain": 0.4863971501099032,
+        "fixed_ssim_gain": 0.005299505349752065,
+        "learned_psnr_gain": 0.5677124421175066,
+        "learned_ssim_gain": 0.005785043175156052,
+        "hybrid_psnr_gain": 0.5313874915060735,
+        "hybrid_ssim_gain": 0.005616486072540283,
+        "selected_psnr_gain": 0.5759744422762492,
+        "selected_ssim_gain": 0.005847958294120994,
+        "hybrid_minus_fixed_psnr_gain": 0.04499034139617025,
+        "hybrid_minus_fixed_ssim_gain": 0.00031698072278821786,
+        "selected_minus_fixed_psnr_gain": 0.08957729216634597,
+        "selected_minus_fixed_ssim_gain": 0.000548452944368929,
+        "hybrid_all_axis_vs_fixed": true,
+        "selected_all_axis_safe_vs_fixed": true,
+        "mean_covered_fraction": 0.9798638530679651,
+        "per_view_noop_fraction": 0.0,
+        "candidate_psnr_gains": {
+          "fixed": 0.4863971501099032,
+          "learned": 0.5677124421175066,
+          "hybrid": 0.5313874915060735,
+          "mix0250": 0.5099592620212438,
+          "mix0750": 0.5506491988846892
+        },
+        "candidate_ssim_gains": {
+          "fixed": 0.005299505349752065,
+          "learned": 0.005785043175156052,
+          "hybrid": 0.005616486072540283,
+          "mix0250": 0.005476660019642598,
+          "mix0750": 0.005719254145751128
+        }
+      },
+      "diagnostic": {
+        "enabled": true,
+        "view_count": 37,
+        "available_view_count": 37,
+        "target_neighbor_matches_strict_oracle_count": 6,
+        "target_neighbor_matches_strict_oracle_fraction": 0.16216216216216217,
+        "mean_strict_oracle_target_neighbor_rank": 4.1891891891891895,
+        "mean_output_target_neighbor_rank": 4.216216216216216,
+        "mean_strict_oracle_minus_output_psnr_gain": 0.007299128751154709,
+        "mean_strict_oracle_minus_output_ssim_gain": 7.095208039154877e-05,
+        "mean_target_neighbor_best_minus_output_psnr_gain": -0.09299496964739061,
+        "mean_target_neighbor_best_minus_output_ssim_gain": -0.000594673929987727,
+        "target_neighbor_best_variant_counts": {
+          "fixed": 28,
+          "hybrid": 2,
+          "learned": 5,
+          "mix0250": 1,
+          "mix0750": 1
+        },
+        "strict_oracle_variant_counts": {
+          "fixed": 5,
+          "hybrid": 1,
+          "learned": 30,
+          "mix0750": 1
+        },
+        "output_variant_counts": {
+          "fixed": 3,
+          "hybrid": 1,
+          "learned": 33
+        },
+        "score_uses_target_gt": false,
+        "oracle_uses_target_gt_posthoc": true,
+        "affects_selection": false
+      }
+    },
+    {
+      "scene": "kitchen",
+      "report": "outputs/carnet/spcarnet_v337_all_candidate_tnc_diag_focus6_20260701/kitchen/support_transport_apply_report.json",
+      "summary": {
+        "fixed_psnr_gain": 0.39306139938107726,
+        "fixed_ssim_gain": 0.0034032719475882395,
+        "learned_psnr_gain": 0.4936231605325725,
+        "learned_ssim_gain": 0.003910861696515764,
+        "hybrid_psnr_gain": 0.4465212053717037,
+        "hybrid_ssim_gain": 0.0037016255514962333,
+        "selected_psnr_gain": 0.4936231605325725,
+        "selected_ssim_gain": 0.003910861696515764,
+        "hybrid_minus_fixed_psnr_gain": 0.05345980599062644,
+        "hybrid_minus_fixed_ssim_gain": 0.0002983536039079938,
+        "selected_minus_fixed_psnr_gain": 0.10056176115149523,
+        "selected_minus_fixed_ssim_gain": 0.0005075897489275247,
+        "hybrid_all_axis_vs_fixed": true,
+        "selected_all_axis_safe_vs_fixed": true,
+        "mean_covered_fraction": 0.9887362837791442,
+        "per_view_noop_fraction": 0.0,
+        "candidate_psnr_gains": {
+          "fixed": 0.39306139938107726,
+          "learned": 0.4936231605325725,
+          "hybrid": 0.4465212053717037,
+          "mix0250": 0.4205672554792259,
+          "mix0750": 0.4708856464896016
+        },
+        "candidate_ssim_gains": {
+          "fixed": 0.0034032719475882395,
+          "learned": 0.003910861696515764,
+          "hybrid": 0.0037016255514962333,
+          "mix0250": 0.0035636067390441895,
+          "mix0750": 0.003817449297223772
+        }
+      },
+      "diagnostic": {
+        "enabled": true,
+        "view_count": 35,
+        "available_view_count": 35,
+        "target_neighbor_matches_strict_oracle_count": 4,
+        "target_neighbor_matches_strict_oracle_fraction": 0.11428571428571428,
+        "mean_strict_oracle_target_neighbor_rank": 4.3428571428571425,
+        "mean_output_target_neighbor_rank": 4.228571428571429,
+        "mean_strict_oracle_minus_output_psnr_gain": 0.002224071021842024,
+        "mean_strict_oracle_minus_output_ssim_gain": 2.2389207567487444e-05,
+        "mean_target_neighbor_best_minus_output_psnr_gain": -0.08702821698090497,
+        "mean_target_neighbor_best_minus_output_ssim_gain": -0.00046265976769583564,
+        "target_neighbor_best_variant_counts": {
+          "fixed": 26,
+          "hybrid": 1,
+          "learned": 6,
+          "mix0250": 1,
+          "mix0750": 1
+        },
+        "strict_oracle_variant_counts": {
+          "fixed": 1,
+          "learned": 32,
+          "mix0750": 2
+        },
+        "output_variant_counts": {
+          "learned": 35
+        },
+        "score_uses_target_gt": false,
+        "oracle_uses_target_gt_posthoc": true,
+        "affects_selection": false
+      }
+    }
+  ],
+  "macro": {
+    "scene_count": 6,
+    "view_count": 170,
+    "available_view_count": 170,
+    "target_neighbor_matches_strict_oracle_count": 37,
+    "target_neighbor_matches_strict_oracle_fraction": 0.21764705882352942,
+    "mean_strict_oracle_minus_output_psnr_gain": 0.009893758798672955,
+    "mean_strict_oracle_minus_output_ssim_gain": 8.725664194892435e-05,
+    "mean_target_neighbor_best_minus_output_psnr_gain": -0.05156664627700543,
+    "mean_target_neighbor_best_minus_output_ssim_gain": -0.00036110632559832405,
+    "mean_strict_oracle_target_neighbor_rank": 3.8941176470588235,
+    "mean_output_target_neighbor_rank": 3.6823529411764704
+  }
+}

@@ -98,8 +98,13 @@ New diagnostic implementation:
 scripts/car_model/apply_source_heldout_support_transport_calibrator.py
 scripts/car_model/analyze_support_transport_oracle_gap.py
 docs/car_model/7-01-v337-AllCandidateTNCDiagnostic-Log.md
+docs/car_model/results/v337_all_candidate_tnc_diag_focus6_oracle_gap.json
+docs/car_model/results/v337_all_candidate_tnc_diag_focus6_oracle_gap.md
+docs/car_model/results/v337_all_candidate_tnc_diag_focus6_tnc_rank_summary.json
+docs/car_model/results/v337_all_candidate_tnc_diag_focus6_tnc_rank_summary.md
 outputs/carnet/spcarnet_v337_all_candidate_tnc_diag_smoke_room_20260701
 outputs/carnet/spcarnet_v337_all_candidate_tnc_diag_smoke3_room_20260701
+outputs/carnet/spcarnet_v337_all_candidate_tnc_diag_focus6_20260701
 ```
 
 The apply pipeline now has an opt-in
@@ -113,6 +118,28 @@ directly: TNC best matched strict oracle on `0/3` views and had mean
 `-0.042101944759` PSNR gain versus the selected output. This supports the
 current claim boundary: target-neighbor consistency is useful as a certificate
 and feature, not as a standalone selector.
+
+Focus6 replay on `stump, treehill, room, bicycle, bonsai, kitchen` makes this
+negative result much stronger. Across `170` views, pure TNC best matches the
+strict oracle on only `37/170` views (`0.217647`) and its best-ranked candidate
+is worse than the selected output by `-0.051566646277` PSNR gain on average.
+The same reports still contain meaningful PSNR-primary oracle headroom:
+selected mean `0.301231404`, oracle mean `0.313737956`, mean headroom
+`+0.012506552` over `63` positive views.
+
+| scene | match frac | oracle-output PSNR | TNC-best-output PSNR |
+|---|---:|---:|---:|
+| stump | 0.500000 | +0.021858285120 | +0.001558000550 |
+| treehill | 0.611111 | +0.015234013794 | -0.005465829862 |
+| room | 0.025641 | +0.011576829779 | -0.045652079578 |
+| bicycle | 0.280000 | +0.010343502985 | -0.017025614542 |
+| bonsai | 0.162162 | +0.007299128751 | -0.092994969647 |
+| kitchen | 0.114286 | +0.002224071022 | -0.087028216981 |
+
+Resulting decision: v337 is an observability milestone, not a promoted method.
+The next real method should combine TNC with source-heldout evidence,
+support-dropout stability, and conservative hard-control safeguards instead of
+using target-neighbor MAE as the selector.
 
 ## 2026-07-01 Follow-up: v335 Target-Neighbor Candidate Unlock
 
