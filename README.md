@@ -4,30 +4,36 @@
 
 ## Latest Status (2026-07-01)
 
-The newest verified milestone is **v335 target-neighbor candidate unlock**. It
-keeps the v334 rollback/source-target contradiction stack, then adds a narrow
-opt-in target-blind unlock: after rollback, a `fixed` output may reopen to
-`learned` only when the learned candidate is more target-neighbor consistent by
-a frozen `0.0002` MAE margin. Full9 replay improves over v334 by
-`+0.001224887209` mean selected PSNR gain and `+0.000002593170` mean selected
-SSIM gain, while preserving `9 / 9` all-axis-safe scenes.
+The newest verified milestone is **v336c adaptive residual with source-summary
+admission**. It adds a real generated candidate, `adaptive`, that blends fixed
+source evidence and learned residuals per pixel using confidence, support count,
+residual stability, and fixed/learned alignment. v336b showed that injecting a
+generated candidate directly into the policy pool can improve room while
+regressing garden; v336c fixes that by filtering generated candidates before
+policy fitting unless their source-heldout scene summary is safe versus the
+scene incumbent. Target/test GT is not used at decision time.
+
+Full9 replay improves over v335 by `+0.000599514552` mean selected PSNR gain and
+`+0.000003450447` mean selected SSIM gain, with `9 / 9` all-axis-safe scenes and
+`9 / 9` nonnegative PSNR/SSIM scenes versus v335. Frontier metrics are
+`27.590966` PSNR, `0.028167` MAE, `0.087738` LPIPS, and `0.057667` DISTS;
+local clean26000 is `27.193643 / 0.029112 / 0.090207 / 0.059902`.
 
 Start from:
 
 - [Latest full evaluation log](docs/Latest.md)
-- [v335 target-neighbor candidate unlock log](docs/car_model/7-01-v335-TargetNeighborCandidateUnlock.md)
-- [v335 full9 audit vs v334/v333/v329b](docs/car_model/results/v335_target_neighbor_candidate_unlock_full9_vs_v334_v333_v329b_audit.md)
-- [v335 target-neighbor rerank probe](docs/car_model/results/v335_target_neighbor_candidate_rerank_probe.md)
-- [v335 frontier LPIPS/DISTS summary](docs/car_model/results/v335_frontier_lpips_qualitative_summary.md)
-- [v335 qualitative treehill unlock panel](docs/car_model/results/v335_frontier_panels/treehill_00000_00010_v334_v335_gt_panel.png)
+- [v336c adaptive residual source-summary gate log](docs/car_model/7-01-v336c-AdaptiveResidual-SourceSummaryGate.md)
+- [v336c full9 audit vs v335/v336b](docs/car_model/results/v336c_source_summary_gate_full9_vs_v335_v336b_audit.md)
+- [v336c frontier LPIPS/DISTS summary](docs/car_model/results/v336c_frontier_lpips_qualitative_summary.md)
+- [v336c room qualitative panel](docs/car_model/results/v336c_frontier_panels/room/00009_frontier_panel.png)
 - [next-model feedback and lessons](feedback.md)
 
-Honest status: v335 is a real method/evidence milestone, not final paper-level
-closure. It is stronger than v334/v333/v329b on full9 PSNR/SSIM gain and remains
-well above the local clean26000 frontier. However, the new gain is concentrated
-in `treehill`, the visual difference is subtle, and LPIPS/DISTS are slightly
-worse than v334/v329b. The next step should improve raw candidate generation or
-representation capacity rather than only stacking arbitration rules.
+Honest status: v336c is a real method/evidence milestone, not final paper-level
+closure. It is stronger than v335 on full9 PSNR/SSIM and remains clearly above
+the local clean26000 frontier across PSNR/MAE/LPIPS/DISTS. However, the admitted
+adaptive gain is mostly `room`-local and the visual difference is still subtle.
+The next step should improve raw candidate generation or representation capacity
+rather than only stacking arbitration rules.
 
 ## Current Report Package (2026-06-26)
 

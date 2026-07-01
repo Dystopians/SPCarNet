@@ -356,11 +356,60 @@ def _candidate_variant_blend_map(args: argparse.Namespace) -> dict[str, float]:
 
 
 def _candidate_variant_names(args: argparse.Namespace) -> list[str]:
-    return list(_candidate_variant_blend_map(args).keys())
+    names = list(_candidate_variant_blend_map(args).keys())
+    generated = _generated_candidate_names(args)
+    for name in generated:
+        if name in names:
+            raise ValueError(f"generated candidate name collides with scalar blend candidate: {name}")
+        names.append(name)
+    return names
+
+
+def _generated_candidate_names(args: argparse.Namespace) -> list[str]:
+    names: list[str] = []
+    if bool(getattr(args, "enable_adaptive_residual_candidate", False)):
+        name = str(getattr(args, "adaptive_residual_candidate_name", "adaptive")).strip() or "adaptive"
+        names.append(name)
+    if bool(getattr(args, "enable_target_neighbor_generated_candidate", False)):
+        name = str(getattr(args, "target_neighbor_generated_candidate_name", "tnc_gen")).strip() or "tnc_gen"
+        if name in names:
+            raise ValueError(f"duplicate generated candidate name: {name}")
+        names.append(name)
+    return names
 
 
 def _candidate_count_dict(variants: list[str]) -> dict[str, int]:
     return {variant: 0 for variant in variants} | {"noop": 0, "scene": 0}
+
+
+def _filter_selector_payload_candidates(
+    selector_payload: dict[str, Any] | None,
+    *,
+    remove_variants: set[str],
+) -> dict[str, Any] | None:
+    if selector_payload is None or not remove_variants:
+        return selector_payload
+    payload = dict(selector_payload)
+    payload["candidate_variants"] = [
+        variant for variant in list(payload.get("candidate_variants", [])) if str(variant) not in remove_variants
+    ]
+    payload["summaries"] = {
+        str(variant): value
+        for variant, value in dict(payload.get("summaries", {})).items()
+        if str(variant) not in remove_variants
+    }
+    filtered_per_view = []
+    for row in list(payload.get("per_view", [])):
+        item = dict(row)
+        item["candidates"] = {
+            str(variant): value
+            for variant, value in dict(row.get("candidates", {})).items()
+            if str(variant) not in remove_variants
+        }
+        filtered_per_view.append(item)
+    payload["per_view"] = filtered_per_view
+    payload["filtered_generated_candidates"] = sorted(remove_variants)
+    return payload
 
 
 def _candidate_deltas(ev: Any, pred_delta: torch.Tensor, args: argparse.Namespace) -> dict[str, torch.Tensor]:
@@ -370,7 +419,252 @@ def _candidate_deltas(ev: Any, pred_delta: torch.Tensor, args: argparse.Namespac
     deltas = {"fixed": fixed_delta, "learned": learned_delta, "hybrid": hybrid_delta}
     for value in _candidate_ladder_blends(args):
         deltas[_variant_name_for_blend(value)] = (1.0 - float(value)) * fixed_delta + float(value) * learned_delta
+    if bool(getattr(args, "enable_adaptive_residual_candidate", False)):
+        name = str(getattr(args, "adaptive_residual_candidate_name", "adaptive")).strip() or "adaptive"
+        deltas[name] = _adaptive_residual_candidate_delta(ev, fixed_delta, learned_delta, args)
     return deltas
+
+
+def _adaptive_residual_candidate_delta(
+    ev: Any,
+    fixed_delta: torch.Tensor,
+    learned_delta: torch.Tensor,
+    args: argparse.Namespace,
+) -> torch.Tensor:
+    device = learned_delta.device
+    eps = 1.0e-6
+    signal = ev.signal.to(device=device, dtype=torch.float32)
+    confidence = ev.confidence.to(device=device, dtype=torch.float32)
+    support_count = (
+        ev.support_count.to(device=device, dtype=torch.float32)
+        if getattr(ev, "support_count", None) is not None
+        else (ev.valid.to(device=device, dtype=torch.float32) * float(max(1, int(getattr(args, "k", 1)))))
+    )
+    residual_std = (
+        ev.residual_std.to(device=device, dtype=torch.float32)
+        if getattr(ev, "residual_std", None) is not None
+        else torch.zeros_like(confidence)
+    )
+    valid = ev.valid.to(device=device, dtype=torch.float32)
+
+    signal_mag = torch.mean(torch.abs(signal), dim=0, keepdim=True)
+    stability = signal_mag / (
+        signal_mag + float(getattr(args, "adaptive_residual_std_scale", 2.0)) * residual_std + eps
+    )
+    support = torch.clamp(support_count / max(float(getattr(args, "k", 1)), 1.0), 0.0, 1.0)
+    confidence_norm = float(getattr(args, "adaptive_residual_confidence_norm", 1.0))
+    confidence_gate = torch.clamp(confidence / max(confidence_norm, eps), 0.0, 1.0)
+
+    dot = torch.sum(fixed_delta * learned_delta, dim=0, keepdim=True)
+    fixed_norm = torch.sqrt(torch.sum(fixed_delta.pow(2), dim=0, keepdim=True) + eps)
+    learned_norm = torch.sqrt(torch.sum(learned_delta.pow(2), dim=0, keepdim=True) + eps)
+    cosine = dot / torch.clamp(fixed_norm * learned_norm, min=eps)
+    alignment = torch.clamp((cosine - float(getattr(args, "adaptive_residual_min_alignment", -0.25))) / 1.25, 0.0, 1.0)
+
+    gate = (
+        torch.pow(confidence_gate, float(getattr(args, "adaptive_residual_confidence_power", 1.0)))
+        * torch.pow(support, float(getattr(args, "adaptive_residual_support_power", 1.0)))
+        * torch.pow(stability, float(getattr(args, "adaptive_residual_stability_power", 1.0)))
+        * torch.pow(alignment, float(getattr(args, "adaptive_residual_alignment_power", 1.0)))
+        * valid
+    )
+    min_blend = float(getattr(args, "adaptive_residual_min_blend", 0.0))
+    max_blend = float(getattr(args, "adaptive_residual_max_blend", 0.75))
+    if max_blend < min_blend:
+        raise ValueError("adaptive_residual_max_blend must be >= adaptive_residual_min_blend")
+    blend = torch.clamp(min_blend + (max_blend - min_blend) * gate, min=min_blend, max=max_blend)
+    return (1.0 - blend) * fixed_delta + blend * learned_delta
+
+
+def _source_evidence_reliability_gate(ev: Any, args: argparse.Namespace, *, device: torch.device) -> torch.Tensor:
+    eps = 1.0e-6
+    confidence = ev.confidence.to(device=device, dtype=torch.float32)
+    support_count = (
+        ev.support_count.to(device=device, dtype=torch.float32)
+        if getattr(ev, "support_count", None) is not None
+        else (ev.valid.to(device=device, dtype=torch.float32) * float(max(1, int(getattr(args, "k", 1)))))
+    )
+    residual_std = (
+        ev.residual_std.to(device=device, dtype=torch.float32)
+        if getattr(ev, "residual_std", None) is not None
+        else torch.zeros_like(confidence)
+    )
+    signal = ev.signal.to(device=device, dtype=torch.float32)
+    signal_mag = torch.mean(torch.abs(signal), dim=0, keepdim=True)
+    confidence_gate = torch.clamp(
+        confidence / max(float(getattr(args, "target_neighbor_generated_confidence_norm", 1.0)), eps),
+        0.0,
+        1.0,
+    )
+    support_gate = torch.clamp(support_count / max(float(getattr(args, "k", 1)), 1.0), 0.0, 1.0)
+    stability = signal_mag / (
+        signal_mag + float(getattr(args, "target_neighbor_generated_std_scale", 2.0)) * residual_std + eps
+    )
+    valid = ev.valid.to(device=device, dtype=torch.float32)
+    return torch.clamp(confidence_gate * support_gate * stability * valid, 0.0, 1.0)
+
+
+def _target_neighbor_consensus_delta(
+    *,
+    target: Any,
+    ev: Any,
+    neighbor_frames: Sequence[Any],
+    loader: FrameLoader,
+    device: torch.device,
+    args: argparse.Namespace,
+) -> tuple[torch.Tensor | None, dict[str, Any]]:
+    neighbors = select_support_frames(
+        target,
+        neighbor_frames,
+        k=int(args.target_neighbor_generated_neighbor_k),
+        exclude_names={target.name, target.camera.image_name},
+        direction_weight=float(args.target_neighbor_generated_direction_weight),
+    )
+    diagnostics: dict[str, Any] = {
+        "enabled": bool(args.enable_target_neighbor_generated_candidate),
+        "neighbor_count": int(len(neighbors)),
+        "used_neighbors": [],
+        "mean_confident_fraction": 0.0,
+        "total_effective_weight": 0.0,
+        "reason": None,
+    }
+    if not neighbors:
+        diagnostics["reason"] = "no_neighbors"
+        return None, diagnostics
+
+    target_depth_full = loader.depth(str(target.depth_path)).to(device=device, dtype=torch.float32)
+    target_size = _tnc_fit_hw(
+        int(target_depth_full.shape[0]),
+        int(target_depth_full.shape[1]),
+        int(args.target_neighbor_generated_max_side),
+    )
+    target_depth = _tnc_resize_hw(target_depth_full, target_size)
+    target_base = _tnc_resize_chw(ev.base.to(device=device, dtype=torch.float32), target_size)
+
+    numerator = torch.zeros_like(target_base)
+    denominator = torch.zeros((1, target_base.shape[1], target_base.shape[2]), device=device, dtype=torch.float32)
+    confident_fractions: list[float] = []
+    used_neighbors: list[str] = []
+
+    for neighbor, view_weight in neighbors:
+        neighbor_depth_full = loader.depth(str(neighbor.depth_path)).to(device=device, dtype=torch.float32)
+        neighbor_base_full = loader.render(str(neighbor.render_path)).to(device=device, dtype=torch.float32)
+        neighbor_size = _tnc_fit_hw(
+            int(neighbor_depth_full.shape[0]),
+            int(neighbor_depth_full.shape[1]),
+            int(args.target_neighbor_generated_max_side),
+        )
+        neighbor_depth = _tnc_resize_hw(neighbor_depth_full, neighbor_size)
+        neighbor_base = _tnc_resize_chw(neighbor_base_full, neighbor_size)
+        warped, confidence = warp_support_residual(
+            target,
+            neighbor,
+            target_depth,
+            neighbor_depth,
+            neighbor_base,
+            depth_abs_tol=float(args.target_neighbor_generated_depth_abs_tol),
+            depth_rel_tol=float(args.target_neighbor_generated_depth_rel_tol),
+            device=device,
+        )
+        mask = (confidence > float(args.target_neighbor_generated_min_confidence)).to(dtype=target_base.dtype)
+        weight = confidence.unsqueeze(0).to(dtype=target_base.dtype) * float(view_weight) * mask.unsqueeze(0)
+        if float(weight.mean().detach().cpu().item()) <= 0.0:
+            continue
+        numerator = numerator + (warped - target_base) * weight
+        denominator = denominator + weight
+        confident_fractions.append(float(mask.mean().detach().cpu().item()))
+        used_neighbors.append(str(neighbor.name))
+
+    if not used_neighbors:
+        diagnostics["reason"] = "no_effective_neighbors"
+        return None, diagnostics
+
+    low_delta = numerator / torch.clamp(denominator, min=1.0e-8)
+    if target_size is not None:
+        full_size = (int(target_depth_full.shape[0]), int(target_depth_full.shape[1]))
+        delta = _tnc_resize_chw(low_delta, full_size)
+        denominator_full = _tnc_resize_chw(denominator, full_size)
+    else:
+        delta = low_delta
+        denominator_full = denominator
+
+    diagnostics.update(
+        {
+            "used_neighbors": used_neighbors,
+            "mean_confident_fraction": float(sum(confident_fractions) / max(len(confident_fractions), 1)),
+            "total_effective_weight": float(denominator_full.mean().detach().cpu().item()),
+            "reason": "ok",
+        }
+    )
+    return delta, diagnostics
+
+
+def _augment_deltas_with_target_neighbor_generated_candidate(
+    *,
+    deltas: dict[str, torch.Tensor],
+    ev: Any,
+    target: Any,
+    neighbor_frames: Sequence[Any],
+    loader: FrameLoader,
+    device: torch.device,
+    args: argparse.Namespace,
+) -> tuple[dict[str, torch.Tensor], dict[str, Any] | None]:
+    if not bool(getattr(args, "enable_target_neighbor_generated_candidate", False)):
+        return deltas, None
+    name = str(getattr(args, "target_neighbor_generated_candidate_name", "tnc_gen")).strip() or "tnc_gen"
+    base_variant = str(getattr(args, "target_neighbor_generated_base_variant", "hybrid"))
+    diagnostics: dict[str, Any] = {
+        "enabled": True,
+        "name": name,
+        "base_variant": base_variant,
+        "uses_target_gt": False,
+        "applied": False,
+        "reason": None,
+    }
+    if name in deltas:
+        raise ValueError(f"target-neighbor generated candidate name collides with deltas: {name}")
+    if base_variant not in deltas:
+        diagnostics["reason"] = "missing_base_variant"
+        return deltas, diagnostics
+    consensus_delta, consensus_diagnostics = _target_neighbor_consensus_delta(
+        target=target,
+        ev=ev,
+        neighbor_frames=neighbor_frames,
+        loader=loader,
+        device=device,
+        args=args,
+    )
+    diagnostics["consensus"] = consensus_diagnostics
+    out = dict(deltas)
+    if consensus_delta is None:
+        out[name] = deltas[base_variant]
+        diagnostics.update(
+            {
+                "applied": False,
+                "reason": f"fallback_to_{base_variant}:{consensus_diagnostics.get('reason', 'no_consensus_delta')}",
+                "mean_blend": 0.0,
+                "max_blend": 0.0,
+                "candidate_changed_fraction": _changed_fraction_from_delta(out[name]),
+            }
+        )
+        return out, diagnostics
+
+    reliability = _source_evidence_reliability_gate(ev, args, device=device)
+    gamma = float(args.target_neighbor_generated_max_blend)
+    blend = torch.clamp(gamma * reliability, min=0.0, max=gamma)
+    base_delta = deltas[base_variant]
+    candidate_delta = (1.0 - blend) * base_delta + blend * consensus_delta.to(device=base_delta.device, dtype=base_delta.dtype)
+    out[name] = candidate_delta
+    diagnostics.update(
+        {
+            "applied": True,
+            "reason": "ok",
+            "mean_blend": float(blend.mean().detach().cpu().item()),
+            "max_blend": float(blend.max().detach().cpu().item()),
+            "candidate_changed_fraction": _changed_fraction_from_delta(candidate_delta),
+        }
+    )
+    return out, diagnostics
 
 
 def _changed_fraction_from_delta(delta: torch.Tensor) -> float:
@@ -917,7 +1211,13 @@ def _fit_per_view_knn_policy(
             "verdict": "disabled because scene-level source-heldout selector fell back to fixed",
         }
     feature_names = _parse_feature_names(args.per_view_knn_feature_grid)
-    variants = list(BASE_CANDIDATE_VARIANTS) if bool(args.per_view_knn_base_variants_only) else _candidate_variant_names(args)
+    variants = (
+        list(BASE_CANDIDATE_VARIANTS)
+        if bool(args.per_view_knn_base_variants_only)
+        else list(selector_payload.get("candidate_variants", _candidate_variant_names(args)))
+    )
+    if selected_variant not in variants:
+        variants = [selected_variant] + [variant for variant in variants if variant != selected_variant]
     entries_by_variant: dict[str, list[dict[str, Any]]] = {variant: [] for variant in variants}
     all_vectors: list[list[float]] = []
     for row in selector_payload["per_view"]:
@@ -1336,7 +1636,11 @@ def _fit_local_support_policy(
         return {"enabled": False, "verdict": "missing source-heldout selector per-view evidence"}
     selected_variant = str(selector_payload["selected_variant"])
     feature_names = _parse_feature_names(args.local_support_feature_grid)
-    variants = list(BASE_CANDIDATE_VARIANTS) if bool(args.local_support_base_variants_only) else _candidate_variant_names(args)
+    variants = (
+        list(BASE_CANDIDATE_VARIANTS)
+        if bool(args.local_support_base_variants_only)
+        else list(selector_payload.get("candidate_variants", _candidate_variant_names(args)))
+    )
     if selected_variant not in variants:
         variants = [selected_variant] + [variant for variant in variants if variant != selected_variant]
     entries_by_variant: dict[str, list[dict[str, Any]]] = {variant: [] for variant in variants}
@@ -1794,7 +2098,7 @@ def _fit_pairwise_dominance_policy(
         return {"enabled": False, "verdict": "missing source-heldout selector per-view evidence"}
     selected_variant = str(selector_payload["selected_variant"])
     feature_names = _parse_feature_names(args.pairwise_dominance_feature_grid)
-    variants = _candidate_variant_names(args)
+    variants = list(selector_payload.get("candidate_variants", _candidate_variant_names(args)))
     variant_blend_map = _candidate_variant_blend_map(args)
     examples: list[dict[str, Any]] = []
     rows_by_view: dict[str, dict[str, Any]] = {}
@@ -2725,7 +3029,7 @@ def _fit_per_view_risk_model_policy(
             "verdict": "disabled because scene-level source-heldout selector fell back to fixed",
         }
     feature_names = _parse_feature_names(args.per_view_risk_model_feature_grid)
-    variants = _candidate_variant_names(args)
+    variants = list(selector_payload.get("candidate_variants", _candidate_variant_names(args)))
     variant_blend_map = _candidate_variant_blend_map(args)
     examples: list[dict[str, Any]] = []
     rows_by_view: dict[str, dict[str, Any]] = {}
@@ -3193,7 +3497,7 @@ def _fit_source_reliability_policy(
         return {"enabled": False, "verdict": "missing source-heldout selector per-view evidence"}
     selected_variant = str(selector_payload["selected_variant"])
     feature_names = _parse_feature_names(args.source_reliability_feature_grid)
-    variants = _candidate_variant_names(args)
+    variants = list(selector_payload.get("candidate_variants", _candidate_variant_names(args)))
     variant_blend_map = _candidate_variant_blend_map(args)
     examples: list[dict[str, Any]] = []
     rows_by_view: dict[str, dict[str, Any]] = {}
@@ -4164,7 +4468,16 @@ def _select_variant_from_source_heldout(
             pred_delta = model(_normalize(features, feature_mean, feature_std), signal, valid).squeeze(0)
             gt = loader.gt(str(target.gt_path)).to(device=device, dtype=torch.float32)
             per_view_candidates: dict[str, Any] = {}
-            for variant, delta in _candidate_deltas(ev, pred_delta, args).items():
+            deltas, generated_diagnostics = _augment_deltas_with_target_neighbor_generated_candidate(
+                deltas=_candidate_deltas(ev, pred_delta, args),
+                ev=ev,
+                target=target,
+                neighbor_frames=source_frames,
+                loader=loader,
+                device=device,
+                args=args,
+            )
+            for variant, delta in deltas.items():
                 row = _image_metrics(
                     ev.base,
                     gt,
@@ -4192,6 +4505,7 @@ def _select_variant_from_source_heldout(
                     "covered_fraction": float(ev.valid.to(torch.float32).mean().detach().cpu().item()),
                     "support_names": list(ev.support_names),
                     "candidates": per_view_candidates,
+                    "target_neighbor_generated_candidate_diagnostics": generated_diagnostics,
                 }
             )
 
@@ -4200,10 +4514,16 @@ def _select_variant_from_source_heldout(
         for variant, rows in candidate_rows.items()
     }
     fixed_summary = summaries["fixed"]
+    generated_scene_candidates = (
+        set(_generated_candidate_names(args))
+        if str(getattr(args, "generated_candidate_scene_selection_mode", "candidate_only")) == "candidate_only"
+        else set()
+    )
     passing = [
         variant
         for variant in candidate_variants
         if variant != "fixed"
+        if variant not in generated_scene_candidates
         if _candidate_passes_guard(
             summaries[variant],
             fixed_summary,
@@ -4235,6 +4555,8 @@ def _select_variant_from_source_heldout(
         "min_vs_fixed_ssim_delta": float(args.selector_min_vs_fixed_ssim_delta),
         "min_vs_fixed_lpips_delta": float(args.selector_min_vs_fixed_lpips_delta),
         "min_vs_fixed_dists_delta": float(args.selector_min_vs_fixed_dists_delta),
+        "generated_candidate_scene_selection_mode": str(args.generated_candidate_scene_selection_mode),
+        "generated_scene_candidates_excluded": sorted(generated_scene_candidates),
         "source_perceptual": {
             "enabled": bool(args.compute_source_perceptual),
             "max_side": int(args.source_perceptual_max_side),
@@ -4328,6 +4650,56 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             args=args,
         )
         selected_variant = str(selector_payload["selected_variant"])
+    generated_candidate_names = set(_generated_candidate_names(args))
+    suppressed_generated_candidate_reasons: dict[str, str] = {}
+    if (
+        bool(args.generated_candidate_disable_when_scene_fixed)
+        and selected_variant == "fixed"
+        and bool(generated_candidate_names)
+    ):
+        suppressed_generated_candidate_reasons.update(
+            {name: "scene_selected_fixed" for name in generated_candidate_names}
+        )
+    if (
+        bool(args.generated_candidate_require_source_summary_safe)
+        and selector_payload is not None
+        and bool(generated_candidate_names)
+    ):
+        summaries = dict(selector_payload.get("summaries", {}))
+        scene_summary = summaries.get(selected_variant)
+        for name in sorted(generated_candidate_names):
+            if name in suppressed_generated_candidate_reasons:
+                continue
+            candidate_summary = summaries.get(name)
+            if not isinstance(scene_summary, dict) or not isinstance(candidate_summary, dict):
+                suppressed_generated_candidate_reasons[name] = "missing_source_summary"
+                continue
+            psnr_delta = float(candidate_summary.get("psnr_gain", -1.0e9)) - float(
+                scene_summary.get("psnr_gain", 0.0)
+            )
+            ssim_delta = float(candidate_summary.get("ssim_gain", -1.0e9)) - float(
+                scene_summary.get("ssim_gain", 0.0)
+            )
+            if psnr_delta < float(args.generated_candidate_min_source_summary_psnr_delta_vs_scene):
+                suppressed_generated_candidate_reasons[name] = (
+                    f"source_summary_psnr_delta:{psnr_delta:.9g}"
+                )
+                continue
+            if bool(args.compute_ssim) and ssim_delta < float(
+                args.generated_candidate_min_source_summary_ssim_delta_vs_scene
+            ):
+                suppressed_generated_candidate_reasons[name] = (
+                    f"source_summary_ssim_delta:{ssim_delta:.9g}"
+                )
+                continue
+    suppressed_generated_candidates = set(suppressed_generated_candidate_reasons)
+    generated_candidates_active_for_scene = bool(generated_candidate_names - suppressed_generated_candidates)
+    if suppressed_generated_candidates:
+        candidate_variants = [variant for variant in candidate_variants if variant not in suppressed_generated_candidates]
+        selector_payload = _filter_selector_payload_candidates(
+            selector_payload,
+            remove_variants=suppressed_generated_candidates,
+        )
     per_view_gate_payload = _fit_per_view_gate(
         selector_payload,
         selected_variant,
@@ -4414,7 +4786,30 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             signal = ev.signal.unsqueeze(0).to(device=device, dtype=torch.float32)
             valid = ev.valid.unsqueeze(0).to(device=device, dtype=torch.float32)
             pred_delta = model(_normalize(features, feature_mean, feature_std), signal, valid).squeeze(0)
-            deltas = _candidate_deltas(ev, pred_delta, args)
+            base_deltas = _candidate_deltas(ev, pred_delta, args)
+            if suppressed_generated_candidates:
+                deltas = {
+                    variant: delta
+                    for variant, delta in base_deltas.items()
+                    if variant not in suppressed_generated_candidates
+                }
+                target_neighbor_generated_candidate_diagnostics = {
+                    "enabled": bool(generated_candidate_names),
+                    "applied": False,
+                    "reason": "suppressed_generated_candidate",
+                    "suppressed": sorted(suppressed_generated_candidates),
+                    "suppressed_reasons": dict(suppressed_generated_candidate_reasons),
+                }
+            else:
+                deltas, target_neighbor_generated_candidate_diagnostics = _augment_deltas_with_target_neighbor_generated_candidate(
+                    deltas=base_deltas,
+                    ev=ev,
+                    target=target,
+                    neighbor_frames=target_frames,
+                    loader=loader,
+                    device=device,
+                    args=args,
+                )
             fixed_delta = deltas["fixed"]
             learned_delta = deltas["learned"]
             hybrid_delta = deltas["hybrid"]
@@ -4802,6 +5197,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "source_reliability_diagnostics": source_reliability_diagnostics,
                     "target_neighbor_consistency_diagnostics": target_neighbor_consistency_diagnostics,
                     "target_neighbor_candidate_unlock_diagnostics": target_neighbor_candidate_unlock_diagnostics,
+                    "target_neighbor_generated_candidate_diagnostics": target_neighbor_generated_candidate_diagnostics,
                 }
             )
             if idx < int(args.save_example_views):
@@ -4884,7 +5280,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         if selected_all_axis_safe_vs_fixed
         else f"Selected support-transport output {output_label} is not all-axis safe versus fixed on this target/test split."
     )
-    online_target_proxy_enabled = bool(args.enable_target_neighbor_consistency) or bool(args.enable_target_neighbor_candidate_unlock)
+    online_target_proxy_enabled = (
+        bool(getattr(args, "enable_target_neighbor_consistency_certificate", False))
+        or bool(getattr(args, "enable_target_neighbor_candidate_unlock", False))
+        or bool(getattr(args, "enable_target_neighbor_generated_candidate", False))
+    )
     payload: dict[str, Any] = {
         "method": "apply v302 constrained hybrid support-transport calibrator",
         "target_gt_usage": "GT read only after candidate images are saved, for evaluation",
@@ -4909,6 +5309,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "target_neighbor_consistency_scope": "target_render_depth_camera_only_post_decision_certificate",
             "target_neighbor_candidate_unlock_uses_target_gt": False,
             "target_neighbor_candidate_unlock_scope": "target_render_depth_camera_only_online_per_view_unlock",
+            "target_neighbor_generated_candidate_uses_target_gt": False,
+            "target_neighbor_generated_candidate_scope": "target_or_sourceheldout_render_depth_camera_consensus_candidate",
         },
         "checkpoint": str(args.checkpoint),
         "base_model_path": str(base_model),
@@ -4929,6 +5331,51 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "candidate_variants": candidate_variants,
             "candidate_variant_blend_map": candidate_variant_blend_map,
             "candidate_feature_schema_version": 2,
+            "generated_candidate_scene_selection_mode": str(args.generated_candidate_scene_selection_mode),
+            "generated_candidate_disable_when_scene_fixed": bool(args.generated_candidate_disable_when_scene_fixed),
+            "generated_candidate_require_source_summary_safe": bool(
+                args.generated_candidate_require_source_summary_safe
+            ),
+            "generated_candidate_min_source_summary_psnr_delta_vs_scene": float(
+                args.generated_candidate_min_source_summary_psnr_delta_vs_scene
+            ),
+            "generated_candidate_min_source_summary_ssim_delta_vs_scene": float(
+                args.generated_candidate_min_source_summary_ssim_delta_vs_scene
+            ),
+            "generated_candidates_active_for_scene": bool(generated_candidates_active_for_scene),
+            "suppressed_generated_candidates": sorted(suppressed_generated_candidates),
+            "suppressed_generated_candidate_reasons": dict(suppressed_generated_candidate_reasons),
+            "adaptive_residual_candidate": {
+                "enabled": bool(args.enable_adaptive_residual_candidate),
+                "name": str(args.adaptive_residual_candidate_name),
+                "min_blend": float(args.adaptive_residual_min_blend),
+                "max_blend": float(args.adaptive_residual_max_blend),
+                "std_scale": float(args.adaptive_residual_std_scale),
+                "confidence_norm": float(args.adaptive_residual_confidence_norm),
+                "confidence_power": float(args.adaptive_residual_confidence_power),
+                "support_power": float(args.adaptive_residual_support_power),
+                "stability_power": float(args.adaptive_residual_stability_power),
+                "alignment_power": float(args.adaptive_residual_alignment_power),
+                "min_alignment": float(args.adaptive_residual_min_alignment),
+                "uses_target_gt": False,
+                "reference": "source-evidence confidence/std/support/alignment per-pixel blend between fixed and learned residuals",
+            },
+            "target_neighbor_generated_candidate": {
+                "enabled": bool(args.enable_target_neighbor_generated_candidate),
+                "name": str(args.target_neighbor_generated_candidate_name),
+                "base_variant": str(args.target_neighbor_generated_base_variant),
+                "max_blend": float(args.target_neighbor_generated_max_blend),
+                "neighbor_k": int(args.target_neighbor_generated_neighbor_k),
+                "direction_weight": float(args.target_neighbor_generated_direction_weight),
+                "max_side": int(args.target_neighbor_generated_max_side),
+                "depth_abs_tol": float(args.target_neighbor_generated_depth_abs_tol),
+                "depth_rel_tol": float(args.target_neighbor_generated_depth_rel_tol),
+                "min_confidence": float(args.target_neighbor_generated_min_confidence),
+                "std_scale": float(args.target_neighbor_generated_std_scale),
+                "confidence_norm": float(args.target_neighbor_generated_confidence_norm),
+                "uses_target_gt": False,
+                "reference": "target/train-heldout neighbor render-depth-camera consensus delta, gated by source evidence reliability",
+            },
             "output_variant": str(args.output_variant),
             "selected_variant": selected_variant,
             "per_view_gate_mode": active_gate,
@@ -5150,6 +5597,49 @@ def main() -> None:
         default="0.25,0.75",
         help="Comma-separated residual blend strengths to add as source-heldout candidates when candidate ladder is enabled.",
     )
+    parser.add_argument("--enable_adaptive_residual_candidate", action="store_true")
+    parser.add_argument("--adaptive_residual_candidate_name", default="adaptive")
+    parser.add_argument("--adaptive_residual_min_blend", type=float, default=0.0)
+    parser.add_argument("--adaptive_residual_max_blend", type=float, default=0.75)
+    parser.add_argument("--adaptive_residual_std_scale", type=float, default=2.0)
+    parser.add_argument("--adaptive_residual_confidence_norm", type=float, default=1.0)
+    parser.add_argument("--adaptive_residual_confidence_power", type=float, default=1.0)
+    parser.add_argument("--adaptive_residual_support_power", type=float, default=1.0)
+    parser.add_argument("--adaptive_residual_stability_power", type=float, default=1.0)
+    parser.add_argument("--adaptive_residual_alignment_power", type=float, default=1.0)
+    parser.add_argument("--adaptive_residual_min_alignment", type=float, default=-0.25)
+    parser.add_argument("--enable_target_neighbor_generated_candidate", action="store_true")
+    parser.add_argument("--target_neighbor_generated_candidate_name", default="tnc_gen")
+    parser.add_argument("--target_neighbor_generated_base_variant", default="hybrid")
+    parser.add_argument("--target_neighbor_generated_max_blend", type=float, default=0.35)
+    parser.add_argument("--target_neighbor_generated_neighbor_k", type=int, default=2)
+    parser.add_argument("--target_neighbor_generated_direction_weight", type=float, default=0.35)
+    parser.add_argument("--target_neighbor_generated_max_side", type=int, default=256)
+    parser.add_argument("--target_neighbor_generated_depth_abs_tol", type=float, default=0.03)
+    parser.add_argument("--target_neighbor_generated_depth_rel_tol", type=float, default=0.04)
+    parser.add_argument("--target_neighbor_generated_min_confidence", type=float, default=1.0e-4)
+    parser.add_argument("--target_neighbor_generated_std_scale", type=float, default=2.0)
+    parser.add_argument("--target_neighbor_generated_confidence_norm", type=float, default=1.0)
+    parser.add_argument(
+        "--generated_candidate_scene_selection_mode",
+        choices=["candidate_only", "allow"],
+        default="candidate_only",
+        help="Whether generated candidates may become the scene-level source-heldout incumbent or only compete in per-view policies.",
+    )
+    parser.add_argument(
+        "--generated_candidate_disable_when_scene_fixed",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Suppress generated candidates downstream when the source-heldout scene selector falls back to fixed.",
+    )
+    parser.add_argument(
+        "--generated_candidate_require_source_summary_safe",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Suppress generated candidates unless their source-heldout scene summary is safe versus the selected scene candidate.",
+    )
+    parser.add_argument("--generated_candidate_min_source_summary_psnr_delta_vs_scene", type=float, default=0.0)
+    parser.add_argument("--generated_candidate_min_source_summary_ssim_delta_vs_scene", type=float, default=-5.0e-5)
     parser.add_argument("--output_variant", default="hybrid")
     parser.add_argument(
         "--policy_profile",

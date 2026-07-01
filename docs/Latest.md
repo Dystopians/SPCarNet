@@ -2,6 +2,67 @@
 
 Date: 2026-06-28
 
+## 2026-07-01 Follow-up: v336c Adaptive Residual Source-Summary Gate
+
+Newest positive method update:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v336c-AdaptiveResidual-SourceSummaryGate.md
+docs/car_model/results/v336c_source_summary_gate_full9_vs_v335_v336b_audit.json
+docs/car_model/results/v336c_source_summary_gate_full9_vs_v335_v336b_audit.md
+docs/car_model/results/v336c_frontier_lpips_qualitative_summary.json
+docs/car_model/results/v336c_frontier_lpips_qualitative_summary.md
+docs/car_model/results/v336c_frontier_panels/
+outputs/carnet/spcarnet_v336c_source_summary_gate_full9_20260701
+outputs/carnet/spcarnet_v336c_frontier_full9_20260701
+```
+
+v336c adds a real adaptive residual generated candidate and, more importantly,
+an automatic source-heldout admission gate. The candidate is a per-pixel blend
+between fixed source evidence and learned residuals, gated by confidence,
+support count, residual stability, and fixed/learned alignment. Generated
+candidates are only allowed into downstream policies when their source-heldout
+scene summary is safe versus the scene incumbent; otherwise they are filtered
+before policy fitting. Target/test GT is not used at decision time.
+
+Why this matters: v336b improved macro metrics but regressed garden by letting
+an unsafe generated candidate perturb the source-reliability policy. v336c keeps
+the room gain while restoring garden to v335.
+
+Full9 replay:
+
+| metric | v335 | v336b | v336c | v336c-v335 |
+|---|---:|---:|---:|---:|
+| selected PSNR gain | 0.274017908934 | 0.274583943273 | 0.274617423486 | +0.000599514552 |
+| selected SSIM gain | 0.003741526179 | 0.003745085387 | 0.003744976625 | +0.000003450447 |
+| all-axis safe scenes | 9/9 | 9/9 | 9/9 |  |
+| nonnegative PSNR scenes vs v335 |  | 8/9 | 9/9 |  |
+| nonnegative SSIM scenes vs v335 |  | 8/9 | 9/9 |  |
+
+Frontier/perceptual result:
+
+| method | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v335 | 27.590394 | 0.028168 | 0.087742 | 0.057670 |
+| v336b | 27.590928 | 0.028167 | 0.087737 | 0.057667 |
+| v336c | 27.590966 | 0.028167 | 0.087738 | 0.057667 |
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+v336c is a verified non-regressive milestone over v335 and a cleaner version of
+v336b. It improves macro PSNR/SSIM, preserves 9/9 per-scene non-regression
+against v335, and remains clearly above local clean26000. It is still not final
+paper closure: the admitted adaptive gain is mainly room-local and qualitative
+differences remain subtle. The next step should improve candidate-generation
+capacity itself while keeping v336c-style source-summary admission as the safety
+layer.
+
 ## 2026-07-01 Follow-up: v335 Target-Neighbor Candidate Unlock
 
 Newest positive method update:

@@ -4,27 +4,34 @@
 
 ## 最新状态（2026-07-01）
 
-当前最新已验证里程碑是 **v335 target-neighbor candidate unlock**。它保留
-v334 rollback / source-target contradiction 栈，然后新增一个很窄的 opt-in
-target-blind 解锁：rollback 之后，如果 `learned` 候选相对 `fixed` 在
-target-neighbor 一致性上至少低 `0.0002` MAE，才允许 `fixed -> learned`。
-full9 replay 相对 v334 提升 `+0.001224887209` mean selected PSNR gain 和
-`+0.000002593170` mean selected SSIM gain，并保持 `9 / 9` 场景 all-axis safe。
+当前最新已验证里程碑是 **v336c adaptive residual with source-summary
+admission**。它新增真实生成候选 `adaptive`：基于 confidence、support count、
+residual stability、fixed/learned alignment，对 fixed source evidence residual
+与 learned residual 做逐像素融合。v336b 已经证明，直接把 generated candidate
+塞进 policy pool 会让 room 变好但 garden 回退；v336c 因此新增 source-heldout
+admission gate，只有当 generated candidate 的 source-heldout 场景汇总相对当前
+scene incumbent 安全时，才允许它进入下游 policy fitting。决策阶段不使用
+target/test GT。
+
+full9 replay 相对 v335 提升 `+0.000599514552` mean selected PSNR gain 和
+`+0.000003450447` mean selected SSIM gain，同时保持 `9 / 9` 场景 all-axis safe，
+且相对 v335 为 `9 / 9` PSNR/SSIM 场景非退化。frontier 指标为 `27.590966`
+PSNR、`0.028167` MAE、`0.087738` LPIPS、`0.057667` DISTS；本地 clean26000 为
+`27.193643 / 0.029112 / 0.090207 / 0.059902`。
 
 优先阅读：
 
 - [最新完整评估日志](docs/Latest.md)
-- [v335 target-neighbor candidate unlock 日志](docs/car_model/7-01-v335-TargetNeighborCandidateUnlock.md)
-- [v335 full9 audit vs v334/v333/v329b](docs/car_model/results/v335_target_neighbor_candidate_unlock_full9_vs_v334_v333_v329b_audit.md)
-- [v335 target-neighbor rerank probe](docs/car_model/results/v335_target_neighbor_candidate_rerank_probe.md)
-- [v335 frontier LPIPS/DISTS 汇总](docs/car_model/results/v335_frontier_lpips_qualitative_summary.md)
-- [v335 treehill 解锁定性面板](docs/car_model/results/v335_frontier_panels/treehill_00000_00010_v334_v335_gt_panel.png)
+- [v336c adaptive residual source-summary gate 日志](docs/car_model/7-01-v336c-AdaptiveResidual-SourceSummaryGate.md)
+- [v336c full9 audit vs v335/v336b](docs/car_model/results/v336c_source_summary_gate_full9_vs_v335_v336b_audit.md)
+- [v336c frontier LPIPS/DISTS 汇总](docs/car_model/results/v336c_frontier_lpips_qualitative_summary.md)
+- [v336c room 定性面板](docs/car_model/results/v336c_frontier_panels/room/00009_frontier_panel.png)
 - [给下一阶段模型的反馈与经验教训](feedback.md)
 
-诚实状态：v335 是真实的方法与证据里程碑，但还不是最终论文闭环。它在 full9 PSNR/SSIM
-gain 上超过 v334/v333/v329b，也明显高于本地 clean26000 frontier。不过新增收益主要集中在
-`treehill`，定性差异仍然细微，并且 LPIPS/DISTS 相比 v334/v329b 略差。下一步应该增强原始
-candidate generation 或表示能力，而不是继续只叠加仲裁规则。
+诚实状态：v336c 是真实的方法与证据里程碑，但还不是最终论文闭环。它在 full9
+PSNR/SSIM 上超过 v335，并且在 PSNR/MAE/LPIPS/DISTS 上明显高于本地 clean26000
+frontier。不过 adaptive 的实际激活收益主要集中在 `room`，定性差异仍然细微。下一步应该增强
+原始 candidate generation 或表示能力，而不是继续只叠加仲裁规则。
 
 ## 当前报告包（2026-06-26）
 
