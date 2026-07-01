@@ -1346,6 +1346,47 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-07-01 Update: v312 OOD-Guarded Risk Model
+
+This update tested whether a target-blind source-feature OOD guard can rescue
+the v311 learned risk model.
+
+New artifacts:
+
+```text
+docs/car_model/7-01-v312-OODGuardRiskModel-Log.md
+docs/car_model/results/v312_ood_guard_risk_model_focused_summary.json
+```
+
+Focused comparison:
+
+| method | macro PSNR gain | macro SSIM gain | safe scene rate | mean min PSNR gain | OOD rejects |
+|---|---:|---:|---:|---:|---:|
+| v309 selective KNN | +0.173055 | +0.003173 | 1.00 | -0.031668 | 0 |
+| v310c tail-risk scene fallback | +0.172930 | +0.003176 | 1.00 | -0.031668 | 0 |
+| v311c dual-guard risk model | +0.165518 | +0.003099 | 0.50 | -0.061860 | 0 |
+| v312a OOD-guarded risk model | +0.165518 | +0.003099 | 0.50 | -0.061860 | 2 |
+
+Conclusion:
+
+- v312a did not improve over v311c.
+- The OOD guard rejected 2 `counter` views but did not reject the harmful
+  `stump/treehill` switches.
+- The bottleneck is not ordinary source-feature OOD. It is source-to-target
+  risk-label mismatch inside apparently in-distribution feature regions.
+
+Current best method status is unchanged:
+
+- `v309` remains the mean-quality frontier.
+- `v310c` remains the tail-balanced frontier.
+- v311/v312 are diagnostic ablations, not paper-final methods.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Update: v311 Learned Risk Model Audit
 
 This update tested a real per-view learned risk model in:

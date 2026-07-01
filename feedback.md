@@ -1344,6 +1344,78 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-07-01 v312 OOD-Guarded Risk Model Feedback Addendum
+
+This addendum records the follow-up attempt after v311.
+
+New implementation:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+```
+
+New report:
+
+```text
+docs/car_model/7-01-v312-OODGuardRiskModel-Log.md
+docs/car_model/results/v312_ood_guard_risk_model_focused_summary.json
+```
+
+What changed:
+
+- The learned risk-model policy now stores source candidate feature entries.
+- It estimates a leave-one-view nearest-neighbor distance distribution from
+  source-heldout candidate features.
+- Target-time per-view switches are rejected to the scene-level choice if the
+  chosen candidate exceeds the source distance quantile.
+- Per-view diagnostics now include raw risk output, final decision, selected
+  proxy variant, OOD distance, OOD threshold, and reject reason.
+
+Focused result:
+
+| method | macro PSNR gain | macro SSIM gain | safe scene rate | mean min PSNR gain | OOD rejects |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| v309 selective KNN | +0.173055 | +0.003173 | 1.00 | -0.031668 | 0 |
+| v310c tail-risk scene fallback | +0.172930 | +0.003176 | 1.00 | -0.031668 | 0 |
+| v311c dual-guard risk model | +0.165518 | +0.003099 | 0.50 | -0.061860 | 0 |
+| v312a OOD-guarded risk model | +0.165518 | +0.003099 | 0.50 | -0.061860 | 2 |
+
+Important lesson:
+
+The v312 OOD guard did not solve the failure. It rejected 2 `counter` views, but
+it rejected 0 `stump` and 0 `treehill` views, exactly where the risk-model
+switches were harmful. The damaging target candidates were inside the source
+feature-distance support, so ordinary OOD distance is not the right reliability
+signal.
+
+Updated bottleneck:
+
+```text
+The problem is not just feature OOD. It is label/utility mismatch:
+source-heldout features that look in-distribution can still imply the wrong
+target risk ordering.
+```
+
+Next recommended prompt:
+
+```text
+Continue from v309/v310c/v311/v312. Stop trying scalar gates over learned risk
+predictions. Build a residual-consistency reliability model: for each target
+candidate, estimate whether the transported residual is supported by multiple
+source views with consistent sign, color direction, depth ordering, normal/view
+alignment, and low residual variance. This reliability score must be target-GT
+free and must be learned/frozen on source-heldout policy-val. Only allow a
+per-view switch when reliability and predicted utility agree; otherwise fall
+back to v309/v310c scene/KNN policy. First validate on bicycle/counter/stump/
+treehill, then full9 only if all-axis safety and mean quality exceed v309/v310c.
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v311 Learned Risk Model Feedback Addendum
 
 This addendum records a focused learned-policy attempt after the v309/v310c

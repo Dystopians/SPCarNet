@@ -356,6 +356,15 @@ def _normalized_distance(a: list[float], b: list[float], mean: list[float], std:
     return float(total ** 0.5)
 
 
+def _quantile(values: list[float], q: float) -> float:
+    if not values:
+        return float("inf")
+    ordered = sorted(float(v) for v in values)
+    clamped = min(max(float(q), 0.0), 1.0)
+    idx = int(round(clamped * (len(ordered) - 1)))
+    return float(ordered[idx])
+
+
 def _summarize_metric_rows(rows: list[dict[str, float]], *, compute_ssim: bool) -> dict[str, Any]:
     return _summarize_rows(rows, compute_ssim=compute_ssim) if rows else {}
 
@@ -671,26 +680,67 @@ def _fit_per_view_risk_model_policy(
     variants = ["fixed", "learned", "hybrid"]
     examples: list[dict[str, Any]] = []
     rows_by_view: dict[str, dict[str, Any]] = {}
+    entries_by_variant: dict[str, list[dict[str, Any]]] = {variant: [] for variant in variants}
+    all_feature_vectors: list[list[float]] = []
     for row in selector_payload["per_view"]:
         rows_by_view[str(row["view"])] = row
         for variant in variants:
             candidate = row["candidates"][variant]
             metrics = candidate["metrics"]
-            examples.append(
+            features = _candidate_learning_features(candidate["proxy"], variant, feature_names)
+            target = [
+                _objective_from_metrics(metrics, compute_ssim=compute_ssim),
+                float(metrics.get("psnr_gain", 0.0)),
+                float(metrics.get("ssim_gain", 0.0)) if compute_ssim else 0.0,
+            ]
+            example = {
+                "view": row["view"],
+                "variant": variant,
+                "features": features,
+                "target": target,
+                "metrics": metrics,
+            }
+            examples.append(example)
+            entries_by_variant[variant].append(
                 {
                     "view": row["view"],
                     "variant": variant,
-                    "features": _candidate_learning_features(candidate["proxy"], variant, feature_names),
-                    "target": [
-                        _objective_from_metrics(metrics, compute_ssim=compute_ssim),
-                        float(metrics.get("psnr_gain", 0.0)),
-                        float(metrics.get("ssim_gain", 0.0)) if compute_ssim else 0.0,
-                    ],
-                    "metrics": metrics,
+                    "vector": features,
+                    "target": target,
                 }
             )
+            all_feature_vectors.append(features)
     if len({example["view"] for example in examples}) < 2:
         return {"enabled": False, "verdict": "not enough source-heldout views for leave-one-out risk model"}
+    ood_feature_mean, ood_feature_std = _feature_stats(all_feature_vectors)
+    ood_source_distances: list[float] = []
+
+    def nearest_source_distance(variant: str, vector: list[float], *, exclude_view: str | None = None) -> float:
+        pool = [
+            entry
+            for entry in entries_by_variant[variant]
+            if exclude_view is None or str(entry["view"]) != str(exclude_view)
+        ]
+        if not pool or not ood_feature_mean:
+            return float("inf")
+        return min(
+            _normalized_distance(vector, entry["vector"], ood_feature_mean, ood_feature_std)
+            for entry in pool
+        )
+
+    for example in examples:
+        dist = nearest_source_distance(
+            str(example["variant"]),
+            list(example["features"]),
+            exclude_view=str(example["view"]),
+        )
+        if math.isfinite(dist):
+            ood_source_distances.append(dist)
+    ood_threshold = (
+        _quantile(ood_source_distances, float(args.per_view_risk_model_ood_quantile))
+        if bool(args.per_view_risk_model_enable_ood_guard)
+        else float("inf")
+    )
 
     def choose_for_row(row: dict[str, Any], model: dict[str, Any]) -> tuple[str, dict[str, list[float]]]:
         predictions: dict[str, list[float]] = {}
@@ -777,8 +827,26 @@ def _fit_per_view_risk_model_policy(
         "source_safe_vs_fixed": bool(safe_vs_fixed),
         "source_selected_counts": selected_counts,
         "source_accept_fraction": accept_fraction,
+        "ood_guard_enabled": bool(args.per_view_risk_model_enable_ood_guard),
+        "ood_quantile": float(args.per_view_risk_model_ood_quantile),
+        "ood_source_distance_count": int(len(ood_source_distances)),
+        "ood_source_distance_threshold": float(ood_threshold),
+        "ood_source_distance_summary": {
+            "min": min(ood_source_distances) if ood_source_distances else None,
+            "mean": _mean(ood_source_distances) if ood_source_distances else None,
+            "max": max(ood_source_distances) if ood_source_distances else None,
+        },
         "loo_predictions": loo_predictions,
     }
+    if (
+        bool(args.per_view_risk_model_enable_ood_guard)
+        and len(ood_source_distances) < int(args.per_view_risk_model_ood_min_samples)
+    ):
+        return {
+            "enabled": False,
+            "verdict": "source-heldout risk model did not have enough OOD calibration distances",
+            **base_payload,
+        }
     if accept_fraction < float(args.per_view_risk_model_min_accept_fraction):
         return {
             "enabled": False,
@@ -832,6 +900,9 @@ def _fit_per_view_risk_model_policy(
         "enabled": True,
         "verdict": "source-heldout learned risk model selected",
         "model": full_model,
+        "source_entries_by_variant": entries_by_variant,
+        "ood_feature_mean": ood_feature_mean,
+        "ood_feature_std": ood_feature_std,
         "min_predicted_objective_delta": float(args.per_view_risk_model_min_predicted_objective_delta),
         "min_predicted_psnr_delta_vs_scene": float(args.per_view_risk_model_min_predicted_psnr_delta_vs_scene),
         "min_predicted_ssim_delta_vs_scene": float(args.per_view_risk_model_min_predicted_ssim_delta_vs_scene),
@@ -846,34 +917,68 @@ def _risk_model_choose_variant(
     policy: dict[str, Any],
     *,
     compute_ssim: bool,
-) -> tuple[str, dict[str, list[float]]]:
+) -> tuple[str, dict[str, list[float]], dict[str, Any]]:
     variants = ["fixed", "learned", "hybrid"]
     feature_names = list(policy["feature_names"])
     scene_variant = str(policy["scene_selected_variant"])
     predictions: dict[str, list[float]] = {}
+    feature_vectors: dict[str, list[float]] = {}
     for variant in variants:
+        feature_vectors[variant] = _candidate_learning_features(proxies_by_variant[variant], variant, feature_names)
         predictions[variant] = _predict_ridge(
             policy["model"],
-            _candidate_learning_features(proxies_by_variant[variant], variant, feature_names),
+            feature_vectors[variant],
         )
     scene_pred = predictions[scene_variant]
     best_variant, best_pred = max(predictions.items(), key=lambda item: item[1][0])
+    diagnostics: dict[str, Any] = {
+        "best_variant": best_variant,
+        "scene_variant": scene_variant,
+        "best_prediction": best_pred,
+        "scene_prediction": scene_pred,
+        "reject_reason": None,
+        "ood_distance": None,
+        "ood_threshold": None,
+    }
     min_objective_delta = float(policy.get("min_predicted_objective_delta", 0.0))
     min_psnr_delta_vs_scene = float(policy.get("min_predicted_psnr_delta_vs_scene", -1.0e9))
     min_ssim_delta_vs_scene = float(policy.get("min_predicted_ssim_delta_vs_scene", -1.0e9))
     min_predicted_psnr = float(policy.get("min_predicted_psnr", -1.0e9))
     min_predicted_ssim = float(policy.get("min_predicted_ssim", -1.0e9))
     if best_pred[0] < scene_pred[0] + min_objective_delta:
-        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions
+        diagnostics["reject_reason"] = "objective_delta"
+        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions, diagnostics
     if best_pred[1] < scene_pred[1] + min_psnr_delta_vs_scene:
-        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions
+        diagnostics["reject_reason"] = "psnr_delta_vs_scene"
+        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions, diagnostics
     if compute_ssim and best_pred[2] < scene_pred[2] + min_ssim_delta_vs_scene:
-        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions
+        diagnostics["reject_reason"] = "ssim_delta_vs_scene"
+        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions, diagnostics
     if best_pred[1] < min_predicted_psnr:
-        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions
+        diagnostics["reject_reason"] = "absolute_psnr"
+        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions, diagnostics
     if compute_ssim and best_pred[2] < min_predicted_ssim:
-        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions
-    return best_variant, predictions
+        diagnostics["reject_reason"] = "absolute_ssim"
+        return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions, diagnostics
+    if bool(policy.get("ood_guard_enabled", False)):
+        entries_by_variant = policy.get("source_entries_by_variant", {})
+        pool = entries_by_variant.get(best_variant, [])
+        mean = [float(x) for x in policy.get("ood_feature_mean", [])]
+        std = [float(x) for x in policy.get("ood_feature_std", [])]
+        if pool and mean and std:
+            ood_distance = min(
+                _normalized_distance(feature_vectors[best_variant], entry["vector"], mean, std)
+                for entry in pool
+            )
+        else:
+            ood_distance = float("inf")
+        ood_threshold = float(policy.get("ood_source_distance_threshold", float("inf")))
+        diagnostics["ood_distance"] = float(ood_distance)
+        diagnostics["ood_threshold"] = float(ood_threshold)
+        if ood_distance > ood_threshold:
+            diagnostics["reject_reason"] = "ood_distance"
+            return "__scene__" if str(policy.get("reject_variant", "scene")) == "scene" else "noop", predictions, diagnostics
+    return best_variant, predictions, diagnostics
 
 
 def _gate_accepts(proxy: dict[str, float], gate: dict[str, Any] | None) -> bool:
@@ -1196,6 +1301,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             selected_proxy = proxies_by_variant[selected_variant]
             knn_predictions: dict[str, float] | None = None
             risk_model_predictions: dict[str, list[float]] | None = None
+            risk_model_diagnostics: dict[str, Any] | None = None
             gate_accepted = True
             output_variant = selected_variant
             selected_proxy_variant = selected_variant
@@ -1204,7 +1310,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             risk_model_raw_output_variant: str | None = None
             risk_model_decision = "not_used"
             if bool(per_view_risk_model_payload.get("enabled", False)):
-                output_variant, risk_model_predictions = _risk_model_choose_variant(
+                output_variant, risk_model_predictions, risk_model_diagnostics = _risk_model_choose_variant(
                     proxies_by_variant,
                     per_view_risk_model_payload,
                     compute_ssim=bool(args.compute_ssim),
@@ -1301,6 +1407,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "per_view_gate_proxy": selected_proxy,
                     "per_view_knn_predictions": knn_predictions,
                     "per_view_risk_model_predictions": risk_model_predictions,
+                    "per_view_risk_model_diagnostics": risk_model_diagnostics,
                 }
             )
             if idx < int(args.save_example_views):
@@ -1535,6 +1642,9 @@ def main() -> None:
     parser.add_argument("--per_view_risk_model_min_predicted_ssim_delta_vs_scene", type=float, default=-1.0e9)
     parser.add_argument("--per_view_risk_model_min_predicted_psnr", type=float, default=-1.0e9)
     parser.add_argument("--per_view_risk_model_min_predicted_ssim", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_risk_model_enable_ood_guard", action="store_true")
+    parser.add_argument("--per_view_risk_model_ood_quantile", type=float, default=0.90)
+    parser.add_argument("--per_view_risk_model_ood_min_samples", type=int, default=4)
     parser.add_argument("--residual_clip", type=float, default=0.25)
     parser.add_argument("--min_confidence", type=float, default=1.0e-4)
     parser.add_argument("--depth_abs_tol", type=float, default=0.02)
