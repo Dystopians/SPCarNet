@@ -2,6 +2,71 @@
 
 Date: 2026-06-28
 
+# 2026-07-01 v318e Feedback Addendum: Reflection Helped, But Did Not Beat v315d
+
+New files:
+
+```text
+docs/car_model/7-01-v318-SourcePerceptualAutoRisk-Log.md
+docs/car_model/results/v318e_apply_metrics_vs_prior_summary.json
+docs/car_model/results/v318e_source_perceptual_autorisk_frontier_summary.json
+docs/car_model/results/v318e_source_perceptual_autorisk_frontier_summary.md
+docs/car_model/results/v318e_frontier_panels/
+outputs/carnet/spcarnet_v318e_source_perceptual_autorisk_multiscene_20260701
+outputs/carnet/spcarnet_v318e_source_perceptual_autorisk_frontier_comparison_20260701
+```
+
+Implemented change:
+
+`scripts/car_model/apply_source_heldout_support_transport_calibrator.py` now
+supports source-heldout LPIPS/DISTS selector evidence, source-objective weights,
+and source-only automatic risk-objective margin search. It also records a
+selection protocol proving that target/test GT is first read only after the
+selected render is saved and evaluated.
+
+Full9 apply result:
+
+| method | PSNR gain | SSIM gain | mean min PSNR | mean CVaR10 PSNR | negative views | safe scenes |
+|---|---:|---:|---:|---:|---:|---:|
+| v305 | +0.266578 | +0.003701 | +0.013917 | +0.039504 | 8 | 9/9 |
+| v315d | +0.269175 | +0.003718 | +0.014301 | +0.039726 | 8 | 9/9 |
+| v316c | +0.268444 | +0.003710 | +0.013917 | +0.039504 | 8 | 9/9 |
+| v318e | +0.268629 | +0.003715 | +0.013917 | +0.039504 | 8 | 9/9 |
+
+Full9 clean-baseline perceptual result:
+
+| method | PSNR | MAE | LPIPS | DISTS |
+|---|---:|---:|---:|---:|
+| clean26000 | 27.193643 | 0.029112 | 0.090207 | 0.059902 |
+| v305 | 27.578504 | 0.028198 | 0.087748 | 0.057662 |
+| v315d | 27.582989 | 0.028182 | 0.087739 | 0.057679 |
+| v316c | 27.580930 | 0.028183 | 0.087745 | 0.057673 |
+| v318e | 27.581262 | 0.028185 | 0.087743 | 0.057674 |
+
+Hard lesson for the next model:
+
+> The latest reflection was useful because it fixed the evaluation/policy
+> protocol and exposed a treehill configuration failure. It did not solve the
+> scientific bottleneck. Source-heldout LPIPS/DISTS signals are too weak or too
+> noisy to select a globally better policy than v315d. Any next-stage method
+> should treat v315d as the mean-quality frontier and must beat it directly,
+> rather than declaring success from being better than clean MeshSplatting.
+
+Next useful direction:
+
+Build a reliability model for support-transport residuals, not another selector
+weight scan. The model should predict whether a residual remains valid under
+target viewpoints using source agreement, OOD distance, view/normal consistency,
+local texture stability, support count, and perceptual train-heldout evidence.
+The acceptance rule must be frozen before target/test evaluation and compared
+against v305, v315d, v316c, v318e, and clean26000.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 Latest evidence closure on 2026-07-01, v317:
 
 ```text

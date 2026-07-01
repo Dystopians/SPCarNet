@@ -1,0 +1,720 @@
+{
+  "v305": {
+    "aggregate": {
+      "mean_psnr_gain": 0.26657784692540587,
+      "mean_ssim_gain": 0.003700548692408039,
+      "mean_min_psnr_gain": 0.01391683306169532,
+      "mean_cvar10_psnr_gain": 0.03950394460313314,
+      "total_negative_views": 8,
+      "safe_scene_count": 9,
+      "scene_count": 9
+    },
+    "scenes": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11208827481638309,
+        "ssim_gain": 0.002952544689178467,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar10_psnr_gain": -0.04755920221850296,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0007012486457824707,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 25,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain": 0.5677124421175066,
+        "ssim_gain": 0.005785043175156052,
+        "min_psnr_gain": 0.14005710063242205,
+        "cvar10_psnr_gain": 0.21370041880688953,
+        "negative_views": 0,
+        "min_ssim_gain": 0.002852320671081543,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 37,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar10_psnr_gain": 0.06868039773497496,
+        "negative_views": 1,
+        "min_ssim_gain": 0.0011790990829467773,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 30,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.08886119364080872,
+        "ssim_gain": 0.004047775810415094,
+        "min_psnr_gain": 0.025085114725499125,
+        "cvar10_psnr_gain": 0.02655331154705287,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0005679726600646973,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 22,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.1409308747749085,
+        "ssim_gain": 0.0019092063109079997,
+        "min_psnr_gain": 0.004856132126725754,
+        "cvar10_psnr_gain": 0.027260804165733177,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0002714395523071289,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 24,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0009958744049072266,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 35,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.42183782192548464,
+        "ssim_gain": 0.004989705024621425,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0008046627044677734,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 39,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "min_ssim_gain": -0.0017296671867370605,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16,
+          "learned": 0,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09075745623850276,
+        "ssim_gain": 0.0015932122866312663,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0008407831192016602,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 18,
+          "learned": 0,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      }
+    ]
+  },
+  "v315d": {
+    "aggregate": {
+      "mean_psnr_gain": 0.2691751230961524,
+      "mean_ssim_gain": 0.003718043972504198,
+      "mean_min_psnr_gain": 0.014301479513850524,
+      "mean_cvar10_psnr_gain": 0.03972570852378235,
+      "total_negative_views": 8,
+      "safe_scene_count": 9,
+      "scene_count": 9
+    },
+    "scenes": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11995854884043254,
+        "ssim_gain": 0.00298875093460083,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar10_psnr_gain": -0.04755920221850296,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0007012486457824707,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 25,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain": 0.5677124421175066,
+        "ssim_gain": 0.005785043175156052,
+        "min_psnr_gain": 0.14005710063242205,
+        "cvar10_psnr_gain": 0.21370041880688953,
+        "negative_views": 0,
+        "min_ssim_gain": 0.002852320671081543,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 37,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar10_psnr_gain": 0.06868039773497496,
+        "negative_views": 1,
+        "min_ssim_gain": 0.0011790990829467773,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 30,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.0923596316861136,
+        "ssim_gain": 0.00411434065211903,
+        "min_psnr_gain": 0.02777446740415357,
+        "cvar10_psnr_gain": 0.027897987886380093,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0005679726600646973,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 22,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.14401626243899424,
+        "ssim_gain": 0.0019136294722557068,
+        "min_psnr_gain": 0.005628597517468137,
+        "cvar10_psnr_gain": 0.02791200311224884,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0002714395523071289,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 24,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0009958744049072266,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 35,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.42183782192548464,
+        "ssim_gain": 0.004989705024621425,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0008046627044677734,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 39,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "min_ssim_gain": -0.0017296671867370605,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16,
+          "learned": 0,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09967884204178172,
+        "ssim_gain": 0.0016434755590226916,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0008407831192016602,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 18,
+          "learned": 0,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      }
+    ]
+  },
+  "v316c": {
+    "aggregate": {
+      "mean_psnr_gain": 0.2684435869062201,
+      "mean_ssim_gain": 0.003710156416609571,
+      "mean_min_psnr_gain": 0.01391683306169532,
+      "mean_cvar10_psnr_gain": 0.03950394460313314,
+      "total_negative_views": 8,
+      "safe_scene_count": 9,
+      "scene_count": 9
+    },
+    "scenes": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11995854884043254,
+        "ssim_gain": 0.00298875093460083,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar10_psnr_gain": -0.04755920221850296,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0007012486457824707,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 25,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain": 0.5677124421175066,
+        "ssim_gain": 0.005785043175156052,
+        "min_psnr_gain": 0.14005710063242205,
+        "cvar10_psnr_gain": 0.21370041880688953,
+        "negative_views": 0,
+        "min_ssim_gain": 0.002852320671081543,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 37,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar10_psnr_gain": 0.06868039773497496,
+        "negative_views": 1,
+        "min_ssim_gain": 0.0011790990829467773,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 30,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.08886119364080872,
+        "ssim_gain": 0.004047775810415094,
+        "min_psnr_gain": 0.025085114725499125,
+        "cvar10_psnr_gain": 0.02655331154705287,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0005679726600646973,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 22,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.1409308747749085,
+        "ssim_gain": 0.0019092063109079997,
+        "min_psnr_gain": 0.004856132126725754,
+        "cvar10_psnr_gain": 0.027260804165733177,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0002714395523071289,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 24,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0009958744049072266,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 35,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.42183782192548464,
+        "ssim_gain": 0.004989705024621425,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0008046627044677734,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 39,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "min_ssim_gain": -0.0017296671867370605,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16,
+          "learned": 0,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09967884204178172,
+        "ssim_gain": 0.0016434755590226916,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0008407831192016602,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 18,
+          "learned": 0,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": null
+      }
+    ]
+  },
+  "v318e": {
+    "aggregate": {
+      "mean_psnr_gain": 0.2686288291478135,
+      "mean_ssim_gain": 0.0037151349577814827,
+      "mean_min_psnr_gain": 0.01391683306169532,
+      "mean_cvar10_psnr_gain": 0.03950394460313314,
+      "total_negative_views": 8,
+      "safe_scene_count": 9,
+      "scene_count": 9
+    },
+    "scenes": [
+      {
+        "scene": "bicycle",
+        "psnr_gain": 0.11980156381277482,
+        "ssim_gain": 0.0030164837837219237,
+        "min_psnr_gain": -0.060029153144686376,
+        "cvar10_psnr_gain": -0.04755920221850296,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0007012486457824707,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 25,
+          "scene": 0
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        }
+      },
+      {
+        "scene": "bonsai",
+        "psnr_gain": 0.5677124421175066,
+        "ssim_gain": 0.005785043175156052,
+        "min_psnr_gain": 0.14005710063242205,
+        "cvar10_psnr_gain": 0.21370041880688953,
+        "negative_views": 0,
+        "min_ssim_gain": 0.002852320671081543,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 37,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        }
+      },
+      {
+        "scene": "counter",
+        "psnr_gain": 0.4263596368894508,
+        "ssim_gain": 0.006908347209294637,
+        "min_psnr_gain": -0.00361339206500233,
+        "cvar10_psnr_gain": 0.06868039773497496,
+        "negative_views": 1,
+        "min_ssim_gain": 0.0011790990829467773,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 30,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        }
+      },
+      {
+        "scene": "flowers",
+        "psnr_gain": 0.09068535884280687,
+        "ssim_gain": 0.0040648498318412085,
+        "min_psnr_gain": 0.025085114725499125,
+        "cvar10_psnr_gain": 0.02655331154705287,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0005679726600646973,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 22,
+          "scene": 0
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        }
+      },
+      {
+        "scene": "garden",
+        "psnr_gain": 0.1409308747749085,
+        "ssim_gain": 0.0019092063109079997,
+        "min_psnr_gain": 0.004856132126725754,
+        "cvar10_psnr_gain": 0.027260804165733177,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0002714395523071289,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 24,
+          "scene": 0
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        }
+      },
+      {
+        "scene": "kitchen",
+        "psnr_gain": 0.4936231605325725,
+        "ssim_gain": 0.003910861696515764,
+        "min_psnr_gain": 0.07003194619634812,
+        "cvar10_psnr_gain": 0.0908235487596644,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0009958744049072266,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 35,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        }
+      },
+      {
+        "scene": "room",
+        "psnr_gain": 0.42183782192548464,
+        "ssim_gain": 0.004989705024621425,
+        "min_psnr_gain": 0.011894511570545774,
+        "cvar10_psnr_gain": 0.039106985118980475,
+        "negative_views": 0,
+        "min_ssim_gain": 0.0008046627044677734,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 0,
+          "learned": 0,
+          "hybrid": 39,
+          "scene": 0
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        }
+      },
+      {
+        "scene": "stump",
+        "psnr_gain": 0.05702976139303506,
+        "ssim_gain": 0.001208242028951645,
+        "min_psnr_gain": -0.01318482027017609,
+        "cvar10_psnr_gain": -0.01318482027017609,
+        "negative_views": 3,
+        "min_ssim_gain": -0.0017296671867370605,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 16,
+          "learned": 0,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        }
+      },
+      {
+        "scene": "treehill",
+        "psnr_gain": 0.09967884204178172,
+        "ssim_gain": 0.0016434755590226916,
+        "min_psnr_gain": -0.04984594221641814,
+        "cvar10_psnr_gain": -0.04984594221641814,
+        "negative_views": 2,
+        "min_ssim_gain": -0.0008407831192016602,
+        "safe_vs_fixed": true,
+        "selected_variants": {
+          "fixed": 18,
+          "learned": 0,
+          "hybrid": 0,
+          "scene": 0
+        },
+        "selection_protocol": {
+          "scope": "source_heldout_before_target_loop",
+          "target_gt_used_for_selection": false,
+          "selection_frozen_before_target_loop": true,
+          "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+          "source_perceptual_uses_train_heldout_gt_only": true
+        }
+      }
+    ]
+  }
+}

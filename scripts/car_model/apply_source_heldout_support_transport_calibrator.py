@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+import torch.nn.functional as F
 from tqdm import tqdm
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,7 +31,6 @@ from scripts.car_model.train_source_heldout_support_transport_calibrator import 
     _image_metrics,
     _mean,
     _normalize,
-    _selection_objective,
     _split_calibrator_train_val,
     _split_source_heldout,
     _summarize_rows,
@@ -79,6 +79,8 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
         f"- output variant: `{payload['policy']['output_variant']}`",
         f"- selected variant: `{payload['policy']['selected_variant']}`",
         f"- per-view gate: `{payload['policy'].get('per_view_gate_mode', 'off')}`",
+        f"- source perceptual selector: `{payload['policy'].get('source_perceptual_enabled')}`",
+        f"- source objective LPIPS / DISTS weight: `{payload['policy'].get('source_objective_lpips_weight')}` / `{payload['policy'].get('source_objective_dists_weight')}`",
         f"- fixed PSNR gain: `{summary['fixed_psnr_gain']}`",
         f"- fixed SSIM gain: `{summary.get('fixed_ssim_gain')}`",
         f"- learned PSNR gain: `{summary['learned_psnr_gain']}`",
@@ -128,6 +130,7 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- selector variant: `{payload['selector'].get('selected_variant')}`",
             f"- selector views: `{payload['selector'].get('val_views')}`",
             f"- selector verdict: `{payload['selector'].get('verdict')}`",
+            f"- source perceptual: `{payload['selector'].get('source_perceptual')}`",
         ]
     if payload.get("per_view_gate"):
         gate = payload["per_view_gate"]
@@ -176,6 +179,8 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- enabled: `{risk.get('enabled')}`",
             f"- ridge: `{risk.get('ridge')}`",
             f"- reject variant: `{risk.get('reject_variant')}`",
+            f"- auto objective margin: `{risk.get('auto_objective_margin')}`",
+            f"- selected objective margin: `{risk.get('selected_objective_margin')}`",
             f"- source accept fraction: `{risk.get('source_accept_fraction')}`",
             f"- source safe vs fixed: `{risk.get('source_safe_vs_fixed')}`",
             f"- source PSNR delta vs scene: `{risk.get('source_mean_psnr_delta_vs_scene_selected')}`",
@@ -312,6 +317,107 @@ def _objective_from_metrics(row: dict[str, float], *, compute_ssim: bool) -> flo
     return float(row.get("psnr_gain", 0.0)) + (20.0 * float(row.get("ssim_gain", 0.0)) if compute_ssim else 0.0)
 
 
+def _source_objective_from_metrics(row: dict[str, float], *, compute_ssim: bool, args: argparse.Namespace) -> float:
+    return (
+        _objective_from_metrics(row, compute_ssim=compute_ssim)
+        + float(args.source_objective_lpips_weight) * float(row.get("lpips_gain", 0.0))
+        + float(args.source_objective_dists_weight) * float(row.get("dists_gain", 0.0))
+    )
+
+
+def _risk_model_objective_from_metrics(row: dict[str, float], *, compute_ssim: bool, args: argparse.Namespace) -> float:
+    if bool(args.per_view_risk_model_use_source_perceptual_objective):
+        return _source_objective_from_metrics(row, compute_ssim=compute_ssim, args=args)
+    return _objective_from_metrics(row, compute_ssim=compute_ssim)
+
+
+def _tail_values(values: list[float], fraction: float = 0.20) -> dict[str, float]:
+    if not values:
+        return {"min": 0.0, "cvar": 0.0}
+    ordered = sorted(float(v) for v in values)
+    count = max(1, int(math.ceil(float(fraction) * len(ordered))))
+    return {"min": float(ordered[0]), "cvar": float(sum(ordered[:count]) / count)}
+
+
+def _downscale_for_perceptual(image: torch.Tensor, max_side: int) -> torch.Tensor:
+    max_side = int(max_side)
+    if max_side <= 0:
+        return image
+    h, w = int(image.shape[-2]), int(image.shape[-1])
+    current = max(h, w)
+    if current <= max_side:
+        return image
+    scale = float(max_side) / float(current)
+    out_h = max(16, int(round(h * scale)))
+    out_w = max(16, int(round(w * scale)))
+    return F.interpolate(image.unsqueeze(0), size=(out_h, out_w), mode="bilinear", align_corners=False).squeeze(0)
+
+
+def _load_source_perceptual_models(device: torch.device, args: argparse.Namespace) -> dict[str, Any]:
+    models: dict[str, Any] = {"enabled": bool(args.compute_source_perceptual), "lpips": None, "dists": None}
+    if not bool(args.compute_source_perceptual):
+        return models
+    import lpips
+
+    lpips_model = lpips.LPIPS(net="alex").to(device).eval()
+    for param in lpips_model.parameters():
+        param.requires_grad_(False)
+    models["lpips"] = lpips_model
+    try:
+        import piq
+
+        dists_model = piq.DISTS(reduction="mean").to(device).eval()
+        for param in dists_model.parameters():
+            param.requires_grad_(False)
+        models["dists"] = dists_model
+        models["dists_status"] = "computed_piq_DISTS_reduction_mean"
+    except ImportError:
+        models["dists_status"] = "not_computed_missing_piq"
+    return models
+
+
+def _augment_source_perceptual_metrics(
+    row: dict[str, float],
+    *,
+    base: torch.Tensor,
+    gt: torch.Tensor,
+    delta: torch.Tensor,
+    models: dict[str, Any],
+    max_side: int,
+) -> None:
+    if not bool(models.get("enabled", False)):
+        return
+    candidate = torch.clamp(base + delta, 0.0, 1.0)
+    base_small = _downscale_for_perceptual(base, int(max_side)).unsqueeze(0)
+    candidate_small = _downscale_for_perceptual(candidate, int(max_side)).unsqueeze(0)
+    gt_small = _downscale_for_perceptual(gt, int(max_side)).unsqueeze(0)
+    with torch.no_grad():
+        lpips_model = models.get("lpips")
+        if lpips_model is not None:
+            base_lpips = float(lpips_model(base_small * 2.0 - 1.0, gt_small * 2.0 - 1.0).detach().cpu().reshape(-1)[0].item())
+            candidate_lpips = float(
+                lpips_model(candidate_small * 2.0 - 1.0, gt_small * 2.0 - 1.0).detach().cpu().reshape(-1)[0].item()
+            )
+            row.update(
+                {
+                    "base_lpips": base_lpips,
+                    "candidate_lpips": candidate_lpips,
+                    "lpips_gain": float(base_lpips - candidate_lpips),
+                }
+            )
+        dists_model = models.get("dists")
+        if dists_model is not None:
+            base_dists = float(dists_model(base_small, gt_small).detach().cpu().reshape(-1)[0].item())
+            candidate_dists = float(dists_model(candidate_small, gt_small).detach().cpu().reshape(-1)[0].item())
+            row.update(
+                {
+                    "base_dists": base_dists,
+                    "candidate_dists": candidate_dists,
+                    "dists_gain": float(base_dists - candidate_dists),
+                }
+            )
+
+
 def _candidate_learning_features(proxy: dict[str, float], variant: str, feature_names: list[str]) -> list[float]:
     base = _feature_vector(proxy, feature_names)
     return base + [
@@ -394,7 +500,32 @@ def _quantile(values: list[float], q: float) -> float:
 
 
 def _summarize_metric_rows(rows: list[dict[str, float]], *, compute_ssim: bool) -> dict[str, Any]:
-    return _summarize_rows(rows, compute_ssim=compute_ssim) if rows else {}
+    if not rows:
+        return {}
+    summary = dict(_summarize_rows(rows, compute_ssim=compute_ssim))
+    if any("lpips_gain" in row for row in rows):
+        lpips_gain = [float(row.get("lpips_gain", 0.0)) for row in rows]
+        summary.update(
+            {
+                "base_lpips": _mean([float(row.get("base_lpips", 0.0)) for row in rows]),
+                "candidate_lpips": _mean([float(row.get("candidate_lpips", 0.0)) for row in rows]),
+                "lpips_gain": _mean(lpips_gain),
+                "lpips_gain_tail": _tail_values(lpips_gain),
+                "lpips_positive_view_fraction": _mean([1.0 if value > 0.0 else 0.0 for value in lpips_gain]),
+            }
+        )
+    if any("dists_gain" in row for row in rows):
+        dists_gain = [float(row.get("dists_gain", 0.0)) for row in rows]
+        summary.update(
+            {
+                "base_dists": _mean([float(row.get("base_dists", 0.0)) for row in rows]),
+                "candidate_dists": _mean([float(row.get("candidate_dists", 0.0)) for row in rows]),
+                "dists_gain": _mean(dists_gain),
+                "dists_gain_tail": _tail_values(dists_gain),
+                "dists_positive_view_fraction": _mean([1.0 if value > 0.0 else 0.0 for value in dists_gain]),
+            }
+        )
+    return summary
 
 
 def _summary_psnr_tail(summary: dict[str, Any], name: str) -> float:
@@ -542,7 +673,7 @@ def _fit_per_view_knn_policy(
                 "variant": variant,
                 "vector": vector,
                 "metrics": candidate["metrics"],
-                "score": _objective_from_metrics(candidate["metrics"], compute_ssim=compute_ssim),
+                "score": _source_objective_from_metrics(candidate["metrics"], compute_ssim=compute_ssim, args=args),
             }
             entries_by_variant[variant].append(entry)
             all_vectors.append(vector)
@@ -732,7 +863,7 @@ def _fit_per_view_knn_policy(
             if bool(args.per_view_knn_require_source_safe) and not safe_vs_fixed:
                 continue
             objective = (
-                _objective_from_metrics(source_summary, compute_ssim=compute_ssim)
+                _source_objective_from_metrics(source_summary, compute_ssim=compute_ssim, args=args)
                 + float(args.per_view_knn_source_cvar_weight) * _summary_psnr_tail(source_summary, "cvar")
                 + float(args.per_view_knn_source_min_weight) * _summary_psnr_tail(source_summary, "min")
                 + float(args.per_view_knn_source_positive_weight) * _positive_view_fraction(source_summary)
@@ -792,6 +923,10 @@ def _fit_per_view_knn_policy(
             "threshold_mode": "source_tail_auto" if bool(args.per_view_knn_auto_threshold) else "fixed",
             "selected_threshold": selected_threshold,
             "threshold_trials": threshold_trials if bool(args.per_view_knn_auto_threshold) else [],
+            "source_objective_weights": {
+                "lpips": float(args.source_objective_lpips_weight),
+                "dists": float(args.source_objective_dists_weight),
+            },
         }
 
     if mean_delta < float(args.per_view_knn_min_source_psnr_delta):
@@ -842,6 +977,10 @@ def _fit_per_view_knn_policy(
         "threshold_mode": "source_tail_auto" if bool(args.per_view_knn_auto_threshold) else "fixed",
         "selected_threshold": selected_threshold,
         "threshold_trials": threshold_trials if bool(args.per_view_knn_auto_threshold) else [],
+        "source_objective_weights": {
+            "lpips": float(args.source_objective_lpips_weight),
+            "dists": float(args.source_objective_dists_weight),
+        },
     }
 
 
@@ -961,7 +1100,7 @@ def _fit_per_view_risk_model_policy(
             metrics = candidate["metrics"]
             features = _candidate_learning_features(candidate["proxy"], variant, feature_names)
             target = [
-                _objective_from_metrics(metrics, compute_ssim=compute_ssim),
+                _risk_model_objective_from_metrics(metrics, compute_ssim=compute_ssim, args=args),
                 float(metrics.get("psnr_gain", 0.0)),
                 float(metrics.get("ssim_gain", 0.0)) if compute_ssim else 0.0,
             ]
@@ -1014,7 +1153,7 @@ def _fit_per_view_risk_model_policy(
         else float("inf")
     )
 
-    def choose_for_row(row: dict[str, Any], model: dict[str, Any]) -> tuple[str, dict[str, list[float]]]:
+    def predict_for_row(row: dict[str, Any], model: dict[str, Any]) -> dict[str, list[float]]:
         predictions: dict[str, list[float]] = {}
         for variant in variants:
             candidate = row["candidates"][variant]
@@ -1022,47 +1161,149 @@ def _fit_per_view_risk_model_policy(
                 model,
                 _candidate_learning_features(candidate["proxy"], variant, feature_names),
             )
+        return predictions
+
+    def choose_from_predictions(
+        predictions: dict[str, list[float]],
+        *,
+        objective_margin: float,
+    ) -> str:
         scene_pred = predictions[selected_variant]
         best_variant, best_pred = max(predictions.items(), key=lambda item: item[1][0])
-        if best_pred[0] < scene_pred[0] + float(args.per_view_risk_model_min_predicted_objective_delta):
-            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop", predictions
+        if best_pred[0] < scene_pred[0] + float(objective_margin):
+            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop"
         if best_pred[1] < scene_pred[1] + float(args.per_view_risk_model_min_predicted_psnr_delta_vs_scene):
-            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop", predictions
+            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop"
         if (
             compute_ssim
             and best_pred[2] < scene_pred[2] + float(args.per_view_risk_model_min_predicted_ssim_delta_vs_scene)
         ):
-            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop", predictions
+            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop"
         if best_pred[1] < float(args.per_view_risk_model_min_predicted_psnr):
-            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop", predictions
+            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop"
         if compute_ssim and best_pred[2] < float(args.per_view_risk_model_min_predicted_ssim):
-            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop", predictions
-        return best_variant, predictions
+            return "__scene__" if str(args.per_view_risk_model_reject_variant) == "scene" else "noop"
+        return best_variant
 
-    source_policy_rows: list[dict[str, float]] = []
-    selected_counts: dict[str, int] = {"fixed": 0, "learned": 0, "hybrid": 0, "noop": 0, "scene": 0}
-    loo_predictions: list[dict[str, Any]] = []
+    loo_items: list[dict[str, Any]] = []
     for view, row in rows_by_view.items():
         train_examples = [example for example in examples if str(example["view"]) != str(view)]
         model = _fit_ridge_predictor(train_examples, ridge=float(args.per_view_risk_model_ridge))
         if model is None:
-            selected_counts["scene"] += 1
-            source_policy_rows.append(row["candidates"][selected_variant]["metrics"])
+            loo_items.append({"view": view, "row": row, "predictions": None})
             continue
-        chosen_variant, predictions = choose_for_row(row, model)
-        loo_predictions.append({"view": view, "chosen_variant": chosen_variant, "predictions": predictions})
-        if chosen_variant == "__scene__":
-            selected_counts["scene"] += 1
-            source_policy_rows.append(row["candidates"][selected_variant]["metrics"])
-        elif chosen_variant == "noop":
-            selected_counts["noop"] += 1
-            # The chosen candidate is irrelevant for no-op metrics; use scene metrics only as a template.
-            source_policy_rows.append(_noop_like(row["candidates"][selected_variant]["metrics"]))
-        else:
-            selected_counts[chosen_variant] += 1
-            source_policy_rows.append(row["candidates"][chosen_variant]["metrics"])
+        loo_items.append({"view": view, "row": row, "predictions": predict_for_row(row, model)})
 
-    source_summary = _summarize_metric_rows(source_policy_rows, compute_ssim=compute_ssim)
+    def evaluate_risk_margin(objective_margin: float) -> tuple[dict[str, Any], dict[str, int], list[dict[str, float]], list[dict[str, Any]]]:
+        source_policy_rows: list[dict[str, float]] = []
+        selected_counts: dict[str, int] = {"fixed": 0, "learned": 0, "hybrid": 0, "noop": 0, "scene": 0}
+        predictions_log: list[dict[str, Any]] = []
+        for item in loo_items:
+            row = item["row"]
+            predictions = item.get("predictions")
+            if predictions is None:
+                selected_counts["scene"] += 1
+                source_policy_rows.append(row["candidates"][selected_variant]["metrics"])
+                predictions_log.append({"view": item["view"], "chosen_variant": "__scene__", "predictions": None})
+                continue
+            chosen_variant = choose_from_predictions(predictions, objective_margin=float(objective_margin))
+            predictions_log.append({"view": item["view"], "chosen_variant": chosen_variant, "predictions": predictions})
+            if chosen_variant == "__scene__":
+                selected_counts["scene"] += 1
+                source_policy_rows.append(row["candidates"][selected_variant]["metrics"])
+            elif chosen_variant == "noop":
+                selected_counts["noop"] += 1
+                source_policy_rows.append(_noop_like(row["candidates"][selected_variant]["metrics"]))
+            else:
+                selected_counts[chosen_variant] += 1
+                source_policy_rows.append(row["candidates"][chosen_variant]["metrics"])
+        return (
+            _summarize_metric_rows(source_policy_rows, compute_ssim=compute_ssim),
+            selected_counts,
+            source_policy_rows,
+            predictions_log,
+        )
+
+    selected_objective_margin = float(args.per_view_risk_model_min_predicted_objective_delta)
+    risk_margin_trials: list[dict[str, Any]] = []
+    if bool(args.per_view_risk_model_auto_objective_margin):
+        candidate_margins = {selected_objective_margin}
+        for item in loo_items:
+            predictions = item.get("predictions")
+            if not predictions:
+                continue
+            scene_pred = predictions[selected_variant]
+            best_variant, best_pred = max(predictions.items(), key=lambda pair: pair[1][0])
+            if best_variant != selected_variant:
+                candidate_margins.add(max(0.0, float(best_pred[0]) - float(scene_pred[0])))
+        if candidate_margins:
+            ordered = sorted(candidate_margins)
+            candidate_margins.add(max(0.0, ordered[0] - 1.0e-9))
+            candidate_margins.add(ordered[-1] + 1.0e-9)
+        best_trial: dict[str, Any] | None = None
+        for margin in sorted(candidate_margins):
+            trial_summary, trial_counts, _, _ = evaluate_risk_margin(float(margin))
+            reject_count = int(trial_counts["noop"] + trial_counts["scene"])
+            accept_fraction_trial = 1.0 - float(reject_count / max(len(loo_items), 1))
+            mean_delta_trial = float(trial_summary.get("psnr_gain", 0.0)) - float(selector_payload["summaries"][selected_variant].get("psnr_gain", 0.0))
+            ssim_delta_trial = (
+                float(trial_summary.get("ssim_gain", 0.0)) - float(selector_payload["summaries"][selected_variant].get("ssim_gain", 0.0))
+                if compute_ssim
+                else 0.0
+            )
+            cvar_delta_trial = _summary_psnr_tail(trial_summary, "cvar") - _summary_psnr_tail(selector_payload["summaries"][selected_variant], "cvar")
+            min_delta_trial = _summary_psnr_tail(trial_summary, "min") - _summary_psnr_tail(selector_payload["summaries"][selected_variant], "min")
+            positive_fraction_delta_trial = _positive_view_fraction(trial_summary) - _positive_view_fraction(selector_payload["summaries"][selected_variant])
+            safe_vs_fixed_trial = (
+                float(trial_summary.get("psnr_gain", 0.0)) >= float(selector_payload["summaries"]["fixed"].get("psnr_gain", 0.0)) - float(args.selected_safe_tolerance_psnr)
+                and (
+                    not compute_ssim
+                    or float(trial_summary.get("ssim_gain", 0.0))
+                    >= float(selector_payload["summaries"]["fixed"].get("ssim_gain", 0.0)) - float(args.selected_safe_tolerance_ssim)
+                )
+            )
+            objective = (
+                _source_objective_from_metrics(trial_summary, compute_ssim=compute_ssim, args=args)
+                + float(args.per_view_risk_model_source_cvar_weight) * _summary_psnr_tail(trial_summary, "cvar")
+                + float(args.per_view_risk_model_source_min_weight) * _summary_psnr_tail(trial_summary, "min")
+                + float(args.per_view_risk_model_source_positive_weight) * _positive_view_fraction(trial_summary)
+            )
+            trial = {
+                "objective_margin": float(margin),
+                "objective": float(objective),
+                "accept_fraction": float(accept_fraction_trial),
+                "source_summary": trial_summary,
+                "source_selected_counts": trial_counts,
+                "source_mean_psnr_delta_vs_scene_selected": mean_delta_trial,
+                "source_mean_ssim_delta_vs_scene_selected": ssim_delta_trial,
+                "source_cvar_psnr_delta_vs_scene_selected": cvar_delta_trial,
+                "source_min_psnr_delta_vs_scene_selected": min_delta_trial,
+                "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta_trial,
+                "source_safe_vs_fixed": bool(safe_vs_fixed_trial),
+            }
+            risk_margin_trials.append(trial)
+            if accept_fraction_trial < float(args.per_view_risk_model_min_accept_fraction):
+                continue
+            if accept_fraction_trial > float(args.per_view_risk_model_max_accept_fraction):
+                continue
+            if mean_delta_trial < float(args.per_view_risk_model_min_source_psnr_delta):
+                continue
+            if compute_ssim and ssim_delta_trial < float(args.per_view_risk_model_min_source_ssim_delta):
+                continue
+            if cvar_delta_trial < float(args.per_view_risk_model_min_source_cvar_delta):
+                continue
+            if min_delta_trial < float(args.per_view_risk_model_min_source_min_delta):
+                continue
+            if positive_fraction_delta_trial < float(args.per_view_risk_model_min_source_positive_fraction_delta):
+                continue
+            if bool(args.per_view_risk_model_require_source_safe) and not safe_vs_fixed_trial:
+                continue
+            if best_trial is None or float(objective) > float(best_trial["objective"]):
+                best_trial = trial
+        if best_trial is not None:
+            selected_objective_margin = float(best_trial["objective_margin"])
+
+    source_summary, selected_counts, _, loo_predictions = evaluate_risk_margin(selected_objective_margin)
     fixed_summary = selector_payload["summaries"]["fixed"]
     scene_selected_summary = selector_payload["summaries"][selected_variant]
     mean_delta = float(source_summary.get("psnr_gain", 0.0)) - float(scene_selected_summary.get("psnr_gain", 0.0))
@@ -1099,6 +1340,9 @@ def _fit_per_view_risk_model_policy(
         "source_safe_vs_fixed": bool(safe_vs_fixed),
         "source_selected_counts": selected_counts,
         "source_accept_fraction": accept_fraction,
+        "auto_objective_margin": bool(args.per_view_risk_model_auto_objective_margin),
+        "selected_objective_margin": float(selected_objective_margin),
+        "objective_margin_trials": risk_margin_trials,
         "ood_guard_enabled": bool(args.per_view_risk_model_enable_ood_guard),
         "ood_quantile": float(args.per_view_risk_model_ood_quantile),
         "ood_source_distance_count": int(len(ood_source_distances)),
@@ -1107,6 +1351,11 @@ def _fit_per_view_risk_model_policy(
             "min": min(ood_source_distances) if ood_source_distances else None,
             "mean": _mean(ood_source_distances) if ood_source_distances else None,
             "max": max(ood_source_distances) if ood_source_distances else None,
+        },
+        "source_objective_weights": {
+            "lpips": float(args.source_objective_lpips_weight),
+            "dists": float(args.source_objective_dists_weight),
+            "used_by_risk_model": bool(args.per_view_risk_model_use_source_perceptual_objective),
         },
         "loo_predictions": loo_predictions,
     }
@@ -1175,7 +1424,7 @@ def _fit_per_view_risk_model_policy(
         "source_entries_by_variant": entries_by_variant,
         "ood_feature_mean": ood_feature_mean,
         "ood_feature_std": ood_feature_std,
-        "min_predicted_objective_delta": float(args.per_view_risk_model_min_predicted_objective_delta),
+        "min_predicted_objective_delta": float(selected_objective_margin),
         "min_predicted_psnr_delta_vs_scene": float(args.per_view_risk_model_min_predicted_psnr_delta_vs_scene),
         "min_predicted_ssim_delta_vs_scene": float(args.per_view_risk_model_min_predicted_ssim_delta_vs_scene),
         "min_predicted_psnr": float(args.per_view_risk_model_min_predicted_psnr),
@@ -1365,6 +1614,8 @@ def _candidate_passes_guard(
     compute_ssim: bool,
     min_psnr_delta: float,
     min_ssim_delta: float,
+    min_lpips_delta: float,
+    min_dists_delta: float,
 ) -> bool:
     if float(row.get("psnr_gain", 0.0)) <= 0.0:
         return False
@@ -1374,6 +1625,12 @@ def _candidate_passes_guard(
         if float(row.get("ssim_gain", 0.0)) <= 0.0:
             return False
         if float(row.get("ssim_gain", 0.0)) - float(fixed.get("ssim_gain", 0.0)) < float(min_ssim_delta):
+            return False
+    if "lpips_gain" in row and "lpips_gain" in fixed:
+        if float(row.get("lpips_gain", 0.0)) - float(fixed.get("lpips_gain", 0.0)) < float(min_lpips_delta):
+            return False
+    if "dists_gain" in row and "dists_gain" in fixed:
+        if float(row.get("dists_gain", 0.0)) - float(fixed.get("dists_gain", 0.0)) < float(min_dists_delta):
             return False
     return True
 
@@ -1400,6 +1657,7 @@ def _select_variant_from_source_heldout(
 
     candidate_rows: dict[str, list[dict[str, float]]] = {"fixed": [], "learned": [], "hybrid": []}
     per_view: list[dict[str, Any]] = []
+    source_perceptual_models = _load_source_perceptual_models(device, args)
     model.eval()
     with torch.no_grad():
         for target in tqdm(selector_val_frames, desc="source-heldout output selector"):
@@ -1431,6 +1689,14 @@ def _select_variant_from_source_heldout(
                     compute_ssim=bool(args.compute_ssim),
                     ssim_max_side=int(args.ssim_max_side),
                 )
+                _augment_source_perceptual_metrics(
+                    row,
+                    base=ev.base,
+                    gt=gt,
+                    delta=delta,
+                    models=source_perceptual_models,
+                    max_side=int(args.source_perceptual_max_side),
+                )
                 row["view"] = target.name
                 candidate_rows[variant].append(row)
                 per_view_candidates[variant] = {
@@ -1447,7 +1713,7 @@ def _select_variant_from_source_heldout(
             )
 
     summaries = {
-        variant: _summarize_rows(rows, compute_ssim=bool(args.compute_ssim))
+        variant: _summarize_metric_rows(rows, compute_ssim=bool(args.compute_ssim))
         for variant, rows in candidate_rows.items()
     }
     fixed_summary = summaries["fixed"]
@@ -1460,12 +1726,14 @@ def _select_variant_from_source_heldout(
             compute_ssim=bool(args.compute_ssim),
             min_psnr_delta=float(args.selector_min_vs_fixed_psnr_delta),
             min_ssim_delta=float(args.selector_min_vs_fixed_ssim_delta),
+            min_lpips_delta=float(args.selector_min_vs_fixed_lpips_delta),
+            min_dists_delta=float(args.selector_min_vs_fixed_dists_delta),
         )
     ]
     if passing:
         selected_variant = max(
             passing,
-            key=lambda name: _selection_objective(summaries[name], compute_ssim=bool(args.compute_ssim)),
+            key=lambda name: _source_objective_from_metrics(summaries[name], compute_ssim=bool(args.compute_ssim), args=args),
         )
         verdict = "source-heldout selector found a learned candidate that beats fixed on the guard axes"
     else:
@@ -1479,6 +1747,16 @@ def _select_variant_from_source_heldout(
         "verdict": verdict,
         "min_vs_fixed_psnr_delta": float(args.selector_min_vs_fixed_psnr_delta),
         "min_vs_fixed_ssim_delta": float(args.selector_min_vs_fixed_ssim_delta),
+        "min_vs_fixed_lpips_delta": float(args.selector_min_vs_fixed_lpips_delta),
+        "min_vs_fixed_dists_delta": float(args.selector_min_vs_fixed_dists_delta),
+        "source_perceptual": {
+            "enabled": bool(args.compute_source_perceptual),
+            "max_side": int(args.source_perceptual_max_side),
+            "lpips_status": "computed_lpips_alex" if source_perceptual_models.get("lpips") is not None else "not_computed",
+            "dists_status": str(source_perceptual_models.get("dists_status", "not_computed")),
+            "objective_lpips_weight": float(args.source_objective_lpips_weight),
+            "objective_dists_weight": float(args.source_objective_dists_weight),
+        },
     }
 
 
@@ -1751,6 +2029,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "method": "apply v302 constrained hybrid support-transport calibrator",
         "target_gt_usage": "GT read only after candidate images are saved, for evaluation",
+        "selection_protocol": {
+            "scope": "source_heldout_before_target_loop",
+            "target_gt_used_for_selection": False,
+            "selection_frozen_before_target_loop": True,
+            "target_gt_first_read_stage": "post_render_eval_after_selected_image_save",
+            "source_perceptual_uses_train_heldout_gt_only": bool(args.compute_source_perceptual),
+        },
         "checkpoint": str(args.checkpoint),
         "base_model_path": str(base_model),
         "base_method_name": base_method,
@@ -1768,6 +2053,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "output_variant": str(args.output_variant),
             "selected_variant": selected_variant,
             "per_view_gate_mode": active_gate,
+            "source_perceptual_enabled": bool(args.compute_source_perceptual),
+            "source_perceptual_max_side": int(args.source_perceptual_max_side),
+            "source_objective_lpips_weight": float(args.source_objective_lpips_weight),
+            "source_objective_dists_weight": float(args.source_objective_dists_weight),
         },
         "evidence_config": {
             "k": int(args.k),
@@ -1861,6 +2150,8 @@ def main() -> None:
     parser.add_argument("--max_selector_views", type=int, default=0)
     parser.add_argument("--selector_min_vs_fixed_psnr_delta", type=float, default=0.0)
     parser.add_argument("--selector_min_vs_fixed_ssim_delta", type=float, default=0.0)
+    parser.add_argument("--selector_min_vs_fixed_lpips_delta", type=float, default=-1.0e9)
+    parser.add_argument("--selector_min_vs_fixed_dists_delta", type=float, default=-1.0e9)
     parser.add_argument("--selected_safe_tolerance_psnr", type=float, default=1.0e-12)
     parser.add_argument("--selected_safe_tolerance_ssim", type=float, default=1.0e-12)
     parser.add_argument("--enable_per_view_risk_gate", action="store_true")
@@ -1916,11 +2207,15 @@ def main() -> None:
     parser.add_argument("--per_view_risk_model_allow_when_scene_fixed", action="store_true")
     parser.add_argument("--per_view_risk_model_require_source_safe", action="store_true")
     parser.add_argument("--per_view_risk_model_min_accept_fraction", type=float, default=0.0)
+    parser.add_argument("--per_view_risk_model_max_accept_fraction", type=float, default=1.0)
     parser.add_argument("--per_view_risk_model_min_source_psnr_delta", type=float, default=0.0)
     parser.add_argument("--per_view_risk_model_min_source_ssim_delta", type=float, default=-1.0e9)
     parser.add_argument("--per_view_risk_model_min_source_cvar_delta", type=float, default=-1.0e9)
     parser.add_argument("--per_view_risk_model_min_source_min_delta", type=float, default=-1.0e9)
     parser.add_argument("--per_view_risk_model_min_source_positive_fraction_delta", type=float, default=-1.0e9)
+    parser.add_argument("--per_view_risk_model_source_cvar_weight", type=float, default=0.25)
+    parser.add_argument("--per_view_risk_model_source_min_weight", type=float, default=0.10)
+    parser.add_argument("--per_view_risk_model_source_positive_weight", type=float, default=0.25)
     parser.add_argument("--per_view_risk_model_min_predicted_objective_delta", type=float, default=0.0)
     parser.add_argument("--per_view_risk_model_min_predicted_psnr_delta_vs_scene", type=float, default=-1.0e9)
     parser.add_argument("--per_view_risk_model_min_predicted_ssim_delta_vs_scene", type=float, default=-1.0e9)
@@ -1929,6 +2224,8 @@ def main() -> None:
     parser.add_argument("--per_view_risk_model_enable_ood_guard", action="store_true")
     parser.add_argument("--per_view_risk_model_ood_quantile", type=float, default=0.90)
     parser.add_argument("--per_view_risk_model_ood_min_samples", type=int, default=4)
+    parser.add_argument("--per_view_risk_model_use_source_perceptual_objective", action="store_true")
+    parser.add_argument("--per_view_risk_model_auto_objective_margin", action="store_true")
     parser.add_argument("--residual_clip", type=float, default=0.25)
     parser.add_argument("--min_confidence", type=float, default=1.0e-4)
     parser.add_argument("--depth_abs_tol", type=float, default=0.02)
@@ -1937,6 +2234,10 @@ def main() -> None:
     parser.add_argument("--evidence_max_side", type=int, default=512)
     parser.add_argument("--compute_ssim", action="store_true")
     parser.add_argument("--ssim_max_side", type=int, default=384)
+    parser.add_argument("--compute_source_perceptual", action="store_true")
+    parser.add_argument("--source_perceptual_max_side", type=int, default=256)
+    parser.add_argument("--source_objective_lpips_weight", type=float, default=0.0)
+    parser.add_argument("--source_objective_dists_weight", type=float, default=0.0)
     parser.add_argument("--min_hybrid_vs_fixed_psnr_delta", type=float, default=0.0)
     parser.add_argument("--min_hybrid_vs_fixed_ssim_delta", type=float, default=0.0)
     parser.add_argument("--save_example_views", type=int, default=0)
