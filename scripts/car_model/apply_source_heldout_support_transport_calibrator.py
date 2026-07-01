@@ -1960,6 +1960,8 @@ def _fit_pairwise_dominance_policy(
         "ood_quantile": float(args.pairwise_dominance_ood_quantile),
         "ood_source_distance_threshold": float(ood_threshold),
     }
+    if selected_counts["incumbent"] >= len(rows_by_view):
+        return {"enabled": False, "verdict": "pairwise dominance accepted no source views", **base_payload}
     if accept_fraction < float(args.pairwise_dominance_min_accept_fraction):
         return {"enabled": False, "verdict": "pairwise dominance accepted too few source views", **base_payload}
     if accept_fraction > float(args.pairwise_dominance_max_accept_fraction):
@@ -3070,6 +3072,19 @@ def _fit_source_reliability_policy(
         "calibrated_lcb_mode": str(args.source_reliability_calibrated_lcb_mode),
         "source_reliability_calibration": calibration_payload,
         "fixed_scene_min_source_ssim_delta": float(args.source_reliability_fixed_scene_min_source_ssim_delta),
+        "min_accept_fraction": float(args.source_reliability_min_accept_fraction),
+        "max_accept_fraction": float(args.source_reliability_max_accept_fraction),
+        "min_source_psnr_delta": float(args.source_reliability_min_source_psnr_delta),
+        "min_source_ssim_delta": float(args.source_reliability_min_source_ssim_delta),
+        "min_source_cvar_delta": float(args.source_reliability_min_source_cvar_delta),
+        "min_source_min_delta": float(args.source_reliability_min_source_min_delta),
+        "min_source_positive_fraction_delta": float(args.source_reliability_min_source_positive_fraction_delta),
+        "min_predicted_objective_delta_vs_scene": float(selected_objective_margin),
+        "min_predicted_psnr_delta_vs_scene": float(args.source_reliability_min_predicted_psnr_delta_vs_scene),
+        "min_predicted_ssim_delta_vs_scene": float(args.source_reliability_min_predicted_ssim_delta_vs_scene),
+        "min_predicted_lpips_delta_vs_scene": float(args.source_reliability_min_predicted_lpips_delta_vs_scene),
+        "min_predicted_dists_delta_vs_scene": float(args.source_reliability_min_predicted_dists_delta_vs_scene),
+        "forbid_fixed_when_scene_nonfixed": bool(args.source_reliability_forbid_fixed_when_scene_nonfixed),
         "loo_predictions": loo_predictions,
     }
     if (
@@ -3119,11 +3134,6 @@ def _fit_source_reliability_policy(
         "source_entries_by_variant": entries_by_variant,
         "ood_feature_mean": ood_mean,
         "ood_feature_std": ood_std,
-        "min_predicted_objective_delta_vs_scene": float(selected_objective_margin),
-        "min_predicted_psnr_delta_vs_scene": float(args.source_reliability_min_predicted_psnr_delta_vs_scene),
-        "min_predicted_ssim_delta_vs_scene": float(args.source_reliability_min_predicted_ssim_delta_vs_scene),
-        "min_predicted_lpips_delta_vs_scene": float(args.source_reliability_min_predicted_lpips_delta_vs_scene),
-        "min_predicted_dists_delta_vs_scene": float(args.source_reliability_min_predicted_dists_delta_vs_scene),
         "decision_prediction_source": (
             "raw_incumbent_with_calibrated_lcb_override"
             if bool(calibration_payload.get("enabled", False))
@@ -3133,7 +3143,6 @@ def _fit_source_reliability_policy(
             else "raw_prediction"
         ),
         "calibrated_lcb_mode": str(args.source_reliability_calibrated_lcb_mode),
-        "forbid_fixed_when_scene_nonfixed": bool(args.source_reliability_forbid_fixed_when_scene_nonfixed),
         **base_payload,
     }
 
@@ -3547,6 +3556,42 @@ def _select_variant_from_source_heldout(
             "objective_dists_weight": float(args.source_objective_dists_weight),
         },
     }
+
+
+def _apply_policy_profile(args: argparse.Namespace) -> None:
+    profile = str(getattr(args, "policy_profile", "none"))
+    if profile == "none":
+        return
+    if profile != "v322c_incumbent":
+        raise ValueError(f"unsupported policy profile: {profile}")
+
+    args.output_variant = "source_heldout_auto"
+    args.enable_candidate_ladder = True
+    args.candidate_ladder_blends = "0.25,0.75"
+    args.enable_per_view_knn_policy = True
+    args.per_view_knn_base_variants_only = True
+    args.per_view_knn_reject_variant = "scene"
+    args.per_view_knn_forbid_fixed_when_scene_nonfixed = True
+    args.per_view_knn_min_score_delta_vs_scene = 5.0e-4
+
+    args.enable_source_reliability_policy = True
+    args.source_reliability_reject_variant = "scene"
+    args.source_reliability_min_predicted_objective_delta_vs_scene = -1.0e-9
+    args.source_reliability_min_predicted_psnr_delta_vs_scene = 0.0
+    args.source_reliability_min_predicted_ssim_delta_vs_scene = -2.0e-4
+    args.source_reliability_enable_calibrated_lcb = True
+    args.source_reliability_calibrated_lcb_mode = "raw_incumbent"
+    args.source_reliability_calibration_quantile = 0.5
+    args.source_reliability_calibration_scale = 0.5
+    args.source_reliability_enable_ood_guard = True
+    args.source_reliability_ood_quantile = 0.8
+    args.source_reliability_min_source_min_delta = 0.0
+    args.source_reliability_fixed_scene_min_source_ssim_delta = -2.0e-5
+    args.source_reliability_forbid_fixed_when_scene_nonfixed = True
+
+    args.evidence_max_side = 256
+    args.compute_ssim = True
+    args.ssim_max_side = 256
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
@@ -4065,6 +4110,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "source_perceptual_max_side": int(args.source_perceptual_max_side),
             "source_objective_lpips_weight": float(args.source_objective_lpips_weight),
             "source_objective_dists_weight": float(args.source_objective_dists_weight),
+            "policy_profile": str(getattr(args, "policy_profile", "none")),
+        },
+        "eval_config": {
+            "compute_ssim": bool(args.compute_ssim),
+            "ssim_max_side": int(args.ssim_max_side),
         },
         "evidence_config": {
             "k": int(args.k),
@@ -4194,6 +4244,16 @@ def main() -> None:
         help="Comma-separated residual blend strengths to add as source-heldout candidates when candidate ladder is enabled.",
     )
     parser.add_argument("--output_variant", default="hybrid")
+    parser.add_argument(
+        "--policy_profile",
+        choices=["none", "v322c_incumbent"],
+        default="none",
+        help=(
+            "Apply a named frozen policy profile. v322c_incumbent pins the "
+            "archived v322C incumbent-preserving source/KNN policy and its "
+            "fair evidence/SSIM evaluation resolution."
+        ),
+    )
     parser.add_argument("--selector_val_stride", type=int, default=3)
     parser.add_argument("--selector_val_offset", type=int, default=0)
     parser.add_argument("--max_selector_views", type=int, default=0)
@@ -4398,6 +4458,7 @@ def main() -> None:
     parser.add_argument("--wandb_project", default="spcarnet-transport-diagnostics")
     parser.add_argument("--wandb_run_name", default="apply-v302-support-transport")
     args = parser.parse_args()
+    _apply_policy_profile(args)
     payload = run(args)
     print(
         json.dumps(

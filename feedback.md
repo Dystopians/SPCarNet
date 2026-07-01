@@ -63,6 +63,81 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-07-01 v325b/v326 Replay Closure Feedback Addendum
+
+This addendum records the latest post-v322C lesson for the next model/prompt.
+
+Main new implementation:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+scripts/car_model/audit_v322c_replay_consistency.py
+```
+
+Detailed log and machine-readable summaries:
+
+```text
+docs/car_model/7-01-v325-v326-ReplayClosure-And-PairwiseGuard-Log.md
+docs/car_model/results/v325b_full9_v322c_profile_replay_audit.json
+docs/car_model/results/v325b_knnfix_delta3_v322c_profile_replay_audit.json
+docs/car_model/results/v326_pairwise_strict_treehill_vs_v322c_audit.json
+docs/car_model/results/v326b_zeroaccept_guard_treehill_vs_v322c_audit.json
+```
+
+What changed:
+
+- Added `--policy_profile v322c_incumbent` so archived v322C is no longer a
+  hand-reconstructed command.
+- The profile includes the hidden fairness-critical settings that were missing
+  from earlier representative commands: source-reliability predictive gates,
+  KNN fixed-downgrade guard, KNN scene-margin, calibrated LCB/OOD settings,
+  `evidence_max_side=256`, and `ssim_max_side=256`.
+- Added an audit script that compares archived v322C and replay/current report
+  roots scene-by-scene, including per-view output variant mismatches and
+  macro gain deltas.
+- Added a pairwise safety guard: target-time pairwise overrides are disabled if
+  source leave-one-out accepted zero pairwise candidates.
+
+Key result:
+
+```text
+v325b full9 replay vs archived v322C:
+scenes = 9/9
+macro_delta_psnr_gain = 0.0
+macro_delta_ssim_gain = 0.0
+macro_delta_candidate_psnr = 0.0
+macro_delta_candidate_ssim = 0.0
+```
+
+Important negative evidence:
+
+- v326 strict pairwise looked principled but regressed treehill because source
+  LOO accepted `0/11` pairwise candidates while the target full model still
+  overrode two target views to `mix0250`.
+- This confirms that the current bottleneck is target-free selection, not raw
+  candidate capacity. The strict target-GT oracle remains positive, but the
+  learned/source-only selector cannot yet capture it safely.
+
+Next recommended prompt for a stronger model:
+
+```text
+Start from the frozen v322C replay profile, not from handwritten flags.
+Use --policy_profile v322c_incumbent as the incumbent baseline and preserve the
+v325b full9 zero-delta replay audit. Build v327 as a source-validated selector
+that may override incumbent only when source LOO proves nonzero accepted views
+and positive PSNR/SSIM/tail deltas against the exact incumbent. Do not enable a
+target-time full model when source LOO accepts zero candidates. First beat v322C
+on focused oracle-gap scenes (treehill, stump, room, bicycle) without any SSIM
+or tail regression, then run full9 and frontier LPIPS/DISTS. Document commands,
+W&B offline paths, report roots, audit JSONs, and failure modes.
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v321G Feedback Addendum: Reflection Finally Produced a Clean Incumbent Upgrade
 
 New files:

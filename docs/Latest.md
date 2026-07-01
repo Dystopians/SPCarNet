@@ -1690,6 +1690,57 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-07-01 Update: v325b Replay Closure and v326 Pairwise Guard
+
+Current best verified incumbent remains archived v322C. The latest work did not
+produce a new metric gain over v322C, but it fixed a major fairness blocker:
+current code can now exactly replay archived v322C with a frozen policy profile.
+
+New interface:
+
+```text
+--policy_profile v322c_incumbent
+```
+
+The profile pins candidate ladder, source reliability gates, KNN fallback
+details, OOD/LCB calibration, `evidence_max_side=256`, and `ssim_max_side=256`.
+
+Key artifacts:
+
+```text
+docs/car_model/7-01-v325-v326-ReplayClosure-And-PairwiseGuard-Log.md
+docs/car_model/results/v325b_full9_v322c_profile_replay_audit.json
+docs/car_model/results/v326_pairwise_strict_treehill_vs_v322c_audit.json
+docs/car_model/results/v326b_zeroaccept_guard_treehill_vs_v322c_audit.json
+scripts/car_model/audit_v322c_replay_consistency.py
+```
+
+Full9 replay audit against archived v322C:
+
+```text
+scenes: 9/9
+missing archive scenes: 0
+missing replay scenes: 0
+macro_delta_psnr_gain: 0.0
+macro_delta_ssim_gain: 0.0
+macro_delta_candidate_psnr: 0.0
+macro_delta_candidate_ssim: 0.0
+```
+
+Pairwise dominance negative evidence:
+
+- strict v326 treehill changed two views without source LOO support and regressed
+  v322C by `-0.002158558 PSNR gain / -0.000002606 SSIM gain`;
+- v326b adds a hard guard: if pairwise accepts no source LOO views, it cannot
+  override incumbent at target time;
+- after the guard, treehill returns exactly to v322C.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Update: v314 Scene-Fixed Risk + KNN Policy
 
 Implemented a stricter composition rule in:

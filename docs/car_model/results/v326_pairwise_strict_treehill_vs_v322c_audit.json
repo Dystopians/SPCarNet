@@ -1,0 +1,230 @@
+{
+  "archive_report_count": 9,
+  "archive_root": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701",
+  "knn_policy_source_selected_counts": {
+    "archive": {},
+    "replay": {}
+  },
+  "macro": {
+    "archive_psnr_gain_mean": 0.10384367229618736,
+    "archive_psnr_mean": 21.02707049919702,
+    "archive_ssim_gain_mean": 0.0016648040877448188,
+    "archive_ssim_mean": 0.6753552721606361,
+    "delta_psnr_gain_mean_replay_minus_archive": -0.002158558035077557,
+    "delta_psnr_mean_replay_minus_archive": -0.0021585580350773625,
+    "delta_ssim_gain_mean_replay_minus_archive": -2.6060475243462698e-06,
+    "delta_ssim_mean_replay_minus_archive": -2.60604752433391e-06,
+    "paired_psnr_gain_scene_count": 1,
+    "paired_psnr_scene_count": 1,
+    "paired_ssim_gain_scene_count": 1,
+    "paired_ssim_scene_count": 1,
+    "replay_psnr_gain_mean": 0.10168511426110981,
+    "replay_psnr_mean": 21.024911941161943,
+    "replay_ssim_gain_mean": 0.0016621980402204725,
+    "replay_ssim_mean": 0.6753526661131117
+  },
+  "missing_archive_scenes": [],
+  "missing_replay_scenes": [],
+  "replay_report_count": 1,
+  "replay_root": "outputs/carnet/spcarnet_v326_profile_pairwise_strict_treehill_20260701",
+  "scene_count": 1,
+  "scene_filter": [
+    "treehill"
+  ],
+  "scenes": [
+    {
+      "archive": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": null,
+          "scene_selected_variant": null,
+          "selected_variant": "fixed",
+          "source_selected_counts": {},
+          "verdict": "disabled because scene-level source-heldout selector fell back to fixed"
+        },
+        "per_view_count": 18,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "fixed",
+        "report_path": "outputs/carnet/spcarnet_v322c_baseknn_ladder_fixedmargin_full9_20260701/treehill/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 21.02707049919702,
+          "candidate_ssim": 0.6753552721606361,
+          "psnr_gain": 0.10384367229618736,
+          "ssim_gain": 0.0016648040877448188
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "fixed": 12,
+            "learned": 6
+          },
+          "per_view_selected_variant": {
+            "fixed": 18
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "fixed": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "fixed",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 1,
+            "hybrid": 0,
+            "learned": 1,
+            "mix0250": 0,
+            "mix0750": 0,
+            "noop": 0,
+            "scene": 9
+          },
+          "verdict": "source-only relative reliability model selected"
+        },
+        "verdict": "Selected support-transport output scene `fixed` with per-view `source_heldout_reliability` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "comparison": {
+        "delta_psnr_gain_replay_minus_archive": -0.002158558035077557,
+        "delta_psnr_replay_minus_archive": -0.0021585580350773625,
+        "delta_ssim_gain_replay_minus_archive": -2.6060475243462698e-06,
+        "delta_ssim_replay_minus_archive": -2.60604752433391e-06,
+        "has_both_reports": true,
+        "per_view": {
+          "archive_only_views": [],
+          "archive_per_view_count": 18,
+          "common_view_count": 18,
+          "output_variant_mismatch_count": 2,
+          "output_variant_mismatches": [
+            {
+              "archive_output_variant": "fixed",
+              "archive_selected_variant": "fixed",
+              "replay_output_variant": "mix0250",
+              "replay_selected_variant": "fixed",
+              "view": "00007"
+            },
+            {
+              "archive_output_variant": "fixed",
+              "archive_selected_variant": "fixed",
+              "replay_output_variant": "mix0250",
+              "replay_selected_variant": "fixed",
+              "view": "00009"
+            }
+          ],
+          "replay_only_views": [],
+          "replay_per_view_count": 18
+        }
+      },
+      "replay": {
+        "final_status": "APPLY_EVAL_COMPLETE_NOT_PAPER_COMPLETE",
+        "knn_policy": {
+          "enabled": false,
+          "reject_variant": null,
+          "scene_selected_variant": null,
+          "selected_variant": "fixed",
+          "source_selected_counts": {},
+          "verdict": "disabled because scene-level source-heldout selector fell back to fixed"
+        },
+        "per_view_count": 18,
+        "policy_output_variant": "source_heldout_auto",
+        "policy_selected_variant": "fixed",
+        "report_path": "outputs/carnet/spcarnet_v326_profile_pairwise_strict_treehill_20260701/support_transport_apply_report.json",
+        "selected_summary": {
+          "candidate_psnr": 21.024911941161943,
+          "candidate_ssim": 0.6753526661131117,
+          "psnr_gain": 0.10168511426110981,
+          "ssim_gain": 0.0016621980402204725
+        },
+        "selected_variant_counts": {
+          "per_view_output_variant": {
+            "fixed": 10,
+            "learned": 6,
+            "mix0250": 2
+          },
+          "per_view_selected_variant": {
+            "fixed": 18
+          },
+          "scene_policy_output_variant": {
+            "source_heldout_auto": 1
+          },
+          "scene_policy_selected_variant": {
+            "fixed": 1
+          }
+        },
+        "source_reliability_policy": {
+          "enabled": true,
+          "reject_variant": "scene",
+          "scene_selected_variant": "fixed",
+          "selected_variant": null,
+          "source_selected_counts": {
+            "fixed": 1,
+            "hybrid": 0,
+            "learned": 1,
+            "mix0250": 0,
+            "mix0750": 0,
+            "noop": 0,
+            "scene": 9
+          },
+          "verdict": "source-only relative reliability model selected"
+        },
+        "verdict": "Selected support-transport output scene `fixed` with per-view `source_pairwise_dominance` refinement is all-axis safe versus fixed on this target/test split."
+      },
+      "scene": "treehill"
+    }
+  ],
+  "selected_variant_counts": {
+    "archive": {
+      "per_view_output_variant": {
+        "fixed": 12,
+        "learned": 6
+      },
+      "per_view_selected_variant": {
+        "fixed": 18
+      },
+      "scene_policy_output_variant": {
+        "source_heldout_auto": 1
+      },
+      "scene_policy_selected_variant": {
+        "fixed": 1
+      }
+    },
+    "replay": {
+      "per_view_output_variant": {
+        "fixed": 10,
+        "learned": 6,
+        "mix0250": 2
+      },
+      "per_view_selected_variant": {
+        "fixed": 18
+      },
+      "scene_policy_output_variant": {
+        "source_heldout_auto": 1
+      },
+      "scene_policy_selected_variant": {
+        "fixed": 1
+      }
+    }
+  },
+  "source_reliability_source_selected_counts": {
+    "archive": {
+      "fixed": 1,
+      "hybrid": 0,
+      "learned": 1,
+      "mix0250": 0,
+      "mix0750": 0,
+      "noop": 0,
+      "scene": 9
+    },
+    "replay": {
+      "fixed": 1,
+      "hybrid": 0,
+      "learned": 1,
+      "mix0250": 0,
+      "mix0750": 0,
+      "noop": 0,
+      "scene": 9
+    }
+  }
+}
