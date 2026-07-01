@@ -206,6 +206,28 @@ def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
             f"- post incumbent fallback only: `{local_support.get('post_incumbent_fallback_only')}`",
             f"- verdict: `{local_support.get('verdict')}`",
         ]
+    if payload.get("source_oracle_knn_policy"):
+        oracle_knn = payload["source_oracle_knn_policy"]
+        lines += [
+            "",
+            "## Source-Heldout Oracle-Neighborhood Policy",
+            "",
+            f"- enabled: `{oracle_knn.get('enabled')}`",
+            f"- k: `{oracle_knn.get('k')}`",
+            f"- apply mode: `{oracle_knn.get('apply_mode')}`",
+            f"- reject variant: `{oracle_knn.get('reject_variant')}`",
+            f"- source accept fraction: `{oracle_knn.get('source_accept_fraction')}`",
+            f"- source safe vs fixed: `{oracle_knn.get('source_safe_vs_fixed')}`",
+            f"- source PSNR delta vs scene: `{oracle_knn.get('source_mean_psnr_delta_vs_scene_selected')}`",
+            f"- source SSIM delta vs scene: `{oracle_knn.get('source_mean_ssim_delta_vs_scene_selected')}`",
+            f"- source CVaR20 PSNR delta vs scene: `{oracle_knn.get('source_cvar_psnr_delta_vs_scene_selected')}`",
+            f"- source min PSNR delta vs scene: `{oracle_knn.get('source_min_psnr_delta_vs_scene_selected')}`",
+            f"- source positive-view delta vs scene: `{oracle_knn.get('source_positive_view_fraction_delta_vs_scene_selected')}`",
+            f"- source selected counts: `{oracle_knn.get('source_selected_counts')}`",
+            f"- min vote fraction / margin: `{oracle_knn.get('min_vote_fraction')}` / `{oracle_knn.get('min_vote_margin')}`",
+            f"- reliability agreement required: `{oracle_knn.get('reliability_agreement_required')}`",
+            f"- verdict: `{oracle_knn.get('verdict')}`",
+        ]
     if payload.get("pairwise_dominance_policy"):
         pairwise = payload["pairwise_dominance_policy"]
         lines += [
@@ -2119,6 +2141,542 @@ def _local_support_choose_variant(
         "local_summaries": local_summaries,
         "reject_reason": None,
     }
+
+
+def _source_oracle_knn_view_feature(
+    candidates_by_variant: dict[str, dict[str, Any]],
+    *,
+    variants: list[str],
+    scene_variant: str,
+    feature_names: list[str],
+    variant_blend_map: dict[str, float],
+) -> list[float]:
+    if scene_variant not in candidates_by_variant:
+        raise KeyError(f"source-oracle KNN missing scene variant `{scene_variant}`")
+    scene_proxy = dict(candidates_by_variant[scene_variant]["proxy"])
+    features: list[float] = []
+    for variant in variants:
+        if variant not in candidates_by_variant:
+            raise KeyError(f"source-oracle KNN missing variant `{variant}`")
+        features.extend(
+            _source_reliability_features(
+                dict(candidates_by_variant[variant]["proxy"]),
+                scene_proxy,
+                variant=variant,
+                scene_variant=scene_variant,
+                feature_names=feature_names,
+                variant_blend=variant_blend_map.get(variant),
+                scene_variant_blend=variant_blend_map.get(scene_variant),
+            )
+        )
+    return features
+
+
+def _source_oracle_knn_best_variant(
+    row: dict[str, Any],
+    *,
+    variants: list[str],
+    scene_variant: str,
+    compute_ssim: bool,
+    args: argparse.Namespace,
+) -> tuple[str, dict[str, Any]]:
+    candidates = dict(row.get("candidates", {}))
+    scene_metrics = dict(candidates[scene_variant]["metrics"])
+    scene_objective = _source_objective_from_metrics(scene_metrics, compute_ssim=compute_ssim, args=args)
+    ranked: list[tuple[float, str, dict[str, float]]] = []
+    rejected: list[dict[str, Any]] = []
+    for variant in variants:
+        if variant not in candidates:
+            rejected.append({"variant": variant, "reason": "missing_candidate"})
+            continue
+        if (
+            bool(args.source_oracle_knn_forbid_fixed_when_scene_nonfixed)
+            and scene_variant != "fixed"
+            and variant == "fixed"
+        ):
+            rejected.append({"variant": variant, "reason": "fixed_when_scene_nonfixed"})
+            continue
+        metrics = dict(candidates[variant]["metrics"])
+        objective = _source_objective_from_metrics(metrics, compute_ssim=compute_ssim, args=args)
+        psnr_delta = float(metrics.get("psnr_gain", 0.0)) - float(scene_metrics.get("psnr_gain", 0.0))
+        ssim_delta = (
+            float(metrics.get("ssim_gain", 0.0)) - float(scene_metrics.get("ssim_gain", 0.0))
+            if compute_ssim
+            else 0.0
+        )
+        if psnr_delta < float(args.source_oracle_knn_min_oracle_psnr_delta_vs_scene):
+            rejected.append({"variant": variant, "reason": "oracle_psnr_delta", "psnr_delta": psnr_delta})
+            continue
+        if compute_ssim and ssim_delta < float(args.source_oracle_knn_min_oracle_ssim_delta_vs_scene):
+            rejected.append({"variant": variant, "reason": "oracle_ssim_delta", "ssim_delta": ssim_delta})
+            continue
+        ranked.append((objective, variant, metrics))
+    if not ranked:
+        return "__scene__", {
+            "scene_variant": scene_variant,
+            "scene_objective": float(scene_objective),
+            "oracle_variant": "__scene__",
+            "oracle_objective": float(scene_objective),
+            "oracle_margin": 0.0,
+            "rejected": rejected,
+        }
+    ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    best_objective, best_variant, best_metrics = ranked[0]
+    margin = float(best_objective - scene_objective)
+    if best_variant == scene_variant or margin < float(args.source_oracle_knn_min_oracle_objective_delta_vs_scene):
+        return "__scene__", {
+            "scene_variant": scene_variant,
+            "scene_objective": float(scene_objective),
+            "oracle_variant": best_variant,
+            "oracle_objective": float(best_objective),
+            "oracle_margin": margin,
+            "best_metrics": best_metrics,
+            "rejected": rejected,
+            "reason": "scene_or_margin",
+        }
+    return best_variant, {
+        "scene_variant": scene_variant,
+        "scene_objective": float(scene_objective),
+        "oracle_variant": best_variant,
+        "oracle_objective": float(best_objective),
+        "oracle_margin": margin,
+        "best_metrics": best_metrics,
+        "rejected": rejected,
+        "reason": "oracle_candidate",
+    }
+
+
+def _source_oracle_knn_vote(
+    feature: list[float],
+    examples: list[dict[str, Any]],
+    *,
+    mean: list[float],
+    std: list[float],
+    k: int,
+    distance_eps: float,
+    exclude_view: str | None = None,
+) -> dict[str, Any]:
+    pool = [
+        example
+        for example in examples
+        if exclude_view is None or str(example.get("view")) != str(exclude_view)
+    ]
+    if not pool:
+        return {
+            "available": False,
+            "chosen_variant": "__scene__",
+            "reject_reason": "no_neighbors",
+            "neighbors": [],
+            "votes": {},
+        }
+    ranked = sorted(
+        pool,
+        key=lambda example: _normalized_distance(feature, list(example["feature"]), mean, std),
+    )
+    local_k = max(1, min(int(k), len(ranked)))
+    neighbors = ranked[:local_k]
+    votes: dict[str, float] = {}
+    neighbor_rows: list[dict[str, Any]] = []
+    for example in neighbors:
+        distance = _normalized_distance(feature, list(example["feature"]), mean, std)
+        weight = 1.0 / max(float(distance) + float(distance_eps), float(distance_eps))
+        variant = str(example.get("oracle_variant", "__scene__"))
+        votes[variant] = float(votes.get(variant, 0.0) + weight)
+        neighbor_rows.append(
+            {
+                "view": str(example.get("view")),
+                "oracle_variant": variant,
+                "distance": float(distance),
+                "weight": float(weight),
+                "oracle_diagnostics": example.get("oracle_diagnostics", {}),
+            }
+        )
+    total = max(sum(votes.values()), 1.0e-12)
+    ranked_votes = sorted(votes.items(), key=lambda item: (item[1], item[0]), reverse=True)
+    top_variant, top_vote = ranked_votes[0]
+    second_vote = ranked_votes[1][1] if len(ranked_votes) > 1 else 0.0
+    return {
+        "available": True,
+        "chosen_variant": top_variant,
+        "vote_fraction": float(top_vote / total),
+        "vote_margin": float((top_vote - second_vote) / total),
+        "votes": {variant: float(value / total) for variant, value in ranked_votes},
+        "neighbors": neighbor_rows,
+        "k": local_k,
+    }
+
+
+def _source_oracle_knn_neighbor_summary(
+    vote: dict[str, Any],
+    *,
+    chosen_variant: str,
+    scene_variant: str,
+    compute_ssim: bool,
+) -> dict[str, Any]:
+    candidate_rows: list[dict[str, float]] = []
+    scene_rows: list[dict[str, float]] = []
+    for neighbor in list(vote.get("neighbors", [])):
+        diagnostics = dict(neighbor.get("oracle_diagnostics", {}))
+        metrics_by_variant = dict(diagnostics.get("metrics_by_variant", {}))
+        if chosen_variant in metrics_by_variant and scene_variant in metrics_by_variant:
+            candidate_rows.append(dict(metrics_by_variant[chosen_variant]))
+            scene_rows.append(dict(metrics_by_variant[scene_variant]))
+    if not candidate_rows or not scene_rows:
+        return {
+            "available": False,
+            "candidate_summary": {},
+            "scene_summary": {},
+            "deltas_vs_scene": {},
+        }
+    candidate_summary = _summarize_metric_rows(candidate_rows, compute_ssim=compute_ssim)
+    scene_summary = _summarize_metric_rows(scene_rows, compute_ssim=compute_ssim)
+    deltas = {
+        "psnr_gain": float(candidate_summary.get("psnr_gain", 0.0)) - float(scene_summary.get("psnr_gain", 0.0)),
+        "cvar_psnr_gain": _summary_psnr_tail(candidate_summary, "cvar") - _summary_psnr_tail(scene_summary, "cvar"),
+        "min_psnr_gain": _summary_psnr_tail(candidate_summary, "min") - _summary_psnr_tail(scene_summary, "min"),
+        "positive_view_fraction": _positive_view_fraction(candidate_summary) - _positive_view_fraction(scene_summary),
+    }
+    if compute_ssim:
+        deltas["ssim_gain"] = float(candidate_summary.get("ssim_gain", 0.0)) - float(
+            scene_summary.get("ssim_gain", 0.0)
+        )
+    return {
+        "available": True,
+        "candidate_summary": candidate_summary,
+        "scene_summary": scene_summary,
+        "deltas_vs_scene": deltas,
+    }
+
+
+def _fit_source_oracle_knn_policy(
+    selector_payload: dict[str, Any] | None,
+    *,
+    compute_ssim: bool,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    if not bool(args.enable_source_oracle_knn_policy):
+        return {"enabled": False, "verdict": "disabled by CLI"}
+    if selector_payload is None or not selector_payload.get("per_view"):
+        return {"enabled": False, "verdict": "missing source-heldout selector per-view evidence"}
+    selected_variant = str(selector_payload["selected_variant"])
+    variants = (
+        list(BASE_CANDIDATE_VARIANTS)
+        if bool(args.source_oracle_knn_base_variants_only)
+        else list(selector_payload.get("candidate_variants", _candidate_variant_names(args)))
+    )
+    if selected_variant not in variants:
+        variants = [selected_variant] + [variant for variant in variants if variant != selected_variant]
+    feature_names = _parse_feature_names(str(args.source_oracle_knn_feature_grid))
+    variant_blend_map = _candidate_variant_blend_map(args)
+    examples: list[dict[str, Any]] = []
+    rows_by_view: dict[str, dict[str, Any]] = {}
+    for row in selector_payload["per_view"]:
+        view = str(row["view"])
+        rows_by_view[view] = row
+        try:
+            feature = _source_oracle_knn_view_feature(
+                dict(row.get("candidates", {})),
+                variants=variants,
+                scene_variant=selected_variant,
+                feature_names=feature_names,
+                variant_blend_map=variant_blend_map,
+            )
+        except KeyError:
+            continue
+        oracle_variant, oracle_diagnostics = _source_oracle_knn_best_variant(
+            row,
+            variants=variants,
+            scene_variant=selected_variant,
+            compute_ssim=compute_ssim,
+            args=args,
+        )
+        oracle_diagnostics["metrics_by_variant"] = {
+            variant: dict(row["candidates"][variant]["metrics"])
+            for variant in variants
+            if variant in row.get("candidates", {})
+        }
+        examples.append(
+            {
+                "view": view,
+                "feature": feature,
+                "oracle_variant": oracle_variant,
+                "oracle_diagnostics": oracle_diagnostics,
+            }
+        )
+    if len(examples) < 2:
+        return {"enabled": False, "verdict": "not enough source-heldout oracle examples"}
+    feature_mean, feature_std = _feature_stats([list(example["feature"]) for example in examples])
+
+    def choose_for_row(row: dict[str, Any], *, exclude_view: str | None) -> tuple[str, dict[str, Any]]:
+        feature = _source_oracle_knn_view_feature(
+            dict(row.get("candidates", {})),
+            variants=variants,
+            scene_variant=selected_variant,
+            feature_names=feature_names,
+            variant_blend_map=variant_blend_map,
+        )
+        vote = _source_oracle_knn_vote(
+            feature,
+            examples,
+            mean=feature_mean,
+            std=feature_std,
+            k=int(args.source_oracle_knn_k),
+            distance_eps=float(args.source_oracle_knn_distance_eps),
+            exclude_view=exclude_view,
+        )
+        reject_choice = "noop" if str(args.source_oracle_knn_reject_variant) == "noop" else "__scene__"
+        diagnostics: dict[str, Any] = {
+            "vote": vote,
+            "reject_reason": None,
+            "scene_variant": selected_variant,
+            "best_variant": str(vote.get("chosen_variant", "__scene__")),
+        }
+        if not bool(vote.get("available", False)):
+            diagnostics["reject_reason"] = str(vote.get("reject_reason", "no_neighbors"))
+            return reject_choice, diagnostics
+        chosen_variant = str(vote.get("chosen_variant", "__scene__"))
+        if chosen_variant in {"__scene__", "noop"}:
+            diagnostics["reject_reason"] = "source_oracle_vote_scene"
+            return reject_choice, diagnostics
+        if chosen_variant not in variants:
+            diagnostics["reject_reason"] = "unknown_voted_variant"
+            return reject_choice, diagnostics
+        if float(vote.get("vote_fraction", 0.0)) < float(args.source_oracle_knn_min_vote_fraction):
+            diagnostics["reject_reason"] = "vote_fraction"
+            return reject_choice, diagnostics
+        if float(vote.get("vote_margin", 0.0)) < float(args.source_oracle_knn_min_vote_margin):
+            diagnostics["reject_reason"] = "vote_margin"
+            return reject_choice, diagnostics
+        neighbor_summary = _source_oracle_knn_neighbor_summary(
+            vote,
+            chosen_variant=chosen_variant,
+            scene_variant=selected_variant,
+            compute_ssim=compute_ssim,
+        )
+        diagnostics["neighbor_summary"] = neighbor_summary
+        local_deltas = dict(neighbor_summary.get("deltas_vs_scene", {}))
+        if not bool(neighbor_summary.get("available", False)):
+            diagnostics["reject_reason"] = "missing_neighbor_metric_summary"
+            return reject_choice, diagnostics
+        if float(local_deltas.get("psnr_gain", 0.0)) < float(args.source_oracle_knn_min_local_psnr_delta_vs_scene):
+            diagnostics["reject_reason"] = "local_psnr_delta"
+            return reject_choice, diagnostics
+        if compute_ssim and float(local_deltas.get("ssim_gain", 0.0)) < float(
+            args.source_oracle_knn_min_local_ssim_delta_vs_scene
+        ):
+            diagnostics["reject_reason"] = "local_ssim_delta"
+            return reject_choice, diagnostics
+        if float(local_deltas.get("cvar_psnr_gain", 0.0)) < float(args.source_oracle_knn_min_local_cvar_delta_vs_scene):
+            diagnostics["reject_reason"] = "local_cvar_delta"
+            return reject_choice, diagnostics
+        if float(local_deltas.get("min_psnr_gain", 0.0)) < float(args.source_oracle_knn_min_local_min_delta_vs_scene):
+            diagnostics["reject_reason"] = "local_min_delta"
+            return reject_choice, diagnostics
+        if float(local_deltas.get("positive_view_fraction", 0.0)) < float(
+            args.source_oracle_knn_min_local_positive_fraction_delta_vs_scene
+        ):
+            diagnostics["reject_reason"] = "local_positive_fraction"
+            return reject_choice, diagnostics
+        return chosen_variant, diagnostics
+
+    source_policy_rows: list[dict[str, float]] = []
+    selected_counts: dict[str, int] = _candidate_count_dict(variants)
+    loo_decisions: list[dict[str, Any]] = []
+    for view, row in rows_by_view.items():
+        try:
+            chosen_variant, diagnostics = choose_for_row(row, exclude_view=view)
+        except KeyError as exc:
+            chosen_variant, diagnostics = "__scene__", {"reject_reason": f"missing_feature:{exc}", "scene_variant": selected_variant}
+        loo_decisions.append(
+            {
+                "view": view,
+                "chosen_variant": chosen_variant,
+                "diagnostics": diagnostics,
+            }
+        )
+        if chosen_variant == "__scene__":
+            selected_counts["scene"] += 1
+            source_policy_rows.append(row["candidates"][selected_variant]["metrics"])
+        elif chosen_variant == "noop":
+            selected_counts["noop"] += 1
+            source_policy_rows.append(_noop_like(row["candidates"][selected_variant]["metrics"]))
+        else:
+            selected_counts[chosen_variant] += 1
+            source_policy_rows.append(row["candidates"][chosen_variant]["metrics"])
+
+    source_summary = _summarize_metric_rows(source_policy_rows, compute_ssim=compute_ssim)
+    fixed_summary = selector_payload["summaries"]["fixed"]
+    scene_summary = selector_payload["summaries"][selected_variant]
+    mean_delta = float(source_summary.get("psnr_gain", 0.0)) - float(scene_summary.get("psnr_gain", 0.0))
+    ssim_delta = (
+        float(source_summary.get("ssim_gain", 0.0)) - float(scene_summary.get("ssim_gain", 0.0))
+        if compute_ssim
+        else 0.0
+    )
+    cvar_delta = _summary_psnr_tail(source_summary, "cvar") - _summary_psnr_tail(scene_summary, "cvar")
+    min_delta = _summary_psnr_tail(source_summary, "min") - _summary_psnr_tail(scene_summary, "min")
+    positive_fraction_delta = _positive_view_fraction(source_summary) - _positive_view_fraction(scene_summary)
+    reject_count = int(selected_counts["noop"] + selected_counts["scene"])
+    accept_fraction = 1.0 - float(reject_count / max(len(rows_by_view), 1))
+    safe_vs_fixed = (
+        float(source_summary.get("psnr_gain", 0.0)) >= float(fixed_summary.get("psnr_gain", 0.0)) - float(args.selected_safe_tolerance_psnr)
+        and (
+            not compute_ssim
+            or float(source_summary.get("ssim_gain", 0.0))
+            >= float(fixed_summary.get("ssim_gain", 0.0)) - float(args.selected_safe_tolerance_ssim)
+        )
+    )
+    base_payload = {
+        "feature_schema_version": 1,
+        "variants": variants,
+        "feature_names": feature_names,
+        "feature_mean": feature_mean,
+        "feature_std": feature_std,
+        "variant_blend_map": variant_blend_map,
+        "scene_selected_variant": selected_variant,
+        "k": int(args.source_oracle_knn_k),
+        "distance_eps": float(args.source_oracle_knn_distance_eps),
+        "reject_variant": str(args.source_oracle_knn_reject_variant),
+        "apply_mode": str(args.source_oracle_knn_apply_mode),
+        "base_variants_only": bool(args.source_oracle_knn_base_variants_only),
+        "min_vote_fraction": float(args.source_oracle_knn_min_vote_fraction),
+        "min_vote_margin": float(args.source_oracle_knn_min_vote_margin),
+        "source_summary": source_summary,
+        "source_fixed_summary": fixed_summary,
+        "source_scene_selected_summary": scene_summary,
+        "source_mean_psnr_delta_vs_scene_selected": mean_delta,
+        "source_mean_ssim_delta_vs_scene_selected": ssim_delta,
+        "source_cvar_psnr_delta_vs_scene_selected": cvar_delta,
+        "source_min_psnr_delta_vs_scene_selected": min_delta,
+        "source_positive_view_fraction_delta_vs_scene_selected": positive_fraction_delta,
+        "source_safe_vs_fixed": bool(safe_vs_fixed),
+        "source_accept_fraction": accept_fraction,
+        "source_selected_counts": selected_counts,
+        "source_examples": examples,
+        "loo_decisions": loo_decisions,
+        "min_local_psnr_delta_vs_scene": float(args.source_oracle_knn_min_local_psnr_delta_vs_scene),
+        "min_local_ssim_delta_vs_scene": float(args.source_oracle_knn_min_local_ssim_delta_vs_scene),
+        "min_local_cvar_delta_vs_scene": float(args.source_oracle_knn_min_local_cvar_delta_vs_scene),
+        "min_local_min_delta_vs_scene": float(args.source_oracle_knn_min_local_min_delta_vs_scene),
+        "min_local_positive_fraction_delta_vs_scene": float(
+            args.source_oracle_knn_min_local_positive_fraction_delta_vs_scene
+        ),
+        "min_source_psnr_delta": float(args.source_oracle_knn_min_source_psnr_delta),
+        "min_source_ssim_delta": float(args.source_oracle_knn_min_source_ssim_delta),
+        "min_source_cvar_delta": float(args.source_oracle_knn_min_source_cvar_delta),
+        "min_source_min_delta": float(args.source_oracle_knn_min_source_min_delta),
+        "min_source_positive_fraction_delta": float(args.source_oracle_knn_min_source_positive_fraction_delta),
+        "forbid_fixed_when_scene_nonfixed": bool(args.source_oracle_knn_forbid_fixed_when_scene_nonfixed),
+        "reliability_agreement_required": bool(args.source_oracle_knn_require_reliability_agreement),
+        "min_reliability_predicted_psnr_delta": float(args.source_oracle_knn_min_reliability_predicted_psnr_delta),
+        "min_reliability_predicted_ssim_delta": float(args.source_oracle_knn_min_reliability_predicted_ssim_delta),
+    }
+    if accept_fraction < float(args.source_oracle_knn_min_accept_fraction):
+        return {"enabled": False, "verdict": "source oracle KNN accepted too few views", **base_payload}
+    if accept_fraction > float(args.source_oracle_knn_max_accept_fraction):
+        return {"enabled": False, "verdict": "source oracle KNN accepted too many views", **base_payload}
+    if mean_delta < float(args.source_oracle_knn_min_source_psnr_delta):
+        return {"enabled": False, "verdict": "source oracle KNN did not improve source PSNR enough", **base_payload}
+    if compute_ssim and ssim_delta < float(args.source_oracle_knn_min_source_ssim_delta):
+        return {"enabled": False, "verdict": "source oracle KNN did not clear source SSIM delta", **base_payload}
+    if cvar_delta < float(args.source_oracle_knn_min_source_cvar_delta):
+        return {"enabled": False, "verdict": "source oracle KNN did not clear source CVaR delta", **base_payload}
+    if min_delta < float(args.source_oracle_knn_min_source_min_delta):
+        return {"enabled": False, "verdict": "source oracle KNN did not clear source min delta", **base_payload}
+    if positive_fraction_delta < float(args.source_oracle_knn_min_source_positive_fraction_delta):
+        return {"enabled": False, "verdict": "source oracle KNN did not clear source positive fraction delta", **base_payload}
+    if bool(args.source_oracle_knn_require_source_safe) and not safe_vs_fixed:
+        return {"enabled": False, "verdict": "source oracle KNN did not clear fixed safety gate", **base_payload}
+    return {"enabled": True, "verdict": "source-heldout oracle-neighborhood policy selected", **base_payload}
+
+
+def _source_oracle_knn_choose_variant(
+    proxies_by_variant: dict[str, dict[str, float]],
+    policy: dict[str, Any],
+    *,
+    compute_ssim: bool,
+) -> tuple[str, dict[str, Any]]:
+    variants = list(policy.get("variants", BASE_CANDIDATE_VARIANTS))
+    scene_variant = str(policy.get("scene_selected_variant", "fixed"))
+    candidates_by_variant = {
+        variant: {"proxy": proxy}
+        for variant, proxy in proxies_by_variant.items()
+        if variant in variants
+    }
+    diagnostics: dict[str, Any] = {
+        "scene_variant": scene_variant,
+        "best_variant": "__scene__",
+        "reject_reason": None,
+    }
+    reject_choice = "noop" if str(policy.get("reject_variant", "scene")) == "noop" else "__scene__"
+    try:
+        feature = _source_oracle_knn_view_feature(
+            candidates_by_variant,
+            variants=variants,
+            scene_variant=scene_variant,
+            feature_names=list(policy.get("feature_names", [])),
+            variant_blend_map={str(k): float(v) for k, v in dict(policy.get("variant_blend_map", {})).items()},
+        )
+    except KeyError as exc:
+        diagnostics["reject_reason"] = f"missing_feature:{exc}"
+        return reject_choice, diagnostics
+    vote = _source_oracle_knn_vote(
+        feature,
+        list(policy.get("source_examples", [])),
+        mean=[float(v) for v in policy.get("feature_mean", [])],
+        std=[float(v) for v in policy.get("feature_std", [])],
+        k=int(policy.get("k", 3)),
+        distance_eps=float(policy.get("distance_eps", 1.0e-6)),
+    )
+    diagnostics["vote"] = vote
+    if not bool(vote.get("available", False)):
+        diagnostics["reject_reason"] = str(vote.get("reject_reason", "no_neighbors"))
+        return reject_choice, diagnostics
+    chosen_variant = str(vote.get("chosen_variant", "__scene__"))
+    diagnostics["best_variant"] = chosen_variant
+    if chosen_variant in {"__scene__", "noop"}:
+        diagnostics["reject_reason"] = "source_oracle_vote_scene"
+        return reject_choice, diagnostics
+    if chosen_variant not in proxies_by_variant:
+        diagnostics["reject_reason"] = "missing_voted_candidate_proxy"
+        return reject_choice, diagnostics
+    if float(vote.get("vote_fraction", 0.0)) < float(policy.get("min_vote_fraction", 0.0)):
+        diagnostics["reject_reason"] = "vote_fraction"
+        return reject_choice, diagnostics
+    if float(vote.get("vote_margin", 0.0)) < float(policy.get("min_vote_margin", 0.0)):
+        diagnostics["reject_reason"] = "vote_margin"
+        return reject_choice, diagnostics
+    neighbor_summary = _source_oracle_knn_neighbor_summary(
+        vote,
+        chosen_variant=chosen_variant,
+        scene_variant=scene_variant,
+        compute_ssim=compute_ssim,
+    )
+    diagnostics["neighbor_summary"] = neighbor_summary
+    local_deltas = dict(neighbor_summary.get("deltas_vs_scene", {}))
+    if not bool(neighbor_summary.get("available", False)):
+        diagnostics["reject_reason"] = "missing_neighbor_metric_summary"
+        return reject_choice, diagnostics
+    if float(local_deltas.get("psnr_gain", 0.0)) < float(policy.get("min_local_psnr_delta_vs_scene", 0.0)):
+        diagnostics["reject_reason"] = "local_psnr_delta"
+        return reject_choice, diagnostics
+    if compute_ssim and float(local_deltas.get("ssim_gain", 0.0)) < float(
+        policy.get("min_local_ssim_delta_vs_scene", -1.0e9)
+    ):
+        diagnostics["reject_reason"] = "local_ssim_delta"
+        return reject_choice, diagnostics
+    if float(local_deltas.get("cvar_psnr_gain", 0.0)) < float(policy.get("min_local_cvar_delta_vs_scene", -1.0e9)):
+        diagnostics["reject_reason"] = "local_cvar_delta"
+        return reject_choice, diagnostics
+    if float(local_deltas.get("min_psnr_gain", 0.0)) < float(policy.get("min_local_min_delta_vs_scene", -1.0e9)):
+        diagnostics["reject_reason"] = "local_min_delta"
+        return reject_choice, diagnostics
+    if float(local_deltas.get("positive_view_fraction", 0.0)) < float(
+        policy.get("min_local_positive_fraction_delta_vs_scene", -1.0e9)
+    ):
+        diagnostics["reject_reason"] = "local_positive_fraction"
+        return reject_choice, diagnostics
+    return chosen_variant, diagnostics
 
 
 PAIRWISE_DOMINANCE_TARGET_NAMES = [
@@ -5441,6 +5999,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         compute_ssim=bool(args.compute_ssim),
         args=args,
     )
+    source_oracle_knn_payload = _fit_source_oracle_knn_policy(
+        selector_payload,
+        compute_ssim=bool(args.compute_ssim),
+        args=args,
+    )
     source_reliability_payload = _fit_source_reliability_policy(
         selector_payload,
         compute_ssim=bool(args.compute_ssim),
@@ -5557,6 +6120,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             risk_model_predictions: dict[str, list[float]] | None = None
             risk_model_diagnostics: dict[str, Any] | None = None
             local_support_diagnostics: dict[str, Any] | None = None
+            source_oracle_knn_diagnostics: dict[str, Any] | None = None
             pairwise_dominance_predictions: dict[str, list[float]] | None = None
             pairwise_dominance_diagnostics: dict[str, Any] | None = None
             source_reliability_predictions: dict[str, list[float]] | None = None
@@ -5567,16 +6131,20 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             per_view_knn_rejected = False
             per_view_risk_model_rejected = False
             local_support_rejected = False
+            source_oracle_knn_rejected = False
             source_reliability_rejected = False
             risk_model_raw_output_variant: str | None = None
             local_support_raw_output_variant: str | None = None
+            source_oracle_knn_raw_output_variant: str | None = None
             pairwise_dominance_raw_output_variant: str | None = None
             source_reliability_raw_output_variant: str | None = None
             risk_model_decision = "not_used"
             local_support_decision = "not_used"
+            source_oracle_knn_decision = "not_used"
             pairwise_dominance_decision = "not_used"
             source_reliability_decision = "not_used"
             local_support_claimed = False
+            source_oracle_knn_claimed = False
             pairwise_dominance_claimed = False
             source_reliability_claimed = False
             output_decision_source = "scene"
@@ -5623,7 +6191,99 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         local_support_decision = "candidate"
                         output_decision_source = "local_support"
                     gate_accepted = output_variant != "noop"
-            if (not local_support_claimed) and bool(source_reliability_payload.get("enabled", False)):
+            if (
+                (not local_support_claimed)
+                and bool(source_oracle_knn_payload.get("enabled", False))
+                and str(args.source_oracle_knn_apply_mode) == "pre_reliability"
+            ):
+                output_variant, source_oracle_knn_diagnostics = _source_oracle_knn_choose_variant(
+                    proxies_by_variant,
+                    source_oracle_knn_payload,
+                    compute_ssim=bool(args.compute_ssim),
+                )
+                source_oracle_knn_raw_output_variant = output_variant
+                if (
+                    output_variant not in {"__scene__", "noop"}
+                    and bool(args.source_oracle_knn_require_reliability_agreement)
+                ):
+                    agreement = {
+                        "enabled": True,
+                        "available": False,
+                        "candidate_variant": output_variant,
+                        "scene_variant": selected_variant,
+                        "predicted_objective_delta": None,
+                        "predicted_psnr_delta": None,
+                        "predicted_ssim_delta": None,
+                        "min_predicted_psnr_delta": float(
+                            args.source_oracle_knn_min_reliability_predicted_psnr_delta
+                        ),
+                        "min_predicted_ssim_delta": float(
+                            args.source_oracle_knn_min_reliability_predicted_ssim_delta
+                        ),
+                        "reject_reason": None,
+                    }
+                    if (
+                        source_reliability_predictions is not None
+                        and output_variant in source_reliability_predictions
+                        and selected_variant in source_reliability_predictions
+                    ):
+                        candidate_prediction = source_reliability_predictions[output_variant]
+                        scene_prediction = source_reliability_predictions[selected_variant]
+                        agreement.update(
+                            {
+                                "available": True,
+                                "candidate_prediction": candidate_prediction,
+                                "scene_prediction": scene_prediction,
+                                "predicted_objective_delta": float(candidate_prediction[0] - scene_prediction[0]),
+                                "predicted_psnr_delta": float(candidate_prediction[1] - scene_prediction[1]),
+                                "predicted_ssim_delta": float(candidate_prediction[2] - scene_prediction[2])
+                                if bool(args.compute_ssim)
+                                else 0.0,
+                            }
+                        )
+                        if float(agreement["predicted_psnr_delta"]) < float(
+                            args.source_oracle_knn_min_reliability_predicted_psnr_delta
+                        ):
+                            agreement["reject_reason"] = "reliability_predicted_psnr_delta"
+                        elif bool(args.compute_ssim) and float(agreement["predicted_ssim_delta"]) < float(
+                            args.source_oracle_knn_min_reliability_predicted_ssim_delta
+                        ):
+                            agreement["reject_reason"] = "reliability_predicted_ssim_delta"
+                    else:
+                        agreement["reject_reason"] = "missing_reliability_predictions"
+                    if source_oracle_knn_diagnostics is None:
+                        source_oracle_knn_diagnostics = {}
+                    source_oracle_knn_diagnostics["reliability_agreement"] = agreement
+                    if agreement.get("reject_reason") is not None:
+                        source_oracle_knn_diagnostics["reject_reason"] = agreement["reject_reason"]
+                        output_variant = "__scene__"
+                if output_variant == "__scene__":
+                    source_oracle_knn_rejected = True
+                    source_oracle_knn_decision = "scene_fallback"
+                    output_variant = selected_variant
+                    selected_delta = deltas[selected_variant]
+                    selected_proxy = proxies_by_variant[selected_variant]
+                    selected_proxy_variant = selected_variant
+                    gate_accepted = True
+                else:
+                    source_oracle_knn_claimed = True
+                    if output_variant == "noop":
+                        selected_delta = torch.zeros_like(selected_delta)
+                        selected_proxy = _candidate_proxy_stats(ev, selected_delta)
+                        selected_proxy_variant = "noop"
+                        source_oracle_knn_decision = "noop"
+                    else:
+                        selected_delta = deltas[output_variant]
+                        selected_proxy = proxies_by_variant[output_variant]
+                        selected_proxy_variant = output_variant
+                        source_oracle_knn_decision = "candidate"
+                        output_decision_source = "source_oracle_knn"
+                    gate_accepted = output_variant != "noop"
+            if (
+                (not local_support_claimed)
+                and (not source_oracle_knn_claimed)
+                and bool(source_reliability_payload.get("enabled", False))
+            ):
                 output_variant, source_reliability_predictions, source_reliability_diagnostics = _source_reliability_choose_variant(
                     proxies_by_variant,
                     source_reliability_payload,
@@ -5652,7 +6312,103 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         source_reliability_decision = "candidate"
                         output_decision_source = "source_reliability"
                     gate_accepted = output_variant != "noop"
-            if (not local_support_claimed) and (not source_reliability_claimed) and bool(per_view_risk_model_payload.get("enabled", False)):
+            if (
+                (not local_support_claimed)
+                and (not source_oracle_knn_claimed)
+                and output_variant == selected_variant
+                and gate_accepted
+                and bool(source_oracle_knn_payload.get("enabled", False))
+                and str(args.source_oracle_knn_apply_mode) == "post_reliability_scene_only"
+            ):
+                output_variant, source_oracle_knn_diagnostics = _source_oracle_knn_choose_variant(
+                    proxies_by_variant,
+                    source_oracle_knn_payload,
+                    compute_ssim=bool(args.compute_ssim),
+                )
+                source_oracle_knn_raw_output_variant = output_variant
+                if (
+                    output_variant not in {"__scene__", "noop"}
+                    and bool(args.source_oracle_knn_require_reliability_agreement)
+                ):
+                    agreement = {
+                        "enabled": True,
+                        "available": False,
+                        "candidate_variant": output_variant,
+                        "scene_variant": selected_variant,
+                        "predicted_objective_delta": None,
+                        "predicted_psnr_delta": None,
+                        "predicted_ssim_delta": None,
+                        "min_predicted_psnr_delta": float(
+                            args.source_oracle_knn_min_reliability_predicted_psnr_delta
+                        ),
+                        "min_predicted_ssim_delta": float(
+                            args.source_oracle_knn_min_reliability_predicted_ssim_delta
+                        ),
+                        "reject_reason": None,
+                    }
+                    if (
+                        source_reliability_predictions is not None
+                        and output_variant in source_reliability_predictions
+                        and selected_variant in source_reliability_predictions
+                    ):
+                        candidate_prediction = source_reliability_predictions[output_variant]
+                        scene_prediction = source_reliability_predictions[selected_variant]
+                        agreement.update(
+                            {
+                                "available": True,
+                                "candidate_prediction": candidate_prediction,
+                                "scene_prediction": scene_prediction,
+                                "predicted_objective_delta": float(candidate_prediction[0] - scene_prediction[0]),
+                                "predicted_psnr_delta": float(candidate_prediction[1] - scene_prediction[1]),
+                                "predicted_ssim_delta": float(candidate_prediction[2] - scene_prediction[2])
+                                if bool(args.compute_ssim)
+                                else 0.0,
+                            }
+                        )
+                        if float(agreement["predicted_psnr_delta"]) < float(
+                            args.source_oracle_knn_min_reliability_predicted_psnr_delta
+                        ):
+                            agreement["reject_reason"] = "reliability_predicted_psnr_delta"
+                        elif bool(args.compute_ssim) and float(agreement["predicted_ssim_delta"]) < float(
+                            args.source_oracle_knn_min_reliability_predicted_ssim_delta
+                        ):
+                            agreement["reject_reason"] = "reliability_predicted_ssim_delta"
+                    else:
+                        agreement["reject_reason"] = "missing_reliability_predictions"
+                    if source_oracle_knn_diagnostics is None:
+                        source_oracle_knn_diagnostics = {}
+                    source_oracle_knn_diagnostics["reliability_agreement"] = agreement
+                    if agreement.get("reject_reason") is not None:
+                        source_oracle_knn_diagnostics["reject_reason"] = agreement["reject_reason"]
+                        output_variant = "__scene__"
+                if output_variant == "__scene__":
+                    source_oracle_knn_rejected = True
+                    source_oracle_knn_decision = "scene_fallback"
+                    output_variant = selected_variant
+                    selected_delta = deltas[selected_variant]
+                    selected_proxy = proxies_by_variant[selected_variant]
+                    selected_proxy_variant = selected_variant
+                    gate_accepted = True
+                else:
+                    source_oracle_knn_claimed = True
+                    if output_variant == "noop":
+                        selected_delta = torch.zeros_like(selected_delta)
+                        selected_proxy = _candidate_proxy_stats(ev, selected_delta)
+                        selected_proxy_variant = "noop"
+                        source_oracle_knn_decision = "noop"
+                    else:
+                        selected_delta = deltas[output_variant]
+                        selected_proxy = proxies_by_variant[output_variant]
+                        selected_proxy_variant = output_variant
+                        source_oracle_knn_decision = "candidate"
+                        output_decision_source = "source_oracle_knn"
+                    gate_accepted = output_variant != "noop"
+            if (
+                (not local_support_claimed)
+                and (not source_oracle_knn_claimed)
+                and (not source_reliability_claimed)
+                and bool(per_view_risk_model_payload.get("enabled", False))
+            ):
                 output_variant, risk_model_predictions, risk_model_diagnostics = _risk_model_choose_variant(
                     proxies_by_variant,
                     per_view_risk_model_payload,
@@ -5680,7 +6436,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         risk_model_decision = "candidate"
                         output_decision_source = "risk_model"
                     gate_accepted = output_variant != "noop"
-            elif (not local_support_claimed) and (not source_reliability_claimed) and bool(per_view_knn_payload.get("enabled", False)):
+            elif (
+                (not local_support_claimed)
+                and (not source_oracle_knn_claimed)
+                and (not source_reliability_claimed)
+                and bool(per_view_knn_payload.get("enabled", False))
+            ):
                 output_variant, knn_predictions, knn_diagnostics = _knn_choose_variant(
                     proxies_by_variant,
                     per_view_knn_payload,
@@ -5704,7 +6465,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         selected_proxy_variant = output_variant
                         output_decision_source = "knn"
                     gate_accepted = output_variant != "noop"
-            elif (not local_support_claimed) and (not source_reliability_claimed) and bool(per_view_gate_payload.get("enabled", False)):
+            elif (
+                (not local_support_claimed)
+                and (not source_oracle_knn_claimed)
+                and (not source_reliability_claimed)
+                and bool(per_view_gate_payload.get("enabled", False))
+            ):
                 gate_accepted = _gate_accepts(selected_proxy, per_view_gate_payload)
             if (
                 bool(pairwise_dominance_payload.get("enabled", False))
@@ -5738,6 +6504,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     output_decision_source = "pairwise"
             if (
                 (not local_support_claimed)
+                and (not source_oracle_knn_claimed)
                 and (not pairwise_dominance_claimed)
                 and bool(args.local_support_post_incumbent_fallback_only)
                 and bool(local_support_payload.get("enabled", False))
@@ -5971,13 +6738,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "per_view_knn_rejected_to_scene": bool(per_view_knn_rejected),
                     "per_view_risk_model_rejected_to_scene": bool(per_view_risk_model_rejected),
                     "local_support_rejected_to_scene": bool(local_support_rejected),
+                    "source_oracle_knn_rejected_to_scene": bool(source_oracle_knn_rejected),
                     "source_reliability_rejected_to_scene": bool(source_reliability_rejected),
                     "risk_model_raw_output_variant": risk_model_raw_output_variant,
                     "local_support_raw_output_variant": local_support_raw_output_variant,
+                    "source_oracle_knn_raw_output_variant": source_oracle_knn_raw_output_variant,
                     "pairwise_dominance_raw_output_variant": pairwise_dominance_raw_output_variant,
                     "source_reliability_raw_output_variant": source_reliability_raw_output_variant,
                     "risk_model_decision": risk_model_decision,
                     "local_support_decision": local_support_decision,
+                    "source_oracle_knn_decision": source_oracle_knn_decision,
                     "pairwise_dominance_decision": pairwise_dominance_decision,
                     "source_reliability_decision": source_reliability_decision,
                     "output_decision_source": output_decision_source,
@@ -5990,6 +6760,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "per_view_risk_model_predictions": risk_model_predictions,
                     "per_view_risk_model_diagnostics": risk_model_diagnostics,
                     "local_support_diagnostics": local_support_diagnostics,
+                    "source_oracle_knn_diagnostics": source_oracle_knn_diagnostics,
                     "pairwise_dominance_predictions": pairwise_dominance_predictions,
                     "pairwise_dominance_diagnostics": pairwise_dominance_diagnostics,
                     "source_reliability_predictions": source_reliability_predictions,
@@ -6063,15 +6834,25 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "source_heldout_local_support"
                 if bool(local_support_payload.get("enabled", False))
                 else (
-                    "source_heldout_reliability"
-                    if bool(source_reliability_payload.get("enabled", False))
+                    "source_heldout_reliability_oracle_scene_fallback"
+                    if bool(source_oracle_knn_payload.get("enabled", False))
+                    and bool(source_reliability_payload.get("enabled", False))
+                    and str(args.source_oracle_knn_apply_mode) == "post_reliability_scene_only"
                     else (
-                        "source_heldout_risk_model"
-                        if bool(per_view_risk_model_payload.get("enabled", False))
+                        "source_heldout_oracle_knn"
+                        if bool(source_oracle_knn_payload.get("enabled", False))
                         else (
-                            "source_heldout_knn"
-                            if bool(per_view_knn_payload.get("enabled", False))
-                            else ("source_heldout_threshold" if bool(per_view_gate_payload.get("enabled", False)) else "off")
+                            "source_heldout_reliability"
+                            if bool(source_reliability_payload.get("enabled", False))
+                            else (
+                                "source_heldout_risk_model"
+                                if bool(per_view_risk_model_payload.get("enabled", False))
+                                else (
+                                    "source_heldout_knn"
+                                    if bool(per_view_knn_payload.get("enabled", False))
+                                    else ("source_heldout_threshold" if bool(per_view_gate_payload.get("enabled", False)) else "off")
+                                )
+                            )
                         )
                     )
                 )
@@ -6111,6 +6892,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "source_reliability_uses_target_gt": False,
             "source_reliability_fit_scope": "source_heldout_before_target_loop",
             "source_reliability_calibrated_lcb_uses_target_gt": False,
+            "source_oracle_knn_uses_target_gt": False,
+            "source_oracle_knn_fit_scope": "source_heldout_before_target_loop",
             "promotion_rollback_uses_target_gt": False,
             "promotion_rollback_fit_scope": "source_heldout_pairwise_loo_before_target_loop",
             "target_neighbor_consistency_uses_target_gt": False,
@@ -6291,6 +7074,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "per_view_gate": per_view_gate_payload,
         "per_view_knn_policy": per_view_knn_payload,
         "local_support_policy": local_support_payload,
+        "source_oracle_knn_policy": source_oracle_knn_payload,
         "pairwise_dominance_policy": pairwise_dominance_payload,
         "per_view_risk_model_policy": per_view_risk_model_payload,
         "source_reliability_policy": source_reliability_payload,
@@ -6397,6 +7181,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             flat["apply/local_support/source_accept_fraction"] = float(local_support.get("source_accept_fraction", 0.0) or 0.0)
             flat["apply/local_support/source_mean_psnr_delta_vs_scene"] = float(
                 local_support.get("source_mean_psnr_delta_vs_scene_selected", 0.0) or 0.0
+            )
+        if payload.get("source_oracle_knn_policy"):
+            oracle_knn = payload["source_oracle_knn_policy"]
+            flat["apply/source_oracle_knn/enabled"] = float(bool(oracle_knn.get("enabled", False)))
+            flat["apply/source_oracle_knn/source_accept_fraction"] = float(
+                oracle_knn.get("source_accept_fraction", 0.0) or 0.0
+            )
+            flat["apply/source_oracle_knn/source_mean_psnr_delta_vs_scene"] = float(
+                oracle_knn.get("source_mean_psnr_delta_vs_scene_selected", 0.0) or 0.0
             )
         if payload.get("pairwise_dominance_policy"):
             pairwise = payload["pairwise_dominance_policy"]
@@ -6649,6 +7442,73 @@ def main() -> None:
     parser.add_argument("--local_support_cvar_weight", type=float, default=0.25)
     parser.add_argument("--local_support_min_weight", type=float, default=0.10)
     parser.add_argument("--local_support_positive_weight", type=float, default=0.25)
+    parser.add_argument(
+        "--enable_source_oracle_knn_policy",
+        action="store_true",
+        help=(
+            "Fit a source-heldout joint view-level oracle-neighborhood policy. "
+            "It learns which candidate wins on similar source validation views and "
+            "applies the vote to target views without target GT."
+        ),
+    )
+    parser.add_argument(
+        "--source_oracle_knn_feature_grid",
+        default=(
+            "covered_fraction,mean_abs_delta,confidence_mean,residual_std_mean,delta_snr,signal_snr,"
+            "confidence_snr,changed_fraction,delta_signal_cosine,opposition_fraction,aligned_fraction,"
+            "delta_to_signal_ratio,std_to_signal_ratio,support_confidence,support_count_mean"
+        ),
+    )
+    parser.add_argument("--source_oracle_knn_k", type=int, default=5)
+    parser.add_argument("--source_oracle_knn_distance_eps", type=float, default=1.0e-6)
+    parser.add_argument("--source_oracle_knn_base_variants_only", action="store_true")
+    parser.add_argument("--source_oracle_knn_reject_variant", choices=["noop", "scene"], default="scene")
+    parser.add_argument(
+        "--source_oracle_knn_apply_mode",
+        choices=["pre_reliability", "post_reliability_scene_only"],
+        default="post_reliability_scene_only",
+        help=(
+            "pre_reliability lets oracle-neighborhood choose before the source reliability model; "
+            "post_reliability_scene_only uses it only when upstream source reliability leaves the view at the scene incumbent."
+        ),
+    )
+    parser.add_argument("--source_oracle_knn_min_vote_fraction", type=float, default=0.45)
+    parser.add_argument("--source_oracle_knn_min_vote_margin", type=float, default=0.05)
+    parser.add_argument("--source_oracle_knn_min_oracle_objective_delta_vs_scene", type=float, default=0.0)
+    parser.add_argument("--source_oracle_knn_min_oracle_psnr_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--source_oracle_knn_min_oracle_ssim_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--source_oracle_knn_min_local_psnr_delta_vs_scene", type=float, default=0.0)
+    parser.add_argument("--source_oracle_knn_min_local_ssim_delta_vs_scene", type=float, default=-5.0e-5)
+    parser.add_argument("--source_oracle_knn_min_local_cvar_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--source_oracle_knn_min_local_min_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--source_oracle_knn_min_local_positive_fraction_delta_vs_scene", type=float, default=-1.0e9)
+    parser.add_argument("--source_oracle_knn_min_accept_fraction", type=float, default=0.0)
+    parser.add_argument("--source_oracle_knn_max_accept_fraction", type=float, default=1.0)
+    parser.add_argument("--source_oracle_knn_min_source_psnr_delta", type=float, default=0.0)
+    parser.add_argument("--source_oracle_knn_min_source_ssim_delta", type=float, default=-5.0e-5)
+    parser.add_argument("--source_oracle_knn_min_source_cvar_delta", type=float, default=-1.0e9)
+    parser.add_argument("--source_oracle_knn_min_source_min_delta", type=float, default=-1.0e9)
+    parser.add_argument("--source_oracle_knn_min_source_positive_fraction_delta", type=float, default=-1.0e9)
+    parser.add_argument("--source_oracle_knn_require_source_safe", action="store_true")
+    parser.add_argument("--source_oracle_knn_forbid_fixed_when_scene_nonfixed", action="store_true")
+    parser.add_argument(
+        "--source_oracle_knn_require_reliability_agreement",
+        dest="source_oracle_knn_require_reliability_agreement",
+        action="store_true",
+        default=True,
+        help=(
+            "Require source-oracle KNN target promotions to agree with the source reliability predictor. "
+            "This is enabled by default to avoid source-oracle-only negative transfer."
+        ),
+    )
+    parser.add_argument(
+        "--source_oracle_knn_no_reliability_agreement",
+        dest="source_oracle_knn_require_reliability_agreement",
+        action="store_false",
+        help="Disable the reliability-agreement certificate for source-oracle KNN promotions.",
+    )
+    parser.add_argument("--source_oracle_knn_min_reliability_predicted_psnr_delta", type=float, default=0.0)
+    parser.add_argument("--source_oracle_knn_min_reliability_predicted_ssim_delta", type=float, default=0.0)
     parser.add_argument("--enable_pairwise_dominance_policy", action="store_true")
     parser.add_argument(
         "--pairwise_dominance_feature_grid",

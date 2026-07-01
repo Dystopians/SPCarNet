@@ -2,6 +2,69 @@
 
 Date: 2026-06-28
 
+## 2026-07-01 Follow-up: v340d Source-Oracle KNN With Reliability Agreement
+
+Newest implemented method update:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-01-v340-LearnedPolicy-Planning-Draft.md
+docs/car_model/7-01-v340-SourceOracleKNNPolicy-Log.md
+docs/car_model/results/v340b_source_oracle_knn_postfallback_focus6_oracle_gap.json
+docs/car_model/results/v340b_source_oracle_knn_postfallback_focus6_oracle_gap.md
+docs/car_model/results/v340c_source_oracle_agreement_focus6_oracle_gap.json
+docs/car_model/results/v340c_source_oracle_agreement_focus6_oracle_gap.md
+docs/car_model/results/v340d_source_oracle_agreement_pairwise_focus6_oracle_gap.json
+docs/car_model/results/v340d_source_oracle_agreement_pairwise_focus6_oracle_gap.md
+outputs/carnet/spcarnet_v340d_source_oracle_agreement_pairwise_focus6_20260701
+```
+
+v340d adds a real target-GT-free policy path, not a target-tuned parameter
+sweep. It fits a source-heldout oracle-neighborhood KNN policy from
+source-validation candidate outcomes, applies it only as a post-reliability
+scene-fallback promotion, and requires agreement from the source-reliability
+predictor before a target/test promotion is accepted. Target/test GT is still
+read only after image outputs are written for evaluation.
+
+Focus6 replay:
+
+| method | selected PSNR gain | selected SSIM gain | PSNR vs v337 | SSIM vs v337 |
+|---|---:|---:|---:|---:|
+| v337diag | 0.301231403771 | 0.003460387180 | 0.000000000000 | 0.000000000000 |
+| v340b oracle KNN | 0.301720711625 | 0.003458363934 | +0.000489307854 | -0.000002023247 |
+| v340d agreement + pairwise | 0.301510278428 | 0.003461709518 | +0.000278874657 | +0.000001322338 |
+
+Per-scene v340d-v337:
+
+| scene | dPSNR | dSSIM |
+|---|---:|---:|
+| stump | +0.000000000000 | +0.000000000000 |
+| treehill | +0.000000000000 | +0.000000000000 |
+| room | +0.001566421685 | +0.000000533385 |
+| bicycle | +0.000000000000 | +0.000000000000 |
+| bonsai | +0.000106826254 | +0.000007400642 |
+| kitchen | +0.000000000000 | +0.000000000000 |
+
+Important lesson: the first v340c focus6 replay looked worse in macro PSNR
+because the command accidentally omitted the pairwise dominance and
+promotion-rollback path used by v337/v340b. Correcting the stack in v340d
+restored treehill exactly and showed that the agreement gate trades part of
+v340b's PSNR gain for SSIM safety.
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+The reflection did help: it produced a cleaner source-heldout outcome policy,
+fixed a real negative-transfer mode, and caught an unfair-command false
+negative. It did not yet produce a paper-level breakthrough. v340d is a small
+all-axis focus6 improvement over v337, but the gain is not visually strong and
+oracle headroom remains essentially unchanged (`+0.012505689` vs v337
+`+0.012506552`). The next step should improve candidate-generation capacity,
+not keep stacking selector thresholds.
+
 ## 2026-07-01 Follow-up: v336c Adaptive Residual Source-Summary Gate
 
 Newest positive method update:
