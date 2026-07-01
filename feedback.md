@@ -1344,6 +1344,72 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+# 2026-06-30 v302-v305 Source-Heldout Support-Transport Feedback Addendum
+
+This addendum records the first successful reflection-driven method revision
+after the v253-v270 representation attempts.
+
+Main implementation:
+
+```text
+scripts/car_model/train_source_heldout_support_transport_calibrator.py
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+```
+
+Detailed log and summaries:
+
+```text
+docs/car_model/6-30-v305-SourceHeldoutAutoPolicy-Multiscene-Log.md
+docs/car_model/results/v304_frozen_hybrid_policy_multiscene_summary.json
+docs/car_model/results/v305_sourceheldout_auto_policy_multiscene_summary.json
+```
+
+What changed:
+
+- v302 trains a bounded support-transport calibrator from train source-heldout
+  views.
+- v303 confirms the v302 policy on flowers test.
+- v304 freezes the hybrid branch and tests all 9 scenes. It is positive versus
+  base on every scene but fails all-axis versus fixed on stump.
+- v305 adds a train-only source-heldout output guard. The guard selects fixed,
+  learned, or hybrid without reading target/test GT before output renders are
+  saved.
+
+Key v305 result:
+
+```text
+9 scenes / 246 test views
+selected PSNR gain:              +0.266578
+selected SSIM gain:              +0.003701
+selected minus fixed PSNR gain:  +0.036542
+selected minus fixed SSIM gain:  +0.000286
+selected safe vs fixed rate:     9/9
+selected positive vs base rate:  9/9
+```
+
+Important lesson:
+
+The previous bottleneck was not only weak representation capacity. A large part
+of the failure came from forcing one residual branch everywhere. The support
+transport signal is useful, but it needs a train-heldout risk guard because some
+scenes prefer learned, some prefer hybrid, and some should fall back to fixed.
+This turns the method from scene-manual tuning into a fixed adaptive policy.
+
+Remaining bottleneck:
+
+v305 is not yet a paper-complete result. It still has negative PSNR tail views
+on bicycle, stump, and treehill, does not include LPIPS/DISTS in the latest pass,
+and has not been rerun from a fresh clean long MeshSplatting baseline. The next
+model should add a target-GT-free per-view risk gate trained on source-heldout
+views, then rerun v305 against fresh clean long baselines with PSNR/SSIM/LPIPS
+and qualitative panels.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-06-30 v294 Cross-View Direction Feedback Addendum
 
 The latest integrated diagnosis is:

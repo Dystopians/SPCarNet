@@ -1346,6 +1346,81 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-06-30 Update: v302-v305 Source-Heldout Support-Transport Auto Policy
+
+This update is the first recent step where reflection materially changed the
+method instead of only changing parameters.
+
+New/updated pipeline files:
+
+```text
+scripts/car_model/train_source_heldout_support_transport_calibrator.py
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+```
+
+Core idea:
+
+- keep the online support-view residual transport signal;
+- train a small bounded calibrator on train-only source-heldout views;
+- apply target/test views without reading target GT before outputs are saved;
+- in v305, use train source-heldout validation to automatically select fixed,
+  learned, or hybrid output, instead of hard-coding a scene-specific choice.
+
+Main evidence:
+
+```text
+docs/car_model/6-30-v305-SourceHeldoutAutoPolicy-Multiscene-Log.md
+docs/car_model/results/v304_frozen_hybrid_policy_multiscene_summary.json
+docs/car_model/results/v305_sourceheldout_auto_policy_multiscene_summary.json
+```
+
+v304 frozen hybrid result over 9 scenes / 246 test views:
+
+```text
+hybrid PSNR gain:                 +0.255222
+hybrid SSIM gain:                 +0.003626
+hybrid positive vs base rate:     9/9
+hybrid all-axis vs fixed rate:    8/9
+```
+
+v304 exposed the real weakness: stump improved PSNR but had a small SSIM
+regression versus fixed raw ELA.
+
+v305 source-heldout auto policy result:
+
+| scene | selected | selected PSNR gain | selected SSIM gain | selected-fixed PSNR | selected-fixed SSIM | safe vs fixed |
+|---|---|---:|---:|---:|---:|:---:|
+| bicycle | hybrid | +0.112088 | +0.002953 | +0.013743 | +0.000133 | yes |
+| bonsai | learned | +0.567712 | +0.005785 | +0.081315 | +0.000486 | yes |
+| counter | learned | +0.426360 | +0.006908 | +0.086728 | +0.000792 | yes |
+| flowers | hybrid | +0.088861 | +0.004048 | +0.010637 | +0.000253 | yes |
+| garden | hybrid | +0.140931 | +0.001909 | +0.007750 | +0.000078 | yes |
+| kitchen | learned | +0.493623 | +0.003911 | +0.100562 | +0.000508 | yes |
+| room | hybrid | +0.421838 | +0.004990 | +0.028147 | +0.000321 | yes |
+| stump | fixed | +0.057030 | +0.001208 | +0.000000 | +0.000000 | yes |
+| treehill | fixed | +0.090757 | +0.001593 | +0.000000 | +0.000000 | yes |
+
+Macro:
+
+```text
+selected PSNR gain:              +0.266578
+selected SSIM gain:              +0.003701
+selected minus fixed PSNR gain:  +0.036542
+selected minus fixed SSIM gain:  +0.000286
+selected safe vs fixed rate:     9/9
+selected positive vs base rate:  9/9
+```
+
+Important limitation: this is still not paper-complete. Some individual views
+remain negative in PSNR tail, and this pass does not yet include LPIPS/DISTS or
+fresh clean long MeshSplatting reruns.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-06-30 Update: v294 Cross-View Residual Direction Synthesis
 
 New synthesis:
