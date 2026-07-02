@@ -86,7 +86,7 @@ def main():
                   f"{m['cost']['render_fps']:.1f} |")
         for B in ("50", "25"):
             for mode in MODES:
-                p = f"{EVAL_ROOT}/{scene}_B{B}_{mode}_e1/metrics.json"
+                p = f"{EVAL_ROOT}/{scene}_B{B}_{mode}_e1b/metrics.json"
                 if not os.path.isfile(p):
                     md.append(f"| {scene} | {B} | {mode} | MISSING ({p}) | | | | | | | | | |")
                     continue
@@ -121,12 +121,23 @@ def main():
                         out["comparisons"][f"{scene}_B{B}_{a_mode}_vs_{b_mode}_{met}"] = c
                         md.append(f"| {scene} | {B} | {a_mode} vs {b_mode} | {met} | {c['mean_diff']:+.4f} | "
                                   f"[{c['ci_lo']:+.4f}, {c['ci_hi']:+.4f}] | {c['excludes_zero']} |")
-            if "importance_ft" in rows:
-                for met in ("psnr", "lpips"):
-                    c = compare(rows["importance_ft"][0], rows["importance_ft"][1], cn, cv, met)
-                    out["comparisons"][f"{scene}_B{B}_importance_ft_vs_clean_{met}"] = c
-                    md.append(f"| {scene} | {B} | importance_ft vs clean | {met} | {c['mean_diff']:+.4f} | "
-                              f"[{c['ci_lo']:+.4f}, {c['ci_hi']:+.4f}] | {c['excludes_zero']} |")
+            for mode in ("importance_ft", "importance_noft"):
+                if mode in rows:
+                    for met in ("psnr", "lpips"):
+                        c = compare(rows[mode][0], rows[mode][1], cn, cv, met)
+                        out["comparisons"][f"{scene}_B{B}_{mode}_vs_clean_{met}"] = c
+                        md.append(f"| {scene} | {B} | {mode} vs clean | {met} | {c['mean_diff']:+.4f} | "
+                                  f"[{c['ci_lo']:+.4f}, {c['ci_hi']:+.4f}] | {c['excludes_zero']} |")
+            # D3 compaction floor check on the prune-only row (>=20% reduction at
+            # iso-quality: dPSNR >= -0.10 AND dLPIPS <= +0.005 vs clean).
+            if "importance_noft" in rows:
+                dp = out["comparisons"][f"{scene}_B{B}_importance_noft_vs_clean_psnr"]
+                dl = out["comparisons"][f"{scene}_B{B}_importance_noft_vs_clean_lpips"]
+                out.setdefault("compaction_floor", {})[f"{scene}_B{B}_importance_noft"] = {
+                    "dpsnr": dp["mean_diff"], "dpsnr_ci": [dp["ci_lo"], dp["ci_hi"]],
+                    "dlpips": dl["mean_diff"], "dlpips_ci": [dl["ci_lo"], dl["ci_hi"]],
+                    "meets_floor": bool(dp["mean_diff"] >= -0.10 and dl["mean_diff"] <= 0.005),
+                }
             if B == "50" and "importance_ft" in rows and "importance_noft" in rows:
                 d_ft = out["comparisons"][f"{scene}_B50_importance_ft_vs_importance_noft_psnr"]
                 d_cl = out["comparisons"][f"{scene}_B50_importance_ft_vs_clean_psnr"]

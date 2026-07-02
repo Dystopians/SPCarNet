@@ -303,9 +303,14 @@ def stage_prune(scene: str, spec, source_ckpt: str, mode: str, budget: float,
 
 
 def build_train_cmd(spec, model_dir: str, load_iter: int, final_iter: int,
-                    run_name: str) -> list:
+                    run_name: str, lr_overrides: dict | None = None) -> list:
     """Mirror scripts/car_model/meshsplatopt_run_strict_compact_recovery.py::
-    _train_args (compact_render_only preset), calling train.py directly."""
+    _train_args (compact_render_only preset), calling train.py directly.
+
+    lr_overrides: optional {'feature_lr': f, 'weight_lr': f,
+    'lr_triangles_points_init': f} — E1 mechanism-variant knobs (PROTOCOL
+    iteration budget applies); they enter the finetune stage hash via the
+    command string."""
     cmd = [
         PY, "train.py",
         "-s", spec.source_path,
@@ -342,6 +347,9 @@ def build_train_cmd(spec, model_dir: str, load_iter: int, final_iter: int,
         "--wandb_image_log_interval", "1000",
         "--wandb_scalar_log_interval", "50",
     ]
+    for k, v in (lr_overrides or {}).items():
+        if v is not None:
+            cmd += [f"--{k}", str(v)]
     return cmd
 
 
@@ -425,6 +433,9 @@ def parse_args():
     p.add_argument("--mode", required=True, choices=list(MODES))
     p.add_argument("--tag", required=True)
     p.add_argument("--ft-iters", type=int, default=10000)
+    p.add_argument("--ft-feature-lr", type=float, default=None)
+    p.add_argument("--ft-weight-lr", type=float, default=None)
+    p.add_argument("--ft-position-lr", type=float, default=None)
     p.add_argument("--gpu", type=int, default=None)
     p.add_argument("--skip-eval", action="store_true")
     return p.parse_args()
@@ -467,8 +478,11 @@ def main():
         "point_cloud_state_dict.pt")
 
     # ---- per-stage config strings -> hashes (stable, execution-detail-free)
+    lr_overrides = {"feature_lr": args.ft_feature_lr,
+                    "weight_lr": args.ft_weight_lr,
+                    "lr_triangles_points_init": args.ft_position_lr}
     train_cmd = build_train_cmd(spec, model_dir, load_iter, final_iter,
-                                run_name) if with_ft else []
+                                run_name, lr_overrides) if with_ft else []
     stage_cfg = {
         "preflight": f"{PIPELINE_VERSION}|preflight|roots={MODELS_ROOT},{EVAL_ROOT}|min_free_gb=50",
         "evidence": (f"{PIPELINE_VERSION}|evidence|scene={args.scene}"
