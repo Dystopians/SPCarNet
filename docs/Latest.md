@@ -2,6 +2,64 @@
 
 Date: 2026-06-28
 
+## 2026-07-02 Follow-up: v345e Source-Confirmed PSNR-Dominant Pairwise Certificate
+
+Newest implemented method update:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+docs/car_model/7-02-v345e-SourceConfirmedPSNRDominantPairwise-Log.md
+docs/car_model/results/v345e_source_confirmed_psnr_dominant_pairwise_focus6_oracle_gap.json
+docs/car_model/results/v345e_source_confirmed_psnr_dominant_pairwise_focus6_oracle_gap.md
+outputs/carnet/spcarnet_v345e_source_confirmed_psnr_dominant_pairwise_certificate_focus6_20260702
+```
+
+v345e adds a bounded PSNR-dominant SSIM tolerance to the pairwise source-heldout
+certificate. The key fix over the rejected v345d probe is source confirmation:
+target-time pairwise SSIM tolerance is allowed only when the source-heldout
+pairwise policy also needed and passed the same tolerance. This keeps the
+treehill repair and blocks the bicycle false promotion seen in v345d.
+
+Focus6 selected gains:
+
+| method | selected PSNR gain | selected SSIM gain | oracle headroom |
+|---|---:|---:|---:|
+| v342e | 0.302818959247 | 0.003471774660 | +0.011762124 |
+| v343e | 0.304165626182 | 0.003493470028 | +0.010415457 |
+| v345e | 0.304477851987 | 0.003495959074 | +0.010103231 |
+
+Per-scene v345e-v343e:
+
+| scene | dPSNR | dSSIM |
+|---|---:|---:|
+| bicycle | +0.000000000000 | +0.000000000000 |
+| bonsai | +0.000000000000 | +0.000000000000 |
+| kitchen | +0.000000000000 | +0.000000000000 |
+| room | +0.000000000000 | +0.000000000000 |
+| stump | +0.000000000000 | +0.000000000000 |
+| treehill | +0.001873354828 | +0.000014934275 |
+
+Strict focus6 audit:
+
+```text
+macro dPSNR vs v343e: +0.000312225805
+macro dSSIM vs v343e: +0.000002489046
+nonnegative PSNR scenes: 6/6
+nonnegative SSIM scenes: 6/6
+```
+
+Status:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+This is a real target-GT-free selector improvement over v343e on the current
+focus6 benchmark, but it is still a localized support-transport repair. It does
+not close the older Phase-J representation gap, and the next stage must return
+to higher-capacity residual transport / representation learning rather than
+claiming paper closure from this small selector gain.
+
 ## 2026-07-01 Follow-up: v340d Source-Oracle KNN With Reliability Agreement
 
 Newest implemented method update:

@@ -2963,6 +2963,58 @@ def _pairwise_blend_step_reject_reason(
     return None
 
 
+def _pairwise_psnr_dominant_ssim_tolerance_accepts(
+    *,
+    prediction: Sequence[float],
+    local_deltas: dict[str, Any],
+    args: argparse.Namespace,
+) -> bool:
+    if not bool(args.pairwise_dominance_enable_psnr_dominant_ssim_tolerance):
+        return False
+    local_ssim = float(local_deltas.get("ssim", -1.0e9))
+    if local_ssim < float(args.pairwise_dominance_psnr_dominant_local_ssim_floor):
+        return False
+    if float(prediction[1]) < float(args.pairwise_dominance_psnr_dominant_min_predicted_psnr_delta):
+        return False
+    if float(prediction[2]) < float(args.pairwise_dominance_psnr_dominant_min_predicted_ssim_delta):
+        return False
+    if float(local_deltas.get("psnr", 0.0)) < float(args.pairwise_dominance_psnr_dominant_min_local_psnr_delta):
+        return False
+    if float(local_deltas.get("psnr_cvar", 0.0)) < float(args.pairwise_dominance_psnr_dominant_min_local_cvar_delta):
+        return False
+    if float(local_deltas.get("psnr_min", 0.0)) < float(args.pairwise_dominance_psnr_dominant_min_local_min_delta):
+        return False
+    if float(local_deltas.get("positive_fraction", 0.0)) < float(
+        args.pairwise_dominance_psnr_dominant_min_positive_fraction
+    ):
+        return False
+    return True
+
+
+def _pairwise_source_psnr_dominant_ssim_tolerance_accepts(
+    *,
+    mean_delta: float,
+    ssim_delta: float,
+    cvar_delta: float,
+    min_delta: float,
+    accept_fraction: float,
+    args: argparse.Namespace,
+) -> bool:
+    if not bool(args.pairwise_dominance_enable_psnr_dominant_ssim_tolerance):
+        return False
+    if float(ssim_delta) < float(args.pairwise_dominance_psnr_dominant_source_ssim_floor):
+        return False
+    if float(mean_delta) < float(args.pairwise_dominance_psnr_dominant_min_source_psnr_delta):
+        return False
+    if float(cvar_delta) < float(args.pairwise_dominance_psnr_dominant_min_source_cvar_delta):
+        return False
+    if float(min_delta) < float(args.pairwise_dominance_psnr_dominant_min_source_min_delta):
+        return False
+    if float(accept_fraction) < float(args.pairwise_dominance_psnr_dominant_min_source_accept_fraction):
+        return False
+    return True
+
+
 def _source_incumbent_variant_for_view(
     view: str,
     *,
@@ -3131,6 +3183,16 @@ def _fit_pairwise_dominance_policy(
             cand_diag["max_blend_step"] = float(args.pairwise_dominance_max_blend_step)
             cand_diag["adaptive_blend_step_enabled"] = bool(args.pairwise_dominance_enable_adaptive_blend_step)
             cand_diag["adaptive_max_blend_step"] = float(args.pairwise_dominance_adaptive_max_blend_step)
+            psnr_dominant_ssim_tolerance_used = bool(
+                compute_ssim
+                and float(local_deltas.get("ssim", 0.0)) < float(args.pairwise_dominance_min_local_ssim_delta)
+                and _pairwise_psnr_dominant_ssim_tolerance_accepts(
+                    prediction=prediction,
+                    local_deltas=local_deltas,
+                    args=args,
+                )
+            )
+            cand_diag["psnr_dominant_ssim_tolerance_used"] = psnr_dominant_ssim_tolerance_used
             reject_reason = None
             blend_reject_reason = _pairwise_blend_step_reject_reason(
                 blend_step=blend_step,
@@ -3149,7 +3211,11 @@ def _fit_pairwise_dominance_policy(
                 reject_reason = "missing_local_support"
             elif float(local_deltas.get("psnr", 0.0)) < float(args.pairwise_dominance_min_local_psnr_delta):
                 reject_reason = "local_psnr_delta"
-            elif compute_ssim and float(local_deltas.get("ssim", 0.0)) < float(args.pairwise_dominance_min_local_ssim_delta):
+            elif (
+                compute_ssim
+                and float(local_deltas.get("ssim", 0.0)) < float(args.pairwise_dominance_min_local_ssim_delta)
+                and not psnr_dominant_ssim_tolerance_used
+            ):
                 reject_reason = "local_ssim_delta"
             elif float(local_deltas.get("psnr_cvar", 0.0)) < float(args.pairwise_dominance_min_local_cvar_delta):
                 reject_reason = "local_cvar_delta"
@@ -3224,6 +3290,18 @@ def _fit_pairwise_dominance_policy(
     cvar_delta = _summary_psnr_tail(source_summary, "cvar") - _summary_psnr_tail(incumbent_summary, "cvar")
     min_delta = _summary_psnr_tail(source_summary, "min") - _summary_psnr_tail(incumbent_summary, "min")
     accept_fraction = 1.0 - float(selected_counts["incumbent"] / max(len(rows_by_view), 1))
+    source_psnr_dominant_ssim_tolerance_used = bool(
+        compute_ssim
+        and ssim_delta < float(args.pairwise_dominance_min_source_ssim_delta)
+        and _pairwise_source_psnr_dominant_ssim_tolerance_accepts(
+            mean_delta=mean_delta,
+            ssim_delta=ssim_delta,
+            cvar_delta=cvar_delta,
+            min_delta=min_delta,
+            accept_fraction=accept_fraction,
+            args=args,
+        )
+    )
     base_payload = {
         "feature_schema_version": 1,
         "target_names": PAIRWISE_DOMINANCE_TARGET_NAMES,
@@ -3256,6 +3334,46 @@ def _fit_pairwise_dominance_policy(
         "large_step_min_local_cvar_delta": float(args.pairwise_dominance_large_step_min_local_cvar_delta),
         "large_step_min_local_min_delta": float(args.pairwise_dominance_large_step_min_local_min_delta),
         "large_step_min_positive_fraction": float(args.pairwise_dominance_large_step_min_positive_fraction),
+        "psnr_dominant_ssim_tolerance_enabled": bool(
+            args.pairwise_dominance_enable_psnr_dominant_ssim_tolerance
+        ),
+        "psnr_dominant_local_ssim_floor": float(
+            args.pairwise_dominance_psnr_dominant_local_ssim_floor
+        ),
+        "psnr_dominant_source_ssim_floor": float(
+            args.pairwise_dominance_psnr_dominant_source_ssim_floor
+        ),
+        "psnr_dominant_min_predicted_psnr_delta": float(
+            args.pairwise_dominance_psnr_dominant_min_predicted_psnr_delta
+        ),
+        "psnr_dominant_min_predicted_ssim_delta": float(
+            args.pairwise_dominance_psnr_dominant_min_predicted_ssim_delta
+        ),
+        "psnr_dominant_min_local_psnr_delta": float(
+            args.pairwise_dominance_psnr_dominant_min_local_psnr_delta
+        ),
+        "psnr_dominant_min_local_cvar_delta": float(
+            args.pairwise_dominance_psnr_dominant_min_local_cvar_delta
+        ),
+        "psnr_dominant_min_local_min_delta": float(
+            args.pairwise_dominance_psnr_dominant_min_local_min_delta
+        ),
+        "psnr_dominant_min_positive_fraction": float(
+            args.pairwise_dominance_psnr_dominant_min_positive_fraction
+        ),
+        "psnr_dominant_min_source_psnr_delta": float(
+            args.pairwise_dominance_psnr_dominant_min_source_psnr_delta
+        ),
+        "psnr_dominant_min_source_cvar_delta": float(
+            args.pairwise_dominance_psnr_dominant_min_source_cvar_delta
+        ),
+        "psnr_dominant_min_source_min_delta": float(
+            args.pairwise_dominance_psnr_dominant_min_source_min_delta
+        ),
+        "psnr_dominant_min_source_accept_fraction": float(
+            args.pairwise_dominance_psnr_dominant_min_source_accept_fraction
+        ),
+        "source_psnr_dominant_ssim_tolerance_used": source_psnr_dominant_ssim_tolerance_used,
     }
     if selected_counts["incumbent"] >= len(rows_by_view):
         return {"enabled": False, "verdict": "pairwise dominance accepted no source views", **base_payload}
@@ -3265,7 +3383,11 @@ def _fit_pairwise_dominance_policy(
         return {"enabled": False, "verdict": "pairwise dominance accepted too many source views", **base_payload}
     if mean_delta < float(args.pairwise_dominance_min_source_psnr_delta):
         return {"enabled": False, "verdict": "pairwise dominance did not clear source PSNR delta", **base_payload}
-    if compute_ssim and ssim_delta < float(args.pairwise_dominance_min_source_ssim_delta):
+    if (
+        compute_ssim
+        and ssim_delta < float(args.pairwise_dominance_min_source_ssim_delta)
+        and not source_psnr_dominant_ssim_tolerance_used
+    ):
         return {"enabled": False, "verdict": "pairwise dominance did not clear source SSIM delta", **base_payload}
     if cvar_delta < float(args.pairwise_dominance_min_source_cvar_delta):
         return {"enabled": False, "verdict": "pairwise dominance did not clear source CVaR delta", **base_payload}
@@ -3332,6 +3454,16 @@ def _pairwise_dominance_choose_variant(
             if candidate_blend is not None and incumbent_blend is not None
             else None
         )
+        psnr_dominant_ssim_tolerance_used = bool(
+            bool(policy.get("source_psnr_dominant_ssim_tolerance_used", False))
+            and compute_ssim
+            and float(local_deltas.get("ssim", 0.0)) < float(args.pairwise_dominance_min_local_ssim_delta)
+            and _pairwise_psnr_dominant_ssim_tolerance_accepts(
+                prediction=prediction,
+                local_deltas=local_deltas,
+                args=args,
+            )
+        )
         reject_reason = None
         blend_reject_reason = _pairwise_blend_step_reject_reason(
             blend_step=blend_step,
@@ -3350,7 +3482,11 @@ def _pairwise_dominance_choose_variant(
             reject_reason = "missing_local_support"
         elif float(local_deltas.get("psnr", 0.0)) < float(args.pairwise_dominance_min_local_psnr_delta):
             reject_reason = "local_psnr_delta"
-        elif compute_ssim and float(local_deltas.get("ssim", 0.0)) < float(args.pairwise_dominance_min_local_ssim_delta):
+        elif (
+            compute_ssim
+            and float(local_deltas.get("ssim", 0.0)) < float(args.pairwise_dominance_min_local_ssim_delta)
+            and not psnr_dominant_ssim_tolerance_used
+        ):
             reject_reason = "local_ssim_delta"
         elif float(local_deltas.get("psnr_cvar", 0.0)) < float(args.pairwise_dominance_min_local_cvar_delta):
             reject_reason = "local_cvar_delta"
@@ -3367,6 +3503,10 @@ def _pairwise_dominance_choose_variant(
             "adaptive_max_blend_step": float(args.pairwise_dominance_adaptive_max_blend_step),
             "ood_distance": float(ood_distance),
             "ood_threshold": float(policy.get("ood_source_distance_threshold", float("inf"))),
+            "source_psnr_dominant_ssim_tolerance_used": bool(
+                policy.get("source_psnr_dominant_ssim_tolerance_used", False)
+            ),
+            "psnr_dominant_ssim_tolerance_used": psnr_dominant_ssim_tolerance_used,
             "reject_reason": reject_reason,
         }
         diagnostics["candidate_diagnostics"][variant] = cand_diag
@@ -7954,6 +8094,27 @@ def main() -> None:
     parser.add_argument("--pairwise_dominance_psnr_weight", type=float, default=0.0)
     parser.add_argument("--pairwise_dominance_ssim_weight", type=float, default=0.0)
     parser.add_argument("--pairwise_dominance_local_cvar_weight", type=float, default=0.25)
+    parser.add_argument(
+        "--pairwise_dominance_enable_psnr_dominant_ssim_tolerance",
+        action="store_true",
+        help=(
+            "Allow pairwise candidates with tiny negative local SSIM support only when source-local "
+            "PSNR/CVaR/min/positive-fraction evidence and predicted PSNR/SSIM are strong. This is a "
+            "bounded certificate, not a global SSIM relaxation."
+        ),
+    )
+    parser.add_argument("--pairwise_dominance_psnr_dominant_local_ssim_floor", type=float, default=-2.5e-4)
+    parser.add_argument("--pairwise_dominance_psnr_dominant_source_ssim_floor", type=float, default=-1.0e-6)
+    parser.add_argument("--pairwise_dominance_psnr_dominant_min_predicted_psnr_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_psnr_dominant_min_predicted_ssim_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_psnr_dominant_min_local_psnr_delta", type=float, default=0.005)
+    parser.add_argument("--pairwise_dominance_psnr_dominant_min_local_cvar_delta", type=float, default=4.0e-4)
+    parser.add_argument("--pairwise_dominance_psnr_dominant_min_local_min_delta", type=float, default=4.0e-4)
+    parser.add_argument("--pairwise_dominance_psnr_dominant_min_positive_fraction", type=float, default=1.0)
+    parser.add_argument("--pairwise_dominance_psnr_dominant_min_source_psnr_delta", type=float, default=0.001)
+    parser.add_argument("--pairwise_dominance_psnr_dominant_min_source_cvar_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_psnr_dominant_min_source_min_delta", type=float, default=0.0)
+    parser.add_argument("--pairwise_dominance_psnr_dominant_min_source_accept_fraction", type=float, default=0.0)
     parser.add_argument("--enable_promotion_rollback_certificate", action="store_true")
     parser.add_argument("--promotion_rollback_mode", choices=["shadow", "enforce"], default="shadow")
     parser.add_argument(
