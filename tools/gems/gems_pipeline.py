@@ -65,7 +65,7 @@ MODELS_ROOT = os.path.join(GEMS_ROOT, "models")
 EVAL_ROOT = os.path.join(GEMS_ROOT, "eval")
 EVIDENCE_ROOT = os.path.join(GEMS_ROOT, "evidence")
 
-MODES = ("importance_ft", "random_ft", "importance_noft")
+MODES = ("importance_ft", "random_ft", "importance_noft", "random_noft")
 PIPELINE_VERSION = "gems_pipeline_v1"
 RANDOM_PRUNE_SEED = 0  # numpy default_rng(0), pre-registered
 TRAIN_SEED = 0
