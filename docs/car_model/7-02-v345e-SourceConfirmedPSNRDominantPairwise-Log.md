@@ -128,6 +128,60 @@ does not solve the older representation-level gap to Phase-J. The next stage
 still needs higher-capacity residual transport or a stronger representation
 route, not more selector-only threshold layering.
 
+## Full9 Extension
+
+After the focus6 milestone, v345e was extended to the remaining full9 scenes
+`counter`, `flowers`, and `garden`. Because v343e originally had only focus6
+outputs in this branch, those three scenes were replayed with the same fixed
+v343e stack on current code with the new tolerance flag disabled. The full9
+roots are:
+
+```text
+outputs/carnet/spcarnet_v343e_replay_full9_currentcode_20260702
+outputs/carnet/spcarnet_v345e_source_confirmed_psnr_dominant_pairwise_certificate_full9_20260702
+```
+
+Full9 audit:
+
+```text
+docs/car_model/results/v345e_source_confirmed_psnr_dominant_pairwise_full9_oracle_gap.json
+docs/car_model/results/v345e_source_confirmed_psnr_dominant_pairwise_full9_oracle_gap.md
+```
+
+Full9 selected gains:
+
+| scene | v343e PSNR | v345e PSNR | dPSNR | v343e SSIM | v345e SSIM | dSSIM |
+|---|---:|---:|---:|---:|---:|---:|
+| bicycle | 0.119958548840 | 0.119958548840 | +0.000000000000 | 0.002988750935 | 0.002988750935 | +0.000000000000 |
+| bonsai | 0.582901931942 | 0.582901931942 | +0.000000000000 | 0.005913528236 | 0.005913528236 | +0.000000000000 |
+| counter | 0.426359636889 | 0.426359636889 | +0.000000000000 | 0.006908347209 | 0.006908347209 | +0.000000000000 |
+| flowers | 0.092359631686 | 0.092359631686 | +0.000000000000 | 0.004114340652 | 0.004114340652 | +0.000000000000 |
+| garden | 0.147204102273 | 0.147204102273 | +0.000000000000 | 0.001919855674 | 0.001919855674 | +0.000000000000 |
+| kitchen | 0.493623160533 | 0.493623160533 | +0.000000000000 | 0.003910861697 | 0.003910861697 | +0.000000000000 |
+| room | 0.453250185878 | 0.453250185878 | +0.000000000000 | 0.005189244564 | 0.005189244564 | +0.000000000000 |
+| stump | 0.058909355358 | 0.058909355358 | +0.000000000000 | 0.001223634928 | 0.001223634928 | +0.000000000000 |
+| treehill | 0.116350574542 | 0.118223929370 | +0.001873354828 | 0.001734799809 | 0.001749734084 | +0.000014934275 |
+
+Full9 macro:
+
+| method | PSNR gain | SSIM gain | oracle headroom |
+|---|---:|---:|---:|
+| v343e replay | 0.276768569771 | 0.003767040412 | +0.008221750 |
+| v345e | 0.276976720308 | 0.003768699775 | +0.008013599 |
+
+v345e-v343e replay:
+
+```text
+macro dPSNR: +0.000208150536
+macro dSSIM: +0.000001659364
+nonnegative PSNR scenes: 9/9
+nonnegative SSIM scenes: 9/9
+```
+
+The remaining full9 scenes did not activate target-time PSNR-dominant SSIM
+tolerance, so the new policy is non-regressive there. The only full9 quality
+change remains treehill view `00011`.
+
 Status:
 
 ```text

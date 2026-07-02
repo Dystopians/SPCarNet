@@ -11,7 +11,11 @@ scripts/car_model/apply_source_heldout_support_transport_calibrator.py
 docs/car_model/7-02-v345e-SourceConfirmedPSNRDominantPairwise-Log.md
 docs/car_model/results/v345e_source_confirmed_psnr_dominant_pairwise_focus6_oracle_gap.json
 docs/car_model/results/v345e_source_confirmed_psnr_dominant_pairwise_focus6_oracle_gap.md
+docs/car_model/results/v345e_source_confirmed_psnr_dominant_pairwise_full9_oracle_gap.json
+docs/car_model/results/v345e_source_confirmed_psnr_dominant_pairwise_full9_oracle_gap.md
 outputs/carnet/spcarnet_v345e_source_confirmed_psnr_dominant_pairwise_certificate_focus6_20260702
+outputs/carnet/spcarnet_v343e_replay_full9_currentcode_20260702
+outputs/carnet/spcarnet_v345e_source_confirmed_psnr_dominant_pairwise_certificate_full9_20260702
 ```
 
 v345e adds a bounded PSNR-dominant SSIM tolerance to the pairwise source-heldout
@@ -46,6 +50,20 @@ macro dPSNR vs v343e: +0.000312225805
 macro dSSIM vs v343e: +0.000002489046
 nonnegative PSNR scenes: 6/6
 nonnegative SSIM scenes: 6/6
+```
+
+Full9 extension versus v343e replay:
+
+| method | selected PSNR gain | selected SSIM gain | oracle headroom |
+|---|---:|---:|---:|
+| v343e replay | 0.276768569771 | 0.003767040412 | +0.008221750 |
+| v345e | 0.276976720308 | 0.003768699775 | +0.008013599 |
+
+```text
+macro dPSNR vs v343e replay: +0.000208150536
+macro dSSIM vs v343e replay: +0.000001659364
+nonnegative PSNR scenes: 9/9
+nonnegative SSIM scenes: 9/9
 ```
 
 Status:
