@@ -74,9 +74,17 @@ SCENES: dict = {
             ],
             "colmap_sparse": "/data/peilincai/mesh_datasets/eth3d_colmap/courtyard/sparse/0",
         },
-        # ROI frozen at first courtyard geometry eval (PROTOCOL 4.3 g4);
-        # not yet set -> g4/d1/d2 report skipped until then.
-        roi=None,
+        # ROI FROZEN 2026-07-02 at first courtyard geometry eval (PROTOCOL 4.3
+        # g4): combined scan_clean AABB expanded 0.3 m (computed from
+        # scan1+scan2, 37.8M pts: min [-8.582,-14.488,-1.745],
+        # max [24.669,19.156,16.642]). z_band=None: the scan frame's up axis
+        # is not axis-aligned/verified, so d1/d2 stay gated until a documented
+        # gravity-alignment derivation freezes it (M5). Never edit (MAJOR bump).
+        roi={
+            "min": [-8.882, -14.788, -2.045],
+            "max": [24.969, 19.456, 16.942],
+            "z_band": None,
+        },
         units_per_meter=1.0,  # ETH3D laser scans are metric
         exists=True,
     ),

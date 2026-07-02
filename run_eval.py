@@ -179,6 +179,9 @@ def main():
         downstream = {"skipped": "--skip-downstream"}
     elif spec.roi is None:
         downstream = {"skipped": "no ROI frozen in scenes.py for this scene"}
+    elif spec.roi.get("z_band") is None:
+        downstream = {"skipped": "ROI frozen without z_band (up-axis derivation "
+                                 "pending, PROTOCOL 4.4); d1/d2 gated"}
     elif not (spec.gt.get("mesh_path") or spec.gt.get("scan_paths")):
         downstream = {"skipped": "no GT surface asset (mesh_path/scan_paths) declared"}
     elif spec.units_per_meter != 1.0:
