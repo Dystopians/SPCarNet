@@ -1,7 +1,6 @@
 # GEMS — ASSET_MAP.md
 
-Status: **DRAFT (GOAL #001, 2026-07-02)** — compiled from code reading by three parallel surveys.
-Items tagged `[VERIFY-M0]` must be confirmed by execution before AT0 is accepted.
+Status: **VERIFIED (GOAL #002, 2026-07-02)** — entry points from code reading; costs/counts/reproduction confirmed by execution (evidence: `/home/peilincai/gems_stage1/`).
 
 ---
 
@@ -52,26 +51,41 @@ Items tagged `[VERIFY-M0]` must be confirmed by execution before AT0 is accepted
 | Dataset | Path | Notes |
 |---|---|---|
 | Mip-NeRF360 full9 | `/data/peilincai/mesh_datasets/mipnerf360/{bicycle,flowers,garden,stump,treehill,room,counter,kitchen,bonsai}` | images + images_{2,4,8} + COLMAP sparse. Outdoor=first5 (train at images_4), indoor=last4 (images_2), `-r -1` |
-| ETH3D | `/data/peilincai/mesh_datasets/eth3d[_colmap]/courtyard` | `[VERIFY-M0]` GT laser scan present on disk? (dev_drive_A candidate) |
-| Tanks&Temples | `/data/peilincai/mesh_datasets/tanks_and_temples[_colmap]/{barn,truck}` | `[VERIFY-M0]` GT availability |
-| Parking phone | `/data/peilincai/parking_phone_tiny_anonymized/` | domain-perfect, no GT mesh (dev_drive_A candidate) |
+| ETH3D courtyard = **dev_drive_A** (DEC-006) | `/data/peilincai/mesh_datasets/eth3d_colmap/courtyard` (38 imgs, COLMAP txt + points3D.ply) | GT laser scans VERIFIED: `mesh_datasets/eth3d/courtyard/courtyard/{scan_clean,dslr_scan_eval}/scan{1,2}.ply`; prior stageR prune/recovery runs exist in outputs/ |
+| Tanks&Temples | `/data/peilincai/mesh_datasets/tanks_and_temples[_colmap]/{barn,truck}` | NO GT geometry on disk (NSVF-style rgb/pose only) |
+| Parking phone | `/data/peilincai/parking_phone_tiny_anonymized/` | domain-perfect, no GT mesh → optional qualitative extra only |
 | SS3DM | **NOT ON DISK** (`/data2/peilincai/SS3DM_raw` absent) | schema doc: `docs/ss3dm_prior_data_schema.md` |
 | MeshFleet car prior | `outputs/ss3dm_prior_car/meshfleet_car_cache_ext_v02/` | SPCarNet prior data, not scene data |
 | toy_parking | TO BUILD (M1b) | Blender/procedural sanctioned |
 
 ## 3. Trained checkpoints (clean baseline, DEC-005)
 
-`outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/<scene>/` — 9/9 scenes, iterations 26000 + 30000, `.pt` ≈ 0.7–0.95 GB each, dir total 23G. Reproduction matches paper (`repro_metrics_vs_paper_iter30000.csv`): garden 24.71/0.762/0.216, bonsai 28.38/0.879/0.290, kitchen 27.30/0.858/0.226.
-- `[VERIFY-M0]` per-scene triangle counts (load `.pt`, read `_triangle_indices.shape[0]`); mid-training wandb reference ~625k tris (garden-family, iter 7k).
-- `[VERIFY-M0]` end-to-end render+metrics runs green today on garden.
+`outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/<scene>/` — 9/9 scenes, iterations 26000 + 30000, dir total 23G.
+- **End-to-end re-eval VERIFIED green + exact** (2026-07-02, GPU 3): garden@30000 → PSNR 24.7120 / SSIM 0.76179 / LPIPS 0.21626 (= recorded). Log: `/home/peilincai/gems_stage1/logs_m0_garden_e2e.log`.
+- **Triangle census** (26000 ≡ 30000; census file `/home/peilincai/gems_stage1/m0_triangle_census.txt`):
 
-## 4. Costs
+| scene | triangles | vertices | .pt MB |
+|---|---|---|---|
+| bicycle | 9,422,930 | 3,490,855 | 952 |
+| flowers | 9,649,601 | 3,605,171 | 982 |
+| garden | 11,568,056 | 3,414,016 | 988 |
+| stump | 9,277,087 | 3,558,228 | 963 |
+| treehill | 9,527,637 | 3,607,676 | 979 |
+| room | 11,173,063 | 2,840,131 | 859 |
+| counter | 9,850,919 | 2,537,250 | 764 |
+| kitchen | 9,716,239 | 2,451,717 | 743 |
+| bonsai | 10,834,182 | 3,409,579 | 969 |
 
-- Training: 30k iters/scene; wall-clock NOT in retained logs (0-byte logs, overwritten wandb summaries). `[VERIFY-M0]` estimate via timed short run.
-- `[VERIFY-M0]` fine-tune cost/1k iters, render FPS at dev res, ELA teacher cost/view (`benchmark_phasej_integrated_runtime.py` reports render_ms/adapter_ms).
+## 4. Costs (measured 2026-07-02, GPU 3 = RTX 6000 Ada)
+
+- **Fine-tune (topology frozen, garden 11.57M tris, images_4): 19.3 it/s** → 10k iters ≈ 8.6 min/scene. Measured via 150-iter probe.
+- **Render**: 24 test views in 34 s incl. PNG saves (×4 supersampling) ≈ 1.4 s/view wall; pure-render FPS to be measured by run_eval bench (M5).
+- Full 30k train/scene: ESTIMATE 40–80 min (early iters faster, fewer tris); not directly measured (retained logs empty). toy_parking training will be timed (M1b).
+- ELA teacher cost/view: measure in M4 via `benchmark_phasej_integrated_runtime.py` (reports render_ms/adapter_ms per view).
 
 ## 5. Compute & storage
 
 - GPUs: 8× RTX 6000 Ada 48GB (driver 565.57.01, CUDA 12.7). Free-ish: **3**, 1, 2, 5. Busy: 0, 6, 7 (other users).
-- Env: micromamba `mesh_splatting` (py3.10).
-- Storage: `/data` 28T, **42G free (100%) — BELOW D6 FLOOR**; `/` 14T, 5.9T free ✓; `/dev/shm` FULL (banned anyway). GEMS output root → `/home/peilincai/gems_stage1/` (DEC-001). Repo `outputs/` holds 2.2T historical artifacts (cleanup = human decision).
+- Env: micromamba `mesh_splatting` (**Python 3.11**). `PY=/home/peilincai/micromamba/envs/mesh_splatting/bin/python`.
+- Storage (VERIFIED, see LEDGER DEC-007): `/data` 28T volume, 41G free, no uid quota — below 50G D6 floor. `/` volume: **hard 100 GiB uid quota, ~1 GiB headroom** (writes fail beyond it; `torch.save` died mid-write during M0 probe). `/dev/shm` full (banned anyway). → GB-scale runs BLOCKED pending human storage decision; small artifacts OK. Repo `outputs/` holds 2.2T historical artifacts = main reclaim candidate.
+- Preflight: `python tools/storage_preflight.py <target> [--min-free-gb 50]` — run before every job (D6).

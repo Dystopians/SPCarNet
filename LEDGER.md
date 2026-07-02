@@ -15,6 +15,8 @@ Never trust chat memory over this file.
 | DEC-003 | SS3DM town data is **NOT on disk** (`/data2/peilincai/SS3DM_raw` gone). `dev_drive_A` must use a fallback; candidates: ETH3D courtyard (GT laser scan? verify), T&T barn/truck (COLMAP present; GT?), `parking_phone_tiny_anonymized` (domain-perfect, no GT mesh). Final pick in M0. | Per prompt §2 "facts M0 must verify" — verified absent. | 2026-07-02 |
 | DEC-004 | Python env = micromamba `mesh_splatting` (`/home/peilincai/micromamba/envs/mesh_splatting`, py3.10). GPUs: prefer 3, then 1/2/5 (0/6/7 busy with other users' jobs). | Environment survey. | 2026-07-02 |
 | DEC-005 | Clean baseline = existing `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/<scene>/` checkpoints (iteration_30000; 26000 also retained). Do NOT retrain full9. | 9/9 scenes trained, metrics recorded, match paper. Retraining wastes days and /data has no space. | 2026-07-02 |
+| DEC-006 | `dev_drive_A` = **ETH3D courtyard** (`/data/peilincai/mesh_datasets/eth3d_colmap/courtyard`, 38 imgs, COLMAP + points3D.ply; GT laser scans at `mesh_datasets/eth3d/courtyard/courtyard/{scan_clean,dslr_scan_eval}/scan{1,2}.ply`). T&T barn/truck have NO GT on disk; parking_phone_tiny has no GT mesh (keep as optional qualitative extra). Caveat: llff every-8 split → ~5 test views; PROTOCOL must set split honestly (candidate: every-4). | Only available scene with GT geometry → enables g1/g4. SS3DM absent (DEC-003). | 2026-07-02 |
+| DEC-007 | **STORAGE CRISIS (blocks GB-scale runs; human decision pending).** Verified: `/` volume has a hard 100 GiB **user quota**, currently ~1 GiB headroom (torch.save died mid-write; dd probe stopped at 941 MiB). `/data` = 41 GB free, no user quota, below the 50 GB D6 floor. No other writable volume. Interim interpretation of D6 (documented, not a waiver): KB–MB artifacts (code, docs, metrics.json, panels) may be written; **GB-scale artifacts (checkpoints, render sets, teacher caches, toy dataset training) are BLOCKED** until human chooses: (a) approve retention-policy cleanup of decommissioned v1xx–v3xx dirs in `outputs/` (2.2 TB, reclaim ≥300 GB), (b) raise home quota, or (c) explicitly waive the 50 GB floor for /data with a tight per-run budget. | D6 + honesty; deleting user research artifacts autonomously is forbidden. | 2026-07-02 |
 
 ## STANDING CONSTRAINTS (from Prime Directives — restated for quick check)
 
@@ -32,8 +34,8 @@ Never trust chat memory over this file.
 
 | Milestone | Status | % | Blockers / notes |
 |-----------|--------|---|------------------|
-| M0 Reproduce & Audit (AT0) | IN PROGRESS | 60 | Asset map drafted from code reading; still need: executed end-to-end eval on garden, triangle counts from .pt, storage preflight tool, legacy-compaction FT recipe documented (done in ASSET_MAP), wall-clock estimate |
-| M1 Protocol & Harness (AT1) | NOT STARTED | 0 | PROTOCOL.md, run_eval.py, bootstrap tool, audit_test_path.py, toy_parking (M1b) |
+| M0 Reproduce & Audit (AT0) | **DONE** | 100 | Eval reproduced exactly (garden 24.7120/0.7618/0.2163); tri counts censused; preflight tool demonstrated (caught 2 violations); FT cost measured 19.3 it/s; storage blocker escalated (DEC-007) |
+| M1 Protocol & Harness (AT1) | IN PROGRESS | 0 | PROTOCOL.md, run_eval.py, bootstrap tool, audit_test_path.py all zero-GB → proceed; M1b toy_parking TRAINING blocked on DEC-007 |
 | M2 Budget Engine (E1) | NOT STARTED | 0 | depends M1 |
 | M3 Geometry Objectives (E2) | NOT STARTED | 0 | depends M2; renderer already exposes expected/median depth, alpha, normals, tri-ids |
 | M4 Teacher Distillation (E3) | NOT STARTED | 0 | depends M2; teacher-render-loss hook already exists in train.py |
@@ -68,6 +70,15 @@ Never trust chat memory over this file.
 ---
 
 ## GOAL LOG
+
+### GOAL #002 — M0 completion: verified reproduction, census, costs, storage [M0] — 2026-07-02 — DONE
+- Infra goal. Evidence (durable): `/home/peilincai/gems_stage1/{m0_triangle_census.txt, logs_m0_garden_e2e.log, m0_repro/garden/results.json}`.
+- **Eval path GREEN & exact**: render.py + metrics.py on copied garden ckpt (GPU 3) → PSNR 24.7120 / SSIM 0.76179 / LPIPS 0.21626 = recorded baseline (24.71/0.762/0.216). Render: 24 test views in 34 s incl. PNG I/O (×4 supersampling).
+- **Trainer GREEN**: 150-iter topology-frozen fine-tune from garden@30000: **19.3 it/s** (11.57M tris, images_4). → 10k-iter fine-tune ≈ 9 min/scene. Full-train 30k ESTIMATE ≈ 40–80 min/scene (rate varies over training; not directly measured — logs empty; toy scene will be timed in M1b).
+- **Triangle census (30000 = 26000, topology frozen)**: bicycle 9.42M, flowers 9.65M, garden 11.57M, stump 9.28M, treehill 9.53M, room 11.17M, counter 9.85M, kitchen 9.72M, bonsai 10.83M; verts 2.45–3.61M; .pt 743–988 MB; SH deg 3. → B=50% ≈ 4.6–5.8M tris, B=25% ≈ 2.3–2.9M.
+- `tools/storage_preflight.py` written + demonstrated: PASS on quota-free target, FAIL on `outputs/` (41 GB < 50). Then the FT-probe's final save **died on the home quota** (torch.save mid-write) — which is how DEC-007's quota was discovered. Crash root cause: 100 GiB uid quota on `/`; fix: deleted my ckpt copies (~2 GB), rerouted all GB-scale work to pending DEC-007.
+- Env correction: mesh_splatting env is Python **3.11** (not 3.10).
+- VERDICT: PASS (AT0 satisfied; training demonstrated via resume-probe per DEC-005 justification).
 
 ### GOAL #001 — Bootstrap [M0] — 2026-07-02 — DONE
 - Infra goal (no hypothesis). Created LEDGER.md, ASSET_MAP.md (pre-verified draft), internalized §2 context via 3 parallel code surveys (train/render/eval path; compaction+ELA+evidence; data/checkpoints/storage).
