@@ -1,0 +1,906 @@
+#!/usr/bin/env python
+"""GEMS Stage One M1b: build the `toy_parking` procedural dev scene.
+
+PROTOCOL.md section 1.1 (frozen spec): meters as units; ground plane >= 30x30 m;
+>= 2 parked vehicle meshes; >= 1 thin structure (pole/fence, <= 10 cm diameter
+members); >= 1 textureless wall; 60-120 posed views on ring/arc trajectories at
+1.4-2.0 m height; renders at ~1000x750; GT mesh + GT depth per view exported at
+build time.
+
+This script (single seeded entry point):
+  1. Builds the GT scene mesh procedurally with numpy (Lambertian shading baked
+     into vertex colors) and exports OBJ + a colors sidecar .npz.
+  2. Generates 90 camera poses (outer orbit ring, inner arc drive-by, 10
+     vehicle-focused views), all PINHOLE 1000x750 at ~60 deg horizontal FOV.
+  3. Renders GT RGB (PNG) and GT median depth (float32 .npy) for every view
+     through the repo's own `triangle_renderer.render` (supersampling x4,
+     black background) using an opaque TriangleModel built from the GT mesh.
+  4. Exports a COLMAP text model (sparse/0/{cameras,images,points3D}.txt +
+     points3D.ply) with a 60k-point area-sampled init cloud, and the
+     train/test split file (every 5th view = test) in the JSON format consumed
+     by --split_strategy file --split_file.
+  5. Verifies everything by re-loading through scene.colmap_loader and running
+     a depth/pose consistency check + per-element view-coverage census.
+
+Conventions verified against the codebase before writing this file:
+  - vertex_weight is stored PRE-sigmoid; activation = sigmoid (opacity_floor=0
+    at construction). inverse_sigmoid(0.9999) => activated opacity ~1.0
+    (rasterizer caps per-triangle alpha at 0.999).
+  - sigma is stored as log(sigma_activated); rasterizer computes
+    Cx = phi_final^sigma, so sigma -> 0 means uniform coverage inside the
+    triangle (hard, crisp edges). We use activated sigma = 1e-4, the exact
+    value used by TriangleModel.load_ply_file and by the trainer's final
+    annealed sigma.
+  - features_dc stores SH0 coefficients: dc = (rgb - 0.5) / C0 (utils.sh_utils
+    RGB2SH); the CUDA rasterizer computes max(0, C0*dc + 0.5).
+  - COLMAP images.txt: qvec/tvec are world-to-camera (x_cam = R_w2c X + t);
+    dataset_readers stores R = qvec2rotmat(qvec).T, T = tvec and rebuilds
+    W2C via getWorld2View2. Empty POINTS2D second lines parse to (0,2)/(0,)
+    arrays (verified). points3D: the reader prefers points3D.ply for the init
+    cloud (fetchPly) and parses points3D.txt for the sparse dict (empty tracks
+    tolerated; the error column is required).
+  - Split file = JSON payload {"train": [...], "test": [...]} of image name
+    stems (scene/dataset_readers._load_colmap_split_file).
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import os
+import sys
+
+import numpy as np
+
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, REPO_ROOT)
+
+# ---------------------------------------------------------------------------
+# Scene constants (meters). These define the frozen toy_parking layout.
+# ---------------------------------------------------------------------------
+GROUND_HALF = 17.025          # ground spans ~34.05 x 34.05 m
+GROUND_PITCH = 0.15           # vertex grid pitch
+GROUND_HEIGHT_AMP = 0.02      # +/- 2 cm height noise
+
+IMG_W, IMG_H = 1000, 750
+HFOV_DEG = 60.0
+FX = IMG_W / (2.0 * math.tan(math.radians(HFOV_DEG) / 2.0))  # = FY (square px)
+SUPERSAMPLE = 4               # matches render.py / training-time setting
+
+SUN_DIR = np.array([0.30, -0.35, 0.87])   # unit-normalized below; toward sun
+AMBIENT = 0.35
+DIFFUSE = 0.72
+
+SIGMA_ACTIVATED = 1e-4        # hard triangle edges (load_ply_file precedent)
+OPACITY_ACTIVATED = 0.9999    # activated vertex opacity for the GT model
+
+N_RING, N_ARC, N_VEHICLE = 48, 32, 10     # 90 views total
+# Ring radius: min 12.7 keeps >= 0.8 m lateral clearance from the fence line at
+# x = -10 (sqrt(12.7^2 - 6.2^2) - 10.1 = 0.98 m); still within the ~12-14 m spec.
+RING_R = (12.7, 14.0)
+RING_H = 1.7
+# Arc radius capped at 7.8 so the pass keeps >= 1.0 m from the wall at y = -9;
+# the sweep runs through the southern drive-lane sector (az 150 -> 390 deg),
+# skipping the bay sector (az ~30-150 deg) where the parked cars sit at r ~6.1.
+ARC_R = (6.0, 7.8)
+ARC_H = 1.6
+
+N_INIT_POINTS = 60_000
+
+CAR_CENTERS = [(-2.7, 5.5), (2.7, 5.5)]   # bay 2 and bay 4 centers
+CAR_ALBEDOS = [(0.55, 0.10, 0.10), (0.12, 0.20, 0.50)]
+POLE_XY = (9.5, -3.0)
+WALL_Y = -9.0
+FENCE_X = -10.0
+
+COVERAGE_MIN_VIEWS = 8
+COVERAGE_MIN_PIXELS = 200     # supersampled pixels (~12.5 px at 1000x750)
+
+
+# ---------------------------------------------------------------------------
+# Mesh builder
+# ---------------------------------------------------------------------------
+class MeshBuilder:
+    def __init__(self):
+        self.verts: list[np.ndarray] = []
+        self.faces: list[np.ndarray] = []
+        self.albedo: list[np.ndarray] = []
+        self.normals: list[np.ndarray] = []
+        self.element_of_face: list[np.ndarray] = []
+        self.element_names: list[str] = []
+        self._n_verts = 0
+        self._n_faces = 0
+
+    def element_id(self, name: str) -> int:
+        if name not in self.element_names:
+            self.element_names.append(name)
+        return self.element_names.index(name)
+
+    def add(self, verts, faces, albedo, normals, element: str):
+        verts = np.asarray(verts, dtype=np.float64)
+        faces = np.asarray(faces, dtype=np.int64)
+        albedo = np.asarray(albedo, dtype=np.float64)
+        normals = np.asarray(normals, dtype=np.float64)
+        assert verts.shape[0] == albedo.shape[0] == normals.shape[0]
+        eid = self.element_id(element)
+        self.verts.append(verts)
+        self.faces.append(faces + self._n_verts)
+        self.albedo.append(albedo)
+        self.normals.append(normals)
+        self.element_of_face.append(np.full(faces.shape[0], eid, dtype=np.int16))
+        self._n_verts += verts.shape[0]
+        self._n_faces += faces.shape[0]
+
+    def finalize(self):
+        V = np.concatenate(self.verts, axis=0)
+        F = np.concatenate(self.faces, axis=0)
+        A = np.concatenate(self.albedo, axis=0)
+        N = np.concatenate(self.normals, axis=0)
+        N = N / np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-9)
+        E = np.concatenate(self.element_of_face, axis=0)
+        return V, F, A, N, E
+
+
+def rot_z(yaw: float) -> np.ndarray:
+    c, s = math.cos(yaw), math.sin(yaw)
+    return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+
+
+def value_noise_2d(n: int, cells: int, rng: np.random.Generator) -> np.ndarray:
+    """Smooth value noise on an n x n grid with `cells` control cells per side.
+
+    Bilinear interpolation of a seeded random control grid; output in [0, 1].
+    """
+    g = rng.random((cells + 1, cells + 1))
+    t = np.linspace(0.0, cells, n)
+    i0 = np.clip(t.astype(int), 0, cells - 1)
+    frac = t - i0
+    # smoothstep for C1 continuity
+    w = frac * frac * (3.0 - 2.0 * frac)
+    gx0 = g[i0, :][:, i0]
+    gx1 = g[i0 + 1, :][:, i0]
+    gy0 = g[i0, :][:, i0 + 1]
+    gy1 = g[i0 + 1, :][:, i0 + 1]
+    wx = w[:, None]
+    wy = w[None, :]
+    top = gx0 * (1 - wx) + gx1 * wx
+    bot = gy0 * (1 - wx) + gy1 * wx
+    return top * (1 - wy) + bot * wy
+
+
+def build_ground(mb: MeshBuilder, rng: np.random.Generator):
+    n = int(round(2 * GROUND_HALF / GROUND_PITCH)) + 1  # 228 verts per side
+    xs = np.linspace(-GROUND_HALF, GROUND_HALF, n)
+    gx, gy = np.meshgrid(xs, xs, indexing="ij")
+
+    # Height: multi-scale noise, clamped to +/- 2 cm.
+    h = (0.55 * (value_noise_2d(n, 12, rng) - 0.5)
+         + 0.30 * (value_noise_2d(n, 34, rng) - 0.5)
+         + 0.15 * (value_noise_2d(n, 90, rng) - 0.5))
+    h = np.clip(2.4 * GROUND_HEIGHT_AMP * h, -GROUND_HEIGHT_AMP, GROUND_HEIGHT_AMP)
+
+    # Mottled multi-scale asphalt albedo.
+    mottle = (0.5 * value_noise_2d(n, 8, rng)
+              + 0.3 * value_noise_2d(n, 28, rng)
+              + 0.2 * value_noise_2d(n, 110, rng))
+    base = 0.22 + 0.16 * mottle                       # gray level per vertex
+    tint = 0.02 * (value_noise_2d(n, 6, rng) - 0.5)   # slight warm/cool patches
+    albedo = np.stack([base + tint, base, base - tint], axis=-1)
+
+    # Parking-lot line markings painted into vertex colors.
+    paint = np.zeros((n, n), dtype=bool)
+    half_w = 0.09
+    # Bay divider stripes: 6 stripes bounding 5 bays of 2.7 m along x.
+    for x0 in np.arange(-6.75, 6.76, 2.7):
+        paint |= (np.abs(gx - x0) <= half_w) & (gy >= 3.0) & (gy <= 8.0)
+    # Bay front boundary line.
+    paint |= (np.abs(gy - 3.0) <= half_w) & (np.abs(gx) <= 6.75 + half_w)
+    # Dashed drive-lane center line at y = -2.
+    paint |= ((np.abs(gy + 2.0) <= 0.06) & (np.abs(gx) <= 10.0)
+              & (np.mod(gx + 100.0, 3.0) < 1.8))
+    white = np.array([0.85, 0.85, 0.80])
+    albedo[paint] = 0.12 * albedo[paint] + 0.88 * white
+
+    # Smooth normals from the height field.
+    dzdx, dzdy = np.gradient(h, GROUND_PITCH, GROUND_PITCH)
+    normals = np.stack([-dzdx, -dzdy, np.ones_like(h)], axis=-1)
+
+    verts = np.stack([gx, gy, h], axis=-1).reshape(-1, 3)
+    idx = np.arange(n * n).reshape(n, n)
+    a = idx[:-1, :-1].ravel()
+    b = idx[1:, :-1].ravel()
+    c = idx[1:, 1:].ravel()
+    d = idx[:-1, 1:].ravel()
+    faces = np.concatenate([np.stack([a, b, c], 1), np.stack([a, c, d], 1)], axis=0)
+    mb.add(verts, faces, albedo.reshape(-1, 3), normals.reshape(-1, 3), "ground")
+
+
+_HEX_FACES = [  # quads of a hexahedron; corners: bottom 0-3 CCW (+z up), top 4-7
+    (0, 3, 2, 1),  # bottom
+    (4, 5, 6, 7),  # top
+    (0, 1, 5, 4),
+    (1, 2, 6, 5),
+    (2, 3, 7, 6),
+    (3, 0, 4, 7),
+]
+
+
+MAX_EDGE = 0.5  # max triangle edge (m). The rasterizer preprocess culls
+# triangles whose projected center-to-vertex distance exceeds 1600 px or whose
+# incenter is within 1 px of an edge (forward.cu); with cameras >= 0.9 m from
+# any surface and fx*4 = 3464 px/rad, a 0.5 m cell projects <= ~1360 px. Large
+# unsubdivided faces (walls, rails, car panels) would silently vanish from
+# nearby views otherwise.
+
+
+def add_hexahedron(mb: MeshBuilder, corners: np.ndarray, albedo, element: str,
+                   rng: np.random.Generator | None = None, panel_jitter: float = 0.0,
+                   max_edge: float = MAX_EDGE):
+    """Flat-shaded hexahedron; planar quads subdivided to <= max_edge cells;
+    vertices duplicated per panel; outward normals; per-panel color jitter."""
+    corners = np.asarray(corners, dtype=np.float64)
+    centroid = corners.mean(axis=0)
+    albedo = np.asarray(albedo, dtype=np.float64)
+    verts, faces, cols, norms = [], [], [], []
+    for quad in _HEX_FACES:
+        p = corners[list(quad)]
+        nrm = np.cross(p[1] - p[0], p[3] - p[0])
+        ln = np.linalg.norm(nrm)
+        if ln < 1e-12:
+            continue
+        nrm = nrm / ln
+        if np.dot(nrm, p.mean(axis=0) - centroid) < 0:
+            nrm = -nrm
+        col = albedo.copy()
+        if rng is not None and panel_jitter > 0:
+            col = np.clip(col * (1.0 + rng.uniform(-panel_jitter, panel_jitter, 3)), 0.0, 1.0)
+        # Bilinear grid over the (planar) quad p0->p1 (u), p0->p3 (v).
+        nu = max(1, int(math.ceil(max(np.linalg.norm(p[1] - p[0]),
+                                      np.linalg.norm(p[2] - p[3])) / max_edge)))
+        nv = max(1, int(math.ceil(max(np.linalg.norm(p[3] - p[0]),
+                                      np.linalg.norm(p[2] - p[1])) / max_edge)))
+        us = np.linspace(0.0, 1.0, nu + 1)
+        vs = np.linspace(0.0, 1.0, nv + 1)
+        uu, vv = np.meshgrid(us, vs, indexing="ij")
+        grid = ((1 - uu)[..., None] * (1 - vv)[..., None] * p[0]
+                + uu[..., None] * (1 - vv)[..., None] * p[1]
+                + uu[..., None] * vv[..., None] * p[2]
+                + (1 - uu)[..., None] * vv[..., None] * p[3])
+        base = len(verts)
+        n_pts = (nu + 1) * (nv + 1)
+        verts.extend(grid.reshape(-1, 3))
+        cols.extend([col] * n_pts)
+        norms.extend([nrm] * n_pts)
+        idx = base + np.arange(n_pts).reshape(nu + 1, nv + 1)
+        a = idx[:-1, :-1].ravel()
+        b = idx[1:, :-1].ravel()
+        c = idx[1:, 1:].ravel()
+        d = idx[:-1, 1:].ravel()
+        faces.extend(np.stack([a, b, c], 1).tolist())
+        faces.extend(np.stack([a, c, d], 1).tolist())
+    mb.add(np.array(verts), np.array(faces), np.array(cols), np.array(norms), element)
+
+
+def box_corners(center, size, yaw: float = 0.0) -> np.ndarray:
+    cx, cy, cz = center
+    sx, sy, sz = size
+    R = rot_z(yaw)
+    local = np.array([
+        [-sx, -sy, -sz], [sx, -sy, -sz], [sx, sy, -sz], [-sx, sy, -sz],
+        [-sx, -sy, sz], [sx, -sy, sz], [sx, sy, sz], [-sx, sy, sz],
+    ]) * 0.5
+    return local @ R.T + np.array([cx, cy, cz])
+
+
+def add_cylinder(mb: MeshBuilder, center, radius, height, axis, n_sides, albedo,
+                 element: str, cap_top=True, cap_bottom=False):
+    """Cylinder along unit `axis` centered at `center` (smooth side normals);
+    side quads split into <= MAX_EDGE rings (see MAX_EDGE cull rationale)."""
+    axis = np.asarray(axis, dtype=np.float64)
+    axis = axis / np.linalg.norm(axis)
+    # Orthonormal basis (u, v, axis)
+    ref = np.array([0.0, 0.0, 1.0]) if abs(axis[2]) < 0.9 else np.array([1.0, 0.0, 0.0])
+    u = np.cross(ref, axis)
+    u /= np.linalg.norm(u)
+    v = np.cross(axis, u)
+    center = np.asarray(center, dtype=np.float64)
+    ang = np.linspace(0, 2 * math.pi, n_sides, endpoint=False)
+    radial = np.outer(np.cos(ang), u) + np.outer(np.sin(ang), v)   # [n,3]
+    lo = center - 0.5 * height * axis
+    hi = center + 0.5 * height * axis
+    n_seg = max(1, int(math.ceil(height / MAX_EDGE)))
+    rings = [lo + (height * k / n_seg) * axis + radius * radial
+             for k in range(n_seg + 1)]
+    verts = np.concatenate(rings, axis=0)
+    normals = np.tile(radial, (n_seg + 1, 1))
+    faces = []
+    for s in range(n_seg):
+        o0 = s * n_sides
+        o1 = (s + 1) * n_sides
+        for i in range(n_sides):
+            j = (i + 1) % n_sides
+            faces.append([o0 + i, o0 + j, o1 + j])
+            faces.append([o0 + i, o1 + j, o1 + i])
+    albedo = np.asarray(albedo, dtype=np.float64)
+    cols = np.tile(albedo, (verts.shape[0], 1))
+
+    def _cap(ring, center_pt, nrm):
+        nonlocal verts, normals, cols, faces
+        base = verts.shape[0]
+        cap_verts = np.concatenate([ring, center_pt[None]], axis=0)
+        verts = np.concatenate([verts, cap_verts], axis=0)
+        normals = np.concatenate([normals, np.tile(nrm, (n_sides + 1, 1))], axis=0)
+        cols = np.concatenate([cols, np.tile(albedo, (n_sides + 1, 1))], axis=0)
+        for i in range(n_sides):
+            faces.append([base + i, base + (i + 1) % n_sides, base + n_sides])
+
+    if cap_top:
+        _cap(rings[-1], hi, axis)
+    if cap_bottom:
+        _cap(rings[0], lo, -axis)
+    mb.add(verts, np.array(faces), cols, normals, element)
+
+
+def add_vehicle(mb: MeshBuilder, center_xy, yaw, base_rgb, rng, name: str):
+    """Box body + wedge cabin + 4 cylinder wheels; ~4.5 x 1.8 x 1.5 m."""
+    cx, cy = center_xy
+    R = rot_z(yaw)
+
+    def world(pts_local):
+        return np.asarray(pts_local) @ R.T + np.array([cx, cy, 0.0])
+
+    # No element of the car interpenetrates another: overlapping opaque parts
+    # would sort-race in the tile compositor (see backface_keep_mask; culling
+    # fixes far sides but not surfaces hidden INSIDE other geometry).
+    # Body: 4.5 (y, length) x 1.8 (x, width), z 0.70 -> 1.13 (above the wheels).
+    body = np.array([
+        [-0.9, -2.25, 0.70], [0.9, -2.25, 0.70], [0.9, 2.25, 0.70], [-0.9, 2.25, 0.70],
+        [-0.9, -2.25, 1.13], [0.9, -2.25, 1.13], [0.9, 2.25, 1.13], [-0.9, 2.25, 1.13],
+    ])
+    add_hexahedron(mb, world(body), base_rgb, name, rng=rng, panel_jitter=0.06)
+
+    # Cabin: wedge (slanted windshield front and rear), z 1.13 -> 1.50.
+    cabin = np.array([
+        [-0.85, -1.15, 1.13], [0.85, -1.15, 1.13], [0.85, 0.95, 1.13], [-0.85, 0.95, 1.13],
+        [-0.75, -0.75, 1.50], [0.75, -0.75, 1.50], [0.75, 0.45, 1.50], [-0.75, 0.45, 1.50],
+    ])
+    cabin_rgb = np.clip(np.asarray(base_rgb) * 0.45 + np.array([0.05, 0.07, 0.10]), 0, 1)
+    add_hexahedron(mb, world(cabin), cabin_rgb, name, rng=rng, panel_jitter=0.06)
+
+    # Wheels: 4 cylinders, r=0.33, width 0.25, axis = car-local x; wheel tops
+    # at z=0.66 stay clear of the body bottom at z=0.70.
+    wheel_axis = R @ np.array([1.0, 0.0, 0.0])
+    for sx in (-0.78, 0.78):
+        for sy in (-1.45, 1.45):
+            c = world([[sx, sy, 0.33]])[0]
+            add_cylinder(mb, c, 0.33, 0.25, wheel_axis, 14, (0.05, 0.05, 0.06),
+                         name, cap_top=True, cap_bottom=True)
+
+
+def build_scene_mesh(rng: np.random.Generator):
+    mb = MeshBuilder()
+    build_ground(mb, rng)
+
+    for i, (cc, rgb) in enumerate(zip(CAR_CENTERS, CAR_ALBEDOS)):
+        add_vehicle(mb, cc, yaw=0.0, base_rgb=rgb, rng=rng, name=f"car_{i}")
+
+    # Vertical pole: 10 cm diameter, 3 m tall, 16-gon.
+    add_cylinder(mb, (POLE_XY[0], POLE_XY[1], 1.5), 0.05, 3.0, (0, 0, 1), 16,
+                 (0.45, 0.47, 0.50), "pole", cap_top=True)
+
+    # Fence: 8 posts (6 cm diameter, 1.2 m) + 2 horizontal rails.
+    fence_rgb = (0.42, 0.30, 0.18)
+    post_ys = np.linspace(-6.0, 6.0, 8)
+    for py in post_ys:
+        add_cylinder(mb, (FENCE_X, py, 0.6), 0.03, 1.2, (0, 0, 1), 10,
+                     fence_rgb, "fence", cap_top=True)
+    # Rails sit on the -x side of the posts (tangent, not interpenetrating).
+    for rail_z in (0.55, 1.05):
+        add_hexahedron(mb, box_corners((FENCE_X - 0.05, 0.0, rail_z), (0.04, 12.3, 0.05)),
+                       fence_rgb, "fence")
+
+    # Textureless wall: 8 x 2.5 m, perfectly uniform albedo (no panel jitter).
+    add_hexahedron(mb, box_corners((0.0, WALL_Y, 1.25), (8.0, 0.25, 2.5)),
+                   (0.62, 0.60, 0.57), "wall")
+
+    # Curb along the back of the parking bays.
+    add_hexahedron(mb, box_corners((0.0, 8.35, 0.08), (14.6, 0.25, 0.16)),
+                   (0.55, 0.55, 0.53), "curb", rng=rng, panel_jitter=0.03)
+
+    V, F, A, N, E = mb.finalize()
+
+    # Guard against the rasterizer's screen-space size cull (see MAX_EDGE).
+    tri = V[F]
+    edge_max = max(
+        np.linalg.norm(tri[:, 1] - tri[:, 0], axis=1).max(),
+        np.linalg.norm(tri[:, 2] - tri[:, 1], axis=1).max(),
+        np.linalg.norm(tri[:, 0] - tri[:, 2], axis=1).max(),
+    )
+    assert edge_max <= 1.5 * MAX_EDGE, f"triangle edge {edge_max:.3f} m too large"
+
+    # Bake Lambertian shading (one directional sun + ambient) into vertex colors.
+    sun = SUN_DIR / np.linalg.norm(SUN_DIR)
+    lam = AMBIENT + DIFFUSE * np.clip(N @ sun, 0.0, None)
+    colors = np.clip(A * lam[:, None], 0.0, 1.0)
+    return V.astype(np.float32), F.astype(np.int64), colors.astype(np.float32), \
+        N.astype(np.float32), A.astype(np.float32), E, mb.element_names
+
+
+# ---------------------------------------------------------------------------
+# Cameras
+# ---------------------------------------------------------------------------
+def look_at_w2c(pos: np.ndarray, target: np.ndarray):
+    """COLMAP/OpenCV world-to-cam: x right, y down, z forward (world Z-up)."""
+    f = target - pos
+    f = f / np.linalg.norm(f)
+    up = np.array([0.0, 0.0, 1.0])
+    r = np.cross(f, up)
+    nr = np.linalg.norm(r)
+    assert nr > 1e-6, "camera looking straight up/down is not supported"
+    r = r / nr
+    d = np.cross(f, r)
+    R_w2c = np.stack([r, d, f], axis=0)
+    t_w2c = -R_w2c @ pos
+    return R_w2c, t_w2c
+
+
+def generate_cameras(rng: np.random.Generator):
+    cams = []  # list of dicts: pos, target, group
+
+    # Outer orbit ring.
+    for i in range(N_RING):
+        az = 2 * math.pi * i / N_RING
+        r = rng.uniform(*RING_R)
+        pos = np.array([r * math.cos(az), r * math.sin(az), RING_H])
+        cams.append({"pos": pos, "target": np.array([0.0, 0.0, 0.6]), "group": "ring"})
+
+    # Inner arc drive-by pass (240 deg sweep through the drive-lane sector).
+    arc_az = np.linspace(math.radians(150), math.radians(390), N_ARC)
+    for az in arc_az:
+        r = rng.uniform(*ARC_R)
+        pos = np.array([r * math.cos(az), r * math.sin(az), ARC_H])
+        cams.append({"pos": pos, "target": np.array([0.0, 0.0, 0.9]), "group": "arc"})
+
+    # Vehicle-focused close-ups: 5 per car from the drive-lane side, azimuths
+    # biased away from the neighboring car (car_0 has car_1 at +x and vice versa).
+    vehicle_az = {
+        0: [175.0, 210.0, 245.0, 280.0, 315.0],
+        1: [225.0, 260.0, 295.0, 330.0, 365.0],
+    }
+    heights = [1.4, 1.55, 1.7, 1.85, 2.0]
+    for ci, (ccx, ccy) in enumerate(CAR_CENTERS):
+        for k, az_deg in enumerate(vehicle_az[ci]):
+            az = math.radians(az_deg)
+            r = rng.uniform(4.2, 5.0)
+            pos = np.array([ccx + r * math.cos(az), ccy + r * math.sin(az), heights[k]])
+            cams.append({"pos": pos, "target": np.array([ccx, ccy, 0.75]),
+                         "group": f"vehicle_{ci}"})
+
+    assert len(cams) == N_RING + N_ARC + N_VEHICLE == 90
+
+    # Clearance check: no camera inside/too close to any solid element.
+    obstacles = []  # inflated AABBs (min, max)
+    for (ccx, ccy) in CAR_CENTERS:
+        obstacles.append(((ccx - 1.0, ccy - 2.35, 0.0), (ccx + 1.0, ccy + 2.35, 1.6)))
+    obstacles.append(((POLE_XY[0] - 0.1, POLE_XY[1] - 0.1, 0.0),
+                      (POLE_XY[0] + 0.1, POLE_XY[1] + 0.1, 3.1)))
+    obstacles.append(((-4.1, WALL_Y - 0.2, 0.0), (4.1, WALL_Y + 0.2, 2.6)))
+    obstacles.append(((FENCE_X - 0.1, -6.2, 0.0), (FENCE_X + 0.1, 6.2, 1.3)))
+    for cam in cams:
+        p = cam["pos"]
+        assert abs(p[0]) < GROUND_HALF - 1.0 and abs(p[1]) < GROUND_HALF - 1.0
+        for (mn, mx) in obstacles:
+            dx = max(mn[0] - p[0], 0.0, p[0] - mx[0])
+            dy = max(mn[1] - p[1], 0.0, p[1] - mx[1])
+            dz = max(mn[2] - p[2], 0.0, p[2] - mx[2])
+            dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+            assert dist >= 0.8, f"camera at {p} too close ({dist:.2f} m) to obstacle {mn}-{mx}"
+
+    for i, cam in enumerate(cams):
+        cam["name"] = f"{i:05d}"
+        cam["R_w2c"], cam["t_w2c"] = look_at_w2c(cam["pos"], cam["target"])
+    return cams
+
+
+# ---------------------------------------------------------------------------
+# Rendering through the repo pipeline
+# ---------------------------------------------------------------------------
+BACKFACE_COS_MARGIN = 0.05  # keep near-tangent faces (silhouette safety)
+
+
+def backface_keep_mask(V, F, vertex_normals, cam_pos):
+    """Per-view mask keeping only camera-facing (and near-tangent) triangles.
+
+    The rasterizer composites per 16x16 tile in TRIANGLE-CENTER depth order
+    (no per-pixel depth test) and does not cull backfaces. For a closed opaque
+    object viewed obliquely, a far-side triangle laterally shifted by ~one
+    tessellation cell can have a SMALLER center depth than the front triangle
+    covering the same pixel, so the far side bleeds through in triangular
+    patches (verified empirically on the wall). Backfaces of opaque objects
+    are never legitimately visible, so culling them per view removes every
+    such sort race without touching the renderer.
+    """
+    n_face = vertex_normals[F].mean(axis=1)
+    n_face /= np.maximum(np.linalg.norm(n_face, axis=1, keepdims=True), 1e-9)
+    c_face = V[F].mean(axis=1)
+    view = c_face - cam_pos[None, :]
+    view /= np.maximum(np.linalg.norm(view, axis=1, keepdims=True), 1e-9)
+    cos = (n_face * view).sum(axis=1)
+    return cos < BACKFACE_COS_MARGIN
+
+
+def build_gt_triangle_model(V, F, colors):
+    import torch
+    from scene.triangle_model import TriangleModel
+    from utils.general_utils import inverse_sigmoid
+    from utils.sh_utils import RGB2SH
+
+    tm = TriangleModel(sh_degree=0)
+    tm.vertices = torch.tensor(V, dtype=torch.float32, device="cuda")
+    tm._triangle_indices = torch.tensor(F, dtype=torch.int32, device="cuda")
+    tm.vertex_weight = inverse_sigmoid(
+        OPACITY_ACTIVATED * torch.ones((V.shape[0], 1), dtype=torch.float32, device="cuda"))
+    tm._sigma = tm.inverse_exponential_activation(SIGMA_ACTIVATED)  # = log(1e-4)
+    tm.active_sh_degree = 0
+    dc = RGB2SH(torch.tensor(colors, dtype=torch.float32, device="cuda"))
+    tm._features_dc = dc.unsqueeze(1)                                  # [V,1,3]
+    tm._features_rest = torch.zeros((V.shape[0], 0, 3), dtype=torch.float32, device="cuda")
+    tm.scaling = SUPERSAMPLE
+    tm.image_size = torch.zeros((F.shape[0],), dtype=torch.float32, device="cuda")
+    tm.importance_score = torch.zeros((F.shape[0],), dtype=torch.float32, device="cuda")
+    tm.pixel_count = torch.zeros((F.shape[0],), dtype=torch.int32, device="cuda")
+    return tm
+
+
+class GTCam:
+    """Mirror of scene.cameras.Camera pose math (znear/zfar defaults included)."""
+
+    def __init__(self, R_w2c: np.ndarray, t_w2c: np.ndarray):
+        import torch
+        from utils.graphics_utils import getWorld2View2, getProjectionMatrix
+
+        # dataset_readers stores R = qvec2rotmat(qvec).T; Camera rebuilds W2C.
+        R = R_w2c.T
+        T = t_w2c
+        self.image_width = IMG_W
+        self.image_height = IMG_H
+        self.FoVx = 2 * math.atan(IMG_W / (2 * FX))
+        self.FoVy = 2 * math.atan(IMG_H / (2 * FX))
+        self.znear = 0.01
+        self.zfar = 100.0
+        self.world_view_transform = torch.tensor(
+            getWorld2View2(R, T)).transpose(0, 1).cuda()
+        self.projection_matrix = getProjectionMatrix(
+            znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy
+        ).transpose(0, 1).cuda()
+        self.full_proj_transform = (
+            self.world_view_transform.unsqueeze(0).bmm(
+                self.projection_matrix.unsqueeze(0))).squeeze(0)
+        self.camera_center = self.world_view_transform.inverse()[3, :3]
+
+
+def render_all_views(cams, V, F, colors, normals, element_of_face, element_names,
+                     images_dir, depth_dir):
+    import torch
+    from PIL import Image
+    from types import SimpleNamespace
+    from triangle_renderer import render
+
+    tm = build_gt_triangle_model(V, F, colors)
+    pipe = SimpleNamespace(convert_SHs_python=False, compute_cov3D_python=False,
+                           debug=False)
+    background = torch.zeros(3, dtype=torch.float32, device="cuda")
+    eof = torch.tensor(element_of_face.astype(np.int64), device="cuda")
+    n_elem = len(element_names)
+
+    coverage = np.zeros((len(cams), n_elem), dtype=np.int64)
+    stats = []
+    with torch.no_grad():
+        for i, cam in enumerate(cams):
+            keep = backface_keep_mask(V, F, normals, cam["pos"])
+            tm.set_temporary_active_mask(torch.tensor(keep, device="cuda"))
+            pkg = render(GTCam(cam["R_w2c"], cam["t_w2c"]), tm, pipe, background)
+            img = pkg["render"].clamp(0.0, 1.0)
+            assert torch.isfinite(img).all(), f"NaN/Inf in render of view {cam['name']}"
+            depth = pkg["surf_depth"].squeeze(0)
+            assert torch.isfinite(depth).all()
+
+            arr = (img.permute(1, 2, 0).cpu().numpy() * 255.0 + 0.5).astype(np.uint8)
+            Image.fromarray(arr).save(os.path.join(images_dir, cam["name"] + ".png"))
+            np.save(os.path.join(depth_dir, cam["name"] + ".npy"),
+                    depth.cpu().numpy().astype(np.float32))
+
+            # rend_ids channel is uninitialized where no triangle covers the
+            # pixel; gate by the full-res median depth (0 <=> no geometry).
+            ids = pkg["rend_ids"].squeeze(0).long()          # supersampled res
+            depth_full = pkg["depth_full"].squeeze(0)
+            valid = (ids >= 0) & (ids < F.shape[0]) & (depth_full > 0)
+            counts = torch.bincount(eof[ids[valid]], minlength=n_elem)
+            coverage[i] = counts.cpu().numpy()
+
+            black_frac = float((img.max(dim=0).values < 2.0 / 255.0).float().mean())
+            stats.append({"name": cam["name"], "mean": float(img.mean()),
+                          "black_frac": black_frac})
+            assert black_frac < 0.8, f"view {cam['name']} is mostly black ({black_frac:.2f})"
+            assert float(img.mean()) > 0.02, f"view {cam['name']} is ~empty"
+    del tm
+    torch.cuda.empty_cache()
+    return coverage, stats
+
+
+# ---------------------------------------------------------------------------
+# COLMAP export
+# ---------------------------------------------------------------------------
+def export_colmap(cams, sparse_dir, points_xyz, points_rgb, points_normals):
+    from scene.colmap_loader import rotmat2qvec
+
+    os.makedirs(sparse_dir, exist_ok=True)
+    with open(os.path.join(sparse_dir, "cameras.txt"), "w") as f:
+        f.write("# Camera list with one line of data per camera:\n"
+                "#   CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[]\n"
+                "# Number of cameras: 1\n")
+        f.write(f"1 PINHOLE {IMG_W} {IMG_H} {FX:.10f} {FX:.10f} "
+                f"{IMG_W / 2.0:.1f} {IMG_H / 2.0:.1f}\n")
+
+    with open(os.path.join(sparse_dir, "images.txt"), "w") as f:
+        f.write("# Image list with two lines of data per image:\n"
+                "#   IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME\n"
+                "#   POINTS2D[] as (X, Y, POINT3D_ID)\n"
+                f"# Number of images: {len(cams)}\n")
+        for i, cam in enumerate(cams):
+            q = rotmat2qvec(cam["R_w2c"])
+            t = cam["t_w2c"]
+            f.write(f"{i + 1} {q[0]:.12f} {q[1]:.12f} {q[2]:.12f} {q[3]:.12f} "
+                    f"{t[0]:.12f} {t[1]:.12f} {t[2]:.12f} 1 {cam['name']}.png\n")
+            f.write("\n")  # empty POINTS2D line (tolerated by the text loader)
+
+    rgb_u8 = np.clip(points_rgb * 255.0 + 0.5, 0, 255).astype(np.uint8)
+    with open(os.path.join(sparse_dir, "points3D.txt"), "w") as f:
+        f.write("# 3D point list with one line of data per point:\n"
+                "#   POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)\n"
+                f"# Number of points: {points_xyz.shape[0]}\n")
+        for i in range(points_xyz.shape[0]):
+            x, y, z = points_xyz[i]
+            r, g, b = rgb_u8[i]
+            f.write(f"{i + 1} {x:.6f} {y:.6f} {z:.6f} {r} {g} {b} 1.0\n")
+
+    # points3D.ply is what readColmapSceneInfo actually feeds to create_from_pcd.
+    from scene.dataset_readers import storePly
+    ply_path = os.path.join(sparse_dir, "points3D.ply")
+    storePly(ply_path, points_xyz.astype(np.float64), rgb_u8.astype(np.float64))
+    # storePly writes zero normals; keep the real normals in a sidecar for GT use.
+    return ply_path
+
+
+def sample_surface_points(V, F, colors, normals, n_points, rng):
+    tri = V[F]                                    # [T,3,3]
+    e1 = tri[:, 1] - tri[:, 0]
+    e2 = tri[:, 2] - tri[:, 0]
+    area = 0.5 * np.linalg.norm(np.cross(e1, e2), axis=1)
+    prob = area / area.sum()
+    face_idx = rng.choice(F.shape[0], size=n_points, p=prob)
+    r1 = np.sqrt(rng.random(n_points))
+    r2 = rng.random(n_points)
+    w0 = 1.0 - r1
+    w1 = r1 * (1.0 - r2)
+    w2 = r1 * r2
+    f = F[face_idx]
+    pts = (w0[:, None] * V[f[:, 0]] + w1[:, None] * V[f[:, 1]] + w2[:, None] * V[f[:, 2]])
+    cols = (w0[:, None] * colors[f[:, 0]] + w1[:, None] * colors[f[:, 1]]
+            + w2[:, None] * colors[f[:, 2]])
+    nrm = (w0[:, None] * normals[f[:, 0]] + w1[:, None] * normals[f[:, 1]]
+           + w2[:, None] * normals[f[:, 2]])
+    nrm /= np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-9)
+    return pts.astype(np.float32), cols.astype(np.float32), nrm.astype(np.float32)
+
+
+# ---------------------------------------------------------------------------
+# Verification
+# ---------------------------------------------------------------------------
+def verify_colmap_roundtrip(cams, sparse_dir, split_path, n_points):
+    from scene.colmap_loader import (read_extrinsics_text, read_intrinsics_text,
+                                     read_points3D_text, qvec2rotmat)
+    from utils.read_write_model import read_points3D_text as read_points3D_text_dict
+
+    intr = read_intrinsics_text(os.path.join(sparse_dir, "cameras.txt"))
+    assert len(intr) == 1 and intr[1].model == "PINHOLE"
+    assert intr[1].width == IMG_W and intr[1].height == IMG_H
+    assert abs(intr[1].params[0] - FX) < 1e-6
+
+    extr = read_extrinsics_text(os.path.join(sparse_dir, "images.txt"))
+    assert len(extr) == len(cams), f"{len(extr)} != {len(cams)}"
+    by_name = {c["name"] + ".png": c for c in cams}
+    for img in extr.values():
+        cam = by_name[img.name]
+        err = np.abs(qvec2rotmat(img.qvec) - cam["R_w2c"]).max()
+        terr = np.abs(np.asarray(img.tvec) - cam["t_w2c"]).max()
+        assert err < 1e-9 and terr < 1e-9, f"pose roundtrip failure on {img.name}"
+        assert img.xys.shape == (0, 2) and img.point3D_ids.shape == (0,)
+
+    xyz, rgb, err = read_points3D_text(os.path.join(sparse_dir, "points3D.txt"))
+    assert xyz.shape == (n_points, 3)
+    pts_dict = read_points3D_text_dict(os.path.join(sparse_dir, "points3D.txt"))
+    assert len(pts_dict) == n_points
+
+    from plyfile import PlyData
+    ply = PlyData.read(os.path.join(sparse_dir, "points3D.ply"))
+    assert ply["vertex"].count == n_points
+
+    with open(split_path) as f:
+        payload = json.load(f)
+    assert len(payload["test"]) == len([i for i in range(len(cams)) if i % 5 == 0])
+    assert len(payload["train"]) + len(payload["test"]) == len(cams)
+    print("[verify] COLMAP text model + split file round-trip OK")
+
+
+def verify_depth_consistency(cams, depth_dir, points_xyz, n_views=4, n_samples=400,
+                             seed=0):
+    """Unproject saved GT depth via the COLMAP poses and compare against the
+    sampled GT surface cloud (validates pose/depth/intrinsics consistency)."""
+    import torch
+
+    rng = np.random.default_rng(seed)
+    pts = torch.tensor(points_xyz, dtype=torch.float32, device="cuda")
+    view_ids = np.linspace(0, len(cams) - 1, n_views).astype(int)
+    medians = []
+    for vi in view_ids:
+        cam = cams[vi]
+        depth = np.load(os.path.join(depth_dir, cam["name"] + ".npy"))
+        # avoid depth-discontinuity pixels (area-downsampled median depth mixes
+        # foreground/background at silhouettes)
+        valid = depth > 0.1
+        interior = valid.copy()
+        d_pad = np.pad(depth, 1, mode="edge")
+        local_max = np.max(np.stack([
+            d_pad[:-2, 1:-1], d_pad[2:, 1:-1], d_pad[1:-1, :-2], d_pad[1:-1, 2:],
+            depth]), axis=0)
+        local_min = np.min(np.stack([
+            d_pad[:-2, 1:-1], d_pad[2:, 1:-1], d_pad[1:-1, :-2], d_pad[1:-1, 2:],
+            depth]), axis=0)
+        interior &= (local_max - local_min) < 0.05
+        ys, xs = np.nonzero(interior)
+        sel = rng.choice(ys.shape[0], size=min(n_samples, ys.shape[0]), replace=False)
+        u = xs[sel] + 0.5
+        v = ys[sel] + 0.5
+        d = depth[ys[sel], xs[sel]]
+        x_cam = np.stack([(u - IMG_W / 2.0) / FX * d, (v - IMG_H / 2.0) / FX * d, d], 1)
+        Rw2c, t = cam["R_w2c"], cam["t_w2c"]
+        x_world = (x_cam - t) @ Rw2c   # R^T (x - t), row-vector form
+        xw = torch.tensor(x_world, dtype=torch.float32, device="cuda")
+        dmin = torch.cdist(xw, pts).min(dim=1).values
+        medians.append(float(dmin.median()))
+    med = float(np.median(medians))
+    print(f"[verify] depth->world unprojection: per-view median NN distance to GT "
+          f"surface cloud = {['%.4f' % m for m in medians]} m (median {med:.4f})")
+    assert med < 0.08, "depth/pose consistency check failed"
+    return medians
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", default="/data/peilincai/gems_stage1")
+    parser.add_argument("--seed", type=int, default=0)
+    args = parser.parse_args()
+
+    rng = np.random.default_rng(args.seed)
+
+    ds_dir = os.path.join(args.root, "datasets", "toy_parking")
+    images_dir = os.path.join(ds_dir, "images")
+    gt_dir = os.path.join(ds_dir, "gt")
+    depth_dir = os.path.join(gt_dir, "depth")
+    sparse_dir = os.path.join(ds_dir, "sparse", "0")
+    for d in (images_dir, gt_dir, depth_dir, sparse_dir):
+        os.makedirs(d, exist_ok=True)
+
+    # ---- 1. GT mesh --------------------------------------------------------
+    V, F, colors, normals, albedo, element_of_face, element_names = build_scene_mesh(rng)
+    print(f"[mesh] V={V.shape[0]} F={F.shape[0]} elements={element_names}")
+
+    obj_path = os.path.join(gt_dir, "mesh.obj")
+    with open(obj_path, "w") as f:
+        f.write("# toy_parking GT mesh (meters); vertex colors in mesh_colors.npz\n")
+        f.write("".join(f"v {x:.6f} {y:.6f} {z:.6f}\n" for x, y, z in V))
+        f.write("".join(f"f {a + 1} {b + 1} {c + 1}\n" for a, b, c in F))
+    np.savez_compressed(
+        os.path.join(gt_dir, "mesh_colors.npz"),
+        vertex_colors=colors, vertex_albedo=albedo, vertex_normals=normals,
+        element_of_face=element_of_face,
+        element_names=np.array(element_names),
+        sun_dir=SUN_DIR / np.linalg.norm(SUN_DIR),
+        ambient=np.float32(AMBIENT), diffuse=np.float32(DIFFUSE))
+
+    # ---- 2. Cameras --------------------------------------------------------
+    cams = generate_cameras(rng)
+
+    # ---- 3. Render GT images + depth --------------------------------------
+    coverage, view_stats = render_all_views(
+        cams, V, F, colors, normals, element_of_face, element_names,
+        images_dir, depth_dir)
+
+    covered_views = (coverage >= COVERAGE_MIN_PIXELS).sum(axis=0)
+    coverage_report = {name: int(covered_views[i]) for i, name in enumerate(element_names)}
+    print(f"[coverage] views with >= {COVERAGE_MIN_PIXELS} supersampled px per element: "
+          f"{coverage_report}")
+    for name, cnt in coverage_report.items():
+        assert cnt >= COVERAGE_MIN_VIEWS, \
+            f"element '{name}' covered by only {cnt} views (< {COVERAGE_MIN_VIEWS})"
+
+    # ---- 4. Init cloud + COLMAP model + split ------------------------------
+    pts, pcols, pnrm = sample_surface_points(V, F, colors, normals, N_INIT_POINTS, rng)
+    export_colmap(cams, sparse_dir, pts, pcols, pnrm)
+
+    names = [c["name"] for c in cams]
+    split_payload = {
+        "train": [n for i, n in enumerate(names) if i % 5 != 0],
+        "test": [n for i, n in enumerate(names) if i % 5 == 0],
+    }
+    split_path = os.path.join(ds_dir, "split_test.txt")
+    with open(split_path, "w") as f:
+        json.dump(split_payload, f, indent=1)
+    # Duplicate for the tools/gems/scenes.py 'file5' contract (split.json).
+    with open(os.path.join(ds_dir, "split.json"), "w") as f:
+        json.dump(split_payload, f, indent=1)
+
+    # ---- 5. Verification ----------------------------------------------------
+    verify_colmap_roundtrip(cams, sparse_dir, split_path, N_INIT_POINTS)
+    depth_medians = verify_depth_consistency(cams, depth_dir, pts, seed=args.seed)
+
+    # ---- 6. Manifest --------------------------------------------------------
+    def _dir_mb(path):
+        total = 0
+        for base, _, files in os.walk(path):
+            total += sum(os.path.getsize(os.path.join(base, fn)) for fn in files)
+        return total / 1e6
+
+    manifest = {
+        "seed": args.seed,
+        "units": "meters",
+        "n_views": len(cams),
+        "n_test": len(split_payload["test"]),
+        "n_train": len(split_payload["train"]),
+        "image_size": [IMG_W, IMG_H],
+        "fov_x_deg": HFOV_DEG,
+        "fx": FX,
+        "gt_mesh": {"n_vertices": int(V.shape[0]), "n_faces": int(F.shape[0])},
+        "init_points": N_INIT_POINTS,
+        "elements": element_names,
+        "coverage_views_per_element": coverage_report,
+        "coverage_min_pixels_supersampled": COVERAGE_MIN_PIXELS,
+        "camera_groups": {"ring": N_RING, "arc": N_ARC, "vehicle": N_VEHICLE},
+        "render": {
+            "supersample": SUPERSAMPLE,
+            "background": "black",
+            "sigma_activated": SIGMA_ACTIVATED,
+            "opacity_activated": OPACITY_ACTIVATED,
+            "per_view_backface_culling": True,
+            "backface_cos_margin": BACKFACE_COS_MARGIN,
+            "depth_semantics": "surf_depth = median depth, area-downsampled from "
+                               "4x supersampled render; 0 where no geometry",
+            "known_artifact": "far-grazing ground slivers are screen-space-culled "
+                              "by the rasterizer (thin-triangle cull), leaving "
+                              "sparse dark pixels near the ground horizon",
+        },
+        "depth_consistency_median_m": depth_medians,
+        "view_stats_minmax_mean_intensity": [
+            min(s["mean"] for s in view_stats), max(s["mean"] for s in view_stats)],
+        "disk_mb": {
+            "images": round(_dir_mb(images_dir), 1),
+            "gt": round(_dir_mb(gt_dir), 1),
+            "sparse": round(_dir_mb(sparse_dir), 1),
+            "total": round(_dir_mb(ds_dir), 1),
+        },
+        "roi": {"min": [-GROUND_HALF, -GROUND_HALF, -0.1],
+                "max": [GROUND_HALF, GROUND_HALF, 3.2],
+                "z_band": [0.1, 1.5]},
+    }
+    with open(os.path.join(ds_dir, "dataset_manifest.json"), "w") as f:
+        json.dump(manifest, f, indent=1)
+    print(json.dumps(manifest, indent=1))
+    print(f"[done] toy_parking dataset written to {ds_dir}")
+
+
+if __name__ == "__main__":
+    main()
