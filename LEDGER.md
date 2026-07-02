@@ -72,6 +72,13 @@ Never trust chat memory over this file.
 
 ## GOAL LOG
 
+### GOAL #006 — M3 geometry objectives, TEST E2 [M3] — 2026-07-02 — IN PROGRESS
+- Human question on E1′ amendment went unanswered (60s timeout); proceeding under "E1 stays FAIL, Stage One continues" — the no-amendment option; final go/no-go remains human's. E1′ decision remains OPEN in KILL_REPORT.md.
+- **Pre-registered E2 hypothesis**: mechanism = add (1) free-space hinge loss L_fs = mean relu(0.95·d_evidence − D_rendered)/d_evidence over sampled train-view evidence (toy: GT train depths; courtyard/garden: COLMAP sparse train points — train-only, D4-pure) via the DIFFERENTIABLE rendered depth, and (2) multi-view rendered-depth consistency loss (pairwise warp between train views, occlusion-masked) — both integrated into the M2 fine-tune (features default lr + positions at low lr re-enabled: geometry losses supply coherent position signal, unlike the noise-drift case; weights frozen). Implementation route: rendered-depth penalties (Route B) — justification: rasterizer already backprops through depth outputs (train.py's existing vertex-depth loss proves it); no CUDA changes.
+- **E2 PASS iff** at B=50% on toy_parking AND courtyard: g1 OR g3 improves ≥30% relative vs the M2 model (CI excl. 0), ΔPSNR ≥ −0.10 dB vs the M2 model, AND before/after panels show visible floater/free-space cleanup. Kill: 3-variant rule; if dead → geometry axis demoted to evaluation-only (documented, claim edited, human review).
+- Baselines (the "M2 model" at B50): toy = toy_parking_B50_importance_ft_e1v2; courtyard = courtyard_B50_importance_ft_e1v2 (launched now, features-only FT 10k — also completes M2 trend table + E1′(i)(ii) courtyard data).
+- Predicted effect: toy g1 0.202→≤0.14; courtyard g1 0.094→≤0.066 (or g3 equivalents); rendering held within −0.10 dB.
+
 ### GOAL #005 — E1 budget engine runs [M2] — 2026-07-02 — CONCLUDED (see KILL_REPORT.md)
 - **Variant 3 result**: garden iterative B50 = 24.8689 (+0.157 vs clean CI[+0.110,+0.200], ΔLPIPS −0.0071) — best row yet; toy unchanged vs one-shot (−0.022 CI[−0.115,+0.079] vs noft; −0.542 vs clean) → toy kill condition tripped. Variants 3/3 spent.
 - **FINAL VERDICT: E1 FAIL as pre-registered (criterion (b) miscalibrated — presumed lossy pruning; measured prune-only −0.011 dB garden B50; criterion (a) fails on toy only). Mechanism (evidence-prune + features-only FT) VALIDATED on real scenes. Full accounting + fallback proposal in `KILL_REPORT.md`. Escalated to human: adopt E1′ or strict stop. M2 experiments STOPPED per rules; no soft pivot.**
