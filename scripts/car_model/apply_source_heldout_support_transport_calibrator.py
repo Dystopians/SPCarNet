@@ -4279,6 +4279,7 @@ def _target_neighbor_consistency_decision(
     incumbent_variant: str,
     decision_source: str,
     pairwise_diagnostics: dict[str, Any] | None,
+    source_oracle_knn_diagnostics: dict[str, Any] | None,
     ev: Any,
     deltas: dict[str, torch.Tensor],
     target: Any,
@@ -4301,6 +4302,7 @@ def _target_neighbor_consistency_decision(
         "output_score": None,
         "incumbent_score": None,
         "source_local_deltas": None,
+        "source_oracle_fixed_override": None,
     }
     if not enabled:
         payload["reject_reason"] = "disabled"
@@ -4385,6 +4387,75 @@ def _target_neighbor_consistency_decision(
                     payload["rollback_applied"] = False
                 return payload
         return payload
+
+    if (
+        bool(getattr(args, "target_neighbor_consistency_enable_source_oracle_fixed_override", False))
+        and decision_source == "source_oracle_knn"
+        and output_variant == "fixed"
+        and incumbent_variant != "fixed"
+    ):
+        oracle_diag = dict(source_oracle_knn_diagnostics or {})
+        neighbor_summary = dict(oracle_diag.get("neighbor_summary", {}))
+        local_deltas = dict(neighbor_summary.get("deltas_vs_scene", {}))
+        reliability = dict(oracle_diag.get("reliability_agreement", {}))
+        override_payload = {
+            "enabled": True,
+            "accepted": False,
+            "reason": None,
+            "oracle_best_variant": oracle_diag.get("best_variant"),
+            "oracle_reject_reason": oracle_diag.get("reject_reason"),
+            "source_psnr_delta": local_deltas.get("psnr_gain"),
+            "source_ssim_delta": local_deltas.get("ssim_gain"),
+            "source_cvar_delta": local_deltas.get("cvar_psnr_gain"),
+            "source_min_delta": local_deltas.get("min_psnr_gain"),
+            "source_positive_fraction_delta": local_deltas.get("positive_view_fraction"),
+            "reliability_available": reliability.get("available"),
+            "reliability_reject_reason": reliability.get("reject_reason"),
+            "reliability_predicted_psnr_delta": reliability.get("predicted_psnr_delta"),
+            "reliability_predicted_ssim_delta": reliability.get("predicted_ssim_delta"),
+        }
+
+        def override_reject(reason: str) -> None:
+            override_payload["reason"] = reason
+
+        source_psnr = float(local_deltas.get("psnr_gain", -1.0e9))
+        source_ssim = float(local_deltas.get("ssim_gain", -1.0e9)) if bool(args.compute_ssim) else 0.0
+        source_cvar = float(local_deltas.get("cvar_psnr_gain", -1.0e9))
+        source_min = float(local_deltas.get("min_psnr_gain", -1.0e9))
+        source_pos = float(local_deltas.get("positive_view_fraction", -1.0e9))
+        rel_psnr = float(reliability.get("predicted_psnr_delta", -1.0e9))
+        rel_ssim = float(reliability.get("predicted_ssim_delta", -1.0e9)) if bool(args.compute_ssim) else 0.0
+        if oracle_diag.get("best_variant") != "fixed" or oracle_diag.get("reject_reason") is not None:
+            override_reject("oracle_not_strong_fixed")
+        elif not bool(reliability.get("available", False)) or reliability.get("reject_reason") is not None:
+            override_reject("reliability_agreement")
+        elif source_psnr < float(args.target_neighbor_consistency_source_oracle_fixed_min_source_psnr_delta):
+            override_reject("source_psnr_delta")
+        elif bool(args.compute_ssim) and source_ssim < float(
+            args.target_neighbor_consistency_source_oracle_fixed_min_source_ssim_delta
+        ):
+            override_reject("source_ssim_delta")
+        elif source_cvar < float(args.target_neighbor_consistency_source_oracle_fixed_min_source_cvar_delta):
+            override_reject("source_cvar_delta")
+        elif source_min < float(args.target_neighbor_consistency_source_oracle_fixed_min_source_min_delta):
+            override_reject("source_min_delta")
+        elif source_pos < float(args.target_neighbor_consistency_source_oracle_fixed_min_source_positive_fraction_delta):
+            override_reject("source_positive_fraction_delta")
+        elif rel_psnr < float(args.target_neighbor_consistency_source_oracle_fixed_min_reliability_psnr_delta):
+            override_reject("reliability_psnr_delta")
+        elif bool(args.compute_ssim) and rel_ssim < float(
+            args.target_neighbor_consistency_source_oracle_fixed_min_reliability_ssim_delta
+        ):
+            override_reject("reliability_ssim_delta")
+        else:
+            override_payload["accepted"] = True
+            override_payload["reason"] = "passed"
+            payload["source_oracle_fixed_override"] = override_payload
+            payload["decision"] = "keep"
+            payload["rollback_applied"] = False
+            payload["reject_reason"] = "source_oracle_fixed_override"
+            return payload
+        payload["source_oracle_fixed_override"] = override_payload
 
     payload["reject_reason"] = "target_neighbor_consistency_delta"
     if str(args.target_neighbor_consistency_mode) == "enforce":
@@ -6815,6 +6886,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 incumbent_variant=promotion_incumbent_variant,
                 decision_source=output_decision_source,
                 pairwise_diagnostics=pairwise_dominance_diagnostics,
+                source_oracle_knn_diagnostics=source_oracle_knn_diagnostics,
                 ev=ev,
                 deltas=deltas,
                 target=target,
@@ -6843,16 +6915,39 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 selected_proxy = proxies_by_variant[output_variant]
                 selected_proxy_variant = output_variant
                 gate_accepted = True
-            target_neighbor_candidate_unlock_diagnostics = _target_neighbor_candidate_unlock_decision(
-                output_variant=output_variant,
-                ev=ev,
-                deltas=deltas,
-                target=target,
-                target_frames=target_frames,
-                loader=loader,
-                device=device,
-                args=args,
+            source_oracle_fixed_override_payload = (
+                (target_neighbor_consistency_diagnostics or {}).get("source_oracle_fixed_override")
+                if isinstance(target_neighbor_consistency_diagnostics, dict)
+                else None
             )
+            source_oracle_fixed_override_accepted = bool(
+                isinstance(source_oracle_fixed_override_payload, dict)
+                and source_oracle_fixed_override_payload.get("accepted", False)
+            )
+            if source_oracle_fixed_override_accepted:
+                target_neighbor_candidate_unlock_diagnostics = {
+                    "enabled": bool(args.enable_target_neighbor_candidate_unlock),
+                    "decision": "keep",
+                    "promote_applied": False,
+                    "reject_reason": "source_oracle_fixed_override",
+                    "input_variant": output_variant,
+                    "incumbent_variant": str(args.target_neighbor_candidate_unlock_incumbent_variant),
+                    "candidate_variant": str(args.target_neighbor_candidate_unlock_candidate_variant),
+                    "incumbent_score": None,
+                    "candidate_score": None,
+                    "incumbent_minus_candidate_mae_delta": None,
+                }
+            else:
+                target_neighbor_candidate_unlock_diagnostics = _target_neighbor_candidate_unlock_decision(
+                    output_variant=output_variant,
+                    ev=ev,
+                    deltas=deltas,
+                    target=target,
+                    target_frames=target_frames,
+                    loader=loader,
+                    device=device,
+                    args=args,
+                )
             if bool(target_neighbor_candidate_unlock_diagnostics.get("enabled", False)):
                 decision = str(target_neighbor_candidate_unlock_diagnostics.get("decision", "keep"))
                 reason = str(target_neighbor_candidate_unlock_diagnostics.get("reject_reason") or "promoted")
@@ -7115,7 +7210,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "promotion_rollback_uses_target_gt": False,
             "promotion_rollback_fit_scope": "source_heldout_pairwise_loo_before_target_loop",
             "target_neighbor_consistency_uses_target_gt": False,
-            "target_neighbor_consistency_scope": "target_render_depth_camera_only_post_decision_certificate",
+            "target_neighbor_consistency_scope": (
+                "target_render_depth_camera_only_post_decision_certificate_with_optional_source_oracle_fixed_override"
+            ),
             "target_neighbor_candidate_unlock_uses_target_gt": False,
             "target_neighbor_candidate_unlock_scope": "target_render_depth_camera_only_online_per_view_unlock",
             "target_neighbor_combined_candidate_ranker_uses_target_gt": False,
@@ -7350,6 +7447,30 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "min_confidence": float(args.target_neighbor_consistency_min_confidence),
             "min_effective_weight": float(args.target_neighbor_consistency_min_effective_weight),
             "source_contradiction_enabled": bool(args.target_neighbor_consistency_enable_source_contradiction),
+            "source_oracle_fixed_override_enabled": bool(
+                args.target_neighbor_consistency_enable_source_oracle_fixed_override
+            ),
+            "source_oracle_fixed_override_min_source_psnr_delta": float(
+                args.target_neighbor_consistency_source_oracle_fixed_min_source_psnr_delta
+            ),
+            "source_oracle_fixed_override_min_source_ssim_delta": float(
+                args.target_neighbor_consistency_source_oracle_fixed_min_source_ssim_delta
+            ),
+            "source_oracle_fixed_override_min_source_cvar_delta": float(
+                args.target_neighbor_consistency_source_oracle_fixed_min_source_cvar_delta
+            ),
+            "source_oracle_fixed_override_min_source_min_delta": float(
+                args.target_neighbor_consistency_source_oracle_fixed_min_source_min_delta
+            ),
+            "source_oracle_fixed_override_min_source_positive_fraction_delta": float(
+                args.target_neighbor_consistency_source_oracle_fixed_min_source_positive_fraction_delta
+            ),
+            "source_oracle_fixed_override_min_reliability_psnr_delta": float(
+                args.target_neighbor_consistency_source_oracle_fixed_min_reliability_psnr_delta
+            ),
+            "source_oracle_fixed_override_min_reliability_ssim_delta": float(
+                args.target_neighbor_consistency_source_oracle_fixed_min_reliability_ssim_delta
+            ),
             "contradiction_min_source_local_min_delta": float(
                 args.target_neighbor_consistency_contradiction_min_source_local_min_delta
             ),
@@ -7869,6 +7990,49 @@ def main() -> None:
     parser.add_argument("--target_neighbor_consistency_contradiction_min_source_local_cvar_delta", type=float, default=1.0e9)
     parser.add_argument("--target_neighbor_consistency_contradiction_min_source_positive_fraction", type=float, default=1.0)
     parser.add_argument("--target_neighbor_consistency_contradiction_max_incumbent_minus_output_delta", type=float, default=-1.0e9)
+    parser.add_argument(
+        "--target_neighbor_consistency_enable_source_oracle_fixed_override",
+        action="store_true",
+        help=(
+            "Allow a strong source-oracle fixed promotion to bypass target-neighbor consistency rollback "
+            "when source-heldout local evidence and reliability agreement both support fixed over the scene incumbent."
+        ),
+    )
+    parser.add_argument(
+        "--target_neighbor_consistency_source_oracle_fixed_min_source_psnr_delta",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
+        "--target_neighbor_consistency_source_oracle_fixed_min_source_ssim_delta",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
+        "--target_neighbor_consistency_source_oracle_fixed_min_source_cvar_delta",
+        type=float,
+        default=-1.0e9,
+    )
+    parser.add_argument(
+        "--target_neighbor_consistency_source_oracle_fixed_min_source_min_delta",
+        type=float,
+        default=-1.0e9,
+    )
+    parser.add_argument(
+        "--target_neighbor_consistency_source_oracle_fixed_min_source_positive_fraction_delta",
+        type=float,
+        default=-1.0e9,
+    )
+    parser.add_argument(
+        "--target_neighbor_consistency_source_oracle_fixed_min_reliability_psnr_delta",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
+        "--target_neighbor_consistency_source_oracle_fixed_min_reliability_ssim_delta",
+        type=float,
+        default=0.0,
+    )
     parser.add_argument("--enable_target_neighbor_candidate_unlock", action="store_true")
     parser.add_argument("--target_neighbor_candidate_unlock_incumbent_variant", default="fixed")
     parser.add_argument("--target_neighbor_candidate_unlock_candidate_variant", default="learned")

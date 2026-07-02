@@ -2369,6 +2369,62 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-07-01 Update: v343e Source-Oracle Fixed Override
+
+Implemented a real policy-path change in:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+```
+
+The new `--target_neighbor_consistency_enable_source_oracle_fixed_override`
+path lets a strong source-oracle `fixed` decision survive target-neighbor
+consistency rollback and prevents the later target-neighbor unlock stage from
+overwriting it. This is target-GT-free at apply time: the certificate uses
+source-heldout local evidence plus source-reliability agreement.
+
+Focus6 result versus v342e:
+
+| scene | v342e PSNR gain | v343e PSNR gain | delta |
+|---|---:|---:|---:|
+| bicycle | 0.119958549 | 0.119958549 | +0.000000000 |
+| bonsai | 0.575974442 | 0.582901932 | +0.006927490 |
+| kitchen | 0.493623161 | 0.493623161 | +0.000000000 |
+| room | 0.450326866 | 0.453250186 | +0.002923320 |
+| stump | 0.058909355 | 0.058909355 | +0.000000000 |
+| treehill | 0.118121383 | 0.116350575 | -0.001770808 |
+
+Macro PSNR gain improved from `0.302818959` to `0.304165626`; macro SSIM gain
+improved from `0.003471775` to `0.003493470`; oracle PSNR headroom dropped from
+`+0.011762124` to `+0.010415457`.
+
+The important accepted override was `bonsai/00035`, where source-local and
+source-reliability evidence both supported `fixed`. This was the largest v342e
+miss and is the clearest proof that the latest reflection produced a concrete
+repair rather than another parameter-only scan.
+
+Remaining weakness: treehill PSNR regressed by `-0.001770808`. A v343f
+pairwise-guard probe did not recover it, so the next fix must decouple
+target-time fixed rollback certificates from source-side LOO/pairwise policy
+fitting. The goal is to preserve bonsai's fixed rescue without removing
+treehill's earlier pairwise mixture evidence.
+
+Artifacts:
+
+```text
+docs/car_model/7-01-v343e-SourceOracleFixedOverride-Log.md
+docs/car_model/results/v343e_source_oracle_fixed_override_focus6_oracle_gap.json
+docs/car_model/results/v343e_source_oracle_fixed_override_focus6_oracle_gap.md
+outputs/carnet/spcarnet_v343e_source_oracle_fixed_override_probe_20260701/
+outputs/carnet/spcarnet_v343f_source_oracle_fixed_override_pairwiseguard_probe_20260701/
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Update: v342e Fixed-Scene Generated Unlock Freeze
 
 This update follows the v341 reflection and negative probes. The key lesson was
