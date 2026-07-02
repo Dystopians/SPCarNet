@@ -72,17 +72,31 @@ SCENES: dict = {
                 "/data/peilincai/mesh_datasets/eth3d/courtyard/courtyard/scan_clean/scan1.ply",
                 "/data/peilincai/mesh_datasets/eth3d/courtyard/courtyard/scan_clean/scan2.ply",
             ],
+            # ETH3D scan_alignment.mlp per-scan rigid transforms into the
+            # calibration/camera frame (verified: median sparse->scan distance
+            # 0.036 m transformed vs 1.19 m raw). Order matches scan_paths.
+            "scan_transforms": [
+                [[0.996548, 0.0830159, -5.48683e-05, 3.81589],
+                 [-0.0830159, 0.996548, 0.000287318, -7.23808],
+                 [7.85309e-05, -0.000281772, 1.0, 1.86659],
+                 [0.0, 0.0, 0.0, 1.0]],
+                [[1.0, -2.38419e-07, -5.96047e-08, 3.59469],
+                 [2.38419e-07, 1.0, 2.38419e-07, 0.562818],
+                 [5.96046e-08, -2.38419e-07, 1.0, 1.80679],
+                 [0.0, 0.0, 0.0, 1.0]],
+            ],
             "colmap_sparse": "/data/peilincai/mesh_datasets/eth3d_colmap/courtyard/sparse/0",
         },
-        # ROI FROZEN 2026-07-02 at first courtyard geometry eval (PROTOCOL 4.3
-        # g4): combined scan_clean AABB expanded 0.3 m (computed from
-        # scan1+scan2, 37.8M pts: min [-8.582,-14.488,-1.745],
-        # max [24.669,19.156,16.642]). z_band=None: the scan frame's up axis
-        # is not axis-aligned/verified, so d1/d2 stay gated until a documented
-        # gravity-alignment derivation freezes it (M5). Never edit (MAJOR bump).
+        # ROI FROZEN 2026-07-02 (PROTOCOL 4.3 g4, changelog 1.1.1): combined
+        # TRANSFORMED scan_clean AABB expanded 0.3 m (37.8M pts after
+        # scan_alignment.mlp: min [-3.722,-13.925,0.118],
+        # max [28.264,10.002,18.449]). The earlier same-day raw-AABB freeze was
+        # voided together with the misaligned g4 row it produced
+        # (courtyard_clean30k_v2; see LEDGER). z_band=None: up-axis derivation
+        # pending (M5) -> d1/d2 gated. Never edit (MAJOR bump).
         roi={
-            "min": [-8.882, -14.788, -2.045],
-            "max": [24.969, 19.456, 16.942],
+            "min": [-4.022, -14.225, -0.182],
+            "max": [28.564, 10.302, 18.749],
             "z_band": None,
         },
         units_per_meter=1.0,  # ETH3D laser scans are metric

@@ -208,9 +208,15 @@ def main():
                 gt_arg = {"mesh_path": spec.gt["mesh_path"]}
             else:
                 import trimesh
-                clouds = [np.asarray(trimesh.load(p, process=False).vertices,
-                                     dtype=np.float64)
-                          for p in spec.gt["scan_paths"]]
+                transforms = spec.gt.get("scan_transforms")
+                clouds = []
+                for i, p in enumerate(spec.gt["scan_paths"]):
+                    v = np.asarray(trimesh.load(p, process=False).vertices,
+                                   dtype=np.float64)
+                    if transforms is not None:
+                        M = np.asarray(transforms[i], dtype=np.float64)
+                        v = v @ M[:3, :3].T + M[:3, 3]
+                    clouds.append(v)
                 gt_arg = {"scan_points": np.concatenate(clouds, axis=0)}
             downstream = compute_downstream_metrics(
                 verts_np, faces_np, gt_arg, spec.roi, seed=0

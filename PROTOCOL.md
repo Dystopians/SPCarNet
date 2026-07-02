@@ -7,6 +7,8 @@
 - §4.1 documents the 8-bit quantization convention (parity with legacy `metrics.py`).
 - §4.3 documents g1's depth-map convention and silhouette-edge caveat; g4 skip-rule when a scan-GT ROI is unfrozen; g4 pairing rule (only gt→recon is paired).
 - §5 documents memory-bounded (chunked) bootstrap implementation; statistics unchanged.
+
+**Changelog 1.1.1** (2026-07-02, GT-asset correction): ETH3D courtyard laser scans must be loaded through the `scan_alignment.mlp` per-scan rigid transforms (frozen in `scenes.py` as `gt.scan_transforms`); raw vertices are ~1.2 m misaligned from the camera frame (verified via COLMAP sparse points: median sparse→scan 0.036 m transformed vs 1.19 m raw). The courtyard ROI is the transformed-scan AABB + 0.3 m. The single g4 row computed with raw scans (`courtyard_clean30k_v2`) is VOID and superseded; no other rows touched scan GT.
 Constitution for all reported numbers. The single evaluation mouth is `run_eval.py` (D5). Numbers not produced by it do not exist (exception: LEGACY-labeled numbers from `metrics.py` produced before this protocol, used only for cross-checks, never in result tables).
 
 ## 0. Frozen claim under test

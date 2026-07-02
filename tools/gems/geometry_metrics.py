@@ -576,12 +576,21 @@ def _load_gt_points(spec, rng):
         return pts, f"gt_mesh:{mesh_path}", "mesh"
     if scan_paths:
         import trimesh
+        # Per-scan rigid transforms into the calibration frame (e.g. ETH3D
+        # scan_alignment.mlp). Raw ETH3D scan vertices are NOT in the camera
+        # frame; skipping this misaligns GT by >1 m (verified: median
+        # sparse->scan distance 1.19 m raw vs 0.036 m transformed).
+        transforms = gt.get("scan_transforms")
         clouds = []
-        for scan in scan_paths:
+        for i, scan in enumerate(scan_paths):
             if not os.path.isfile(str(scan)):
                 raise FileNotFoundError(f"scan not found: {scan}")
             scan_obj = trimesh.load(str(scan), process=False)
-            clouds.append(np.asarray(scan_obj.vertices, dtype=np.float64))
+            v = np.asarray(scan_obj.vertices, dtype=np.float64)
+            if transforms is not None:
+                M = np.asarray(transforms[i], dtype=np.float64)
+                v = v @ M[:3, :3].T + M[:3, 3]
+            clouds.append(v)
         pts = np.concatenate(clouds, axis=0)
         if pts.shape[0] > G4_SCAN_SUBSAMPLE:
             keep = rng.choice(pts.shape[0], size=G4_SCAN_SUBSAMPLE, replace=False)
