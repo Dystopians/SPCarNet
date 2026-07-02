@@ -37,7 +37,7 @@ Never trust chat memory over this file.
 |-----------|--------|---|------------------|
 | M0 Reproduce & Audit (AT0) | **DONE** | 100 | Eval reproduced exactly (garden 24.7120/0.7618/0.2163); tri counts censused; preflight tool demonstrated (caught 2 violations); FT cost measured 19.3 it/s; storage blocker escalated (DEC-007) |
 | M1 Protocol & Harness (AT1) | **DONE** | 100 | All metric families proven: GT-model calibration row ≈perfect (g1 0.028%, g2 2.8mm, chamfer 1.8cm, d2 agreement 1.0) vs toy clean30k poor (g1 23.9%, g2 0.26m, chamfer 0.57m, d2 0.625) → metric code validated; toy clean geometry genuinely unreliable (headline motivation) |
-| M2 Budget Engine (E1) | NOT STARTED | 0 | depends M1 |
+| M2 Budget Engine (E1) | **CONCLUDED — E1 FAIL as written; mechanism VALIDATED; escalated** | 95 | KILL_REPORT.md filed. Garden B50 prune+features-FT BEATS clean (+0.157 dB, −0.0071 LPIPS, CIs excl. 0); garden B25 iso (75% reduction); courtyard B50 iso; toy −0.52 residual (geometric). Human decision pending: amended E1′ vs strict stop |
 | M3 Geometry Objectives (E2) | NOT STARTED | 0 | depends M2; renderer already exposes expected/median depth, alpha, normals, tri-ids |
 | M4 Teacher Distillation (E3) | NOT STARTED | 0 | depends M2; teacher-render-loss hook already exists in train.py |
 | M5 Downstream Proxy & Efficiency (AT5) | NOT STARTED | 0 | depends M2 |
@@ -72,7 +72,9 @@ Never trust chat memory over this file.
 
 ## GOAL LOG
 
-### GOAL #005 — E1 budget engine runs [M2] — 2026-07-02 — IN PROGRESS (variant 1 running)
+### GOAL #005 — E1 budget engine runs [M2] — 2026-07-02 — CONCLUDED (see KILL_REPORT.md)
+- **Variant 3 result**: garden iterative B50 = 24.8689 (+0.157 vs clean CI[+0.110,+0.200], ΔLPIPS −0.0071) — best row yet; toy unchanged vs one-shot (−0.022 CI[−0.115,+0.079] vs noft; −0.542 vs clean) → toy kill condition tripped. Variants 3/3 spent.
+- **FINAL VERDICT: E1 FAIL as pre-registered (criterion (b) miscalibrated — presumed lossy pruning; measured prune-only −0.011 dB garden B50; criterion (a) fails on toy only). Mechanism (evidence-prune + features-only FT) VALIDATED on real scenes. Full accounting + fallback proposal in `KILL_REPORT.md`. Escalated to human: adopt E1′ or strict stop. M2 experiments STOPPED per rules; no soft pivot.**
 - **E1 attempt 1 (tag e1b, post scaling-fix) = FAIL as pre-registered** (`/data/peilincai/gems_stage1/analysis/e1_summary.{md,json}`): importance_ft LOSES vs importance_noft on both scenes (garden B50 −2.92 dB CI[−3.29,−2.54]; toy B50 −1.26 CI[−1.79,−0.78]). But the FAILURE STRUCTURE is informative:
   - **Prune-only (importance=pixels_total) is near-lossless: garden B50 −0.011 dB CI[−0.033,+0.003], ΔLPIPS +0.0001 → MEETS the D3 compaction floor (50% tris, iso-quality, 32→42 FPS).** garden B25 −0.139; toy B50 −0.520; toy B25 −1.167 (fail strict floor). Random-prune is far worse at B25 (garden −5.0 vs clean) → importance definition genuinely matters.
   - **The FT stage damages ANY resumed model** — diagnostics (all toy, durable evals): D-a clean-resume+10k FT, NO prune → −1.12 dB (`eval/toy_cleanresume_diag`); D-b prune+FT-1k → only −0.11 vs noft (`eval/toy_parking_B50_importance_ft_diag1k`) → damage ∝ FT length; D-c fine-tuned model loses 3.7 dB on ITS OWN TRAIN VIEWS (36.22→32.53) and its training loss RISES ~50% over 10k iters → not overfitting; optimizer noise-drift at default constant LRs (feature 0.0016, weight 0.03) on a converged model. Supersampling fix verified effective (model best at scaling 4). Sigma/floor/pos-LR schedules verified resume-consistent.
