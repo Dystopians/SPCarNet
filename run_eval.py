@@ -192,10 +192,12 @@ def main():
         else:
             import numpy as np
             # PROTOCOL 1.1.0 §4.3: d1/d2 surface = ALL checkpoint triangles
-            # (opaque_mask is definitionally all-True; see eval_context).
-            opaque = ctx.opaque_mask()
+            # with finite vertices (rasterizer culls non-finite faces; the
+            # excluded count is a model-quality diagnostic).
+            finite = ctx.finite_faces_mask()
             verts_np = ctx.vertices().cpu().numpy()
-            faces_np = ctx.faces()[opaque].cpu().numpy()
+            faces_np = ctx.faces()[finite].cpu().numpy()
+            n_nonfinite_faces = int((~finite).sum().item())
             # Adapt SceneSpec.gt to the downstream contract: it accepts
             # 'mesh_path' (.obj) or 'scan_points' [N,3]; scan .ply files
             # (courtyard) are loaded here by the caller.
@@ -215,6 +217,8 @@ def main():
             ds_dir = os.path.join(args.out, "downstream")
             os.makedirs(ds_dir, exist_ok=True)
             for sub_name, sub in downstream.items():
+                if not isinstance(sub, dict):
+                    continue
                 arrays = {k: v for k, v in sub.items() if isinstance(v, np.ndarray)}
                 if arrays:
                     npz_path = os.path.join(ds_dir, f"{sub_name}_per_sample.npz")
@@ -222,6 +226,7 @@ def main():
                     for k in arrays:
                         del sub[k]
                     sub["per_sample_npz"] = npz_path
+            downstream["n_nonfinite_faces_excluded"] = n_nonfinite_faces
 
     # --- 4.5 panels ---
     floater_tri_ids = None

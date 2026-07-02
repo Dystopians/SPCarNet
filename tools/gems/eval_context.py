@@ -144,6 +144,19 @@ class EvalContext:
     def faces(self) -> torch.Tensor:
         return self.triangles._triangle_indices.detach().long()
 
+    def finite_faces_mask(self) -> torch.Tensor:
+        """Bool [T]: faces whose 3 vertices are all finite (PROTOCOL §4.3).
+
+        Training can rarely produce NaN vertices (observed: 2/1.97M verts on
+        toy_parking clean30k -> 13 NaN faces); the rasterizer silently culls
+        them, so they are not part of the rendered surface. Geometry and
+        downstream surfaces exclude them and report the count. Indexing is
+        preserved: this is a mask over the ORIGINAL face order (rend_ids
+        compatibility).
+        """
+        finite_v = torch.isfinite(self.vertices()).all(dim=1)
+        return finite_v[self.faces()].all(dim=1)
+
 
 def build_eval_context(checkpoint_path: str, spec: SceneSpec,
                        data_device: str = "cpu", sh_degree: int = 3,

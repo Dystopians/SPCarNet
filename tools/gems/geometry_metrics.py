@@ -455,6 +455,16 @@ def _support_counts(ctx, n_triangles, max_views=G3_MAX_SUPPORT_VIEWS):
     return support.cpu().numpy(), view_indices
 
 
+def _finite_faces_mask(ctx, faces_np):
+    """Bool [T] over ORIGINAL face order: all-3-vertices-finite (PROTOCOL §4.3)."""
+    fn = getattr(ctx, "finite_faces_mask", None)
+    if callable(fn):
+        return fn().detach().cpu().numpy().astype(bool)
+    verts = ctx.vertices().detach().cpu().numpy()
+    finite_v = np.isfinite(verts).all(axis=1)
+    return finite_v[faces_np].all(axis=1)
+
+
 def compute_g3(ctx):
     out_dir = _out_subdir(ctx)
     faces_np = ctx.faces().detach().cpu().numpy().astype(np.int64)
@@ -466,15 +476,22 @@ def compute_g3(ctx):
         # rend_ids is float32; integer ids above 2^24 are not exactly representable.
         return {"skipped": "skipped: triangle count >= 2^24 exceeds rend_ids float32 precision"}
 
+    # PROTOCOL §4.3: faces touching non-finite vertices are excluded from the
+    # geometry surface (rasterizer culls them); indexing stays original.
+    finite_mask = _finite_faces_mask(ctx, faces_np)
+    n_nonfinite = int((~finite_mask).sum())
+
     face_labels = _mesh_component_labels(faces_np, n_vertices)
     support, view_indices = _support_counts(ctx, n_triangles)
 
     # Reduce per component (labels come from the vertex graph; only components
-    # that actually contain triangles are counted).
+    # that actually contain triangles are counted). Non-finite faces are
+    # excluded from component stats and can never be floaters.
     n_labels = int(face_labels.max()) + 1
-    comp_sizes = np.bincount(face_labels, minlength=n_labels)
+    fin_labels = face_labels[finite_mask]
+    comp_sizes = np.bincount(fin_labels, minlength=n_labels)
     comp_max_support = np.zeros(n_labels, dtype=np.int64)
-    np.maximum.at(comp_max_support, face_labels, support.astype(np.int64))
+    np.maximum.at(comp_max_support, fin_labels, support[finite_mask].astype(np.int64))
     has_faces = comp_sizes > 0
 
     is_floater = (
@@ -482,7 +499,7 @@ def compute_g3(ctx):
         & (comp_max_support <= G3_FLOATER_MAX_SUPPORT)
         & (comp_sizes < G3_FLOATER_MAX_SIZE)
     )
-    floater_face_mask = is_floater[face_labels]
+    floater_face_mask = is_floater[face_labels] & finite_mask
     floater_tri_ids = np.nonzero(floater_face_mask)[0].astype(np.int64)
 
     npz_path = os.path.join(out_dir, "g3_floaters.npz")
@@ -501,6 +518,7 @@ def compute_g3(ctx):
         "floater_triangle_fraction": float(floater_face_mask.mean()),
         "n_components": int(has_faces.sum()),
         "n_triangles": n_triangles,
+        "n_nonfinite_faces_excluded": n_nonfinite,
         "n_support_views": int(view_indices.shape[0]),
         "floater_tri_ids_npz": npz_path,
         "per_sample_npz": npz_path,
@@ -617,11 +635,17 @@ def compute_g4(ctx):
 
     # PROTOCOL 1.1.0 §4.3: reconstructed surface = ALL checkpoint triangles
     # (opacity floor >= 0.999 makes every triangle part of the rendered
-    # surface; the former sigmoid(weight) >= 0.5 mask is gone).
+    # surface; the former sigmoid(weight) >= 0.5 mask is gone), minus faces
+    # touching non-finite vertices (rasterizer culls those; count reported).
     faces = ctx.faces().detach().cpu().numpy().astype(np.int64)
     if faces.shape[0] == 0:
         return {"skipped": "skipped: model has no triangles", "roi": roi}
     verts = ctx.vertices().detach().cpu().numpy().astype(np.float64)
+    finite_mask = _finite_faces_mask(ctx, faces)
+    n_nonfinite = int((~finite_mask).sum())
+    faces = faces[finite_mask]
+    if faces.shape[0] == 0:
+        return {"skipped": "skipped: no finite triangles", "roi": roi}
     recon_pts = _sample_points_on_mesh(verts, faces, G4_RECON_SAMPLES, rng)
 
     try:
@@ -676,6 +700,7 @@ def compute_g4(ctx):
         "n_recon_excluded_by_scan_region": n_excluded,
         "n_gt_samples": int(gt_pts.shape[0]),
         "n_surface_triangles": int(faces.shape[0]),
+        "n_nonfinite_faces_excluded": n_nonfinite,
         "surface_definition": "all_checkpoint_triangles (PROTOCOL 1.1.0 §4.3)",
         "pairing": "only gt_to_recon_dist feeds paired_bootstrap_ci; "
                    "recon_to_gt_dist_unpaired is an unpaired summary",
