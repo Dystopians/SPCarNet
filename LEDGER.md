@@ -72,6 +72,12 @@ Never trust chat memory over this file.
 
 ## GOAL LOG
 
+### GOAL #005 — E1 budget engine runs [M2] — 2026-07-02 — IN PROGRESS
+- Pre-registered hypothesis (before any run): evidence-guided prune to B + topology-frozen FT (10k it, frozen config) → at B=50 on garden AND toy: ≥ +0.5 dB vs prune-no-FT (CI excl. 0) AND ≥ −0.20 dB vs clean. Kill: either fails on either scene after ≤3 mechanism variants.
+- 12 runs launched as 3 detached GPU chains (tag e1). CRASH #1: all importance-mode runs died at `gems_pipeline.py:519` — `stage_evidence` returned the npz path (str) where the stamp payload (dict) was expected; random-mode smoke never exercised the branch. Root-caused, fixed (commit ee5cf64), chains relaunched; stamps resumed completed work. No results were affected (crash was before FT).
+- CRASH/VOID #2: first courtyard g4 row (courtyard_clean30k_v2) showed F@5cm=0.009 → investigated → ETH3D raw scan vertices are ~1.2 m off the camera frame; `scan_alignment.mlp` transforms are REQUIRED (verified: median sparse→scan 0.036 m transformed vs 1.19 m raw; camera frames of eth3d_colmap and ETH3D GT calibration are bit-identical). Fix: transforms frozen into scenes.py, loaders apply them, ROI recomputed from transformed AABB, PROTOCOL changelog 1.1.1, v2 g4 row VOID (commit cb1560b). v3 eval re-running.
+- Courtyard clean baseline (trained this session, 30k it, ~20 min, GPU 5): PSNR 17.686 / SSIM 0.5968 / LPIPS 0.3850, 4.37M tris, 104.6 FPS; g1 9.40% (99,690 samples), g3 5808 comps / 0.81% — geometry much worse than garden, good E2 headroom. Eval: `/data/peilincai/gems_stage1/eval/courtyard_clean30k_v1` (+v3 for g4).
+
 ### GOAL #003 — M1: PROTOCOL v1.1.0 + eval harness, validated + adversarially reviewed [M1] — 2026-07-02 — DONE
 - Infra goal. Built via 8-agent workflow (5 implementers, integrator, 2 adversarial reviewers) + 1 fixer agent.
 - Artifacts: `PROTOCOL.md` (v1.0.0→v1.1.0 same-day pre-first-row amendments, changelog inside), `run_eval.py` (single mouth), `tools/gems/{scenes,eval_context,panels,geometry_metrics,downstream_metrics,paired_bootstrap,test_paired_bootstrap}.py`, `tools/audit_test_path.py`.
