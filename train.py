@@ -4198,6 +4198,13 @@ def training(
             if torch.is_tensor(sparse_parent_rollback_loss) and torch.isfinite(sparse_parent_rollback_loss):
                 loss += sparse_parent_rollback_loss
 
+        # GEMS M3 (E2 mechanism variant 1): gradient-routed geometry coupling.
+        # When enabled, the geometry losses (freespace + depth consistency) are
+        # accumulated separately and backpropagated to vertex positions ONLY;
+        # everything else in `loss` backprops to features/weights only.
+        geometry_grad_routing_active = bool(getattr(opt, "geometry_grad_routing", False))
+        geometry_routed_loss = 0
+
         # GEMS M3 (E2): free-space hinge on train-view evidence depths.
         freespace_loss_pure = 0
         freespace_loss = 0
@@ -4220,7 +4227,10 @@ def training(
                 if fs_pure is not None and torch.is_tensor(fs_pure) and torch.isfinite(fs_pure):
                     freespace_loss_pure = fs_pure
                     freespace_loss = fs_res["loss_weighted"]
-                    loss += freespace_loss
+                    if geometry_grad_routing_active:
+                        geometry_routed_loss = geometry_routed_loss + freespace_loss
+                    else:
+                        loss += freespace_loss
 
         # GEMS M3 (E2): multi-view rendered-depth consistency (differentiable
         # current view vs cached neighbor renders, occlusion-masked).
@@ -4261,7 +4271,10 @@ def training(
                 if dc_pure is not None and torch.is_tensor(dc_pure) and torch.isfinite(dc_pure):
                     depth_consistency_loss_pure = dc_pure
                     depth_consistency_loss = dc_res["loss_weighted"]
-                    loss += depth_consistency_loss
+                    if geometry_grad_routing_active:
+                        geometry_routed_loss = geometry_routed_loss + depth_consistency_loss
+                    else:
+                        loss += depth_consistency_loss
 
         rend_normal = render_pkg['rend_normal']
         surf_normal = render_pkg['surf_normal']
@@ -4364,7 +4377,19 @@ def training(
                 viewpoint_cam=viewpoint_cam,
                 render_pkg=render_pkg,
             )
-        loss.backward()
+        if geometry_grad_routing_active and torch.is_tensor(geometry_routed_loss):
+            # Two-pass routed backward: photometric (+ any other reg) gradients
+            # go to features/weights; then vertices.grad is cleared so vertex
+            # positions receive ONLY the geometry-loss gradients.
+            loss_photo = loss
+            loss = loss_photo + geometry_routed_loss  # logged total stays photo + geo
+            loss_photo.backward(retain_graph=True)
+            triangles.vertices.grad = None
+            geometry_routed_loss.backward()
+        else:
+            # Routing off, or no geometry loss this iteration: plain backward
+            # (in routing mode `loss` excludes geometry terms, which are 0 here).
+            loss.backward()
         if bool(phase_info.get("collect_stats", True)):
             _update_prism_gradient_state(prism_state=prism_state, triangles=triangles, iteration=int(iteration))
             _update_prism_scores(

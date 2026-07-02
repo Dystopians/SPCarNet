@@ -194,6 +194,11 @@ class OptimizationParams(ParamGroup):
         self.dc_neighbors = 3
         self.dc_refresh_interval = 500
         self.dc_rel_tol = 0.05
+        # E2 mechanism variant 1: gradient-routed geometry coupling. When True
+        # (and geometry losses are enabled), the photometric total backprops to
+        # features/weights only (vertices.grad cleared between two backward
+        # passes) while the geometry losses backprop to vertex positions only.
+        self.geometry_grad_routing = False
         # Optional render-teacher distillation from a pre-rendered stronger
         # checkpoint. This is disabled by default and is intended for topology-
         # constrained recovery rows that need to regain clean-baseline appearance.
