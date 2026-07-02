@@ -198,9 +198,10 @@ def evidence_npz_path(scene: str, ckpt_fp: dict) -> str:
 
 
 def stage_evidence(scene: str, spec, source_ckpt: str, ckpt_fp: dict,
-                   stamps: StageStamps, cfg_hash: str) -> str:
+                   stamps: StageStamps, cfg_hash: str) -> dict:
     """Evidence npz for the SOURCE checkpoint, cached per checkpoint
-    fingerprint (reused across budgets/modes)."""
+    fingerprint (reused across budgets/modes). Returns the stamp payload
+    (run_stage's cache-hit path returns the same dict shape)."""
     npz_path = evidence_npz_path(scene, ckpt_fp)
     meta_path = npz_path + ".meta.json"
     if os.path.isfile(npz_path) and os.path.isfile(meta_path):
@@ -209,18 +210,18 @@ def stage_evidence(scene: str, spec, source_ckpt: str, ckpt_fp: dict,
         cached_fp = (meta.get("checkpoint") or {}).get("sha256_first16mb")
         if cached_fp == ckpt_fp["sha256_first16mb"] and meta.get("max_views") is None:
             print(f"[gems] evidence cache HIT: {npz_path}", flush=True)
-            stamps.write("evidence", cfg_hash,
-                         {"npz": npz_path, "cache": "hit", "meta": meta})
-            return npz_path
+            payload = {"npz": npz_path, "cache": "hit", "meta": meta}
+            stamps.write("evidence", cfg_hash, payload)
+            return payload
 
     from tools.gems.triangle_evidence import compute_triangle_evidence
     meta = compute_triangle_evidence(
         checkpoint=source_ckpt, spec=spec, out_npz=npz_path, max_views=None)
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=1)
-    stamps.write("evidence", cfg_hash,
-                 {"npz": npz_path, "cache": "miss", "meta": meta})
-    return npz_path
+    payload = {"npz": npz_path, "cache": "miss", "meta": meta}
+    stamps.write("evidence", cfg_hash, payload)
+    return payload
 
 
 def _keep_ids(mode: str, keep_count: int, t_clean: int, npz_path=None):
