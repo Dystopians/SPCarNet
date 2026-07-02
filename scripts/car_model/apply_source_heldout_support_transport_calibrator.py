@@ -461,6 +461,112 @@ def _filter_selector_payload_candidates(
     return payload
 
 
+def _fixed_scene_generated_source_summary_unlock(
+    selector_payload: dict[str, Any] | None,
+    selected_variant: str,
+    *,
+    suppressed_generated_candidates: set[str],
+    compute_ssim: bool,
+    args: argparse.Namespace,
+) -> tuple[str, dict[str, Any]]:
+    payload: dict[str, Any] = {
+        "enabled": bool(getattr(args, "enable_fixed_scene_generated_source_summary_unlock", False)),
+        "applied": False,
+        "input_variant": str(selected_variant),
+        "output_variant": str(selected_variant),
+        "candidate_diagnostics": {},
+        "reject_reason": None,
+    }
+    if not payload["enabled"]:
+        payload["reject_reason"] = "disabled"
+        return selected_variant, payload
+    if selected_variant != "fixed":
+        payload["reject_reason"] = "scene_not_fixed"
+        return selected_variant, payload
+    if selector_payload is None:
+        payload["reject_reason"] = "missing_selector_payload"
+        return selected_variant, payload
+
+    summaries = dict(selector_payload.get("summaries", {}))
+    fixed_summary = summaries.get("fixed")
+    if not isinstance(fixed_summary, dict):
+        payload["reject_reason"] = "missing_fixed_summary"
+        return selected_variant, payload
+
+    requested_names = {
+        item.strip()
+        for item in str(getattr(args, "fixed_scene_generated_unlock_candidate_names", "")).split(",")
+        if item.strip()
+    }
+    generated_names = [
+        name
+        for name in _generated_candidate_names(args)
+        if name not in suppressed_generated_candidates and (not requested_names or name in requested_names)
+    ]
+    if not generated_names:
+        payload["reject_reason"] = "no_active_generated_candidates"
+        return selected_variant, payload
+
+    best_name: str | None = None
+    best_score = -float("inf")
+    for name in generated_names:
+        summary = summaries.get(name)
+        diag = {
+            "available": isinstance(summary, dict),
+            "source_psnr_delta_vs_fixed": None,
+            "source_ssim_delta_vs_fixed": None,
+            "source_cvar_delta_vs_fixed": None,
+            "source_min_delta_vs_fixed": None,
+            "score": None,
+            "reject_reason": None,
+        }
+        if not isinstance(summary, dict):
+            diag["reject_reason"] = "missing_source_summary"
+            payload["candidate_diagnostics"][name] = diag
+            continue
+        psnr_delta = float(summary.get("psnr_gain", 0.0)) - float(fixed_summary.get("psnr_gain", 0.0))
+        ssim_delta = (
+            float(summary.get("ssim_gain", 0.0)) - float(fixed_summary.get("ssim_gain", 0.0))
+            if compute_ssim
+            else 0.0
+        )
+        cvar_delta = _summary_psnr_tail(summary, "cvar") - _summary_psnr_tail(fixed_summary, "cvar")
+        min_delta = _summary_psnr_tail(summary, "min") - _summary_psnr_tail(fixed_summary, "min")
+        score = psnr_delta + float(getattr(args, "fixed_scene_generated_unlock_ssim_weight", 20.0)) * ssim_delta
+        diag.update(
+            {
+                "source_psnr_delta_vs_fixed": float(psnr_delta),
+                "source_ssim_delta_vs_fixed": float(ssim_delta),
+                "source_cvar_delta_vs_fixed": float(cvar_delta),
+                "source_min_delta_vs_fixed": float(min_delta),
+                "score": float(score),
+            }
+        )
+        if psnr_delta < float(getattr(args, "fixed_scene_generated_unlock_min_source_psnr_delta", 0.0)):
+            diag["reject_reason"] = "source_psnr_delta"
+        elif compute_ssim and ssim_delta < float(
+            getattr(args, "fixed_scene_generated_unlock_min_source_ssim_delta", -1.0e-4)
+        ):
+            diag["reject_reason"] = "source_ssim_delta"
+        elif cvar_delta < float(getattr(args, "fixed_scene_generated_unlock_min_source_cvar_delta", -1.0e9)):
+            diag["reject_reason"] = "source_cvar_delta"
+        elif min_delta < float(getattr(args, "fixed_scene_generated_unlock_min_source_min_delta", -1.0e9)):
+            diag["reject_reason"] = "source_min_delta"
+        elif score > best_score:
+            best_name = name
+            best_score = float(score)
+        payload["candidate_diagnostics"][name] = diag
+
+    if best_name is None:
+        payload["reject_reason"] = "no_candidate_passed_source_summary_unlock"
+        return selected_variant, payload
+    payload["applied"] = True
+    payload["output_variant"] = str(best_name)
+    payload["selected_score"] = float(best_score)
+    payload["reject_reason"] = None
+    return str(best_name), payload
+
+
 def _candidate_deltas(ev: Any, pred_delta: torch.Tensor, args: argparse.Namespace) -> dict[str, torch.Tensor]:
     fixed_delta = float(args.anchor_alpha) * ev.signal
     learned_delta = float(args.learned_scale) * pred_delta
@@ -6061,6 +6167,20 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             selector_payload,
             remove_variants=suppressed_generated_candidates,
         )
+    selected_variant, fixed_scene_generated_unlock_payload = _fixed_scene_generated_source_summary_unlock(
+        selector_payload,
+        selected_variant,
+        suppressed_generated_candidates=suppressed_generated_candidates,
+        compute_ssim=bool(args.compute_ssim),
+        args=args,
+    )
+    if (
+        selector_payload is not None
+        and bool(fixed_scene_generated_unlock_payload.get("applied", False))
+    ):
+        selector_payload = dict(selector_payload)
+        selector_payload["selected_variant"] = selected_variant
+        selector_payload["fixed_scene_generated_source_summary_unlock"] = fixed_scene_generated_unlock_payload
     per_view_gate_payload = _fit_per_view_gate(
         selector_payload,
         selected_variant,
@@ -6231,6 +6351,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             target_neighbor_consistency_diagnostics: dict[str, Any] | None = None
             target_neighbor_candidate_unlock_diagnostics: dict[str, Any] | None = None
             target_neighbor_combined_candidate_ranker_diagnostics: dict[str, Any] | None = None
+            fixed_scene_generated_unlock_freeze_diagnostics: dict[str, Any] | None = None
             target_neighbor_all_candidate_scores = _target_neighbor_all_candidate_scores(
                 ev=ev,
                 deltas=deltas,
@@ -6750,6 +6871,24 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 selected_proxy_variant = output_variant
                 output_decision_source = "target_neighbor_unlock"
                 gate_accepted = True
+            if (
+                bool(fixed_scene_generated_unlock_payload.get("applied", False))
+                and bool(getattr(args, "fixed_scene_generated_unlock_freeze_incumbent", False))
+                and selected_variant in deltas
+            ):
+                fixed_scene_generated_unlock_freeze_diagnostics = {
+                    "enabled": True,
+                    "applied": output_variant != selected_variant or not gate_accepted,
+                    "input_variant": output_variant,
+                    "frozen_variant": selected_variant,
+                    "input_decision_source": output_decision_source,
+                }
+                output_variant = selected_variant
+                selected_delta = deltas[selected_variant]
+                selected_proxy = proxies_by_variant[selected_variant]
+                selected_proxy_variant = selected_variant
+                output_decision_source = "fixed_scene_generated_source_summary_unlock"
+                gate_accepted = True
             if not gate_accepted and output_variant != "noop":
                 selected_delta = torch.zeros_like(selected_delta)
                 output_variant = "noop"
@@ -6847,6 +6986,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "target_neighbor_candidate_unlock_diagnostics": target_neighbor_candidate_unlock_diagnostics,
                     "target_neighbor_combined_candidate_ranker_diagnostics": target_neighbor_combined_candidate_ranker_diagnostics,
                     "target_neighbor_generated_candidate_diagnostics": target_neighbor_generated_candidate_diagnostics,
+                    "fixed_scene_generated_unlock_freeze_diagnostics": fixed_scene_generated_unlock_freeze_diagnostics,
                     "target_neighbor_all_candidate_rank_diagnostics": target_neighbor_all_candidate_rank_diagnostics,
                 }
             )
@@ -6986,6 +7126,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "tnc_regularized_residual_candidate_scope": "source_evidence_reliability_gated_fixed_learned_residual_with_target_neighbor_self_consistency_regularization",
             "source_trust_residual_candidate_uses_target_gt": False,
             "source_trust_residual_candidate_scope": "source_evidence_confidence_support_stability_alignment_disagreement_gated_full_fixed_learned_residual_blend",
+            "fixed_scene_generated_source_summary_unlock_uses_target_gt": False,
+            "fixed_scene_generated_source_summary_unlock_scope": "source_heldout_summary_only_fixed_scene_generated_candidate_incumbent_unlock",
             "target_neighbor_all_candidate_scores_affect_selection": bool(
                 target_neighbor_combined_candidate_ranker_payload.get("enabled", False)
             ),
@@ -7028,6 +7170,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "generated_candidates_active_for_scene": bool(generated_candidates_active_for_scene),
             "suppressed_generated_candidates": sorted(suppressed_generated_candidates),
             "suppressed_generated_candidate_reasons": dict(suppressed_generated_candidate_reasons),
+            "fixed_scene_generated_source_summary_unlock": fixed_scene_generated_unlock_payload,
+            "fixed_scene_generated_source_summary_unlock_freeze_incumbent": bool(
+                args.fixed_scene_generated_unlock_freeze_incumbent
+            ),
             "adaptive_residual_candidate": {
                 "enabled": bool(args.enable_adaptive_residual_candidate),
                 "name": str(args.adaptive_residual_candidate_name),
@@ -7469,6 +7615,25 @@ def main() -> None:
     )
     parser.add_argument("--generated_candidate_min_source_summary_psnr_delta_vs_scene", type=float, default=0.0)
     parser.add_argument("--generated_candidate_min_source_summary_ssim_delta_vs_scene", type=float, default=-5.0e-5)
+    parser.add_argument(
+        "--enable_fixed_scene_generated_source_summary_unlock",
+        action="store_true",
+        help=(
+            "When source-heldout scene selection falls back to fixed, allow an active generated candidate "
+            "to become the incumbent if its source-heldout summary is PSNR-positive and SSIM-bounded vs fixed."
+        ),
+    )
+    parser.add_argument(
+        "--fixed_scene_generated_unlock_candidate_names",
+        default="",
+        help="Optional comma-separated generated candidate allowlist for fixed-scene source-summary unlock.",
+    )
+    parser.add_argument("--fixed_scene_generated_unlock_min_source_psnr_delta", type=float, default=0.0)
+    parser.add_argument("--fixed_scene_generated_unlock_min_source_ssim_delta", type=float, default=-1.0e-4)
+    parser.add_argument("--fixed_scene_generated_unlock_min_source_cvar_delta", type=float, default=-1.0e9)
+    parser.add_argument("--fixed_scene_generated_unlock_min_source_min_delta", type=float, default=-1.0e9)
+    parser.add_argument("--fixed_scene_generated_unlock_ssim_weight", type=float, default=20.0)
+    parser.add_argument("--fixed_scene_generated_unlock_freeze_incumbent", action="store_true")
     parser.add_argument("--output_variant", default="hybrid")
     parser.add_argument(
         "--policy_profile",

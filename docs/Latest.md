@@ -2369,6 +2369,79 @@ Current verdict:
 Final status: NOT COMPLETE.
 ```
 
+## 2026-07-01 Update: v342e Fixed-Scene Generated Unlock Freeze
+
+This update follows the v341 reflection and negative probes. The key lesson was
+that fixed-scene failures were not solved by broad threshold relaxation:
+unsuppressed generated candidates hurt `treehill`, the existing per-view risk
+model broke `stump`, and pairwise micro-relaxation did not move `stump`.
+
+v342e therefore adds a narrow, target-GT-free unlock:
+
+```text
+scripts/car_model/apply_source_heldout_support_transport_calibrator.py
+--enable_fixed_scene_generated_source_summary_unlock
+--fixed_scene_generated_unlock_freeze_incumbent
+```
+
+If the source-heldout selector falls back to `fixed`, v342e allows an active
+generated candidate such as `adaptive` or `source_trust` to become the incumbent
+only when its source-heldout summary beats `fixed` on PSNR with bounded SSIM/tail
+risk. The freeze option keeps that source-supported incumbent from being
+overridden by later aggressive target-time policies.
+
+Focus6 comparison:
+
+| metric | v340d | v341 | v342e | v342e-v341 |
+|---|---:|---:|---:|---:|
+| macro selected PSNR gain | 0.301510278 | 0.302505694 | 0.302818959 | +0.000313266 |
+| macro selected SSIM gain | 0.003461710 | 0.003469209 | 0.003471775 | +0.000002566 |
+| macro oracle headroom | 0.012505689 | 0.012075390 | 0.011762124 | -0.000313266 |
+| positive PSNR-headroom views | 65 | 68 | 74 | +6 |
+
+Scene-level deltas relative to v341:
+
+| scene | PSNR delta | SSIM delta | note |
+|---|---:|---:|---|
+| stump | +0.001879594 | +0.000015393 | fixed-scene unlock selects adaptive safely |
+| room | +0.000000000 | +0.000000000 | preserves v341 source_trust gain |
+| treehill | +0.000000000 | +0.000000000 | no regression from unsafe unlock |
+| bicycle | +0.000000000 | +0.000000000 | unchanged |
+| bonsai | +0.000000000 | +0.000000000 | still inherits v341 slight regression vs v340d |
+| kitchen | +0.000000000 | +0.000000000 | unchanged |
+
+Artifacts:
+
+```text
+docs/car_model/7-01-v342e-FixedSceneGeneratedUnlockFreeze-Log.md
+docs/car_model/results/v342e_fixed_generated_unlock_freeze_focus6_oracle_gap.json
+docs/car_model/results/v342e_fixed_generated_unlock_freeze_focus6_oracle_gap.md
+outputs/carnet/spcarnet_v342e_fixed_generated_unlock_freeze_probe_20260701
+```
+
+All six scene runs used offline W&B logs under:
+
+```text
+outputs/carnet/spcarnet_v342e_fixed_generated_unlock_freeze_probe_20260701/<scene>/wandb/offline-run-*
+```
+
+Current reflection:
+
+- The reflection loop is working in the sense that it produced a falsifiable
+  diagnosis, rejected unsafe broad relaxations, and yielded a small measurable
+  focus6 improvement.
+- It is not sufficient for paper closure: the macro gain is still too small,
+  and the largest oracle misses remain `bonsai/00035`, `treehill/00011`,
+  `treehill/00016`, `room/00023`, `kitchen/00018`, and several `stump` views.
+- The next work must target view-local fixed/learned arbitration using
+  source-heldout contradiction features, not more scene-level parameter search.
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 ## 2026-07-01 Update: v341 Source-Trust Residual Candidate
 
 This update adds a real opt-in candidate-generation change in:
