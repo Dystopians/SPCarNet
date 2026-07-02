@@ -1,0 +1,565 @@
+{
+  "date": "2026-07-02",
+  "status": "NOT COMPLETE",
+  "current_verdict": "v346-v348 do not surpass Phase-J; Phase-J remains the strongest local method family in current evidence.",
+  "implemented_changes": [
+    "source-heldout image/patch proxy loss for training supervision",
+    "source-heldout calibrated texture anchor inside SurfaceResidualDecoder",
+    "support-normalized smooth residual transport at apply/eval time",
+    "raw/view-gated/applied residual diagnostics in policy evaluation"
+  ],
+  "phasej_reference": {
+    "method": "ours_26000_phasej_guarded_adaptedge_ela",
+    "strict_rgb_scene_wins_vs_clean": "9/9",
+    "strict_rgb_per_view_wins_vs_clean": "244/246",
+    "mean_psnr_gain": 1.331084,
+    "mean_ssim_gain": 0.034702,
+    "mean_lpips_gain": -0.063359,
+    "mean_triangle_reduction_percent": 7.6479
+  },
+  "teacher_residual_oracle_upper_bound": {
+    "same_128_candidate_faces": true,
+    "radius2_alpha0.125": {
+      "psnr_gain": 0.0010359857904577534,
+      "ssim_gain": 2.2078553835550945e-05,
+      "lpips_gain": 1.3890365759531656e-05,
+      "changed_fraction": 0.0012968947659709044,
+      "positive_view_fractions": "1.0/1.0/0.6667"
+    },
+    "radius2_alpha1.0": {
+      "psnr_gain": 0.00610695796717368,
+      "ssim_gain": 0.00011391937732696533,
+      "lpips_gain": 0.00017133603493372598,
+      "changed_fraction": 0.001671262254901961,
+      "positive_view_fractions": "1.0/1.0/0.75"
+    },
+    "radius3_alpha1.0": {
+      "psnr_gain": 0.006463811089862936,
+      "ssim_gain": 8.745988210042317e-05,
+      "lpips_gain": 0.00024011979500452677,
+      "changed_fraction": 0.002275853889943074,
+      "positive_view_fractions": "1.0/1.0/0.8333"
+    },
+    "interpretation": "The support and apply path have positive all-axis headroom; the learned decoder direction/amplitude is the bottleneck."
+  },
+  "runs": [
+    {
+      "name": "v346a_v297_like_transport_no_patch_24step",
+      "audit_json": "outputs/carnet/spcarnet_v346_source_heldout_image_proxy_20260702/v346a_v297_like_transport_no_patch_24step/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 24,
+      "requested_steps": 24,
+      "skip_training": false,
+      "max_faces": 32,
+      "selected_faces": 32,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.125,
+        "apply_gate_strength": 0.0,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 8.111842868530061e-06,
+        "ssim_gain": -5.76178232828776e-07,
+        "lpips_gain": 2.092371384302775e-07
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": null,
+        "mean_abs_view_gated_pred": null,
+        "mean_abs_applied_delta": null,
+        "mean_pred_confidence": null,
+        "mean_view_support_gate": null,
+        "smooth_enabled": null,
+        "smooth_radius": null,
+        "smooth_iterations": null
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v346_source_heldout_image_proxy_20260702/v346a_v297_like_transport_no_patch_24step/policy_val_best"
+    },
+    {
+      "name": "v346b_source_heldout_patch_transport_24step",
+      "audit_json": "outputs/carnet/spcarnet_v346_source_heldout_image_proxy_20260702/v346b_source_heldout_patch_transport_24step/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 24,
+      "requested_steps": 24,
+      "skip_training": false,
+      "max_faces": 32,
+      "selected_faces": 32,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.03125,
+        "apply_gate_strength": 0.0,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 1.93131492901936e-06,
+        "ssim_gain": -1.44044558207194e-07,
+        "lpips_gain": 2.539406220118205e-07
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": null,
+        "mean_abs_view_gated_pred": null,
+        "mean_abs_applied_delta": null,
+        "mean_pred_confidence": null,
+        "mean_view_support_gate": null,
+        "smooth_enabled": null,
+        "smooth_radius": null,
+        "smooth_iterations": null
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v346_source_heldout_image_proxy_20260702/v346b_source_heldout_patch_transport_24step/policy_val_best"
+    },
+    {
+      "name": "v347a_energy_transport_no_anchor_24step",
+      "audit_json": "outputs/carnet/spcarnet_v347_texture_anchor_flowers_20260702/v347a_energy_transport_no_anchor_24step/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 24,
+      "requested_steps": 24,
+      "skip_training": false,
+      "max_faces": 32,
+      "selected_faces": 32,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.03125,
+        "apply_gate_strength": 0.0,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 3.759819000433614e-06,
+        "ssim_gain": -2.980232238769531e-07,
+        "lpips_gain": 1.2231369813283285e-07
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": 0.00848644355150239,
+        "mean_abs_view_gated_pred": 0.00848644355150239,
+        "mean_abs_applied_delta": 1.0875660202043964e-07,
+        "mean_pred_confidence": 0.9166666666666666,
+        "mean_view_support_gate": 0.9166666666666666,
+        "smooth_enabled": null,
+        "smooth_radius": null,
+        "smooth_iterations": null
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v347_texture_anchor_flowers_20260702/v347a_energy_transport_no_anchor_24step/policy_val_best"
+    },
+    {
+      "name": "v347b_texture_anchor_24step",
+      "audit_json": "outputs/carnet/spcarnet_v347_texture_anchor_flowers_20260702/v347b_texture_anchor_24step/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 24,
+      "requested_steps": 24,
+      "skip_training": false,
+      "max_faces": 32,
+      "selected_faces": 32,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.0,
+        "apply_gate_strength": 0.0,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 0.0,
+        "ssim_gain": 0.0,
+        "lpips_gain": 0.0
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": 0.01769027540873847,
+        "mean_abs_view_gated_pred": 0.01769027540873847,
+        "mean_abs_applied_delta": 0.0,
+        "mean_pred_confidence": 0.9166666666666666,
+        "mean_view_support_gate": 0.9166666666666666,
+        "smooth_enabled": null,
+        "smooth_radius": null,
+        "smooth_iterations": null
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v347_texture_anchor_flowers_20260702/v347b_texture_anchor_24step/policy_val_best"
+    },
+    {
+      "name": "v347c_texture_anchor_source_image_24step",
+      "audit_json": "outputs/carnet/spcarnet_v347_texture_anchor_flowers_20260702/v347c_texture_anchor_source_image_24step/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 24,
+      "requested_steps": 24,
+      "skip_training": false,
+      "max_faces": 32,
+      "selected_faces": 32,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.0,
+        "apply_gate_strength": 0.0,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 0.0,
+        "ssim_gain": 0.0,
+        "lpips_gain": 0.0
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": 0.0176526025452006,
+        "mean_abs_view_gated_pred": 0.0176526025452006,
+        "mean_abs_applied_delta": 0.0,
+        "mean_pred_confidence": 0.9166666666666666,
+        "mean_view_support_gate": 0.9166666666666666,
+        "smooth_enabled": null,
+        "smooth_radius": null,
+        "smooth_iterations": null
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v347_texture_anchor_flowers_20260702/v347c_texture_anchor_source_image_24step/policy_val_best"
+    },
+    {
+      "name": "v347d_anchor_structure_gate_policy_probe",
+      "audit_json": "outputs/carnet/spcarnet_v347_texture_anchor_gate_probe_20260702/v347d_anchor_structure_gate_policy_probe/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 0,
+      "requested_steps": 1,
+      "skip_training": true,
+      "max_faces": null,
+      "selected_faces": 32,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.015625,
+        "apply_gate_strength": 0.5,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 3.9436668126668906e-06,
+        "ssim_gain": -3.228584925333659e-07,
+        "lpips_gain": 2.539406220118205e-07
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": 0.01769027540873847,
+        "mean_abs_view_gated_pred": 0.01769027540873847,
+        "mean_abs_applied_delta": 1.1408423154316931e-07,
+        "mean_pred_confidence": 0.9166666666666666,
+        "mean_view_support_gate": 0.9166666666666666,
+        "smooth_enabled": null,
+        "smooth_radius": null,
+        "smooth_iterations": null
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v347_texture_anchor_gate_probe_20260702/v347d_anchor_structure_gate_policy_probe/policy_val_best"
+    },
+    {
+      "name": "v347e_128face_no_anchor_48step",
+      "audit_json": "outputs/carnet/spcarnet_v347_128face_texture_anchor_flowers_20260702/v347e_128face_no_anchor_48step/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 48,
+      "requested_steps": 48,
+      "skip_training": false,
+      "max_faces": 128,
+      "selected_faces": 128,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.125,
+        "apply_gate_strength": 0.0,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 6.068536812649702e-05,
+        "ssim_gain": -1.1771917343139648e-06,
+        "lpips_gain": -9.033828973770142e-07
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": 0.010228462082142358,
+        "mean_abs_view_gated_pred": 0.010228462082142358,
+        "mean_abs_applied_delta": 1.3456719827331654e-06,
+        "mean_pred_confidence": 1.0,
+        "mean_view_support_gate": 1.0,
+        "smooth_enabled": null,
+        "smooth_radius": null,
+        "smooth_iterations": null
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v347_128face_texture_anchor_flowers_20260702/v347e_128face_no_anchor_48step/policy_val_best"
+    },
+    {
+      "name": "v347f_128face_anchor_48step",
+      "audit_json": "outputs/carnet/spcarnet_v347_128face_texture_anchor_flowers_20260702/v347f_128face_anchor_48step/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 48,
+      "requested_steps": 48,
+      "skip_training": false,
+      "max_faces": 128,
+      "selected_faces": 128,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.0625,
+        "apply_gate_strength": 0.0,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 3.9510675319635404e-05,
+        "ssim_gain": -9.08970832824707e-07,
+        "lpips_gain": 1.1734664440155029e-07
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": 0.013782952190555574,
+        "mean_abs_view_gated_pred": 0.013782952190555574,
+        "mean_abs_applied_delta": 8.672576766362757e-07,
+        "mean_pred_confidence": 1.0,
+        "mean_view_support_gate": 1.0,
+        "smooth_enabled": null,
+        "smooth_radius": null,
+        "smooth_iterations": null
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v347_128face_texture_anchor_flowers_20260702/v347f_128face_anchor_48step/policy_val_best"
+    },
+    {
+      "name": "v347g_128face_anchor_structure_safe_48step",
+      "audit_json": "outputs/carnet/spcarnet_v347_128face_texture_anchor_flowers_20260702/v347g_128face_anchor_structure_safe_48step/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 48,
+      "requested_steps": 48,
+      "skip_training": false,
+      "max_faces": 128,
+      "selected_faces": 128,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.03125,
+        "apply_gate_strength": 0.0,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 1.5804389608279717e-05,
+        "ssim_gain": -4.669030507405599e-07,
+        "lpips_gain": 5.320956309636434e-07
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": 0.011894159031731896,
+        "mean_abs_view_gated_pred": 0.011894159031731896,
+        "mean_abs_applied_delta": 3.8405679999205705e-07,
+        "mean_pred_confidence": 1.0,
+        "mean_view_support_gate": 1.0,
+        "smooth_enabled": null,
+        "smooth_radius": null,
+        "smooth_iterations": null
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v347_128face_texture_anchor_flowers_20260702/v347g_128face_anchor_structure_safe_48step/policy_val_best"
+    },
+    {
+      "name": "v347h_no_anchor_smooth_r1_probe",
+      "audit_json": "outputs/carnet/spcarnet_v347_smooth_transport_probe_flowers_20260702/v347h_no_anchor_smooth_r1_probe/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 0,
+      "requested_steps": 1,
+      "skip_training": true,
+      "max_faces": null,
+      "selected_faces": 128,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.125,
+        "apply_gate_strength": 0.0,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 7.500280141048421e-05,
+        "ssim_gain": -1.231829325358073e-06,
+        "lpips_gain": -3.321717182795207e-07
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": 0.010228462082142358,
+        "mean_abs_view_gated_pred": 0.010228462082142358,
+        "mean_abs_applied_delta": 2.1657640966547356e-06,
+        "mean_pred_confidence": 1.0,
+        "mean_view_support_gate": 1.0,
+        "smooth_enabled": true,
+        "smooth_radius": 1,
+        "smooth_iterations": 1
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v347_smooth_transport_probe_flowers_20260702/v347h_no_anchor_smooth_r1_probe/policy_val_best"
+    },
+    {
+      "name": "v347i_anchor_smooth_r1_probe",
+      "audit_json": "outputs/carnet/spcarnet_v347_smooth_transport_probe_flowers_20260702/v347i_anchor_smooth_r1_probe/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 0,
+      "requested_steps": 1,
+      "skip_training": true,
+      "max_faces": null,
+      "selected_faces": 128,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.00390625,
+        "apply_gate_strength": 0.0,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 3.2652944176684664e-06,
+        "ssim_gain": -3.9736429850260414e-08,
+        "lpips_gain": 4.917383193969727e-07
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": 0.013782952190555574,
+        "mean_abs_view_gated_pred": 0.013782952190555574,
+        "mean_abs_applied_delta": 8.977288320129635e-08,
+        "mean_pred_confidence": 1.0,
+        "mean_view_support_gate": 1.0,
+        "smooth_enabled": true,
+        "smooth_radius": 1,
+        "smooth_iterations": 1
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v347_smooth_transport_probe_flowers_20260702/v347i_anchor_smooth_r1_probe/policy_val_best"
+    },
+    {
+      "name": "v347j_anchor_smooth_r2_probe",
+      "audit_json": "outputs/carnet/spcarnet_v347_smooth_transport_probe_flowers_20260702/v347j_anchor_smooth_r2_probe/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 0,
+      "requested_steps": 1,
+      "skip_training": true,
+      "max_faces": null,
+      "selected_faces": 128,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.0625,
+        "apply_gate_strength": 0.0,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 5.1259576784386716e-05,
+        "ssim_gain": -1.142422358194987e-06,
+        "lpips_gain": 1.5205393234888713e-06
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": 0.013782952190555574,
+        "mean_abs_view_gated_pred": 0.013782952190555574,
+        "mean_abs_applied_delta": 2.083781476850769e-06,
+        "mean_pred_confidence": 1.0,
+        "mean_view_support_gate": 1.0,
+        "smooth_enabled": true,
+        "smooth_radius": 2,
+        "smooth_iterations": 1
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v347_smooth_transport_probe_flowers_20260702/v347j_anchor_smooth_r2_probe/policy_val_best"
+    },
+    {
+      "name": "v348a_128face_directional_smooth_no_anchor_600step",
+      "audit_json": "outputs/carnet/spcarnet_v348_directional_smooth_transport_flowers_20260702/v348a_128face_directional_smooth_no_anchor_600step/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 600,
+      "requested_steps": 600,
+      "skip_training": false,
+      "max_faces": 128,
+      "selected_faces": 128,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.0625,
+        "apply_gate_strength": 0.0,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 5.2119297316188806e-05,
+        "ssim_gain": -8.195638656616211e-07,
+        "lpips_gain": 7.282942533493042e-07
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": 0.01769608110087588,
+        "mean_abs_view_gated_pred": 0.01769608110087588,
+        "mean_abs_applied_delta": 2.566492540267973e-06,
+        "mean_pred_confidence": 1.0,
+        "mean_view_support_gate": 1.0,
+        "smooth_enabled": true,
+        "smooth_radius": 2,
+        "smooth_iterations": 1
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v348_directional_smooth_transport_flowers_20260702/v348a_128face_directional_smooth_no_anchor_600step/policy_val_best"
+    },
+    {
+      "name": "v348b_128face_directional_smooth_anchor_600step",
+      "audit_json": "outputs/carnet/spcarnet_v348_directional_smooth_transport_flowers_20260702/v348b_128face_directional_smooth_anchor_600step/v180_perceptual_surface_decoder_audit.json",
+      "created_at": "2026-06-30",
+      "steps": 600,
+      "requested_steps": 600,
+      "skip_training": false,
+      "max_faces": 128,
+      "selected_faces": 128,
+      "policy_val_all_axis_pass": false,
+      "policy_val_tail_safe_pass": false,
+      "flowers_exact_phasej_gate_pass": false,
+      "best_policy": {
+        "alpha": 0.0625,
+        "apply_gate_strength": 0.0,
+        "confidence_threshold": null,
+        "face_reliability_threshold": -1000000000.0,
+        "texture_reliability_threshold": -1000000000.0
+      },
+      "best_gains": {
+        "psnr_gain": 5.7815691993923224e-05,
+        "ssim_gain": -8.99036725362142e-07,
+        "lpips_gain": 1.2243787447611492e-06
+      },
+      "delta_diagnostics": {
+        "changed_fraction": null,
+        "mean_abs_raw_pred": 0.01799882694307588,
+        "mean_abs_view_gated_pred": 0.01799882694307588,
+        "mean_abs_applied_delta": 2.612664104617579e-06,
+        "mean_pred_confidence": 1.0,
+        "mean_view_support_gate": 1.0,
+        "smooth_enabled": true,
+        "smooth_radius": 2,
+        "smooth_iterations": 1
+      },
+      "output_render_dir": "outputs/carnet/spcarnet_v348_directional_smooth_transport_flowers_20260702/v348b_128face_directional_smooth_anchor_600step/policy_val_best"
+    }
+  ]
+}

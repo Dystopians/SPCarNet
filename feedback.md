@@ -2,6 +2,77 @@
 
 Date: 2026-06-28
 
+# 2026-07-02 v346-v348 Feedback Addendum: Learned Residual Direction Is the Bottleneck
+
+New files:
+
+```text
+scripts/car_model/train_perceptual_surface_residual_decoder.py
+docs/car_model/7-02-v346-v348-RepresentationTransport-Log.md
+docs/car_model/results/v348_directional_smooth_transport_flowers_summary.json
+docs/car_model/results/v348_directional_smooth_transport_flowers_summary.md
+outputs/carnet/spcarnet_v346_source_heldout_image_proxy_20260702
+outputs/carnet/spcarnet_v347_texture_anchor_flowers_20260702
+outputs/carnet/spcarnet_v347_128face_texture_anchor_flowers_20260702
+outputs/carnet/spcarnet_v347_smooth_transport_probe_flowers_20260702
+outputs/carnet/spcarnet_v348_directional_smooth_transport_flowers_20260702
+```
+
+Implemented changes:
+
+v346-v348 moved back into the real train/eval pipeline instead of adding another
+selector-only layer. The new interfaces add source-heldout image/patch proxy
+supervision, a source-baked texture residual anchor, support-normalized smooth
+transport, and explicit residual magnitude diagnostics.
+
+Key result:
+
+| method | steps | faces | all-axis pass | Phase-J gate | PSNR gain | SSIM gain | LPIPS gain |
+|---|---:|---:|---|---|---:|---:|---:|
+| v348a directional smooth no anchor | 600 | 128 | false | false | +0.000052119297 | -0.000000819564 | +0.000000728294 |
+| v348b directional smooth anchor | 600 | 128 | false | false | +0.000057815692 | -0.000000899037 | +0.000001224379 |
+
+This is a negative result. Longer training and stronger direction-oriented
+supervision increased raw residual amplitude, but they still did not produce an
+all-axis policy-val pass. Do not describe v346-v348 as beating Phase-J.
+
+Phase-J boundary:
+
+```text
+Phase-J reference: ours_26000_phasej_guarded_adaptedge_ela
+strict RGB scene wins vs clean: 9/9
+strict RGB per-view wins vs clean: 244/246
+mean gain vs clean: +1.331084 PSNR / +0.034702 SSIM / -0.063359 LPIPS
+mean triangle reduction: 7.6479%
+```
+
+Hard lesson:
+
+The support/apply path is not the only blocker. A teacher-residual oracle on
+the same 128 candidate faces gives positive PSNR/SSIM and mostly positive LPIPS
+headroom. The learned residual decoder is the bottleneck: the current feature
+set and loss produce conservative, low-bandwidth, structurally weak residuals.
+Smoothing spreads the signal but also spreads direction errors. Texture anchors
+increase amplitude but do not make the residual target-view compatible.
+
+Recommended next prompt:
+
+```text
+Replace the per-face/UV mean residual decoder with a high-bandwidth
+support-view residual transport model. Keep source-view residual patches or
+local descriptors, condition prediction on target/source geometry and neighbor
+evidence, train with explicit gradient/SSIM-compatible direction objectives,
+and use Phase-J/v345e gates only as final certification. Do not run more
+alpha-grid or selector-only variants until the generator itself can reproduce
+the teacher-residual oracle direction on heldout views.
+```
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
 # 2026-07-01 v335 Feedback Addendum: Guarded Unlock Works, Pure TNC Ranking Fails
 
 New files:

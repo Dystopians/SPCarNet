@@ -2,6 +2,61 @@
 
 Date: 2026-06-28
 
+## 2026-07-02 Follow-up: v346-v348 Representation Transport Diagnostics
+
+Newest evidence files:
+
+```text
+scripts/car_model/train_perceptual_surface_residual_decoder.py
+docs/car_model/7-02-v346-v348-RepresentationTransport-Log.md
+docs/car_model/results/v348_directional_smooth_transport_flowers_summary.json
+docs/car_model/results/v348_directional_smooth_transport_flowers_summary.md
+outputs/carnet/spcarnet_v346_source_heldout_image_proxy_20260702
+outputs/carnet/spcarnet_v347_texture_anchor_flowers_20260702
+outputs/carnet/spcarnet_v347_128face_texture_anchor_flowers_20260702
+outputs/carnet/spcarnet_v347_smooth_transport_probe_flowers_20260702
+outputs/carnet/spcarnet_v348_directional_smooth_transport_flowers_20260702
+```
+
+Implemented train/eval changes:
+
+- source-heldout image/patch proxy loss;
+- calibrated source-texture residual anchor inside the residual decoder;
+- support-normalized smooth residual transport at application/evaluation time;
+- raw/view-gated/applied residual diagnostics for policy validation.
+
+Latest flowers policy-val result:
+
+| method | steps | faces | all-axis pass | Phase-J gate | PSNR gain | SSIM gain | LPIPS gain |
+|---|---:|---:|---|---|---:|---:|---:|
+| v348a directional smooth no anchor | 600 | 128 | false | false | +0.000052119297 | -0.000000819564 | +0.000000728294 |
+| v348b directional smooth anchor | 600 | 128 | false | false | +0.000057815692 | -0.000000899037 | +0.000001224379 |
+
+Current verdict:
+
+```text
+Final status: NOT COMPLETE.
+```
+
+v346-v348 are real train/eval pipeline changes, but they do **not** surpass
+Phase-J. Phase-J remains the strongest local method family in current evidence:
+9/9 strict RGB scene wins vs clean, 244/246 per-view strict RGB wins, mean
++1.331084 PSNR / +0.034702 SSIM / -0.063359 LPIPS, and 7.6479% mean triangle
+reduction.
+
+The useful new finding is the teacher-residual oracle: using the same 128
+candidate faces, oracle residual transport is positive on PSNR/SSIM and mostly
+positive on LPIPS. For example, radius2 alpha1.0 gives +0.006106957967 PSNR,
++0.000113919377 SSIM, +0.000171336035 LPIPS, and 0.001671262255 changed
+fraction. Therefore the support/apply path still has headroom; the current
+learned decoder is the bottleneck because it does not recover the residual
+direction and structure reliably enough.
+
+Next required method change: stop treating this as an alpha/grid problem. The
+next successor to Phase-J needs a higher-bandwidth support-view residual
+transport representation or a neighbor/view-conditioned field, with Phase-J-like
+strict gates retained only as the final safety layer.
+
 ## 2026-07-02 Follow-up: v345e Source-Confirmed PSNR-Dominant Pairwise Certificate
 
 Newest implemented method update:

@@ -148,6 +148,62 @@ def _structure_gate_map(
     }
 
 
+def _box_sum_2d(image: np.ndarray, radius: int) -> np.ndarray:
+    r = max(0, int(radius))
+    img = np.asarray(image, dtype=np.float32)
+    if r <= 0:
+        return img
+    padded = np.pad(img, ((r, r), (r, r)), mode="constant", constant_values=0.0)
+    integral = np.pad(padded, ((1, 0), (1, 0)), mode="constant", constant_values=0.0).cumsum(axis=0).cumsum(axis=1)
+    k = 2 * r + 1
+    return (integral[k:, k:] - integral[:-k, k:] - integral[k:, :-k] + integral[:-k, :-k]).astype(np.float32)
+
+
+def _support_normalized_smooth_delta(
+    delta: np.ndarray,
+    *,
+    radius: int,
+    iterations: int,
+) -> tuple[np.ndarray, dict[str, float | int | bool]]:
+    r = max(0, int(radius))
+    iters = max(0, int(iterations))
+    out = np.asarray(delta, dtype=np.float32)
+    support = np.any(np.abs(out) > 1.0e-8, axis=0)
+    before_support = float(np.mean(support)) if support.size else 0.0
+    before_abs = float(np.mean(np.abs(out))) if out.size else 0.0
+    if r <= 0 or iters <= 0 or not np.any(support):
+        return out, {
+            "smooth_enabled": False,
+            "smooth_radius": int(r),
+            "smooth_iterations": int(iters),
+            "smooth_support_before": float(before_support),
+            "smooth_support_after": float(before_support),
+            "smooth_mean_abs_before": float(before_abs),
+            "smooth_mean_abs_after": float(before_abs),
+        }
+    for _ in range(iters):
+        support_f = support.astype(np.float32)
+        denom = _box_sum_2d(support_f, r)
+        valid = denom > 1.0e-6
+        nxt = np.zeros_like(out, dtype=np.float32)
+        for channel in range(int(out.shape[0])):
+            numer = _box_sum_2d(out[channel] * support_f, r)
+            nxt[channel] = np.where(valid, numer / np.maximum(denom, 1.0e-6), 0.0).astype(np.float32)
+        out = nxt
+        support = valid
+    after_abs = float(np.mean(np.abs(out))) if out.size else 0.0
+    after_support = float(np.mean(np.any(np.abs(out) > 1.0e-8, axis=0))) if out.size else 0.0
+    return out.astype(np.float32), {
+        "smooth_enabled": True,
+        "smooth_radius": int(r),
+        "smooth_iterations": int(iters),
+        "smooth_support_before": float(before_support),
+        "smooth_support_after": float(after_support),
+        "smooth_mean_abs_before": float(before_abs),
+        "smooth_mean_abs_after": float(after_abs),
+    }
+
+
 def _apply_delta(
     parent: np.ndarray,
     delta: np.ndarray,
@@ -159,11 +215,18 @@ def _apply_delta(
     apply_gate_strength: float,
     apply_gate_floor: float,
     apply_gate_eps: float,
+    apply_delta_smooth_radius: int = 0,
+    apply_delta_smooth_iterations: int = 1,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, float | str | bool]]:
     final_delta = float(alpha) * np.asarray(delta, dtype=np.float32)
     if confidence is not None and float(confidence_threshold) > 0.0:
         keep = np.asarray(confidence, dtype=np.float32) >= float(confidence_threshold)
         final_delta = np.where(keep.reshape(1, keep.shape[0], keep.shape[1]), final_delta, 0.0).astype(np.float32)
+    final_delta, smooth_summary = _support_normalized_smooth_delta(
+        final_delta,
+        radius=int(apply_delta_smooth_radius),
+        iterations=int(apply_delta_smooth_iterations),
+    )
     active_mask = np.any(np.abs(final_delta) > 1.0e-8, axis=0)
     gate, gate_summary = _structure_gate_map(
         np.asarray(parent, dtype=np.float32),
@@ -174,6 +237,7 @@ def _apply_delta(
         eps=float(apply_gate_eps),
         active_mask=active_mask,
     )
+    gate_summary.update(smooth_summary)
     applied_delta = final_delta * gate.reshape(1, gate.shape[0], gate.shape[1])
     adapted = np.clip(np.asarray(parent, dtype=np.float32) + applied_delta, 0.0, 1.0).astype(np.float32)
     gate_summary["confidence_threshold"] = float(confidence_threshold)
@@ -1252,6 +1316,12 @@ class SurfaceResidualDecoder(torch.nn.Module):
         lowrank_direct_scale: float = 0.25,
         moe_expert_count: int = 3,
         moe_direct_scale: float = 0.35,
+        surface_texture_feature_offset: int = -1,
+        surface_texture_dim: int = 0,
+        texture_anchor_scale: float = 0.0,
+        texture_anchor_reliability_power: float = 1.0,
+        texture_anchor_floor: float = 0.0,
+        texture_anchor_use_holdout_confidence: bool = False,
         texture_latent_count: int = 0,
         texture_latent_dim: int = 0,
         texture_latent_init_std: float = 0.02,
@@ -1276,6 +1346,12 @@ class SurfaceResidualDecoder(torch.nn.Module):
         self.lowrank_direct_scale = float(lowrank_direct_scale)
         self.moe_expert_count = max(1, int(moe_expert_count))
         self.moe_direct_scale = float(moe_direct_scale)
+        self.surface_texture_feature_offset = int(surface_texture_feature_offset)
+        self.surface_texture_dim = max(0, int(surface_texture_dim))
+        self.texture_anchor_scale = float(texture_anchor_scale)
+        self.texture_anchor_reliability_power = max(0.0, float(texture_anchor_reliability_power))
+        self.texture_anchor_floor = float(np.clip(float(texture_anchor_floor), 0.0, 1.0))
+        self.texture_anchor_use_holdout_confidence = bool(texture_anchor_use_holdout_confidence)
         if self.output_mode not in {"direct", "lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}:
             raise ValueError(f"unknown decoder output mode={self.output_mode}")
         if self.output_mode in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}:
@@ -1348,6 +1424,31 @@ class SurfaceResidualDecoder(torch.nn.Module):
         else:
             residual = torch.tanh(raw[:, :3]) * self.max_delta
             confidence_index = 3
+        if (
+            abs(float(self.texture_anchor_scale)) > 0.0
+            and self.surface_texture_feature_offset >= 0
+            and self.surface_texture_dim >= 5
+            and int(features.shape[1]) >= self.surface_texture_feature_offset + self.surface_texture_dim
+        ):
+            tex_start = int(self.surface_texture_feature_offset)
+            tex_end = tex_start + int(self.surface_texture_dim)
+            tex = features[:, tex_start:tex_end]
+            anchor = tex[:, 2:5]
+            reliability = torch.ones((features.shape[0],), dtype=features.dtype, device=features.device)
+            if self.surface_texture_dim > LOWRANK_TEXTURE_RELIABILITY_INDEX:
+                reliability = torch.clamp(tex[:, LOWRANK_TEXTURE_RELIABILITY_INDEX], 0.0, 1.0)
+            elif self.surface_texture_dim > 21:
+                reliability = torch.clamp(tex[:, 21], 0.0, 1.0)
+            elif self.surface_texture_dim > 9:
+                reliability = torch.clamp(tex[:, 1] * tex[:, 9], 0.0, 1.0)
+            if self.texture_anchor_use_holdout_confidence and self.surface_texture_dim > LOWRANK_VIEW_HOLDOUT_CONFIDENCE_INDEX:
+                reliability = reliability * torch.clamp(tex[:, LOWRANK_VIEW_HOLDOUT_CONFIDENCE_INDEX], 0.0, 1.0)
+            anchor_gate = self.texture_anchor_floor + (1.0 - self.texture_anchor_floor) * torch.pow(
+                torch.clamp(reliability, 0.0, 1.0),
+                self.texture_anchor_reliability_power,
+            )
+            residual = residual + float(self.texture_anchor_scale) * anchor_gate[:, None] * anchor
+            residual = torch.clamp(residual, -self.max_delta, self.max_delta)
         if not self.predict_confidence:
             confidence = torch.ones((raw.shape[0],), dtype=residual.dtype, device=residual.device)
         else:
@@ -2054,6 +2155,8 @@ def _evaluate(
     apply_gate_strength_grid: list[float],
     apply_gate_floor: float,
     apply_gate_eps: float,
+    apply_delta_smooth_radius: int,
+    apply_delta_smooth_iterations: int,
     chunk_size: int,
     ssim_max_side: int,
     lpips_max_side: int,
@@ -2101,6 +2204,11 @@ def _evaluate(
             ys, xs = np.nonzero(mask)
             delta = np.zeros((3, parent.shape[1], parent.shape[2]), dtype=np.float32)
             confidence = np.zeros((parent.shape[1], parent.shape[2]), dtype=np.float32)
+            raw_abs_sum = 0.0
+            gated_abs_sum = 0.0
+            confidence_sum = 0.0
+            view_gate_sum = 0.0
+            pred_count = 0
             if ys.size:
                 faces = np.asarray(z["face_id"], dtype=np.int64)[ys, xs]
                 face_idx, ok = _face_indices(faces, candidate_faces)
@@ -2131,13 +2239,24 @@ def _evaluate(
                     feat = torch.from_numpy(features_np).to(device)
                     face_t = torch.from_numpy(face_idx[start:end].astype(np.int64)).to(device)
                     pred_t, conf_t = model.forward_with_confidence(face_t, feat, texture_bin_t)
-                    pred = pred_t.detach().cpu().numpy().astype(np.float32) * view_gate.reshape(-1, 1)
+                    pred_raw = pred_t.detach().cpu().numpy().astype(np.float32)
+                    conf_raw = conf_t.detach().cpu().numpy().astype(np.float32)
+                    pred = pred_raw * view_gate.reshape(-1, 1)
+                    raw_abs_sum += float(np.sum(np.mean(np.abs(pred_raw), axis=1)))
+                    gated_abs_sum += float(np.sum(np.mean(np.abs(pred), axis=1)))
+                    confidence_sum += float(np.sum(conf_raw))
+                    view_gate_sum += float(np.sum(view_gate))
+                    pred_count += int(pred_raw.shape[0])
                     conf = conf_t.detach().cpu().numpy().astype(np.float32) * view_gate
                     delta[:, ys[start:end], xs[start:end]] = pred.T
                     confidence[ys[start:end], xs[start:end]] = conf
             p_psnr = _psnr(parent, gt)
             p_ssim = image_ssim_chw(parent, gt, int(ssim_max_side))
             p_lp = image_lpips_chw(parent, gt, int(lpips_max_side), lpips_model) if compute_lpips else None
+            mean_abs_raw_pred = float(raw_abs_sum / max(pred_count, 1))
+            mean_abs_view_gated_pred = float(gated_abs_sum / max(pred_count, 1))
+            mean_pred_confidence = float(confidence_sum / max(pred_count, 1))
+            mean_view_support_gate = float(view_gate_sum / max(pred_count, 1))
             for alpha, gate_strength, confidence_threshold, face_reliability_threshold, texture_reliability_threshold in policy_grid:
                 if face_reliability_scores is not None or texture_reliability_scores is not None:
                     # Rebuild reliability gates cheaply without rerunning the MLP.
@@ -2173,6 +2292,8 @@ def _evaluate(
                     apply_gate_strength=float(gate_strength),
                     apply_gate_floor=float(apply_gate_floor),
                     apply_gate_eps=float(apply_gate_eps),
+                    apply_delta_smooth_radius=int(apply_delta_smooth_radius),
+                    apply_delta_smooth_iterations=int(apply_delta_smooth_iterations),
                 )
                 c_psnr = _psnr(adapted, gt)
                 c_ssim = image_ssim_chw(adapted, gt, int(ssim_max_side))
@@ -2208,6 +2329,18 @@ def _evaluate(
                     "candidate_ssim": float(c_ssim),
                     "ssim_gain": float(c_ssim - p_ssim),
                     "changed_fraction": float(np.mean(np.any(np.abs(applied_delta) > (0.5 / 255.0), axis=0))),
+                    "mean_abs_raw_pred": float(mean_abs_raw_pred),
+                    "mean_abs_view_gated_pred": float(mean_abs_view_gated_pred),
+                    "mean_abs_applied_delta": float(np.mean(np.abs(applied_delta))),
+                    "mean_pred_confidence": float(mean_pred_confidence),
+                    "mean_view_support_gate": float(mean_view_support_gate),
+                    "smooth_enabled": bool(gate_summary.get("smooth_enabled", False)),
+                    "smooth_radius": int(gate_summary.get("smooth_radius", 0)),
+                    "smooth_iterations": int(gate_summary.get("smooth_iterations", 0)),
+                    "smooth_support_before": float(gate_summary.get("smooth_support_before", 0.0)),
+                    "smooth_support_after": float(gate_summary.get("smooth_support_after", 0.0)),
+                    "smooth_mean_abs_before": float(gate_summary.get("smooth_mean_abs_before", 0.0)),
+                    "smooth_mean_abs_after": float(gate_summary.get("smooth_mean_abs_after", 0.0)),
                 }
                 if compute_lpips:
                     row.update(
@@ -2257,6 +2390,18 @@ def _evaluate(
             "mean_texture_reliability_keep_fraction": float(np.mean([r["texture_reliability_keep_fraction"] for r in rows])),
             "mean_apply_confidence_keep_fraction": float(np.mean([r["apply_confidence_keep_fraction"] for r in rows])),
             "mean_apply_gate_active": float(np.mean([r["apply_gate_active_mean"] for r in rows])),
+            "mean_abs_raw_pred": float(np.mean([r["mean_abs_raw_pred"] for r in rows])),
+            "mean_abs_view_gated_pred": float(np.mean([r["mean_abs_view_gated_pred"] for r in rows])),
+            "mean_abs_applied_delta": float(np.mean([r["mean_abs_applied_delta"] for r in rows])),
+            "mean_pred_confidence": float(np.mean([r["mean_pred_confidence"] for r in rows])),
+            "mean_view_support_gate": float(np.mean([r["mean_view_support_gate"] for r in rows])),
+            "smooth_enabled": bool(any(r.get("smooth_enabled", False) for r in rows)),
+            "smooth_radius": int(rows[0].get("smooth_radius", 0)) if rows else 0,
+            "smooth_iterations": int(rows[0].get("smooth_iterations", 0)) if rows else 0,
+            "mean_smooth_support_before": float(np.mean([r["smooth_support_before"] for r in rows])),
+            "mean_smooth_support_after": float(np.mean([r["smooth_support_after"] for r in rows])),
+            "mean_smooth_abs_before": float(np.mean([r["smooth_mean_abs_before"] for r in rows])),
+            "mean_smooth_abs_after": float(np.mean([r["smooth_mean_abs_after"] for r in rows])),
             "per_view": rows,
         }
         if compute_lpips:
@@ -2387,6 +2532,8 @@ def _evaluate(
                     apply_gate_strength=float(best_gate_strength),
                     apply_gate_floor=float(apply_gate_floor),
                     apply_gate_eps=float(apply_gate_eps),
+                    apply_delta_smooth_radius=int(apply_delta_smooth_radius),
+                    apply_delta_smooth_iterations=int(apply_delta_smooth_iterations),
                 )
                 save_image_chw(output_dir / "renders" / f"{path.stem}.png", adapted)
                 save_image_chw(output_dir / "gt" / f"{path.stem}.png", gt)
@@ -2515,6 +2662,8 @@ def _target_exact_eval(
     apply_gate_strength: float,
     apply_gate_floor: float,
     apply_gate_eps: float,
+    apply_delta_smooth_radius: int,
+    apply_delta_smooth_iterations: int,
     view_support_gate_mode: str,
     view_support_min_cos: float,
     view_support_min_concentration: float,
@@ -2576,6 +2725,8 @@ def _target_exact_eval(
                 apply_gate_strength=float(apply_gate_strength),
                 apply_gate_floor=float(apply_gate_floor),
                 apply_gate_eps=float(apply_gate_eps),
+                apply_delta_smooth_radius=int(apply_delta_smooth_radius),
+                apply_delta_smooth_iterations=int(apply_delta_smooth_iterations),
             )
         with np.load(eval_paths[apply_path.stem], allow_pickle=False) as z_eval:
             gt = np.asarray(z_eval["rgb_gt"], dtype=np.float32)
@@ -2879,6 +3030,18 @@ def main() -> int:
     parser.add_argument("--lowrank_direct_scale", type=float, default=0.25)
     parser.add_argument("--moe_expert_count", type=int, default=3)
     parser.add_argument("--moe_direct_scale", type=float, default=0.35)
+    parser.add_argument(
+        "--texture_anchor_scale",
+        type=float,
+        default=0.0,
+        help=(
+            "Default-off source-transport anchor. When positive and a surface texture is present, the decoder "
+            "adds the source-baked face/UV residual mean, gated by texture reliability, before policy validation."
+        ),
+    )
+    parser.add_argument("--texture_anchor_reliability_power", type=float, default=1.0)
+    parser.add_argument("--texture_anchor_floor", type=float, default=0.0)
+    parser.add_argument("--texture_anchor_use_holdout_confidence", action="store_true")
     parser.add_argument("--texture_latent_dim", type=int, default=0)
     parser.add_argument("--texture_latent_init_std", type=float, default=0.02)
     parser.add_argument("--texture_latent_reg", type=float, default=0.0)
@@ -2902,6 +3065,18 @@ def main() -> int:
     parser.add_argument("--source_heldout_loss_weight", type=float, default=0.35)
     parser.add_argument("--source_heldout_batch_fraction", type=float, default=0.50)
     parser.add_argument("--source_heldout_loss_every", type=int, default=1)
+    parser.add_argument(
+        "--source_heldout_image_loss_weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Optional source-heldout image/patch proxy loss. When enabled, the source-only surface texture "
+            "must reconstruct heldout-source residual images with the same luma/gradient/highpass structure "
+            "used by --image_loss_mode. This strengthens cross-view transport supervision without target/test GT."
+        ),
+    )
+    parser.add_argument("--source_heldout_image_loss_every", type=int, default=4)
+    parser.add_argument("--source_heldout_image_loss_stride", type=int, default=12)
     parser.add_argument("--alpha_grid", default="0,0.0625,0.125,0.25,0.5,0.75,1")
     parser.add_argument("--apply_confidence_threshold", type=float, default=0.0)
     parser.add_argument("--apply_confidence_threshold_grid", default="")
@@ -2910,6 +3085,16 @@ def main() -> int:
     parser.add_argument("--apply_gate_strength_grid", default="")
     parser.add_argument("--apply_gate_floor", type=float, default=0.0)
     parser.add_argument("--apply_gate_eps", type=float, default=0.02)
+    parser.add_argument(
+        "--apply_delta_smooth_radius",
+        type=int,
+        default=0,
+        help=(
+            "Default-off support-normalized box smoothing radius for predicted residual maps before alpha/gate metrics. "
+            "This turns sparse point residuals into a locally continuous transport field without using target GT."
+        ),
+    )
+    parser.add_argument("--apply_delta_smooth_iterations", type=int, default=1)
     parser.add_argument("--view_support_gate_mode", choices=["none", "lowrank_view_cos"], default="none")
     parser.add_argument("--view_support_min_cos", type=float, default=-1.0)
     parser.add_argument("--view_support_min_concentration", type=float, default=0.0)
@@ -3100,6 +3285,9 @@ def main() -> int:
                 "loss_weight": float(args.source_heldout_loss_weight),
                 "batch_fraction": float(args.source_heldout_batch_fraction),
                 "loss_every": int(args.source_heldout_loss_every),
+                "image_loss_weight": float(args.source_heldout_image_loss_weight),
+                "image_loss_every": int(args.source_heldout_image_loss_every),
+                "image_loss_stride": int(args.source_heldout_image_loss_stride),
                 "surface_texture_summary": dict(source_heldout_surface_texture.get("summary", {})),
             }
             np.savez_compressed(
@@ -3133,6 +3321,10 @@ def main() -> int:
     )
     if int(args.texture_latent_dim) > 0 and surface_feature_texture is None:
         raise ValueError("--texture_latent_dim requires --surface_texture_mode other than none")
+    surface_texture_dim = _surface_texture_dim(surface_feature_texture)
+    surface_texture_feature_offset = _base_feature_dim(str(args.feature_mode)) if surface_texture_dim > 0 else -1
+    if abs(float(args.texture_anchor_scale)) > 0.0 and surface_texture_dim < 5:
+        raise ValueError("--texture_anchor_scale requires --surface_texture_mode other than none")
     lowrank_basis_feature_offset = (
         _base_feature_dim(str(args.feature_mode)) + LOWRANK_TEXTURE_BASIS_OFFSET
         if str(args.decoder_output_mode) in {"lowrank_texture", "lowrank_plus_direct", "patch_view_moe"}
@@ -3156,6 +3348,12 @@ def main() -> int:
         lowrank_direct_scale=float(args.lowrank_direct_scale),
         moe_expert_count=int(args.moe_expert_count),
         moe_direct_scale=float(args.moe_direct_scale),
+        surface_texture_feature_offset=int(surface_texture_feature_offset),
+        surface_texture_dim=int(surface_texture_dim),
+        texture_anchor_scale=float(args.texture_anchor_scale),
+        texture_anchor_reliability_power=float(args.texture_anchor_reliability_power),
+        texture_anchor_floor=float(args.texture_anchor_floor),
+        texture_anchor_use_holdout_confidence=bool(args.texture_anchor_use_holdout_confidence),
         texture_latent_count=int(texture_latent_count),
         texture_latent_dim=int(args.texture_latent_dim),
         texture_latent_init_std=float(args.texture_latent_init_std),
@@ -3295,6 +3493,41 @@ def main() -> int:
                 image_loss_residual_gradient_weight=float(args.image_loss_residual_gradient_weight),
                 device=device,
             )
+        source_heldout_img_loss = torch.zeros((), device=device)
+        if (
+            source_heldout_surface_texture is not None
+            and source_heldout_paths
+            and float(args.source_heldout_image_loss_weight) > 0.0
+            and int(args.source_heldout_image_loss_every) > 0
+            and step % int(args.source_heldout_image_loss_every) == 0
+        ):
+            heldout_img_path = source_heldout_paths[(step - 1) % len(source_heldout_paths)]
+            source_heldout_img_loss = _image_proxy_loss(
+                model,
+                heldout_img_path,
+                candidate_faces,
+                residual_rgb_key=str(args.residual_rgb_key),
+                residual_l1_key=str(args.residual_l1_key),
+                min_l1=float(args.min_l1),
+                min_alpha=float(args.min_alpha),
+                stride=int(args.source_heldout_image_loss_stride),
+                feature_mode=str(args.feature_mode),
+                residual_target_mode=str(args.residual_target_mode),
+                residual_target_gain_floor=float(args.residual_target_gain_floor),
+                residual_target_gain_scale=float(args.residual_target_gain_scale),
+                residual_target_structure_strength=float(args.residual_target_structure_strength),
+                residual_target_structure_floor=float(args.residual_target_structure_floor),
+                residual_target_structure_eps=float(args.residual_target_structure_eps),
+                residual_target_chroma_scale=float(args.residual_target_chroma_scale),
+                surface_feature_texture=source_heldout_surface_texture,
+                image_loss_mode=str(args.image_loss_mode),
+                image_loss_patch_kernel=int(args.image_loss_patch_kernel),
+                image_loss_luma_weight=float(args.image_loss_luma_weight),
+                image_loss_gradient_weight=float(args.image_loss_gradient_weight),
+                image_loss_highpass_weight=float(args.image_loss_highpass_weight),
+                image_loss_residual_gradient_weight=float(args.image_loss_residual_gradient_weight),
+                device=device,
+            )
         mag = main_losses["pred_mag_regularizer"]
         texture_latent_loss = torch.zeros((), device=device)
         if model.texture_embedding is not None:
@@ -3308,6 +3541,7 @@ def main() -> int:
             main_losses["loss"]
             + float(args.source_heldout_loss_weight) * source_heldout_loss
             + float(args.image_loss_weight) * img_loss
+            + float(args.source_heldout_image_loss_weight) * source_heldout_img_loss
             + float(args.mag_reg) * mag
             + float(args.texture_latent_reg) * texture_latent_loss
         )
@@ -3340,6 +3574,7 @@ def main() -> int:
                     if source_heldout_losses is not None
                     else 0.0
                 ),
+                "source_heldout_image_proxy_loss": float(source_heldout_img_loss.detach().cpu()),
                 "texture_latent_loss": float(texture_latent_loss.detach().cpu()),
                 "mean_confidence": float(main_losses["mean_confidence"].detach().cpu()),
                 "mean_confidence_target": float(main_losses["mean_confidence_target"].detach().cpu()),
@@ -3468,6 +3703,8 @@ def main() -> int:
         apply_gate_strength_grid=apply_gate_strength_grid,
         apply_gate_floor=float(args.apply_gate_floor),
         apply_gate_eps=float(args.apply_gate_eps),
+        apply_delta_smooth_radius=int(args.apply_delta_smooth_radius),
+        apply_delta_smooth_iterations=int(args.apply_delta_smooth_iterations),
         chunk_size=int(args.eval_chunk_size),
         ssim_max_side=int(args.policy_val_ssim_max_side),
         lpips_max_side=int(args.policy_val_lpips_max_side),
@@ -3535,6 +3772,8 @@ def main() -> int:
             apply_gate_strength=float(selected_gate_strength),
             apply_gate_floor=float(args.apply_gate_floor),
             apply_gate_eps=float(args.apply_gate_eps),
+            apply_delta_smooth_radius=int(args.apply_delta_smooth_radius),
+            apply_delta_smooth_iterations=int(args.apply_delta_smooth_iterations),
             view_support_gate_mode=str(args.view_support_gate_mode),
             view_support_min_cos=float(args.view_support_min_cos),
             view_support_min_concentration=float(args.view_support_min_concentration),
@@ -3644,6 +3883,12 @@ def main() -> int:
             "lowrank_direct_scale": float(args.lowrank_direct_scale),
             "moe_expert_count": int(args.moe_expert_count),
             "moe_direct_scale": float(args.moe_direct_scale),
+            "texture_anchor_scale": float(args.texture_anchor_scale),
+            "texture_anchor_reliability_power": float(args.texture_anchor_reliability_power),
+            "texture_anchor_floor": float(args.texture_anchor_floor),
+            "texture_anchor_use_holdout_confidence": bool(args.texture_anchor_use_holdout_confidence),
+            "surface_texture_feature_offset": int(surface_texture_feature_offset),
+            "surface_texture_dim": int(surface_texture_dim),
             "texture_latent_dim": int(args.texture_latent_dim),
             "texture_latent_count": int(texture_latent_count),
             "texture_latent_init_std": float(args.texture_latent_init_std),
@@ -3671,6 +3916,9 @@ def main() -> int:
             "source_heldout_loss_weight": float(args.source_heldout_loss_weight),
             "source_heldout_batch_fraction": float(args.source_heldout_batch_fraction),
             "source_heldout_loss_every": int(args.source_heldout_loss_every),
+            "source_heldout_image_loss_weight": float(args.source_heldout_image_loss_weight),
+            "source_heldout_image_loss_every": int(args.source_heldout_image_loss_every),
+            "source_heldout_image_loss_stride": int(args.source_heldout_image_loss_stride),
             "apply_confidence_threshold": float(args.apply_confidence_threshold),
             "apply_confidence_threshold_grid": [float(x) for x in apply_confidence_threshold_grid],
             "policy_val_min_positive_view_fraction": float(args.policy_val_min_positive_view_fraction),
@@ -3688,6 +3936,8 @@ def main() -> int:
             "apply_gate_strength_grid": [float(x) for x in apply_gate_strength_grid],
             "apply_gate_floor": float(args.apply_gate_floor),
             "apply_gate_eps": float(args.apply_gate_eps),
+            "apply_delta_smooth_radius": int(args.apply_delta_smooth_radius),
+            "apply_delta_smooth_iterations": int(args.apply_delta_smooth_iterations),
             "view_support_gate_mode": str(args.view_support_gate_mode),
             "view_support_min_cos": float(args.view_support_min_cos),
             "view_support_min_concentration": float(args.view_support_min_concentration),
@@ -3780,10 +4030,16 @@ def main() -> int:
                 ),
                 "texture_latent/dim": float(args.texture_latent_dim),
                 "texture_latent/count": float(texture_latent_count),
+                "texture_anchor/scale": float(args.texture_anchor_scale),
+                "texture_anchor/reliability_power": float(args.texture_anchor_reliability_power),
+                "texture_anchor/floor": float(args.texture_anchor_floor),
+                "apply_delta_smooth/radius": float(args.apply_delta_smooth_radius),
+                "apply_delta_smooth/iterations": float(args.apply_delta_smooth_iterations),
                 "source_heldout/enabled": float(bool(source_heldout_payload.get("enabled", False))),
                 "source_heldout/source_views": float(source_heldout_payload.get("source_views", 0)),
                 "source_heldout/heldout_views": float(source_heldout_payload.get("heldout_views", 0)),
                 "source_heldout/loss_weight": float(args.source_heldout_loss_weight),
+                "source_heldout/image_loss_weight": float(args.source_heldout_image_loss_weight),
                 "target_exact/ran": float(bool(target_eval)),
                 "target_exact/psnr_gain": float(target_eval.get("summary", {}).get("psnr_gain", 0.0)),
                 "target_exact/ssim_gain": float(target_eval.get("summary", {}).get("ssim_gain", 0.0)),
@@ -3817,6 +4073,7 @@ def main() -> int:
                     "source_views": int(source_heldout_payload.get("source_views", 0)),
                     "heldout_views": int(source_heldout_payload.get("heldout_views", 0)),
                     "loss_weight": float(args.source_heldout_loss_weight),
+                    "image_loss_weight": float(args.source_heldout_image_loss_weight),
                 },
                 "best": best,
             },
