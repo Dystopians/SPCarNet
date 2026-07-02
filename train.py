@@ -3510,10 +3510,14 @@ def training(
             reset_ground_supervision_state("restricted_delaunay")
             need_delaunay = False
 
-        # Supersampling
-        if iteration == start_upsampling:
+        # Supersampling. >= (not ==) so resumed runs (--load_iteration /
+        # --start_checkpoint past these thresholds) train at the same scaling
+        # the checkpoint was trained and is evaluated at; with equality, a
+        # resume at iteration >= 25000 stayed at the init scaling=1 while
+        # eval renders at 4, so fine-tuning actively degraded 4x rendering.
+        if iteration >= start_upsampling:
             triangles.scaling = opt.upscaling_factor
-        if iteration == start_upsampling + 5000:
+        if iteration >= start_upsampling + 5000:
             triangles.scaling = 4
 
         iter_start.record()
