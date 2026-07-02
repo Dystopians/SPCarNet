@@ -1251,6 +1251,295 @@ def _compute_sparse_colmap_depth_loss(
     }
 
 
+# ---------------------------------------------------------------------------
+# GEMS M3 (E2) geometry objectives: free-space hinge + multi-view rendered-
+# depth consistency. Both consume TRAIN-view evidence only (toy GT train
+# depths or COLMAP sparse points on train views); D4 purity is asserted at
+# cache-build time. Disabled by default (enable_freespace_loss /
+# enable_depth_consistency_loss).
+# ---------------------------------------------------------------------------
+
+def _assert_train_only_image_keys(cache_keys, test_cameras, label: str):
+    """D4 purity guard: none of the per-view cache keys may name a test camera."""
+    test_keys = {
+        normalize_image_key(getattr(cam, "image_name", "")) for cam in (test_cameras or [])
+    }
+    overlap = set(cache_keys) & test_keys
+    assert not overlap, (
+        f"[{label}] D4 purity violation: cache built for test cameras: {sorted(overlap)[:8]}"
+    )
+
+
+def _build_freespace_evidence_cache(
+    scene,
+    dataset,
+    samples_per_view: int,
+    point_error_max: float = 2.0,
+    device: str = "cuda",
+) -> dict:
+    """Build per-TRAIN-camera free-space evidence arrays (px, py, depth).
+
+    Route 1 (toy-style scenes): <source_path>/gt/depth/<stem>.npy per train
+    view, subsampled to samples_per_view valid pixels (numpy seed 0).
+    Route 2 (COLMAP scenes): sparse points visible per TRAIN image via the
+    point2D->point3D join, reusing utils.prism_geometry_proxy plumbing with a
+    context built from TRAIN cam_infos only.
+    Depths are camera-z in scene units, matching the renderer's depth maps.
+    """
+    train_cams = scene.getTrainCameras()
+    rng = np.random.default_rng(0)
+    by_image_key = {}
+    source_path = str(getattr(dataset, "source_path", "") or "")
+    gt_depth_dir = os.path.join(source_path, "gt", "depth")
+    if os.path.isdir(gt_depth_dir):
+        source = "gt_depth"
+        for cam in train_cams:
+            raw_stem = os.path.basename(str(getattr(cam, "image_name", ""))).split(".")[0]
+            key = normalize_image_key(getattr(cam, "image_name", ""))
+            depth_path = None
+            for cand in (f"{raw_stem}.npy", f"{key}.npy"):
+                p = os.path.join(gt_depth_dir, cand)
+                if os.path.isfile(p):
+                    depth_path = p
+                    break
+            if depth_path is None:
+                continue
+            depth_np = np.load(depth_path).astype(np.float32)
+            h, w = int(cam.image_height), int(cam.image_width)
+            if depth_np.shape != (h, w):
+                raise ValueError(
+                    f"[FreeSpaceLoss] GT depth shape {depth_np.shape} != camera "
+                    f"resolution {(h, w)} for train view {raw_stem}"
+                )
+            valid = np.isfinite(depth_np) & (depth_np > 0)
+            ys, xs = np.nonzero(valid)
+            if ys.size == 0:
+                continue
+            if samples_per_view > 0 and ys.size > samples_per_view:
+                keep = rng.choice(ys.size, size=int(samples_per_view), replace=False)
+                ys, xs = ys[keep], xs[keep]
+            by_image_key[key] = {
+                "px": torch.from_numpy(xs.astype(np.int64)).to(device),
+                "py": torch.from_numpy(ys.astype(np.int64)).to(device),
+                "depth": torch.from_numpy(depth_np[ys, xs]).to(device=device, dtype=torch.float32),
+            }
+    else:
+        source = "colmap_sparse"
+        colmap_points = getattr(scene.scene_info, "colmap_points3d", None)
+        if colmap_points is None or len(colmap_points) == 0:
+            return {"by_image_key": {}, "source": "none",
+                    "reason": "no <source>/gt/depth dir and no COLMAP sparse points"}
+        # D4 purity: the proxy context is built from TRAIN cam_infos ONLY, so
+        # only point2D->point3D joins of train images can produce evidence.
+        train_infos = list(getattr(scene.scene_info, "train_cameras", []) or [])
+        fs_cfg = GeometryProxyConfig(
+            max_points_per_view=int(samples_per_view),
+            point_error_max=float(point_error_max),
+            compute_normal=False,
+            seed=0,
+            sample_mode="random",
+        )
+        fs_ctx = build_geometry_proxy_context(
+            colmap_points3d=colmap_points,
+            cam_infos=train_infos,
+            cfg=fs_cfg,
+        )
+        for cam in train_cams:
+            corr = collect_view_sparse_depth_correspondences(
+                view=cam, ctx=fs_ctx, cfg=fs_cfg, rng=rng,
+            )
+            if int(corr.get("num_matches", 0)) <= 0:
+                continue
+            by_image_key[normalize_image_key(getattr(cam, "image_name", ""))] = {
+                "px": torch.from_numpy(corr["px"].astype(np.int64)).to(device),
+                "py": torch.from_numpy(corr["py"].astype(np.int64)).to(device),
+                "depth": torch.from_numpy(corr["gt_depth"].astype(np.float32)).to(device),
+            }
+    return {"by_image_key": by_image_key, "source": source, "reason": "ok"}
+
+
+def _compute_freespace_hinge_loss(viewpoint_cam, render_pkg, evidence: dict, lam: float, margin: float):
+    """L_fs = mean(relu(margin*d_ev - D_expected) / d_ev) at the current train
+    view's evidence pixels; gradient flows through the differentiable
+    expected-depth render output."""
+    if evidence is None or lam <= 0.0:
+        return None
+    entry = evidence.get("by_image_key", {}).get(
+        normalize_image_key(getattr(viewpoint_cam, "image_name", "")), None
+    )
+    if entry is None:
+        return {"loss_pure": None, "loss_weighted": None, "n_samples": 0,
+                "reason": "no_evidence_for_view"}
+    depth_map = render_pkg.get("expected_depth", None)
+    if depth_map is None:
+        return {"loss_pure": None, "loss_weighted": None, "n_samples": 0,
+                "reason": "render_missing_output"}
+    pred = depth_map[0]  # expected_depth is [1, H, W] at native camera resolution
+    h, w = int(pred.shape[0]), int(pred.shape[1])
+    px = torch.clamp(entry["px"], 0, w - 1)
+    py = torch.clamp(entry["py"], 0, h - 1)
+    d_ev = entry["depth"].to(device=pred.device, dtype=pred.dtype)
+    valid = d_ev > 1e-6
+    if not bool(valid.any()):
+        return {"loss_pure": None, "loss_weighted": None, "n_samples": 0,
+                "reason": "no_valid_evidence"}
+    d_ev = d_ev[valid]
+    pred_t = pred[py[valid], px[valid]]
+    hinge = torch.relu(float(margin) * d_ev - pred_t) / d_ev
+    loss_pure = hinge.mean()
+    if not torch.isfinite(loss_pure):
+        return {"loss_pure": None, "loss_weighted": None, "n_samples": 0,
+                "reason": "non_finite"}
+    return {"loss_pure": loss_pure, "loss_weighted": float(lam) * loss_pure,
+            "n_samples": int(d_ev.shape[0]), "reason": "ok"}
+
+
+def _dc_camera_forward_world(cam) -> torch.Tensor:
+    """Camera forward (+z) axis in world coords. The repo uses the row-vector
+    convention p_cam = p_world_h @ world_view_transform, so the camera-frame z
+    axis expressed in world coordinates is column 2 of the top-left 3x3."""
+    fwd = cam.world_view_transform[:3, 2].detach().float()
+    return fwd / torch.clamp(torch.linalg.norm(fwd), min=1e-8)
+
+
+def _build_depth_consistency_neighbors(train_cams, k: int, direction_weight: float = 0.35) -> dict:
+    """Per-train-view neighbor lists (indices into train_cams) scored by
+    normalized camera-center distance + view-angle cost (self-contained;
+    mirrors the ELA support-frame scoring without importing it)."""
+    n = len(train_cams)
+    if n <= 1 or int(k) <= 0:
+        return {}
+    centers = torch.stack([cam.camera_center.detach().float() for cam in train_cams]).cpu()
+    dirs = torch.stack([_dc_camera_forward_world(cam) for cam in train_cams]).cpu()
+    median = torch.median(torch.linalg.norm(centers - centers.mean(dim=0, keepdim=True), dim=1))
+    scale = max(float(median.item()), 1e-3)
+    dist = torch.cdist(centers, centers)
+    angle_cost = 1.0 - torch.clamp(dirs @ dirs.T, -1.0, 1.0)
+    score = dist / scale + float(direction_weight) * angle_cost
+    score.fill_diagonal_(float("inf"))
+    k_eff = min(int(k), n - 1)
+    knn = torch.topk(score, k=k_eff, largest=False, dim=1).indices
+    return {
+        normalize_image_key(getattr(train_cams[i], "image_name", "")): [int(j) for j in knn[i]]
+        for i in range(n)
+    }
+
+
+@torch.no_grad()
+def _refresh_depth_consistency_cache(train_cams, triangles, pipe, background) -> dict:
+    """Render all train views (no grad) and cache native-res expected depth."""
+    cache = {}
+    for cam in train_cams:
+        pkg = render(cam, triangles, pipe, background)
+        depth = pkg.get("expected_depth", None)
+        if depth is None:
+            continue
+        cache[normalize_image_key(getattr(cam, "image_name", ""))] = depth.detach().clone()
+        del pkg
+    return cache
+
+
+def _compute_depth_consistency_loss(
+    viewpoint_cam,
+    render_pkg,
+    train_cams,
+    neighbor_map: dict,
+    depth_cache: dict,
+    cycle_state: dict,
+    lam: float,
+    rel_tol: float,
+    pixel_stride: int = 4,
+):
+    """Warp current view A's differentiable expected depth into one cached
+    neighbor B (cycled) and penalize |D_B_sampled - z_B| on the occlusion-
+    consistent mask. Gradient flows through D_A only (world points -> z_B and
+    the grid_sample location); D_B is a detached cache."""
+    import math as _math
+    from triangle_renderer import transform_point_4x3, compute_image_2d_pytorch_exact
+
+    if lam <= 0.0 or not neighbor_map or not depth_cache:
+        return None
+    key_a = normalize_image_key(getattr(viewpoint_cam, "image_name", ""))
+    candidates = [
+        idx for idx in neighbor_map.get(key_a, [])
+        if normalize_image_key(getattr(train_cams[idx], "image_name", "")) in depth_cache
+    ]
+    if not candidates:
+        return {"loss_pure": None, "loss_weighted": None, "n_valid": 0,
+                "neighbor": "", "reason": "no_cached_neighbor"}
+    turn = int(cycle_state.get(key_a, 0))
+    cycle_state[key_a] = turn + 1
+    cam_b = train_cams[candidates[turn % len(candidates)]]
+    key_b = normalize_image_key(getattr(cam_b, "image_name", ""))
+    depth_b = depth_cache[key_b]  # [1, Hb, Wb], detached
+
+    depth_a_map = render_pkg.get("expected_depth", None)
+    if depth_a_map is None:
+        return {"loss_pure": None, "loss_weighted": None, "n_valid": 0,
+                "neighbor": key_b, "reason": "render_missing_output"}
+    depth_a = depth_a_map[0]  # [H, W] native resolution, differentiable
+    h, w = int(depth_a.shape[0]), int(depth_a.shape[1])
+    stride = max(1, int(pixel_stride))
+    ys = torch.arange(0, h, stride, device=depth_a.device)
+    xs = torch.arange(0, w, stride, device=depth_a.device)
+    gy, gx = torch.meshgrid(ys, xs, indexing="ij")
+    gy = gy.reshape(-1)
+    gx = gx.reshape(-1)
+    z_a = depth_a[gy, gx]
+    front = z_a > float(getattr(viewpoint_cam, "znear", 0.01))
+    if not bool(front.any()):
+        return {"loss_pure": None, "loss_weighted": None, "n_valid": 0,
+                "neighbor": key_b, "reason": "no_foreground_depth"}
+    gy, gx, z_a = gy[front], gx[front], z_a[front]
+
+    # Backproject A's pixel centers. ndc2Pix: pix = ((ndc+1)*S - 1)/2, so
+    # ndc = (2*pix + 1)/S - 1; with the repo's projection, x_cam = ndc_x *
+    # tan(FoVx/2) * z (symmetric frustum, w_clip = z).
+    ndc_x = (2.0 * gx.to(depth_a.dtype) + 1.0) / float(w) - 1.0
+    ndc_y = (2.0 * gy.to(depth_a.dtype) + 1.0) / float(h) - 1.0
+    tanfovx = _math.tan(0.5 * float(viewpoint_cam.FoVx))
+    tanfovy = _math.tan(0.5 * float(viewpoint_cam.FoVy))
+    p_cam = torch.stack(
+        [ndc_x * tanfovx * z_a, ndc_y * tanfovy * z_a, z_a, torch.ones_like(z_a)], dim=1
+    )
+    # Row-vector convention: p_cam_h = p_world_h @ W2V  =>  p_world_h = p_cam_h @ W2V^-1.
+    view_inv = torch.inverse(viewpoint_cam.world_view_transform.to(depth_a.dtype))
+    p_world = (p_cam @ view_inv)[:, :3]
+
+    # Project into B with the verified CUDA-exact helpers (differentiable).
+    z_b = transform_point_4x3(p_world, cam_b.world_view_transform.to(depth_a.dtype))[:, 2]
+    w_b, h_b = int(cam_b.image_width), int(cam_b.image_height)
+    pix_b = compute_image_2d_pytorch_exact(
+        p_world, cam_b.full_proj_transform.to(depth_a.dtype), w_b, h_b
+    )
+    # grid_sample(align_corners=False): pixel-center i sits at u = (2i+1)/S - 1.
+    u = (2.0 * pix_b[:, 0] + 1.0) / float(w_b) - 1.0
+    v = (2.0 * pix_b[:, 1] + 1.0) / float(h_b) - 1.0
+    grid = torch.stack([u, v], dim=1).view(1, 1, -1, 2)
+    sampled = F.grid_sample(
+        depth_b.unsqueeze(0).to(depth_a.dtype), grid,
+        mode="bilinear", padding_mode="zeros", align_corners=False,
+    ).reshape(-1)
+    diff = sampled - z_b
+    with torch.no_grad():
+        mask = (
+            (u > -1.0) & (u < 1.0) & (v > -1.0) & (v < 1.0)
+            & (z_b > float(getattr(cam_b, "znear", 0.01)))
+            & (sampled > 1e-6)
+            & (diff.abs() < float(rel_tol) * z_b)
+        )
+    n_valid = int(mask.sum().item())
+    if n_valid == 0:
+        return {"loss_pure": None, "loss_weighted": None, "n_valid": 0,
+                "neighbor": key_b, "reason": "empty_mask"}
+    loss_pure = diff[mask].abs().mean()
+    if not torch.isfinite(loss_pure):
+        return {"loss_pure": None, "loss_weighted": None, "n_valid": 0,
+                "neighbor": key_b, "reason": "non_finite"}
+    return {"loss_pure": loss_pure, "loss_weighted": float(lam) * loss_pure,
+            "n_valid": n_valid, "neighbor": key_b, "reason": "ok"}
+
+
 def _topk_masked_ids(score_t: torch.Tensor, mask_t: torch.Tensor, k: int) -> torch.Tensor:
     device = score_t.device
     k = int(max(0, k))
@@ -3399,6 +3688,61 @@ def training(
             f"lambda={float(getattr(opt, 'lambda_sparse_depth_parent_rollback', 0.0))}"
         )
 
+    # GEMS M3 (E2): free-space hinge evidence (train views only, built once).
+    freespace_evidence = None
+    if bool(getattr(opt, "enable_freespace_loss", False)):
+        freespace_evidence = _build_freespace_evidence_cache(
+            scene=scene,
+            dataset=dataset,
+            samples_per_view=int(getattr(opt, "freespace_samples_per_view", 4096)),
+            point_error_max=float(getattr(opt, "prism_proxy_point_error_max", 2.0)),
+        )
+        _assert_train_only_image_keys(
+            cache_keys=freespace_evidence.get("by_image_key", {}).keys(),
+            test_cameras=scene.getTestCameras(),
+            label="FreeSpaceLoss",
+        )
+        fs_views = len(freespace_evidence.get("by_image_key", {}))
+        print(
+            "[FreeSpaceLoss] enabled: "
+            f"source={freespace_evidence.get('source')}, views={fs_views}/{len(scene.getTrainCameras())}, "
+            f"samples_per_view={int(getattr(opt, 'freespace_samples_per_view', 4096))}, "
+            f"lambda={float(getattr(opt, 'lambda_freespace', 0.01))}, "
+            f"margin={float(getattr(opt, 'freespace_margin', 0.95))}"
+        )
+        if fs_views == 0:
+            print(
+                "[FreeSpaceLoss] disabled for this run: no train-view evidence "
+                f"({freespace_evidence.get('reason', 'unknown')})."
+            )
+            freespace_evidence = None
+
+    # GEMS M3 (E2): multi-view depth-consistency neighbor lists + depth cache.
+    depth_consistency_neighbors = {}
+    depth_consistency_cache = {}
+    depth_consistency_cycle = {}
+    depth_consistency_last_refresh = -1
+    if bool(getattr(opt, "enable_depth_consistency_loss", False)):
+        depth_consistency_neighbors = _build_depth_consistency_neighbors(
+            train_cams=scene.getTrainCameras(),
+            k=int(getattr(opt, "dc_neighbors", 3)),
+        )
+        _assert_train_only_image_keys(
+            cache_keys=depth_consistency_neighbors.keys(),
+            test_cameras=scene.getTestCameras(),
+            label="DepthConsistencyLoss",
+        )
+        print(
+            "[DepthConsistencyLoss] enabled: "
+            f"views={len(depth_consistency_neighbors)}, "
+            f"neighbors={int(getattr(opt, 'dc_neighbors', 3))}, "
+            f"refresh_interval={int(getattr(opt, 'dc_refresh_interval', 500))}, "
+            f"rel_tol={float(getattr(opt, 'dc_rel_tol', 0.05))}, "
+            f"lambda={float(getattr(opt, 'lambda_depth_consistency', 0.05))}"
+        )
+        if len(depth_consistency_neighbors) == 0:
+            print("[DepthConsistencyLoss] disabled for this run: not enough train views.")
+
     prism_state = _prepare_prism_state(
         opt=opt,
         scene=scene,
@@ -3854,6 +4198,71 @@ def training(
             if torch.is_tensor(sparse_parent_rollback_loss) and torch.isfinite(sparse_parent_rollback_loss):
                 loss += sparse_parent_rollback_loss
 
+        # GEMS M3 (E2): free-space hinge on train-view evidence depths.
+        freespace_loss_pure = 0
+        freespace_loss = 0
+        freespace_n_samples = 0
+        freespace_lambda_value = (
+            float(getattr(opt, "lambda_freespace", 0.01))
+            if bool(getattr(opt, "enable_freespace_loss", False)) else 0.0
+        )
+        if freespace_evidence is not None and freespace_lambda_value > 0.0:
+            fs_res = _compute_freespace_hinge_loss(
+                viewpoint_cam=viewpoint_cam,
+                render_pkg=render_pkg,
+                evidence=freespace_evidence,
+                lam=freespace_lambda_value,
+                margin=float(getattr(opt, "freespace_margin", 0.95)),
+            )
+            if fs_res is not None:
+                freespace_n_samples = int(fs_res.get("n_samples", 0))
+                fs_pure = fs_res.get("loss_pure", None)
+                if fs_pure is not None and torch.is_tensor(fs_pure) and torch.isfinite(fs_pure):
+                    freespace_loss_pure = fs_pure
+                    freespace_loss = fs_res["loss_weighted"]
+                    loss += freespace_loss
+
+        # GEMS M3 (E2): multi-view rendered-depth consistency (differentiable
+        # current view vs cached neighbor renders, occlusion-masked).
+        depth_consistency_loss_pure = 0
+        depth_consistency_loss = 0
+        depth_consistency_valid_px = 0
+        depth_consistency_lambda_value = (
+            float(getattr(opt, "lambda_depth_consistency", 0.05))
+            if bool(getattr(opt, "enable_depth_consistency_loss", False)) else 0.0
+        )
+        if depth_consistency_lambda_value > 0.0 and depth_consistency_neighbors:
+            dc_refresh_interval = int(getattr(opt, "dc_refresh_interval", 500))
+            if len(depth_consistency_cache) == 0 or (
+                dc_refresh_interval > 0
+                and iteration % dc_refresh_interval == 0
+                and iteration != depth_consistency_last_refresh
+            ):
+                depth_consistency_cache = _refresh_depth_consistency_cache(
+                    train_cams=scene.getTrainCameras(),
+                    triangles=triangles,
+                    pipe=pipe,
+                    background=background,
+                )
+                depth_consistency_last_refresh = iteration
+            dc_res = _compute_depth_consistency_loss(
+                viewpoint_cam=viewpoint_cam,
+                render_pkg=render_pkg,
+                train_cams=scene.getTrainCameras(),
+                neighbor_map=depth_consistency_neighbors,
+                depth_cache=depth_consistency_cache,
+                cycle_state=depth_consistency_cycle,
+                lam=depth_consistency_lambda_value,
+                rel_tol=float(getattr(opt, "dc_rel_tol", 0.05)),
+            )
+            if dc_res is not None:
+                depth_consistency_valid_px = int(dc_res.get("n_valid", 0))
+                dc_pure = dc_res.get("loss_pure", None)
+                if dc_pure is not None and torch.is_tensor(dc_pure) and torch.isfinite(dc_pure):
+                    depth_consistency_loss_pure = dc_pure
+                    depth_consistency_loss = dc_res["loss_weighted"]
+                    loss += depth_consistency_loss
+
         rend_normal = render_pkg['rend_normal']
         surf_normal = render_pkg['surf_normal']
 
@@ -3987,6 +4396,16 @@ def training(
                     loss_dict["Gs"] = f"{ground_reg_logs.get('ground_reg_adaptive_scale', 1.0):.2f}"
                 if assoc_stats is not None:
                     loss_dict["Gtri"] = int(assoc_stats["is_ground_mask"].sum().item())
+                if bool(getattr(opt, "enable_freespace_loss", False)):
+                    loss_dict["Lfs"] = "{:.3e}".format(
+                        float(freespace_loss_pure.detach().item())
+                        if torch.is_tensor(freespace_loss_pure) else float(freespace_loss_pure)
+                    )
+                if bool(getattr(opt, "enable_depth_consistency_loss", False)):
+                    loss_dict["Ldc"] = "{:.3e}".format(
+                        float(depth_consistency_loss_pure.detach().item())
+                        if torch.is_tensor(depth_consistency_loss_pure) else float(depth_consistency_loss_pure)
+                    )
                 progress_bar.set_postfix(loss_dict)
                 progress_bar.update(10)
             if iteration == opt.iterations:
@@ -4117,6 +4536,24 @@ def training(
                         ),
                         "train/parent_render_rollback_active_pixels": float(parent_render_rollback_active_pixels),
                         "train/parent_render_rollback_lambda": float(parent_render_rollback_lambda_value),
+                        "train/freespace_loss": float(
+                            freespace_loss_pure.detach().item()
+                            if torch.is_tensor(freespace_loss_pure)
+                            else freespace_loss_pure
+                            if isinstance(freespace_loss_pure, (float, int))
+                            else 0.0
+                        ),
+                        "train/freespace_samples": float(freespace_n_samples),
+                        "train/freespace_lambda": float(freespace_lambda_value),
+                        "train/depth_consistency_loss": float(
+                            depth_consistency_loss_pure.detach().item()
+                            if torch.is_tensor(depth_consistency_loss_pure)
+                            else depth_consistency_loss_pure
+                            if isinstance(depth_consistency_loss_pure, (float, int))
+                            else 0.0
+                        ),
+                        "train/depth_consistency_valid_px": float(depth_consistency_valid_px),
+                        "train/depth_consistency_lambda": float(depth_consistency_lambda_value),
                     },
                     step=iteration,
                     log_state=wandb_log_state,

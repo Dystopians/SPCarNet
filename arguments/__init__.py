@@ -180,6 +180,20 @@ class OptimizationParams(ParamGroup):
         self.sparse_colmap_depth_low_error_fraction = 1.0
         self.sparse_colmap_depth_enable_in_recovery = False
         self.sparse_colmap_depth_enable_in_final_finetune = False
+        # GEMS M3 (E2) geometry objectives. Train-view evidence only (D4-pure);
+        # both losses act on the differentiable rendered expected depth.
+        # Free-space hinge: mean(relu(margin*d_ev - D)/d_ev) at evidence pixels.
+        self.enable_freespace_loss = False
+        self.lambda_freespace = 0.01
+        self.freespace_samples_per_view = 4096
+        self.freespace_margin = 0.95
+        # Multi-view rendered-depth consistency between train views (warp the
+        # current view's depth into a cached neighbor render, occlusion-masked).
+        self.enable_depth_consistency_loss = False
+        self.lambda_depth_consistency = 0.05
+        self.dc_neighbors = 3
+        self.dc_refresh_interval = 500
+        self.dc_rel_tol = 0.05
         # Optional render-teacher distillation from a pre-rendered stronger
         # checkpoint. This is disabled by default and is intended for topology-
         # constrained recovery rows that need to regain clean-baseline appearance.
