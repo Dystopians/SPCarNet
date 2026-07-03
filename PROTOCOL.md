@@ -13,7 +13,10 @@ Constitution for all reported numbers. The single evaluation mouth is `run_eval.
 
 ## 0. Frozen claim under test
 
-As in `docs/GEMS_Stage1_Prompt.md` §0, unmodified. Demotions (if any) will be recorded here with links to the killing evidence. Current demotions: **none**.
+As in `docs/GEMS_Stage1_Prompt.md` §0, with the following **documented demotions** (2026-07-02, per the M3/M4 failure paths; full evidence in `LEDGER.md` GOALs #006–#007 and `STAGE1_REPORT.md`):
+- **Lever (2) geometric reliability objectives — DEMOTED to evaluation-only.** Both sanctioned implementation routes are structurally blocked in this representation: the transmittance/opacity route by the model's opacity floor (render opacity ∈ [0.999, 1] for every triangle), and the rendered-depth-penalty route by appearance–geometry entanglement (position updates measurably destroy rendering whether driven by photometric noise or by geometry losses; 2 pre-registered FAILs). g1–g4 remain protocol metrics; the loss implementations remain in-tree, default-off.
+- **Lever (3) teacher distillation — DEMOTED to diagnostic-only** by the sunset rule (3 consecutive below-floor results: garden distill−control +0.039/+0.051/+0.125 dB, each CI excl. 0 — a real but view-conditioning-capped channel).
+- The claim's validated core is **lever (1): evidence-guided pruning under an explicit budget + post-prune features-only fine-tuning**, which meets/exceeds the D3 compaction floor on the real dev scenes (garden B50: BETTER than clean, +0.157 dB / −0.0071 LPIPS, CIs excl. 0; garden B25 and courtyard B50: iso-quality).
 
 ## 1. Datasets (dev only; holdout untouched)
 
