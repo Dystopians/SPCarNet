@@ -502,10 +502,13 @@ class TriangleModel:
       
   
     def training_setup(self, training_args, lr_features, weight_lr, lr_triangles_init):
-      
+        # f_rest historically trains at feature_lr/20; feature_rest_lr_mult
+        # (default 0.05 = 1/20, unchanged) exposes the ratio for distillation
+        # experiments that need view-dependent SH capacity (GEMS E3).
+        rest_mult = float(getattr(training_args, "feature_rest_lr_mult", 0.05))
         l = [
             {'params': [self._features_dc], 'lr': lr_features, "name": "f_dc"},
-            {'params': [self._features_rest], 'lr': lr_features / 20.0, "name": "f_rest"},
+            {'params': [self._features_rest], 'lr': lr_features * rest_mult, "name": "f_rest"},
             {'params': [self.vertices], 'lr': lr_triangles_init, "name": "vertices"},
             {'params': [self.vertex_weight], 'lr': weight_lr, "name": "vertex_weight"}
         ]

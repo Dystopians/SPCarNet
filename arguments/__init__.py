@@ -115,6 +115,8 @@ class OptimizationParams(ParamGroup):
         self.random_background = False
         
         self.feature_lr = 0.0016 # 0.0025
+        # f_rest lr = feature_lr * this (default 1/20 = historical behavior).
+        self.feature_rest_lr_mult = 0.05
         self.max_points = 4000000
 
         # Opacity & weight
