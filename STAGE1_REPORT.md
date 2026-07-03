@@ -56,7 +56,7 @@ Newcomer path: read `LEDGER.md` → `PROTOCOL.md` → run `python -m tools.gems.
 
 ## 7. Open items & risks
 
-- Fresh-environment reproduction check (AT6): NOT yet run (needs a clean clone + env; ~1 h). All rows are config-hashed and the pipeline is deterministic (seed 0), but this box is unchecked.
+- Fresh-environment reproduction check (AT6): **PASS** — fresh `git clone` + documented env, full pipeline re-run (toy B50 importance_ft): PSNR 30.3700 vs recorded 30.3705, |Δ| = 0.0005 dB ≤ 0.05 tolerance (log: `gems_stage1/logs/repro_check3.log`; exact prune keep-count also reproduced). Caveat: the compiled rasterizer came from the documented env, and the working-tree submodule carries local modifications vs its pinned commit — building the extension from a pristine submodule checkout is untested (noted risk).
 - E1′ amendment decision (human): `KILL_REPORT.md` §fallback.
 - Courtyard d1/d2 gated on an up-axis derivation (z_band unfrozen).
 - Toy B50/B25 miss the compaction floor — the one scene where budget compaction costs real quality; geometric-importance variants (free-space-evidence pruning) are the parked, human-gated idea.

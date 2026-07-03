@@ -41,8 +41,8 @@ Never trust chat memory over this file.
 | M3 Geometry Objectives (E2) | **TOMBSTONED — demoted to evaluation-only** | 100 | 2 pre-registered FAILs + structural closure: BOTH sanctioned loss routes are blocked in this representation (opacity floor ∈[0.999,1] forbids transmittance/fade route; position motion breaks appearance for the depth-penalty route — measured repeatedly). Final variant unspent — closed on structural grounds, not exhausted budget; losses remain in-tree (default-off) + g1–g4 remain eval metrics. Floater-PRUNE alternative parked for human review |
 | M4 Teacher Distillation (E3) | **TOMBSTONED by sunset rule — demoted to diagnostic-only** | 100 | 3 consecutive below-floor results (+0.039 → +0.051 → +0.125 dB garden distill−control, all CIs excl. 0 — REAL but sub-floor; toy unstable). Teacher factory + augmented-dataset machinery stays (train-only, D4-pure). Best garden compact model overall came from attempt-1 distill: +0.207 dB over clean at 50% tris |
 | M4 Teacher Distillation (E3) | NOT STARTED | 0 | depends M2; teacher-render-loss hook already exists in train.py |
-| M5 Downstream Proxy & Efficiency (AT5) | NOT STARTED | 0 | depends M2 |
-| M6 Integration & Report (AT6) | NOT STARTED | 0 | depends all |
+| M5 Downstream Proxy & Efficiency (AT5) | DONE (scoped) | 95 | d1/d2 computed on toy for every model row; FPS/VRAM/disk in every metrics.json + report table; compact models strictly cheaper. Gated remainder: courtyard d1/d2 (z_band up-axis derivation, documented) |
+| M6 Integration & Report (AT6) | **DONE — awaiting human gate** | 100 | gems_pipeline = one command/(scene,budget,mode), stamp-resumable, config-hashed; STAGE1_REPORT.md written; fresh-clone repro PASS (Δ 0.0005 dB); audit green on all reported rows. NOTE: repro attempts 1–2 died silently (external SIGKILL, cause undetermined; improperly detached launches suspected); attempt 3, properly detached, passed |
 
 ## ITERATION BUDGETS & SUNSET WATCH
 
