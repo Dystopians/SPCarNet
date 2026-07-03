@@ -1,4 +1,15 @@
-# GEMS STAGE ONE — LEDGER
+# GEMS LEDGER (Stage One COMPLETE → Stage Two ACTIVE)
+
+## STAGE TWO ENTRY (2026-07-02)
+- **Human approval of Stage-1→Stage-2 transition RECORDED**: user directive "按照你认为最好的方式来,在你认为完整完成了stage1时进行下面的任务 docs/GEMS_Stage2_Prompt.md" — explicit instruction to proceed to Stage Two upon Stage-One completion, given with full knowledge of the honest Stage-One state (all E-tests FAIL; compaction core validated; report + recommendation delivered). Stage One completed 2026-07-02 (commit 05adc6c).
+- Entry conditions verified: STAGE1_REPORT ✓ (candidate-completion + this approval); fresh-env repro PASS (Δ0.0005 dB, same day); `audit_test_path` on final artifact: first run RED — scope artifact (train-side `teacher_factory.py` inside the eval-audited `tools/gems/`; dynamic eval-path check was clean) → relocated to `tools/gems_train/` → **AUDIT GREEN** (`eval/stage2_entry_audit2`).
+- Stage-Two state files: `CLAIMS.md` (C1 full; C2 demoted-to-measurement; C3 sans teacher; C4 bounded-to-preservation + NON-CLAIMS), `MATRIX.md` (cells+status). Stage-Two goals continue the same GOAL numbering.
+
+### GOAL #009 — Stage-2 bootstrap + first Tier-1 batch [Matrix: E1-PARETO S-REND] — 2026-07-02 — IN PROGRESS
+- CLAIMS.md + MATRIX.md written; scene registry expanded to all 9 M360 scenes (frozen ingestion configs: outdoor images_4 / indoor images_2, llff8; ONE FT config all scenes per D7 — features 0.0016, positions/weights 0; NOTE: indoor originals trained with update_indoor lrs, our FT config is deliberately uniform).
+- PREDICTION (serves C1/C3): B5 (evidence prune + features-FT) at B50 lands within −0.10 dB of clean on ≥7/8 remaining S-REND scenes (garden precedent: above clean); B4 (no-FT) within −0.20; any scene failing → bounds C1 and goes to E9-FAIL.
+- RUNNING: 8 scenes × {B5, B4} @B50, tag s2, 4 detached chains (GPUs 1/2/3/5), logs `gems_stage1/logs/s2_gpu*.log`. Remaining for E1-PARETO S-REND: B25/B12.5 budgets, B2/B3 baselines, aggregate analysis.
+- SS3DM acquisition (D-1) = next blocking cell after this batch.
 
 Persistent memory for the GEMS Stage One loop (`docs/GEMS_Stage1_Prompt.md`, v1.0, 2026-07-02).
 At every /goal: read this file top-to-bottom, then PROTOCOL.md (once it exists), then act.
@@ -153,3 +164,7 @@ Never trust chat memory over this file.
 - Storage preflight (manual): /data 42G free ⚠ BELOW 50G FLOOR; / 5.9T free ✓; /dev/shm full ✗. → DEC-001.
 - SS3DM verified ABSENT → DEC-003.
 - Next: GOAL #002 — complete M0/AT0: triangle counts from .pt, executed end-to-end render+metrics on garden clean checkpoint, `tools/storage_preflight.py`, wall-clock estimate, dev_drive_A candidate verification (ETH3D GT availability), finalize ASSET_MAP.
+
+### GOAL #009 RESULT (2026-07-03) — E1-PARETO S-REND B50 slice: PREDICTION MET, SUPPORTS C1+C3
+- 8 new scenes evaluated vs same-mouth clean rows (evals `eval/<scene>_{clean30k_v1,B50_importance_ft_s2,B50_importance_noft_s2}`): B5 within −0.10 dB on 7/8 (predicted ≥7); ABOVE clean with CI excl. 0 on bicycle/kitchen/bonsai/stump; LPIPS improved 8/8. Full9 incl. garden: 8/9 within −0.10, 5/9 above clean, 9/9 LPIPS better at half triangles. flowers FAILS (−0.147 CI[−0.31,−0.00]; also B4 −0.238) → E9-FAIL taxonomy candidate (hard low-texture scene; prune damage not FT-recoverable, cf. toy selection-effect).
+- B25 batch launched (same chains/tag s2), B12.5 to follow; D-1 SS3DM acquisition = next blocking cell.
