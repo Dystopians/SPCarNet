@@ -367,6 +367,10 @@ def main():
 
     os.makedirs(args.out, exist_ok=True)
     manifest_path = os.path.join(args.out, "manifest.json")
+    prior_scenes = {}
+    if os.path.isfile(manifest_path):
+        with open(manifest_path) as f:
+            prior_scenes = json.load(f).get("scenes", {})
     manifest = {"generator": "tools/gems/report/qual_grids.py",
                 "frozen_rules": {
                     "best": "argmax banked per-view PSNR of the scene's B50 B5 row",
@@ -383,7 +387,7 @@ def main():
                                        "g3_floaters.npz floater_tri_ids",
                 },
                 "eval_root": EVAL_ROOT,
-                "scenes": {}}
+                "scenes": prior_scenes}
     for scene in args.scenes:
         build_grid(scene, GRIDS[scene], args.out, manifest)
         with open(manifest_path, "w") as f:

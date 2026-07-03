@@ -10,6 +10,283 @@
  },
  "eval_root": "/data/peilincai/gems_stage1/eval",
  "scenes": {
+  "ss3dm_town01": {
+   "suite": "S-GEO",
+   "view_selection": [
+    {
+     "scene": "ss3dm_town01",
+     "rule": "(a) best-case = argmax per-view PSNR",
+     "banked_array": "/data/peilincai/gems_stage1/eval/ss3dm_town01_B50_geo_v1/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 57,
+     "chosen_view": "front_right_00000072",
+     "psnr_at_view_b50row": 27.714664459228516,
+     "note": ""
+    },
+    {
+     "scene": "ss3dm_town01",
+     "rule": "(b) median-PSNR = image_names[argsort(psnr)[(n-1)//2]]",
+     "banked_array": "/data/peilincai/gems_stage1/eval/ss3dm_town01_B50_geo_v1/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 57,
+     "chosen_view": "front_left_00000032",
+     "psnr_at_view_b50row": 24.40973472595215,
+     "note": "(sorted-rank 28 of 57)"
+    },
+    {
+     "scene": "ss3dm_town01",
+     "rule": "(c) failure = argmin per-view PSNR (no E9 case for this scene)",
+     "banked_array": "/data/peilincai/gems_stage1/eval/ss3dm_town01_B50_geo_v1/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 57,
+     "chosen_view": "front_right_00000000",
+     "psnr_at_view_b50row": 9.412681579589844,
+     "note": ""
+    }
+   ],
+   "views": {
+    "best": "front_right_00000072",
+    "median": "front_left_00000032",
+    "failure": "front_right_00000000"
+   },
+   "crop_windows": {
+    "best": {
+     "y0": 256,
+     "x0": 0,
+     "h": 270,
+     "w": 480,
+     "mean_err_in_window": 0.009115026026596258,
+     "rule": "argmin-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "failure": {
+     "y0": 256,
+     "x0": 480,
+     "h": 270,
+     "w": 480,
+     "mean_err_in_window": 0.384118968822338,
+     "rule": "argmax-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "median": null
+   },
+   "depth_vmax_by_view": {
+    "front_right_00000072": 38.55942916870117,
+    "front_left_00000032": 56.8629035949707,
+    "front_right_00000000": 50.58863830566406
+   },
+   "rows": {
+    "clean": {
+     "eval_row": "ss3dm_town01_clean30k_geo_v1",
+     "checkpoint": "/data/peilincai/gems_stage1/models/ss3dm_town01_clean30k/point_cloud/iteration_30000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/ss3dm_town01_clean30k_geo_v1/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 57606,
+     "psnr_mean_banked": 22.57353401184082
+    },
+    "B50 B5": {
+     "eval_row": "ss3dm_town01_B50_geo_v1",
+     "checkpoint": "/data/peilincai/gems_stage1/models/ss3dm_town01_B50_importance_ft_s2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/ss3dm_town01_B50_geo_v1/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 73817,
+     "psnr_mean_banked": 22.634313583374023
+    },
+    "B25 B5": {
+     "eval_row": "ss3dm_town01_B25_importance_ft_s2",
+     "checkpoint": "/data/peilincai/gems_stage1/models/ss3dm_town01_B25_importance_ft_s2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/ss3dm_town01_B25_importance_ft_s2/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 62403,
+     "psnr_mean_banked": 22.37320899963379
+    },
+    "B6R": {
+     "eval_row": "b6r_ss3dm_town01_B50_v1",
+     "checkpoint": "/data/peilincai/gems_stage1/models/b6r_ss3dm_town01_B50_v1/point_cloud/iteration_50000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/b6r_ss3dm_town01_B50_v1/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 60656,
+     "psnr_mean_banked": 22.60726547241211
+    }
+   },
+   "output_png": "/data/peilincai/mesh-splatting/RESULTS/figures/qual/ss3dm_town01_qual_grid.png"
+  },
+  "ss3dm_town06": {
+   "suite": "S-GEO",
+   "view_selection": [
+    {
+     "scene": "ss3dm_town06",
+     "rule": "(a) best-case = argmax per-view PSNR",
+     "banked_array": "/data/peilincai/gems_stage1/eval/ss3dm_town06_B50_geo_v1/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 57,
+     "chosen_view": "front_right_00000064",
+     "psnr_at_view_b50row": 28.898128509521484,
+     "note": ""
+    },
+    {
+     "scene": "ss3dm_town06",
+     "rule": "(b) median-PSNR = image_names[argsort(psnr)[(n-1)//2]]",
+     "banked_array": "/data/peilincai/gems_stage1/eval/ss3dm_town06_B50_geo_v1/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 57,
+     "chosen_view": "front_00000144",
+     "psnr_at_view_b50row": 22.258909225463867,
+     "note": "(sorted-rank 28 of 57)"
+    },
+    {
+     "scene": "ss3dm_town06",
+     "rule": "(c) failure = E9-taxonomy view",
+     "banked_array": "/data/peilincai/gems_stage1/eval/ss3dm_town06_B50_geo_v1/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 57,
+     "chosen_view": "front_00000088",
+     "psnr_at_view_b50row": 18.282875061035156,
+     "note": "[E9 case02 (town06 B50 S-GEO fail)]"
+    }
+   ],
+   "views": {
+    "best": "front_right_00000064",
+    "median": "front_00000144",
+    "failure": "front_00000088"
+   },
+   "crop_windows": {
+    "best": {
+     "y0": 224,
+     "x0": 32,
+     "h": 270,
+     "w": 480,
+     "mean_err_in_window": 0.008549874623616536,
+     "rule": "argmin-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "failure": {
+     "y0": 0,
+     "x0": 0,
+     "h": 270,
+     "w": 480,
+     "mean_err_in_window": 0.0999072868441358,
+     "rule": "argmax-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "median": null
+   },
+   "depth_vmax_by_view": {
+    "front_right_00000064": 44.78791809082031,
+    "front_00000144": 39.437767028808594,
+    "front_00000088": 53.896175384521484
+   },
+   "rows": {
+    "clean": {
+     "eval_row": "ss3dm_town06_clean30k_geo_v1",
+     "checkpoint": "/data/peilincai/gems_stage1/models/ss3dm_town06_clean30k/point_cloud/iteration_30000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/ss3dm_town06_clean30k_geo_v1/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 86992,
+     "psnr_mean_banked": 22.2131290435791
+    },
+    "B50 B5": {
+     "eval_row": "ss3dm_town06_B50_geo_v1",
+     "checkpoint": "/data/peilincai/gems_stage1/models/ss3dm_town06_B50_importance_ft_s2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/ss3dm_town06_B50_geo_v1/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 133567,
+     "psnr_mean_banked": 21.76618003845215
+    },
+    "B25 B5": {
+     "eval_row": "ss3dm_town06_B25_importance_ft_s2",
+     "checkpoint": "/data/peilincai/gems_stage1/models/ss3dm_town06_B25_importance_ft_s2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/ss3dm_town06_B25_importance_ft_s2/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 92458,
+     "psnr_mean_banked": 20.72444725036621
+    }
+   },
+   "output_png": "/data/peilincai/mesh-splatting/RESULTS/figures/qual/ss3dm_town06_qual_grid.png"
+  },
+  "toy_parking": {
+   "suite": "S-GEO/S-DOWN (toy)",
+   "view_selection": [
+    {
+     "scene": "toy_parking",
+     "rule": "(a) best-case = argmax per-view PSNR",
+     "banked_array": "/data/peilincai/gems_stage1/eval/toy_parking_B50_importance_ft_e1v2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 18,
+     "chosen_view": "00050",
+     "psnr_at_view_b50row": 36.57862854003906,
+     "note": ""
+    },
+    {
+     "scene": "toy_parking",
+     "rule": "(b) median-PSNR = image_names[argsort(psnr)[(n-1)//2]]",
+     "banked_array": "/data/peilincai/gems_stage1/eval/toy_parking_B50_importance_ft_e1v2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 18,
+     "chosen_view": "00035",
+     "psnr_at_view_b50row": 32.07482147216797,
+     "note": "(sorted-rank 8 of 18)"
+    },
+    {
+     "scene": "toy_parking",
+     "rule": "(c) failure = E9-taxonomy view",
+     "banked_array": "/data/peilincai/gems_stage1/eval/toy_parking_B50_importance_ft_e1v2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 18,
+     "chosen_view": "00035",
+     "psnr_at_view_b50row": 32.07482147216797,
+     "note": "[E9 case03/04/09 (train-coverage gap view)]"
+    }
+   ],
+   "views": {
+    "best": "00050",
+    "median": "00035",
+    "failure": "00035"
+   },
+   "crop_windows": {
+    "best": {
+     "y0": 368,
+     "x0": 160,
+     "h": 375,
+     "w": 500,
+     "mean_err_in_window": 0.001374080078125,
+     "rule": "argmin-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "failure": {
+     "y0": 368,
+     "x0": 0,
+     "h": 375,
+     "w": 500,
+     "mean_err_in_window": 0.006872047037760416,
+     "rule": "argmax-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "median": null
+   },
+   "depth_vmax_by_view": {
+    "00050": 16.249553680419922,
+    "00035": 4.254026412963867
+   },
+   "rows": {
+    "clean": {
+     "eval_row": "toy_parking_clean30k_v1",
+     "checkpoint": "/data/peilincai/gems_stage1/models/toy_parking_clean30k/point_cloud/iteration_30000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/toy_parking_clean30k_v1/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 18565,
+     "psnr_mean_banked": 30.89434814453125
+    },
+    "B50 B5": {
+     "eval_row": "toy_parking_B50_importance_ft_e1v2",
+     "checkpoint": "/data/peilincai/gems_stage1/models/toy_parking_B50_importance_ft_e1v2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/toy_parking_B50_importance_ft_e1v2/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 26588,
+     "psnr_mean_banked": 30.370500564575195
+    },
+    "B25 B5": {
+     "eval_row": "toy_parking_B25_importance_ft_e1v2",
+     "checkpoint": "/data/peilincai/gems_stage1/models/toy_parking_B25_importance_ft_e1v2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/toy_parking_B25_importance_ft_e1v2/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 15685,
+     "psnr_mean_banked": 29.765995025634766
+    },
+    "B6R": {
+     "eval_row": "e2r_toy_parking_B50_v1",
+     "checkpoint": "/data/peilincai/gems_stage1/models/e2r_toy_parking_B50_v1/point_cloud/iteration_50000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/e2r_toy_parking_B50_v1/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 19200,
+     "psnr_mean_banked": 29.987857818603516
+    }
+   },
+   "output_png": "/data/peilincai/mesh-splatting/RESULTS/figures/qual/toy_parking_qual_grid.png"
+  },
   "garden": {
    "suite": "S-REND",
    "view_selection": [
