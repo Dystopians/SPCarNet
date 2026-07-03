@@ -425,7 +425,7 @@ def stage_eval(scene: str, final_ckpt: str, eval_dir: str, gpu,
 def parse_args():
     p = argparse.ArgumentParser(description="GEMS M2 budget-engine pipeline")
     p.add_argument("--scene", required=True,
-                   choices=["garden", "toy_parking", "courtyard"])
+                   choices=None)  # validated against tools/gems/scenes.py SCENES in main()
     p.add_argument("--source-ckpt", required=True,
                    help="source point_cloud_state_dict.pt (clean baseline)")
     p.add_argument("--budget", type=float, required=True,

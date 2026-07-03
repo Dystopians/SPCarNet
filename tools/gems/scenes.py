@@ -134,3 +134,25 @@ SCENES: dict = {
         exists=True,
     ),
 }
+
+# Stage Two S-REND expansion (MATRIX.md): the remaining Mip-NeRF360 scenes at
+# the clean-baseline ingestion configs (outdoor images_4, indoor images_2,
+# llff8, -r -1). COLMAP sparse declared for g1; no GT mesh (g4/d skipped).
+_M360 = "/data/peilincai/mesh_datasets/mipnerf360"
+for _name, _imgdir in [
+    ("bicycle", "images_4"), ("flowers", "images_4"), ("stump", "images_4"),
+    ("treehill", "images_4"), ("room", "images_2"), ("counter", "images_2"),
+    ("kitchen", "images_2"), ("bonsai", "images_2"),
+]:
+    SCENES[_name] = SceneSpec(
+        name=_name,
+        source_path=f"{_M360}/{_name}",
+        images=_imgdir,
+        resolution=-1,
+        white_background=False,
+        split="llff8",
+        gt={"colmap_sparse": f"{_M360}/{_name}/sparse/0"},
+        roi=None,
+        units_per_meter=None,
+        exists=True,
+    )

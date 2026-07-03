@@ -48,7 +48,7 @@ D4 purity (asserted in code, recorded in the manifest):
     measure PSNR(teacher) vs PSNR(base); it never enters the dataset.
 
 CLI (LEDGER GOAL #007 spec):
-  python -m tools.gems.teacher_factory --scene <name> --checkpoint <B50 pt> \
+  python -m tools.gems_train.teacher_factory --scene <name> --checkpoint <B50 pt> \
       --out-root /data/peilincai/gems_stage1/datasets_aug/<scene>_B50_teacher \
       [--kout-frac 0.12] [--jitter-count-frac 0.5] [--interp-count-frac 0.5] \
       [--gpu N]
@@ -782,7 +782,7 @@ def main() -> int:
     except Exception:
         commit = "unknown"
     manifest = {
-        "tool": "tools/gems/teacher_factory.py",
+        "tool": "tools.gems_train.teacher_factory.py",
         "goal": "LEDGER GOAL #007 (E3, M4 teacher distillation)",
         "command": sys.argv,
         "git_commit": commit,
