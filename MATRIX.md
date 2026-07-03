@@ -14,7 +14,7 @@ Methods: B0 clean · B1 no-op · B2 random+FT(safe) · B3 QEM+FT · B4 evidence 
 | cell | tier | scope | status | notes |
 |---|---|---|---|---|
 | D-1 SS3DM acquisition | T1-blocking | 4 seqs (Town01/02/03/06, 150f×6cam×5lidar) + GT meshes | **DONE-PASS** | ~15 GB via Zip64 central-directory range extraction (of 137 GB); CRC-verified; `mesh_datasets/SS3DM/ACQUISITION_LOG.md` |
-| D-1b SS3DM ingestion | T1 | scenario.pt(pickle)→COLMAP-format per sequence + scene registry + split policy; verify with readColmapSceneInfo + 1 render | RUNNING (builder agent) | anchor-independent (R0.2 allows) |
+| D-1b SS3DM ingestion | T1 | 4 towns → COLMAP + registry + split.json (393/57 whole-frame holdout) | **DONE** | left-handed CARLA frame mirrored (det=−1, projection-invariant); depth-PNG scale 65535/1000 decoded; 3 front cams × 150 fr @-r2 (VRAM-frozen policy); GT OBJs are cm (×0.01); Town06 g4 RAM risk flagged; B0 trainings pending |
 | D-2 toy variants ×2 | T1 | builder re-runs, altered layout/occlusion | TODO | tools/gems/build_toy_parking.py parameterization |
 | E1-PARETO S-REND | T1 | {50,25,12.5} × {B2,B3,B4,B5} × 9 scenes (+B6,B7 diagnostic on 2 scenes) | B50 slice DONE-PASS (B5 within −0.10: 8/9 scenes incl. garden, ABOVE clean 5/9, LPIPS better 9/9; flowers −0.147 → E9-FAIL; B4 within −0.20: 8/9). B25 slice DONE (floor 3/9 at 75% reduction; FT helps 9/9); B12.5 TODO | garden rows exist from Stage One |
 | E1-PARETO S-GEO | T1 | same on SS3DM+toy | TODO (blocked D-1 for SS3DM; toy rows partially exist) | |
