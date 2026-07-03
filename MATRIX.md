@@ -19,17 +19,18 @@ Methods: B0 clean · B1 no-op · B2 random+FT(safe) · B3 QEM+FT · B4 evidence 
 | E1-PARETO S-REND | T1 | {50,25,12.5} × {B2,B3,B4,B5} × 9 scenes (+B6,B7 diagnostic on 2 scenes) | B50 slice DONE-PASS (B5 within −0.10: 8/9 scenes incl. garden, ABOVE clean 5/9, LPIPS better 9/9; flowers −0.147 → E9-FAIL; B4 within −0.20: 8/9). B50+B25+B12.5 slices DONE; B12.5 dominance: importance beats random +5.23 dB mean, 9/9 CI (GOAL #011); remaining: B2/B3 columns at B50/B25, B6.25 T2 | garden rows exist from Stage One |
 | E1-PARETO S-GEO | T1 | same on SS3DM+toy | TODO (blocked D-1 for SS3DM; toy rows partially exist) | |
 | E2-GEO tables | T1 | g1–g4 all scenes + evidence-vs-error analysis | TODO (metrics auto-computed in every eval; analysis script needed) | |
-| E3-REND tables | T1 | per-scene S-REND tables + teacher-headroom analysis | TODO (headroom analysis partially done in Stage One) | |
-| E4-EFF | T1 | tris/disk/VRAM/FPS@2res + pipeline overhead | TODO (1-res numbers exist everywhere; add 2nd res + overhead table) | |
+| E3-REND tables | T1 | per-scene tables + teacher-headroom (T2/T6/F7) | **DONE** (evidence pack v1, commit 3dce47c) | |
+| E4-EFF | T1 | T4 + half-res FPS bench + pipeline-overhead column | **DONE** (contention caveat in T4 header; laptop bench waived) | |
 | E5-DOWN | T1 | occupancy confusion, ESDF/costmap error, ≥500 maneuvers | TODO (d1/d2@200 exist; extend to 500 + ESDF; SS3DM pending) | |
-| E6-ABL | T1 | importance families; schedule; geometry losses; teacher variants — @B50, 2 S-REND + 1 S-GEO scene | TODO (several cells already exist from Stage One variants — map them in) | |
+| E6-ABL | T1 | importance families; schedule; geometry losses; teacher variants — @B50, 2 S-REND + 1 S-GEO scene | importance-families sub-cell RUNNING (GOAL #012: pixels_total vs max_blending_max vs ckpt_importance_score @B50 on garden/kitchen/town01, tags abl_blend/abl_ckptimp); schedule/geometry-losses/teacher sub-cells map to Stage One variants (E1 v3 iterative, M3 tombstone, E3 tombstone) — mapping TODO | town01 max_blending keep-set degenerate-equal to pixels_total at B50 (pre-registered noise-floor row) |
 | E7-SENS | T2 | 3 seeds; dev-vs-full res; 3-point loss weights | TODO | |
 | E8-ROBUST | T2 | 50% view drop; pose noise ×2; S-GEN | TODO | |
 | E9-FAIL | T1 | ≥10 curated failure panels + diagnoses | **DONE** (13 cases, 5 mechanism families; `gems_stage1/analysis/e9_failure_taxonomy/TAXONOMY.md`; LEDGER #R-09) | 0 candidates rejected; 2 kept with qualifications |
-| E10-STATS | T1 | CIs everywhere + multiple-comparisons caveat | ONGOING (CI discipline already universal) | |
+| E10-STATS | T1 | CIs everywhere + multiple-comparisons caveat | **DONE** (universal CI discipline; caveat EXPERIMENT_REPORT §5; per-scene win/loss in T1) | |
 | E11-QUAL | T1 | qualitative grids + before/after maps; (T2) 2 videos | TODO | |
-| H1 row | T1 | v106 historical context row | TODO (locate v106 artifacts) | |
-| R1 row | T1 | 3DGS + public compression at matched storage | TODO (needs 3DGS training env check) | |
+| H1 row | T1 | v106 historical context row | RUNNING (GOAL #013: locating v106 artifacts) | |
+| R1 row | T1 | 3DGS + public compression at matched storage | RUNNING (GOAL #013: feasibility check only) | |
+| B3 QEM column @B50 | T1 (E1 slice) | garden+toy+courtyard, QEM decimation + safe-FT, tag b3 | RUNNING (GOAL #013, pre-registered: B3 < B5) | tools/gems_train/qem_prune.py |
 | R2 row | T3 | 2DGS-style on S-GEO | TODO | |
 | R3.a occupancy routes | T1 | voxelization vs TSDF, toy-calibrated frozen | **DONE-FAIL (hypothesis falsified; citable)** | TSDF halves false-occ but worsens false-free 26–41% — voxelization is the safe consumer; B50 surf_depth bit-identical to clean |
 | R3.c planner loop v0 | T1 | Hybrid-A*-lite, 100 paired problems × 12 cells | **DONE** | B50 preservation exact (CI[0,0]); raw grids unconsumable (route-i 93–100% spurious infeasible; route-ii 10.7 coll/100 courtyard) → elevates R3.b |
