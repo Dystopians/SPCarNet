@@ -124,6 +124,28 @@ class OptimizationParams(ParamGroup):
         self.weight_lr =  0.03
         self.lambda_weight = 1.9e-06
 
+        # GEMS Stage-1R R2 (E2R): learnable per-triangle opacity release.
+        # Default OFF; pre-registered in LEDGER.md GOAL #R-00 (frozen values:
+        # o_min=0.01, lambda_opacity_decay=1e-4 pending the pre-run scale
+        # sanity check, fade tau=0.05, T=3 consecutive checks @500-iter
+        # intervals). When enabled at training_setup/resume time the pinned
+        # opacity floor is dropped to opacity_floor_min and the loaded weight
+        # logits are re-expressed (update_min_weight preserve-outputs
+        # pattern) so realized opacities are unchanged at step 0; the
+        # vertex_weight param group then trains at opacity_lr (logit-space
+        # Adam scale, cf. historical weight_lr 0.03-0.05).
+        self.enable_learnable_opacity = False
+        self.opacity_lr = 0.05
+        self.opacity_floor_min = 0.01
+        self.lambda_opacity_decay = 1e-4
+        # Fade-and-prune (sanctioned REMOVAL under E2R): explicit override on
+        # top of --freeze_topology_updates; nothing else in the frozen-
+        # topology path changes.
+        self.allow_fade_prune = False
+        self.fade_tau = 0.05
+        self.fade_check_interval = 500
+        self.fade_consecutive_checks = 3
+
         # Normal loss
         self.iteration_mesh = 5000
         self.lambda_normals = 0.00005

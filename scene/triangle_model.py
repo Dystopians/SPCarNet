@@ -201,6 +201,11 @@ class TriangleModel:
         point_cloud_state_dict["importance_score"] = self.importance_score
         point_cloud_state_dict["image_size"] = self.image_size
         point_cloud_state_dict["pixel_count"] = self.pixel_count
+        # GEMS E2R: persist the opacity floor so checkpoints trained with a
+        # released floor (--enable_learnable_opacity) render identically at
+        # load time. Legacy checkpoints lack this key and keep the historical
+        # 0.999 pin in load_parameters.
+        point_cloud_state_dict["opacity_floor"] = float(self.opacity_floor)
 
         torch.save(point_cloud_state_dict, os.path.join(path, 'point_cloud_state_dict.pt'))
 
@@ -344,7 +349,10 @@ class TriangleModel:
 
         ################################################################
 
-        self.opacity_floor = 0.999
+        # GEMS E2R: checkpoints saved with a released opacity floor carry it
+        # in the state dict; legacy checkpoints (no key) keep the historical
+        # 0.999 pin — bit-identical to prior behavior.
+        self.opacity_floor = float(state.get("opacity_floor", 0.999))
         self._triangle_indices = self._triangle_indices.to(torch.int32)
 
         param_groups = [

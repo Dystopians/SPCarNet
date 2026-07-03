@@ -3468,7 +3468,38 @@ def training(
     scene = Scene(dataset, triangles, opt.set_weight, opt.set_sigma, load_iteration=load_iteration)
     scene_ground_plane = None
 
-    triangles.training_setup(opt, opt.feature_lr, opt.weight_lr, opt.lr_triangles_points_init)
+    # GEMS Stage-1R R2 (E2R, default OFF): learnable per-triangle opacity.
+    # The vertex_weight logits ARE the opacity parameters — train them at
+    # --opacity_lr instead of --weight_lr, release the pinned floor to
+    # --opacity_floor_min, and re-express the loaded logits (the
+    # update_min_weight preserve-outputs pattern) so realized opacities are
+    # unchanged at step 0. Pre-registration: LEDGER.md GOAL #R-00.
+    e2r_learnable_opacity = bool(getattr(opt, "enable_learnable_opacity", False))
+    effective_weight_lr = (
+        float(getattr(opt, "opacity_lr", 0.05)) if e2r_learnable_opacity else opt.weight_lr
+    )
+    triangles.training_setup(opt, opt.feature_lr, effective_weight_lr, opt.lr_triangles_points_init)
+    if e2r_learnable_opacity:
+        o_min = float(getattr(opt, "opacity_floor_min", 0.01))
+        with torch.no_grad():
+            e2r_pre_realized = triangles.get_vertex_weight.detach().clone()
+        triangles.update_min_weight(o_min, preserve_outputs=True)
+        with torch.no_grad():
+            e2r_post_realized = triangles.get_vertex_weight.detach()
+            e2r_reexpress_dev = (
+                float((e2r_post_realized - e2r_pre_realized).abs().max().item())
+                if e2r_pre_realized.numel() > 0 else 0.0
+            )
+        print(
+            "[E2R] learnable opacity ON: floor released to {:.4f}, "
+            "vertex_weight lr {} (opacity_lr), lambda_opacity_decay {}, "
+            "step-0 max |delta realized opacity| after re-expression = {:.3e}".format(
+                o_min, effective_weight_lr,
+                float(getattr(opt, "lambda_opacity_decay", 0.0)),
+                e2r_reexpress_dev,
+            )
+        )
+        del e2r_pre_realized, e2r_post_realized
     triangles.add_percentage = opt.add_percentage
 
 
@@ -3552,6 +3583,11 @@ def training(
     triangles.size_probs_zero_image_space = opt.size_probs_zero_image_space
     
     need_delaunay = False
+
+    # GEMS E2R fade-and-prune bookkeeping (active only with
+    # --enable_learnable_opacity --allow_fade_prune).
+    fade_mark_counter = None
+    fade_pruned_total = 0
 
     run_restricted_delaunay = opt.densify_until_iter + 1000
 
@@ -4078,6 +4114,24 @@ def training(
         else:
             Lweight = 0
 
+        # GEMS Stage-1R R2 (E2R): opacity decay regularizer on REALIZED
+        # opacities, same triangle-gathered form as the legacy Lweight above
+        # (which is inactive past start_opacity_floor, so no double count).
+        # Junk fades toward the released floor; load-bearing content resists
+        # via the photometric gradient. Lambda pre-registered in GOAL #R-00.
+        opacity_decay_pure = 0.0
+        opacity_decay_loss = 0
+        opacity_decay_lambda = (
+            float(getattr(opt, "lambda_opacity_decay", 0.0))
+            if bool(getattr(opt, "enable_learnable_opacity", False)) else 0.0
+        )
+        if opacity_decay_lambda > 0.0:
+            mask_out = triangles.vertices.shape[0]
+            realized_opacity = triangles.get_vertex_weight[:mask_out][triangles._triangle_indices]
+            opacity_decay_pure = realized_opacity.mean()
+            opacity_decay_loss = opacity_decay_lambda * opacity_decay_pure
+            loss += opacity_decay_loss
+
         # Vertex depth regularization
         Lvertex_depth_pure = 0.0
         lambda_vertex = opt.lambda_vertex if iteration > opt.start_vertex_opt else 0
@@ -4579,6 +4633,14 @@ def training(
                         ),
                         "train/depth_consistency_valid_px": float(depth_consistency_valid_px),
                         "train/depth_consistency_lambda": float(depth_consistency_lambda_value),
+                        "train/opacity_decay_loss": float(
+                            opacity_decay_pure.detach().item()
+                            if torch.is_tensor(opacity_decay_pure)
+                            else opacity_decay_pure
+                            if isinstance(opacity_decay_pure, (float, int))
+                            else 0.0
+                        ),
+                        "train/opacity_decay_lambda": float(opacity_decay_lambda),
                     },
                     step=iteration,
                     log_state=wandb_log_state,
@@ -5177,7 +5239,9 @@ def training(
                     triangles.add_new_gs(iteration, cap_max=opt.max_points, splitt_large_triangles=splitt_large_triangles)
    
 
-                if iteration > opt.start_opacity_floor:
+                # GEMS E2R: the legacy floor schedule must not re-pin the
+                # released floor when learnable opacity is enabled.
+                if iteration > opt.start_opacity_floor and not e2r_learnable_opacity:
                     start_iter = opt.start_opacity_floor
                     end_iter = total_iters_opacity  # the iteration where you want to reach final_opacity
                     a = min(1.0, max(0.0, (iteration - start_iter) / max(1, end_iter - start_iter)))
@@ -5185,7 +5249,7 @@ def training(
                     current_opacity = min(current_opacity, final_opacity)
                     triangles.update_min_weight(current_opacity)
 
-                    prune_triangles += 0.01 
+                    prune_triangles += 0.01
                     mask_out = triangles.vertices.shape[0]
                     triangle_vertex_weights = triangles.get_vertex_weight[:mask_out][triangles._triangle_indices]
                 post_triangles = int(triangles._triangle_indices.shape[0])
@@ -5221,7 +5285,10 @@ def training(
                 need_delaunay = True
             elif iteration % 500 == 0 and iteration > run_restricted_delaunay + 1000:
 
-                if iteration > opt.start_opacity_floor:
+                # GEMS E2R: this branch fires on resumed frozen-topology
+                # fine-tunes; it must not re-pin the released floor when
+                # learnable opacity is enabled.
+                if iteration > opt.start_opacity_floor and not e2r_learnable_opacity:
                     start_iter = opt.start_opacity_floor
                     end_iter = total_iters_opacity  # the iteration where you want to reach final_opacity
                     a = min(1.0, max(0.0, (iteration - start_iter) / max(1, end_iter - start_iter)))
@@ -5229,10 +5296,79 @@ def training(
                     current_opacity = min(current_opacity, final_opacity)
                     triangles.update_min_weight(current_opacity)
 
-                    prune_triangles += 0.01 
+                    prune_triangles += 0.01
                     mask_out = triangles.vertices.shape[0]
                     triangle_vertex_weights = triangles.get_vertex_weight[:mask_out][triangles._triangle_indices]
-            
+
+            # GEMS Stage-1R R2 (E2R) fade-and-prune: sanctioned REMOVAL of
+            # faded triangles inside the otherwise frozen-topology FT path.
+            # Requires the explicit override --allow_fade_prune on top of
+            # --enable_learnable_opacity; everything else still respects
+            # --freeze_topology_updates. Every fade_check_interval iters a
+            # triangle whose MAX realized vertex opacity < fade_tau gets a
+            # mark; fade_consecutive_checks consecutive marks => removal via
+            # the existing prune_triangles keep-mask machinery (+ GC of
+            # unreferenced vertices, mirroring the standard prune path).
+            if (
+                e2r_learnable_opacity
+                and bool(getattr(opt, "allow_fade_prune", False))
+                and int(getattr(opt, "fade_check_interval", 500)) > 0
+                and iteration % int(getattr(opt, "fade_check_interval", 500)) == 0
+            ):
+                tri_opacity = triangles.get_vertex_weight[triangles._triangle_indices]
+                tri_max_opacity = tri_opacity.max(dim=1).values.reshape(-1)
+                faded = tri_max_opacity < float(getattr(opt, "fade_tau", 0.05))
+                if (
+                    fade_mark_counter is None
+                    or int(fade_mark_counter.shape[0]) != int(faded.shape[0])
+                ):
+                    fade_mark_counter = torch.zeros(
+                        int(faded.shape[0]), dtype=torch.int32, device=faded.device
+                    )
+                fade_mark_counter = torch.where(
+                    faded, fade_mark_counter + 1, torch.zeros_like(fade_mark_counter)
+                )
+                remove_mask = fade_mark_counter >= int(
+                    getattr(opt, "fade_consecutive_checks", 3)
+                )
+                n_marked = int(faded.sum().item())
+                n_removed = int(remove_mask.sum().item())
+                if n_removed > 0:
+                    keep_mask = ~remove_mask
+                    triangles.prune_triangles(keep_mask)
+                    fade_mark_counter = fade_mark_counter[keep_mask]
+                    # GC vertices no longer referenced by any triangle (keeps
+                    # optimizer state aligned; same machinery as the standard
+                    # prune path above).
+                    device = triangles.vertices.device
+                    used_vertex_mask = torch.zeros(
+                        triangles.vertices.shape[0], dtype=torch.bool, device=device
+                    )
+                    if triangles._triangle_indices.numel() > 0:
+                        used_vertex_mask[triangles._triangle_indices.flatten().long()] = True
+                    triangles._prune_vertices(used_vertex_mask)
+                    fade_pruned_total += n_removed
+                    print(
+                        "[E2R] fade-prune @iter {}: removed {} triangles "
+                        "(marked this check: {}, removed total: {}, remaining: {})".format(
+                            iteration, n_removed, n_marked, fade_pruned_total,
+                            int(triangles._triangle_indices.shape[0]),
+                        )
+                    )
+                if wandb_run is not None:
+                    _wandb_log_filtered(
+                        wandb_run=wandb_run,
+                        payload={
+                            "e2r/fade_marked": float(n_marked),
+                            "e2r/fade_removed_step": float(n_removed),
+                            "e2r/fade_removed_total": float(fade_pruned_total),
+                            "e2r/triangle_count": float(triangles._triangle_indices.shape[0]),
+                            "e2r/opacity_mean": float(tri_max_opacity.mean().item()),
+                        },
+                        step=iteration,
+                        log_state=wandb_log_state,
+                    )
+
 
             if iteration < opt.iterations:
                 triangles.optimizer.step()
