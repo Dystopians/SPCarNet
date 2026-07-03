@@ -66,6 +66,12 @@ EVAL_ROOT = os.path.join(GEMS_ROOT, "eval")
 EVIDENCE_ROOT = os.path.join(GEMS_ROOT, "evidence")
 
 MODES = ("importance_ft", "random_ft", "importance_noft", "random_noft")
+# E6-ABL importance-family ablation: which evidence-npz column ranks
+# triangles in importance modes. Default = pixels_total (importance v1,
+# pre-registered in GOAL #005) — default behavior and its stage hashes are
+# UNCHANGED. Non-default keys enter the prune-stage config string (and hence
+# its hash) via an importance token != "pixels_total_v1".
+IMPORTANCE_KEYS = ("pixels_total", "max_blending_max", "ckpt_importance_score")
 PIPELINE_VERSION = "gems_pipeline_v1"
 RANDOM_PRUNE_SEED = 0  # numpy default_rng(0), pre-registered
 TRAIN_SEED = 0
@@ -224,19 +230,35 @@ def stage_evidence(scene: str, spec, source_ckpt: str, ckpt_fp: dict,
     return payload
 
 
-def _keep_ids(mode: str, keep_count: int, t_clean: int, npz_path=None):
+def _keep_ids(mode: str, keep_count: int, t_clean: int, npz_path=None,
+              importance_key: str = "pixels_total"):
     import numpy as np
+    assert importance_key in IMPORTANCE_KEYS, importance_key
     if mode.startswith("importance"):
         with np.load(npz_path) as z:
-            pixels_total = z["pixels_total"]
-        assert pixels_total.shape[0] == t_clean, (
-            f"evidence npz has {pixels_total.shape[0]} triangles, "
+            assert importance_key in z.files, (
+                f"evidence npz {npz_path} has no column '{importance_key}'; "
+                f"columns: {sorted(z.files)}")
+            score = z[importance_key]
+        assert score.shape[0] == t_clean, (
+            f"evidence npz has {score.shape[0]} triangles, "
             f"source ckpt has {t_clean}")
-        # importance v1 = pixels_total (PRE-REGISTERED). Stable sort =>
-        # deterministic tie-breaking by triangle id.
-        order = np.argsort(-pixels_total.astype(np.int64), kind="stable")
+        # Rank descending by the chosen evidence column. Stable sort =>
+        # deterministic tie-breaking by triangle id (identical rule for all
+        # families). Integer columns keep exact int64 comparison (importance
+        # v1 = pixels_total, PRE-REGISTERED, bit-identical to the historical
+        # path); float columns compare as float64 and must be finite.
+        if score.dtype.kind in "iu":
+            score = score.astype(np.int64)
+        else:
+            score = score.astype(np.float64)
+            assert np.isfinite(score).all(), (
+                f"non-finite values in evidence column '{importance_key}'")
+        order = np.argsort(-score, kind="stable")
         keep = np.sort(order[:keep_count])
-        rule = "importance_v1_pixels_total_top_keep_count_stable"
+        rule = ("importance_v1_pixels_total_top_keep_count_stable"
+                if importance_key == "pixels_total"
+                else f"importance_{importance_key}_top_keep_count_stable")
     else:
         rng = np.random.default_rng(RANDOM_PRUNE_SEED)
         keep = np.sort(rng.choice(t_clean, size=keep_count, replace=False))
@@ -247,12 +269,14 @@ def _keep_ids(mode: str, keep_count: int, t_clean: int, npz_path=None):
 
 def stage_prune(scene: str, spec, source_ckpt: str, mode: str, budget: float,
                 keep_count: int, t_clean: int, model_dir: str,
-                npz_path, stamps: StageStamps, cfg_hash: str) -> dict:
+                npz_path, stamps: StageStamps, cfg_hash: str,
+                importance_key: str = "pixels_total") -> dict:
     import numpy as np
     from ss3dm_prior.meshsplatopt.checkpoint_compaction import apply_compaction
 
     src_model, load_iter = _source_model_dir_and_iter(source_ckpt)
-    keep, rule = _keep_ids(mode, keep_count, t_clean, npz_path)
+    keep, rule = _keep_ids(mode, keep_count, t_clean, npz_path,
+                           importance_key=importance_key)
 
     # apply_compaction takes the REMOVE list.
     keep_mask = np.zeros(t_clean, dtype=bool)
@@ -431,6 +455,11 @@ def parse_args():
     p.add_argument("--budget", type=float, required=True,
                    help="triangle budget as a fraction (0.5 or 0.25)")
     p.add_argument("--mode", required=True, choices=list(MODES))
+    p.add_argument("--importance-key", default="pixels_total",
+                   choices=list(IMPORTANCE_KEYS),
+                   help="evidence npz column used as importance in importance "
+                        "modes (E6-ABL; default pixels_total = importance v1, "
+                        "historical behavior + hashes unchanged)")
     p.add_argument("--tag", required=True)
     p.add_argument("--ft-iters", type=int, default=10000)
     p.add_argument("--ft-feature-lr", type=float, default=None)
@@ -471,6 +500,13 @@ def main():
     final_iter = load_iter + int(args.ft_iters)
     with_ft = args.mode.endswith("_ft")
     with_evidence = args.mode.startswith("importance")
+    assert args.importance_key == "pixels_total" or with_evidence, (
+        "--importance-key is only meaningful for importance modes")
+    # Prune-stage importance token: legacy string for the default key (keeps
+    # every existing stamp/config hash valid); the key itself otherwise, so a
+    # changed importance definition re-runs prune+downstream (E6-ABL).
+    imp_token = ("pixels_total_v1" if args.importance_key == "pixels_total"
+                 else args.importance_key)
 
     final_ckpt = os.path.join(
         model_dir, "point_cloud",
@@ -491,7 +527,7 @@ def main():
         "prune": (f"{PIPELINE_VERSION}|prune|scene={args.scene}"
                   f"|ckpt={ckpt_fp['sha256_first16mb']}|budget={args.budget}"
                   f"|mode={args.mode}|t_clean={t_clean}|keep_count={keep_count}"
-                  f"|importance=pixels_total_v1|random_seed={RANDOM_PRUNE_SEED}"),
+                  f"|importance={imp_token}|random_seed={RANDOM_PRUNE_SEED}"),
         "finetune": (f"{PIPELINE_VERSION}|finetune|{shlex.join(train_cmd)}"
                      if with_ft else ""),
         "eval": (f"{PIPELINE_VERSION}|eval|scene={args.scene}"
@@ -537,7 +573,7 @@ def main():
     prune_payload = run_stage(
         "prune", stage_prune, args.scene, spec, source_ckpt, args.mode,
         args.budget, keep_count, t_clean, model_dir, npz_path, stamps,
-        stage_hash["prune"])
+        stage_hash["prune"], importance_key=args.importance_key)
     pruned_ckpt = prune_payload["pruned_ckpt"]
 
     # (4) fine-tune (ft modes)
@@ -564,6 +600,7 @@ def main():
         "budget": args.budget,
         "budget_label": blabel,
         "mode": args.mode,
+        "importance_key": args.importance_key if with_evidence else None,
         "tag": args.tag,
         "config_hash": config_hash,
         "git_commit": git_commit(),
