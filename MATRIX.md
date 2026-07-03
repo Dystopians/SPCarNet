@@ -31,3 +31,6 @@ Methods: B0 clean · B1 no-op · B2 random+FT(safe) · B3 QEM+FT · B4 evidence 
 | H1 row | T1 | v106 historical context row | TODO (locate v106 artifacts) | |
 | R1 row | T1 | 3DGS + public compression at matched storage | TODO (needs 3DGS training env check) | |
 | R2 row | T3 | 2DGS-style on S-GEO | TODO | |
+| R3.a occupancy routes | T1 | voxelization vs TSDF, toy-calibrated frozen | **DONE-FAIL (hypothesis falsified; citable)** | TSDF halves false-occ but worsens false-free 26–41% — voxelization is the safe consumer; B50 surf_depth bit-identical to clean |
+| R3.c planner loop v0 | T1 | Hybrid-A*-lite, 100 paired problems × 12 cells | **DONE** | B50 preservation exact (CI[0,0]); raw grids unconsumable (route-i 93–100% spurious infeasible; route-ii 10.7 coll/100 courtyard) → elevates R3.b |
+| R3.b certified sub-mesh | T2→elevated | one-time global labeling → collision-grade sub-mesh → route-i | TODO (next after GPUs free) | R3.c quantifies the need |
