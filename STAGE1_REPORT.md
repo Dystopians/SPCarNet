@@ -62,6 +62,16 @@ Newcomer path: read `LEDGER.md` → `PROTOCOL.md` → run `python -m tools.gems.
 - Toy B50/B25 miss the compaction floor — the one scene where budget compaction costs real quality; geometric-importance variants (free-space-evidence pruning) are the parked, human-gated idea.
 - Sourcing compaction from iteration-26000 checkpoints (pre-decline) is untested and likely free upside.
 
+## 7b. Post-escalation completion round (human-delegated, 2026-07-02)
+
+Under the user's delegation, the three remaining cards were played to pre-registered verdicts — all documented, none re-thresholded:
+- **E1′ (amended criteria): FAIL** — with matched safe-FT configs, importance beats random on courtyard by only +0.130 CI[−0.55,+0.64] (bar ≥ +1.0): a safe features-only FT can repaint most random-prune damage on a 33-view scene. Importance's decisive value is at aggressive budgets / no-FT (random collapses 2.4–5.3 dB). E1 therefore stays FAIL under both original and amended criteria.
+- **26k-sourcing: refuted** (−0.020 CI vs 30k-sourced): the safe FT is itself the end-phase-damage recovery; source choice is irrelevant.
+- **E2 variant 3, floater removal (sanctioned topology mechanism): FAIL** — g3 → 0 (−100%) but the PSNR guard broke on both scenes because **low-train-support triangles are load-bearing for held-out views** (selection effect; one toy view −8 dB from a true coverage gap invisible to any D4-legal evidence). This falsification finalizes the geometry-axis demotion and explains toy's prune residual.
+- Courtyard d1/d2 unlocked (up-axis derivation frozen): clean false-free 65.0% (geometric unreliability confirmed on the real scene); **d2 collision agreement 0.895 with unsafe-disagreement 0.000, identical for clean/B50/B25** — compaction preserves downstream behavior exactly.
+
+Stage One is now **complete**: every pre-registered avenue, including all human-sanctioned extensions, has a verdict. Final standing per §6.7: E1/E2/E3 all FAIL as existence tests → Stage One does not pass as the original GEMS claim; the validated deliverable is the compaction core (§8) plus the discovery set (§4, now including the low-support selection effect and the FT-repaintability result).
+
 ## 8. Recommendation (human decision required)
 
 **Go, with a reframed claim.** The honest Stage One outcome: *"GEMS re-optimizes a trained MeshSplatting scene under an explicit triangle budget via evidence-guided pruning + drift-safe (features-only) fine-tuning, producing plain compact checkpoints that render at least as well as — on real scenes, better than — the unpruned baseline, with geometry metrics preserved and rendering cost roughly halved."* That claim is fully evidence-backed at B50/B25 on garden and B50 on courtyard, with toy as the documented limitation. Geometry objectives and teacher distillation are demoted (evaluation-only / diagnostic-only) with measured structural causes. If the reframed claim is acceptable, Stage Two should attack: (a) geometric-importance pruning (the parked floater-removal mechanism), (b) 26k-sourcing, (c) the end-phase trainer decline as a first-class fix.
