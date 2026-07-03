@@ -25,7 +25,7 @@ Methods: B0 clean · B1 no-op · B2 random+FT(safe) · B3 QEM+FT · B4 evidence 
 | E6-ABL | T1 | importance families; schedule; geometry losses; teacher variants — @B50, 2 S-REND + 1 S-GEO scene | TODO (several cells already exist from Stage One variants — map them in) | |
 | E7-SENS | T2 | 3 seeds; dev-vs-full res; 3-point loss weights | TODO | |
 | E8-ROBUST | T2 | 50% view drop; pose noise ×2; S-GEN | TODO | |
-| E9-FAIL | T1 | ≥10 curated failure panels + diagnoses | TODO (6+ candidates already identified in STAGE1_REPORT §5) | |
+| E9-FAIL | T1 | ≥10 curated failure panels + diagnoses | **DONE** (13 cases, 5 mechanism families; `gems_stage1/analysis/e9_failure_taxonomy/TAXONOMY.md`; LEDGER #R-09) | 0 candidates rejected; 2 kept with qualifications |
 | E10-STATS | T1 | CIs everywhere + multiple-comparisons caveat | ONGOING (CI discipline already universal) | |
 | E11-QUAL | T1 | qualitative grids + before/after maps; (T2) 2 videos | TODO | |
 | H1 row | T1 | v106 historical context row | TODO (locate v106 artifacts) | |
