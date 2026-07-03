@@ -1,0 +1,53 @@
+# T6 — Ablations (E6-ABL)
+
+_generated 2026-07-03T19:27:01.110808+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+
+> STATS: every delta is a paired per-view bootstrap 95% CI (10k resamples, seed 0, PROTOCOL section 5). MULTIPLE-COMPARISONS CAVEAT (E10): dozens of CIs are reported across this pack; borderline CIs (effect near a floor or CI edge near 0) should be read with Bonferroni-style skepticism — headline claims rest only on effects that are large, replicated across scenes/suites, or mechanism-backed. Courtyard rendering CIs are 5-view (underpowered by design). Reporting language per section 6: 'improves/reduces' ONLY when the CI excludes 0 AND the D3 floor is cleared; otherwise 'comparable'/'inconclusive'.
+> E6 mapping note: these are the EXISTING Stage-One/1R variant rows mapped onto the E6 ablation axes (MATRIX E6: 'map them in'). Un-run E6 axes remain open: importance-feature families beyond evidence-vs-random, and reallocation on/off (never built).
+> Geometry-mechanism rows are diagnostics of FAILED/demoted mechanisms (E2/E2R/E3 verdicts in LEDGER; NEGATIVE_RESULTS.md) — shown with the rendering guard delta; their g-metric movements are in T3/LEDGER.
+
+| ablation axis | variant | scene | budget | PSNR | dPSNR vs reference (CI) | dLPIPS vs reference (CI) | reference row | eval row |
+|---|---|---|---|---|---|---|---|---|
+| FT channel (E6 loss-form) | default all-param FT (e1b) | garden | B50 | 21.780 | -2.921 [-3.288,-2.543] | +0.1361 [+0.1309,+0.1409] | garden_B50_importance_noft_e1b | garden_B50_importance_ft_e1b |
+| FT channel (E6 loss-form) | all-param FT, lr x0.1 (e1v1) | garden | B50 | 20.579 | -4.122 [-4.568,-3.640] | +0.1814 [+0.1746,+0.1875] | garden_B50_importance_noft_e1b | garden_B50_importance_ft_e1v1 |
+| FT channel (E6 loss-form) | features-only FT (e1v2/s2) = GEMS-core | garden | B50 | 24.851 | +0.150 [+0.122,+0.179] | -0.0062 [-0.0066,-0.0058] | garden_B50_importance_noft_e1b | garden_B50_importance_ft_e1v2 |
+| FT channel (E6 loss-form) | default all-param FT (e1b) | garden | B25 | 21.592 | -2.981 [-3.359,-2.592] | +0.1424 [+0.1365,+0.1477] | garden_B25_importance_noft_e1b | garden_B25_importance_ft_e1b |
+| FT channel (E6 loss-form) | all-param FT, lr x0.1 (e1v1) | garden | B25 | 20.580 | -3.993 [-4.453,-3.507] | +0.1799 [+0.1725,+0.1866] | garden_B25_importance_noft_e1b | garden_B25_importance_ft_e1v1 |
+| FT channel (E6 loss-form) | features-only FT (e1v2/s2) = GEMS-core | garden | B25 | 24.739 | +0.166 [+0.137,+0.195] | -0.0076 [-0.0080,-0.0072] | garden_B25_importance_noft_e1b | garden_B25_importance_ft_e1v2 |
+| FT channel (E6 loss-form) | default all-param FT (e1b) | toy_parking | B50 | 29.119 | -1.256 [-1.790,-0.781] | +0.0461 [+0.0402,+0.0515] | toy_parking_B50_importance_noft_e1b | toy_parking_B50_importance_ft_e1b |
+| FT channel (E6 loss-form) | all-param FT, lr x0.1 (e1v1) | toy_parking | B50 | 28.732 | -1.642 [-2.195,-1.125] | +0.0557 [+0.0494,+0.0617] | toy_parking_B50_importance_noft_e1b | toy_parking_B50_importance_ft_e1v1 |
+| FT channel (E6 loss-form) | features-only FT (e1v2/s2) = GEMS-core | toy_parking | B50 | 30.371 | -0.004 [-0.072,+0.071] | +0.0102 [+0.0080,+0.0126] | toy_parking_B50_importance_noft_e1b | toy_parking_B50_importance_ft_e1v2 |
+| FT channel (E6 loss-form) | default all-param FT (e1b) | toy_parking | B25 | 27.970 | -1.758 [-2.361,-1.189] | +0.0620 [+0.0559,+0.0677] | toy_parking_B25_importance_noft_e1b | toy_parking_B25_importance_ft_e1b |
+| FT channel (E6 loss-form) | all-param FT, lr x0.1 (e1v1) | toy_parking | B25 | 27.703 | -2.025 [-2.645,-1.430] | +0.0663 [+0.0588,+0.0733] | toy_parking_B25_importance_noft_e1b | toy_parking_B25_importance_ft_e1v1 |
+| FT channel (E6 loss-form) | features-only FT (e1v2/s2) = GEMS-core | toy_parking | B25 | 29.766 | +0.038 [-0.015,+0.098] | +0.0071 [+0.0053,+0.0091] | toy_parking_B25_importance_noft_e1b | toy_parking_B25_importance_ft_e1v2 |
+| prune schedule | iterative 2-step (e1v3) vs one-shot | garden | B50 | 24.869 | +0.018 [+0.012,+0.024] | -0.0010 [-0.0010,-0.0009] | garden_B50_importance_ft_e1v2 | garden_B70_importance_ft_e1v3 |
+| prune schedule | iterative 2-step (e1v3) vs one-shot | toy_parking | B50 | 30.353 | -0.018 [-0.043,+0.009] | +0.0027 [+0.0021,+0.0034] | toy_parking_B50_importance_ft_e1v2 | toy_parking_B70_importance_ft_e1v3 |
+| importance family | evidence importance vs random (both +FT) | bicycle | B12.5 | 22.714 | +4.785 [+4.313,+5.246] | -0.1232 [-0.1345,-0.1115] | bicycle_B12_random_ft_s2 | bicycle_B12_importance_ft_s2 |
+| importance family | evidence importance vs random (both +FT) | flowers | B12.5 | 18.296 | +3.745 [+3.388,+4.092] | -0.0905 [-0.0988,-0.0820] | flowers_B12_random_ft_s2 | flowers_B12_importance_ft_s2 |
+| importance family | evidence importance vs random (both +FT) | garden | B50 | 24.851 | +3.473 [+3.105,+3.839] | -0.1554 [-0.1601,-0.1501] | garden_B50_random_ft_e1b | garden_B50_importance_ft_e1v2 |
+| importance family | evidence importance vs random (both +FT) | garden | B25 | 24.739 | +5.044 [+4.636,+5.429] | -0.2137 [-0.2205,-0.2061] | garden_B25_random_ft_e1b | garden_B25_importance_ft_e1v2 |
+| importance family | evidence importance vs random (both +FT) | garden | B12.5 | 23.911 | +6.438 [+5.865,+6.959] | -0.1778 [-0.1855,-0.1696] | garden_B12_random_ft_s2 | garden_B12_importance_ft_s2 |
+| importance family | evidence importance vs random (both +FT) | stump | B12.5 | 24.071 | +4.470 [+3.997,+4.897] | -0.1238 [-0.1341,-0.1125] | stump_B12_random_ft_s2 | stump_B12_importance_ft_s2 |
+| importance family | evidence importance vs random (both +FT) | treehill | B12.5 | 19.536 | +3.632 [+3.256,+4.012] | -0.0693 [-0.0735,-0.0648] | treehill_B12_random_ft_s2 | treehill_B12_importance_ft_s2 |
+| importance family | evidence importance vs random (both +FT) | room | B12.5 | 26.985 | +6.696 [+6.028,+7.338] | -0.2068 [-0.2184,-0.1947] | room_B12_random_ft_s2 | room_B12_importance_ft_s2 |
+| importance family | evidence importance vs random (both +FT) | counter | B12.5 | 24.396 | +4.230 [+3.661,+4.817] | -0.1533 [-0.1627,-0.1441] | counter_B12_random_ft_s2 | counter_B12_importance_ft_s2 |
+| importance family | evidence importance vs random (both +FT) | kitchen | B12.5 | 24.927 | +4.892 [+4.204,+5.575] | -0.2080 [-0.2159,-0.1998] | kitchen_B12_random_ft_s2 | kitchen_B12_importance_ft_s2 |
+| importance family | evidence importance vs random (both +FT) | bonsai | B12.5 | 26.201 | +8.194 [+7.150,+9.179] | -0.2142 [-0.2227,-0.2047] | bonsai_B12_random_ft_s2 | bonsai_B12_importance_ft_s2 |
+| importance family | evidence importance vs random (both +FT) | toy_parking | B50 | 30.371 | +1.597 [+1.020,+2.198] | -0.0663 [-0.0787,-0.0566] | toy_parking_B50_random_ft_e1b | toy_parking_B50_importance_ft_e1v2 |
+| importance family | evidence importance vs random (both +FT) | toy_parking | B25 | 29.766 | +3.405 [+2.383,+4.412] | -0.1337 [-0.1518,-0.1185] | toy_parking_B25_random_ft_e1b | toy_parking_B25_importance_ft_e1v2 |
+| importance family | evidence importance vs random (both +FT) | courtyard | B50 | 17.566 | +0.130 [-0.551,+0.640] | -0.0408 [-0.0585,-0.0287] | courtyard_B50_random_ft_e1b | courtyard_B50_ft_v4 |
+| checkpoint sourcing | 26k-sourced prune+FT vs 30k-sourced (e26src) | garden | B50 | 24.831 | -0.020 [-0.030,-0.010] | +0.0016 [+0.0012,+0.0021] | garden_B50_importance_ft_e1v2 | garden_B50_importance_ft_e26src |
+| teacher distillation (E3, DEMOTED diagnostic) | density 1x | garden | B50 | 24.919 | +0.039 [+0.016,+0.062] | -0.0015 [-0.0018,-0.0011] | e3_garden_B50_control_v1 | e3_garden_B50_distill_v1 |
+| teacher distillation (E3, DEMOTED diagnostic) | density 1x | toy_parking | B50 | 30.449 | +0.115 [+0.053,+0.191] | +0.0001 [-0.0012,+0.0015] | e3_toy_B50_control_v1 | e3_toy_B50_distill_v1 |
+| teacher distillation (E3, DEMOTED diagnostic) | density 3x (control: e3 same-length) | garden | B50 | 24.931 | +0.051 [+0.028,+0.074] | -0.0018 [-0.0021,-0.0014] | e3_garden_B50_control_v1 | e3v1_garden_B50_distill_v1 |
+| teacher distillation (E3, DEMOTED diagnostic) | density 3x (control: e3 same-length) | toy_parking | B50 | 30.466 | +0.133 [+0.053,+0.231] | +0.0011 [-0.0008,+0.0036] | e3_toy_B50_control_v1 | e3v1_toy_parking_B50_distill_v1 |
+| teacher distillation (E3, DEMOTED diagnostic) | density 3x + SH rest-lr 1.0 | garden | B50 | 24.880 | +0.125 [+0.076,+0.173] | -0.0022 [-0.0034,-0.0011] | e3v2_garden_B50_control_v1 | e3v2_garden_B50_distill_v1 |
+| teacher distillation (E3, DEMOTED diagnostic) | density 3x + SH rest-lr 1.0 | toy_parking | B50 | 29.959 | +0.026 [-0.146,+0.187] | +0.0059 [-0.0111,+0.0208] | e3v2_toy_B50_control_v1 | e3v2_toy_B50_distill_v1 |
+| geometry mechanism (E2 family, all FAIL/bounded) | free-space+depth losses (m3/E2 a1) | toy_parking | B50 | 30.126 | -0.245 [-0.427,-0.093] | +0.0112 [+0.0081,+0.0146] | toy_parking_B50_importance_ft_e1v2 | m3_e2_toy_parking_B50_v1 |
+| geometry mechanism (E2 family, all FAIL/bounded) | gradient-routed losses (m3v1/E2 v1) | toy_parking | B50 | 29.158 | -1.212 [-1.747,-0.707] | +0.0474 [+0.0408,+0.0538] | toy_parking_B50_importance_ft_e1v2 | m3v1_toy_parking_B50_v1 |
+| geometry mechanism (E2 family, all FAIL/bounded) | evidence floater deletion (e2v3) | toy_parking | B50 | 29.858 | -0.513 [-1.424,-0.035] | +0.0047 [+0.0023,+0.0077] | toy_parking_B50_importance_ft_e1v2 | e2v3_toy_parking_B50_v1 |
+| geometry mechanism (E2 family, all FAIL/bounded) | opacity release + fade-prune (e2r) | toy_parking | B50 | 29.988 | -0.383 [-0.586,-0.201] | +0.0060 [+0.0043,+0.0079] | toy_parking_B50_importance_ft_e1v2 | e2r_toy_parking_B50_v1 |
+| geometry mechanism (E2 family, all FAIL/bounded) | free-space+depth losses (m3/E2 a1) | courtyard | B50 | 17.511 | -0.056 [-0.243,+0.160] | +0.0209 [+0.0109,+0.0310] | courtyard_B50_ft_v4 | m3_e2_courtyard_B50_v1 |
+| geometry mechanism (E2 family, all FAIL/bounded) | gradient-routed losses (m3v1/E2 v1) | courtyard | B50 | 16.815 | -0.752 [-1.318,-0.238] | +0.0924 [+0.0683,+0.1167] | courtyard_B50_ft_v4 | m3v1_courtyard_B50_v1 |
+| geometry mechanism (E2 family, all FAIL/bounded) | evidence floater deletion (e2v3) | courtyard | B50 | 17.331 | -0.235 [-0.396,-0.110] | +0.0018 [-0.0007,+0.0038] | courtyard_B50_ft_v4 | e2v3_courtyard_B50_v1 |
+| geometry mechanism (E2 family, all FAIL/bounded) | opacity release + fade-prune (e2r) | courtyard | B50 | 18.026 | +0.460 [-0.152,+1.605] | -0.0062 [-0.0108,-0.0023] | courtyard_B50_ft_v4 | e2r_courtyard_B50_v1 |

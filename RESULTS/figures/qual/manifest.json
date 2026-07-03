@@ -1,0 +1,371 @@
+{
+ "generator": "tools/gems/report/qual_grids.py",
+ "frozen_rules": {
+  "best": "argmax banked per-view PSNR of the scene's B50 B5 row",
+  "median": "image_names[argsort(psnr)[(n-1)//2]] of the same banked array (script-chosen)",
+  "failure": "E9-taxonomy view where a case names one, else argmin banked per-view PSNR",
+  "crops": "best->argmin-error half-frame window / failure->argmax-error half-frame window (stride 16px) computed on the B50 B5 row only, applied identically to all rows; median->full frame",
+  "depth_vmax": "P99 of CLEAN-row valid depth per view",
+  "floater_overlay": "each row tinted by its OWN banked g3_floaters.npz floater_tri_ids"
+ },
+ "eval_root": "/data/peilincai/gems_stage1/eval",
+ "scenes": {
+  "garden": {
+   "suite": "S-REND",
+   "view_selection": [
+    {
+     "scene": "garden",
+     "rule": "(a) best-case = argmax per-view PSNR",
+     "banked_array": "/data/peilincai/gems_stage1/eval/garden_B50_importance_ft_e1v2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 24,
+     "chosen_view": "DSC08068",
+     "psnr_at_view_b50row": 27.276470184326172,
+     "note": ""
+    },
+    {
+     "scene": "garden",
+     "rule": "(b) median-PSNR = image_names[argsort(psnr)[(n-1)//2]]",
+     "banked_array": "/data/peilincai/gems_stage1/eval/garden_B50_importance_ft_e1v2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 24,
+     "chosen_view": "DSC08052",
+     "psnr_at_view_b50row": 25.327239990234375,
+     "note": "(sorted-rank 11 of 24)"
+    },
+    {
+     "scene": "garden",
+     "rule": "(c) failure = E9-taxonomy view",
+     "banked_array": "/data/peilincai/gems_stage1/eval/garden_B50_importance_ft_e1v2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 24,
+     "chosen_view": "DSC08052",
+     "psnr_at_view_b50row": 25.327239990234375,
+     "note": "[E9 case12 (garden g3 fragmentation)]"
+    }
+   ],
+   "views": {
+    "best": "DSC08068",
+    "median": "DSC08052",
+    "failure": "DSC08052"
+   },
+   "crop_windows": {
+    "best": {
+     "y0": 400,
+     "x0": 432,
+     "h": 420,
+     "w": 648,
+     "mean_err_in_window": 0.020023196588748345,
+     "rule": "argmin-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "failure": {
+     "y0": 0,
+     "x0": 640,
+     "h": 420,
+     "w": 648,
+     "mean_err_in_window": 0.04616676971955835,
+     "rule": "argmax-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "median": null
+   },
+   "depth_vmax_by_view": {
+    "DSC08068": 14.169751167297363,
+    "DSC08052": 13.522985458374023
+   },
+   "rows": {
+    "clean": {
+     "eval_row": "garden_clean30k_v2",
+     "checkpoint": "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/point_cloud/iteration_30000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/garden_clean30k_v2/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 15910,
+     "psnr_mean_banked": 24.712003707885742
+    },
+    "B50 B5": {
+     "eval_row": "garden_B50_importance_ft_e1v2",
+     "checkpoint": "/data/peilincai/gems_stage1/models/garden_B50_importance_ft_e1v2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/garden_B50_importance_ft_e1v2/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 15050,
+     "psnr_mean_banked": 24.85094451904297
+    },
+    "B25 B5": {
+     "eval_row": "garden_B25_importance_ft_e1v2",
+     "checkpoint": "/data/peilincai/gems_stage1/models/garden_B25_importance_ft_e1v2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/garden_B25_importance_ft_e1v2/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 10047,
+     "psnr_mean_banked": 24.738637924194336
+    }
+   },
+   "output_png": "/data/peilincai/mesh-splatting/RESULTS/figures/qual/garden_qual_grid.png"
+  },
+  "kitchen": {
+   "suite": "S-REND",
+   "view_selection": [
+    {
+     "scene": "kitchen",
+     "rule": "(a) best-case = argmax per-view PSNR",
+     "banked_array": "/data/peilincai/gems_stage1/eval/kitchen_B50_importance_ft_s2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 35,
+     "chosen_view": "DSCF0864",
+     "psnr_at_view_b50row": 30.25322914123535,
+     "note": ""
+    },
+    {
+     "scene": "kitchen",
+     "rule": "(b) median-PSNR = image_names[argsort(psnr)[(n-1)//2]]",
+     "banked_array": "/data/peilincai/gems_stage1/eval/kitchen_B50_importance_ft_s2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 35,
+     "chosen_view": "DSCF0768",
+     "psnr_at_view_b50row": 27.583959579467773,
+     "note": "(sorted-rank 17 of 35)"
+    },
+    {
+     "scene": "kitchen",
+     "rule": "(c) failure = E9-taxonomy view",
+     "banked_array": "/data/peilincai/gems_stage1/eval/kitchen_B50_importance_ft_s2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 35,
+     "chosen_view": "DSCF0768",
+     "psnr_at_view_b50row": 27.583959579467773,
+     "note": "[E9 case13 (indoor budget starvation)]"
+    }
+   ],
+   "views": {
+    "best": "DSCF0864",
+    "median": "DSCF0768",
+    "failure": "DSCF0768"
+   },
+   "crop_windows": {
+    "best": {
+     "y0": 32,
+     "x0": 0,
+     "h": 519,
+     "w": 779,
+     "mean_err_in_window": 0.01293133990765756,
+     "rule": "argmin-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "failure": {
+     "y0": 512,
+     "x0": 768,
+     "h": 519,
+     "w": 779,
+     "mean_err_in_window": 0.03592247165091726,
+     "rule": "argmax-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "median": null
+   },
+   "depth_vmax_by_view": {
+    "DSCF0864": 17.43943977355957,
+    "DSCF0768": 12.54936695098877
+   },
+   "rows": {
+    "clean": {
+     "eval_row": "kitchen_clean30k_v1",
+     "checkpoint": "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/kitchen/point_cloud/iteration_30000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/kitchen_clean30k_v1/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 147208,
+     "psnr_mean_banked": 27.295724868774414
+    },
+    "B50 B5": {
+     "eval_row": "kitchen_B50_importance_ft_s2",
+     "checkpoint": "/data/peilincai/gems_stage1/models/kitchen_B50_importance_ft_s2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/kitchen_B50_importance_ft_s2/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 75936,
+     "psnr_mean_banked": 27.449411392211914
+    },
+    "B25 B5": {
+     "eval_row": "kitchen_B25_importance_ft_s2",
+     "checkpoint": "/data/peilincai/gems_stage1/models/kitchen_B25_importance_ft_s2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/kitchen_B25_importance_ft_s2/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 52324,
+     "psnr_mean_banked": 27.012409210205078
+    }
+   },
+   "output_png": "/data/peilincai/mesh-splatting/RESULTS/figures/qual/kitchen_qual_grid.png"
+  },
+  "flowers": {
+   "suite": "S-REND",
+   "view_selection": [
+    {
+     "scene": "flowers",
+     "rule": "(a) best-case = argmax per-view PSNR",
+     "banked_array": "/data/peilincai/gems_stage1/eval/flowers_B50_importance_ft_s2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 22,
+     "chosen_view": "_DSC9120",
+     "psnr_at_view_b50row": 21.654909133911133,
+     "note": ""
+    },
+    {
+     "scene": "flowers",
+     "rule": "(b) median-PSNR = image_names[argsort(psnr)[(n-1)//2]]",
+     "banked_array": "/data/peilincai/gems_stage1/eval/flowers_B50_importance_ft_s2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 22,
+     "chosen_view": "_DSC9096",
+     "psnr_at_view_b50row": 19.574012756347656,
+     "note": "(sorted-rank 10 of 22)"
+    },
+    {
+     "scene": "flowers",
+     "rule": "(c) failure = E9-taxonomy view",
+     "banked_array": "/data/peilincai/gems_stage1/eval/flowers_B50_importance_ft_s2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 22,
+     "chosen_view": "_DSC9144",
+     "psnr_at_view_b50row": 19.63127326965332,
+     "note": "[E9 case01 (flowers compaction-floor fail)]"
+    }
+   ],
+   "views": {
+    "best": "_DSC9120",
+    "median": "_DSC9096",
+    "failure": "_DSC9144"
+   },
+   "crop_windows": {
+    "best": {
+     "y0": 32,
+     "x0": 512,
+     "h": 414,
+     "w": 628,
+     "mean_err_in_window": 0.04041276831579794,
+     "rule": "argmin-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "failure": {
+     "y0": 400,
+     "x0": 320,
+     "h": 414,
+     "w": 628,
+     "mean_err_in_window": 0.08803192479540235,
+     "rule": "argmax-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "median": null
+   },
+   "depth_vmax_by_view": {
+    "_DSC9120": 29.348880767822266,
+    "_DSC9096": 31.373693466186523,
+    "_DSC9144": 33.56474685668945
+   },
+   "rows": {
+    "clean": {
+     "eval_row": "flowers_clean30k_v1",
+     "checkpoint": "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/flowers/point_cloud/iteration_30000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/flowers_clean30k_v1/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 33327,
+     "psnr_mean_banked": 19.390180587768555
+    },
+    "B50 B5": {
+     "eval_row": "flowers_B50_importance_ft_s2",
+     "checkpoint": "/data/peilincai/gems_stage1/models/flowers_B50_importance_ft_s2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/flowers_B50_importance_ft_s2/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 46342,
+     "psnr_mean_banked": 19.24363899230957
+    },
+    "B25 B5": {
+     "eval_row": "flowers_B25_importance_ft_s2",
+     "checkpoint": "/data/peilincai/gems_stage1/models/flowers_B25_importance_ft_s2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/flowers_B25_importance_ft_s2/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 25202,
+     "psnr_mean_banked": 19.050235748291016
+    }
+   },
+   "output_png": "/data/peilincai/mesh-splatting/RESULTS/figures/qual/flowers_qual_grid.png"
+  },
+  "courtyard": {
+   "suite": "dev_drive_A (courtyard)",
+   "view_selection": [
+    {
+     "scene": "courtyard",
+     "rule": "(a) best-case = argmax per-view PSNR",
+     "banked_array": "/data/peilincai/gems_stage1/eval/courtyard_B50_importance_ft_e1v2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 5,
+     "chosen_view": "DSC_0294",
+     "psnr_at_view_b50row": 22.478389739990234,
+     "note": ""
+    },
+    {
+     "scene": "courtyard",
+     "rule": "(b) median-PSNR = image_names[argsort(psnr)[(n-1)//2]]",
+     "banked_array": "/data/peilincai/gems_stage1/eval/courtyard_B50_importance_ft_e1v2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 5,
+     "chosen_view": "DSC_0310",
+     "psnr_at_view_b50row": 18.43659782409668,
+     "note": "(sorted-rank 2 of 5)"
+    },
+    {
+     "scene": "courtyard",
+     "rule": "(c) failure = E9-taxonomy view",
+     "banked_array": "/data/peilincai/gems_stage1/eval/courtyard_B50_importance_ft_e1v2/metrics.json",
+     "banked_field": "rendering.per_view.psnr",
+     "n_views": 5,
+     "chosen_view": "DSC_0302",
+     "psnr_at_view_b50row": 14.475934982299805,
+     "note": "[E9 case08 (near-camera occluder view)]"
+    }
+   ],
+   "views": {
+    "best": "DSC_0294",
+    "median": "DSC_0310",
+    "failure": "DSC_0302"
+   },
+   "crop_windows": {
+    "best": {
+     "y0": 224,
+     "x0": 16,
+     "h": 258,
+     "w": 388,
+     "mean_err_in_window": 0.044850041442739394,
+     "rule": "argmin-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "failure": {
+     "y0": 0,
+     "x0": 0,
+     "h": 258,
+     "w": 388,
+     "mean_err_in_window": 0.1928787225348138,
+     "rule": "argmax-error half-frame window, stride 16, from B50-B5 row"
+    },
+    "median": null
+   },
+   "depth_vmax_by_view": {
+    "DSC_0294": 10.01567554473877,
+    "DSC_0310": 11.16938591003418,
+    "DSC_0302": 22.832178115844727
+   },
+   "rows": {
+    "clean": {
+     "eval_row": "courtyard_clean30k_v1",
+     "checkpoint": "/data/peilincai/gems_stage1/models/courtyard_clean30k/point_cloud/iteration_30000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/courtyard_clean30k_v1/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 35366,
+     "psnr_mean_banked": 17.686046600341797
+    },
+    "B50 B5": {
+     "eval_row": "courtyard_B50_importance_ft_e1v2",
+     "checkpoint": "/data/peilincai/gems_stage1/models/courtyard_B50_importance_ft_e1v2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/courtyard_B50_importance_ft_e1v2/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 54897,
+     "psnr_mean_banked": 17.566267013549805
+    },
+    "B25 B5": {
+     "eval_row": "courtyard_B25_importance_ft_e1v2",
+     "checkpoint": "/data/peilincai/gems_stage1/models/courtyard_B25_importance_ft_e1v2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/courtyard_B25_importance_ft_e1v2/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 17060,
+     "psnr_mean_banked": 17.270668029785156
+    },
+    "B6R": {
+     "eval_row": "e2r_courtyard_B50_v1",
+     "checkpoint": "/data/peilincai/gems_stage1/models/e2r_courtyard_B50_v1/point_cloud/iteration_50000/point_cloud_state_dict.pt",
+     "floater_npz": "/data/peilincai/gems_stage1/eval/e2r_courtyard_B50_v1/geometry/g3_floaters.npz",
+     "n_floater_tri_ids": 31688,
+     "psnr_mean_banked": 18.02585792541504
+    }
+   },
+   "output_png": "/data/peilincai/mesh-splatting/RESULTS/figures/qual/courtyard_qual_grid.png"
+  }
+ }
+}
