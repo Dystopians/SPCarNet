@@ -256,3 +256,6 @@ Never trust chat memory over this file.
 
 ### GOAL #010 — B12.5 slice (S-REND) — 2026-07-03 — DONE
 - 18 rows (9 scenes × B5/B4 @12.5%), all jobs EXITED:0. **0/9 within −0.10 of clean (−0.31..−2.37 dB; graceful degradation, FPS 48–76) — iso claim consolidates at B50. FT value 9/9 positive CI, growing as budget shrinks (+0.09..+0.27), confirming the E1′/G4 regime prediction.** Next: random contrast at B12.5 (the A2 dominance measurement).
+
+### GOAL #011 — B12.5 dominance contrast — 2026-07-03 — DONE
+- 9 random_ft@B12.5 rows (safe-FT matched config), all EXITED:0. **Evidence-importance dominates random by +3.63..+8.19 dB (mean +5.23), 9/9 CIs excl. 0** — the E1'/G4 regime claim is fully evidenced; RED-TEAM A2 answered with measured margins. E1-PARETO S-REND core structure complete: B50 iso (8/9 legacy / 4/9 primary anchor), B25/B12.5 graceful degradation with FT value growing (9/9 CI), aggressive-budget dominance quantified.
