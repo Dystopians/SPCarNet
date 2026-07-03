@@ -1,6 +1,6 @@
 # T2 — Per-scene rendering (E3-REND)
 
-_generated 2026-07-03T19:26:58.161156+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-03T22:28:25.211099+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > STATS: every delta is a paired per-view bootstrap 95% CI (10k resamples, seed 0, PROTOCOL section 5). MULTIPLE-COMPARISONS CAVEAT (E10): dozens of CIs are reported across this pack; borderline CIs (effect near a floor or CI edge near 0) should be read with Bonferroni-style skepticism — headline claims rest only on effects that are large, replicated across scenes/suites, or mechanism-backed. Courtyard rendering CIs are 5-view (underpowered by design). Reporting language per section 6: 'improves/reduces' ONLY when the CI excludes 0 AND the D3 floor is cleared; otherwise 'comparable'/'inconclusive'.
 > B0-26k rows are the 26k-snapshot context anchor (NOT compute-matched; LEDGER GOAL#R-01). Teacher-headroom analysis (E3-REND): see T6_ablations teacher block — distill-control deltas were REAL but sub-floor (E3 sunset; CLAIMS.md C3').
@@ -33,6 +33,7 @@ _generated 2026-07-03T19:26:58.161156+00:00 by tools/gems/report/tables.py — e
 | S-REND | garden | B5 | B50 | 24.851 | 0.7693 | 0.2101 | +0.139 [+0.097,+0.177] | +0.070 [+0.037,+0.100] | -0.0061 [-0.0065,-0.0057] | 24 | garden_B50_importance_ft_e1v2 |
 | S-REND | garden | B4 | B50 | 24.701 | 0.7619 | 0.2163 | -0.011 [-0.033,+0.003] | -0.080 [-0.102,-0.061] | +0.0001 [-0.0000,+0.0002] | 24 | garden_B50_importance_noft_e1b |
 | S-REND | garden | B2 | B50 | 21.378 | 0.5788 | 0.3655 | -3.334 [-3.667,-3.001] | -3.403 [-3.749,-3.058] | +0.1493 [+0.1442,+0.1539] | 24 | garden_B50_random_ft_e1b |
+| S-REND | garden | B3 | B50 | 21.457 | 0.6075 | 0.3533 | -3.255 [-3.460,-3.035] | -3.324 [-3.530,-3.101] | +0.1371 [+0.1337,+0.1402] | 24 | garden_B50_qem_ft_b3 |
 | S-REND | garden | B5-iter | B50 | 24.869 | 0.7700 | 0.2092 | +0.157 [+0.110,+0.200] | +0.088 [+0.050,+0.122] | -0.0071 [-0.0075,-0.0067] | 24 | garden_B70_importance_ft_e1v3 |
 | S-REND | garden | B5 | B25 | 24.739 | 0.7668 | 0.2148 | +0.027 [-0.054,+0.098] | -0.042 [-0.111,+0.020] | -0.0014 [-0.0023,-0.0003] | 24 | garden_B25_importance_ft_e1v2 |
 | S-REND | garden | B4 | B25 | 24.573 | 0.7578 | 0.2225 | -0.139 [-0.199,-0.087] | -0.208 [-0.260,-0.161] | +0.0062 [+0.0053,+0.0074] | 24 | garden_B25_importance_noft_e1b |
@@ -103,16 +104,19 @@ _generated 2026-07-03T19:26:58.161156+00:00 by tools/gems/report/tables.py — e
 | S-GEO | ss3dm_town01 | B0 | B100 | 22.574 | 0.8645 | 0.2831 | — | — | — | 57 | ss3dm_town01_clean30k_geo_v1 |
 | S-GEO | ss3dm_town01 | B5 | B50 | 22.634 | 0.8658 | 0.2798 | +0.061 [-0.017,+0.118] | — | -0.0033 [-0.0040,-0.0025] | 57 | ss3dm_town01_B50_geo_v1 |
 | S-GEO | ss3dm_town01 | B4 | B50 | 22.506 | 0.8640 | 0.2835 | -0.067 [-0.136,-0.020] | — | +0.0004 [+0.0001,+0.0009] | 57 | ss3dm_town01_B50_importance_noft_s2 |
+| S-GEO | ss3dm_town01 | B6R | B50 | 22.607 | 0.8664 | 0.2786 | +0.034 [-0.098,+0.136] | — | -0.0045 [-0.0053,-0.0036] | 57 | b6r_ss3dm_town01_B50_v1 |
 | S-GEO | ss3dm_town01 | B5 | B25 | 22.373 | 0.8639 | 0.2827 | -0.200 [-0.382,-0.049] | — | -0.0004 [-0.0016,+0.0011] | 57 | ss3dm_town01_B25_importance_ft_s2 |
 | S-GEO | ss3dm_town01 | B4 | B25 | 22.250 | 0.8619 | 0.2867 | -0.324 [-0.500,-0.178] | — | +0.0037 [+0.0027,+0.0049] | 57 | ss3dm_town01_B25_importance_noft_s2 |
 | S-GEO | ss3dm_town02 | B0 | B100 | 22.624 | 0.8533 | 0.2798 | — | — | — | 57 | ss3dm_town02_clean30k_geo_v1 |
 | S-GEO | ss3dm_town02 | B5 | B50 | 22.669 | 0.8543 | 0.2771 | +0.045 [-0.010,+0.089] | — | -0.0027 [-0.0034,-0.0020] | 57 | ss3dm_town02_B50_geo_v1 |
 | S-GEO | ss3dm_town02 | B4 | B50 | 22.569 | 0.8529 | 0.2801 | -0.055 [-0.104,-0.021] | — | +0.0003 [+0.0000,+0.0005] | 57 | ss3dm_town02_B50_importance_noft_s2 |
+| S-GEO | ss3dm_town02 | B6R | B50 | 22.702 | 0.8568 | 0.2741 | +0.078 [-0.024,+0.159] | — | -0.0057 [-0.0067,-0.0047] | 57 | b6r_ss3dm_town02_B50_v1 |
 | S-GEO | ss3dm_town02 | B5 | B25 | 22.468 | 0.8531 | 0.2788 | -0.156 [-0.317,-0.027] | — | -0.0010 [-0.0020,+0.0001] | 57 | ss3dm_town02_B25_importance_ft_s2 |
 | S-GEO | ss3dm_town02 | B4 | B25 | 22.370 | 0.8515 | 0.2821 | -0.254 [-0.408,-0.130] | — | +0.0023 [+0.0017,+0.0030] | 57 | ss3dm_town02_B25_importance_noft_s2 |
 | S-GEO | ss3dm_town03 | B0 | B100 | 23.181 | 0.8696 | 0.2445 | — | — | — | 57 | ss3dm_town03_clean30k_geo_v1 |
 | S-GEO | ss3dm_town03 | B5 | B50 | 23.278 | 0.8715 | 0.2399 | +0.097 [+0.056,+0.136] | — | -0.0045 [-0.0052,-0.0038] | 57 | ss3dm_town03_B50_geo_v1 |
 | S-GEO | ss3dm_town03 | B4 | B50 | 23.155 | 0.8692 | 0.2446 | -0.026 [-0.048,-0.009] | — | +0.0002 [-0.0000,+0.0004] | 57 | ss3dm_town03_B50_importance_noft_s2 |
+| S-GEO | ss3dm_town03 | B6R | B50 | 23.298 | 0.8718 | 0.2391 | +0.117 [+0.065,+0.165] | — | -0.0054 [-0.0061,-0.0047] | 57 | b6r_ss3dm_town03_B50_v1 |
 | S-GEO | ss3dm_town03 | B5 | B25 | 23.142 | 0.8704 | 0.2414 | -0.039 [-0.150,+0.054] | — | -0.0030 [-0.0040,-0.0020] | 57 | ss3dm_town03_B25_importance_ft_s2 |
 | S-GEO | ss3dm_town03 | B4 | B25 | 23.022 | 0.8680 | 0.2464 | -0.159 [-0.266,-0.073] | — | +0.0019 [+0.0013,+0.0027] | 57 | ss3dm_town03_B25_importance_noft_s2 |
 | S-GEO | ss3dm_town06 | B0 | B100 | 22.213 | 0.8395 | 0.3134 | — | — | — | 57 | ss3dm_town06_clean30k_geo_v1 |
@@ -124,15 +128,23 @@ _generated 2026-07-03T19:26:58.161156+00:00 by tools/gems/report/tables.py — e
 | S-DEV | toy_parking | B5 | B50 | 30.371 | 0.9541 | 0.1060 | -0.524 [-0.881,-0.218] | — | +0.0124 [+0.0094,+0.0156] | 18 | toy_parking_B50_importance_ft_e1v2 |
 | S-DEV | toy_parking | B4 | B50 | 30.375 | 0.9570 | 0.0958 | -0.520 [-0.852,-0.247] | — | +0.0021 [+0.0005,+0.0045] | 18 | toy_parking_B50_importance_noft_e1b |
 | S-DEV | toy_parking | B2 | B50 | 28.773 | 0.9352 | 0.1723 | -2.121 [-2.783,-1.481] | — | +0.0787 [+0.0687,+0.0927] | 18 | toy_parking_B50_random_ft_e1b |
+| S-DEV | toy_parking | B3 | B50 | 27.647 | 0.9406 | 0.1259 | -3.247 [-4.242,-2.300] | — | +0.0323 [+0.0265,+0.0381] | 18 | toy_parking_B50_qem_ft_b3 |
 | S-DEV | toy_parking | B5-iter | B50 | 30.353 | 0.9532 | 0.1088 | -0.542 [-0.916,-0.221] | — | +0.0151 [+0.0117,+0.0186] | 18 | toy_parking_B70_importance_ft_e1v3 |
 | S-DEV | toy_parking | B6R | B50 | 29.988 | 0.9500 | 0.1120 | -0.906 [-1.462,-0.429] | — | +0.0184 [+0.0141,+0.0232] | 18 | e2r_toy_parking_B50_v1 |
 | S-DEV | toy_parking | B5 | B25 | 29.766 | 0.9503 | 0.1070 | -1.128 [-1.830,-0.570] | — | +0.0134 [+0.0093,+0.0182] | 18 | toy_parking_B25_importance_ft_e1v2 |
 | S-DEV | toy_parking | B4 | B25 | 29.728 | 0.9522 | 0.0999 | -1.167 [-1.843,-0.633] | — | +0.0062 [+0.0026,+0.0110] | 18 | toy_parking_B25_importance_noft_e1b |
 | S-DEV | toy_parking | B2 | B25 | 26.361 | 0.8832 | 0.2407 | -4.533 [-5.534,-3.562] | — | +0.1470 [+0.1313,+0.1678] | 18 | toy_parking_B25_random_ft_e1b |
+| S-DEV | toy_parking_v2 | B0 | B100 | 31.224 | 0.9643 | 0.0936 | — | — | — | 18 | toy_parking_v2_clean30k_v1 |
+| S-DEV | toy_parking_v2 | B5 | B50 | 30.787 | 0.9587 | 0.1073 | -0.437 [-0.769,-0.155] | — | +0.0138 [+0.0105,+0.0171] | 18 | toy_parking_v2_B50_importance_ft_s2 |
+| S-DEV | toy_parking_v2 | B4 | B50 | 30.734 | 0.9611 | 0.0963 | -0.491 [-0.787,-0.246] | — | +0.0027 [+0.0006,+0.0055] | 18 | toy_parking_v2_B50_importance_noft_s2 |
+| S-DEV | toy_parking_occl | B0 | B100 | 31.448 | 0.9612 | 0.1013 | — | — | — | 18 | toy_parking_occl_clean30k_v1 |
+| S-DEV | toy_parking_occl | B5 | B50 | 30.796 | 0.9548 | 0.1157 | -0.653 [-1.397,-0.183] | — | +0.0143 [+0.0111,+0.0179] | 18 | toy_parking_occl_B50_importance_ft_s2 |
+| S-DEV | toy_parking_occl | B4 | B50 | 30.800 | 0.9584 | 0.1041 | -0.648 [-1.378,-0.208] | — | +0.0028 [+0.0003,+0.0061] | 18 | toy_parking_occl_B50_importance_noft_s2 |
 | S-DEV | courtyard | B0 | B100 | 17.686 | 0.5968 | 0.3850 | — | — | — | 5 | courtyard_clean30k_v4 |
 | S-DEV | courtyard | B5 | B50 | 17.566 | 0.5897 | 0.3889 | -0.120 [-0.199,-0.064] | — | +0.0038 [+0.0014,+0.0070] | 5 | courtyard_B50_ft_v4 |
 | S-DEV | courtyard | B4 | B50 | 17.648 | 0.5974 | 0.3830 | -0.038 [-0.061,-0.007] | — | -0.0020 [-0.0032,-0.0007] | 5 | courtyard_B50_importance_noft_v4 |
 | S-DEV | courtyard | B2 | B50 | 17.436 | 0.5387 | 0.4297 | -0.250 [-0.796,+0.446] | — | +0.0447 [+0.0321,+0.0606] | 5 | courtyard_B50_random_ft_e1b |
+| S-DEV | courtyard | B3 | B50 | 17.431 | 0.5530 | 0.4503 | -0.255 [-1.320,+1.203] | — | +0.0653 [+0.0485,+0.0804] | 5 | courtyard_B50_qem_ft_b3 |
 | S-DEV | courtyard | B6R | B50 | 18.026 | 0.5882 | 0.3826 | +0.340 [-0.282,+1.516] | — | -0.0024 [-0.0086,+0.0035] | 5 | e2r_courtyard_B50_v1 |
 | S-DEV | courtyard | B5 | B25 | 17.271 | 0.5889 | 0.3850 | -0.415 [-0.613,-0.266] | — | +0.0000 [-0.0035,+0.0032] | 5 | courtyard_B25_importance_ft_e1v2 |
 | S-DEV | courtyard | B4 | B25 | 17.297 | 0.5930 | 0.3825 | -0.389 [-0.575,-0.247] | — | -0.0025 [-0.0060,+0.0013] | 5 | courtyard_B25_importance_noft_v4 |

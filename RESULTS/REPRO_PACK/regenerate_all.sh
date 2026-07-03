@@ -9,4 +9,5 @@ cd "$REPO"
 $PY tools/gems/report/collect.py
 $PY tools/gems/report/tables.py
 $PY tools/gems/report/figures.py
+$PY tools/gems/report/figures_composite.py
 echo "[regenerate_all] done — RESULTS/aggregate + RESULTS/figures refreshed"

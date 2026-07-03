@@ -1,12 +1,12 @@
 # T4 — Efficiency (E4-EFF)
 
-_generated 2026-07-03T19:26:58.167623+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-03T22:28:25.219270+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > Second-resolution FPS column: bench-only, non-protocol resolution (0.5x linear protocol res); loop: identical to run_eval.py: 3 warmup renders, median of 3 full test-set forward passes, no image I/O; GPU NVIDIA RTX 6000 Ada Generation. These half-res numbers are for the E4 efficiency table only ('bench-only, non-protocol resolution') — no quality metric was computed at this resolution.
 > HONESTY CAVEAT on FPS columns: the protocol-res FPS in each metrics.json was measured at eval time (idle GPUs, various same-model RTX 6000 Ada devices); the half-res bench ran on GPU 4 WITH a background process from another user (~21% util at launch). Method-vs-method comparisons WITHIN the half-res column share GPU state (paired-ish); protocol-vs-half-res comparisons across columns are indicative only. Several large scenes show half-res FPS close to or below protocol-res FPS — consistent with triangle-sort-bound rendering (cost dominated by primitive count, not pixels) plus contention; do not read that cross-column delta as a resolution scaling law.
 > Pipeline overhead = evidence+prune+finetune wall-clock from row.json stage stamps (measured). 30k-train reference: MEASURED for SS3DM towns (supervised job files, appendix below). For M360/toy/courtyard the original 30k trainings predate the job supervisor: LEDGER GOAL#002 estimates 40-80 min/scene (M360, images_4/2) and GOAL#004 measured ~17 min (toy); those are ESTIMATES, labeled as such — the overhead column stays measured either way.
 > Overhead rows exist only for pipeline rows with row.json (B5/B4/B2 tags s2/e1b/e1v2...); B4 overhead is evidence+prune only (no FT).
-> Measured 30k-train wall-clocks (supervised jobs): b0_ss3dm_town01=31.2 min (exit 0); b0_ss3dm_town02=32.5 min (exit 0); b0_ss3dm_town03=32.6 min (exit 0); b0_ss3dm_town06=29.5 min (exit 0)
+> Measured 30k-train wall-clocks (supervised jobs): b0_ss3dm_town01=31.2 min (exit 0); b0_ss3dm_town02=32.5 min (exit 0); b0_ss3dm_town03=32.6 min (exit 0); b0_ss3dm_town06=29.5 min (exit 0); b0_toy_occl=23.8 min (exit 0); b0_toy_v2=22.8 min (exit 0)
 
 | suite | scene | method | budget | triangles | disk MB | peak VRAM MB | FPS @protocol res | FPS @0.5x res (bench-only) | prune+FT overhead [min] | overhead vs 30k-train | eval row |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -27,6 +27,7 @@ _generated 2026-07-03T19:26:58.167623+00:00 by tools/gems/report/tables.py — e
 | S-REND | garden | B0 | B100 | 11568056 | 942 | 6946 | 32.3 | 26.6 | — | — | garden_clean30k_v2 |
 | S-REND | garden | B5 | B50 | 5784028 | 735 | 5158 | 41.7 | 38.9 | 13.0 | see note (no measured 30k train for this scene) | garden_B50_importance_ft_e1v2 |
 | S-REND | garden | B4 | B50 | 5784028 | 735 | 5158 | 42.2 | — | 0.4 | see note (no measured 30k train for this scene) | garden_B50_importance_noft_e1b |
+| S-REND | garden | B3 | B50 | 5784028 | 328 | 4298 | 33.2 | — | — | — | garden_B50_qem_ft_b3 |
 | S-REND | garden | B5 | B25 | 2892014 | 555 | 4010 | 54.3 | 54.5 | 10.8 | see note (no measured 30k train for this scene) | garden_B25_importance_ft_e1v2 |
 | S-REND | garden | B4 | B25 | 2892014 | 555 | 4010 | 53.8 | — | 0.4 | see note (no measured 30k train for this scene) | garden_B25_importance_noft_e1b |
 | S-REND | garden | B5 | B12.5 | 1446007 | 390 | 3231 | 65.9 | 110.1 | 9.5 | see note (no measured 30k train for this scene) | garden_B12_importance_ft_s2 |
@@ -96,10 +97,43 @@ _generated 2026-07-03T19:26:58.167623+00:00 by tools/gems/report/tables.py — e
 | S-DEV | toy_parking | B0 | B100 | 6590559 | 542 | 4189 | 62.3 | 74.2 | — | — | toy_parking_clean30k_v1 |
 | S-DEV | toy_parking | B5 | B50 | 3295279 | 426 | 3197 | 75.5 | 115.5 | 7.6 | see note (no measured 30k train for this scene) | toy_parking_B50_importance_ft_e1v2 |
 | S-DEV | toy_parking | B4 | B50 | 3295279 | 426 | 3197 | 76.1 | — | 0.2 | see note (no measured 30k train for this scene) | toy_parking_B50_importance_noft_e1b |
+| S-DEV | toy_parking | B3 | B50 | 3295275 | 209 | 2692 | 36.5 | — | — | — | toy_parking_B50_qem_ft_b3 |
 | S-DEV | toy_parking | B5 | B25 | 1647639 | 320 | 2549 | 90.0 | — | 6.6 | see note (no measured 30k train for this scene) | toy_parking_B25_importance_ft_e1v2 |
 | S-DEV | toy_parking | B4 | B25 | 1647639 | 320 | 2549 | 90.2 | — | 0.2 | see note (no measured 30k train for this scene) | toy_parking_B25_importance_noft_e1b |
+| S-DEV | toy_parking_v2 | B0 | B100 | 6665411 | 549 | 4266 | 61.0 | — | — | — | toy_parking_v2_clean30k_v1 |
+| S-DEV | toy_parking_v2 | B5 | B50 | 3332705 | 431 | 3248 | 74.4 | — | 8.2 | see note (no measured 30k train for this scene) | toy_parking_v2_B50_importance_ft_s2 |
+| S-DEV | toy_parking_v2 | B4 | B50 | 3332705 | 431 | 3248 | 73.7 | — | 0.3 | see note (no measured 30k train for this scene) | toy_parking_v2_B50_importance_noft_s2 |
+| S-DEV | toy_parking_occl | B0 | B100 | 6659597 | 554 | 4305 | 60.5 | — | — | — | toy_parking_occl_clean30k_v1 |
+| S-DEV | toy_parking_occl | B5 | B50 | 3329798 | 436 | 3276 | 74.2 | — | 8.2 | see note (no measured 30k train for this scene) | toy_parking_occl_B50_importance_ft_s2 |
+| S-DEV | toy_parking_occl | B4 | B50 | 3329798 | 436 | 3276 | 75.0 | — | 0.3 | see note (no measured 30k train for this scene) | toy_parking_occl_B50_importance_noft_s2 |
 | S-DEV | courtyard | B0 | B100 | 4374929 | 463 | 2544 | 104.9 | 101.6 | — | — | courtyard_clean30k_v4 |
 | S-DEV | courtyard | B5 | B50 | 2187464 | 355 | 1910 | 122.7 | 126.0 | 5.9 | see note (no measured 30k train for this scene) | courtyard_B50_ft_v4 |
 | S-DEV | courtyard | B4 | B50 | 2187464 | 355 | 1910 | 123.1 | — | 0.8 | see note (no measured 30k train for this scene) | courtyard_B50_importance_noft_v4 |
+| S-DEV | courtyard | B3 | B50 | 2187463 | 187 | 1549 | 148.7 | — | — | — | courtyard_B50_qem_ft_b3 |
 | S-DEV | courtyard | B5 | B25 | 1093732 | 248 | 1468 | 140.3 | — | 5.3 | see note (no measured 30k train for this scene) | courtyard_B25_importance_ft_e1v2 |
 | S-DEV | courtyard | B4 | B25 | 1093732 | 248 | 1468 | 141.0 | — | 0.4 | see note (no measured 30k train for this scene) | courtyard_B25_importance_noft_v4 |
+
+---
+
+## CONTEXT appendix (NOT corpus rows — no CIs vs GEMS)
+
+### R1 — 3DGS + storage-matched opacity-prune reference (LEDGER GOAL#017; sanctioned outside-single-mouth exception; full table: `analysis/r1_3dgs_reference/r1_table.md`)
+
+Context only per Stage2 prompt section 4: NOT a claim target; NON-CLAIMS already disclaim SOTA novel-view quality vs the 3DGS family. Same llff8 splits/resolutions (name-asserted); disk MB = each representation's shippable artifact.
+
+| scene | method | primitives | disk MB | FPS | peak VRAM MB |
+|---|---|---|---|---|---|
+| garden | 3DGS 30k (vanilla) | 4,158,575 gaussians | 983.6 | 100.8 | 5610 |
+| garden | 3DGS opacity-prune+FT5k (storage-matched) | 3,106,001 gaussians | 734.6 | 140.3 | 4965 |
+| garden | GEMS B0 (corpus row, quoted) | 11,568,056 triangles | 942.0 | 32.3 | — |
+| garden | GEMS B5@B50 (corpus row, quoted) | 5,784,028 triangles | 734.6 | 41.7 | — |
+| bicycle | 3DGS 30k (vanilla) | 4,925,145 gaussians | 1164.9 | 79.4 | 6164 |
+| bicycle | 3DGS opacity-prune+FT5k (storage-matched) | 2,892,207 gaussians | 684.0 | 156.2 | 4859 |
+| bicycle | GEMS B0 (corpus row, quoted) | 9,422,930 triangles | 908.1 | 38.6 | — |
+| bicycle | GEMS B5@B50 (corpus row, quoted) | 4,711,465 triangles | 684.0 | 49.6 | — |
+| kitchen | 3DGS 30k (vanilla) | 1,592,262 gaussians | 376.6 | 149.4 | 8152 |
+| kitchen | 3DGS opacity-prune+FT5k (storage-matched) | 1,592,262 gaussians | 376.6 | 149.4 | 8152 |
+| kitchen | GEMS B0 (corpus row, quoted) | 9,716,239 triangles | 708.7 | 26.4 | — |
+| kitchen | GEMS B5@B50 (corpus row, quoted) | 4,858,119 triangles | 527.3 | 33.8 | — |
+
+A3 positioning (verbatim conclusion lives in r1_table.md): at matched artifact storage 3DGS renders these scenes 2.1–3.4 dB above GEMS B5@B50 at 3.1–4.4x FPS; GEMS's deliverables (mesh artifact, g1–g4/downstream consumability, preservation-exactness, 50%-reduction-at-iso) have no 3DGS-family equivalent artifact. R1 contextualizes, gates nothing.

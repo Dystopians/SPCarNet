@@ -53,7 +53,13 @@ BUDGETS = ("B50", "B25", "B12.5")
 SCENE_ORDER = ["bicycle", "flowers", "garden", "stump", "treehill", "room",
                "counter", "kitchen", "bonsai",
                "ss3dm_town01", "ss3dm_town02", "ss3dm_town03", "ss3dm_town06",
-               "toy_parking", "courtyard"]
+               "toy_parking", "toy_parking_v2", "toy_parking_occl", "courtyard"]
+
+# R1 / H1 context artifacts (OUTSIDE the single-mouth corpus by design;
+# LEDGER GOAL#017 sanctioned exception / GOAL#013 historical row). Quoted in
+# T1/T4 as clearly-marked CONTEXT lines, never as corpus rows, never CI'd.
+R1_DIR = os.path.join(ANALYSIS_ROOT, "r1_3dgs_reference")
+H1_JSON = os.path.join(ANALYSIS_ROOT, "h1_v106_context", "h1_v106_context_row.json")
 
 STATS_CAVEAT = (
     "STATS: every delta is a paired per-view bootstrap 95% CI (10k resamples, "
@@ -146,6 +152,85 @@ def write_table(outdir, name, title, header_lines, columns, rows_out):
 
 
 # ---------------------------------------------------------------------------
+# R1 / H1 context appendices (script-read from durable analysis artifacts;
+# clearly marked CONTEXT — outside the single-mouth corpus, never CI'd)
+# ---------------------------------------------------------------------------
+
+def _append_context_appendix(outdir, table_name, include_h1=False,
+                             include_r1=False, r1_fields="quality"):
+    lines = ["\n---\n\n## CONTEXT appendix (NOT corpus rows — no CIs vs GEMS)\n"]
+    if include_r1 and os.path.isdir(R1_DIR):
+        lines.append(
+            "\n### R1 — 3DGS + storage-matched opacity-prune reference "
+            "(LEDGER GOAL#017; sanctioned outside-single-mouth exception; "
+            "full table: `analysis/r1_3dgs_reference/r1_table.md`)\n\n"
+            "Context only per Stage2 prompt section 4: NOT a claim target; "
+            "NON-CLAIMS already disclaim SOTA novel-view quality vs the 3DGS "
+            "family. Same llff8 splits/resolutions (name-asserted); disk MB = "
+            "each representation's shippable artifact.\n\n")
+        if r1_fields == "quality":
+            lines.append("| scene | method | PSNR | LPIPS | primitives | "
+                         "disk MB | FPS |\n|---|---|---|---|---|---|---|\n")
+        else:
+            lines.append("| scene | method | primitives | disk MB | FPS | "
+                         "peak VRAM MB |\n|---|---|---|---|---|---|\n")
+        for scene in ("garden", "bicycle", "kitchen"):
+            jp = os.path.join(R1_DIR, f"r1_{scene}.json")
+            if not os.path.exists(jp):
+                continue
+            j = json.load(open(jp))
+            for key, label in (("3dgs_30k", "3DGS 30k (vanilla)"),
+                               ("3dgs_compressed",
+                                "3DGS opacity-prune+FT5k (storage-matched)"),
+                               ("gems_b0", "GEMS B0 (corpus row, quoted)"),
+                               ("gems_b5_at_b50", "GEMS B5@B50 (corpus row, quoted)")):
+                r = j["rows"].get(key)
+                if r is None:
+                    continue
+                if r1_fields == "quality":
+                    lines.append(
+                        f"| {scene} | {label} | {r['psnr']:.3f} | "
+                        f"{r['lpips']:.4f} | {r['primitives']:,} "
+                        f"{r['primitive_kind']} | {r['disk_mb']:.1f} | "
+                        f"{r['render_fps']:.1f} |\n")
+                else:
+                    vram = r.get("peak_vram_mb")
+                    lines.append(
+                        f"| {scene} | {label} | {r['primitives']:,} "
+                        f"{r['primitive_kind']} | {r['disk_mb']:.1f} | "
+                        f"{r['render_fps']:.1f} | "
+                        f"{vram:.0f} |\n" if vram is not None else
+                        f"| {scene} | {label} | {r['primitives']:,} "
+                        f"{r['primitive_kind']} | {r['disk_mb']:.1f} | "
+                        f"{r['render_fps']:.1f} | — |\n")
+        lines.append(
+            "\nA3 positioning (verbatim conclusion lives in r1_table.md): at "
+            "matched artifact storage 3DGS renders these scenes 2.1–3.4 dB "
+            "above GEMS B5@B50 at 3.1–4.4x FPS; GEMS's deliverables (mesh "
+            "artifact, g1–g4/downstream consumability, preservation-"
+            "exactness, 50%-reduction-at-iso) have no 3DGS-family "
+            "equivalent artifact. R1 contextualizes, gates nothing.\n")
+    if include_h1 and os.path.exists(H1_JSON):
+        h = json.load(open(H1_JSON))
+        m = h["recorded_metrics"]["full9_mean"]
+        d = h["recorded_metrics"]["delta_vs_clean_meshsplatting"]
+        lines.append(
+            "\n### H1 — v106 historical context row (LEDGER GOAL#013; "
+            "`analysis/h1_v106_context/h1_v106_context_row.json`)\n\n"
+            f"{h['method']['name']}: full9 mean PSNR {m['psnr']:.3f} / SSIM "
+            f"{m['ssim']:.4f} / LPIPS {m['lpips']:.4f} "
+            f"({d['psnr']:+.3f} dB vs its era's clean row). Different "
+            "mechanism (baked render-time residual field), different protocol "
+            "era (legacy metrics.py mouth), NO triangle budget, and a "
+            "documented target-camera-sidecar dependency — NEVER CI-compared "
+            "to GEMS rows; quotable but not re-runnable (checkpoints existed "
+            "only on tmpfs).\n")
+    with open(os.path.join(outdir, f"{table_name}.md"), "a") as f:
+        f.writelines(lines)
+    print(f"[tables] appended R1/H1 context appendix to {table_name}.md")
+
+
+# ---------------------------------------------------------------------------
 # T1 — main Pareto summary
 # ---------------------------------------------------------------------------
 
@@ -164,7 +249,7 @@ def t1_main_pareto(c: Corpus, outdir):
         for budget in BUDGETS:
             # B7 (teacher) is EXCLUDED here: three e3 variants exist per scene
             # (no unique row; demoted diagnostic) — all appear in T6 instead.
-            for method in ("B5", "B4", "B2", "B5-iter", "B6R"):
+            for method in ("B5", "B4", "B2", "B3", "B5-iter", "B6R"):
                 recs = []
                 for s in scenes:
                     r = c.canon(s, method, budget)
@@ -221,14 +306,21 @@ def t1_main_pareto(c: Corpus, outdir):
         "excludes 0 in the improving direction). iso-floor pass = scenes with "
         f"mean dPSNR >= -{FLOOR_PSNR} AND mean dLPIPS <= +{FLOOR_LPIPS} vs B0 "
         "(D3 compaction iso-quality floor).",
-        "MISSING BY DESIGN (honesty, section 7.3/7.4): B1 no-op, B3 QEM+FT and "
-        "H1/R1 reference rows have NOT been run (MATRIX: TODO); B2 exists at "
-        "B12.5 on all 9 S-REND scenes but only on garden/toy/courtyard at "
-        "B50/B25 (e1b era). B6/B7 appear only as diagnostic rows on dev scenes "
-        "(both DEMOTED per CLAIMS.md). S-GEO B2 was never run.",
+        "MISSING BY DESIGN / KNOWN GAPS (honesty, section 7.3/7.4): B1 no-op "
+        "pass-through was never run (sanity cell; MATRIX). B3 QEM+FT exists at "
+        "B50 on garden/toy_parking/courtyard only (GOAL#013 DONE-PASS; other "
+        "scenes/budgets open in the E1 cell notes). B2 exists at B12.5 on all "
+        "9 S-REND scenes but only on garden/toy/courtyard at B50/B25 (e1b "
+        "era); S-GEO B2 was never run. B6/B7 appear only as diagnostic rows "
+        "on dev scenes (both DEMOTED per CLAIMS.md). B6R rows are ablation "
+        "rows (E2R FAILED its joint bar; GOAL#R-04/#014) shown for the "
+        "bounded-positive context. H1/R1 are context appendices below, not "
+        "corpus rows.",
     ]
     write_table(outdir, "T1_main_pareto", "T1 — Main Pareto summary "
                 "(E1-PARETO / E10)", header, cols, out)
+    _append_context_appendix(outdir, "T1_main_pareto",
+                             include_h1=True, include_r1=True)
 
     # per-scene companion csv (feeds F2 and the spot-check)
     with open(os.path.join(outdir, "T1_per_scene_detail.csv"), "w", newline="") as f:
@@ -265,7 +357,7 @@ def t2_rendering(c: Corpus, outdir):
             "n views", "eval row"]
     out = []
     methods = [("B0", "B100"), ("B0'", "B100"), ("B0-26k", "B100")] + [
-        (m, b) for b in BUDGETS for m in ("B5", "B4", "B2", "B5-iter", "B6R")]
+        (m, b) for b in BUDGETS for m in ("B5", "B4", "B2", "B3", "B5-iter", "B6R")]
     for suite in SUITES:
         for s in c.scenes(suite):
             b0 = c.canon(s, "B0", "B100")
@@ -364,7 +456,7 @@ def t4_efficiency(c: Corpus, outdir):
             "peak VRAM MB", "FPS @protocol res", "FPS @0.5x res (bench-only)",
             "prune+FT overhead [min]", "overhead vs 30k-train", "eval row"]
     out = []
-    methods = [("B0", "B100")] + [(m, b) for b in BUDGETS for m in ("B5", "B4")]
+    methods = [("B0", "B100")] + [(m, b) for b in BUDGETS for m in ("B5", "B4", "B3")]
     for suite in SUITES:
         for s in c.scenes(suite):
             for method, budget in methods:
@@ -435,6 +527,8 @@ def t4_efficiency(c: Corpus, outdir):
     ]
     write_table(outdir, "T4_efficiency", "T4 — Efficiency (E4-EFF)", header,
                 cols, out)
+    _append_context_appendix(outdir, "T4_efficiency", include_r1=True,
+                             r1_fields="efficiency")
 
 
 # ---------------------------------------------------------------------------
@@ -553,6 +647,15 @@ def t6_ablations(c: Corpus, outdir):
         for b in BUDGETS:
             add("importance family", "evidence importance vs random (both +FT)",
                 c.canon(s, "B5", b), c.canon(s, "B2", b))
+    # (c2) importance-DEFINITION family ablation (E6 sub-cell, GOAL#012:
+    # revision trigger NOT tripped; pixels_total stands; axis nearly flat)
+    for s in ("garden", "kitchen", "ss3dm_town01"):
+        ref = c.canon(s, "B5", "B50")
+        for meth, name in (
+                ("B5-abl_blend", "max_blending_max vs pixels_total"),
+                ("B5-abl_ckptimp", "ckpt_importance_score vs pixels_total")):
+            add("importance definition (E6, GOAL#012)", name,
+                c.canon(s, meth, "B50"), ref)
     # (d) sourcing probe
     add("checkpoint sourcing", "26k-sourced prune+FT vs 30k-sourced (e26src)",
         c.canon("garden", "B5-src26k", "B50"), c.canon("garden", "B5", "B50"))
@@ -581,13 +684,25 @@ def t6_ablations(c: Corpus, outdir):
                            ("B6R", "opacity release + fade-prune (e2r)")):
             add("geometry mechanism (E2 family, all FAIL/bounded)",
                 name, c.canon(s, meth, "B50"), b5)
+    # (f2) B6R-on-SS3DM generalization rows (GOAL#014 DONE-FAIL as
+    # pre-registered: guard held 3/3 but g3-FRACTION arm 0/3 towns;
+    # B6R stays courtyard-scoped)
+    for s in ("ss3dm_town01", "ss3dm_town02", "ss3dm_town03"):
+        add("geometry mechanism (E2 family, all FAIL/bounded)",
+            "B6R on SS3DM (b6r, GOAL#014 DONE-FAIL)",
+            c.canon(s, "B6R", "B50"), c.canon(s, "B5", "B50"))
 
     header = [
         STATS_CAVEAT,
-        "E6 mapping note: these are the EXISTING Stage-One/1R variant rows "
-        "mapped onto the E6 ablation axes (MATRIX E6: 'map them in'). "
-        "Un-run E6 axes remain open: importance-feature families beyond "
-        "evidence-vs-random, and reallocation on/off (never built).",
+        "E6 mapping note: Stage-One/1R variant rows are mapped onto the E6 "
+        "ablation axes (MATRIX E6: 'map them in'); the importance-DEFINITION "
+        "family block is the dedicated E6 sub-cell (GOAL#012: pixels_total "
+        "vs max_blending_max vs ckpt_importance_score @B50 on "
+        "garden/kitchen/town01 — revision trigger NOT tripped; axis flat, "
+        "all pairwise |dPSNR| <= 0.052 dB; town01 abl_blend is the "
+        "pre-registered degenerate-identical-prune row = measured pipeline "
+        "noise floor 1.6e-5 dB; full CIs analysis/e6_abl/e6_table.md). "
+        "Reallocation on/off was never built (dropped with note, MATRIX).",
         "Geometry-mechanism rows are diagnostics of FAILED/demoted mechanisms "
         "(E2/E2R/E3 verdicts in LEDGER; NEGATIVE_RESULTS.md) — shown with the "
         "rendering guard delta; their g-metric movements are in T3/LEDGER.",
@@ -603,12 +718,19 @@ def t6_ablations(c: Corpus, outdir):
 def t7_robustness(outdir):
     with open(os.path.join(outdir, "T7_robustness.md"), "w") as f:
         f.write("# T7 — Robustness / sensitivity (E7-SENS, E8-ROBUST)\n\n"
-                "**STATUS: PENDING.** No E7 (seeds / dev-vs-full resolution / "
+                "**STATUS: NOT RUN — Tier-2 waive notes DRAFTED, human "
+                "approval pending.** No E7 (seeds / dev-vs-full resolution / "
                 "loss-weight 3-point) or E8 (view drop / pose noise / S-GEN) "
-                "cells have been run yet (MATRIX: TODO, Tier 2). This file is "
-                "a placeholder so the evidence pack is honest about the gap; "
-                "it will be regenerated by tables.py once those cells exist.\n")
-    print("[tables] wrote T7_robustness.md (placeholder PENDING)")
+                "cells were run (MATRIX: TODO, Tier 2). Waive drafts with "
+                "reasoning are in `EXPERIMENT_REPORT.md` section 7 and "
+                "`RESULTS/HANDOFF.md`. Partial substitutes on record "
+                "(honest, NOT replacements): the measured pipeline "
+                "reproducibility noise floor of 1.6e-5 dB from the GOAL#012 "
+                "degenerate-identical-prune row (seeded FT+eval repeat), and "
+                "the D-2 toy-variant family replication (GOAL#016). This "
+                "file will be regenerated by tables.py if those cells are "
+                "ever run.\n")
+    print("[tables] wrote T7_robustness.md (waive-draft placeholder)")
 
 
 def main():

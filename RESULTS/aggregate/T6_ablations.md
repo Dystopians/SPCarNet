@@ -1,9 +1,9 @@
 # T6 — Ablations (E6-ABL)
 
-_generated 2026-07-03T19:27:01.110808+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-03T22:28:28.859605+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > STATS: every delta is a paired per-view bootstrap 95% CI (10k resamples, seed 0, PROTOCOL section 5). MULTIPLE-COMPARISONS CAVEAT (E10): dozens of CIs are reported across this pack; borderline CIs (effect near a floor or CI edge near 0) should be read with Bonferroni-style skepticism — headline claims rest only on effects that are large, replicated across scenes/suites, or mechanism-backed. Courtyard rendering CIs are 5-view (underpowered by design). Reporting language per section 6: 'improves/reduces' ONLY when the CI excludes 0 AND the D3 floor is cleared; otherwise 'comparable'/'inconclusive'.
-> E6 mapping note: these are the EXISTING Stage-One/1R variant rows mapped onto the E6 ablation axes (MATRIX E6: 'map them in'). Un-run E6 axes remain open: importance-feature families beyond evidence-vs-random, and reallocation on/off (never built).
+> E6 mapping note: Stage-One/1R variant rows are mapped onto the E6 ablation axes (MATRIX E6: 'map them in'); the importance-DEFINITION family block is the dedicated E6 sub-cell (GOAL#012: pixels_total vs max_blending_max vs ckpt_importance_score @B50 on garden/kitchen/town01 — revision trigger NOT tripped; axis flat, all pairwise |dPSNR| <= 0.052 dB; town01 abl_blend is the pre-registered degenerate-identical-prune row = measured pipeline noise floor 1.6e-5 dB; full CIs analysis/e6_abl/e6_table.md). Reallocation on/off was never built (dropped with note, MATRIX).
 > Geometry-mechanism rows are diagnostics of FAILED/demoted mechanisms (E2/E2R/E3 verdicts in LEDGER; NEGATIVE_RESULTS.md) — shown with the rendering guard delta; their g-metric movements are in T3/LEDGER.
 
 | ablation axis | variant | scene | budget | PSNR | dPSNR vs reference (CI) | dLPIPS vs reference (CI) | reference row | eval row |
@@ -36,6 +36,12 @@ _generated 2026-07-03T19:27:01.110808+00:00 by tools/gems/report/tables.py — e
 | importance family | evidence importance vs random (both +FT) | toy_parking | B50 | 30.371 | +1.597 [+1.020,+2.198] | -0.0663 [-0.0787,-0.0566] | toy_parking_B50_random_ft_e1b | toy_parking_B50_importance_ft_e1v2 |
 | importance family | evidence importance vs random (both +FT) | toy_parking | B25 | 29.766 | +3.405 [+2.383,+4.412] | -0.1337 [-0.1518,-0.1185] | toy_parking_B25_random_ft_e1b | toy_parking_B25_importance_ft_e1v2 |
 | importance family | evidence importance vs random (both +FT) | courtyard | B50 | 17.566 | +0.130 [-0.551,+0.640] | -0.0408 [-0.0585,-0.0287] | courtyard_B50_random_ft_e1b | courtyard_B50_ft_v4 |
+| importance definition (E6, GOAL#012) | max_blending_max vs pixels_total | garden | B50 | 24.853 | +0.003 [+0.000,+0.005] | +0.0001 [+0.0000,+0.0001] | garden_B50_importance_ft_e1v2 | garden_B50_importance_ft_abl_blend |
+| importance definition (E6, GOAL#012) | ckpt_importance_score vs pixels_total | garden | B50 | 24.849 | -0.002 [-0.006,+0.001] | +0.0001 [+0.0000,+0.0002] | garden_B50_importance_ft_e1v2 | garden_B50_importance_ft_abl_ckptimp |
+| importance definition (E6, GOAL#012) | max_blending_max vs pixels_total | kitchen | B50 | 27.449 | -0.000 [-0.006,+0.004] | -0.0001 [-0.0001,-0.0000] | kitchen_B50_importance_ft_s2 | kitchen_B50_importance_ft_abl_blend |
+| importance definition (E6, GOAL#012) | ckpt_importance_score vs pixels_total | kitchen | B50 | 27.437 | -0.012 [-0.021,-0.004] | +0.0001 [-0.0000,+0.0004] | kitchen_B50_importance_ft_s2 | kitchen_B50_importance_ft_abl_ckptimp |
+| importance definition (E6, GOAL#012) | max_blending_max vs pixels_total | ss3dm_town01 | B50 | 22.634 | -0.000 [-0.000,+0.000] | -0.0000 [-0.0000,+0.0000] | ss3dm_town01_B50_geo_v1 | ss3dm_town01_B50_importance_ft_abl_blend |
+| importance definition (E6, GOAL#012) | ckpt_importance_score vs pixels_total | ss3dm_town01 | B50 | 22.582 | -0.052 [-0.121,-0.001] | -0.0001 [-0.0002,+0.0000] | ss3dm_town01_B50_geo_v1 | ss3dm_town01_B50_importance_ft_abl_ckptimp |
 | checkpoint sourcing | 26k-sourced prune+FT vs 30k-sourced (e26src) | garden | B50 | 24.831 | -0.020 [-0.030,-0.010] | +0.0016 [+0.0012,+0.0021] | garden_B50_importance_ft_e1v2 | garden_B50_importance_ft_e26src |
 | teacher distillation (E3, DEMOTED diagnostic) | density 1x | garden | B50 | 24.919 | +0.039 [+0.016,+0.062] | -0.0015 [-0.0018,-0.0011] | e3_garden_B50_control_v1 | e3_garden_B50_distill_v1 |
 | teacher distillation (E3, DEMOTED diagnostic) | density 1x | toy_parking | B50 | 30.449 | +0.115 [+0.053,+0.191] | +0.0001 [-0.0012,+0.0015] | e3_toy_B50_control_v1 | e3_toy_B50_distill_v1 |
@@ -51,3 +57,6 @@ _generated 2026-07-03T19:27:01.110808+00:00 by tools/gems/report/tables.py — e
 | geometry mechanism (E2 family, all FAIL/bounded) | gradient-routed losses (m3v1/E2 v1) | courtyard | B50 | 16.815 | -0.752 [-1.318,-0.238] | +0.0924 [+0.0683,+0.1167] | courtyard_B50_ft_v4 | m3v1_courtyard_B50_v1 |
 | geometry mechanism (E2 family, all FAIL/bounded) | evidence floater deletion (e2v3) | courtyard | B50 | 17.331 | -0.235 [-0.396,-0.110] | +0.0018 [-0.0007,+0.0038] | courtyard_B50_ft_v4 | e2v3_courtyard_B50_v1 |
 | geometry mechanism (E2 family, all FAIL/bounded) | opacity release + fade-prune (e2r) | courtyard | B50 | 18.026 | +0.460 [-0.152,+1.605] | -0.0062 [-0.0108,-0.0023] | courtyard_B50_ft_v4 | e2r_courtyard_B50_v1 |
+| geometry mechanism (E2 family, all FAIL/bounded) | B6R on SS3DM (b6r, GOAL#014 DONE-FAIL) | ss3dm_town01 | B50 | 22.607 | -0.027 [-0.095,+0.030] | -0.0012 [-0.0017,-0.0008] | ss3dm_town01_B50_geo_v1 | b6r_ss3dm_town01_B50_v1 |
+| geometry mechanism (E2 family, all FAIL/bounded) | B6R on SS3DM (b6r, GOAL#014 DONE-FAIL) | ss3dm_town02 | B50 | 22.702 | +0.032 [-0.021,+0.077] | -0.0030 [-0.0038,-0.0023] | ss3dm_town02_B50_geo_v1 | b6r_ss3dm_town02_B50_v1 |
+| geometry mechanism (E2 family, all FAIL/bounded) | B6R on SS3DM (b6r, GOAL#014 DONE-FAIL) | ss3dm_town03 | B50 | 23.298 | +0.019 [-0.005,+0.042] | -0.0008 [-0.0012,-0.0005] | ss3dm_town03_B50_geo_v1 | b6r_ss3dm_town03_B50_v1 |

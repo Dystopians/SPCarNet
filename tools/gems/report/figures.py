@@ -44,6 +44,7 @@ C_B4 = "#1baf7a"      # slot 2 aqua  — B4 prune-no-FT
 C_B2 = "#eda100"      # slot 3 yellow— B2 random+FT (relief: direct labels)
 C_B5I = "#008300"     # slot 4 green — B5-iter
 C_B6R = "#4a3aa7"     # slot 5 violet— B6R opacity release
+C_B3 = "#c8326b"      # slot 6 pink  — B3 QEM decimation + FT
 INK = "#0b0b0b"
 INK2 = "#52514e"
 GRID = "#e5e4e0"
@@ -52,6 +53,7 @@ SURFACE = "#fcfcfb"
 SERIES = [("B5", "B5 GEMS-core", C_B5),
           ("B4", "B4 prune, no FT", C_B4),
           ("B2", "B2 random + FT", C_B2),
+          ("B3", "B3 QEM + FT", C_B3),
           ("B5-iter", "B5-iter (2-step)", C_B5I),
           ("B6R", "B6R opacity-release", C_B6R)]
 
@@ -122,7 +124,8 @@ def f2_pareto(c: Corpus, outdir):
                    "room", "counter", "kitchen", "bonsai"], (3, 3)),
         "sgeo": (["ss3dm_town01", "ss3dm_town02", "ss3dm_town03",
                   "ss3dm_town06"], (2, 2)),
-        "sdev": (["toy_parking", "courtyard"], (1, 2)),
+        "sdev": (["toy_parking", "toy_parking_v2", "toy_parking_occl",
+                  "courtyard"], (2, 2)),
     }
     for tag, (scenes, (nr, nc)) in suites.items():
         for metric_idx, mname, ylab in ((1, "psnr", "PSNR [dB]"),
@@ -237,12 +240,26 @@ def f7_ablations(c: Corpus, outdir):
               "counter", "kitchen", "bonsai"):
         add("evidence importance vs random (B12.5)", s,
             c.canon(s, "B5", "B12.5"), c.canon(s, "B2", "B12.5"))
+    # importance-DEFINITION family (E6 sub-cell, GOAL#012 — axis flat)
+    for s in ("garden", "kitchen", "ss3dm_town01"):
+        ref = c.canon(s, "B5", "B50")
+        add("importance definition (E6, flat axis)",
+            f"max_blending vs pixels_total — {s}",
+            c.canon(s, "B5-abl_blend", "B50"), ref)
+        add("importance definition (E6, flat axis)",
+            f"ckpt-stat vs pixels_total — {s}",
+            c.canon(s, "B5-abl_ckptimp", "B50"), ref)
+    # B3 QEM baseline vs B5 at matched budget (GOAL#013)
+    for s in ("garden", "toy_parking", "courtyard"):
+        add("B3 QEM+FT vs B5 (matched budget)", s,
+            c.canon(s, "B3", "B50"), c.canon(s, "B5", "B50"))
 
     groups = []
     for g_, l_, ci in rows:
         if g_ not in groups:
             groups.append(g_)
-    group_color = {g_: col for g_, col in zip(groups, (C_B5, C_B5I, C_B2, C_B6R, C_B4))}
+    palette = (C_B5, C_B5I, C_B2, C_B6R, C_B4, C_B3, INK2)
+    group_color = {g_: palette[i % len(palette)] for i, g_ in enumerate(groups)}
 
     fig, ax = plt.subplots(figsize=(7.6, 0.32 * len(rows) + 1.8))
     y = 0

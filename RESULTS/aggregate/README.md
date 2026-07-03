@@ -12,19 +12,22 @@ hand-typed numbers (Stage-2 Prompt §6). Regeneration:
 
 | File | Content | MATRIX cell |
 |---|---|---|
-| `all_rows.json` | 197-row corpus dump: method taxonomy, budgets, per-view arrays, cost, g/d scalars, provenance, VOID annotations, duplicate-consistency checks, supervised-job wall-clocks | (input to all) |
-| `T1_main_pareto.{md,csv}` + `T1_per_scene_detail.csv` | main Pareto summary per suite × budget; per-scene win/iso/loss vs BOTH anchors; iso-floor pass counts | E1-PARETO, E10 |
-| `T2_rendering.{md,csv}` | per-scene rendering incl. dual-anchor CIs and 26k context rows | E3-REND |
-| `T3_geometry.{md,csv}` | g1–g4 per scene (VOID-aware), GT-calibration row | E2-GEO (tables part) |
-| `T4_efficiency.{md,csv}` | tris/disk/VRAM/FPS@2 resolutions + prune+FT overhead vs measured/estimated 30k train | E4-EFF |
+| `all_rows.json` | 217-row corpus dump (179 canonical): method taxonomy, budgets, per-view arrays, cost, g/d scalars, provenance, VOID annotations, duplicate-consistency checks, supervised-job wall-clocks | (input to all) |
+| `T1_main_pareto.{md,csv}` + `T1_per_scene_detail.csv` | main Pareto summary per suite × budget (incl. B3 QEM column); per-scene win/iso/loss vs BOTH anchors; iso-floor pass counts; R1/H1 CONTEXT appendix | E1-PARETO, E10, H1, R1 |
+| `T2_rendering.{md,csv}` | per-scene rendering incl. dual-anchor CIs, 26k context rows, B3/B6R rows, D-2 variant scenes | E3-REND |
+| `T3_geometry.{md,csv}` | g1–g4 per scene (VOID-aware), GT-calibration row, B6R rows, D-2 variants | E2-GEO (tables part) |
+| `T4_efficiency.{md,csv}` | tris/disk/VRAM/FPS@2 resolutions + prune+FT overhead vs measured/estimated 30k train; R1 CONTEXT appendix (FPS/disk at matched storage) | E4-EFF, R1 |
 | `fps_bench_halfres.json` | the second-resolution FPS bench raw records (bench-only, non-protocol res; GPU-4) | E4-EFF |
-| `T5_downstream.{md,csv}` + `T5b_r3_trilogy.md` | d1/d2 per scene + R3.a/R3.c/R3.b verdict tables (script-extracted from summary.json) | E5-DOWN (existing evidence) |
-| `T6_ablations.{md,csv}` | Stage-One/1R variant rows mapped to E6 axes (FT channel, schedule, importance family, sourcing, teacher variants, geometry mechanisms) | E6-ABL (mapping part) |
-| `T7_robustness.md` | placeholder — E7/E8 PENDING | E7/E8 |
+| `T5_downstream.{md,csv}` + `T5b_r3_trilogy.md` | d1/d2 per scene (incl. D-2 variants, B6R towns) + R3.a/R3.c/R3.b verdict tables (script-extracted from summary.json) | E5-DOWN (existing evidence) |
+| `T6_ablations.{md,csv}` | Stage-One/1R variant rows mapped to E6 axes + the dedicated importance-DEFINITION family block (GOAL#012) + B6R-on-SS3DM rows (GOAL#014) | E6-ABL |
+| `T7_robustness.md` | placeholder — E7/E8 NOT RUN; Tier-2 waive drafts in EXPERIMENT_REPORT §7 | E7/E8 |
 
-Figures: `../figures/` (F1 draft teaser + caption, F2 Pareto ×6, F7
-ablations; PNG+PDF). Documents: `../CLAIMS_EVIDENCE_MATRIX.md`,
-`../NEGATIVE_RESULTS.md`, `../REPRO_PACK/`.
+Figures: `../figures/` (F1 draft teaser + caption, F2 Pareto ×6 (now incl.
+B3/B6R series + D-2 variant panels), F3 pipeline draft + caption, F6
+downstream composite + caption, F7 ablations, F8 failure board; F4 qual
+grids under `../figures/qual/` with crop-rule manifest; PNG+PDF). Documents:
+`../CLAIMS_EVIDENCE_MATRIX.md`, `../NEGATIVE_RESULTS.md`, `../HANDOFF.md`,
+`../REPRO_PACK/`.
 
 The `RESULTS/<suite>/<scene>/<method>/<budget>/eval_row` symlink tree (§8
 layout) points into the durable corpus — no data is duplicated; panels and
@@ -32,13 +35,15 @@ per-sample npz live behind those links.
 
 ## Snapshot policy
 
-The eval corpus is LIVE (other /goal sessions append rows). This pack is a
-snapshot: rows from concurrent, not-yet-closed goals are collected into
-`all_rows.json` with role `ablation-pending` and are EXCLUDED from tables
-until their owning goal posts a verdict (at assembly time: `b6r_ss3dm_*`,
-`garden_B50_importance_ft_abl_{ckptimp,blend}`). To fold them in later: flip
-their rule in `collect.py` (role -> ablation) and run
-`REPRO_PACK/regenerate_all.sh`.
+The eval corpus is LIVE (other /goal sessions append rows). Pack v1 collected
+rows from concurrent, not-yet-closed goals with role `ablation-pending`
+(excluded from tables). **Pack v2 (final assembly, GOAL#018, 2026-07-03):
+that quarantine is retired** — all owning goals closed with verdicts
+(GOAL#012 E6 families, #013 B3+H1+R1 feasibility, #014 B6R-on-SS3DM, #016
+D-2 variants, #017 R1 execution) and their rows are folded into the tables.
+If future goals append rows mid-assembly, reinstate the same pattern: collect
+with role `ablation-pending`, exclude from tables, flip on goal closure and
+run `REPRO_PACK/regenerate_all.sh`.
 
 ## Statistics standard (E10)
 

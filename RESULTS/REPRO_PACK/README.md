@@ -48,6 +48,8 @@ Run from the repo root with `PY=/home/peilincai/micromamba/envs/mesh_splatting/b
 | `RESULTS/aggregate/all_rows.json` | `$PY tools/gems/report/collect.py` |
 | T1–T7 (`RESULTS/aggregate/T*.{md,csv}`) | `$PY tools/gems/report/tables.py` |
 | F1/F2/F7 (`RESULTS/figures/*.{png,pdf}`) | `$PY tools/gems/report/figures.py` |
+| F3/F6/F8 + captions (`RESULTS/figures/F{3,6,8}_*`) | `$PY tools/gems/report/figures_composite.py` |
+| F4 qual grids (`RESULTS/figures/qual/`, GPU) | `$PY tools/gems/report/qual_grids.py` (crop-rule invocations logged in qual/manifest.json) |
 | E4 half-res FPS bench (GPU, ~15 min) | `tools/gems/run_supervised.sh fpsbench -- $PY tools/gems/report/fps_bench.py --gpu 4` |
 | everything (CPU parts) | `bash RESULTS/REPRO_PACK/regenerate_all.sh` |
 
@@ -75,7 +77,7 @@ against the shipped ones (ignoring only the generation-timestamp line in the
 - FPS bench: 1 GPU (≈5 GB VRAM peak), ~15 min for 48 checkpoints.
 - Re-running the underlying evals (not needed for the pack): 1 GPU,
   ~80 s (rendering-only scenes) to ~8 min (geometry+downstream) per row;
-  corpus total ≈ 197 rows.
+  corpus total ≈ 217 rows.
 - Re-training everything from scratch: see T4's measured SS3DM 30k wall-clocks
   (~31–48 min/town) and LEDGER GOAL#002 estimates for M360 (40–80 min/scene);
   ~170 GB for checkpoints.
@@ -85,7 +87,17 @@ against the shipped ones (ignoring only the generation-timestamp line in the
 - `RESULTS/aggregate/all_rows.json` encodes the LEDGER VOID list
   (courtyard_clean30k_v2.g4; all pre-R-08 SS3DM g4 fields) — regenerated
   tables inherit it; do not consume voided fields from raw metrics.json.
-- T7 is a PENDING placeholder (E7/E8 not run). B1/B3/H1/R1 baselines are
-  open MATRIX cells; T1 and CLAIMS_EVIDENCE_MATRIX.md say so explicitly.
+- Pack v2 (final assembly, 2026-07-03): the v1 'ablation-pending' quarantine
+  is retired — B3 (tag b3), E6 importance-family (abl_blend/abl_ckptimp),
+  D-2 variants (toy_parking_v2/occl) and b6r_* rows are folded into the
+  corpus/tables now that GOALs #012/#013/#014/#016 are closed (corpus:
+  217 rows, 179 canonical). H1 and R1 are quoted as clearly-marked CONTEXT
+  appendices in T1/T4 (script-read from
+  `analysis/{h1_v106_context,r1_3dgs_reference}/`), never as corpus rows
+  (R1 is the sanctioned outside-single-mouth exception, GOAL#017).
+- T7 remains a placeholder: E7/E8 were NOT run (Tier-2; waive drafts in
+  EXPERIMENT_REPORT.md §7, human approval pending). B1 no-op was never run;
+  B3 exists only @B50 on garden/toy/courtyard; S-GEO B2 was never run —
+  T1's header and CLAIMS_EVIDENCE_MATRIX.md say so explicitly.
 - The half-res FPS column is bench-only (non-protocol resolution) and was
   measured under partial GPU contention (documented in T4's header).

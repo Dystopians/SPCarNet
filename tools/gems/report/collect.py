@@ -22,6 +22,12 @@ VOID list (encoded from LEDGER.md — do not weaken):
 
 No numbers are typed here: everything is read from metrics.json / row.json.
 
+NOT corpus rows (by design): the R1 3DGS cross-representation reference lives
+OUTSIDE the single mouth (sanctioned exception, LEDGER GOAL#017) at
+analysis/r1_3dgs_reference/ — tables.py quotes it as clearly-marked CONTEXT
+lines in T1/T4, never as corpus rows. Same for the H1 v106 historical context
+row (analysis/h1_v106_context/, GOAL#013).
+
 Usage:
     python tools/gems/report/collect.py [--eval-root DIR] [--out FILE]
 """
@@ -44,7 +50,8 @@ JOBS_ROOT = "/data/peilincai/gems_stage1/jobs"
 M360_SCENES = {"bicycle", "flowers", "garden", "stump", "treehill",
                "room", "counter", "kitchen", "bonsai"}
 SS3DM_SCENES = {"ss3dm_town01", "ss3dm_town02", "ss3dm_town03", "ss3dm_town06"}
-DEV_SCENES = {"toy_parking", "courtyard"}
+# D-2 toy variants (GOAL#016) are S-DEV family members of toy_parking
+DEV_SCENES = {"toy_parking", "courtyard", "toy_parking_v2", "toy_parking_occl"}
 
 
 def suite_of(scene: str) -> str:
@@ -113,6 +120,8 @@ SPECIAL = {
     "stage2_entry_audit": (None, "audit", None, None),
     "stage2_entry_audit2": (None, "audit", None, None),
     "e2r_audit_courtyard": (None, "audit", None, None),
+    "b3_audit_garden": (None, "audit", None, None),
+    "d2_audit_v2_B5": (None, "audit", None, None),
 }
 
 _BUDGET_RE = re.compile(r"_B(\d+)_")
@@ -148,13 +157,14 @@ def classify(dirname: str, row: dict | None, scene: str):
         bv, bl = _budget_from_name(dirname)
         return "B6R", "ablation", bv, bl, "E2R opacity-floor release + fade-prune (GOAL#R-04)"
     if dirname.startswith("b6r_"):
-        # B6R-on-S-GEO cells from a CONCURRENT open /goal (landing while this
-        # pack was assembled, 2026-07-03). Excluded from tables until that
-        # goal closes with a verdict; then flip this rule to role='ablation'
-        # and regenerate (one command, REPRO_PACK).
+        # B6R-on-S-GEO cells: owning goal CLOSED (LEDGER GOAL#014,
+        # DONE-FAIL as pre-registered — g3 FRACTION arm 0/3 towns; PSNR
+        # guard held 3/3; LPIPS/g1/g3-components better CI-excl-0 3/3;
+        # d1-ff worse CI-excl-0 3/3). Folded into tables 2026-07-03.
         bv, bl = _budget_from_name(dirname)
-        return "B6R", "ablation-pending", bv, bl, (
-            "concurrent B6R S-GEO cell — owning goal not yet closed")
+        return "B6R", "ablation", bv, bl, (
+            "B6R-on-SS3DM (GOAL#014 DONE-FAIL as pre-registered; B6R stays "
+            "a bounded courtyard-scoped positive, NOT claim-grade)")
     if dirname.startswith("e2v3_"):
         bv, bl = _budget_from_name(dirname)
         role = "diagnostic" if dirname.endswith("_diag") else "ablation"
@@ -187,11 +197,19 @@ def classify(dirname: str, row: dict | None, scene: str):
             bl = "B12.5"
         note = f"tag={tag}"
         if isinstance(tag, str) and tag.startswith("abl_"):
-            # concurrent E6 importance-family runs (another /goal session owns
-            # their pre-registration) — excluded from tables until that goal
-            # closes; regenerating the pack later will keep them visible here.
-            return f"B5-{tag}", "ablation-pending", bv, bl, (
-                note + " (concurrent E6 cell, not yet mapped into tables)")
+            # E6 importance-family ablation rows: owning goal CLOSED (LEDGER
+            # GOAL#012 — revision trigger NOT tripped; pixels_total stands;
+            # family axis flat, all pairwise |dPSNR| <= 0.052 dB; measured
+            # pipeline noise floor 1.6e-5 dB on the town01 degenerate row).
+            fam = {"abl_blend": "max_blending_max",
+                   "abl_ckptimp": "ckpt_importance_score"}.get(tag, tag)
+            return f"B5-{tag}", "ablation", bv, bl, (
+                note + f" (E6 importance family = {fam}, GOAL#012 closed)")
+        if mode == "qem_ft":
+            # B3 QEM-decimation + safe-FT column (LEDGER GOAL#013 DONE-PASS)
+            return "B3", "primary", bv, bl, (
+                note + " (QEM decimation via fast_simplification + "
+                "features-only FT; GOAL#013)")
         if tag == "e1":
             # first e1 chain, pre supersampling-scaling fix -> superseded by e1b
             return f"pre-fix {mode}", "superseded", bv, bl, note + " (pre-scaling-fix, superseded by e1b)"

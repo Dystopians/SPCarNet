@@ -1,6 +1,6 @@
 # T5 — Downstream proxies (E5-DOWN)
 
-_generated 2026-07-03T19:26:58.170373+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-03T22:28:25.227152+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > d1 = occupancy confusion at 0.10 m voxels (false-free is the safety-critical direction); d2 = collision-verdict agreement on 200 seed-0 trajectories. C4' is a PRESERVATION claim (CLAIMS.md): no row here claims improvement vs clean.
 > R3 consumption trilogy summary below is read by script from analysis/r3{a,c,b}_*/summary.json (LEDGER #R-02/#R-03/#R-06).
@@ -9,10 +9,13 @@ _generated 2026-07-03T19:26:58.170373+00:00 by tools/gems/report/tables.py — e
 |---|---|---|---|---|---|---|---|---|---|
 | S-GEO | ss3dm_town01 | B0 | B100 | 0.8135 | 0.0674 | 0.6900 | 0.2923 | 200 | ss3dm_town01_clean30k_geo_v1 |
 | S-GEO | ss3dm_town01 | B5 | B50 | 0.8318 | 0.0608 | 0.6850 | 0.2974 | 200 | ss3dm_town01_B50_geo_v1 |
+| S-GEO | ss3dm_town01 | B6R | B50 | 0.8387 | 0.0580 | 0.6850 | 0.2974 | 200 | b6r_ss3dm_town01_B50_v1 |
 | S-GEO | ss3dm_town02 | B0 | B100 | 0.7733 | 0.0655 | 0.6900 | 0.3005 | 200 | ss3dm_town02_clean30k_geo_v1 |
 | S-GEO | ss3dm_town02 | B5 | B50 | 0.7892 | 0.0604 | 0.6900 | 0.3005 | 200 | ss3dm_town02_B50_geo_v1 |
+| S-GEO | ss3dm_town02 | B6R | B50 | 0.7941 | 0.0588 | 0.6850 | 0.3057 | 200 | b6r_ss3dm_town02_B50_v1 |
 | S-GEO | ss3dm_town03 | B0 | B100 | 0.8047 | 0.0743 | 0.6400 | 0.2288 | 200 | ss3dm_town03_clean30k_geo_v1 |
 | S-GEO | ss3dm_town03 | B5 | B50 | 0.8232 | 0.0661 | 0.6350 | 0.2353 | 200 | ss3dm_town03_B50_geo_v1 |
+| S-GEO | ss3dm_town03 | B6R | B50 | 0.8325 | 0.0625 | 0.6350 | 0.2353 | 200 | b6r_ss3dm_town03_B50_v1 |
 | S-DEV | toy_parking | GT-CAL | B100 | 0.0019 | 0.0001 | 1.0000 | 0.0000 | 200 | toy_parking_GTmodel_v1 |
 | S-DEV | toy_parking | B0 | B100 | 0.5895 | 0.0305 | 0.6250 | 0.0000 | 200 | toy_parking_clean30k_v1 |
 | S-DEV | toy_parking | B5 | B50 | 0.5974 | 0.0296 | 0.6250 | 0.0000 | 200 | toy_parking_B50_importance_ft_e1v2 |
@@ -20,6 +23,12 @@ _generated 2026-07-03T19:26:58.170373+00:00 by tools/gems/report/tables.py — e
 | S-DEV | toy_parking | B6R | B50 | 0.6006 | 0.0290 | 0.6250 | 0.0000 | 200 | e2r_toy_parking_B50_v1 |
 | S-DEV | toy_parking | B5 | B25 | 0.6149 | 0.0278 | 0.6250 | 0.0000 | 200 | toy_parking_B25_importance_ft_e1v2 |
 | S-DEV | toy_parking | B4 | B25 | 0.6149 | 0.0278 | 0.6250 | 0.0000 | 200 | toy_parking_B25_importance_noft_e1b |
+| S-DEV | toy_parking_v2 | B0 | B100 | 0.5849 | 0.0318 | 0.6650 | 0.0000 | 200 | toy_parking_v2_clean30k_v1 |
+| S-DEV | toy_parking_v2 | B5 | B50 | 0.5925 | 0.0310 | 0.6650 | 0.0000 | 200 | toy_parking_v2_B50_importance_ft_s2 |
+| S-DEV | toy_parking_v2 | B4 | B50 | 0.5925 | 0.0310 | 0.6650 | 0.0000 | 200 | toy_parking_v2_B50_importance_noft_s2 |
+| S-DEV | toy_parking_occl | B0 | B100 | 0.5934 | 0.0320 | 0.6700 | 0.0000 | 200 | toy_parking_occl_clean30k_v1 |
+| S-DEV | toy_parking_occl | B5 | B50 | 0.6022 | 0.0310 | 0.6700 | 0.0000 | 200 | toy_parking_occl_B50_importance_ft_s2 |
+| S-DEV | toy_parking_occl | B4 | B50 | 0.6022 | 0.0310 | 0.6700 | 0.0000 | 200 | toy_parking_occl_B50_importance_noft_s2 |
 | S-DEV | courtyard | B0 | B100 | 0.6503 | 0.1053 | 0.8950 | 0.0000 | 200 | courtyard_clean30k_v4 |
 | S-DEV | courtyard | B5 | B50 | 0.6680 | 0.0958 | 0.8950 | 0.0000 | 200 | courtyard_B50_ft_v4 |
 | S-DEV | courtyard | B4 | B50 | 0.6680 | 0.0958 | 0.8950 | 0.0000 | 200 | courtyard_B50_importance_noft_v4 |

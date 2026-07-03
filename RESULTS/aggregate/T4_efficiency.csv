@@ -16,6 +16,7 @@ S-REND,flowers,B4,B12.5,1206200,328,2973,73.1,—,0.3,see note (no measured 30k 
 S-REND,garden,B0,B100,11568056,942,6946,32.3,26.6,—,—,garden_clean30k_v2
 S-REND,garden,B5,B50,5784028,735,5158,41.7,38.9,13.0,see note (no measured 30k train for this scene),garden_B50_importance_ft_e1v2
 S-REND,garden,B4,B50,5784028,735,5158,42.2,—,0.4,see note (no measured 30k train for this scene),garden_B50_importance_noft_e1b
+S-REND,garden,B3,B50,5784028,328,4298,33.2,—,—,—,garden_B50_qem_ft_b3
 S-REND,garden,B5,B25,2892014,555,4010,54.3,54.5,10.8,see note (no measured 30k train for this scene),garden_B25_importance_ft_e1v2
 S-REND,garden,B4,B25,2892014,555,4010,53.8,—,0.4,see note (no measured 30k train for this scene),garden_B25_importance_noft_e1b
 S-REND,garden,B5,B12.5,1446007,390,3231,65.9,110.1,9.5,see note (no measured 30k train for this scene),garden_B12_importance_ft_s2
@@ -85,10 +86,18 @@ S-GEO,ss3dm_town06,B4,B25,2230258,453,2389,100.7,—,0.8,3% of measured 29 min,s
 S-DEV,toy_parking,B0,B100,6590559,542,4189,62.3,74.2,—,—,toy_parking_clean30k_v1
 S-DEV,toy_parking,B5,B50,3295279,426,3197,75.5,115.5,7.6,see note (no measured 30k train for this scene),toy_parking_B50_importance_ft_e1v2
 S-DEV,toy_parking,B4,B50,3295279,426,3197,76.1,—,0.2,see note (no measured 30k train for this scene),toy_parking_B50_importance_noft_e1b
+S-DEV,toy_parking,B3,B50,3295275,209,2692,36.5,—,—,—,toy_parking_B50_qem_ft_b3
 S-DEV,toy_parking,B5,B25,1647639,320,2549,90.0,—,6.6,see note (no measured 30k train for this scene),toy_parking_B25_importance_ft_e1v2
 S-DEV,toy_parking,B4,B25,1647639,320,2549,90.2,—,0.2,see note (no measured 30k train for this scene),toy_parking_B25_importance_noft_e1b
+S-DEV,toy_parking_v2,B0,B100,6665411,549,4266,61.0,—,—,—,toy_parking_v2_clean30k_v1
+S-DEV,toy_parking_v2,B5,B50,3332705,431,3248,74.4,—,8.2,see note (no measured 30k train for this scene),toy_parking_v2_B50_importance_ft_s2
+S-DEV,toy_parking_v2,B4,B50,3332705,431,3248,73.7,—,0.3,see note (no measured 30k train for this scene),toy_parking_v2_B50_importance_noft_s2
+S-DEV,toy_parking_occl,B0,B100,6659597,554,4305,60.5,—,—,—,toy_parking_occl_clean30k_v1
+S-DEV,toy_parking_occl,B5,B50,3329798,436,3276,74.2,—,8.2,see note (no measured 30k train for this scene),toy_parking_occl_B50_importance_ft_s2
+S-DEV,toy_parking_occl,B4,B50,3329798,436,3276,75.0,—,0.3,see note (no measured 30k train for this scene),toy_parking_occl_B50_importance_noft_s2
 S-DEV,courtyard,B0,B100,4374929,463,2544,104.9,101.6,—,—,courtyard_clean30k_v4
 S-DEV,courtyard,B5,B50,2187464,355,1910,122.7,126.0,5.9,see note (no measured 30k train for this scene),courtyard_B50_ft_v4
 S-DEV,courtyard,B4,B50,2187464,355,1910,123.1,—,0.8,see note (no measured 30k train for this scene),courtyard_B50_importance_noft_v4
+S-DEV,courtyard,B3,B50,2187463,187,1549,148.7,—,—,—,courtyard_B50_qem_ft_b3
 S-DEV,courtyard,B5,B25,1093732,248,1468,140.3,—,5.3,see note (no measured 30k train for this scene),courtyard_B25_importance_ft_e1v2
 S-DEV,courtyard,B4,B25,1093732,248,1468,141.0,—,0.4,see note (no measured 30k train for this scene),courtyard_B25_importance_noft_v4
