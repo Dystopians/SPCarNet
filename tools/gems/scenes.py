@@ -92,12 +92,17 @@ SCENES: dict = {
         # scan_alignment.mlp: min [-3.722,-13.925,0.118],
         # max [28.264,10.002,18.449]). The earlier same-day raw-AABB freeze was
         # voided together with the misaligned g4 row it produced
-        # (courtyard_clean30k_v2; see LEDGER). z_band=None: up-axis derivation
-        # pending (M5) -> d1/d2 gated. Never edit (MAJOR bump).
+        # (courtyard_clean30k_v2; see LEDGER).
+        # z_band FROZEN 2026-07-02 (M5 up-axis derivation, LEDGER GOAL #008):
+        # +z is up in the calibration frame (mean camera up-vector
+        # [-0.025,-0.013,0.9996], all 38 cams dot>=0.908); ground = P1 of
+        # transformed-scan z within the camera xy-footprint+1m = 0.146 m
+        # (cameras then sit 1.55 m above ground - consistent with handheld
+        # DSLR). z_band = [ground, ground+1.5]. Never edit (MAJOR bump).
         roi={
             "min": [-4.022, -14.225, -0.182],
             "max": [28.564, 10.302, 18.749],
-            "z_band": None,
+            "z_band": [0.146, 1.646],
         },
         units_per_meter=1.0,  # ETH3D laser scans are metric
         exists=True,
