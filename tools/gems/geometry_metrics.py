@@ -569,11 +569,46 @@ def _load_gt_points(spec, rng):
         mesh = trimesh.load(str(mesh_path), process=False)
         if not isinstance(mesh, trimesh.Trimesh):
             mesh = trimesh.util.concatenate([g for g in mesh.dump()])
-        pts = _sample_points_on_mesh(
-            np.asarray(mesh.vertices, dtype=np.float64),
-            np.asarray(mesh.faces, dtype=np.int64),
-            G4_GT_MESH_SAMPLES, rng)
-        return pts, f"gt_mesh:{mesh_path}", "mesh"
+        verts = np.asarray(mesh.vertices, dtype=np.float64)
+        faces = np.asarray(mesh.faces, dtype=np.int64)
+        # Optional rigid/affine 4x4 into the trainer/camera frame, mirroring
+        # scan_transforms semantics (applied to raw vertices after load).
+        # E.g. SS3DM town OBJs are CENTIMETERS in the RAW left-handed CARLA
+        # world; gt.mesh_transform = diag(0.01,-0.01,0.01) lands them in the
+        # exported (mirrored, metric) trainer world. Frozen in scenes.py.
+        transform = gt.get("mesh_transform")
+        if transform is not None:
+            M = np.asarray(transform, dtype=np.float64)
+            verts = verts @ M[:3, :3].T + M[:3, 3]
+        source = f"gt_mesh:{mesh_path}"
+        # Opt-in (scenes.py gt['mesh_roi_presample_crop']): restrict the
+        # area-weighted GT sampling to faces whose bbox intersects the frozen
+        # scene ROI BEFORE drawing G4_GT_MESH_SAMPLES. Needed when the GT mesh
+        # vastly exceeds the ROI (SS3DM town meshes: ~11 km^2 incl. far
+        # terrain vs ~0.03 km^2 ROI -> full-mesh sampling leaves ~3k in-ROI GT
+        # points, NN spacing ~3 m; recon->gt distances would measure GT
+        # sampling sparsity, not geometry). The final ROI crop still applies
+        # to both clouds; sampling stays deterministic (seed 0) and paired
+        # across models. Never enabled for toy_parking (its rows predate this
+        # flag and stay bit-exact).
+        roi = getattr(spec, "roi", None)
+        if gt.get("mesh_roi_presample_crop") and roi:
+            lo = np.asarray(roi["min"], dtype=np.float64)
+            hi = np.asarray(roi["max"], dtype=np.float64)
+            keep = np.zeros(faces.shape[0], dtype=bool)
+            chunk = 2_000_000
+            for s in range(0, faces.shape[0], chunk):
+                tri = verts[faces[s:s + chunk]]
+                keep[s:s + chunk] = (
+                    np.all(tri.max(axis=1) >= lo[None, :], axis=1)
+                    & np.all(tri.min(axis=1) <= hi[None, :], axis=1))
+            faces = faces[keep]
+            if faces.shape[0] == 0:
+                raise FileNotFoundError(
+                    f"GT mesh has no faces intersecting the ROI: {mesh_path}")
+            source += "|roi_presample_crop"
+        pts = _sample_points_on_mesh(verts, faces, G4_GT_MESH_SAMPLES, rng)
+        return pts, source, "mesh"
     if scan_paths:
         import trimesh
         # Per-scan rigid transforms into the calibration frame (e.g. ETH3D

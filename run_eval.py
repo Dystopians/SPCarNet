@@ -206,6 +206,10 @@ def main():
             # (courtyard) are loaded here by the caller.
             if spec.gt.get("mesh_path") and os.path.isfile(spec.gt["mesh_path"]):
                 gt_arg = {"mesh_path": spec.gt["mesh_path"]}
+                if spec.gt.get("mesh_transform") is not None:
+                    # 4x4 into the trainer frame (e.g. SS3DM cm->m + mirror);
+                    # applied by downstream_metrics._build_gt_occupancy.
+                    gt_arg["mesh_transform"] = spec.gt["mesh_transform"]
             else:
                 import trimesh
                 transforms = spec.gt.get("scan_transforms")

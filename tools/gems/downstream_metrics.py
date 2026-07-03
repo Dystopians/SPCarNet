@@ -222,10 +222,17 @@ def _rasterize_triangles(grid, occ, verts, faces, chunk_points=4_000_000):
 
 def _build_gt_occupancy(grid, gt):
     """Build the GT occupancy grid from gt['mesh_path'] (.obj mesh) or
-    gt['scan_points'] (np [N,3] laser-scan points)."""
+    gt['scan_points'] (np [N,3] laser-scan points). Optional
+    gt['mesh_transform'] (4x4) is applied to the mesh vertices after load —
+    same semantics as geometry_metrics g4 (scenes.py gt.mesh_transform, e.g.
+    SS3DM cm->m + diag(1,-1,1) world mirror)."""
     occ = grid.new_occupancy()
     if gt.get("mesh_path"):
         verts, faces = _load_gt_mesh(gt["mesh_path"])
+        transform = gt.get("mesh_transform")
+        if transform is not None:
+            M = np.asarray(transform, dtype=np.float64)
+            verts = verts @ M[:3, :3].T + M[:3, 3]
         _rasterize_triangles(grid, occ, verts, faces)
     elif gt.get("scan_points") is not None:
         pts = np.asarray(gt["scan_points"], dtype=np.float64).reshape(-1, 3)

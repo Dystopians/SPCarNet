@@ -172,16 +172,87 @@ for _name, _imgdir in [
 # left-handed, c2w rotation det=-1); LiDAR evidence npz (recorded in the
 # manifests) stay in the RAW frame -> negate y when consuming.
 # gt.mesh_path OBJ units are CENTIMETERS (x0.01 -> m, schema
-# town_mesh_unit_scale=0.01); mesh->trainer-world alignment (scale + axis
-# flips) is frozen at first geometry eval, together with the ROI.
-# RAM: g4's trimesh ASCII-OBJ load peaks ~3-6x file size: Town02 ~1 GB OBJ is
-# safe; Town01/Town03 (2.1-2.5 GB) are borderline; Town06 (4.5 GB, est.
-# 14-27 GB RSS) EXCEEDS the 16 GB budget -> needs a streaming/decimated
-# variant (never silently decimate).
+# town_mesh_unit_scale=0.01); mesh->trainer-world alignment frozen 2026-07-03
+# (S-GEO activation, LEDGER GOAL #R-08) as gt.mesh_transform =
+# diag(0.01,-0.01,0.01) (cm->m scale THEN the diag(1,-1,1) world mirror;
+# diagonal matrices commute; zero translation). VERIFIED per town in
+# /data/peilincai/gems_stage1/analysis/sgeo_roi_freeze/<town>.json:
+# (B1) median NN distance of 100k in-ROI LiDAR points (converted frame) to 2M
+# transformed-mesh surface samples = 0.073/0.103/0.076 m (towns 01/02/03;
+# GT-sample-density-limited) vs the WRONG (unmirrored) diag(0.01,0.01,0.01)
+# control: 32.98 m / "no faces reach the ROI" / 0.13 m (town03's control is
+# weak because CARLA's near-symmetric road grid puts road planes under the
+# mirrored ROI too; the B2 projection check disambiguates);
+# (B2, prescribed) per-16x16px-bin min-depth mesh samples projected into a
+# mid-test front camera vs the raw GT depth PNG: median ratio
+# 1.0028/1.0045/1.0130 (~=1 within 1.3%; p10 0.998-0.999, p90 tail =
+# occlusion, expected for a crude z-buffer).
+# gt.gt_depth_dir (g1/g2 activation): per-TEST-VIEW float32 z-depth .npy at
+# the -r 2 render resolution 960x540, exported by
+# tools/gems_train/ss3dm_export_gt_depth.py (decode raw*1000/65535 m,
+# sky/far-plane saturation raw>=65534 -> 0 invalid, nearest at target pixel
+# centers d[1::2,1::2]). Verified: npy vs LiDAR projection median ratio
+# 0.9975 (94% within 5%); B0 rendered median depth / GT ratio ~=0.99 in the
+# 10-20 m band (larger deviations at <5 m and >40 m are real model error).
+# gt.mesh_roi_presample_crop: SS3DM town meshes cover ~4-11 km^2 (far
+# terrain/skirt geometry) vs ~0.02-0.03 km^2 ROI; g4's frozen 1M-on-full-mesh
+# sampling would leave only ~3k in-ROI GT points (NN spacing ~3 m >> tau).
+# The flag (defined at this first SS3DM geometry eval, before any valid g4
+# row existed; toy rows untouched) restricts GT sampling to ROI-intersecting
+# faces; the posterior ROI crop of both clouds is unchanged. Even so, 1M GT
+# samples over ~3e4 m^2 -> NN spacing ~0.09 m: absolute F@5cm/chamfer are
+# GT-sampling-density-limited; paired clean-vs-B50 deltas are unaffected.
+# ROIs FROZEN 2026-07-03 (derivation:
+# analysis/sgeo_roi_freeze/derive_roi_and_verify_mesh.py, per-town json):
+# xy = camera-centers xy-bbox +/- 30 m; up-axis verified +z in the mirrored
+# frame (mean camera up [~0,~0,+0.99], min dot(+z) 0.966, courtyard-M5
+# pattern); ground = P1 of LiDAR z (converted frame, range filter
+# [0.5,120] m) within the camera xy-footprint+1m = -0.069/0.150/-0.073/-0.071
+# (towns 01/02/03/06; cameras sit 2.25-2.47 m above -- vehicle roof, flat:
+# per-trajectory-fifth ground spread <= 7 mm every town);
+# z_band = [ground, ground+1.5] (PROTOCOL 4.4 convention);
+# ROI z = [ground-0.3, P99.9(in-ROI-xy LiDAR z)+0.3] (0.3 m margin mirrors
+# the courtyard scan-AABB+0.3 rule). Never edit (MAJOR bump).
+# RAM (measured 2026-07-03, exact g4 trimesh load, scratchpad mesh_rss.log):
+# Town01 13.3 / Town02 5.1 / Town03 11.1 / Town06 24.7 GB peak RSS.
+# Town06 EXCEEDS the pre-registered 20 GB bar -> g4/d1/d2 INFEASIBLE-for-now
+# (mesh_path=None below; do NOT silently decimate; g1/g2/g3 still active).
 _SS3DM_DS = "/data/peilincai/gems_stage1/datasets"
 _SS3DM_MESH = "/data/peilincai/mesh_datasets/SS3DM/meshes/mesh"
+_SS3DM_MESH_TRANSFORM = [
+    [0.01, 0.0, 0.0, 0.0],
+    [0.0, -0.01, 0.0, 0.0],
+    [0.0, 0.0, 0.01, 0.0],
+    [0.0, 0.0, 0.0, 1.0],
+]
+_SS3DM_ROI = {
+    "Town01": {"min": [57.874, -99.822, -0.369], "max": [119.037, 12.164, 7.433],
+               "z_band": [-0.069, 1.431]},
+    "Town02": {"min": [91.471, -218.128, -0.15], "max": [204.169, -156.987, 9.394],
+               "z_band": [0.15, 1.65]},
+    "Town03": {"min": [-87.206, 163.657, -0.373], "max": [23.888, 225.838, 9.619],
+               "z_band": [-0.073, 1.427]},
+    "Town06": {"min": [-35.165, -14.956, -0.371], "max": [76.793, 46.578, 8.407],
+               "z_band": [-0.071, 1.429]},
+}
 for _town in ["Town01", "Town02", "Town03", "Town06"]:
     _key = f"ss3dm_{_town.lower()}"
+    _gt = {
+        "colmap_sparse": f"{_SS3DM_DS}/{_key}/sparse/0",
+        "gt_depth_dir": f"{_SS3DM_DS}/{_key}/gt/depth",
+    }
+    if _town == "Town06":
+        # Measured 24.7 GB peak RSS > the 20 GB bar (see block comment):
+        # surface-GT metrics stay gated until a streaming loader exists.
+        _gt["mesh_path"] = None
+        _gt["mesh_infeasible_note"] = (
+            "g4/d1/d2 INFEASIBLE-for-now: trimesh load of Town06_obj.obj "
+            "(4.5 GB ASCII OBJ) measured 24.7 GB peak RSS > pre-registered "
+            "20 GB bar (LEDGER #R-08); never silently decimate")
+    else:
+        _gt["mesh_path"] = f"{_SS3DM_MESH}/{_town}_obj.obj"
+        _gt["mesh_transform"] = _SS3DM_MESH_TRANSFORM
+        _gt["mesh_roi_presample_crop"] = True
     SCENES[_key] = SceneSpec(
         name=_key,
         source_path=f"{_SS3DM_DS}/{_key}",
@@ -189,11 +260,8 @@ for _town in ["Town01", "Town02", "Town03", "Town06"]:
         resolution=2,
         white_background=False,
         split="file5",
-        gt={
-            "mesh_path": f"{_SS3DM_MESH}/{_town}_obj.obj",
-            "colmap_sparse": f"{_SS3DM_DS}/{_key}/sparse/0",
-        },
-        roi=None,  # frozen at first geometry eval
+        gt=_gt,
+        roi=_SS3DM_ROI[_town],
         units_per_meter=1.0,  # CARLA is metric
         exists=True,
     )
