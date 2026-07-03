@@ -1,0 +1,102 @@
+{
+ "generator": "tools/gems/report/flythrough.py",
+ "path_rule": "keyframes = every 3rd TRAIN camera in image-name order (ss3dm: center-front stream only); centers = Catmull-Rom spline; rotations = per-segment quaternion SLERP (teacher_factory math); frames uniform in chord arc length; intrinsics = first keyframe; NO test poses, NO GT pixels (D4-pure)",
+ "render_settings": "tools.gems.eval_context training-time settings (supersampling x4, protocol resolution)",
+ "eval_root": "/data/peilincai/gems_stage1/eval",
+ "scenes": {
+  "garden": {
+   "suite": "S-REND",
+   "output_mp4": "/data/peilincai/mesh-splatting/RESULTS/figures/videos/garden_flythrough.mp4",
+   "file_size_bytes": 10454611,
+   "codec": "h264_nvenc",
+   "fps": 30,
+   "n_frames": 300,
+   "duration_s": 10.0,
+   "pane_resolution_wh": [
+    1297,
+    840
+   ],
+   "composite_resolution_wh": [
+    2594,
+    840
+   ],
+   "layout": "side-by-side: left=clean 30k, right=B5 @ B50 (importance+FT)",
+   "path": {
+    "n_path_cams": 161,
+    "n_keyframes": 54,
+    "keyframe_stride": 3,
+    "first_keyframe": "DSC07957",
+    "last_keyframe": "DSC08138",
+    "path_length_scene_units": 135.27556142833922,
+    "intrinsics": {
+     "fovx": 1.1868535749573557,
+     "fovy": 0.8226821381618385,
+     "width": 1297,
+     "height": 840
+    }
+   },
+   "train_name_filter": null,
+   "models": [
+    {
+     "label": "clean 30k",
+     "eval_row": "garden_clean30k_v2",
+     "checkpoint": "/data/peilincai/mesh-splatting/outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/garden/point_cloud/iteration_30000/point_cloud_state_dict.pt",
+     "psnr_mean_banked": 24.712003707885742
+    },
+    {
+     "label": "B5 @ B50 (importance+FT)",
+     "eval_row": "garden_B50_importance_ft_e1v2",
+     "checkpoint": "/data/peilincai/gems_stage1/models/garden_B50_importance_ft_e1v2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "psnr_mean_banked": 24.85094451904297
+    }
+   ]
+  },
+  "ss3dm_town01": {
+   "suite": "S-GEO",
+   "output_mp4": "/data/peilincai/mesh-splatting/RESULTS/figures/videos/ss3dm_town01_flythrough.mp4",
+   "file_size_bytes": 10445266,
+   "codec": "h264_nvenc",
+   "fps": 30,
+   "n_frames": 300,
+   "duration_s": 10.0,
+   "pane_resolution_wh": [
+    960,
+    540
+   ],
+   "composite_resolution_wh": [
+    1920,
+    540
+   ],
+   "layout": "side-by-side: left=clean 30k, right=B5 @ B50 (importance+FT)",
+   "path": {
+    "n_path_cams": 131,
+    "n_keyframes": 44,
+    "keyframe_stride": 3,
+    "first_keyframe": "front_00000001",
+    "last_keyframe": "front_00000148",
+    "path_length_scene_units": 51.15441026575519,
+    "intrinsics": {
+     "fovx": 1.9198621767482695,
+     "fovy": 1.3535402232860771,
+     "width": 960,
+     "height": 540
+    }
+   },
+   "train_name_filter": "^front_\\d+$",
+   "models": [
+    {
+     "label": "clean 30k",
+     "eval_row": "ss3dm_town01_clean30k_geo_v1",
+     "checkpoint": "/data/peilincai/gems_stage1/models/ss3dm_town01_clean30k/point_cloud/iteration_30000/point_cloud_state_dict.pt",
+     "psnr_mean_banked": 22.57353401184082
+    },
+    {
+     "label": "B5 @ B50 (importance+FT)",
+     "eval_row": "ss3dm_town01_B50_geo_v1",
+     "checkpoint": "/data/peilincai/gems_stage1/models/ss3dm_town01_B50_importance_ft_s2/point_cloud/iteration_40000/point_cloud_state_dict.pt",
+     "psnr_mean_banked": 22.634313583374023
+    }
+   ]
+  }
+ }
+}
