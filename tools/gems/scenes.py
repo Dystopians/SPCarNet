@@ -135,6 +135,44 @@ SCENES: dict = {
     ),
 }
 
+# ---------------------------------------------------------------------------
+# Stage Two S-GEO (MATRIX cell D-2, GEMS_Stage2_Prompt §3): toy_parking
+# generated variants, built 2026-07-03 by the SAME generator
+# (tools/gems/build_toy_parking.py) with layout parameters exposed as CLI args
+# (LEDGER GOAL #016). Frozen ingestion identical to toy_parking: 90 views
+# @1000x750, file5 split (every 5th view test), GT mesh + per-view GT depth
+# exported at build time, images/-r -1.
+#   toy_parking_v2   (altered layout): --seed 1 --car-yaws-deg 180,0
+#                    --car-offsets -0.35,0.4,0.3,-0.3 --wall-x 3.0 --fence-x -9.0
+#   toy_parking_occl (added occlusion): --seed 0 + 2 extra vehicles parked at
+#                    (±2.4, 9.7, yaw 90°) directly behind the bays, occluding
+#                    the northern ring cameras' sightlines to cars/bays/curb.
+# ROIs recomputed per variant from each GT mesh extent at build time (both:
+# xy ±17.025 exactly, z ∈ [-0.02, 3.0]) -> identical to the toy_parking ROI;
+# ground z = 0 by construction, z_band = [0.0, 1.5] (PROTOCOL 4.4).
+for _vname in ["toy_parking_v2", "toy_parking_occl"]:
+    _vsrc = f"/data/peilincai/gems_stage1/datasets/{_vname}"
+    SCENES[_vname] = SceneSpec(
+        name=_vname,
+        source_path=_vsrc,
+        images="images",
+        resolution=-1,
+        white_background=False,
+        split="file5",
+        gt={
+            "mesh_path": f"{_vsrc}/gt/mesh.obj",
+            "gt_depth_dir": f"{_vsrc}/gt/depth",
+            "colmap_sparse": f"{_vsrc}/sparse/0",
+        },
+        roi={
+            "min": [-17.025, -17.025, -0.1],
+            "max": [17.025, 17.025, 3.2],
+            "z_band": [0.0, 1.5],
+        },
+        units_per_meter=1.0,
+        exists=True,
+    )
+
 # Stage Two S-REND expansion (MATRIX.md): the remaining Mip-NeRF360 scenes at
 # the clean-baseline ingestion configs (outdoor images_4, indoor images_2,
 # llff8, -r -1). COLMAP sparse declared for g1; no GT mesh (g4/d skipped).
