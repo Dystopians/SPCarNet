@@ -156,3 +156,44 @@ for _name, _imgdir in [
         units_per_meter=None,
         exists=True,
     )
+
+# ---------------------------------------------------------------------------
+# Stage Two S-GEO (MATRIX cell D-1b): SS3DM CARLA street sequences, converted
+# by tools/gems_train/ss3dm_ingest.py from
+# /data/peilincai/mesh_datasets/SS3DM (150_streetsurf, 4 towns).
+# Frozen ingestion policy (see each dataset_manifest.json): 3 front cameras x
+# 150 frames = 450 images at 1920x1080; resolution=2 (-r 2 -> 960x540) keeps
+# the trainer's cuda data_device GT-image footprint at ~2.8 GB (450 full-res
+# would be ~11.2 GB, 900 imgs of 6 cams ~22.4 GB).
+# split='file5' consumes <source_path>/split.json; its content is a WHOLE-FRAME
+# holdout (frame idx % 8 == 0 -> test, all 3 cams of that frame; 393/57), not
+# every-5th (the registry code only keys on the literal 'file5').
+# Trainer/COLMAP world = diag(1,-1,1) @ raw SS3DM world (raw CARLA world is
+# left-handed, c2w rotation det=-1); LiDAR evidence npz (recorded in the
+# manifests) stay in the RAW frame -> negate y when consuming.
+# gt.mesh_path OBJ units are CENTIMETERS (x0.01 -> m, schema
+# town_mesh_unit_scale=0.01); mesh->trainer-world alignment (scale + axis
+# flips) is frozen at first geometry eval, together with the ROI.
+# RAM: g4's trimesh ASCII-OBJ load peaks ~3-6x file size: Town02 ~1 GB OBJ is
+# safe; Town01/Town03 (2.1-2.5 GB) are borderline; Town06 (4.5 GB, est.
+# 14-27 GB RSS) EXCEEDS the 16 GB budget -> needs a streaming/decimated
+# variant (never silently decimate).
+_SS3DM_DS = "/data/peilincai/gems_stage1/datasets"
+_SS3DM_MESH = "/data/peilincai/mesh_datasets/SS3DM/meshes/mesh"
+for _town in ["Town01", "Town02", "Town03", "Town06"]:
+    _key = f"ss3dm_{_town.lower()}"
+    SCENES[_key] = SceneSpec(
+        name=_key,
+        source_path=f"{_SS3DM_DS}/{_key}",
+        images="images",
+        resolution=2,
+        white_background=False,
+        split="file5",
+        gt={
+            "mesh_path": f"{_SS3DM_MESH}/{_town}_obj.obj",
+            "colmap_sparse": f"{_SS3DM_DS}/{_key}/sparse/0",
+        },
+        roi=None,  # frozen at first geometry eval
+        units_per_meter=1.0,  # CARLA is metric
+        exists=True,
+    )
