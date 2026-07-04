@@ -327,7 +327,8 @@ def stage_prune(scene: str, spec, source_ckpt: str, mode: str, budget: float,
 
 
 def build_train_cmd(spec, model_dir: str, load_iter: int, final_iter: int,
-                    run_name: str, lr_overrides: dict | None = None) -> list:
+                    run_name: str, lr_overrides: dict | None = None,
+                    train_seed: int = TRAIN_SEED) -> list:
     """Mirror scripts/car_model/meshsplatopt_run_strict_compact_recovery.py::
     _train_args (compact_render_only preset), calling train.py directly.
 
@@ -351,7 +352,7 @@ def build_train_cmd(spec, model_dir: str, load_iter: int, final_iter: int,
         cmd += ["--split_strategy", "llff"]
     cmd += [
         "--load_iteration", str(load_iter),
-        "--seed", str(TRAIN_SEED),
+        "--seed", str(int(train_seed)),
         "--iterations", str(final_iter),
         "--densify_until_iter", str(load_iter),
         "--skip_restricted_delaunay",
@@ -465,6 +466,9 @@ def parse_args():
     p.add_argument("--ft-feature-lr", type=float, default=None)
     p.add_argument("--ft-weight-lr", type=float, default=None)
     p.add_argument("--ft-position-lr", type=float, default=None)
+    p.add_argument("--train-seed", type=int, default=TRAIN_SEED,
+                   help="seed passed to the safe FT train.py stage "
+                        "(default 0 preserves all pre-Stage3 hashes)")
     p.add_argument("--gpu", type=int, default=None)
     p.add_argument("--skip-eval", action="store_true")
     return p.parse_args()
@@ -518,7 +522,8 @@ def main():
                     "weight_lr": args.ft_weight_lr,
                     "lr_triangles_points_init": args.ft_position_lr}
     train_cmd = build_train_cmd(spec, model_dir, load_iter, final_iter,
-                                run_name, lr_overrides) if with_ft else []
+                                run_name, lr_overrides,
+                                train_seed=args.train_seed) if with_ft else []
     stage_cfg = {
         "preflight": f"{PIPELINE_VERSION}|preflight|roots={MODELS_ROOT},{EVAL_ROOT}|min_free_gb=50",
         "evidence": (f"{PIPELINE_VERSION}|evidence|scene={args.scene}"
@@ -609,6 +614,7 @@ def main():
         "n_triangles_pruned": prune_payload["keep_count"],
         "final_ckpt": final_ckpt,
         "ft_iters": int(args.ft_iters) if with_ft else 0,
+        "train_seed": int(args.train_seed) if with_ft else None,
         "ft_wallclock_min": (ft_payload or {}).get("ft_wallclock_min"),
         "metrics_json": (eval_payload or {}).get("metrics_json"),
         "eval_skipped": bool(args.skip_eval),

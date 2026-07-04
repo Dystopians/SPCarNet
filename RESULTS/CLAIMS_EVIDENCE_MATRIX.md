@@ -30,10 +30,9 @@ clean-fixed@30k (PRIMARY anchor, LEDGER GOAL#R-01); B0-26k = 26k context row.
 Context rows (not claim-bearing): **H1** v106 historical and **R1**
 3DGS+compression — both RECORDED as clearly-marked context appendices in
 T1/T4 (LEDGER GOAL#013/#017; `analysis/h1_v106_context/`,
-`analysis/r1_3dgs_reference/`). **B1 no-op was never run** (sanity cell;
-honest open gap, flagged in T1's header — the near-lossless B4-vs-B0
-prune-only deltas at B50 bound the pipeline's pass-through fidelity
-indirectly, but that is not a substitute row).
+`analysis/r1_3dgs_reference/`). **B1 no-op sanity was run in the gap-closure
+phase** and is treated as an exact pass-through sanity check, not as a
+claim-bearing method row.
 
 ## C2 — Geometry reliability (DEMOTED to measurement claim, CLAIMS v1.0)
 
@@ -54,14 +53,14 @@ indirectly, but that is not a substitute row).
 | Teacher distillation = diagnostic channel only (real, sub-floor, view-conditioning-capped ~5–16%) | `T6_ablations.md` teacher block (6 distill−control CIs), `F7_ablations`; LEDGER GOAL#007 (E3 sunset); eval rows `e3*` | **SUPPORTED as demoted diagnostic; no headline claim** |
 | End-phase decline: features-only end-phase improves baseline 9/9, yet 26k > fixed-30k 9/9 (trainer property, NON-CLAIM) | T2 B0-26k and B0′ rows; LEDGER GOAL#R-01; NEGATIVE_RESULTS §12 | **SUPPORTED, kept as NON-CLAIM** |
 
-## C4′ — Downstream (three components, CLAIMS v1.2)
+## C4′/C4″ — Downstream (CLAIMS v1.3)
 
 | Claim component | Evidence | Status |
 |---|---|---|
 | (1) Preservation-exactness (bit-identical rendered depth; identical certification sets; planner outcomes CI [0,0]; SS3DM 20/20 arms) — now at N=500 | `T5_downstream.md` paired rows, `T5b_r3_trilogy.md`, `F6`; LEDGER GOAL#R-02/#R-03/#R-06/#R-08 + **GOAL#015-B: N=500 outcome-level EXACT (identical found/collision sets, CIs [0,0]; sole deviation = 2/500 label-only reason flips on courtyard, no outcome differs)**; `analysis/e5_down_ext/summary.json` (replay-verified vs R3.c first-100) | **SUPPORTED (strongest form measured)** |
-| (2) Consumption-route falsifications with mechanisms (TSDF grazing-ray bias; raw-grid spurious infeasibility; certification sheds load-bearing surface; frozen fix-target on courtyard) | `T5b_r3_trilogy.md`, `F6` panels (b)–(d); NEGATIVE_RESULTS §§9–11; LEDGER GOAL#R-02/#R-03/#R-06; **N=500 refinement (GOAL#015-B): route-i spurious infeasibility 88.4%/99.6% (P-B2's frozen ≥90%/=100% letter FALSIFIED at better resolution — substance survives); NEW damning datum: courtyard route-i's only 2/500 plans BOTH hit GT; route-ii 5.93 coll/100 = 3.66× GTREF floor (P-B3's 5× letter falsified, direction holds); ESDF clearance under-estimated 1.0–2.9 m mean everywhere (P-B4 confirmed)** | **SUPPORTED (citable negatives; falsified numeric letters reported as falsified)** |
+| (2) Consumption-route falsifications with mechanisms (TSDF grazing-ray bias; raw-grid spurious infeasibility; certification sheds load-bearing surface; three-state UNKNOWN blocks free space; frozen fix-target on courtyard) | `T5b_r3_trilogy.md`, `RESULTS/CONSUMPTION_IMPOSSIBILITY.md`, `F6` panels (b)–(d); NEGATIVE_RESULTS §§9–14; LEDGER GOAL#R-02/#R-03/#R-06/#C-02; **N=500 refinement (GOAL#015-B): route-i spurious infeasibility 88.4%/99.6% (P-B2's frozen ≥90%/=100% letter FALSIFIED at better resolution — substance survives); NEW Stage3 datum: R3-FINAL V1 controls toy false-free (0.0975) but finds 0/100 plans on toy and courtyard clean/B50 because UNKNOWN blocks 65–76% GT-free space** | **SUPPORTED (citable negatives; falsified numeric letters reported as falsified)** |
 | (3) Bounded geometry positive B6R (courtyard opacity-release; single real scene; joint bar FAIL stands) | T1 S-DEV/S-GEO B6R rows, T3/T5 B6R rows, T6 geometry-mechanism block incl. **B6R-on-SS3DM (GOAL#014 DONE-FAIL as pre-registered: guard held 3/3, LPIPS/g1/g3-components better CI-excl-0 3/3, but g3-FRACTION arm 0/3 and d1-ff worse CI-excl-0 3/3 — NOT claim-grade, stays courtyard-scoped)**; LEDGER GOAL#R-04/#014; `analysis/b6r_ss3dm/` | **SUPPORTED as bounded (scene-scoped); the generalization test was run and failed honestly** |
-| NON-CLAIM: no tested one-time consumption route supports parking-grade closed-loop planning; blocker is baseline checkpoint geometry | `T5b_r3_trilogy.md` + LEDGER GOAL#R-06 consumability conclusion + #015-B N=500 sharpening | **RESPECTED** |
+| NON-CLAIM: no tested one-time consumption route supports parking-grade closed-loop planning; blocker is baseline checkpoint geometry and train coverage | `T5b_r3_trilogy.md` + `RESULTS/CONSUMPTION_IMPOSSIBILITY.md` + LEDGER GOAL#R-06/#C-02 + #015-B N=500 sharpening | **RESPECTED; strengthened to IMPOSSIBILITY x4 route families** |
 
 ## NON-CLAIMS (must appear verbatim in report/paper — from CLAIMS.md)
 
@@ -73,32 +72,33 @@ indirectly, but that is not a substitute row).
 > metrics vs clean; no claim that evidence-guided importance dominates random
 > pruning under safe fine-tuning at moderate budgets on small scenes; the
 > end-phase-decline finding (clean26k > clean30k) is reported as a property of
-> the baseline trainer, not a GEMS contribution. (v1.2 addition:) no tested
-> one-time occupancy-consumption route currently supports parking-grade
-> closed-loop planning from these checkpoints.
+> the baseline trainer, not a GEMS contribution. (v1.3 addition:) no tested
+> one-time train-evidence occupancy consumer supports parking-grade closed-loop
+> planning on these checkpoints; the closed-loop stretch is an impossibility
+> result, not a positive application claim.
 
 Where honored in the pack: T1/T2 dual anchors + explicit anchor naming; the
 R1 context appendix measures the 3DGS trade plainly (2.1–3.4 dB, 3.1–4.4×
 FPS at matched storage) instead of hiding it; T6 teacher block labeled
 DEMOTED; T5/T5b/F6 preservation-only language; F1 caption carries the
-geometry caveat; T7 admits robustness cells were not run.
+geometry caveat; T7 reports the Stage3 seed and 50%-view-drop substitutes and
+names the waived residue.
 
 ---
 
 ## §10.4 audit (regenerated at final assembly)
 
 **Claims lacking evidence:**
-1. — none at the claim-text level. Every sentence in CLAIMS.md v1.2 now has
+1. — none at the claim-text level. Every sentence in CLAIMS.md v1.3 now has
    at least one supporting-or-bounding table/figure/goal above, including the
    formerly naked "QEM-style decimation" arm (B3, GOAL#013).
 2. Residual SCOPE caveats (documented, not silent): the B3 column exists
    only @B50 on 3 scenes (margin CI-certified on 2/3; courtyard 5-view CI
-   wide); B2 at B50/B25 exists only on garden/toy/courtyard and S-GEO B2 was
-   never run — C1′'s "dominates random pruning" therefore rests on the
-   B12.5 9/9 result plus the moderate-budget NON-CLAIM, which is exactly how
-   CLAIMS.md words it; B1 no-op sanity row never run. These are flagged in
-   T1's header and EXPERIMENT_REPORT §7 as human-decision items (complete or
-   waive), not hidden.
+   wide); B2 at B50/B25 exists only on garden/toy/courtyard while S-GEO B2 is
+   run at B50; C1′'s broad "dominates random pruning" wording rests on the
+   B12.5 9/9 result plus the moderate-budget NON-CLAIM, exactly as CLAIMS.md
+   words it. The remaining breadth residue is scope-frozen by Stage3 W4/W5,
+   not hidden.
 
 **Strong evidence lacking a claim (stated home or reason for exclusion):**
 1. B12.5 importance-vs-random dominance (+5.23 dB mean, 9/9 CIs — T6/F7,
@@ -121,6 +121,9 @@ geometry caveat; T7 admits robustness cells were not run.
 9. D-2 family replication (GOAL#016): folded into C2 (measurement claim) and
    the C1′ toy bound; no new claim minted.
 
+10. R3-FINAL V1 hard failure (GOAL#C-02): folded into C4″ as an impossibility
+    result and into NON-CLAIMS; no positive application claim is minted.
+
 **Verdict on §10.4:** no claim lacks evidence; every strong result has a
 named claim-home or a stated exclusion reason. The matrix is consistent with
-the post-shrink CLAIMS.md v1.2.
+the post-shrink CLAIMS.md v1.3.

@@ -1,6 +1,6 @@
 # T3 — Geometry reliability (E2-GEO)
 
-_generated 2026-07-04T00:04:14.687416+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-04T07:47:36.454148+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > GT-CAL = toy GT-mesh model calibration row (metric-suite validation, LEDGER GOAL#004). VOID cells are LEDGER-voided measurements (encoded in collect.py), NOT missing data: pre-R-08 SS3DM g4 used a raw-cm unmirrored GT mesh. 'n/a' = metric not defined for the scene (no GT asset / no gt_depth).
 > SS3DM g1 absolute values are NOT comparable across datasets (GT depth to ~1000 m; LEDGER GOAL#R-08). g4 absolutes on SS3DM are GT-sampling-density-limited; paired deltas are the valid signal.

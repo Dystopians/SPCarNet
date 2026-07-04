@@ -1,9 +1,9 @@
 # T5 — Downstream proxies (E5-DOWN)
 
-_generated 2026-07-04T00:04:14.700671+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-04T07:47:36.463617+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > d1 = occupancy confusion at 0.10 m voxels (false-free is the safety-critical direction); d2 = collision-verdict agreement on 200 seed-0 trajectories. C4' is a PRESERVATION claim (CLAIMS.md): no row here claims improvement vs clean.
-> R3 consumption trilogy summary below is read by script from analysis/r3{a,c,b}_*/summary.json (LEDGER #R-02/#R-03/#R-06).
+> R3 consumption closure summary below is read by script from analysis/r3{a,c,b}_*/summary.json plus Stage3 R3-FINAL outputs when present (LEDGER #R-02/#R-03/#R-06/#C-02).
 
 | suite | scene | method | budget | d1 false-free rate | d1 false-occupied rate | d2 agreement | d2 unsafe disagreement | n traj | eval row |
 |---|---|---|---|---|---|---|---|---|---|

@@ -1,11 +1,12 @@
 # GEMS — HANDOFF note for human paper writing
 
-2026-07-03 · Stage-2 §8 final deliverable (GOAL#018). Suggested narrative
+2026-07-04 · Stage-2/3 final deliverable (pack v4). Suggested narrative
 order, strongest evidence first, known weak points flagged. Writing the
 paper's narrative claims is a human task by design (Stage-2 §10); this note
 is the map, not the draft. Companion: `EXPERIMENT_REPORT.md` (complete
 honest report + §7 completion table), `CLAIMS_EVIDENCE_MATRIX.md`,
-`NEGATIVE_RESULTS.md`, `REPRO_PACK/`.
+`NEGATIVE_RESULTS.md`, `CONSUMPTION_IMPOSSIBILITY.md`, `REPRO_PACK/`, and
+`SUBMISSION_HANDOFF/`.
 
 ## The paper's spine (per Delta Memo #002 steering)
 
@@ -54,10 +55,12 @@ selection effects — write them as ONE section, not three apologies.
    (§7.5 guard).
 5. **The honest negatives with mechanisms (one section)** — F8, F6(b–d),
    NEGATIVE_RESULTS.md, T5b.
-   - Consumption trilogy: TSDF votes near-surface voxels free (grazing-ray);
+   - Consumption closure: TSDF votes near-surface voxels free (grazing-ray);
      raw grids blanket free space (88–100% spurious infeasibility, and the
-     rare courtyard plans collide); certification sheds real walls with junk.
-     Frozen fix-target: courtyard ≥30/100 found at ≤3.0 coll/100.
+     rare courtyard plans collide); certification sheds real walls with junk;
+     R3-FINAL three-state carving controls toy false-free but blocks too much
+     free space and finds 0/100 plans on toy/courtyard clean+B50. Frozen
+     fix-target remains unmet: courtyard ≥30/100 found at ≤3.0 coll/100.
    - Geometry-repair and teacher axes: tombstoned with measured mechanisms
      (position drift; view-conditioning cap 5–16%). B6R = the one bounded
      positive (courtyard), generalization tested and failed honestly.
@@ -73,14 +76,14 @@ selection effects — write them as ONE section, not three apologies.
 - **W-1 Anchor duality:** vs the PRIMARY (drift-repaired) anchor, B50 iso is
   4/9, not 8/9. The claim text names its anchor; a reviewer may still call
   the headline soft. Mitigation: lead with the dual-row table itself.
-- **W-2 Single seed:** no E7; base-training seed sensitivity
-  uncharacterized. Measured 1.6e-5 dB pipeline repeat floor + 15-scene
-  replication is the current answer (EXPERIMENT_REPORT §4-A5, waive W1).
-- **W-3 No robustness/generalization column (E8/S-GEN):** three dataset
-  families only; T&T data on disk but never run (waive W2).
-- **W-4 Baseline breadth:** B1 never run; B3 only @B50×3 scenes (courtyard
-  PSNR CI wide — its LPIPS margin is the certified arm); B2 moderate-budget
-  columns only on 3 scenes; S-GEO B2 absent (waives W4/W5).
+- **W-2 Seed breadth:** Stage3 adds one full garden seed-1 retrain pair, which
+  supports the waiver, but not the full 3-seed x subset grid.
+- **W-3 Robustness/generalization breadth:** Stage3 adds one 50% train-view
+  drop arm; pose-noise and unseen-type S-GEN remain waived and should be
+  stated as limitations.
+- **W-4 Baseline breadth:** B3 only @B50×3 scenes (courtyard PSNR CI wide —
+  its LPIPS margin is the certified arm); B2 moderate-budget columns only on
+  3 scenes; remaining breadth is scope-frozen by Stage3 W4/W5.
 - **W-5 Courtyard rendering CIs are 5-view** (by design; geometry/downstream
   carry that scene) — say it before the reviewer does.
 - **W-6 toy-family LPIPS caveat:** features-FT trades LPIPS for PSNR on toy
@@ -103,5 +106,5 @@ selection effects — write them as ONE section, not three apologies.
   caption text; F4 grids embed the §5 crop rule (best/median/failure —
   manifest.json proves script selection, cite it in the reproducibility
   statement).
-- Open human decisions before "Stage Two complete" can be declared:
-  approve/reject waive drafts W1–W6 in EXPERIMENT_REPORT §7.
+- No open human decisions remain for Stage3 closure. Submission writing remains
+  human-owned; the evidence pack is locked.

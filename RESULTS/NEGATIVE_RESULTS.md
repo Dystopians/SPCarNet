@@ -140,6 +140,27 @@ Format: **what failed — verdict — mechanism — evidence.**
   (selection effect; adversarial 62× over-parameterized synthetic scene).
   Evidence: T1/T2, LEDGER GOAL#005/#008; E9 family A.
 
+## 14. R3-FINAL three-state evidence-carved occupancy — FAIL (hard non-near-miss)
+
+- Verdict: the last Stage3 downstream consumer class, V1 log-odds
+  visibility-carved three-state occupancy, fails the frozen parking-grade bar
+  on every reported cell. toy clean/B50 and courtyard clean/B50 all produce
+  **0/100 feasible plans**; collision and path-inflation metrics are therefore
+  unavailable rather than passing.
+- Mechanism: the intended false-free guard works on toy (`FREE@GT-occ` 0.0975
+  ≤ 10%), but UNKNOWN-as-obstacle blocks too much legitimate free space
+  (`blocked@GT-free` 0.6517 toy, 0.7649 courtyard). The trade is structural:
+  if unobserved space is made free, prior routes collide or create unsafe
+  false-free cells; if it is made unknown, planning becomes infeasible.
+- Evidence: `/data/peilincai/gems_stage1/analysis/r3final_three_state_v1/summary.json`,
+  `R3_FINAL_V1_REPORT.md`, and `RESULTS/CONSUMPTION_IMPOSSIBILITY.md`;
+  purity audit GREEN at
+  `/data/peilincai/gems_stage1/eval/c02_purity_audit_fast/audit_report.json`.
+- Consequence: no V2/V3 is run because V1 is not a near-miss under Stage3.
+  Combined with R3.a/R3.c/R3.b, the downstream consumption axis closes as
+  **IMPOSSIBILITY×4 route families** for one-time train-evidence occupancy
+  consumers on these checkpoints.
+
 ## Cross-reference
 The full failure taxonomy with panels and one-paragraph diagnoses (13 cases,
 5 mechanism families) is at

@@ -1,6 +1,6 @@
 # T6 — Ablations (E6-ABL)
 
-_generated 2026-07-04T00:04:18.500430+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-04T07:47:40.324224+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > STATS: every delta is a paired per-view bootstrap 95% CI (10k resamples, seed 0, PROTOCOL section 5). MULTIPLE-COMPARISONS CAVEAT (E10): dozens of CIs are reported across this pack; borderline CIs (effect near a floor or CI edge near 0) should be read with Bonferroni-style skepticism — headline claims rest only on effects that are large, replicated across scenes/suites, or mechanism-backed. Courtyard rendering CIs are 5-view (underpowered by design). Reporting language per section 6: 'improves/reduces' ONLY when the CI excludes 0 AND the D3 floor is cleared; otherwise 'comparable'/'inconclusive'.
 > E6 mapping note: Stage-One/1R variant rows are mapped onto the E6 ablation axes (MATRIX E6: 'map them in'); the importance-DEFINITION family block is the dedicated E6 sub-cell (GOAL#012: pixels_total vs max_blending_max vs ckpt_importance_score @B50 on garden/kitchen/town01 — revision trigger NOT tripped; axis flat, all pairwise |dPSNR| <= 0.052 dB; town01 abl_blend is the pre-registered degenerate-identical-prune row = measured pipeline noise floor 1.6e-5 dB; full CIs analysis/e6_abl/e6_table.md). Reallocation on/off was never built (dropped with note, MATRIX).

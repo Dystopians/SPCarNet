@@ -1,6 +1,6 @@
 # T4 — Efficiency (E4-EFF)
 
-_generated 2026-07-04T00:04:14.692044+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-04T07:47:36.458605+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > Second-resolution FPS column: bench-only, non-protocol resolution (0.5x linear protocol res); loop: identical to run_eval.py: 3 warmup renders, median of 3 full test-set forward passes, no image I/O; GPU NVIDIA RTX 6000 Ada Generation. These half-res numbers are for the E4 efficiency table only ('bench-only, non-protocol resolution') — no quality metric was computed at this resolution.
 > HONESTY CAVEAT on FPS columns: the protocol-res FPS in each metrics.json was measured at eval time (idle GPUs, various same-model RTX 6000 Ada devices); the half-res bench ran on GPU 4 WITH a background process from another user (~21% util at launch). Method-vs-method comparisons WITHIN the half-res column share GPU state (paired-ish); protocol-vs-half-res comparisons across columns are indicative only. Several large scenes show half-res FPS close to or below protocol-res FPS — consistent with triangle-sort-bound rendering (cost dominated by primitive count, not pixels) plus contention; do not read that cross-column delta as a resolution scaling law.

@@ -58,6 +58,27 @@ SCENES: dict = {
         units_per_meter=None,  # COLMAP scale, not metric
         exists=True,
     ),
+    # Stage 3 W2 robustness arm: garden with the original llff8 test set kept
+    # fixed, and a deterministic 50% drop of the train views. The dataset
+    # directory under GEMS_ROOT is a symlink mirror of the original garden
+    # source plus a frozen split.json; original data are not edited. Split
+    # policy frozen in LEDGER GOAL #C-01 before any W2 model is trained:
+    # sorted COLMAP cameras, idx%8==0 test unchanged, every other remaining
+    # train camera kept (81/161 train views).
+    "garden_halftrain": SceneSpec(
+        name="garden_halftrain",
+        source_path="/data/peilincai/gems_stage1/datasets/garden_halftrain",
+        images="images_4",
+        resolution=-1,
+        white_background=False,
+        split="file5",
+        gt={
+            "colmap_sparse": "/data/peilincai/gems_stage1/datasets/garden_halftrain/sparse/0",
+        },
+        roi=None,
+        units_per_meter=None,
+        exists=True,
+    ),
     # dev_drive_A (PROTOCOL section 1): ETH3D courtyard at the stageR precedent
     # ingestion config `--images images -r 8 --eval`.
     "courtyard": SceneSpec(

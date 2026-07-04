@@ -158,6 +158,14 @@ def classify(dirname: str, row: dict | None, scene: str):
         method, role, bv, bl = SPECIAL[dirname]
         return method, role, bv, bl, ""
 
+    # --- Stage3 closure rows (GOAL#C-01; T7 consumes these explicitly) ---
+    if dirname == "garden_clean30k_seed1_v1":
+        return "B0-seed1", "robustness", 1.0, "B100", (
+            "Stage3 W1 seed-1 clean full retrain substitute row")
+    if dirname == "garden_halftrain_clean30k_v1":
+        return "B0-halftrain", "robustness", 1.0, "B100", (
+            "Stage3 W2 garden 50% train-view-drop clean retrain row")
+
     # --- anchors / clean rows (no row.json) ---
     if "cleanfixed30k" in dirname:
         return "B0'", "anchor", 1.0, "B100", "primary anchor (R1, features-only 26k->30k)"
@@ -261,6 +269,12 @@ def classify(dirname: str, row: dict | None, scene: str):
         if mode == "importance_noft":
             return "B4", "primary", bv, bl, note
         if mode == "importance_ft":
+            if tag == "stage3seed1":
+                return "B5-seed1-full", "robustness", bv, bl, (
+                    note + " (Stage3 W1 B5@B50 from seed-1 clean retrain)")
+            if tag == "stage3drop50":
+                return "B5-halftrain", "robustness", bv, bl, (
+                    note + " (Stage3 W2 B5@B50 under 50% train-view drop)")
             if tag in ("s2", "e1v2"):
                 return "B5", "primary", bv, bl, note
             if tag == "e1b":

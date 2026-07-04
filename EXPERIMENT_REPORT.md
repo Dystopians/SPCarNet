@@ -1,10 +1,11 @@
-# GEMS — EXPERIMENT_REPORT.md (Stage 2, FINAL ASSEMBLY)
+# GEMS — EXPERIMENT_REPORT.md (Stage 2/3, FINAL EVIDENCE PACK v4)
 
-Started 2026-07-03 (Stage-1R R4); final assembly 2026-07-03 (GOAL#018).
+Started 2026-07-03 (Stage-1R R4); Stage3 closure completed 2026-07-04
+(GOAL#C-01/#C-02 plus pack v4 regeneration).
 Every table/figure referenced below is script-generated from `metrics.json`
 / durable analysis artifacts (Stage-2 §6: no hand-typed numbers; generators
 in `tools/gems/report/`; one-command regeneration + from-scratch T1
-verification in `RESULTS/REPRO_PACK/`). Claim boundaries: `CLAIMS.md` v1.2
+verification in `RESULTS/REPRO_PACK/`). Claim boundaries: `CLAIMS.md` v1.3
 applies verbatim — the NON-CLAIMS block is reproduced in §6 below.
 Claim↔evidence mapping: `RESULTS/CLAIMS_EVIDENCE_MATRIX.md`.
 
@@ -20,9 +21,9 @@ measurably destroys converged checkpoints). Output = a plain, smaller
 checkpoint of the same format; no test-time components. Single-mouth
 evaluation (`run_eval.py`, PROTOCOL v1.1.x); all deltas paired per-view
 bootstrap, 10k resamples, seed 0, against dual anchors (clean@30k legacy;
-clean-fixed@30k primary). The consumption trilogy (occupancy routes /
-planner / certified sub-mesh) and the evidence-vs-error study are ANALYSIS,
-not method (§7.5 framing).
+clean-fixed@30k primary). The consumption-closure routes (occupancy routes /
+planner / certified sub-mesh / three-state R3-FINAL) and the evidence-vs-error
+study are ANALYSIS, not method (§7.5 framing).
 
 ## 2. Results index (final pointers)
 
@@ -42,13 +43,13 @@ not method (§7.5 framing).
   VRAM/FPS@2 res + measured prune+FT overhead; R1 efficiency context
   appendix (E4-EFF).
 - **T5** `T5_downstream.{md,csv}` + `T5b_r3_trilogy.md` — d1/d2 per scene +
-  R3.a/c/b verdicts script-extracted (E5-DOWN); N=500 extension in
-  `analysis/e5_down_ext/` (quoted in F6).
+  R3.a/c/b plus Stage3 R3-FINAL verdicts script-extracted (E5-DOWN);
+  N=500 extension in `analysis/e5_down_ext/` (quoted in F6).
 - **T6** `T6_ablations.{md,csv}` — E6 axes: FT channel, schedule,
   evidence-vs-random, importance-DEFINITION family (GOAL#012), sourcing,
   teacher variants, geometry mechanisms incl. B6R-on-SS3DM (E6-ABL).
-- **T7** `T7_robustness.md` — NOT RUN placeholder with waive-draft pointer
-  (E7/E8; §7 below).
+- **T7** `T7_robustness.md` — Stage3 W1 seed-1 retrain substitute and W2
+  50% train-view-drop arm, both completed; residue waived by human ruling.
 
 **Figures** (`RESULTS/figures/`):
 - **F1** teaser draft (garden budget–quality–geometry) + caption.
@@ -86,8 +87,9 @@ byte-diff: PASS 2026-07-03, `verify_t1_result.txt`).
    cap ~5–16%).
 5. 26k-sourcing refuted (−0.020 CI).
 6. R3.a TSDF fusion falsified (false-free ↑26–41%; grazing-ray bias).
-7. R3.c raw grids unusable closed-loop; R3.b certification falsified 0/4
-   (sheds load-bearing surface); N=500: courtyard route-i's only 2/500 plans
+7. R3.c raw grids unusable closed-loop; R3.b certification falsified 0/4;
+   Stage3 R3-FINAL three-state carving falsified 0/4 with 0/100 found on toy
+   and courtyard clean/B50. N=500: courtyard route-i's only 2/500 plans
    BOTH collide; P-B2/P-B3 numeric letters falsified at better resolution
    (substance survives) — LEDGER #015-B.
 8. Trainer end-phase decline (baseline property; 26k > fixed-30k 9/9).
@@ -222,79 +224,37 @@ Stage-2 entry audit (`eval/stage2_entry_audit`) was RED — a scope artifact
 fresh-clone repro PASS (Δ0.0005 dB) + pristine-submodule build check PASS
 with bit-exact toy eval (GOAL#R-07).
 
-## 7. Stage-2 §10 completion verification (final assembly, 2026-07-03)
+## 7. Stage-2 §10 completion verification (Stage3 closure, 2026-07-04)
 
 | § | Criterion | Verdict | Evidence / gap |
 |---|---|---|---|
-| 10.1a | Every Tier-1 cell DONE-PASS / DONE-FAIL / INFEASIBLE-with-note | **PASS (post-GOAL#019)** | Everything from the #018 list PLUS the gap runs: **B1 no-op RUN — exact pass-through (Δ=0.00e+00 vs clean, same tri count)**; S-GEO B2 column RUN (importance−random +0.77..+1.30 dB, 4/4 towns CI excl. 0); B6.25 far-end RUN (garden −3.50 / kitchen −5.27 / town01 −3.26). Remaining Tier-1 residue = E1 breadth beyond the run grids (B3 beyond B50×3, B2 moderate-budget breadth) and E5 SS3DM planner cells — scope-freeze rulings W4/W6 below; town06 INFEASIBLE note stands (#R-08). |
-| 10.1b | ≥80% of Tier-2 cells resolved or explicitly waived | **PASS — 7/9 resolved by runs/verdicts** (R3.b, B6R-SS3DM, laptop-bench waive, videos DELIVERED, B6.25 RUN, S-GEO B2 RUN, E7 partial-evidence) **; 9/9 iff W1-residue + W2 approved** | E7: measured seed-pair −0.0004 CI[−0.0009,+0.0001] + 1.6e-5 dB repeat floor; formal residue = full 3-seed×subset grid (W1). E8-ROBUST+S-GEN = the sole untouched Tier-2 family (W2). |
-| 10.2 | All experiment types present in RESULTS/ + summarized | **PASS except E8** | Sensitivity now has measured evidence in T7 (seed pair + repeat floor + importance-family flatness); robustness/generalization (E8/S-GEN) remains ABSENT (W2). |
+| 10.1a | Every Tier-1 cell DONE-PASS / DONE-FAIL / INFEASIBLE-with-note | **PASS** | Stage3 rulings execute the remaining scope decisions: W4/W4a/W5 granted as drafted; W6 superseded by R3-FINAL and closes as IMPOSSIBILITY; town06 INFEASIBLE note stands (#R-08). |
+| 10.1b | ≥80% of Tier-2 cells resolved or explicitly waived | **PASS** | W1 substitute run completed and supports waiver; W2 50% train-view-drop arm completed and pose-noise/S-GEN residue waived by Stage3 ruling; W3 withdrawn after videos; W4/W4a/W5 granted. |
+| 10.2 | All experiment types present in RESULTS/ + summarized | **PASS** | T7 contains measured seed and view-drop evidence. E8 pose-noise and S-GEN are waived with the W2 datum and explicit limitation language, not silently treated as run. |
 | 10.3 | Paired bootstrap on every headline delta; §6 language | **PASS** | Universal CI discipline (E10 DONE); caveat §5; win/iso/loss per scene in T1; language rules enforced in table headers. |
 | 10.4 | CLAIMS_EVIDENCE_MATRIX complete & consistent post-shrink | **PASS** | Regenerated at final assembly; no claim lacks evidence; every strong result has a claim-home or stated exclusion; residual scope caveats flagged, not hidden. |
-| 10.5 | All §8 deliverables exist; script-reproducible; REPRO_PACK verified by regenerating T1 from scratch | **PASS** | T1–T7 + F1–F8 + qual grids + 4 documents + REPRO_PACK; `verify_t1.sh` PASS 2026-07-03 (byte-identical modulo timestamp). T2-flythrough videos are the only §8 item deferred (F-item? — videos are E11-T2, waive W3). |
-| 10.6 | Final purity audit + fresh-env reproduction green on shipped artifacts | **PASS** | §6 verbatim audit quotes (6 GREEN incl. the garden B5 headline artifact and a D-2 variant artifact); fresh-clone repro PASS + pristine-build bit-exact (#R-07). |
-| 10.7 | EXPERIMENT_REPORT complete, honest, incl. negatives/limitations/boundaries | **PASS** | This document + NEGATIVE_RESULTS.md + §6 verbatim NON-CLAIMS + §8 limitations. |
+| 10.5 | All §8 deliverables exist; script-reproducible; REPRO_PACK verified by regenerating T1 from scratch | **PASS** | Pack v4 regenerated: 234-row corpus, T1–T7, F1–F8, qual grids, videos, submission handoff, and REPRO_PACK; `verify_t1.sh` PASS 2026-07-04T07:48:36Z. |
+| 10.6 | Final purity audit + fresh-env reproduction green on shipped artifacts | **PASS** | Prior green audits remain in force; Stage3 carving tool audited GREEN at `/data/peilincai/gems_stage1/eval/c02_purity_audit_fast/audit_report.json`; fresh-clone repro PASS + pristine-build bit-exact (#R-07). |
+| 10.7 | EXPERIMENT_REPORT complete, honest, incl. negatives/limitations/boundaries | **PASS** | This document + NEGATIVE_RESULTS.md + CONSUMPTION_IMPOSSIBILITY.md + §6 verbatim NON-CLAIMS + §8 limitations. |
 
-**Bottom line (updated post-GOAL#019/#020): "Stage Two complete — evidence
-pack ready for paper writing" is declared CONTINGENT on exactly TWO human
-waive rulings** — W1-residue (the full 3-seed×subset E7 grid; a measured
-seed-pair at −0.0004 dB CI[−0.0009,+0.0001] and the 1.6e-5 dB repeat floor
-already bound the axis) and W2 (E8-ROBUST + S-GEN: the only untouched
-Tier-2 family; a genuine multi-GPU-hour retraining campaign). W3/W4a/W5 were
-run instead of waived (videos delivered; B6.25 far-end banked; S-GEO B2
-dominance 4/4 CI); the B1 sanity gap was run to an exact no-op; W4/W6 are
-scope-freeze rulings on breadth, not missing science. Everything else —
-pack (v3, T1 from-scratch byte-verified), tables, figures, videos,
-claims-evidence consistency, statistics, audits, reproducibility — is in
-place and verified.
+**Bottom line:** Stage3 removes the final contingencies. W1 seed substitute:
+clean seed1-clean seed0 = +0.031 dB CI[-0.018,+0.090], and the B5 residual
+delta shift = +0.008 dB CI[+0.000,+0.017], both inside the 0.15 dB support
+rule. W2 half-train arm: the B50 residual worsens relative to full-view
+garden by -0.030 dB CI[-0.047,-0.014], matching the pre-registered direction.
+R3-FINAL fails hard and closes downstream as IMPOSSIBILITY x4 route families.
+All §10 rows are PASS; zero PARTIAL rows remain.
 
-### Tier-2 / residual waive DRAFTS (for human approval; not self-granted)
+### Stage3 human-ruling closure
 
-- **W1 (E7-SENS, T2).** Waive 3-seed variance and loss-weight 3-point scans.
-  Rationale: the shipped method has NO loss weights to scan (geometry losses
-  and teacher are demoted/default-off; the pipeline is prune+features-FT
-  with one LR that Stage-One already probed at ×0.1 — NEGATIVE_RESULTS §2);
-  eval/FT determinism was MEASURED end-to-end at 1.6e-5 dB (GOAL#012); all
-  headline effects are ≥0.1–5 dB and replicated across 15 scenes. Residual
-  risk honestly stated: base-training seed sensitivity is uncharacterized —
-  one full re-train pair (~1 GPU-h, e.g. garden seed 1: clean + B5) would
-  close the gap cheaply if the human prefers a run to a waiver.
-  dev-vs-full-res consistency: dev res IS the protocol res (DEC-002); no
-  second resolution was ever claimed.
-- **W2 (E8-ROBUST + S-GEN, T2).** Waive view-drop/pose-noise stress and
-  unseen-type scenes. Rationale: the program's central mechanism finding
-  (train-coverage selection effect, family A) IS a view-sparsity result and
-  predicts the direction of 50%-view-drop outcomes; S-GEN T&T scenes have
-  data on disk but need B0 trainings + the whole column at frozen
-  hyperparameters (~1 GPU-day) with no claim depending on it (C1′/C3′ scope
-  their scenes explicitly). Risk: generalization evidence stays anecdotal
-  (3 dataset families); flagged as a limitation in §8.
-- **W3 (E11 flythrough videos, T2).** Waive 2 videos. Rationale: teaser
-  material, not evidence; every claim-bearing qualitative deliverable exists
-  (7 crop-rule grids + panels); rendering a camera-path video is ~1 h of
-  GPU+script work the humans may prefer to art-direct during paper writing.
-- **W4 (Tier-1 residual: E1 breadth — B3 beyond B50×3, B2 at B50/B25 beyond
-  3 scenes, B1 no-op; +W4a B6.25 T2 budget).** Ruling requested:
-  scope-freeze E1 to the run grid. Rationale: B3's verdict is mechanism-backed
-  and CI-certified where run (2/3 scenes decisive; the mechanism — QEM moves
-  appearance carriers — is scene-independent); B2's regime story is complete
-  at B12.5 (9/9) + moderate-budget NON-CLAIM; B1's pass-through sanity is
-  indirectly bounded by prune-only-at-B50 near-losslessness (garden −0.011)
-  but was never run as specified — if any cell is completed rather than
-  waived, B1 is the cheapest (hours). B6.25: the E1′ "center of gravity"
-  prediction already has its dominance datum at B12.5; B6.25 would sharpen,
-  not change, C1′.
-- **W5 (S-GEO B2 column, T2 per task list).** Waive. Rationale: S-GEO's
-  claim role is C1′-transfer (B5 vs anchors: 3/4 towns) + C2/C4′
-  preservation; the evidence-vs-random contrast is established on S-REND
-  9/9 at B12.5 and is not S-GEO-claim-bearing. Cost if run: ~8 rows.
-- **W6 (E5 SS3DM planner cells).** Waive-or-defer. Rationale: the planner
-  verdict is already mechanism-closed on both GT-mesh scene families (raw
-  grids unusable; blocker = checkpoint geometry, invariant to compaction);
-  SS3DM adds GT-mesh towns but g4/d1 there are GT-sampling/ROI-limited
-  (#R-08 caveats) and town06 is INFEASIBLE — expected outcome is another
-  replication of "spurious infeasibility dominates", cost ~1 day of
-  harness adaptation. C4′ does not depend on it.
+- **W1:** cheap substitute run completed; full 3-seed x subset/loss-weight
+  grid waived with measured support plus the GOAL#012 repeat floor.
+- **W2:** garden 50% train-view-drop clean+B5@B50 arm completed; pose-noise
+  and S-GEN residue waived with limitation language strengthened by T7.
+- **W3:** withdrawn because videos were delivered.
+- **W4/W4a/W5:** granted as drafted in Stage3 §1 and recorded in LEDGER.
+- **W6:** superseded by R3-FINAL; because R3-FINAL fails, no SS3DM planner
+  cells are launched.
 
 ## 8. Limitations
 
@@ -304,6 +264,8 @@ documented thrice, now replicated on 3 family instances); SS3DM g1/g4
 absolutes are far-field/GT-sampling-limited (paired deltas are the valid
 signal); town06 g4/d1/d2 infeasible under the 20 GB RAM bar; courtyard
 z_band approximate; GT-scan unscanned voxels count free (collision lower
-bounds); no seed-sensitivity of base training (W1); no unseen-type-scene
-generalization run (W2); single-GPU-class FPS numbers (laptop bench waived);
-B0′ primary anchor exists on S-REND only.
+bounds); seed robustness is bounded by one garden seed-1 substitute rather
+than a full 3-seed grid; robustness/generalization is bounded by one 50%
+train-view-drop arm rather than pose-noise and unseen-type S-GEN trainings;
+single-GPU-class FPS numbers (laptop bench waived); B0′ primary anchor exists
+on S-REND only; no positive closed-loop planning claim survives R3-FINAL.

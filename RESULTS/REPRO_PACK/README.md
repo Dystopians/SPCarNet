@@ -1,7 +1,8 @@
-# GEMS — REPRO_PACK (Stage-2 §8)
+# GEMS — REPRO_PACK (Stage-2/3 §8, pack v4)
 
 One-command regeneration of every table/figure in the evidence pack from the
-durable eval corpus. Assembled 2026-07-03.
+durable eval corpus. Assembled 2026-07-03; Stage3 pack v4 refreshed
+2026-07-04.
 
 ## Environment
 
@@ -10,10 +11,9 @@ durable eval corpus. Assembled 2026-07-03.
   (`/home/peilincai/micromamba/envs/mesh_splatting/bin/python`, Python 3.11.14)
 - Key packages: torch 2.7.1+cu126, numpy 2.4.2, scipy 1.17.1,
   matplotlib 3.10.8 (full spec: `pip freeze` in this env).
-- Repo: `/data/peilincai/mesh-splatting`, HEAD at pack-assembly time:
-  `41c2fad09009ebd17546340947a8c7cc29a68ff9` (working tree carries additional
-  uncommitted report scripts under `tools/gems/report/` — the repo owner has a
-  no-autonomous-commits rule; commit them to freeze the pack).
+- Repo: `/data/peilincai/mesh-splatting`. The citable release is the tag
+  `gems-evidence-v1.0`; verify the exact commit with
+  `git rev-parse gems-evidence-v1.0^{}` after tagging.
 - Rasterizer submodule pin: `submodules/diff-triangle-mesh-rasterization @
   b27f283` (pristine-build check: LEDGER GOAL#R-07, bit-exact).
 - Eval-time commits per row are recorded in `RESULTS/aggregate/all_rows.json`
@@ -24,7 +24,7 @@ durable eval corpus. Assembled 2026-07-03.
 
 - Eval corpus (single mouth `run_eval.py`, PROTOCOL v1.1.x):
   `/data/peilincai/gems_stage1/eval/<row>/{metrics.json,row.json,geometry/,downstream/,panels/}`
-- Analysis artifacts: `/data/peilincai/gems_stage1/analysis/{r3a_occupancy_routes,r3c_planner,r3b_submesh,r08_sgeo,e9_failure_taxonomy,...}`
+- Analysis artifacts: `/data/peilincai/gems_stage1/analysis/{r3a_occupancy_routes,r3c_planner,r3b_submesh,r3final_three_state_v1,r08_sgeo,e9_failure_taxonomy,...}`
 - Checkpoints: `/data/peilincai/gems_stage1/models/` (146 GB) and
   `outputs/carnet/meshsplatopt/paper_m360_repro/official_clean30k/` (23 GB).
 - Datasets: `/data/peilincai/mesh_datasets/{mipnerf360,SS3DM,eth3d_colmap}`,
@@ -36,7 +36,9 @@ durable eval corpus. Assembled 2026-07-03.
 - d2 trajectory sampler: seed 0 (200 trajectories).
 - R3 planner problems: seed 0 (100 paired problems/scene).
 - g4 sampling: deterministic per PROTOCOL (1M GT samples).
-- Training/FT runs: repo-default seeds; configs hashed per row
+- Training/FT runs: repo-default seeds unless pre-registered otherwise.
+  Stage3 W1 uses train seed 1 for clean and B5@B50; W2 uses the frozen
+  garden_halftrain file split and seed 0. Configs are hashed per row
   (`row.json config_hash`).
 
 ## One command per deliverable
@@ -77,7 +79,7 @@ against the shipped ones (ignoring only the generation-timestamp line in the
 - FPS bench: 1 GPU (≈5 GB VRAM peak), ~15 min for 48 checkpoints.
 - Re-running the underlying evals (not needed for the pack): 1 GPU,
   ~80 s (rendering-only scenes) to ~8 min (geometry+downstream) per row;
-  corpus total ≈ 217 rows.
+  corpus total ≈ 234 rows.
 - Re-training everything from scratch: see T4's measured SS3DM 30k wall-clocks
   (~31–48 min/town) and LEDGER GOAL#002 estimates for M360 (40–80 min/scene);
   ~170 GB for checkpoints.
@@ -95,9 +97,9 @@ against the shipped ones (ignoring only the generation-timestamp line in the
   appendices in T1/T4 (script-read from
   `analysis/{h1_v106_context,r1_3dgs_reference}/`), never as corpus rows
   (R1 is the sanctioned outside-single-mouth exception, GOAL#017).
-- T7 remains a placeholder: E7/E8 were NOT run (Tier-2; waive drafts in
-  EXPERIMENT_REPORT.md §7, human approval pending). B1 no-op was never run;
-  B3 exists only @B50 on garden/toy/courtyard; S-GEO B2 was never run —
-  T1's header and CLAIMS_EVIDENCE_MATRIX.md say so explicitly.
+- Pack v4 (Stage3 closure): T7 is complete. W1 seed-1 retrain clean+B5@B50
+  supports the seed waiver; W2 50% train-view-drop arm was run and the
+  pose-noise/S-GEN residue is waived by Stage3 ruling. R3-FINAL V1 is folded
+  into T5b and `RESULTS/CONSUMPTION_IMPOSSIBILITY.md`.
 - The half-res FPS column is bench-only (non-protocol resolution) and was
   measured under partial GPU contention (documented in T4's header).

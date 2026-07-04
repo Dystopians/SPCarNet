@@ -1,4 +1,4 @@
-# T5b — R3 consumption-trilogy summary (script-extracted)
+# T5b — R3 consumption-closure summary (script-extracted)
 
 ## R3.a occupancy routes (GOAL#R-02)
 
@@ -42,3 +42,16 @@ Verdict (verbatim summary.json): `{"per_bar_cell": {"toy_parking__clean30k": {"f
 | toy_parking__B25_importance_ft_e1v2_40000 | 14 | 0.0 | 0.6822 | 0.6149 | 0.4566 |
 | courtyard__clean30k | 42 | 16.7 | 0.8489 | 0.6503 | 0.0778 |
 | courtyard__B50_importance_ft_e1v2_40000 | 42 | 16.7 | 0.8489 | 0.6680 | 0.1556 |
+
+## R3-FINAL V1 three-state visibility carving (GOAL#C-02)
+
+Verdict (verbatim summary.json): `{"mechanism": "V1 log-odds visibility carving", "stage3_r3_final_v1_pass": false, "toy_bar_pass_all_reported": false, "courtyard_fix_target_pass_all_reported": false, "selected_params": {"theta_free": -0.5, "theta_occ": 1.0, "v_min": 1, "r_inf": 1.0}, "note": "PASS requires toy found >=0.5x GTREF at <=3 collisions/100 and median path inflation <=1.5x, plus courtyard >=30/100 found and <=3 collisions/100. If false, Stage3 may consume V2/V3 only if pre-registered as near-miss mechanisms; otherwise write the impossibility addendum after <=3 mechanisms total."}`
+
+| scene | model | FREE frac | UNKNOWN frac | FREE@GT-occ | blocked@GT-free | found /100 | coll /100 | verdict |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| toy_parking | clean30k | 0.3375 | 0.6462 | 0.0975 | 0.6517 | 0 | n/a | FAIL |
+| toy_parking | B50 | 0.3375 | 0.6462 | 0.0975 | 0.6517 | 0 | n/a | FAIL |
+| courtyard | clean30k | 0.2259 | 0.7649 | 0.0621 | 0.7649 | 0 | n/a | FAIL |
+| courtyard | B50 | 0.2259 | 0.7649 | 0.0621 | 0.7649 | 0 | n/a | FAIL |
+
+**Stage3 closure:** V1 is a hard non-near-miss (0/100 found on toy and courtyard clean/B50). V2/V3 are not launched; `RESULTS/CONSUMPTION_IMPOSSIBILITY.md` closes the axis as IMPOSSIBILITY x4 route families.

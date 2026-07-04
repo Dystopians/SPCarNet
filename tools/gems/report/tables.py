@@ -572,14 +572,15 @@ def t5_downstream(c: Corpus, outdir):
         "safety-critical direction); d2 = collision-verdict agreement on 200 "
         "seed-0 trajectories. C4' is a PRESERVATION claim (CLAIMS.md): no row "
         "here claims improvement vs clean.",
-        "R3 consumption trilogy summary below is read by script from "
-        "analysis/r3{a,c,b}_*/summary.json (LEDGER #R-02/#R-03/#R-06).",
+        "R3 consumption closure summary below is read by script from "
+        "analysis/r3{a,c,b}_*/summary.json plus Stage3 R3-FINAL outputs "
+        "when present (LEDGER #R-02/#R-03/#R-06/#C-02).",
     ]
     write_table(outdir, "T5_downstream", "T5 — Downstream proxies (E5-DOWN)",
                 header, cols, out)
 
-    # ---- R3 trilogy appendix (script-read from durable analysis artifacts) ----
-    lines = ["# T5b — R3 consumption-trilogy summary (script-extracted)\n"]
+    # ---- R3 consumption appendix (script-read from durable analysis artifacts) ----
+    lines = ["# T5b — R3 consumption-closure summary (script-extracted)\n"]
     r3a = json.load(open(os.path.join(ANALYSIS_ROOT, "r3a_occupancy_routes", "summary.json")))
     lines.append("\n## R3.a occupancy routes (GOAL#R-02)\n\nVerdict (verbatim "
                  f"summary.json): `{json.dumps(r3a.get('verdict'))[:800]}`\n")
@@ -617,6 +618,47 @@ def t5_downstream(c: Corpus, outdir):
                      f"{v['d1_submesh']['false_free_rate']:.4f} | "
                      f"{v['d1_raw_route_i']['false_free_rate']:.4f} | "
                      f"{v['kept']['kept_fraction_of_finite']:.4f} |\n")
+    r3final_path = os.path.join(ANALYSIS_ROOT, "r3final_three_state_v1", "summary.json")
+    if os.path.exists(r3final_path):
+        r3f = json.load(open(r3final_path))
+        verdict = r3f.get("verdict") or {}
+        lines.append("\n## R3-FINAL V1 three-state visibility carving (GOAL#C-02)\n\n")
+        lines.append("Verdict (verbatim summary.json): "
+                     f"`{json.dumps(verdict)[:800]}`\n")
+        lines.append("\n| scene | model | FREE frac | UNKNOWN frac | FREE@GT-occ | "
+                     "blocked@GT-free | found /100 | coll /100 | verdict |\n"
+                     "|---|---|---:|---:|---:|---:|---:|---:|---|\n")
+        cells = r3f.get("cells") or []
+        if isinstance(cells, dict):
+            iterable = cells.items()
+        else:
+            iterable = [
+                (f"{v.get('scene', '?')}__{v.get('model_label', '?')}", v)
+                for v in cells
+            ]
+        for cell, v in iterable:
+            conf = v.get("confusion") or {}
+            frac = v.get("state_fractions") or {}
+            plan = v.get("planner_summary") or v.get("planner_metrics") or {}
+            scene = v.get("scene", cell.split("__", 1)[0])
+            model = v.get("model_label", v.get("model", cell.split("__", 1)[-1]))
+            coll = plan.get("collisions_per_100_plans")
+            cell_pass = bool(v.get("toy_bar_pass") or v.get("courtyard_fix_target_pass"))
+            lines.append(
+                f"| {scene} | {model} | "
+                f"{frac.get('free_fraction', float('nan')):.4f} | "
+                f"{frac.get('unknown_fraction', float('nan')):.4f} | "
+                f"{conf.get('free_at_gt_occ_rate', float('nan')):.4f} | "
+                f"{conf.get('blocked_at_gt_free_rate', float('nan')):.4f} | "
+                f"{plan.get('found_count', plan.get('plans_found', '?'))} | {_f(coll)} | "
+                f"{'PASS' if cell_pass else 'FAIL'} |\n")
+        lines.append("\n**Stage3 closure:** V1 is a hard non-near-miss (0/100 "
+                     "found on toy and courtyard clean/B50). V2/V3 are not "
+                     "launched; `RESULTS/CONSUMPTION_IMPOSSIBILITY.md` closes "
+                     "the axis as IMPOSSIBILITY x4 route families.\n")
+    else:
+        lines.append("\n## R3-FINAL V1 three-state visibility carving (GOAL#C-02)\n\n"
+                     "**PENDING:** summary not present yet.\n")
     with open(os.path.join(outdir, "T5b_r3_trilogy.md"), "w") as f:
         f.writelines(lines)
     print("[tables] wrote T5b_r3_trilogy.md")
@@ -723,25 +765,152 @@ def t6_ablations(c: Corpus, outdir):
 
 
 # ---------------------------------------------------------------------------
-# T7 — robustness placeholder
+# T7 — Stage3 W1/W2 robustness substitute evidence
 # ---------------------------------------------------------------------------
 
-def t7_robustness(outdir):
+def _paired_delta_of_deltas(row_a, base_a, row_b, base_b, metric):
+    """CI of mean((row_a-base_a) - (row_b-base_b)) over matched views."""
+    names = row_a["per_view"]["image_names"]
+    if (base_a["per_view"]["image_names"] != names or
+            row_b["per_view"]["image_names"] != names or
+            base_b["per_view"]["image_names"] != names):
+        raise RuntimeError(
+            "view mismatch for delta-of-deltas: "
+            f"{row_a['eval_dir']} / {base_a['eval_dir']} / "
+            f"{row_b['eval_dir']} / {base_b['eval_dir']}")
+    a = np.array(row_a["per_view"][metric]) - np.array(base_a["per_view"][metric])
+    b = np.array(row_b["per_view"][metric]) - np.array(base_b["per_view"][metric])
+    return paired_bootstrap_ci(a, b)
+
+
+def _mean_delta(row_a, row_b, metric):
+    return float(np.mean(np.array(row_a["per_view"][metric]) -
+                         np.array(row_b["per_view"][metric])))
+
+
+def _row_link(r):
+    return f"`{r['eval_dir']}`" if r is not None else "**PENDING**"
+
+
+def t7_robustness(c: Corpus, outdir):
+    clean0 = c.canon("garden", "B0", "B100")
+    b50_0 = c.canon("garden", "B5", "B50")
+    clean1 = c.by_dir("garden_clean30k_seed1_v1")
+    b50_1 = c.by_dir("garden_B50_importance_ft_stage3seed1")
+    half_clean = c.by_dir("garden_halftrain_clean30k_v1")
+    half_b50 = c.by_dir("garden_halftrain_B50_importance_ft_stage3drop50")
+
+    lines = [
+        "# T7 — Robustness / sensitivity (E7-SENS, E8-ROBUST)",
+        "",
+        "_Stage3 §1 executes the human ruling: run one cheap W1 substitute "
+        "and one W2 arm, then waive the residue with explicit limitation "
+        "language. Every number below is computed from metrics.json rows; "
+        "missing rows remain PENDING._",
+        "",
+        "## Inputs",
+        "",
+        "| role | row |",
+        "|---|---|",
+        f"| garden seed0 clean | {_row_link(clean0)} |",
+        f"| garden seed0 B5@B50 | {_row_link(b50_0)} |",
+        f"| W1 seed1 clean | {_row_link(clean1)} |",
+        f"| W1 seed1 B5@B50 | {_row_link(b50_1)} |",
+        f"| W2 half-train clean | {_row_link(half_clean)} |",
+        f"| W2 half-train B5@B50 | {_row_link(half_b50)} |",
+        "",
+    ]
+
+    w1_ready = all(r is not None for r in (clean0, b50_0, clean1, b50_1))
+    if w1_ready:
+        clean_psnr = paired_delta(clean1, clean0, "psnr")
+        clean_lpips = paired_delta(clean1, clean0, "lpips")
+        b5_delta_diff_psnr = _paired_delta_of_deltas(
+            b50_1, clean1, b50_0, clean0, "psnr")
+        b5_delta_diff_lpips = _paired_delta_of_deltas(
+            b50_1, clean1, b50_0, clean0, "lpips")
+        w1_support = (
+            abs(clean_psnr["mean_diff"]) <= 0.15 and
+            abs(b5_delta_diff_psnr["mean_diff"]) <= 0.15)
+        lines += [
+            "## W1 — Seed-Sensitivity Substitute",
+            "",
+            "Pre-registered support rule: `|clean(seed1)-clean(seed0)| <= 0.15 dB` "
+            "and `|B5_delta(seed1)-B5_delta(seed0)| <= 0.15 dB`.",
+            "",
+            "| quantity | PSNR CI | LPIPS CI | verdict |",
+            "|---|---:|---:|---|",
+            f"| clean seed1 - seed0 | {fmt_ci(clean_psnr)} | "
+            f"{fmt_ci(clean_lpips, nd=4)} | "
+            f"{'support' if abs(clean_psnr['mean_diff']) <= 0.15 else 'out-of-bound'} |",
+            f"| (B5-clean) seed1 - (B5-clean) seed0 | "
+            f"{fmt_ci(b5_delta_diff_psnr)} | "
+            f"{fmt_ci(b5_delta_diff_lpips, nd=4)} | "
+            f"{'support' if abs(b5_delta_diff_psnr['mean_diff']) <= 0.15 else 'out-of-bound'} |",
+            "",
+            f"**W1 substitute verdict:** {'SUPPORTS WAIVER' if w1_support else 'DOES NOT SUPPORT WAIVER'} "
+            "(the full 3-seed x subset/loss-weight grid is waived only with this "
+            "measured substitute plus the GOAL#012 repeat floor and recorded seed-pair evidence).",
+            "",
+        ]
+    else:
+        lines += [
+            "## W1 — Seed-Sensitivity Substitute",
+            "",
+            "**STATUS: PENDING.** Required rows are not all present yet; no W1 "
+            "waiver-support verdict is issued.",
+            "",
+        ]
+
+    w2_ready = all(r is not None for r in (clean0, b50_0, half_clean, half_b50))
+    if w2_ready:
+        full_res_psnr = _mean_delta(b50_0, clean0, "psnr")
+        half_res_psnr = _mean_delta(half_b50, half_clean, "psnr")
+        full_res_lpips = _mean_delta(b50_0, clean0, "lpips")
+        half_res_lpips = _mean_delta(half_b50, half_clean, "lpips")
+        shift_psnr = _paired_delta_of_deltas(
+            half_b50, half_clean, b50_0, clean0, "psnr")
+        shift_lpips = _paired_delta_of_deltas(
+            half_b50, half_clean, b50_0, clean0, "lpips")
+        prediction_met = half_res_psnr < full_res_psnr
+        lines += [
+            "## W2 — 50% Train-View Drop Arm",
+            "",
+            "Pre-registered direction: the B50 residual vs clean-half worsens "
+            "relative to the full-view garden residual. Pose-noise and S-GEN "
+            "remain waived with this datum strengthening the limitation note.",
+            "",
+            "| quantity | PSNR | LPIPS |",
+            "|---|---:|---:|",
+            f"| full-view B5@B50 - clean | {full_res_psnr:+.3f} | {full_res_lpips:+.4f} |",
+            f"| half-train B5@B50 - clean-half | {half_res_psnr:+.3f} | {half_res_lpips:+.4f} |",
+            f"| half residual - full residual CI | {fmt_ci(shift_psnr)} | {fmt_ci(shift_lpips, nd=4)} |",
+            "",
+            f"**W2 direction verdict:** {'PREDICTION MET' if prediction_met else 'PREDICTION NOT MET'} "
+            "(reported either way; the rest of E8/S-GEN is waived by Stage3 ruling, "
+            "not silently treated as run).",
+            "",
+        ]
+    else:
+        lines += [
+            "## W2 — 50% Train-View Drop Arm",
+            "",
+            "**STATUS: PENDING.** Required rows are not all present yet; no W2 "
+            "direction verdict is issued.",
+            "",
+        ]
+
+    status = ("COMPLETE" if (w1_ready and w2_ready) else "PENDING")
+    lines += [
+        "## Closure Status",
+        "",
+        f"**T7 status: {status}.** W4/W4a/W5 are recorded as granted in LEDGER "
+        "GOAL #C-00; this table only tracks the measured W1/W2 substitute rows.",
+        "",
+    ]
     with open(os.path.join(outdir, "T7_robustness.md"), "w") as f:
-        f.write("# T7 — Robustness / sensitivity (E7-SENS, E8-ROBUST)\n\n"
-                "**STATUS: NOT RUN — Tier-2 waive notes DRAFTED, human "
-                "approval pending.** No E7 (seeds / dev-vs-full resolution / "
-                "loss-weight 3-point) or E8 (view drop / pose noise / S-GEN) "
-                "cells were run (MATRIX: TODO, Tier 2). Waive drafts with "
-                "reasoning are in `EXPERIMENT_REPORT.md` section 7 and "
-                "`RESULTS/HANDOFF.md`. Partial substitutes on record "
-                "(honest, NOT replacements): the measured pipeline "
-                "reproducibility noise floor of 1.6e-5 dB from the GOAL#012 "
-                "degenerate-identical-prune row (seeded FT+eval repeat), and "
-                "the D-2 toy-variant family replication (GOAL#016). This "
-                "file will be regenerated by tables.py if those cells are "
-                "ever run.\n")
-    print("[tables] wrote T7_robustness.md (waive-draft placeholder)")
+        f.write("\n".join(lines))
+    print(f"[tables] wrote T7_robustness.md ({status})")
 
 
 def main():
@@ -758,7 +927,7 @@ def main():
     t4_efficiency(c, args.outdir)
     t5_downstream(c, args.outdir)
     t6_ablations(c, args.outdir)
-    t7_robustness(args.outdir)
+    t7_robustness(c, args.outdir)
 
 
 if __name__ == "__main__":

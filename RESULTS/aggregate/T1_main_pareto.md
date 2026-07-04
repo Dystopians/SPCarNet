@@ -1,6 +1,6 @@
 # T1 — Main Pareto summary (E1-PARETO / E10)
 
-_generated 2026-07-04T00:04:02.467884+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-04T07:47:24.012716+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > STATS: every delta is a paired per-view bootstrap 95% CI (10k resamples, seed 0, PROTOCOL section 5). MULTIPLE-COMPARISONS CAVEAT (E10): dozens of CIs are reported across this pack; borderline CIs (effect near a floor or CI edge near 0) should be read with Bonferroni-style skepticism — headline claims rest only on effects that are large, replicated across scenes/suites, or mechanism-backed. Courtyard rendering CIs are 5-view (underpowered by design). Reporting language per section 6: 'improves/reduces' ONLY when the CI excludes 0 AND the D3 floor is cleared; otherwise 'comparable'/'inconclusive'.
 > Anchors: B0 = clean@30k (legacy/deployed default); B0' = clean-fixed@30k (PRIMARY anchor per LEDGER GOAL#R-01; exists on S-REND only — S-GEO/S-DEV anchor columns vs B0' are blank by construction).
