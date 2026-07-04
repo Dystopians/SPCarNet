@@ -444,3 +444,10 @@ Never trust chat memory over this file.
   - **W1-residue (E7 full grid):** waive the 3-seed×subset variance grid and 3-point loss-weight scans. Evidence in hand: garden B50 seed-pair Δ=−0.0004 dB CI[−0.0009,+0.0001]; pipeline repeat floor 1.6e-5 dB; importance-family flatness ±0.05 dB. Cost if run instead: ~6 GPU-h.
   - **W2 (E8-ROBUST + S-GEN):** waive view-drop/pose-noise stress tests and the unseen-type T&T scenes. Rationale: robustness claims are NOT in CLAIMS.md; the pack's claims are bounded to the tested regimes; cost if run: multi-day retraining campaign. If the paper needs a robustness paragraph, run then.
 - Everything else verified in place: 217-row corpus, T1–T7, F1–F8 + 7 qual grids + 2 flythrough videos, CLAIMS_EVIDENCE_MATRIX (no naked claims), NEGATIVE_RESULTS (13+), HANDOFF, REPRO_PACK (T1 byte-verified; fresh-clone Δ0.0005 dB; pristine-build bit-exact), 6 GREEN purity audits quoted verbatim.
+
+## STAGE 3 CLOSURE (docs/GEMS_Stage3_Closure_Prompt.md, activated 2026-07-03)
+
+### GOAL #C-00 — rulings receipt + closure board — 2026-07-03 — DONE
+- Human rulings received via the closure prompt §1: W1 = run cheap substitute (garden seed-1 full retrain pair) then waive residue; W2 = run one arm (garden 50% view-drop) then waive rest; W4/W4a/W5 GRANTED as drafted; W3 already withdrawn; W6 SUPERSEDED by §2.4 (only runs if R3-FINAL passes).
+- **CLOSURE BOARD (must shrink monotonically):** [1] W1 substitute run → T7 fold; [2] W2 arm run → limitation fold; [3] R3-FINAL verdict (V1 pre-registered → calibrate-once → courtyard bar: ≥30/100 found AND ≤3.0 coll/100; ≤3 mechanisms; PASS→§2.4 1-5 / FAIL→CONSUMPTION_IMPOSSIBILITY.md); [4] pack v4 + §10 zero-PARTIAL; [5] declaration line; [6] release tag + ARCHIVE.md; [7] SUBMISSION_HANDOFF/ ×4 docs.
+- Boundaries §5 acknowledged (extended dead list; new ideas → FUTURE_WORK.md only).
