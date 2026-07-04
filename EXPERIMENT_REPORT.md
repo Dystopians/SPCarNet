@@ -226,22 +226,27 @@ with bit-exact toy eval (GOAL#R-07).
 
 | § | Criterion | Verdict | Evidence / gap |
 |---|---|---|---|
-| 10.1a | Every Tier-1 cell DONE-PASS / DONE-FAIL / INFEASIBLE-with-note | **PARTIAL** | Closed: D-1/D-1b/D-2, E1 core structure (B50/B25/B12.5 × B5/B4 × 15 scenes; B3@B50×3; B2@B12.5×9+B50/B25×3), E2-GEO (tables + analysis arm), E3, E4, E5 (toy/courtyard incl. N=500), E6 (families measured; other axes mapped), E9, E10, E11-grids, H1, R1, R3.a/c/b, B3. OPEN inside Tier-1 cells, needing human complete-or-waive: (i) E1 baseline BREADTH — B2/B3 columns beyond the run subsets, B1 no-op never run (waive drafts W4/W5); (ii) E5 SS3DM planner cells (W6); (iii) town06 g4/d1/d2 INFEASIBLE note exists (RAM ruling, #R-08 — human ack recorded in MATRIX). |
-| 10.1b | ≥80% of Tier-2 cells resolved or explicitly waived | **PARTIAL — 3/9 resolved today; 9/9 IF the drafted waivers below are approved** | Resolved: R3.b (T2-elevated, DONE-FAIL citable), B6R-on-SS3DM (DONE-FAIL as pre-registered), E4 laptop bench (waived in MATRIX). Unresolved, waive drafts below: E7-SENS (W1), E8-ROBUST+S-GEN (W2), E11 flythrough videos (W3), B6.25 budget (W4a), S-GEO B2 column (W5a). |
-| 10.2 | All experiment types present in RESULTS/ + summarized | **PARTIAL** | Present: main, baselines B0/B0′/B2/B3/B4/B5(+B6/B7 diagnostics, B6R)+H1+R1, Pareto across declared budgets, geometry, rendering, efficiency, downstream, ablations, failure analysis, qualitative. ABSENT: sensitivity (E7), robustness/generalization (E8/S-GEN) — same items as 10.1b; T7 says so in-pack. |
+| 10.1a | Every Tier-1 cell DONE-PASS / DONE-FAIL / INFEASIBLE-with-note | **PASS (post-GOAL#019)** | Everything from the #018 list PLUS the gap runs: **B1 no-op RUN — exact pass-through (Δ=0.00e+00 vs clean, same tri count)**; S-GEO B2 column RUN (importance−random +0.77..+1.30 dB, 4/4 towns CI excl. 0); B6.25 far-end RUN (garden −3.50 / kitchen −5.27 / town01 −3.26). Remaining Tier-1 residue = E1 breadth beyond the run grids (B3 beyond B50×3, B2 moderate-budget breadth) and E5 SS3DM planner cells — scope-freeze rulings W4/W6 below; town06 INFEASIBLE note stands (#R-08). |
+| 10.1b | ≥80% of Tier-2 cells resolved or explicitly waived | **PASS — 7/9 resolved by runs/verdicts** (R3.b, B6R-SS3DM, laptop-bench waive, videos DELIVERED, B6.25 RUN, S-GEO B2 RUN, E7 partial-evidence) **; 9/9 iff W1-residue + W2 approved** | E7: measured seed-pair −0.0004 CI[−0.0009,+0.0001] + 1.6e-5 dB repeat floor; formal residue = full 3-seed×subset grid (W1). E8-ROBUST+S-GEN = the sole untouched Tier-2 family (W2). |
+| 10.2 | All experiment types present in RESULTS/ + summarized | **PASS except E8** | Sensitivity now has measured evidence in T7 (seed pair + repeat floor + importance-family flatness); robustness/generalization (E8/S-GEN) remains ABSENT (W2). |
 | 10.3 | Paired bootstrap on every headline delta; §6 language | **PASS** | Universal CI discipline (E10 DONE); caveat §5; win/iso/loss per scene in T1; language rules enforced in table headers. |
 | 10.4 | CLAIMS_EVIDENCE_MATRIX complete & consistent post-shrink | **PASS** | Regenerated at final assembly; no claim lacks evidence; every strong result has a claim-home or stated exclusion; residual scope caveats flagged, not hidden. |
 | 10.5 | All §8 deliverables exist; script-reproducible; REPRO_PACK verified by regenerating T1 from scratch | **PASS** | T1–T7 + F1–F8 + qual grids + 4 documents + REPRO_PACK; `verify_t1.sh` PASS 2026-07-03 (byte-identical modulo timestamp). T2-flythrough videos are the only §8 item deferred (F-item? — videos are E11-T2, waive W3). |
 | 10.6 | Final purity audit + fresh-env reproduction green on shipped artifacts | **PASS** | §6 verbatim audit quotes (6 GREEN incl. the garden B5 headline artifact and a D-2 variant artifact); fresh-clone repro PASS + pristine-build bit-exact (#R-07). |
 | 10.7 | EXPERIMENT_REPORT complete, honest, incl. negatives/limitations/boundaries | **PASS** | This document + NEGATIVE_RESULTS.md + §6 verbatim NON-CLAIMS + §8 limitations. |
 
-**Bottom line: "Stage Two complete — evidence pack ready for paper writing"
-CANNOT yet be declared.** Blocking items are exactly two kinds, both
-human-decision-shaped, no new science required for either: (1) approval (or
-rejection → runs) of the Tier-2 waive drafts W1–W3 below (drives 10.1b and
-10.2); (2) complete-or-waive rulings on the Tier-1 breadth residuals W4–W6.
-Everything else — pack, tables, figures, claims-evidence consistency,
-statistics, audits, reproducibility — is in place and verified.
+**Bottom line (updated post-GOAL#019/#020): "Stage Two complete — evidence
+pack ready for paper writing" is declared CONTINGENT on exactly TWO human
+waive rulings** — W1-residue (the full 3-seed×subset E7 grid; a measured
+seed-pair at −0.0004 dB CI[−0.0009,+0.0001] and the 1.6e-5 dB repeat floor
+already bound the axis) and W2 (E8-ROBUST + S-GEN: the only untouched
+Tier-2 family; a genuine multi-GPU-hour retraining campaign). W3/W4a/W5 were
+run instead of waived (videos delivered; B6.25 far-end banked; S-GEO B2
+dominance 4/4 CI); the B1 sanity gap was run to an exact no-op; W4/W6 are
+scope-freeze rulings on breadth, not missing science. Everything else —
+pack (v3, T1 from-scratch byte-verified), tables, figures, videos,
+claims-evidence consistency, statistics, audits, reproducibility — is in
+place and verified.
 
 ### Tier-2 / residual waive DRAFTS (for human approval; not self-granted)
 

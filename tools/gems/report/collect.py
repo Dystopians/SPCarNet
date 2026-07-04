@@ -17,8 +17,16 @@ VOID list (encoded from LEDGER.md — do not weaken):
   * courtyard_clean30k_v2 g4       (GOAL#005 CRASH/VOID#2, scan alignment,
                                     commit cb1560b; superseded by v3/v4)
   * every pre-#R-08 SS3DM g4 field (GOAL#R-08: raw-cm unmirrored GT mesh ->
-                                    garbage chamfer; i.e. all ss3dm_* rows
-                                    whose dir does not end in _geo_v1)
+                                    garbage chamfer). Pack v3 (GOAL#020): the
+                                    discriminator is now read from the
+                                    artifact itself — a pre-R-08 g4 lacks the
+                                    'roi_presample_crop' marker in
+                                    g4.gt_source that the fixed mesh path
+                                    stamps. This keys the VOID on the
+                                    measurement provenance instead of the
+                                    dirname heuristic (which wrongly VOIDed
+                                    post-fix rows such as b6r_* and the
+                                    GOAL#019 gap rows).
 
 No numbers are typed here: everything is read from metrics.json / row.json.
 
@@ -67,15 +75,18 @@ def suite_of(scene: str) -> str:
 # ---------------------------------------------------------------------------
 # B-zoo taxonomy mapping (task/MATRIX.md):
 #   B0   clean30k anchor              B0'  cleanfixed30k primary anchor
-#   B0-26k clean26k context anchor
+#   B0-26k clean26k context anchor    B1   no-op pass-through sanity (b1noop)
 #   B2   random prune + safe FT       B2-noft random prune, no FT (context)
 #   B4   evidence prune, no FT        B5   GEMS-core evidence prune + feat-FT
 #   B5-iter iterative schedule (e1v3) B6R  opacity-release (e2r)
+#   B5-seed1 E7 seed-sensitivity pair (GOAL#019)
 #   B6-* geometry-loss diagnostics (m3/m3v1/e2v3)
 #   B7-diag teacher distill (e3*)     B7-control same-length no-teacher FT
 #   GT-CAL toy GT-mesh calibration model
+# Budget labels: B50/B25/B12.5/B6.25 (row.json budget_label(0.0625)='B6',
+#   normalized here to B6.25) and B100 for full budget.
 # Roles: anchor | primary | context | ablation | diagnostic | intermediate |
-#        superseded | calibration | audit
+#        superseded | calibration | audit | sanity
 # ---------------------------------------------------------------------------
 
 VOID_NOTES = {
@@ -87,7 +98,9 @@ VOID_NOTES = {
 }
 SS3DM_PRE_R08_G4_VOID = ("VOID per LEDGER GOAL#R-08: pre-R-08 SS3DM g4 used the "
                          "raw-cm, unmirrored GT mesh (chamfer 11k-77k m garbage); "
-                         "valid g4 lives in the *_geo_v1 rows.")
+                         "valid g4 = rows whose g4.gt_source carries the R-08 "
+                         "'roi_presample_crop' marker (the *_geo_v1 re-evals and "
+                         "every eval run after the fix).")
 
 # Rows that are duplicate evals of the SAME checkpoint through the same mouth.
 # canonical=the most complete / current-protocol row; the others get
@@ -132,9 +145,10 @@ def _budget_from_name(dirname: str):
     if not m:
         return None, None
     n = int(m.group(1))
-    # B12 rows are budget=0.125 in row.json; label normalized to B12.5
-    label = "B12.5" if n == 12 else f"B{n}"
-    value = 0.125 if n == 12 else n / 100.0
+    # B12 rows are budget=0.125 / B6 rows budget=0.0625 in row.json; labels
+    # normalized to B12.5 / B6.25 (run-pipeline budget_label truncates).
+    label = {12: "B12.5", 6: "B6.25"}.get(n, f"B{n}")
+    value = {12: 0.125, 6: 0.0625}.get(n, n / 100.0)
     return value, label
 
 
@@ -151,6 +165,16 @@ def classify(dirname: str, row: dict | None, scene: str):
         return "B0", "anchor", 1.0, "B100", "legacy/deployed-default anchor"
     if "clean26k" in dirname:
         return "B0-26k", "context", 1.0, "B100", "26k-snapshot context anchor (not compute-matched)"
+
+    # --- GOAL#019 gap-closure rows ---
+    if dirname == "garden_B50_seed1_v1":
+        # E7 seed-sensitivity pair: identical prune + features-only FT chain
+        # re-run end-to-end with seed 1 (checkpoint models/garden_B50_seed1);
+        # the paired delta vs the canonical seed-0 B5@B50 row is computed by
+        # script in T7 (tables.py) — never typed here.
+        return "B5-seed1", "ablation", 0.5, "B50", (
+            "GOAL#019 E7 seed-sensitivity pair (seed 1 re-run of the "
+            "garden B5@B50 chain; paired vs seed-0 row in T7)")
 
     # --- named experiment families (no row.json) ---
     if dirname.startswith("e2r_"):
@@ -195,7 +219,20 @@ def classify(dirname: str, row: dict | None, scene: str):
         bl = row.get("budget_label")
         if bl == "B12":
             bl = "B12.5"
+        elif bl == "B6":
+            # budget_label(0.0625) truncates to 'B6' in row.json — normalize
+            # to B6.25 (GOAL#019 far-end budget rows; avoids clashing with
+            # the B6 method name).
+            bl = "B6.25"
         note = f"tag={tag}"
+        if tag == "b1noop":
+            # B1 no-op pass-through sanity (GOAL#019 gap: MATRIX E1 B1 cell,
+            # run instead of waived): budget=1.0, importance_noft — the
+            # pipeline must reproduce the clean checkpoint exactly. The
+            # exactness check (paired delta vs B0 identically zero, same
+            # triangle count) is computed by script in T2/T7.
+            return "B1", "sanity", bv, bl, (
+                note + " (B1 no-op pass-through sanity, GOAL#019)")
         if isinstance(tag, str) and tag.startswith("abl_"):
             # E6 importance-family ablation rows: owning goal CLOSED (LEDGER
             # GOAL#012 — revision trigger NOT tripped; pixels_total stands;
@@ -345,8 +382,15 @@ def extract(dirname: str, eval_root: str):
     # ---- VOID annotations (LEDGER-encoded) ----
     if dirname in VOID_NOTES:
         rec["void"].update(VOID_NOTES[dirname])
-    if scene in SS3DM_SCENES and not dirname.endswith("_geo_v1"):
-        if rec["g4"] is not None and "skipped" not in (rec["g4"] or {}):
+    if scene in SS3DM_SCENES:
+        # Pre-R-08 SS3DM g4 is VOID (raw-cm unmirrored GT mesh). Keyed on the
+        # artifact: the R-08 fixed mesh path stamps '|roi_presample_crop'
+        # into g4.gt_source; anything without the marker predates the fix.
+        # (Pack v3 refinement over the old dirname-endswith-_geo_v1 rule,
+        # which wrongly VOIDed post-fix rows: b6r_*, GOAL#019 gap rows.)
+        g4v = rec["g4"] or {}
+        if (g4v and "skipped" not in g4v
+                and "roi_presample_crop" not in str(g4v.get("gt_source", ""))):
             rec["void"]["g4"] = SS3DM_PRE_R08_G4_VOID
     for famname, why in rec["void"].items():
         if isinstance(rec.get(famname), dict):

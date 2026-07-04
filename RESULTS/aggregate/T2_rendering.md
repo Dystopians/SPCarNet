@@ -1,6 +1,6 @@
 # T2 — Per-scene rendering (E3-REND)
 
-_generated 2026-07-03T22:28:25.211099+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-04T00:04:14.682169+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > STATS: every delta is a paired per-view bootstrap 95% CI (10k resamples, seed 0, PROTOCOL section 5). MULTIPLE-COMPARISONS CAVEAT (E10): dozens of CIs are reported across this pack; borderline CIs (effect near a floor or CI edge near 0) should be read with Bonferroni-style skepticism — headline claims rest only on effects that are large, replicated across scenes/suites, or mechanism-backed. Courtyard rendering CIs are 5-view (underpowered by design). Reporting language per section 6: 'improves/reduces' ONLY when the CI excludes 0 AND the D3 floor is cleared; otherwise 'comparable'/'inconclusive'.
 > B0-26k rows are the 26k-snapshot context anchor (NOT compute-matched; LEDGER GOAL#R-01). Teacher-headroom analysis (E3-REND): see T6_ablations teacher block — distill-control deltas were REAL but sub-floor (E3 sunset; CLAIMS.md C3').
@@ -30,6 +30,7 @@ _generated 2026-07-03T22:28:25.211099+00:00 by tools/gems/report/tables.py — e
 | S-REND | garden | B0 | B100 | 24.712 | 0.7618 | 0.2163 | — | -0.069 [-0.088,-0.052] | — | 24 | garden_clean30k_v2 |
 | S-REND | garden | B0' | B100 | 24.781 | 0.7670 | 0.2133 | +0.069 [+0.052,+0.088] | — | -0.0030 [-0.0035,-0.0024] | 24 | garden_cleanfixed30k_v1 |
 | S-REND | garden | B0-26k | B100 | 25.029 | 0.7800 | 0.2013 | +0.317 [+0.292,+0.343] | +0.249 [+0.218,+0.279] | -0.0149 [-0.0160,-0.0140] | 24 | garden_clean26k_v1 |
+| S-REND | garden | B1 | B100 | 24.712 | 0.7618 | 0.2163 | +0.000 [+0.000,+0.000] | -0.069 [-0.088,-0.052] | +0.0000 [+0.0000,+0.0000] | 24 | garden_B100_importance_noft_b1noop |
 | S-REND | garden | B5 | B50 | 24.851 | 0.7693 | 0.2101 | +0.139 [+0.097,+0.177] | +0.070 [+0.037,+0.100] | -0.0061 [-0.0065,-0.0057] | 24 | garden_B50_importance_ft_e1v2 |
 | S-REND | garden | B4 | B50 | 24.701 | 0.7619 | 0.2163 | -0.011 [-0.033,+0.003] | -0.080 [-0.102,-0.061] | +0.0001 [-0.0000,+0.0002] | 24 | garden_B50_importance_noft_e1b |
 | S-REND | garden | B2 | B50 | 21.378 | 0.5788 | 0.3655 | -3.334 [-3.667,-3.001] | -3.403 [-3.749,-3.058] | +0.1493 [+0.1442,+0.1539] | 24 | garden_B50_random_ft_e1b |
@@ -41,6 +42,8 @@ _generated 2026-07-03T22:28:25.211099+00:00 by tools/gems/report/tables.py — e
 | S-REND | garden | B5 | B12.5 | 23.911 | 0.7457 | 0.2416 | -0.801 [-1.019,-0.601] | -0.870 [-1.080,-0.674] | +0.0253 [+0.0226,+0.0285] | 24 | garden_B12_importance_ft_s2 |
 | S-REND | garden | B4 | B12.5 | 23.642 | 0.7268 | 0.2565 | -1.070 [-1.266,-0.889] | -1.139 [-1.332,-0.960] | +0.0402 [+0.0370,+0.0438] | 24 | garden_B12_importance_noft_s2 |
 | S-REND | garden | B2 | B12.5 | 17.473 | 0.4901 | 0.4193 | -7.239 [-7.716,-6.751] | -7.308 [-7.795,-6.809] | +0.2031 [+0.1940,+0.2118] | 24 | garden_B12_random_ft_s2 |
+| S-REND | garden | B5 | B6.25 | 21.210 | 0.6640 | 0.3169 | -3.502 [-3.871,-3.154] | -3.571 [-3.947,-3.218] | +0.1007 [+0.0949,+0.1068] | 24 | garden_B6_importance_ft_s2 |
+| S-REND | garden | B4 | B6.25 | 20.864 | 0.6268 | 0.3393 | -3.848 [-4.215,-3.506] | -3.916 [-4.290,-3.568] | +0.1230 [+0.1170,+0.1293] | 24 | garden_B6_importance_noft_s2 |
 | S-REND | stump | B0 | B100 | 24.866 | 0.6835 | 0.3095 | — | -0.088 [-0.121,-0.054] | — | 16 | stump_clean30k_v1 |
 | S-REND | stump | B0' | B100 | 24.954 | 0.6900 | 0.3069 | +0.088 [+0.054,+0.121] | — | -0.0025 [-0.0036,-0.0014] | 16 | stump_cleanfixed30k_v1 |
 | S-REND | stump | B0-26k | B100 | 25.205 | 0.7052 | 0.2940 | +0.339 [+0.309,+0.371] | +0.251 [+0.216,+0.291] | -0.0155 [-0.0175,-0.0137] | 16 | stump_clean26k_v1 |
@@ -91,6 +94,8 @@ _generated 2026-07-03T22:28:25.211099+00:00 by tools/gems/report/tables.py — e
 | S-REND | kitchen | B5 | B12.5 | 24.927 | 0.8411 | 0.2439 | -2.369 [-3.049,-1.733] | -2.683 [-3.349,-2.071] | +0.0176 [+0.0126,+0.0230] | 35 | kitchen_B12_importance_ft_s2 |
 | S-REND | kitchen | B4 | B12.5 | 24.733 | 0.8302 | 0.2559 | -2.563 [-3.217,-1.960] | -2.877 [-3.514,-2.291] | +0.0296 [+0.0250,+0.0348] | 35 | kitchen_B12_importance_noft_s2 |
 | S-REND | kitchen | B2 | B12.5 | 20.035 | 0.6211 | 0.4519 | -7.261 [-7.675,-6.842] | -7.575 [-8.010,-7.142] | +0.2257 [+0.2176,+0.2334] | 35 | kitchen_B12_random_ft_s2 |
+| S-REND | kitchen | B5 | B6.25 | 22.030 | 0.7990 | 0.2876 | -5.266 [-6.194,-4.382] | -5.580 [-6.493,-4.722] | +0.0613 [+0.0551,+0.0678] | 35 | kitchen_B6_importance_ft_s2 |
+| S-REND | kitchen | B4 | B6.25 | 21.757 | 0.7762 | 0.3076 | -5.539 [-6.417,-4.721] | -5.853 [-6.715,-5.050] | +0.0814 [+0.0753,+0.0877] | 35 | kitchen_B6_importance_noft_s2 |
 | S-REND | bonsai | B0 | B100 | 28.379 | 0.8790 | 0.2901 | — | -0.265 [-0.318,-0.211] | — | 37 | bonsai_clean30k_v1 |
 | S-REND | bonsai | B0' | B100 | 28.644 | 0.8865 | 0.2835 | +0.265 [+0.211,+0.318] | — | -0.0066 [-0.0075,-0.0058] | 37 | bonsai_cleanfixed30k_v1 |
 | S-REND | bonsai | B0-26k | B100 | 28.895 | 0.8964 | 0.2595 | +0.516 [+0.429,+0.605] | +0.252 [+0.181,+0.318] | -0.0306 [-0.0332,-0.0281] | 37 | bonsai_clean26k_v1 |
@@ -104,24 +109,30 @@ _generated 2026-07-03T22:28:25.211099+00:00 by tools/gems/report/tables.py — e
 | S-GEO | ss3dm_town01 | B0 | B100 | 22.574 | 0.8645 | 0.2831 | — | — | — | 57 | ss3dm_town01_clean30k_geo_v1 |
 | S-GEO | ss3dm_town01 | B5 | B50 | 22.634 | 0.8658 | 0.2798 | +0.061 [-0.017,+0.118] | — | -0.0033 [-0.0040,-0.0025] | 57 | ss3dm_town01_B50_geo_v1 |
 | S-GEO | ss3dm_town01 | B4 | B50 | 22.506 | 0.8640 | 0.2835 | -0.067 [-0.136,-0.020] | — | +0.0004 [+0.0001,+0.0009] | 57 | ss3dm_town01_B50_importance_noft_s2 |
+| S-GEO | ss3dm_town01 | B2 | B50 | 21.365 | 0.8412 | 0.3096 | -1.208 [-1.407,-1.018] | — | +0.0265 [+0.0232,+0.0299] | 57 | ss3dm_town01_B50_random_ft_s2 |
 | S-GEO | ss3dm_town01 | B6R | B50 | 22.607 | 0.8664 | 0.2786 | +0.034 [-0.098,+0.136] | — | -0.0045 [-0.0053,-0.0036] | 57 | b6r_ss3dm_town01_B50_v1 |
 | S-GEO | ss3dm_town01 | B5 | B25 | 22.373 | 0.8639 | 0.2827 | -0.200 [-0.382,-0.049] | — | -0.0004 [-0.0016,+0.0011] | 57 | ss3dm_town01_B25_importance_ft_s2 |
 | S-GEO | ss3dm_town01 | B4 | B25 | 22.250 | 0.8619 | 0.2867 | -0.324 [-0.500,-0.178] | — | +0.0037 [+0.0027,+0.0049] | 57 | ss3dm_town01_B25_importance_noft_s2 |
+| S-GEO | ss3dm_town01 | B5 | B6.25 | 19.319 | 0.7882 | 0.3654 | -3.255 [-3.820,-2.687] | — | +0.0824 [+0.0767,+0.0878] | 57 | ss3dm_town01_B6_importance_ft_s2 |
+| S-GEO | ss3dm_town01 | B4 | B6.25 | 19.209 | 0.7802 | 0.3735 | -3.364 [-3.932,-2.795] | — | +0.0904 [+0.0850,+0.0956] | 57 | ss3dm_town01_B6_importance_noft_s2 |
 | S-GEO | ss3dm_town02 | B0 | B100 | 22.624 | 0.8533 | 0.2798 | — | — | — | 57 | ss3dm_town02_clean30k_geo_v1 |
 | S-GEO | ss3dm_town02 | B5 | B50 | 22.669 | 0.8543 | 0.2771 | +0.045 [-0.010,+0.089] | — | -0.0027 [-0.0034,-0.0020] | 57 | ss3dm_town02_B50_geo_v1 |
 | S-GEO | ss3dm_town02 | B4 | B50 | 22.569 | 0.8529 | 0.2801 | -0.055 [-0.104,-0.021] | — | +0.0003 [+0.0000,+0.0005] | 57 | ss3dm_town02_B50_importance_noft_s2 |
+| S-GEO | ss3dm_town02 | B2 | B50 | 21.848 | 0.8369 | 0.2954 | -0.776 [-0.904,-0.653] | — | +0.0155 [+0.0128,+0.0184] | 57 | ss3dm_town02_B50_random_ft_s2 |
 | S-GEO | ss3dm_town02 | B6R | B50 | 22.702 | 0.8568 | 0.2741 | +0.078 [-0.024,+0.159] | — | -0.0057 [-0.0067,-0.0047] | 57 | b6r_ss3dm_town02_B50_v1 |
 | S-GEO | ss3dm_town02 | B5 | B25 | 22.468 | 0.8531 | 0.2788 | -0.156 [-0.317,-0.027] | — | -0.0010 [-0.0020,+0.0001] | 57 | ss3dm_town02_B25_importance_ft_s2 |
 | S-GEO | ss3dm_town02 | B4 | B25 | 22.370 | 0.8515 | 0.2821 | -0.254 [-0.408,-0.130] | — | +0.0023 [+0.0017,+0.0030] | 57 | ss3dm_town02_B25_importance_noft_s2 |
 | S-GEO | ss3dm_town03 | B0 | B100 | 23.181 | 0.8696 | 0.2445 | — | — | — | 57 | ss3dm_town03_clean30k_geo_v1 |
 | S-GEO | ss3dm_town03 | B5 | B50 | 23.278 | 0.8715 | 0.2399 | +0.097 [+0.056,+0.136] | — | -0.0045 [-0.0052,-0.0038] | 57 | ss3dm_town03_B50_geo_v1 |
 | S-GEO | ss3dm_town03 | B4 | B50 | 23.155 | 0.8692 | 0.2446 | -0.026 [-0.048,-0.009] | — | +0.0002 [-0.0000,+0.0004] | 57 | ss3dm_town03_B50_importance_noft_s2 |
+| S-GEO | ss3dm_town03 | B2 | B50 | 21.974 | 0.8447 | 0.2749 | -1.207 [-1.393,-1.028] | — | +0.0305 [+0.0263,+0.0350] | 57 | ss3dm_town03_B50_random_ft_s2 |
 | S-GEO | ss3dm_town03 | B6R | B50 | 23.298 | 0.8718 | 0.2391 | +0.117 [+0.065,+0.165] | — | -0.0054 [-0.0061,-0.0047] | 57 | b6r_ss3dm_town03_B50_v1 |
 | S-GEO | ss3dm_town03 | B5 | B25 | 23.142 | 0.8704 | 0.2414 | -0.039 [-0.150,+0.054] | — | -0.0030 [-0.0040,-0.0020] | 57 | ss3dm_town03_B25_importance_ft_s2 |
 | S-GEO | ss3dm_town03 | B4 | B25 | 23.022 | 0.8680 | 0.2464 | -0.159 [-0.266,-0.073] | — | +0.0019 [+0.0013,+0.0027] | 57 | ss3dm_town03_B25_importance_noft_s2 |
 | S-GEO | ss3dm_town06 | B0 | B100 | 22.213 | 0.8395 | 0.3134 | — | — | — | 57 | ss3dm_town06_clean30k_geo_v1 |
 | S-GEO | ss3dm_town06 | B5 | B50 | 21.766 | 0.8375 | 0.3122 | -0.447 [-0.691,-0.220] | — | -0.0012 [-0.0020,-0.0003] | 57 | ss3dm_town06_B50_geo_v1 |
 | S-GEO | ss3dm_town06 | B4 | B50 | 21.686 | 0.8373 | 0.3139 | -0.527 [-0.760,-0.315] | — | +0.0005 [+0.0002,+0.0008] | 57 | ss3dm_town06_B50_importance_noft_s2 |
+| S-GEO | ss3dm_town06 | B2 | B50 | 20.995 | 0.8095 | 0.3510 | -1.218 [-1.483,-0.974] | — | +0.0376 [+0.0345,+0.0408] | 57 | ss3dm_town06_B50_random_ft_s2 |
 | S-GEO | ss3dm_town06 | B5 | B25 | 20.724 | 0.8320 | 0.3170 | -1.489 [-2.067,-0.942] | — | +0.0036 [+0.0021,+0.0052] | 57 | ss3dm_town06_B25_importance_ft_s2 |
 | S-GEO | ss3dm_town06 | B4 | B25 | 20.646 | 0.8314 | 0.3192 | -1.568 [-2.130,-1.032] | — | +0.0058 [+0.0047,+0.0071] | 57 | ss3dm_town06_B25_importance_noft_s2 |
 | S-DEV | toy_parking | B0 | B100 | 30.894 | 0.9603 | 0.0936 | — | — | — | 18 | toy_parking_clean30k_v1 |

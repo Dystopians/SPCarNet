@@ -15,7 +15,9 @@ Outputs (markdown + csv) under RESULTS/aggregate/:
   T4_efficiency       tris/disk/VRAM/FPS@2res + pipeline overhead
   T5_downstream       d1/d2 per scene + R3 trilogy summary
   T6_ablations        Stage-One variant rows mapped to E6 columns
-  T7_robustness       placeholder (PENDING: E7/E8 cells not yet run)
+  T7_robustness       E7 measured evidence (seed-sensitivity pair + repeat
+                      floor, computed here from the corpus) + the two
+                      remaining formal waives (W1-residue, W2)
 
 Usage:
     python tools/gems/report/tables.py [--rows FILE] [--outdir DIR]
@@ -49,7 +51,8 @@ FLOOR_PSNR = 0.10
 FLOOR_LPIPS = 0.005
 
 SUITES = ("S-REND", "S-GEO", "S-DEV")
-BUDGETS = ("B50", "B25", "B12.5")
+# B6.25 added pack v3 (GOAL#019 far-end rows: garden/kitchen/ss3dm_town01)
+BUDGETS = ("B50", "B25", "B12.5", "B6.25")
 SCENE_ORDER = ["bicycle", "flowers", "garden", "stump", "treehill", "room",
                "counter", "kitchen", "bonsai",
                "ss3dm_town01", "ss3dm_town02", "ss3dm_town03", "ss3dm_town06",
@@ -306,16 +309,23 @@ def t1_main_pareto(c: Corpus, outdir):
         "excludes 0 in the improving direction). iso-floor pass = scenes with "
         f"mean dPSNR >= -{FLOOR_PSNR} AND mean dLPIPS <= +{FLOOR_LPIPS} vs B0 "
         "(D3 compaction iso-quality floor).",
-        "MISSING BY DESIGN / KNOWN GAPS (honesty, section 7.3/7.4): B1 no-op "
-        "pass-through was never run (sanity cell; MATRIX). B3 QEM+FT exists at "
-        "B50 on garden/toy_parking/courtyard only (GOAL#013 DONE-PASS; other "
-        "scenes/budgets open in the E1 cell notes). B2 exists at B12.5 on all "
-        "9 S-REND scenes but only on garden/toy/courtyard at B50/B25 (e1b "
-        "era); S-GEO B2 was never run. B6/B7 appear only as diagnostic rows "
-        "on dev scenes (both DEMOTED per CLAIMS.md). B6R rows are ablation "
-        "rows (E2R FAILED its joint bar; GOAL#R-04/#014) shown for the "
-        "bounded-positive context. H1/R1 are context appendices below, not "
-        "corpus rows.",
+        "MISSING BY DESIGN / KNOWN GAPS (honesty, section 7.3/7.4; updated "
+        "pack v3 after the GOAL#019 gap-closure runs): B1 no-op pass-through "
+        "WAS RUN (GOAL#019): garden budget=1.0 reproduces the clean "
+        "checkpoint EXACTLY (paired dPSNR identically zero, identical "
+        "triangle count — B1 row in T2/T7). B6.25 far-end rows exist on "
+        "garden/kitchen/ss3dm_town01 (GOAL#019); other scenes scope-frozen. "
+        "B3 QEM+FT exists at B50 on garden/toy_parking/courtyard only "
+        "(GOAL#013 DONE-PASS; breadth scope-frozen per the GOAL#019 "
+        "run-instead-of-waive ruling, MATRIX E1 notes). B2 exists at B12.5 "
+        "on all 9 S-REND scenes, at B50/B25 on garden/toy/courtyard (e1b "
+        "era), and at B50 on all 4 SS3DM towns (GOAL#019: importance beats "
+        "random on S-GEO 4/4 CI-excl-0 — see T6/F7); remaining B2 cells "
+        "(B50/B25 on the other 6 S-REND scenes) scope-frozen. B6/B7 appear "
+        "only as diagnostic rows on dev scenes (both DEMOTED per CLAIMS.md). "
+        "B6R rows are ablation rows (E2R FAILED its joint bar; "
+        "GOAL#R-04/#014) shown for the bounded-positive context. H1/R1 are "
+        "context appendices below, not corpus rows.",
     ]
     write_table(outdir, "T1_main_pareto", "T1 — Main Pareto summary "
                 "(E1-PARETO / E10)", header, cols, out)
@@ -356,7 +366,8 @@ def t2_rendering(c: Corpus, outdir):
             "dPSNR vs B0 (CI)", "dPSNR vs B0' (CI)", "dLPIPS vs B0 (CI)",
             "n views", "eval row"]
     out = []
-    methods = [("B0", "B100"), ("B0'", "B100"), ("B0-26k", "B100")] + [
+    methods = [("B0", "B100"), ("B0'", "B100"), ("B0-26k", "B100"),
+               ("B1", "B100")] + [
         (m, b) for b in BUDGETS for m in ("B5", "B4", "B2", "B3", "B5-iter", "B6R")]
     for suite in SUITES:
         for s in c.scenes(suite):

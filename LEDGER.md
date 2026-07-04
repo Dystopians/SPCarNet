@@ -435,3 +435,12 @@ Never trust chat memory over this file.
 
 ### GOAL #019 — gap-closure runs (run-instead-of-waive) — 2026-07-03 — IN PROGRESS
 - All 4 gap chains EXITED:0 + videos delivered (W3 withdrawn). Verdicts: **B1 no-op EXACT** (garden budget=1.0 pass-through Δ=0.00e+00 vs clean, same triangle count — strongest possible sanity); **seed sensitivity −0.0004 dB CI[−0.0009,+0.0001]** (garden B50 B5 seed1 vs seed0 — FT seed-insensitive at 4th decimal; W1 substantially answered, full 3-seed×subset remains the formal waive); **B6.25** garden −3.502 / kitchen −5.266 (Pareto far-end extended); **S-GEO B2@B50: importance beats random +0.77..+1.30 dB, 4/4 towns CI excl. 0** (W5 withdrawn — driving-domain dominance appears already at B50, stronger than courtyard's inconclusive +0.13). town01 B6.25 crashed on a hardcoded ckpt root in the reused chain script (masked by `|| true`) — diagnosed, rerunning as gap5.
+- gap5 (town01 B6.25 rerun after the hardcoded-ckpt-root crash): EXITED:0 — −3.255 CI[−3.820,−2.687], 753,384 tris, 130 fps. **GOAL #019 DONE.**
+
+### GOAL #020 — Stage-2 §10 final verification + conditional declaration — 2026-07-03 — DONE
+- Pack v3 regenerated (gap rows folded: B1 sanity, seed-pair, B6.25 ×3, S-GEO B2 ×4; role mappings landed by the #019-era assembly work); `verify_t1.sh` from-scratch **PASS**; EXPERIMENT_REPORT §7 waive statuses + §10 table updated.
+- **Final §10: 10.1a PASS · 10.1b 7/9 (9/9 iff W1-residue+W2 approved) · 10.2 PASS-except-E8 · 10.3–10.7 PASS.**
+- **DECLARATION: "Stage Two complete — evidence pack ready for paper writing" — CONTINGENT ONLY on human approval of two waivers:**
+  - **W1-residue (E7 full grid):** waive the 3-seed×subset variance grid and 3-point loss-weight scans. Evidence in hand: garden B50 seed-pair Δ=−0.0004 dB CI[−0.0009,+0.0001]; pipeline repeat floor 1.6e-5 dB; importance-family flatness ±0.05 dB. Cost if run instead: ~6 GPU-h.
+  - **W2 (E8-ROBUST + S-GEN):** waive view-drop/pose-noise stress tests and the unseen-type T&T scenes. Rationale: robustness claims are NOT in CLAIMS.md; the pack's claims are bounded to the tested regimes; cost if run: multi-day retraining campaign. If the paper needs a robustness paragraph, run then.
+- Everything else verified in place: 217-row corpus, T1–T7, F1–F8 + 7 qual grids + 2 flythrough videos, CLAIMS_EVIDENCE_MATRIX (no naked claims), NEGATIVE_RESULTS (13+), HANDOFF, REPRO_PACK (T1 byte-verified; fresh-clone Δ0.0005 dB; pristine-build bit-exact), 6 GREEN purity audits quoted verbatim.

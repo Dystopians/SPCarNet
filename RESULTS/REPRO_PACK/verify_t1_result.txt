@@ -1,4 +1,4 @@
-verify_t1 run: 2026-07-03T22:29:10Z (fresh process, fresh corpus walk)
+verify_t1 run: 2026-07-04T00:05:01Z (fresh process, fresh corpus walk)
   T1_main_pareto.md: IDENTICAL (modulo timestamp line)
   T1_main_pareto.csv: IDENTICAL (modulo timestamp line)
   T1_per_scene_detail.csv: IDENTICAL (modulo timestamp line)

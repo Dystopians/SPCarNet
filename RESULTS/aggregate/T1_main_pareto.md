@@ -1,11 +1,11 @@
 # T1 — Main Pareto summary (E1-PARETO / E10)
 
-_generated 2026-07-03T22:28:13.507242+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-04T00:04:02.467884+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > STATS: every delta is a paired per-view bootstrap 95% CI (10k resamples, seed 0, PROTOCOL section 5). MULTIPLE-COMPARISONS CAVEAT (E10): dozens of CIs are reported across this pack; borderline CIs (effect near a floor or CI edge near 0) should be read with Bonferroni-style skepticism — headline claims rest only on effects that are large, replicated across scenes/suites, or mechanism-backed. Courtyard rendering CIs are 5-view (underpowered by design). Reporting language per section 6: 'improves/reduces' ONLY when the CI excludes 0 AND the D3 floor is cleared; otherwise 'comparable'/'inconclusive'.
 > Anchors: B0 = clean@30k (legacy/deployed default); B0' = clean-fixed@30k (PRIMARY anchor per LEDGER GOAL#R-01; exists on S-REND only — S-GEO/S-DEV anchor columns vs B0' are blank by construction).
 > w/i/l = per-scene win/iso/loss counts by paired 95% CI (win = CI excludes 0 in the improving direction). iso-floor pass = scenes with mean dPSNR >= -0.1 AND mean dLPIPS <= +0.005 vs B0 (D3 compaction iso-quality floor).
-> MISSING BY DESIGN / KNOWN GAPS (honesty, section 7.3/7.4): B1 no-op pass-through was never run (sanity cell; MATRIX). B3 QEM+FT exists at B50 on garden/toy_parking/courtyard only (GOAL#013 DONE-PASS; other scenes/budgets open in the E1 cell notes). B2 exists at B12.5 on all 9 S-REND scenes but only on garden/toy/courtyard at B50/B25 (e1b era); S-GEO B2 was never run. B6/B7 appear only as diagnostic rows on dev scenes (both DEMOTED per CLAIMS.md). B6R rows are ablation rows (E2R FAILED its joint bar; GOAL#R-04/#014) shown for the bounded-positive context. H1/R1 are context appendices below, not corpus rows.
+> MISSING BY DESIGN / KNOWN GAPS (honesty, section 7.3/7.4; updated pack v3 after the GOAL#019 gap-closure runs): B1 no-op pass-through WAS RUN (GOAL#019): garden budget=1.0 reproduces the clean checkpoint EXACTLY (paired dPSNR identically zero, identical triangle count — B1 row in T2/T7). B6.25 far-end rows exist on garden/kitchen/ss3dm_town01 (GOAL#019); other scenes scope-frozen. B3 QEM+FT exists at B50 on garden/toy_parking/courtyard only (GOAL#013 DONE-PASS; breadth scope-frozen per the GOAL#019 run-instead-of-waive ruling, MATRIX E1 notes). B2 exists at B12.5 on all 9 S-REND scenes, at B50/B25 on garden/toy/courtyard (e1b era), and at B50 on all 4 SS3DM towns (GOAL#019: importance beats random on S-GEO 4/4 CI-excl-0 — see T6/F7); remaining B2 cells (B50/B25 on the other 6 S-REND scenes) scope-frozen. B6/B7 appear only as diagnostic rows on dev scenes (both DEMOTED per CLAIMS.md). B6R rows are ablation rows (E2R FAILED its joint bar; GOAL#R-04/#014) shown for the bounded-positive context. H1/R1 are context appendices below, not corpus rows.
 
 | suite | budget | method | scenes | tri_ratio_vs_B0 | mean dPSNR vs B0 [dB] | PSNR w/i/l vs B0 | mean dLPIPS vs B0 | LPIPS w/i/l vs B0 | mean dPSNR vs B0' | PSNR w/i/l vs B0' | mean dLPIPS vs B0' | LPIPS w/i/l vs B0' | iso-floor pass (vs B0) | iso-floor pass (vs B0') | mean FPS x vs B0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -20,11 +20,16 @@ _generated 2026-07-03T22:28:13.507242+00:00 by tools/gems/report/tables.py — e
 | S-REND | B12.5 | B5 | 9/9 | 0.125 | -1.352 | 0/0/9 | +0.025 | 0/0/9 | -1.494 | 0/0/9 | +0.031 | 0/0/9 | 0/9 | 0/9 | 1.94 |
 | S-REND | B12.5 | B4 | 9/9 | 0.125 | -1.510 | 0/0/9 | +0.034 | 0/0/9 | -1.653 | 0/0/9 | +0.040 | 0/0/9 | 0/9 | 0/9 | 1.93 |
 | S-REND | B12.5 | B2 | 9/9 | 0.125 | -6.583 | 0/0/9 | +0.177 | 0/0/9 | -6.726 | 0/0/9 | +0.183 | 0/0/9 | 0/9 | 0/9 | 1.92 |
+| S-REND | B6.25 | B5 | 2/9 | 0.062 | -4.384 | 0/0/2 | +0.081 | 0/0/2 | -4.575 | 0/0/2 | +0.090 | 0/0/2 | 0/2 | 0/2 | 2.37 |
+| S-REND | B6.25 | B4 | 2/9 | 0.062 | -4.693 | 0/0/2 | +0.102 | 0/0/2 | -4.885 | 0/0/2 | +0.111 | 0/0/2 | 0/2 | 0/2 | 2.38 |
 | S-GEO | B50 | B5 | 4/4 | 0.500 | -0.061 | 1/2/1 | -0.003 | 4/0/0 | — | — | — | — | 3/4 | — | 1.30 |
 | S-GEO | B50 | B4 | 4/4 | 0.500 | -0.169 | 0/0/4 | +0.000 | 0/1/3 | — | — | — | — | 3/4 | — | 0.99 |
+| S-GEO | B50 | B2 | 4/4 | 0.500 | -1.102 | 0/0/4 | +0.028 | 0/0/4 | — | — | — | — | 0/4 | — | 1.29 |
 | S-GEO | B50 | B6R | 3/4 | 0.482 | +0.076 | 1/2/0 | -0.005 | 3/0/0 | — | — | — | — | 3/3 | — | 1.34 |
 | S-GEO | B25 | B5 | 4/4 | 0.250 | -0.471 | 0/1/3 | -0.000 | 1/2/1 | — | — | — | — | 1/4 | — | 1.64 |
 | S-GEO | B25 | B4 | 4/4 | 0.250 | -0.576 | 0/0/4 | +0.003 | 0/0/4 | — | — | — | — | 0/4 | — | 1.64 |
+| S-GEO | B6.25 | B5 | 1/4 | 0.062 | -3.255 | 0/0/1 | +0.082 | 0/0/1 | — | — | — | — | 0/1 | — | 2.44 |
+| S-GEO | B6.25 | B4 | 1/4 | 0.062 | -3.364 | 0/0/1 | +0.090 | 0/0/1 | — | — | — | — | 0/1 | — | 2.49 |
 | S-DEV | B50 | B5 | 4/4 | 0.500 | -0.433 | 0/0/4 | +0.011 | 0/0/4 | — | — | — | — | 0/4 | — | 1.21 |
 | S-DEV | B50 | B4 | 4/4 | 0.500 | -0.424 | 0/0/4 | +0.001 | 1/0/3 | — | — | — | — | 1/4 | — | 1.21 |
 | S-DEV | B50 | B2 | 2/4 | 0.500 | -1.186 | 0/1/1 | +0.062 | 0/0/2 | — | — | — | — | 0/2 | — | 1.25 |

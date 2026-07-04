@@ -1,6 +1,6 @@
 # T6 — Ablations (E6-ABL)
 
-_generated 2026-07-03T22:28:28.859605+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-04T00:04:18.500430+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > STATS: every delta is a paired per-view bootstrap 95% CI (10k resamples, seed 0, PROTOCOL section 5). MULTIPLE-COMPARISONS CAVEAT (E10): dozens of CIs are reported across this pack; borderline CIs (effect near a floor or CI edge near 0) should be read with Bonferroni-style skepticism — headline claims rest only on effects that are large, replicated across scenes/suites, or mechanism-backed. Courtyard rendering CIs are 5-view (underpowered by design). Reporting language per section 6: 'improves/reduces' ONLY when the CI excludes 0 AND the D3 floor is cleared; otherwise 'comparable'/'inconclusive'.
 > E6 mapping note: Stage-One/1R variant rows are mapped onto the E6 ablation axes (MATRIX E6: 'map them in'); the importance-DEFINITION family block is the dedicated E6 sub-cell (GOAL#012: pixels_total vs max_blending_max vs ckpt_importance_score @B50 on garden/kitchen/town01 — revision trigger NOT tripped; axis flat, all pairwise |dPSNR| <= 0.052 dB; town01 abl_blend is the pre-registered degenerate-identical-prune row = measured pipeline noise floor 1.6e-5 dB; full CIs analysis/e6_abl/e6_table.md). Reallocation on/off was never built (dropped with note, MATRIX).
@@ -33,6 +33,10 @@ _generated 2026-07-03T22:28:28.859605+00:00 by tools/gems/report/tables.py — e
 | importance family | evidence importance vs random (both +FT) | counter | B12.5 | 24.396 | +4.230 [+3.661,+4.817] | -0.1533 [-0.1627,-0.1441] | counter_B12_random_ft_s2 | counter_B12_importance_ft_s2 |
 | importance family | evidence importance vs random (both +FT) | kitchen | B12.5 | 24.927 | +4.892 [+4.204,+5.575] | -0.2080 [-0.2159,-0.1998] | kitchen_B12_random_ft_s2 | kitchen_B12_importance_ft_s2 |
 | importance family | evidence importance vs random (both +FT) | bonsai | B12.5 | 26.201 | +8.194 [+7.150,+9.179] | -0.2142 [-0.2227,-0.2047] | bonsai_B12_random_ft_s2 | bonsai_B12_importance_ft_s2 |
+| importance family | evidence importance vs random (both +FT) | ss3dm_town01 | B50 | 22.634 | +1.269 [+1.083,+1.461] | -0.0298 [-0.0329,-0.0267] | ss3dm_town01_B50_random_ft_s2 | ss3dm_town01_B50_geo_v1 |
+| importance family | evidence importance vs random (both +FT) | ss3dm_town02 | B50 | 22.669 | +0.822 [+0.712,+0.931] | -0.0183 [-0.0210,-0.0157] | ss3dm_town02_B50_random_ft_s2 | ss3dm_town02_B50_geo_v1 |
+| importance family | evidence importance vs random (both +FT) | ss3dm_town03 | B50 | 23.278 | +1.304 [+1.117,+1.498] | -0.0350 [-0.0393,-0.0311] | ss3dm_town03_B50_random_ft_s2 | ss3dm_town03_B50_geo_v1 |
+| importance family | evidence importance vs random (both +FT) | ss3dm_town06 | B50 | 21.766 | +0.771 [+0.599,+0.962] | -0.0388 [-0.0419,-0.0358] | ss3dm_town06_B50_random_ft_s2 | ss3dm_town06_B50_geo_v1 |
 | importance family | evidence importance vs random (both +FT) | toy_parking | B50 | 30.371 | +1.597 [+1.020,+2.198] | -0.0663 [-0.0787,-0.0566] | toy_parking_B50_random_ft_e1b | toy_parking_B50_importance_ft_e1v2 |
 | importance family | evidence importance vs random (both +FT) | toy_parking | B25 | 29.766 | +3.405 [+2.383,+4.412] | -0.1337 [-0.1518,-0.1185] | toy_parking_B25_random_ft_e1b | toy_parking_B25_importance_ft_e1v2 |
 | importance family | evidence importance vs random (both +FT) | courtyard | B50 | 17.566 | +0.130 [-0.551,+0.640] | -0.0408 [-0.0585,-0.0287] | courtyard_B50_random_ft_e1b | courtyard_B50_ft_v4 |

@@ -1,6 +1,6 @@
 # T5 — Downstream proxies (E5-DOWN)
 
-_generated 2026-07-03T22:28:25.227152+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-04T00:04:14.700671+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > d1 = occupancy confusion at 0.10 m voxels (false-free is the safety-critical direction); d2 = collision-verdict agreement on 200 seed-0 trajectories. C4' is a PRESERVATION claim (CLAIMS.md): no row here claims improvement vs clean.
 > R3 consumption trilogy summary below is read by script from analysis/r3{a,c,b}_*/summary.json (LEDGER #R-02/#R-03/#R-06).
@@ -10,6 +10,8 @@ _generated 2026-07-03T22:28:25.227152+00:00 by tools/gems/report/tables.py — e
 | S-GEO | ss3dm_town01 | B0 | B100 | 0.8135 | 0.0674 | 0.6900 | 0.2923 | 200 | ss3dm_town01_clean30k_geo_v1 |
 | S-GEO | ss3dm_town01 | B5 | B50 | 0.8318 | 0.0608 | 0.6850 | 0.2974 | 200 | ss3dm_town01_B50_geo_v1 |
 | S-GEO | ss3dm_town01 | B6R | B50 | 0.8387 | 0.0580 | 0.6850 | 0.2974 | 200 | b6r_ss3dm_town01_B50_v1 |
+| S-GEO | ss3dm_town01 | B5 | B6.25 | 0.9130 | 0.0335 | 0.5950 | 0.3897 | 200 | ss3dm_town01_B6_importance_ft_s2 |
+| S-GEO | ss3dm_town01 | B4 | B6.25 | 0.9130 | 0.0335 | 0.5950 | 0.3897 | 200 | ss3dm_town01_B6_importance_noft_s2 |
 | S-GEO | ss3dm_town02 | B0 | B100 | 0.7733 | 0.0655 | 0.6900 | 0.3005 | 200 | ss3dm_town02_clean30k_geo_v1 |
 | S-GEO | ss3dm_town02 | B5 | B50 | 0.7892 | 0.0604 | 0.6900 | 0.3005 | 200 | ss3dm_town02_B50_geo_v1 |
 | S-GEO | ss3dm_town02 | B6R | B50 | 0.7941 | 0.0588 | 0.6850 | 0.3057 | 200 | b6r_ss3dm_town02_B50_v1 |

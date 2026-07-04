@@ -1,6 +1,6 @@
 # T4 — Efficiency (E4-EFF)
 
-_generated 2026-07-03T22:28:25.219270+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
+_generated 2026-07-04T00:04:14.692044+00:00 by tools/gems/report/tables.py — every number computed from metrics.json-derived artifacts; none hand-typed._
 
 > Second-resolution FPS column: bench-only, non-protocol resolution (0.5x linear protocol res); loop: identical to run_eval.py: 3 warmup renders, median of 3 full test-set forward passes, no image I/O; GPU NVIDIA RTX 6000 Ada Generation. These half-res numbers are for the E4 efficiency table only ('bench-only, non-protocol resolution') — no quality metric was computed at this resolution.
 > HONESTY CAVEAT on FPS columns: the protocol-res FPS in each metrics.json was measured at eval time (idle GPUs, various same-model RTX 6000 Ada devices); the half-res bench ran on GPU 4 WITH a background process from another user (~21% util at launch). Method-vs-method comparisons WITHIN the half-res column share GPU state (paired-ish); protocol-vs-half-res comparisons across columns are indicative only. Several large scenes show half-res FPS close to or below protocol-res FPS — consistent with triangle-sort-bound rendering (cost dominated by primitive count, not pixels) plus contention; do not read that cross-column delta as a resolution scaling law.
@@ -32,6 +32,8 @@ _generated 2026-07-03T22:28:25.219270+00:00 by tools/gems/report/tables.py — e
 | S-REND | garden | B4 | B25 | 2892014 | 555 | 4010 | 53.8 | — | 0.4 | see note (no measured 30k train for this scene) | garden_B25_importance_noft_e1b |
 | S-REND | garden | B5 | B12.5 | 1446007 | 390 | 3231 | 65.9 | 110.1 | 9.5 | see note (no measured 30k train for this scene) | garden_B12_importance_ft_s2 |
 | S-REND | garden | B4 | B12.5 | 1446007 | 390 | 3231 | 63.6 | — | 0.4 | see note (no measured 30k train for this scene) | garden_B12_importance_noft_s2 |
+| S-REND | garden | B5 | B6.25 | 723003 | 254 | 2710 | 79.9 | — | 8.5 | see note (no measured 30k train for this scene) | garden_B6_importance_ft_s2 |
+| S-REND | garden | B4 | B6.25 | 723003 | 254 | 2710 | 80.3 | — | 0.4 | see note (no measured 30k train for this scene) | garden_B6_importance_noft_s2 |
 | S-REND | stump | B0 | B100 | 9277087 | 918 | 6374 | 37.2 | 30.5 | — | — | stump_clean30k_v1 |
 | S-REND | stump | B5 | B50 | 4638543 | 678 | 4675 | 49.7 | 48.1 | 12.1 | see note (no measured 30k train for this scene) | stump_B50_importance_ft_s2 |
 | S-REND | stump | B4 | B50 | 4638543 | 678 | 4675 | 49.7 | — | 0.3 | see note (no measured 30k train for this scene) | stump_B50_importance_noft_s2 |
@@ -67,6 +69,8 @@ _generated 2026-07-03T22:28:25.219270+00:00 by tools/gems/report/tables.py — e
 | S-REND | kitchen | B4 | B25 | 2429059 | 392 | 4869 | 41.7 | — | 0.6 | see note (no measured 30k train for this scene) | kitchen_B25_importance_noft_s2 |
 | S-REND | kitchen | B5 | B12.5 | 1214529 | 279 | 4115 | 50.7 | 81.3 | 11.3 | see note (no measured 30k train for this scene) | kitchen_B12_importance_ft_s2 |
 | S-REND | kitchen | B4 | B12.5 | 1214529 | 279 | 4115 | 50.8 | — | 0.5 | see note (no measured 30k train for this scene) | kitchen_B12_importance_noft_s2 |
+| S-REND | kitchen | B5 | B6.25 | 607264 | 186 | 3611 | 60.1 | — | 10.8 | see note (no measured 30k train for this scene) | kitchen_B6_importance_ft_s2 |
+| S-REND | kitchen | B4 | B6.25 | 607264 | 186 | 3611 | 60.1 | — | 0.5 | see note (no measured 30k train for this scene) | kitchen_B6_importance_noft_s2 |
 | S-REND | bonsai | B0 | B100 | 10834182 | 924 | 7824 | 29.5 | 26.3 | — | — | bonsai_clean30k_v1 |
 | S-REND | bonsai | B5 | B50 | 5417091 | 707 | 6084 | 36.8 | 40.7 | 16.3 | see note (no measured 30k train for this scene) | bonsai_B50_importance_ft_s2 |
 | S-REND | bonsai | B4 | B50 | 5417091 | 707 | 6084 | 36.9 | — | 0.6 | see note (no measured 30k train for this scene) | bonsai_B50_importance_noft_s2 |
@@ -79,6 +83,8 @@ _generated 2026-07-03T22:28:25.219270+00:00 by tools/gems/report/tables.py — e
 | S-GEO | ss3dm_town01 | B4 | B50 | 6027077 | 735 | 3741 | 33.4 | — | 1.4 | 4% of measured 31 min | ss3dm_town01_B50_importance_noft_s2 |
 | S-GEO | ss3dm_town01 | B5 | B25 | 3013538 | 541 | 2745 | 86.8 | — | 9.5 | 30% of measured 31 min | ss3dm_town01_B25_importance_ft_s2 |
 | S-GEO | ss3dm_town01 | B4 | B25 | 3013538 | 541 | 2745 | 88.0 | — | 0.9 | 3% of measured 31 min | ss3dm_town01_B25_importance_noft_s2 |
+| S-GEO | ss3dm_town01 | B5 | B6.25 | 753384 | 237 | 1621 | 129.7 | — | 6.4 | 21% of measured 31 min | ss3dm_town01_B6_importance_ft_s2 |
+| S-GEO | ss3dm_town01 | B4 | B6.25 | 753384 | 237 | 1621 | 132.4 | — | 0.8 | 3% of measured 31 min | ss3dm_town01_B6_importance_noft_s2 |
 | S-GEO | ss3dm_town02 | B0 | B100 | 15573225 | 1022 | 6163 | 48.0 | 36.4 | — | — | ss3dm_town02_clean30k_geo_v1 |
 | S-GEO | ss3dm_town02 | B5 | B50 | 7786612 | 792 | 4215 | 64.2 | 53.4 | 13.3 | 41% of measured 33 min | ss3dm_town02_B50_geo_v1 |
 | S-GEO | ss3dm_town02 | B4 | B50 | 7786612 | 792 | 4215 | 63.3 | — | 1.1 | 3% of measured 33 min | ss3dm_town02_B50_importance_noft_s2 |

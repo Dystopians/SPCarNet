@@ -24,6 +24,10 @@ importance family,evidence importance vs random (both +FT),room,B12.5,26.985,"+6
 importance family,evidence importance vs random (both +FT),counter,B12.5,24.396,"+4.230 [+3.661,+4.817]","-0.1533 [-0.1627,-0.1441]",counter_B12_random_ft_s2,counter_B12_importance_ft_s2
 importance family,evidence importance vs random (both +FT),kitchen,B12.5,24.927,"+4.892 [+4.204,+5.575]","-0.2080 [-0.2159,-0.1998]",kitchen_B12_random_ft_s2,kitchen_B12_importance_ft_s2
 importance family,evidence importance vs random (both +FT),bonsai,B12.5,26.201,"+8.194 [+7.150,+9.179]","-0.2142 [-0.2227,-0.2047]",bonsai_B12_random_ft_s2,bonsai_B12_importance_ft_s2
+importance family,evidence importance vs random (both +FT),ss3dm_town01,B50,22.634,"+1.269 [+1.083,+1.461]","-0.0298 [-0.0329,-0.0267]",ss3dm_town01_B50_random_ft_s2,ss3dm_town01_B50_geo_v1
+importance family,evidence importance vs random (both +FT),ss3dm_town02,B50,22.669,"+0.822 [+0.712,+0.931]","-0.0183 [-0.0210,-0.0157]",ss3dm_town02_B50_random_ft_s2,ss3dm_town02_B50_geo_v1
+importance family,evidence importance vs random (both +FT),ss3dm_town03,B50,23.278,"+1.304 [+1.117,+1.498]","-0.0350 [-0.0393,-0.0311]",ss3dm_town03_B50_random_ft_s2,ss3dm_town03_B50_geo_v1
+importance family,evidence importance vs random (both +FT),ss3dm_town06,B50,21.766,"+0.771 [+0.599,+0.962]","-0.0388 [-0.0419,-0.0358]",ss3dm_town06_B50_random_ft_s2,ss3dm_town06_B50_geo_v1
 importance family,evidence importance vs random (both +FT),toy_parking,B50,30.371,"+1.597 [+1.020,+2.198]","-0.0663 [-0.0787,-0.0566]",toy_parking_B50_random_ft_e1b,toy_parking_B50_importance_ft_e1v2
 importance family,evidence importance vs random (both +FT),toy_parking,B25,29.766,"+3.405 [+2.383,+4.412]","-0.1337 [-0.1518,-0.1185]",toy_parking_B25_random_ft_e1b,toy_parking_B25_importance_ft_e1v2
 importance family,evidence importance vs random (both +FT),courtyard,B50,17.566,"+0.130 [-0.551,+0.640]","-0.0408 [-0.0585,-0.0287]",courtyard_B50_random_ft_e1b,courtyard_B50_ft_v4
