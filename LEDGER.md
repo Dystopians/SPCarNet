@@ -479,5 +479,5 @@ Never trust chat memory over this file.
 - **Verification:** `verify_t1.sh` from-scratch byte-diff PASS at 2026-07-04T07:48:36Z (`RESULTS/REPRO_PACK/verify_t1_result.txt`). Carving purity audit GREEN at `/data/peilincai/gems_stage1/eval/c02_purity_audit_fast/audit_report.json`.
 - **§10:** all rows PASS, zero PARTIAL. `EXPERIMENT_REPORT.md`, `MATRIX.md`, `CLAIMS.md`, `RESULTS/CLAIMS_EVIDENCE_MATRIX.md`, `RESULTS/NEGATIVE_RESULTS.md`, and `RESULTS/HANDOFF.md` updated to Stage3/v4 closure. `SUBMISSION_HANDOFF/` delivered with 4 documents.
 - **Declaration:** "Stage Two complete — evidence pack ready for paper writing."
-- **Archive:** `RESULTS/ARCHIVE.md` written; release tag target to be resolved by `git rev-parse gems-evidence-v1.0^{}` after tagging.
-- **CLOSURE BOARD:** [1] W1 substitute run = DONE/WAIVED; [2] W2 arm = DONE/WAIVED; [3] R3-FINAL = IMPOSSIBILITY x4 route families; [4] pack v4 + verify_t1 = PASS; [5] declaration = issued; [6] release tag + ARCHIVE = ARCHIVE written / tag pending git step; [7] SUBMISSION_HANDOFF = DONE.
+- **Archive/release:** `RESULTS/ARCHIVE.md` written; release tag `gems-evidence-v1.0` created for the final evidence-pack commit and pushed to `spcarnet/main`. Resolve exact tag target with `git rev-parse gems-evidence-v1.0^{}`.
+- **CLOSURE BOARD:** [1] W1 substitute run = DONE/WAIVED; [2] W2 arm = DONE/WAIVED; [3] R3-FINAL = IMPOSSIBILITY x4 route families; [4] pack v4 + verify_t1 = PASS; [5] declaration = issued; [6] release tag + ARCHIVE = DONE; [7] SUBMISSION_HANDOFF = DONE.
