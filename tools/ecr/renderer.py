@@ -63,6 +63,13 @@ _L2_KWARG_KEYS = (
     "depth_abs_tol", "depth_rel_tol", "direction_weight", "bands",
 )
 
+# L3 learned-fusion feature kwargs (tools/ecr/fusion.compute_transport_features).
+_L3_KWARG_KEYS = (
+    "k", "residual_clip", "min_confidence",
+    "depth_abs_tol", "depth_rel_tol", "direction_weight",
+    "inner_fuse", "bands",
+)
+
 
 def camera_record_from_pose(idx: int, pose: dict) -> CameraRecord:
     """CameraRecord from plain pose primitives (mirrors the construction in
@@ -196,6 +203,7 @@ class EcrRenderer:
 
         transport = dict(self.manifest["transport"])
         self.fuse = str(transport.get("fuse", "single"))
+        self._fusion_net = None
         if self.fuse == "multiband":
             from tools.ecr.transport_l2 import adapt_frame_l2
             self._adapt_fn = adapt_frame_l2
@@ -203,18 +211,45 @@ class EcrRenderer:
         elif self.fuse == "single":
             self._adapt_fn = adapt_frame
             keys = _ADAPT_KWARG_KEYS
+        elif self.fuse == "learned":
+            # L3: frozen per-scene fusion net (trained train-only by
+            # tools/ecr/train_fusion.py; sha pinned in the manifest).
+            from tools.ecr.fusion import FusionNet
+            net_path = self.cache_dir / str(transport["fusion_net"])
+            net_sha = hashlib.sha256(net_path.read_bytes()).hexdigest()
+            if net_sha != transport.get("fusion_net_sha256"):
+                raise RuntimeError(
+                    f"fusion net sha mismatch: {net_sha} != manifest "
+                    f"{transport.get('fusion_net_sha256')}")
+            net = FusionNet().to(self.device)
+            net.load_state_dict(torch.load(net_path, map_location=self.device,
+                                           weights_only=True))
+            net.eval()
+            for p in net.parameters():
+                p.requires_grad_(False)
+            self._fusion_net = net
+            self._fusion_net_sha = net_sha
+            self._adapt_fn = None
+            keys = _L3_KWARG_KEYS
         else:
             raise ValueError(f"unknown transport fuse mode: {self.fuse}")
         self._adapt_kwargs = {
             key: transport[key] for key in keys if key in transport
         }
-        # alpha in the manifest is the train-only calibrated scalar (for the
-        # L2 transport, k is likewise the train-only calibrated value, frozen
-        # into transport["k"] at cache build).
-        self._adapt_kwargs["alpha"] = float(self.manifest["alpha"]["alpha"])
-        self.config_hash = self._hash_kwargs(
-            {"fuse": self.fuse, **self._adapt_kwargs})
+        if self.fuse != "learned":
+            # alpha in the manifest is the train-only calibrated scalar (for
+            # the L2 transport, k is likewise the calibrated value, frozen
+            # into transport["k"] at cache build). The learned fuse has no
+            # global alpha — the frozen net IS the alpha map.
+            self._adapt_kwargs["alpha"] = float(self.manifest["alpha"]["alpha"])
+        hash_payload = {"fuse": self.fuse, **self._adapt_kwargs}
+        if self._fusion_net is not None:
+            hash_payload["fusion_net_sha256"] = self._fusion_net_sha
+        self.config_hash = self._hash_kwargs(hash_payload)
         self.loader = ConfinedFrameLoader(self.cache_dir, device=self.device)
+        if self._fusion_net is not None:
+            self.loader.read_log.add(os.path.realpath(str(
+                self.cache_dir / str(transport["fusion_net"]))))
 
     @staticmethod
     def _hash_kwargs(kwargs: dict) -> str:
@@ -253,17 +288,42 @@ class EcrRenderer:
         )
         self.loader.register_target(name, base_render, base_depth)
         kwargs = dict(self._adapt_kwargs)
-        call_hash = self._hash_kwargs({"fuse": self.fuse, **kwargs})
+        hash_payload = {"fuse": self.fuse, **kwargs}
+        if self._fusion_net is not None:
+            hash_payload["fusion_net_sha256"] = self._fusion_net_sha
+        call_hash = self._hash_kwargs(hash_payload)
         try:
             torch.cuda.synchronize()
             t0 = time.perf_counter()
-            adapted, info = self._adapt_fn(
-                target,
-                self.train_frames,
-                loader=self.loader,
-                device=self.device,
-                **kwargs,
-            )
+            if self._fusion_net is not None:
+                from tools.ecr.fusion import (apply_fusion,
+                                              compute_transport_features)
+                with torch.no_grad():
+                    feat_kwargs = dict(kwargs)
+                    feat_kwargs["fuse"] = feat_kwargs.pop("inner_fuse", "single")
+                    feats = compute_transport_features(
+                        target, self.train_frames, loader=self.loader,
+                        device=self.device, **feat_kwargs)
+                    adapted, alpha_map = apply_fusion(self._fusion_net, feats)
+                valid = feats["weight_den"] > float(
+                    kwargs.get("min_confidence", 1e-4))
+                info = {
+                    "support_count": len(feats["support_names"]),
+                    "support_names": feats["support_names"],
+                    "mean_confidence": float(feats["weight_den"].mean()
+                                             .detach().cpu().item()),
+                    "covered_fraction": float(valid.to(torch.float32).mean()
+                                              .detach().cpu().item()),
+                    "alpha_mean": float(alpha_map.mean().detach().cpu().item()),
+                }
+            else:
+                adapted, info = self._adapt_fn(
+                    target,
+                    self.train_frames,
+                    loader=self.loader,
+                    device=self.device,
+                    **kwargs,
+                )
             torch.cuda.synchronize()
             elapsed = time.perf_counter() - t0
         finally:
