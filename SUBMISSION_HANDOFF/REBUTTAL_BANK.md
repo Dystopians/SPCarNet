@@ -98,3 +98,53 @@ measurement-suite paper if the submitted story makes the negative evidence
 central and avoids decorative overclaiming.
 
 Pointers: `CLAIMS.md`, `EXPERIMENT_REPORT.md`, `RESULTS/HANDOFF.md`.
+
+# Stage-4 additions (ECR track, 2026-07-09; prompt §4 RED-TEAM)
+
+## A10. "This is just ULR / Deep Blending 2.0."
+
+Differences, all measured: (1) the base is a mesh-splat checkpoint with a
+retained triangle-mesh artifact and frozen geometry/downstream guarantees
+(Stage-2/3 pack; preservation-exactness CIs [0,0]); (2) the confidence inputs
+are evidence-CERTIFIED — the same machinery whose error-prediction law is
+banked (Spearman rho ~= 0.69–0.74 on 3 scenes, GOAL#015A) and whose failure
+boundary is quantified (coverage gaps; 5–11x error tails); (3) strict
+train-only guarantees are ENFORCED per row by an audit tool
+(`tools/audit_test_path.py --ecr`: transport reads ⊆ cache manifest, manifest
+disjoint from the recomputed test split, frozen per-view kwargs hash, no GT
+accessor reachable in the render path); (4) storage is accounted at TOTAL
+artifact honesty (checkpoint + cache raw AND lossless-compressed, in every
+row); (5) the design is justified by a falsification corpus proving the baked
+alternative is information-theoretically closed on these checkpoints: static
+baking captures 4.76% of the Phase-J gap, full-parameter distillation 5–16%,
+held-out residual cosine ~= 0.21, and Stage-4's own L1 rung measured the
+composition NEGATIVE (full9 −0.109 dB CI[−0.129,−0.090]: distillation consumes
+exactly the residual structure the transport exploits). The negatives ARE the
+motivation section.
+
+Pointers: `CLAIMS_ECR.md`, `LEDGER.md` GOALs #E-00..#E-04,
+`analysis/e0_pj2026/`, `analysis/e2geo_evidence_vs_error/`.
+
+## A11. "Why not 3DGS + an enhancer?"
+
+Answered by measured rows, not prose: the R1 context row already banked 3DGS
+at matched artifact storage (2.1–3.4 dB above the GEMS base at 3–4x FPS,
+reported plainly); Stage-4 §4 adds (a) 3DGS at matched TOTAL storage
+(checkpoint + evidence cache) and (b) a bounded Difix3D+-style single-step
+enhancer cell (or an INFEASIBLE filing with the attempt log). The mesh
+artifact, geometry/downstream measurement suite, and preservation-exactness
+story have no 3DGS-family equivalent; rendering-quality comparisons name
+their references explicitly.
+
+Pointers: `analysis/r1_3dgs_reference/r1_table.md`, MATRIX `ECR` section
+(L5 + external cells).
+
+## A12. "Per-scene learned fusion doesn't generalize."
+
+Correct, and claimed as such: the method is per-scene BY DESIGN (NON-CLAIM:
+no cross-scene generalization). The fusion net is trained once per scene on
+train views only, frozen, applied identically to every test view — the same
+legal move as Deep Blending's per-scene training. Cross-scene training is
+future work (one line, T3 note only).
+
+Pointers: `CLAIMS_ECR.md` NON-CLAIMS, LEDGER #E-04 pre-registration.
