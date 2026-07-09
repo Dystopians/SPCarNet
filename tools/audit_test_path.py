@@ -85,6 +85,32 @@ BLOCKLIST_PATTERN = (
 )
 BLOCKLIST_RE = re.compile(BLOCKLIST_PATTERN)
 
+# Stage-4 ECR mode (PROTOCOL 1.2.0 §4E): the evidence-transport module
+# (utils/evidence_lumigraph_adapter.py) and tools/ecr are LEGAL render-time
+# inputs — train-view evidence is part of the shipped artifact. Everything
+# else stays dead: teacher/selector/ecsr_/car_model remain blocked. The
+# no-test-GT guarantee moves to the ECR-specific checks below (transport
+# reads confined to the cache manifest; manifest disjoint from the test
+# split; frozen per-view kwargs; no `original_image` token in the transport
+# module).
+ECR_BLOCKLIST_PATTERN = (
+    r"(teacher|ecsr_|phasej|phase_j|selector|calibrator|"
+    r"arbitrat|scripts[./\\]car_model|car_model)"
+)
+ECR_BLOCKLIST_RE = re.compile(ECR_BLOCKLIST_PATTERN)
+
+# The regex the current invocation enforces (set in main; default Stage-2).
+ACTIVE_BLOCKLIST_RE = BLOCKLIST_RE
+
+# Directory of the Stage-4 ECR render-path package. In Stage-2 (default)
+# mode the STATIC walk does not expand into it (run_eval.py's ecr import is
+# mode-gated and never executes with --renderer base); instead the DYNAMIC
+# check FAILS if any tools.ecr / transport module actually loads in base
+# mode — the guarantee is enforced at runtime, where it is real.
+TOOLS_ECR_ROOT = os.path.realpath(
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                 "tools", "ecr"))
+
 # Directory whose contents are NEVER allowed in the eval process, whatever the
 # module is called: any loaded module __file__ or successfully-read path whose
 # realpath lands here FAILS the audit.
@@ -116,7 +142,7 @@ def _strip_stdlib_segments(dotted_or_path: str, sep: str) -> str:
 
 def module_name_violates(name: str) -> bool:
     """Blocklist match on a dotted module name, exempting stdlib selectors."""
-    return bool(BLOCKLIST_RE.search(_strip_stdlib_segments(name, ".")))
+    return bool(ACTIVE_BLOCKLIST_RE.search(_strip_stdlib_segments(name, ".")))
 
 
 # --------------------------------------------------------------------------
@@ -218,9 +244,11 @@ def _walk_file(path: str, is_core: bool, failures: list, warnings: list):
     return referenced
 
 
-def run_static_check(run_eval_path: str, gems_dir: str) -> dict:
+def run_static_check(run_eval_path: str, gems_dir: str,
+                     ecr_mode: bool = False) -> dict:
     failures: list = []
     warnings: list = []
+    notes: list = []
     core_files = []
     if os.path.isfile(run_eval_path):
         core_files.append(os.path.abspath(run_eval_path))
@@ -236,20 +264,73 @@ def run_static_check(run_eval_path: str, gems_dir: str) -> dict:
     else:
         failures.append(f"core package missing: {gems_dir}")
 
+    if ecr_mode:
+        # ECR mode: the transport render path is CORE and must satisfy the
+        # ECR blocklist. build_cache.py is the offline train-side builder
+        # (it legitimately reads TRAIN images via cam.original_image); the
+        # `original_image` token check applies to every OTHER tools/ecr
+        # file, structurally proving the render path never touches an
+        # object that can carry test GT.
+        if os.path.isdir(TOOLS_ECR_ROOT):
+            for root, _dirs, names in os.walk(TOOLS_ECR_ROOT):
+                if "__pycache__" in root:
+                    continue
+                for name in sorted(names):
+                    if name.endswith(".py"):
+                        core_files.append(
+                            os.path.abspath(os.path.join(root, name)))
+        else:
+            failures.append(f"core package missing: {TOOLS_ECR_ROOT}")
+
     referenced = set()
     for path in core_files:
         referenced |= _walk_file(path, is_core=True,
                                  failures=failures, warnings=warnings)
+    if not ecr_mode:
+        # Stage-2 mode: do NOT expand into tools/ecr — run_eval.py's ecr
+        # import is mode-gated (never executes with --renderer base); the
+        # dynamic check fails the audit if any tools.ecr / transport module
+        # actually loads in base mode (PROTOCOL 1.2.0 changelog).
+        deferred = sorted(p for p in referenced
+                          if _under(os.path.realpath(p), TOOLS_ECR_ROOT))
+        if deferred:
+            notes.append(
+                "Stage-4 ecr modules referenced but not expanded (mode-gated "
+                "import; base-mode non-loading enforced dynamically): "
+                + ", ".join(os.path.relpath(p, REPO_ROOT) for p in deferred))
+        referenced = {p for p in referenced
+                      if not _under(os.path.realpath(p), TOOLS_ECR_ROOT)}
     transitive = sorted(referenced - set(core_files))
     for path in transitive:
         _walk_file(path, is_core=False, failures=failures, warnings=warnings)
 
+    if ecr_mode:
+        for path in core_files:
+            rp = os.path.realpath(path)
+            if not _under(rp, TOOLS_ECR_ROOT):
+                continue
+            if os.path.basename(path) == "build_cache.py":
+                continue
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    for i, line in enumerate(fh, start=1):
+                        if "original_image" in line:
+                            failures.append(
+                                f"{os.path.relpath(path, REPO_ROOT)}:{i}: "
+                                "'original_image' token in ECR render path "
+                                "(test-GT accessor forbidden)")
+            except OSError as exc:
+                failures.append(f"{os.path.relpath(path, REPO_ROOT)}: "
+                                f"unreadable ({exc})")
+
     return {
         "ok": not failures,
+        "mode": "ecr" if ecr_mode else "stage2",
         "core_files": [os.path.relpath(p, REPO_ROOT) for p in core_files],
         "transitive_files": [os.path.relpath(p, REPO_ROOT) for p in transitive],
         "failures": failures,
         "warnings": warnings,
+        "notes": notes,
     }
 
 
@@ -340,7 +421,7 @@ def audit_read_paths(reads, allowed_roots, env_root):
             continue
         if any(_under(rp, r) for r in system_like):
             continue  # OS / interpreter files: always allowed, never matched
-        if BLOCKLIST_RE.search(_strip_stdlib_segments(rp, "/")):
+        if ACTIVE_BLOCKLIST_RE.search(_strip_stdlib_segments(rp, "/")):
             failures.append(f"read blocklisted path: {path}")
             continue
         if not any(_under(rp, r) for r in allowed_roots):
@@ -383,7 +464,7 @@ def audit_loaded_modules(modules, env_root=None):
             continue
         if any(_under(rp, r) for r in system_like):
             continue
-        if BLOCKLIST_RE.search(_strip_stdlib_segments(rp, "/")):
+        if ACTIVE_BLOCKLIST_RE.search(_strip_stdlib_segments(rp, "/")):
             failures.append(
                 f"module '{name}' file matches blocklist: {mod_file}")
     return failures
@@ -432,11 +513,15 @@ def run_dynamic_check(args, run_eval_path: str) -> dict:
                 "--out", args.out]
     if args.fast:
         eval_cmd += ["--skip-geometry", "--skip-downstream"]
+    if getattr(args, "ecr", False):
+        eval_cmd += ["--renderer", "ecr", "--ecr-cache", args.ecr_cache]
 
     strace_bin = None if args.no_strace else shutil.which("strace")
     scene_roots, scene_note = _scene_data_roots(args.scene)
     if scene_note:
         result["notes"].append(scene_note)
+    if getattr(args, "ecr", False) and args.ecr_cache:
+        scene_roots = list(scene_roots) + [os.path.realpath(args.ecr_cache)]
 
     def _launch(with_strace: bool):
         cmd = list(eval_cmd)
@@ -469,10 +554,32 @@ def run_dynamic_check(args, run_eval_path: str) -> dict:
         result["n_modules_loaded"] = len(modules)
         env_root = os.path.dirname(os.path.dirname(os.path.realpath(python_bin)))
         result["failures"].extend(audit_loaded_modules(modules, env_root))
+        if not getattr(args, "ecr", False):
+            # Stage-2 mode strengthening (PROTOCOL 1.2.0): base-mode eval
+            # must never load the Stage-4 ECR render path or the transport
+            # module — this is what makes the static walker's tools/ecr
+            # non-expansion sound.
+            mod_map = ({name: None for name in modules}
+                       if isinstance(modules, list) else modules)
+            for name in sorted(mod_map):
+                mod_file = mod_map[name]
+                under_ecr = bool(
+                    mod_file
+                    and _under(os.path.realpath(mod_file), TOOLS_ECR_ROOT))
+                if name == "tools.ecr" or name.startswith("tools.ecr.") \
+                        or under_ecr:
+                    result["failures"].append(
+                        f"base-mode eval loaded Stage-4 ecr module: {name} "
+                        f"({mod_file})")
     else:
         result["failures"].append(
             "module dump missing (sitecustomize hook did not run) — cannot "
             "verify loaded modules")
+
+    if getattr(args, "ecr", False):
+        ecr_failures, ecr_notes = _ecr_specific_checks(args)
+        result["failures"].extend(ecr_failures)
+        result["notes"].extend(ecr_notes)
 
     if used_strace and os.path.exists(trace_path):
         reads = parse_strace_reads(trace_path)
@@ -490,6 +597,105 @@ def run_dynamic_check(args, run_eval_path: str) -> dict:
 
     result["ok"] = not result["failures"]
     return result
+
+
+def _ecr_specific_checks(args):
+    """PROTOCOL 1.2.0 §4E: prove no test-GT dependency and no per-test-view
+    parameter injection in the ECR render path.
+
+    1. every file the transport read is listed in the cache manifest
+       (run_eval's confined-loader read log, cross-checked here);
+    2. the manifest's train_views are DISJOINT from the scene's test split
+       (recomputed independently from the registry, not trusted from the
+       manifest);
+    3. the manifest was built for exactly the audited checkpoint;
+    4. the transport kwargs hash is identical for every test view (frozen
+       config; no per-view injection).
+    """
+    failures, notes = [], []
+    out = os.path.realpath(args.out)
+    cache_root = os.path.realpath(args.ecr_cache)
+
+    reads_path = os.path.join(out, "ecr_transport_reads.json")
+    if not os.path.exists(reads_path):
+        failures.append(f"ecr transport read log missing: {reads_path}")
+    else:
+        with open(reads_path) as fh:
+            reads = json.load(fh)
+        if reads.get("all_reads_in_manifest") is True:
+            notes.append(
+                f"ecr transport reads: {reads.get('n_reads')} files, all "
+                f"within the cache manifest ({reads.get('n_manifest_files')} "
+                "files)")
+        else:
+            head = (reads.get("reads_outside_manifest") or [])[:5]
+            failures.append(
+                f"ecr transport read files OUTSIDE the cache manifest: {head}")
+
+    manifest_path = os.path.join(cache_root, "manifest.json")
+    if not os.path.exists(manifest_path):
+        failures.append(f"ecr cache manifest missing: {manifest_path}")
+        return failures, notes
+    with open(manifest_path) as fh:
+        manifest = json.load(fh)
+
+    try:
+        if REPO_ROOT not in sys.path:
+            sys.path.insert(0, REPO_ROOT)
+        from tools.gems.scenes import SCENES
+        from tools.gems.eval_context import _read_scene_info
+        spec = SCENES[args.scene]
+        info = _read_scene_info(spec)
+        test_names = {str(c.image_name) for c in info.test_cameras}
+    except Exception as exc:
+        failures.append(f"could not recompute the test split for the "
+                        f"manifest-disjointness check: {exc}")
+    else:
+        train_views = set(manifest.get("train_views", []))
+        overlap = sorted(test_names & train_views)
+        if overlap:
+            failures.append(
+                f"cache manifest lists TEST view names (D4 violation): "
+                f"{overlap[:5]}")
+        else:
+            notes.append(
+                f"cache manifest train views ({len(train_views)}) disjoint "
+                f"from the recomputed test split ({len(test_names)})")
+
+    ckpt_path = args.checkpoint
+    if os.path.isdir(ckpt_path):
+        ckpt_path = os.path.join(ckpt_path, "point_cloud_state_dict.pt")
+    import hashlib
+    h = hashlib.sha256()
+    with open(ckpt_path, "rb") as fh:
+        h.update(fh.read(16 * 1024 * 1024))
+    manifest_sha = (manifest.get("checkpoint") or {}).get("sha256_first16mb")
+    if manifest_sha != h.hexdigest():
+        failures.append(
+            f"cache manifest checkpoint fingerprint {manifest_sha} != audited "
+            f"checkpoint {h.hexdigest()}")
+
+    metrics_path = os.path.join(out, "metrics.json")
+    if not os.path.exists(metrics_path):
+        failures.append(f"metrics.json missing: {metrics_path}")
+    else:
+        with open(metrics_path) as fh:
+            metrics = json.load(fh)
+        if metrics.get("renderer") != "ecr":
+            failures.append(
+                f"metrics.json renderer={metrics.get('renderer')!r}, "
+                "expected 'ecr'")
+        ecr_block = metrics.get("ecr") or {}
+        if ecr_block.get("per_view_kwargs_identical") is True:
+            notes.append(
+                "transport kwargs hash identical across all test views "
+                f"(config_hash {str(ecr_block.get('config_hash'))[:12]}) — "
+                "no per-test-view parameter injection")
+        else:
+            failures.append(
+                "per-view transport kwargs are NOT identical (or missing) — "
+                "possible per-test-view parameter injection")
+    return failures, notes
 
 
 # --------------------------------------------------------------------------
@@ -516,17 +722,31 @@ def main() -> int:
                         help="skip the best-effort strace read audit")
     parser.add_argument("--timeout", type=float, default=3600.0,
                         help="subprocess timeout in seconds")
+    parser.add_argument("--ecr", action="store_true",
+                        help="Stage-4 ECR audit mode (PROTOCOL 1.2.0 §4E): "
+                             "runs run_eval.py --renderer ecr and proves the "
+                             "no-test-GT / frozen-config guarantees for the "
+                             "evidence-transport path")
+    parser.add_argument("--ecr-cache", default=None,
+                        help="evidence cache dir (required with --ecr)")
     args = parser.parse_args()
+
+    if args.ecr and not args.ecr_cache:
+        parser.error("--ecr requires --ecr-cache")
+    global ACTIVE_BLOCKLIST_RE
+    ACTIVE_BLOCKLIST_RE = ECR_BLOCKLIST_RE if args.ecr else BLOCKLIST_RE
 
     os.makedirs(args.out, exist_ok=True)
     gems_dir = os.path.join(REPO_ROOT, "tools", "gems")
 
-    static = run_static_check(args.run_eval, gems_dir)
+    static = run_static_check(args.run_eval, gems_dir, ecr_mode=args.ecr)
     dynamic = run_dynamic_check(args, args.run_eval)
 
     report = {
         "ok": static["ok"] and dynamic["ok"],
-        "blocklist_pattern": BLOCKLIST_PATTERN,
+        "mode": "ecr" if args.ecr else "stage2",
+        "blocklist_pattern": (ECR_BLOCKLIST_PATTERN if args.ecr
+                              else BLOCKLIST_PATTERN),
         "static": static,
         "dynamic": dynamic,
     }

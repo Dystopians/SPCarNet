@@ -1,10 +1,11 @@
 #!/usr/bin/env python
-"""GEMS Stage One — THE single evaluation mouth (PROTOCOL.md v1.1.0, D5).
+"""GEMS — THE single evaluation mouth (PROTOCOL.md v1.2.0, D5).
 
 Usage:
     python run_eval.py --checkpoint <point_cloud_state_dict.pt> \
-        --scene <toy_parking|garden|courtyard> --out <dir> \
-        [--gpu N] [--skip-geometry] [--skip-downstream]
+        --scene <toy_parking|garden|courtyard|...> --out <dir> \
+        [--gpu N] [--skip-geometry] [--skip-downstream] \
+        [--renderer base|ecr] [--ecr-cache <cache_dir>]
 
 Writes <out>/metrics.json (per-view arrays + means, cost metrics, geometry,
 downstream, provenance) and <out>/panels/ per PROTOCOL 4.5.
@@ -12,6 +13,18 @@ downstream, provenance) and <out>/panels/ per PROTOCOL 4.5.
 Rendering metrics reproduce metrics.py conventions exactly: renders are
 quantized to 8-bit like torchvision.utils.save_image before PSNR/SSIM/LPIPS,
 so numbers match the legacy render.py + metrics.py path bit-for-bit.
+
+Renderer modes (PROTOCOL 1.2.0, one mouth, identical metric code):
+  base (default) — the render path used for every pre-Stage-4 row; behavior
+                   and numbers unchanged. Never loads any tools/ecr or
+                   evidence-transport module (audited).
+  ecr            — Stage-4 evidence-cached rendering: base render + frozen
+                   Phase-J transport from the evidence cache built by
+                   tools/ecr/build_cache.py (--ecr-cache required). Test-view
+                   GT is used ONLY for metric computation, never by the
+                   transport (audited by tools/audit_test_path.py --ecr).
+                   Adds cost columns: cache_mb_raw, cache_mb_compressed,
+                   transport_ms_per_frame, end_to_end_fps.
 """
 import argparse
 import hashlib
@@ -24,7 +37,7 @@ import time
 from datetime import datetime, timezone
 
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
-PROTOCOL_VERSION = "1.1.0"
+PROTOCOL_VERSION = "1.2.0"
 
 
 def parse_args():
@@ -38,7 +51,31 @@ def parse_args():
                         help="GPU index (sets CUDA_VISIBLE_DEVICES)")
     parser.add_argument("--skip-geometry", action="store_true")
     parser.add_argument("--skip-downstream", action="store_true")
+    parser.add_argument("--renderer", choices=("base", "ecr"), default="base",
+                        help="render path: 'base' (default, pre-Stage-4 "
+                             "behavior, unchanged) or 'ecr' (Stage-4 "
+                             "evidence-cached rendering; needs --ecr-cache)")
+    parser.add_argument("--ecr-cache", default=None,
+                        help="evidence cache dir from tools/ecr/build_cache.py "
+                             "(required with --renderer ecr)")
     return parser.parse_args()
+
+
+def pose_primitives(cam) -> dict:
+    """Plain pose dict for the ECR renderer. Deliberately contains ONLY
+    geometry — never the camera's image tensor — so no GT-bearing object
+    crosses the D4 boundary into tools/ecr (PROTOCOL 1.2.0)."""
+    return {
+        "image_name": str(cam.image_name),
+        "width": int(cam.image_width),
+        "height": int(cam.image_height),
+        "fovx": float(cam.FoVx),
+        "fovy": float(cam.FoVy),
+        "camera_center": [float(x) for x in
+                          cam.camera_center.detach().cpu().tolist()],
+        "world_view_transform":
+            cam.world_view_transform.detach().cpu().tolist(),
+    }
 
 
 def checkpoint_fingerprint(path: str) -> dict:
@@ -101,6 +138,35 @@ def main():
     print(f"[run_eval] {len(test_cams)} test views "
           f"({len(ctx.scene_info.train_cameras)} train cams registered)")
 
+    # --- Stage-4 ECR renderer (PROTOCOL 1.2.0 §4E) ---
+    ecr = None
+    if args.renderer == "ecr":
+        if not args.ecr_cache:
+            raise SystemExit("--renderer ecr requires --ecr-cache")
+        # Lazy, mode-gated import: this line never executes in base mode.
+        # The Stage-2 purity audit verifies DYNAMICALLY that no tools.ecr /
+        # evidence-transport module is loaded in base mode (PROTOCOL 1.2.0
+        # changelog); the --ecr audit mode covers this path.
+        from tools.ecr.renderer import EcrRenderer
+        ecr = EcrRenderer(args.ecr_cache)
+        ckpt_fp = checkpoint_fingerprint(args.checkpoint)
+        cache_fp = ecr.checkpoint_fingerprint()
+        if cache_fp.get("sha256_first16mb") != ckpt_fp["sha256_first16mb"]:
+            raise SystemExit(
+                "evidence cache / checkpoint mismatch: cache built for "
+                f"{cache_fp.get('path')} ({cache_fp.get('sha256_first16mb')}), "
+                f"evaluating {ckpt_fp['path']} ({ckpt_fp['sha256_first16mb']})")
+        overlap = {str(c.image_name) for c in test_cams}.intersection(
+            ecr.manifest["train_views"])
+        if overlap:
+            raise SystemExit(
+                f"evidence cache lists TEST view names (D4 violation): "
+                f"{sorted(overlap)[:5]}")
+        print(f"[run_eval] ecr: cache={args.ecr_cache} "
+              f"alpha={ecr.manifest['alpha']['alpha']} "
+              f"config_hash={ecr.config_hash[:12]} "
+              f"({ecr.manifest['n_train_views']} train views)")
+
     def quantize_like_png(img: torch.Tensor) -> torch.Tensor:
         """Exact torchvision.utils.save_image 8-bit round trip
         (mul(255).add_(0.5).clamp_(0,255).to(uint8), read back as /255)."""
@@ -108,10 +174,28 @@ def main():
 
     # --- 4.1 rendering metrics (per view, metrics.py conventions) ---
     view_names, psnrs, ssims, lpipss = [], [], [], []
+    ecr_view_infos = []
     with torch.no_grad():
         for cam in test_cams:
             pkg = ctx.render_view(cam)
-            render = quantize_like_png(pkg["render"]).unsqueeze(0)[:, :3]
+            out_img = quantize_like_png(pkg["render"])
+            if ecr is not None:
+                # transport inputs: 8-bit-quantized base render (parity with
+                # the archived PNG path) + median surf_depth; the camera's
+                # image tensor never crosses into the transport.
+                adapted, info = ecr.adapt(
+                    str(cam.image_name), pose_primitives(cam),
+                    out_img, pkg["surf_depth"][0])
+                ecr_view_infos.append({
+                    "image_name": str(cam.image_name),
+                    "kwargs_hash": info["kwargs_hash"],
+                    "transport_seconds": info["transport_seconds"],
+                    "covered_fraction": info.get("covered_fraction"),
+                    "mean_confidence": info.get("mean_confidence"),
+                    "support_names": info.get("support_names"),
+                })
+                out_img = quantize_like_png(adapted)
+            render = out_img.unsqueeze(0)[:, :3]
             gt = quantize_like_png(
                 cam.original_image[:3].to(render.device).clamp(0.0, 1.0)
             ).unsqueeze(0)
@@ -163,8 +247,40 @@ def main():
         "n_test_views": len(test_cams),
     }
 
+    if ecr is not None:
+        # --- 4E cost columns: transport ms/frame + end-to-end FPS ---
+        # Steady state (loader warm from the metric pass); 3 timed passes of
+        # base render + transport, median, mirroring the render_fps rule.
+        e2e_pass_seconds, transport_secs = [], []
+        with torch.no_grad():
+            for _ in range(3):
+                t0 = time.perf_counter()
+                for cam in test_cams:
+                    pkg = ctx.render_view(cam)
+                    base_q = quantize_like_png(pkg["render"])
+                    _, info = ecr.adapt(
+                        str(cam.image_name), pose_primitives(cam),
+                        base_q, pkg["surf_depth"][0])
+                    transport_secs.append(info["transport_seconds"])
+                torch.cuda.synchronize()
+                e2e_pass_seconds.append(time.perf_counter() - t0)
+        cost["transport_ms_per_frame"] = 1000.0 * statistics.median(transport_secs)
+        cost["end_to_end_fps"] = len(test_cams) / statistics.median(e2e_pass_seconds)
+        cost["e2e_pass_seconds"] = e2e_pass_seconds
+        cost.update(ecr.cache_cost())
+        cost["total_artifact_mb"] = disk_mb + max(cost["cache_mb_raw"], 0.0)
+        print(f"[run_eval] ecr: transport {cost['transport_ms_per_frame']:.1f} "
+              f"ms/frame, end-to-end {cost['end_to_end_fps']:.2f} fps, cache "
+              f"{cost['cache_mb_raw']:.1f} MB raw / "
+              f"{cost['cache_mb_compressed']:.1f} MB compressed")
+
     # --- 4.3 geometry metrics (lazy: module may not have landed yet) ---
-    if args.skip_geometry:
+    if ecr is not None:
+        geometry = {"skipped": "renderer=ecr: transport alters only rendered "
+                               "RGB; g-metrics are unchanged by construction "
+                               "(PROTOCOL 1.2.0 §4E) — see the checkpoint's "
+                               "base rows"}
+    elif args.skip_geometry:
         geometry = {"skipped": "--skip-geometry"}
     else:
         try:
@@ -175,7 +291,12 @@ def main():
             geometry = compute_geometry_metrics(ctx)
 
     # --- 4.4 downstream proxy (lazy, needs GT surface + frozen ROI) ---
-    if args.skip_downstream:
+    if ecr is not None:
+        downstream = {"skipped": "renderer=ecr: transport alters only rendered "
+                                 "RGB; d-metrics are unchanged by construction "
+                                 "(PROTOCOL 1.2.0 §4E) — see the checkpoint's "
+                                 "base rows"}
+    elif args.skip_downstream:
         downstream = {"skipped": "--skip-downstream"}
     elif spec.roi is None:
         downstream = {"skipped": "no ROI frozen in scenes.py for this scene"}
@@ -255,8 +376,44 @@ def main():
     panel_paths = write_panels(ctx, args.out, n_views=6,
                                floater_tri_ids=floater_tri_ids)
 
+    ecr_block = None
+    if ecr is not None:
+        reads = ecr.read_log()
+        cache_root = os.path.realpath(args.ecr_cache)
+        manifest_files = {
+            os.path.realpath(os.path.join(cache_root, rel))
+            for rel in ecr.manifest["sizes"]["files"]
+        }
+        reads_report = {
+            "cache_root": cache_root,
+            "n_reads": len(reads),
+            "n_manifest_files": len(manifest_files),
+            "all_reads_in_manifest": all(r in manifest_files for r in reads),
+            "reads_outside_manifest": sorted(
+                r for r in reads if r not in manifest_files),
+            "reads": reads,
+        }
+        reads_path = os.path.join(args.out, "ecr_transport_reads.json")
+        with open(reads_path, "w") as f:
+            json.dump(reads_report, f, indent=1)
+        kwargs_hashes = {v["kwargs_hash"] for v in ecr_view_infos}
+        ecr_block = {
+            "cache_dir": cache_root,
+            "manifest_sha256": ecr.manifest_sha256,
+            "config_hash": ecr.config_hash,
+            "alpha": float(ecr.manifest["alpha"]["alpha"]),
+            "alpha_source": ecr.manifest["alpha"].get("source"),
+            "n_train_views": int(ecr.manifest["n_train_views"]),
+            "per_view": ecr_view_infos,
+            "per_view_kwargs_identical": len(kwargs_hashes) == 1
+                and next(iter(kwargs_hashes)) == ecr.config_hash,
+            "transport_reads_json": reads_path,
+            "all_reads_in_manifest": reads_report["all_reads_in_manifest"],
+        }
+
     metrics = {
         "protocol_version": PROTOCOL_VERSION,
+        "renderer": args.renderer,
         "scene": spec.name,
         "checkpoint": ckpt,
         "git_commit": git_commit(),
@@ -273,6 +430,7 @@ def main():
             "mean": {"psnr": mean_psnr, "ssim": mean_ssim, "lpips": mean_lpips},
         },
         "cost": cost,
+        "ecr": ecr_block,
         "geometry": geometry,
         "downstream": downstream,
         "panels": [os.path.relpath(p, args.out) for p in panel_paths],

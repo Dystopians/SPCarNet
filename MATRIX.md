@@ -37,3 +37,20 @@ Methods: B0 clean · B1 no-op · B2 random+FT(safe) · B3 QEM+FT · B4 evidence 
 | R3.c planner loop v0 | T1 | Hybrid-A*-lite, 100 paired problems × 12 cells | **DONE** | B50 preservation exact (CI[0,0]); raw grids unconsumable (route-i 93–100% spurious infeasible; route-ii 10.7 coll/100 courtyard) → elevates R3.b |
 | R3.b certified sub-mesh | T2-elevated | k×m calibration + frozen application, 5 cells | **DONE-FAIL (falsified 0/4; citable)** | sheds load-bearing surface (courtyard 16.7 coll/100); kept-sets EXACTLY identical clean↔B50; pre-Stage3 route family falsified and folded into the final IMPOSSIBILITY x4 closure |
 | R3-FINAL three-state occupancy | Stage3 closure | train-evidence-only visibility carving, calibrate once on toy, apply to courtyard | **DONE-FAIL / IMPOSSIBILITY x4** | V1 selected theta_free=-0.5, theta_occ=1, v_min=1, r_inf=1; toy/courtyard clean+B50 all 0/100 found. No V2/V3 because not near-miss. Evidence: `RESULTS/CONSUMPTION_IMPOSSIBILITY.md`, `T5b_r3_trilogy.md` |
+
+## ECR (Stage 4, `docs/GEMS_Stage4_ECR_Prompt.md`; goals GOAL #E-xx; claims in CLAIMS_ECR.md)
+
+Bases: PRIMARY anchor clean-fixed@30k (primary rows) · B5@B50 compact (secondary / L6). Suites: full9 S-REND · 4 SS3DM towns · toy_parking. Promotion floor (§1, raised): full9 mean ΔPSNR ≥ +0.10 dB OR ΔLPIPS ≥ 0.004 vs current incumbent, CI excl. 0.
+
+| cell | tier | scope | status | notes |
+|---|---|---|---|---|
+| E-00 mouth extension | T1-blocking | `run_eval.py --renderer ecr` + `audit_test_path.py --ecr` + PROTOCOL 1.2.0 + one-scene self-test | **DONE-PASS** (garden self-test +1.260 dB CI[+1.071,+1.444] vs primary, ΔLPIPS −0.0669; --ecr audit GREEN; Stage-2 audit still GREEN) | tools/ecr/{build_cache,renderer}.py; frozen transport = production Phase-J ADAPTER_CONFIG; alpha = train-only LOO per scene at cache build; LEDGER #E-00 |
+| M-E0 floor (PJ-2026) | T1 | both bases × (full9 + 4 towns + toy_parking); quality vs 3 references + honest cost row | **RUNNING** (chains e0_chain_primary GPU4 / e0_chain_b50 GPU1) | AT-E0: PJ-2026 ≥ +1.0 dB over PRIMARY anchor on full9 mean, CI excl. 0; else STOP ladder + escalate |
+| L1 base composition | T1 ladder | PJ on ONE full-budget E3-style distilled base | TODO | predict +0.05..+0.15 over E0 |
+| L2 K-source occlusion-aware aggregation | T1 ladder | K ∈ {2,4,8} chosen ONCE train-side; soft z-test; Laplacian blending | TODO | predict +0.15..+0.40 |
+| L3 learned per-pixel fusion | T1 ladder | per-scene U-Net on train leave-k-out; frozen at test | TODO | predict +0.20..+0.50 over L2; ≤2 mechanisms |
+| L4 residual-vs-RGB routing | T1 ladder | folded into L3 head | TODO | |
+| L5 cache Pareto + matched-TOTAL-storage 3DGS rerun | T1 | JPEG 3-point sweep, res halving, K-subset; R1 rerun at matched TOTAL MB | TODO | report whatever it says |
+| L6 compact variant (T2) | T2 | full incumbent stack on B5@B50 | TODO | "half the triangles AND above Phase-J" row |
+| External cells | T1/T2 | Difix3D+-style single-step fixer (2-day cell, else INFEASIBLE+log) · 3DGS matched-TOTAL (L5) · optional classical ULR point | TODO | |
+| DS-1 dense-carve retry (§6, human-deletable) | T2 | stride 16→2, UNKNOWN=high-cost traversable; PASS = frozen fix-target | TODO (does NOT gate mainline) | one variant, hard kill |
