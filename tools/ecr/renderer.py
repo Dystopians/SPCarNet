@@ -243,11 +243,11 @@ class EcrRenderer:
         self._adapt_kwargs = {
             key: transport[key] for key in keys if key in transport
         }
-        if self.fuse != "learned":
+        if self._fusion_net is None:
             # alpha in the manifest is the train-only calibrated scalar (for
             # the L2 transport, k is likewise the calibrated value, frozen
-            # into transport["k"] at cache build). The learned fuse has no
-            # global alpha — the frozen net IS the alpha map.
+            # into transport["k"] at cache build). The learned/routed fuses
+            # have no global alpha — the frozen net IS the alpha map.
             self._adapt_kwargs["alpha"] = float(self.manifest["alpha"]["alpha"])
         hash_payload = {"fuse": self.fuse, **self._adapt_kwargs}
         if self._fusion_net is not None:
