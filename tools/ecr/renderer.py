@@ -187,14 +187,17 @@ class EcrRenderer:
 
         cameras = load_camera_index(self.cache_dir / "camera_index.json")
         by_name = {cam.image_name: cam for cam in cameras}
+        ext = self.manifest.get("image_ext", {})
+        rext = str(ext.get("renders", "png"))
+        gext = str(ext.get("gt", "png"))
         self.train_frames: list[FrameRecord] = []
         for idx, name in enumerate(self.manifest["train_views"]):
             cam = by_name[name]
             self.train_frames.append(FrameRecord(
                 idx=idx,
                 name=name,
-                render_path=self.cache_dir / "renders" / f"{name}.png",
-                gt_path=self.cache_dir / "gt" / f"{name}.png",
+                render_path=self.cache_dir / "renders" / f"{name}.{rext}",
+                gt_path=self.cache_dir / "gt" / f"{name}.{gext}",
                 depth_path=self.cache_dir / "depths" / f"{name}.npy",
                 camera=cam,
             ))

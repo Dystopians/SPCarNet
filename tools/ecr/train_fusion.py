@@ -70,10 +70,13 @@ def main() -> int:
     inner_fuse = str(transport.get("fuse", "single"))
     device = torch.device("cuda")
 
+    ext = manifest.get("image_ext", {})
+    rext = str(ext.get("renders", "png"))
+    gext = str(ext.get("gt", "png"))
     cameras = {c.image_name: c for c in load_camera_index(cache / "camera_index.json")}
     frames = [FrameRecord(idx=i, name=n,
-                          render_path=cache / "renders" / f"{n}.png",
-                          gt_path=cache / "gt" / f"{n}.png",
+                          render_path=cache / "renders" / f"{n}.{rext}",
+                          gt_path=cache / "gt" / f"{n}.{gext}",
                           depth_path=cache / "depths" / f"{n}.npy",
                           camera=cameras[n])
               for i, n in enumerate(manifest["train_views"])]
