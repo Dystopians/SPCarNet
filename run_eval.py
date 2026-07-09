@@ -58,6 +58,10 @@ def parse_args():
     parser.add_argument("--ecr-cache", default=None,
                         help="evidence cache dir from tools/ecr/build_cache.py "
                              "(required with --renderer ecr)")
+    parser.add_argument("--save-renders", action="store_true",
+                        help="additionally write the metric-path output image "
+                             "per test view to <out>/renders/ (8-bit PNG; "
+                             "output artifact only — metric code unchanged)")
     return parser.parse_args()
 
 
@@ -195,6 +199,12 @@ def main():
                     "support_names": info.get("support_names"),
                 })
                 out_img = quantize_like_png(adapted)
+            if args.save_renders:
+                import torchvision
+                rdir = os.path.join(args.out, "renders")
+                os.makedirs(rdir, exist_ok=True)
+                torchvision.utils.save_image(
+                    out_img[:3], os.path.join(rdir, f"{cam.image_name}.png"))
             render = out_img.unsqueeze(0)[:, :3]
             gt = quantize_like_png(
                 cam.original_image[:3].to(render.device).clamp(0.0, 1.0)
