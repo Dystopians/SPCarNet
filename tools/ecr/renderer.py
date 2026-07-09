@@ -211,8 +211,8 @@ class EcrRenderer:
         elif self.fuse == "single":
             self._adapt_fn = adapt_frame
             keys = _ADAPT_KWARG_KEYS
-        elif self.fuse == "learned":
-            # L3: frozen per-scene fusion net (trained train-only by
+        elif self.fuse in ("learned", "routed"):
+            # L3/L4: frozen per-scene fusion net (trained train-only by
             # tools/ecr/train_fusion.py; sha pinned in the manifest).
             from tools.ecr.fusion import FusionNet
             net_path = self.cache_dir / str(transport["fusion_net"])
@@ -221,7 +221,11 @@ class EcrRenderer:
                 raise RuntimeError(
                     f"fusion net sha mismatch: {net_sha} != manifest "
                     f"{transport.get('fusion_net_sha256')}")
-            net = FusionNet().to(self.device)
+            if self.fuse == "routed":
+                net = FusionNet(cin=12, out_channels=2,
+                                head_bias=(1.0, -4.0)).to(self.device)
+            else:
+                net = FusionNet().to(self.device)
             net.load_state_dict(torch.load(net_path, map_location=self.device,
                                            weights_only=True))
             net.eval()
@@ -297,14 +301,26 @@ class EcrRenderer:
             t0 = time.perf_counter()
             if self._fusion_net is not None:
                 from tools.ecr.fusion import (apply_fusion,
+                                              apply_routed_fusion,
                                               compute_transport_features)
                 with torch.no_grad():
                     feat_kwargs = dict(kwargs)
                     feat_kwargs["fuse"] = feat_kwargs.pop("inner_fuse", "single")
                     feats = compute_transport_features(
                         target, self.train_frames, loader=self.loader,
-                        device=self.device, **feat_kwargs)
-                    adapted, alpha_map = apply_fusion(self._fusion_net, feats)
+                        device=self.device,
+                        with_color=(self.fuse == "routed"), **feat_kwargs)
+                    if self.fuse == "routed":
+                        adapted, maps = apply_routed_fusion(
+                            self._fusion_net, feats,
+                            min_confidence=float(
+                                kwargs.get("min_confidence", 1e-4)))
+                        alpha_map = maps[0:1]
+                        beta_map = maps[1:2]
+                    else:
+                        adapted, alpha_map = apply_fusion(
+                            self._fusion_net, feats)
+                        beta_map = None
                 valid = feats["weight_den"] > float(
                     kwargs.get("min_confidence", 1e-4))
                 info = {
@@ -316,6 +332,9 @@ class EcrRenderer:
                                               .detach().cpu().item()),
                     "alpha_mean": float(alpha_map.mean().detach().cpu().item()),
                 }
+                if beta_map is not None:
+                    info["beta_mean"] = float(beta_map.mean()
+                                              .detach().cpu().item())
             else:
                 adapted, info = self._adapt_fn(
                     target,

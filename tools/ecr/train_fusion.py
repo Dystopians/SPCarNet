@@ -43,6 +43,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--cache", required=True)
     ap.add_argument("--gpu", type=int, default=None)
+    ap.add_argument("--routed", action="store_true",
+                    help="L4: 12-ch inputs (+fused warped color) and a "
+                         "2-ch (alpha, beta) routing head; same frozen "
+                         "trainer (GOAL #E-05)")
     args = ap.parse_args()
     if args.gpu is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
@@ -54,8 +58,9 @@ def main() -> int:
     from utils.evidence_lumigraph_adapter import FrameRecord, load_camera_index
     from utils.loss_utils import ssim
     from tools.ecr.renderer import ConfinedFrameLoader
-    from tools.ecr.fusion import (FusionNet, compute_transport_features,
-                                  features_to_input)
+    from tools.ecr.fusion import (FusionNet, compose_routed,
+                                  compute_transport_features,
+                                  features_to_input, features_to_input_routed)
 
     torch.manual_seed(TRAIN_CONFIG["seed"])
     cache = Path(args.cache).resolve()
@@ -87,13 +92,15 @@ def main() -> int:
 
     # ---- stage 1: precompute LOO features for every train view (fp16) ----
     t0 = time.time()
+    stack_fn = features_to_input_routed if args.routed else features_to_input
     inputs, targets = [], []
     with torch.no_grad():
         for i, frame in enumerate(frames):
             support = [f for f in frames if f.name != frame.name]
             feats = compute_transport_features(
-                frame, support, loader=loader, device=device, **feat_kwargs)
-            inputs.append(features_to_input(feats).to(torch.float16).cpu())
+                frame, support, loader=loader, device=device,
+                with_color=bool(args.routed), **feat_kwargs)
+            inputs.append(stack_fn(feats).to(torch.float16).cpu())
             gt = loader.gt(str(frame.gt_path))
             targets.append(gt.to(torch.float16).cpu())
             if i % 25 == 0:
@@ -104,7 +111,10 @@ def main() -> int:
           f"({len(inputs)} views)")
 
     # ---- stage 2: train (random crops, fixed steps, last iterate) ----
-    net = FusionNet().to(device)
+    if args.routed:
+        net = FusionNet(cin=12, out_channels=2, head_bias=(1.0, -4.0)).to(device)
+    else:
+        net = FusionNet().to(device)
     opt = torch.optim.Adam(net.parameters(), lr=TRAIN_CONFIG["lr"],
                            weight_decay=TRAIN_CONFIG["weight_decay"])
     gen = torch.Generator().manual_seed(TRAIN_CONFIG["seed"])
@@ -126,10 +136,16 @@ def main() -> int:
             ys.append(y[:, i0:i0 + ch, j0:j0 + cw])
         x = torch.stack(xs).to(device=device, dtype=torch.float32)
         y = torch.stack(ys).to(device=device, dtype=torch.float32)
-        alpha = net(x)
+        maps = net(x)
         base = x[:, 0:3]
         signal = x[:, 3:6]
-        pred = torch.clamp(base + alpha * signal, 0.0, 1.0)
+        if args.routed:
+            color = x[:, 6:9]
+            # conf channel is weight_den/4 clamped; valid = conf plane > 0
+            valid = x[:, 9:10] > 0.0
+            pred = compose_routed(base, signal, color, valid, maps)
+        else:
+            pred = torch.clamp(base + maps * signal, 0.0, 1.0)
         l1 = torch.abs(pred - y).mean()
         dssim = 1.0 - ssim(pred, y)
         loss = l1 + float(TRAIN_CONFIG["dssim_weight"]) * dssim
@@ -150,6 +166,7 @@ def main() -> int:
     net_mb = os.path.getsize(net_path) / (1024.0 * 1024.0)
     (cache / "fusion_training.json").write_text(json.dumps({
         "config": TRAIN_CONFIG,
+        "routed": bool(args.routed),
         "inner_fuse": inner_fuse,
         "feat_kwargs": {k: v for k, v in feat_kwargs.items()},
         "n_train_views": len(frames),
@@ -160,9 +177,9 @@ def main() -> int:
         "net_mb": net_mb,
     }, indent=1) + "\n", encoding="utf-8")
 
-    # ---- stage 3: rewrite manifest (fuse=learned; sizes updated) ----
+    # ---- stage 3: rewrite manifest (fuse=learned|routed; sizes updated) ----
     transport["inner_fuse"] = inner_fuse
-    transport["fuse"] = "learned"
+    transport["fuse"] = "routed" if args.routed else "learned"
     transport["fusion_net"] = "fusion_net.pt"
     transport["fusion_net_sha256"] = net_sha
     manifest["transport"] = transport
@@ -174,7 +191,7 @@ def main() -> int:
     manifest_path.write_text(json.dumps(manifest, indent=1) + "\n",
                              encoding="utf-8")
     print(f"[train_fusion] wrote {net_path} ({net_mb:.1f} MB) + manifest "
-          f"(fuse=learned, inner={inner_fuse})")
+          f"(fuse={transport['fuse']}, inner={inner_fuse})")
     return 0
 
 

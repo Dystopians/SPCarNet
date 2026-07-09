@@ -42,11 +42,14 @@ def compute_transport_features(
     direction_weight: float,
     fuse: str = "single",
     bands: int = 4,
+    with_color: bool = False,
     loader=None,
     device: torch.device | str = "cuda",
 ) -> dict:
     """Warp + fuse WITHOUT applying: returns base, signal and the confidence
-    feature planes for one target view. Reads only through `loader`."""
+    feature planes for one target view. Reads only through `loader`.
+    with_color additionally warps + fuses the support TRAIN GT colors
+    (L4 routing input)."""
     device = torch.device(device)
     base = loader.render(str(target.render_path)).to(device)
     target_depth = loader.depth(str(target.depth_path)).to(device)
@@ -57,11 +60,12 @@ def compute_transport_features(
     world_grid = _make_target_world_grid(target.camera, target_depth,
                                          device=device)
     h, w = base.shape[-2:]
-    residuals, confidences, used = [], [], []
+    residuals, colors, confidences, used = [], [], [], []
     for frame, view_weight in support:
+        support_depth = loader.depth(str(frame.depth_path))
         warped, conf = warp_support_residual(
             target, frame, target_depth,
-            loader.depth(str(frame.depth_path)),
+            support_depth,
             loader.residual(frame, residual_clip=residual_clip),
             depth_abs_tol=float(depth_abs_tol),
             depth_rel_tol=float(depth_rel_tol),
@@ -69,14 +73,26 @@ def compute_transport_features(
         weight = conf.unsqueeze(0) * float(view_weight)
         if float(weight.mean().item()) <= 0.0:
             continue
+        if with_color:
+            warped_color, _ = warp_support_residual(
+                target, frame, target_depth,
+                support_depth,
+                loader.gt(str(frame.gt_path)),
+                depth_abs_tol=float(depth_abs_tol),
+                depth_rel_tol=float(depth_rel_tol),
+                target_world_grid=world_grid, device=device)
+            colors.append(warped_color)
         residuals.append(warped)
         confidences.append(weight)
         used.append(frame.name)
     zeros1 = torch.zeros(1, h, w, device=device)
     if not residuals:
-        return {"base": base, "signal": torch.zeros_like(base),
-                "weight_den": zeros1, "support_count": zeros1,
-                "residual_std": zeros1, "support_names": []}
+        out = {"base": base, "signal": torch.zeros_like(base),
+               "weight_den": zeros1, "support_count": zeros1,
+               "residual_std": zeros1, "support_names": []}
+        if with_color:
+            out["color"] = torch.zeros_like(base)
+        return out
     # single-band accumulators (ELA EvidenceSignal definitions)
     sig_num = torch.zeros_like(base)
     sig_sq = torch.zeros_like(base)
@@ -102,9 +118,22 @@ def compute_transport_features(
                                    min_confidence=float(min_confidence))
     else:
         signal = mean
-    return {"base": base, "signal": signal, "weight_den": weight_den,
-            "support_count": support_count, "residual_std": residual_std,
-            "support_names": used}
+    out = {"base": base, "signal": signal, "weight_den": weight_den,
+           "support_count": support_count, "residual_std": residual_std,
+           "support_names": used}
+    if with_color:
+        if fuse == "multiband":
+            color, _ = multiband_fuse(colors, confidences, bands=int(bands),
+                                      min_confidence=float(min_confidence))
+        else:
+            color_num = torch.zeros_like(base)
+            for wc, weight in zip(colors, confidences):
+                color_num = color_num + wc * weight
+            color = torch.where(valid,
+                                color_num / torch.clamp(weight_den, min=1e-8),
+                                torch.zeros_like(color_num))
+        out["color"] = torch.clamp(color, 0.0, 1.0)
+    return out
 
 
 def features_to_input(feats: dict) -> torch.Tensor:
@@ -112,6 +141,18 @@ def features_to_input(feats: dict) -> torch.Tensor:
     return torch.cat([
         feats["base"],
         feats["signal"],
+        torch.clamp(feats["weight_den"], 0.0, 4.0) / 4.0,
+        torch.clamp(feats["support_count"], 0.0, 8.0) / 8.0,
+        torch.clamp(feats["residual_std"], 0.0, 0.5) * 2.0,
+    ], dim=0)
+
+
+def features_to_input_routed(feats: dict) -> torch.Tensor:
+    """Stack the 12-channel routed net input (L4): 9-ch + fused color."""
+    return torch.cat([
+        feats["base"],
+        feats["signal"],
+        feats["color"],
         torch.clamp(feats["weight_den"], 0.0, 4.0) / 4.0,
         torch.clamp(feats["support_count"], 0.0, 8.0) / 8.0,
         torch.clamp(feats["residual_std"], 0.0, 0.5) * 2.0,
@@ -132,10 +173,16 @@ class _Block(nn.Module):
 
 
 class FusionNet(nn.Module):
-    """U-Net-S: 9 -> alpha map in [0,1]. ~0.9M params; frozen arch (L3
-    mechanism axis 1: architecture/inputs)."""
+    """U-Net-S -> per-pixel maps in [0,1]. ~0.9M params; frozen arch.
 
-    def __init__(self, cin: int = 9, base: int = 32):
+    L3 (default): cin=9, out=1 (alpha), head bias +1.0 -> alpha ~= 0.73 at
+    init (close to the PJ-2026 calibrated global alphas).
+    L4 (routed): cin=12, out=2 (alpha, beta), head bias (+1.0, -4.0) ->
+    routing starts OFF (beta ~= 0.018), i.e. training starts at L3 behavior.
+    """
+
+    def __init__(self, cin: int = 9, base: int = 32, out_channels: int = 1,
+                 head_bias: tuple = (1.0,)):
         super().__init__()
         self.enc1 = _Block(cin, base)
         self.enc2 = _Block(base, base * 2)
@@ -144,12 +191,11 @@ class FusionNet(nn.Module):
         self.dec3 = _Block(base * 4 + base * 4, base * 2)
         self.dec2 = _Block(base * 2 + base * 2, base)
         self.dec1 = _Block(base + base, base)
-        self.head = nn.Conv2d(base, 1, 3, padding=1)
+        self.head = nn.Conv2d(base, int(out_channels), 3, padding=1)
         nn.init.zeros_(self.head.weight)
-        # bias > 0 so training starts near alpha ~= 0.73 (close to the
-        # PJ-2026 calibrated global alphas) instead of destroying the
-        # transport at init.
-        nn.init.constant_(self.head.bias, 1.0)
+        with torch.no_grad():
+            for c, b in enumerate(head_bias):
+                self.head.bias[c] = float(b)
 
     def forward(self, x):
         h, w = x.shape[-2:]
@@ -180,3 +226,28 @@ def apply_fusion(net: FusionNet, feats: dict) -> tuple[torch.Tensor, torch.Tenso
     x = features_to_input(feats).unsqueeze(0)
     alpha = net(x).squeeze(0)
     return torch.clamp(feats["base"] + alpha * feats["signal"], 0.0, 1.0), alpha
+
+
+def compose_routed(base: torch.Tensor, signal: torch.Tensor,
+                   color: torch.Tensor, valid: torch.Tensor,
+                   maps: torch.Tensor) -> torch.Tensor:
+    """L4 composition: out = (1-beta·valid)·(base + alpha·signal)
+    + beta·valid·color. maps: [2,H,W] (alpha, beta) or [B,2,h,w]."""
+    if maps.dim() == 3:
+        alpha, beta = maps[0:1], maps[1:2]
+    else:
+        alpha, beta = maps[:, 0:1], maps[:, 1:2]
+    beta = beta * valid.to(maps.dtype)
+    corrected = torch.clamp(base + alpha * signal, 0.0, 1.0)
+    return torch.clamp((1.0 - beta) * corrected + beta * color, 0.0, 1.0)
+
+
+def apply_routed_fusion(net: FusionNet, feats: dict,
+                        min_confidence: float = 1e-4
+                        ) -> tuple[torch.Tensor, torch.Tensor]:
+    x = features_to_input_routed(feats).unsqueeze(0)
+    maps = net(x).squeeze(0)
+    valid = feats["weight_den"] > float(min_confidence)
+    out = compose_routed(feats["base"], feats["signal"], feats["color"],
+                         valid, maps)
+    return out, maps
