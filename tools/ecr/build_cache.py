@@ -125,6 +125,15 @@ def main() -> int:
     parser.add_argument("--alpha", type=float, default=-1.0,
                         help="fixed alpha; < 0 -> train-only LOO calibration "
                              "(production default)")
+    parser.add_argument("--fuse", choices=("single", "multiband"),
+                        default="single",
+                        help="transport fuse: 'single' = frozen PJ-2026 "
+                             "(default); 'multiband' = L2 Laplacian fusion "
+                             "with joint train-LOO (K, alpha) calibration")
+    parser.add_argument("--k-grid", default="2,4,8",
+                        help="pre-registered K grid for --fuse multiband")
+    parser.add_argument("--bands", type=int, default=4,
+                        help="Laplacian bands for --fuse multiband (frozen)")
     parser.add_argument("--skip-compress", action="store_true",
                         help="skip the compressed-size measurement")
     args = parser.parse_args()
@@ -221,7 +230,42 @@ def main() -> int:
                           depth_path=depth_dir / f"{n}.npy",
                           camera=camera_records[i])
               for i, n in enumerate(names)]
-    if args.alpha >= 0.0:
+    transport_config = dict(TRANSPORT_CONFIG)
+    if args.fuse == "multiband":
+        from tools.ecr.transport_l2 import calibrate_k_alpha
+        transport_config["fuse"] = "multiband"
+        transport_config["bands"] = int(args.bands)
+        k_grid = [int(x) for x in str(args.k_grid).split(",") if x.strip()]
+        print(f"[build_cache] L2 joint (K, alpha) train-LOO calibration, "
+              f"K grid {k_grid}...")
+        calib = calibrate_k_alpha(
+            frames,
+            k_grid=k_grid,
+            alpha_grid=ALPHA_CALIBRATION["alpha_grid"],
+            calib_stride=ALPHA_CALIBRATION["calib_stride"],
+            calib_max_views=ALPHA_CALIBRATION["calib_max_views"],
+            residual_clip=transport_config["residual_clip"],
+            depth_abs_tol=transport_config["depth_abs_tol"],
+            depth_rel_tol=transport_config["depth_rel_tol"],
+            direction_weight=transport_config["direction_weight"],
+            bands=int(args.bands),
+            min_confidence=transport_config["min_confidence"],
+            device="cuda",
+        )
+        transport_config["k"] = int(calib["k"])
+        alpha_block = {
+            "alpha": float(calib["alpha"]),
+            "k": int(calib["k"]),
+            "source": "train_loo_k_alpha",
+            "loo_psnr_gain": float(calib["psnr_gain"]),
+            "rows": calib["rows"],
+            "calibration_views": calib["calibration_views"],
+            "k_grid": calib["k_grid"],
+            "alpha_grid": calib["alpha_grid"],
+        }
+        print(f"[build_cache] calibrated K = {calib['k']}, "
+              f"alpha = {calib['alpha']} (LOO gain {calib['psnr_gain']:.3f} dB)")
+    elif args.alpha >= 0.0:
         alpha_block = {"alpha": float(args.alpha), "source": "cli_fixed"}
     else:
         print("[build_cache] calibrating alpha (train-only leave-one-out)...")
@@ -264,7 +308,7 @@ def main() -> int:
         "checkpoint": checkpoint_fingerprint(args.checkpoint),
         "train_views": names,
         "n_train_views": len(names),
-        "transport": TRANSPORT_CONFIG,
+        "transport": transport_config,
         "alpha": alpha_block,
         "sizes": {
             "cache_mb_raw": cache_mb_raw,

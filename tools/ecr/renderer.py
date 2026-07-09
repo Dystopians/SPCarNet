@@ -57,6 +57,12 @@ _ADAPT_KWARG_KEYS = (
     "evidence_max_side",
 )
 
+# L2 multi-band transport kwargs (tools/ecr/transport_l2.adapt_frame_l2).
+_L2_KWARG_KEYS = (
+    "k", "alpha", "residual_clip", "min_confidence",
+    "depth_abs_tol", "depth_rel_tol", "direction_weight", "bands",
+)
+
 
 def camera_record_from_pose(idx: int, pose: dict) -> CameraRecord:
     """CameraRecord from plain pose primitives (mirrors the construction in
@@ -189,12 +195,25 @@ class EcrRenderer:
             raise RuntimeError(f"evidence cache lists no train views: {cache_dir}")
 
         transport = dict(self.manifest["transport"])
+        self.fuse = str(transport.get("fuse", "single"))
+        if self.fuse == "multiband":
+            from tools.ecr.transport_l2 import adapt_frame_l2
+            self._adapt_fn = adapt_frame_l2
+            keys = _L2_KWARG_KEYS
+        elif self.fuse == "single":
+            self._adapt_fn = adapt_frame
+            keys = _ADAPT_KWARG_KEYS
+        else:
+            raise ValueError(f"unknown transport fuse mode: {self.fuse}")
         self._adapt_kwargs = {
-            key: transport[key] for key in _ADAPT_KWARG_KEYS if key in transport
+            key: transport[key] for key in keys if key in transport
         }
-        # alpha in the manifest is the train-only calibrated scalar.
+        # alpha in the manifest is the train-only calibrated scalar (for the
+        # L2 transport, k is likewise the train-only calibrated value, frozen
+        # into transport["k"] at cache build).
         self._adapt_kwargs["alpha"] = float(self.manifest["alpha"]["alpha"])
-        self.config_hash = self._hash_kwargs(self._adapt_kwargs)
+        self.config_hash = self._hash_kwargs(
+            {"fuse": self.fuse, **self._adapt_kwargs})
         self.loader = ConfinedFrameLoader(self.cache_dir, device=self.device)
 
     @staticmethod
@@ -234,11 +253,11 @@ class EcrRenderer:
         )
         self.loader.register_target(name, base_render, base_depth)
         kwargs = dict(self._adapt_kwargs)
-        call_hash = self._hash_kwargs(kwargs)
+        call_hash = self._hash_kwargs({"fuse": self.fuse, **kwargs})
         try:
             torch.cuda.synchronize()
             t0 = time.perf_counter()
-            adapted, info = adapt_frame(
+            adapted, info = self._adapt_fn(
                 target,
                 self.train_frames,
                 loader=self.loader,
