@@ -129,15 +129,27 @@ Pointers: `CLAIMS_ECR.md`, `LEDGER.md` GOALs #E-00..#E-04,
 
 Answered by measured rows, not prose: the R1 context row already banked 3DGS
 at matched artifact storage (2.1–3.4 dB above the GEMS base at 3–4x FPS,
-reported plainly); Stage-4 §4 adds (a) 3DGS at matched TOTAL storage
-(checkpoint + evidence cache) and (b) a bounded Difix3D+-style single-step
-enhancer cell (or an INFEASIBLE filing with the attempt log). The mesh
-artifact, geometry/downstream measurement suite, and preservation-exactness
-story have no 3DGS-family equivalent; rendering-quality comparisons name
-their references explicitly.
+reported plainly); Stage-4 §4 adds both cells, MEASURED (2026-07-10):
+(a) 3DGS at matched TOTAL storage (GOAL #E-07): vanilla 3DGS-30k sits under
+the ECR TOTAL budget on all 3 scenes (uses 11–55% of it) and stays ahead
++0.32..+1.53 dB — but the Stage-2 gap (2.1–3.4 dB) is mostly closed by the
+ECR stack (kitchen +0.32 dB at near-parity LPIPS). (b) The enhancer route
+itself (GOAL #E-09): Difix3D+ (nvidia/difix_ref, single-step, given the SAME
+train-view evidence rights — nearest support train GT as reference) applied
+to our base renders is PSNR-NEGATIVE on all 3 scenes (−0.89..−1.54 dB, CIs
+excl. 0) with LPIPS gains (−0.030 on 2 scenes, WORSE on garden) that fall
+well short of the transport's; the ECR final stack exceeds the
+Difix-enhanced base on BOTH metrics on all 3 scenes. So "base + generative
+enhancer" is not a shortcut to this deliverable: evidence transport
+dominates enhancement on the same artifact. The mesh artifact,
+geometry/downstream measurement suite, and preservation-exactness story
+have no 3DGS-family equivalent; rendering-quality comparisons name their
+references explicitly.
 
-Pointers: `analysis/r1_3dgs_reference/r1_table.md`, MATRIX `ECR` section
-(L5 + external cells).
+Pointers: `analysis/r1_3dgs_reference/r1_table.md`,
+`analysis/final_stack/e07_matched_total_3dgs.md`,
+`analysis/difix_cell/difix_table.md`, MATRIX `ECR` section (L5 + external
+cells).
 
 ## A12. "Per-scene learned fusion doesn't generalize."
 

@@ -91,9 +91,15 @@ def main():
             "COVERAGE GAP: 47% covered (frame edges + near ground "
             "unsupported); transport corrects the covered remainder for "
             "+0.66 dB.",
+        ("kitchen", "DSCF0760"):
+            "Lowest-coverage kitchen view is 94% covered and gains "
+            "+4.52 dB — no failure mode in this indoor ring scene.",
+        ("kitchen", "DSCF0728"):
+            "Scene-worst transport delta is +0.69 dB (strongly positive); "
+            "the view where the base render is already best (29.1 dB).",
         ("treehill", "_DSC8946"):
             "OCCLUSION SEAM — the ONLY transport-negative view in all "
-            "104 dumped full9 views (−0.06 dB): a close-up of the tree "
+            "dumped full9 views (−0.06 dB): a close-up of the tree "
             "trunk with strong parallax; the trunk boundary shows a "
             "zero-confidence occlusion seam (conf.png: dark crack right of "
             "the trunk) and the bench/near-ground is largely unsupported, "
@@ -112,12 +118,16 @@ def main():
                 (report[scene]["coverage_gap"],
                  report[scene]["transport_worst"])):
             md.append(f"- **{scene} / {view}** — {text}")
-    md += ["", "**Headline:** across all dumped full9 views, the routed "
-           "transport is PSNR-positive on every view but one (−0.06 dB, "
-           "occlusion-seam case above); coverage gaps degrade gracefully "
-           "to the base render via the certified-confidence gate instead "
-           "of hallucinating — the per-pixel evidence-gating mechanism "
-           "(CR4) is what makes the worst case boring."]
+    total = sum(e["n_views"] for e in report.values())
+    n_neg = sum(len(e["transport_negative_views"]) for e in report.values())
+    md += ["", f"**Headline:** across all {total} dumped full9 test views, "
+           f"the routed transport is PSNR-positive on every view but "
+           f"{n_neg} (−0.06 dB, occlusion-seam case above); coverage gaps "
+           "degrade gracefully to the base render via the STRUCTURAL "
+           "compose gate (β·valid — see GOAL #E-08: the certification "
+           "lives in the valid mask, not the net's confidence inputs) "
+           "instead of hallucinating — that is what makes the worst case "
+           "boring."]
     with open(os.path.join(out_dir, "ecr_failure_cases.md"), "w") as fh:
         fh.write("\n".join(md) + "\n")
     with open(os.path.join(out_dir, "ecr_failure_cases.json"), "w") as fh:

@@ -1,0 +1,3510 @@
+{
+  "generated_by": "/data/peilincai/mesh-splatting/tools/analysis/ecr_qual_grids.py",
+  "scenes": {
+    "bicycle": {
+      "crop_windows": {
+        "best": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "half_frame_minimize_error_stride32",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8856/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8856/gt.png",
+          "image_name": "_DSC8856",
+          "mean_error_in_selected_window_raw_0_255": 4.404916082016394,
+          "stride_px": 32,
+          "window_xyxy": [
+            416,
+            0,
+            1034,
+            411
+          ]
+        },
+        "failure": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "half_frame_maximize_error_stride32",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8784/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8784/gt.png",
+          "image_name": "_DSC8784",
+          "mean_error_in_selected_window_raw_0_255": 13.240007918369436,
+          "stride_px": 32,
+          "window_xyxy": [
+            160,
+            411,
+            778,
+            822
+          ]
+        },
+        "median": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "full_frame_no_crop",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8752/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8752/gt.png",
+          "image_name": "_DSC8752",
+          "mean_error_in_selected_window_raw_0_255": 10.422971725463867,
+          "stride_px": null,
+          "window_xyxy": [
+            0,
+            0,
+            1237,
+            822
+          ]
+        }
+      },
+      "grid_png": "/data/peilincai/mesh-splatting/RESULTS/figures/ecr_qual/bicycle_ecr_qual_grid.png",
+      "omitted_cells": [],
+      "output_dir": "/data/peilincai/mesh-splatting/RESULTS/figures/ecr_qual",
+      "placed_images": [
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            416,
+            0,
+            1034,
+            411
+          ],
+          "image_name": "_DSC8856",
+          "row": "GT",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8856/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            292
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1237,
+            822
+          ],
+          "image_name": "_DSC8752",
+          "row": "GT",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8752/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            160,
+            411,
+            778,
+            822
+          ],
+          "image_name": "_DSC8784",
+          "row": "GT",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8784/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            416,
+            0,
+            1034,
+            411
+          ],
+          "image_name": "_DSC8856",
+          "row": "base",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8856/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            292
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1237,
+            822
+          ],
+          "image_name": "_DSC8752",
+          "row": "base",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8752/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            160,
+            411,
+            778,
+            822
+          ],
+          "image_name": "_DSC8784",
+          "row": "base",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8784/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            416,
+            0,
+            1034,
+            411
+          ],
+          "image_name": "_DSC8856",
+          "row": "PJ-2026",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_pj2026/_DSC8856/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            292
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1237,
+            822
+          ],
+          "image_name": "_DSC8752",
+          "row": "PJ-2026",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_pj2026/_DSC8752/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            160,
+            411,
+            778,
+            822
+          ],
+          "image_name": "_DSC8784",
+          "row": "PJ-2026",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_pj2026/_DSC8784/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            416,
+            0,
+            1034,
+            411
+          ],
+          "image_name": "_DSC8856",
+          "row": "ECR final",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8856/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            292
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1237,
+            822
+          ],
+          "image_name": "_DSC8752",
+          "row": "ECR final",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8752/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            160,
+            411,
+            778,
+            822
+          ],
+          "image_name": "_DSC8784",
+          "row": "ECR final",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8784/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            416,
+            0,
+            1034,
+            411
+          ],
+          "image_name": "_DSC8856",
+          "row": "beta.png",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8856/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            292
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1237,
+            822
+          ],
+          "image_name": "_DSC8752",
+          "row": "beta.png",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8752/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            160,
+            411,
+            778,
+            822
+          ],
+          "image_name": "_DSC8784",
+          "row": "beta.png",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8784/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            416,
+            0,
+            1034,
+            411
+          ],
+          "image_name": "_DSC8856",
+          "row": "conf.png",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8856/conf.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            292
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1237,
+            822
+          ],
+          "image_name": "_DSC8752",
+          "row": "conf.png",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8752/conf.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            160,
+            411,
+            778,
+            822
+          ],
+          "image_name": "_DSC8784",
+          "row": "conf.png",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_final/_DSC8784/conf.png"
+        }
+      ],
+      "rows": {
+        "ECR final": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "bicycle_final/*/final.png"
+        },
+        "GT": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "bicycle_final/*/gt.png"
+        },
+        "PJ-2026": {
+          "cells": [
+            {
+              "image_name": "_DSC8856",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_pj2026/_DSC8856/final.png",
+              "rule": "best"
+            },
+            {
+              "image_name": "_DSC8752",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_pj2026/_DSC8752/final.png",
+              "rule": "median"
+            },
+            {
+              "image_name": "_DSC8784",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/bicycle_pj2026/_DSC8784/final.png",
+              "rule": "failure"
+            }
+          ],
+          "included": true,
+          "omitted_reason": null
+        },
+        "base": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "bicycle_final/*/base.png"
+        },
+        "beta.png": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "bicycle_final/*/beta.png"
+        },
+        "conf.png": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "bicycle_final/*/conf.png"
+        }
+      },
+      "scene": "bicycle",
+      "selected_views": {
+        "best": {
+          "base_psnr": 26.168184280395508,
+          "delta_psnr": 0.8984279632568359,
+          "expression": "image_names[argmax(final_row_psnr)]",
+          "final_psnr": 27.066612243652344,
+          "image_name": "_DSC8856",
+          "index": 22,
+          "rule": "best"
+        },
+        "failure": {
+          "base_psnr": 25.01073455810547,
+          "delta_psnr": 0.12766456604003906,
+          "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+          "final_psnr": 25.138399124145508,
+          "image_name": "_DSC8784",
+          "index": 13,
+          "rule": "failure"
+        },
+        "median": {
+          "base_psnr": 23.908823013305664,
+          "delta_psnr": 0.3686199188232422,
+          "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+          "final_psnr": 24.277442932128906,
+          "image_name": "_DSC8752",
+          "index": 9,
+          "rule": "median"
+        }
+      },
+      "skip_reason": null,
+      "stage_root": "/data/peilincai/gems_stage1",
+      "status": "produced",
+      "view_selection_inputs": {
+        "base_metrics_json": "/data/peilincai/gems_stage1/eval/bicycle_cleanfixed30k_v1/metrics.json",
+        "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_bicycle_cleanfixed30k_routed_v1/metrics.json",
+        "per_view_values": [
+          {
+            "base_psnr": 19.764558792114258,
+            "delta_psnr": 0.4554882049560547,
+            "final_psnr": 20.220046997070312,
+            "image_name": "_DSC8679",
+            "index": 0
+          },
+          {
+            "base_psnr": 17.068138122558594,
+            "delta_psnr": 0.3169593811035156,
+            "final_psnr": 17.38509750366211,
+            "image_name": "_DSC8687",
+            "index": 1
+          },
+          {
+            "base_psnr": 18.012977600097656,
+            "delta_psnr": 0.4740867614746094,
+            "final_psnr": 18.487064361572266,
+            "image_name": "_DSC8695",
+            "index": 2
+          },
+          {
+            "base_psnr": 19.124483108520508,
+            "delta_psnr": 0.3615226745605469,
+            "final_psnr": 19.486005783081055,
+            "image_name": "_DSC8703",
+            "index": 3
+          },
+          {
+            "base_psnr": 19.712120056152344,
+            "delta_psnr": 0.5515174865722656,
+            "final_psnr": 20.26363754272461,
+            "image_name": "_DSC8711",
+            "index": 4
+          },
+          {
+            "base_psnr": 21.68212127685547,
+            "delta_psnr": 0.4372825622558594,
+            "final_psnr": 22.119403839111328,
+            "image_name": "_DSC8719",
+            "index": 5
+          },
+          {
+            "base_psnr": 23.362913131713867,
+            "delta_psnr": 0.2622852325439453,
+            "final_psnr": 23.625198364257812,
+            "image_name": "_DSC8727",
+            "index": 6
+          },
+          {
+            "base_psnr": 23.620040893554688,
+            "delta_psnr": 0.5012092590332031,
+            "final_psnr": 24.12125015258789,
+            "image_name": "_DSC8735",
+            "index": 7
+          },
+          {
+            "base_psnr": 22.89846420288086,
+            "delta_psnr": 0.2860546112060547,
+            "final_psnr": 23.184518814086914,
+            "image_name": "_DSC8744",
+            "index": 8
+          },
+          {
+            "base_psnr": 23.908823013305664,
+            "delta_psnr": 0.3686199188232422,
+            "final_psnr": 24.277442932128906,
+            "image_name": "_DSC8752",
+            "index": 9
+          },
+          {
+            "base_psnr": 22.531566619873047,
+            "delta_psnr": 0.33550262451171875,
+            "final_psnr": 22.867069244384766,
+            "image_name": "_DSC8760",
+            "index": 10
+          },
+          {
+            "base_psnr": 22.561206817626953,
+            "delta_psnr": 0.6573696136474609,
+            "final_psnr": 23.218576431274414,
+            "image_name": "_DSC8768",
+            "index": 11
+          },
+          {
+            "base_psnr": 24.351234436035156,
+            "delta_psnr": 0.611328125,
+            "final_psnr": 24.962562561035156,
+            "image_name": "_DSC8776",
+            "index": 12
+          },
+          {
+            "base_psnr": 25.01073455810547,
+            "delta_psnr": 0.12766456604003906,
+            "final_psnr": 25.138399124145508,
+            "image_name": "_DSC8784",
+            "index": 13
+          },
+          {
+            "base_psnr": 24.824953079223633,
+            "delta_psnr": 0.5619125366210938,
+            "final_psnr": 25.386865615844727,
+            "image_name": "_DSC8792",
+            "index": 14
+          },
+          {
+            "base_psnr": 24.89333724975586,
+            "delta_psnr": 1.2066478729248047,
+            "final_psnr": 26.099985122680664,
+            "image_name": "_DSC8800",
+            "index": 15
+          },
+          {
+            "base_psnr": 24.544841766357422,
+            "delta_psnr": 0.44420814514160156,
+            "final_psnr": 24.989049911499023,
+            "image_name": "_DSC8808",
+            "index": 16
+          },
+          {
+            "base_psnr": 24.77898597717285,
+            "delta_psnr": 0.7178478240966797,
+            "final_psnr": 25.49683380126953,
+            "image_name": "_DSC8816",
+            "index": 17
+          },
+          {
+            "base_psnr": 26.127405166625977,
+            "delta_psnr": 0.6531219482421875,
+            "final_psnr": 26.780527114868164,
+            "image_name": "_DSC8824",
+            "index": 18
+          },
+          {
+            "base_psnr": 25.819232940673828,
+            "delta_psnr": 1.1201038360595703,
+            "final_psnr": 26.9393367767334,
+            "image_name": "_DSC8832",
+            "index": 19
+          },
+          {
+            "base_psnr": 25.161867141723633,
+            "delta_psnr": 0.4520702362060547,
+            "final_psnr": 25.613937377929688,
+            "image_name": "_DSC8840",
+            "index": 20
+          },
+          {
+            "base_psnr": 25.110515594482422,
+            "delta_psnr": 0.83367919921875,
+            "final_psnr": 25.944194793701172,
+            "image_name": "_DSC8848",
+            "index": 21
+          },
+          {
+            "base_psnr": 26.168184280395508,
+            "delta_psnr": 0.8984279632568359,
+            "final_psnr": 27.066612243652344,
+            "image_name": "_DSC8856",
+            "index": 22
+          },
+          {
+            "base_psnr": 22.972915649414062,
+            "delta_psnr": 0.42113494873046875,
+            "final_psnr": 23.39405059814453,
+            "image_name": "_DSC8864",
+            "index": 23
+          },
+          {
+            "base_psnr": 25.02140998840332,
+            "delta_psnr": 0.7427883148193359,
+            "final_psnr": 25.764198303222656,
+            "image_name": "_DSC8872",
+            "index": 24
+          }
+        ]
+      },
+      "view_selection_invocations": [
+        {
+          "expression": "image_names[argmax(final_row_psnr)]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/bicycle_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_bicycle_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 25
+          },
+          "rule": "best",
+          "selected": {
+            "base_psnr": 26.168184280395508,
+            "delta_psnr": 0.8984279632568359,
+            "expression": "image_names[argmax(final_row_psnr)]",
+            "final_psnr": 27.066612243652344,
+            "image_name": "_DSC8856",
+            "index": 22,
+            "rule": "best"
+          }
+        },
+        {
+          "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/bicycle_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_bicycle_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 25
+          },
+          "rule": "median",
+          "selected": {
+            "base_psnr": 23.908823013305664,
+            "delta_psnr": 0.3686199188232422,
+            "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+            "final_psnr": 24.277442932128906,
+            "image_name": "_DSC8752",
+            "index": 9,
+            "rule": "median"
+          }
+        },
+        {
+          "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/bicycle_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_bicycle_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 25
+          },
+          "rule": "failure",
+          "selected": {
+            "base_psnr": 25.01073455810547,
+            "delta_psnr": 0.12766456604003906,
+            "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+            "final_psnr": 25.138399124145508,
+            "image_name": "_DSC8784",
+            "index": 13,
+            "rule": "failure"
+          }
+        }
+      ]
+    },
+    "bonsai": {
+      "crop_windows": {
+        "best": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "half_frame_minimize_error_stride32",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5829/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5829/gt.png",
+          "image_name": "DSCF5829",
+          "mean_error_in_selected_window_raw_0_255": 1.958769502796184,
+          "stride_px": 32,
+          "window_xyxy": [
+            0,
+            192,
+            779,
+            711
+          ]
+        },
+        "failure": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "half_frame_maximize_error_stride32",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5789/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5789/gt.png",
+          "image_name": "DSCF5789",
+          "mean_error_in_selected_window_raw_0_255": 5.508219123870582,
+          "stride_px": 32,
+          "window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ]
+        },
+        "median": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "full_frame_no_crop",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5629/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5629/gt.png",
+          "image_name": "DSCF5629",
+          "mean_error_in_selected_window_raw_0_255": 2.639572858810425,
+          "stride_px": null,
+          "window_xyxy": [
+            0,
+            0,
+            1559,
+            1039
+          ]
+        }
+      },
+      "grid_png": "/data/peilincai/mesh-splatting/RESULTS/figures/ecr_qual/bonsai_ecr_qual_grid.png",
+      "omitted_cells": [],
+      "output_dir": "/data/peilincai/mesh-splatting/RESULTS/figures/ecr_qual",
+      "placed_images": [
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            192,
+            779,
+            711
+          ],
+          "image_name": "DSCF5829",
+          "row": "GT",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5829/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1559,
+            1039
+          ],
+          "image_name": "DSCF5629",
+          "row": "GT",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5629/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ],
+          "image_name": "DSCF5789",
+          "row": "GT",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5789/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            192,
+            779,
+            711
+          ],
+          "image_name": "DSCF5829",
+          "row": "base",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5829/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1559,
+            1039
+          ],
+          "image_name": "DSCF5629",
+          "row": "base",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5629/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ],
+          "image_name": "DSCF5789",
+          "row": "base",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5789/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            192,
+            779,
+            711
+          ],
+          "image_name": "DSCF5829",
+          "row": "PJ-2026",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_pj2026/DSCF5829/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1559,
+            1039
+          ],
+          "image_name": "DSCF5629",
+          "row": "PJ-2026",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_pj2026/DSCF5629/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ],
+          "image_name": "DSCF5789",
+          "row": "PJ-2026",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_pj2026/DSCF5789/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            192,
+            779,
+            711
+          ],
+          "image_name": "DSCF5829",
+          "row": "ECR final",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5829/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1559,
+            1039
+          ],
+          "image_name": "DSCF5629",
+          "row": "ECR final",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5629/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ],
+          "image_name": "DSCF5789",
+          "row": "ECR final",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5789/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            192,
+            779,
+            711
+          ],
+          "image_name": "DSCF5829",
+          "row": "beta.png",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5829/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1559,
+            1039
+          ],
+          "image_name": "DSCF5629",
+          "row": "beta.png",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5629/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ],
+          "image_name": "DSCF5789",
+          "row": "beta.png",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5789/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            192,
+            779,
+            711
+          ],
+          "image_name": "DSCF5829",
+          "row": "conf.png",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5829/conf.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1559,
+            1039
+          ],
+          "image_name": "DSCF5629",
+          "row": "conf.png",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5629/conf.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ],
+          "image_name": "DSCF5789",
+          "row": "conf.png",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_final/DSCF5789/conf.png"
+        }
+      ],
+      "rows": {
+        "ECR final": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "bonsai_final/*/final.png"
+        },
+        "GT": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "bonsai_final/*/gt.png"
+        },
+        "PJ-2026": {
+          "cells": [
+            {
+              "image_name": "DSCF5829",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_pj2026/DSCF5829/final.png",
+              "rule": "best"
+            },
+            {
+              "image_name": "DSCF5629",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_pj2026/DSCF5629/final.png",
+              "rule": "median"
+            },
+            {
+              "image_name": "DSCF5789",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/bonsai_pj2026/DSCF5789/final.png",
+              "rule": "failure"
+            }
+          ],
+          "included": true,
+          "omitted_reason": null
+        },
+        "base": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "bonsai_final/*/base.png"
+        },
+        "beta.png": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "bonsai_final/*/beta.png"
+        },
+        "conf.png": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "bonsai_final/*/conf.png"
+        }
+      },
+      "scene": "bonsai",
+      "selected_views": {
+        "best": {
+          "base_psnr": 32.17989730834961,
+          "delta_psnr": 4.156002044677734,
+          "expression": "image_names[argmax(final_row_psnr)]",
+          "final_psnr": 36.335899353027344,
+          "image_name": "DSCF5829",
+          "index": 33,
+          "rule": "best"
+        },
+        "failure": {
+          "base_psnr": 24.718168258666992,
+          "delta_psnr": 0.8502559661865234,
+          "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+          "final_psnr": 25.568424224853516,
+          "image_name": "DSCF5789",
+          "index": 28,
+          "rule": "failure"
+        },
+        "median": {
+          "base_psnr": 29.550466537475586,
+          "delta_psnr": 3.0006465911865234,
+          "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+          "final_psnr": 32.55111312866211,
+          "image_name": "DSCF5629",
+          "index": 8,
+          "rule": "median"
+        }
+      },
+      "skip_reason": null,
+      "stage_root": "/data/peilincai/gems_stage1",
+      "status": "produced",
+      "view_selection_inputs": {
+        "base_metrics_json": "/data/peilincai/gems_stage1/eval/bonsai_cleanfixed30k_v1/metrics.json",
+        "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_bonsai_cleanfixed30k_routed_v1/metrics.json",
+        "per_view_values": [
+          {
+            "base_psnr": 20.854164123535156,
+            "delta_psnr": 3.2411441802978516,
+            "final_psnr": 24.095308303833008,
+            "image_name": "DSCF5565",
+            "index": 0
+          },
+          {
+            "base_psnr": 26.4931640625,
+            "delta_psnr": 7.273578643798828,
+            "final_psnr": 33.76674270629883,
+            "image_name": "DSCF5573",
+            "index": 1
+          },
+          {
+            "base_psnr": 28.910924911499023,
+            "delta_psnr": 5.06956672668457,
+            "final_psnr": 33.980491638183594,
+            "image_name": "DSCF5581",
+            "index": 2
+          },
+          {
+            "base_psnr": 28.33270263671875,
+            "delta_psnr": 4.181549072265625,
+            "final_psnr": 32.514251708984375,
+            "image_name": "DSCF5589",
+            "index": 3
+          },
+          {
+            "base_psnr": 31.324186325073242,
+            "delta_psnr": 3.6393604278564453,
+            "final_psnr": 34.96354675292969,
+            "image_name": "DSCF5597",
+            "index": 4
+          },
+          {
+            "base_psnr": 31.019060134887695,
+            "delta_psnr": 4.317922592163086,
+            "final_psnr": 35.33698272705078,
+            "image_name": "DSCF5605",
+            "index": 5
+          },
+          {
+            "base_psnr": 28.404748916625977,
+            "delta_psnr": 3.8148250579833984,
+            "final_psnr": 32.219573974609375,
+            "image_name": "DSCF5613",
+            "index": 6
+          },
+          {
+            "base_psnr": 31.497896194458008,
+            "delta_psnr": 3.9862422943115234,
+            "final_psnr": 35.48413848876953,
+            "image_name": "DSCF5621",
+            "index": 7
+          },
+          {
+            "base_psnr": 29.550466537475586,
+            "delta_psnr": 3.0006465911865234,
+            "final_psnr": 32.55111312866211,
+            "image_name": "DSCF5629",
+            "index": 8
+          },
+          {
+            "base_psnr": 23.629619598388672,
+            "delta_psnr": 4.665899276733398,
+            "final_psnr": 28.29551887512207,
+            "image_name": "DSCF5637",
+            "index": 9
+          },
+          {
+            "base_psnr": 28.749977111816406,
+            "delta_psnr": 2.1001949310302734,
+            "final_psnr": 30.85017204284668,
+            "image_name": "DSCF5645",
+            "index": 10
+          },
+          {
+            "base_psnr": 27.09104347229004,
+            "delta_psnr": 3.9373607635498047,
+            "final_psnr": 31.028404235839844,
+            "image_name": "DSCF5653",
+            "index": 11
+          },
+          {
+            "base_psnr": 25.35607147216797,
+            "delta_psnr": 2.445516586303711,
+            "final_psnr": 27.80158805847168,
+            "image_name": "DSCF5661",
+            "index": 12
+          },
+          {
+            "base_psnr": 29.100502014160156,
+            "delta_psnr": 2.7847824096679688,
+            "final_psnr": 31.885284423828125,
+            "image_name": "DSCF5669",
+            "index": 13
+          },
+          {
+            "base_psnr": 30.198877334594727,
+            "delta_psnr": 3.950441360473633,
+            "final_psnr": 34.14931869506836,
+            "image_name": "DSCF5677",
+            "index": 14
+          },
+          {
+            "base_psnr": 24.375308990478516,
+            "delta_psnr": 3.107959747314453,
+            "final_psnr": 27.48326873779297,
+            "image_name": "DSCF5685",
+            "index": 15
+          },
+          {
+            "base_psnr": 27.351505279541016,
+            "delta_psnr": 3.360891342163086,
+            "final_psnr": 30.7123966217041,
+            "image_name": "DSCF5693",
+            "index": 16
+          },
+          {
+            "base_psnr": 29.816612243652344,
+            "delta_psnr": 2.813251495361328,
+            "final_psnr": 32.62986373901367,
+            "image_name": "DSCF5701",
+            "index": 17
+          },
+          {
+            "base_psnr": 29.104869842529297,
+            "delta_psnr": 3.24566650390625,
+            "final_psnr": 32.35053634643555,
+            "image_name": "DSCF5709",
+            "index": 18
+          },
+          {
+            "base_psnr": 28.749160766601562,
+            "delta_psnr": 3.377899169921875,
+            "final_psnr": 32.12705993652344,
+            "image_name": "DSCF5717",
+            "index": 19
+          },
+          {
+            "base_psnr": 31.168851852416992,
+            "delta_psnr": 3.608675003051758,
+            "final_psnr": 34.77752685546875,
+            "image_name": "DSCF5725",
+            "index": 20
+          },
+          {
+            "base_psnr": 27.10694122314453,
+            "delta_psnr": 1.4473876953125,
+            "final_psnr": 28.55432891845703,
+            "image_name": "DSCF5733",
+            "index": 21
+          },
+          {
+            "base_psnr": 27.432170867919922,
+            "delta_psnr": 4.925769805908203,
+            "final_psnr": 32.357940673828125,
+            "image_name": "DSCF5741",
+            "index": 22
+          },
+          {
+            "base_psnr": 29.59446144104004,
+            "delta_psnr": 4.413187026977539,
+            "final_psnr": 34.00764846801758,
+            "image_name": "DSCF5749",
+            "index": 23
+          },
+          {
+            "base_psnr": 30.327558517456055,
+            "delta_psnr": 4.429231643676758,
+            "final_psnr": 34.75679016113281,
+            "image_name": "DSCF5757",
+            "index": 24
+          },
+          {
+            "base_psnr": 28.632009506225586,
+            "delta_psnr": 3.1496658325195312,
+            "final_psnr": 31.781675338745117,
+            "image_name": "DSCF5765",
+            "index": 25
+          },
+          {
+            "base_psnr": 30.923059463500977,
+            "delta_psnr": 3.6386280059814453,
+            "final_psnr": 34.56168746948242,
+            "image_name": "DSCF5773",
+            "index": 26
+          },
+          {
+            "base_psnr": 30.7967472076416,
+            "delta_psnr": 4.840028762817383,
+            "final_psnr": 35.636775970458984,
+            "image_name": "DSCF5781",
+            "index": 27
+          },
+          {
+            "base_psnr": 24.718168258666992,
+            "delta_psnr": 0.8502559661865234,
+            "final_psnr": 25.568424224853516,
+            "image_name": "DSCF5789",
+            "index": 28
+          },
+          {
+            "base_psnr": 30.795352935791016,
+            "delta_psnr": 5.0377197265625,
+            "final_psnr": 35.833072662353516,
+            "image_name": "DSCF5797",
+            "index": 29
+          },
+          {
+            "base_psnr": 31.609373092651367,
+            "delta_psnr": 3.627687454223633,
+            "final_psnr": 35.237060546875,
+            "image_name": "DSCF5805",
+            "index": 30
+          },
+          {
+            "base_psnr": 29.020008087158203,
+            "delta_psnr": 2.560995101928711,
+            "final_psnr": 31.581003189086914,
+            "image_name": "DSCF5813",
+            "index": 31
+          },
+          {
+            "base_psnr": 31.355077743530273,
+            "delta_psnr": 4.829267501831055,
+            "final_psnr": 36.18434524536133,
+            "image_name": "DSCF5821",
+            "index": 32
+          },
+          {
+            "base_psnr": 32.17989730834961,
+            "delta_psnr": 4.156002044677734,
+            "final_psnr": 36.335899353027344,
+            "image_name": "DSCF5829",
+            "index": 33
+          },
+          {
+            "base_psnr": 27.734861373901367,
+            "delta_psnr": 5.858003616333008,
+            "final_psnr": 33.592864990234375,
+            "image_name": "DSCF5837",
+            "index": 34
+          },
+          {
+            "base_psnr": 28.17723846435547,
+            "delta_psnr": 5.764667510986328,
+            "final_psnr": 33.9419059753418,
+            "image_name": "DSCF5845",
+            "index": 35
+          },
+          {
+            "base_psnr": 28.328533172607422,
+            "delta_psnr": 3.467416763305664,
+            "final_psnr": 31.795949935913086,
+            "image_name": "DSCF5853",
+            "index": 36
+          }
+        ]
+      },
+      "view_selection_invocations": [
+        {
+          "expression": "image_names[argmax(final_row_psnr)]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/bonsai_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_bonsai_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 37
+          },
+          "rule": "best",
+          "selected": {
+            "base_psnr": 32.17989730834961,
+            "delta_psnr": 4.156002044677734,
+            "expression": "image_names[argmax(final_row_psnr)]",
+            "final_psnr": 36.335899353027344,
+            "image_name": "DSCF5829",
+            "index": 33,
+            "rule": "best"
+          }
+        },
+        {
+          "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/bonsai_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_bonsai_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 37
+          },
+          "rule": "median",
+          "selected": {
+            "base_psnr": 29.550466537475586,
+            "delta_psnr": 3.0006465911865234,
+            "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+            "final_psnr": 32.55111312866211,
+            "image_name": "DSCF5629",
+            "index": 8,
+            "rule": "median"
+          }
+        },
+        {
+          "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/bonsai_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_bonsai_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 37
+          },
+          "rule": "failure",
+          "selected": {
+            "base_psnr": 24.718168258666992,
+            "delta_psnr": 0.8502559661865234,
+            "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+            "final_psnr": 25.568424224853516,
+            "image_name": "DSCF5789",
+            "index": 28,
+            "rule": "failure"
+          }
+        }
+      ]
+    },
+    "garden": {
+      "crop_windows": {
+        "best": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "half_frame_minimize_error_stride32",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08068/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08068/gt.png",
+          "image_name": "DSC08068",
+          "mean_error_in_selected_window_raw_0_255": 3.7795866861405054,
+          "stride_px": 32,
+          "window_xyxy": [
+            384,
+            320,
+            1032,
+            740
+          ]
+        },
+        "failure": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "half_frame_maximize_error_stride32",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC07988/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC07988/gt.png",
+          "image_name": "DSC07988",
+          "mean_error_in_selected_window_raw_0_255": 28.533634626690183,
+          "stride_px": 32,
+          "window_xyxy": [
+            649,
+            0,
+            1297,
+            420
+          ]
+        },
+        "median": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "full_frame_no_crop",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08100/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08100/gt.png",
+          "image_name": "DSC08100",
+          "mean_error_in_selected_window_raw_0_255": 8.044513702392578,
+          "stride_px": null,
+          "window_xyxy": [
+            0,
+            0,
+            1297,
+            840
+          ]
+        }
+      },
+      "grid_png": "/data/peilincai/mesh-splatting/RESULTS/figures/ecr_qual/garden_ecr_qual_grid.png",
+      "omitted_cells": [],
+      "output_dir": "/data/peilincai/mesh-splatting/RESULTS/figures/ecr_qual",
+      "placed_images": [
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            384,
+            320,
+            1032,
+            740
+          ],
+          "image_name": "DSC08068",
+          "row": "GT",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08068/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1297,
+            840
+          ],
+          "image_name": "DSC08100",
+          "row": "GT",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08100/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            649,
+            0,
+            1297,
+            420
+          ],
+          "image_name": "DSC07988",
+          "row": "GT",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC07988/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            384,
+            320,
+            1032,
+            740
+          ],
+          "image_name": "DSC08068",
+          "row": "base",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08068/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1297,
+            840
+          ],
+          "image_name": "DSC08100",
+          "row": "base",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08100/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            649,
+            0,
+            1297,
+            420
+          ],
+          "image_name": "DSC07988",
+          "row": "base",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC07988/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            384,
+            320,
+            1032,
+            740
+          ],
+          "image_name": "DSC08068",
+          "row": "PJ-2026",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_pj2026/DSC08068/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1297,
+            840
+          ],
+          "image_name": "DSC08100",
+          "row": "PJ-2026",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_pj2026/DSC08100/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            649,
+            0,
+            1297,
+            420
+          ],
+          "image_name": "DSC07988",
+          "row": "PJ-2026",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_pj2026/DSC07988/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            384,
+            320,
+            1032,
+            740
+          ],
+          "image_name": "DSC08068",
+          "row": "ECR final",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08068/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1297,
+            840
+          ],
+          "image_name": "DSC08100",
+          "row": "ECR final",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08100/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            649,
+            0,
+            1297,
+            420
+          ],
+          "image_name": "DSC07988",
+          "row": "ECR final",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC07988/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            384,
+            320,
+            1032,
+            740
+          ],
+          "image_name": "DSC08068",
+          "row": "beta.png",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08068/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1297,
+            840
+          ],
+          "image_name": "DSC08100",
+          "row": "beta.png",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08100/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            649,
+            0,
+            1297,
+            420
+          ],
+          "image_name": "DSC07988",
+          "row": "beta.png",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC07988/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            384,
+            320,
+            1032,
+            740
+          ],
+          "image_name": "DSC08068",
+          "row": "conf.png",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08068/conf.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1297,
+            840
+          ],
+          "image_name": "DSC08100",
+          "row": "conf.png",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC08100/conf.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            285
+          ],
+          "crop_window_xyxy": [
+            649,
+            0,
+            1297,
+            420
+          ],
+          "image_name": "DSC07988",
+          "row": "conf.png",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/garden_final/DSC07988/conf.png"
+        }
+      ],
+      "rows": {
+        "ECR final": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "garden_final/*/final.png"
+        },
+        "GT": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "garden_final/*/gt.png"
+        },
+        "PJ-2026": {
+          "cells": [
+            {
+              "image_name": "DSC08068",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/garden_pj2026/DSC08068/final.png",
+              "rule": "best"
+            },
+            {
+              "image_name": "DSC08100",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/garden_pj2026/DSC08100/final.png",
+              "rule": "median"
+            },
+            {
+              "image_name": "DSC07988",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/garden_pj2026/DSC07988/final.png",
+              "rule": "failure"
+            }
+          ],
+          "included": true,
+          "omitted_reason": null
+        },
+        "base": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "garden_final/*/base.png"
+        },
+        "beta.png": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "garden_final/*/beta.png"
+        },
+        "conf.png": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "garden_final/*/conf.png"
+        }
+      },
+      "scene": "garden",
+      "selected_views": {
+        "best": {
+          "base_psnr": 27.213943481445312,
+          "delta_psnr": 2.0622730255126953,
+          "expression": "image_names[argmax(final_row_psnr)]",
+          "final_psnr": 29.276216506958008,
+          "image_name": "DSC08068",
+          "index": 14,
+          "rule": "best"
+        },
+        "failure": {
+          "base_psnr": 17.282207489013672,
+          "delta_psnr": 0.3480815887451172,
+          "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+          "final_psnr": 17.63028907775879,
+          "image_name": "DSC07988",
+          "index": 4,
+          "rule": "failure"
+        },
+        "median": {
+          "base_psnr": 25.975345611572266,
+          "delta_psnr": 0.9355335235595703,
+          "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+          "final_psnr": 26.910879135131836,
+          "image_name": "DSC08100",
+          "index": 18,
+          "rule": "median"
+        }
+      },
+      "skip_reason": null,
+      "stage_root": "/data/peilincai/gems_stage1",
+      "status": "produced",
+      "view_selection_inputs": {
+        "base_metrics_json": "/data/peilincai/gems_stage1/eval/garden_cleanfixed30k_v1/metrics.json",
+        "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_garden_cleanfixed30k_routed_v1/metrics.json",
+        "per_view_values": [
+          {
+            "base_psnr": 21.520496368408203,
+            "delta_psnr": 0.7992229461669922,
+            "final_psnr": 22.319719314575195,
+            "image_name": "DSC07956",
+            "index": 0
+          },
+          {
+            "base_psnr": 20.30709457397461,
+            "delta_psnr": 0.5653858184814453,
+            "final_psnr": 20.872480392456055,
+            "image_name": "DSC07964",
+            "index": 1
+          },
+          {
+            "base_psnr": 24.9892635345459,
+            "delta_psnr": 1.9678573608398438,
+            "final_psnr": 26.957120895385742,
+            "image_name": "DSC07972",
+            "index": 2
+          },
+          {
+            "base_psnr": 22.69805908203125,
+            "delta_psnr": 1.5056705474853516,
+            "final_psnr": 24.2037296295166,
+            "image_name": "DSC07980",
+            "index": 3
+          },
+          {
+            "base_psnr": 17.282207489013672,
+            "delta_psnr": 0.3480815887451172,
+            "final_psnr": 17.63028907775879,
+            "image_name": "DSC07988",
+            "index": 4
+          },
+          {
+            "base_psnr": 24.079139709472656,
+            "delta_psnr": 0.9304752349853516,
+            "final_psnr": 25.009614944458008,
+            "image_name": "DSC07996",
+            "index": 5
+          },
+          {
+            "base_psnr": 25.93030548095703,
+            "delta_psnr": 1.9756336212158203,
+            "final_psnr": 27.90593910217285,
+            "image_name": "DSC08004",
+            "index": 6
+          },
+          {
+            "base_psnr": 25.93448257446289,
+            "delta_psnr": 2.404520034790039,
+            "final_psnr": 28.33900260925293,
+            "image_name": "DSC08012",
+            "index": 7
+          },
+          {
+            "base_psnr": 24.631980895996094,
+            "delta_psnr": 1.9051513671875,
+            "final_psnr": 26.537132263183594,
+            "image_name": "DSC08020",
+            "index": 8
+          },
+          {
+            "base_psnr": 24.69546890258789,
+            "delta_psnr": 1.0612907409667969,
+            "final_psnr": 25.756759643554688,
+            "image_name": "DSC08028",
+            "index": 9
+          },
+          {
+            "base_psnr": 24.666336059570312,
+            "delta_psnr": 1.9209938049316406,
+            "final_psnr": 26.587329864501953,
+            "image_name": "DSC08036",
+            "index": 10
+          },
+          {
+            "base_psnr": 25.980661392211914,
+            "delta_psnr": 2.0362987518310547,
+            "final_psnr": 28.01696014404297,
+            "image_name": "DSC08044",
+            "index": 11
+          },
+          {
+            "base_psnr": 25.220993041992188,
+            "delta_psnr": 1.7579402923583984,
+            "final_psnr": 26.978933334350586,
+            "image_name": "DSC08052",
+            "index": 12
+          },
+          {
+            "base_psnr": 26.679418563842773,
+            "delta_psnr": 1.45538330078125,
+            "final_psnr": 28.134801864624023,
+            "image_name": "DSC08060",
+            "index": 13
+          },
+          {
+            "base_psnr": 27.213943481445312,
+            "delta_psnr": 2.0622730255126953,
+            "final_psnr": 29.276216506958008,
+            "image_name": "DSC08068",
+            "index": 14
+          },
+          {
+            "base_psnr": 24.47112274169922,
+            "delta_psnr": 1.682840347290039,
+            "final_psnr": 26.153963088989258,
+            "image_name": "DSC08076",
+            "index": 15
+          },
+          {
+            "base_psnr": 25.76542854309082,
+            "delta_psnr": 1.0723323822021484,
+            "final_psnr": 26.83776092529297,
+            "image_name": "DSC08084",
+            "index": 16
+          },
+          {
+            "base_psnr": 27.08279800415039,
+            "delta_psnr": 2.187124252319336,
+            "final_psnr": 29.269922256469727,
+            "image_name": "DSC08092",
+            "index": 17
+          },
+          {
+            "base_psnr": 25.975345611572266,
+            "delta_psnr": 0.9355335235595703,
+            "final_psnr": 26.910879135131836,
+            "image_name": "DSC08100",
+            "index": 18
+          },
+          {
+            "base_psnr": 26.603683471679688,
+            "delta_psnr": 2.350851058959961,
+            "final_psnr": 28.95453453063965,
+            "image_name": "DSC08108",
+            "index": 19
+          },
+          {
+            "base_psnr": 26.705360412597656,
+            "delta_psnr": 1.6928329467773438,
+            "final_psnr": 28.398193359375,
+            "image_name": "DSC08116",
+            "index": 20
+          },
+          {
+            "base_psnr": 24.74304962158203,
+            "delta_psnr": 1.3505020141601562,
+            "final_psnr": 26.093551635742188,
+            "image_name": "DSC08124",
+            "index": 21
+          },
+          {
+            "base_psnr": 25.473045349121094,
+            "delta_psnr": 1.9929313659667969,
+            "final_psnr": 27.46597671508789,
+            "image_name": "DSC08132",
+            "index": 22
+          },
+          {
+            "base_psnr": 26.085521697998047,
+            "delta_psnr": 2.1771907806396484,
+            "final_psnr": 28.262712478637695,
+            "image_name": "DSC08140",
+            "index": 23
+          }
+        ]
+      },
+      "view_selection_invocations": [
+        {
+          "expression": "image_names[argmax(final_row_psnr)]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/garden_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_garden_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 24
+          },
+          "rule": "best",
+          "selected": {
+            "base_psnr": 27.213943481445312,
+            "delta_psnr": 2.0622730255126953,
+            "expression": "image_names[argmax(final_row_psnr)]",
+            "final_psnr": 29.276216506958008,
+            "image_name": "DSC08068",
+            "index": 14,
+            "rule": "best"
+          }
+        },
+        {
+          "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/garden_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_garden_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 24
+          },
+          "rule": "median",
+          "selected": {
+            "base_psnr": 25.975345611572266,
+            "delta_psnr": 0.9355335235595703,
+            "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+            "final_psnr": 26.910879135131836,
+            "image_name": "DSC08100",
+            "index": 18,
+            "rule": "median"
+          }
+        },
+        {
+          "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/garden_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_garden_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 24
+          },
+          "rule": "failure",
+          "selected": {
+            "base_psnr": 17.282207489013672,
+            "delta_psnr": 0.3480815887451172,
+            "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+            "final_psnr": 17.63028907775879,
+            "image_name": "DSC07988",
+            "index": 4,
+            "rule": "failure"
+          }
+        }
+      ]
+    },
+    "kitchen": {
+      "crop_windows": {
+        "best": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "half_frame_minimize_error_stride32",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0848/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0848/gt.png",
+          "image_name": "DSCF0848",
+          "mean_error_in_selected_window_raw_0_255": 2.1466152383991135,
+          "stride_px": 32,
+          "window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ]
+        },
+        "failure": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "half_frame_maximize_error_stride32",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0728/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0728/gt.png",
+          "image_name": "DSCF0728",
+          "mean_error_in_selected_window_raw_0_255": 8.388857713683617,
+          "stride_px": 32,
+          "window_xyxy": [
+            779,
+            520,
+            1558,
+            1039
+          ]
+        },
+        "median": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "full_frame_no_crop",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0712/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0712/gt.png",
+          "image_name": "DSCF0712",
+          "mean_error_in_selected_window_raw_0_255": 3.57214617729187,
+          "stride_px": null,
+          "window_xyxy": [
+            0,
+            0,
+            1558,
+            1039
+          ]
+        }
+      },
+      "grid_png": "/data/peilincai/mesh-splatting/RESULTS/figures/ecr_qual/kitchen_ecr_qual_grid.png",
+      "omitted_cells": [],
+      "output_dir": "/data/peilincai/mesh-splatting/RESULTS/figures/ecr_qual",
+      "placed_images": [
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ],
+          "image_name": "DSCF0848",
+          "row": "GT",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0848/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1558,
+            1039
+          ],
+          "image_name": "DSCF0712",
+          "row": "GT",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0712/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            779,
+            520,
+            1558,
+            1039
+          ],
+          "image_name": "DSCF0728",
+          "row": "GT",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0728/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ],
+          "image_name": "DSCF0848",
+          "row": "base",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0848/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1558,
+            1039
+          ],
+          "image_name": "DSCF0712",
+          "row": "base",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0712/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            779,
+            520,
+            1558,
+            1039
+          ],
+          "image_name": "DSCF0728",
+          "row": "base",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0728/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ],
+          "image_name": "DSCF0848",
+          "row": "PJ-2026",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_pj2026/DSCF0848/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1558,
+            1039
+          ],
+          "image_name": "DSCF0712",
+          "row": "PJ-2026",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_pj2026/DSCF0712/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            779,
+            520,
+            1558,
+            1039
+          ],
+          "image_name": "DSCF0728",
+          "row": "PJ-2026",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_pj2026/DSCF0728/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ],
+          "image_name": "DSCF0848",
+          "row": "ECR final",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0848/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1558,
+            1039
+          ],
+          "image_name": "DSCF0712",
+          "row": "ECR final",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0712/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            779,
+            520,
+            1558,
+            1039
+          ],
+          "image_name": "DSCF0728",
+          "row": "ECR final",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0728/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ],
+          "image_name": "DSCF0848",
+          "row": "beta.png",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0848/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1558,
+            1039
+          ],
+          "image_name": "DSCF0712",
+          "row": "beta.png",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0712/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            779,
+            520,
+            1558,
+            1039
+          ],
+          "image_name": "DSCF0728",
+          "row": "beta.png",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0728/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            779,
+            519
+          ],
+          "image_name": "DSCF0848",
+          "row": "conf.png",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0848/conf.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1558,
+            1039
+          ],
+          "image_name": "DSCF0712",
+          "row": "conf.png",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0712/conf.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            293
+          ],
+          "crop_window_xyxy": [
+            779,
+            520,
+            1558,
+            1039
+          ],
+          "image_name": "DSCF0728",
+          "row": "conf.png",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_final/DSCF0728/conf.png"
+        }
+      ],
+      "rows": {
+        "ECR final": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "kitchen_final/*/final.png"
+        },
+        "GT": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "kitchen_final/*/gt.png"
+        },
+        "PJ-2026": {
+          "cells": [
+            {
+              "image_name": "DSCF0848",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_pj2026/DSCF0848/final.png",
+              "rule": "best"
+            },
+            {
+              "image_name": "DSCF0712",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_pj2026/DSCF0712/final.png",
+              "rule": "median"
+            },
+            {
+              "image_name": "DSCF0728",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/kitchen_pj2026/DSCF0728/final.png",
+              "rule": "failure"
+            }
+          ],
+          "included": true,
+          "omitted_reason": null
+        },
+        "base": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "kitchen_final/*/base.png"
+        },
+        "beta.png": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "kitchen_final/*/beta.png"
+        },
+        "conf.png": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "kitchen_final/*/conf.png"
+        }
+      },
+      "scene": "kitchen",
+      "selected_views": {
+        "best": {
+          "base_psnr": 27.7501277923584,
+          "delta_psnr": 6.986703872680664,
+          "expression": "image_names[argmax(final_row_psnr)]",
+          "final_psnr": 34.73683166503906,
+          "image_name": "DSCF0848",
+          "index": 24,
+          "rule": "best"
+        },
+        "failure": {
+          "base_psnr": 29.08643341064453,
+          "delta_psnr": 0.6908798217773438,
+          "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+          "final_psnr": 29.777313232421875,
+          "image_name": "DSCF0728",
+          "index": 9,
+          "rule": "failure"
+        },
+        "median": {
+          "base_psnr": 27.383647918701172,
+          "delta_psnr": 3.386178970336914,
+          "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+          "final_psnr": 30.769826889038086,
+          "image_name": "DSCF0712",
+          "index": 7,
+          "rule": "median"
+        }
+      },
+      "skip_reason": null,
+      "stage_root": "/data/peilincai/gems_stage1",
+      "status": "produced",
+      "view_selection_inputs": {
+        "base_metrics_json": "/data/peilincai/gems_stage1/eval/kitchen_cleanfixed30k_v1/metrics.json",
+        "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_kitchen_cleanfixed30k_routed_v1/metrics.json",
+        "per_view_values": [
+          {
+            "base_psnr": 23.01276206970215,
+            "delta_psnr": 1.479330062866211,
+            "final_psnr": 24.49209213256836,
+            "image_name": "DSCF0656",
+            "index": 0
+          },
+          {
+            "base_psnr": 23.760757446289062,
+            "delta_psnr": 3.0861854553222656,
+            "final_psnr": 26.846942901611328,
+            "image_name": "DSCF0664",
+            "index": 1
+          },
+          {
+            "base_psnr": 26.460371017456055,
+            "delta_psnr": 2.466409683227539,
+            "final_psnr": 28.926780700683594,
+            "image_name": "DSCF0672",
+            "index": 2
+          },
+          {
+            "base_psnr": 26.68404769897461,
+            "delta_psnr": 3.594541549682617,
+            "final_psnr": 30.278589248657227,
+            "image_name": "DSCF0680",
+            "index": 3
+          },
+          {
+            "base_psnr": 25.730716705322266,
+            "delta_psnr": 3.729276657104492,
+            "final_psnr": 29.459993362426758,
+            "image_name": "DSCF0688",
+            "index": 4
+          },
+          {
+            "base_psnr": 26.114871978759766,
+            "delta_psnr": 1.7099590301513672,
+            "final_psnr": 27.824831008911133,
+            "image_name": "DSCF0696",
+            "index": 5
+          },
+          {
+            "base_psnr": 24.699838638305664,
+            "delta_psnr": 1.4092254638671875,
+            "final_psnr": 26.10906410217285,
+            "image_name": "DSCF0704",
+            "index": 6
+          },
+          {
+            "base_psnr": 27.383647918701172,
+            "delta_psnr": 3.386178970336914,
+            "final_psnr": 30.769826889038086,
+            "image_name": "DSCF0712",
+            "index": 7
+          },
+          {
+            "base_psnr": 24.846010208129883,
+            "delta_psnr": 1.3229007720947266,
+            "final_psnr": 26.16891098022461,
+            "image_name": "DSCF0720",
+            "index": 8
+          },
+          {
+            "base_psnr": 29.08643341064453,
+            "delta_psnr": 0.6908798217773438,
+            "final_psnr": 29.777313232421875,
+            "image_name": "DSCF0728",
+            "index": 9
+          },
+          {
+            "base_psnr": 29.240190505981445,
+            "delta_psnr": 5.22596549987793,
+            "final_psnr": 34.466156005859375,
+            "image_name": "DSCF0736",
+            "index": 10
+          },
+          {
+            "base_psnr": 27.39578628540039,
+            "delta_psnr": 3.4556312561035156,
+            "final_psnr": 30.851417541503906,
+            "image_name": "DSCF0744",
+            "index": 11
+          },
+          {
+            "base_psnr": 26.67891502380371,
+            "delta_psnr": 3.518980026245117,
+            "final_psnr": 30.197895050048828,
+            "image_name": "DSCF0752",
+            "index": 12
+          },
+          {
+            "base_psnr": 28.823894500732422,
+            "delta_psnr": 4.523021697998047,
+            "final_psnr": 33.34691619873047,
+            "image_name": "DSCF0760",
+            "index": 13
+          },
+          {
+            "base_psnr": 27.87594985961914,
+            "delta_psnr": 3.5168190002441406,
+            "final_psnr": 31.39276885986328,
+            "image_name": "DSCF0768",
+            "index": 14
+          },
+          {
+            "base_psnr": 27.039567947387695,
+            "delta_psnr": 1.7983131408691406,
+            "final_psnr": 28.837881088256836,
+            "image_name": "DSCF0776",
+            "index": 15
+          },
+          {
+            "base_psnr": 29.680240631103516,
+            "delta_psnr": 3.9842376708984375,
+            "final_psnr": 33.66447830200195,
+            "image_name": "DSCF0784",
+            "index": 16
+          },
+          {
+            "base_psnr": 29.52068519592285,
+            "delta_psnr": 2.8964672088623047,
+            "final_psnr": 32.417152404785156,
+            "image_name": "DSCF0792",
+            "index": 17
+          },
+          {
+            "base_psnr": 28.026172637939453,
+            "delta_psnr": 2.3124027252197266,
+            "final_psnr": 30.33857536315918,
+            "image_name": "DSCF0800",
+            "index": 18
+          },
+          {
+            "base_psnr": 29.255399703979492,
+            "delta_psnr": 0.7995281219482422,
+            "final_psnr": 30.054927825927734,
+            "image_name": "DSCF0808",
+            "index": 19
+          },
+          {
+            "base_psnr": 29.494503021240234,
+            "delta_psnr": 3.2679176330566406,
+            "final_psnr": 32.762420654296875,
+            "image_name": "DSCF0816",
+            "index": 20
+          },
+          {
+            "base_psnr": 29.401514053344727,
+            "delta_psnr": 3.7208385467529297,
+            "final_psnr": 33.122352600097656,
+            "image_name": "DSCF0824",
+            "index": 21
+          },
+          {
+            "base_psnr": 30.213098526000977,
+            "delta_psnr": 1.8314456939697266,
+            "final_psnr": 32.0445442199707,
+            "image_name": "DSCF0832",
+            "index": 22
+          },
+          {
+            "base_psnr": 29.925661087036133,
+            "delta_psnr": 2.3191776275634766,
+            "final_psnr": 32.24483871459961,
+            "image_name": "DSCF0840",
+            "index": 23
+          },
+          {
+            "base_psnr": 27.7501277923584,
+            "delta_psnr": 6.986703872680664,
+            "final_psnr": 34.73683166503906,
+            "image_name": "DSCF0848",
+            "index": 24
+          },
+          {
+            "base_psnr": 28.12079620361328,
+            "delta_psnr": 5.654064178466797,
+            "final_psnr": 33.77486038208008,
+            "image_name": "DSCF0856",
+            "index": 25
+          },
+          {
+            "base_psnr": 30.510541915893555,
+            "delta_psnr": 1.6261157989501953,
+            "final_psnr": 32.13665771484375,
+            "image_name": "DSCF0864",
+            "index": 26
+          },
+          {
+            "base_psnr": 26.628955841064453,
+            "delta_psnr": 1.0454235076904297,
+            "final_psnr": 27.674379348754883,
+            "image_name": "DSCF0872",
+            "index": 27
+          },
+          {
+            "base_psnr": 28.1429443359375,
+            "delta_psnr": 3.668445587158203,
+            "final_psnr": 31.811389923095703,
+            "image_name": "DSCF0880",
+            "index": 28
+          },
+          {
+            "base_psnr": 27.69167709350586,
+            "delta_psnr": 3.7524566650390625,
+            "final_psnr": 31.444133758544922,
+            "image_name": "DSCF0888",
+            "index": 29
+          },
+          {
+            "base_psnr": 28.501724243164062,
+            "delta_psnr": 2.4462509155273438,
+            "final_psnr": 30.947975158691406,
+            "image_name": "DSCF0896",
+            "index": 30
+          },
+          {
+            "base_psnr": 26.11724090576172,
+            "delta_psnr": 1.9140586853027344,
+            "final_psnr": 28.031299591064453,
+            "image_name": "DSCF0904",
+            "index": 31
+          },
+          {
+            "base_psnr": 30.337318420410156,
+            "delta_psnr": 3.838886260986328,
+            "final_psnr": 34.176204681396484,
+            "image_name": "DSCF0912",
+            "index": 32
+          },
+          {
+            "base_psnr": 25.349937438964844,
+            "delta_psnr": 1.3668651580810547,
+            "final_psnr": 26.7168025970459,
+            "image_name": "DSCF0920",
+            "index": 33
+          },
+          {
+            "base_psnr": 26.835920333862305,
+            "delta_psnr": 2.3266544342041016,
+            "final_psnr": 29.162574768066406,
+            "image_name": "DSCF0928",
+            "index": 34
+          }
+        ]
+      },
+      "view_selection_invocations": [
+        {
+          "expression": "image_names[argmax(final_row_psnr)]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/kitchen_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_kitchen_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 35
+          },
+          "rule": "best",
+          "selected": {
+            "base_psnr": 27.7501277923584,
+            "delta_psnr": 6.986703872680664,
+            "expression": "image_names[argmax(final_row_psnr)]",
+            "final_psnr": 34.73683166503906,
+            "image_name": "DSCF0848",
+            "index": 24,
+            "rule": "best"
+          }
+        },
+        {
+          "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/kitchen_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_kitchen_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 35
+          },
+          "rule": "median",
+          "selected": {
+            "base_psnr": 27.383647918701172,
+            "delta_psnr": 3.386178970336914,
+            "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+            "final_psnr": 30.769826889038086,
+            "image_name": "DSCF0712",
+            "index": 7,
+            "rule": "median"
+          }
+        },
+        {
+          "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/kitchen_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_kitchen_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 35
+          },
+          "rule": "failure",
+          "selected": {
+            "base_psnr": 29.08643341064453,
+            "delta_psnr": 0.6908798217773438,
+            "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+            "final_psnr": 29.777313232421875,
+            "image_name": "DSCF0728",
+            "index": 9,
+            "rule": "failure"
+          }
+        }
+      ]
+    },
+    "treehill": {
+      "crop_windows": {
+        "best": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "half_frame_minimize_error_stride32",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8930/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8930/gt.png",
+          "image_name": "_DSC8930",
+          "mean_error_in_selected_window_raw_0_255": 5.757955145294082,
+          "stride_px": 32,
+          "window_xyxy": [
+            352,
+            192,
+            985,
+            608
+          ]
+        },
+        "failure": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "half_frame_maximize_error_stride32",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8946/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8946/gt.png",
+          "image_name": "_DSC8946",
+          "mean_error_in_selected_window_raw_0_255": 14.200421147770081,
+          "stride_px": 32,
+          "window_xyxy": [
+            0,
+            0,
+            633,
+            416
+          ]
+        },
+        "median": {
+          "applied_identically_to_all_rows_in_column": true,
+          "crop_rule": "full_frame_no_crop",
+          "error_definition": "mean(abs(final.png - gt.png), axis=RGB) from raw PNG arrays",
+          "error_source_final_png": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8938/final.png",
+          "error_source_gt_png": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8938/gt.png",
+          "image_name": "_DSC8938",
+          "mean_error_in_selected_window_raw_0_255": 13.425235748291016,
+          "stride_px": null,
+          "window_xyxy": [
+            0,
+            0,
+            1267,
+            832
+          ]
+        }
+      },
+      "grid_png": "/data/peilincai/mesh-splatting/RESULTS/figures/ecr_qual/treehill_ecr_qual_grid.png",
+      "omitted_cells": [],
+      "output_dir": "/data/peilincai/mesh-splatting/RESULTS/figures/ecr_qual",
+      "placed_images": [
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            352,
+            192,
+            985,
+            608
+          ],
+          "image_name": "_DSC8930",
+          "row": "GT",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8930/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1267,
+            832
+          ],
+          "image_name": "_DSC8938",
+          "row": "GT",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8938/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            633,
+            416
+          ],
+          "image_name": "_DSC8946",
+          "row": "GT",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8946/gt.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            352,
+            192,
+            985,
+            608
+          ],
+          "image_name": "_DSC8930",
+          "row": "base",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8930/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1267,
+            832
+          ],
+          "image_name": "_DSC8938",
+          "row": "base",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8938/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            633,
+            416
+          ],
+          "image_name": "_DSC8946",
+          "row": "base",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8946/base.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            352,
+            192,
+            985,
+            608
+          ],
+          "image_name": "_DSC8930",
+          "row": "PJ-2026",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_pj2026/_DSC8930/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1267,
+            832
+          ],
+          "image_name": "_DSC8938",
+          "row": "PJ-2026",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_pj2026/_DSC8938/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            633,
+            416
+          ],
+          "image_name": "_DSC8946",
+          "row": "PJ-2026",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_pj2026/_DSC8946/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            352,
+            192,
+            985,
+            608
+          ],
+          "image_name": "_DSC8930",
+          "row": "ECR final",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8930/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1267,
+            832
+          ],
+          "image_name": "_DSC8938",
+          "row": "ECR final",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8938/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            633,
+            416
+          ],
+          "image_name": "_DSC8946",
+          "row": "ECR final",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8946/final.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            352,
+            192,
+            985,
+            608
+          ],
+          "image_name": "_DSC8930",
+          "row": "beta.png",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8930/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1267,
+            832
+          ],
+          "image_name": "_DSC8938",
+          "row": "beta.png",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8938/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            633,
+            416
+          ],
+          "image_name": "_DSC8946",
+          "row": "beta.png",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8946/beta.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            352,
+            192,
+            985,
+            608
+          ],
+          "image_name": "_DSC8930",
+          "row": "conf.png",
+          "rule": "best",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8930/conf.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            1267,
+            832
+          ],
+          "image_name": "_DSC8938",
+          "row": "conf.png",
+          "rule": "median",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8938/conf.png"
+        },
+        {
+          "cell_size_px": [
+            440,
+            289
+          ],
+          "crop_window_xyxy": [
+            0,
+            0,
+            633,
+            416
+          ],
+          "image_name": "_DSC8946",
+          "row": "conf.png",
+          "rule": "failure",
+          "source_path": "/data/peilincai/gems_stage1/analysis/quals/treehill_final/_DSC8946/conf.png"
+        }
+      ],
+      "rows": {
+        "ECR final": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "treehill_final/*/final.png"
+        },
+        "GT": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "treehill_final/*/gt.png"
+        },
+        "PJ-2026": {
+          "cells": [
+            {
+              "image_name": "_DSC8930",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/treehill_pj2026/_DSC8930/final.png",
+              "rule": "best"
+            },
+            {
+              "image_name": "_DSC8938",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/treehill_pj2026/_DSC8938/final.png",
+              "rule": "median"
+            },
+            {
+              "image_name": "_DSC8946",
+              "included": true,
+              "omitted_reason": null,
+              "path": "/data/peilincai/gems_stage1/analysis/quals/treehill_pj2026/_DSC8946/final.png",
+              "rule": "failure"
+            }
+          ],
+          "included": true,
+          "omitted_reason": null
+        },
+        "base": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "treehill_final/*/base.png"
+        },
+        "beta.png": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "treehill_final/*/beta.png"
+        },
+        "conf.png": {
+          "included": true,
+          "omitted_reason": null,
+          "source": "treehill_final/*/conf.png"
+        }
+      },
+      "scene": "treehill",
+      "selected_views": {
+        "best": {
+          "base_psnr": 24.81678009033203,
+          "delta_psnr": 0.4504661560058594,
+          "expression": "image_names[argmax(final_row_psnr)]",
+          "final_psnr": 25.26724624633789,
+          "image_name": "_DSC8930",
+          "index": 7,
+          "rule": "best"
+        },
+        "failure": {
+          "base_psnr": 23.956613540649414,
+          "delta_psnr": -0.05874443054199219,
+          "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+          "final_psnr": 23.897869110107422,
+          "image_name": "_DSC8946",
+          "index": 9,
+          "rule": "failure"
+        },
+        "median": {
+          "base_psnr": 20.73448944091797,
+          "delta_psnr": 0.34139060974121094,
+          "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+          "final_psnr": 21.07588005065918,
+          "image_name": "_DSC8938",
+          "index": 8,
+          "rule": "median"
+        }
+      },
+      "skip_reason": null,
+      "stage_root": "/data/peilincai/gems_stage1",
+      "status": "produced",
+      "view_selection_inputs": {
+        "base_metrics_json": "/data/peilincai/gems_stage1/eval/treehill_cleanfixed30k_v1/metrics.json",
+        "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_treehill_cleanfixed30k_routed_v1/metrics.json",
+        "per_view_values": [
+          {
+            "base_psnr": 16.04753875732422,
+            "delta_psnr": 0.7363815307617188,
+            "final_psnr": 16.783920288085938,
+            "image_name": "_DSC8874",
+            "index": 0
+          },
+          {
+            "base_psnr": 16.573198318481445,
+            "delta_psnr": 0.5236663818359375,
+            "final_psnr": 17.096864700317383,
+            "image_name": "_DSC8882",
+            "index": 1
+          },
+          {
+            "base_psnr": 17.29713249206543,
+            "delta_psnr": 0.6457939147949219,
+            "final_psnr": 17.94292640686035,
+            "image_name": "_DSC8890",
+            "index": 2
+          },
+          {
+            "base_psnr": 16.581661224365234,
+            "delta_psnr": 0.6638545989990234,
+            "final_psnr": 17.245515823364258,
+            "image_name": "_DSC8898",
+            "index": 3
+          },
+          {
+            "base_psnr": 19.36708641052246,
+            "delta_psnr": 0.48608970642089844,
+            "final_psnr": 19.85317611694336,
+            "image_name": "_DSC8906",
+            "index": 4
+          },
+          {
+            "base_psnr": 20.72606658935547,
+            "delta_psnr": 0.20963096618652344,
+            "final_psnr": 20.935697555541992,
+            "image_name": "_DSC8914",
+            "index": 5
+          },
+          {
+            "base_psnr": 22.353200912475586,
+            "delta_psnr": 0.3010082244873047,
+            "final_psnr": 22.65420913696289,
+            "image_name": "_DSC8922",
+            "index": 6
+          },
+          {
+            "base_psnr": 24.81678009033203,
+            "delta_psnr": 0.4504661560058594,
+            "final_psnr": 25.26724624633789,
+            "image_name": "_DSC8930",
+            "index": 7
+          },
+          {
+            "base_psnr": 20.73448944091797,
+            "delta_psnr": 0.34139060974121094,
+            "final_psnr": 21.07588005065918,
+            "image_name": "_DSC8938",
+            "index": 8
+          },
+          {
+            "base_psnr": 23.956613540649414,
+            "delta_psnr": -0.05874443054199219,
+            "final_psnr": 23.897869110107422,
+            "image_name": "_DSC8946",
+            "index": 9
+          },
+          {
+            "base_psnr": 21.507720947265625,
+            "delta_psnr": 1.3924884796142578,
+            "final_psnr": 22.900209426879883,
+            "image_name": "_DSC8954",
+            "index": 10
+          },
+          {
+            "base_psnr": 18.998268127441406,
+            "delta_psnr": 1.2804431915283203,
+            "final_psnr": 20.278711318969727,
+            "image_name": "_DSC8962",
+            "index": 11
+          },
+          {
+            "base_psnr": 23.07447052001953,
+            "delta_psnr": 0.42312049865722656,
+            "final_psnr": 23.497591018676758,
+            "image_name": "_DSC8970",
+            "index": 12
+          },
+          {
+            "base_psnr": 22.85465431213379,
+            "delta_psnr": 0.6485576629638672,
+            "final_psnr": 23.503211975097656,
+            "image_name": "_DSC8978",
+            "index": 13
+          },
+          {
+            "base_psnr": 19.884592056274414,
+            "delta_psnr": 0.7554378509521484,
+            "final_psnr": 20.640029907226562,
+            "image_name": "_DSC8986",
+            "index": 14
+          },
+          {
+            "base_psnr": 23.3973388671875,
+            "delta_psnr": 0.2703132629394531,
+            "final_psnr": 23.667652130126953,
+            "image_name": "_DSC8994",
+            "index": 15
+          },
+          {
+            "base_psnr": 21.80776596069336,
+            "delta_psnr": 0.5753421783447266,
+            "final_psnr": 22.383108139038086,
+            "image_name": "_DSC9002",
+            "index": 16
+          },
+          {
+            "base_psnr": 22.37921714782715,
+            "delta_psnr": 0.48516082763671875,
+            "final_psnr": 22.864377975463867,
+            "image_name": "_DSC9010",
+            "index": 17
+          }
+        ]
+      },
+      "view_selection_invocations": [
+        {
+          "expression": "image_names[argmax(final_row_psnr)]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/treehill_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_treehill_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 18
+          },
+          "rule": "best",
+          "selected": {
+            "base_psnr": 24.81678009033203,
+            "delta_psnr": 0.4504661560058594,
+            "expression": "image_names[argmax(final_row_psnr)]",
+            "final_psnr": 25.26724624633789,
+            "image_name": "_DSC8930",
+            "index": 7,
+            "rule": "best"
+          }
+        },
+        {
+          "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/treehill_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_treehill_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 18
+          },
+          "rule": "median",
+          "selected": {
+            "base_psnr": 20.73448944091797,
+            "delta_psnr": 0.34139060974121094,
+            "expression": "image_names[argsort(final_row_psnr)[(n-1)//2]]",
+            "final_psnr": 21.07588005065918,
+            "image_name": "_DSC8938",
+            "index": 8,
+            "rule": "median"
+          }
+        },
+        {
+          "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+          "inputs": {
+            "base_final_order_asserted_equal": true,
+            "base_metrics_json": "/data/peilincai/gems_stage1/eval/treehill_cleanfixed30k_v1/metrics.json",
+            "base_psnr_field": "rendering.per_view.psnr",
+            "final_metrics_json": "/data/peilincai/gems_stage1/eval/l4_treehill_cleanfixed30k_routed_v1/metrics.json",
+            "final_psnr_field": "rendering.per_view.psnr",
+            "image_names_field": "rendering.per_view.image_names",
+            "n_views": 18
+          },
+          "rule": "failure",
+          "selected": {
+            "base_psnr": 23.956613540649414,
+            "delta_psnr": -0.05874443054199219,
+            "expression": "image_names[argmin(final_row_psnr - base_row_psnr)]",
+            "final_psnr": 23.897869110107422,
+            "image_name": "_DSC8946",
+            "index": 9,
+            "rule": "failure"
+          }
+        }
+      ]
+    }
+  },
+  "schema": "ecr_qual_grids.v1",
+  "version": 1
+}

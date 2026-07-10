@@ -49,16 +49,23 @@ compared as such.
   Geometry/downstream metrics preserved per the frozen Stage-2/3 results
   (cited, not re-run; transport leaves rendered depth untouched by
   construction).
-- **CR4 — Certified transport (INSTANTIATED).** Train-only guarantees are
-  audited per reported row: **65/65 `--ecr` audits GREEN** (all transport
-  reads ⊆ cache manifest; manifest train views disjoint from the
-  independently recomputed test split; checkpoint fingerprint match; frozen
-  per-view kwargs hash — no per-test-view parameters anywhere). Confidence
-  inputs predict transport benefit (banked precedent: evidence-vs-error
-  Spearman ρ ≈ 0.69–0.74 on 3 scenes), and the L4 routing head consumes
-  exactly those confidence features to gate direct-evidence RGB (β maps
-  concentrate on high-frequency, well-supported regions and vanish at
-  occlusion boundaries — `analysis/quals/<scene>_final/`).
+- **CR4 — Certified transport (INSTANTIATED; SHRUNK v0.3).** Train-only
+  guarantees are audited per reported row: **69/69 `--ecr` audits GREEN**
+  (all transport reads ⊆ cache manifest; manifest train views disjoint from
+  the independently recomputed test split; checkpoint fingerprint match;
+  frozen per-view kwargs hash — no per-test-view parameters anywhere).
+  Confidence predicts transport benefit (banked precedent: evidence-vs-error
+  Spearman ρ ≈ 0.69–0.74 on 3 scenes), and the certified gating is
+  STRUCTURAL: evidence RGB can only be routed where the transport physically
+  has support (compose = β·valid with valid = warp-confidence mask), which
+  is why β vanishes at occlusion boundaries and coverage gaps degrade to
+  the base render instead of hallucinating (failure-case set: 1
+  transport-negative view in 104, −0.06 dB). SHRUNK per GOAL #E-08
+  (2026-07-10): the net's EXPLICIT confidence input planes are redundant —
+  zeroing them at train+test leaves quality statistically unchanged on 2
+  scenes (CIs incl. 0) — so the certification claim attaches to the audits
+  + the structural compose gate, NOT to the net's use of confidence input
+  channels.
 
 ## NON-CLAIMS (verbatim in any Stage-4 report)
 
@@ -82,3 +89,10 @@ MOTIVATION for caching evidence rather than baking it, reported first-class.
   banked; L6 slot open); CR4 instantiated (65/65 ecr audits GREEN + routing
   qualitative evidence). No claim shrunk; two slots remain open on in-flight
   rows only.
+- 2026-07-10 v0.3: **CR4 SHRUNK** per GOAL #E-08 (confidence-inputs-off
+  ablation: quality unchanged, CIs incl. 0 on 2 scenes) — certification now
+  attaches to the audits + the structural compose valid-mask, not to the
+  net's confidence input channels; audit tally 69/69. External context
+  banked alongside (GOAL #E-09): Difix3D+ single-step on the same base
+  renders is PSNR-negative on all 3 scenes and dominated by the ECR final
+  stack on both metrics — recorded as A11 rebuttal evidence, not a claim.
