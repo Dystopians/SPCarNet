@@ -136,26 +136,37 @@ def compute_transport_features(
     return out
 
 
-def features_to_input(feats: dict) -> torch.Tensor:
+def _conf_planes(feats: dict, ablate_conf: bool) -> list:
+    """The 3 confidence-derived net-input planes; zeroed under the CR4
+    ablation (net loses access to certified confidence as INPUT — the
+    transport/compose machinery itself is untouched)."""
+    if ablate_conf:
+        z = torch.zeros_like(feats["weight_den"])
+        return [z, z.clone(), z.clone()]
+    return [
+        torch.clamp(feats["weight_den"], 0.0, 4.0) / 4.0,
+        torch.clamp(feats["support_count"], 0.0, 8.0) / 8.0,
+        torch.clamp(feats["residual_std"], 0.0, 0.5) * 2.0,
+    ]
+
+
+def features_to_input(feats: dict, ablate_conf: bool = False) -> torch.Tensor:
     """Stack the 9-channel net input from compute_transport_features."""
     return torch.cat([
         feats["base"],
         feats["signal"],
-        torch.clamp(feats["weight_den"], 0.0, 4.0) / 4.0,
-        torch.clamp(feats["support_count"], 0.0, 8.0) / 8.0,
-        torch.clamp(feats["residual_std"], 0.0, 0.5) * 2.0,
+        *_conf_planes(feats, ablate_conf),
     ], dim=0)
 
 
-def features_to_input_routed(feats: dict) -> torch.Tensor:
+def features_to_input_routed(feats: dict,
+                             ablate_conf: bool = False) -> torch.Tensor:
     """Stack the 12-channel routed net input (L4): 9-ch + fused color."""
     return torch.cat([
         feats["base"],
         feats["signal"],
         feats["color"],
-        torch.clamp(feats["weight_den"], 0.0, 4.0) / 4.0,
-        torch.clamp(feats["support_count"], 0.0, 8.0) / 8.0,
-        torch.clamp(feats["residual_std"], 0.0, 0.5) * 2.0,
+        *_conf_planes(feats, ablate_conf),
     ], dim=0)
 
 
@@ -222,8 +233,9 @@ class FusionNet(nn.Module):
         return alpha
 
 
-def apply_fusion(net: FusionNet, feats: dict) -> tuple[torch.Tensor, torch.Tensor]:
-    x = features_to_input(feats).unsqueeze(0)
+def apply_fusion(net: FusionNet, feats: dict,
+                 ablate_conf: bool = False) -> tuple[torch.Tensor, torch.Tensor]:
+    x = features_to_input(feats, ablate_conf=ablate_conf).unsqueeze(0)
     alpha = net(x).squeeze(0)
     return torch.clamp(feats["base"] + alpha * feats["signal"], 0.0, 1.0), alpha
 
@@ -243,9 +255,10 @@ def compose_routed(base: torch.Tensor, signal: torch.Tensor,
 
 
 def apply_routed_fusion(net: FusionNet, feats: dict,
-                        min_confidence: float = 1e-4
+                        min_confidence: float = 1e-4,
+                        ablate_conf: bool = False
                         ) -> tuple[torch.Tensor, torch.Tensor]:
-    x = features_to_input_routed(feats).unsqueeze(0)
+    x = features_to_input_routed(feats, ablate_conf=ablate_conf).unsqueeze(0)
     maps = net(x).squeeze(0)
     valid = feats["weight_den"] > float(min_confidence)
     out = compose_routed(feats["base"], feats["signal"], feats["color"],

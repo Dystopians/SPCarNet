@@ -47,6 +47,11 @@ def main() -> int:
                     help="L4: 12-ch inputs (+fused warped color) and a "
                          "2-ch (alpha, beta) routing head; same frozen "
                          "trainer (GOAL #E-05)")
+    ap.add_argument("--ablate-conf", action="store_true",
+                    help="CR4 ablation: zero the confidence-derived net "
+                         "input planes at train AND test (flag frozen into "
+                         "the manifest); compose validity still uses the "
+                         "true transport mask")
     args = ap.parse_args()
     if args.gpu is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
@@ -96,14 +101,19 @@ def main() -> int:
     # ---- stage 1: precompute LOO features for every train view (fp16) ----
     t0 = time.time()
     stack_fn = features_to_input_routed if args.routed else features_to_input
-    inputs, targets = [], []
+    inputs, targets, valids = [], [], []
     with torch.no_grad():
         for i, frame in enumerate(frames):
             support = [f for f in frames if f.name != frame.name]
             feats = compute_transport_features(
                 frame, support, loader=loader, device=device,
                 with_color=bool(args.routed), **feat_kwargs)
-            inputs.append(stack_fn(feats).to(torch.float16).cpu())
+            inputs.append(stack_fn(feats, ablate_conf=args.ablate_conf)
+                          .to(torch.float16).cpu())
+            if args.routed and args.ablate_conf:
+                # the conf input plane is zeroed, so the compose validity
+                # mask must be kept separately (true transport support)
+                valids.append((feats["weight_den"] > 0.0).cpu())
             gt = loader.gt(str(frame.gt_path))
             targets.append(gt.to(torch.float16).cpu())
             if i % 25 == 0:
@@ -125,7 +135,7 @@ def main() -> int:
     losses = []
     t0 = time.time()
     for step in range(int(TRAIN_CONFIG["steps"])):
-        xs, ys = [], []
+        xs, ys, vs = [], [], []
         for _ in range(int(TRAIN_CONFIG["batch"])):
             vi = int(torch.randint(0, len(inputs), (1,), generator=gen))
             x = inputs[vi]
@@ -137,6 +147,8 @@ def main() -> int:
             j0 = int(torch.randint(0, w - cw + 1, (1,), generator=gen))
             xs.append(x[:, i0:i0 + ch, j0:j0 + cw])
             ys.append(y[:, i0:i0 + ch, j0:j0 + cw])
+            if valids:
+                vs.append(valids[vi][:, i0:i0 + ch, j0:j0 + cw])
         x = torch.stack(xs).to(device=device, dtype=torch.float32)
         y = torch.stack(ys).to(device=device, dtype=torch.float32)
         maps = net(x)
@@ -145,7 +157,10 @@ def main() -> int:
         if args.routed:
             color = x[:, 6:9]
             # conf channel is weight_den/4 clamped; valid = conf plane > 0
-            valid = x[:, 9:10] > 0.0
+            # (under --ablate-conf that plane is zeroed, so use the stored
+            # true transport mask instead)
+            valid = (torch.stack(vs).to(device) if vs
+                     else x[:, 9:10] > 0.0)
             pred = compose_routed(base, signal, color, valid, maps)
         else:
             pred = torch.clamp(base + maps * signal, 0.0, 1.0)
@@ -170,6 +185,7 @@ def main() -> int:
     (cache / "fusion_training.json").write_text(json.dumps({
         "config": TRAIN_CONFIG,
         "routed": bool(args.routed),
+        "ablate_conf": bool(args.ablate_conf),
         "inner_fuse": inner_fuse,
         "feat_kwargs": {k: v for k, v in feat_kwargs.items()},
         "n_train_views": len(frames),
@@ -185,6 +201,11 @@ def main() -> int:
     transport["fuse"] = "routed" if args.routed else "learned"
     transport["fusion_net"] = "fusion_net.pt"
     transport["fusion_net_sha256"] = net_sha
+    if args.ablate_conf:
+        # frozen into the manifest so the renderer applies the SAME ablation
+        # at test time and the kwargs hash covers it; key absent (not False)
+        # on normal runs to keep production manifests byte-stable
+        transport["ablate_conf"] = True
     manifest["transport"] = transport
     sizes = manifest["sizes"]
     for rel in ("fusion_net.pt", "fusion_training.json"):

@@ -63,11 +63,13 @@ _L2_KWARG_KEYS = (
     "depth_abs_tol", "depth_rel_tol", "direction_weight", "bands",
 )
 
-# L3 learned-fusion feature kwargs (tools/ecr/fusion.compute_transport_features).
+# L3 learned-fusion feature kwargs (tools/ecr/fusion.compute_transport_features)
+# + ablate_conf (CR4 ablation flag, consumed by apply_*fusion, NOT a
+# compute_transport_features argument — popped before the feature call).
 _L3_KWARG_KEYS = (
     "k", "residual_clip", "min_confidence",
     "depth_abs_tol", "depth_rel_tol", "direction_weight",
-    "inner_fuse", "bands",
+    "inner_fuse", "bands", "ablate_conf",
 )
 
 
@@ -309,6 +311,7 @@ class EcrRenderer:
                 with torch.no_grad():
                     feat_kwargs = dict(kwargs)
                     feat_kwargs["fuse"] = feat_kwargs.pop("inner_fuse", "single")
+                    ablate_conf = bool(feat_kwargs.pop("ablate_conf", False))
                     feats = compute_transport_features(
                         target, self.train_frames, loader=self.loader,
                         device=self.device,
@@ -317,12 +320,14 @@ class EcrRenderer:
                         adapted, maps = apply_routed_fusion(
                             self._fusion_net, feats,
                             min_confidence=float(
-                                kwargs.get("min_confidence", 1e-4)))
+                                kwargs.get("min_confidence", 1e-4)),
+                            ablate_conf=ablate_conf)
                         alpha_map = maps[0:1]
                         beta_map = maps[1:2]
                     else:
                         adapted, alpha_map = apply_fusion(
-                            self._fusion_net, feats)
+                            self._fusion_net, feats,
+                            ablate_conf=ablate_conf)
                         beta_map = None
                 valid = feats["weight_den"] > float(
                     kwargs.get("min_confidence", 1e-4))
