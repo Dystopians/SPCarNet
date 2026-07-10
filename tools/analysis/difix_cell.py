@@ -60,7 +60,8 @@ def main():
 
     def img(path, device):
         t = torchvision.io.read_image(path).float().div(255.0)
-        return t[:3].to(device)
+        # repo psnr() uses .view() -> needs contiguous memory
+        return t[:3].to(device).contiguous()
 
     device = torch.device("cuda")
     for scene in SCENES:
