@@ -29,8 +29,11 @@ compared as such.
   PJ-2026 on BOTH metrics, CIs excl. 0, target ≥ +0.15) is met at the
   stretch level (CI-low +0.316 ≥ +0.30). Evidence:
   `analysis/final_stack/final_stack_tables.md` (T-ECR-1), gates
-  `analysis/e0_pj2026/l4_{gate,vs_floor}.json`. Suite rows (4 SS3DM towns +
-  toy_parking) extend the same stack and are logged as they bank.
+  `analysis/e0_pj2026/l4_{gate,vs_floor}.json`. Suite rows (banked
+  2026-07-10): vs PJ-2026 town01 +0.412 / town02 +0.298 / town03 +0.519
+  (CIs excl. 0), town06 +0.095 (CI excl. 0, LPIPS worse — honest boundary
+  case), toy_parking +0.029 (CI incl. 0 — the pre-registered ring-coverage
+  saturation).
 - **CR2 — Honest cost (matched-storage cell INSTANTIATED; Pareto pending
   E-06).** At matched TOTAL artifact storage (checkpoint + raw cache = 2.1–
   3.3 GB/scene), stock 3DGS-30k uses only 11–55% of the budget and stays
@@ -41,14 +44,16 @@ compared as such.
   GOAL #E-07). The cache-quality Pareto is [curve — GOAL #E-06 chains in
   flight]. Every ECR row carries cache_mb_raw / cache_mb_compressed /
   transport_ms_per_frame / end_to_end_fps / total_artifact_mb.
-- **CR3 — Mesh retained (partial; L6 rows in flight).** At 50% triangles
-  (B5@B50 base), the frozen Phase-J transport alone already delivers
-  **+1.151 dB [+1.062, +1.238]** over the FULL-BUDGET primary anchor (GOAL
-  #E-01 secondary base, 9/9 CI-positive); the final-stack-on-B50 tie-back
-  (GOAL #E-05/L6) is [measured — `final_<scene>_B50_v1` rows in flight].
-  Geometry/downstream metrics preserved per the frozen Stage-2/3 results
-  (cited, not re-run; transport leaves rendered depth untouched by
-  construction).
+- **CR3 — Mesh retained (INSTANTIATED).** At 50% triangles (B5@B50 base),
+  the full ECR stack delivers **+1.488 dB [+1.379, +1.593] AND ΔLPIPS
+  −0.0748 [−0.0775, −0.0720]** over the FULL-BUDGET primary anchor (full9
+  stratified, 9/9), and **+0.336 dB [+0.294, +0.380] / −0.0176** over
+  PJ-2026 on the same B50 base — the ladder's margin over Phase-J is
+  base-independent (full-budget margin +0.361/−0.0169). Geometry/downstream
+  metrics preserved per the frozen Stage-2/3 results (cited, not re-run;
+  the transport leaves rendered depth untouched by construction). Evidence:
+  `final_<scene>_B50_v1` rows + L6 tie-back in
+  `analysis/final_stack/final_stack_tables.md` (GOAL L6, 9/9 audits GREEN).
 - **CR4 — Certified transport (INSTANTIATED; SHRUNK v0.3).** Train-only
   guarantees are audited per reported row: **69/69 `--ecr` audits GREEN**
   (all transport reads ⊆ cache manifest; manifest train views disjoint from
@@ -96,3 +101,9 @@ MOTIVATION for caching evidence rather than baking it, reported first-class.
   banked alongside (GOAL #E-09): Difix3D+ single-step on the same base
   renders is PSNR-negative on all 3 scenes and dominated by the ECR final
   stack on both metrics — recorded as A11 rebuttal evidence, not a claim.
+- 2026-07-10 v0.4: CR1 extended with the banked suite rows (3/5 CI-positive
+  over PJ-2026; town06/toy honest boundary cases); **CR3 fully
+  instantiated** from the L6 rows (compact stack +1.488/−0.0748 over the
+  full-budget anchor; +0.336/−0.0176 over PJ-2026 on the same base, 9/9;
+  14/14 chain audits GREEN). Open slot remaining: CR2's Pareto curve
+  (E-06 chains running).
