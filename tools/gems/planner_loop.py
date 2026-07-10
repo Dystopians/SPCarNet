@@ -344,7 +344,8 @@ class GridMaps:
 # ---------------------------------------------------------------------------
 
 def astar(maps, ptab, start, goal, dist_map,
-          max_expansions=MAX_EXPANSIONS, max_seconds=MAX_SECONDS):
+          max_expansions=MAX_EXPANSIONS, max_seconds=MAX_SECONDS,
+          cell_cost_mult=None):
     """A* from start=(ix,iy,t) to goal=(gx,gy,gt) on one grid.
 
     dist_map: flattened [nx*ny] geodesic distances (m) from the GOAL cell on
@@ -434,7 +435,13 @@ def astar(maps, ptab, start, goal, dist_map,
             niy = iy + dj
             if nix < 0 or nix >= nx or niy < 0 or niy >= ny:
                 continue
-            ng = gc + cost[p]
+            # DS-1 hook (default None = exact legacy behavior): per-cell
+            # traversal-cost multiplier >= 1 at the primitive END cell —
+            # keeps h admissible (costs only inflate).
+            if cell_cost_mult is None:
+                ng = gc + cost[p]
+            else:
+                ng = gc + cost[p] * cell_cost_mult[nix * ny + niy]
             nsid = (nix * ny + niy) * N_THETA + nt
             if ng < g[nsid] - 1e-12:
                 g[nsid] = ng
@@ -696,11 +703,13 @@ def _json_safe(x):
     return x
 
 
-def plan_cell(cell_key, maps, maps_gt_band, problems, ptab, dist_maps):
+def plan_cell(cell_key, maps, maps_gt_band, problems, ptab, dist_maps,
+              cell_cost_mult=None):
     """Plan all problems on one grid; GT-sweep each found plan."""
     per_problem = []
     for k, prob in enumerate(problems):
-        res = astar(maps, ptab, prob["start"], prob["goal"], dist_maps[k])
+        res = astar(maps, ptab, prob["start"], prob["goal"], dist_maps[k],
+                    cell_cost_mult=cell_cost_mult)
         rec = {"problem": k, "found": res["found"], "reason": res["reason"],
                "n_expansions": res["n_expansions"],
                "wall_s": round(res["wall_s"], 4),
