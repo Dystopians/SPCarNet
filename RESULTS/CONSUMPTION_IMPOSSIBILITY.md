@@ -84,3 +84,38 @@ checkpoints. The strongest honest statement is negative and diagnostic:
 GEMS exposes where splatting-style checkpoint geometry remains unsafe for
 one-time occupancy consumers, while B50 compaction preserves those downstream
 outcomes exactly under the tested consumers.
+
+## DS-1 Addendum (2026-07-10, Stage-4 prompt §6 — the ONE permitted retry): STRENGTHENED
+
+The closure was narrowly reopened for one pre-registered mechanism (LEDGER
+GOAL #E-10): ray stride 16→2, FREE dilation by r_inf, and UNKNOWN =
+traversable at ×5 cost (never free); V1's frozen params reused, NO
+recalibration; GTREF/problems/collision accounting byte-identical.
+
+**Verdict: FAIL — and the diagnosis is sharper than V1's.** Courtyard stays
+0/100 found on both checkpoints, but the failure MODE changed: with UNKNOWN
+traversable, nothing is starved — instead the dense stride-2 carve floods
+the map with depth-noise votes, so the model's own OCCUPIED set invalidates
+the episode poses (courtyard: 92 start_invalid + 8 goal_invalid; lethal
+fraction 88.6% after the r_inf inflation). Critically, P1 no longer holds
+at dense sampling: raw FREE false-free rises from 6.2% (stride 16) to
+19.1% (stride 2) — denser sampling of the same rendered depth makes the
+map WORSE on both safety axes simultaneously. Toy moves 0→6/100 (0
+collisions, far under the bar; 57 start_invalid / 31 goal_invalid / 6
+disconnected).
+
+The V1 diagnosis ("the map was safe; the semantics starved it") is
+therefore amended: at the sampling density needed to defeat starvation, the
+map is NOT safe. The binding constraint is the metric accuracy of the
+checkpoint's own rendered depth in the vehicle band — not ray density, not
+UNKNOWN semantics, not planner cost design. This closes the §6 reopening
+with the impossibility STRENGTHENED: no configuration of this one-time
+carve family reaches the frozen fix-target, and the failure now has a
+single named cause. (Note the Stage-4 contrast: the SAME rendered evidence
+that cannot form a collision-grade world model is highly effective as
+RENDER-TIME photometric evidence — ECR's +1.67 dB — which is exactly the
+representation-vs-consumption boundary this program documents.)
+
+Evidence: `analysis/ds1_dense_carve/{summary.json,cells/*.json,maps/*}`;
+mechanism + hook: `tools/gems/ds1_dense_carve.py`,
+`tools/gems/planner_loop.py::astar(cell_cost_mult=None)` (default-off).
