@@ -48,3 +48,23 @@ If time allows, render a compact 2x4 panel:
 
 Evidence path for numbers:
 `RESULTS/CONSUMPTION_IMPOSSIBILITY.md` and `T5b_r3_trilogy.md`.
+
+---
+
+## STAGE-4 REFRESH (2026-07-10) — ECR figure set
+
+Revised main-figure recommendation: the pipeline figure now ends in the ECR
+render loop, not the analysis branches — {mesh checkpoint + evidence cache}
+→ base render → K-source depth-consistent warp → learned α/β routing →
+final frame, with the audit boundary (pose-primitives only, GT sentinel)
+drawn as a hard wall. The Stage-3 branches (geometry suite, impossibility)
+become a compact side box labeled "scope".
+
+| figure | source | purpose | notes |
+|---|---|---|---|
+| F-E1 ECR pipeline + audit wall | new art | the method core + the no-test-GT boundary | show the cache as a shipped artifact; β·valid gate explicit |
+| F-E2 qual grids (best/median/failure) | `RESULTS/figures/ecr_qual/<scene>_ecr_qual_grid.png` (5 scenes) | GT/base/PJ-2026/final + β + confidence rows under the frozen crop rule | bicycle failure column IS the coverage-gap story — keep it |
+| F-E3 β/confidence close-ups | `analysis/quals/<scene>_final/<view>/{beta,conf}.png` | routing concentrates on high-frequency supported regions; vanishes at occlusion seams | garden DSC07956 β map is the poster child |
+| F-E4 ladder bar chart | `analysis/e0_pj2026/l{1,2,3,4}_gate.json` | per-rung CI'd deltas incl. the L1 negative | plot CI bars, mark the promotion floor |
+| F-E5 storage Pareto | `analysis/final_stack/l5_pareto.{md,json}` (E-06, in flight) | quality vs TOTAL MB incl. matched-3DGS point | overlay e07 3DGS points + Difix point for the full trade picture |
+| F-E6 failure cases | `analysis/final_stack/ecr_failure_cases.md` + quals planes | E9-style: 1 negative view in 139; graceful degradation | pair each case with its conf/β plane |
