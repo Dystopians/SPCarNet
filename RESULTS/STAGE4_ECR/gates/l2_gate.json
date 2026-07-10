@@ -1,0 +1,218 @@
+{
+ "label": "L2-multiband",
+ "candidate": "l2_{scene}_cleanfixed30k_multiband_v1",
+ "incumbent": "e0_{scene}_cleanfixed30k_pj2026_v1",
+ "full9_mean_dpsnr": {
+  "mean": 0.09627843638308625,
+  "ci_lo": 0.06139192563230191,
+  "ci_hi": 0.13257979219662852
+ },
+ "full9_mean_dlpips": {
+  "mean": -0.004640040661571475,
+  "ci_lo": -0.005686740736305976,
+  "ci_hi": -0.0035780008944940175
+ },
+ "psnr_floor_pass": false,
+ "lpips_floor_pass": true,
+ "verdict": "PROMOTE",
+ "per_scene": {
+  "garden": {
+   "cand_psnr": 26.055580139160156,
+   "inc_psnr": 26.040678024291992,
+   "psnr": {
+    "mean_diff": 0.014901558558146158,
+    "ci_lo": 0.010618654886881511,
+    "ci_hi": 0.019531305631001788,
+    "floor": 0.1,
+    "excludes_zero": true,
+    "clears_floor": false,
+    "verdict": "DIAGNOSTIC"
+   },
+   "lpips": {
+    "mean_diff": -0.00022588390856981277,
+    "ci_lo": -0.00030100290508319933,
+    "ci_hi": -0.00015021368550757568,
+    "floor": 0.004,
+    "excludes_zero": true,
+    "clears_floor": false,
+    "verdict": "DIAGNOSTIC"
+   }
+  },
+  "bicycle": {
+   "cand_psnr": 23.611417770385742,
+   "inc_psnr": 23.700536727905273,
+   "psnr": {
+    "mean_diff": -0.08911872863769531,
+    "ci_lo": -0.15907796096801757,
+    "ci_hi": -0.026915012359619177,
+    "floor": 0.1,
+    "excludes_zero": true,
+    "clears_floor": false,
+    "verdict": "DIAGNOSTIC"
+   },
+   "lpips": {
+    "mean_diff": 0.0003875434398651123,
+    "ci_lo": -0.004303268507122994,
+    "ci_hi": 0.005596016809344288,
+    "floor": 0.004,
+    "excludes_zero": false,
+    "clears_floor": false,
+    "verdict": "DIAGNOSTIC"
+   }
+  },
+  "flowers": {
+   "cand_psnr": 20.007434844970703,
+   "inc_psnr": 20.00541877746582,
+   "psnr": {
+    "mean_diff": 0.002016240900213068,
+    "ci_lo": 0.0009055506099354137,
+    "ci_hi": 0.0032246849753639908,
+    "floor": 0.1,
+    "excludes_zero": true,
+    "clears_floor": false,
+    "verdict": "DIAGNOSTIC"
+   },
+   "lpips": {
+    "mean_diff": 0.0003023540431802923,
+    "ci_lo": 0.0001863929358395663,
+    "ci_hi": 0.0004150306975299661,
+    "floor": 0.004,
+    "excludes_zero": true,
+    "clears_floor": false,
+    "verdict": "DIAGNOSTIC"
+   }
+  },
+  "stump": {
+   "cand_psnr": 25.19936752319336,
+   "inc_psnr": 25.226669311523438,
+   "psnr": {
+    "mean_diff": -0.027303457260131836,
+    "ci_lo": -0.06409449279308319,
+    "ci_hi": 0.00864021778106689,
+    "floor": 0.1,
+    "excludes_zero": false,
+    "clears_floor": false,
+    "verdict": "DIAGNOSTIC"
+   },
+   "lpips": {
+    "mean_diff": 0.0006186682730913162,
+    "ci_lo": -0.0007909609004855156,
+    "ci_hi": 0.002178137330338359,
+    "floor": 0.004,
+    "excludes_zero": false,
+    "clears_floor": false,
+    "verdict": "DIAGNOSTIC"
+   }
+  },
+  "treehill": {
+   "cand_psnr": 20.949493408203125,
+   "inc_psnr": 20.96029281616211,
+   "psnr": {
+    "mean_diff": -0.010801421271430122,
+    "ci_lo": -0.04573364787631565,
+    "ci_hi": 0.021946875254313145,
+    "floor": 0.1,
+    "excludes_zero": false,
+    "clears_floor": false,
+    "verdict": "DIAGNOSTIC"
+   },
+   "lpips": {
+    "mean_diff": -0.0013414869705835979,
+    "ci_lo": -0.0030575471619764963,
+    "ci_hi": 0.0005350803335507709,
+    "floor": 0.004,
+    "excludes_zero": false,
+    "clears_floor": false,
+    "verdict": "DIAGNOSTIC"
+   }
+  },
+  "room": {
+   "cand_psnr": 30.336484909057617,
+   "inc_psnr": 30.205644607543945,
+   "psnr": {
+    "mean_diff": 0.1308423555814303,
+    "ci_lo": -0.00923003416794997,
+    "ci_hi": 0.27865749139052165,
+    "floor": 0.1,
+    "excludes_zero": false,
+    "clears_floor": true,
+    "verdict": "DIAGNOSTIC"
+   },
+   "lpips": {
+    "mean_diff": -0.009798453022272158,
+    "ci_lo": -0.013457429423355139,
+    "ci_hi": -0.006107835963559457,
+    "floor": 0.004,
+    "excludes_zero": true,
+    "clears_floor": true,
+    "verdict": "SIGNIFICANT (a < b)"
+   }
+  },
+  "counter": {
+   "cand_psnr": 28.649593353271484,
+   "inc_psnr": 28.299095153808594,
+   "psnr": {
+    "mean_diff": 0.3504994710286458,
+    "ci_lo": 0.24439449151357018,
+    "ci_hi": 0.44447309017181397,
+    "floor": 0.1,
+    "excludes_zero": true,
+    "clears_floor": true,
+    "verdict": "SIGNIFICANT (a > b)"
+   },
+   "lpips": {
+    "mean_diff": -0.012506165107091268,
+    "ci_lo": -0.015827402484913666,
+    "ci_hi": -0.00896383434534073,
+    "floor": 0.004,
+    "excludes_zero": true,
+    "clears_floor": true,
+    "verdict": "SIGNIFICANT (a < b)"
+   }
+  },
+  "kitchen": {
+   "cand_psnr": 30.24982261657715,
+   "inc_psnr": 30.14463996887207,
+   "psnr": {
+    "mean_diff": 0.10518199375697544,
+    "ci_lo": -0.08326073510306221,
+    "ci_hi": 0.28146867479596815,
+    "floor": 0.1,
+    "excludes_zero": false,
+    "clears_floor": true,
+    "verdict": "DIAGNOSTIC"
+   },
+   "lpips": {
+    "mean_diff": -0.00027639887162617273,
+    "ci_lo": -0.005420665948518685,
+    "ci_hi": 0.005278504075748576,
+    "floor": 0.004,
+    "excludes_zero": false,
+    "clears_floor": false,
+    "verdict": "DIAGNOSTIC"
+   }
+  },
+  "bonsai": {
+   "cand_psnr": 32.0435905456543,
+   "inc_psnr": 31.65330696105957,
+   "psnr": {
+    "mean_diff": 0.39028791479162267,
+    "ci_lo": 0.23129658312410922,
+    "ci_hi": 0.5986548488204543,
+    "floor": 0.1,
+    "excludes_zero": true,
+    "clears_floor": true,
+    "verdict": "SIGNIFICANT (a > b)"
+   },
+   "lpips": {
+    "mean_diff": -0.018920543830136995,
+    "ci_lo": -0.021565998813791853,
+    "ci_hi": -0.016288833013056097,
+    "floor": 0.004,
+    "excludes_zero": true,
+    "clears_floor": true,
+    "verdict": "SIGNIFICANT (a < b)"
+   }
+  }
+ }
+}

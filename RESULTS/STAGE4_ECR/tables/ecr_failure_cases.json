@@ -1,0 +1,74 @@
+{
+ "garden": {
+  "coverage_gap": {
+   "view": "DSC07988",
+   "covered_fraction": 0.9215754866600037,
+   "dpsnr": 0.3480815887451172
+  },
+  "transport_worst": {
+   "view": "DSC07988",
+   "dpsnr": 0.3480815887451172,
+   "covered_fraction": 0.9215754866600037
+  },
+  "transport_negative_views": {},
+  "n_views": 24
+ },
+ "bicycle": {
+  "coverage_gap": {
+   "view": "_DSC8784",
+   "covered_fraction": 0.46743258833885193,
+   "dpsnr": 0.12766456604003906
+  },
+  "transport_worst": {
+   "view": "_DSC8784",
+   "dpsnr": 0.12766456604003906,
+   "covered_fraction": 0.46743258833885193
+  },
+  "transport_negative_views": {},
+  "n_views": 25
+ },
+ "bonsai": {
+  "coverage_gap": {
+   "view": "DSCF5813",
+   "covered_fraction": 0.9251827597618103,
+   "dpsnr": 2.560995101928711
+  },
+  "transport_worst": {
+   "view": "DSCF5789",
+   "dpsnr": 0.8502559661865234,
+   "covered_fraction": 0.9540331959724426
+  },
+  "transport_negative_views": {},
+  "n_views": 37
+ },
+ "treehill": {
+  "coverage_gap": {
+   "view": "_DSC8898",
+   "covered_fraction": 0.47063496708869934,
+   "dpsnr": 0.6638545989990234
+  },
+  "transport_worst": {
+   "view": "_DSC8946",
+   "dpsnr": -0.05874443054199219,
+   "covered_fraction": 0.8251415491104126
+  },
+  "transport_negative_views": {
+   "_DSC8946": -0.05874443054199219
+  },
+  "n_views": 18
+ },
+ "kitchen": {
+  "coverage_gap": {
+   "view": "DSCF0760",
+   "covered_fraction": 0.934816837310791,
+   "dpsnr": 4.523021697998047
+  },
+  "transport_worst": {
+   "view": "DSCF0728",
+   "dpsnr": 0.6908798217773438,
+   "covered_fraction": 0.9836399555206299
+  },
+  "transport_negative_views": {},
+  "n_views": 35
+ }
+}

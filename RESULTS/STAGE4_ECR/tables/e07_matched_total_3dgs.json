@@ -1,0 +1,94 @@
+{
+ "goal": "GOAL #E-07",
+ "cell": "matched-TOTAL-storage 3DGS rerun",
+ "context_only": true,
+ "scenes": {
+  "garden": {
+   "target_total_mb": 2275.1591482162476,
+   "ecr_final_stack": {
+    "row": "l4_garden_cleanfixed30k_routed_v1",
+    "psnr": 26.36972999572754,
+    "ssim": 0.8333484530448914,
+    "lpips": 0.12856817245483398,
+    "ckpt_mb": 941.9941701889038,
+    "cache_mb_raw": 1333.1649780273438,
+    "cache_mb_compressed": 1207.0581121444702,
+    "total_mb": 2275.1591482162476,
+    "end_to_end_fps": 1.3295814672391146
+   },
+   "3dgs_matched_total": {
+    "source": "r1_garden.json rows.3dgs_30k (GOAL #017, banked; vanilla <= target => as-is)",
+    "psnr": 27.503400802612305,
+    "ssim": 0.8681352734565735,
+    "lpips": 0.10615985840559006,
+    "disk_mb": 983.5511512756348,
+    "fps": 100.84591218980195,
+    "n_gaussians": 4158575,
+    "storage_headroom_mb": 1291.6079969406128,
+    "pruned": false
+   },
+   "gap": {
+    "dpsnr_3dgs_minus_ecr": 1.1336708068847656,
+    "dlpips_3dgs_minus_ecr": -0.022408314049243927
+   }
+  },
+  "bicycle": {
+   "target_total_mb": 2124.0327434539795,
+   "ecr_final_stack": {
+    "row": "l4_bicycle_cleanfixed30k_routed_v1",
+    "psnr": 23.713274002075195,
+    "ssim": 0.6921018958091736,
+    "lpips": 0.27771633863449097,
+    "ckpt_mb": 908.1382131576538,
+    "cache_mb_raw": 1215.8945302963257,
+    "cache_mb_compressed": 1103.8904876708984,
+    "total_mb": 2124.0327434539795,
+    "end_to_end_fps": 2.5658982531224357
+   },
+   "3dgs_matched_total": {
+    "source": "r1_bicycle.json rows.3dgs_30k (GOAL #017, banked; vanilla <= target => as-is)",
+    "psnr": 25.24148941040039,
+    "ssim": 0.7660205364227295,
+    "lpips": 0.20879630744457245,
+    "disk_mb": 1164.8535652160645,
+    "fps": 79.37142538685325,
+    "n_gaussians": 4925145,
+    "storage_headroom_mb": 959.179178237915,
+    "pruned": false
+   },
+   "gap": {
+    "dpsnr_3dgs_minus_ecr": 1.5282154083251953,
+    "dlpips_3dgs_minus_ecr": -0.06892003118991852
+   }
+  },
+  "kitchen": {
+   "target_total_mb": 3339.8597831726074,
+   "ecr_final_stack": {
+    "row": "l4_kitchen_cleanfixed30k_routed_v1",
+    "psnr": 30.485992431640625,
+    "ssim": 0.9208558201789856,
+    "lpips": 0.13206900656223297,
+    "ckpt_mb": 708.7238454818726,
+    "cache_mb_raw": 2631.135937690735,
+    "cache_mb_compressed": 2324.331343650818,
+    "total_mb": 3339.8597831726074,
+    "end_to_end_fps": 2.073500135256713
+   },
+   "3dgs_matched_total": {
+    "source": "r1_kitchen.json rows.3dgs_30k (GOAL #017, banked; vanilla <= target => as-is)",
+    "psnr": 30.803070068359375,
+    "ssim": 0.925217866897583,
+    "lpips": 0.12696316838264465,
+    "disk_mb": 376.58930587768555,
+    "fps": 149.406430551828,
+    "n_gaussians": 1592262,
+    "storage_headroom_mb": 2963.270477294922,
+    "pruned": false
+   },
+   "gap": {
+    "dpsnr_3dgs_minus_ecr": 0.31707763671875,
+    "dlpips_3dgs_minus_ecr": -0.005105838179588318
+   }
+  }
+ }
+}

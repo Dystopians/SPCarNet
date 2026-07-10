@@ -1,0 +1,21 @@
+0606661464d3f806680358e060a50b8a94e10a04633dab642c5e682b3f1c54d5  RESULTS/STAGE4_ECR/difix/attempt_log.md  <= /data/peilincai/gems_stage1/analysis/difix_cell/attempt_log.md
+748d98da9f4ae254b40960ee15b70b1d70e4f8173a6ec9e5997f55bf1fce0c6b  RESULTS/STAGE4_ECR/difix/difix_table.md  <= /data/peilincai/gems_stage1/analysis/difix_cell/difix_table.md
+4493a613f8e140db845739232e9a4be58f6de5c1c39e3e1f467c64791edce297  RESULTS/STAGE4_ECR/gates/l1_gate.json  <= /data/peilincai/gems_stage1/analysis/e0_pj2026/l1_gate.json
+bb348684e834f469390ee21b80681c844c36b2833bc3a122c3235462a49d82c2  RESULTS/STAGE4_ECR/gates/l2_gate.json  <= /data/peilincai/gems_stage1/analysis/e0_pj2026/l2_gate.json
+00520dec9fff308aaf9ddc5701032141c83c7e876f4c58e8dae9d1bcb7235472  RESULTS/STAGE4_ECR/gates/l3_gate.json  <= /data/peilincai/gems_stage1/analysis/e0_pj2026/l3_gate.json
+635729c7175dd16f3da7acaf5ba51cf869f07311afef8de3ae44b73a87484df2  RESULTS/STAGE4_ECR/gates/l3_vs_floor.json  <= /data/peilincai/gems_stage1/analysis/e0_pj2026/l3_vs_floor.json
+92c929df0f17be43470f5a924563afc487e5c8141d5dd0530fb31c281d7e5d12  RESULTS/STAGE4_ECR/gates/l4_gate.json  <= /data/peilincai/gems_stage1/analysis/e0_pj2026/l4_gate.json
+aeeaf73877ade142c4993495926ec3ec8c8f3b41b0e9bb0432dc6ad1ee4e3175  RESULTS/STAGE4_ECR/gates/l4_vs_floor.json  <= /data/peilincai/gems_stage1/analysis/e0_pj2026/l4_vs_floor.json
+7e8e9622440ae08bbacfb3090c4bba23f24cef88d0804c7f501c719e310a3ef3  RESULTS/STAGE4_ECR/tables/e07_matched_total_3dgs.json  <= /data/peilincai/gems_stage1/analysis/final_stack/e07_matched_total_3dgs.json
+e3f08bf746e772f48fa598a005420cbb77da770963683015d17f1d286b9fcc28  RESULTS/STAGE4_ECR/tables/e07_matched_total_3dgs.md  <= /data/peilincai/gems_stage1/analysis/final_stack/e07_matched_total_3dgs.md
+12950c42a2d6621d49340268769939efbeba22875c5d6530767cb1bec2e5fced  RESULTS/STAGE4_ECR/tables/e0_b50_table.md  <= /data/peilincai/gems_stage1/analysis/e0_pj2026/e0_b50_table.md
+d7881fe0674334da7caf19d08291e228f4c5acf1b7aea97e79222e3e88cc24a8  RESULTS/STAGE4_ECR/tables/e0_primary_table.md  <= /data/peilincai/gems_stage1/analysis/e0_pj2026/e0_primary_table.md
+31d5b3e1cbf273e51e3545d76c8ac7b6d75f46629e6ce46fefb34a10e2f3cf67  RESULTS/STAGE4_ECR/tables/ecr_failure_cases.json  <= /data/peilincai/gems_stage1/analysis/final_stack/ecr_failure_cases.json
+f5500780f109179bc8687b8a5fc281a30963f07d36c2715de18bf2128c1cc64b  RESULTS/STAGE4_ECR/tables/ecr_failure_cases.md  <= /data/peilincai/gems_stage1/analysis/final_stack/ecr_failure_cases.md
+8b9504f4b4a5279bd462e4fe0e76f750201b5970205d4a791f95e56c26e75625  RESULTS/STAGE4_ECR/tables/final_stack_summary.json  <= /data/peilincai/gems_stage1/analysis/final_stack/final_stack_summary.json
+0376d4565c3a11ecc0dce5a2f21561c298f3b7b33afc900d62c303de1abd7595  RESULTS/STAGE4_ECR/tables/final_stack_tables.md  <= /data/peilincai/gems_stage1/analysis/final_stack/final_stack_tables.md
+# Stage-4 ECR pack — folded 8689033
+# Byte verification: every line above is sha256 of BOTH source and copy (asserted equal at fold time).
+# Qual grids live in RESULTS/figures/ecr_qual/ (generated in-repo, not copied).
+# PENDING (not yet banked): /data/peilincai/gems_stage1/analysis/final_stack/l5_pareto.md
+# PENDING (not yet banked): /data/peilincai/gems_stage1/analysis/final_stack/l5_pareto.json
