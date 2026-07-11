@@ -41,9 +41,13 @@ compared as such.
   end-to-end FPS — context-only cross-representation reference, no CIs,
   exactly the frozen NON-CLAIMS trade; the Stage-2 R1 gap (2.1–3.4 dB) is
   nonetheless mostly closed (`analysis/final_stack/e07_matched_total_3dgs.md`,
-  GOAL #E-07). The cache-quality Pareto is [curve — GOAL #E-06 chains in
-  flight]. Every ECR row carries cache_mb_raw / cache_mb_compressed /
-  transport_ms_per_frame / end_to_end_fps / total_artifact_mb.
+  GOAL #E-07). The cache-quality Pareto (GOAL #E-06, 15 points, 15/15
+  audits): **jpeg95 re-encoding is nearly free** (garden −0.10 / kitchen
+  −0.08 dB, bicycle +0.32 dB) at ~22% TOTAL savings; halfres buys 44–58%
+  savings at −0.85..−0.95 dB; K-subset-50 is the dominated axis
+  (`analysis/final_stack/l5_pareto.md`). Every ECR row carries cache_mb_raw
+  / cache_mb_compressed / transport_ms_per_frame / end_to_end_fps /
+  total_artifact_mb.
 - **CR3 — Mesh retained (INSTANTIATED).** At 50% triangles (B5@B50 base),
   the full ECR stack delivers **+1.488 dB [+1.379, +1.593] AND ΔLPIPS
   −0.0748 [−0.0775, −0.0720]** over the FULL-BUDGET primary anchor (full9
@@ -107,3 +111,7 @@ MOTIVATION for caching evidence rather than baking it, reported first-class.
   full-budget anchor; +0.336/−0.0176 over PJ-2026 on the same base, 9/9;
   14/14 chain audits GREEN). Open slot remaining: CR2's Pareto curve
   (E-06 chains running).
+- 2026-07-10 v0.5: **CR2 complete** — L5 Pareto banked (15 points, 15/15
+  audits GREEN; jpeg95 ~free, halfres −0.9 dB at ~50% TOTAL savings). All
+  four claims now fully instantiated; total ecr-audit trail 96/96 GREEN.
+  No open slots.

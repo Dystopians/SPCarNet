@@ -14,8 +14,8 @@ d7881fe0674334da7caf19d08291e228f4c5acf1b7aea97e79222e3e88cc24a8  RESULTS/STAGE4
 f5500780f109179bc8687b8a5fc281a30963f07d36c2715de18bf2128c1cc64b  RESULTS/STAGE4_ECR/tables/ecr_failure_cases.md  <= /data/peilincai/gems_stage1/analysis/final_stack/ecr_failure_cases.md
 8b9504f4b4a5279bd462e4fe0e76f750201b5970205d4a791f95e56c26e75625  RESULTS/STAGE4_ECR/tables/final_stack_summary.json  <= /data/peilincai/gems_stage1/analysis/final_stack/final_stack_summary.json
 0376d4565c3a11ecc0dce5a2f21561c298f3b7b33afc900d62c303de1abd7595  RESULTS/STAGE4_ECR/tables/final_stack_tables.md  <= /data/peilincai/gems_stage1/analysis/final_stack/final_stack_tables.md
-# Stage-4 ECR pack — folded 8689033
+99467b0bf2a16f22024aa8c73ce71474af1ee75e85202570fbce54d135b367ff  RESULTS/STAGE4_ECR/tables/l5_pareto.json  <= /data/peilincai/gems_stage1/analysis/final_stack/l5_pareto.json
+7908e5bdaeb9179c3219841b091dae95c099076680f807eb503ff4c40e31e970  RESULTS/STAGE4_ECR/tables/l5_pareto.md  <= /data/peilincai/gems_stage1/analysis/final_stack/l5_pareto.md
+# Stage-4 ECR pack — folded d54f509
 # Byte verification: every line above is sha256 of BOTH source and copy (asserted equal at fold time).
 # Qual grids live in RESULTS/figures/ecr_qual/ (generated in-repo, not copied).
-# PENDING (not yet banked): /data/peilincai/gems_stage1/analysis/final_stack/l5_pareto.md
-# PENDING (not yet banked): /data/peilincai/gems_stage1/analysis/final_stack/l5_pareto.json

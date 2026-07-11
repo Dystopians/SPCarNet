@@ -1,0 +1,170 @@
+{
+ "garden": {
+  "uncompressed": {
+   "psnr": 26.36972999572754,
+   "lpips": 0.12856817245483398,
+   "cache_mb_raw": 1333.1649780273438,
+   "cache_mb_compressed": 1207.0581121444702,
+   "ckpt_mb": 941.9941701889038,
+   "total_mb_raw": 2275.1591482162476,
+   "dpsnr_vs_uncompressed": 0.0
+  },
+  "jpeg95": {
+   "psnr": 26.27427101135254,
+   "lpips": 0.13620765507221222,
+   "cache_mb_raw": 851.4830522537231,
+   "cache_mb_compressed": 725.360517501831,
+   "ckpt_mb": 941.9941701889038,
+   "total_mb_raw": 1793.477222442627,
+   "dpsnr_vs_uncompressed": -0.095458984375
+  },
+  "jpeg85": {
+   "psnr": 26.20477294921875,
+   "lpips": 0.14672590792179108,
+   "cache_mb_raw": 771.3997888565063,
+   "cache_mb_compressed": 645.2768535614014,
+   "ckpt_mb": 941.9941701889038,
+   "total_mb_raw": 1713.3939590454102,
+   "dpsnr_vs_uncompressed": -0.16495704650878906
+  },
+  "jpeg70": {
+   "psnr": 26.04545783996582,
+   "lpips": 0.1637340933084488,
+   "cache_mb_raw": 738.2572841644287,
+   "cache_mb_compressed": 612.1353521347046,
+   "ckpt_mb": 941.9941701889038,
+   "total_mb_raw": 1680.2514543533325,
+   "dpsnr_vs_uncompressed": -0.32427215576171875
+  },
+  "halfres": {
+   "psnr": 25.516624450683594,
+   "lpips": 0.19700604677200317,
+   "cache_mb_raw": 331.08914279937744,
+   "cache_mb_compressed": 300.3370237350464,
+   "ckpt_mb": 941.9941701889038,
+   "total_mb_raw": 1273.0833129882812,
+   "dpsnr_vs_uncompressed": -0.8531055450439453
+  },
+  "ksubset50": {
+   "psnr": 25.955785751342773,
+   "lpips": 0.1411610096693039,
+   "cache_mb_raw": 663.378436088562,
+   "cache_mb_compressed": 599.531759262085,
+   "ckpt_mb": 941.9941701889038,
+   "total_mb_raw": 1605.3726062774658,
+   "dpsnr_vs_uncompressed": -0.4139442443847656
+  }
+ },
+ "bicycle": {
+  "uncompressed": {
+   "psnr": 23.713274002075195,
+   "lpips": 0.27771633863449097,
+   "cache_mb_raw": 1215.8945302963257,
+   "cache_mb_compressed": 1103.8904876708984,
+   "ckpt_mb": 908.1382131576538,
+   "total_mb_raw": 2124.0327434539795,
+   "dpsnr_vs_uncompressed": 0.0
+  },
+  "jpeg95": {
+   "psnr": 24.027841567993164,
+   "lpips": 0.2614991068840027,
+   "cache_mb_raw": 811.7721834182739,
+   "cache_mb_compressed": 699.6116971969604,
+   "ckpt_mb": 908.1382131576538,
+   "total_mb_raw": 1719.9103965759277,
+   "dpsnr_vs_uncompressed": 0.31456756591796875
+  },
+  "jpeg85": {
+   "psnr": 23.992998123168945,
+   "lpips": 0.26918715238571167,
+   "cache_mb_raw": 744.6504793167114,
+   "cache_mb_compressed": 632.4379043579102,
+   "ckpt_mb": 908.1382131576538,
+   "total_mb_raw": 1652.7886924743652,
+   "dpsnr_vs_uncompressed": 0.27972412109375
+  },
+  "jpeg70": {
+   "psnr": 23.97393035888672,
+   "lpips": 0.2778322994709015,
+   "cache_mb_raw": 717.1360654830933,
+   "cache_mb_compressed": 604.8921461105347,
+   "ckpt_mb": 908.1382131576538,
+   "total_mb_raw": 1625.274278640747,
+   "dpsnr_vs_uncompressed": 0.26065635681152344
+  },
+  "halfres": {
+   "psnr": 23.467849731445312,
+   "lpips": 0.32770347595214844,
+   "cache_mb_raw": 312.42284297943115,
+   "cache_mb_compressed": 284.3778324127197,
+   "ckpt_mb": 908.1382131576538,
+   "total_mb_raw": 1220.561056137085,
+   "dpsnr_vs_uncompressed": -0.2454242706298828
+  },
+  "ksubset50": {
+   "psnr": 23.680835723876953,
+   "lpips": 0.28768017888069153,
+   "cache_mb_raw": 603.6937913894653,
+   "cache_mb_compressed": 545.8787870407104,
+   "ckpt_mb": 908.1382131576538,
+   "total_mb_raw": 1511.8320045471191,
+   "dpsnr_vs_uncompressed": -0.03243827819824219
+  }
+ },
+ "kitchen": {
+  "uncompressed": {
+   "psnr": 30.485992431640625,
+   "lpips": 0.13206900656223297,
+   "cache_mb_raw": 2631.135937690735,
+   "cache_mb_compressed": 2324.331343650818,
+   "ckpt_mb": 708.7238454818726,
+   "total_mb_raw": 3339.8597831726074,
+   "dpsnr_vs_uncompressed": 0.0
+  },
+  "jpeg95": {
+   "psnr": 30.405269622802734,
+   "lpips": 0.13598491251468658,
+   "cache_mb_raw": 1785.6657257080078,
+   "cache_mb_compressed": 1478.8377084732056,
+   "ckpt_mb": 708.7238454818726,
+   "total_mb_raw": 2494.3895711898804,
+   "dpsnr_vs_uncompressed": -0.08072280883789062
+  },
+  "jpeg85": {
+   "psnr": 30.278236389160156,
+   "lpips": 0.14209549129009247,
+   "cache_mb_raw": 1658.5425968170166,
+   "cache_mb_compressed": 1351.7131080627441,
+   "ckpt_mb": 708.7238454818726,
+   "total_mb_raw": 2367.266442298889,
+   "dpsnr_vs_uncompressed": -0.20775604248046875
+  },
+  "jpeg70": {
+   "psnr": 30.1385498046875,
+   "lpips": 0.14829154312610626,
+   "cache_mb_raw": 1610.873293876648,
+   "cache_mb_compressed": 1304.0202713012695,
+   "ckpt_mb": 708.7238454818726,
+   "total_mb_raw": 2319.5971393585205,
+   "dpsnr_vs_uncompressed": -0.347442626953125
+  },
+  "halfres": {
+   "psnr": 29.540767669677734,
+   "lpips": 0.1740022897720337,
+   "cache_mb_raw": 687.8770866394043,
+   "cache_mb_compressed": 615.8757610321045,
+   "ckpt_mb": 708.7238454818726,
+   "total_mb_raw": 1396.6009321212769,
+   "dpsnr_vs_uncompressed": -0.9452247619628906
+  },
+  "ksubset50": {
+   "psnr": 29.771024703979492,
+   "lpips": 0.13671262562274933,
+   "cache_mb_raw": 1317.0856819152832,
+   "cache_mb_compressed": 1162.23215675354,
+   "ckpt_mb": 708.7238454818726,
+   "total_mb_raw": 2025.8095273971558,
+   "dpsnr_vs_uncompressed": -0.7149677276611328
+  }
+ }
+}
