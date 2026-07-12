@@ -110,6 +110,7 @@ class ConfinedFrameLoader:
         self._cache: OrderedDict[str, torch.Tensor] = OrderedDict()
         self._max_cached = int(max_cached)
         self.read_log: set[str] = set()
+        self._patches: dict[str, str] = {}
 
     def register_target(self, name: str, render: torch.Tensor,
                         depth: torch.Tensor) -> FrameRecord:
@@ -152,7 +153,14 @@ class ConfinedFrameLoader:
             real, lambda: read_image_tensor(Path(real), device=self.device))
 
     def render(self, path: str) -> torch.Tensor:
-        return self._image(path)
+        text = str(path)
+        patch = self._patches.get(text)
+        if patch is None:
+            return self._image(text)
+        key = f"{text}::patched"
+        return self._cached_disk(
+            key, lambda: self._apply_patch(self._image(text), patch,
+                                           "render"))
 
     def gt(self, path: str) -> torch.Tensor:
         if TARGET_GT_SENTINEL in str(path):
@@ -165,6 +173,14 @@ class ConfinedFrameLoader:
         text = str(path)
         if text in self._mem:
             return self._mem[text]
+        patch = self._patches.get(text)
+        if patch is not None:
+            key = f"{text}::patched"
+            real = self._confined(text)
+            return self._cached_disk(
+                key, lambda: self._apply_patch(
+                    read_depth_tensor(Path(real), device=self.device),
+                    patch, "depth"))
         real = self._confined(text)
         return self._cached_disk(
             real, lambda: read_depth_tensor(Path(real), device=self.device))
@@ -175,6 +191,29 @@ class ConfinedFrameLoader:
         real = self._confined(str(path))
         return self._cached_disk(
             real, lambda: read_image_tensor(Path(real), device=self.device)[0])
+
+    def set_patches(self, patches: dict) -> None:
+        """Route-A sparse sidecar: {render_or_depth_path: patch_npz_path}.
+        Absent (the default) = bit-identical behavior. A patch npz holds
+        {bbox=(y0,x0,y1,x1), render=uint8 HxWx3 crop} or {bbox, depth=f32
+        crop}; the composed tensor is cached like any disk read and the
+        patch file is confined + read-logged."""
+        self._patches = {str(k): str(v) for k, v in patches.items()}
+
+    def _apply_patch(self, base: torch.Tensor, patch_path: str,
+                     kind: str) -> torch.Tensor:
+        import numpy as np
+        real = self._confined(patch_path)
+        data = np.load(real)
+        y0, x0, y1, x1 = [int(v) for v in data["bbox"]]
+        out = base.clone()
+        if kind == "render":
+            crop = torch.from_numpy(data["render"]).to(self.device)
+            out[:, y0:y1, x0:x1] = crop.permute(2, 0, 1).float() / 255.0
+        else:
+            crop = torch.from_numpy(data["depth"]).to(self.device)
+            out[y0:y1, x0:x1] = crop
+        return out
 
     def residual(self, frame: FrameRecord, residual_clip: float) -> torch.Tensor:
         residual = self.gt(str(frame.gt_path)) - self.render(str(frame.render_path))
@@ -202,6 +241,7 @@ class EcrRenderer:
         # Edit-aware ECR (Route A): edited caches list per-view evidence
         # validity masks; absent key (all pre-edit caches) = no masks.
         edit_masks = dict(self.manifest.get("edit", {}).get("masks", {}))
+        edit_patches = dict(self.manifest.get("edit", {}).get("patches", {}))
         self.train_frames: list[FrameRecord] = []
         for idx, name in enumerate(self.manifest["train_views"]):
             cam = by_name[name]
@@ -268,6 +308,16 @@ class EcrRenderer:
             hash_payload["fusion_net_sha256"] = self._fusion_net_sha
         self.config_hash = self._hash_kwargs(hash_payload)
         self.loader = ConfinedFrameLoader(self.cache_dir, device=self.device)
+        if edit_patches:
+            # sparse sidecar: map each patched view's render/depth path to
+            # its patch file (paths relative to the cache root)
+            pmap = {}
+            for name, rel in edit_patches.items():
+                pmap[str(self.cache_dir / "renders" / f"{name}.{rext}")] = \
+                    str(self.cache_dir / rel)
+                pmap[str(self.cache_dir / "depths" / f"{name}.npy")] = \
+                    str(self.cache_dir / rel)
+            self.loader.set_patches(pmap)
         if self._fusion_net is not None:
             self.loader.read_log.add(os.path.realpath(str(
                 self.cache_dir / str(transport["fusion_net"]))))

@@ -32,6 +32,10 @@ def main():
     ap.add_argument("--spec", required=True, help="edit spec json")
     ap.add_argument("--scene", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--sparse", action="store_true",
+                    help="sparse sidecar: store only changed-region patches "
+                         "for affected views (renders/depths hardlink the "
+                         "ORIGINAL; EcrRenderer composes at load)")
     ap.add_argument("--gpu", type=int, default=None)
     args = ap.parse_args()
     if args.gpu is not None:
@@ -117,11 +121,56 @@ def main():
     rext = str(ext.get("renders", "png"))
     gext = str(ext.get("gt", "png"))
     bytes_written = 0
+    patches_rel = {}
+    if args.sparse:
+        os.makedirs(os.path.join(dst, "patches"), exist_ok=True)
     with torch.no_grad():
         for name in train_views:
             rdst = os.path.join(dst, "renders", f"{name}.{rext}")
             ddst = os.path.join(dst, "depths", f"{name}.npy")
-            if name in masks_rel:
+            if name in masks_rel and args.sparse:
+                pkg = ctx.render_view(train_cams[name])
+                new_r = pkg["render"][:3].clamp(0, 1)
+                new_d = pkg["surf_depth"][0]
+                from utils.evidence_lumigraph_adapter import (
+                    read_image_tensor, read_depth_tensor)
+                from pathlib import Path as __P
+                old_r = read_image_tensor(
+                    __P(src) / "renders" / f"{name}.{rext}", device="cuda")
+                old_d = read_depth_tensor(
+                    __P(src) / "depths" / f"{name}.npy", device="cuda")
+                # bit-identity contract: a pixel is "changed" iff its
+                # QUANTIZED (PNG-serialized) value or exact f32 depth differs
+                q = lambda x: x.mul(255).add(0.5).clamp(0, 255).to(torch.uint8)
+                changed = (q(new_r) != q(old_r)).any(0)
+                changed |= new_d != old_d
+                ys, xs = torch.nonzero(changed, as_tuple=True)
+                if ys.numel() == 0:
+                    y0 = x0 = 0; y1 = x1 = 1
+                else:
+                    pad = 4
+                    y0 = max(int(ys.min()) - pad, 0)
+                    x0 = max(int(xs.min()) - pad, 0)
+                    y1 = min(int(ys.max()) + pad + 1, changed.shape[0])
+                    x1 = min(int(xs.max()) + pad + 1, changed.shape[1])
+                prel = f"patches/{name}.npz"
+                r8 = (new_r[:, y0:y1, x0:x1].permute(1, 2, 0) * 255.0) \
+                    .add(0.5).clamp(0, 255).to(torch.uint8).cpu().numpy()
+                np.savez_compressed(
+                    os.path.join(dst, prel),
+                    bbox=np.array([y0, x0, y1, x1], dtype=np.int64),
+                    render=r8,
+                    depth=new_d[y0:y1, x0:x1].detach().cpu().numpy()
+                    .astype(np.float32))
+                patches_rel[name] = prel
+                bytes_written += os.path.getsize(os.path.join(dst, prel))
+                for s, d in ((os.path.join(src, "renders", f"{name}.{rext}"),
+                              rdst),
+                             (os.path.join(src, "depths", f"{name}.npy"),
+                              ddst)):
+                    if not os.path.exists(d):
+                        os.link(s, d)
+            elif name in masks_rel:
                 pkg = ctx.render_view(train_cams[name])
                 torchvision.utils.save_image(
                     pkg["render"][:3].clamp(0, 1), rdst)
@@ -161,6 +210,7 @@ def main():
         "spec_path": os.path.abspath(args.spec),
         "affected_views": affected,
         "masks": masks_rel,
+        **({"patches": patches_rel} if patches_rel else {}),
         "policy": "evidence masked at warp (multiplicative <=1); "
                   "renders/depths regenerated for affected views only; "
                   "(K, alpha) + fusion net reused from parent cache",
