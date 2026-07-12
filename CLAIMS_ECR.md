@@ -118,6 +118,12 @@ MOTIVATION for caching evidence rather than baking it, reported first-class.
   audits GREEN; jpeg95 ~free, halfres −0.9 dB at ~50% TOTAL savings). All
   four claims now fully instantiated; total ecr-audit trail 96/96 GREEN.
   No open slots.
+- 2026-07-11 v0.8 (TOPCONF external baselines): IBRNet cell banked (GOAL
+  #E-12) — pretrained generalizable IBR with MORE evidence (10 sources)
+  lands 1.0–5.4 dB BELOW the base anchor on the R1 trio; ECR final exceeds
+  it by +2.6..+5.9 dB with better SSIM/LPIPS. Recorded as A10/A11 rebuttal
+  evidence (context row), not a claim; convention verified by a banked
+  22.48 dB self-reconstruction gate before any number was computed.
 - 2026-07-11 v0.7 (TOPCONF benchmark breadth): **CR1 extended to the
   community suite** — on T&T {truck, train} + DB {drjohnson, playroom} (the
   3DGS eval set), run with ZERO per-scene tuning through the frozen

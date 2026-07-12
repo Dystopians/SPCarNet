@@ -160,3 +160,17 @@ legal move as Deep Blending's per-scene training. Cross-scene training is
 future work (one line, T3 note only).
 
 Pointers: `CLAIMS_ECR.md` NON-CLAIMS, LEDGER #E-04 pre-registration.
+
+### A10 addendum (2026-07-11, measured): "just ULR/Deep Blending" — now answered head-to-head
+
+Two measured externals sharpen the lineage answer: (a) a PRETRAINED
+generalizable IBR baseline (IBRNet, 10 source views — more evidence than our
+transport uses, convention verified by a 22.48 dB self-reconstruction gate)
+scores 1.0–5.4 dB BELOW even our base anchor on garden/bicycle/kitchen; the
+ECR stack exceeds it by +2.6..+5.9 dB (`analysis/ibr_cell/ibr_table.md`).
+(b) The tuned per-scene classical point IS our floor: PJ-2026 (frozen
+K-nearest warp + confidence fuse + per-scene train-LOO α) — and the ladder
+adds +0.361/−0.0169 (full9) and +0.122/−0.0084 (T&T+DB, zero tuning) on top
+of it with CIs excl. 0. So the comparison the question implies has been run
+in both directions: generic-generalizable (fails here) and tuned-classical
+(our floor, exceeded).

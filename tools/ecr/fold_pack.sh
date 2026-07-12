@@ -28,7 +28,16 @@ declare -A COPIES=(
   [$G1/analysis/e0_pj2026/l4_vs_floor.json]=$DST/gates/l4_vs_floor.json
   [$G1/analysis/difix_cell/difix_table.md]=$DST/difix/difix_table.md
   [$G1/analysis/difix_cell/attempt_log.md]=$DST/difix/attempt_log.md
+  [$G1/analysis/final_stack/hierarchical_cis.md]=$DST/tables/hierarchical_cis.md
+  [$G1/analysis/final_stack/hierarchical_cis.json]=$DST/tables/hierarchical_cis.json
+  [$G1/analysis/final_stack/t2b_tandt_db.md]=$DST/tables/t2b_tandt_db.md
+  [$G1/analysis/final_stack/t2b_tandt_db.json]=$DST/tables/t2b_tandt_db.json
+  [$G1/analysis/temporal/temporal_summary.md]=$DST/tables/temporal_summary.md
+  [$G1/analysis/temporal/temporal_summary.json]=$DST/tables/temporal_summary.json
+  [$G1/analysis/ibr_cell/ibr_table.md]=$DST/ibr/ibr_table.md
+  [$G1/ibr_cell/attempt_log.md]=$DST/ibr/attempt_log.md
 )
+mkdir -p $DST/ibr
 
 MANIFEST=$DST/sha256_manifest.txt
 : > $MANIFEST

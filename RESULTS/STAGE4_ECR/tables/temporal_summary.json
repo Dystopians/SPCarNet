@@ -1,0 +1,41 @@
+{
+ "garden": {
+  "scene": "garden",
+  "frames": 120,
+  "roughness_base_mean": 0.1407747982429857,
+  "roughness_final_mean": 0.13910279642133153,
+  "roughness_ratio_mean": 0.9881228611759884,
+  "roughness_base_p95": 0.1720703363418579,
+  "roughness_final_p95": 0.16916591227054595,
+  "roughness_ratio_p95": 0.9831207160219549,
+  "support_switches_per_step_mean": 3.226890756302521,
+  "support_switches_per_step_max": 4.0,
+  "acceptance_ratio_le_1p5": true
+ },
+ "bonsai": {
+  "scene": "bonsai",
+  "frames": 120,
+  "roughness_base_mean": 0.12855147172798628,
+  "roughness_final_mean": 0.12880982734075114,
+  "roughness_ratio_mean": 1.0020097444960532,
+  "roughness_base_p95": 0.17011310160160062,
+  "roughness_final_p95": 0.1716757223010063,
+  "roughness_ratio_p95": 1.009185775138386,
+  "support_switches_per_step_mean": 1.4705882352941178,
+  "support_switches_per_step_max": 2.0,
+  "acceptance_ratio_le_1p5": true
+ },
+ "ss3dm_town01": {
+  "scene": "ss3dm_town01",
+  "frames": 120,
+  "roughness_base_mean": 0.061595544579024074,
+  "roughness_final_mean": 0.06345223679262049,
+  "roughness_ratio_mean": 1.0301432875751975,
+  "roughness_base_p95": 0.13645718693733205,
+  "roughness_final_p95": 0.13847341686487186,
+  "roughness_ratio_p95": 1.0147755495536175,
+  "support_switches_per_step_mean": 1.9831932773109244,
+  "support_switches_per_step_max": 2.0,
+  "acceptance_ratio_le_1p5": true
+ }
+}
