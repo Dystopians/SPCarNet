@@ -68,3 +68,5 @@ become a compact side box labeled "scope".
 | F-E4 ladder bar chart | `analysis/e0_pj2026/l{1,2,3,4}_gate.json` | per-rung CI'd deltas incl. the L1 negative | plot CI bars, mark the promotion floor |
 | F-E5 storage Pareto | `analysis/final_stack/l5_pareto.{md,json}` (E-06, in flight) | quality vs TOTAL MB incl. matched-3DGS point | overlay e07 3DGS points + Difix point for the full trade picture |
 | F-E6 failure cases | `analysis/final_stack/ecr_failure_cases.md` + quals planes | E9-style: 1 negative view in 139; graceful degradation | pair each case with its conf/β plane |
+
+| F-E7 edit-consistency matrix | `RESULTS/figures/edit_aware/{garden__*,garden_recolor__*,toy_parking__*}_grid.png` | the Route-A section figure: rows {full frame, edit-region zoom} × columns {original ECR, edited base, stale cache, full rebuild, ours}; leak values under headers | the C4 ghost-table tile IS the motivation; pick garden deletion + garden recolor rows for the main paper, toy in supp |

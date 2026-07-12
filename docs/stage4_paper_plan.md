@@ -174,3 +174,13 @@ banked json/md so draft revisions never retype a number.
   F4/F5 plot specs + verification; red-team + number-freeze passes.
 - **Codex (delegated, tightly specced):** LaTeX table generator implementation, F4/F5 matplotlib scripts,
   qual-grid label polish, supplementary assembly mechanics — all verified against banked sources before use.
+
+---
+
+## Addendum (2026-07-12): the editing section (Route A, GOAL #E-15)
+
+Insert as §6.5 "Editing the scene without losing the evidence" (~0.75 pg): the two-failure-modes
+evidence matrix (rebuild inversion + depth-consistency asymmetry), the one-mechanism fix (masks at the
+single warp site), preservation + cost numbers, and F-E7. This section IS the "why retain the mesh"
+answer (face identity → exact invalidation) — position it as completing the thesis, claims bounded per
+CR5 (deletion + recolor only). Verdict provenance: docs/EDIT_AWARE_ECR_VALUE_REPORT.md.

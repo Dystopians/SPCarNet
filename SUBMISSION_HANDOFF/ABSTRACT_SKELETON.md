@@ -88,3 +88,12 @@ final prose.
    it: an audited train-only transport turns a compact mesh artifact into a rendering
    system that surpasses its strongest baked baseline — at an honestly
    reported storage/latency price.
+
+9. **Editing slot (added 2026-07-12, Route A).** The cache stays consistent
+   under mesh editing: per-pixel evidence invalidation (one face-ID pass +
+   masks at the transport's warp) renders deletions and recolors without
+   stale-content leakage — where BOTH naive strategies fail on one class
+   each (cache rebuild ghosts deletions back, +3.09 dB; stale caches
+   repaint recolors, +1.96) — preserving unaffected quality to ≤0.02 dB at
+   ~1/20 rebuild cost (quote `analysis/edit_aware/*`; motion/deformation
+   are declared boundaries).
