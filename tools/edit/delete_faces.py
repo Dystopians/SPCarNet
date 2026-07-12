@@ -31,6 +31,14 @@ def main():
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--box", default=None,
                     help="x0,y0,z0,x1,y1,z1 (world/COLMAP units)")
+    ap.add_argument("--cleanup-expand", type=float, default=None,
+                    help="cylinder mode: also delete pixel_count==0 "
+                         "(never-photographed) faces within radius*THIS "
+                         "expanded region — unconstrained-interior cleanup")
+    ap.add_argument("--extra-ids-npy", default=None,
+                    help="npy of additional face ids (ORIGINAL checkpoint "
+                         "indexing) to delete — union with the region "
+                         "selection (e.g. probed interior-debris faces)")
     ap.add_argument("--cylinder", default=None,
                     help="cx,cy,cz,ux,uy,uz,radius,h_lo,h_hi — gravity-"
                          "aligned cylinder: axis through c along unit u; "
@@ -72,6 +80,29 @@ def main():
         inside = (radial < radius) & (h >= h_lo) & (h <= h_hi)
         region = {"kind": "cylinder", "center": cyl[:3], "up": u.tolist(),
                   "radius": radius, "h_lo": h_lo, "h_hi": h_hi}
+    if args.cleanup_expand and args.cylinder is not None:
+        # Unconstrained-interior cleanup: faces with ZERO training-view
+        # visibility (checkpoint pixel_count == 0) inside an expanded copy
+        # of the edit region have garbage appearance by definition (never
+        # photographed) — deleting the object exposes them as debris, so
+        # they are deleted WITH it. Principled: uses only banked training
+        # statistics, no visual iteration.
+        f = float(args.cleanup_expand)
+        pad = (h_hi - h_lo) * 0.25
+        exp = (radial < radius * f) & (h >= h_lo - pad) & (h <= h_hi + pad)
+        unseen = sd["pixel_count"].detach() == 0
+        cleanup = exp & unseen & ~inside
+        inside = inside | cleanup
+        region["cleanup_expand"] = f
+        region["n_cleanup_unseen_faces"] = int(cleanup.sum())
+    if args.extra_ids_npy:
+        import numpy as _np
+        extra = torch.from_numpy(_np.load(args.extra_ids_npy)).long()
+        extra_mask = torch.zeros(tri.shape[0], dtype=torch.bool)
+        extra_mask[extra] = True
+        inside = inside | extra_mask
+        region["extra_ids_npy"] = os.path.abspath(args.extra_ids_npy)
+        region["n_extra_ids"] = int(extra.numel())
     deleted_ids = torch.nonzero(inside, as_tuple=False).squeeze(1)
     keep = ~inside
     n_del = int(deleted_ids.numel())

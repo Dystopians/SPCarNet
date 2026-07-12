@@ -40,6 +40,15 @@ def main():
     ap.add_argument("--edited-cache", required=True)
     ap.add_argument("--rebuild-cache", default=None,
                     help="C4 cache (full rebuild, unmasked GT); skipped if absent")
+    ap.add_argument("--extra-cache", action="append", default=[],
+                    help="name=path additional method caches (ablations)")
+    ap.add_argument("--with-target-mask", action="store_true",
+                    help="add the TM baseline: ECR disabled inside the "
+                         "(1-px) target edit region — composed from C1/C2, "
+                         "no extra renders")
+    ap.add_argument("--save-outputs", default=None,
+                    help="dir to dump EVERY method's EVERY view PNG (for "
+                         "oracle scoring) + per-view region masks npz")
     ap.add_argument("--spec", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--gpu", type=int, default=None)
@@ -91,9 +100,10 @@ def main():
             ids = F.interpolate(ids, size=(h, w), mode="nearest") \
                 .squeeze().long().cuda()
             R = torch.isin(ids, deleted).float()[None, None]
+            R1 = F.max_pool2d(R, 3, stride=1, padding=1).squeeze()
             R8 = F.max_pool2d(R, 17, stride=1, padding=8).squeeze()
             U = 1.0 - F.max_pool2d(R, 33, stride=1, padding=16).squeeze()
-            regions[name] = (R8, U)
+            regions[name] = (R8, U, R1)
             base = quant(pkg["render"][:3])
             orig_base[name] = base.cpu()
             adapted, _ = ecr_orig.adapt(name, pose_primitives(cam), base,
@@ -107,6 +117,9 @@ def main():
     # ---- pass B: EDITED checkpoint -> C1 base + per-method ECR ----
     ctx = build_eval_context(args.edited_checkpoint, SCENES[args.scene])
     methods = {"C2_stale": args.original_cache, "C5_ours": args.edited_cache}
+    for spec_kv in args.extra_cache:
+        mname, mpath = spec_kv.split("=", 1)
+        methods[mname] = mpath
     if args.rebuild_cache and os.path.exists(
             os.path.join(args.rebuild_cache, "manifest.json")):
         methods["C4_rebuild"] = args.rebuild_cache
@@ -131,15 +144,39 @@ def main():
     del ctx
     torch.cuda.empty_cache()
 
-    # ---- metrics ----
+    # ---- TM baseline: ECR disabled inside the 1-px target region ----
     names = sorted(regions)
+    if args.with_target_mask:
+        tm = {}
+        for n in names:
+            R1 = regions[n][2].cpu()
+            tm[n] = c1[n] * R1 + renders["C2_stale"][n] * (1.0 - R1)
+        renders["TM_targetmask"] = tm
+
+    if args.save_outputs:
+        import numpy as _np
+        os.makedirs(args.save_outputs, exist_ok=True)
+        for m, imgs in {"C1_editedbase": c1, "ORIG_ecr": orig_ecr,
+                        **renders}.items():
+            mdir = os.path.join(args.save_outputs, m)
+            os.makedirs(mdir, exist_ok=True)
+            for n in names:
+                torchvision.utils.save_image(imgs[n],
+                                             os.path.join(mdir, f"{n}.png"))
+        _np.savez_compressed(
+            os.path.join(args.save_outputs, "regions.npz"),
+            **{f"{n}__R8": regions[n][0].cpu().numpy() for n in names},
+            **{f"{n}__U": regions[n][1].cpu().numpy() for n in names},
+            **{f"{n}__R1": regions[n][2].cpu().numpy() for n in names})
+
+    # ---- metrics ----
     per_view = {"names": names}
     outs = {"C1_editedbase": c1, **renders}
     arrays = {}
     for m, imgs in outs.items():
         gr, lk, pu = [], [], []
         for n in names:
-            R8, U = regions[n]
+            R8, U = regions[n][0], regions[n][1]
             R8c, Uc = R8.cpu(), U.cpu()
             gr.append(masked_psnr(imgs[n], orig_ecr[n], R8c))   # ghost
             lk.append(masked_mean_abs(imgs[n], c1[n], R8c))     # leak

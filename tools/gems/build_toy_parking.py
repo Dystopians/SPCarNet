@@ -451,6 +451,65 @@ def build_scene_mesh(rng: np.random.Generator, layout: dict = None):
         N.astype(np.float32), A.astype(np.float32), E, mb.element_names
 
 
+def parse_drop_elements(value: str | None) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    names = []
+    for raw in str(value).split(","):
+        name = raw.strip()
+        if name and name not in names:
+            names.append(name)
+    return tuple(names)
+
+
+def element_face_counts(element_of_face, element_names) -> dict[str, int]:
+    eof = np.asarray(element_of_face, dtype=np.int64)
+    counts = np.bincount(eof, minlength=len(element_names))
+    return {str(name): int(counts[i]) for i, name in enumerate(element_names)}
+
+
+def filter_mesh_by_elements(V, F, colors, normals, albedo, element_of_face,
+                            element_names, drop_elements):
+    """Remove faces whose element label is listed in `drop_elements`.
+
+    Vertex arrays intentionally stay unchanged: orphaned vertices are harmless
+    for the downstream OBJ/colors sidecar and avoid any need to remap faces.
+    Element ids are compacted so coverage tensors stay indexed by
+    `element_names`.
+    """
+    drop_elements = tuple(drop_elements)
+    if not drop_elements:
+        return V, F, colors, normals, albedo, element_of_face, element_names, {}
+
+    element_names = [str(n) for n in element_names]
+    name_to_old = {name: i for i, name in enumerate(element_names)}
+    missing = [name for name in drop_elements if name not in name_to_old]
+    if missing:
+        raise ValueError(
+            "--drop-elements names not found: "
+            f"{missing}; available elements: {element_names}")
+
+    drop_ids = np.array([name_to_old[name] for name in drop_elements],
+                        dtype=np.int64)
+    eof = np.asarray(element_of_face, dtype=np.int64)
+    keep = ~np.isin(eof, drop_ids)
+    if not bool(keep.any()):
+        raise ValueError("--drop-elements removed every face")
+
+    kept_names = [name for name in element_names if name not in set(drop_elements)]
+    old_to_new = np.full(len(element_names), -1, dtype=np.int64)
+    for new_id, name in enumerate(kept_names):
+        old_to_new[name_to_old[name]] = new_id
+
+    filtered_eof = old_to_new[eof[keep]]
+    assert np.all(filtered_eof >= 0)
+    drop_counts = element_face_counts(eof[~keep], element_names)
+    drop_counts = {name: drop_counts[name] for name in drop_elements}
+    return (V, F[keep], colors, normals, albedo,
+            filtered_eof.astype(np.asarray(element_of_face).dtype, copy=False),
+            kept_names, drop_counts)
+
+
 # ---------------------------------------------------------------------------
 # Cameras
 # ---------------------------------------------------------------------------
@@ -819,6 +878,31 @@ def verify_depth_consistency(cams, depth_dir, points_xyz, n_views=4, n_samples=4
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", default="/data/peilincai/gems_stage1")
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--name", default="toy_parking",
+                        help="dataset directory name under <root>/datasets/ "
+                             "(D-2 variants: toy_parking_v2, toy_parking_occl)")
+    parser.add_argument("--wall-x", type=float, default=0.0,
+                        help="wall center x (frozen default 0.0)")
+    parser.add_argument("--wall-y", type=float, default=WALL_Y)
+    parser.add_argument("--fence-x", type=float, default=FENCE_X)
+    parser.add_argument("--car-yaws-deg", default="0,0",
+                        help="per-car yaw in degrees, e.g. '180,0'")
+    parser.add_argument("--car-offsets", default="0,0,0,0",
+                        help="dx0,dy0,dx1,dy1 offsets applied to the frozen "
+                             "CAR_CENTERS (in-bay placement jitter)")
+    parser.add_argument("--extra-vehicle", action="append", default=[],
+                        metavar="X,Y,YAW_DEG,R,G,B",
+                        help="add an occluder vehicle (repeatable)")
+    parser.add_argument("--drop-elements", default="",
+                        help="comma-separated element names to remove from the "
+                             "GT mesh after assembly, e.g. car_0")
+    return parser
+
+
 def parse_layout_args(args) -> dict:
     layout = {k: (list(v) if isinstance(v, list) else v)
               for k, v in DEFAULT_LAYOUT.items()}
@@ -844,27 +928,11 @@ def parse_layout_args(args) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", default="/data/peilincai/gems_stage1")
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--name", default="toy_parking",
-                        help="dataset directory name under <root>/datasets/ "
-                             "(D-2 variants: toy_parking_v2, toy_parking_occl)")
-    parser.add_argument("--wall-x", type=float, default=0.0,
-                        help="wall center x (frozen default 0.0)")
-    parser.add_argument("--wall-y", type=float, default=WALL_Y)
-    parser.add_argument("--fence-x", type=float, default=FENCE_X)
-    parser.add_argument("--car-yaws-deg", default="0,0",
-                        help="per-car yaw in degrees, e.g. '180,0'")
-    parser.add_argument("--car-offsets", default="0,0,0,0",
-                        help="dx0,dy0,dx1,dy1 offsets applied to the frozen "
-                             "CAR_CENTERS (in-bay placement jitter)")
-    parser.add_argument("--extra-vehicle", action="append", default=[],
-                        metavar="X,Y,YAW_DEG,R,G,B",
-                        help="add an occluder vehicle (repeatable)")
+    parser = build_arg_parser()
     args = parser.parse_args()
 
     layout = parse_layout_args(args)
+    dropped_elements = parse_drop_elements(args.drop_elements)
     rng = np.random.default_rng(args.seed)
 
     ds_dir = os.path.join(args.root, "datasets", args.name)
@@ -878,6 +946,16 @@ def main():
     # ---- 1. GT mesh --------------------------------------------------------
     V, F, colors, normals, albedo, element_of_face, element_names = \
         build_scene_mesh(rng, layout)
+    if dropped_elements:
+        try:
+            V, F, colors, normals, albedo, element_of_face, element_names, drop_counts = \
+                filter_mesh_by_elements(
+                    V, F, colors, normals, albedo, element_of_face,
+                    element_names, dropped_elements)
+        except ValueError as exc:
+            parser.error(str(exc))
+        print(f"[mesh] dropped elements={list(dropped_elements)} "
+              f"faces={drop_counts}")
     print(f"[mesh] V={V.shape[0]} F={F.shape[0]} elements={element_names}")
 
     obj_path = os.path.join(gt_dir, "mesh.obj")
@@ -991,6 +1069,8 @@ def main():
                 "max": [GROUND_HALF, GROUND_HALF, 3.2],
                 "z_band": [0.1, 1.5]},
     }
+    if dropped_elements:
+        manifest["dropped_elements"] = list(dropped_elements)
     with open(os.path.join(ds_dir, "dataset_manifest.json"), "w") as f:
         json.dump(manifest, f, indent=1)
     print(json.dumps(manifest, indent=1))

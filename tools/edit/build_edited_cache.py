@@ -64,6 +64,13 @@ def main():
     t0 = time.time()
     ctx = build_eval_context(orig_ckpt, SCENES[args.scene])
     train_cams = {str(c.image_name): c for c in ctx.train_cams}
+    # chained edits (red-team fix 2026-07-12): a parent cache may itself be
+    # edited — its masks MUST be inherited (valid = parent_valid AND new_valid)
+    # or a second edit would silently re-validate the first edit's stale
+    # evidence. Parent affected views stay affected.
+    parent_masks = dict(manifest.get("edit", {}).get("masks", {}))
+    from utils.evidence_lumigraph_adapter import read_image_tensor
+    from pathlib import Path as _P
     affected, masks_rel = [], {}
     stale_px_total = 0
     with torch.no_grad():
@@ -77,19 +84,25 @@ def main():
             ids = F.interpolate(ids, size=(h, w), mode="nearest") \
                 .squeeze().long().cuda()
             stale = torch.isin(ids, deleted)
-            if not bool(stale.any()):
+            parent_valid = None
+            if name in parent_masks:
+                parent_valid = read_image_tensor(
+                    _P(src) / parent_masks[name], device="cuda")[0]
+            if not bool(stale.any()) and parent_valid is None:
                 continue
             # 1-px dilation of the STALE region (splat bleed)
             stale_f = stale.float()[None, None]
             stale_d = F.max_pool2d(stale_f, 3, stride=1, padding=1) \
                 .squeeze() > 0.5
             valid = (~stale_d).float()
+            if parent_valid is not None:
+                valid = torch.minimum(valid, parent_valid)
             rel = f"masks/{name}.png"
             torchvision.utils.save_image(valid[None],
                                          os.path.join(dst, rel))
             masks_rel[name] = rel
             affected.append(name)
-            stale_px_total += int(stale_d.sum())
+            stale_px_total += int((valid < 0.5).sum())
     del ctx
     torch.cuda.empty_cache()
     t_mask = time.time() - t0
