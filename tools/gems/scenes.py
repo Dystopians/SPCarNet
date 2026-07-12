@@ -324,3 +324,31 @@ for _town in ["Town01", "Town02", "Town03", "Town06"]:
         units_per_meter=1.0,  # CARLA is metric
         exists=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# TOPCONF EXP-T2B (2026-07-11, PROTOCOL 1.3.0 MINOR addition): the standard
+# 3DGS evaluation suite — Tanks&Temples {truck, train} + Deep Blending
+# {drjohnson, playroom} from the official tandt_db distribution. ADDITIVE
+# entries only (no frozen field of any existing scene changed). Ingestion
+# mirrors the repo's standard COLMAP path: images/, -r -1, llff8 split
+# (sorted cameras, idx % 8 == 0 test) — the same split rule as full9.
+# Anchor convention for these scenes = clean30k (SS3DM/toy precedent; no 26k
+# save exists, so no clean-fixed continuation — dual-anchor caveat logged in
+# LEDGER GOAL #E-11).
+# ---------------------------------------------------------------------------
+for _name, _sub in (("tandt_truck", "tandt/truck"), ("tandt_train", "tandt/train"),
+                    ("db_drjohnson", "db/drjohnson"), ("db_playroom", "db/playroom")):
+    _src = f"/data/peilincai/mesh_datasets/tandt_db/{_sub}"
+    SCENES[_name] = SceneSpec(
+        name=_name,
+        source_path=_src,
+        images="images",
+        resolution=-1,
+        white_background=False,
+        split="llff8",
+        gt={"colmap_sparse": f"{_src}/sparse/0"},
+        roi=None,
+        units_per_meter=None,  # COLMAP scale, not metric
+        exists=True,
+    )

@@ -37,7 +37,7 @@ import time
 from datetime import datetime, timezone
 
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
-PROTOCOL_VERSION = "1.2.0"
+PROTOCOL_VERSION = "1.3.0"
 
 
 def parse_args():
