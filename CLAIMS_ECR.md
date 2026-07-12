@@ -78,10 +78,23 @@ compared as such.
   scenes (CIs incl. 0) — so the audit claim attaches to the audit checks
   + the structural compose gate, NOT to the net's use of confidence input
   channels.
+- **CR5 — Edit-consistent evidence (BOUNDED; added v0.9, 2026-07-12).** For
+  triangle DELETION and appearance-only RECOLOR edits (the two validated
+  classes — rigid motion and deformation are explicitly NOT claimed), per-
+  source-pixel evidence invalidation renders the edited scene without stale-
+  content leakage: in-region deviation 10–13× lower than the stale-cache and
+  full-rebuild baselines (ghost CIs excl. 0 against both), unaffected-region
+  TRUE-GT quality preserved to ≤0.02 dB, at ~1/20–1/30 the cost of a cache
+  rebuild. The two naive strategies each fail on one edit class (rebuild
+  ghosts deletions +3.09 dB [+2.57,+3.62]; stale cache repaints recolors
+  +1.96 [+1.87,+2.06]) — the mechanism is necessary, not an optimization.
+  Evidence: `analysis/edit_aware/*`, GOAL #E-15; protocol
+  `docs/EDIT_AWARE_ECR_PROTOCOL.md` (outside-the-mouth measurement cell;
+  edited scenes have no GT — unaffected-region metrics are true-GT).
 
 ## NON-CLAIMS (verbatim in any Stage-4 report)
 
-Per-scene method — no cross-scene generalization claim; no test-GT anywhere
+Per-scene method — no cross-scene generalization claim; no arbitrary-editing claim (deletion + recolor validated; motion/deformation are declared boundaries);  no test-GT anywhere
 (train-view evidence is a declared render-time input of the shipped artifact);
 no claim that ECR fixes geometry or planning consumability (the Stage-3
 IMPOSSIBILITY×4 result is cited as scope, not re-litigated); rendering
@@ -118,6 +131,10 @@ MOTIVATION for caching evidence rather than baking it, reported first-class.
   audits GREEN; jpeg95 ~free, halfres −0.9 dB at ~50% TOTAL savings). All
   four claims now fully instantiated; total ecr-audit trail 96/96 GREEN.
   No open slots.
+- 2026-07-12 v0.9 (Route A): **CR5 added, tightly bounded** (deletion +
+  recolor only) from the GOAL #E-15 prototype; NON-CLAIMS extended with the
+  no-arbitrary-editing clause. The two naive-strategy failure modes (rebuild
+  inversion; depth-consistency asymmetry) are part of the claim's evidence.
 - 2026-07-11 v0.8 (TOPCONF external baselines): IBRNet cell banked (GOAL
   #E-12) — pretrained generalizable IBR with MORE evidence (10 sources)
   lands 1.0–5.4 dB BELOW the base anchor on the R1 trio; ECR final exceeds

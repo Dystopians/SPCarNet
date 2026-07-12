@@ -1,0 +1,408 @@
+{
+  "grids": {
+    "garden__DSC07988": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/garden/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "full rebuild (C4)": 0.08402502117678523,
+        "local invalidation (C5, ours)": 0.00649706568219699,
+        "original ECR": null,
+        "stale cache (C2)": 0.00883256186110278
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak=0",
+        "full rebuild (C4)": "leak=0.084",
+        "local invalidation (C5, ours)": "leak=0.0065",
+        "original ECR": null,
+        "stale cache (C2)": "leak=0.00883"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "full rebuild (C4)": "C4_rebuild",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/garden__DSC07988_grid.png",
+      "scene": "garden",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/garden/panels/DSC07988.png",
+      "source_tile_size": [
+        1297,
+        840
+      ],
+      "tile_count": 5,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "full rebuild (C4)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "DSC07988",
+      "zoom_window": [
+        278,
+        420,
+        926,
+        840
+      ]
+    },
+    "garden__DSC08044": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/garden/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "full rebuild (C4)": 0.08402502117678523,
+        "local invalidation (C5, ours)": 0.00649706568219699,
+        "original ECR": null,
+        "stale cache (C2)": 0.00883256186110278
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak=0",
+        "full rebuild (C4)": "leak=0.084",
+        "local invalidation (C5, ours)": "leak=0.0065",
+        "original ECR": null,
+        "stale cache (C2)": "leak=0.00883"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "full rebuild (C4)": "C4_rebuild",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/garden__DSC08044_grid.png",
+      "scene": "garden",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/garden/panels/DSC08044.png",
+      "source_tile_size": [
+        1297,
+        840
+      ],
+      "tile_count": 5,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "full rebuild (C4)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "DSC08044",
+      "zoom_window": [
+        371,
+        300,
+        1019,
+        720
+      ]
+    },
+    "garden__DSC08132": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/garden/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "full rebuild (C4)": 0.08402502117678523,
+        "local invalidation (C5, ours)": 0.00649706568219699,
+        "original ECR": null,
+        "stale cache (C2)": 0.00883256186110278
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak=0",
+        "full rebuild (C4)": "leak=0.084",
+        "local invalidation (C5, ours)": "leak=0.0065",
+        "original ECR": null,
+        "stale cache (C2)": "leak=0.00883"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "full rebuild (C4)": "C4_rebuild",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/garden__DSC08132_grid.png",
+      "scene": "garden",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/garden/panels/DSC08132.png",
+      "source_tile_size": [
+        1297,
+        840
+      ],
+      "tile_count": 5,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "full rebuild (C4)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "DSC08132",
+      "zoom_window": [
+        278,
+        300,
+        926,
+        720
+      ]
+    },
+    "garden_recolor__DSC07988": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_recolor/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "local invalidation (C5, ours)": 0.0033980124183775238,
+        "original ECR": null,
+        "stale cache (C2)": 0.03462487203069031
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak=0",
+        "local invalidation (C5, ours)": "leak=0.0034",
+        "original ECR": null,
+        "stale cache (C2)": "leak=0.0346"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/garden_recolor__DSC07988_grid.png",
+      "scene": "garden_recolor",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_recolor/panels/DSC07988.png",
+      "source_tile_size": [
+        1297,
+        840
+      ],
+      "tile_count": 4,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "DSC07988",
+      "zoom_window": [
+        185,
+        0,
+        833,
+        420
+      ]
+    },
+    "garden_recolor__DSC08044": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_recolor/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "local invalidation (C5, ours)": 0.0033980124183775238,
+        "original ECR": null,
+        "stale cache (C2)": 0.03462487203069031
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak=0",
+        "local invalidation (C5, ours)": "leak=0.0034",
+        "original ECR": null,
+        "stale cache (C2)": "leak=0.0346"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/garden_recolor__DSC08044_grid.png",
+      "scene": "garden_recolor",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_recolor/panels/DSC08044.png",
+      "source_tile_size": [
+        1297,
+        840
+      ],
+      "tile_count": 4,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "DSC08044",
+      "zoom_window": [
+        371,
+        420,
+        1019,
+        840
+      ]
+    },
+    "garden_recolor__DSC08132": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_recolor/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "local invalidation (C5, ours)": 0.0033980124183775238,
+        "original ECR": null,
+        "stale cache (C2)": 0.03462487203069031
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak=0",
+        "local invalidation (C5, ours)": "leak=0.0034",
+        "original ECR": null,
+        "stale cache (C2)": "leak=0.0346"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/garden_recolor__DSC08132_grid.png",
+      "scene": "garden_recolor",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_recolor/panels/DSC08132.png",
+      "source_tile_size": [
+        1297,
+        840
+      ],
+      "tile_count": 4,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "DSC08132",
+      "zoom_window": [
+        278,
+        420,
+        926,
+        840
+      ]
+    },
+    "toy_parking__00035": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/toy_parking/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "full rebuild (C4)": 0.022075849382569384,
+        "local invalidation (C5, ours)": 0.0031842901446981703,
+        "original ECR": null,
+        "stale cache (C2)": 0.0032608010434789967
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak=0",
+        "full rebuild (C4)": "leak=0.0221",
+        "local invalidation (C5, ours)": "leak=0.00318",
+        "original ECR": null,
+        "stale cache (C2)": "leak=0.00326"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "full rebuild (C4)": "C4_rebuild",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/toy_parking__00035_grid.png",
+      "scene": "toy_parking",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/toy_parking/panels/00035.png",
+      "source_tile_size": [
+        1000,
+        750
+      ],
+      "tile_count": 5,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "full rebuild (C4)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "00035",
+      "zoom_window": [
+        500,
+        375,
+        1000,
+        750
+      ]
+    },
+    "toy_parking__00040": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/toy_parking/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "full rebuild (C4)": 0.022075849382569384,
+        "local invalidation (C5, ours)": 0.0031842901446981703,
+        "original ECR": null,
+        "stale cache (C2)": 0.0032608010434789967
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak=0",
+        "full rebuild (C4)": "leak=0.0221",
+        "local invalidation (C5, ours)": "leak=0.00318",
+        "original ECR": null,
+        "stale cache (C2)": "leak=0.00326"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "full rebuild (C4)": "C4_rebuild",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/toy_parking__00040_grid.png",
+      "scene": "toy_parking",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/toy_parking/panels/00040.png",
+      "source_tile_size": [
+        1000,
+        750
+      ],
+      "tile_count": 5,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "full rebuild (C4)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "00040",
+      "zoom_window": [
+        286,
+        268,
+        786,
+        643
+      ]
+    },
+    "toy_parking__00080": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/toy_parking/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "full rebuild (C4)": 0.022075849382569384,
+        "local invalidation (C5, ours)": 0.0031842901446981703,
+        "original ECR": null,
+        "stale cache (C2)": 0.0032608010434789967
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak=0",
+        "full rebuild (C4)": "leak=0.0221",
+        "local invalidation (C5, ours)": "leak=0.00318",
+        "original ECR": null,
+        "stale cache (C2)": "leak=0.00326"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "full rebuild (C4)": "C4_rebuild",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/toy_parking__00080_grid.png",
+      "scene": "toy_parking",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/toy_parking/panels/00080.png",
+      "source_tile_size": [
+        1000,
+        750
+      ],
+      "tile_count": 5,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "full rebuild (C4)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "00080",
+      "zoom_window": [
+        0,
+        214,
+        500,
+        589
+      ]
+    }
+  },
+  "script": "/data/peilincai/mesh-splatting/tools/edit/edit_grids.py",
+  "skips": []
+}
