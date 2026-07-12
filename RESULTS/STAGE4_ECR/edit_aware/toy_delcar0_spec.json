@@ -1,0 +1,24 @@
+{
+ "edit_type": "delete_faces_box",
+ "box": [
+  -3.755,
+  3.1,
+  -0.142,
+  -1.645,
+  7.9,
+  1.65
+ ],
+ "n_faces_before": 6590559,
+ "n_faces_deleted": 711609,
+ "deleted_ids_npy": "/data/peilincai/gems_stage1/edit_aware/toy_parking_delcar0/edit_spec_deleted_ids.npy",
+ "parent_checkpoint": {
+  "path": "/data/peilincai/gems_stage1/models/toy_parking_clean30k/point_cloud/iteration_30000/point_cloud_state_dict.pt",
+  "sha256_first16mb": "7d68968deb1bf0ab2b0661c005edb5ce95003ed61194a75fa965576b2d408ead",
+  "file_size_bytes": 567880671
+ },
+ "edited_checkpoint": {
+  "path": "/data/peilincai/gems_stage1/edit_aware/toy_parking_delcar0/point_cloud_state_dict.pt",
+  "sha256_first16mb": "66016da2752d4e0be952118688310bee1816f39bb913f66733708be0ba8f9dda",
+  "file_size_bytes": 550801887
+ }
+}

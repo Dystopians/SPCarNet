@@ -1,0 +1,38 @@
+{
+ "edit_type": "recolor_faces_cylinder",
+ "box": {
+  "kind": "cylinder",
+  "center": [
+   0.29,
+   1.47,
+   1.04
+  ],
+  "up": [
+   -0.0029001389630138874,
+   -0.8817422389984131,
+   -0.47172263264656067
+  ],
+  "radius": 1.55,
+  "h_lo": -1.395,
+  "h_hi": 1.15
+ },
+ "rgb_shift": [
+  -0.699999988079071,
+  0.0,
+  1.059999942779541
+ ],
+ "n_faces_before": 11568056,
+ "n_faces_deleted": 2037550,
+ "n_vertices_shifted": 419813,
+ "deleted_ids_npy": "/data/peilincai/gems_stage1/edit_aware/garden_recolor/edit_spec_deleted_ids.npy",
+ "parent_checkpoint": {
+  "path": "/data/peilincai/gems_stage1/models/garden_cleanfixed30k/point_cloud/iteration_30000/point_cloud_state_dict.pt",
+  "sha256_first16mb": "796d17687bc2c2ae3010eb78f6180f4b911de3a82511cad057545081eb02000c",
+  "file_size_bytes": 987752479
+ },
+ "edited_checkpoint": {
+  "path": "/data/peilincai/gems_stage1/edit_aware/garden_recolor/point_cloud_state_dict.pt",
+  "sha256_first16mb": "e248609a6012ce6e1a46b2e2855872de9811c6085146a1955b25a464905ea9fa",
+  "file_size_bytes": 987752351
+ }
+}

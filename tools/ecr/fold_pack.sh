@@ -36,8 +36,17 @@ declare -A COPIES=(
   [$G1/analysis/temporal/temporal_summary.json]=$DST/tables/temporal_summary.json
   [$G1/analysis/ibr_cell/ibr_table.md]=$DST/ibr/ibr_table.md
   [$G1/ibr_cell/attempt_log.md]=$DST/ibr/attempt_log.md
+  [$G1/analysis/edit_aware/garden/edit_eval.md]=$DST/edit_aware/garden_edit_eval.md
+  [$G1/analysis/edit_aware/garden/edit_eval.json]=$DST/edit_aware/garden_edit_eval.json
+  [$G1/analysis/edit_aware/toy_parking/edit_eval.md]=$DST/edit_aware/toy_parking_edit_eval.md
+  [$G1/analysis/edit_aware/toy_parking/edit_eval.json]=$DST/edit_aware/toy_parking_edit_eval.json
+  [$G1/analysis/edit_aware/garden_recolor/edit_eval.md]=$DST/edit_aware/garden_recolor_edit_eval.md
+  [$G1/analysis/edit_aware/garden_recolor/edit_eval.json]=$DST/edit_aware/garden_recolor_edit_eval.json
+  [$G1/edit_aware/garden_deltable/edit_spec.json]=$DST/edit_aware/garden_deltable_spec.json
+  [$G1/edit_aware/toy_parking_delcar0/edit_spec.json]=$DST/edit_aware/toy_delcar0_spec.json
+  [$G1/edit_aware/garden_recolor/edit_spec.json]=$DST/edit_aware/garden_recolor_spec.json
 )
-mkdir -p $DST/ibr
+mkdir -p $DST/ibr $DST/edit_aware
 
 MANIFEST=$DST/sha256_manifest.txt
 : > $MANIFEST
