@@ -66,6 +66,30 @@ def stratified_mean_ci(diffs_by_scene, n_resamples=10000, seed=0):
     return {"mean": point, "ci_lo": float(lo), "ci_hi": float(hi)}
 
 
+def hierarchical_mean_ci(diffs_by_scene, n_resamples=10000, seed=0):
+    """Two-stage (cluster) bootstrap: resample SCENES with replacement, then
+    views within each drawn scene. Treats scene as the sampling unit, so the
+    interval also carries scene-to-scene variance (wider than the stratified
+    interval by construction). Reported ALONGSIDE stratified_mean_ci, never
+    replacing it (TOPCONF EXP-HBOOT, 2026-07-11)."""
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    scenes = sorted(diffs_by_scene)
+    arrays = [np.asarray(diffs_by_scene[s], dtype=np.float64) for s in scenes]
+    n_scenes = len(arrays)
+    point = float(np.mean([a.mean() for a in arrays]))
+    means = np.empty(n_resamples, dtype=np.float64)
+    for i in range(n_resamples):
+        picks = rng.integers(0, n_scenes, size=n_scenes)
+        means[i] = np.mean([
+            arrays[j][rng.integers(0, len(arrays[j]),
+                                   size=len(arrays[j]))].mean()
+            for j in picks])
+    lo, hi = np.percentile(means, [2.5, 97.5])
+    return {"mean": point, "ci_lo": float(lo), "ci_hi": float(hi),
+            "scheme": "scene-cluster + within-scene, 2-stage"}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", choices=("primary", "b50"), default="primary")

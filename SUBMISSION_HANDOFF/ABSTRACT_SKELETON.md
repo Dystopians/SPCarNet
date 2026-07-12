@@ -54,7 +54,7 @@ final prose.
    evidence-cached rendering (ECR) ships {mesh checkpoint + train-view cache
    + frozen transport} and corrects each novel view at render time via
    depth-consistent K-source warping, learned per-pixel fusion, and
-   residual-vs-RGB routing — trained train-only, certified per row by a
+   residual-vs-RGB routing — trained train-only, audited per row by a
    structural no-test-GT audit (69/69 GREEN).
 
 3. **Quality result slot.** Full9: +1.666 dB [+1.567,+1.766] over the primary
@@ -85,6 +85,6 @@ final prose.
    R3 impossibility is cited as scope).
 
 8. **Takeaway slot.** For mesh-first pipelines, caching evidence beats baking
-   it: a certified transport turns a compact mesh artifact into a rendering
+   it: an audited train-only transport turns a compact mesh artifact into a rendering
    system that surpasses its strongest baked baseline — at an honestly
    reported storage/latency price.

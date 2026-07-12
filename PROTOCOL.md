@@ -88,6 +88,36 @@ Depth convention: "rendered median depth" = the renderer's `surf_depth` product 
 - Purity: run `tools/audit_test_path.py --ecr --ecr-cache <dir>` on every reported ECR row (checks enumerated in the 1.2.0 changelog). Base-mode rows keep the Stage-2 audit unchanged.
 - Geometry/downstream: `skipped` by construction in ECR rows (RGB-only transport); cite the checkpoint's base rows.
 
+#### 4E.1 Threat model of the ECR purity audit (added 2026-07-11; terminology: "audited", not "certified")
+
+The Stage-4 transport is an **audited train-only transport**. "Audited" is a defined term with exactly
+this scope; the word "certified" is retired from claim-bearing text (it connoted formal verification,
+which is NOT what is provided; historical Stage-2/3 artifact names like R3.b "certified sub-mesh" are
+frozen and keep their names).
+
+PROVEN, per reported row (mechanically checked by `tools/audit_test_path.py --ecr`, report banked
+alongside the row):
+1. Every filesystem read performed by the transport during the eval pass resolves under the evidence
+   cache root (realpath-confined loader + read log; cross-checked against an OS-level trace) and is a
+   member of the cache manifest.
+2. The cache's train-view list is disjoint from the test split, where the test split is recomputed
+   INDEPENDENTLY by the audit from the frozen scene registry — not read from the cache.
+3. The transport kwargs are frozen once from the manifest; the per-view kwargs hash is identical across
+   all test views of the row (no per-test-view parameters, no view-indexed calibration).
+4. The evaluated checkpoint fingerprint matches the fingerprint recorded at cache-build time.
+5. No GT-bearing camera object crosses the renderer boundary (pose-primitives-only interface); the
+   target view's GT path is a raising sentinel; base-mode evals never load any tools.ecr module
+   (checked dynamically).
+
+ASSUMED (not re-proven per row): integrity of the OS/filesystem during the run; the audit tool itself
+runs unmodified (its source ships in the evidence pack; the pack manifest is sha256-verified); the
+frozen scene registry correctly describes the datasets.
+
+NOT CLAIMED: formal verification of renderer/transport code; robustness to adversarially constructed
+cache contents; any statement about geometry or downstream consumption (Stage-3 scope); any privacy or
+security property. The audit establishes *evaluation hygiene* — that reported test-view quality cannot
+have been inflated by test-view information — nothing more.
+
 ### 4.5 Panels
 Per eval: for 6 evenly-spaced test views (or all if fewer): RGB render | GT | ×5 error heatmap | median-depth map; plus one floater overlay (triangles of floater components in red over a representative view). PNG, written under `<out>/panels/`.
 

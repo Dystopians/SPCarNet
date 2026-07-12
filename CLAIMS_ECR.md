@@ -58,21 +58,24 @@ compared as such.
   the transport leaves rendered depth untouched by construction). Evidence:
   `final_<scene>_B50_v1` rows + L6 tie-back in
   `analysis/final_stack/final_stack_tables.md` (GOAL L6, 9/9 audits GREEN).
-- **CR4 — Certified transport (INSTANTIATED; SHRUNK v0.3).** Train-only
-  guarantees are audited per reported row: **69/69 `--ecr` audits GREEN**
+- **CR4 — Audited transport (INSTANTIATED; SHRUNK v0.3; terminology v0.6).**
+  "Audited" is the defined term of PROTOCOL §4E.1 (threat model: what is
+  PROVEN per row / ASSUMED / NOT CLAIMED — no formal-verification connotation).
+  Train-only guarantees are audited per reported row: **96/96 `--ecr` audits
+  GREEN**
   (all transport reads ⊆ cache manifest; manifest train views disjoint from
   the independently recomputed test split; checkpoint fingerprint match;
   frozen per-view kwargs hash — no per-test-view parameters anywhere).
   Confidence predicts transport benefit (banked precedent: evidence-vs-error
-  Spearman ρ ≈ 0.69–0.74 on 3 scenes), and the certified gating is
+  Spearman ρ ≈ 0.69–0.74 on 3 scenes), and the audited gating is
   STRUCTURAL: evidence RGB can only be routed where the transport physically
   has support (compose = β·valid with valid = warp-confidence mask), which
   is why β vanishes at occlusion boundaries and coverage gaps degrade to
   the base render instead of hallucinating (failure-case set: 1
-  transport-negative view in 104, −0.06 dB). SHRUNK per GOAL #E-08
+  transport-negative view in 139, −0.06 dB). SHRUNK per GOAL #E-08
   (2026-07-10): the net's EXPLICIT confidence input planes are redundant —
   zeroing them at train+test leaves quality statistically unchanged on 2
-  scenes (CIs incl. 0) — so the certification claim attaches to the audits
+  scenes (CIs incl. 0) — so the audit claim attaches to the audit checks
   + the structural compose gate, NOT to the net's use of confidence input
   channels.
 
@@ -115,3 +118,13 @@ MOTIVATION for caching evidence rather than baking it, reported first-class.
   audits GREEN; jpeg95 ~free, halfres −0.9 dB at ~50% TOTAL savings). All
   four claims now fully instantiated; total ecr-audit trail 96/96 GREEN.
   No open slots.
+- 2026-07-11 v0.6 (TOPCONF hardening): terminology — "certified" retired
+  from claim-bearing text, replaced by the DEFINED term "audited"
+  (PROTOCOL §4E.1 threat model added: PROVEN / ASSUMED / NOT CLAIMED);
+  stale CR4 figures refreshed (96/96 audits; 1-in-139 failure census).
+  **Robustness addendum:** every headline CI ALSO excludes 0 under a
+  two-stage scene-cluster bootstrap (scenes resampled with replacement,
+  then views; 10k, seed 0) — e.g. final vs PJ-2026 dPSNR hierarchical CI
+  [+0.218, +0.527], dLPIPS [−0.0258, −0.0098]
+  (`analysis/final_stack/hierarchical_cis.md`, EXP-HBOOT). The stratified
+  interval remains the pre-registered primary form.

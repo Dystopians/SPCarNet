@@ -79,7 +79,7 @@ should lead with it.
 ### New outcome summary (all through the single mouth, PROTOCOL 1.2.0)
 
 - **Headline system result:** per-scene evidence-cached rendering (ECR): the
-  shipped artifact {mesh checkpoint + train-view evidence cache + certified
+  shipped artifact {mesh checkpoint + train-view evidence cache + audited
   transport} renders full9 at **+1.666 dB [+1.567,+1.766]** over the PRIMARY
   anchor and **+0.361 dB [+0.316,+0.407] / ΔLPIPS −0.0169** over the strong
   Phase-J floor (9/9 and 8/9 per-scene CI-wins) — and the ladder generalizes
@@ -108,7 +108,7 @@ should lead with it.
 
 | venue | fit under Stage-4 | note |
 |---|---|---|
-| 3DV 2027 | **strong, now as a positive-system paper** | representation + certified-transport method + reliability audit; leads with CR1/CR3. |
+| 3DV 2027 | **strong, now as a positive-system paper** | representation + audited-transport method + reliability audit; leads with CR1/CR3. |
 | WACV 2027 R2 | strong | deployment trade story (storage-vs-quality Pareto, honest fps) is stronger with L6. |
 | CVPR 2027 | **materially improved** | there is now a method core (routing ladder) + striking quals (β/confidence maps); risk shifts to novelty positioning vs ULR/Deep-Blending lineage — REBUTTAL A10 is the key paragraph. |
 | ICRA 2027 | unchanged (medium) | still not a closed-loop story; DS-1 retry may sharpen the scope sentence either way. |
