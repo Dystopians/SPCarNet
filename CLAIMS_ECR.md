@@ -131,6 +131,16 @@ MOTIVATION for caching evidence rather than baking it, reported first-class.
   audits GREEN; jpeg95 ~free, halfres −0.9 dB at ~50% TOTAL savings). All
   four claims now fully instantiated; total ecr-audit trail 96/96 GREEN.
   No open slots.
+- 2026-07-12 v1.1 (pre-submission cleanup): explicit ORACLE-SCOPE statement
+  added to CR5 — true edited GT exists only for the synthetic scene; real
+  scenes claim content preservation (true-GT outside the region) + bounded
+  ghost metrics ONLY. Multiple-comparison treatment: the 5-way novelty
+  family survives at BOTH 95% and 99% CIs (Bonferroni alpha = 0.05/5).
+  Parent-mask bug blast radius audited: NO banked result affected (single-
+  edit parents unedited; the chained cache built post-fix, mask-superset
+  verified). Canonical table: RESULTS/STAGE4_ECR/edit_aware/
+  routeA_master_table.md. Affected-view counts reconciled (garden 161 train
+  views, pot 57; toy 72 train views, car_0 all 72).
 - 2026-07-12 v1.0 (Route-A red-team closure, GOAL #E-16): **CR5 upgraded to
   oracle-verified** — in-region claims re-anchored on TRUE edited GT
   (verified oracle rebuild of the synthetic scene): exact face-provenance

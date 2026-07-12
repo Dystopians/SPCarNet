@@ -103,3 +103,11 @@ the metrics that matter ROSE with our method (the ECR gain survives editing; the
 cleaner than any naive strategy at 20–30× lower update cost), and the only measurable DECLINE is a
 −0.02 dB true-GT dip outside the garden edit region (toy: none; recolor: a +0.015 rise) — while both
 naive alternatives fail catastrophically on at least one edit class.
+
+---
+
+**PRE-SUBMISSION ADDENDUM (2026-07-12):** the in-region leak/ghost numbers in this report are
+SECONDARY metrics per the Route-A red-team (leak_R ρ=0.502 vs true edited GT; it penalizes legitimate
+improvements). Canonical in-region evidence = the oracle-scored master table
+(`RESULTS/STAGE4_ECR/edit_aware/routeA_master_table.md`). Unaffected-region (true-GT) and cost numbers
+in this report are unchanged and remain primary.

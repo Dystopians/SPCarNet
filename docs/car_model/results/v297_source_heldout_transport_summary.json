@@ -63,6 +63,43 @@
       "policy_val_all_axis_pass": false,
       "policy_val_tail_safe_pass": false,
       "min_changed_fraction_gate": 1.0e-5
+    },
+    "transport_alpha_diag": {
+      "output_dir": "/tmp/peilincai_spcarnet_v297_transport_alpha_diag_20260630",
+      "policy_val_all_axis_pass": false,
+      "rows": [
+        {
+          "alpha": 0.0,
+          "psnr_gain": 0.0,
+          "ssim_gain": 0.0,
+          "mean_changed_fraction": 0.0
+        },
+        {
+          "alpha": 0.125,
+          "psnr_gain": -5.1201389084098994e-8,
+          "ssim_gain": 8.344650268554687e-8,
+          "mean_changed_fraction": 2.0517077798861483e-5
+        },
+        {
+          "alpha": 0.25,
+          "psnr_gain": -3.294827806143985e-7,
+          "ssim_gain": 1.6689300537109374e-7,
+          "mean_changed_fraction": 5.016603415559772e-5
+        },
+        {
+          "alpha": 0.5,
+          "psnr_gain": -1.631607124608081e-6,
+          "ssim_gain": 3.0994415283203126e-7,
+          "mean_changed_fraction": 7.222485768500949e-5
+        },
+        {
+          "alpha": 1.0,
+          "psnr_gain": -6.4758459629388195e-6,
+          "ssim_gain": 5.125999450683594e-7,
+          "mean_changed_fraction": 8.894686907020873e-5
+        }
+      ],
+      "lesson": "Increasing alpha raises changed fraction but makes PSNR more negative; the pilot residual direction is still wrong, not merely under-applied."
     }
   },
   "verdict": {

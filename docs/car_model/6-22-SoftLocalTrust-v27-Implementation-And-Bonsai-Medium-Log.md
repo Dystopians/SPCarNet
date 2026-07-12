@@ -188,7 +188,9 @@ scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py \
 - output root: `/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v27_softtrust_20260622_bonsai_medium_gpu4`
 - W&B online 已按 pipeline 配置启用；
 - plan stage 已完成 test / trainval / render-region gate / decision；
-- top-level pipeline 后续 filter/selector session 仍可能继续运行，但 plan decision 已足够判断 v27 不能替代 Phase-J headline。
+- candidate-owned refit 已完成并被 honest gate 拒绝；
+- selector 已完成，最终选择 `strictfull_s1`，但 report-only held-out test 三指标轻微回退；
+- final conclusion: v27 仍不能替代 Phase-J headline。
 
 关键 artifacts：
 
@@ -197,6 +199,8 @@ scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py \
 /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v27_softtrust_20260622_bonsai_medium_gpu4/plan_generation/bonsai/model/test_results.json
 /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v27_softtrust_20260622_bonsai_medium_gpu4/plan_generation/bonsai/model/trainval_gate_results.json
 /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v27_softtrust_20260622_bonsai_medium_gpu4/plan_generation/decisions/bonsai_decision.json
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v27_softtrust_20260622_bonsai_medium_gpu4/candidate_owned_refit/decisions/bonsai_decision.json
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v27_softtrust_20260622_bonsai_medium_gpu4/selector/bonsai/coupled_selector_decision.json
 ```
 
 定量结果：
@@ -266,6 +270,52 @@ render-region gate 本身通过：
 }
 ```
 
+candidate-owned refit final decision:
+
+```json
+{
+  "accepted": false,
+  "selected_label": "phasej_guarded_adaptedge",
+  "decision_reasons": [
+    "psnr_gain_below_0",
+    "ssim_regression_exceeds_5e-05",
+    "lpips_regression_exceeds_0.00015",
+    "balanced_delta_below_0",
+    "render_region_tail_cvar_below_-2e-05"
+  ],
+  "test_delta_report_only": {
+    "LPIPS": -0.0005948097,
+    "PSNR": 0.0053901672,
+    "SSIM": 0.0001439452
+  },
+  "trainval_delta": {
+    "LPIPS": 0.0006463081,
+    "PSNR": -0.0196056366,
+    "SSIM": -0.0003137589
+  },
+  "trainval_balanced_delta": -0.0388069749
+}
+```
+
+selector final decision:
+
+```json
+{
+  "accepted": true,
+  "selected_trial": "strictfull_s1",
+  "selected_trainval_balanced_delta": 0.0006342530,
+  "effective_report_only_test_delta": {
+    "LPIPS": 0.0000103563,
+    "PSNR": -0.0000171661,
+    "SSIM": -0.0000039935
+  }
+}
+```
+
+Interpretation: selector acceptance is train-val honest, but the accepted trial
+is effectively no-op and slightly worse on held-out test. It is therefore a
+diagnostic/fairness result, not a promoted method.
+
 ## 7. 验收标准
 
 v27 只有在以下条件满足时才能替代 v26 或进入 headline 候选：
@@ -311,7 +361,11 @@ scripts/car_model/ecsr_summarize_autovisual_run.py
 | v26 hard trust | plan | false | +0.016258 | +0.000576 | +0.000198 | +0.015650 | -0.000066 | -0.000479 | +0.023907 |
 | v26 hard trust | candidate-owned | false | +0.039511 | +0.000839 | -0.000856 | +0.006525 | -0.000212 | -0.000514 | +0.012566 |
 | v27 soft trust | plan | false | -0.002831 | +0.000139 | +0.000037 | -0.020847 | -0.000283 | +0.000571 | -0.037934 |
+| v27 soft trust | candidate-owned | false | +0.005390 | +0.000144 | -0.000595 | -0.019606 | -0.000314 | +0.000646 | -0.038807 |
+| v27 soft trust | selector | true | -0.000017 | -0.000004 | +0.000010 | n/a | n/a | n/a | +0.000634 |
 
 解读：v27 解决了 trust 全零，但把 residual 重新放开后出现更强 trainval
-负尾部；v26 反而在 balanced 上更稳，但 SSIM 越界。下一轮应关注
-per-view/per-region tail-safe alpha，而不是单纯 hard/soft trust 二选一。
+负尾部；selector 虽然可以找到 train-val balanced 为正的 strict replay，
+但 held-out test 为近似 no-op 且三指标轻微回退。v26 反而在部分 balanced
+诊断上更稳，但 SSIM/tail 越界。下一轮应关注 per-view/per-region tail-safe
+alpha，而不是单纯 hard/soft trust 二选一。

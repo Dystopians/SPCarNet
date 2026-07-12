@@ -113,6 +113,28 @@ Transport slightly reduces the PSNR negativity relative to the baseline pilot,
 but the effect is still numerical-noise scale. It is not enough to run flowers
 exact or full9.
 
+## Alpha-Energy Diagnostic
+
+To separate "too little residual energy" from "wrong residual direction", the
+transport pilot checkpoint was re-evaluated without training using a wider alpha
+grid:
+
+```text
+/tmp/peilincai_spcarnet_v297_transport_alpha_diag_20260630
+```
+
+| alpha | PSNR gain | SSIM gain | changed fraction |
+|---:|---:|---:|---:|
+| 0.000 | +0.000000000 | +0.000000000 | 0.000000000 |
+| 0.125 | -0.000000051 | +0.000000083 | 0.000020517 |
+| 0.250 | -0.000000329 | +0.000000167 | 0.000050166 |
+| 0.500 | -0.000001632 | +0.000000310 | 0.000072225 |
+| 1.000 | -0.000006476 | +0.000000513 | 0.000088947 |
+
+The larger alphas increase changed fraction, but PSNR becomes more negative.
+This means the pilot is not simply under-applied; the learned residual direction
+is still not reliable enough.
+
 ## Engineering Cost
 
 In the 24-step pilot:

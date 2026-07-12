@@ -91,3 +91,16 @@ not a spine; revisit standalone (with translation + peripheral-object locality +
 row) only if the main paper lands and the mentor wants a follow-up. Route B (appearance baking) remains
 falsified by the Stage-1/2/3 corpus; Route C (geometry refinement) remains open but is a different
 program — neither displaces Route A's section-level value.
+
+---
+
+## PRE-SUBMISSION ADDENDUM (2026-07-12, GOAL #E-16 red-team + cleanup)
+
+Numbers above predate the red-team corrections. The CANONICAL presentation is
+`analysis/edit_aware/routeA_master_table.md` (packed at
+`RESULTS/STAGE4_ECR/edit_aware/routeA_master_table.md`): in-region claims are ORACLE-PRIMARY
+(synthetic scene only — verified oracle rebuild; real scenes report true-GT preservation + bounded
+ghost metrics only); leak_R is SECONDARY (ρ=0.502 vs oracle error; penalizes legitimate improvement —
+the garden proxy ordering INVERTS the oracle ordering); the 5-way novelty family holds at BOTH 95% and
+99% CIs; the parent-mask builder bug affected NO banked result (all single-edit parents unedited; the
+only chained cache was built post-fix with verified mask-superset inheritance).

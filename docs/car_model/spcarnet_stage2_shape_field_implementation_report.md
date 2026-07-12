@@ -2,14 +2,35 @@
 title: SP-CarNet Stage 2 — Shape-field auto-decoder implementation report
 date: 2026-04-29
 authors: SP-CarNet line
-status: implementation complete; smoke PASS; full-training pending
+status: implementation complete; v4 normal-band trained; held-out MAP-fit eval complete; gate soft FAIL
 linked_design: docs/car_model/spcarnet_stage2_shape_field_design.md
 linked_log: docs/car_model/SPCarNet_research_log.md
 ---
 
 # SP-CarNet Stage 2 — Implementation report
 
-This document closes the implementation phase of Stage 2 (the canonical, object-level shape-field auto-decoder). The full training run is **not yet launched**; this report covers what was built, what was checked, and the exact command needed to start the headline run.
+This document originally closed the implementation phase of Stage 2 (the canonical, object-level shape-field auto-decoder). As of 2026-06-24, the line has been trained through `autodecoder_v3` and `autodecoder_v4_band`; the eval entry now supports held-out z-only MAP fitting for val/test objects that do not have train-time latent-table rows.
+
+Current headline status:
+
+> The Stage-2 engineering path is now complete enough to evaluate held-out clean-val decoder capacity: `206 / 206` val objects extract after z-only MAP fitting, with strict JSON output and W&B logging. The v4 normal-band objective improves v3 chamfer and filled-volume IoU, but the method still does **not** pass the original Stage-2 quality gate.
+
+Latest evidence:
+
+```text
+outputs/carnet/spcarnet/autodecoder_v3/checkpoint_last.pt
+outputs/carnet/spcarnet/autodecoder_v3/eval/train_eval.json
+outputs/carnet/spcarnet/autodecoder_v3/eval/val_mapfit_full206_20260624.json
+W&B: https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet/runs/svtbc8sn
+outputs/carnet/spcarnet/autodecoder_v4_band_20260624/checkpoint_last.pt
+outputs/carnet/spcarnet/autodecoder_v4_band_20260624/eval/val_mapfit_epoch50_full206_20260624.json
+outputs/carnet/spcarnet/autodecoder_v4_band_20260624/eval/val_mapfit_final_full206_20260624.json
+outputs/carnet/spcarnet/autodecoder_v4_band_20260624/checkpoint_selection/stage2_v4_checkpoint_selection_20260624.json
+outputs/carnet/spcarnet/autodecoder_v4_band_20260624/checkpoint_selection/stage2_v4_checkpoint_selection_20260624.md
+W&B train: https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet/runs/dysg8508
+W&B eval: https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet/runs/4wu9w305
+W&B final eval: https://wandb.ai/karamazovaniki-university-of-southern-california/spcarnet/runs/q1jjwvdm
+```
 
 ---
 
@@ -53,7 +74,7 @@ This preserves the explicit RFC §6 "Demote, don't delete" promise.
 
 - No observation likelihood `L_ray` term — Stage 4.
 - No symmetry term and no scanner-pose conditioning — Stage 3+.
-- No per-object MAP refinement at val time — Stage 3.
+- No observation-driven posterior/MAP refinement — Stage 3 and Stage 4. A clean-shape z-only MAP-fit eval ablation is now implemented for held-out Stage-2 decoder-capacity measurement.
 - No mesh GT chamfer (only point-cloud chamfer) — Stage 4.
 - No DDP / multi-GPU. Single-GPU, single-process.
 - No wandb sweep — single configured run only.
@@ -96,8 +117,131 @@ The MC `mesh_present=False` outcome at smoke is **expected**: with 2 untrained l
 
 ### 2.3 Did **not** run
 
-- The full training launcher (`scripts/car_model/train_spcarnet_shape_field_autodecoder.sh`) — not yet kicked off; this is the next decision point.
-- The eval entrypoint (`scripts/car_model/eval_spcarnet_shape_field_autodecoder.py`) — depends on a checkpoint from the full run.
+Superseded by the 2026-06-24 update below. The original implementation report predates `autodecoder_v3` training and the held-out MAP-fit eval path.
+
+### 2.4 2026-06-24 held-out MAP-fit eval update
+
+The original val eval skipped every held-out object because Stage-2 auto-decoders only contain latent-table rows for train objects. This produced `0 / 206` extraction in:
+
+```text
+outputs/carnet/spcarnet/autodecoder_v3/eval/val_eval.json
+```
+
+That is not a valid decoder-capacity evaluation. The eval script now supports explicit z-only MAP fitting for objects missing from the train-time latent table:
+
+```bash
+CUDA_VISIBLE_DEVICES=2 WANDB_MODE=online \
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/eval_spcarnet_shape_field_autodecoder.py \
+  --checkpoint outputs/carnet/spcarnet/autodecoder_v3/checkpoint_last.pt \
+  --object_index outputs/carnet/spcarnet/object_index_v1.json \
+  --splits val \
+  --output outputs/carnet/spcarnet/autodecoder_v3/eval/val_mapfit_full206_20260624.json \
+  --mc_resolution 32 \
+  --sample_count 4096 \
+  --device cuda \
+  --fit_missing_latents \
+  --fit_steps 100 \
+  --fit_lr 0.01 \
+  --fit_queries_surface 384 \
+  --fit_queries_free 384 \
+  --fit_queries_hard 128 \
+  --fit_queries_mixed 128 \
+  --resolved_config outputs/carnet/spcarnet/autodecoder_v3/resolved_config.json \
+  --wandb_project spcarnet \
+  --wandb_run_name stage2_autodecoder_v3_val_mapfit_full206_20260624 \
+  --wandb_mode online
+```
+
+Result summary:
+
+| metric | value |
+|---|---:|
+| `n_objects_evaluated` | `206` |
+| `n_extracted` | `206` |
+| `mesh_extraction_success_rate` | `1.0` |
+| `recon_chamfer_l1_mean` | `0.0698447353` |
+| `hidden_chamfer_l1_mean` | `0.1023846301` |
+| `mesh_iou_at_0.5_mean` | `0.5531548112` |
+| `mesh_iou_at_0.5_shell_mean` | `0.9112784961` |
+| `n_iou_filled` | `69` |
+| `n_iou_shell` | `137` |
+| `surface_normal_consistency_mean` | `0.7182239138` |
+
+Audit checks:
+
+| check | result |
+|---|---|
+| Strict JSON, no `NaN` / `Infinity` tokens | PASS |
+| Per-object latent source | all `heldout_map_fit` |
+| Per-object fit status | all `ok` |
+| W&B online run | `svtbc8sn` |
+
+Interpretation:
+
+> This fixes the Stage-2 held-out evaluation interface and proves the decoder can produce meshes for all val objects after clean-shape z-only MAP fitting. It does not prove that Stage 2 is a strong headline shape prior: the original gate still fails on chamfer and filled-volume IoU.
+
+### 2.5 2026-06-24 v4 normal-band objective update
+
+The v4 branch keeps the v3 decoder capacity fixed and changes the training objective. For each surface point with a clean normal, it samples a narrow band around the surface:
+
+```text
+x_inner = x_surface - epsilon * normal  -> occupied target
+x_outer = x_surface + epsilon * normal  -> free target
+```
+
+This adds a boundary-sharpening BCE term to reduce ambiguity around the Marching-Cubes `0.5` crossing:
+
+```text
+loss_band = 0.5 * (BCE(f(x_inner, z), 1) + BCE(f(x_outer, z), 0))
+```
+
+Implementation and config:
+
+```text
+ss3dm_prior/training/spcarnet_autodecoder.py
+scripts/car_model/eval_spcarnet_shape_field_autodecoder.py
+scripts/car_model/smoke_test_spcarnet_stage2.py
+configs/ss3dm_prior/spcarnet/model_spcarnet_shape_field_autodecoder_v4_band.yaml
+configs/ss3dm_prior/spcarnet/train_spcarnet_shape_field_autodecoder_v4_band.yaml
+scripts/car_model/train_spcarnet_shape_field_autodecoder_v4_band.sh
+docs/car_model/6-24-Stage2-v4-NormalBand-Autodecoder-Log.md
+```
+
+Full training:
+
+```text
+W&B run: dysg8508
+steps: 69300 / 69300
+epochs: 300
+checkpoint: outputs/carnet/spcarnet/autodecoder_v4_band_20260624/checkpoint_last.pt
+```
+
+Best documented full-val MAP-fit result so far is the epoch50 checkpoint:
+
+| metric | v3 MAP-fit | v4 epoch50 MAP-fit | v4 final MAP-fit | best |
+|---|---:|---:|---:|---|
+| `n_extracted` | `206 / 206` | `206 / 206` | `206 / 206` | tie |
+| `recon_chamfer_l1_mean` | `0.0698447353` | `0.0607328202` | `0.0655826944` | v4 epoch50 |
+| `hidden_chamfer_l1_mean` | `0.1023846301` | `0.0933915632` | `0.0963624408` | v4 epoch50 |
+| `mesh_iou_at_0.5_mean` | `0.5531548112` | `0.5683319216` | `0.5314717742` | v4 epoch50 |
+| `mesh_iou_at_0.5_shell_mean` | `0.9112784961` | `0.8783071888` | `0.8563237802` | v3 |
+
+Interpretation:
+
+> v4 is a real method improvement over v3 on chamfer and filled-volume IoU when using the epoch50 checkpoint, but it still misses the original Stage-2 gate and trades off shell IoU. The final checkpoint is worse than epoch50, so longer training is not sufficient; this should be reported as a promising object-prior direction, not as a headline-complete result.
+
+The checkpoint choice is now captured by a deterministic selector artifact:
+
+```text
+script: scripts/car_model/select_spcarnet_stage2_checkpoint.py
+status: BEST_AVAILABLE_GATE_FAIL_WITH_LATE_DEGRADATION
+best candidate: v4_epoch50
+selection JSON: outputs/carnet/spcarnet/autodecoder_v4_band_20260624/checkpoint_selection/stage2_v4_checkpoint_selection_20260624.json
+selection Markdown: outputs/carnet/spcarnet/autodecoder_v4_band_20260624/checkpoint_selection/stage2_v4_checkpoint_selection_20260624.md
+```
+
+This closes the report-side checkpoint-selection gap: future Stage-2 variants should be compared through this selector instead of citing a manually chosen checkpoint.
 
 ---
 
@@ -161,7 +305,7 @@ The trainer does **not yet** persist checkpoints — that is a known gap below.
 
 ## 5. Stage gate (unchanged from design)
 
-Stage 2 is **PASS** when, on the held-out `val` split, after the full training run:
+Stage 2 is **PASS** when, on the held-out `val` split, after the full training run and the clean-val z-only MAP-fit eval:
 
 | Metric | Threshold | Source |
 |---|---|---|
@@ -171,13 +315,23 @@ Stage 2 is **PASS** when, on the held-out `val` split, after the full training r
 
 All three must hold simultaneously. A miss on any single metric does not advance Stage 3.
 
+2026-06-24 gate result:
+
+| Metric | Threshold | v3 MAP-fit | v4 epoch50 MAP-fit | Pass? |
+|---|---:|---:|---:|---|
+| `mesh_iou_at_0.5_mean` | ≥ `0.92` | `0.5531548112` | `0.5683319216` | no |
+| `recon_chamfer_l1_mean` | ≤ `0.05` | `0.0698447353` | `0.0607328202` | no |
+| `mesh_extraction_success_rate` | ≥ `0.95` | `1.0` | `1.0` | yes |
+
+Decision: **soft FAIL**. The evaluation path is now correct and complete, and v4 improves the right metrics, but decoder quality is not strong enough to make Stage 2 a headline object-prior result.
+
 ---
 
 ## 6. Known risks / gaps
 
-1. **No checkpoint emission yet.** `ShapeFieldAutoDecoderTrainer.fit()` returns history but does not persist a `.pt` file with `decoder_state_dict`, `latent_table`, and `object_id_to_row`. The eval entry expects exactly that schema. **Action before launch**: add a `_save_checkpoint(path)` call at end-of-fit (and at every `eval_every_epochs`) before kicking off the headline run. Tiny patch — listed as the first follow-up.
-2. **No periodic eval inside `fit()`.** `eval_every_epochs` is plumbed in the config but not yet wired. Will be added together with the checkpoint hook.
-3. **No wandb logging inside the trainer.** Launcher exports `WANDB_MODE=online` and `WANDB_PROJECT=spcarnet`, but the trainer does not currently call `wandb.init`. To meet the persistent feedback rule (CarNet training runs go online), the trainer needs `wandb.init` + per-step `wandb.log`. Add before launching the headline run.
+1. **Decoder-capacity ceiling remains low.** `autodecoder_v3` reaches full val extraction after z-only MAP fitting, but chamfer `0.0698` and filled IoU `0.5532` miss the Stage-2 gate. Scaling width/depth alone did not solve the shape prior.
+2. **No periodic geometry eval inside `fit()`.** `eval_every_epochs` currently emits checkpoints and W&B training metadata, but does not run full geometry validation during training. The new selector closes report-side checkpoint choice after eval JSONs exist; it does not replace in-loop validation.
+3. **Held-out MAP-fit uses clean val supervision.** This is legitimate for decoder-capacity measurement, but it is not an inference-time result. Stage 3/4 results remain the correct evidence for partial-observation inference.
 4. **Smoke does not assert mesh quality.** Smoke MC at resolution=16 with an untrained tiny decoder returns `mesh=None`. That is an *acceptance* path of the smoke. Mesh-quality gating belongs to the eval script post-training, not to the smoke.
 5. **Mixed cache format.** Cache versions 2 and 3 are both consumed by the Stage-1 dataset. The auto-decoder does not need symmetry persistence (symmetry is Stage 4 territory), so this is not a Stage-2 risk; it is documented to keep the trail honest.
 6. **Eikonal autograd path under `requires_grad_(True)` on a tensor that already has `requires_grad=False`.** Tested only in the smoke that runs `field_kind=occupancy`; SDF ablation has been compiled but not executed end-to-end. To be exercised before the first SDF run.
@@ -189,9 +343,9 @@ None of these are blockers — they are pre-launch follow-ups, all under one hou
 
 ## 7. Decision and next concrete step
 
-Stage 2 implementation is **complete and passes smoke**. The recommended next concrete step is the small pre-launch hardening pass (checkpoint emission, periodic eval, wandb integration) and **then** kick off the headline auto-decoder run on GPU 5 with `WANDB_MODE=online` and `WANDB_PROJECT=spcarnet`.
+Stage 2 implementation and held-out eval are now engineering-complete, but the Stage-2 quality gate is a **soft FAIL**.
 
-The Stage-2 gate is defined and reachable; advancing to Stage 3 (per-object MAP refinement at val time) is conditional on hitting all three thresholds in §5 on the headline run.
+The next concrete research step is not another blind width/depth scale-up. The evidence points to a decoder/prior limitation: either improve the shape representation objective, switch to a stronger signed-distance / surface-distance formulation, or keep Stage 2 as a supporting component while Stage 3/4/5 carry the object-prior story.
 
 ---
 

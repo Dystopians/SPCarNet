@@ -54,6 +54,9 @@ declare -A COPIES=(
   [$G1/analysis/edit_aware/garden_chain2/edit_eval.md]=$DST/edit_aware/garden_chain2.md
   [$G1/analysis/edit_aware/sidecar_toy/edit_eval.md]=$DST/edit_aware/sidecar_toy.md
   [$G1/analysis/edit_aware/boundary_translate/BOUNDARY.md]=$DST/edit_aware/boundary_translate.md
+  [$G1/analysis/edit_aware/routeA_master_table.md]=$DST/edit_aware/routeA_master_table.md
+  [$G1/analysis/edit_aware/routeA_master_table.json]=$DST/edit_aware/routeA_master_table.json
+  [$G1/analysis/edit_aware/sensitivity_summary.md]=$DST/edit_aware/sensitivity_summary.md
 )
 mkdir -p $DST/ibr $DST/edit_aware
 

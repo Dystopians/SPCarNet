@@ -66,3 +66,21 @@ construction). Masks only REMOVE evidence (multiplicative ≤1 on confidence) �
 information; the audit wall (read confinement, pose-primitives boundary, GT sentinel, frozen kwargs)
 is unchanged. `ablate`-style default-off law: with no masks present, the transport is bit-identical
 (config-hash check required before any run).
+
+## Amendments (red-team + pre-submission, 2026-07-12)
+
+1. **Oracle scope (explicit):** true edited GT exists ONLY for the synthetic scene (seeded generator
+   rebuild, verified: cameras/splits byte-identical, element census, element-free-view image
+   byte-identity). Real-scene cells claim ONLY content preservation (true-GT outside the edit region)
+   and bounded ghost metrics; no edited-GT access is implied anywhere.
+2. **Metric hierarchy:** oracle PSNR/MAE in-region = primary where the oracle exists; ghost-similarity
+   CIs = bounded primary on real scenes; leak_R = secondary (ρ=0.502 vs oracle; conflates improvement
+   with leakage — the finding is reported, not hidden).
+3. **Multiple comparisons:** the novelty family (5 comparisons) is reported at 95% AND 99% CIs
+   (Bonferroni α=0.05/5); all five survive both.
+4. **Cross-process nondeterminism:** renders are deterministic within a process (0 differing quantized
+   pixels) but not across processes; ALL paired CIs are computed within-run (valid); cross-run absolute
+   values on tiny near-saturated regions jitter (up to ~20 dB masked-PSNR swing on C1) — a sensitivity
+   rerun verifies rank/conclusion stability (`analysis/edit_aware/sensitivity_*`).
+5. Affected-view reconciliation: garden = 161 train views (pot affects 57); toy = 72 train views
+   (car_0 affects all 72; "76/90" is the dataset's all-view coverage census incl. test views).

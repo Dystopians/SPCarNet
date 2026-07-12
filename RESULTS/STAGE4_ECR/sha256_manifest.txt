@@ -13,6 +13,9 @@ f96eb085e3eb5ddf238ecb2acf136d0c38ce4e705b9b1e562cfd6f177ce82e25  RESULTS/STAGE4
 430cc3461a3ac8a054e3c767bd2cb191f160b33f0852ce16a3581bcd60511a56  RESULTS/STAGE4_ECR/edit_aware/garden_recolor_spec.json  <= /data/peilincai/gems_stage1/edit_aware/garden_recolor/edit_spec.json
 30c6da54dab367fb9e30438351a2a2f8ef3b9253bfbeab4d890f09969dd327bd  RESULTS/STAGE4_ECR/edit_aware/oracle_eval.json  <= /data/peilincai/gems_stage1/analysis/edit_aware/oracle_toy/oracle_eval.json
 0415390ee2cfc8f56366753e00644de617dc880872965330d589185abcb05ccc  RESULTS/STAGE4_ECR/edit_aware/oracle_eval.md  <= /data/peilincai/gems_stage1/analysis/edit_aware/oracle_toy/oracle_eval.md
+7ebf93d7a2dbc400d5abbb3d674e5eed47bf13a02995495677ea2c5f03e6a1a3  RESULTS/STAGE4_ECR/edit_aware/routeA_master_table.json  <= /data/peilincai/gems_stage1/analysis/edit_aware/routeA_master_table.json
+d73dd9d9f5f09501845d1c1df92ec090b05c8ce2610b9dd65802defe265c48a6  RESULTS/STAGE4_ECR/edit_aware/routeA_master_table.md  <= /data/peilincai/gems_stage1/analysis/edit_aware/routeA_master_table.md
+19aa1bc3331c264d5799bac2c34c21932ab5c319f8e1c9cffa8ec8a7db19942c  RESULTS/STAGE4_ECR/edit_aware/sensitivity_summary.md  <= /data/peilincai/gems_stage1/analysis/edit_aware/sensitivity_summary.md
 7a0564ff10006fa127f260f81931e3a3ada4069fc44184c64d39971b4007e40e  RESULTS/STAGE4_ECR/edit_aware/sidecar_toy.md  <= /data/peilincai/gems_stage1/analysis/edit_aware/sidecar_toy/edit_eval.md
 a8d6e1204ba6f344e8ee9e24da7a576655e67988fb00a401df460e324298459a  RESULTS/STAGE4_ECR/edit_aware/toy_delcar0_spec.json  <= /data/peilincai/gems_stage1/edit_aware/toy_parking_delcar0/edit_spec.json
 f0958fcbf4d416954b6c0f37183590ae9539b229df952eb5dbe821df5e5605d8  RESULTS/STAGE4_ECR/edit_aware/toy_delcar1.md  <= /data/peilincai/gems_stage1/analysis/edit_aware/toy_delcar1/edit_eval.md
@@ -42,6 +45,6 @@ f5500780f109179bc8687b8a5fc281a30963f07d36c2715de18bf2128c1cc64b  RESULTS/STAGE4
 43aa866090f666a7a45475f01ea267ddda37ee7516862b559058f11ea2c002d8  RESULTS/STAGE4_ECR/tables/t2b_tandt_db.md  <= /data/peilincai/gems_stage1/analysis/final_stack/t2b_tandt_db.md
 7b77fccc32e2d32ac9c14a6642cb67cb6992daa06a5a02d6eb04f749961e315c  RESULTS/STAGE4_ECR/tables/temporal_summary.json  <= /data/peilincai/gems_stage1/analysis/temporal/temporal_summary.json
 0b95f457a16e302cf27dc9573190bf4a467f9a839d64f50f48681605b7d9eae7  RESULTS/STAGE4_ECR/tables/temporal_summary.md  <= /data/peilincai/gems_stage1/analysis/temporal/temporal_summary.md
-# Stage-4 ECR pack — folded 9b92a11
+# Stage-4 ECR pack — folded bf3ee65
 # Byte verification: every line above is sha256 of BOTH source and copy (asserted equal at fold time).
 # Qual grids live in RESULTS/figures/ecr_qual/ (generated in-repo, not copied).

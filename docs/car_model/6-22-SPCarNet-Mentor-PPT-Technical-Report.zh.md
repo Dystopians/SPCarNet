@@ -4,6 +4,14 @@
 
 用途：mentor 汇报 / PPT 制作 / 当前方法阶段性技术交底
 
+当前代码版本：`a5131a8 Add SPCarNet v28 audit hardening and Phase-J showcase`
+
+报告范围说明：
+
+- 本报告面向“明天给 mentor 做阶段性技术汇报”，不是论文最终版 claim lock。
+- 当前可正式主讲的是 Phase-J endpoint；v26/v27/v28 是近期诊断和下一步机制，不应包装成已全面胜出的主结果。
+- 所有 headline 数字优先引用本地同协议 selected clean MeshSplatting baseline，而不是只引用论文表格。
+
 当前可作为主结果汇报的方法：
 
 ```text
@@ -23,6 +31,63 @@ ours_26000_phasej_guarded_adaptedge_ela
 | 最强主 claim | 相对本地同协议 selected clean MeshSplatting，full9 9/9 三指标严格胜出 |
 | 最重要 caveat | 主 RGB 收益仍来自 render-time ELA，representation-level 内化仍是下一步 |
 | PPT 风格 | 先讲强结果，再主动解释公平性、负结果和下一步 |
+
+---
+
+## A. Mentor 汇报 Executive Battlecard
+
+### A.1 最短结论
+
+如果 PPT 只能讲 30 秒，建议讲这段：
+
+> 我们把 MeshSplatting 从“训练完直接渲染”升级成“训练证据驱动的安全压缩与残差修复闭环”。当前 Phase-J endpoint 在 Mip-NeRF360 full9 上相对本地同协议 selected clean MeshSplatting 实现 9/9 场景 PSNR、SSIM、LPIPS 严格提升，均值提升 `+1.3311 PSNR / +0.0347 SSIM / -0.0634 LPIPS`，同时平均减少 `7.6479%` triangles，并且 `244/246` held-out views 三指标同时提升。最重要的边界是：最强外观收益仍来自 train-only render-time ELA，下一步要把修复能力进一步内化回 representation-level checkpoint。
+
+### A.2 PPT 可以直接放的四条 claim
+
+| claim | 可讲强度 | 证据 |
+|---|---|---|
+| full9 RGB 全场景严格胜出 | 强 | Phase-J closure audit: `9 / 9` scene strict wins |
+| per-view 稳定性 | 强 | `244 / 246` held-out views strict RGB wins |
+| 几何安全与压缩 | 强但要解释室内低压缩 | `9 / 9` geometry-safe，平均 triangle reduction `7.6479%` |
+| 相对 MeshSplatting paper table 更高 | 辅助 claim | Phase-J mean `26.4828 / 0.7837 / 0.2243` vs paper `24.78 / 0.728 / 0.310` |
+
+### A.3 PPT 不建议这样讲
+
+| 不建议说法 | 原因 | 推荐替代表述 |
+|---|---|---|
+| “已经完全是 representation-level 方法” | 当前最强 RGB endpoint 仍包含 render-time ELA | “compact mesh checkpoint + train-evidence residual adapter；representation-level baking 是下一步” |
+| “v28 已经更强” | v28 目前只有实现、smoke 和 dry-run，尚无中长程结果 | “v28 是针对 v27 tail 风险的新机制，正在验证” |
+| “只和论文表格比就够了” | paper table 不是本地同代码同脚本公平 baseline | “主 claim 使用本地 selected clean MeshSplatting，paper table 作为外部 sanity check” |
+| “所有三角形都能大幅删掉” | 室内场景安全策略只允许 micro-budget | “压缩率由 train evidence 决定，优先保证 geometry-safe” |
+
+### A.4 PPT 图表取材清单
+
+| PPT 用途 | 推荐素材 | 备注 |
+|---|---|---|
+| 主定量表 | 本报告 Section 5.1 | 9 场景 per-scene 结果 |
+| 主定性图 | `assets/spcarnet_phasej_where_it_helps_showcase_20260622.png` | 最新 Phase-J current-method local crop/error map |
+| 定性图选择记录 | `assets/spcarnet_phasej_where_it_helps_selection_20260622.json` | 说明 crop 不是手工随意挑选 |
+| 全图公平比较 | `assets/spcarnet_m360_full9_qualitative_gallery.png` | 用于展示同 view 同 baseline |
+| 旧户外细节 backup | `assets/spcarnet_m360_outdoor_detail_showcase.png` | 只作为补充，不要替代最新 Phase-J 图 |
+| 主结果审计 | `outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_closure_audit.md` | 机械审计摘要 |
+| 主结果完整表 | `outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/phasef_ela_eval_summary_phasej_guarded_adaptedge_full9.md` | headline endpoint |
+
+### A.5 建议的 12 页 PPT 大纲
+
+| slide | 标题 | 核心信息 |
+|---:|---|---|
+| 1 | Problem | MeshSplatting 强，但局部 residual、训练 checkpoint 选择和拓扑冗余仍有空间 |
+| 2 | Baseline Protocol | 本地 clean `26000/30000` envelope；不使用 train metric 选 baseline |
+| 3 | Key Idea | train-view evidence 决定“哪里能压缩、哪里能修复、何时回退” |
+| 4 | Pipeline | evidence mining -> compaction -> ELA repair -> guarded policy -> held-out eval |
+| 5 | Safe Compaction | triangle reduction 与 geometry-safe 审计 |
+| 6 | Evidence Lumigraph Adapter | residual warp、support views、alpha calibration、edge fallback |
+| 7 | Main Result | `9/9` strict RGB wins，mean gains，triangle reduction |
+| 8 | Per-Scene Result | 9 场景结果表，突出 bonsai/kitchen/counter/room |
+| 9 | Qualitative | 全图公平对比 + 局部 crop/error map |
+| 10 | Ablations / Negative Results | clean 30000 不一定更好；v25/v26/v27 被 honest gate 拒绝 |
+| 11 | Current Risk | render-time ELA 风险、室内压缩低、representation-level 内化不足 |
+| 12 | Next Step | v28 view-tail-safe alpha shrink 与 representation-level distillation |
 
 ---
 
@@ -46,9 +111,9 @@ ours_26000_phasej_guarded_adaptedge_ela
 
 1. 当前 headline 的 RGB 增益主要来自 render-time ELA，不能声称所有修复都已经完全 baked into mesh representation。
 2. Phase-S / v25 / v26 / v27 / v28 是 representation-level 或 render-layer 可信修复升级方向，但目前还没有显著超过 Phase-J headline。
-3. v26 local-trust 已完成接口闭环、smoke test、dry-run 和 bonsai candidate test；但当前 test 数字低于 Phase-J headline，且 trainval/selector 仍在运行，因此只能作为“严格 local-trust 过保守”的候选分支/诊断结果，不能作为主结果。
-4. v27 已把 v26 hard local-trust 升级为 fixed-profile soft trust-weighted ELA，并通过 py_compile、smoke、dry-run、fixed-profile override 拒绝和 bonsai medium 验证；它证明 soft trust 机制生效，但 plan candidate 被诚实 trainval gate 拒绝，不能替代 Phase-J headline。
-5. v28 已进一步把 ELA alpha 从 pixel/bin 安全性推进到 policy-view tail 安全性，接口、smoke 和 dry-run 均通过；但 v28 还没有中长程 W&B 结果，不能作为主结果。
+3. v26 local-trust 已完成接口闭环、smoke test、dry-run 和 bonsai medium；最终 selector 回退 Phase-J，因此只能作为“严格 local-trust 过保守”的候选分支/诊断结果，不能作为主结果。
+4. v27 已把 v26 hard local-trust 升级为 fixed-profile soft trust-weighted ELA，并通过 py_compile、smoke、dry-run、fixed-profile override 拒绝和 bonsai medium 验证；它证明 soft trust 机制生效，但 candidate-owned 被诚实 gate 拒绝，selector 接受的 strictfull_s1 在 held-out test 上三指标轻微回退，不能替代 Phase-J headline。
+5. v28 已进一步把 ELA alpha 从 pixel/bin 安全性推进到 policy-view tail 安全性，接口、smoke 和 dry-run 均通过；首个 real run 暴露并修复了 plan/candidate-owned region-risk 参数转发问题，修复版 W&B medium run 正在验证中，不能作为主结果。
 6. 定性图建议用 full-frame fair comparison + local crop + error map，而不是只展示缩小后的整图，因为当前收益很多是局部 residual-level 改善。
 
 ### 0.3 最推荐的 PPT 主线
@@ -106,6 +171,8 @@ Honest boundary:
 score = PSNR + 20 * SSIM - 20 * LPIPS
 ```
 
+这个 clean baseline envelope 只用于选择更强的 clean comparator。方法本身的 branch、alpha、edge fallback、压缩比例和后续 v26/v27/v28 gate 都只由 train/policy-validation evidence 决定；held-out test GT 只做最终 report-only 评价。
+
 当前 Phase-J 相对 selected clean MeshSplatting：
 
 | 比较 | 场景 | dPSNR | dSSIM | dLPIPS | 平均三角形减少 |
@@ -118,8 +185,11 @@ score = PSNR + 20 * SSIM - 20 * LPIPS
 |---|---|
 | per-view held-out audit | 244 / 246 个 held-out view 同时提升 PSNR / SSIM / LPIPS |
 | sparse geometry audit | 9 / 9 geometry-safe，6 / 9 sparse geometry 严格更好 |
-| 相对 Phase-F alpha-grid predecessor | 9 / 9 三指标严格胜出，均值 +0.3971 PSNR / +0.0083 SSIM / -0.0193 LPIPS |
+| 相对 Phase-F alpha-grid historical predecessor | 9 / 9 三指标严格胜出，均值 +0.3971 PSNR / +0.0083 SSIM / -0.0193 LPIPS |
+| 相对 Phase-J closure audit 中的 source Compact-ELA/SOR row | 9 / 9 三指标严格胜出，均值 +0.8331 PSNR / +0.0189 SSIM / -0.0400 LPIPS |
 | 外部 ETH3D courtyard clean9000 | 最高 +0.2642 PSNR / +0.0094 SSIM / -0.0225 LPIPS |
+
+说明：这里有两个“前序方法”口径。`+0.3971` 来自 README/历史 Phase-F alpha-grid 对照；`+0.8331` 来自当前 Phase-J closure audit 机械读取的 source Compact-ELA/SOR row。PPT 主线不需要强调二者差别，主 claim 应固定为“相对 selected clean MeshSplatting 的 `+1.3311 / +0.0347 / -0.0634`”。
 
 ### 1.3 与 MeshSplatting 论文表格的口径关系
 
@@ -324,6 +394,100 @@ Phase-J 的关键升级是：不是所有场景都强行用同一种 ELA。
 
 这解决了 Phase-H 最后的非严格胜出场景。
 
+### 4.5 算法级拆解
+
+这一节适合放进 backup slides，用来回答“具体是怎么判断和怎么修复的”。
+
+#### Step 1：训练视角证据收集
+
+对每个训练视角，系统先渲染 clean/compact MeshSplatting checkpoint，然后缓存：
+
+- rendered RGB；
+- GT RGB；
+- residual `GT - render`；
+- face visibility / hit count；
+- per-face pixel count；
+- support-view consistency；
+- high-error region statistics。
+
+这一阶段只读训练视角，不读取 held-out GT 来做决策。
+
+#### Step 2：三角形压缩候选判断
+
+三角形不是按面积或随机比例删除，而是按 evidence 做 conservative filter。一个 face 只有在满足以下条件时才进入可压缩候选：
+
+- 多视角可见性和 sample 数足够，不是只被单个偶然视角解释；
+- 删除或改写后不会造成 policy-validation residual 明显恶化；
+- sparse geometry audit 不出现明显 AbsRel / DepthMAE / Normal regression；
+- 对室内高质量 geometry 场景启用 micro-budget，避免为了更高压缩率破坏几何。
+
+因此当前的“triangle reduction”是删去的三角形占比，不是保留比例；它是安全策略的结果，而不是预设必须删多少。
+
+#### Step 3：Residual support graph
+
+对 target view，ELA 会选择若干 support train views。每个 support view 提供一个 residual field：
+
+```text
+residual_s(x) = GT_s(x) - render_s(x)
+```
+
+然后根据相机几何、深度投影和 visibility confidence，把 support residual warp 到 target view。多个 support residual 聚合时，会计算：
+
+- valid support count；
+- residual mean；
+- residual std；
+- confidence；
+- support agreement。
+
+这一步的直觉是：只有当多个训练视角对同一局部区域的“该怎么修”达成一致时，才把这部分 residual 转移到测试视角。
+
+#### Step 4：Alpha calibration
+
+ELA 不直接把 residual 全量加上去，而是学习/选择一个安全 alpha：
+
+```text
+render_final = render_base + alpha(pixel) * residual_evidence(pixel)
+```
+
+Phase-J 中的 adaptive alpha 会按 benefit bin 调节修复强度；v28 进一步在 per-bin alpha 之后增加 view-tail scale：
+
+```text
+alpha_final(pixel) = view_tail_scale * alpha_bin(pixel)
+```
+
+`view_tail_scale` 只由 policy-validation views 选择，用来防止少数 view 被过度修复。
+
+#### Step 5：Guard 与 fallback
+
+每个候选分支都必须过 train-only guard：
+
+- PSNR 不能低于门槛；
+- SSIM regression 不能超过门槛；
+- LPIPS regression 不能超过门槛；
+- balanced score 不能为负；
+- render-region tail CVaR 不能明显恶化；
+- 若局部风险过高，则触发 no-op 或 edge fallback。
+
+这就是为什么 v25/v26/v27 中一些 report-only test 看起来有小收益，仍然不能作为 headline：它们没有通过 honest trainval / region-tail gate。
+
+### 4.6 实现结构与可定位代码
+
+| 功能 | 主要文件 | 汇报时可说的作用 |
+|---|---|---|
+| ELA residual warp / aggregation | `utils/evidence_lumigraph_adapter.py` | 从训练视角 residual 中构造可转移的局部修复信号 |
+| Alpha calibration / v28 view-tail | `utils/evidence_lumigraph_adapter.py` | 决定每个像素/bin 的修复强度，并在 view tail 上做安全缩放 |
+| ELA 批量应用与 W&B | `scripts/car_model/meshsplatopt_apply_evidence_lumigraph_adapter.py` | 渲染 ELA 结果、写 `ela_report.json`、记录 W&B |
+| PhaseK plan/gate | `scripts/car_model/ecsr_run_phasek_barycentric_gate_scene.py` | 生成 candidate checkpoint，做 trainval/test report-only gate |
+| Coupled selector | `scripts/car_model/ecsr_run_facelocal_coupled_selector.py` | 在 candidate pool 中做 train-only selector 和 fallback |
+| AutoVisual pipeline | `scripts/car_model/ecsr_run_autovisual_facelocal_pipeline.py` | 串联 plan/filter/selector，多场景自动化实验 |
+| v28 audit | `scripts/car_model/ecsr_audit_viewtail_alpha_run.py` | 扫描 `ela_report.json` 和 decision，确认 view-tail 是否真生效 |
+
+当前最适合在 PPT 中展示的不是代码细节，而是这一条实现闭环：
+
+```text
+train evidence -> compact checkpoint -> residual adapter -> guarded selector -> held-out report-only eval
+```
+
 ---
 
 ## 5. 主实验结果
@@ -366,6 +530,8 @@ mean triangle reduction = 7.6479%
 | bonsai | 28.19 / 0.876 / 0.294 | 31.8620 / 0.9303 / 0.1726 | +3.6720 | +0.0543 | -0.1214 |
 
 ### 5.3 Geometry / topology
+
+注意：Section 5.1 的 `tri red.` 是 Phase-J endpoint 的 full result triangle reduction；本节表格来自 sparse/topology audit 口径，用于几何安全审计，数值可能与 full result table 略有不同。PPT 中建议分别标成 “endpoint triangle reduction” 和 “sparse-geometry audit reduction”。
 
 | scene | dAbsRel | dDepthMAE | dNormal | triangle red. | vertex red. | 状态 |
 |---|---:|---:|---:|---:|---:|---|
@@ -479,8 +645,8 @@ ELA 很强，但也可能过度修复。Phase-J 的核心就是把 ELA 放进 gu
 | Phase-S face-local residual repair | 已实现真实 representation-level checkpoint edit | 有可靠正收益，但相对 Phase-J 增益很小，不是论文级突破 |
 | v25 witness-group CVaR | 已实现 train-objective change，bonsai medium W&B 验证 | 被 selector 拒绝，是有价值负结果 |
 | v26 local-trust ELA | ELA / PhaseK / selector / autovisual profile 接口已接入，CLI help、py_compile、dry-run、local-trust smoke 均通过；bonsai medium 已完成 candidate-owned final decision | hard local-trust 过保守，candidate report-only test 小幅改善但 honest trainval/render-region gate 拒绝，不能作为 headline |
-| v27 soft local-trust ELA | 新增 continuous trust-weighted residual，fixed profile `field_region_render_risk_strict_v27`；py_compile、smoke、dry-run、fixed-profile override 拒绝和 bonsai medium plan decision 均已完成 | soft trust 机制有效，明显好于 v26 hard trust 的“全零 trust”问题；但 trainval gate 拒绝 plan candidate，仍不能替代 Phase-J headline |
-| v28 view-tail-safe alpha shrink | 已新增 policy-view tail 安全 alpha shrink，fixed profile `field_region_render_risk_strict_v28`；py_compile、ELA smoke、CLI visibility 和 dry-run command manifest 均通过 | 这是对 v27 tail 负迁移的直接修复，但尚未完成中长程 W&B 验证；当前只能作为下一轮候选机制，不可替代 Phase-J headline |
+| v27 soft local-trust ELA | 新增 continuous trust-weighted residual，fixed profile `field_region_render_risk_strict_v27`；py_compile、smoke、dry-run、fixed-profile override 拒绝和 bonsai medium plan/candidate/selector 均已完成 | soft trust 机制有效，明显好于 v26 hard trust 的“全零 trust”问题；但 candidate-owned 被 honest gate 拒绝，selector 接受项在 held-out test 上三指标轻微回退，仍不能替代 Phase-J headline |
+| v28 view-tail-safe alpha shrink | 已新增 policy-view tail 安全 alpha shrink，fixed profile `field_region_render_risk_strict_v28`；py_compile、ELA smoke、CLI visibility 和 dry-run command manifest 均通过；首个 real run 暴露并修复了 region-risk 参数转发问题 | 这是对 v27 tail 负迁移的直接修复，修复版 medium W&B run 正在验证；当前只能作为下一轮候选机制，不可替代 Phase-J headline |
 
 v25 bonsai medium 关键结果：
 
@@ -526,7 +692,9 @@ v27 的当前状态：
 | v27 plan trainval | 30.4506 PSNR / 0.9142 SSIM / 0.2247 LPIPS |
 | soft trust stats | test mean trust weight 0.6132, active fraction 0.9629; train mean trust weight 0.5873, active fraction 0.9574 |
 | plan decision | `accepted=false`; selected fallback `phasej_guarded_adaptedge`; reasons: PSNR/SSIM/LPIPS/trainval balanced regression |
-| current conclusion | v27 修复了 v26 “trust 全零”问题，但没有超过当前 fallback/Phase-J 主线，不能作为 headline |
+| candidate-owned decision | `accepted=false`; report-only test `+0.005390 PSNR / +0.000144 SSIM / -0.000595 LPIPS`，但 trainval balanced `-0.038807` 且 render-region tail 失败 |
+| selector decision | `accepted=true` for `strictfull_s1`，trainval balanced `+0.000634`，但 report-only test `-0.000017 PSNR / -0.000004 SSIM / +0.000010 LPIPS` |
+| current conclusion | v27 修复了 v26 “trust 全零”问题，但最终 accepted selector 近似 no-op 且 held-out test 三指标轻微回退，不能作为 headline |
 
 ### 7.5 v26/v27 横向诊断表
 
@@ -543,10 +711,12 @@ v27 的当前状态：
 | v26 hard local-trust | plan | false | +0.016258 | +0.000576 | +0.000198 | +0.023907 | -0.018957 | PSNR/SSIM 有增益，但 LPIPS 和 tail 不安全；hard trust 太保守且不连续 |
 | v26 hard local-trust | candidate-owned refit | false | +0.039511 | +0.000839 | -0.000856 | +0.012566 | -0.062490 | test 三指标好看，但 trainval SSIM/tail 风险导致 honest gate 拒绝 |
 | v27 soft local-trust | plan | false | -0.002831 | +0.000139 | +0.000037 | -0.037934 | -0.122139 | soft trust 解决了全零问题，但全局引入了更大的 trainval/tail 负迁移 |
+| v27 soft local-trust | candidate-owned refit | false | +0.005390 | +0.000144 | -0.000595 | -0.038807 | -0.105724 | report-only test 小幅正向，但 trainval balanced 和 region tail 明确失败 |
+| v27 soft local-trust | selector strictfull_s1 | true | -0.000017 | -0.000004 | +0.000010 | +0.000634 | n/a | trainval 通过但 held-out test 近似 no-op 且三指标轻微回退 |
 
 对导师建议说法：
 
-> v26/v27 不是当前主结果，但它们让下一步方向更明确：local trust 不应该是全局二值开关，也不应该是全局连续权重。它需要变成按 target view、局部区域和 tail-risk 条件变化的安全策略，并在局部失败时只回退失败区域，而不是整张图或整个候选全拒绝。
+> v26/v27 不是当前主结果，但它们让下一步方向更明确：local trust 不应该是全局二值开关，也不应该是全局连续权重。它需要变成按 target view、局部区域和 tail-risk 条件变化的安全策略，并在局部失败时只回退失败区域，而不是整张图或整个候选全拒绝。v27 selector 的结果尤其提醒我们：trainval 极小正收益不足以支撑论文 claim，必须看 effect size、held-out report-only 和 tail risk。
 
 ### 7.6 v28：view-tail-safe alpha shrink
 
@@ -576,15 +746,23 @@ alpha_final(pixel) = view_tail_scale * alpha_bin(pixel)
 | core implementation | `utils/evidence_lumigraph_adapter.py` |
 | ELA CLI | `--alpha_view_tail_scale_grid`, `--alpha_view_tail_cvar_fraction`, `--alpha_view_tail_min_gain`, `--alpha_view_tail_max_negative_fraction` |
 | PhaseK / selector / AutoVisual | 均已转发 `ela_alpha_view_tail_*` |
-| verification | py_compile passed, `git diff --check` passed, `[ELA smoke] passed`, CLI help 可见，dry-run manifest 确认 plan/candidate/selector 都带 v28 参数 |
+| verification | py_compile passed, `git diff --check` passed, `[ELA smoke] passed`, CLI help 可见；dry-run manifest 确认 plan/candidate/selector 都带 v28 参数，且修复后 plan 不再带 dangling region-risk enable、candidate-owned/selector 带 region-risk JSON/template |
 | dry-run root | `/data/peilincai/spcarnet_runs/dryrun_field_region_render_risk_strict_v28_viewtail_20260622` |
-| current conclusion | 真实方法改动已进入 train/eval pipeline，但还未完成中长程验证，不能宣传为已胜出 |
+| real-run status | first GPU5 real run failed before ELA because plan had `--ela_alpha_region_risk_enable` without JSON; fixed in AutoVisual and relaunched as `/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v28_viewtail_fix2_20260622_bonsai_medium_gpu5` |
+| current conclusion | 真实方法改动已进入 train/eval pipeline，但修复版中长程验证仍在运行，不能宣传为已胜出 |
 
 建议在 PPT 中这样定位：
 
 > v28 是从失败诊断中长出来的下一轮机制：它不再只问“某类像素的 alpha 平均是否安全”，而是要求“这个 alpha 在 policy-validation view tail 上也安全”。这使 ELA 从局部像素统计走向 view-level risk control。
 
 不建议在主结果页放 v28 数字，因为它还没有真实 medium/full W&B 结果。它更适合放在“ongoing upgrade / next experiment”页，说明我们知道 Phase-J 的 remaining risk 并且已经有明确修复机制。
+
+v28 后续只有在同时满足以下证据后才可 promotion：
+
+- post-run `ela_report.json` 显示 `alpha_calibrator.view_tail_enabled=true`；
+- `view_tail_candidate_stats` 非空，且 `view_tail_scale` 有 policy-view tail 证据支撑；
+- decision 文件显示 train-val / render-region tail gate 通过；
+- held-out test report-only 至少不是近似 no-op 级别的三指标微退。
 
 ---
 
@@ -733,8 +911,9 @@ MeshSplatting -> evidence mining -> safe compaction -> ELA repair -> guarded pol
 
 当前汇报主结果的设计目标是避免 test leakage：
 
-- clean baseline 从 clean 26000/30000 中按 held-out score 选择，这是 baseline envelope，不用 train metrics 偏置 longer checkpoint。
+- clean baseline 从 clean 26000/30000 中按 held-out score 选择，这是 evaluation-time baseline envelope，用来给 MeshSplatting 一个更强 comparator，而不是用来选择我们的方法。
 - 方法 branch / alpha / edge fallback 使用 train-only calibration。
+- 压缩比例、candidate promotion、v26/v27/v28 gates 使用 train/policy-validation evidence。
 - held-out test 只用于最终报告。
 
 PPT 中建议强调“method selection does not use test GT”。
@@ -777,6 +956,54 @@ PPT 中建议强调“method selection does not use test GT”。
 
 ## 13. 证据索引
 
+### 13.1 主结果复现与审计入口
+
+主结果不建议在 PPT 里贴长命令，但需要知道数字从哪里来。当前最关键入口如下。
+
+Phase-J full9 结果表：
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/phasef_ela_eval_summary_phasej_guarded_adaptedge_full9.md
+```
+
+Phase-J closure audit：
+
+```text
+outputs/carnet/meshsplatopt/ecsr_phase_j_closure_audit/phasej_closure_audit.md
+```
+
+v26/v27 Bonsai medium 横向摘要：
+
+```text
+/data/peilincai/spcarnet_runs/20260622_v26_v27_autovisual_run_summary.md
+```
+
+v28 当前修复版运行 root：
+
+```text
+/data/peilincai/spcarnet_runs/field_region_render_risk_strict_v28_viewtail_fix2_20260622_bonsai_medium_gpu5
+```
+
+v28 完成后应立刻运行的审计命令：
+
+```bash
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/ecsr_audit_viewtail_alpha_run.py \
+  --run_root /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v28_viewtail_fix2_20260622_bonsai_medium_gpu5 \
+  --output_json /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v28_viewtail_fix2_20260622_bonsai_medium_gpu5/viewtail_alpha_audit.json \
+  --output_md /data/peilincai/spcarnet_runs/field_region_render_risk_strict_v28_viewtail_fix2_20260622_bonsai_medium_gpu5/viewtail_alpha_audit.md
+```
+
+主图重新生成入口：
+
+```bash
+/home/peilincai/micromamba/envs/mesh_splatting/bin/python \
+  scripts/car_model/generate_spcarnet_advantage_showcase.py \
+  --help
+```
+
+### 13.2 文件索引
+
 主结果：
 
 - `outputs/carnet/meshsplatopt/ecsr_phase_f/policy_val_compaction_ladder_v2_envfix/phasef_ela_eval_summary_phasej_guarded_adaptedge_full9.md`
@@ -798,6 +1025,8 @@ README 结果块：
 
 定性图：
 
+- `assets/spcarnet_phasej_where_it_helps_showcase_20260622.png`
+- `assets/spcarnet_phasej_where_it_helps_selection_20260622.json`
 - `assets/spcarnet_m360_full9_qualitative_gallery.png`
 - `assets/spcarnet_m360_outdoor_detail_showcase.png`
 - `assets/spcarnet_m360_where_it_helps_showcase.png`
