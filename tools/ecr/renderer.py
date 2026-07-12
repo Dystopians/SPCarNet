@@ -169,6 +169,13 @@ class ConfinedFrameLoader:
         return self._cached_disk(
             real, lambda: read_depth_tensor(Path(real), device=self.device))
 
+    def mask(self, path: str) -> torch.Tensor:
+        """Edit-aware evidence-validity mask [H,W] in [0,1] (Route A);
+        confined + read-logged like every other cache read."""
+        real = self._confined(str(path))
+        return self._cached_disk(
+            real, lambda: read_image_tensor(Path(real), device=self.device)[0])
+
     def residual(self, frame: FrameRecord, residual_clip: float) -> torch.Tensor:
         residual = self.gt(str(frame.gt_path)) - self.render(str(frame.render_path))
         if residual_clip > 0:
@@ -192,6 +199,9 @@ class EcrRenderer:
         ext = self.manifest.get("image_ext", {})
         rext = str(ext.get("renders", "png"))
         gext = str(ext.get("gt", "png"))
+        # Edit-aware ECR (Route A): edited caches list per-view evidence
+        # validity masks; absent key (all pre-edit caches) = no masks.
+        edit_masks = dict(self.manifest.get("edit", {}).get("masks", {}))
         self.train_frames: list[FrameRecord] = []
         for idx, name in enumerate(self.manifest["train_views"]):
             cam = by_name[name]
@@ -202,6 +212,8 @@ class EcrRenderer:
                 gt_path=self.cache_dir / "gt" / f"{name}.{gext}",
                 depth_path=self.cache_dir / "depths" / f"{name}.npy",
                 camera=cam,
+                mask_path=(self.cache_dir / edit_masks[name]
+                           if name in edit_masks else None),
             ))
         if not self.train_frames:
             raise RuntimeError(f"evidence cache lists no train views: {cache_dir}")

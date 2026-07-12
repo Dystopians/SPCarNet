@@ -61,6 +61,11 @@ class FrameRecord:
     gt_path: Path
     depth_path: Path
     camera: CameraRecord
+    # Edit-aware ECR (Route A, 2026-07-12): optional per-view evidence
+    # validity mask (1 = valid, 0 = stale, e.g. pixels imaging deleted
+    # faces). None (the default, all pre-edit caches) = fully valid;
+    # behavior is bit-identical when absent.
+    mask_path: "Path | None" = None
 
 
 def _image_key(path: Path) -> str:
@@ -88,6 +93,32 @@ def read_depth_tensor(path: Path, device: torch.device | str = "cpu") -> torch.T
     if depth.ndim == 3:
         depth = depth[..., 0]
     return torch.from_numpy(depth).to(device=device, dtype=torch.float32)
+
+
+def _resize_chw(image: torch.Tensor, size: tuple[int, int], mode: str = "bilinear") -> torch.Tensor:
+    kwargs = {"mode": mode}
+    if mode in {"bilinear", "bicubic"}:
+        kwargs["align_corners"] = False
+    return F.interpolate(image.unsqueeze(0), size=size, **kwargs).squeeze(0)
+
+
+def _resize_hw(image: torch.Tensor, size: tuple[int, int], mode: str = "bilinear") -> torch.Tensor:
+    return _resize_chw(image.unsqueeze(0), size=size, mode=mode).squeeze(0)
+
+
+def _evidence_size(height: int, width: int, max_side: int) -> tuple[int, int] | None:
+    max_side = int(max_side)
+    if max_side <= 0:
+        return None
+    current = max(int(height), int(width))
+    if current <= max_side:
+        return None
+    scale = float(max_side) / max(float(current), 1.0)
+    out_h = max(8, int(round(float(height) * scale)))
+    out_w = max(8, int(round(float(width) * scale)))
+    if out_h >= int(height) and out_w >= int(width):
+        return None
+    return out_h, out_w
 
 
 def save_image_tensor(image: torch.Tensor, path: Path) -> None:
@@ -232,6 +263,15 @@ def _make_target_world_grid(
     return cam_points @ inv_view
 
 
+def _frame_valid_mask(loader, frame) -> "torch.Tensor | None":
+    """Edit-aware ECR: a support frame's evidence-validity mask via the
+    loader (None for all pre-edit frames -> bit-identical behavior)."""
+    mask_path = getattr(frame, "mask_path", None)
+    if not mask_path:
+        return None
+    return loader.mask(str(mask_path))
+
+
 def warp_support_residual(
     target: FrameRecord,
     support: FrameRecord,
@@ -241,7 +281,9 @@ def warp_support_residual(
     *,
     depth_abs_tol: float = 0.02,
     depth_rel_tol: float = 0.03,
+    target_world_grid: torch.Tensor | None = None,
     device: torch.device | str = "cuda",
+    support_valid: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     device = torch.device(device)
     target_depth = target_depth.to(device=device, dtype=torch.float32)
@@ -250,7 +292,11 @@ def warp_support_residual(
 
     target_h, target_w = target_depth.shape
     support_h, support_w = support_depth.shape
-    world_points = _make_target_world_grid(target.camera, target_depth, device=device)
+    world_points = (
+        target_world_grid.to(device=device, dtype=torch.float32)
+        if target_world_grid is not None
+        else _make_target_world_grid(target.camera, target_depth, device=device)
+    )
     support_view = support.camera.view_matrix.to(device=device, dtype=torch.float32)
     support_cam = (world_points @ support_view).reshape(target_h, target_w, 4)
     z = support_cam[..., 2]
@@ -282,6 +328,17 @@ def warp_support_residual(
     depth_consistent = depth_error <= tolerance
     confidence = torch.exp(-depth_error / torch.clamp(tolerance, min=1e-6))
     confidence = confidence * (in_bounds & valid_depth & depth_consistent).to(torch.float32)
+    if support_valid is not None:
+        # Edit-aware ECR: evidence-validity mask sampled with the SAME grid;
+        # multiplicative (<= 1) so it can only REMOVE evidence, never inject.
+        sampled_valid = F.grid_sample(
+            support_valid.to(device=device, dtype=torch.float32)[None, None],
+            grid,
+            mode="bilinear",
+            padding_mode="zeros",
+            align_corners=True,
+        ).squeeze(0).squeeze(0)
+        confidence = confidence * sampled_valid
     return sampled_residual, confidence
 
 
@@ -300,6 +357,11 @@ class FrameLoader:
     @lru_cache(maxsize=96)
     def depth(self, path: str) -> torch.Tensor:
         return read_depth_tensor(Path(path), device=self.device)
+
+    @lru_cache(maxsize=96)
+    def mask(self, path: str) -> torch.Tensor:
+        # edit-aware evidence-validity mask: [H,W] float in [0,1]
+        return read_image_tensor(Path(path), device=self.device)[0]
 
     def residual(self, frame: FrameRecord, residual_clip: float) -> torch.Tensor:
         residual = self.gt(str(frame.gt_path)) - self.render(str(frame.render_path))
@@ -465,6 +527,11 @@ class AlphaCalibrator:
     view_tail_cvar_fraction: float = 0.25
     view_tail_min_gain: float = -math.inf
     view_tail_max_negative_fraction: float = 1.0
+    view_tail_objective: str = "mse"
+    view_tail_ssim_weight: float = 20.0
+    view_tail_lpips_weight: float = 20.0
+    view_tail_compute_lpips: bool = False
+    view_tail_metric_max_side: int = 512
     view_tail_mean_gain: float = 0.0
     view_tail_cvar_gain: float = 0.0
     view_tail_negative_fraction: float = 0.0
@@ -540,6 +607,11 @@ class AlphaCalibrator:
             "view_tail_cvar_fraction": float(self.view_tail_cvar_fraction),
             "view_tail_min_gain": float(self.view_tail_min_gain) if math.isfinite(float(self.view_tail_min_gain)) else None,
             "view_tail_max_negative_fraction": float(self.view_tail_max_negative_fraction),
+            "view_tail_objective": str(self.view_tail_objective),
+            "view_tail_ssim_weight": float(self.view_tail_ssim_weight),
+            "view_tail_lpips_weight": float(self.view_tail_lpips_weight),
+            "view_tail_compute_lpips": bool(self.view_tail_compute_lpips),
+            "view_tail_metric_max_side": int(self.view_tail_metric_max_side),
             "view_tail_mean_gain": float(self.view_tail_mean_gain),
             "view_tail_cvar_gain": float(self.view_tail_cvar_gain),
             "view_tail_negative_fraction": float(self.view_tail_negative_fraction),
@@ -718,13 +790,22 @@ def compute_evidence_signal(
     depth_abs_tol: float = 0.02,
     depth_rel_tol: float = 0.03,
     direction_weight: float = 0.35,
+    evidence_max_side: int = 0,
     loader: FrameLoader | None = None,
     device: torch.device | str = "cuda",
 ) -> EvidenceSignal:
     loader = loader or FrameLoader(device=device)
     device = torch.device(device)
-    base = loader.render(str(target.render_path)).to(device)
-    target_depth = loader.depth(str(target.depth_path)).to(device)
+    base_full = loader.render(str(target.render_path)).to(device)
+    target_depth_full = loader.depth(str(target.depth_path)).to(device)
+    full_h, full_w = int(target_depth_full.shape[0]), int(target_depth_full.shape[1])
+    low_size = _evidence_size(full_h, full_w, int(evidence_max_side))
+    if low_size is None:
+        base = base_full
+        target_depth = target_depth_full
+    else:
+        base = _resize_chw(base_full, low_size, mode="bilinear")
+        target_depth = _resize_hw(target_depth_full, low_size, mode="bilinear")
     if mode not in {"residual", "color"}:
         raise ValueError(f"Unsupported ELA mode: {mode}")
     support = select_support_frames(
@@ -738,6 +819,7 @@ def compute_evidence_signal(
     signal_sq_num = torch.zeros_like(base)
     weight_den = torch.zeros((1, base.shape[1], base.shape[2]), device=device, dtype=torch.float32)
     support_count = torch.zeros((1, base.shape[1], base.shape[2]), device=device, dtype=torch.float32)
+    target_world_grid = _make_target_world_grid(target.camera, target_depth, device=device)
     used: list[str] = []
     for support_frame, view_weight in support:
         support_depth = loader.depth(str(support_frame.depth_path))
@@ -745,6 +827,15 @@ def compute_evidence_signal(
             support_signal = loader.residual(support_frame, residual_clip=residual_clip)
         else:
             support_signal = loader.gt(str(support_frame.gt_path))
+        if low_size is not None:
+            support_size = _evidence_size(
+                int(support_depth.shape[0]),
+                int(support_depth.shape[1]),
+                int(evidence_max_side),
+            )
+            if support_size is not None:
+                support_depth = _resize_hw(support_depth, support_size, mode="bilinear")
+                support_signal = _resize_chw(support_signal, support_size, mode="bilinear")
         warped, confidence = warp_support_residual(
             target,
             support_frame,
@@ -753,7 +844,9 @@ def compute_evidence_signal(
             support_signal,
             depth_abs_tol=depth_abs_tol,
             depth_rel_tol=depth_rel_tol,
+            target_world_grid=target_world_grid,
             device=device,
+            support_valid=_frame_valid_mask(loader, support_frame),
         )
         weight = confidence.unsqueeze(0) * float(view_weight)
         if float(weight.mean().item()) <= 0.0:
@@ -769,8 +862,24 @@ def compute_evidence_signal(
     variance = torch.clamp(mean_sq - signal.pow(2), min=0.0)
     residual_std = torch.sqrt(torch.mean(variance, dim=0, keepdim=True) + 1e-12)
     residual_std = torch.where(valid, residual_std, torch.zeros_like(residual_std))
+    if low_size is not None:
+        full_size = (full_h, full_w)
+        signal = _resize_chw(signal, full_size, mode="bilinear")
+        confidence = _resize_chw(weight_den, full_size, mode="bilinear")
+        support_count = _resize_chw(support_count, full_size, mode="nearest")
+        residual_std = _resize_chw(residual_std, full_size, mode="bilinear")
+        valid = confidence > float(min_confidence)
+        return EvidenceSignal(
+            base=base_full,
+            signal=torch.where(valid, signal, torch.zeros_like(signal)),
+            confidence=confidence,
+            valid=valid,
+            support_names=used,
+            support_count=support_count,
+            residual_std=torch.where(valid, residual_std, torch.zeros_like(residual_std)),
+        )
     return EvidenceSignal(
-        base=base,
+        base=base_full,
         signal=signal,
         confidence=weight_den,
         valid=valid,
@@ -1168,6 +1277,11 @@ def fit_alpha_calibrator(
     view_tail_cvar_fraction: float = 0.25,
     view_tail_min_gain: float = -math.inf,
     view_tail_max_negative_fraction: float = 1.0,
+    view_tail_objective: str = "mse",
+    view_tail_ssim_weight: float = 20.0,
+    view_tail_lpips_weight: float = 20.0,
+    view_tail_compute_lpips: bool = False,
+    view_tail_metric_max_side: int = 512,
     local_trust_gate: bool = False,
     local_trust_min_supports: int = 2,
     local_trust_max_residual_std: float = -1.0,
@@ -1181,6 +1295,9 @@ def fit_alpha_calibrator(
 ) -> AlphaCalibrator:
     if feature_mode not in {"confidence_magnitude", "confidence_magnitude_edge"}:
         raise ValueError(f"Unsupported alpha feature mode: {feature_mode}")
+    view_tail_objective_value = str(view_tail_objective).strip().lower()
+    if view_tail_objective_value not in {"mse", "balanced"}:
+        raise ValueError(f"Unsupported view-tail objective: {view_tail_objective}")
     if mode != "residual" or not train_frames:
         return AlphaCalibrator(
             confidence_edges=(0.0, 1.0),
@@ -1205,6 +1322,11 @@ def fit_alpha_calibrator(
             region_risk_min_tail_gain=float(region_risk_min_tail_gain),
             region_risk_max_negative_fraction=float(region_risk_max_negative_fraction),
             region_risk_min_regions=max(int(region_risk_min_regions), 1),
+            view_tail_objective=view_tail_objective_value,
+            view_tail_ssim_weight=float(view_tail_ssim_weight),
+            view_tail_lpips_weight=float(view_tail_lpips_weight),
+            view_tail_compute_lpips=bool(view_tail_compute_lpips),
+            view_tail_metric_max_side=max(int(view_tail_metric_max_side), 0),
             feature_mode=feature_mode,
         )
     device = torch.device(device)
@@ -1319,6 +1441,11 @@ def fit_alpha_calibrator(
             region_risk_min_tail_gain=float(region_risk_min_tail_gain),
             region_risk_max_negative_fraction=float(region_risk_max_negative_fraction),
             region_risk_min_regions=max(int(region_risk_min_regions), 1),
+            view_tail_objective=view_tail_objective_value,
+            view_tail_ssim_weight=float(view_tail_ssim_weight),
+            view_tail_lpips_weight=float(view_tail_lpips_weight),
+            view_tail_compute_lpips=bool(view_tail_compute_lpips),
+            view_tail_metric_max_side=max(int(view_tail_metric_max_side), 0),
             feature_mode=feature_mode,
         )
     conf_all = torch.cat(conf_values).float()
@@ -1601,18 +1728,194 @@ def fit_alpha_calibrator(
         tail_fraction_view = max(min(float(view_tail_cvar_fraction), 1.0), 1e-6)
         best_stats: tuple[float, float, float, float, float] | None = None
         fallback_stats: tuple[float, float, float, float, float] | None = None
+        balanced_rows: dict[float, dict[str, list[float]]] = {}
+        if view_tail_objective_value == "balanced":
+            from utils.loss_utils import ssim
+
+            lpips_model = None
+            if bool(view_tail_compute_lpips):
+                from lpipsPyTorch.modules.lpips import LPIPS
+
+                lpips_model = LPIPS("vgg").to(device).eval()
+                for param in lpips_model.parameters():
+                    param.requires_grad_(False)
+
+            def _metric_image(image: torch.Tensor) -> torch.Tensor:
+                max_side = max(int(view_tail_metric_max_side), 0)
+                if max_side <= 0:
+                    return image
+                height, width = int(image.shape[-2]), int(image.shape[-1])
+                long_side = max(height, width)
+                if long_side <= max_side:
+                    return image
+                scale = float(max_side) / float(max(long_side, 1))
+                out_h = max(1, int(round(float(height) * scale)))
+                out_w = max(1, int(round(float(width) * scale)))
+                return F.interpolate(
+                    image.unsqueeze(0),
+                    size=(out_h, out_w),
+                    mode="bilinear",
+                    align_corners=False,
+                ).squeeze(0)
+
+            def _psnr_value(lhs: torch.Tensor, rhs: torch.Tensor) -> float:
+                mse = float(torch.mean((lhs - rhs) ** 2).detach().cpu().item())
+                return mse_to_psnr(mse)
+
+            for scale in scale_values:
+                balanced_rows[float(scale)] = {
+                    "score": [],
+                    "psnr_gain": [],
+                    "ssim_gain": [],
+                    "lpips_gain": [],
+                    "mse_gain": [],
+                }
+
+            alpha_lookup = alpha_tensor.to(device=device, dtype=torch.float32)
+            conf_edges_device = conf_edges.to(device=device)
+            mag_edges_device = mag_edges.to(device=device)
+            edge_edges_device = (
+                torch.tensor(edge_edges_tuple, device=device, dtype=torch.float32)
+                if edge_edges_tuple is not None
+                else None
+            )
+            for target in candidates:
+                support = [frame for frame in train_frames if frame.name != target.name]
+                if not support:
+                    continue
+                gt_full = loader.gt(str(target.gt_path)).to(device)
+                ev = compute_evidence_signal(
+                    target,
+                    support,
+                    k=k,
+                    mode=mode,
+                    residual_clip=residual_clip,
+                    min_confidence=1e-8,
+                    depth_abs_tol=depth_abs_tol,
+                    depth_rel_tol=depth_rel_tol,
+                    direction_weight=direction_weight,
+                    loader=loader,
+                    device=device,
+                )
+                valid_mask_full = ev.valid
+                signal_full = ev.signal
+                if bool(local_trust_gate):
+                    local_mode = str(local_trust_mode).strip().lower()
+                    if local_mode == "soft":
+                        local_weight, _ = local_trust_weight_map(
+                            ev,
+                            enabled=True,
+                            min_supports=int(local_trust_min_supports),
+                            max_residual_std=float(local_trust_max_residual_std),
+                            min_agreement=float(local_trust_min_agreement),
+                            agreement_scale=float(local_trust_agreement_scale),
+                            confidence_quantile=float(local_trust_confidence_quantile),
+                            min_confidence=float(local_trust_min_confidence),
+                            min_weight=float(local_trust_min_weight),
+                        )
+                        valid_mask_full = valid_mask_full & (local_weight > 0.0)
+                        signal_full = signal_full * local_weight
+                        signal_full = torch.where(valid_mask_full, signal_full, torch.zeros_like(signal_full))
+                    else:
+                        local_accept, _ = local_trust_acceptance_mask(
+                            ev,
+                            enabled=True,
+                            min_supports=int(local_trust_min_supports),
+                            max_residual_std=float(local_trust_max_residual_std),
+                            min_agreement=float(local_trust_min_agreement),
+                            agreement_scale=float(local_trust_agreement_scale),
+                            confidence_quantile=float(local_trust_confidence_quantile),
+                            min_confidence=float(local_trust_min_confidence),
+                        )
+                        valid_mask_full = valid_mask_full & local_accept
+                        signal_full = torch.where(valid_mask_full, signal_full, torch.zeros_like(signal_full))
+                height, width = int(ev.base.shape[1]), int(ev.base.shape[2])
+                conf_feature = torch.log1p(torch.clamp(ev.confidence.squeeze(0), min=0.0))
+                mag_feature = torch.linalg.vector_norm(signal_full, dim=0)
+                conf_full_idx = torch.bucketize(conf_feature.reshape(-1), conf_edges_device[1:-1], right=False)
+                mag_full_idx = torch.bucketize(mag_feature.reshape(-1), mag_edges_device[1:-1], right=False)
+                if feature_mode == "confidence_magnitude_edge":
+                    assert edge_edges_device is not None
+                    edge_feature = _image_edge_magnitude(ev.base).squeeze(0)
+                    edge_full_idx = torch.bucketize(edge_feature.reshape(-1), edge_edges_device[1:-1], right=False)
+                    flat_full_idx = conf_full_idx * bin_count * bin_count + mag_full_idx * bin_count + edge_full_idx
+                else:
+                    flat_full_idx = conf_full_idx * bin_count + mag_full_idx
+                alpha_full = alpha_lookup[flat_full_idx].reshape(1, height, width)
+                alpha_full = torch.where(valid_mask_full, alpha_full, torch.zeros_like(alpha_full))
+                base_metric = _metric_image(ev.base)
+                gt_metric = _metric_image(gt_full)
+                delta_metric = _metric_image(alpha_full * signal_full)
+                base_psnr = _psnr_value(base_metric, gt_metric)
+                base_ssim = float(ssim(base_metric.unsqueeze(0), gt_metric.unsqueeze(0)).detach().cpu().item())
+                base_lpips = 0.0
+                if lpips_model is not None:
+                    with torch.no_grad():
+                        base_lpips = float(lpips_model(base_metric.unsqueeze(0), gt_metric.unsqueeze(0)).detach().cpu().item())
+                base_mse_metric = float(torch.mean((base_metric - gt_metric) ** 2).detach().cpu().item())
+                for scale in scale_values:
+                    pred = torch.clamp(base_metric + float(scale) * delta_metric, 0.0, 1.0)
+                    pred_psnr = _psnr_value(pred, gt_metric)
+                    pred_ssim = float(ssim(pred.unsqueeze(0), gt_metric.unsqueeze(0)).detach().cpu().item())
+                    pred_lpips = 0.0
+                    if lpips_model is not None:
+                        with torch.no_grad():
+                            pred_lpips = float(lpips_model(pred.unsqueeze(0), gt_metric.unsqueeze(0)).detach().cpu().item())
+                    pred_mse_metric = float(torch.mean((pred - gt_metric) ** 2).detach().cpu().item())
+                    psnr_gain = float(pred_psnr - base_psnr)
+                    ssim_gain = float(pred_ssim - base_ssim)
+                    lpips_gain = float(base_lpips - pred_lpips) if lpips_model is not None else 0.0
+                    mse_gain = float(base_mse_metric - pred_mse_metric)
+                    score_gain = (
+                        psnr_gain
+                        + float(view_tail_ssim_weight) * ssim_gain
+                        + float(view_tail_lpips_weight) * lpips_gain
+                    )
+                    row = balanced_rows[float(scale)]
+                    row["score"].append(score_gain)
+                    row["psnr_gain"].append(psnr_gain)
+                    row["ssim_gain"].append(ssim_gain)
+                    row["lpips_gain"].append(lpips_gain)
+                    row["mse_gain"].append(mse_gain)
+
         for scale in scale_values:
-            pred = torch.clamp(base_all + float(scale) * selected_alpha.unsqueeze(1) * sig_all, 0.0, 1.0)
-            gain = base_err - torch.mean((pred - gt_all) ** 2, dim=1)
-            view_gain_sum = torch.zeros(len(view_id_values), dtype=torch.float64)
-            view_gain_sum.scatter_add_(0, view_id_all, gain.to(torch.float64))
-            view_gain = torch.where(
-                view_count > 0,
-                view_gain_sum / torch.clamp(view_count, min=1.0),
-                torch.zeros_like(view_gain_sum),
-            )[valid_views]
-            if view_gain.numel() == 0:
-                continue
+            extra_stats: dict[str, object] = {"objective": view_tail_objective_value}
+            if view_tail_objective_value == "balanced":
+                row = balanced_rows.get(float(scale), {})
+                view_gain = torch.tensor(row.get("score", []), dtype=torch.float64)
+                if view_gain.numel() == 0:
+                    continue
+                psnr_gain_values = torch.tensor(row.get("psnr_gain", []), dtype=torch.float64)
+                ssim_gain_values = torch.tensor(row.get("ssim_gain", []), dtype=torch.float64)
+                lpips_gain_values = torch.tensor(row.get("lpips_gain", []), dtype=torch.float64)
+                mse_gain_values = torch.tensor(row.get("mse_gain", []), dtype=torch.float64)
+                extra_stats.update(
+                    {
+                        "mean_score": float(view_gain.mean().item()),
+                        "mean_psnr_gain": float(psnr_gain_values.mean().item()),
+                        "mean_ssim_gain": float(ssim_gain_values.mean().item()),
+                        "mean_lpips_gain": float(lpips_gain_values.mean().item()),
+                        "mean_mse_gain": float(mse_gain_values.mean().item()),
+                        "lpips_regression_fraction": float(
+                            (lpips_gain_values < 0.0).to(torch.float64).mean().item()
+                        )
+                        if lpips_gain_values.numel() > 0
+                        else 0.0,
+                    }
+                )
+            else:
+                pred = torch.clamp(base_all + float(scale) * selected_alpha.unsqueeze(1) * sig_all, 0.0, 1.0)
+                gain = base_err - torch.mean((pred - gt_all) ** 2, dim=1)
+                view_gain_sum = torch.zeros(len(view_id_values), dtype=torch.float64)
+                view_gain_sum.scatter_add_(0, view_id_all, gain.to(torch.float64))
+                view_gain = torch.where(
+                    view_count > 0,
+                    view_gain_sum / torch.clamp(view_count, min=1.0),
+                    torch.zeros_like(view_gain_sum),
+                )[valid_views]
+                if view_gain.numel() == 0:
+                    continue
+                extra_stats["mean_mse_gain"] = float(view_gain.mean().item())
             mean_gain_scale = float(view_gain.mean().item())
             tail_count = max(1, int(math.ceil(tail_fraction_view * int(view_gain.numel()))))
             cvar_gain = float(torch.topk(view_gain, k=tail_count, largest=False).values.mean().item())
@@ -1633,6 +1936,7 @@ def fit_alpha_calibrator(
                     "cvar_gain": cvar_gain,
                     "negative_fraction": negative_fraction,
                     "safe": bool(safe),
+                    **extra_stats,
                 }
             )
             if safe and (
@@ -1747,6 +2051,11 @@ def fit_alpha_calibrator(
         view_tail_cvar_fraction=float(view_tail_cvar_fraction),
         view_tail_min_gain=float(view_tail_min_gain),
         view_tail_max_negative_fraction=float(view_tail_max_negative_fraction),
+        view_tail_objective=view_tail_objective_value,
+        view_tail_ssim_weight=float(view_tail_ssim_weight),
+        view_tail_lpips_weight=float(view_tail_lpips_weight),
+        view_tail_compute_lpips=bool(view_tail_compute_lpips),
+        view_tail_metric_max_side=max(int(view_tail_metric_max_side), 0),
         view_tail_mean_gain=float(view_tail_mean_gain),
         view_tail_cvar_gain=float(view_tail_cvar_gain),
         view_tail_negative_fraction=float(view_tail_negative_fraction),
@@ -1784,6 +2093,7 @@ def adapt_frame(
     local_trust_min_confidence: float = 0.0,
     local_trust_mode: str = "hard",
     local_trust_min_weight: float = 0.0,
+    evidence_max_side: int = 0,
     loader: FrameLoader | None = None,
     device: torch.device | str = "cuda",
 ) -> tuple[torch.Tensor, dict[str, object]]:
@@ -1799,6 +2109,7 @@ def adapt_frame(
         depth_abs_tol=depth_abs_tol,
         depth_rel_tol=depth_rel_tol,
         direction_weight=direction_weight,
+        evidence_max_side=int(evidence_max_side),
         loader=loader,
         device=device,
     )
@@ -1882,6 +2193,8 @@ def adapt_frame(
         "support_names": evidence.support_names,
         "mean_confidence": float(evidence.confidence.mean().detach().cpu().item()),
         "covered_fraction": float(valid.to(torch.float32).mean().detach().cpu().item()),
+        "evidence_max_side": int(evidence_max_side),
+        "evidence_scaled": bool(int(evidence_max_side) > 0 and max(int(base.shape[1]), int(base.shape[2])) > int(evidence_max_side)),
     }
     evidence_valid = evidence.valid.bool()
     if evidence.support_count is not None:

@@ -23,6 +23,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from utils.evidence_lumigraph_adapter import (
+    _frame_valid_mask,
     _make_target_world_grid,
     select_support_frames,
     warp_support_residual,
@@ -63,13 +64,15 @@ def compute_transport_features(
     residuals, colors, confidences, used = [], [], [], []
     for frame, view_weight in support:
         support_depth = loader.depth(str(frame.depth_path))
+        frame_valid = _frame_valid_mask(loader, frame)
         warped, conf = warp_support_residual(
             target, frame, target_depth,
             support_depth,
             loader.residual(frame, residual_clip=residual_clip),
             depth_abs_tol=float(depth_abs_tol),
             depth_rel_tol=float(depth_rel_tol),
-            target_world_grid=world_grid, device=device)
+            target_world_grid=world_grid, device=device,
+            support_valid=frame_valid)
         weight = conf.unsqueeze(0) * float(view_weight)
         if float(weight.mean().item()) <= 0.0:
             continue
@@ -80,7 +83,8 @@ def compute_transport_features(
                 loader.gt(str(frame.gt_path)),
                 depth_abs_tol=float(depth_abs_tol),
                 depth_rel_tol=float(depth_rel_tol),
-                target_world_grid=world_grid, device=device)
+                target_world_grid=world_grid, device=device,
+                support_valid=frame_valid)
             colors.append(warped_color)
         residuals.append(warped)
         confidences.append(weight)

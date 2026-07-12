@@ -25,6 +25,7 @@ import torch
 import torch.nn.functional as F
 
 from utils.evidence_lumigraph_adapter import (
+    _frame_valid_mask,
     FrameRecord,
     _make_target_world_grid,
     mse_to_psnr,
@@ -139,7 +140,8 @@ def adapt_frame_l2(
             loader.residual(frame, residual_clip=residual_clip),
             depth_abs_tol=float(depth_abs_tol),
             depth_rel_tol=float(depth_rel_tol),
-            target_world_grid=world_grid, device=device)
+            target_world_grid=world_grid, device=device,
+            support_valid=_frame_valid_mask(loader, frame))
         weight = conf.unsqueeze(0) * float(view_weight)
         if float(weight.mean().item()) <= 0.0:
             continue
