@@ -118,6 +118,16 @@ MOTIVATION for caching evidence rather than baking it, reported first-class.
   audits GREEN; jpeg95 ~free, halfres −0.9 dB at ~50% TOTAL savings). All
   four claims now fully instantiated; total ecr-audit trail 96/96 GREEN.
   No open slots.
+- 2026-07-11 v0.7 (TOPCONF benchmark breadth): **CR1 extended to the
+  community suite** — on T&T {truck, train} + DB {drjohnson, playroom} (the
+  3DGS eval set), run with ZERO per-scene tuning through the frozen
+  pipeline, the final stack exceeds PJ-2026 by **+0.122 [+0.070, +0.176]
+  dPSNR AND −0.0084 [−0.0105, −0.0064] dLPIPS** (suite-4 stratified; both
+  also CI-excl.-0 under scene-cluster resampling); PJ-2026 exceeds the
+  clean30k anchors on 4/4 (suite mean +0.731). Per-scene: 3/4 PSNR CIs
+  excl. 0 (train +0.130 [−0.044, +0.322], honest boundary). Transfer
+  magnitudes are smaller than full9 — reported as-is
+  (`analysis/final_stack/t2b_tandt_db.md`, GOAL #E-11, 8/8 audits GREEN).
 - 2026-07-11 v0.6 (TOPCONF hardening): terminology — "certified" retired
   from claim-bearing text, replaced by the DEFINED term "audited"
   (PROTOCOL §4E.1 threat model added: PROVEN / ASSUMED / NOT CLAIMED);
