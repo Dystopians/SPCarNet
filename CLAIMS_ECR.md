@@ -131,6 +131,18 @@ MOTIVATION for caching evidence rather than baking it, reported first-class.
   audits GREEN; jpeg95 ~free, halfres −0.9 dB at ~50% TOTAL savings). All
   four claims now fully instantiated; total ecr-audit trail 96/96 GREEN.
   No open slots.
+- 2026-07-12 v1.0 (Route-A red-team closure, GOAL #E-16): **CR5 upgraded to
+  oracle-verified** — in-region claims re-anchored on TRUE edited GT
+  (verified oracle rebuild of the synthetic scene): exact face-provenance
+  beats dilation/2D-box/target-side/rebuild alternatives with CIs excl. 0
+  (+0.16..+1.13) and retains +0.49 dB of genuine in-region evidence value;
+  leak_R downgraded to secondary (ρ=0.502 vs oracle, under the 0.7 bar —
+  finding reported). Locality wording corrected to REGION-PROPORTIONAL
+  (peripheral edit: 57/161 views; sparse sidecar 12.8 MB, validated
+  bit-equal same-process). Chained edits added (parent-mask inheritance);
+  translation/deformation boundaries now EVIDENCE-BACKED (tearing +
+  shadowless-arrival figure). Honest keeps: stale-cache deletion tie
+  (CI incl. 0); pot clutter-debris limitation (base representation).
 - 2026-07-12 v0.9 (Route A): **CR5 added, tightly bounded** (deletion +
   recolor only) from the GOAL #E-15 prototype; NON-CLAIMS extended with the
   no-arbitrary-editing clause. The two naive-strategy failure modes (rebuild

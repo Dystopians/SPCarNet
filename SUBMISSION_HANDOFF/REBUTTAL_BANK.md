@@ -174,3 +174,23 @@ adds +0.361/−0.0169 (full9) and +0.122/−0.0084 (T&T+DB, zero tuning) on top
 of it with CIs excl. 0. So the comparison the question implies has been run
 in both directions: generic-generalizable (fails here) and tuned-classical
 (our floor, exceeded).
+
+## A13. "GaussianEditor-class systems delete/recolor without any of this — why is editing hard here?" (added 2026-07-12)
+
+Because they edit only the REPRESENTATION — which is our C1 control (edited base render), the easy
+part. ECR ships photographic evidence NEXT TO the representation for +1.67 dB; the hard problem this
+work isolates is keeping that evidence consistent with edits, and it is measurably non-trivial: the
+banked evidence matrix shows a full cache rebuild paints deleted objects back (+3.09 dB ghost) and a
+stale cache repaints old colors (+1.96), while per-pixel face-provenance invalidation survives both
+classes AND beats every simpler masking strategy on TRUE edited ground truth (oracle CIs excl. 0:
++0.16 vs 4-px dilation, +0.26 vs target-side masking, +0.38 vs 2D boxes — which also bleed up to
+−0.74 dB on unaffected regions). Positioning matrix (related work, honest one-liners):
+- Gaussian editing (GaussianEditor / Gaussian-Grouping class): representation edits, no external
+  evidence to invalidate; complementary, not comparable — no cache exists there.
+- Neural mesh editing (NeuMesh / SEAL-3D class): edits neural fields anchored to meshes; retraining or
+  distillation per edit; no train-photograph reuse at render time.
+- Editable IBR / source-view masking (classical IBR with view or region disabling): our TM and
+  view-drop baselines ARE this family — both measured and beaten (TM −0.263 oracle in-region;
+  view-drop degenerates to no-ECR when the object is widely visible).
+- Inpainting/generative removal: excluded by the no-hallucination policy; disocclusions honestly fall
+  back to the edited base via the structural gate.
