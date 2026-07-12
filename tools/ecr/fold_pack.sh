@@ -45,6 +45,15 @@ declare -A COPIES=(
   [$G1/edit_aware/garden_deltable/edit_spec.json]=$DST/edit_aware/garden_deltable_spec.json
   [$G1/edit_aware/toy_parking_delcar0/edit_spec.json]=$DST/edit_aware/toy_delcar0_spec.json
   [$G1/edit_aware/garden_recolor/edit_spec.json]=$DST/edit_aware/garden_recolor_spec.json
+  [$G1/analysis/edit_aware/oracle_toy/oracle_eval.md]=$DST/edit_aware/oracle_eval.md
+  [$G1/analysis/edit_aware/oracle_toy/oracle_eval.json]=$DST/edit_aware/oracle_eval.json
+  [$G1/analysis/edit_aware/abl_garden/edit_eval.md]=$DST/edit_aware/abl_garden.md
+  [$G1/analysis/edit_aware/abl_toy/edit_eval.md]=$DST/edit_aware/abl_toy.md
+  [$G1/analysis/edit_aware/garden_delpot/edit_eval.md]=$DST/edit_aware/garden_delpot.md
+  [$G1/analysis/edit_aware/toy_delcar1/edit_eval.md]=$DST/edit_aware/toy_delcar1.md
+  [$G1/analysis/edit_aware/garden_chain2/edit_eval.md]=$DST/edit_aware/garden_chain2.md
+  [$G1/analysis/edit_aware/sidecar_toy/edit_eval.md]=$DST/edit_aware/sidecar_toy.md
+  [$G1/analysis/edit_aware/boundary_translate/BOUNDARY.md]=$DST/edit_aware/boundary_translate.md
 )
 mkdir -p $DST/ibr $DST/edit_aware
 
