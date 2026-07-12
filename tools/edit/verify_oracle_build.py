@@ -271,10 +271,12 @@ def check_zero_pixel_images(original: Path, oracle: Path, dropped: list[str],
         "zero_pixel_images",
         "original dataset_manifest.json has no per-view element coverage detail")
     expected = [normalized_view_name(v) for v in expect_identical]
-    if len(expected) != 3:
+    if len(expected) < 1:
         results.fail(
             "expect_identical_images",
-            "per-view census absent; pass exactly 3 views with --expect-identical")
+            "per-view census absent; pass >=1 element-free views via "
+            "--expect-identical (fewer than 3 may exist for widely-visible "
+            "elements — reviewed relaxation 2026-07-12)")
         return
     compare_images_for_views(original, oracle, expected, results,
                              "expect_identical_images")
