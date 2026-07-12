@@ -10,11 +10,11 @@
         "stale cache (C2)": 0.00883256186110278
       },
       "leak_R_formatted": {
-        "edited base (C1)": "leak=0",
-        "full rebuild (C4)": "leak=0.084",
-        "local invalidation (C5, ours)": "leak=0.0065",
+        "edited base (C1)": "leak*=0",
+        "full rebuild (C4)": "leak*=0.084",
+        "local invalidation (C5, ours)": "leak*=0.0065",
         "original ECR": null,
-        "stale cache (C2)": "leak=0.00883"
+        "stale cache (C2)": "leak*=0.00883"
       },
       "method_keys": {
         "edited base (C1)": "C1_editedbase",
@@ -56,11 +56,11 @@
         "stale cache (C2)": 0.00883256186110278
       },
       "leak_R_formatted": {
-        "edited base (C1)": "leak=0",
-        "full rebuild (C4)": "leak=0.084",
-        "local invalidation (C5, ours)": "leak=0.0065",
+        "edited base (C1)": "leak*=0",
+        "full rebuild (C4)": "leak*=0.084",
+        "local invalidation (C5, ours)": "leak*=0.0065",
         "original ECR": null,
-        "stale cache (C2)": "leak=0.00883"
+        "stale cache (C2)": "leak*=0.00883"
       },
       "method_keys": {
         "edited base (C1)": "C1_editedbase",
@@ -102,11 +102,11 @@
         "stale cache (C2)": 0.00883256186110278
       },
       "leak_R_formatted": {
-        "edited base (C1)": "leak=0",
-        "full rebuild (C4)": "leak=0.084",
-        "local invalidation (C5, ours)": "leak=0.0065",
+        "edited base (C1)": "leak*=0",
+        "full rebuild (C4)": "leak*=0.084",
+        "local invalidation (C5, ours)": "leak*=0.0065",
         "original ECR": null,
-        "stale cache (C2)": "leak=0.00883"
+        "stale cache (C2)": "leak*=0.00883"
       },
       "method_keys": {
         "edited base (C1)": "C1_editedbase",
@@ -138,6 +138,258 @@
         720
       ]
     },
+    "garden_chain2__DSC07972": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_chain2/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "local invalidation (C5, ours)": 0.002944361340875427,
+        "original ECR": null,
+        "stale cache (C2)": 0.020730562663326662
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak*=0",
+        "local invalidation (C5, ours)": "leak*=0.00294",
+        "original ECR": null,
+        "stale cache (C2)": "leak*=0.0207"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/garden_chain2__DSC07972_grid.png",
+      "scene": "garden_chain2",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_chain2/panels/DSC07972.png",
+      "source_tile_size": [
+        1297,
+        840
+      ],
+      "tile_count": 4,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "DSC07972",
+      "zoom_window": [
+        185,
+        0,
+        833,
+        420
+      ]
+    },
+    "garden_chain2__DSC08108": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_chain2/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "local invalidation (C5, ours)": 0.002944361340875427,
+        "original ECR": null,
+        "stale cache (C2)": 0.020730562663326662
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak*=0",
+        "local invalidation (C5, ours)": "leak*=0.00294",
+        "original ECR": null,
+        "stale cache (C2)": "leak*=0.0207"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/garden_chain2__DSC08108_grid.png",
+      "scene": "garden_chain2",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_chain2/panels/DSC08108.png",
+      "source_tile_size": [
+        1297,
+        840
+      ],
+      "tile_count": 4,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "DSC08108",
+      "zoom_window": [
+        649,
+        0,
+        1297,
+        420
+      ]
+    },
+    "garden_chain2__DSC08140": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_chain2/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "local invalidation (C5, ours)": 0.002944361340875427,
+        "original ECR": null,
+        "stale cache (C2)": 0.020730562663326662
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak*=0",
+        "local invalidation (C5, ours)": "leak*=0.00294",
+        "original ECR": null,
+        "stale cache (C2)": "leak*=0.0207"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/garden_chain2__DSC08140_grid.png",
+      "scene": "garden_chain2",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_chain2/panels/DSC08140.png",
+      "source_tile_size": [
+        1297,
+        840
+      ],
+      "tile_count": 4,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "DSC08140",
+      "zoom_window": [
+        464,
+        0,
+        1112,
+        420
+      ]
+    },
+    "garden_delpot__DSC07972": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_delpot/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "local invalidation (C5, ours)": 0.003704421455040574,
+        "original ECR": null,
+        "stale cache (C2)": 0.0042263375750432415
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak*=0",
+        "local invalidation (C5, ours)": "leak*=0.0037",
+        "original ECR": null,
+        "stale cache (C2)": "leak*=0.00423"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/garden_delpot__DSC07972_grid.png",
+      "scene": "garden_delpot",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_delpot/panels/DSC07972.png",
+      "source_tile_size": [
+        1297,
+        840
+      ],
+      "tile_count": 4,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "DSC07972",
+      "zoom_window": [
+        185,
+        0,
+        833,
+        420
+      ]
+    },
+    "garden_delpot__DSC08108": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_delpot/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "local invalidation (C5, ours)": 0.003704421455040574,
+        "original ECR": null,
+        "stale cache (C2)": 0.0042263375750432415
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak*=0",
+        "local invalidation (C5, ours)": "leak*=0.0037",
+        "original ECR": null,
+        "stale cache (C2)": "leak*=0.00423"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/garden_delpot__DSC08108_grid.png",
+      "scene": "garden_delpot",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_delpot/panels/DSC08108.png",
+      "source_tile_size": [
+        1297,
+        840
+      ],
+      "tile_count": 4,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "DSC08108",
+      "zoom_window": [
+        649,
+        0,
+        1297,
+        420
+      ]
+    },
+    "garden_delpot__DSC08140": {
+      "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_delpot/edit_eval.json",
+      "leak_R": {
+        "edited base (C1)": 0.0,
+        "local invalidation (C5, ours)": 0.003704421455040574,
+        "original ECR": null,
+        "stale cache (C2)": 0.0042263375750432415
+      },
+      "leak_R_formatted": {
+        "edited base (C1)": "leak*=0",
+        "local invalidation (C5, ours)": "leak*=0.0037",
+        "original ECR": null,
+        "stale cache (C2)": "leak*=0.00423"
+      },
+      "method_keys": {
+        "edited base (C1)": "C1_editedbase",
+        "local invalidation (C5, ours)": "C5_ours",
+        "original ECR": "ORIG_ecr",
+        "stale cache (C2)": "C2_stale"
+      },
+      "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/garden_delpot__DSC08140_grid.png",
+      "scene": "garden_delpot",
+      "source_panel_path": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_delpot/panels/DSC08140.png",
+      "source_tile_size": [
+        1297,
+        840
+      ],
+      "tile_count": 4,
+      "tile_order": [
+        "original ECR",
+        "edited base (C1)",
+        "stale cache (C2)",
+        "local invalidation (C5, ours)"
+      ],
+      "view": "DSC08140",
+      "zoom_window": [
+        185,
+        60,
+        833,
+        480
+      ]
+    },
     "garden_recolor__DSC07988": {
       "edit_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/garden_recolor/edit_eval.json",
       "leak_R": {
@@ -147,10 +399,10 @@
         "stale cache (C2)": 0.03462487203069031
       },
       "leak_R_formatted": {
-        "edited base (C1)": "leak=0",
-        "local invalidation (C5, ours)": "leak=0.0034",
+        "edited base (C1)": "leak*=0",
+        "local invalidation (C5, ours)": "leak*=0.0034",
         "original ECR": null,
-        "stale cache (C2)": "leak=0.0346"
+        "stale cache (C2)": "leak*=0.0346"
       },
       "method_keys": {
         "edited base (C1)": "C1_editedbase",
@@ -189,10 +441,10 @@
         "stale cache (C2)": 0.03462487203069031
       },
       "leak_R_formatted": {
-        "edited base (C1)": "leak=0",
-        "local invalidation (C5, ours)": "leak=0.0034",
+        "edited base (C1)": "leak*=0",
+        "local invalidation (C5, ours)": "leak*=0.0034",
         "original ECR": null,
-        "stale cache (C2)": "leak=0.0346"
+        "stale cache (C2)": "leak*=0.0346"
       },
       "method_keys": {
         "edited base (C1)": "C1_editedbase",
@@ -231,10 +483,10 @@
         "stale cache (C2)": 0.03462487203069031
       },
       "leak_R_formatted": {
-        "edited base (C1)": "leak=0",
-        "local invalidation (C5, ours)": "leak=0.0034",
+        "edited base (C1)": "leak*=0",
+        "local invalidation (C5, ours)": "leak*=0.0034",
         "original ECR": null,
-        "stale cache (C2)": "leak=0.0346"
+        "stale cache (C2)": "leak*=0.0346"
       },
       "method_keys": {
         "edited base (C1)": "C1_editedbase",
@@ -274,11 +526,11 @@
         "stale cache (C2)": 0.0032608010434789967
       },
       "leak_R_formatted": {
-        "edited base (C1)": "leak=0",
-        "full rebuild (C4)": "leak=0.0221",
-        "local invalidation (C5, ours)": "leak=0.00318",
+        "edited base (C1)": "leak*=0",
+        "full rebuild (C4)": "leak*=0.0221",
+        "local invalidation (C5, ours)": "leak*=0.00318",
         "original ECR": null,
-        "stale cache (C2)": "leak=0.00326"
+        "stale cache (C2)": "leak*=0.00326"
       },
       "method_keys": {
         "edited base (C1)": "C1_editedbase",
@@ -286,6 +538,21 @@
         "local invalidation (C5, ours)": "C5_ours",
         "original ECR": "ORIG_ecr",
         "stale cache (C2)": "C2_stale"
+      },
+      "oracle_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/oracle_toy/oracle_eval.json",
+      "oracle_psnr_R": {
+        "edited base (C1)": 26.061718397497874,
+        "full rebuild (C4)": 25.41589417998976,
+        "local invalidation (C5, ours)": 26.548680370433637,
+        "original ECR": 23.52848220023409,
+        "stale cache (C2)": 26.57620810017536
+      },
+      "oracle_psnr_R_formatted": {
+        "edited base (C1)": "oracle_R=26.062 dB",
+        "full rebuild (C4)": "oracle_R=25.416 dB",
+        "local invalidation (C5, ours)": "oracle_R=26.549 dB",
+        "original ECR": "oracle_R=23.528 dB",
+        "stale cache (C2)": "oracle_R=26.576 dB"
       },
       "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/toy_parking__00035_grid.png",
       "scene": "toy_parking",
@@ -320,11 +587,11 @@
         "stale cache (C2)": 0.0032608010434789967
       },
       "leak_R_formatted": {
-        "edited base (C1)": "leak=0",
-        "full rebuild (C4)": "leak=0.0221",
-        "local invalidation (C5, ours)": "leak=0.00318",
+        "edited base (C1)": "leak*=0",
+        "full rebuild (C4)": "leak*=0.0221",
+        "local invalidation (C5, ours)": "leak*=0.00318",
         "original ECR": null,
-        "stale cache (C2)": "leak=0.00326"
+        "stale cache (C2)": "leak*=0.00326"
       },
       "method_keys": {
         "edited base (C1)": "C1_editedbase",
@@ -332,6 +599,21 @@
         "local invalidation (C5, ours)": "C5_ours",
         "original ECR": "ORIG_ecr",
         "stale cache (C2)": "C2_stale"
+      },
+      "oracle_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/oracle_toy/oracle_eval.json",
+      "oracle_psnr_R": {
+        "edited base (C1)": 26.061718397497874,
+        "full rebuild (C4)": 25.41589417998976,
+        "local invalidation (C5, ours)": 26.548680370433637,
+        "original ECR": 23.52848220023409,
+        "stale cache (C2)": 26.57620810017536
+      },
+      "oracle_psnr_R_formatted": {
+        "edited base (C1)": "oracle_R=26.062 dB",
+        "full rebuild (C4)": "oracle_R=25.416 dB",
+        "local invalidation (C5, ours)": "oracle_R=26.549 dB",
+        "original ECR": "oracle_R=23.528 dB",
+        "stale cache (C2)": "oracle_R=26.576 dB"
       },
       "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/toy_parking__00040_grid.png",
       "scene": "toy_parking",
@@ -366,11 +648,11 @@
         "stale cache (C2)": 0.0032608010434789967
       },
       "leak_R_formatted": {
-        "edited base (C1)": "leak=0",
-        "full rebuild (C4)": "leak=0.0221",
-        "local invalidation (C5, ours)": "leak=0.00318",
+        "edited base (C1)": "leak*=0",
+        "full rebuild (C4)": "leak*=0.0221",
+        "local invalidation (C5, ours)": "leak*=0.00318",
         "original ECR": null,
-        "stale cache (C2)": "leak=0.00326"
+        "stale cache (C2)": "leak*=0.00326"
       },
       "method_keys": {
         "edited base (C1)": "C1_editedbase",
@@ -378,6 +660,21 @@
         "local invalidation (C5, ours)": "C5_ours",
         "original ECR": "ORIG_ecr",
         "stale cache (C2)": "C2_stale"
+      },
+      "oracle_eval_json": "/data/peilincai/gems_stage1/analysis/edit_aware/oracle_toy/oracle_eval.json",
+      "oracle_psnr_R": {
+        "edited base (C1)": 26.061718397497874,
+        "full rebuild (C4)": 25.41589417998976,
+        "local invalidation (C5, ours)": 26.548680370433637,
+        "original ECR": 23.52848220023409,
+        "stale cache (C2)": 26.57620810017536
+      },
+      "oracle_psnr_R_formatted": {
+        "edited base (C1)": "oracle_R=26.062 dB",
+        "full rebuild (C4)": "oracle_R=25.416 dB",
+        "local invalidation (C5, ours)": "oracle_R=26.549 dB",
+        "original ECR": "oracle_R=23.528 dB",
+        "stale cache (C2)": "oracle_R=26.576 dB"
       },
       "output_path": "/data/peilincai/mesh-splatting/RESULTS/figures/edit_aware/toy_parking__00080_grid.png",
       "scene": "toy_parking",

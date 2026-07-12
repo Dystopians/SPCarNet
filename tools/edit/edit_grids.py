@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -15,9 +16,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 INPUT_ROOT = Path("/data/peilincai/gems_stage1/analysis/edit_aware")
 OUT_DIR = REPO_ROOT / "RESULTS" / "figures" / "edit_aware"
 
-SCENES = ("garden", "toy_parking", "garden_recolor")
+SCENES = ("garden", "toy_parking", "garden_recolor", "garden_delpot", "garden_chain2")
+FOUR_TILE_SCENES = {"garden_recolor", "garden_delpot", "garden_chain2"}
 TILE_WIDTH_OUT = 420
 LABEL_STRIP_H = 20
+ORACLE_LABEL_STRIP_H = 34
+CAPTION_STRIP_H = 26
+CAPTION_TEXT = "leak* = secondary bounded-deviation metric (see protocol amendment); in-region fidelity is oracle-scored on the synthetic scene only — real scenes claim content preservation + bounded ghost metrics."
+ORACLE_TOY_PATH = INPUT_ROOT / "oracle_toy" / "oracle_eval.json"
 
 COLUMNS_5 = [
     ("ORIG", "original ECR"),
@@ -41,6 +47,18 @@ METHOD_SYNONYMS = {
     "C5": (("ours",), ("local", "invalidation")),
 }
 
+ORACLE_METHOD_KEYS = {
+    "ORIG": "ORIG_ecr",
+    "C1": "C1_editedbase",
+    "C2": "C2_stale",
+    "C4": "C4_rebuild",
+    "C5": "C5_ours",
+}
+
+
+def warn(message: str) -> None:
+    print(f"[edit_grids][WARN] {message}", file=sys.stderr)
+
 
 def load_json(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as f:
@@ -53,6 +71,15 @@ def write_json_atomic(path: Path, data: Any) -> None:
         json.dump(data, f, indent=2, sort_keys=True)
         f.write("\n")
     os.replace(tmp, path)
+
+
+def load_font(size: int) -> ImageFont.ImageFont:
+    for font_path in ("DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"):
+        try:
+            return ImageFont.truetype(font_path, size=size)
+        except OSError:
+            pass
+    return ImageFont.load_default()
 
 
 def norm_key(value: str) -> str:
@@ -91,12 +118,50 @@ def leak_values(per_method: dict[str, Any], columns: list[tuple[str, str]]) -> t
             if isinstance(method_record, dict) and "leak_R" in method_record:
                 value = float(method_record["leak_R"])
         raw[label] = value
-        formatted[label] = None if value is None else f"leak={value:.3g}"
+        formatted[label] = None if value is None else f"leak*={value:.3g}"
     return raw, formatted, method_keys
 
 
 def scene_tile_count(scene: str) -> int:
-    return 4 if "recolor" in scene else 5
+    return 4 if scene in FOUR_TILE_SCENES else 5
+
+
+def toy_oracle_values(columns: list[tuple[str, str]]) -> tuple[dict[str, float | None], dict[str, str | None]]:
+    raw = {label: None for _, label in columns}
+    formatted = {label: None for _, label in columns}
+
+    if not ORACLE_TOY_PATH.is_file():
+        warn(f"toy_parking: missing oracle file {ORACLE_TOY_PATH}; skipping oracle_R labels")
+        return raw, formatted
+
+    try:
+        data = load_json(ORACLE_TOY_PATH)
+    except Exception as exc:
+        warn(f"toy_parking: failed to read oracle file {ORACLE_TOY_PATH}: {exc}; skipping oracle_R labels")
+        return raw, formatted
+
+    methods = data.get("methods")
+    if not isinstance(methods, dict):
+        warn(f"toy_parking: oracle file {ORACLE_TOY_PATH} missing object field methods; skipping oracle_R labels")
+        return raw, formatted
+
+    for code, label in columns:
+        method_key = ORACLE_METHOD_KEYS.get(code)
+        if method_key is None:
+            warn(f"toy_parking: no oracle method mapping for column {code}; skipping {label}")
+            continue
+        method_record = methods.get(method_key)
+        if not isinstance(method_record, dict):
+            warn(f"toy_parking: oracle method {method_key} missing; skipping {label}")
+            continue
+        if "oracle_psnr_R" not in method_record:
+            warn(f"toy_parking: oracle method {method_key} missing oracle_psnr_R; skipping {label}")
+            continue
+        value = float(method_record["oracle_psnr_R"])
+        raw[label] = value
+        formatted[label] = f"oracle_R={value:.3f} dB"
+
+    return raw, formatted
 
 
 def columns_for_count(tile_count: int) -> list[tuple[str, str]]:
@@ -161,45 +226,81 @@ def best_zoom_window(tiles: list[Image.Image], tile_count: int) -> list[int]:
     return [int(x0), int(y0), int(x0 + crop_w), int(y0 + crop_h)]
 
 
-def draw_column_labels(draw: ImageDraw.ImageDraw, y0: int, labels: list[str], leak_labels: dict[str, str | None], font: ImageFont.ImageFont) -> None:
+def draw_column_labels(
+    draw: ImageDraw.ImageDraw,
+    y0: int,
+    labels: list[str],
+    leak_labels: dict[str, str | None],
+    oracle_labels: dict[str, str | None],
+    font: ImageFont.ImageFont,
+    strip_h: int,
+) -> None:
     for idx, label in enumerate(labels):
         x0 = idx * TILE_WIDTH_OUT
         x1 = x0 + TILE_WIDTH_OUT
         leak_label = leak_labels.get(label)
-        lines = [label] if leak_label is None else [label, leak_label]
-        if len(lines) == 1:
-            ys = [y0 + 6]
-        else:
-            ys = [y0 + 1, y0 + 10]
-        for text, text_y in zip(lines, ys):
+        oracle_label = oracle_labels.get(label)
+        lines = [label]
+        if leak_label is not None:
+            lines.append(leak_label)
+        if oracle_label is not None:
+            lines.append(oracle_label)
+
+        bbox = draw.textbbox((0, 0), "Ag", font=font)
+        line_h = bbox[3] - bbox[1]
+        line_gap = 1
+        block_h = len(lines) * line_h + max(0, len(lines) - 1) * line_gap
+        text_y = y0 + max(1, (strip_h - block_h) // 2)
+        for text in lines:
             bbox = draw.textbbox((0, 0), text, font=font)
             text_w = bbox[2] - bbox[0]
             text_x = x0 + max(0, (x1 - x0 - text_w) // 2)
             draw.text((text_x, text_y), text, fill="black", font=font)
+            text_y += line_h + line_gap
 
 
-def build_grid_image(tiles: list[Image.Image], zoom_window: list[int], labels: list[str], leak_labels: dict[str, str | None]) -> Image.Image:
-    font = ImageFont.load_default()
+def draw_caption(draw: ImageDraw.ImageDraw, y0: int, width: int, font: ImageFont.ImageFont) -> None:
+    bbox = draw.textbbox((0, 0), CAPTION_TEXT, font=font)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
+    text_x = max(0, (width - text_w) // 2)
+    text_y = y0 + max(1, (CAPTION_STRIP_H - text_h) // 2)
+    draw.line((0, y0, width, y0), fill=(180, 180, 180))
+    draw.text((text_x, text_y), CAPTION_TEXT, fill="black", font=font)
+
+
+def build_grid_image(
+    tiles: list[Image.Image],
+    zoom_window: list[int],
+    labels: list[str],
+    leak_labels: dict[str, str | None],
+    oracle_labels: dict[str, str | None],
+) -> Image.Image:
+    label_font = load_font(10)
+    caption_font = load_font(10)
     full_tiles = [resize_to_width(tile, TILE_WIDTH_OUT) for tile in tiles]
     crops = [resize_to_width(tile.crop(tuple(zoom_window)), TILE_WIDTH_OUT) for tile in tiles]
 
     full_h = max(tile.height for tile in full_tiles)
     crop_h = max(tile.height for tile in crops)
     width = TILE_WIDTH_OUT * len(tiles)
-    height = LABEL_STRIP_H + full_h + LABEL_STRIP_H + crop_h
+    label_strip_h = ORACLE_LABEL_STRIP_H if any(oracle_labels.get(label) for label in labels) else LABEL_STRIP_H
+    height = label_strip_h + full_h + label_strip_h + crop_h + CAPTION_STRIP_H
     grid = Image.new("RGB", (width, height), "white")
     draw = ImageDraw.Draw(grid)
 
     y = 0
-    draw_column_labels(draw, y, labels, leak_labels, font)
-    y += LABEL_STRIP_H
+    draw_column_labels(draw, y, labels, leak_labels, oracle_labels, label_font, label_strip_h)
+    y += label_strip_h
     for idx, tile in enumerate(full_tiles):
         grid.paste(tile, (idx * TILE_WIDTH_OUT, y))
     y += full_h
-    draw_column_labels(draw, y, labels, leak_labels, font)
-    y += LABEL_STRIP_H
+    draw_column_labels(draw, y, labels, leak_labels, oracle_labels, label_font, label_strip_h)
+    y += label_strip_h
     for idx, tile in enumerate(crops):
         grid.paste(tile, (idx * TILE_WIDTH_OUT, y))
+    y += crop_h
+    draw_caption(draw, y, width, caption_font)
     return grid
 
 
@@ -237,19 +338,23 @@ def process_scene(scene: str, manifest: dict[str, Any]) -> tuple[list[Path], lis
     columns = columns_for_count(tile_count)
     labels = [label for _, label in columns]
     leak_raw, leak_formatted, method_keys = leak_values(per_method, columns)
+    oracle_raw: dict[str, float | None] | None = None
+    oracle_formatted: dict[str, str | None] = {}
+    if scene == "toy_parking":
+        oracle_raw, oracle_formatted = toy_oracle_values(columns)
     produced: list[Path] = []
 
     for panel_path in panel_paths:
         try:
             tiles, tile_size = split_strip(panel_path, tile_count)
             zoom_window = best_zoom_window(tiles, tile_count)
-            grid = build_grid_image(tiles, zoom_window, labels, leak_formatted)
+            grid = build_grid_image(tiles, zoom_window, labels, leak_formatted, oracle_formatted)
             out_path = OUT_DIR / f"{scene}__{panel_path.stem}_grid.png"
             out_path.parent.mkdir(parents=True, exist_ok=True)
             grid.save(out_path)
 
             grid_key = f"{scene}__{panel_path.stem}"
-            manifest.setdefault("grids", {})[grid_key] = {
+            grid_record = {
                 "source_panel_path": str(panel_path),
                 "output_path": str(out_path),
                 "scene": scene,
@@ -263,6 +368,11 @@ def process_scene(scene: str, manifest: dict[str, Any]) -> tuple[list[Path], lis
                 "method_keys": method_keys,
                 "edit_eval_json": str(eval_path),
             }
+            if oracle_raw is not None:
+                grid_record["oracle_psnr_R"] = oracle_raw
+                grid_record["oracle_psnr_R_formatted"] = oracle_formatted
+                grid_record["oracle_eval_json"] = str(ORACLE_TOY_PATH)
+            manifest.setdefault("grids", {})[grid_key] = grid_record
             produced.append(out_path)
             print(f"[edit_grids] wrote {out_path}")
         except Exception as exc:
@@ -289,7 +399,7 @@ def main() -> int:
 
     print(f"[edit_grids] manifest {manifest_path}")
     for skip in all_skips:
-        print(f"[edit_grids][SKIP] {skip}")
+        warn(skip)
     print(f"[edit_grids] produced {len(all_produced)} grid(s)")
     return 0
 
